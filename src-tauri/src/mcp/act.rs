@@ -65,7 +65,7 @@ use crate::folders;
 use crate::git;
 use crate::i18n;
 use crate::model::{
-    AgentsAnswer, BoardSettings, Column, EngineId, PauseReason, Project, Ticket, PROGRESS_LINE_MAX,
+    BoardSettings, Column, EngineId, PauseReason, Project, Ticket, PROGRESS_LINE_MAX,
 };
 use crate::telemetry::Event;
 use crate::tickets::{
@@ -2016,20 +2016,16 @@ pub(super) fn may_answer<R: Runtime>(
     let Caller::Agent(id) = caller else {
         return Ok(());
     };
-    let chef = || {
-        core.project(&found.project_id)
-            .ok()
-            .and_then(|p| p.chef)
-            .is_some_and(|c| c == *id)
-    };
-    match core.settings.read().agents_answer {
-        AgentsAnswer::All => Ok(()),
-        AgentsAnswer::Chef if chef() => Ok(()),
-        AgentsAnswer::Chef => Err(ToolError::Refused(tr!(
+    let chef = core.project(&found.project_id).ok().and_then(|p| p.chef);
+    // The same rule as for the requests of the box the user leaves to an agent (ESC-513).
+    let setting = core.settings.read().agents_answer;
+    match crate::delegation::may_answer(setting, chef.as_deref(), id) {
+        Ok(()) => Ok(()),
+        Err(crate::delegation::Refusal::NotTheChef) => Err(ToolError::Refused(tr!(
             "Seul le chef d’escouade que l’utilisateur a choisi pour ce projet répond aux permissions et aux questions des autres agents, et ce n’est pas toi : la demande attend la réponse de l’utilisateur. Le chef se choisit dans Réglages › Projets › Équipe (« Chef d’escouade »).",
             "Only the squad lead the user chose for this project answers the other agents’ permissions and questions, and it is not you: the request waits for the user’s answer. The lead is chosen in Settings › Projects › Team (“Squad lead”)."
         ))),
-        AgentsAnswer::Nobody => Err(ToolError::Refused(tr!(
+        Err(crate::delegation::Refusal::Nobody) => Err(ToolError::Refused(tr!(
             "Un agent ne répond pas aux permissions ni aux questions d’un autre agent : la demande attend la réponse de l’utilisateur. Seul l’utilisateur peut le permettre, dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux demandes des autres agents »).",
             "An agent does not answer another agent’s permissions or questions: the request waits for the user’s answer. Only the user can allow it, in Settings › Agents › Drive Escouade (“Agents can answer the other agents’ requests”)."
         ))),

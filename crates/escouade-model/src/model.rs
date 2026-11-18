@@ -24,6 +24,10 @@ pub struct Settings {
     pub os_notifications: bool,
     /// "Me prévenir pour": what the chime and the system notifications are for.
     pub notify_for: NotifyFor,
+    /// « Résumé de la boîte « À toi » » (ESC-513, docs/INBOX.md § 11): how often the summary of the
+    /// requests left in the box tells the user, never one alert per request; it is said only while
+    /// the MCP server is on.
+    pub inbox_summary: InboxSummary,
     /// Stop idle Claude processes after N minutes (0 = never). Sessions stay resumable.
     pub idle_stop_minutes: u32,
     /// « Ouvrir les nouveaux agents dans l'interface de Claude Code »: a new agent (not a
@@ -723,6 +727,7 @@ impl Default for Settings {
             sound: true,
             os_notifications: true,
             notify_for: NotifyFor::default(),
+            inbox_summary: InboxSummary::default(),
             idle_stop_minutes: 30,
             terminal_view: false,
             pwsh_path: String::new(),
@@ -1061,6 +1066,28 @@ pub enum PagesOpen {
     Window,
     /// « Dans le navigateur du système »: as before the browser inside Escouade.
     System,
+}
+
+/// « Résumé de la boîte « À toi » » (ESC-513): a summary at most every 30 minutes (the default), at
+/// most every hour, or never (the counter alone).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum InboxSummary {
+    #[default]
+    Every30,
+    Hourly,
+    Never,
+}
+
+impl InboxSummary {
+    /// The least time between two summaries, in minutes; None: never.
+    pub fn minutes(self) -> Option<i64> {
+        match self {
+            Self::Every30 => Some(30),
+            Self::Hourly => Some(60),
+            Self::Never => None,
+        }
+    }
 }
 
 /// « Les agents peuvent répondre aux demandes des autres agents » (ESC-423).
@@ -2559,6 +2586,9 @@ pub struct PersistedState {
     pub asks: Vec<crate::asks::Ask>,
     /// The number of the last request left (`a-<n>`): never given twice.
     pub ask_seq: u64,
+    /// « Plus tard » on a view of the box (ESC-513): until when (epoch ms), by the view's key. Its
+    /// source is not touched.
+    pub inbox_snoozes: BTreeMap<String, i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

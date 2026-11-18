@@ -976,6 +976,10 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) pr_reviews: RwLock<Vec<crate::prreview::PrReview>>,
     /// The agents' asynchronous requests (« À toi », ESC-509): `asks`.
     pub(crate) asks: Mutex<crate::asks::AskBox>,
+    /// « Plus tard » on the views of the box (ESC-513, `inboxviews`).
+    pub(crate) inbox_snoozes: Mutex<crate::inboxviews::ViewSnoozes>,
+    /// What the summary of the box last told (ESC-513, `inboxnotify`).
+    pub(crate) inbox_summary: Mutex<crate::inboxnotify::Summary>,
     /// Serializes agent creation so that concurrent creations get distinct names.
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
@@ -1918,6 +1922,9 @@ impl<R: Runtime> Core<R> {
             list: std::mem::take(&mut state.asks),
             seq: state.ask_seq,
         };
+        let inbox_snoozes = crate::inboxviews::ViewSnoozes {
+            until: std::mem::take(&mut state.inbox_snoozes),
+        };
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
         // what the app needs of it from now on.
@@ -2144,6 +2151,8 @@ impl<R: Runtime> Core<R> {
             leftover_histories: Mutex::new(leftover),
             pr_reviews: RwLock::new(pr_reviews),
             asks: Mutex::new(asks),
+            inbox_snoozes: Mutex::new(inbox_snoozes),
+            inbox_summary: Mutex::default(),
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
@@ -2249,6 +2258,10 @@ impl<R: Runtime> Core<R> {
         let resolver: std::sync::Weak<dyn crate::facts::Resolve> =
             Arc::downgrade(&(core.clone() as Arc<dyn crate::facts::Resolve>));
         core.facts.resolve_with(resolver);
+        // A fact that moves a view of the box « À toi » has the window read it again (ESC-513).
+        core.facts.subscribe(Arc::new(crate::inboxviews::ViewsSink {
+            core: Arc::downgrade(&core),
+        }));
         let place: std::sync::Weak<dyn crate::plugins::events::Place> =
             Arc::downgrade(&(core.clone() as Arc<dyn crate::plugins::events::Place>));
         core.plugin_events.place_with(place.clone());
@@ -2577,6 +2590,8 @@ impl<R: Runtime> Core<R> {
                 // answers whose 10 seconds were cut by a stop (ESC-509).
                 c.asks_sweep();
                 c.deliver_answers().await;
+                // Its summary, when requests came and its time did (ESC-513).
+                c.inbox_summary_tick();
             }
         });
         // The pull requests of the tickets « En revue » (ESC-59), without a webhook.
@@ -2654,6 +2669,7 @@ impl<R: Runtime> Core<R> {
             let b = self.asks.lock();
             (b.list.clone(), b.seq)
         };
+        let inbox_snoozes = self.inbox_snoozes.lock().until.clone();
         PersistedState {
             projects,
             agents,
@@ -2667,6 +2683,7 @@ impl<R: Runtime> Core<R> {
             pr_reviews,
             asks,
             ask_seq,
+            inbox_snoozes,
         }
     }
 

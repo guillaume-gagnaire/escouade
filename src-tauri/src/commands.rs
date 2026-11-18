@@ -4754,9 +4754,11 @@ pub fn inbox_track(
         v.and_then(|v| of.iter().copied().find(|x| *x == v))
     };
     let tracked = match event.as_str() {
-        "opened" => pick(from, &["tile", "shortcut", "settings"]).map(|from| Event::InboxOpened {
-            from,
-            scope: pick(scope, &["all", "project"]).unwrap_or("all"),
+        "opened" => pick(from, &["tile", "shortcut", "settings", "notification"]).map(|from| {
+            Event::InboxOpened {
+                from,
+                scope: pick(scope, &["all", "project"]).unwrap_or("all"),
+            }
         }),
         "compare" => Some(Event::InboxCompareOpened),
         "attachment" => pick(kind, &["image", "pdf", "markdown", "word", "csv", "other"])
@@ -4791,6 +4793,33 @@ pub fn inbox_weight(core: CoreState) -> u64 {
 #[tauri::command(async)]
 pub fn inbox_erase_closed_files(core: CoreState) -> u64 {
     core.asks_erase_closed_files()
+}
+
+/// What Escouade puts in the box of its own (ESC-513): the views on what already waits for the user
+/// elsewhere, of a project or of all, with the counts of every project. Nothing while the MCP
+/// server is off.
+#[tauri::command]
+pub async fn inbox_views(
+    core: CoreState<'_>,
+    project_id: Option<String>,
+) -> Res<crate::inboxviews::InboxViews> {
+    Ok(core.inbox_views(project_id.as_deref()).await)
+}
+
+/// A gesture on a view of the box: the one of its source, on the view the user read.
+#[tauri::command]
+pub async fn inbox_view_act(
+    core: CoreState<'_>,
+    key: String,
+    act: crate::inboxviews::ViewAct,
+) -> Res<()> {
+    core.inbox_view_act(&key, act).await.map_err(err)
+}
+
+/// « Plus tard » on a view (`until`, epoch ms; none brings it back): its source is not touched.
+#[tauri::command]
+pub async fn inbox_view_snooze(core: CoreState<'_>, key: String, until: Option<i64>) -> Res<()> {
+    core.inbox_view_snooze(&key, until).await.map_err(err)
 }
 
 /// « Enregistrer sous… » of a request's file (ESC-510): its copy written where the user picks in the system's dialog,

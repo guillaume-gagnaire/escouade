@@ -159,6 +159,13 @@ pub enum UiEvent {
     Inbox {
         project_id: String,
     },
+    /// A click on the summary of the box (ESC-513): the window opens the box, on this project when
+    /// the summary was of one alone.
+    #[serde(rename_all = "camelCase")]
+    #[cfg_attr(test, allow(dead_code))]
+    InboxOpen {
+        project_id: Option<String>,
+    },
     /// A project's shared memory changed (ESC-255): written or forgotten through the server or the window.
     #[serde(rename_all = "camelCase")]
     Memory {

@@ -10,6 +10,8 @@ import { intlLocale, t } from '../i18n';
 import { api } from '../ipc';
 import { app, asksUser } from '../state.svelte';
 import type { Agent, AskFile, WindowAsk } from '../types';
+import type { InboxItem } from './views';
+import { inboxViews } from './views.svelte';
 
 /** A closed request stays in « Répondu récemment » that long, and so many at most (§ 3.4). */
 export const RECENT_MS = 7 * 24 * 3600 * 1000;
@@ -17,19 +19,25 @@ export const RECENT_MAX = 50;
 
 export type Scope = 'all' | 'project';
 
-/** What the queue shows, row by row: an agent stopped (a blocking request, until IN-3's views), or a request. */
-export type QueueItem = { kind: 'stopped'; agent: Agent } | { kind: 'ask'; ask: WindowAsk };
+/**
+ * What the queue shows, row by row: a request; a view of what waits elsewhere (ESC-513: a blocking request, a ticket, a
+ * decision, the docs, a review); or an agent stopped with no view (a deletion it asks for, an agent of the Claude Code
+ * view), which leads to its conversation.
+ */
+export type QueueItem = { kind: 'stopped'; agent: Agent } | { kind: 'ask'; ask: WindowAsk } | { kind: 'view'; view: InboxItem };
 
 export interface QueueGroups {
   stopped: QueueItem[];
   today: QueueItem[];
   earlier: QueueItem[];
   later: WindowAsk[];
+  /** The views put off (« Plus tard »), drawn with the requests put off. */
+  laterViews: InboxItem[];
   recent: WindowAsk[];
 }
 
 /** The key of a row: what `selected` holds. */
-export const itemKey = (i: QueueItem) => (i.kind === 'ask' ? i.ask.id : `agent:${i.agent.id}`);
+export const itemKey = (i: QueueItem) => (i.kind === 'ask' ? i.ask.id : i.kind === 'view' ? `view:${i.view.key}` : `agent:${i.agent.id}`);
 
 const startOfDay = (now: number) => {
   const d = new Date(now);
@@ -51,18 +59,46 @@ export const isClosed = (a: WindowAsk) => !['open', 'snoozed'].includes(a.state)
 /** When it left the queue: its answer, else when it closed. */
 export const closedAt = (a: WindowAsk) => a.answer?.at ?? a.closedAt ?? a.updatedAt;
 
-/** The queue's groups (§ 10.2), in their order: the stopped agents first, the oldest first; then today, earlier. */
-export function groups(asks: WindowAsk[], stopped: Agent[], now = Date.now()): QueueGroups {
+/**
+ * The queue's groups (§ 10.2), in their order: the stopped first, the oldest first; then today, earlier. The views
+ * (ESC-513) go in their own group: the blocking ones among the stopped, in the place of their agent's row (an agent with
+ * none keeps its row); the others after the requests of their group; those put off with the requests put off.
+ */
+export function groups(asks: WindowAsk[], stopped: Agent[], now = Date.now(), views: InboxItem[] = []): QueueGroups {
+  const waiting = views.filter((v) => !v.snoozedUntil);
+  const blocking = waiting.filter((v) => v.group === 'stopped').sort((a, b) => a.since - b.since);
+  const withView = new Set(blocking.map((v) => v.agentId));
+  const asView = (v: InboxItem): QueueItem => ({ kind: 'view', view: v });
+  const bySince = (a: InboxItem, b: InboxItem) => a.since - b.since;
   const open = asks.filter(isOpen);
   const byAge = (a: WindowAsk, b: WindowAsk) =>
     Number(b.urgency === 'today') - Number(a.urgency === 'today') || Number(b.woke) - Number(a.woke) || a.createdAt - b.createdAt;
   const today = open.filter((a) => isToday(a, now)).sort(byAge);
   const earlier = open.filter((a) => !isToday(a, now)).sort(byAge);
   return {
-    stopped: [...stopped].sort((a, b) => a.lastActivity - b.lastActivity).map((agent) => ({ kind: 'stopped', agent })),
-    today: today.map((ask) => ({ kind: 'ask', ask })),
-    earlier: earlier.map((ask) => ({ kind: 'ask', ask })),
+    stopped: [
+      ...blocking.map(asView),
+      ...[...stopped]
+        .filter((agent) => !withView.has(agent.id))
+        .sort((a, b) => a.lastActivity - b.lastActivity)
+        .map((agent): QueueItem => ({ kind: 'stopped', agent })),
+    ],
+    today: [
+      ...today.map((ask): QueueItem => ({ kind: 'ask', ask })),
+      ...waiting
+        .filter((v) => v.group === 'today')
+        .sort(bySince)
+        .map(asView),
+    ],
+    earlier: [
+      ...earlier.map((ask): QueueItem => ({ kind: 'ask', ask })),
+      ...waiting
+        .filter((v) => v.group === 'earlier')
+        .sort(bySince)
+        .map(asView),
+    ],
     later: asks.filter((a) => a.state === 'snoozed').sort((a, b) => (a.snoozedUntil ?? 0) - (b.snoozedUntil ?? 0)),
+    laterViews: views.filter((v) => v.snoozedUntil).sort((a, b) => (a.snoozedUntil ?? 0) - (b.snoozedUntil ?? 0)),
     recent: asks
       .filter((a) => isClosed(a) && now - closedAt(a) <= RECENT_MS)
       .sort((a, b) => closedAt(b) - closedAt(a))
@@ -74,13 +110,19 @@ export function groups(asks: WindowAsk[], stopped: Agent[], now = Date.now()): Q
 export const actionable = (g: QueueGroups): QueueItem[] => [...g.stopped, ...g.today, ...g.earlier];
 
 /**
- * What the count of the rail says (§ 10.1): what waits for the user in the box, every project — the requests open and
- * the agents stopped, the latter being the same agents as « N en attente » of the status bar (`asksUser`): never two
- * numbers that disagree. A request put off for later does not count until it comes back.
+ * What the count of the rail says (§ 10.1): what waits for the user in the box, every project — the requests open, the
+ * agents stopped, the latter being the same agents as « N en attente » of the status bar (`asksUser`): never two
+ * numbers that disagree; and the views of what waits elsewhere (ESC-513) that are no blocking request (those are their
+ * agents', counted once). A request or a view put off for later does not count until it comes back.
  */
-export function inboxCount(asks: WindowAsk[], stopped: Agent[]): { asks: number; stopped: number; total: number } {
+export function inboxCount(
+  asks: WindowAsk[],
+  stopped: Agent[],
+  views: InboxItem[] = [],
+): { asks: number; stopped: number; views: number; total: number } {
   const n = asks.filter(isOpen).length;
-  return { asks: n, stopped: stopped.length, total: n + stopped.length };
+  const v = views.filter((x) => !x.snoozedUntil && x.group !== 'stopped').length;
+  return { asks: n, stopped: stopped.length, views: v, total: n + stopped.length + v };
 }
 
 /** The agents stopped on a request (permission, question, plan, a deletion asked), as the status bar counts them. */
@@ -161,12 +203,15 @@ class Inbox {
   stopped = $derived(stoppedAgents(app.agents, this.scope === 'project' ? app.ui.activeProject : null));
   /** The requests in the scope. */
   scoped = $derived(this.scope === 'project' ? this.asks.filter((a) => a.projectId === app.ui.activeProject) : this.asks);
-  groups = $derived(groups(this.scoped, this.stopped));
+  /** What Escouade puts in the box of its own (ESC-513), every project, then in the scope. */
+  views = $derived(this.enabled ? inboxViews.data.views : []);
+  scopedViews = $derived(this.scope === 'project' ? this.views.filter((v) => v.projectId === app.ui.activeProject) : this.views);
+  groups = $derived(groups(this.scoped, this.stopped, Date.now(), this.scopedViews));
   rows = $derived(actionable(this.groups));
   /** The rail's count: every project, whatever the scope. */
-  count = $derived(inboxCount(this.asks, stoppedAgents(app.agents)));
+  count = $derived(inboxCount(this.asks, stoppedAgents(app.agents), this.views));
   /** In the scope: the header's number. */
-  scopedCount = $derived(inboxCount(this.scoped, this.stopped));
+  scopedCount = $derived(inboxCount(this.scoped, this.stopped, this.scopedViews));
   /** Handled today: answered by the user (or for them) since midnight. */
   doneToday = $derived(this.scoped.filter((a) => a.answer && a.answer.at >= startOfDay(Date.now())).length);
 
@@ -174,6 +219,10 @@ class Inbox {
   current = $derived.by((): QueueItem | null => {
     const key = this.selected;
     if (!key) return null;
+    if (key.startsWith('view:')) {
+      const view = this.views.find((v) => `view:${v.key}` === key);
+      return view ? { kind: 'view', view } : null;
+    }
     if (key.startsWith('agent:')) {
       const agent = app.agents[key.slice(6)];
       return agent ? { kind: 'stopped', agent } : null;
@@ -243,7 +292,7 @@ class Inbox {
   select(key: string | null, seen = true) {
     this.selected = key ?? (this.rows[0] ? itemKey(this.rows[0]) : null);
     const id = this.selected;
-    if (seen && id && !id.startsWith('agent:')) {
+    if (seen && id && !id.startsWith('agent:') && !id.startsWith('view:')) {
       const a = this.asks.find((x) => x.id === id);
       if (a && (!a.seen || a.woke)) void api.inboxSeen(id).catch(() => {});
     }

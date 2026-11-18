@@ -7,6 +7,8 @@
   import type { AskKind, WindowAsk } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import AskThumb from './AskThumb.svelte';
+  import type { InboxItem, ViewSource } from '../../lib/inbox/views';
+  import { viewTitle } from './view-title';
 
   // The queue of the box « À toi » (direction B, `b-pleine.png`): « À toi » and its count, the scope (« Tous », « Ce
   // projet »), the meter (a cell per row: green handled, amber stopped, white the one open), « 3 traitées aujourd'hui · il
@@ -15,6 +17,19 @@
 
   const KIND_ICON: Record<AskKind, IconName> = { choice: 'choice', confirm: 'check-c', answer: 'edit', task: 'check' };
   const STOP_ICON: Record<string, IconName> = { permission: 'shield', question: 'question', plan: 'read', delete: 'trash' };
+  /** What Escouade puts in the box of its own (ESC-513): an icon by source. */
+  const VIEW_ICON: Record<ViewSource, IconName> = {
+    permission: 'shield',
+    question: 'question',
+    plan: 'read',
+    ticketReview: 'kanban',
+    ticketBlocked: 'kanban',
+    decision: 'check-c',
+    docs: 'file',
+    review: 'pr',
+  };
+  /** Who a view is about, on its line: its agent, else its ticket, else its project. */
+  const whoOf = (v: InboxItem) => v.agentName ?? v.ticketKey ?? v.projectName;
 
   let now = $state(Date.now());
   $effect(() => {
@@ -30,7 +45,8 @@
   const cells = $derived.by(() => {
     const out: ('d' | 'w' | 'c' | '')[] = [];
     for (let i = 0; i < done; i++) out.push('d');
-    for (const r of inbox.rows) out.push(itemKey(r) === inbox.selected ? 'c' : r.kind === 'stopped' ? 'w' : '');
+    for (const r of inbox.rows)
+      out.push(itemKey(r) === inbox.selected ? 'c' : r.kind === 'stopped' || (r.kind === 'view' && r.view.group === 'stopped') ? 'w' : '');
     return out.slice(Math.max(0, out.length - 24));
   });
 
@@ -92,11 +108,44 @@
   }
 </script>
 
+{#snippet viewRow(v: InboxItem, key: string)}
+  <!-- A view of what waits elsewhere (ESC-513): its source, what, who, since when; its gestures in the panel. -->
+  <button
+    class="row-ask"
+    class:wt={v.group === 'stopped'}
+    class:on={inbox.selected === key}
+    aria-current={inbox.selected === key}
+    onclick={() => inbox.select(key)}
+    data-testid="ivw-row"
+    data-key={v.key}
+    data-source={v.source}
+  >
+    <span class="ic"><Icon name={VIEW_ICON[v.source]} /></span>
+    <span class="t ell">{viewTitle(v)}</span>
+    <span class="tm">{v.snoozedUntil ? '' : v.since ? fSince(v.since, now) : ''}</span>
+    <span class="s">
+      <span class="pdot" style:background={colorOf(v.projectId)}></span>
+      {#if v.snoozedUntil}
+        <Icon name="clock" size={11} />
+        <span class="ell">{t('inbox.queue.until', { when: fLater(v.snoozedUntil, now) })}</span>
+      {:else}
+        <span class="ell nm">{whoOf(v)}</span>
+        <span aria-hidden="true">·</span>
+        {#if v.group === 'stopped'}<b class="wk">{t(`inboxViews.kind.${v.source}`)}</b>{:else}<span class="ell" data-testid="ivw-kind"
+            >{t(`inboxViews.kind.${v.source}`)}</span
+          >{/if}
+      {/if}
+    </span>
+  </button>
+{/snippet}
+
 {#snippet row(item: QueueItem)}
   {@const key = itemKey(item)}
-  {#if item.kind === 'stopped'}
+  {#if item.kind === 'view'}
+    {@render viewRow(item.view, key)}
+  {:else if item.kind === 'stopped'}
     {@const what = stoppedWhat(item.agent)}
-    <!-- IN-3: InboxViewRow — the blocking requests become IN-3's views (answered in the box); until then, a row that leads to its agent. -->
+    <!-- An agent stopped with no view of its request (a deletion it asks for, the Claude Code view): a row that leads to it. -->
     <button
       class="row-ask wt"
       class:on={inbox.selected === key}
@@ -189,10 +238,10 @@
         {#each g.earlier as it (itemKey(it))}{@render row(it)}{/each}
       </div>
     {/if}
-    {#if g.later.length}
+    {#if g.later.length || g.laterViews.length}
       <h2 class="grp">
         <button class="fold" aria-expanded={laterOpen} onclick={() => (laterOpen = !laterOpen)} data-testid="inbox-later">
-          <Icon name="clock" size={12} />{t('inbox.queue.later')} <span class="c">{g.later.length}</span>
+          <Icon name="clock" size={12} />{t('inbox.queue.later')} <span class="c">{g.later.length + g.laterViews.length}</span>
         </button>
       </h2>
       {#if laterOpen}
@@ -216,6 +265,7 @@
               </span>
             </button>
           {/each}
+          {#each g.laterViews as v (v.key)}{@render viewRow(v, `view:${v.key}`)}{/each}
         </div>
       {/if}
     {/if}

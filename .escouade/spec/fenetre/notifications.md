@@ -2,8 +2,8 @@
 title: "Notifications"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md (chapitre 2, « Notifications, vue d'ensemble, serveur MCP »)","src-tauri/src/prnews.rs"]
-tickets: ["ESC-68"]
-decisions: []
+tickets: ["ESC-68","ESC-513"]
+decisions: ["la-boite-a-toi-montre-ce-qui-attend-aill"]
 compared: null
 ---
 
@@ -72,3 +72,9 @@ Elles ne demandent rien à l'hébergeur : une notification est l'écart entre de
 - Une nouvelle n'arrive qu'avec la lecture qui la voit : toutes les minutes fenêtre devant et toutes les 5 minutes sinon pour une PR de ticket et un déploiement suivi ; seulement quand l'agent est affiché pour la PR d'un agent ordinaire ; seulement quand la liste du projet est lue (vue « Pull requests », vue d'ensemble ouverte, outil `list_pull_requests`) pour une relecture demandée.
 - Ce qui change pendant que l'app est fermée est dit à la prochaine lecture pour une PR suivie, mais pas pour une relecture demandée : la première lecture d'une liste après le démarrage ne dit rien.
 - Essayé contre le faux GitHub seulement. Essai réel à faire sur GitHub ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps suivent leur documentation.
+
+## Le résumé de la boîte « À toi » (ESC-513)
+
+- Les demandes asynchrones des agents (la boîte « À toi », voir *La boîte « À toi »*) ne notifient jamais une par une : un **résumé**, 2 minutes après la première d'un calme, puis une notification au plus toutes les 30 minutes (ou par heure). Titre « <projet> · À toi », ou « Escouade · À toi » pour plusieurs projets ; corps « 2 demandes t'attendent dans À toi : un choix de design-tableau, un feu vert de chef-atlas. », jamais le titre d'une demande.
+- Ni carillon ni barre des tâches qui clignote ; une notification du système seulement, que l'app soit hors de vue. Les questions, autorisations et plans gardent leurs notifications ci-dessus.
+- Réglage : Réglages › Notifications › « Boîte « À toi » » › « Résumé de la boîte « À toi » » : « Un résumé, toutes les 30 min au plus » (défaut), « Un résumé par heure », « Jamais (le compteur seul) ». Il n'existe que serveur MCP allumé (la recherche des réglages ne le trouve pas sinon) ; « Notifications système » éteint, il ne dit rien non plus.

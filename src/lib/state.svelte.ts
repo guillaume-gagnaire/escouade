@@ -29,6 +29,7 @@ import { applyTheme } from './theme';
 import { hasTab } from './code-host';
 import { newCount, opened, readSeen, seenOf, type PrSeen } from './prnew';
 import { workflows } from './workflows.svelte';
+import { inboxViews } from './inbox/views.svelte';
 import { modeToAsk } from './first-mode';
 import {
   activeItem,
@@ -431,6 +432,8 @@ class AppState {
   memoryTicks = $state<Record<string, number>>({});
   /** Counts the changes of the box « À toi » the core told (ESC-510): the box reads itself again (App.svelte). */
   inboxTick = $state(0);
+  /** The scope the click of the box's summary opens it on (ESC-513): the box takes it (App.svelte). */
+  inboxScopeAsked = $state<'all' | 'project' | null>(null);
   /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
   vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
@@ -874,6 +877,8 @@ class AppState {
   }
 
   private onEvent(e: UiEvent) {
+    // What Escouade puts in the box « À toi » follows its sources (ESC-513); the MCP server off, there is no box.
+    if (this.settings.mcpEnabled) inboxViews.take(e);
     switch (e.type) {
       case 'agent': {
         const prev = this.agents[e.agent.id];
@@ -931,6 +936,14 @@ class AppState {
         // The click of a ticket's notification.
         this.openBoard(e.projectId);
         break;
+      case 'inboxOpen': {
+        // The click of the box's summary (ESC-513): the box, on the project when the summary was of one alone.
+        const one = e.projectId && this.projects.some((p) => p.id === e.projectId) ? e.projectId : null;
+        if (one) this.ui.activeProject = one;
+        this.inboxScopeAsked = one ? 'project' : 'all';
+        this.openInbox('notification', this.inboxScopeAsked);
+        break;
+      }
       case 'focusPrs':
         // The click of a review asked of the user.
         this.openPrs(e.projectId);
@@ -1207,7 +1220,7 @@ class AppState {
    * Shows the box « À toi » (ESC-510, direction B: a view of every project, from the rail) in place of the project, the
    * statistics or « Vue d’ensemble »; never while the MCP server is off (the box is its own, docs/INBOX.md § 6).
    */
-  openInbox(from: 'tile' | 'shortcut' | 'settings' = 'tile', scope: 'all' | 'project' = 'all') {
+  openInbox(from: 'tile' | 'shortcut' | 'settings' | 'notification' = 'tile', scope: 'all' | 'project' = 'all') {
     if (this.ui.view === 'inbox' || !this.settings.mcpEnabled) return;
     this.inboxFrom = this.ui.view;
     this.ui.view = 'inbox';

@@ -47,7 +47,12 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `pr_merged` | A ticket’s pull request is merged, from Escouade or on the host | `forge`: `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo included), `azure` or `other` (the host of a third party’s plugin, never named) |
 | `ci_fix_started` | A failed CI is given to an agent | `from`: `agent` or `ticket`; `by`: `user` or `autopilot` |
 | `pr_review_started` | A pull request is given to an agent to review | `forge`: `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo included), `azure` or `other` (the host of a third party’s plugin, never named) |
-| `inbox_opened` | The “Your turn” box is opened | `from`: `tile` (its tile), `shortcut` (Ctrl Shift J) or `settings` (“Open the box”); `scope`: `all` or `project` |
+| `ask_created` | An agent leaves a request in the box “Your turn” | `kind`: `choice`, `confirm`, `answer` or `task`; `author`: `agent`, `chef` (the squad lead) or `client` (Claude outside Escouade); `files`: the number of files joined, by range (`0`, `1-3`, `4-12`); `recommendation` and `decision`: yes or no; never the text nor the files |
+| `ask_withdrawn` | Its author takes a request out of the box | `kind` |
+| `ask_expired` | A request reaches its date without an answer | `kind` |
+| `inbox_view_settled` | What waited elsewhere is settled from the box “Your turn” | `source`: `permission`, `question`, `plan`, `ticketReview`, `ticketBlocked`, `decision` or `docs`; `act`: the gesture (`allow`, `deny`, `approve`, `accept`, `share`…) |
+| `inbox_summary_shown` | The summary of the box “Your turn” is shown | `requests`: the number of requests, by range (`1`, `2-3`, `4+`) |
+| `inbox_opened` | The “Your turn” box is opened | `from`: `tile` (its tile), `shortcut` (Ctrl Shift J), `notification` (the box’s summary) or `settings` (“Open the box”); `scope`: `all` or `project` |
 | `ask_answered` | You answer an agent’s request in the box | `kind`: `choice`, `confirm`, `answer` or `task`; `delay`: how long it had waited (`ten_minutes`, `hour`, `day` or `longer`); `via`: `click`, `keyboard` or `voice`; `followed`: for a choice with a recommendation, whether you followed it (yes or no); never the question nor the answer |
 | `ask_snoozed` | A request is put off for later | — |
 | `ask_reopened` | You take back an answer before the agent read it | — |

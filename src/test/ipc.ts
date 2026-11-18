@@ -85,6 +85,7 @@ export const SETTINGS: Settings = {
   claudePath: '',
   sound: true,
   osNotifications: true,
+  inboxSummary: 'every30',
   notifyFor: {
     questions: true,
     done: true,

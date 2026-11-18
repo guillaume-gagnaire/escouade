@@ -352,6 +352,30 @@ describe('SettingsModal', () => {
     expect(app.settings.notifyFor.done).toBe(false);
   });
 
+  // ESC-513: the summary of the box « À toi » rests on the MCP server, like the box: off, its setting is not there.
+  it('sets the summary of the box « À toi » only while the MCP server is on', async () => {
+    const backend = backendSaving();
+    app.settings = { ...app.settings, mcpEnabled: false };
+    const { unmount } = render(SettingsModal);
+    await userEvent.click(tab('Notifications'));
+    expect(within(panel()).queryByRole('combobox', { name: 'Résumé de la boîte « À toi »' })).toBeNull();
+    unmount();
+    app.settings = { ...app.settings, mcpEnabled: true };
+    render(SettingsModal);
+    await userEvent.click(tab('Notifications'));
+    const choice = within(panel()).getByRole('combobox', { name: 'Résumé de la boîte « À toi »' });
+    expect(choice).toHaveValue('every30');
+    expect(
+      within(choice)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Un résumé, toutes les 30 min au plus', 'Un résumé par heure', 'Jamais (le compteur seul)']);
+    expect(group('Boîte « À toi »').getByText(/Jamais une alerte par demande/)).toBeInTheDocument();
+    await userEvent.selectOptions(choice, 'hourly');
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.inboxSummary).toBe('hourly');
+  });
+
   it('sets each news of the code hosts on its own (ESC-68)', async () => {
     const backend = backendSaving();
     render(SettingsModal);

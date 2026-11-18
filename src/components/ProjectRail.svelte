@@ -198,6 +198,8 @@
               asks: t('inbox.tile.asks', { count: c.asks }),
               stopped: t('inbox.tile.stopped', { count: c.stopped }),
             }),
+            // What Escouade puts in it of its own (ESC-513): tickets, decisions, docs, reviews.
+            ...(c.views ? [t('inboxViews.tileViews', { count: c.views })] : []),
           ],
           side: 'right',
           aria: false,

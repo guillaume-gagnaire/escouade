@@ -44,12 +44,19 @@ const EVENTS = [
   'pr_merged',
   'ci_fix_started',
   'pr_review_started',
+  // The box « À toi » (ESC-510).
   'inbox_opened',
   'ask_answered',
   'ask_snoozed',
   'ask_reopened',
   'inbox_compare_opened',
   'inbox_attachment_opened',
+  // What Escouade puts in it, and its summary (ESC-513).
+  'ask_created',
+  'ask_withdrawn',
+  'ask_expired',
+  'inbox_view_settled',
+  'inbox_summary_shown',
 ];
 /** The values some props take, written on the page as `value`. */
 const VALUES = [
@@ -72,10 +79,11 @@ const VALUES = [
   'ticket',
   'project',
   'global',
-  // The box « À toi » (ESC-510).
+  // The box « À toi » (ESC-510, ESC-513).
   'tile',
   'shortcut',
   'settings',
+  'notification',
   'all',
   'choice',
   'confirm',
@@ -93,8 +101,35 @@ const VALUES = [
   'markdown',
   'word',
   'csv',
+  'chef',
+  'client',
+  'permission',
+  'ticketReview',
+  'decision',
+  'docs',
 ];
-const PROPS = ['worktree', 'by', 'op', 'service', 'from', 'from_store', 'forge', 'scope', 'kind', 'delay', 'via', 'followed', 'type'];
+const PROPS = [
+  'worktree',
+  'by',
+  'op',
+  'service',
+  'from',
+  'from_store',
+  'forge',
+  'scope',
+  'kind',
+  'delay',
+  'via',
+  'followed',
+  'type',
+  'author',
+  'files',
+  'recommendation',
+  'decision',
+  'source',
+  'act',
+  'requests',
+];
 
 const source = (lang: Lang) => readFileSync(new URL(`../${privacySource(lang)}`, import.meta.url), 'utf8');
 const render = (lang: Lang) => renderDoc(source(lang), { lang, link: (p) => p, callouts: CATALOGS[lang].docs.callouts });

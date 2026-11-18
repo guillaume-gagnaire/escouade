@@ -53,6 +53,7 @@ mod cursor_tui_tests;
 mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
+mod delegation;
 mod deleteask;
 #[cfg(test)]
 mod deleteask_tests;
@@ -121,6 +122,12 @@ mod harness_scope;
 #[cfg(test)]
 mod harness_scope_tests;
 mod hub;
+mod inboxnotify;
+#[cfg(test)]
+mod inboxnotify_tests;
+mod inboxviews;
+#[cfg(test)]
+mod inboxviews_tests;
 mod integrations;
 #[cfg(test)]
 mod integrations_tests;
@@ -806,6 +813,9 @@ pub fn run() {
                 commands::inbox_closing,
                 commands::inbox_weight,
                 commands::inbox_erase_closed_files,
+                commands::inbox_views,
+                commands::inbox_view_act,
+                commands::inbox_view_snooze,
                 commands::memory_forget,
                 commands::claude_memory_offer,
                 commands::claude_memory_take,

@@ -19,6 +19,8 @@ export interface Settings {
   osNotifications: boolean;
   /** « Me prévenir pour »: what the chime and the system notifications are for. */
   notifyFor: NotifyFor;
+  /** « Résumé de la boîte « À toi » » (ESC-513): how often its summary tells, never one alert per request. */
+  inboxSummary: InboxSummary;
   idleStopMinutes: number;
   /** « Taille maximale d'un fichier joint », in MB: 0 = no limit. */
   attachMaxMb: number;
@@ -1560,6 +1562,9 @@ export interface FoundWorktree {
 export type Integration = { kind: 'upToDate' } | { kind: 'done' } | { kind: 'conflict'; files: string[]; rebase: boolean };
 
 /** A request waiting for the user, as the agent's view sums it up: each text capped, the card in the conversation has it whole. */
+/** « Résumé de la boîte « À toi » » (ESC-513). */
+export type InboxSummary = 'every30' | 'hourly' | 'never';
+
 export interface PendingRequest {
   /** The item's id in the conversation, which the answer names. */
   id: string;
@@ -2691,6 +2696,8 @@ export type UiEvent =
   | { type: 'memory'; projectId: string }
   /** The box « À toi » changed (ESC-509): `inbox_list` reads it again. */
   | { type: 'inbox'; projectId: string }
+  /** A click on the summary of the box (ESC-513): the box opens, on this project when it was of one alone. */
+  | { type: 'inboxOpen'; projectId: string | null }
   | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
   | { type: 'usage'; usage: Usage }

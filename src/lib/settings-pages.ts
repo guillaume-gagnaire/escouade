@@ -206,6 +206,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
 
   // Notifications › Me prévenir pour, Pull requests et déploiements, Canaux, Son.
   row('notifyFor', 'notifications', 'settings.notifications.notifyFor', s('notifyFor')),
+  row('inboxSummary', 'notifications', 'inboxViews.summary.label', s('inboxSummary')),
   row('osNotifications', 'notifications', 'settings.notifications.systemName', s('osNotifications')),
   row('sound', 'notifications', 'settings.notifications.soundOn', s('sound')),
 

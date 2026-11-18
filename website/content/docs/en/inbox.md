@@ -12,13 +12,13 @@ The box comes with Escouade’s MCP server: turn on “Agents can drive Escouade
 - **`Ctrl+Shift+J`** opens and closes it; `Esc` closes it too. `Ctrl+J` still goes to the next stopped agent.
 - **Server off**, nothing of the box shows: no tile, no count, no shortcut. Turning the server off with requests open asks first: they are kept, without you seeing them or their agents reading them, until you turn it on again, and they expire at their date. On again, the tile comes back with them, without a restart.
 
-The tile’s count and the status bar’s say the same thing: “N waiting” counts the stopped agents, and the tile counts those same agents plus the open requests. A request put off for later only counts once it comes back.
+The tile’s count and the status bar’s say the same thing: “N waiting” counts the stopped agents, and the tile counts those same agents plus the open requests and what Escouade puts in the box of its own (see below), a blocking request counted once, with its agent. A request put off for later only counts once it comes back.
 
 ## The queue
 
 On the left, the queue: “All” or “This project”, the meter (a cell per request, green once handled, amber for a stopped agent) and “3 handled today · 9 left”. Below, the groups:
 
-1. **“Your agents have stopped”**: the agents waiting for your answer in their conversation (“Open the conversation” leads there).
+1. **“Your agents have stopped”**: the permissions, the questions and the plans of your stopped agents, settled right there; an agent stopped for something else (a deletion it asks for) leads to its conversation (“Open the conversation” leads there).
 2. **“Today”**: the urgent requests, those back from “Later”, those a ticket waits for or left today.
 3. **“Earlier”**, then **“Later”** (folded), with the time each comes back.
 4. **“Recently answered”**: the answers of the last 7 days (50 at most), with who answered, when, and whether the agent read them.
@@ -73,6 +73,25 @@ The files of a closed request are kept 30 days, then erased (Settings › Agents
 - **Taking back your answer**: it goes 10 seconds after your gesture (“goes in 10 s · Undo”). Then, as long as the agent hasn’t read it, “Take back my answer” reopens the request; once read, “Change my mind…” takes you to its conversation with a message ready to finish.
 - **Letting the squad lead decide**: when the project has a lead and “Agents can answer the other agents’ requests” allows it, “Let chef-atlas decide” leaves this request to it, and “Take it back” gives it back to you. A go-ahead and a task stay yours.
 - **Go to the agent** or **to the ticket** the request is about, from the bar at the top.
+
+## What Escouade puts in it of its own
+
+The box also shows what already waits for you elsewhere, without copying it: settled here, it is settled there, and settled there, its line leaves the box at once.
+
+| Line | Group | What you do in the box |
+|---|---|---|
+| Permission, question, plan of a stopped agent | Your agents have stopped | Allow (or always allow, when its card offers it), deny with a word, pick a question’s answer, approve a plan |
+| Ticket to approve | Today | Approve it, as on its card on the board, or send it back to the agent with what to change |
+| Blocked ticket | Today | A conflict: the agent resolves, or cancel; a ticket under way: resume |
+| Proposed decision | Earlier | Accept it |
+| Docs to share | Earlier | Share them |
+| Review | Today | Open the pull request on its host |
+
+The top bar leads to their place (the agent, the board, Docs). All of them can be put off for later, but those of a stopped agent, which waits for your answer.
+
+## Being told
+
+Never one alert per request: when requests come in, Escouade waits two minutes to have them all, then a system notification says how many, of what kinds and from whom (never their title). After that, one every 30 minutes at most. No chime, no flashing; your agents’ questions and permissions keep their notifications. A click on the notification opens the box. Settings › Notifications: a summary every 30 minutes at most, every hour, or never (the counter alone).
 
 ## The trace
 

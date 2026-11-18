@@ -13,7 +13,7 @@
 
 use crate::core::Core;
 use crate::i18n::{self, Lang};
-use crate::model::{now_ms, AgentsAnswer, Column, UiEvent};
+use crate::model::{now_ms, Column, UiEvent};
 use anyhow::{anyhow, bail, Result};
 pub use escouade_model::asks::*;
 use std::collections::HashSet;
@@ -1079,6 +1079,23 @@ impl<R: Runtime> Core<R> {
             kept.files.len()
         );
         self.inbox_told(project_id);
+        // Its summary, once the requests that come with it are gathered (ESC-513).
+        self.inbox_summary_soon();
+        self.telemetry.track(crate::telemetry::Event::AskCreated {
+            kind: kept.kind.as_str(),
+            author: match (&kept.author.agent, kept.author.chef) {
+                (None, _) => "client",
+                (Some(_), true) => "chef",
+                (Some(_), false) => "agent",
+            },
+            files: match kept.files.len() {
+                0 => "0",
+                1..=3 => "1-3",
+                _ => "4-12",
+            },
+            recommendation: kept.recommend.is_some(),
+            decision: kept.decision,
+        });
         Ok(kept)
     }
 
@@ -1294,6 +1311,9 @@ impl<R: Runtime> Core<R> {
             Ok(a.clone())
         })?;
         log::info!("ask {id} withdrawn");
+        self.telemetry.track(crate::telemetry::Event::AskWithdrawn {
+            kind: a.kind.as_str(),
+        });
         self.block_waiting(&a);
         self.inbox_told(&a.project_id);
         Ok(a)
@@ -1558,14 +1578,15 @@ impl<R: Runtime> Core<R> {
             .iter()
             .find(|p| p.id == a.project_id)
             .and_then(|p| p.chef.clone());
-        match self.settings.read().agents_answer {
-            AgentsAnswer::All => Ok(()),
-            AgentsAnswer::Chef if chef.as_deref() == Some(agent) => Ok(()),
-            AgentsAnswer::Chef => bail!(tr!(
+        // The same rule as for the requests an agent stopped for (ESC-513).
+        let setting = self.settings.read().agents_answer;
+        match crate::delegation::may_answer(setting, chef.as_deref(), agent) {
+            Ok(()) => Ok(()),
+            Err(crate::delegation::Refusal::NotTheChef) => bail!(tr!(
                 "Seul le chef d’escouade du projet reçoit une demande : il se choisit dans Réglages › Projets › Équipe.",
                 "Only the project’s squad lead is left a request: it is chosen in Settings › Projects › Team."
             )),
-            AgentsAnswer::Nobody => bail!(tr!(
+            Err(crate::delegation::Refusal::Nobody) => bail!(tr!(
                 "Aucun agent ne répond aux demandes des autres : permets-le dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux demandes des autres agents »).",
                 "No agent answers the others’ requests: allow it in Settings › Agents › Drive Escouade (“Agents can answer the other agents’ requests”)."
             )),
@@ -1775,6 +1796,11 @@ impl<R: Runtime> Core<R> {
             let _ = std::fs::remove_dir_all(self.ask_dir(&id));
         }
         for a in &closed {
+            if a.state == AskState::Expired {
+                self.telemetry.track(crate::telemetry::Event::AskExpired {
+                    kind: a.kind.as_str(),
+                });
+            }
             self.block_waiting(a);
         }
         for p in changed {

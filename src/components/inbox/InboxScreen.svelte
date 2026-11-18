@@ -1,13 +1,15 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
   import type { IconName } from '../../lib/icons';
-  import { inbox, stoppedTitle, stoppedWhat } from '../../lib/inbox/inbox.svelte';
+  import { inbox, itemKey, stoppedTitle, stoppedWhat } from '../../lib/inbox/inbox.svelte';
+  import { goToSource, placeOf } from '../../lib/inbox/act';
   import { api } from '../../lib/ipc';
   import { menu } from '../../lib/menu.svelte';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
   import Icon from '../Icon.svelte';
   import AskPane from './AskPane.svelte';
+  import InboxViewPane from './InboxViewPane.svelte';
 
   // The panel of the box « À toi » (direction B, `b-pleine.png`): its bar (« ‹ 3 sur 9 › », J suivante, K précédente,
   // L plus tard; « Aller à l'agent », « Le ticket »), then one request at a time, in full; the box empty when nothing
@@ -107,6 +109,13 @@
             data-testid="inbox-to-ticket"><Icon name="kanban" size={13} />{t('inbox.ask.toTicket')}</button
           >
         {/if}
+      {:else if cur.kind === 'view'}
+        {@const place = placeOf(cur.view)}
+        {#if place}
+          <button class="btn ghost" onclick={() => goToSource(cur.view)} data-testid="ivw-source"
+            ><Icon name={place.icon} size={13} />{place.label}</button
+          >
+        {/if}
       {:else}
         <button class="btn ghost" onclick={() => goAgent(cur.agent.id)}><Icon name="agents" size={13} />{t('inbox.ask.toAgent')}</button>
       {/if}
@@ -115,8 +124,13 @@
       {#key cur.ask.id}
         <AskPane ask={cur.ask} />
       {/key}
+    {:else if cur.kind === 'view'}
+      <!-- What waits elsewhere (ESC-513), settled here with the gestures of its source; done, the next row opens. -->
+      {#key cur.view.key}
+        <InboxViewPane view={cur.view} ondone={() => inbox.after(itemKey(cur))} />
+      {/key}
     {:else}
-      <!-- IN-3: InboxViewPane — a blocking request answered in the box; until then, where to answer it. -->
+      <!-- An agent stopped with no view of its request: where to answer it. -->
       {@const what = stoppedWhat(cur.agent)}
       <div class="stopped" data-testid="inbox-stopped-pane">
         <span class="kind wt"

@@ -365,3 +365,30 @@ async fn a_private_projects_requests_are_found_by_its_own_agents_alone() {
     .await;
     assert!(e.contains("Aucun projet"), "{e}");
 }
+
+/// The server's instructions say when to leave a request in the box rather than in a report
+/// (ESC-513, docs/INBOX.md § 13): given with the server only, since off there is none.
+#[tokio::test]
+async fn the_server_tells_its_agents_when_to_leave_a_request() {
+    let h = crate::core_tests::harness("mcp-asks-guidance");
+    h.core.settings.write().mcp_enabled = true;
+    let c = super::tools_tests::external(&h).await;
+    let said = c
+        .peer_info()
+        .and_then(|i| i.instructions.clone())
+        .unwrap_or_default();
+    for part in [
+        "without being blocked",
+        "with ask_user instead of only writing it in your report",
+        "a go-ahead to publish, sign, delete or spend",
+        "a trial only the user can make",
+        "join your renders to their options (light and dark)",
+        "withdraw_ask",
+        "A question that blocks you stays a question",
+        "Never put a secret in a request",
+    ] {
+        assert!(said.contains(part), "{part}: {said}");
+    }
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}

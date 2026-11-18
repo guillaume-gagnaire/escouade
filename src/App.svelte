@@ -62,6 +62,7 @@
   import InboxQueue from './components/inbox/InboxQueue.svelte';
   import InboxScreen from './components/inbox/InboxScreen.svelte';
   import { inbox } from './lib/inbox/inbox.svelte';
+  import { inboxViews } from './lib/inbox/views.svelte';
   import ProjectRail from './components/ProjectRail.svelte';
   import { railWidth } from './lib/rail-width.svelte';
   import { sideWidth } from './lib/side-width.svelte';
@@ -172,6 +173,21 @@
         inbox.clear();
         if (app.ui.view === 'inbox') app.closeInbox();
       }
+    });
+  });
+
+  // What Escouade puts in the box of its own (ESC-513): its views read once the server is on (then by their sources'
+  // events, `inboxViews.take`), gone when it is off; the scope the summary's click asked for.
+  $effect(() => {
+    const on = app.ready && app.settings.mcpEnabled;
+    untrack(() => (on ? void inboxViews.load() : inboxViews.reset()));
+  });
+  $effect(() => {
+    const scope = app.inboxScopeAsked;
+    if (!scope) return;
+    untrack(() => {
+      inbox.scope = scope;
+      app.inboxScopeAsked = null;
     });
   });
 

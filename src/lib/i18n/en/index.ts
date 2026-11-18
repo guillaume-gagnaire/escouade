@@ -20,6 +20,7 @@ import integrations from './integrations';
 import inbox from './inbox';
 import mcp from './mcp';
 import memory from './memory';
+import inboxViews from './inboxViews';
 import vectors from './vectors';
 import nav from './nav';
 import plan from './plan';
@@ -63,6 +64,7 @@ export const en = defineCatalog({
   heat,
   mcp,
   memory,
+  inboxViews,
   vectors,
   branches,
   plan,

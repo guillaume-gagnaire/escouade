@@ -8,6 +8,7 @@ import { found, writerOptions } from './engines';
 import { tIn, type Lang } from './i18n';
 import { harnessInstalled, installedEngines, installedOf } from './installed';
 import { SERVICE_IDS } from './integrations';
+import { app } from './state.svelte';
 import { pageInfo, SETTINGS_PAGES, SETTINGS_ROWS, type RowInfo, type SettingsPage } from './settings-pages';
 
 const LANGS: Lang[] = ['fr', 'en'];
@@ -57,6 +58,8 @@ const SHOWN: Record<string, () => boolean> = {
   sync: () => installedOf('ticketSources', SERVICE_IDS).length > 0,
   autoImport: () => installedOf('ticketSources', SERVICE_IDS).length > 0,
   mapping: () => installedOf('ticketSources', SERVICE_IDS).length > 0,
+  // The box « À toi » rests on the MCP server (ESC-513): off, the search does not lead to it.
+  inboxSummary: () => !!app.settings.mcpEnabled,
 };
 
 /** Whether the row is on its page, as the plugins installed have it. */

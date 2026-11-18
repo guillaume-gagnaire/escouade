@@ -224,3 +224,125 @@ async fn no_tool_of_the_server_names_the_chef() {
     e.cancel().await.unwrap();
     h.core.mcp.stop();
 }
+
+/// The requests of the box the user leaves to an agent follow the same rule as the requests an
+/// agent stopped for (ESC-513, docs/INBOX.md § 8.5): for each setting, the chef and another agent
+/// are let or refused alike, for the same reason; and never one's own.
+#[tokio::test]
+async fn the_box_and_the_blocking_requests_follow_one_rule_with_the_same_refusals() {
+    use crate::asks::{AskAuthor, AskDraft, AskKind};
+    let h = harness("mcp-rights-box");
+    h.core.settings.write().mcp_enabled = true;
+    let p = project(&h).await;
+    let chef = live(&h, &p, "chef").await;
+    let other = live(&h, &p, "autre").await;
+    designate(&h, &p, Some(&chef.id));
+    let chef_c = as_agent(&h, &chef.id).await;
+    let other_c = as_agent(&h, &other.id).await;
+    let mut n = 0;
+    for setting in [AgentsAnswer::Nobody, AgentsAnswer::Chef, AgentsAnswer::All] {
+        answering(&h, setting);
+        for (who, c) in [(&chef, &chef_c), (&other, &other_c)] {
+            n += 1;
+            let name = format!("demandeur-{n}");
+            let asker = asking(&h, &p, &name, "permission").await;
+            let ask = h
+                .core
+                .ask_deposit(
+                    AskAuthor {
+                        agent: Some(asker.id.clone()),
+                        name: name.clone(),
+                        chef: false,
+                    },
+                    &p.id,
+                    None,
+                    AskDraft {
+                        kind: AskKind::Choice,
+                        title: "Choisis".into(),
+                        options: ["A", "B"]
+                            .iter()
+                            .map(|l| crate::asks::AskOption {
+                                label: (*l).into(),
+                                ..Default::default()
+                            })
+                            .collect(),
+                        wake: true,
+                        ..Default::default()
+                    },
+                    vec![],
+                )
+                .unwrap();
+            let rule = crate::delegation::may_answer(setting, Some(&chef.id), &who.id);
+            let left = h.core.ask_delegate(&ask.id, Some(&who.id));
+            assert_eq!(left.is_ok(), rule.is_ok(), "{setting:?} {}", who.name);
+            match rule {
+                Ok(()) => {
+                    read(c, "answer_permission", allow(&name)).await;
+                }
+                Err(why) => {
+                    let blocking = refused(c, "answer_permission", allow(&name)).await;
+                    let boxed = left.unwrap_err().to_string();
+                    let (b, x) = match why {
+                        crate::delegation::Refusal::Nobody => (
+                            "Seul l’utilisateur peut le permettre",
+                            "Aucun agent ne répond",
+                        ),
+                        crate::delegation::Refusal::NotTheChef => (
+                            "Seul le chef d’escouade",
+                            "Seul le chef d’escouade du projet",
+                        ),
+                    };
+                    assert!(blocking.contains(b), "{blocking}");
+                    assert!(boxed.contains(x), "{boxed}");
+                    // Both say where it is set.
+                    assert!(blocking.contains("Réglages ›") && boxed.contains("Réglages ›"));
+                }
+            }
+        }
+    }
+    // The rule never lets an agent answer its own: a request of the box neither.
+    answering(&h, AgentsAnswer::All);
+    let own = h
+        .core
+        .ask_deposit(
+            AskAuthor {
+                agent: Some(other.id.clone()),
+                name: "autre".into(),
+                chef: false,
+            },
+            &p.id,
+            None,
+            AskDraft {
+                kind: AskKind::Confirm,
+                title: "Publier ?".into(),
+                wake: true,
+                ..Default::default()
+            },
+            vec![],
+        )
+        .unwrap();
+    let why = h.core.ask_delegate(&own.id, Some(&other.id)).unwrap_err();
+    assert!(why.to_string().contains("sa propre demande"), "{why}");
+    chef_c.cancel().await.unwrap();
+    other_c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[test]
+fn the_rule_is_one_for_every_setting() {
+    use crate::delegation::{may_answer, Refusal};
+    assert_eq!(
+        may_answer(AgentsAnswer::Nobody, Some("c"), "c"),
+        Err(Refusal::Nobody)
+    );
+    assert_eq!(may_answer(AgentsAnswer::Chef, Some("c"), "c"), Ok(()));
+    assert_eq!(
+        may_answer(AgentsAnswer::Chef, Some("c"), "x"),
+        Err(Refusal::NotTheChef)
+    );
+    assert_eq!(
+        may_answer(AgentsAnswer::Chef, None, "x"),
+        Err(Refusal::NotTheChef)
+    );
+    assert_eq!(may_answer(AgentsAnswer::All, None, "x"), Ok(()));
+}

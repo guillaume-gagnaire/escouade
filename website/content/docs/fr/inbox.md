@@ -12,13 +12,13 @@ La boîte existe avec le serveur MCP d’Escouade : allume « Les agents peuven
 - **`Ctrl+Maj+J`** l’ouvre et la referme ; `Échap` aussi la referme. `Ctrl+J` va toujours au prochain agent arrêté.
 - **Serveur éteint**, rien de la boîte ne se montre : ni tuile, ni compteur, ni raccourci. Éteindre le serveur avec des demandes ouvertes te le demande d’abord : elles sont gardées, sans que tu les voies ni que leurs agents puissent les lire, jusqu’à ce que tu le rallumes, et elles se périment à leur date. Rallumé, la tuile revient avec elles, sans redémarrer.
 
-Le compte de la tuile et celui de la barre d’état disent la même chose : « N en attente » compte les agents arrêtés, et la tuile compte ces mêmes agents plus les demandes ouvertes. Une demande remise à plus tard ne compte qu’à son retour.
+Le compte de la tuile et celui de la barre d’état disent la même chose : « N en attente » compte les agents arrêtés, et la tuile compte ces mêmes agents plus les demandes ouvertes et ce qu’Escouade y range de lui-même (voir plus bas), une demande bloquante comptée une seule fois, avec son agent. Une demande remise à plus tard ne compte qu’à son retour.
 
 ## La file
 
 À gauche, la file : « Tous » ou « Ce projet », la jauge (une case par demande, verte une fois traitée, ambre pour un agent arrêté) et « 3 traitées aujourd’hui · il en reste 9 ». Dessous, les groupes :
 
-1. **« Tes agents se sont arrêtés »** : les agents qui attendent ta réponse dans leur conversation (« Ouvrir la conversation » y mène).
+1. **« Tes agents se sont arrêtés »** : les autorisations, les questions et les plans de tes agents arrêtés, à régler sur place ; un agent arrêté pour autre chose (une suppression qu’il demande) mène à sa conversation (« Ouvrir la conversation » y mène).
 2. **« Aujourd’hui »** : les demandes urgentes, revenues de « Plus tard », attendues par un ticket ou déposées aujourd’hui.
 3. **« Plus tôt »**, puis **« Plus tard »** (replié), avec l’heure du retour de chacune.
 4. **« Répondu récemment »** : les réponses des 7 derniers jours (50 au plus), avec qui a répondu, quand, et si l’agent les a lues.
@@ -73,6 +73,25 @@ Les fichiers d’une demande close sont gardés 30 jours, puis effacés (Réglag
 - **Revenir sur ta réponse** : elle part 10 secondes après ton geste (« part dans 10 s · Annuler »). Ensuite, tant que l’agent ne l’a pas lue, « Revenir sur ma réponse » rouvre la demande ; lue, « Changer d’avis… » t’emmène dans sa conversation avec un message prêt à compléter.
 - **Laisser le chef d’escouade trancher** : quand le projet a un chef et que « Les agents peuvent répondre aux demandes des autres agents » le permet, « Laisser chef-atlas trancher » lui confie cette demande, et « La reprendre » te la rend. Un feu vert et une tâche restent à toi.
 - **Aller à l’agent** ou **au ticket** dont parle la demande, depuis la barre du haut.
+
+## Ce qu’Escouade y range de lui-même
+
+La boîte montre aussi ce qui t’attend déjà ailleurs, sans le copier : réglé ici, c’est réglé là-bas, et réglé là-bas, la ligne quitte la boîte aussitôt.
+
+| Ligne | Groupe | Ce que tu fais dans la boîte |
+|---|---|---|
+| Autorisation, question, plan d’un agent arrêté | Tes agents se sont arrêtés | Autoriser (ou toujours autoriser, quand sa carte l’offre), refuser avec un mot, choisir la réponse d’une question, approuver un plan |
+| Ticket à valider | Aujourd’hui | Valider, comme sur sa carte du Kanban, ou le renvoyer à l’agent avec ce qu’il faut changer |
+| Ticket bloqué | Aujourd’hui | Un conflit : l’agent résout, ou annuler ; un ticket en cours : reprendre |
+| Décision proposée | Plus tôt | L’accepter |
+| Docs à partager | Plus tôt | Les partager |
+| Relecture | Aujourd’hui | Ouvrir la pull request chez l’hébergeur |
+
+La barre du haut mène à leur place (l’agent, le Kanban, Docs). Toutes se remettent à plus tard, sauf celles d’un agent arrêté, qui attend ta réponse.
+
+## Être prévenu
+
+Jamais une alerte par demande : quand des demandes arrivent, Escouade attend deux minutes de les avoir toutes, puis une notification du système dit combien, de quelles sortes et de qui (jamais leur titre). Ensuite, au plus une toutes les 30 minutes. Ni carillon ni clignotement ; les questions et les autorisations de tes agents gardent leurs notifications. Un clic sur la notification ouvre la boîte. Réglages › Notifications : un résumé toutes les 30 minutes au plus, par heure, ou jamais (le compteur seul).
 
 ## La trace
 

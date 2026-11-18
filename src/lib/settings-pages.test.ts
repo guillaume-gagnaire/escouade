@@ -31,6 +31,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   sound: true,
   osNotifications: true,
   notifyFor: true,
+  inboxSummary: true,
   idleStopMinutes: true,
   attachMaxMb: true,
   attachWarnMb: true,

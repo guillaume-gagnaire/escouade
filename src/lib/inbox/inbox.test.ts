@@ -82,7 +82,8 @@ describe('the count of the box', () => {
       [windowAsk({ id: 'a-1' }), windowAsk({ id: 'a-2', state: 'snoozed' }), windowAsk({ id: 'a-3', state: 'answered' })],
       stoppedAgents(app.agents),
     );
-    expect(c).toEqual({ asks: 1, stopped: 2, total: 3 });
+    // No view of what waits elsewhere (ESC-513) here.
+    expect(c).toEqual({ asks: 1, stopped: 2, views: 0, total: 3 });
   });
 
   it('says what a stopped agent waits for', () => {

@@ -47,7 +47,12 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `pr_merged` | La pull request d’un ticket est mergée, depuis Escouade ou chez l’hébergeur | `forge` : `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo compris), `azure` ou `other` (l’hébergeur d’un plugin d’un tiers, jamais nommé) |
 | `ci_fix_started` | Une CI en échec est donnée à un agent | `from` : `agent` ou `ticket` ; `by` : `user` ou `autopilot` |
 | `pr_review_started` | Une pull request est donnée à relire à un agent | `forge` : `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo compris), `azure` ou `other` (l’hébergeur d’un plugin d’un tiers, jamais nommé) |
-| `inbox_opened` | La boîte « À toi » est ouverte | `from` : `tile` (sa tuile), `shortcut` (Ctrl Maj J) ou `settings` (« Ouvrir la boîte ») ; `scope` : `all` ou `project` |
+| `ask_created` | Un agent dépose une demande dans la boîte « À toi » | `kind` : `choice`, `confirm`, `answer` ou `task` ; `author` : `agent`, `chef` (le chef d’escouade) ou `client` (Claude hors Escouade) ; `files` : le nombre de fichiers joints par tranche (`0`, `1-3`, `4-12`) ; `recommendation` et `decision` : oui ou non ; jamais le texte ni les fichiers |
+| `ask_withdrawn` | Son auteur retire une demande de la boîte | `kind` |
+| `ask_expired` | Une demande arrive à sa date sans réponse | `kind` |
+| `inbox_view_settled` | Ce qui attendait ailleurs est réglé depuis la boîte « À toi » | `source` : `permission`, `question`, `plan`, `ticketReview`, `ticketBlocked`, `decision` ou `docs` ; `act` : le geste (`allow`, `deny`, `approve`, `accept`, `share`…) |
+| `inbox_summary_shown` | Le résumé de la boîte « À toi » est montré | `requests` : le nombre de demandes par tranche (`1`, `2-3`, `4+`) |
+| `inbox_opened` | La boîte « À toi » est ouverte | `from` : `tile` (sa tuile), `shortcut` (Ctrl Maj J), `notification` (le résumé de la boîte) ou `settings` (« Ouvrir la boîte ») ; `scope` : `all` ou `project` |
 | `ask_answered` | Tu réponds à une demande d’un agent dans la boîte | `kind` : `choice`, `confirm`, `answer` ou `task` ; `delay` : depuis combien de temps elle attendait (`ten_minutes`, `hour`, `day` ou `longer`) ; `via` : `click`, `keyboard` ou `voice` ; `followed` : pour un choix recommandé, si tu as suivi la recommandation (oui ou non) ; jamais la question ni la réponse |
 | `ask_snoozed` | Une demande est remise à plus tard | — |
 | `ask_reopened` | Tu reviens sur une réponse avant que l’agent l’ait lue | — |

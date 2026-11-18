@@ -122,6 +122,33 @@ pub enum Event {
     PrReviewStarted {
         forge: &'static str,
     },
+    /// A view of the box « À toi » settled in the box (ESC-513): its source (`permission`,
+    /// `question`, `plan`, `ticketReview`, `ticketBlocked`, `decision`, `docs`) and the gesture.
+    InboxViewSettled {
+        source: &'static str,
+        act: &'static str,
+    },
+    /// An agent left a request in the box (ESC-513): its kind, who left it (`agent`, `chef`,
+    /// `client`), how many files by range, whether it recommends and whether it decides.
+    AskCreated {
+        kind: &'static str,
+        author: &'static str,
+        files: &'static str,
+        recommendation: bool,
+        decision: bool,
+    },
+    /// Its author took it back.
+    AskWithdrawn {
+        kind: &'static str,
+    },
+    /// Its date passed without an answer.
+    AskExpired {
+        kind: &'static str,
+    },
+    /// The summary of the box was told: how many requests, by range (`1`, `2-3`, `4+`).
+    InboxSummaryShown {
+        requests: &'static str,
+    },
     /// The box « À toi » opened (ESC-510): from where, on what.
     InboxOpened {
         from: &'static str,
@@ -178,6 +205,11 @@ impl Event {
             Event::PrMerged { .. } => "pr_merged",
             Event::CiFixStarted { .. } => "ci_fix_started",
             Event::PrReviewStarted { .. } => "pr_review_started",
+            Event::InboxViewSettled { .. } => "inbox_view_settled",
+            Event::InboxSummaryShown { .. } => "inbox_summary_shown",
+            Event::AskCreated { .. } => "ask_created",
+            Event::AskWithdrawn { .. } => "ask_withdrawn",
+            Event::AskExpired { .. } => "ask_expired",
             Event::InboxOpened { .. } => "inbox_opened",
             Event::AskAnswered { .. } => "ask_answered",
             Event::AskSnoozed => "ask_snoozed",
@@ -230,6 +262,22 @@ impl Event {
             Event::PrMerged { forge } | Event::PrReviewStarted { forge } => {
                 json!({ "forge": forge })
             }
+            Event::InboxViewSettled { source, act } => json!({ "source": source, "act": act }),
+            Event::InboxSummaryShown { requests } => json!({ "requests": requests }),
+            Event::AskCreated {
+                kind,
+                author,
+                files,
+                recommendation,
+                decision,
+            } => json!({
+                "kind": kind,
+                "author": author,
+                "files": files,
+                "recommendation": yes(*recommendation),
+                "decision": yes(*decision),
+            }),
+            Event::AskWithdrawn { kind } | Event::AskExpired { kind } => json!({ "kind": kind }),
             Event::CiFixStarted { from, autopilot } => {
                 json!({ "from": from, "by": if *autopilot { "autopilot" } else { "user" } })
             }
@@ -859,6 +907,20 @@ mod tests {
                 autopilot: false,
             },
             Event::PrReviewStarted { forge: "gitea" },
+            Event::InboxViewSettled {
+                source: "ticketReview",
+                act: "approve",
+            },
+            Event::InboxSummaryShown { requests: "2-3" },
+            Event::AskCreated {
+                kind: "choice",
+                author: "agent",
+                files: "4-12",
+                recommendation: true,
+                decision: false,
+            },
+            Event::AskWithdrawn { kind: "task" },
+            Event::AskExpired { kind: "confirm" },
             Event::InboxOpened {
                 from: "tile",
                 scope: "all",
