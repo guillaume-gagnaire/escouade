@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
 # Puts Microsoft's ONNX Runtime where the bundles take it, for the systems where the conversation's voice (ESC-97)
 # loads it at run time: Intel Macs (pyke builds no static library for them) and Linux (pyke's needs glibc 2.38; this
-# one, 2.28). Its SHA-256 is that of the release's asset (GitHub's digest). Bundled by src-tauri/tauri.ort-<os>.conf.json.
+# one, 2.28). Bundled by src-tauri/tauri.ort-<os>.conf.json.
 #   scripts/onnxruntime.sh macos → src-tauri/macos/onnxruntime/libonnxruntime.1.23.2.dylib
 #   scripts/onnxruntime.sh linux → src-tauri/linux/onnxruntime/libonnxruntime.so.1.23.2
+#
+# From Microsoft's NuGet package Microsoft.ML.OnnxRuntime (nuget.org, where a published version can never change),
+# since github.com/microsoft/onnxruntime answers 404 (2026-11-18): the package's SHA-256 is pinned, and so is each
+# library's. The Linux one is byte for byte the library of the GitHub release that Escouade 2.1.3 shipped.
 set -euo pipefail
 
 VERSION=1.23.2
+PACKAGE_SHA256=25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 case "${1:-}" in
   macos)
-    NAME="onnxruntime-osx-x86_64-${VERSION}"
-    SHA256=d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6
+    IN_PACKAGE="runtimes/osx-x64/native/libonnxruntime.dylib"
+    SHA256=8c9c78de65ea3786f987c0d980e9c1b13a3a5fbc6b3e2965ba05b450e6e4c054
     LIB="libonnxruntime.${VERSION}.dylib"
     ;;
   linux)
-    NAME="onnxruntime-linux-x64-${VERSION}"
-    SHA256=1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b
+    IN_PACKAGE="runtimes/linux-x64/native/libonnxruntime.so"
+    SHA256=13ab8084954fa4a47c777880180b90810d6020f021441395712b48a75b74c68b
     LIB="libonnxruntime.so.${VERSION}"
     ;;
   *)
@@ -32,12 +37,13 @@ if [ -f "$DEST/$LIB" ]; then
 fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-curl -fsSL -o "$TMP/$NAME.tgz" "https://github.com/microsoft/onnxruntime/releases/download/v${VERSION}/${NAME}.tgz"
+curl -fsSL -o "$TMP/ort.nupkg" \
+  "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${VERSION}/microsoft.ml.onnxruntime.${VERSION}.nupkg"
 if command -v shasum >/dev/null; then sum="shasum -a 256"; else sum=sha256sum; fi
-echo "$SHA256  $TMP/$NAME.tgz" | $sum -c -
-# Its symbolic links may not be made (Git Bash under Windows): only the library itself is needed.
-tar -xzf "$TMP/$NAME.tgz" -C "$TMP" 2>/dev/null || true
-[ -f "$TMP/$NAME/lib/$LIB" ] || { echo "$LIB not in $NAME.tgz" >&2; exit 1; }
+echo "$PACKAGE_SHA256  $TMP/ort.nupkg" | $sum -c -
+unzip -q -o "$TMP/ort.nupkg" "$IN_PACKAGE" LICENSE -d "$TMP/x"
+echo "$SHA256  $TMP/x/$IN_PACKAGE" | $sum -c -
 mkdir -p "$DEST"
-cp "$TMP/$NAME/lib/$LIB" "$TMP/$NAME/LICENSE" "$DEST/"
+cp "$TMP/x/$IN_PACKAGE" "$DEST/$LIB"
+cp "$TMP/x/LICENSE" "$DEST/LICENSE"
 echo "$DEST/$LIB"
