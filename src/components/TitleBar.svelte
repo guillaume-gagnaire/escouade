@@ -12,6 +12,9 @@
   import { tip } from '../lib/tip';
   import Icon from './Icon.svelte';
   import PrivateMark from './PrivateMark.svelte';
+  import SpacePlate from './servers/SpacePlate.svelte';
+  import { connection } from '../lib/connection.svelte';
+  import { knowsServers } from '../lib/servers.svelte';
 
   // The title bar of the 2.0 design (ESC-158), with no tabs: over the projects' rail, the logo (Windows, Linux) or the
   // room of macOS's traffic lights; over the agents' sidebar, the active project's name and its menu; the search in the
@@ -42,6 +45,12 @@
   /** A shortcut as the bar writes it: « Ctrl K ». */
   const kbd = (s: string) => keyLabel(s).split('+').join(' ');
 
+  // The machine (ESC-537, docs/SERVER-UX.md § 4): once this computer knows a server, the space before the project — its
+  // plate and name, the SSH host (not at 1024), amber with « reconnexion » while cut; « Ce poste » on this computer.
+  const server = $derived(connection.server);
+  const cut = $derived(server !== null && connection.state !== 'open');
+  const machineShown = $derived(knowsServers());
+
   function openMenu() {
     if (!activeProject || !nameButton) return;
     menu.showAt(nameButton, projectMenu(activeProject));
@@ -55,6 +64,21 @@
     <div class="corner" data-tauri-drag-region>
       {#if !IS_MAC}<img class="mark" src="/logo.svg" alt="Escouade" draggable="false" />{/if}
     </div>
+    {#if machineShown}
+      <span
+        class="machine"
+        class:cut
+        role="status"
+        aria-label={t('servers.machineLabel', { name: server ? server.name : t('servers.thisComputer') })}
+        data-testid="title-machine"
+      >
+        <SpacePlate name={server?.name ?? ''} here={!server} {cut} size={18} />
+        <b>{server ? server.name : t('servers.thisComputer')}</b>
+        {#if server}<span class="host">{server.ssh}</span>{/if}
+        {#if cut && connection.state !== 'refused'}<span class="re"><Icon name="refresh" size={11} />{t('servers.reconnecting')}</span>{/if}
+      </span>
+      {#if activeProject && !first}<span class="slash" aria-hidden="true">/</span>{/if}
+    {/if}
     {#if activeProject && !first}
       <button
         class="proj"
@@ -198,6 +222,53 @@
     height: 22px;
     display: block;
     pointer-events: none;
+  }
+  /* The machine (ESC-537): the space's plate and name, its SSH host; amber while cut. */
+  .machine {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    margin-left: 2px;
+    padding: 0 9px 0 5px;
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    white-space: nowrap;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .machine b {
+    font-weight: 620;
+  }
+  .machine .host {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .machine.cut {
+    color: var(--wait);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .machine.cut b {
+    color: var(--wait);
+  }
+  .machine .re {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .slash {
+    color: var(--dim);
+    margin: 0 2px;
+  }
+  /* At 1024, the host leaves the bar: the plate and the name stay (§ 11). */
+  @media (max-width: 1100px) {
+    .machine .host {
+      display: none;
+    }
   }
   /* The active project, over its sidebar: its name, its changes, the same menu as its tile. */
   .proj {

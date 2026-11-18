@@ -415,6 +415,7 @@ export const fr: Catalog = {
       notifications: 'Notifications',
       'claude-code-view': 'La vue terminal',
       'remote-control': 'Remote control',
+      'connect-server': 'Se connecter à un serveur',
       git: 'Git et commits',
       worktrees: 'Worktrees',
       branches: 'Branches',

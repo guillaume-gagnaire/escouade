@@ -389,3 +389,26 @@ async fn an_agent_of_a_harness_no_longer_allowed_stops_between_two_turns_and_say
         .to_string();
     assert!(err.contains("claude"), "{err}");
 }
+
+#[test]
+fn a_server_reached_by_ssh_is_refused_before_any_connection_when_the_list_does_not_hold_it() {
+    // ESC-537: `servers.allowed` holds hosts and domains (`*.acme.internal`), written however.
+    let listed = locks(&[(
+        SERVERS,
+        json!(["*.acme.internal", "ssh://escouade@VPS.example.net:2222"]),
+    )]);
+    assert!(listed.check_ssh_server("escouade.acme.internal").is_ok());
+    assert!(listed.check_ssh_server("vps.example.net").is_ok());
+    let err = listed
+        .check_ssh_server("autre.example.org")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("autre.example.org") && err.contains("*.acme.internal"),
+        "{err}"
+    );
+    // The domain itself is not one of its machines' names.
+    assert!(listed.check_ssh_server("acme.internal").is_err());
+    // Without the policy, any server.
+    assert!(locks(&[]).check_ssh_server("x.example").is_ok());
+}

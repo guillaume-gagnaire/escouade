@@ -847,6 +847,41 @@ impl Locks {
         Ok(())
     }
 
+    /// A server of the server mode reached by SSH (ESC-537), `host` its address (the `HostName` of `~/.ssh/config`, or
+    /// the host typed): refused before any connection when `servers.allowed` does not hold it. An entry is a host
+    /// (`escouade.acme.internal`, `ssh://escouade.acme.internal`, `user@host:port` read for its host) or a pattern of a
+    /// domain (`*.acme.internal`).
+    pub fn check_ssh_server(&self, host: &str) -> Result<()> {
+        let Some(lock) = self.get(SERVERS) else {
+            return Ok(());
+        };
+        let asked = ssh_host_of(host);
+        let allowed = lock.allowed().unwrap_or_default();
+        let fits = |entry: &str| {
+            let entry = ssh_host_of(entry);
+            match entry.strip_prefix("*.") {
+                Some(domain) => asked.ends_with(&format!(".{domain}")),
+                None => !entry.is_empty() && entry == asked,
+            }
+        };
+        if allowed.iter().any(|a| fits(a)) {
+            return Ok(());
+        }
+        let list = if allowed.is_empty() {
+            tr!("aucun", "none")
+        } else {
+            allowed
+                .iter()
+                .map(|a| ssh_host_of(a))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        bail!(tr!(
+            "Le serveur {asked} est refusé : la stratégie de ce poste ne permet que {list}.",
+            "Server {asked} is refused: this computer’s policy only allows {list}."
+        ))
+    }
+
     /// « par la stratégie de ce poste »: who imposes `key`.
     fn by_line(&self, key: &str) -> String {
         self.by(key)
@@ -1101,6 +1136,23 @@ pub struct Enrollment {
     pub server: String,
     pub fingerprint: Option<String>,
     pub only_this_server: bool,
+}
+
+/// The host of an address as a server of the server mode is compared (ESC-537): its scheme, its user, its port and
+/// its path left out, in lower case (`ssh://escouade@Vps.Example.net:2222/` → `vps.example.net`).
+pub fn ssh_host_of(address: &str) -> String {
+    let a = address.trim();
+    let a = a.split_once("://").map(|(_, rest)| rest).unwrap_or(a);
+    let a = a.split('/').next().unwrap_or("");
+    let a = a.rsplit('@').next().unwrap_or("");
+    let a = if let Some(rest) = a.strip_prefix('[') {
+        rest.split(']').next().unwrap_or("")
+    } else if a.matches(':').count() == 1 {
+        a.split(':').next().unwrap_or("")
+    } else {
+        a
+    };
+    a.trim_end_matches('.').to_lowercase()
 }
 
 /// A server's address as it is compared: trimmed, its scheme and host in lower case, without the final `/`.

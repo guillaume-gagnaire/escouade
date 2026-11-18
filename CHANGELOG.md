@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Mode serveur : « Se connecter à un serveur » pilote d’ici un Escouade qui tourne sur ton serveur, par un tunnel SSH que l’app ouvre avec ta config, ton agent et tes hôtes connus, sans jamais accepter une clé à ta place. Un code d’appairage (ou le lancer d’ici par SSH) suffit la première fois ; la machine se lit dans la barre de titre, la barre d’état et le rail, et une coupure reprend seule, l’envoi suspendu et ton brouillon gardé.
 - Sécurité : un poste géré ou une équipe peut interdire le fichier où se gardent les secrets des plugins sans trousseau système, et ses stratégies jugent aussi le modèle et l’effort qu’un agent donne à l’agent qu’il crée. Le fichier interdit n’est plus proposé ni lu, et Réglages › Plugins le montre sous cadenas.
 - Tes agents peuvent te laisser ce qu’ils attendent de toi sans s’arrêter (un choix entre leurs rendus, un feu vert, une réponse, un essai à faire), avec leurs images et leurs PDF, par le serveur MCP : ta réponse leur revient en message, et un ticket peut l’attendre. L’écran de la boîte « À toi » suit.
 - Serveur d’équipe : la mémoire partagée d’un projet d’équipe part sur le serveur avec ses docs, chaque souvenir signé de qui l’a écrit. Un souvenir écrit par un agent attend qu’un humain le garde avant d’être lu de l’équipe, les agents lisent comme une donnée ce qui n’est pas validé, un administrateur peut tout retirer après un incident, et un secret est refusé.

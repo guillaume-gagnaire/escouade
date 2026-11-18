@@ -347,6 +347,41 @@ impl Failure {
     }
 }
 
+/// The machine this process runs on (ESC-537): its name on its network and the account it runs as, what a client
+/// says of a server (« escouade@vps.example.net ») and what a server is told of a client (« DESKTOP-7QK2 »).
+pub fn this_machine() -> proto::Machine {
+    let env = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty());
+    let host = env("COMPUTERNAME")
+        .or_else(host_name)
+        .or_else(|| env("HOSTNAME"))
+        .unwrap_or_default();
+    let user = env("USER")
+        .or_else(|| env("USERNAME"))
+        .or_else(|| env("LOGNAME"))
+        .unwrap_or_default();
+    proto::Machine {
+        host: host.trim().to_string(),
+        user: user.trim().to_string(),
+    }
+}
+
+#[cfg(unix)]
+fn host_name() -> Option<String> {
+    let mut buf = [0u8; 256];
+    // SAFETY: the buffer is ours, its length given; gethostname writes a string ended by a 0 within it.
+    let ok = unsafe { libc::gethostname(buf.as_mut_ptr().cast(), buf.len()) } == 0;
+    if !ok {
+        return None;
+    }
+    let end = buf.iter().position(|b| *b == 0).unwrap_or(buf.len());
+    Some(String::from_utf8_lossy(&buf[..end]).into_owned()).filter(|h| !h.is_empty())
+}
+
+#[cfg(not(unix))]
+fn host_name() -> Option<String> {
+    None
+}
+
 /// The names of the remote API's refusals: what a client reads to say what to do.
 pub mod codes {
     /// The desktop's only command.

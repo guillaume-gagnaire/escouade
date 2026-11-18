@@ -95,6 +95,35 @@ pub enum ToServer {
     /// showed (`remoteapi::pairing`), and the name the user gives the device. Answered by [`ToClient::Paired`] (its
     /// token, given once) or [`ToClient::Refused`] (`pairing`), then closed: the device connects again with its token.
     Pair { code: String, name: String },
+    /// In place of the handshake, a device that forgets the server (ESC-537, « Retirer un serveur de ce poste »): its
+    /// token, which the server revokes (its own name said as who revoked it); answered by [`ToClient::Unpaired`] or
+    /// [`ToClient::Refused`] (`token`), then closed.
+    Unpair { token: String },
+    /// After the handshake, a measure of the way to the server and back (ESC-537: the latency the status bar says):
+    /// answered at once by [`ToClient::Pong`] with the same `id`.
+    Ping { id: u64 },
+}
+
+/// The machine a server runs on (ESC-537), as the client says it: « escouade@vps.example.net ».
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Machine {
+    /// Its name on its network (`gethostname`).
+    pub host: String,
+    /// The account the server runs as.
+    pub user: String,
+}
+
+/// A device's token refused because it was revoked (ESC-537): when, and by whom (the name of the device that asked
+/// for it; none: the server itself, `escouade-server devices revoke`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Revoked {
+    /// The name of the device revoked.
+    pub device: String,
+    /// When (ms since the epoch).
+    pub at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
 }
 
 /// What the server sends.
@@ -119,7 +148,15 @@ pub enum ToClient {
         /// so where they are given.
         #[serde(default, rename = "secretsInFile")]
         secrets_in_file: bool,
+        /// The machine the server runs on (ESC-537): what the title bar and a terminal's head say. None from a window's
+        /// own core.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        machine: Option<Machine>,
     },
+    /// The device forgot the server (ESC-537): its token is revoked. The connection then closes.
+    Unpaired {},
+    /// The answer to [`ToServer::Ping`].
+    Pong { id: u64 },
     /// The pairing passed (ESC-514): the new device and its token, which the client keeps and gives at each handshake
     /// from now on. Given once; the connection then closes.
     Paired {
@@ -136,6 +173,12 @@ pub enum ToClient {
         server_version: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         update: Option<String>,
+        /// For `pairing` (ESC-537): why, for the client to say it in its words (`none`, `expired`, `wrong`, `tries`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+        /// For `token` (ESC-537): the token was a device's, revoked; when and by whom.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        revoked: Option<Revoked>,
     },
     /// The answer to the call `id`: `ok` (its value, `null` for none), or `error` (as the IPC gives it: a text for
     /// most) with `code` when the remote API refused it. An answer in bytes comes in binary frames instead.

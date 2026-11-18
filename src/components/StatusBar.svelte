@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TunnelItem from './servers/TunnelItem.svelte';
   import { keyLabel } from '../lib/platform';
   import {
     accountName,
@@ -406,6 +407,8 @@
           ></span
         >
       {/if}
+      <!-- The tunnel to the server the window is on (ESC-537): its space, its SSH host, its latency; the next try while cut. -->
+      <TunnelItem />
       {#if docsShown}
         <span class="vsep"></span>
         <span class="it"><DocsShareItem projectId={docsShown} /></span>

@@ -88,6 +88,43 @@ export function firstAnswer(url: string, message: unknown): Promise<Record<strin
   });
 }
 
+/** An `escouade-server` started, not paired yet (ESC-537: the client pairs it itself, through a fake `ssh`). */
+export interface BareServer {
+  data: string;
+  port: number;
+  log: () => string;
+  stop: () => Promise<void>;
+}
+
+/** `escouade-server` started on `data` (its settings.json written already) with `env`, on `port` (0: a free one), ready. */
+export async function startBareServer(program: string, data: string, env: NodeJS.ProcessEnv, port: number): Promise<BareServer> {
+  if (!fs.existsSync(program)) throw new Error(`build the server first: cargo build --bin escouade-server (missing ${program})`);
+  const out = path.join(data, '..', 'server-stdout.log');
+  const fd = fs.openSync(out, 'a');
+  const child: ChildProcess = spawn(program, ['run', '--data-dir', data, '--port', String(port)], { env, stdio: ['ignore', fd, fd] });
+  fs.closeSync(fd);
+  let exited: string | null = null;
+  child.on('exit', (code) => (exited = `exit code ${code}`));
+  const log = () => (fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '');
+  const stop = async () => {
+    if (child.pid && exited === null) {
+      try {
+        execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      } catch {
+        // gone already
+      }
+    }
+  };
+  for (const deadline = Date.now() + 90_000; Date.now() < deadline;) {
+    const ready = /ready: remote API on ws:\/\/127\.0\.0\.1:(\d+)\//.exec(log());
+    if (ready) return { data, port: Number(ready[1]), log, stop };
+    if (exited) throw new Error(`escouade-server stopped as it started (${exited}):\n${log()}`);
+    await wait(200);
+  }
+  await stop();
+  throw new Error(`escouade-server not ready in 90 s:\n${log()}`);
+}
+
 /**
  * `escouade-server` started on `data` (its settings.json written already) with `env`, ready; a device paired through a
  * local forward to it. `ports`: its own and the forward's (0: free ones).

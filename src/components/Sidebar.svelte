@@ -17,6 +17,7 @@
   import { api } from '../lib/ipc';
   import { dropPlace, landing, stepPlace, type Place } from '../lib/agent-folders';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
+  import { connection } from '../lib/connection.svelte';
   import { accountName, defaultEngine, newAgentAccount, newAgentDefaults } from '../lib/accounts';
   import {
     cardActivity,
@@ -1640,9 +1641,11 @@
       use:tip={{ text: project.path, aria: false }}
       onclick={() => app.openEditor({ projectId: project.id, source: 'project' })}
     >
-      <Icon name="folder" size={14} /><span class="grow mono path">{tildify(project.path)}</span><span class="browse" aria-hidden="true"
-        >{t('common.browse')}</span
-      >
+      <!-- On a server (ESC-537): the space's name before the folder, a server in place of a folder. -->
+      <Icon name={connection.server ? 'server' : 'folder'} size={14} />{#if connection.server}<b
+          class="on-server"
+          data-testid="side-machine">{t('servers.sidebar.on', { name: connection.server.name })}</b
+        >{/if}<span class="grow mono path">{tildify(project.path)}</span><span class="browse" aria-hidden="true">{t('common.browse')}</span>
     </button>
     <div class="foot-row">
       <Icon name="branch" size={14} />
@@ -2916,5 +2919,10 @@
     .plan-bar i {
       transition: none;
     }
+  }
+  .on-server {
+    flex: none;
+    color: var(--soft);
+    font-weight: 600;
   }
 </style>

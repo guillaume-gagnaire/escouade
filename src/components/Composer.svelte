@@ -3,6 +3,7 @@
 </script>
 
 <script lang="ts">
+  import { connection } from '../lib/connection.svelte';
   import { untrack } from 'svelte';
   import {
     MAX_TOTAL,
@@ -206,14 +207,18 @@
   const tight = $derived(width > 0 && width < 696);
   const narrow = $derived(width > 0 && width < 520);
   const cramped = $derived(width > 0 && width < 300);
+  // S10 (ESC-537): the connection to the server cut, sending is paused, not queued: the draft stays, nothing leaves.
+  const paused = $derived(connection.server !== null && connection.state !== 'open');
   const placeholder = $derived(
-    pendingItem
-      ? pendingItem.kind === 'permission'
-        ? t('composer.placeholder.denyPermission', { engine: speakerOf(agent.engine) })
-        : t('composer.placeholder.answerQuestion')
-      : conv.items.length
-        ? t('composer.placeholder.sendTo', { name: agent.name })
-        : t('composer.placeholder.describe', { engine: speakerOf(agent.engine) }),
+    paused
+      ? t('servers.composer.paused')
+      : pendingItem
+        ? pendingItem.kind === 'permission'
+          ? t('composer.placeholder.denyPermission', { engine: speakerOf(agent.engine) })
+          : t('composer.placeholder.answerQuestion')
+        : conv.items.length
+          ? t('composer.placeholder.sendTo', { name: agent.name })
+          : t('composer.placeholder.describe', { engine: speakerOf(agent.engine) }),
   );
 
   // Reused for another agent (the id itself changed): switch drafts.
@@ -555,7 +560,7 @@
 
   async function send() {
     const body = text.trim();
-    if ((!body && !files.length) || reading || copying) return;
+    if ((!body && !files.length) || reading || copying || paused) return;
     // An interactive command of its harness (ESC-401) never goes as a message: it opens what it stands for.
     const opens = interactiveOf(agent.engine, body);
     if (opens) {
@@ -932,7 +937,7 @@
         <button
           class="btn primary send"
           use:tip={sendTitle}
-          disabled={sending || reading > 0 || copying || (!text.trim() && !files.length)}
+          disabled={paused || sending || reading > 0 || copying || (!text.trim() && !files.length)}
           onclick={send}
         >
           {t('composer.send.label')}{#if !cramped}<kbd aria-hidden="true"><Icon name="enter" size={12} /></kbd>{/if}

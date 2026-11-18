@@ -39,6 +39,7 @@ import subagents from './subagents';
 import team from './team';
 import teamBoard from './teamBoard';
 import remote from './remote';
+import servers from './servers';
 import teamProjects from './teamProjects';
 import teamDocs from './teamDocs';
 import wizard from './wizard';
@@ -92,6 +93,7 @@ export const fr = {
   team,
   teamBoard,
   remote,
+  servers,
   teamProjects,
   teamDocs,
 } as const;

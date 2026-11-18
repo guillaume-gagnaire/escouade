@@ -5977,3 +5977,120 @@ pub fn inbox_weight(core: CoreState) -> u64 {
 pub fn inbox_erase_closed_files(core: CoreState) -> u64 {
     core.asks_erase_closed_files()
 }
+
+// ---------- « Se connecter à un serveur » (ESC-537) ----------
+//
+// The servers this computer knows, their tunnel and their pairing: always this computer's (`desk`), whichever core the
+// window speaks to.
+
+#[cfg(feature = "desktop")]
+type ServersState<'a> = State<'a, Arc<crate::servers::Servers>>;
+
+/// The servers this computer knows, and the one the window is on.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn servers_view(servers: ServersState) -> crate::servers::View {
+    servers.view()
+}
+
+/// The hosts of `~/.ssh/config`, for the dialog.
+#[cfg(feature = "desktop")]
+#[tauri::command(async)]
+pub fn servers_ssh_hosts(servers: ServersState) -> Vec<crate::servers::sshconfig::SshHost> {
+    servers.ssh_hosts()
+}
+
+/// Where the window connects, on a server; none on this computer. Read before each try of the window.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_link(servers: ServersState) -> Option<crate::servers::Link> {
+    servers.link()
+}
+
+/// The dialog's step « Connexion »: the policy, the tunnel to `host`, the handshake without a token.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn server_attempt(
+    servers: ServersState<'_>,
+    host: String,
+    remote_port: Option<u16>,
+    existing: Option<String>,
+) -> Res<crate::servers::Outcome<crate::servers::Reached>> {
+    Ok(servers.attempt(&host, remote_port, existing).await)
+}
+
+/// « Le lancer d'ici par SSH »: the code `escouade-server pair` printed on the host.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn server_code_over_ssh(
+    servers: ServersState<'_>,
+    attempt: String,
+) -> Res<crate::servers::Outcome<String>> {
+    Ok(servers.code_over_ssh(&attempt).await)
+}
+
+/// The dialog's step « Appairage »: the server known, its token in this computer's keychain; its id.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn server_pair(
+    servers: ServersState<'_>,
+    attempt: String,
+    code: String,
+    name: String,
+    device: String,
+) -> Res<crate::servers::Outcome<String>> {
+    Ok(servers.pair(&attempt, &code, &name, &device).await)
+}
+
+/// The dialog closed before its end: its tunnel stopped.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_cancel(servers: ServersState, attempt: String) {
+    servers.cancel(&attempt);
+}
+
+/// The window to go on the server `id` (it loads again once this answers « ok »).
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn server_open(
+    servers: ServersState<'_>,
+    id: String,
+) -> Res<crate::servers::Outcome<()>> {
+    Ok(servers.inner().open(&id).await)
+}
+
+/// Back on this computer (the window loads again).
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_leave(servers: ServersState) {
+    servers.leave();
+}
+
+/// « Réessayer »: the tunnel started again now.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_retry(servers: ServersState) {
+    servers.inner().retry();
+}
+
+/// « Retirer » (S15): the server asked to revoke this computer when it answers, then forgotten here. Whether it
+/// revoked it.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn server_forget(servers: ServersState<'_>, id: String) -> Res<bool> {
+    Ok(servers.inner().forget(&id).await)
+}
+
+/// What stopped the window's tries on the server `id`, noted for Réglages › Serveurs.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_note(servers: ServersState, id: String, problem: crate::servers::Problem) {
+    servers.note(&id, problem);
+}
+
+/// A server's name, the user's.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_rename(servers: ServersState, id: String, name: String) {
+    servers.rename(&id, &name);
+}

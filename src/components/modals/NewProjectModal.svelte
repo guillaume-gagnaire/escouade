@@ -1,5 +1,6 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog';
+  import { connection } from '../../lib/connection.svelte';
   import { fDate, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { tip } from '../../lib/tip';
@@ -286,6 +287,10 @@
   onclose={() => (app.modal = null)}
 >
   {#snippet badge()}
+    <!-- On a server (ESC-537): where the project will be, before anything else. -->
+    {#if connection.server}<span class="chip-sm on-server" data-testid="new-project-machine"
+        ><Icon name="server" size={12} />{t('servers.newProject.on', { name: connection.server.name, host: connection.server.host })}</span
+      >{/if}
     {#if form.path.trim()}<span class="chip-sm mono path">{tildify(form.path.trim())}</span>{/if}
     <span class="chip-sm" data-step-of>{t('wizard.stepOf', { n: at + 1, count: form.steps.length })}</span>
   {/snippet}
@@ -343,8 +348,15 @@
                 spellcheck="false"
                 autofocus
               />
-              <button class="btn" onclick={browse}><Icon name="folder" size={14} />{t('shell.newProject.browse')}</button>
+              <!-- The system's folder picker is this computer's: never on a server, whose folders are typed (its browser comes
+                   with MS-4). -->
+              {#if !connection.server}<button class="btn" onclick={browse}
+                  ><Icon name="folder" size={14} />{t('shell.newProject.browse')}</button
+                >{/if}
             </div>
+            {#if connection.server}<span class="on-server-note"
+                ><Icon name="server" size={12} />{t('servers.newProject.folders', { name: connection.server.name })}</span
+              >{/if}
             <span class="git" style:color={gitLine.color} use:tip={info?.repos?.length ? t('repos.wizard.foundHint') : undefined}
               ><span class="gd" style:background={gitLine.color}></span>{gitLine.text}</span
             >
@@ -725,6 +737,17 @@
     gap: 18px;
   }
   /* The folder beside the title, cut short when it is long. */
+  .chip-sm.on-server {
+    gap: 5px;
+    color: var(--soft);
+  }
+  .on-server-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
   .chip-sm.path {
     flex: 0 1 auto;
     min-width: 0;

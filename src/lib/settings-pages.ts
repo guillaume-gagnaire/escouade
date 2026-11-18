@@ -15,6 +15,8 @@ export type SettingsScope = 'app' | 'project';
 export type SettingsPage =
   // Escouade's, in the order of the bar.
   | 'general'
+  // The servers this computer knows (ESC-537).
+  | 'servers'
   | 'agents'
   | 'accounts'
   | 'services'
@@ -62,6 +64,7 @@ function page(id: SettingsPage, scope: SettingsScope, icon: IconName): PageInfo 
 /** The pages, in the order of the bar: Escouade's, « À propos », each project's, then « Tous les projets ». */
 export const SETTINGS_PAGES: PageInfo[] = [
   page('general', 'app', 'sliders'),
+  page('servers', 'app', 'server'),
   page('agents', 'app', 'agents'),
   page('accounts', 'app', 'user'),
   page('services', 'app', 'link'),
@@ -248,6 +251,9 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('teamServer', 'advanced', 'team.entry.row'),
 
   // À propos.
+  // Réglages › Serveurs (ESC-537): the servers this computer knows; nothing of the settings (their list is its own file).
+  row('serversKnown', 'servers', 'servers.settings.title'),
+  row('serversConnect', 'servers', 'servers.connect'),
   row('version', 'about', { raw: 'Escouade' }),
   row('credits', 'about', 'settings.about.credits'),
   row('site', 'about', 'settings.about.site'),

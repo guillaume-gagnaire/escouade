@@ -81,6 +81,10 @@ pub trait Host: Send + Sync + 'static {
     fn secrets_in_file(&self) -> bool {
         false
     }
+    /// The machine the core runs on, which a client of the remote API says (ESC-537, `welcome`).
+    fn machine(&self) -> Option<crate::remoteapi::proto::Machine> {
+        Some(crate::remoteapi::this_machine())
+    }
 }
 
 /// What `Core::load` takes for its host: a Tauri app's handle (the desktop's and most tests'), or a

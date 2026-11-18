@@ -136,3 +136,48 @@ describe('TitleBar in English', () => {
     expect(screen.getByRole('button', { name: 'Close' })).toHaveAttribute('data-tip', 'Close (the app stays in the notification area)');
   });
 });
+
+// The machine (ESC-537, docs/SERVER-UX.md § 4): said once this computer knows a server, amber while cut.
+describe('TitleBar, the machine', () => {
+  beforeEach(() => {
+    setLang('fr');
+    resetApp({ projects: [project()], agents: [] });
+  });
+
+  it('says nothing of a machine while no server is known', async () => {
+    const { connection } = await import('../lib/connection.svelte');
+    const { servers } = await import('../lib/servers.svelte');
+    servers.view = { servers: [], active: null, tokensInFile: false, thisDevice: 'D' };
+    connection.server = null;
+    fakeBackend();
+    render(TitleBar);
+    expect(screen.queryByTestId('title-machine')).not.toBeInTheDocument();
+  });
+
+  it('says « Ce poste » once a server is known, and the server with its host when on it, amber while cut', async () => {
+    const { connection } = await import('../lib/connection.svelte');
+    const { servers } = await import('../lib/servers.svelte');
+    const travail = { id: 's1', name: 'Travail', ssh: 'acme-escouade', host: 'h', remotePort: 1, device: 'd', active: false };
+    servers.view = { servers: [travail], active: null, tokensInFile: false, thisDevice: 'D' };
+    connection.server = null;
+    fakeBackend();
+    const { unmount } = render(TitleBar);
+    expect(screen.getByTestId('title-machine')).toHaveTextContent('Ce poste');
+    expect(screen.getByRole('status', { name: 'Machine : Ce poste' })).toBeInTheDocument();
+    unmount();
+    connection.server = { ...travail, active: true };
+    connection.state = 'open';
+    render(TitleBar);
+    const machine = screen.getByTestId('title-machine');
+    expect(machine).toHaveTextContent('Travail');
+    expect(machine).toHaveTextContent('acme-escouade');
+    expect(machine).not.toHaveClass('cut');
+    connection.state = 'lost';
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByTestId('title-machine')).toHaveClass('cut');
+    expect(screen.getByTestId('title-machine')).toHaveTextContent('reconnexion');
+    connection.server = null;
+    connection.state = 'local';
+  });
+});

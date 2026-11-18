@@ -1,4 +1,6 @@
 <script lang="ts">
+  import RailSpace from './servers/RailSpace.svelte';
+  import { knowsServers, openConnect } from '../lib/servers.svelte';
   import { untrack } from 'svelte';
   import { fDate } from '../lib/format';
   import { t } from '../lib/i18n';
@@ -136,7 +138,8 @@
   async function add(e: MouseEvent) {
     const button = e.currentTarget as HTMLElement;
     const closed = (await api.closedProjects().catch(() => [])).filter((c) => !c.unreadable);
-    if (!closed.length) {
+    // With a server known (ESC-537), the menu too: « Se connecter à un serveur » is there (direction B).
+    if (!closed.length && !knowsServers()) {
       app.modal = { kind: 'newProject' };
       return;
     }
@@ -147,7 +150,7 @@
         detail: t('nav.rail.addMenu.newDetail'),
         onClick: () => (app.modal = { kind: 'newProject' }),
       },
-      { label: '', separator: true },
+      ...(closed.length ? [{ label: '', separator: true }] : []),
       ...closed.slice(0, 5).map((c): MenuItem => ({
         label: c.name,
         swatch: c.color,
@@ -155,13 +158,22 @@
         hint: t('nav.rail.addMenu.reopen'),
         onClick: () => (app.modal = { kind: 'newProject', path: c.path, historyId: c.id }),
       })),
-      {
-        label: t('nav.rail.addMenu.all'),
-        icon: 'sliders',
-        detail: t('nav.rail.addMenu.allDetail'),
-        onClick: () => (app.modal = { kind: 'settings', page: 'allProjects' }),
-      },
+      ...(closed.length
+        ? [
+            {
+              label: t('nav.rail.addMenu.all'),
+              icon: 'sliders',
+              detail: t('nav.rail.addMenu.allDetail'),
+              onClick: () => (app.modal = { kind: 'settings', page: 'allProjects' }),
+            } satisfies MenuItem,
+          ]
+        : []),
       { label: '', separator: true },
+      {
+        label: t('servers.connect'),
+        icon: 'server',
+        onClick: () => openConnect(),
+      },
       {
         label: t('team.entry.menu'),
         icon: 'team',
@@ -229,6 +241,8 @@
       ><Icon name="overview" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.overview')}</span></span></button
     >
     <div class="sep"></div>
+    <!-- The open space, once this computer knows a server (ESC-537, direction B). -->
+    {#if knowsServers()}<RailSpace part="head" />{/if}
     {#if above}
       <button
         class="more"
@@ -286,6 +300,8 @@
     use:tip={{ title: t('nav.rail.add'), rows: [t('nav.rail.addTip')], side: 'right', aria: false }}
     onclick={add}><Icon name="plus" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.add')}</span></span></button
   >
+  <!-- The other spaces, under « + » (ESC-537, direction B): the way back to this computer, or to a server. -->
+  {#if knowsServers()}<RailSpace part="others" />{/if}
   <div class="spacer"></div>
   <!-- « Aide » (ESC-504), above the stats: the first launch again, the documentation. -->
   <button

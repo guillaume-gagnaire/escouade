@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { connection } from '../lib/connection.svelte';
+  import { serverWhere } from '../lib/servers.svelte';
   import { untrack } from 'svelte';
   import { paneCtx } from '../lib/pane-context';
   import { t } from '../lib/i18n';
@@ -25,6 +27,8 @@
   let query = $state('');
 
   const label = $derived(app.shells.find((s) => s.id === term.shell)?.label ?? term.shell);
+  // On a server (ESC-537): where the shell runs, « Perso · escouade@vps.example.net ».
+  const machine = $derived(connection.server ? t('servers.terminal.on', { name: connection.server.name, where: serverWhere() }) : '');
   const exited = $derived(app.exitedTerms[term.id]);
   /** The folder it opened in: the project's. */
   const folder = $derived(tildify(project.path));
@@ -68,6 +72,7 @@
       <div class="row">
         <h1 class="name">{term.name}</h1>
         <span class="chip">{label}</span>
+        {#if machine}<span class="chip server" data-testid="terminal-machine"><Icon name="server" size={12} />{machine}</span>{/if}
       </div>
       <div class="crumbs"><span class="mono where" use:tip={{ text: folder, cut: true }}>{folder}</span></div>
     </div>
@@ -243,5 +248,10 @@
   }
   .exited > :global(.icon) {
     color: var(--muted);
+  }
+  .chip.server {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
   }
 </style>

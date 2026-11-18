@@ -84,6 +84,10 @@
   import TeamHintBand from './components/team/TeamHintBand.svelte';
   import TeamPourModal from './components/board/TeamPourModal.svelte';
   import ConnectionBand from './components/ConnectionBand.svelte';
+  import ConnectServerModal from './components/servers/ConnectServerModal.svelte';
+  import ServerScreen from './components/servers/ServerScreen.svelte';
+  import { connection } from './lib/connection.svelte';
+  import { loadServers } from './lib/servers.svelte';
   import Toasts from './components/Toasts.svelte';
   import Welcome from './components/Welcome.svelte';
   import PaneDrop from './components/panes/PaneDrop.svelte';
@@ -92,8 +96,16 @@
 
   let initError = $state<string | null>(null);
 
+  // The window on a server that stopped answering it, or that it does not reach yet (ESC-537): its own screen, in place
+  // of the space.
+  const serverScreen = $derived(
+    connection.server !== null && (connection.state === 'refused' || (connection.state === 'connecting' && connection.tries > 0)),
+  );
+
   onMount(() => {
     app.init().catch((e) => (initError = String(e)));
+    // The servers this computer knows (ESC-537): the machine is said once one is.
+    void loadServers();
     if (!import.meta.env.PROD) return;
     const stopChecks = watchForUpdates();
     const stopPresence = watchPresence();
@@ -254,7 +266,9 @@
   {:else}
     <ProjectRail />
     <div class="body">
-      {#if initError}
+      {#if serverScreen}
+        <div class="work"><ServerScreen /></div>
+      {:else if initError}
         <div class="work"><div class="fatal">{t('shell.app.cantStart', { error: initError })}</div></div>
       {:else if !app.ready}
         <div class="work"></div>
@@ -353,6 +367,8 @@
 
 {#if app.modal?.kind === 'newProject'}
   <NewProjectModal />
+{:else if app.modal?.kind === 'connectServer'}
+  <ConnectServerModal existing={app.modal.existing} />
 {:else if app.modal?.kind === 'settings'}
   <SettingsModal
     page={app.modal.page}

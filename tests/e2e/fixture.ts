@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freePort, waitForPortToClose } from './port';
-import { serverProgram, startServer, type Server } from './server';
+import { serverProgram, startBareServer, startServer, type BareServer, type Server } from './server';
 import { lookDiff } from './srgb';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -100,6 +100,13 @@ export interface App {
    * as the app's (the fake `claude`). Stopped with the test; a `restart()` restarts the app, not the server.
    */
   server: Server | null;
+  /**
+   * With `test.use({ sshServer: true })` (ESC-537): an `escouade-server` not paired yet, reached by « Se connecter à un
+   * serveur » through the fake `ssh` (tests/fixtures/fake-ssh.mjs, given to the app by ESCOUADE_SSH), the hosts of a
+   * test `~/.ssh/config` (ESCOUADE_SSH_CONFIG): `travail` (the server), `labo-inconnu` (an unknown host key). `dir`: the
+   * fake's folder (`down`, `cut`).
+   */
+  ssh: { server: BareServer; program: string; dir: string; env: NodeJS.ProcessEnv } | null;
 }
 
 function git(cwd: string, ...args: string[]) {
@@ -558,7 +565,10 @@ export const test = base.extend<{
   language: Language;
   preStart: { run: (root: string) => Record<string, unknown> | void };
   server: boolean;
+  sshServer: boolean;
 }>({
+  // An `escouade-server` to connect to through the fake `ssh` (`test.use({ sshServer: true })`, ESC-537): `app.ssh`.
+  sshServer: [false, { option: true }],
   // The window on an `escouade-server` of the test's (`test.use({ server: true })`, ESC-514): `app.server`.
   server: [false, { option: true }],
   // Variables for the app on top of the fixture's, which they replace (`test.use({ appEnv: … })`):
@@ -572,7 +582,7 @@ export const test = base.extend<{
   // may put there (a second Claude account's folder and sign-in), and the settings to start with, merged into settings.json.
   // (An object: Playwright reads a function given as an option for a fixture.)
   preStart: [{ run: () => ({}) }, { option: true }],
-  app: async ({ appEnv, appArgs, language, preStart, server }, use, testInfo) => {
+  app: async ({ appEnv, appArgs, language, preStart, server, sshServer }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
     // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
     // opens a fixed port through the machine policy instead (tests run one at a time), by the program's name
@@ -717,6 +727,34 @@ export const test = base.extend<{
       env.ESCOUADE_REMOTE_URL = served.url;
       env.ESCOUADE_REMOTE_API_TOKEN = served.token;
     }
+    // An `escouade-server` reached through the fake `ssh` (ESC-537): on the worktree's base + 2 when given. The app is
+    // given the fake and a ~/.ssh/config of the test's; never a real SSH.
+    let sshed: { server: BareServer; program: string; dir: string; env: NodeJS.ProcessEnv } | null = null;
+    if (sshServer) {
+      const serverData = path.join(root, 'server-data');
+      fs.mkdirSync(serverData);
+      fs.copyFileSync(path.join(data, 'settings.json'), path.join(serverData, 'settings.json'));
+      const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
+      const serverEnv = { ...env, ESCOUADE_DATA_DIR: serverData };
+      const program = serverProgram(EXE);
+      const bare = await startBareServer(program, serverData, serverEnv, base ? base + 2 : 0);
+      const config = path.join(root, 'ssh-home', '.ssh', 'config');
+      fs.mkdirSync(path.dirname(config), { recursive: true });
+      fs.writeFileSync(
+        config,
+        'Host travail\n  HostName escouade.test.internal\n  User escouade\n\nHost labo-inconnu\n  HostName labo.test.internal\n  User gpu\n  ProxyJump travail\n\nHost *\n  ServerAliveInterval 30\n',
+      );
+      const dir = path.join(root, 'fake-ssh');
+      fs.mkdirSync(dir);
+      env.ESCOUADE_SSH = process.execPath;
+      env.ESCOUADE_SSH_PREFIX = path.join(ROOT, 'tests', 'fixtures', 'fake-ssh.mjs');
+      env.ESCOUADE_SSH_CONFIG = config;
+      env.FAKE_SSH_DIR = dir;
+      env.FAKE_SSH_PORTS = `46480=${bare.port}`;
+      env.FAKE_SSH_SERVER = program;
+      env.FAKE_SSH_DATA = serverData;
+      sshed = { server: bare, program, dir, env: serverEnv };
+    }
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
     let instance: Instance | null = null;
     const current = () => instance as Instance;
@@ -804,6 +842,7 @@ export const test = base.extend<{
         opencodeJson: path.join(root, 'xdg', 'opencode', 'opencode.json'),
         copilotJson: path.join(root, 'copilot', 'mcp-config.json'),
         server: served,
+        ssh: sshed,
         launches,
         launchedAt: () => current().at,
         restart: async () => {
@@ -922,6 +961,7 @@ export const test = base.extend<{
       }
       if (instance) await killApp(instance);
       await served?.stop();
+      await sshed?.server.stop();
       // The next test must not find this instance still answering on the port (it waits for that too, before it
       // starts; a test that passed does not fail for it).
       if (!(await waitForPortToClose(port))) console.warn(`port ${port} is still taken 30 s after the app was killed`);

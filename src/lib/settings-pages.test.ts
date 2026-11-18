@@ -165,6 +165,7 @@ describe('the register of the settings pages', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(SETTINGS_PAGES.filter((p) => p.scope === 'app').map((p) => p.id)).toEqual([
       'general',
+      'servers',
       'agents',
       'accounts',
       'services',
@@ -199,6 +200,7 @@ describe('the register of the settings pages', () => {
     flushSync();
     expect(SETTINGS_PAGES.map((p) => p.label)).toEqual([
       'General',
+      'Servers',
       'Agents',
       'Accounts and harnesses',
       'Connected services',

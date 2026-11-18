@@ -111,7 +111,9 @@ pub fn open_csp<R: tauri::Runtime>(context: &mut tauri::Context<R>) {
         return;
     };
     let mut policy = csp.to_string();
-    if policy.contains("connect-src ") {
+    if policy.contains("ws://127.0.0.1:*") {
+        // The app's own policy lets it already (ESC-537: the tunnel to a server).
+    } else if policy.contains("connect-src ") {
         policy = policy.replacen("connect-src ", "connect-src ws://127.0.0.1:* ", 1);
     } else {
         policy.push_str("; connect-src 'self' ws://127.0.0.1:*");

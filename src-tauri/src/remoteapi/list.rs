@@ -461,6 +461,20 @@ escouade_command::commands! {
         commands::speech_delete,
         commands::speech_preview,
         commands::speech_preview_online,
+        // « Se connecter à un serveur » (ESC-537): this computer's servers, their tunnel and their pairing.
+        commands::servers_view,
+        commands::servers_ssh_hosts,
+        commands::server_link,
+        commands::server_attempt,
+        commands::server_code_over_ssh,
+        commands::server_pair,
+        commands::server_cancel,
+        commands::server_open,
+        commands::server_leave,
+        commands::server_retry,
+        commands::server_forget,
+        commands::server_note,
+        commands::server_rename,
     }
     // They change machines in server mode, and work as they are: served.
     moves_served {

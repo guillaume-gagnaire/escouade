@@ -580,6 +580,7 @@ describe('settingsForm', () => {
     flushSync();
     expect(names()).toEqual([
       'General',
+      'Servers',
       'Agents',
       'Accounts and harnesses',
       'Connected services',

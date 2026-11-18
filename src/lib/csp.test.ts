@@ -32,6 +32,11 @@ describe('the content security policy of the window', () => {
       ).toEqual([]);
   });
 
+  it('lets the window reach a server’s tunnel on this computer’s loopback, nowhere else (ESC-537)', () => {
+    const sockets = directives.get('connect-src')!.filter((v) => v.startsWith('ws'));
+    expect(sockets).toEqual(['ws://127.0.0.1:*']);
+  });
+
   it('still refuses inline scripts and eval', () => {
     const scripts = directives.get('script-src')!;
     expect(scripts).not.toContain("'unsafe-inline'");

@@ -274,6 +274,11 @@ mod sentfiles_tests;
 pub mod server;
 #[cfg(test)]
 mod server_tests;
+// « Se connecter à un serveur » (ESC-537): the client of the server mode, its SSH tunnel and its pairing.
+#[cfg(feature = "desktop")]
+mod servers;
+#[cfg(test)]
+mod servers_tests;
 mod sharing;
 #[cfg(test)]
 mod sharing_tests;
@@ -710,6 +715,23 @@ pub fn run() {
                 }),
             )));
             app.manage(updates::Updates::started(after_update));
+            // The servers this computer knows (ESC-537): the window goes back on the one it was on, its tunnel started.
+            let servers = {
+                let locks = Arc::downgrade(&core);
+                servers::Servers::load(
+                    core.data.root(),
+                    core.secrets.clone(),
+                    servers::tunnel::Ssh::system(),
+                    app.package_info().version.to_string(),
+                    Arc::new(move |host: &str| match locks.upgrade() {
+                        Some(core) => core.locks.read().check_ssh_server(host),
+                        None => Ok(()),
+                    }),
+                    servers::sshconfig::user_config(),
+                )
+            };
+            servers.resume();
+            app.manage(servers);
             if !paths::hidden_window() {
                 build_tray(app)?;
             }
@@ -875,6 +897,10 @@ pub fn run() {
         .expect("error while building the application")
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {
+                // The tunnel to a server ends with the app (ESC-537).
+                if let Some(servers) = app.try_state::<Arc<servers::Servers>>() {
+                    servers.shutdown();
+                }
                 // The language servers end with the app, with what they started (their Jobs).
                 if let Some(servers) = app.try_state::<Arc<lsp::Manager>>() {
                     servers.shutdown();

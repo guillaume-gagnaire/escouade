@@ -390,16 +390,19 @@ impl RemoteApi {
         &self,
         code: &str,
         name: &str,
-    ) -> std::result::Result<(super::devices::Device, String), (&'static str, String)> {
+    ) -> std::result::Result<
+        (super::devices::Device, String),
+        (&'static str, String, Option<&'static str>),
+    > {
         let core = self.services.core().clone();
         if let Err(e) = core.locks.read().check_remote_api() {
-            return Err((codes::POLICY, e.to_string()));
+            return Err((codes::POLICY, e.to_string(), None));
         }
         let data = core.data.clone();
         if let Err(refusal) = super::pairing::redeem(&data, code, crate::model::now_ms()) {
             self.failed();
             log::warn!("remote API: pairing refused: {}", refusal.reason());
-            return Err((codes::PAIRING, refusal.text()));
+            return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
         }
         // The name, as the user typed it: printable, 64 characters at most.
         let name: String = name.chars().filter(|c| !c.is_control()).take(64).collect();
@@ -415,7 +418,31 @@ impl RemoteApi {
             }
             Err(e) => {
                 log::error!("remote API: a paired device not kept: {e:#}");
-                Err((codes::PAIRING, e.to_string()))
+                Err((codes::PAIRING, e.to_string(), None))
+            }
+        }
+    }
+
+    /// The device whose token `token` is, forgetting this server (ESC-537): revoked, its own name said as who asked;
+    /// its connections closed, its sessions forgotten. None when the token is no device's.
+    fn unpair(&self, token: &str) -> Option<super::devices::Device> {
+        self.devices.refresh();
+        let device = self.devices.find(token)?;
+        match self.devices.revoke_by(&device.id, Some(&device.name)) {
+            Ok(_) => {
+                for conn in self.live.lock().values().filter(|c| c.device == device.id) {
+                    conn.kicked.notify_one();
+                }
+                self.sessions.forget_device(&device.id);
+                log::info!(
+                    "remote API: device « {} » forgot this server: revoked",
+                    device.name
+                );
+                Some(device)
+            }
+            Err(e) => {
+                log::error!("remote API: a device that forgot this server not revoked: {e:#}");
+                None
             }
         }
     }
@@ -559,10 +586,12 @@ impl RemoteApi {
         };
         let (mut sink, mut stream) = ws.split();
         // Before the handshake, the few messages of a refusal: a queue of their own, never past its bounds.
-        let refuse = |code: &'static str,
-                      error: String,
-                      server_version: Option<String>,
-                      update: Option<String>|
+        let refuse_with = |code: &'static str,
+                           error: String,
+                           server_version: Option<String>,
+                           update: Option<String>,
+                           reason: Option<&'static str>,
+                           revoked: Option<proto::Revoked>|
          -> Vec<Message> {
             log::warn!("remote API: refused a connection ({code}): {error}");
             let mut out = Vec::new();
@@ -571,6 +600,8 @@ impl RemoteApi {
                 error,
                 server_version,
                 update,
+                reason: reason.map(str::to_string),
+                revoked,
             }) {
                 out.push(Message::text(text));
             }
@@ -579,6 +610,13 @@ impl RemoteApi {
                 reason: code.into(),
             })));
             out
+        };
+        let refuse = |code: &'static str,
+                      error: String,
+                      server_version: Option<String>,
+                      update: Option<String>|
+         -> Vec<Message> {
+            refuse_with(code, error, server_version, update, None, None)
         };
 
         // The handshake: the first message, in time.
@@ -606,7 +644,39 @@ impl RemoteApi {
                             })));
                             out
                         }
-                        Err((code, error)) => refuse(code, error, None, None),
+                        Err((code, error, reason)) => {
+                            refuse_with(code, error, None, None, reason, None)
+                        }
+                    };
+                    send_all(&mut sink, messages).await;
+                    return;
+                }
+                // A device that forgets this server (ESC-537): its token revoked; closed either way.
+                Ok(ToServer::Unpair { token }) => {
+                    let messages = match self.unpair(&token) {
+                        Some(_) => {
+                            let mut out = Vec::new();
+                            if let Ok(text) = serde_json::to_string(&ToClient::Unpaired {}) {
+                                out.push(Message::text(text));
+                            }
+                            out.push(Message::Close(Some(CloseFrame {
+                                code: CloseCode::Normal,
+                                reason: "unpaired".into(),
+                            })));
+                            out
+                        }
+                        None => {
+                            self.failed();
+                            refuse(
+                                codes::TOKEN,
+                                tr!(
+                                    "Jeton d’appareil absent, inconnu ou révoqué.",
+                                    "Device token missing, unknown or revoked."
+                                ),
+                                None,
+                                None,
+                            )
+                        }
                     };
                     send_all(&mut sink, messages).await;
                     return;
@@ -651,14 +721,19 @@ impl RemoteApi {
             }
         } else {
             self.failed();
-            Err(refuse(
+            // A device revoked says so, when and by whom (ESC-537): « Ce poste n'est plus appairé ».
+            let revoked = self.devices.revoked(&token);
+            // Its version said (ESC-537): a client not paired yet learns that Escouade answers, and which.
+            Err(refuse_with(
                 codes::TOKEN,
                 tr!(
                     "Jeton d’appareil absent, inconnu ou révoqué.",
                     "Device token missing, unknown or revoked."
                 ),
+                Some(server_version.clone()),
                 None,
                 None,
+                revoked,
             ))
         };
         let device = match refused {
@@ -765,6 +840,7 @@ impl RemoteApi {
                 .map(|c| c.name.to_string())
                 .collect(),
             secrets_in_file: core.host.secrets_in_file(),
+            machine: core.host.machine(),
         });
         // What the host publishes (a process without a window), pushed as it comes.
         let host_events = core.host.events().map(|mut events| {
@@ -816,6 +892,8 @@ impl RemoteApi {
                             };
                             self.dispatch(&conn, id, &cmd, args, body)
                         }
+                        // The way there and back (ESC-537): answered at once, before any call that waits.
+                        Ok(ToServer::Ping { id }) => conn.send(&ToClient::Pong { id }),
                         Ok(ToServer::Resume { channels }) if channels.len() <= proto::MAX_RESUME => {
                             for r in channels {
                                 match conn.sessions.find(&conn.session, &conn.device, r.channel) {

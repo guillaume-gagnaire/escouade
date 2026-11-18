@@ -5,6 +5,10 @@
 //!
 //! A presented token is compared with every device's in constant time, each time: the time an answer takes says
 //! nothing of how close a token came.
+//!
+//! A revoked device leaves a trace beside the list (`remote-revoked.json`, ESC-537): its name, when and by whom, and
+//! its token's SHA-256 (never the token), so that a client that still presents it is told « revoked on …, from … »
+//! rather than « unknown ». The last [`MAX_REVOKED`] are kept.
 
 use crate::integrations::secrets::{keep_secret, SecretStore};
 use crate::model::{new_id, now_ms};
@@ -18,6 +22,31 @@ use std::time::SystemTime;
 
 /// The file of the devices, in the data folder.
 pub const FILE: &str = "remote-devices.json";
+
+/// The file of the revoked devices' traces (ESC-537), beside it.
+pub const REVOKED_FILE: &str = "remote-revoked.json";
+
+/// The revoked devices whose trace is kept.
+pub const MAX_REVOKED: usize = 32;
+
+/// A revoked device's trace: never its token, its SHA-256.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Trace {
+    name: String,
+    at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    by: Option<String>,
+    hash: String,
+}
+
+fn token_hash(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(b"escouade-device:");
+    h.update(token.as_bytes());
+    hex::encode(h.finalize())
+}
 
 /// A device, as the list keeps it and the interface will show it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,6 +83,13 @@ pub struct Devices {
 
 fn entry(id: &str) -> String {
     format!("remote-device-{id}")
+}
+
+fn read_traces(file: &Path) -> Vec<Trace> {
+    std::fs::read(file)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
 }
 
 fn stamp_of(file: &Path) -> Option<(SystemTime, u64)> {
@@ -173,11 +209,42 @@ impl Devices {
 
     /// The device `id` revoked: its token forgotten, it can no longer connect. False when there is none.
     pub fn revoke(&self, id: &str) -> Result<bool> {
+        self.revoke_by(id, None)
+    }
+
+    /// The device `id` revoked at the demand of the device named `by` (none: the server itself), its trace kept.
+    pub fn revoke_by(&self, id: &str, by: Option<&str>) -> Result<bool> {
         let gone = self.change(|known| {
-            let before = known.len();
+            let gone: Vec<(Device, String, bool)> = known
+                .iter()
+                .filter(|(d, _, _)| d.id == id)
+                .cloned()
+                .collect();
             known.retain(|(d, _, _)| d.id != id);
-            known.len() != before
+            gone
         })?;
+        if let (Some(file), Some((device, token, _))) = (&self.file, gone.first()) {
+            let traces = file.with_file_name(REVOKED_FILE);
+            let trace = Trace {
+                name: device.name.clone(),
+                at: now_ms(),
+                by: by.map(str::to_string),
+                hash: token_hash(token),
+            };
+            let kept = crate::headless::with_file_lock(&traces, || {
+                let mut all = read_traces(&traces);
+                all.push(trace);
+                let over = all.len().saturating_sub(MAX_REVOKED);
+                all.drain(..over);
+                let bytes = serde_json::to_vec_pretty(&all)?;
+                crate::paths::write_private(&traces, &bytes)
+                    .with_context(|| format!("writing {REVOKED_FILE}"))
+            });
+            if let Err(e) = kept {
+                log::warn!("remote API: a revoked device's trace not kept: {e:#}");
+            }
+        }
+        let gone = !gone.is_empty();
         if gone {
             if let Err(e) = self.store.delete(&entry(id)) {
                 log::warn!("remote API: the system keychain did not forget a revoked device's token: {e:#}");
@@ -195,6 +262,24 @@ impl Devices {
             }
         }
         found.filter(|_| !presented.is_empty())
+    }
+
+    /// The token `presented` was a device's, revoked: its name, when and by whom.
+    pub fn revoked(&self, presented: &str) -> Option<crate::remoteapi::proto::Revoked> {
+        let file = self.file.as_ref()?.with_file_name(REVOKED_FILE);
+        if presented.is_empty() {
+            return None;
+        }
+        let hash = token_hash(presented);
+        read_traces(&file)
+            .into_iter()
+            .rev()
+            .find(|t| escouade_mcp::same_token(&t.hash, &hash))
+            .map(|t| crate::remoteapi::proto::Revoked {
+                device: t.name,
+                at: t.at,
+                by: t.by,
+            })
     }
 
     /// Whether the device `id` is still one (not revoked).

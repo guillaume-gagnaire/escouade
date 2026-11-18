@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537"]
 decisions: [118,119,120,121,123,124,126,145,147,181]
 compared: null
 ---
@@ -195,3 +195,7 @@ Sur la page Plugins, entre « Proposés par Escouade » et « Sécurité », seu
 - **La note** dit où est le fichier et ce qu'il est. Sans trousseau : « Ce poste n’a pas de trousseau système : tu as choisi de garder les secrets des plugins dans <chemin>, en clair, lisible de ton seul compte. Jamais copié dans les sauvegardes de l’état. ». Avec un trousseau arrivé depuis, elle renvoie à « Déplacer vers le trousseau » sur la page de chaque plugin.
 - **La liste** donne un secret par ligne, sa clé et le nom de son plugin (« token, de Faux plugin »), jamais sa valeur. Si le fichier est vide : « Aucun secret dedans pour l’instant. ».
 - **« Retirer le fichier »**, à droite du titre, demande une confirmation sur place : « Retirer le fichier ? Ses secrets sont effacés : il faudra les saisir à nouveau. », avec « Annuler » et « Retirer et effacer ». Retiré, le fichier disparaît avec ses secrets, le groupe aussi, et le choix est à refaire au champ.
+
+## Serveurs (ESC-537)
+
+Une page d'Escouade de plus, juste après Général : **« Serveurs »**, « Les serveurs Escouade que ce poste connaît, leur état, s'y connecter ou les retirer ». Elle est à l'app sur ce poste, quel que soit le cœur où est la fenêtre, et ne règle aucune clé des réglages : la liste des serveurs a son propre fichier. Ce qu'elle montre et ses gestes sont décrits dans *Escouade à distance › Se connecter à un serveur* ; la barre devient « Escouade » : Général, Serveurs, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé.

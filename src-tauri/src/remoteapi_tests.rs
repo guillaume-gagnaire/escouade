@@ -493,6 +493,8 @@ async fn the_handshake_passes_with_a_device_token_and_the_server_s_version_and_a
             desk: desk.clone(),
             // A core whose host keeps no file of secrets (the tests' memory store): the keychain's, as the desktop.
             secrets_in_file: false,
+            // The machine it runs on (ESC-537).
+            machine: Some(crate::remoteapi::this_machine()),
         }
     );
     assert_eq!(api.clients(), 1);
@@ -517,6 +519,7 @@ async fn a_client_of_another_version_is_refused_and_told_which_one_to_update() {
             error,
             server_version,
             update,
+            ..
         } => {
             assert_eq!(code, codes::VERSION);
             assert_eq!(server_version.as_deref(), Some(VERSION));

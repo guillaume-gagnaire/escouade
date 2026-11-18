@@ -137,6 +137,8 @@ export type Modal =
     }
   /** The question of the first start: the usage statistics. */
   | { kind: 'telemetry' }
+  /** « Se connecter à un serveur » (ESC-537); `existing`: paired again, a server known whose token was revoked. */
+  | { kind: 'connectServer'; existing?: string }
   /** The first launch's other question (ESC-190): the user's name for the team; `then`, what waited for it (a share). */
   | { kind: 'teamName'; projectId?: string; then?: () => void }
   /** The teams of the team server (TS-3): at a step (the list by default), on a link opened (`escouade://team/join`). */

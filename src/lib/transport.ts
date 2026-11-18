@@ -15,10 +15,15 @@
  *   terminal is resumed from the end of the last bytes it received (no hole, no byte twice), and the state is read
  *   again whole (`onStale`). A call left without its answer is failed, never sent again by itself: a command is not
  *   idempotent. A token refused or another version stop the tries, and say why (`connection`).
+ * - **On a server** (ESC-537, « Se connecter à un serveur »): this computer's core says where the window connects (the
+ *   local port of the SSH tunnel it keeps up, the token from its keychain: `server_link`), at the start and before each
+ *   try (the tunnel may have taken another port, or stopped for good: a host key). A ping every few seconds measures the
+ *   way there and back (the status bar's latency) and finds a connection that went silent. The commands of this
+ *   computer's servers (`servers_*`, `server_*`) always go to its own core (`local`).
  */
 
 import { Channel as TauriChannel, invoke as tauriInvoke } from '@tauri-apps/api/core';
-import { connection } from './connection.svelte';
+import { connection, type ServerInfo, type ServerProblem } from './connection.svelte';
 import { fSize } from './format';
 import { t } from './i18n';
 
@@ -42,7 +47,15 @@ export interface RemoteLink {
   url: string;
   token: string;
   version: string;
+  /** The server it is, as this computer knows it (ESC-537); none for a build of development's link. */
+  server?: ServerInfo;
+  /** How its tunnel stands (`servers::TunnelState`). */
+  tunnel?: { state: 'starting' | 'up' | 'failed'; tries?: number; since?: number; problem?: ServerProblem };
 }
+
+/** How often the way to the server and back is measured, and how long a ping may wait before the socket is said cut. */
+export const PING_EVERY = 10_000;
+export const PING_WAIT = 20_000;
 
 /** The socket the transport opens: the browser's `WebSocket`, or a test's. */
 export interface Socket {
@@ -156,14 +169,70 @@ export class RemoteTransport {
   private stale: (() => void)[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
   private holdUntil = 0;
+  private pinger: ReturnType<typeof setInterval> | null = null;
+  private pingId = 0;
+  private pingSent = new Map<number, number>();
 
   constructor(
     private link: RemoteLink,
     private open: (url: string) => Socket = (url) => new WebSocket(url) as unknown as Socket,
     private local: <T>(cmd: string, args?: Args, options?: Options) => Promise<T> = ipcInvoke,
     private delays: number[] = RETRY_DELAYS,
+    /** Where to connect now, asked before each try (on a server: this computer's core, `server_link`). */
+    private refresh: (() => Promise<RemoteLink | null>) | null = null,
   ) {
     connection.state = 'connecting';
+    connection.server = link.server ?? null;
+    if (link.tunnel?.state === 'failed' && link.tunnel.problem) {
+      this.stopFor(link.tunnel.problem);
+      return;
+    }
+    this.connect();
+  }
+
+  /** The tries stopped: the tunnel can no longer be made (a host key, an account refused). */
+  private stopFor(problem: ServerProblem): void {
+    this.stopped = true;
+    connection.problem = problem;
+    connection.state = 'refused';
+    connection.retryAt = null;
+    connection.reason = 'output' in problem ? problem.output : '';
+    for (const go of this.waiting.splice(0)) go();
+  }
+
+  /** « Réessayer »: the next try now. */
+  retryNow(): void {
+    if (this.stopped || this.ready) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.tries = 0;
+    this.timer = null;
+    this.holdUntil = 0;
+    this.socket?.close(4000, 'retry');
+    if (!this.socket) void this.tryAgain();
+  }
+
+  /** The link asked again, then a new socket (or the tries stopped, the tunnel down for good). */
+  private async tryAgain(): Promise<void> {
+    this.timer = null;
+    if (this.refresh) {
+      try {
+        const link = await this.refresh();
+        if (!link) {
+          // No longer on a server (the window goes back on this computer).
+          this.stopped = true;
+          return;
+        }
+        this.link = link;
+        connection.server = link.server ?? connection.server;
+        if (link.tunnel?.state === 'failed' && link.tunnel.problem) {
+          this.stopFor(link.tunnel.problem);
+          return;
+        }
+      } catch {
+        // This computer's core did not answer: the link as it was.
+      }
+    }
+    if (this.stopped) return;
     this.connect();
   }
 
@@ -228,6 +297,7 @@ export class RemoteTransport {
     socket.binaryType = 'arraybuffer';
     let welcomed = false;
     let refusal: string | null = null;
+    connection.retryAt = null;
     socket.onopen = () => {
       socket.send(JSON.stringify({ t: 'hello', version: this.link.version, token: this.link.token, session: this.session ?? undefined }));
     };
@@ -248,9 +318,18 @@ export class RemoteTransport {
         } else if (m.t === 'refused') {
           refusal = String(m.code ?? '');
           connection.reason = String(namedError(refusal, '', m.error ?? refusal));
+          connection.refusal = {
+            code: refusal,
+            error: String(m.error ?? ''),
+            serverVersion: typeof m.serverVersion === 'string' ? m.serverVersion : undefined,
+            update: typeof m.update === 'string' ? m.update : undefined,
+            clientVersion: this.link.version,
+            revoked: m.revoked && typeof m.revoked === 'object' ? m.revoked : undefined,
+          };
         }
         return;
       }
+      if (m.t === 'pong') return this.pong(Number(m.id));
       this.message(m);
     };
     socket.onerror = () => {};
@@ -258,6 +337,8 @@ export class RemoteTransport {
       if (this.socket !== socket) return;
       this.socket = null;
       this.ready = false;
+      this.stopPinging();
+      if (this.everOpen && connection.lostAt === null) connection.lostAt = Date.now();
       // Every call left without its answer fails: never sent again (a command is not idempotent).
       for (const [, p] of this.pending) p.reject(t('remote.error.lost', { command: p.cmd }));
       this.pending.clear();
@@ -271,7 +352,9 @@ export class RemoteTransport {
       connection.state = this.everOpen ? 'lost' : 'connecting';
       const delay = Math.max(this.delays[Math.min(this.tries, this.delays.length - 1)], this.holdUntil - Date.now());
       this.tries++;
-      this.timer = setTimeout(() => this.connect(), delay);
+      connection.tries = this.tries;
+      connection.retryAt = Date.now() + delay;
+      this.timer = setTimeout(() => void this.tryAgain(), delay);
     };
   }
 
@@ -284,6 +367,12 @@ export class RemoteTransport {
     this.tries = 0;
     connection.state = 'open';
     connection.reason = '';
+    connection.refusal = null;
+    connection.problem = null;
+    connection.tries = 0;
+    connection.retryAt = null;
+    connection.lostAt = null;
+    connection.machine = m.machine && typeof m.machine === 'object' ? m.machine : null;
     // A server's secrets are in a file of its data, not in a keychain (ESC-514).
     connection.secretsInFile = m.secretsInFile === true;
     if (again) {
@@ -298,6 +387,39 @@ export class RemoteTransport {
       this.tellStale();
     }
     for (const go of this.waiting.splice(0)) go();
+    this.startPinging();
+  }
+
+  /** The way there and back measured every `PING_EVERY`; a socket whose ping waits past `PING_WAIT` is closed (cut). */
+  private startPinging(): void {
+    this.stopPinging();
+    const ping = () => {
+      const now = Date.now();
+      for (const sent of this.pingSent.values()) {
+        if (now - sent > PING_WAIT) {
+          this.socket?.close(4001, 'silent');
+          return;
+        }
+      }
+      const id = ++this.pingId;
+      this.pingSent.set(id, now);
+      this.send(JSON.stringify({ t: 'ping', id }));
+    };
+    ping();
+    this.pinger = setInterval(ping, PING_EVERY);
+  }
+
+  private stopPinging(): void {
+    if (this.pinger) clearInterval(this.pinger);
+    this.pinger = null;
+    this.pingSent.clear();
+  }
+
+  private pong(id: number): void {
+    const sent = this.pingSent.get(id);
+    if (sent === undefined) return;
+    this.pingSent.delete(id);
+    connection.latency = Date.now() - sent;
   }
 
   private tellStale(): void {
@@ -436,25 +558,73 @@ declare global {
   }
 }
 
-const link = typeof window !== 'undefined' ? window.__ESCOUADE_REMOTE__ : undefined;
-const remote = link ? new RemoteTransport(link) : null;
+/** A command of this computer's own core, whichever core the window speaks to (its servers, its tunnel). */
+export function local<T>(cmd: string, args?: Args, options?: Options): Promise<T> {
+  return ipcInvoke<T>(cmd, args, options);
+}
+
+const given = typeof window !== 'undefined' ? window.__ESCOUADE_REMOTE__ : undefined;
+/** In Escouade's window (not in the tests of the components, which have no Tauri). */
+const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+let remote: RemoteTransport | null = given ? new RemoteTransport(given) : null;
+/** The transport is chosen: calls go straight to it, without waiting. */
+let decided = !!given || !inTauri;
+const stale: (() => void)[] = [];
+
+/** The link of a server the window is on, asked of this computer's core (ESC-537). */
+async function serverLink(): Promise<RemoteLink | null> {
+  return (await ipcInvoke<RemoteLink | null>('server_link')) ?? null;
+}
+
+/** Settled once the window knows which core it speaks to: this computer's, or a server's through its tunnel. */
+const started: Promise<void> =
+  given || !inTauri
+    ? Promise.resolve()
+    : serverLink()
+        .then((link) => {
+          decided = true;
+          if (!link) return;
+          remote = new RemoteTransport(link, undefined, undefined, undefined, serverLink);
+          for (const f of stale) remote.onStale(f);
+          (window as unknown as { __escouadeRemote?: { drop(holdMs?: number): void } }).__escouadeRemote = {
+            drop: (holdMs?: number) => remote?.drop(holdMs),
+          };
+        })
+        .catch((e) => {
+          decided = true;
+          console.error('server_link', e);
+        });
 
 /** Calls the command `cmd` of the core, as Tauri's `invoke` does, on the transport of this window. */
 export function invoke<T>(cmd: string, args?: Args, options?: Options): Promise<T> {
-  return remote ? remote.invoke<T>(cmd, args, options) : ipcInvoke<T>(cmd, args, options);
+  if (remote) return remote.invoke<T>(cmd, args, options);
+  if (decided) return ipcInvoke<T>(cmd, args, options);
+  return started.then(() => (remote ? remote.invoke<T>(cmd, args, options) : ipcInvoke<T>(cmd, args, options)));
 }
 
 /** `f` is called when the state the window holds is to be read again whole (never on the IPC, which loses nothing). */
 export function onStale(f: () => void): () => void {
-  return remote ? remote.onStale(f) : () => {};
+  if (remote) return remote.onStale(f);
+  stale.push(f);
+  return () => {
+    const i = stale.indexOf(f);
+    if (i >= 0) stale.splice(i, 1);
+  };
 }
 
 /** Whether this window runs on the remote API (the e2e of the cut close its socket: `drop`). */
-export const remoteTransport = remote;
+export function remoteTransport(): RemoteTransport | null {
+  return remote;
+}
+
+/** Settled once the transport is chosen. */
+export const transportReady = started;
 
 // The e2e of the cut close the socket as a cut would.
 if (remote) {
+  const r = remote;
   (window as unknown as { __escouadeRemote?: { drop(holdMs?: number): void } }).__escouadeRemote = {
-    drop: (holdMs?: number) => remote.drop(holdMs),
+    drop: (holdMs?: number) => r.drop(holdMs),
   };
 }

@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Server mode: “Connect to a server” drives from here an Escouade running on your server, through an SSH tunnel the app opens with your config, your agent and your known hosts, never accepting a key for you. A pairing code (or running it from here over SSH) is enough the first time; the machine shows in the title bar, the status bar and the rail, and a cut resumes by itself, sending paused and your draft kept.
 - Security: a managed device or a team can deny the file that keeps the plugins’ secrets where there is no system keychain, and their policies also judge the model and the effort an agent gives the agent it creates. The file denied is no longer offered nor read, and Settings › Plugins shows it under a padlock.
 - Your agents can leave you what they wait for from you without stopping (a choice between their renders, a go-ahead, an answer, a test to run), with their images and PDFs, through the MCP server: your answer comes back to them as a message, and a ticket can wait for it. The screen of the “Your turn” box follows.
 - Team server: a team project’s shared memory goes to the server with its docs, each memory signed by whoever wrote it. A memory an agent writes waits for a human to keep it before the team reads it, the agents read what is not validated as data, an administrator can take everything back after an incident, and a secret is refused.

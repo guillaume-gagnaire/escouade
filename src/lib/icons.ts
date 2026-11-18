@@ -118,6 +118,14 @@ export const ICONS = {
     '<rect x="5.25" y="1.75" width="5.5" height="3.5" rx="1" /><rect x="1.75" y="10.75" width="5" height="3.5" rx="1" /><rect x="9.25" y="10.75" width="5" height="3.5" rx="1" /><path d="M8 5.25v2.5M4.25 10.75V9.5c0-.7.55-1.25 1.25-1.25h5c.7 0 1.25.55 1.25 1.25v1.25" />',
   expand: '<path d="M9.5 2.75h3.75V6.5M6.5 13.25H2.75V9.5M13.25 2.75 9 7M2.75 13.25 7 9" />',
   copy: '<rect x="5.25" y="5.25" width="8" height="8" rx="1.5" /><path d="M10.75 5.25V3.5c0-.7-.55-1.25-1.25-1.25h-6c-.7 0-1.25.55-1.25 1.25v6c0 .7.55 1.25 1.25 1.25h1.75" />',
+  // The server mode (ESC-537, design/server-2-3): a server, a warning, try again, a key, unpaired, the tunnel.
+  server:
+    '<rect x="2.75" y="2.75" width="10.5" height="4.25" rx="1.2" /><rect x="2.75" y="9" width="10.5" height="4.25" rx="1.2" /><path d="M5.25 4.9h.01M5.25 11.1h.01" />',
+  warn: '<path d="M8 2.5 14 13H2z" /><path d="M8 6.5v3M8 11.3h.01" />',
+  refresh: '<path d="M12.75 8a4.75 4.75 0 1 1-1.39-3.36" /><path d="M12.75 2.75v2.5h-2.5" />',
+  key: '<circle cx="5.25" cy="10.75" r="2.5" /><path d="M7.1 9 13 3.1M11 5l1.6 1.6" />',
+  unlink: '<path d="M4.6 7.4 3.4 8.6a2.5 2.5 0 0 0 3.5 3.5l1.2-1.2M11.4 8.6l1.2-1.2a2.5 2.5 0 0 0-3.5-3.5L7.9 5.1M2.75 2.75l10.5 10.5" />',
+  tunnel: '<path d="M2.5 8h11M10.5 5l3 3-3 3M5.5 5l-3 3 3 3" />',
 } as const;
 
 export type IconName = keyof typeof ICONS;

@@ -90,6 +90,16 @@ impl Refusal {
         }
     }
 
+    /// Why, as the client reads it (`proto::ToClient::Refused::reason`, ESC-537): `none`, `expired`, `wrong`, `tries`.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Refusal::NoCode => "none",
+            Refusal::Expired => "expired",
+            Refusal::Wrong { .. } => "wrong",
+            Refusal::TooManyTries => "tries",
+        }
+    }
+
     /// As the log says it: never the code.
     pub fn reason(&self) -> &'static str {
         match self {

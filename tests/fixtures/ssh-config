@@ -1,0 +1,17 @@
+# A ~/.ssh/config to try « Se connecter à un serveur » by hand with the fake ssh (tests/fixtures/fake-ssh.mjs, ESC-537):
+# give it to a debug build by ESCOUADE_SSH_CONFIG. `travail` reaches the escouade-server of FAKE_SSH_PORTS,
+# `labo-inconnu` plays an unknown host key, `injoignable` a host that does not answer.
+Host travail
+  HostName escouade.test.internal
+  User escouade
+
+Host labo-inconnu
+  HostName labo.test.internal
+  User gpu
+  ProxyJump travail
+
+Host injoignable
+  HostName injoignable.test.internal
+
+Host *
+  ServerAliveInterval 30

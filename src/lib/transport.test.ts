@@ -303,3 +303,81 @@ describe('the transport on the remote API', () => {
     expect(stale).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('the transport to a server through its tunnel (ESC-537)', () => {
+  let sockets: FakeSocket[];
+  const open = (url: string) => {
+    const s = new FakeSocket(url);
+    sockets.push(s);
+    return s;
+  };
+  const server = { id: 's1', name: 'Travail', ssh: 'acme-escouade', host: 'h', remotePort: 46480, device: 'd', active: true };
+  const link = (url: string, tunnel?: object) => ({ url, token: 'secret', version: '2.3.2', server, tunnel: tunnel as never });
+  beforeEach(() => {
+    setLang('fr');
+    sockets = [];
+    Object.assign(connection, {
+      state: 'local',
+      server: null,
+      latency: null,
+      refusal: null,
+      problem: null,
+      tries: 0,
+      retryAt: null,
+      lostAt: null,
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    for (const s of sockets) s.onclose = null;
+  });
+
+  it('measures the way there and back by a ping, after the resume, and says the machine of the server', async () => {
+    vi.useFakeTimers();
+    const transport = new RemoteTransport(link('ws://127.0.0.1:4121/remote'), open, (async () => null) as never, [5]);
+    expect(connection.server?.name).toBe('Travail');
+    sockets[0].onopen?.();
+    sockets[0].json({ t: 'welcome', session: 's', desk: [], machine: { host: 'vps', user: 'escouade' } });
+    expect(connection.machine).toEqual({ host: 'vps', user: 'escouade' });
+    const ping = sockets[0].texts().find((m) => m.t === 'ping')!;
+    expect(ping).toBeTruthy();
+    vi.advanceTimersByTime(38);
+    sockets[0].json({ t: 'pong', id: ping.id });
+    expect(connection.latency).toBe(38);
+    // A ping that waits past its bound: the socket is said cut, and tried again.
+    vi.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(30_000);
+    expect(sockets[0].closed).toBe(true);
+    expect(connection.state).toBe('lost');
+    expect(connection.lostAt).not.toBeNull();
+    void transport;
+  });
+
+  it('keeps a refusal whole: a revoked token says when and by whom, and the tries stop', () => {
+    new RemoteTransport(link('ws://127.0.0.1:4121/remote'), open, (async () => null) as never, [5]);
+    sockets[0].onopen?.();
+    sockets[0].json({ t: 'refused', code: 'token', error: 'revoked', revoked: { device: 'Poste', at: 1, by: 'MacBook-Air' } });
+    sockets[0].close(1008, 'token');
+    expect(connection.state).toBe('refused');
+    expect(connection.refusal).toMatchObject({ code: 'token', revoked: { by: 'MacBook-Air' }, clientVersion: '2.3.2' });
+  });
+
+  it('asks where to connect before each try: the tunnel’s new port, or its end for good', async () => {
+    let next: ReturnType<typeof link> | null = link('ws://127.0.0.1:4125/remote');
+    const refresh = vi.fn(async () => next);
+    new RemoteTransport(link('ws://127.0.0.1:4121/remote'), open, (async () => null) as never, [1], refresh);
+    sockets[0].onopen?.();
+    sockets[0].json({ t: 'welcome', session: 's', desk: [] });
+    sockets[0].close(1006, 'cut');
+    await vi.waitFor(() => expect(sockets).toHaveLength(2));
+    expect(sockets[1].url).toBe('ws://127.0.0.1:4125/remote');
+    next = link('ws://127.0.0.1:4125/remote', {
+      state: 'failed',
+      problem: { kind: 'hostKey', changed: true, output: 'REMOTE HOST IDENTIFICATION HAS CHANGED', command: 'ssh' },
+    });
+    sockets[1].close(1006, 'cut');
+    await vi.waitFor(() => expect(connection.state).toBe('refused'));
+    expect(connection.problem).toMatchObject({ kind: 'hostKey', changed: true });
+    expect(sockets).toHaveLength(2);
+  });
+});
