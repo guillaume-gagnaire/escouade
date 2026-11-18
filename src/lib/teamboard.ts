@@ -28,6 +28,9 @@ export interface PourDocs {
   pages: string[];
   decisions: string[];
   documents: string[];
+  /** The memory of `.escouade/memory/` (TS-10): `pending` when it goes with « Verser »; its memories' names then. */
+  memory?: 'pending' | 'server' | 'repo' | 'private' | 'none';
+  memories?: string[];
 }
 
 export interface PourPreview {
@@ -75,7 +78,13 @@ export function ticketByKey(tickets: Iterable<Ticket>, projectId: string, key: s
 
 /** The number of the docs' files that would go. */
 export function docsCount(d: PourDocs): number {
-  return d.state === 'pending' ? d.pages.length + d.decisions.length + d.documents.length : 0;
+  const docs = d.state === 'pending' ? d.pages.length + d.decisions.length + d.documents.length : 0;
+  return docs + (d.memory === 'pending' ? (d.memories ?? []).length : 0);
+}
+
+/** Whether « Verser » has docs or a memory to take (its box shown). */
+export function docsPending(d: PourDocs): boolean {
+  return d.state === 'pending' || d.memory === 'pending';
 }
 
 /** The files to pour: those that can be read and are not in the team's Kanban yet. */

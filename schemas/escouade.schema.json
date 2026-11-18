@@ -337,6 +337,16 @@
         }
       ]
     },
+    "memory": {
+      "additionalProperties": false,
+      "properties": {
+        "review": {
+          "description": "In a project of a team: a memory an agent writes is born proposed, read by the agents of its author alone, and becomes the team's once a human accepts it (true when absent). A team may impose it (enforced of its .escouade.yml).",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
     "plugins": {
       "additionalProperties": false,
       "patternProperties": {

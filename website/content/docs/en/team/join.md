@@ -3,7 +3,7 @@
 For a member: join a team through the link you were sent, add your other devices, keep the recovery key, clone the team’s projects and answer the settings it asks you to accept.
 
 > [!NOTE]
-> The team server is a preview of 2.3. Today, a team shares its members, its project list, its settings and the Kanban of its projects. The spec, decisions, documents and memory on the server are coming.
+> The team server is a preview of 2.3. Today, a team shares its members, its project list, its settings and the Kanban of its projects. The spec, decisions, documents and shared memory go there too, by a gesture.
 
 ## A team, in a few words
 
@@ -78,7 +78,7 @@ A plain member has no recovery key to keep.
 - **No id to copy.** A project’s entry in the list carries its team Kanban, encrypted like the rest. Attaching the project, or cloning it from the list, joins that Kanban: you see its tickets at once. Under each project, the screen says “The team’s Kanban joined”, “The team’s Kanban written” or “No Kanban of the team yet”.
 - **Who writes it.** An administrator who shares the Kanban of a project of the list writes it there. A member proposes it: the administrator sees “A member proposes their Kanban for this project” and “Write the Kanban”. A project outside the list is still joined by its Kanban’s id.
 - **Attaching writes the `team` key** of the repository’s `.escouade.yml` (the server’s address, the team’s and the project’s ids, the team’s name; nothing secret). Commit it: whoever opens the repository will see the project is the team’s. Escouade commits nothing.
-- **“Pour into the team”**, on the Kanban, puts the tickets of before on the team’s Kanban: those of the `.escouade/tickets/` files ([Sharing the Kanban](shared-board)) and those of this machine you check (“Check all” is there). A preview first says which tickets leave, what leaves (key, title, description, criteria, column…) and what stays on your machine (images, joined files, account, model, harness, and the shared memory). Nothing leaves before “Pour”.
+- **“Pour into the team”**, on the Kanban, puts the tickets of before on the team’s Kanban: those of the `.escouade/tickets/` files ([Sharing the Kanban](shared-board)) and those of this machine you check (“Check all” is there). A preview first says which tickets leave, what leaves (key, title, description, criteria, column…) and what stays on your machine (images, joined files, account, model, harness); the spec, decisions, documents and shared memory go with them, checked. Nothing leaves before “Pour”.
   - While the team does not have its docs on the server yet, the preview also names the spec, decisions and documents of `.escouade/`: “Also pour the spec, the decisions and the documents” sends them with the tickets. Attaching the project or joining its Kanban never sends them for you. When they do not go (on the server already, kept in the repository by the team, a private project), the preview says why.
   - The tickets of the files keep their id: poured twice, or by two teammates at once, they are never doubled.
   - A ticket poured takes a key of the team (`ACM-4`); a ticket imported from Jira, GitHub… keeps its own. Its card says “Former key: DEM-12”, and it can still be found by it.
@@ -124,5 +124,4 @@ If the server shows two versions of the team, goes back, or changes what your de
 
 ## What is not there yet
 
-- The spec, decisions, documents and memory on the server (coming).
 - The team as a separate space in the window, with its members, devices and their roles, and the key-by-key settings editor (coming).

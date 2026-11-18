@@ -19,10 +19,20 @@ Le serveur d’équipe est installé par ton équipe, sur une machine qu’elle 
 | La liste des projets | pour chaque projet : son nom, sa couleur, son logo, ses dépôts (leurs adresses), sa branche par défaut, qui y a accès | le dossier du projet, ses worktrees, ses réglages sur ce poste | là |
 | Les tickets d’un Kanban partagé avec l’équipe | clé, titre, description, critères et leur état, colonne, place, boucles, avancement, assignation, le nom de chaque appareil | images et fichiers joints, compte, modèle, harness, agent, branche, coût ; les tickets « Ne pas partager » | là |
 | La prise d’un ticket | quel appareil le tient, jusqu’à quand, son jeton, le compteur des clés : en clair, sans dire quel ticket c’est | | là |
-| La spec, les décisions, les documents | les pages, les décisions, les fichiers déposés | le texte extrait, l’index, les vecteurs | à venir |
-| La mémoire partagée | les souvenirs et leur provenance | l’index et les vecteurs | à venir |
+| La spec, les décisions, les documents | les pages, les décisions, les fichiers déposés | le texte extrait, l’index, les vecteurs | là, au choix de l’équipe |
+| La mémoire partagée | les souvenirs et leur provenance signée ; ceux d’un agent proposés jusqu’à ce qu’un humain les garde | l’index et les vecteurs | là, avec les docs |
 
-Tant que les lignes « à venir » ne sont pas là, la spec, les décisions, les documents et la mémoire de tes projets restent où ils sont aujourd’hui : sur ton poste et dans ton dépôt. Les tickets d’un projet ne partent que si son Kanban est partagé avec l’équipe.
+La spec, les décisions, les documents et la mémoire partent sur le serveur par un geste : « Sur le serveur d’équipe » dans les réglages du projet, ou « Verser à l’équipe » sur le Kanban. L’équipe peut aussi les garder dans le dépôt, comme avant. Les tickets d’un projet ne partent que si son Kanban est partagé avec l’équipe.
+
+## La mémoire de l’équipe
+
+La mémoire partagée d’un projet d’équipe (voir [la mémoire partagée](shared-memory)) est lue de tous les agents de l’équipe : un souvenir y est une consigne qui dure. Escouade la garde de ce qu’un agent trompé, ou un membre malveillant, y glisserait :
+
+- **Chaque souvenir porte sa provenance**, signée par l’appareil qui l’écrit : le membre, l’agent (son ticket, son harness, son modèle), la date, écrit à la main ou par un agent, et si cet agent avait lu des données de tiers (une issue, une PR, une page web). Un souvenir dont la provenance ne tient pas à sa signature est refusé.
+- **Un souvenir écrit par un agent naît proposé** : seuls tes agents le lisent, comme une donnée. Il devient celui de l’équipe quand tu le gardes, sur la carte du ticket à valider (« Ce ticket a laissé 2 souvenirs · Garder · Écarter ») ou dans Réglages › Projets › Équipe › Mémoire partagée. Un souvenir écrit à la main est accepté d’office. « Valider les souvenirs des agents » est allumé d’office ; l’équipe peut l’éteindre, ou l’imposer.
+- **Les agents lisent comme une donnée**, jamais comme une consigne, un souvenir non validé ou écrit après des données de tiers.
+- **Un administrateur met en quarantaine** ce qu’a écrit l’agent d’un ticket, ou un membre ou l’un de ses appareils depuis une date, après un aperçu de ce qui part : la règle vaut sur tous les postes, aussi pour ce qui arrive plus tard. L’historique reste au journal de l’équipe.
+- **Un secret est refusé** à l’écriture : un jeton, une clé privée, l’adresse d’un webhook. Une adresse que le projet ne connaît pas est montrée à la validation.
 
 ## Ce qui n’y part jamais
 

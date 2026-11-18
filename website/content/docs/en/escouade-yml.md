@@ -207,6 +207,14 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 
 - `enabled`: `false` stands for “No workflow for this project” (Settings › Projects › Kanban › Workflow): Escouade neither reads nor writes the project’s [workflows](workflows) and follows no agent in them, on every machine that reads the file; `.escouade/workflows/` is left as it is.
 
+### memory
+
+| Key | Type | Values | Missing | Example |
+|---|---|---|---|---|
+| `memory.review` | Boolean | `true`, `false` | `true` | `review: false` |
+
+- `review`: “Review the agents’ memories” of a team’s project (Settings › Projects › Team › Shared memory). A memory an agent writes is born proposed and becomes the team’s once a human keeps it; `false` sends it to the team without review, always with its provenance. A team can impose it in its team `.escouade.yml` (`enforced`): see [the team’s data](team/data).
+
 ### plugins
 
 | Key | Type | Values | Missing | Example |

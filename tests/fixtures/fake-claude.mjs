@@ -3018,6 +3018,28 @@ function startSession() {
         .finally(() => result());
       return;
     }
+    // [souvenir:<name>] (TS-10): a memory noted by Escouade's write_memory (the agent's own project), then read back by
+    // read_memory; « Souvenir noté : <its standing>. ».
+    const remember = text.match(/\[souvenir:([^\]]+)\]/)?.[1];
+    if (remember) {
+      (async () => {
+        const wrote = await escouadeTool('write_memory', {
+          name: remember,
+          description: `Ce que l’agent a appris (${remember})`,
+          body: 'Lancer les tests avant de commiter, puis relire le diff.',
+        });
+        const standing = JSON.parse(wrote?.content?.[0]?.text ?? '{}')?.provenance?.standing ?? 'local';
+        await escouadeTool('read_memory', { name: remember });
+        return standing;
+      })()
+        .then((standing) => streamText(`Souvenir noté : ${standing}.`))
+        .catch((e) => {
+          process.stderr.write(`souvenir: ${e.stack}\n`);
+          streamText(`Échec : ${e.message}`);
+        })
+        .finally(() => result());
+      return;
+    }
     // [proposer:<project>] (ESC-261): what a discussion proposes for the spec, by Escouade's docs tools.
     const proposeIn = text.match(/\[proposer:([^\]]+)\]/)?.[1];
     if (proposeIn) {

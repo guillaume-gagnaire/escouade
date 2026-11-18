@@ -466,8 +466,11 @@ async fn a_test_launch_the_docs_the_memory_the_decisions_and_the_start_are_facts
             ..Default::default()
         },
     )
+    .await
     .unwrap();
-    crate::mcp::memory::forget(&h.core, &caller, Some(&p.id), "build").unwrap();
+    crate::mcp::memory::forget(&h.core, &caller, Some(&p.id), "build")
+        .await
+        .unwrap();
     // The app's start.
     h.core.tell_started();
 

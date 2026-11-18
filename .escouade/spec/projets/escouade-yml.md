@@ -39,6 +39,7 @@ Seulement ce qui vaut pour toute l'équipe. Clés en anglais, en `snake_case`, p
 | `board.on_conflict` | `ask`, `agent`, `abort` |
 | `board.model`, `board.effort`, `board.mode` | ceux des agents des tickets ; vides : ceux du compte. `model` : un texte, tel que le harness le nomme ; `effort` : `low`, `medium`, `high`, `xhigh`, `max` ; `mode` : `auto`, `default`, `plan`, `acceptEdits` |
 | `workflows.enabled` | `false` : « Pas de workflow pour ce projet », ni lecture ni écriture de ses workflows (voir *Workflows*) ; vrai si absente |
+| `memory.review` | « Valider les souvenirs des agents » d'un projet d'équipe (TS-10, C14-B) : `false` envoie les souvenirs des agents à l'équipe sans validation ; vrai si absente ; une équipe peut l'imposer (voir *La mémoire d'équipe*) |
 | `plugins.recommended` | les plugins que le projet propose : des identifiants du store (`dev.exemple.slack`) ; voir *Plugins proposés* |
 | `plugins.<id>` | les réglages que le projet donne au plugin `<id>` : des valeurs simples (texte, nombre, `true`, `false`), jamais un secret |
 | `language_servers.<id>` | le serveur de langage `<id>` du catalogue (`typescript`, `rust`, `python`, `go`, `json`, `css`, `html`) : `enabled` (`true`, `false`), `path` (son programme, relatif au dépôt), `args` (ses arguments) ; voir *Serveurs de langage* |

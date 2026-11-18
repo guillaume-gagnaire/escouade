@@ -2,7 +2,7 @@
 title: "Le Kanban d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md §2.7, §4.1, C5","crates/escouade-team/README.md","crates/escouade-team-server/README.md","src-tauri/src/teamboard.rs","src-tauri/src/teampour.rs","src-tauri/src/teamjoin.rs"]
-tickets: ["ESC-479","ESC-493"]
+tickets: ["ESC-479","ESC-493","ESC-518"]
 decisions: [168,173,178,188,194]
 compared: null
 ---
@@ -109,5 +109,5 @@ Des ids opaques (le projet, la prise de chaque ticket), des ids d'appareil, des 
 - **L'aperçu de « Verser à l'équipe »** a une troisième partie, « Spec, décisions et documents (.escouade/) » :
   - quand l'équipe n'a encore ni choisi ni importé de docs pour ce projet : le nombre de pages, de décisions et de documents, chaque fichier, et la case « Verser aussi la spec, les décisions et les documents », cochée ; le bouton le compte (« Verser 2 tickets et 1 fichier de docs », « Verser 1 fichier de docs » sans ticket) ;
   - sinon, pourquoi rien ne part : déjà sur le serveur d'équipe (ce poste les lit de là, rien de son dépôt ne part), gardées dans le dépôt par l'équipe, projet privé, ou aucune dans le dépôt.
-  - Ce qui reste le dit aussi : la mémoire partagée (`.escouade/memory`) reste dans le dépôt.
+  - Ce qui reste le dit aussi : les images, les fichiers joints, le compte, le modèle et le harness. La mémoire partagée (`.escouade/memory`) part avec les docs (voir « La mémoire d'équipe »).
 - **Verser les docs** les importe comme le réglage « Sur le serveur d'équipe » (ids et numéros gardés, une fois pour l'équipe) ; l'écran nomme ensuite les fichiers restés dans `.escouade/` (« Retirer du dépôt » de l'onglet Docs les retire ; Escouade ne commite rien).

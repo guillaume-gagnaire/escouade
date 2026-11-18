@@ -446,7 +446,7 @@ fn clean_name(name: &str, host: &str) -> String {
 
 // === The teams of this data folder ===
 
-type Shared = Arc<tokio::sync::Mutex<Team>>;
+pub(crate) type Shared = Arc<tokio::sync::Mutex<Team>>;
 
 pub struct Teams {
     root: PathBuf,

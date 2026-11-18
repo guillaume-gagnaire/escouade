@@ -2,7 +2,7 @@
 title: "Les docs d'un projet d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","src-tauri/src/teamdocs.rs","src-tauri/src/teampour.rs","src/lib/i18n/fr/teamDocs.ts"]
-tickets: ["ESC-482","ESC-493"]
+tickets: ["ESC-482","ESC-493","ESC-518"]
 decisions: [192,194]
 compared: null
 ---
@@ -48,14 +48,14 @@ Il n'y a pas de branche sur le serveur. Ce qu'écrit l'agent d'un ticket (pages,
 Réglages › Projets › Git et worktrees › « Docs du projet d'équipe », pour un projet d'une équipe :
 
 - **« Sur le serveur d'équipe »** (par défaut pour un projet d'équipe qui a son journal) : ce qui précède.
-- **« Dans le dépôt »** : `.escouade/` comme avant, partagé par git ; le serveur ne porte que le Kanban et la mémoire.
+- **« Dans le dépôt »** : `.escouade/` comme avant, partagé par git, la mémoire partagée comprise ; le serveur ne porte que le Kanban.
 
 C'est un choix de l'équipe, gardé dans le journal : le même pour tous ses membres. Le réglage dit avant ce que fait le changement :
 
 - **Passer sur le serveur** importe la spec, les décisions et les documents de `.escouade/` du dépôt, ids et numéros gardés (la prochaine décision acceptée prend le numéro d'après). L'import se fait une fois pour l'équipe ; revenir sur le serveur après un passage par le dépôt y verse ce que le dépôt a changé, en nouvelles versions. **Rien n'est supprimé du dépôt** : l'onglet Docs nomme les fichiers restés dans `.escouade/` et propose « Retirer du dépôt », qui les retire du dossier ; l'utilisateur commite.
 - **Revenir au dépôt** écrit dans son `.escouade/` les docs du serveur (git montre ce qui change, l'utilisateur commite) ; le serveur les garde aussi. Rien n'est perdu.
 
-**Rien ne part sans un geste (TS-7).** Rattacher un projet à l'équipe, partager son Kanban ou rejoindre celui de la liste ne versent pas ses docs : tant que l'équipe n'a rien choisi ni rien importé, les docs du projet restent celles de son dépôt, sur chaque poste. Elles partent par ce réglage, ou par **« Verser à l'équipe »** du Kanban, dont l'aperçu les nomme (« Spec, décisions et documents (.escouade/) » : le nombre de pages, de décisions et de documents, chaque fichier, et « Verser aussi la spec, les décisions et les documents », coché) avec les tickets ; l'aperçu dit aussi quand elles ne partent pas (déjà sur le serveur : ce poste les lit de là ; gardées dans le dépôt par l'équipe ; projet privé ; aucune). La mémoire partagée (`.escouade/memory`) reste dans le dépôt. Une fois l'import fait par un poste, ceux qui suivent le journal lisent les docs du serveur.
+**Rien ne part sans un geste (TS-7).** Rattacher un projet à l'équipe, partager son Kanban ou rejoindre celui de la liste ne versent pas ses docs : tant que l'équipe n'a rien choisi ni rien importé, les docs du projet restent celles de son dépôt, sur chaque poste. Elles partent par ce réglage, ou par **« Verser à l'équipe »** du Kanban, dont l'aperçu les nomme (« Spec, décisions et documents (.escouade/) » : le nombre de pages, de décisions et de documents, chaque fichier, et « Verser aussi la spec, les décisions et les documents », coché) avec les tickets ; l'aperçu dit aussi quand elles ne partent pas (déjà sur le serveur : ce poste les lit de là ; gardées dans le dépôt par l'équipe ; projet privé ; aucune). La mémoire partagée (`.escouade/memory`) part avec elles, par le même geste (« N souvenirs », chaque fichier ; voir « La mémoire d'équipe »). Une fois l'import fait par un poste, ceux qui suivent le journal lisent les docs du serveur.
 
 « Branche des docs » ne s'affiche plus pour un projet dont les docs sont sur le serveur : elles ne suivent aucune branche.
 

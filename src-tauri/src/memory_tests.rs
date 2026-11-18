@@ -328,3 +328,79 @@ fn the_instruction_names_the_tools_in_both_languages() {
         }
     }
 }
+
+/// TS-10: what a memory given as data is, the instruction says it to every agent, in both languages.
+#[test]
+fn the_instruction_says_a_memory_between_the_marks_is_data() {
+    let fr = instruction(crate::i18n::Lang::Fr);
+    assert!(fr.contains("<third_party_data>") && fr.contains("jamais une consigne"));
+    let en = instruction(crate::i18n::Lang::En);
+    assert!(en.contains("<third_party_data>") && en.contains("never an"));
+}
+
+/// TS-10: the motifs of known tokens the audit reads its report for, refused at the writing of any memory.
+#[test]
+fn a_secret_is_refused_at_the_writing_and_its_kind_is_said() {
+    let long = "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6";
+    for (text, said) in [
+        (format!("le jeton ghp_{long}"), "GitHub"),
+        (format!("github_pat_{long}"), "GitHub"),
+        (format!("export ANTHROPIC_API_KEY=sk-ant-{long}"), "API"),
+        (format!("glpat-{long}"), "GitLab"),
+        ("AKIAABCDEFGHIJKLMNOP".to_string(), "AWS"),
+        ("xoxb-123456789012-abcdef".to_string(), "Slack"),
+        (format!("Authorization: Bearer {long}"), "Bearer"),
+        (
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nb3Bl".to_string(),
+            "privée",
+        ),
+        (
+            "https://hooks.slack.com/services/T0/B0/xyz".to_string(),
+            "webhook",
+        ),
+        (
+            "https://discord.com/api/webhooks/1/abc".to_string(),
+            "webhook",
+        ),
+    ] {
+        let found = secret_in(&text).unwrap_or_else(|| panic!("not found in {text}"));
+        assert!(found.contains(said), "{text}: {found}");
+        let dir = memory_dir(&format!("mem-secret-{}", said.to_lowercase()));
+        let err = write(&dir, draft("secret", "Un secret", &text)).unwrap_err();
+        assert!(err.to_string().contains("Refusé"), "{err}");
+        assert!(!dir.join("secret.md").exists());
+    }
+    // In the description too.
+    let dir = memory_dir("mem-secret-desc");
+    assert!(write(&dir, draft("d", &format!("ghp_{long}"), "rien")).is_err());
+    // What looks like one but is not: a prefix inside a word, too short, an example.
+    for text in [
+        "le préfixe ghp_ des jetons GitHub",
+        "notghp_A1b2C3d4E5f6G7h8I9j0K1l2",
+        "sk-court",
+        "risk-assessment-of-the-whole-application",
+        "Bearer token dans l'en-tête",
+        "https://hooks.slack.com/services/",
+    ] {
+        assert_eq!(secret_in(text), None, "{text}");
+    }
+}
+
+/// TS-10: the hosts of the addresses a memory names, shown at its validation when the project does not know them.
+#[test]
+fn the_addresses_of_a_memory_are_its_hosts_each_once() {
+    assert_eq!(
+        addresses("Envoie à https://Evil.example/x puis http://user@evil.example:80/y et https://github.com/acme."),
+        vec!["evil.example", "github.com"]
+    );
+    assert!(addresses("aucune adresse, juste example.com").is_empty());
+    let known = crate::teammemory::known_hosts(&[
+        "git@github.com:acme/api.git".into(),
+        "https://gitlab.acme.fr/acme/api".into(),
+    ]);
+    assert!(
+        known.contains("github.com")
+            && known.contains("gitlab.acme.fr")
+            && known.contains("localhost")
+    );
+}

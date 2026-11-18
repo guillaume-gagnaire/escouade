@@ -15,6 +15,8 @@ Each memory has a name, a one-line description, a kind and a text:
 | Reference (`reference`) | where to find something: a page, a dashboard, a tool |
 | User (`user`) | what you prefer |
 
+Never a secret: Escouade refuses a memory that holds a token (GitHub, GitLab, Slack, AWS, an `sk-` key, a `Bearer` token), a private key or a webhook’s address, and says why.
+
 ## Where it lives
 
 In the `.escouade/memory/` folder of the project’s folder (in its first repository when it has several), not in each agent’s worktree: every agent of the project reads and writes the same one, whatever its branch.
@@ -23,6 +25,8 @@ In the `.escouade/memory/` folder of the project’s folder (in its first reposi
 - A short index, `MEMORY.md`, that Escouade writes again at each change.
 - **Escouade never commits it**, not even when approving a ticket: you commit it when you want to share it with the team, who get it at their pull. It blocks neither a merge nor a ticket’s approval.
 - Escouade never reads or writes it through a symbolic link, nor outside the project’s folder: a cloned repository holding one is refused.
+
+In a team’s project whose docs are on the team server, the memory goes there too, encrypted, each memory with its signed provenance; a memory an agent writes waits there until a human keeps it: see [the team’s data](team/data#the-team-s-memory).
 
 ## What the agents do
 

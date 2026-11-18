@@ -7,7 +7,7 @@
   import { onMount } from 'svelte';
   import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
-  import { docsCount, filesToPour, teamBoardApi, type PourPreview, type Poured } from '../../lib/teamboard';
+  import { docsCount, docsPending, filesToPour, teamBoardApi, type PourPreview, type Poured } from '../../lib/teamboard';
   import { errorText } from '../../lib/teams.svelte';
   import Modal from '../modals/Modal.svelte';
 
@@ -143,20 +143,32 @@
       </section>
       <section data-testid="team-pour-docs" data-state={preview.docs.state}>
         <h4>{t('teamBoard.pour.docs')}</h4>
-        {#if preview.docs.state === 'pending'}
+        {#if docsPending(preview.docs)}
           <label class="check">
             <input type="checkbox" bind:checked={takeDocs} data-testid="team-pour-docs-take" />
             {t('teamBoard.pour.docsTake')}
           </label>
-          <p class="muted small">
-            {[
-              t('teamBoard.pour.docsPages', { count: preview.docs.pages.length }),
-              t('teamBoard.pour.docsDecisions', { count: preview.docs.decisions.length }),
-              t('teamBoard.pour.docsDocuments', { count: preview.docs.documents.length }),
-            ].join(', ')} · {t('teamBoard.pour.docsHint')}
-          </p>
+          {#if preview.docs.state === 'pending'}
+            <p class="muted small">
+              {[
+                t('teamBoard.pour.docsPages', { count: preview.docs.pages.length }),
+                t('teamBoard.pour.docsDecisions', { count: preview.docs.decisions.length }),
+                t('teamBoard.pour.docsDocuments', { count: preview.docs.documents.length }),
+              ].join(', ')} · {t('teamBoard.pour.docsHint')}
+            </p>
+          {:else}
+            <p class="muted small">{t('teamBoard.pour.memoryOnly')}</p>
+          {/if}
+          {#if preview.docs.memory === 'pending'}
+            <p class="muted small" data-testid="team-pour-memory">
+              {t('teamBoard.pour.docsMemories', { count: (preview.docs.memories ?? []).length })} · {t('teamBoard.pour.memoryHint')}
+            </p>
+          {/if}
           <ul class="items mono small">
-            {#each [...preview.docs.pages, ...preview.docs.decisions, ...preview.docs.documents] as f (f)}<li>{f}</li>{/each}
+            {#each [...(preview.docs.state === 'pending' ? [...preview.docs.pages, ...preview.docs.decisions, ...preview.docs.documents] : []), ...(preview.docs.memory === 'pending' ? (preview.docs.memories ?? []).map((m) => `memory/${m}.md`) : [])] as f (f)}<li
+              >
+                {f}
+              </li>{/each}
           </ul>
         {:else}
           <p class="muted">

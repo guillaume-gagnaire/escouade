@@ -156,7 +156,6 @@ The IT department also imposes settings through its own tools, with no team serv
 
 - The external audit of the cryptography (coming, before the server is called stable).
 - The live team Kanban, and a ticket taken by a single agent (coming).
-- The spec, decisions, documents and memory on the server; for the memory, the signed provenance of each memory and human approval of those an agent writes (coming). Today, the shared memory stays in each person’s repository (see [the shared memory](shared-memory)).
 - The screen of members and devices, the team’s place as a separate space, the owner and reader roles (coming).
 - Entry through the company directory (OIDC): today, you only get in by invitation.
 - Per-project rights on the server: it serves a project to every device of the team; only encryption protects a project kept to a few members.

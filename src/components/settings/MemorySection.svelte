@@ -4,13 +4,17 @@
   import { MEMORY_DIR } from '../../lib/memory';
   import { app } from '../../lib/state.svelte';
   import type { Memory, Project } from '../../lib/types';
+  import { teamMemoryApi, type TeamMemoryView } from '../../lib/team-memory';
   import Group from './Group.svelte';
+  import TeamMemory from './TeamMemory.svelte';
 
   // « Mémoire partagée » of a project's settings (ESC-255, choice of the chief): its memories read, each one forgotten
   // on a second click. Nothing else: the agents write it through Escouade's tools. Read again when it changes.
   let { project }: { project: Project } = $props();
 
   let memories = $state<Memory[] | null>(null);
+  /** The team's memory (TS-10), when it is on the team server: shown in its place. */
+  let team = $state<TeamMemoryView | null>(null);
   let error = $state<string | null>(null);
   /** The memory whose « Oublier » was clicked once: the next click forgets it. */
   let armed = $state<string | null>(null);
@@ -18,6 +22,14 @@
 
   async function load(id: string) {
     try {
+      const view = project.team && !project.private ? await teamMemoryApi.view(id) : null;
+      if (id !== project.id) return;
+      team = view?.on ? view : null;
+      if (team) {
+        memories = team.memories;
+        error = null;
+        return;
+      }
       const got = await api.memoryList(id);
       if (id !== project.id) return;
       memories = got;
@@ -50,11 +62,17 @@
   }
 </script>
 
-<Group title={t('memory.settings.title')} anchor="memory" note={t('memory.settings.note', { dir: MEMORY_DIR })}>
+<Group
+  title={t('memory.settings.title')}
+  anchor="memory"
+  note={team ? t('memory.team.note') : t('memory.settings.note', { dir: MEMORY_DIR })}
+>
   {#snippet state()}
     {#if memories?.length}<span class="count">{t('memory.settings.count', { count: memories.length })}</span>{/if}
   {/snippet}
-  {#if error}
+  {#if team}
+    <TeamMemory {project} bind:view={team} />
+  {:else if error}
     <p class="empty error">{t('memory.settings.unreadable', { error })}</p>
   {:else if memories && !memories.length}
     <p class="empty">{t('memory.settings.empty')}</p>

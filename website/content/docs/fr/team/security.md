@@ -156,7 +156,6 @@ Le service informatique impose aussi des réglages par ses propres outils, sans 
 
 - L’audit externe de la cryptographie (à venir, avant de dire le serveur stable).
 - Le Kanban d’équipe en direct, et la prise d’un ticket par un seul agent (à venir).
-- La spec, les décisions, les documents et la mémoire sur le serveur ; pour la mémoire, la provenance signée de chaque souvenir et la validation humaine de ceux qu’écrit un agent (à venir). Aujourd’hui, la mémoire partagée reste dans le dépôt de chacun (voir [la mémoire partagée](shared-memory)).
 - L’écran des membres et des appareils, la place de l’équipe comme espace à part, les rôles propriétaire et lecteur (à venir).
 - L’entrée par l’annuaire de l’entreprise (OIDC) : aujourd’hui, on n’entre que par invitation.
 - Les droits par projet sur le serveur : il sert un projet à tout appareil de l’équipe ; seul le chiffrement protège un projet gardé à quelques membres.

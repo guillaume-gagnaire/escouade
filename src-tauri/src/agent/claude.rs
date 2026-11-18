@@ -152,6 +152,11 @@ impl AgentRt {
         if parent.is_none() {
             self.watch_plan_files(id, name, input);
         }
+        // A tool that reads the web, its own or a subagent's (TS-10): a third party's data in its session.
+        if crate::teammemory::web_tool(name) && !self.meta.third_party {
+            self.meta.third_party = true;
+            fx.save = true;
+        }
         let doing = parent.and_then(|_| tool_activity(name, input, &self.meta.cwd));
         let now = now_ms();
         // The agent's own list moved: the plan it follows is named and titled again from what the

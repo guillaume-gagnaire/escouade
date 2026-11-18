@@ -1740,6 +1740,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         workflows_auto_read: true,
         workflows_enabled: true,
         workflows_in_repo: true,
+        memory_review_off: false,
         agent_folders: Vec::new(),
         agent_order: Vec::new(),
     }
@@ -9451,12 +9452,19 @@ impl Core {
 
     /// The memories of the project's shared memory, by name.
     pub fn memories(&self, id: &str) -> Result<Vec<crate::memory::Memory>> {
-        crate::memory::list(&crate::memory::dir_of(&self.project(id)?))
+        crate::memory::list(&self.memory_dir(&self.project(id)?))
     }
 
-    /// « Oublier » of the settings: a memory's file removed.
-    pub fn forget_memory(&self, id: &str, name: &str) -> Result<()> {
-        if !crate::memory::forget(&crate::memory::dir_of(&self.project(id)?), name)? {
+    /// « Oublier » of the settings: a memory's file removed (a tombstone that goes to every machine, for a memory on
+    /// the team server: TS-10).
+    pub async fn forget_memory(&self, id: &str, name: &str) -> Result<()> {
+        let p = self.project(id)?;
+        let gone = if self.team_docs_on(&p) {
+            self.team_memory_forget(id, name).await?
+        } else {
+            crate::memory::forget(&crate::memory::dir_of(&p), name)?
+        };
+        if !gone {
             bail!(tr!(
                 "Aucun souvenir « {name} » dans la mémoire du projet.",
                 "No memory “{name}” in the project's memory."
@@ -9499,20 +9507,37 @@ impl Core {
         }
         Ok(crate::memory::claude_offer(
             &self.claude_memory_dirs(&p),
-            &crate::memory::dir_of(&p),
+            &self.memory_dir(&p),
         ))
     }
 
     /// « Reprendre » of the window: the memories of Claude Code the user ticked, written into the project's; the
     /// offer is not made again.
-    pub fn claude_memory_take(&self, id: &str, names: &[String]) -> Result<Project> {
+    pub async fn claude_memory_take(&self, id: &str, names: &[String]) -> Result<Project> {
         let p = self.project(id)?;
         if !names.is_empty() {
-            let offered = crate::memory::claude_offer(
-                &self.claude_memory_dirs(&p),
-                &crate::memory::dir_of(&p),
-            );
-            crate::memory::claude_take(&offered, names, &crate::memory::dir_of(&p))?;
+            let offered =
+                crate::memory::claude_offer(&self.claude_memory_dirs(&p), &self.memory_dir(&p));
+            if self.team_docs_on(&p) {
+                // The member's gesture: written by hand in the team's journal (TS-10).
+                for o in offered.iter().filter(|o| names.contains(&o.memory.name)) {
+                    let m = &o.memory;
+                    let draft = crate::memory::Draft {
+                        name: m.name.clone(),
+                        description: m
+                            .description
+                            .chars()
+                            .take(crate::memory::MAX_DESCRIPTION)
+                            .collect(),
+                        kind: m.kind,
+                        body: m.body.chars().take(crate::memory::MAX_BODY).collect(),
+                    };
+                    self.team_memory_write(id, draft, crate::teammemory::Writer::hand())
+                        .await?;
+                }
+            } else {
+                crate::memory::claude_take(&offered, names, &crate::memory::dir_of(&p))?;
+            }
             self.memory_changed(id);
         }
         self.claude_memory_asked(id)

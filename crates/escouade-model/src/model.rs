@@ -1010,6 +1010,11 @@ pub struct Project {
     /// (`workflows.enabled`).
     #[serde(default = "crate::model::yes")]
     pub workflows_enabled: bool,
+    /// « Valider les souvenirs des agents » turned off (TS-10, C14-B). On (false here, the default), in a project of a
+    /// team, a memory an agent writes is born proposed and becomes the team's once a human accepts it; the team may
+    /// turn it off, or impose it (its `.escouade.yml`, `memory.review`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub memory_review_off: bool,
     /// Its agent folders (`folders`): groups of agents in the sidebar, with a principal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agent_folders: Vec<AgentFolder>,
@@ -2351,6 +2356,11 @@ pub struct AgentMeta {
     pub limit_model: Option<String>,
     /// The board's ticket this agent works on.
     pub ticket_id: Option<String>,
+    /// Its session received a third party's data (TS-10): an answer of Escouade's MCP server marked
+    /// `<third_party_data>`, or a tool of its harness that reads the web, as its hook or its stream told it. The
+    /// memories it writes say so, and are given to the agents as data. Reset with its session (`/clear`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub third_party: bool,
     /// What the agent last said it does (`report_progress`, a tool of Escouade's MCP server), on
     /// one line of `PROGRESS_LINE_MAX` characters at most: shown on its card and its ticket's,
     /// until its next call.

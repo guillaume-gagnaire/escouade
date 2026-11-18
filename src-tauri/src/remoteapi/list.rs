@@ -77,6 +77,13 @@ escouade_command::commands! {
         commands::team_docs_settle,
         commands::team_docs_dismiss,
         commands::team_docs_remove_repo_files,
+        // The team's memory (TS-10, ESC-518).
+        commands::team_memory_view,
+        commands::team_memory_decide,
+        commands::team_memory_quarantine,
+        commands::team_memory_lift,
+        commands::team_memory_of_ticket,
+        commands::team_memory_set_review,
         commands::team_forget,
         commands::team_settings,
         commands::team_settings_check,

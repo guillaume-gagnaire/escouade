@@ -85,8 +85,7 @@ export default defineZone('teamBoard', {
     already: 'Already on the team’s Kanban',
     keepsKey: 'keeps its key',
     goes: 'What leaves: the key, the title, the description, the criteria and their state, the column, the place, the loops, the progress, the assignment.',
-    stays:
-      'What stays on this machine: the images, the joined files, the account, the model and the harness. The shared memory (.escouade/memory) stays in the repository.',
+    stays: 'What stays on this machine: the images, the joined files, the account, the model and the harness.',
     docs: 'Spec, decisions and documents (.escouade/)',
     docsTake: 'Also pour the spec, the decisions and the documents',
     docsHint:
@@ -94,6 +93,10 @@ export default defineZone('teamBoard', {
     docsPages: { one: '{count} page', other: '{count} pages' },
     docsDecisions: { one: '{count} decision', other: '{count} decisions' },
     docsDocuments: { one: '{count} document', other: '{count} documents' },
+    docsMemories: { one: '{count} memory', other: '{count} memories' },
+    memoryHint:
+      'The shared memory (.escouade/memory) goes too: each memory written in your name, by hand, with its provenance. Nothing is removed from the repository.',
+    memoryOnly: 'The docs are on the team server already; this repository’s shared memory isn’t there yet.',
     docsServer: 'This project’s docs are on the team server already: this machine reads them from there, nothing of its repository goes.',
     docsRepo: 'The team keeps this project’s docs in the repository: they do not go (Settings › Projects › Git and worktrees).',
     docsPrivate: 'Private project: its docs never go to the team server.',

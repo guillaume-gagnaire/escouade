@@ -15,6 +15,8 @@ Chaque souvenir a un nom, une description d’une ligne, une sorte et un texte :
 | Référence (`reference`) | où trouver quelque chose : une page, un tableau de bord, un outil |
 | Utilisateur (`user`) | ce que tu préfères |
 
+Jamais un secret : Escouade refuse un souvenir qui contient un jeton (GitHub, GitLab, Slack, AWS, une clé `sk-`, un jeton `Bearer`), une clé privée ou l’adresse d’un webhook, et dit pourquoi.
+
 ## Où elle vit
 
 Dans le dossier `.escouade/memory/` du dossier du projet (dans son premier dépôt quand il en a plusieurs), et non dans le worktree de chaque agent : tous les agents du projet lisent et écrivent la même, quelle que soit leur branche.
@@ -23,6 +25,8 @@ Dans le dossier `.escouade/memory/` du dossier du projet (dans son premier dép�
 - Un index court, `MEMORY.md`, qu’Escouade réécrit à chaque changement.
 - **Escouade ne la commite jamais**, pas même en validant un ticket : tu la commites quand tu veux la partager avec l’équipe, qui la reçoit à son pull. Elle ne bloque ni un merge ni la validation d’un ticket.
 - Escouade ne la lit ni ne l’écrit à travers un lien symbolique, ni hors du dossier du projet : un dépôt cloné qui en contiendrait un est refusé.
+
+Dans un projet d’équipe dont les docs sont sur le serveur d’équipe, la mémoire y part aussi, chiffrée, chaque souvenir avec sa provenance signée ; un souvenir écrit par un agent y attend qu’un humain le garde : voir [les données de l’équipe](team/data#la-memoire-de-l-equipe).
 
 ## Ce que font les agents
 

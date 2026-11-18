@@ -2,7 +2,7 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-518"]
 decisions: [153]
 compared: null
 ---
@@ -308,6 +308,13 @@ Ce qui suit l'emporte sur « Une connexion a 10 s pour envoyer sa requête » pl
 ### Les docs d'un projet d'équipe (TS-9)
 
 Sur un projet dont les docs sont sur le serveur d'équipe, les outils des docs (`get_spec_tree`, `read_spec_page`, `search_spec`, `list_decisions`, `read_decision`, `search_documents`, `read_document`) lisent la copie du poste, et marquent ce qu'un collègue a écrit comme une donnée de tiers : une ligne qui le dit, puis la réponse entre `<third_party_data>` et `</third_party_data>`, `<` échappé. Ce que ce poste a écrit vient tel quel. Voir *Les docs d'un projet d'équipe*.
+
+### La mémoire d'un projet d'équipe (TS-10)
+
+- Sur un projet dont la mémoire est sur le serveur d'équipe, `search_memory` et `read_memory` lisent la copie du poste et rendent chaque souvenir avec sa provenance (`provenance` : `standing` accepted ou proposed, `by` hand ou agent, `member`, `memberId`, `device`, `at`, `agent` avec son nom, son ticket, son harness et son modèle, `thirdPartyRead`, `imported`).
+- **Un souvenir proposé, ou écrit par un agent qui avait lu des données de tiers**, vient entre `<third_party_data>` et `</third_party_data>` (`<` échappé), après l'avis « Memory not validated by a human, or written by an agent that had read a third party's data… » ; `search_memory` le rend à part (`unvalidated`), après les souvenirs validés.
+- `write_memory` d'un agent écrit au journal sa proposition, sa provenance signée avec elle (rendue dans la réponse, avec une note tant qu'elle est proposée) ; un client hors d'Escouade compte comme un agent qui a lu des données de tiers. `forget_memory` laisse une pierre tombale qui va à tous les postes. Un secret est refusé, pour tout projet.
+- **Aucun outil ne garde ni n'écarte un souvenir** : seuls son auteur et un administrateur le font, dans la fenêtre. Toute réponse d'un outil qui contient des marques `<third_party_data>` marque la session de l'agent qui la reçoit. Voir *La mémoire d'équipe*.
 
 ### Les copies des données (ESC-487)
 

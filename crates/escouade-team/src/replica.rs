@@ -578,6 +578,28 @@ impl Replica {
         Ok(())
     }
 
+    /// The member a device wrote as, as an operation of the journal says it (its author, whose signature was checked
+    /// when it was read: TS-10, the provenance of a memory). None when the journal holds none of that device (none
+    /// yet, or all before the snapshot).
+    pub fn author_member(
+        &self,
+        device: &DeviceId,
+    ) -> Result<Option<escouade_team_crypto::MemberId>, Error> {
+        let op: Option<Vec<u8>> = self
+            .conn()
+            .query_row(
+                "SELECT op FROM ops WHERE author = ?1 LIMIT 1",
+                [device.0.as_slice()],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?;
+        Ok(op
+            .and_then(|b| Operation::from_bytes(&b).ok())
+            .filter(|o| o.author.device == *device)
+            .map(|o| o.author.member))
+    }
+
     /// How many operations the journal holds (after the snapshot).
     pub fn journal_len(&self) -> Result<u64, Error> {
         self.conn()

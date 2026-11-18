@@ -212,11 +212,18 @@ impl AgentRt {
                 self.meta.last_entry = None;
                 self.meta.fork_of = None;
                 self.meta.fork_at = None;
+                // A conversation that starts again has read nothing yet (TS-10).
+                self.meta.third_party = false;
                 fx.save = true;
                 out.transcript = h["transcript_path"].as_str().map(str::to_string);
             }
         }
         let tool = h["tool_name"].as_str().unwrap_or("");
+        // A tool of its own that reads the web (TS-10): what it reads is a third party's data.
+        if crate::teammemory::web_tool(tool) && !self.meta.third_party {
+            self.meta.third_party = true;
+            fx.save = true;
+        }
         match h["hook_event_name"].as_str().unwrap_or("") {
             "UserPromptSubmit" => {
                 if !self.meta.status.is_active() {

@@ -61,6 +61,8 @@ mod scheduled_tests;
 #[cfg(test)]
 mod teamdocs_tests;
 #[cfg(test)]
+mod teammemory_tests;
+#[cfg(test)]
 mod tests;
 pub(crate) mod tools;
 #[cfg(test)]

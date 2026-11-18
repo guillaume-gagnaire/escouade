@@ -58,6 +58,8 @@ board:
   mode: plan
 workflows:
   enabled: false
+memory:
+  review: false
 editor:
   extensions_allowed:
     \"*\": true
@@ -129,6 +131,26 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("board.mode"), json!("plan"));
     assert_eq!(v("plugins.recommended"), json!(["dev.exemple.slack"]));
     assert_eq!(v("workflows.enabled"), json!(false));
+    assert_eq!(v("memory.review"), json!(false));
+}
+
+/// « Valider les souvenirs des agents » (TS-10, C14-B): a key of the file, true when absent, that a team may impose.
+#[test]
+fn the_review_of_the_agents_memories_is_a_key_of_the_file_on_when_absent() {
+    let k = pf::key_of("memory.review").unwrap();
+    assert_eq!(k.kind, pf::Kind::Bool);
+    assert!(!k.command && !k.file_only);
+    let mut p = project();
+    assert!(!p.memory_review_off);
+    assert_eq!(pf::get(&p, "memory.review"), json!(true));
+    pf::apply(&mut p, &read("version: 1\nmemory:\n  review: false\n"));
+    assert!(p.memory_review_off);
+    assert_eq!(pf::get(&p, "memory.review"), json!(false));
+    // A team's file classifies it as a value it may recommend or impose.
+    use escouade_team::settings::Classify;
+    assert!(crate::team_settings::CORE_KEYS
+        .sort("memory.review")
+        .is_some());
 }
 
 /// « Pas de workflow pour ce projet » (ESC-309): a key of the file, true when absent.

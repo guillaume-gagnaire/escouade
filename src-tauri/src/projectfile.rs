@@ -147,6 +147,8 @@ pub const PRIVATE: &str = "private";
 const MODE: &str = "board.mode";
 /// « Pas de workflow pour ce projet » (ESC-309) when false.
 pub const WORKFLOWS: &str = "workflows.enabled";
+/// « Valider les souvenirs des agents » (TS-10, C14-B) when true (the default).
+pub const MEMORY_REVIEW: &str = "memory.review";
 
 /// The keys of a setting Escouade no longer has (the index of the code's symbols, retired by
 /// ESC-310): a file that still sets one is read all the same, the key left out with no warning,
@@ -280,6 +282,11 @@ pub const KEYS: &[Key] = &[
         WORKFLOWS,
         Kind::Bool,
         "The project has workflows (true when absent). false: « Pas de workflow pour ce projet », Escouade neither reads nor writes its workflows (.escouade/workflows/ left as it is) and follows its agents in none.",
+    ),
+    key(
+        MEMORY_REVIEW,
+        Kind::Bool,
+        "In a project of a team: a memory an agent writes is born proposed, read by the agents of its author alone, and becomes the team's once a human accepts it (true when absent). A team may impose it (enforced of its .escouade.yml).",
     ),
     file_key(
         "team.server",
@@ -1101,6 +1108,7 @@ pub fn get(p: &Project, key: &str) -> Value {
         "board.effort" => json!(b.effort),
         MODE => json!(b.mode),
         WORKFLOWS => json!(p.workflows_enabled),
+        MEMORY_REVIEW => json!(!p.memory_review_off),
         _ => Value::Null,
     }
 }
@@ -1194,6 +1202,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "board.effort" => b.effort = str_of(v),
         MODE => b.mode = str_of(v),
         WORKFLOWS => p.workflows_enabled = flag,
+        MEMORY_REVIEW => p.memory_review_off = !flag,
         _ => {}
     }
 }

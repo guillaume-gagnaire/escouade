@@ -31,6 +31,7 @@
   import EngineMark from '../EngineMark.svelte';
   import Icon from '../Icon.svelte';
   import RejectForm from './RejectForm.svelte';
+  import TicketMemories from './TicketMemories.svelte';
   import { tip } from '../../lib/tip';
   import { harnessHeld } from '../../lib/engines';
   import { isMulti, repoLabel, touchedRepos } from '../../lib/repos';
@@ -873,6 +874,7 @@
       </div>
     {/if}
   {/if}
+  {#if ticket.column === 'review' && project.team}<TicketMemories {project} {ticket} />{/if}
 </div>
 
 <style>

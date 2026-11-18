@@ -486,6 +486,12 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `team_join`
 - `team_join_preview`
 - `team_list`
+- `team_memory_decide`
+- `team_memory_lift`
+- `team_memory_of_ticket`
+- `team_memory_quarantine`
+- `team_memory_set_review`
+- `team_memory_view`
 - `team_new_recovery`
 - `team_own_device`
 - `team_pair_cancel`

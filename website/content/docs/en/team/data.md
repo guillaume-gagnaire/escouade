@@ -19,10 +19,20 @@ The team server is installed by your team, on a machine it chooses (see [Install
 | The project list | for each project: its name, color, logo, repositories (their addresses), default branch, who has access | the project’s folder, its worktrees, its settings on this machine | there |
 | The tickets of a Kanban shared with the team | key, title, description, criteria and their state, column, place, loops, progress, assignment, each device’s name | attached images and files, account, model, harness, agent, branch, cost; the “Do not share” tickets | there |
 | Taking a ticket | which device holds it, until when, its token, the counter of the keys: in clear, without saying which ticket it is | | there |
-| The spec, decisions, documents | the pages, the decisions, the uploaded files | the extracted text, the index, the vectors | coming |
-| The shared memory | the memories and their provenance | the index and the vectors | coming |
+| The spec, decisions, documents | the pages, the decisions, the uploaded files | the extracted text, the index, the vectors | there, as the team chooses |
+| The shared memory | the memories and their signed provenance; an agent’s proposed until a human keeps them | the index and the vectors | there, with the docs |
 
-Until the “coming” rows are there, your projects’ spec, decisions, documents and memory stay where they are today: on your machine and in your repository. A project’s tickets go only if its Kanban is shared with the team.
+The spec, decisions, documents and memory go to the server by a gesture: “On the team server” in the project’s settings, or “Pour into the team” on the Kanban. The team can also keep them in the repository, as before. A project’s tickets go only if its Kanban is shared with the team.
+
+## The team’s memory
+
+The shared memory of a team’s project (see [the shared memory](shared-memory)) is read by every agent of the team: a memory there is an instruction that lasts. Escouade guards it from what a fooled agent, or a member who means harm, would slip in:
+
+- **Each memory carries its provenance**, signed by the device that writes it: the member, the agent (its ticket, harness and model), the date, by hand or by an agent, and whether that agent had read a third party’s data (an issue, a PR, a web page). A memory whose provenance doesn’t match its signature is refused.
+- **A memory an agent writes is born proposed**: only your agents read it, as data. It becomes the team’s once you keep it, on the card of the ticket to approve (“This ticket left 2 memories · Keep · Set aside”) or in Settings › Projects › Team › Shared memory. A memory written by hand is accepted at once. “Review the agents’ memories” is on by default; the team can turn it off, or impose it.
+- **The agents read as data**, never as an instruction, a memory not approved or written after a third party’s data.
+- **An administrator puts in quarantine** what a ticket’s agent wrote, or a member or one of their devices since a date, after a preview of what goes: the rule holds on every device, for what comes later too. The history stays in the team’s journal.
+- **A secret is refused** at the writing: a token, a private key, a webhook’s address. An address the project doesn’t know is shown at its approval.
 
 ## What never goes there
 

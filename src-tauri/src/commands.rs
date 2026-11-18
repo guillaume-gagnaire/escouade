@@ -4887,9 +4887,9 @@ pub fn memory_list(core: CoreState, project_id: String) -> Res<Vec<crate::memory
 }
 
 /// « Oublier » of a memory, in the project's settings.
-#[tauri::command(async)]
-pub fn memory_forget(core: CoreState, project_id: String, name: String) -> Res<()> {
-    core.forget_memory(&project_id, &name).map_err(err)
+#[tauri::command]
+pub async fn memory_forget(core: CoreState<'_>, project_id: String, name: String) -> Res<()> {
+    core.forget_memory(&project_id, &name).await.map_err(err)
 }
 
 /// What Claude Code remembers of the project, offered once: none once offered.
@@ -4902,9 +4902,83 @@ pub fn claude_memory_offer(
 }
 
 /// « Reprendre » the memories ticked (none: « Pas maintenant »); the offer is not made again.
+#[tauri::command]
+pub async fn claude_memory_take(
+    core: CoreState<'_>,
+    project_id: String,
+    names: Vec<String>,
+) -> Res<Project> {
+    core.claude_memory_take(&project_id, &names)
+        .await
+        .map_err(err)
+}
+
+/// The shared memory of a project of a team on its server (TS-10), as Réglages › Projets › Équipe › Mémoire partagée shows it:
+/// what this member's agents read with its provenance, the proposals to keep or set aside, what was withdrawn, the
+/// quarantines.
+#[tauri::command]
+pub async fn team_memory_view(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<crate::teammemory::TeamMemoryView> {
+    core.team_memory_view(&project_id).await.map_err(err)
+}
+
+/// « Garder » (`keep`) or « Écarter » a proposed memory of the team: its author or an administrator, in the window
+/// alone.
+#[tauri::command]
+pub async fn team_memory_decide(
+    core: CoreState<'_>,
+    project_id: String,
+    id: String,
+    keep: bool,
+) -> Res<crate::teammemory::TeamMemoryView> {
+    core.team_memory_decide(&project_id, &id, keep)
+        .await
+        .map_err(err)
+}
+
+/// A quarantine of the team's memory (an administrator's): its preview (`apply` false), or the rule written.
+#[tauri::command]
+pub async fn team_memory_quarantine(
+    core: CoreState<'_>,
+    project_id: String,
+    rule: crate::teammemory::Rule,
+    apply: bool,
+) -> Res<crate::teammemory::QuarantinePreview> {
+    core.team_memory_quarantine(&project_id, rule, apply)
+        .await
+        .map_err(err)
+}
+
+/// « Lever la quarantaine » (an administrator's).
+#[tauri::command]
+pub async fn team_memory_lift(
+    core: CoreState<'_>,
+    project_id: String,
+    rule_id: String,
+) -> Res<crate::teammemory::TeamMemoryView> {
+    core.team_memory_lift(&project_id, &rule_id)
+        .await
+        .map_err(err)
+}
+
+/// The memories a ticket's agent proposed (its key), to keep or set aside at its validation.
+#[tauri::command]
+pub async fn team_memory_of_ticket(
+    core: CoreState<'_>,
+    project_id: String,
+    key: String,
+) -> Res<Vec<crate::teammemory::Entry>> {
+    core.team_memory_of_ticket(&project_id, &key)
+        .await
+        .map_err(err)
+}
+
+/// « Valider les souvenirs des agents » (C14-B), unless the team imposes it.
 #[tauri::command(async)]
-pub fn claude_memory_take(core: CoreState, project_id: String, names: Vec<String>) -> Res<Project> {
-    core.claude_memory_take(&project_id, &names).map_err(err)
+pub fn team_memory_set_review(core: CoreState, project_id: String, on: bool) -> Res<Project> {
+    core.team_memory_set_review(&project_id, on).map_err(err)
 }
 
 /// « Commencer » of « Nouvelle discussion » (ESC-261): a discussion or a brainstorm of the Docs

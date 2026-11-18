@@ -286,6 +286,7 @@ mod teamdocs;
 #[cfg(test)]
 mod teamdocs_tests;
 mod teamjoin;
+mod teammemory;
 mod teampour;
 mod teams;
 #[cfg(test)]

@@ -29,7 +29,14 @@ const PREVIEW: PourPreview = {
   ],
   locals: [item({ id: 't1', key: 'DEM-L1', title: 'Brouillon' }), item({ id: 't2', key: 'DEM-L2', title: 'Note' })],
   folder: '.escouade/tickets',
-  docs: { state: 'pending', pages: ['spec/general/accueil.md'], decisions: [], documents: ['documents/cahier.md'] },
+  docs: {
+    state: 'pending',
+    pages: ['spec/general/accueil.md'],
+    decisions: [],
+    documents: ['documents/cahier.md'],
+    memory: 'pending',
+    memories: ['build-avant-tests'],
+  },
 };
 const NO_DOCS = { state: 'none', pages: [], decisions: [], documents: [] } as const;
 
@@ -69,22 +76,23 @@ describe('« Verser à l’équipe » (TS-7)', () => {
     expect(screen.getByText('son fichier est en conflit après un pull')).toBeInTheDocument();
     expect(screen.getByText(/Ce qui part : la clé, le titre/)).toBeInTheDocument();
     expect(screen.getByText(/Ce qui reste sur ce poste : les images/)).toBeInTheDocument();
-    // The docs of `.escouade/` that would go, named, with what does not (the memory).
+    // The docs of `.escouade/` that would go, named, and the shared memory with them (TS-10).
     expect(screen.getByTestId('team-pour-docs')).toHaveTextContent('1 page, 0 décision, 1 document');
     expect(screen.getByTestId('team-pour-docs')).toHaveTextContent('spec/general/accueil.md');
-    expect(screen.getByText(/La mémoire partagée \(\.escouade\/memory\) reste dans le dépôt/)).toBeInTheDocument();
+    expect(screen.getByTestId('team-pour-memory')).toHaveTextContent('1 souvenir · La mémoire partagée (.escouade/memory) part aussi');
+    expect(screen.getByTestId('team-pour-docs')).toHaveTextContent('memory/build-avant-tests.md');
     // The two files that can go, and the docs, by default; none of this machine's tickets.
-    expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 2 tickets et 2 fichiers de docs');
+    expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 2 tickets et 3 fichiers de docs');
     await userEvent.click(screen.getByTestId('team-pour-docs-take'));
     expect(screen.getByTestId('team-pour-submit')).toHaveTextContent(/^Verser 2 tickets$/);
     await userEvent.click(screen.getByTestId('team-pour-docs-take'));
     expect(b.calls.some((c) => c.cmd === 'project_team_pour')).toBe(false);
     // All of this machine's at once.
     await userEvent.click(screen.getByRole('button', { name: 'Tout cocher' }));
-    expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 4 tickets et 2 fichiers de docs');
+    expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 4 tickets et 3 fichiers de docs');
     await userEvent.click(screen.getByRole('button', { name: 'Tout décocher' }));
     await userEvent.click(screen.getAllByTestId('team-pour-local')[1]);
-    expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 3 tickets et 2 fichiers de docs');
+    expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 3 tickets et 3 fichiers de docs');
     await userEvent.click(screen.getByTestId('team-pour-submit'));
     await waitFor(() =>
       expect(b.calls.find((c) => c.cmd === 'project_team_pour')?.args).toEqual({ project: 'p1', files: true, tickets: ['t2'], docs: true }),
@@ -117,7 +125,28 @@ describe('« Verser à l’équipe » (TS-7)', () => {
       project_team_pour: () => ({ imported: 0, already: 0, locals: 0, files: [], folder: '.escouade/tickets', docs: [] }),
     });
     render(TeamPourModal, { projectId: 'p1' });
-    await waitFor(() => expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 2 fichiers de docs'));
+    await waitFor(() => expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 3 fichiers de docs'));
+    await userEvent.click(screen.getByTestId('team-pour-submit'));
+    await waitFor(() =>
+      expect(b.calls.find((c) => c.cmd === 'project_team_pour')?.args).toEqual({ project: 'p1', files: false, tickets: [], docs: true }),
+    );
+  });
+
+  it('pours the shared memory alone when the docs are on the team server already (TS-10)', async () => {
+    const b = fakeBackend({
+      project_team_pour_preview: () => ({
+        ...PREVIEW,
+        files: [],
+        locals: [],
+        docs: { ...NO_DOCS, state: 'server', memory: 'pending', memories: ['build-avant-tests', 'ports'] },
+      }),
+      project_team_pour: () => ({ imported: 0, already: 0, locals: 0, files: [], folder: '.escouade/tickets', docs: [] }),
+    });
+    render(TeamPourModal, { projectId: 'p1' });
+    expect(await screen.findByTestId('team-pour-memory')).toHaveTextContent('2 souvenirs');
+    expect(screen.getByTestId('team-pour-docs')).toHaveTextContent('Les docs sont déjà sur le serveur d’équipe');
+    expect(screen.getByTestId('team-pour-docs')).toHaveTextContent('memory/ports.md');
+    expect(screen.getByTestId('team-pour-submit')).toHaveTextContent('Verser 2 fichiers de docs');
     await userEvent.click(screen.getByTestId('team-pour-submit'));
     await waitFor(() =>
       expect(b.calls.find((c) => c.cmd === 'project_team_pour')?.args).toEqual({ project: 'p1', files: false, tickets: [], docs: true }),

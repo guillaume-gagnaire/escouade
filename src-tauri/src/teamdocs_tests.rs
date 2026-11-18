@@ -73,7 +73,7 @@ impl Server {
     }
 
     /// The server unreachable: nothing listens at its address, and every connection is cut.
-    async fn stop(&mut self) {
+    pub(crate) async fn stop(&mut self) {
         for t in self.relay.drain(..) {
             t.abort();
             let _ = t.await;
@@ -83,7 +83,7 @@ impl Server {
         }
     }
 
-    async fn again(&mut self) {
+    pub(crate) async fn again(&mut self) {
         let mut tries = 0;
         let front = loop {
             match tokio::net::TcpListener::bind(self.addr).await {
@@ -99,7 +99,7 @@ impl Server {
     }
 
     /// Every byte the server keeps.
-    fn kept(&self) -> Vec<u8> {
+    pub(crate) fn kept(&self) -> Vec<u8> {
         let mut out = Vec::new();
         let mut todo = vec![self.dir.path().join("server")];
         while let Some(d) = todo.pop() {
@@ -116,7 +116,7 @@ impl Server {
     }
 }
 
-fn holds(hay: &[u8], needle: &str) -> bool {
+pub(crate) fn holds(hay: &[u8], needle: &str) -> bool {
     hay.windows(needle.len()).any(|w| w == needle.as_bytes())
 }
 

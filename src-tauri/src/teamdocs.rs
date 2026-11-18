@@ -62,7 +62,7 @@ const PLACE: &str = "place";
 static PASSES: LazyLock<parking_lot::Mutex<BTreeMap<String, Arc<tokio::sync::Mutex<()>>>>> =
     LazyLock::new(Default::default);
 
-fn pass_lock(project_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+pub(crate) fn pass_lock(project_id: &str) -> Arc<tokio::sync::Mutex<()>> {
     PASSES
         .lock()
         .entry(project_id.to_string())
@@ -962,7 +962,8 @@ fn load_decision_conflicts(space: &Space) -> Vec<DecisionConflict> {
 
 // === Moving between the repository and the server ===
 
-/// The files of the repository's `.escouade/` docs (spec, decisions, documents), relative to the repository.
+/// The files of the repository's `.escouade/` docs (spec, decisions, documents) and of its memory (TS-10: its `.md`
+/// files and their index), relative to the repository.
 pub fn repo_doc_files(repo: &Path) -> Vec<String> {
     let mut out = Vec::new();
     for sub in [SPEC, DECISIONS, DOCUMENTS] {
@@ -971,6 +972,23 @@ pub fn repo_doc_files(repo: &Path) -> Vec<String> {
             out.push(format!("{ROOT}/{sub}/{rel}"));
         }
     }
+    out.extend(repo_memory_files(repo));
+    out
+}
+
+/// The files of the repository's memory (`.escouade/memory/*.md`), relative to the repository.
+pub fn repo_memory_files(repo: &Path) -> Vec<String> {
+    let dir = repo.join(crate::memory::DIR);
+    let mut out: Vec<String> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.ends_with(".md"))
+        .map(|n| format!("{}/{n}", crate::memory::DIR))
+        .collect();
+    out.sort();
     out
 }
 
@@ -1140,6 +1158,10 @@ impl Core {
             copy_docs(&repo, &root)?;
             let n = publish(&mut t, pid, &space, &mut man, true, true).await?;
             set_place(&mut t, pid, "server", true)?;
+            // The repository's memory (TS-10) comes with them, by the same gesture; nothing leaves the repository.
+            let n = n + self
+                .team_memory_import(&project, &mut t, pid, false)
+                .await?;
             man.imported = true;
             man.repo_files = repo_doc_files(&repo);
             n + 1
@@ -1158,6 +1180,10 @@ impl Core {
         if !settled.merged.is_empty() {
             // The merges written: sent at once.
             let _ = t.sync_project(pid).await;
+        }
+        // The memory (TS-10): what this member reads of the journal, to this machine's copy.
+        if let Err(err) = self.team_memory_settle(&project, &mut t, pid).await {
+            log::warn!("team memory of {project_id}: {err:#}");
         }
         drop(t);
         man.save(&file)?;
@@ -1409,6 +1435,8 @@ impl Core {
                     let root = self.team_docs_root(project_id);
                     copy_docs(&repo, &root)?;
                     man.repo_files = repo_doc_files(&repo);
+                    // Its memory too (TS-10): what the team does not hold already.
+                    self.team_memory_import(&project, &mut t, pid, true).await?;
                 }
                 man.save(&file)?;
                 let _ = t.sync_project(pid).await;
@@ -1419,9 +1447,25 @@ impl Core {
             set_place(&mut t, pid, "repo", true)?;
             let _ = t.sync_project(pid).await;
             drop(t);
-            // Nothing lost: the server's docs written in the repository.
+            // Nothing lost: the server's docs written in the repository, and the memory the team accepted (TS-10).
             let repo = crate::docsbranch::base_of(&project);
             copy_docs(&self.team_docs_root(project_id), &repo)?;
+            let accepted = self.team_memory_manifest(project_id).memories;
+            let into = crate::memory::dir_of(&project);
+            for e in accepted
+                .values()
+                .filter(|e| e.standing == crate::teammemory::Standing::Accepted)
+            {
+                let draft = crate::memory::Draft {
+                    name: e.name.clone(),
+                    description: e.description.clone(),
+                    kind: e.kind,
+                    body: e.body.clone(),
+                };
+                if let Err(err) = crate::memory::write(&into, draft) {
+                    log::warn!("team memory: « {} » not written back: {err:#}", e.name);
+                }
+            }
             let mut man = Manifest::load(&file);
             man.place = Some("repo".into());
             man.repo_files.clear();
@@ -1472,13 +1516,16 @@ impl Core {
         choice: &str,
     ) -> Result<TeamDocsView> {
         let file = self.team_docs_manifest_file(project_id);
-        let mut man = Manifest::load(&file);
-        let conflict = man.conflicts.get(path).cloned().ok_or_else(|| {
-            anyhow!(tr!(
-                "Cette page n’est plus en conflit.",
-                "This page is no longer in conflict."
-            ))
-        })?;
+        let conflict = Manifest::load(&file)
+            .conflicts
+            .get(path)
+            .cloned()
+            .ok_or_else(|| {
+                anyhow!(tr!(
+                    "Cette page n’est plus en conflit.",
+                    "This page is no longer in conflict."
+                ))
+            })?;
         let space = Space::new(self.team_docs_root(project_id), None);
         let rel = format!("{path}.md");
         match choice {
@@ -1488,12 +1535,19 @@ impl Core {
                 } else {
                     &conflict.theirs
                 };
-                space.raw_write(SPEC, &rel, text)?;
-                // Forced past the hash: the version is written after both heads.
-                if let Some(seen) = man.pages.get_mut(path) {
-                    seen.hash.clear();
+                {
+                    // Under the pass's lock: a pass under way, its manifest read before, would write the conflict
+                    // back over this choice.
+                    let one = pass_lock(project_id);
+                    let _one = one.lock().await;
+                    let mut man = Manifest::load(&file);
+                    space.raw_write(SPEC, &rel, text)?;
+                    // Forced past the hash: the version is written after both heads.
+                    if let Some(seen) = man.pages.get_mut(path) {
+                        seen.hash.clear();
+                    }
+                    man.save(&file)?;
                 }
-                man.save(&file)?;
                 self.team_docs_changed(project_id).await;
             }
             "agent" => {
@@ -1510,13 +1564,18 @@ impl Core {
                     )
                     .await?;
                 let id = agent.meta.id.clone();
-                if let Some(c) = man.conflicts.get_mut(path) {
-                    c.agent_id = Some(id.clone());
+                {
+                    let one = pass_lock(project_id);
+                    let _one = one.lock().await;
+                    let mut man = Manifest::load(&file);
+                    if let Some(c) = man.conflicts.get_mut(path) {
+                        c.agent_id = Some(id.clone());
+                    }
+                    if let Some(seen) = man.pages.get_mut(path) {
+                        seen.hash.clear();
+                    }
+                    man.save(&file)?;
                 }
-                if let Some(seen) = man.pages.get_mut(path) {
-                    seen.hash.clear();
-                }
-                man.save(&file)?;
                 let message = conflict_message(lang, &conflict);
                 if let Err(err) = self.send_message(&id, message, Vec::new()).await {
                     log::warn!("team docs conflict: the writer agent was not asked: {err:#}");
@@ -1585,6 +1644,29 @@ fn place_of(t: &mut Team, pid: ProjectId) -> Option<String> {
         .get(PLACE)
         .and_then(Value::as_str)
         .map(str::to_string)
+}
+
+/// Whether the repository's memory was imported to the server (TS-10, by any device of the team).
+pub(crate) fn memory_imported(t: &mut Team, pid: ProjectId) -> bool {
+    t.replica(&pid)
+        .ok()
+        .and_then(|r| r.object(&place_object()).ok().flatten())
+        .is_some_and(|v| v.fields.get("memoryImported") == Some(&Value::Bool(true)))
+}
+
+/// The repository's memory imported (TS-10): said in the team's choice, so that no device imports it again.
+pub(crate) fn set_memory_imported(t: &mut Team, pid: ProjectId) -> Result<()> {
+    let e = |e: escouade_team::Error| anyhow!(crate::teams::say(&e));
+    if t.replica(&pid)
+        .map_err(e)?
+        .object(&place_object())
+        .map_err(e)?
+        .is_none()
+    {
+        set_place(t, pid, "server", true)?;
+    }
+    t.set_field(pid, place_object(), "memoryImported", json!(true))
+        .map_err(e)
 }
 
 /// Whether the repository's docs were imported to the server (by any device of the team).

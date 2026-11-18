@@ -3,7 +3,7 @@
 Pour un membre : entrer dans une équipe par le lien qu’on t’a envoyé, y ajouter tes autres appareils, garder la clé de secours, cloner les projets de l’équipe et répondre aux réglages qu’elle te demande d’accepter.
 
 > [!NOTE]
-> Le serveur d’équipe est un aperçu de la 2.3. Aujourd’hui, une équipe partage ses membres, sa liste de projets, ses réglages et le Kanban de ses projets. La spec, les décisions, les documents et la mémoire sur le serveur sont à venir.
+> Le serveur d’équipe est un aperçu de la 2.3. Aujourd’hui, une équipe partage ses membres, sa liste de projets, ses réglages et le Kanban de ses projets. La spec, les décisions, les documents et la mémoire partagée y vont aussi, par un geste.
 
 ## Une équipe, en deux mots
 
@@ -78,7 +78,7 @@ Un simple membre n’a pas de clé de secours à garder.
 - **Sans identifiant à copier.** L’entrée d’un projet dans la liste porte son Kanban d’équipe, chiffré comme le reste. Rattacher le projet, ou le cloner depuis la liste, rejoint ce Kanban : tu vois ses tickets aussitôt. Sous chaque projet, l’écran dit « Kanban de l’équipe rejoint », « Kanban de l’équipe inscrit » ou « Pas encore de Kanban de l’équipe ».
 - **Qui l’inscrit.** Un administrateur qui partage le Kanban d’un projet de la liste l’y inscrit. Un membre le propose : l’administrateur voit « Un membre propose son Kanban pour ce projet » et « Inscrire le Kanban ». Un projet hors de la liste se rejoint toujours par l’identifiant de son Kanban.
 - **Rattacher écrit la clé `team`** du `.escouade.yml` du dépôt (l’adresse du serveur, l’id de l’équipe et du projet, le nom de l’équipe ; rien de secret). Commite-la : qui ouvrira le dépôt verra que le projet est de l’équipe. Escouade ne commite rien.
-- **« Verser à l’équipe »**, sur le Kanban, met dans le Kanban de l’équipe les tickets d’avant : ceux des fichiers `.escouade/tickets/` ([Partager le Kanban](shared-board)) et ceux de ce poste que tu coches (« Tout cocher » est là). Un aperçu dit d’abord quels tickets partent, ce qui part (clé, titre, description, critères, colonne…) et ce qui reste sur ton poste (images, fichiers joints, compte, modèle, harness, et la mémoire partagée). Rien ne part avant « Verser ».
+- **« Verser à l’équipe »**, sur le Kanban, met dans le Kanban de l’équipe les tickets d’avant : ceux des fichiers `.escouade/tickets/` ([Partager le Kanban](shared-board)) et ceux de ce poste que tu coches (« Tout cocher » est là). Un aperçu dit d’abord quels tickets partent, ce qui part (clé, titre, description, critères, colonne…) et ce qui reste sur ton poste (images, fichiers joints, compte, modèle, harness) ; la spec, les décisions, les documents et la mémoire partagée partent avec, cochés. Rien ne part avant « Verser ».
   - Tant que l’équipe n’a pas encore ses docs sur le serveur, l’aperçu nomme aussi la spec, les décisions et les documents de `.escouade/` : « Verser aussi la spec, les décisions et les documents » les envoie avec les tickets. Rattacher le projet ou rejoindre son Kanban ne les envoie jamais à ta place. S’ils ne partent pas (déjà sur le serveur, gardés dans le dépôt par l’équipe, projet privé), l’aperçu dit pourquoi.
   - Les tickets des fichiers gardent leur id : versés deux fois, ou par deux collègues en même temps, ils ne sont jamais en double.
   - Un ticket versé prend une clé de l’équipe (`ACM-4`) ; un ticket importé de Jira, GitHub… garde la sienne. Sa carte dit « Ancienne clé : DEM-12 », et il se trouve encore par elle.
@@ -124,5 +124,4 @@ Si le serveur montre deux versions de l’équipe, revient en arrière ou change
 
 ## Ce qui n’est pas encore là
 
-- La spec, les décisions, les documents et la mémoire sur le serveur (à venir).
 - L’équipe comme espace à part dans la fenêtre, avec ses membres, ses appareils et leurs rôles, et l’éditeur des réglages clé par clé (à venir).

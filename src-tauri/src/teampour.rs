@@ -15,7 +15,9 @@
 //! - **The docs** of `.escouade/` (spec, decisions, documents: TS-9, `teamdocs`) go by the same gesture when the team
 //!   has none on its server yet (`docs`), named in the preview; they never leave by themselves at the attachment. Those
 //!   of a team that has them already, or chose to keep them in the repository, or of a private project, do not go: the
-//!   preview says why. The shared memory (`.escouade/memory`) stays in the repository (TS-10).
+//!   preview says why. The shared memory (`.escouade/memory`, TS-10, `teammemory`) goes with them, its memories written
+//!   by hand by the member who pours; once the team's docs are on its server, it goes alone by this gesture when no
+//!   device poured it yet (`memory`: `pending`).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -82,6 +84,10 @@ pub struct PourDocs {
     pub pages: Vec<String>,
     pub decisions: Vec<String>,
     pub documents: Vec<String>,
+    /// The memory of `.escouade/memory/` (TS-10): `pending` (it goes with « Verser »), `server` (the team's is there
+    /// already), `repo`, `private` or `none`, as the docs; and the names of its memories that would go.
+    pub memory: String,
+    pub memories: Vec<String>,
 }
 
 /// What it did.
@@ -112,6 +118,7 @@ fn doc_files(project: &crate::model::Project) -> (Vec<String>, Vec<String>, Vec<
         match rel.split('/').next() {
             Some(crate::docs::SPEC) => pages.push(rel),
             Some(crate::docs::DECISIONS) => decisions.push(rel),
+            Some("memory") => {}
             _ => documents.push(rel),
         }
     }
@@ -250,19 +257,45 @@ impl Core {
     /// What becomes of the docs of the repository's `.escouade/` at « Verser » (the module's doc).
     async fn pour_docs(&self, project: &crate::model::Project) -> PourDocs {
         let (pages, decisions, documents) = doc_files(project);
+        let memories: Vec<String> = crate::memory::list(&crate::memory::dir_of(project))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| m.name)
+            .collect();
         let state = if project.private {
             "private"
         } else {
             match self.team_docs_state(project).await {
                 Some((Some(p), _)) if p == "repo" => "repo",
                 Some((_, true)) | Some((Some(_), _)) => "server",
-                _ if pages.is_empty() && decisions.is_empty() && documents.is_empty() => "none",
+                _ if pages.is_empty()
+                    && decisions.is_empty()
+                    && documents.is_empty()
+                    && memories.is_empty() =>
+                {
+                    "none"
+                }
                 _ => "pending",
             }
+        };
+        // The memory follows the docs; on the server already, it goes once by this gesture when no device poured it.
+        let memory = match state {
+            "pending" if !memories.is_empty() => "pending",
+            "server" if memories.is_empty() => "none",
+            "server" if self.team_memory_pending(project).await => "pending",
+            "pending" => "none",
+            s => s,
+        };
+        let memories = if memory == "pending" {
+            memories
+        } else {
+            Vec::new()
         };
         if state != "pending" {
             return PourDocs {
                 state: state.into(),
+                memory: memory.into(),
+                memories,
                 ..Default::default()
             };
         }
@@ -271,6 +304,8 @@ impl Core {
             pages,
             decisions,
             documents,
+            memory: memory.into(),
+            memories,
         }
     }
 
@@ -426,9 +461,14 @@ impl Core {
         }
         // The docs of `.escouade/`, when the team has none on its server yet: imported as « Sur le serveur d'équipe »
         // does it (ids and numbers kept, nothing removed from the repository).
-        if docs && self.pour_docs(&project).await.state == "pending" {
+        let before = self.pour_docs(&project).await;
+        if docs && before.state == "pending" {
             let view = self.team_docs_choose(project_id, true, None).await?;
             done.docs = view.repo_files;
+        } else if docs && before.memory == "pending" {
+            // The docs on the server already: the memory alone (TS-10).
+            self.team_memory_pour(project_id).await?;
+            done.docs = crate::teamdocs::repo_memory_files(&crate::docsbranch::base_of(&project));
         }
         self.request_save();
         self.sync_team_board(project_id).await;

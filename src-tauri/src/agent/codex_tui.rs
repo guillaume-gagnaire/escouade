@@ -61,6 +61,11 @@ impl AgentRt {
                 self.tui_wait(body, fx);
             }
             "PostToolUse" => {
+                // Its web search (TS-10): a third party's data in its session.
+                if crate::teammemory::web_tool(h["tool_name"].as_str().unwrap_or_default()) {
+                    self.meta.third_party = true;
+                    fx.save = true;
+                }
                 if self.meta.status == AgentStatus::Waiting {
                     self.set_status(AgentStatus::Running, fx);
                 }

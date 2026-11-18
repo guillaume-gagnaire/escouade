@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: a team project’s shared memory goes to the server with its docs, each memory signed by whoever wrote it. A memory an agent writes waits for a human to keep it before the team reads it, the agents read what is not validated as data, an administrator can take everything back after an incident, and a secret is refused.
 - Server mode, a first step: `escouade-server` runs Escouade without a window on a Linux server (x64 or arm64) with no desktop, its API on 127.0.0.1 for a client that comes through a tunnel. A device pairs with a one-time code (`escouade-server pair`), and the server keeps its secrets in a file only you can read.
 - The VS Code editor takes extensions from Open VSX: search them, install a theme, a grammar or snippets, update them, turn them off or remove them from its “Extensions” panel. Escouade checks each one’s signature and runs no extension code; a list of allowed extensions is set on the device, in `.escouade.yml` and by the policies.
 - Help › Discover: the map of what Escouade can do (voice, the board and its autopilot, Docs, PRs, terminals, the editor, plugins, the MCP server, your team), each thing leading to the real gesture and ticked once you have really done it. A bubble at the right moment, never while you type, nothing installed or sent without your click; what you dismiss never comes back, and “Hide all” quiets the rest.

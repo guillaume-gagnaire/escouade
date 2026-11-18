@@ -207,6 +207,14 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 
 - `enabled` : `false` vaut « Pas de workflow pour ce projet » (Réglages › Projets › Kanban › Workflow) : Escouade ne lit ni n’écrit les [workflows](workflows) du projet et n’y suit aucun agent, sur chaque machine qui lit le fichier ; `.escouade/workflows/` reste tel quel.
 
+### memory
+
+| Clé | Type | Valeurs | Absente | Exemple |
+|---|---|---|---|---|
+| `memory.review` | Booléen | `true`, `false` | `true` | `review: false` |
+
+- `review` : « Valider les souvenirs des agents » d’un projet d’équipe (Réglages › Projets › Équipe › Mémoire partagée). Un souvenir écrit par un agent naît proposé et devient celui de l’équipe quand un humain le garde ; `false` l’envoie à l’équipe sans validation, toujours avec sa provenance. Une équipe peut l’imposer dans son `.escouade.yml` d’équipe (`enforced`) : voir [les données de l’équipe](team/data).
+
 ### plugins
 
 | Clé | Type | Valeurs | Absente | Exemple |
