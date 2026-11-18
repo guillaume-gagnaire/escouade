@@ -916,6 +916,56 @@ async fn an_agent_at_work_when_bypass_is_turned_off_ends_its_turn_then_stops() {
     }
 }
 
+/// What the window was sent of the agent `id`.
+fn agent_events(h: &Harness, id: &str) -> usize {
+    h.events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "agent" && e["agent"]["id"] == id)
+        .count()
+}
+
+/// A judgement of the mode that changes nothing — its harness runs it in its own mode — tells the window nothing and
+/// asks no save: a warm-up that comes after the window read the agent sends it nothing more (ESC-521, the CI of Linux).
+/// One that changes its mode tells it, once.
+#[tokio::test]
+async fn a_judgement_of_the_mode_that_changes_nothing_tells_the_window_nothing() {
+    let h = harness("esc521-settle-quiet");
+    let (p, _) = h.project(false).await;
+    allow_bypass(&h, true);
+    let e = with_account(&h, &NO_ASK);
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(e),
+                mode: Some("acceptEdits".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
+    // Its warm-up over, then archived (its process stopped, nothing starts it again): nothing else tells the window of
+    // it meanwhile.
+    h.wait("its process started ahead", |h| h.alive(&a.id))
+        .await;
+    h.core.archive_agent(&a.id, true).await.unwrap();
+    assert!(!h.alive(&a.id));
+    let sent = agent_events(&h, &a.id);
+    h.core.settle_mode(&a.id).unwrap();
+    h.core.judge_start(&a.id).unwrap();
+    assert_eq!(agent_events(&h, &a.id), sent, "nothing changed");
+    // Kept in a mode its harness lacks: it goes in the one it runs in, told once.
+    h.core.agent(&a.id).unwrap().lock().meta.mode = "default".into();
+    h.core.settle_mode(&a.id).unwrap();
+    assert_eq!(h.agent(&a.id).mode, "plan");
+    assert_eq!(agent_events(&h, &a.id), sent + 1);
+    h.core.settle_mode(&a.id).unwrap();
+    assert_eq!(agent_events(&h, &a.id), sent + 1);
+}
+
 /// An agent that does not run in Bypass goes on when « Autoriser le mode Bypass » is turned off.
 #[tokio::test]
 async fn an_agent_that_does_not_run_in_bypass_goes_on_when_bypass_is_turned_off() {

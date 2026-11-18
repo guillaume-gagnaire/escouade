@@ -333,6 +333,19 @@ impl<R: Runtime> Core<R> {
     pub(crate) fn settle_mode(self: &Arc<Self>, id: &str) -> Result<()> {
         let lang = crate::i18n::ui();
         let allowed = self.bypass_allowed();
+        // Its harness runs it in its own mode: nothing changes, so the window is told nothing and nothing is saved (a
+        // warm-up that comes after the window read the agent sends it nothing more, ESC-521).
+        let same = {
+            let h = self.agent(id)?;
+            let rt = h.lock();
+            let engine = crate::engine::of(&rt.meta);
+            runs_in(&rt.meta.mode, &offered(engine))
+                .filter(|m| *m == rt.meta.mode)
+                .map(|m| (engine, m))
+        };
+        if let Some((engine, mode)) = same {
+            return check(engine, &mode, allowed, lang);
+        }
         // Its mode shown as its harness runs it, refused or not.
         let (engine, mode) = self.with_agent(id, |rt, fx| {
             let engine = crate::engine::of(&rt.meta);
