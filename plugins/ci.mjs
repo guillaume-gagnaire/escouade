@@ -145,7 +145,9 @@ async function check(plugin, log) {
   }
   // By its relative folder, as an author runs it beside the plugin; a reserved id is Escouade's own hand.
   const hand = String(id).startsWith('dev.escouade.') ? ['--first-party'] : [];
-  const judged = ['--escouade', since];
+  // Offline, as the store's review plays it (ESC-536): a public service out of reach that day (codeberg.org, 2026-11-18)
+  // must not fail the CI; how a plugin types a service's errors is checked by its own tests.
+  const judged = ['--escouade', since, '--offline'];
   const waits = AWAITING_PUBLICATION[name];
   if (waits) {
     const built = join(ROOT, 'src-tauri', 'target', 'plugins-wasm', name, 'plugin.wasm');
