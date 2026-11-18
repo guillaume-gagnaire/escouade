@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.4] — 2026-11-18
 
 - Windows: an update installs even when Escouade takes a while to close, instead of vanishing with nothing installed; should it still fail, Escouade comes back and offers to try again.
 - Plugins: the window no longer announces the menus, status bar items, badges and project templates a manifest declares while Escouade does not use them yet, and `escouade-plugin validate` says they are reserved, without refusing the plugin. The description, default value, choices and order of a plugin’s settings are documented.

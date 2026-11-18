@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.4] — 2026-11-18
 
 - Windows : une mise à jour s’installe même quand Escouade met du temps à se fermer, au lieu de disparaître sans rien installer ; si elle échoue malgré tout, Escouade revient et te propose de réessayer.
 - Plugins : la fenêtre n’annonce plus les menus, éléments de barre d’état, badges et modèles de projet qu’un manifeste déclare sans qu’Escouade s’en serve encore, et `escouade-plugin validate` les dit réservés, sans refuser le plugin. La description, la valeur par défaut, les choix et l’ordre des réglages d’un plugin sont documentés.
