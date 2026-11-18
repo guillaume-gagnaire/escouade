@@ -1,9 +1,9 @@
 ---
-number: null
+number: 210
 id: "la-boite-a-toi-les-demandes-asynchrones"
 title: "La boîte « À toi » : les demandes asynchrones des agents, par le serveur MCP, avec leurs pièces jointes"
 date: "2026-11-17"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-509"
 pages: ["harness/boite-a-toi","harness/serveur-mcp"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/boite-a-toi","added":50,"removed":0},{"page":"harness/serveur-mcp","added":8,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T12:17:38+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
