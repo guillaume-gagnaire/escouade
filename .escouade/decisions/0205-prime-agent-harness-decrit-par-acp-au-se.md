@@ -1,9 +1,9 @@
 ---
-number: null
+number: 205
 id: "prime-agent-harness-decrit-par-acp-au-se"
 title: "Prime Agent, harness décrit par ACP au seul mode Bypass, sans session gardée dans son démon"
 date: "2026-11-16"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-485"
 pages: ["plugins/harness-acp-decrits","plugins/plugins-d-exemple"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-acp-decrits","added":15,"removed":2},{"page":"plugins/plugins-d-exemple","added":5,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T12:14:29+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
