@@ -63,7 +63,7 @@ async fn without_a_keychain_keep_says_why_and_the_chosen_file_keeps_what_the_plu
     crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     let states = |h: &crate::core_tests::Harness| {
         h.core
-            .plugin_secret_states(ID, vec!["password".to_string()])
+            .plugin_secret_states(ID, vec!["password".to_string()], &[])
     };
 
     // « Garder »: nothing kept, and it says why (issue #37: it said nothing).
@@ -83,7 +83,8 @@ async fn without_a_keychain_keep_says_why_and_the_chosen_file_keeps_what_the_plu
         [SecretState {
             key: "password".into(),
             kept: false,
-            in_file: false
+            in_file: false,
+            size: None
         }]
     );
     // Never taken in silence: no file before the choice.
@@ -111,7 +112,8 @@ async fn without_a_keychain_keep_says_why_and_the_chosen_file_keeps_what_the_plu
         [SecretState {
             key: "password".into(),
             kept: true,
-            in_file: true
+            in_file: true,
+            size: None
         }]
     );
     let file = h.core.secrets_file();
@@ -203,7 +205,8 @@ async fn without_a_keychain_keep_says_why_and_the_chosen_file_keeps_what_the_plu
         [SecretState {
             key: "password".into(),
             kept: true,
-            in_file: false
+            in_file: false,
+            size: None
         }]
     );
 
@@ -279,6 +282,68 @@ fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
         .collect()
 }
 
+/// A secret on several lines (`multiline`, ESC-526): kept, its page reads its lines and bytes, never its text; over
+/// 64 KiB, « Garder » keeps nothing and says why.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_secret_on_several_lines_tells_its_size_never_its_text_and_holds_64_kib() {
+    use crate::plugin_secrets::{multiline_secrets, SecretSize};
+    use escouade_plugins::secrets::SECRET_MAX;
+    let h = harness("plugin-secrets-multiline");
+    let conf = "client\ndev tun\nproto udp\nremote vpn.example 1194\n";
+    h.core.plugin_secret_set(ID, "ovpn", conf, false).unwrap();
+    h.core
+        .plugin_secret_set(ID, "password", SECRET, false)
+        .unwrap();
+    let keys = vec!["password".to_string(), "ovpn".to_string()];
+    let states = h.core.plugin_secret_states(ID, keys, &["ovpn".to_string()]);
+    assert_eq!(states[0].size, None, "a secret on one line says no size");
+    assert_eq!(
+        states[1].size,
+        Some(SecretSize {
+            lines: 4,
+            bytes: conf.len()
+        })
+    );
+    let shown = serde_json::to_string(&states).unwrap();
+    assert!(
+        !shown.contains("remote") && !shown.contains(SECRET),
+        "{shown}"
+    );
+    assert!(
+        shown.contains(&format!(r#""size":{{"lines":4,"bytes":{}}}"#, conf.len())),
+        "{shown}"
+    );
+
+    // Over 64 KiB: refused, said, and what was kept stays.
+    let big = "x".repeat(SECRET_MAX + 1);
+    let refused = h
+        .core
+        .plugin_secret_set(ID, "ovpn", &big, false)
+        .unwrap_err();
+    assert!(!refused.keychain_refused);
+    assert!(refused.message.contains("64"), "{}", refused.message);
+    let kept = h
+        .core
+        .plugin_secret_states(ID, vec!["ovpn".into()], &["ovpn".into()]);
+    assert_eq!(kept[0].size.map(|s| s.lines), Some(4));
+    let exact = "y".repeat(SECRET_MAX);
+    h.core.plugin_secret_set(ID, "ovpn", &exact, false).unwrap();
+
+    use crate::plugins::manifest::{read, Hand};
+    let text = json!({
+        "id": ID, "name": "VPN", "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.1.0" },
+        "contributes": { "secrets": [
+            { "key": "password", "title": "Mot de passe" },
+            { "key": "ovpn", "title": "Conf", "multiline": true, "import": [".ovpn"] }
+        ] }
+    })
+    .to_string();
+    let manifest = read(&text, Hand::Third).manifest.unwrap();
+    assert_eq!(multiline_secrets(Some(&manifest)), ["ovpn"]);
+    assert!(multiline_secrets(None).is_empty());
+}
+
 /// A configuration of `n` bytes with its certificate, of lines like an OpenVPN one's.
 fn openvpn_config(n: usize) -> String {
     let mut c = String::from("client\nremote vpn.example.test 1194\n<ca>\n");
@@ -328,7 +393,16 @@ async fn a_long_secret_is_kept_in_pieces_read_whole_and_forgotten_whole() {
         .all()
         .values()
         .all(|v| v.encode_utf16().count() <= 1280));
-    assert!(h.core.plugin_secret_states(ID, vec!["config".into()])[0].kept);
+    // Its page (ESC-526) reads it whole as one secret on several lines: its lines and bytes, never its text.
+    let state = &h
+        .core
+        .plugin_secret_states(ID, vec!["config".into()], &["config".into()])[0];
+    assert!(state.kept);
+    assert_eq!(
+        state.size,
+        Some(crate::plugin_secrets::SecretSize::of(&config))
+    );
+    assert_eq!(state.size.map(|s| s.bytes), Some(6 * 1024));
     // The plugin reads it whole, by `secrets/get`, unchanged.
     let got = h
         .core
@@ -379,7 +453,10 @@ async fn a_long_secret_is_kept_in_pieces_read_whole_and_forgotten_whole() {
         )
         .await;
     assert!(format!("{piece:?}").contains("-32001"), "{piece:?}");
-    let refused = h.core.plugin_secret_states(ID, vec!["config".into()]).len();
+    let refused = h
+        .core
+        .plugin_secret_states(ID, vec!["config".into()], &[])
+        .len();
     assert_eq!(refused, 1);
 
     // A piece gone: the plugin is told the keychain's error, never a secret cut short.

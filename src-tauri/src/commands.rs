@@ -658,7 +658,8 @@ pub fn plugin_secrets(
     id: String,
 ) -> Result<Vec<crate::plugin_secrets::SecretState>, String> {
     let view = plugin_view(&core, &id)?;
-    Ok(core.plugin_secret_states(&id, view.secret_keys))
+    let multiline = crate::plugin_secrets::multiline_secrets(view.manifest.as_ref());
+    Ok(core.plugin_secret_states(&id, view.secret_keys, &multiline))
 }
 
 /// Keeps a plugin's secret in the keychain, under its own name, read back to check; empty forgets it. `inFile`: the

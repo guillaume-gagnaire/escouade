@@ -18,6 +18,39 @@ pub struct SecretState {
     pub kept: bool,
     /// In the file the user chose, not in the keychain.
     pub in_file: bool,
+    /// A secret on several lines (`multiline`), kept: how many lines and bytes, never its text (« Gardé · 84 lignes ·
+    /// 5,1 Ko »). It is not read back in the window: it is replaced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<SecretSize>,
+}
+
+/// What the page of a plugin says of a secret on several lines it keeps: its lines and its bytes, never a character of it.
+#[derive(Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+pub struct SecretSize {
+    pub lines: usize,
+    pub bytes: usize,
+}
+
+impl SecretSize {
+    pub fn of(value: &str) -> Self {
+        Self {
+            lines: value.lines().count().max(1),
+            bytes: value.len(),
+        }
+    }
+}
+
+/// The keys of the secrets of `manifest` declared on several lines (`"multiline": true`).
+pub fn multiline_secrets(manifest: Option<&crate::plugins::manifest::Manifest>) -> Vec<String> {
+    use serde_json::Value;
+    manifest
+        .and_then(|m| m.contributes.get("secrets"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|s| s.get("multiline").and_then(Value::as_bool) == Some(true))
+        .filter_map(|s| s.get("key").and_then(Value::as_str).map(str::to_string))
+        .collect()
 }
 
 /// What « Garder » says when the secret was not kept: its cause, in the user's language, and whether the keychain was
@@ -105,15 +138,25 @@ pub fn refusal_in(lang: crate::i18n::Lang, e: &anyhow::Error, secret: &str) -> S
 }
 
 impl<R: tauri::Runtime> Core<R> {
-    /// The secrets `keys` of the plugin `id`: kept or not, and where.
-    pub fn plugin_secret_states(&self, id: &str, keys: Vec<String>) -> Vec<SecretState> {
+    /// The secrets `keys` of the plugin `id`: kept or not, and where; of those on several lines (`multiline`), their
+    /// lines and bytes.
+    pub fn plugin_secret_states(
+        &self,
+        id: &str,
+        keys: Vec<String>,
+        multiline: &[String],
+    ) -> Vec<SecretState> {
         keys.into_iter()
             .map(|key| {
                 let name = secret_name(id, &key);
-                let kept = self.secrets.get(&name).ok().flatten().is_some();
+                let value = self.secrets.get(&name).ok().flatten();
+                let kept = value.is_some();
                 SecretState {
                     in_file: kept && self.kept.in_file(&name),
                     kept,
+                    size: value
+                        .filter(|_| multiline.contains(&key))
+                        .map(|v| SecretSize::of(&v)),
                     key,
                 }
             })

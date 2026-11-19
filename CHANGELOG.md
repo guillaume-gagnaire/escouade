@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Docs : ce qui reste à partager se lit sur un badge de l’onglet « Docs », plus dans la barre d’état, et un conflit s’y voit à part. « Synchroniser », dans l’espace Docs, partage tes changements ou, s’il n’y en a pas, récupère ceux des autres.
 - Auteurs de plugins : le manifeste accepte désormais des profils, des réglages par projet, des groupes, des champs sur plusieurs lignes, l’import d’un fichier, des jokers typés dans les commandes et une limite de programmes, et refuse ce qui sort de leur grammaire. Un plugin qui en demande un que l’app ne sert pas encore reste coupé, la raison dite.
+- Plugins : la page d’un plugin range ses réglages et ses secrets dans les groupes qu’il déclare, décrit chaque secret et accepte un texte sur plusieurs lignes, comme une configuration OpenVPN, collé ou importé d’un fichier. Un tel secret, gardé, ne se relit plus : il dit sa taille et se remplace.
 - Plugins : une commande qu’un plugin lance peut désormais contenir des jokers (un nombre, un port, un nom, un programme qu’il a lancé, un fichier de son dossier), chacun un seul mot que l’app vérifie avant de lancer quoi que ce soit, jamais une option. La fenêtre d’installation et l’onglet Permissions les montrent en pastilles de mots.
 - Un secret long (une configuration VPN avec ses certificats, jusqu’à 64 Kio) se garde maintenant au trousseau de Windows, qui refusait plus de 1 280 caractères : il y est découpé en morceaux et vérifié à chaque lecture.
 

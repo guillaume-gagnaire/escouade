@@ -252,4 +252,27 @@ mod tests {
         j.push(Kind::Message, "got s3cr3t-token-value and s3cr3t");
         assert_eq!(j.entries()[0].text, format!("got {MASK} and s3cr3t"));
     }
+
+    /// ESC-526: written line by line on the journal, as the page of a plugin's configuration is, each long line masked;
+    /// a short line alone stays.
+    #[test]
+    fn a_configuration_written_line_by_line_shows_none_of_its_long_lines() {
+        let j = journal();
+        let conf = "client\nremote vpn.acme.example 1194\n  <key>MIIEvQIBADANBg</key>\n";
+        j.mask(conf);
+        j.push(Kind::Stderr, format!("the secret is {conf}"));
+        j.push(Kind::Stderr, "remote vpn.acme.example 1194");
+        j.push(Kind::Stderr, "<key>MIIEvQIBADANBg</key>");
+        j.push(Kind::Stderr, "client");
+        let said: Vec<String> = j.entries().into_iter().map(|e| e.text).collect();
+        assert_eq!(
+            said,
+            [
+                format!("the secret is {MASK}"),
+                MASK.into(),
+                MASK.into(),
+                "client".into()
+            ]
+        );
+    }
 }

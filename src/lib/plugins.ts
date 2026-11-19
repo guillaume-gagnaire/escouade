@@ -238,6 +238,8 @@ export interface SecretState {
   key: string;
   kept: boolean;
   inFile: boolean;
+  /** A secret on several lines, kept: its lines and bytes, never its text (ESC-526). */
+  size?: { lines: number; bytes: number };
 }
 
 /** Why « Garder » kept nothing: its cause, said simply; `keychainRefused`: the keychain was the cause, the file is offered. */

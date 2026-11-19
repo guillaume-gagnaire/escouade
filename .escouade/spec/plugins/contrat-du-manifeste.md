@@ -1,9 +1,9 @@
 ---
 title: "Le contrat du manifeste : réglages, secrets, profils, jokers et limite"
 subject: "plugins"
-sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts"]
-tickets: ["ESC-525","ESC-528"]
-decisions: ["le-contrat-du-manifeste-est-lu-avant-d-e","les-jokers-de-permissions-commands-sont"]
+sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts","docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §2 à §6 et §10","src/components/plugins/PluginSettings.svelte","src/lib/plugin-fields.ts","src-tauri/src/plugin_secrets.rs","design/plugins-contract-2-3/captures (release/2.3) : a-plugin, a-projet, b-profil"]
+tickets: ["ESC-525","ESC-528","ESC-526"]
+decisions: ["le-contrat-du-manifeste-est-lu-avant-d-e","les-jokers-de-permissions-commands-sont","la-page-d-un-plugin-sert-ses-groupes-ses"]
 compared: null
 ---
 
@@ -13,8 +13,10 @@ Ce que le manifeste d'un plugin (`escouade-plugin.json`) peut dire de ses régla
 
 **Ce qui est fait** :
 - **ESC-525 (T1)** : le contrat est **lu, validé et refusé** par les deux lecteurs, celui de l'app (`crates/escouade-plugin-cli/src/manifest.rs`) et celui du store (`schemas/plugin-manifest.mjs`, contrôle n° 1), qui passent le même corpus (`tests/fixtures/plugins/manifests.json`) et rendent le même verdict cas par cas. Le schéma `plugin-1.json` le décrit, par ajouts.
+- **ESC-526 (T2)** : la page du plugin sert les groupes, la description d'un secret, les champs sur plusieurs lignes et l'import d'un fichier (dernière section).
+- **ESC-527 (T3)** : un secret long se garde en morceaux au trousseau.
 - **ESC-528 (T5)** : les **jokers sont servis** : l'hôte les vérifie à chaque `proc/spawn`, la fenêtre d'installation et l'onglet Permissions les montrent en mots.
-- Restent à servir : la page du plugin (T2), les profils et les secrets d'un projet (T4), la limite (T6).
+- Restent à servir : les profils et les secrets d'un projet (T4), la limite (T6).
 
 ## Compatibilité
 
@@ -26,7 +28,7 @@ Ce que le manifeste d'un plugin (`escouade-plugin.json`) peut dire de ses régla
 
   La raison : « Ce plugin demande ce que cette version d'Escouade ne sert pas encore : … Il reste coupé plutôt que servi à moitié ; une version plus récente d'Escouade le servira. » Chaque ticket qui sert un point le retire de cette liste. Les jokers en sont sortis avec ESC-528.
 - `escouade-plugin validate` dit ces points par un avertissement (⚠), sans échouer : un plugin écrit pour l'Escouade suivante se valide.
-- Ce qui se lit et se montre comme avant, sans couper le plugin : `groups`, `description`, `multiline`, `lines`, `import`, `scope: project` sur un réglage simple, `repo`, `limits.processes` jusqu'à 4. `repo: false` est déjà tenu : la valeur de `.escouade.yml` n'est jamais prise pour ce réglage, ni pour un réglage qui a `import`.
+- Ce qui se lit sans couper le plugin : `groups`, `description`, `multiline`, `lines`, `import` (servis par la page du plugin depuis ESC-526), `scope: project` sur un réglage simple, `repo`, `limits.processes` jusqu'à 4. `repo: false` est déjà tenu : la valeur de `.escouade.yml` n'est jamais prise pour ce réglage, ni pour un réglage qui a `import`.
 
 ## Réglages et secrets
 
@@ -107,3 +109,22 @@ Le plugin demande une commande et ses arguments ; l'hôte la compare à chaque e
 ## La limite de programmes
 
 `limits.processes`, de 1 à 16 (code `bounds`), et `limits.reason`, un texte, exigé au-delà de 4. L'hôte garde 4 programmes à la fois tant que le ticket de la limite (T6) n'est pas fusionné : au-delà, le plugin est coupé.
+
+## La page d'un plugin : groupes, secrets décrits, plusieurs lignes, import (ESC-526, T2)
+
+L'onglet « Réglages » de la page d'un plugin sert `groups`, `description` d'un secret, `multiline`, `lines` et `import` (issue #40, étude §4.1 et §4.3, choix n° 6 : l'import du contenu, jamais un chemin).
+
+- **Les groupes d'abord**, dans l'ordre de la liste : un titre, sa description dessous, ses rangées séparées par un filet, sans boîte. Réglages et secrets y sont **mêlés dans l'ordre de `fields`**. Un groupe `folded` est replié d'office, comme « Avancé » ailleurs dans les réglages : une rangée calme « › Avancé · 3 réglages », un bouton qui s'ouvre et se ferme au clavier (`aria-expanded`). Ce que l'utilisateur ouvre reste ouvert tant que la page est là.
+- **Un champ hors de tout groupe vient après**, sous « Réglages » puis « Secrets », comme avant. **Un plugin sans groupes est rendu comme avant**, au pixel près. Quand tous les secrets sont dans des groupes, la note du trousseau se lit sous les groupes.
+- **La description d'un secret** se lit sous son titre, avant son état.
+- **Un champ sur plusieurs lignes** (`multiline`, un réglage `string` ou un secret) : une zone de texte à chasse fixe, ses lignes numérotées dans une gouttière qui défile avec elle, `lines` lignes visibles (3 à 20, 6 d'office), sans retour à la ligne automatique. **64 Kio au plus** : au-delà, « Plus de 64 Kio : rien n'a été pris, rien n'est coupé. », et rien n'est gardé ni tronqué. L'app refuse aussi un secret de plus de 64 Kio de son côté (la limite d'ESC-527).
+- **Un secret sur plusieurs lignes ne se relit pas.** Gardé, sa rangée dit « Gardé · 84 lignes · 5,1 Ko » (« Gardé dans un fichier · … » s'il est dans le fichier lisible de l'utilisateur seul) et propose « Oublier » et « Remplacer… ». L'app ne rend à la fenêtre que son nombre de lignes et d'octets, jamais son texte. « Remplacer… » ouvre une zone vide, « Annuler » y revient ; pendant la saisie, le texte se voit.
+- **« Importer un fichier… »** (un champ qui a `import`) ouvre la boîte de dialogue du système, filtrée sur ces extensions. Le fichier choisi est lu **une fois**, dans la fenêtre :
+  - son nom doit finir par une des extensions (le filtre de la boîte n'est qu'une aide) ;
+  - 64 Kio au plus ;
+  - du texte en UTF-8, sans caractère nul.
+
+  Sinon un message dit pourquoi et rien n'est pris. Son texte remplit le champ : un secret attend « Garder », un réglage est gardé aussitôt. **Le chemin n'est jamais connu de l'app** : ni dans l'état, ni dans les réglages, ni dans le journal du plugin ou de l'app. Son nom non plus. Le plugin ne gagne **aucun droit** sur les fichiers.
+- **Une configuration de plus de 1 280 caractères** (6 Ko avec ses certificats) se garde aussi sous Windows : le trousseau la reçoit en morceaux (ESC-527). Un trousseau qui refuse quand même fait dire la raison à « Garder » (le message d'ESC-499), et le fichier lisible de l'utilisateur seul est proposé.
+- Tout tient à 1024 × 728, en français et en anglais. L'e2e `plugin-groups.spec.ts` le vérifie avec un plugin de test.
+- **Le journal du plugin** masque un secret entier, comme avant. Pour un secret sur plusieurs lignes, il masque aussi chacune de ses lignes de plus de 8 caractères (étude §4.4, un seul masquage partagé avec ESC-527). Un plugin qui écrit la configuration ligne par ligne n'en montre donc rien de lisible ; une ligne courte comme `client` reste, sinon elle masquerait tout.

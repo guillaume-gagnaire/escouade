@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - Docs: what is left to share shows as a badge on the “Docs” tab, no longer in the status bar, and a conflict stands out there. “Sync”, in the Docs space, shares your changes or, when there are none, brings in the others’.
 - Plugin authors: the manifest now takes profiles, settings by project, groups, fields on several lines, importing a file, typed jokers in commands and a limit of programs, and refuses what falls outside their grammar. A plugin that asks for one the app does not serve yet stays disabled, the reason said.
+- Plugins: a plugin’s page puts its settings and secrets in the groups it declares, describes each secret and takes a text on several lines, such as an OpenVPN configuration, pasted or imported from a file. Such a secret, once kept, is never read back: it shows its size and is replaced.
 - Plugins: a command a plugin runs can now hold jokers (a number, a port, a name, a program it started, a file of its folder), each one word the app checks before running anything, never an option. The install window and the Permissions tab show them as pills of words.
 - A long secret (a VPN configuration with its certificates, up to 64 KiB) can now be kept in the Windows keychain, which refused more than 1,280 characters: it is cut into pieces there and checked at each read.
 
