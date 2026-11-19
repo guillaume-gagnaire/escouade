@@ -66,25 +66,26 @@ fn a_manifest_of_today_and_one_of_what_is_served_ask_for_nothing_unserved() {
     let m = read(&more);
     assert_eq!(m.limits.processes, Some(4));
     assert_eq!(m.unserved(Lang::En), None);
+    // Profiles and a `profile` setting of each project are served since ESC-530.
+    let mut profiles = today.clone();
+    profiles["permissions"]["secrets"] = json!(["profile:vpn"]);
+    profiles["contributes"] = json!({
+        "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "name", "fields": [
+            { "key": "name", "type": "string", "title": "Nom" },
+            { "key": "password", "secret": true, "title": "Mot de passe" }
+        ] }],
+        "settings": [{ "key": "profile", "type": "profile", "of": "vpn", "scope": "project", "title": "Profil" }]
+    });
+    assert_eq!(read(&profiles).unserved(Lang::Fr), None);
 }
 
 #[test]
 fn each_point_not_served_yet_is_said_in_both_languages() {
-    let cases = [
-        (
-            json!({ "contributes": {
-                "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "name",
-                    "fields": [{ "key": "name", "type": "string", "title": "Nom" }] }]
-            } }),
-            "des profils (`contributes.profiles`)",
-            "profiles (`contributes.profiles`)",
-        ),
-        (
-            json!({ "contributes": { "secrets": [{ "key": "p", "title": "P", "scope": "project" }] } }),
-            "un secret propre à chaque projet",
-            "a secret of each project",
-        ),
-    ];
+    let cases = [(
+        json!({ "contributes": { "secrets": [{ "key": "p", "title": "P", "scope": "project" }] } }),
+        "un secret propre à chaque projet",
+        "a secret of each project",
+    )];
     for (more, fr, en) in cases {
         let mut v = base();
         for (k, x) in more.as_object().unwrap() {
@@ -102,20 +103,6 @@ fn each_point_not_served_yet_is_said_in_both_languages() {
         assert!(said.ends_with("Il reste coupé plutôt que servi à moitié ; une version plus récente d'Escouade le servira."), "{said}");
         assert!(m.unserved(Lang::En).unwrap().contains(en));
     }
-    // Several at once: each named, in one sentence.
-    let mut v = base();
-    v["contributes"] = json!({
-        "secrets": [{ "key": "p", "title": "P", "scope": "project" }],
-        "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "name",
-            "fields": [{ "key": "name", "type": "string", "title": "Nom" }] }]
-    });
-    let said = read(&v).unserved(Lang::En).unwrap();
-    assert!(
-        said.contains(
-            "profiles (`contributes.profiles`), a secret of each project (`\"scope\": \"project\"`)."
-        ),
-        "{said}"
-    );
 }
 
 /// The programs at once of `limits.processes` are served since ESC-529: a plugin that asks for 16 loads, and its

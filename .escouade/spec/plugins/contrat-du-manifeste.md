@@ -1,9 +1,9 @@
 ---
 title: "Le contrat du manifeste : réglages, secrets, profils, jokers et limite"
 subject: "plugins"
-sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/lib.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts","docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §2 à §6 et §10","src/components/plugins/PluginSettings.svelte","src/lib/plugin-fields.ts","src-tauri/src/plugin_secrets.rs","design/plugins-contract-2-3/captures (release/2.3) : a-plugin, a-projet, b-profil"]
-tickets: ["ESC-525","ESC-528","ESC-529","ESC-526"]
-decisions: ["le-contrat-du-manifeste-est-lu-avant-d-e","les-jokers-de-permissions-commands-sont","la-limite-de-programmes-d-un-plugin-est","la-page-d-un-plugin-sert-ses-groupes-ses"]
+sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/lib.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts","docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §2 à §6 et §10","src/components/plugins/PluginSettings.svelte","src/lib/plugin-fields.ts","src-tauri/src/plugin_secrets.rs","design/plugins-contract-2-3/captures (release/2.3) : a-plugin, a-projet, b-profil","crates/escouade-plugins/src/profiles.rs"]
+tickets: ["ESC-525","ESC-528","ESC-529","ESC-526","ESC-530"]
+decisions: ["le-contrat-du-manifeste-est-lu-avant-d-e","les-jokers-de-permissions-commands-sont","la-limite-de-programmes-d-un-plugin-est","la-page-d-un-plugin-sert-ses-groupes-ses","les-profils-d-un-plugin-et-ses-reglages"]
 compared: null
 ---
 
@@ -17,22 +17,21 @@ Ce que le manifeste d'un plugin (`escouade-plugin.json`) peut dire de ses régla
 - **ESC-527 (T3)** : un secret long se garde en morceaux au trousseau.
 - **ESC-528 (T5)** : les **jokers sont servis** : l'hôte les vérifie à chaque `proc/spawn`, la fenêtre d'installation et l'onglet Permissions les montrent en mots.
 - **ESC-529 (T6)** : la **limite de programmes est servie** : `limits.processes` fixe le nombre de programmes à la fois, dit à l'installation au-delà de 4.
-- Restent à servir : les profils et les secrets d'un projet (T4).
+- **ESC-530 (T4)** : les **profils** et les **réglages de portée `project`** sont servis : leurs rangs, la page du plugin, la page Plugins d'un projet, le protocole et la sécurité sont sur *Les profils d'un plugin et ses réglages d'un projet*.
+- Tout T1 à T6 est servi. Un secret de portée `project` (la direction A de l'étude, non retenue le 2026-11-17) reste lu et refusé à l'usage : le plugin est coupé.
 
 ## Compatibilité
 
 - **Un manifeste d'aujourd'hui se lit pareil.** Chaque ajout est facultatif ; absent, il vaut le comportement d'avant : `scope: app`, pas de groupe, une ligne, 4 programmes à la fois, pas de joker.
-- **Jamais servi à moitié.** Un plugin qui déclare un point que l'app lit mais ne sert pas encore est **chargé coupé, la raison dite**, et la fenêtre d'installation le dit avant l'installation. Deux points sont encore concernés :
-  - des profils (`contributes.profiles`) ;
-  - un secret de portée `project`.
+- **Jamais servi à moitié.** Un plugin qui déclare un point que l'app lit mais ne sert pas encore est **chargé coupé, la raison dite**, et la fenêtre d'installation le dit avant l'installation. Un point est encore concerné : un secret de portée `project`.
 
-  La raison : « Ce plugin demande ce que cette version d'Escouade ne sert pas encore : … Il reste coupé plutôt que servi à moitié ; une version plus récente d'Escouade le servira. » Chaque ticket qui sert un point le retire de cette liste. Les jokers en sont sortis avec ESC-528, `limits.processes` au-delà de 4 avec ESC-529.
+  La raison : « Ce plugin demande ce que cette version d'Escouade ne sert pas encore : … Il reste coupé plutôt que servi à moitié ; une version plus récente d'Escouade le servira. » Chaque ticket qui sert un point le retire de cette liste. Les jokers en sont sortis avec ESC-528, `limits.processes` au-delà de 4 avec ESC-529, les profils avec ESC-530.
 - `escouade-plugin validate` dit ces points par un avertissement (⚠), sans échouer : un plugin écrit pour l'Escouade suivante se valide.
-- Ce qui se lit sans couper le plugin : `groups`, `description`, `multiline`, `lines`, `import` (servis par la page du plugin depuis ESC-526), `scope: project` sur un réglage simple, `repo`. `repo: false` est déjà tenu : la valeur de `.escouade.yml` n'est jamais prise pour ce réglage, ni pour un réglage qui a `import`.
+- Ce qui se lit sans couper le plugin : `groups`, `description`, `multiline`, `lines`, `import` (servis par la page du plugin depuis ESC-526), `contributes.profiles` et `type: "profile"`, `scope: project` sur un réglage simple, `repo` (servis depuis ESC-530), `limits.processes` (servi depuis ESC-529). `repo: false` est tenu : la valeur de `.escouade.yml` n'est jamais prise pour ce réglage, ni pour un réglage qui a `import`, ni pour un réglage `profile`.
 
 ## Réglages et secrets
 
-- `scope` : `app` (d'office) ou `project`, sur un réglage et sur un secret.
+- `scope` : `app` (d'office) ou `project`, sur un réglage et sur un secret. Un réglage de portée `project` n'est pas sur la page du plugin : chaque projet le règle dans Réglages › Projets › Plugins.
 - `repo` : `false` interdit la valeur venue de `.escouade.yml`. Jamais `true` pour un secret, un réglage `profile` ou un réglage qui a `import` (code `repo`).
 - `description` : un texte, ou un texte par langue, sur un secret aussi.
 - `multiline: true` : un drapeau, pas un type, sur un réglage `string` ou sur un secret. `lines` (3 à 20, 6 d'office) ne va qu'avec lui.
@@ -46,14 +45,16 @@ Ce que le manifeste d'un plugin (`escouade-plugin.json`) peut dire de ses régla
 - une clé dans deux groupes (code `duplicate`) ;
 - une liste vide.
 
+Une clé d'un réglage de portée `project` dans un groupe n'est pas montrée sur la page du plugin.
+
 ## Profils (`contributes.profiles`)
 
-- Un genre : `id`, `title`, `nameField`, `fields`.
+- Un genre : `id`, `title`, `nameField`, `fields` (et `description`, lue par la page du plugin).
 - Un champ : `key`, `title`, `description`, et un `type` (`string`, `number`, `boolean`, `select`) ou `secret: true`, sans `type`. Il accepte `multiline`, `lines` et `import`, jamais `scope` ni `of`.
 - `nameField` nomme un champ `string` d'une ligne, non secret (code `field`).
-- Un réglage `type: "profile"` dit son genre par `of`, qui doit être un genre déclaré (code `profile`).
+- Un réglage `type: "profile"` dit son genre par `of`, qui doit être un genre déclaré (code `profile`). De portée `project`, il est le choix de chaque projet ; de portée `app`, le « Profil par défaut » des projets qui n'en choisissent pas.
 - `permissions.secrets` peut demander `profile:<genre>`, pour un genre déclaré qui a un champ secret (code `profile`). Le contrôle n° 9 du store le tient comme `account:<genre>`. `profile:*` n'existe pas.
-- Les secrets d'un profil ne sont pas des clés de la page du plugin.
+- Les secrets d'un profil ne sont pas des clés de la page du plugin : ils se gardent dans la fenêtre du profil.
 
 ## Les jokers de `permissions.commands`
 
@@ -137,7 +138,7 @@ Le plugin demande une commande et ses arguments ; l'hôte la compare à chaque e
 
 ## La page d'un plugin : groupes, secrets décrits, plusieurs lignes, import (ESC-526, T2)
 
-L'onglet « Réglages » de la page d'un plugin sert `groups`, `description` d'un secret, `multiline`, `lines` et `import` (issue #40, étude §4.1 et §4.3, choix n° 6 : l'import du contenu, jamais un chemin).
+L'onglet « Réglages » de la page d'un plugin sert `groups`, `description` d'un secret, `multiline`, `lines` et `import` (issue #40, étude §4.1 et §4.3, choix n° 6 : l'import du contenu, jamais un chemin). Ses profils viennent en tête (ESC-530, voir *Les profils d'un plugin et ses réglages d'un projet*).
 
 - **Les groupes d'abord**, dans l'ordre de la liste : un titre, sa description dessous, ses rangées séparées par un filet, sans boîte. Réglages et secrets y sont **mêlés dans l'ordre de `fields`**. Un groupe `folded` est replié d'office, comme « Avancé » ailleurs dans les réglages : une rangée calme « › Avancé · 3 réglages », un bouton qui s'ouvre et se ferme au clavier (`aria-expanded`). Ce que l'utilisateur ouvre reste ouvert tant que la page est là.
 - **Un champ hors de tout groupe vient après**, sous « Réglages » puis « Secrets », comme avant. **Un plugin sans groupes est rendu comme avant**, au pixel près. Quand tous les secrets sont dans des groupes, la note du trousseau se lit sous les groupes.

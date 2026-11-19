@@ -750,9 +750,9 @@ impl Manifest {
     }
 
     /// What it declares of the contract (docs/PLUGINS-CONTRACT-STUDY.md) that this Escouade reads but does not serve
-    /// yet, in `lang`: profiles, a secret of each project (the jokers of a command are served since ESC-528, the
-    /// programs at once of `limits.processes` since ESC-529). Such a plugin is loaded disabled with this reason, never served by half (ESC-525). None
-    /// when all it asks is served.
+    /// yet, in `lang`: a secret of each project (direction A of the study, not chosen). The jokers of a command are served
+    /// since ESC-528, the programs at once of `limits.processes` since ESC-529, the profiles since ESC-530. Such a plugin is
+    /// loaded disabled with this reason, never served by half (ESC-525). None when all it asks is served.
     pub fn unserved(&self, lang: Lang) -> Option<String> {
         let mut points = Vec::new();
         let listed = |key: &str| {
@@ -762,13 +762,6 @@ impl Manifest {
                 .cloned()
                 .unwrap_or_default()
         };
-        if !listed("profiles").is_empty() {
-            points.push(tr_in!(
-                lang,
-                "des profils (`contributes.profiles`)",
-                "profiles (`contributes.profiles`)"
-            ));
-        }
         if listed("secrets")
             .iter()
             .any(|s| s.get("scope").and_then(Value::as_str) == Some("project"))

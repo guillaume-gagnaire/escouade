@@ -48,7 +48,14 @@ export type ManifestText = string | Record<string, string>;
 
 export interface ManifestSetting {
   key: string;
-  type: 'string' | 'number' | 'boolean' | 'select';
+  /** `profile`: a profile of the kind `of` (ESC-530). */
+  type: 'string' | 'number' | 'boolean' | 'select' | 'profile';
+  /** `project`: set by each project, in its settings, not on the plugin's page (ESC-530). */
+  scope?: 'app' | 'project';
+  /** `false`: never from `.escouade.yml`. */
+  repo?: boolean;
+  /** The kind of profile of a `profile` setting. */
+  of?: string;
   title?: ManifestText;
   description?: ManifestText;
   default?: unknown;
@@ -89,6 +96,12 @@ export interface Choices {
   settings: Record<string, unknown>;
   /** The fingerprint of the commands on facts the user agreed to (PLG-5); absent: none. */
   commandsApproved?: string;
+  /** Its settings of each project set on this machine, by project then key (ESC-530); a profile's id, or null. */
+  projectSettings?: Record<string, Record<string, unknown>>;
+  /** Its profiles by kind (ESC-530): their ids and simple fields. */
+  profiles?: Record<string, { id: string; values: Record<string, unknown> }[]>;
+  /** The names of the secrets kept for it (never their values). */
+  secretNames?: string[];
 }
 
 export interface PluginUpdate {

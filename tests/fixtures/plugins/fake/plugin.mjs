@@ -20,6 +20,8 @@
 //   stderr  → <lines> written on its journal, then { ok }
 //   secret / steal → asks Escouade `secrets/get` for <key>, and gives back what came: { result } or { error }
 //   settings → asks Escouade `settings/get` (of <project>, if given), and gives back what came: { result }
+//   request → asks Escouade <method> with <params> (a profile's secret, profiles/list…), and gives back what came:
+//             { result } or { error }
 //   log     → a `log` notification of <message>, then { ok }
 // It also serves a ticket source and a code host (INT-5, ESC-211): `account/me`, `tickets/*` and `forge/*`, on a
 // few fixed records. `--untyped` answers every one with an error that is not typed; `--fetch` asks `net/fetch` for
@@ -129,6 +131,17 @@ function handle(msg) {
         for (const until = Date.now() + busy; Date.now() < until;) {
           // Busy.
         }
+        return null;
+      }
+      // `--fact-profile <setting>` (ESC-530): the profile the fact's project chose (settings/get of its project), then the
+      // secret of that profile.
+      if (option('--fact-profile')) {
+        const project = params.project?.id;
+        ask('settings/get', project ? { project } : {}).then((got) => {
+          const profile = got.result?.[option('--fact-profile')] ?? null;
+          send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: `fact ${params.name}: profile ${profile}` } });
+          if (profile) ask('secrets/get', { key: option('--fact-secret') ?? 'token', profile });
+        });
         return null;
       }
       ask('secrets/get', { key: option('--fact-secret') ?? 'token' }).then((answer) => {
@@ -285,6 +298,10 @@ function behave(id, p) {
       );
     case 'settings':
       return ask('settings/get', p.project ? { project: p.project } : {}).then((answer) => ok(id, { result: answer.result ?? null }));
+    case 'request':
+      return ask(p.method, p.params ?? {}).then((answer) =>
+        ok(id, answer.error ? { error: answer.error } : { result: answer.result ?? null }),
+      );
     case 'log':
       send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: p.message } });
       return ok(id, { ok: true });

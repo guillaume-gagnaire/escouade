@@ -178,6 +178,7 @@ describe('the register of the settings pages', () => {
       'launch',
       'board',
       'tickets',
+      'projectPlugins',
       'team',
       'privacy',
     ]);
@@ -208,6 +209,7 @@ describe('the register of the settings pages', () => {
       'Launch',
       'Kanban',
       'Imported tickets',
+      'Plugins',
       'Team',
       'Privacy',
       'All projects',

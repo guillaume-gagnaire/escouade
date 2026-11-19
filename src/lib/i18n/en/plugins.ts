@@ -333,6 +333,58 @@ export default defineZone('plugins', {
     no: 'No',
   },
 
+  /** A plugin's profiles (ESC-530): the list on its page, and the window of one. */
+  profiles: {
+    intro:
+      'A profile brings settings and secrets together, which you make as many times as you want. Each project chooses its own in its settings.',
+    add: 'Add a profile…',
+    edit: 'Edit',
+    none: 'No profile yet: “Add a profile…” makes one.',
+    noProject: 'No project',
+    kept: { one: '{count} secret kept', other: '{count} secrets kept' },
+    keptNone: 'No secret kept',
+    newTitle: 'New profile · {kind}',
+    title: 'Profile “{name}”',
+    nameDesc: 'Its name in the list and in the projects’ settings.',
+    fields: 'Settings',
+    secrets: 'Secrets',
+    secretsNote:
+      'Kept in the system’s keychain under a name of this profile’s own, never in .escouade.yml; the plugin reads them for the projects that choose it.',
+    secretKept: 'Kept in the keychain',
+    secretInFile: 'Kept in a file only you can read',
+    secretUnset: 'None',
+    secretTyped: 'Kept when saved',
+    replace: 'Replace…',
+    replaceFile: 'Replace with a file…',
+    forget: 'Forget',
+    usedBy: 'Used by {projects}',
+    usedByNone: 'Used by no project',
+    delete: 'Delete the profile',
+    deleteAsk: 'Delete “{name}”? Its secrets are erased.',
+    deleteUsed: { one: '{projects} will have no profile.', other: '{projects} will have no profile.' },
+    deleteYes: 'Delete',
+    deleted: 'Profile “{name}” deleted, its secrets erased.',
+    cancel: 'Cancel',
+    save: 'Save',
+    saved: 'Profile “{name}” saved.',
+  },
+
+  /** Settings › Projects › project › Plugins (ESC-530, issue #39). */
+  projectPage: {
+    pluginPage: 'Plugin page',
+    machine: 'Kept on this machine, never in .escouade.yml.',
+    profileNone: 'No profile',
+    profileDefault: 'Default: {name}',
+    noneSays: 'No profile: {plugin} has none for this project.',
+    noProfiles: 'No profile yet: make one on the plugin’s page.',
+    proposed: '.escouade.yml proposes the profile “{name}” for {plugin}.',
+    proposedWhy: 'A repository does not choose your credentials: you do, here, on this machine.',
+    proposedMissing: 'None of your profiles has that name: make it on the plugin’s page, or choose one.',
+    take: 'Take “{name}”',
+    defaultNote: 'The plugin’s default value.',
+    projectLink: 'Project settings',
+  },
+
   journal: {
     filter: 'What it shows',
     all: 'All',

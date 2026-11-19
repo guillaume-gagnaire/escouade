@@ -333,6 +333,58 @@ export default {
     no: 'Non',
   },
 
+  /** A plugin's profiles (ESC-530): the list on its page, and the window of one. */
+  profiles: {
+    intro:
+      'Un profil réunit des réglages et des secrets, que tu crées autant de fois que tu veux. Chaque projet choisit le sien dans ses réglages.',
+    add: 'Ajouter un profil…',
+    edit: 'Modifier',
+    none: 'Aucun profil encore : « Ajouter un profil… » en crée un.',
+    noProject: 'Aucun projet',
+    kept: { one: '{count} secret gardé', other: '{count} secrets gardés' },
+    keptNone: 'Aucun secret gardé',
+    newTitle: 'Nouveau profil · {kind}',
+    title: 'Profil « {name} »',
+    nameDesc: 'Son nom dans la liste et dans les réglages des projets.',
+    fields: 'Réglages',
+    secrets: 'Secrets',
+    secretsNote:
+      'Gardés dans le trousseau du système sous un nom propre à ce profil, jamais dans .escouade.yml ; le plugin les lit pour les projets qui le choisissent.',
+    secretKept: 'Gardé dans le trousseau',
+    secretInFile: 'Gardé dans un fichier lisible de toi seul',
+    secretUnset: 'Aucun',
+    secretTyped: 'Gardé à l’enregistrement',
+    replace: 'Remplacer…',
+    replaceFile: 'Remplacer par un fichier…',
+    forget: 'Oublier',
+    usedBy: 'Utilisé par {projects}',
+    usedByNone: 'Utilisé par aucun projet',
+    delete: 'Supprimer le profil',
+    deleteAsk: 'Supprimer « {name} » ? Ses secrets sont effacés.',
+    deleteUsed: { one: '{projects} n’aura plus de profil.', other: '{projects} n’auront plus de profil.' },
+    deleteYes: 'Supprimer',
+    deleted: 'Profil « {name} » supprimé, ses secrets effacés.',
+    cancel: 'Annuler',
+    save: 'Enregistrer',
+    saved: 'Profil « {name} » enregistré.',
+  },
+
+  /** Réglages › Projets › projet › Plugins (ESC-530, issue #39). */
+  projectPage: {
+    pluginPage: 'Page du plugin',
+    machine: 'Gardé sur cette machine, jamais dans .escouade.yml.',
+    profileNone: 'Aucun profil',
+    profileDefault: 'Par défaut : {name}',
+    noneSays: 'Aucun profil : {plugin} n’en a pas pour ce projet.',
+    noProfiles: 'Aucun profil encore : crée-le sur la page du plugin.',
+    proposed: '.escouade.yml propose le profil « {name} » pour {plugin}.',
+    proposedWhy: 'Un dépôt ne choisit pas tes identifiants : c’est toi qui choisis, ici, sur cette machine.',
+    proposedMissing: 'Aucun de tes profils ne porte ce nom : crée-le sur la page du plugin, ou choisis-en un.',
+    take: 'Prendre « {name} »',
+    defaultNote: 'Valeur par défaut du plugin.',
+    projectLink: 'Réglages du projet',
+  },
+
   journal: {
     filter: 'Ce qu’il montre',
     all: 'Tout',

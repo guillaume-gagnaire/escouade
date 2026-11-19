@@ -45,7 +45,8 @@ export interface Layout {
 /** The page's fields: `secretKeys` are the secrets it shows (`contributes.secrets`, then those of `permissions.secrets`). */
 export function layoutOf(manifest: Manifest | null, secretKeys: string[]): Layout {
   const c = manifest?.contributes ?? {};
-  const settings = (c.settings as FieldSetting[] | undefined) ?? [];
+  // A setting of each project is not on the plugin's page: each project sets it in its own (ESC-530).
+  const settings = ((c.settings as FieldSetting[] | undefined) ?? []).filter((s) => s?.scope !== 'project');
   const declared = (c.secrets as ManifestSecret[] | undefined) ?? [];
   const secrets: ManifestSecret[] = secretKeys.map((key) => declared.find((s) => s.key === key) ?? { key });
   const groups = ((c.groups as ManifestGroup[] | undefined) ?? []).filter((g) => g && Array.isArray(g.fields));

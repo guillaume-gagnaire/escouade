@@ -111,6 +111,41 @@ impl Cx {
         Ok(v.as_str().map(str::to_string))
     }
 
+    /// The secret field `key` of the profile `profile` (its id, from `settings/get` or `profiles`), which
+    /// `permissions.secrets` holds by `profile:<kind>`: none when Escouade keeps none. Check
+    /// `escouade_plugin_protocol::greeting()`'s `profiles` first: an older Escouade ignores the profile.
+    pub async fn secret_of(&self, profile: &str, key: &str) -> Result<Option<String>, Refusal> {
+        let v = self
+            .request("secrets/get", json!({ "key": key, "profile": profile }))
+            .await?;
+        Ok(v.as_str().map(str::to_string))
+    }
+
+    /// Its profiles of the kind `kind` (`contributes.profiles`): their ids and names, in the order the user made them.
+    pub async fn profiles(&self, kind: &str) -> Result<Vec<(String, String)>, Refusal> {
+        let v = self
+            .request("profiles/list", json!({ "kind": kind }))
+            .await?;
+        Ok(v.as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|p| {
+                Some((
+                    p.get("id")?.as_str()?.to_string(),
+                    p.get("name")?.as_str()?.to_string(),
+                ))
+            })
+            .collect())
+    }
+
+    /// The simple fields of its profile `profile` of the kind `kind` (never a secret): none when it has no such profile.
+    pub async fn profile(&self, kind: &str, profile: &str) -> Result<Option<Value>, Refusal> {
+        let v = self
+            .request("profiles/get", json!({ "kind": kind, "profile": profile }))
+            .await?;
+        Ok((!v.is_null()).then_some(v))
+    }
+
     /// A notification to Escouade (`method`, no answer).
     pub fn notify(&self, method: &str, params: Value) {
         let line = json!({ "jsonrpc": "2.0", "method": method, "params": params });

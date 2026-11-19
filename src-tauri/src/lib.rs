@@ -161,6 +161,10 @@ mod save_tests;
 use escouade_plan::{plan, planfiles};
 // The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).
 use escouade_model::{agentgroups, heat, job, pricing, proc, wsl};
+/// A plugin's profiles and its settings of each project, as the window sets them (ESC-530).
+mod plugin_profiles;
+#[cfg(test)]
+mod plugin_profiles_tests;
 mod plugin_secrets;
 #[cfg(test)]
 mod plugin_secrets_tests;
@@ -716,6 +720,12 @@ pub fn run() {
                 commands::plugin_set_setting,
                 commands::plugin_secrets,
                 commands::plugin_set_secret,
+                commands::plugin_profile_secrets,
+                commands::plugin_profile_save,
+                commands::plugin_profile_secret,
+                commands::plugin_profile_delete,
+                commands::plugin_project_set,
+                commands::plugin_project_write,
                 commands::plugin_secret_move,
                 commands::secrets_file,
                 commands::secrets_file_remove,

@@ -173,7 +173,7 @@ export class Plugin {
    * Its settings (`contributes.settings`) as the user set them; with `project` (the `project.id` of a fact), those the
    * project's `.escouade.yml` gives it (`plugins.<id>`) over them, where it is on.
    */
-  settings(project?: string): Promise<Record<string, string | number | boolean>> {
+  settings(project?: string): Promise<Record<string, string | number | boolean | null>> {
     return this.call('settings/get', project ? { project } : {});
   }
 

@@ -23,6 +23,10 @@ export default defineZone('settings', {
     launch: { label: 'Launch', desc: 'The commands that launch this project, and where its pages open' },
     board: { label: 'Kanban', desc: 'Approved tickets, the autopilot, the tickets’ agents and the workflow' },
     tickets: { label: 'Imported tickets', desc: 'The sources linked to this project and how their statuses map' },
+    projectPlugins: {
+      label: 'Plugins',
+      desc: 'What the plugins on in this project ask you for it. A plugin’s other settings are on its page.',
+    },
     team: { label: 'Team', desc: 'The shared Kanban, the shared settings (.escouade.yml) and the shared memory' },
     privacy: { label: 'Privacy', desc: 'What this project keeps to itself: its files, its accounts, its plugins' },
     allProjects: { label: 'All projects', desc: 'What a new project starts with, and the closed projects' },
@@ -399,6 +403,8 @@ export default defineZone('settings', {
   },
 
   project: {
+    pluginFields: 'Plugins’ profiles and settings for this project',
+    pluginFieldsDesc: 'What the plugins on in this project ask you for it: a profile, a route, a channel.',
     identity: 'Identity',
     nameLabel: 'Project name',
     engine: 'Default harness',

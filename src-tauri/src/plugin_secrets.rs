@@ -173,7 +173,46 @@ impl<R: tauri::Runtime> Core<R> {
         value: &str,
         in_file: bool,
     ) -> Result<(), SecretRefused> {
-        let name = secret_name(id, key);
+        self.plugin_secret_set_named(id, key, &secret_name(id, key), value, in_file)
+    }
+
+    /// `plugin_secret_set` under the name `name` in the keychain (a profile's secret, ESC-530): `key` is what the logs
+    /// say. The name is noted in the plugin's list of the names kept (`Choices::secret_names`), and taken out of it once
+    /// forgotten: its uninstall erases them, the keychain listing nothing by prefix.
+    pub fn plugin_secret_set_named(
+        &self,
+        id: &str,
+        key: &str,
+        name: &str,
+        value: &str,
+        in_file: bool,
+    ) -> Result<(), SecretRefused> {
+        let done = self.keep_named(id, key, name, value, in_file);
+        if done.is_ok() {
+            self.note_secret_name(id, name, !value.is_empty());
+        }
+        done
+    }
+
+    /// Notes (`kept`) or takes out the name `name` in the list of the names of the plugin `id`'s secrets.
+    pub(crate) fn note_secret_name(&self, id: &str, name: &str, kept: bool) {
+        let _ = self.plugins.choose(id, |c| {
+            c.secret_names.retain(|n| n != name);
+            if kept {
+                c.secret_names.push(name.to_string());
+            }
+        });
+    }
+
+    fn keep_named(
+        &self,
+        id: &str,
+        key: &str,
+        name: &str,
+        value: &str,
+        in_file: bool,
+    ) -> Result<(), SecretRefused> {
+        let name = name.to_string();
         if value.is_empty() {
             return self.secrets.delete(&name).map_err(|e| {
                 log::warn!("plugin {id}: its secret {key} was not forgotten: {e:#}");
@@ -210,17 +249,32 @@ impl<R: tauri::Runtime> Core<R> {
     /// Uninstalls the plugin `id`: its process stopped, its copy, its settings, its secrets (each one whole, its pieces
     /// with it: `Chunked`) and its journal removed; `keep`: its settings and its secrets kept for a later install.
     pub fn plugin_uninstall(&self, id: &str, keep: bool) -> Result<bool, String> {
-        let keys = self
+        let mut names: Vec<String> = self
             .plugins
             .get(id, crate::i18n::ui())
             .map(|v| v.secret_keys)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .iter()
+            .map(|k| secret_name(id, k))
+            .collect();
+        // The names it kept besides (its profiles', ESC-530): the keychain lists nothing by prefix (§2.3). Only its own.
+        let prefix = secret_name(id, "");
+        for n in self
+            .plugins
+            .choices(id)
+            .map(|c| c.secret_names)
+            .unwrap_or_default()
+        {
+            if n.starts_with(&prefix) && !names.contains(&n) {
+                names.push(n);
+            }
+        }
         self.plugin_runtime.forget(id);
         let gone = self.plugins.remove(id, keep).map_err(|e| e.to_string())?;
         if gone && !keep {
-            for k in keys {
-                if let Err(e) = self.secrets.delete(&secret_name(id, &k)) {
-                    log::warn!("plugin {id}: its secret {k} stays in the keychain: {e}");
+            for n in names {
+                if let Err(e) = self.secrets.delete(&n) {
+                    log::warn!("plugin {id}: its secret {n} stays in the keychain: {e}");
                 }
             }
             let log = self.plugin_runtime.journal_file(id);

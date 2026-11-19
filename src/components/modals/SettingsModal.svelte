@@ -20,6 +20,7 @@
   import NotificationsPage from '../settings/NotificationsPage.svelte';
   import PluginsPage from '../settings/PluginsPage.svelte';
   import PrivacyPage from '../settings/PrivacyPage.svelte';
+  import ProjectPluginsPage from '../settings/ProjectPluginsPage.svelte';
   import ProjectPage from '../settings/ProjectPage.svelte';
   import ServicesPage from '../settings/ServicesPage.svelte';
   import SettingsNav from '../settings/SettingsNav.svelte';
@@ -183,6 +184,8 @@
                 <BoardTab {project} />
               {:else if info.id === 'tickets'}
                 <TicketsPage {project} />
+              {:else if info.id === 'projectPlugins'}
+                <ProjectPluginsPage {project} />
               {:else if info.id === 'team'}
                 <TeamPage {project} />
               {:else if info.id === 'privacy'}

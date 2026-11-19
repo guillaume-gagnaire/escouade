@@ -21,9 +21,11 @@
     type SecretState,
     type SecretsFile,
   } from '../../lib/plugins';
+  import { kindsOf, nameOf, profilesOf } from '../../lib/plugin-profiles';
   import { plugins } from '../../lib/plugins-view.svelte';
   import Icon from '../Icon.svelte';
   import LinedText from './LinedText.svelte';
+  import PluginProfiles from './PluginProfiles.svelte';
 
   // A plugin's settings and secrets (§3.5): the fields it declares (`contributes.settings`, `contributes.secrets`). A
   // setting is kept in the list of the installed plugins and given by `settings/get`; a secret goes to the system's
@@ -43,7 +45,9 @@
   const layout = $derived(layoutOf(plugin.manifest, plugin.secretKeys));
   const fields = $derived(layout.settings);
   const secretFields = $derived(layout.secrets);
-  const anyField = $derived(layout.groups.length > 0 || fields.length > 0 || secretFields.length > 0);
+  // Its profiles (ESC-530) come first: a setting of each project is not here, each project sets it in its own settings.
+  const kinds = $derived(kindsOf(plugin.manifest));
+  const anyField = $derived(kinds.length > 0 || layout.groups.length > 0 || fields.length > 0 || secretFields.length > 0);
   const groupedSecret = $derived(layout.groups.some((g) => g.fields.some((f) => f.kind === 'secret')));
   let kept = $state<Record<string, SecretState>>({});
   let typed = $state<Record<string, string>>({});
@@ -141,6 +145,14 @@
         : t('plugins.settings.secretSet');
 
   const valueOf = (f: FieldSetting) => plugin.choices.settings[f.key] ?? f.default ?? (f.type === 'boolean' ? false : '');
+  /** The profiles a `profile` setting chooses among (« Profil par défaut »), « Aucun profil » first. */
+  const profileOptions = (f: FieldSetting) => {
+    const kind = kinds.find((k) => k.id === f.of);
+    return [
+      { value: '', title: t('plugins.projectPage.profileNone') },
+      ...(kind ? profilesOf(plugin, kind.id).map((p) => ({ value: p.id, title: nameOf(kind, p) })) : []),
+    ];
+  };
   const optionsOf = (f: FieldSetting) =>
     (f.options ?? []).map((o) =>
       typeof o === 'string' ? { value: o, title: o } : { value: o.value, title: textOf(o.title, lang) || o.value },
@@ -195,6 +207,15 @@
             aria-label={title}
             onclick={() => plugins.setSetting(plugin.id, f.key, !valueOf(f))}
           ></button>
+        {:else if f.type === 'profile'}
+          <select
+            class="field"
+            aria-label={title}
+            value={String(valueOf(f) ?? '')}
+            onchange={(e) => plugins.setSetting(plugin.id, f.key, e.currentTarget.value || null)}
+          >
+            {#each profileOptions(f) as o (o.value)}<option value={o.value}>{o.title}</option>{/each}
+          </select>
         {:else if f.type === 'select'}
           <select
             class="field"
@@ -311,6 +332,7 @@
 {#if !anyField}
   <p class="hint">{t('plugins.settings.none')}</p>
 {/if}
+{#if kinds.length}<PluginProfiles {plugin} />{/if}
 {#each layout.groups as { group: g, fields: inside } (g.id)}
   {@const title = textOf(g.title, lang) || g.id}
   {@const open = isOpen(g)}

@@ -105,6 +105,10 @@ pub struct Greeting {
     /// `{pid}`, `{path:temp}`, `{path:plugin}`, Escouade 2.2.5 and later). An Escouade that does not refuses such an
     /// entry, it never runs more for it.
     pub typed_commands: bool,
+    /// Whether it serves the profiles and the settings of each project (`capabilities.profiles`: `profiles/list`,
+    /// `profiles/get`, `secrets/get` with `profile`, Escouade 2.2.5 and later). An Escouade that does not ignores
+    /// `profile` of `secrets/get`: check it before asking.
+    pub profiles: bool,
 }
 
 impl Greeting {
@@ -116,6 +120,7 @@ impl Greeting {
                 .unwrap_or_default()
                 .to_string(),
             typed_commands: params["capabilities"]["typedCommands"].as_bool() == Some(true),
+            profiles: params["capabilities"]["profiles"].as_bool() == Some(true),
         }
     }
 }
@@ -438,5 +443,8 @@ mod tests {
         assert!(!said.typed_commands);
         let typed = json!({ "capabilities": { "typedCommands": true } });
         assert!(Greeting::of(&typed).typed_commands);
+        assert!(!Greeting::of(&typed).profiles);
+        let profiles = json!({ "capabilities": { "profiles": true } });
+        assert!(Greeting::of(&profiles).profiles);
     }
 }

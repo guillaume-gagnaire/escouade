@@ -2,8 +2,8 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309"]
-decisions: []
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-530"]
+decisions: ["les-profils-d-un-plugin-et-ses-reglages"]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 
@@ -40,7 +40,7 @@ Seulement ce qui vaut pour toute l'équipe. Clés en anglais, en `snake_case`, p
 | `board.model`, `board.effort`, `board.mode` | ceux des agents des tickets ; vides : ceux du compte. `model` : un texte, tel que le harness le nomme ; `effort` : `low`, `medium`, `high`, `xhigh`, `max` ; `mode` : `auto`, `default`, `plan`, `acceptEdits` |
 | `workflows.enabled` | `false` : « Pas de workflow pour ce projet », ni lecture ni écriture de ses workflows (voir *Workflows*) ; vrai si absente |
 | `plugins.recommended` | les plugins que le projet propose : des identifiants du store (`dev.exemple.slack`) ; voir *Plugins proposés* |
-| `plugins.<id>` | les réglages que le projet donne au plugin `<id>` : des valeurs simples (texte, nombre, `true`, `false`), jamais un secret |
+| `plugins.<id>` | les réglages que le projet donne au plugin `<id>` : des valeurs simples (texte, nombre, `true`, `false`), jamais un secret ; pour un réglage `profile`, le nom d'un profil qu'il **propose**, jamais un choix |
 
 Une valeur ou une étape seule, hors liste, vaut une liste d'un élément (`launch`, `worktrees.copy`, `worktrees.setup`, `worktrees.teardown`, `plugins.recommended`).
 
@@ -58,7 +58,8 @@ Chaque cas est tranché :
 - le mode `bypassPermissions` : un dépôt ne lève pas les autorisations de qui l'ouvre. Refusé à la lecture (« bypassPermissions ne se partage pas : il se règle sur chaque machine »), jamais écrit, gardé sur la machine ;
 - les intégrations : liées aux comptes connectés de chacun ;
 - les workflows supprimés d'un projet : retenus par chaque machine (voir *Workflows*) ;
-- les chemins absolus, les jetons, les empreintes approuvées ; les secrets d'un plugin (ils vont au trousseau du système, par sa page).
+- les chemins absolus, les jetons, les empreintes approuvées ; les secrets d'un plugin (ils vont au trousseau du système, par sa page) ;
+- le profil d'un plugin qu'un projet prend : un dépôt qui choisirait « le VPN de l'entreprise » ferait passer ses agents par le réseau de l'entreprise. Il peut en proposer un par son nom (voir *Plugins proposés*).
 
 ### Projet privé
 
@@ -74,8 +75,10 @@ Chaque cas est tranché :
 - En tête de Réglages › Projets, une bande « Ce projet propose N plugins » nomme ceux qui ne sont pas installés, chacun avec sa tuile, son nom et sa description du catalogue, son identifiant, ce que demande la version que l'app installerait (« Lance un programme · hooks.slack.com · Un secret »), ou « Absent du catalogue du store. ». « Voir dans le store » ferme les réglages et ouvre sa page du store dans la vue Plugins : l'installation reste le geste de l'utilisateur, plugin par plugin, après la fenêtre qui montre ses permissions. La bande attend de connaître les plugins installés avant de parler.
 - Un plugin installé quitte la bande. « Pas pour ce projet » la fait taire pour les plugins qu'elle nommait, sur cette machine ; un plugin que le fichier proposerait plus tard la fait revenir, pour lui seul.
 - Dans un projet privé, la bande ajoute qu'un plugin installé n'y est actif qu'une fois activé pour lui, dans sa page.
-- `plugins.<id>` : les réglages que le projet donne au plugin. Quand le plugin les demande pour ce projet (`settings/get` avec `project`), ils passent devant ceux de l'utilisateur, mais seulement les clés qu'il déclare (`contributes.settings`), d'une valeur de leur type (un `select` parmi ses options), jamais l'un de ses secrets, et seulement s'il est actif dans ce projet : un projet privé ne donne rien à un plugin qui n'y est pas activé. Une valeur qui n'est pas simple (une liste, un groupe) est dite et ignorée.
-- Ces clés sont celles du fichier seul : jamais appliquées au projet, jamais marquées dans la fenêtre, jamais écrites par l'export, qui les garde telles qu'elles sont.
+- `plugins.<id>` : les réglages que le projet donne au plugin. Quand le plugin les demande pour ce projet (`settings/get` avec `project`), ils passent devant ceux de l'utilisateur, mais seulement les clés qu'il déclare (`contributes.settings`), d'une valeur de leur type (un `select` parmi ses options), jamais l'un de ses secrets, ni un réglage que son auteur écarte (`"repo": false`) ou qui importe un fichier, et seulement s'il est actif dans ce projet : un projet privé ne donne rien à un plugin qui n'y est pas activé. Une valeur qui n'est pas simple (une liste, un groupe) est dite et ignorée.
+- Pour un réglage de portée `project` (ESC-530), la valeur que cette machine a réglée pour le projet passe devant celle du fichier, elle-même devant le défaut du manifeste (voir *Les profils d'un plugin et ses réglages d'un projet*).
+- Pour un réglage `profile`, la valeur du fichier n'est jamais prise : c'est le nom d'un profil que le projet **propose**. Réglages › Projets › Plugins le dit dans une bande (« .escouade.yml propose le profil « client-a » pour Tunnel. Un dépôt ne choisit pas tes identifiants : c'est toi qui choisis, ici, sur cette machine. ») et l'utilisateur choisit.
+- Ces clés ne sont jamais appliquées au projet ni écrites par l'export, qui les garde telles qu'elles sont. La page Plugins d'un projet les marque (« Défini par .escouade.yml », « Réglage local de cette machine ») et écrit **une clé à la fois** (« Écrire dans .escouade.yml », voir *Dans la fenêtre*).
 
 ### Versions et erreurs
 
@@ -111,13 +114,14 @@ Chaque cas est tranché :
 
 ### Dans la fenêtre
 
-- Chaque réglage que le fichier définit le dit sous son libellé, dans Réglages › Projets (« Projet privé » et « Workflows du projet » compris) et Réglages › Kanban (modèle, effort et mode compris ; ni « En parallèle » ni le pilote auto) : « Défini par .escouade.yml », ou « Défini par .escouade.yml, en attente de ton accord » pour une commande.
+- Chaque réglage que le fichier définit le dit sous son libellé, dans Réglages › Projets (« Projet privé » et « Workflows du projet » compris), Réglages › Kanban (modèle, effort et mode compris ; ni « En parallèle » ni le pilote auto) et Réglages › Projets › Plugins (les réglages de portée `project` d'un plugin) : « Défini par .escouade.yml », ou « Défini par .escouade.yml, en attente de ton accord » pour une commande.
 - Le modifier dans la fenêtre et enregistrer le garde sur cette machine : il passe devant le fichier, relu ou pas, et c'est dit (un toast, et sous le réglage « Réglage local de cette machine : il passe devant .escouade.yml. »), avec « Écrire dans .escouade.yml » et « Reprendre la valeur du fichier ».
+- Sur la page Plugins d'un projet, « Écrire dans .escouade.yml » écrit la seule clé `plugins.<id>.<clé>` de ce réglage, en gardant les commentaires, son ordre et les clés inconnues du fichier, puis oublie la valeur de cette machine. Un réglage que son auteur écarte (`"repo": false`), qui importe un fichier, un profil ou un secret dit « Gardé sur cette machine, jamais dans .escouade.yml. » et ne s'écrit pas.
 - « Relancer les tests avant », éteint par la fenêtre faute de commande de tests (celle du fichier attend l'accord), n'est pas un choix : la valeur du fichier reste.
 
 ### Exporter
 
-- Réglages › Projets › « Exporter vers .escouade.yml » écrit toutes les clés avec les réglages enregistrés du projet (une branche cible vide est omise, le mode `bypassPermissions` aussi, et les clés `plugins.*`, qui ne sont pas des réglages du projet) : par-dessus le fichier existant, en gardant ses commentaires, son ordre et ses clés inconnues ; sinon un nouveau fichier, avec la ligne du schéma, un commentaire qui renvoie à la doc et `version: 1`.
+- Réglages › Projets › « Exporter vers .escouade.yml » écrit toutes les clés avec les réglages enregistrés du projet (une branche cible vide est omise, le mode `bypassPermissions` aussi, et les clés `plugins.*`, qui ne sont pas des réglages du projet : un réglage d'un plugin s'écrit une clé à la fois, depuis la page Plugins du projet) : par-dessus le fichier existant, en gardant ses commentaires, son ordre et ses clés inconnues ; sinon un nouveau fichier, avec la ligne du schéma, un commentaire qui renvoie à la doc et `version: 1`.
 - Les commandes écrites sont celles du projet : approuvées d'office.
 - « Écrire dans .escouade.yml » d'un mode `bypassPermissions` gardé sur la machine n'écrit rien et le garde.
 - Un fichier illisible ou d'une version plus récente n'est pas réécrit : « modifie-le à la main ».

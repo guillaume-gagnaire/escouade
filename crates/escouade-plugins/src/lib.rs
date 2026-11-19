@@ -49,6 +49,8 @@ pub mod isola;
 pub use escouade_plugin_cli::manifest;
 /// `proc/*`: the programs of a plugin in WASM.
 pub mod procs;
+/// A plugin's profiles and the settings of each project (ESC-530).
+pub mod profiles;
 #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
 pub mod runtime;
 // The store of the secrets (the app's keychain).
@@ -306,6 +308,18 @@ pub struct Choices {
     /// empty, none runs.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub commands_approved: String,
+    /// The values of its settings of each project (`"scope": "project"`, ESC-530), by the project's id then the key: this
+    /// machine's, ahead of the project's `.escouade.yml`. A `profile` setting holds a profile's id, or null for « Aucun
+    /// profil ».
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub project_settings: BTreeMap<String, Map<String, Value>>,
+    /// Its profiles (`contributes.profiles`), by kind, in the order they were made: their simple fields alone.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub profiles: BTreeMap<String, Vec<profiles::Profile>>,
+    /// The names in the keychain of the secrets Escouade kept for it (never their values): what its uninstall erases, the
+    /// keychain listing nothing by prefix (§2.3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub secret_names: Vec<String>,
 }
 
 impl Default for Choices {
@@ -316,6 +330,9 @@ impl Default for Choices {
             revoked: Vec::new(),
             settings: Map::new(),
             commands_approved: String::new(),
+            project_settings: BTreeMap::new(),
+            profiles: BTreeMap::new(),
+            secret_names: Vec::new(),
         }
     }
 }

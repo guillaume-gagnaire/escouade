@@ -95,6 +95,8 @@ export interface EscouadeCapabilities {
   attach?: boolean;
   /** The jokers of permissions.commands are served: {int}, {port}, {name}, {pid}, {path:temp}, {path:plugin}, each one whole word that Escouade checks, and proc/spawn answers the pid. Without it, an entry with a joker runs nothing a plugin asks: it is refused, never wider. */
   typedCommands?: boolean;
+  /** Profiles and settings of each project are served: profiles/list, profiles/get, secrets/get with profile, and settings/get of a project by its ranks. Without it, secrets/get ignores profile: check it before asking. */
+  profiles?: boolean;
 }
 
 export interface InitializeParams {
@@ -146,8 +148,29 @@ export interface Decision {
 }
 
 export interface SecretsGetParams {
-  /** A key of permissions.secrets. */
+  /** A key of permissions.secrets, or a secret field of a profile (with profile). */
   key: string;
+  /** The id of one of its profiles (profiles/list, or a profile setting of settings/get): key is then a secret field of its kind. capabilities.profiles. */
+  profile?: string;
+}
+
+export interface ProfilesListParams {
+  /** A kind of contributes.profiles (its id). */
+  kind: string;
+}
+
+export interface ProfilesGetParams {
+  /** A kind of contributes.profiles (its id). */
+  kind: string;
+  /** The id of one of its profiles. */
+  profile: string;
+}
+
+export interface ProfileRef {
+  /** Its id, drawn by Escouade: what secrets/get and profiles/get take. */
+  id: string;
+  /** Its name, the value of its kind's nameField. */
+  name: string;
 }
 
 export interface SettingsGetParams {
@@ -545,10 +568,14 @@ export interface ToPlugin {
 
 /** What the plugin sends to Escouade: each method, its parameters and its answer (`void` for a notification). */
 export interface ToEscouade {
-  /** One of its secrets (a key of permissions.secrets), or null when none is kept. */
+  /** One of its secrets (a key of permissions.secrets), or null when none is kept. With profile (capabilities.profiles), the secret field key of that profile, which permissions.secrets holds by profile:<kind>: invalidParams for a profile it does not have or a key that is no secret field of its kind, notYours without profile:<kind>. A secret field of a profile asked without its profile is refused (invalidParams), never another secret given. */
   'secrets/get': { params: SecretsGetParams; result: string | null };
-  /** The values of its settings (contributes.settings), as the user set them; with a project, those its .escouade.yml gives the plugin (plugins.<id>) over them, where the plugin is on. */
-  'settings/get': { params: SettingsGetParams; result: Record<string, string | number | boolean> };
+  /** The values of its settings (contributes.settings), as the user set them; with a project, those its .escouade.yml gives the plugin (plugins.<id>) over them, where the plugin is on. A setting of each project (scope project) goes by its ranks: this machine's value for the project, then the file's, then its default. A profile setting gives the id of the profile chosen (profiles/get, secrets/get with profile), or null: never one the file names, and only for a project where the plugin is on. */
+  'settings/get': { params: SettingsGetParams; result: Record<string, string | number | boolean | null> };
+  /** Its profiles of a kind (contributes.profiles), in the order the user made them: their ids, drawn by Escouade, and their names (nameField). capabilities.profiles. */
+  'profiles/list': { params: ProfilesListParams; result: ProfileRef[] };
+  /** The simple fields of one of its profiles (never a secret field: secrets/get with profile), or null when it has none of that id. capabilities.profiles. */
+  'profiles/get': { params: ProfilesGetParams; result: Record<string, string | number | boolean> | null };
   /** A file of the plugin's own folder, as text (UTF-8): a path relative to the folder, with / between its parts. Refused (refused) for a path that leaves the folder (absolute, .., a link that goes out of it), a hidden file or folder (.env, .git) and the manifest; notFound for a file that is not there; failed for a file over 256 KiB or not UTF-8. Both transports: the SDK's p.file(path). */
   'files/read': { params: FilesReadParams; result: string };
   /** An HTTP request, for a plugin in WASM (run.js, run.wasm): the SDK's standard fetch goes by it. Escouade sends it in https only, to a host of permissions.network or one of its subdomains, never to an address of the machine or of the local network (judged on the addresses the name resolves to). `{account}` in permissions.network opens the host the user typed for one of the plugin's accounts, on that port and that host alone, in http or on the local network; `local:shared` opens http to 127.0.0.1 on a port the core read in the output of the process it started for the plugin (Launch.shared.listens), while it lives. The proxy and the TLS of Réglages › Réseau are followed: through a proxy only the name is judged, and the journal says so. No redirection is followed (the plugin gets the 3xx). The answer comes within 10 s and holds 1 MiB at most (failed past either), unless the manifest's limits ask for more (120 s, 32 MiB at most). A plugin run by a command uses its own network, and is answered methodNotFound; the same for net/stream, ws/* and timer/*. */
