@@ -91,6 +91,18 @@ Sur un dépôt public, n’importe qui peut ouvrir une PR, et son titre, son dif
 - Le diff part chez le service de ce harness, comme tout ce que tu donnes à un agent.
 - 40 commentaires au plus, sur des lignes de la nouvelle version.
 
+## Ta relecture
+
+Dans la vue d’une PR, « Ta relecture » rassemble ce que tu en dis avant de le publier, comme une relecture sur GitHub.
+
+- **Tes remarques** : « + » sur une ligne de l’onglet Fichiers, puis « Ajouter à ma relecture » au lieu de « Commenter maintenant ». La remarque reste sous sa ligne, marquée « en attente · pas publiée » ; tu la modifies ou la retires. Elle attend sur ton poste, même si tu fermes la vue ou l’app.
+- **Après un commit**, une remarque suit son code s’il a bougé ; si sa ligne a disparu, elle est marquée « dépassée » : elle partira dans le texte de ta relecture, avec sa place, ou tu la retires.
+- **Le bouton « Ta relecture »** de l’en-tête dit combien de remarques attendent. Son panneau a ton texte (en Markdown, facultatif sauf pour demander des changements), la liste de tes remarques (un clic mène à la ligne) et le verdict : « Commenter », « Approuver » ou « Demander des changements ». Sur ta propre PR, seul « Commenter » est offert : les hébergeurs refusent le reste.
+- **« Publier sur GitHub »** envoie tout en une seule relecture, sous ton compte, à ce clic seulement. Un refus (jeton, droits, réseau, ligne sortie du diff) garde tout en attente et dit pourquoi. « Abandonner ma relecture » efface tout, après confirmation.
+- **Sur la PR d’un ticket**, « Renvoyer aussi à l’agent du ticket » (coché pour « Demander des changements ») lui donne ton texte et tes remarques comme les tiens, puis il corrige, vérifie et pousse, comme avec « L’agent corrige les retours ».
+
+Ensuite, la Conversation montre ta relecture, et la vue « Pull requests » et la carte du ticket se relisent aussitôt. Aucun outil du serveur MCP ne publie de relecture à ta place.
+
 ## Les environnements et les déploiements
 
 Sur GitHub, GitLab et Bitbucket Cloud, Escouade suit les déploiements du dépôt après le merge. La carte d’un ticket terminé dit où il tourne, et « Tickets · Environnements », dans l’en-tête du Kanban, montre un couloir par environnement, de « Mergés, pas encore déployés » à la production.

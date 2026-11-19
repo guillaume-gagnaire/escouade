@@ -618,6 +618,12 @@ mod tests {
                 http_error_in(En, "Trello", 404, "model not found\n"),
                 http_error_in(En, "Trello", 429, ""),
                 http_error_in(En, "GitHub", 502, "<html>Bad gateway</html>"),
+                http_error_in(
+                    En,
+                    "GitHub",
+                    422,
+                    r#"{"message":"Unprocessable Entity","errors":["Line could not be resolved"]}"#,
+                ),
             ],
             [
                 "Jira refuses these credentials (401)",
@@ -625,6 +631,7 @@ mod tests {
                 "Trello: not found (404) — model not found",
                 "Trello limits the requests (429): try again in a moment",
                 "GitHub: error 502",
+                "GitHub: error 422 — Line could not be resolved",
             ]
         );
     }

@@ -65,8 +65,8 @@ pub fn http_error_in(lang: Lang, name: &str, status: u16, body: &str) -> String 
     }
 }
 
-/// The message of an error's body: Jira's `errorMessages` or `errors`, the first of GraphQL's `errors`, GitHub's
-/// `message`, ClickUp's `err`, or a text's first line; none for a page of HTML.
+/// The message of an error's body: Jira's `errorMessages` or `errors`, the first of GraphQL's `errors` (or of a list of
+/// texts, GitHub's 422), GitHub's `message`, ClickUp's `err`, or a text's first line; none for a page of HTML.
 pub fn said(body: &str) -> Option<String> {
     let body = body.trim();
     let msg = match serde_json::from_str::<Value>(body) {
@@ -80,6 +80,8 @@ pub fn said(body: &str) -> Option<String> {
                     .and_then(|o| o.values().find_map(|e| e.as_str().map(str::to_string)))
             })
             .or_else(|| v["errors"][0]["message"].as_str().map(str::to_string))
+            // GitHub's 422 of a review says why in a list of texts (`["Line could not be resolved"]`, ESC-494).
+            .or_else(|| v["errors"][0].as_str().map(str::to_string))
             .or_else(|| v["message"].as_str().map(str::to_string))
             .or_else(|| v["error"].as_str().map(str::to_string))
             // Bitbucket's `{"type": "error", "error": {"message": …}}`.

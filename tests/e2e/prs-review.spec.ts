@@ -236,6 +236,7 @@ test('the reviewer’s remarks: threads under their line, dropped, published one
   await shots(page, 'pr-review-again');
   expect((await writes()).slice(seeded), 'a reading again writes nothing').toHaveLength(2);
 
-  // No branch moved, no reference left: the reviewer wrote nothing in the repository.
-  expect(git(app.repo, 'for-each-ref', 'refs/escouade')).toBe('');
+  // No branch moved, no reference left: the reviewer wrote nothing in the repository. The following of the pull requests
+  // reads it every second here, and a reading holds its refs for the time of its fetch: none is left once it is over.
+  await expect.poll(() => git(app.repo, 'for-each-ref', 'refs/escouade'), { timeout: 10_000 }).toBe('');
 });

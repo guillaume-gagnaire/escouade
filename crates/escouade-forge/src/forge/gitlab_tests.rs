@@ -667,7 +667,9 @@ async fn a_validated_review_publishes_its_lines_on_the_diff_its_text_then_its_ap
                     path: "merge_requests.go".into(),
                     line: 1412,
                     body: "Nit: a doc comment.".into(),
+                    ..Default::default()
                 }],
+                commit: String::new(),
             },
         )
         .await

@@ -965,7 +965,9 @@ async fn a_validated_review_posts_its_threads_then_votes() {
                     path: "src/login.ts".into(),
                     line: 12,
                     body: "Renomme.".into(),
+                    ..Default::default()
                 }],
+                commit: String::new(),
             },
         )
         .await
@@ -993,6 +995,7 @@ async fn a_validated_review_posts_its_threads_then_votes() {
                 state: ReviewState::Commented,
                 body: "Vu.".into(),
                 lines: vec![],
+                commit: String::new(),
             },
         )
         .await

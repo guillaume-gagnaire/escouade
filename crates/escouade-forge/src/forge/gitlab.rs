@@ -35,8 +35,12 @@ impl Provider for GitlabProvider {
             rerun: true,
             // Not read yet (PR-9): its client says `unsupported`.
             reading: Reading::default(),
-            // Its client comments, answers and resolves (PR-9 tries it for real).
-            writing: Writing::ANSWERS,
+            // Its client comments, answers and resolves (PR-9 tries it for real). Its review approves, it asks for no
+            // changes (ESC-494): GitLab has no such verdict in its review.
+            writing: Writing {
+                request_changes: false,
+                ..Writing::ANSWERS
+            },
             // `Draft:` before the title.
             draft: true,
             // `merge_when_pipeline_succeeds` (`auto_merge` in later versions).

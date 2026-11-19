@@ -242,6 +242,7 @@ async fn real_azure_devops() {
                 state: ReviewState::Commented,
                 body: "Relecture d'essai.".into(),
                 lines: vec![],
+                commit: String::new(),
             },
         )
         .await

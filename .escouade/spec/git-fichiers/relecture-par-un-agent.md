@@ -2,7 +2,7 @@
 title: "Relecture d'une PR par un agent"
 subject: "git-fichiers"
 sources: ["docs/TODO-1.8.md","design/esc-66/README.md","design/pr-2-3/README.md","design/pr-2-3/maquette.html","src-tauri/src/prreview.rs","crates/escouade-model/src/prreview.rs","src/components/prs/PrView.svelte","src/components/prs/PrAgentNote.svelte","src/lib/prreview.ts"]
-tickets: ["ESC-66","ESC-490"]
+tickets: ["ESC-66","ESC-490","ESC-494"]
 decisions: [100,190]
 compared: null
 ---
@@ -83,3 +83,8 @@ Sur une PR ouverte du projet (« MR » sur GitLab), de l'équipe ou d'un ticket,
 - L'agent n'ouvre aucun fichier : il ne voit que le diff et son contexte.
 - 40 remarques au plus par lecture.
 - On ne parle pas encore à l'agent dans son fil, on ne lui demande pas de corriger et on n'applique pas une suggestion (PR-6) ; l'approbation et la demande de changements viennent avec « Ta relecture » (PR-7) : la publication d'une relecture entière avec verdict d'ESC-66 n'existe plus.
+
+## À côté de « Ta relecture » (ESC-494)
+
+- L'approbation et la demande de changements sont maintenant dans « Ta relecture », la relecture de l'utilisateur (voir *Pull requests*) : son texte, ses remarques en attente et son verdict, publiés en une relecture chez l'hébergeur. Elle passe par l'opération de relecture des plugins (`forge/review`) qui publiait la relecture entière d'un agent avant PR-5.
+- Une remarque de l'agent ne rejoint pas « Ta relecture » : elle se publie seule, comme commentaire de l'utilisateur (ci-dessus). Pour la mettre dans sa relecture, l'utilisateur la recopie en remarque à lui (« + » sur sa ligne, « Ajouter à ma relecture »).

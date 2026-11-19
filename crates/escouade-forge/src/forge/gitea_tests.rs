@@ -625,7 +625,9 @@ async fn a_review_is_published_with_its_lines_and_a_comment_under_the_descriptio
                 path: "src/search.rs".into(),
                 line: 14,
                 body: "off by one".into(),
+                ..Default::default()
             }],
+            commit: String::new(),
         },
     )
     .await

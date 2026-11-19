@@ -2266,6 +2266,51 @@ pub async fn pr_review_send(
         .map_err(err)
 }
 
+/// « Ta relecture » (ESC-494): the user's review waiting on a pull request, its remarks placed against the diff read last.
+#[tauri::command]
+pub fn pr_pending(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> crate::myreview::PendingRead {
+    core.pr_pending(&project_id, number, host_repo.as_deref().unwrap_or(""))
+}
+
+/// A remark of the user's review added, written again or taken out, its text, or all of it given up: kept on this machine,
+/// nothing sent to the host.
+#[tauri::command]
+pub fn pr_pending_change(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+    change: crate::myreview::PendingChange,
+) -> Res<crate::myreview::PendingRead> {
+    core.pr_pending_change(
+        &project_id,
+        number,
+        host_repo.as_deref().unwrap_or(""),
+        change,
+    )
+    .map_err(err)
+}
+
+/// « Publier » of « Ta relecture »: the user's review in one review of the host, its verdict, its text and its remarks, on
+/// their click. Only the window calls it: no tool of the MCP server, no agent.
+#[tauri::command]
+pub async fn pr_review_submit(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+    ask: crate::myreview::ReviewAsk,
+) -> Res<crate::prview::Read<crate::myreview::Submitted>> {
+    Ok(core
+        .pr_review_submit(&project_id, number, host_repo.as_deref().unwrap_or(""), ask)
+        .await)
+}
+
 /// A review dropped.
 #[tauri::command]
 pub fn pr_review_discard(core: CoreState<'_>, project_id: String, number: u64) {

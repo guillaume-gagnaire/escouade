@@ -64,6 +64,8 @@ pub enum FailureKind {
     Protected,
     /// A merge that waits for a check the base requires (ESC-488).
     CheckRequired,
+    /// A review whose comment is on a line the host no longer has in its diff (its 422, « Ta relecture », ESC-494).
+    Lines,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

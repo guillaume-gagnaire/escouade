@@ -773,3 +773,126 @@ async fn a_graphql_refusal_says_its_status() {
     assert_eq!(status(e), Some(422));
     assert!(graphql_refusal(&json!({ "data": {} })).is_none());
 }
+
+/// « Ta relecture » (ESC-494): one review of GitHub's for the text, the verdict and the comments on lines, each on its
+/// side and its range, on the commit read.
+#[tokio::test]
+async fn a_review_goes_whole_with_its_verdict_its_lines_and_its_commit() {
+    let server = FakeServer::start().await;
+    server.on(
+        "POST",
+        "/repos/cli/cli/pulls/7/reviews",
+        200,
+        json!({ "id": 3 }),
+    );
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    let draft = |state| ReviewDraft {
+        state,
+        body: "Deux points.".into(),
+        lines: vec![
+            ReviewLine {
+                path: "a.ts".into(),
+                line: 12,
+                start_line: Some(10),
+                side: DiffSide::Left,
+                body: "Pourquoi l'enlever ?".into(),
+            },
+            ReviewLine {
+                path: "b.ts".into(),
+                line: 3,
+                body: "Ici".into(),
+                ..Default::default()
+            },
+        ],
+        commit: "abc".into(),
+    };
+    for state in [
+        ReviewState::Commented,
+        ReviewState::Approved,
+        ReviewState::ChangesRequested,
+    ] {
+        github.review(&repo(), 7, &draft(state)).await.unwrap();
+    }
+    let sent: Vec<Value> = server
+        .writes()
+        .iter()
+        .filter(|r| r.path() == "/repos/cli/cli/pulls/7/reviews")
+        .map(|r| r.json())
+        .collect();
+    let events: Vec<&str> = sent.iter().map(|b| b["event"].as_str().unwrap()).collect();
+    assert_eq!(events, ["COMMENT", "APPROVE", "REQUEST_CHANGES"]);
+    let b = &sent[2];
+    assert_eq!(b["body"], "Deux points.");
+    assert_eq!(b["commit_id"], "abc");
+    let c = &b["comments"];
+    assert_eq!(c.as_array().unwrap().len(), 2, "in the one review: {b}");
+    assert_eq!(
+        (
+            &c[0]["line"],
+            &c[0]["start_line"],
+            &c[0]["side"],
+            &c[0]["start_side"]
+        ),
+        (&json!(12), &json!(10), &json!("LEFT"), &json!("LEFT"))
+    );
+    assert_eq!(
+        (&c[1]["side"], c[1].get("start_line")),
+        (&json!("RIGHT"), None)
+    );
+
+    // No commit said: GitHub's tip now.
+    let bare = review_body(&ReviewDraft {
+        commit: String::new(),
+        ..draft(ReviewState::Commented)
+    });
+    assert!(bare.get("commit_id").is_none(), "{bare}");
+}
+
+/// A line no longer in the diff, or the user's own pull request: GitHub's 422 is said with its status and its words, for
+/// the core to keep the review waiting and say why.
+#[tokio::test]
+async fn a_review_github_refuses_says_its_422_and_its_words() {
+    for (message, errors) in [
+        (
+            "Unprocessable Entity",
+            json!(["Line could not be resolved"]),
+        ),
+        (
+            "Unprocessable Entity",
+            json!(["Review Can not request changes on your own pull request"]),
+        ),
+    ] {
+        let server = FakeServer::start().await;
+        server.on(
+            "POST",
+            "/repos/cli/cli/pulls/7/reviews",
+            422,
+            json!({ "message": message, "errors": errors, "status": "422" }),
+        );
+        let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+        let e = github
+            .review(
+                &repo(),
+                7,
+                &ReviewDraft {
+                    state: ReviewState::ChangesRequested,
+                    body: "Non.".into(),
+                    lines: vec![ReviewLine {
+                        path: "a.ts".into(),
+                        line: 99,
+                        body: "x".into(),
+                        ..Default::default()
+                    }],
+                    commit: String::new(),
+                },
+            )
+            .await
+            .unwrap_err();
+        let h = e
+            .downcast_ref::<escouade_plugin_kit::errors::HttpError>()
+            .expect("an HttpError");
+        assert_eq!(h.status, 422);
+        let said = errors[0].as_str().unwrap();
+        assert!(format!("{e:#}").contains(said), "{e:#}");
+    }
+}

@@ -2,7 +2,7 @@
 title: "Vue « Pull requests » du projet"
 subject: "git-fichiers"
 sources: ["docs/TODO-1.8.md","design/esc-65/README.md","design/pr-2-3/README.md","src/components/prs/PrsView.svelte","src/lib/prlist.ts","src/lib/prnew.ts","src-tauri/src/pragent.rs","src-tauri/src/prview.rs","ESC-403 (demande de l'utilisateur du 2026-11-09, réponse de l'overseer sur la lecture de fond)"]
-tickets: ["ESC-65","ESC-66","ESC-68","ESC-383","ESC-390","ESC-403","ESC-457"]
+tickets: ["ESC-65","ESC-66","ESC-68","ESC-383","ESC-390","ESC-403","ESC-457","ESC-494"]
 decisions: [60,129,139,171]
 compared: null
 ---
@@ -71,3 +71,5 @@ compared: null
 - La lecture de fond n'est pas conditionnelle (ETag / `If-None-Match`) : la requête chez l'hébergeur est faite par son plugin. Le plugin GitHub lit la liste en une requête GraphQL, que GitHub ne sert pas en conditionnel ; ceux de GitLab, Gitea/Forgejo, Bitbucket Cloud et Azure DevOps ne gardent pas d'ETag pour la liste aujourd'hui (une version de chacun le pourrait).
 
 - Chaque lecture de la liste est gardée : la vue d'ensemble et `list_pull_requests` la reprennent pendant une minute, et une relecture nouvellement demandée à l'utilisateur se notifie (voir *Notifications*).
+
+- « Ta relecture » (ESC-494) : la relecture de l'utilisateur publiée depuis la vue d'une PR (voir *Pull requests*, « Ta relecture »), la liste se relit aussitôt : la PR dit ses approbations et « Changements demandés » de la relecture, et sa pastille « Ta relecture » (une relecture demandée à l'utilisateur) s'éteint quand l'hébergeur ne la demande plus, ce que GitHub fait dès qu'elle est rendue. La liste elle-même n'écrit toujours rien.

@@ -24,6 +24,7 @@ pub mod git;
 pub mod heat;
 pub mod job;
 pub mod model;
+pub mod myreview;
 pub mod notify;
 pub mod paths;
 pub mod pricing;
@@ -39,7 +40,7 @@ pub mod wsl;
 /// The data of the code hosts the model names, shared with their plugins.
 mod forge {
     pub(crate) use escouade_plugin_protocol::forge::{
-        CheckState, MergeOptions, MergeStrategy, PrState, PullRequest, RepoRef,
+        CheckState, DiffSide, MergeOptions, MergeStrategy, PrState, PullRequest, RepoRef,
     };
 }
 

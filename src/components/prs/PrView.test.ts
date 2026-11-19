@@ -205,7 +205,7 @@ describe('the view of a pull request (ESC-457)', () => {
     expect(
       backend.calls
         .map((c) => c.cmd)
-        .filter((c) => !['pr_contents', 'pr_detail', 'pr_control', 'pr_log', 'pr_rerun', 'pr_reviews'].includes(c)),
+        .filter((c) => !['pr_contents', 'pr_detail', 'pr_control', 'pr_log', 'pr_rerun', 'pr_reviews', 'pr_pending'].includes(c)),
     ).toEqual([]);
   });
 

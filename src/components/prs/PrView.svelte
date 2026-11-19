@@ -41,6 +41,7 @@
     type PrWrite,
     type PrWriting,
   } from '../../lib/prthreads';
+  import type { PendingChange } from '../../lib/myreview';
   import {
     boxRows,
     controlFailure,
@@ -73,6 +74,7 @@
     type NextScope,
     type SeverityFilter,
   } from '../../lib/prreview';
+  import { mineFailure, pendingKey, placePending, reviews as reviewsMine, type ReviewAsk } from '../../lib/myreview';
   import { readPref, writePref } from '../../lib/prefs';
   import { POLL_MS, stillRunning } from '../../lib/prview';
   import { app } from '../../lib/state.svelte';
@@ -84,6 +86,8 @@
     PrFailure,
     PrLine,
     PrRead,
+    PendingNote,
+    PendingRead,
     PrThread,
     Project,
     PullRequest,
@@ -97,6 +101,8 @@
   import PrComposer from './PrComposer.svelte';
   import PrFiles from './PrFiles.svelte';
   import PrMergeBox from './PrMergeBox.svelte';
+  import PrMyReview from './PrMyReview.svelte';
+  import PrPendingNote from './PrPendingNote.svelte';
   import PrPicker from './PrPicker.svelte';
   import PrThreadView from './PrThread.svelte';
 
@@ -211,6 +217,10 @@
         it.open += ns.filter(isLive).length;
       }
     }
+    for (const [path, lines] of Object.entries(minePlaced.under)) {
+      const it = (out[path] ??= { open: 0, marked: {} });
+      for (const i of Object.keys(lines)) it.marked[Number(i)] = true;
+    }
     for (const group of [notePlaced.onFile, notePlaced.stale])
       for (const [path, ns] of Object.entries(group)) {
         const it = (out[path] ??= { open: 0, marked: {} });
@@ -296,6 +306,94 @@
     const at = n.path ? Object.entries(all.under[n.path] ?? {}).find(([, ns]) => ns.some((x) => x.id === n.id)) : undefined;
     show(noteKey(n), n.path && files.some((f) => f.path === n.path) ? n.path : null, at ? Number(at[0]) : -1);
   }
+  // ---------- « Ta relecture » (ESC-494, PR-7) ----------
+
+  /** The user's review waiting on this machine, placed by the core against the diff read. */
+  let pending = $state<PendingRead | null>(null);
+  let mineOpen = $state(false);
+  const mine = $derived(pending?.review.notes ?? []);
+  const minePlaced = $derived(c ? placePending(c.files, mine) : { under: {}, stale: {}, top: [] });
+  /** The host publishes the user's review: « Ta relecture » and « Ajouter à ma relecture » are there. */
+  const canReview = $derived(reviewsMine(writing) && pr?.state === 'open');
+  const ticketAgent = $derived(ticket?.agentId ? (app.agents[ticket.agentId]?.name ?? '') : '');
+
+  async function loadPending() {
+    const at = place;
+    try {
+      const r = await api.prPending(project.id, number, hostRepo);
+      if (at === place) pending = r;
+    } catch {
+      // Not read: the view goes on without it.
+    }
+  }
+
+  /** A change of the review waiting: null when done, else why not. */
+  async function changeMine(change: PendingChange): Promise<string | null> {
+    try {
+      pending = await api.prPendingChange(project.id, number, change, hostRepo);
+      return null;
+    } catch (e) {
+      return String(e);
+    }
+  }
+
+  /** « Ajouter à ma relecture » under the lines picked: kept waiting, nothing sent. */
+  async function addToReview(body: string) {
+    const p = composing;
+    if (!p) return;
+    composeBusy = true;
+    composeFailure = null;
+    const why = await changeMine({ kind: 'add', path: p.path, line: p.line, startLine: p.startLine, side: p.side, body });
+    composeBusy = false;
+    if (why) {
+      composeFailure = why;
+      return;
+    }
+    delete app.prDrafts[keyOf(lineTarget(p.path, p.side, p.line))];
+    composing = null;
+  }
+
+  const editMine = (n: PendingNote, body: string) => changeMine({ kind: 'edit', id: n.id, body });
+  const removeMine = (n: PendingNote) => changeMine({ kind: 'remove', id: n.id });
+
+  async function submitMine(ask: ReviewAsk): Promise<string | null> {
+    let r: Awaited<ReturnType<typeof api.prReviewSubmit>>;
+    try {
+      r = await api.prReviewSubmit(project.id, number, ask, hostRepo);
+    } catch (e) {
+      return String(e);
+    }
+    if (r.failure || !r.data) {
+      // Kept waiting: its remarks read again, a stale one said under its line.
+      void loadPending();
+      return r.failure ? mineFailure(r.failure, host, online) : null;
+    }
+    const done = r.data;
+    pending = null;
+    mineOpen = false;
+    if (done.agentFailure) app.toast(t('prs.page.mine.agentFailed', { host, why: done.agentFailure }), 'error');
+    else if (done.agentTicket) app.toast(t('prs.page.mine.publishedAgent', { host, ticket: done.agentTicket }), 'ok');
+    else app.toast(t('prs.page.mine.published', { host }), 'ok');
+    // Published: the conversation, the merge box and the list read it again, no read of before brought back.
+    fence();
+    await load();
+    return null;
+  }
+
+  async function discardMine() {
+    const why = await changeMine({ kind: 'discard' });
+    if (why) app.toast(why, 'error');
+    else mineOpen = false;
+  }
+
+  /** A remark of the panel, in the tab « Fichiers » under its line. */
+  function showMine(n: PendingNote) {
+    const files = c?.files ?? [];
+    const at = Object.entries(minePlaced.under[n.path] ?? {}).find(([, ns]) => ns.some((x) => x.id === n.id));
+    mineOpen = false;
+    show(pendingKey(n), files.some((f) => f.path === n.path) ? n.path : null, at ? Number(at[0]) : -1);
+  }
+
   /** The lines a comment is being written on. */
   let composing = $state<LinePick | null>(null);
   let composeBusy = $state(false);
@@ -423,6 +521,8 @@
     if (next.data && !next.failure) {
       readAt = Date.now();
       app.prWords[at.id] = next.data.word;
+      // The review waiting, placed against this reading.
+      void loadPending();
     }
   }
 
@@ -487,7 +587,10 @@
       sevFilter = {};
       batchOpen = false;
       batchFailure = null;
+      pending = null;
+      mineOpen = false;
       void load();
+      void loadPending();
       if (!hostRepo) app.loadPrReviews(project.id).catch(() => {});
     });
   });
@@ -818,14 +921,26 @@
     <PrComposer
       draftKey={keyOf(lineTarget(p.path, p.side, p.line))}
       label={t('prs.page.threads.commentOn', { place: `${p.path} · ${pickPlace(p)}` })}
-      submit={t('prs.page.threads.send')}
+      submit={canReview ? t('prs.page.mine.commentNow') : t('prs.page.threads.send')}
       {host}
       busy={composeBusy}
       autofocus
       onSend={sendLine}
+      alt={canReview
+        ? {
+            label: t('prs.page.mine.addToReview'),
+            hint: t('prs.page.mine.composerHint', { host }),
+            first: mine.length > 0,
+            onSend: addToReview,
+          }
+        : undefined}
       onCancel={() => (composing = null)}
     />
   </div>
+{/snippet}
+
+{#snippet pendingNote(n: PendingNote, showPlace: boolean)}
+  <PrPendingNote note={n} {host} {word} current={currentThread === pendingKey(n)} {showPlace} edit={editMine} remove={removeMine} />
 {/snippet}
 
 {#snippet agentNote(n: ReviewNote, showPlace: boolean)}
@@ -845,11 +960,13 @@
 {#snippet under(file: PrContentsFile, _l: PrLine, i: number)}
   {@const here = placed.under[file.path]?.[i]}
   {@const mine = notePlaced.under[file.path]?.[i]}
+  {@const yours = minePlaced.under[file.path]?.[i]}
   {@const writingHere = !!composing && composing.path === file.path && composing.index === i}
-  {#if here || mine || writingHere}
+  {#if here || mine || yours || writingHere}
     <div class="under">
       {#each here ?? [] as th (threadKey(th))}{@render lineThread(th, false)}{/each}
       {#each mine ?? [] as n (n.id)}{@render agentNote(n, false)}{/each}
+      {#each yours ?? [] as n (n.id)}{@render pendingNote(n, false)}{/each}
       {#if writingHere && composing}{@render lineComposer(composing)}{/if}
     </div>
   {/if}
@@ -878,6 +995,13 @@
       {#each staleNotes as n (n.id)}{@render agentNote(n, true)}{/each}
     </div>
   {/if}
+  {@const staleMine = minePlaced.stale[file.path]}
+  {#if staleMine?.length}
+    <div class="apart" role="group" aria-label={t('prs.page.mine.staleGroup', { count: staleMine.length })}>
+      <p class="apart-h"><Icon name="clock" size={12} />{t('prs.page.mine.staleGroup', { count: staleMine.length })}</p>
+      {#each staleMine as n (n.id)}{@render pendingNote(n, true)}{/each}
+    </div>
+  {/if}
 {/snippet}
 
 <!-- Above the files: the threads on files the diff does not change, the agent's remarks on the whole pull request. -->
@@ -887,6 +1011,12 @@
     <div class="apart top" role="group" aria-label={t('prs.review.elsewhere', { count: notePlaced.top.length, word })}>
       <p class="apart-h"><Icon name="sparkle" size={12} />{t('prs.review.elsewhere', { count: notePlaced.top.length, word })}</p>
       {#each notePlaced.top as n (n.id)}{@render agentNote(n, true)}{/each}
+    </div>
+  {/if}
+  {#if minePlaced.top.length}
+    <div class="apart top" role="group" aria-label={t('prs.page.mine.elsewhere', { count: minePlaced.top.length, word })}>
+      <p class="apart-h"><Icon name="clock" size={12} />{t('prs.page.mine.elsewhere', { count: minePlaced.top.length, word })}</p>
+      {#each minePlaced.top as n (n.id)}{@render pendingNote(n, true)}{/each}
     </div>
   {/if}
   {#if placed.elsewhere.length}
@@ -1060,22 +1190,67 @@
           class="btn agentic"
           data-discover="prReview"
           bind:this={reviewBtn}
+          aria-label={review ? t('prs.review.again') : t('prs.review.ask')}
           disabled={starting || review?.phase === 'reading'}
           use:tip={review ? t('prs.review.againHint', { word }) : t('prs.review.askHint', { word })}
-          onclick={askReview}><Icon name="sparkle" size={14} />{review ? t('prs.review.again') : t('prs.review.ask')}</button
+          onclick={askReview}
+          ><Icon name="sparkle" size={14} /><span class="blabel">{review ? t('prs.review.again') : t('prs.review.ask')}</span></button
         >
       {/if}
-      <!-- The place of « Ta relecture » (PR-7). The control of the pull request and its merge box, over the view when it is narrow or on « Fichiers » (ESC-488). -->
+      <!-- « Ta relecture » (ESC-494, PR-7): its count of remarks waiting, and its panel. -->
+      {#if canReview || mine.length || pending?.review.body.trim()}
+        <button
+          class="btn mine-btn"
+          aria-haspopup="dialog"
+          aria-expanded={mineOpen}
+          aria-controls="pr-my-review"
+          aria-label={mine.length ? t('prs.page.mine.buttonLabel', { count: mine.length }) : t('prs.page.mine.button')}
+          use:tip={t('prs.page.mine.buttonHint', { host })}
+          disabled={!c || !pending}
+          onclick={() => (mineOpen = !mineOpen)}
+          ><Icon name="edit" size={14} /><span class="blabel">{t('prs.page.mine.button')}</span>{#if mine.length}<span class="cnt num"
+              >{mine.length}</span
+            >{/if}<Icon name="down" size={12} /></button
+        >
+      {/if}
+      <!-- The control of the pull request and its merge box, over the view when it is narrow or on « Fichiers » (ESC-488). -->
       <button
         class="btn ctl-toggle"
         class:files={tab === 'files'}
         aria-controls="pr-control"
         aria-expanded={asideOpen}
+        aria-label={t('prs.page.control.toggle', { word })}
+        use:tip={t('prs.page.control.toggle', { word })}
         disabled={!c}
-        onclick={() => (asideOpen = !asideOpen)}><Icon name="merge" size={14} />{t('prs.page.control.toggle', { word })}</button
+        onclick={() => (asideOpen = !asideOpen)}
+        ><Icon name="merge" size={14} /><span class="blabel">{t('prs.page.control.toggle', { word })}</span></button
       >
-      <button class="btn" disabled={!pr} onclick={openOnHost}><Icon name="ext" size={14} />{t('prs.page.openOnHost', { host })}</button>
+      <button
+        class="btn"
+        disabled={!pr}
+        aria-label={t('prs.page.openOnHost', { host })}
+        use:tip={t('prs.page.openOnHost', { host })}
+        onclick={openOnHost}><Icon name="ext" size={14} /><span class="blabel">{t('prs.page.openOnHost', { host })}</span></button
+      >
     </div>
+    {#if mineOpen && pending && pr}
+      <PrMyReview
+        review={pending.review}
+        {number}
+        {host}
+        {word}
+        writing={can}
+        own={pending.own}
+        {ticket}
+        agentName={ticketAgent}
+        paths={c ? treeOrder(c.files, '').map((f) => f.path) : []}
+        onBody={(body) => void changeMine({ kind: 'body', body })}
+        onSubmit={submitMine}
+        onDiscard={discardMine}
+        onGo={showMine}
+        onClose={() => (mineOpen = false)}
+      />
+    {/if}
   </header>
 
   <div class="tabs">
@@ -1506,10 +1681,31 @@
   }
   .hd {
     flex: none;
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 12px 14px 10px 12px;
+  }
+  /* « Ta relecture » (ESC-494): its count of remarks waiting, in the colour of what waits. */
+  .mine-btn .cnt {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    display: inline-grid;
+    place-items: center;
+    font-size: 10.5px;
+    font-weight: 650;
+    color: var(--wait);
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  /* Narrow: the header's buttons keep their icon, their label in their name (ESC-481). */
+  @container (max-width: 1000px) {
+    .hd .right .blabel {
+      display: none;
+    }
   }
   .back {
     color: var(--muted);

@@ -989,6 +989,8 @@ pub struct Core {
     pub(crate) leftover_histories: Mutex<Vec<String>>,
     /// The reviews written by an agent (ESC-66), one per pull request.
     pub(crate) pr_reviews: RwLock<Vec<crate::prreview::PrReview>>,
+    /// The user's own reviews waiting (« Ta relecture », ESC-494), one per pull request.
+    pub(crate) pending_reviews: RwLock<Vec<crate::myreview::PendingReview>>,
     /// The scheduled tasks of every project (ESC-448): this machine's alone.
     pub(crate) scheduled: RwLock<Vec<crate::model::ScheduledTask>>,
     /// The first launch's journey (ESC-504), saved with the state.
@@ -1979,6 +1981,7 @@ impl Core {
         // they can be now.
         let mut leftover = std::mem::take(&mut state.leftover_histories);
         let pr_reviews = std::mem::take(&mut state.pr_reviews);
+        let pending_reviews = std::mem::take(&mut state.pending_reviews);
         let scheduled = std::mem::take(&mut state.scheduled);
         let onboarding = std::mem::take(&mut state.onboarding);
         let asks = crate::asks::AskBox {
@@ -2213,6 +2216,7 @@ impl Core {
             closed_index: Mutex::new(closed_index),
             leftover_histories: Mutex::new(leftover),
             pr_reviews: RwLock::new(pr_reviews),
+            pending_reviews: RwLock::new(pending_reviews),
             scheduled: RwLock::new(scheduled),
             onboarding: RwLock::new(onboarding),
             fresh,
@@ -2764,6 +2768,9 @@ impl Core {
         let pr_reviews = crate::prreview::kept_reviews(&self.pr_reviews.read(), |id| {
             projects.iter().any(|p| p.id == id)
         });
+        let pending_reviews = crate::myreview::kept_pending(&self.pending_reviews.read(), |id| {
+            projects.iter().any(|p| p.id == id)
+        });
         let scheduled = self.scheduled.read().clone();
         let onboarding = self.onboarding.read().clone();
         let (asks, ask_seq) = {
@@ -2781,6 +2788,7 @@ impl Core {
             pause,
             leftover_histories,
             pr_reviews,
+            pending_reviews,
             scheduled,
             onboarding,
             asks,

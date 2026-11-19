@@ -1676,6 +1676,17 @@ impl Core {
     /// its file, its line, the lines of the diff it is on, its author and its text; restored
     /// first, as for its CI. It pushes; Escouade pushes again at the end of its turn.
     pub async fn ticket_pr_fix_reviews(self: &Arc<Self>, id: &str) -> Result<()> {
+        self.ticket_pr_fix_reviews_with(id, None).await
+    }
+
+    /// « L'agent corrige les retours », with the user's own review just published (« Ta relecture », ESC-494): their
+    /// text and remarks go to the agent as theirs, first; the host's others as a third party's data, as always. What the
+    /// host now holds of the user's review is not handed twice.
+    pub async fn ticket_pr_fix_reviews_with(
+        self: &Arc<Self>,
+        id: &str,
+        own: Option<crate::myreview::OwnReview>,
+    ) -> Result<()> {
         let (t, tp, agent_id) = self.pr_fix_preflight(id)?;
         if tp.closed || tp.state != PrState::Open {
             bail!(tr!(
@@ -1691,8 +1702,26 @@ impl Core {
         let (client, account) = self.forge_client(&tp.host).await?;
         let reviews = client.reviews(&repo, tp.number).await?;
         let comments = client.comments(&repo, tp.number).await?;
-        let (rs, cs) = new_feedback(&tp, &account.user, &reviews, &comments);
-        if rs.is_empty() && cs.is_empty() {
+        let (all_rs, all_cs) = new_feedback(&tp, &account.user, &reviews, &comments);
+        // The user's own review is theirs, said apart: not again as the host's.
+        let theirs = |author: &str, body: &str| {
+            own.as_ref().is_some_and(|o| {
+                !account.user.is_empty()
+                    && author.eq_ignore_ascii_case(&account.user)
+                    && o.holds(body)
+            })
+        };
+        let rs: Vec<&Review> = all_rs
+            .iter()
+            .copied()
+            .filter(|r| !theirs(&r.author, &r.body))
+            .collect();
+        let cs: Vec<&ReviewComment> = all_cs
+            .iter()
+            .copied()
+            .filter(|c| !theirs(&c.author, &c.body))
+            .collect();
+        if rs.is_empty() && cs.is_empty() && own.is_none() {
             let _ = self.edit_ticket(id, |x| {
                 if let Some(p) = x.pr.as_mut() {
                     p.feedback = 0;
@@ -1703,10 +1732,10 @@ impl Core {
         }
         let rs: Vec<Review> = rs.into_iter().cloned().collect();
         let mut cs: Vec<ReviewComment> = cs.into_iter().cloned().collect();
-        let ids: Vec<String> = rs
+        let ids: Vec<String> = all_rs
             .iter()
-            .map(review_key)
-            .chain(cs.iter().map(|c| c.id.clone()))
+            .map(|r| review_key(r))
+            .chain(all_cs.iter().map(|c| c.id.clone()))
             .collect();
         let threads: Vec<String> = cs
             .iter()
@@ -1749,14 +1778,13 @@ impl Core {
                 url: tp.url.clone(),
                 ..Default::default()
             };
-            let message = crate::agentprs::reviews_message(
-                self.lang().claude,
-                &tp.word,
-                &pr,
-                &tp.branch,
-                &rs,
-                &cs,
-            );
+            let lang = self.lang().claude;
+            let message =
+                crate::agentprs::reviews_message(lang, &tp.word, &pr, &tp.branch, &rs, &cs);
+            let message = match &own {
+                Some(o) => crate::myreview::with_own(lang, &message, o),
+                None => message,
+            };
             self.send_message(&agent_id, message, Vec::new()).await
         }
         .await;

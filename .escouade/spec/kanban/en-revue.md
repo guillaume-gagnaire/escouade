@@ -2,8 +2,8 @@
 title: "En revue"
 subject: "kanban"
 sources: ["docs/TODO-1.8.md"]
-tickets: ["ESC-59","ESC-60","ESC-61","ESC-62","ESC-63","ESC-67"]
-decisions: [55,56,58]
+tickets: ["ESC-59","ESC-60","ESC-61","ESC-62","ESC-63","ESC-67","ESC-494"]
+decisions: [55,56,58,221]
 compared: null
 ---
 
@@ -120,3 +120,9 @@ Rien ne se merge sans un geste : les deux actions sont des boutons de la carte, 
 - Les retours de GitLab, Bitbucket et Azure DevOps n'ont pas d'extrait du diff de l'hébergeur : Escouade donne les lignes du fichier autour de la ligne. Leurs relectures sans texte ne comptent pas comme retours (leurs commentaires, si).
 - Couper l'auto-merge de l'hébergeur depuis Escouade : il se coupe sur l'hébergeur.
 - Les essais réels : GitHub seulement, avec le compte de l'utilisateur ; GitLab, Bitbucket Cloud et Gitea / Forgejo d'après leur documentation et leurs faux serveurs, à essayer en vrai plus tard.
+
+## Ta relecture, renvoyée à l'agent (ESC-494)
+
+- Depuis la vue de la PR d'un ticket « En revue », « Ta relecture » (voir *Pull requests*) publie la relecture de l'utilisateur ; une fois publiée, les PR des tickets sont relues aussitôt, et la carte dit son nouvel état (« changements demandés », « approuvée »).
+- Avec « Renvoyer aussi à l'agent du ticket » cochée (d'office pour « Demander des changements », et pour « Commenter » sur la propre PR de l'utilisateur, où l'hébergeur refuse de demander des changements), c'est le clic de « L'agent corrige les retours » : le même chemin, l'agent restauré comme pour tout retour. Il reçoit d'abord le texte et les remarques de l'utilisateur, comme ses mots à lui, puis les autres retours de l'hébergeur, balisés comme toujours ; ce que l'hébergeur garde de la relecture de l'utilisateur n'est pas redonné. La carte dit « L'agent corrige les retours… », puis Escouade pousse à la fin de son tour.
+- Si l'agent ne peut pas la recevoir (il travaille, une correction est en cours, le ticket n'a plus d'agent), la relecture reste publiée et un toast dit pourquoi ; « L'agent corrige les retours » reste sur la carte.

@@ -50,8 +50,10 @@ import type {
   PrContents,
   PrContentsFile,
   PrDetail,
+  PendingRead,
   PrFailure,
   PrRead,
+  ReviewSubmitted,
   ProjectEnvironments,
   BranchCi,
   CiDetail,
@@ -620,6 +622,15 @@ export const api = {
   prReviewSend: (projectId: string, number: number, notes: { id: number; body?: string; onLine: boolean }[]) =>
     invoke<{ review: AgentReview; sent: number[]; failure?: PrFailure }>('pr_review_send', { projectId, number, notes }),
   prReviewDiscard: (projectId: string, number: number) => invoke<void>('pr_review_discard', { projectId, number }),
+  /** « Ta relecture » (ESC-494): the user's review waiting on this machine, its remarks placed against the diff read. */
+  prPending: (projectId: string, number: number, hostRepo?: string) =>
+    invoke<PendingRead>('pr_pending', { projectId, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** A remark added, written again or taken out, the text, or all given up: on this machine, nothing sent. */
+  prPendingChange: (projectId: string, number: number, change: import('./myreview').PendingChange, hostRepo?: string) =>
+    invoke<PendingRead>('pr_pending_change', { projectId, number, change, ...(hostRepo ? { hostRepo } : {}) }),
+  /** « Publier » of « Ta relecture »: one review of the host, on the user's click only, in their name. */
+  prReviewSubmit: (projectId: string, number: number, ask: import('./myreview').ReviewAsk, hostRepo?: string) =>
+    invoke<PrRead<ReviewSubmitted>>('pr_review_submit', { projectId, number, ask, ...(hostRepo ? { hostRepo } : {}) }),
   /** The environments of the project's host as last read (ESC-67); the project is followed while its view is open. */
   projectEnvironments: (projectId: string) => invoke<ProjectEnvironments | null>('project_environments', { projectId }),
   /** « Rafraîchir » of the view « Environnements »: read now. */

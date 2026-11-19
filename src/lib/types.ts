@@ -3595,12 +3595,56 @@ export interface PrFailure {
     // A merge or an update of the branch refused (ESC-488): a conflict since, the protected branch's rules, a check required.
     | 'conflict'
     | 'protected'
-    | 'checkRequired';
+    | 'checkRequired'
+    // A review whose remark is on a line the host no longer has (its 422, « Ta relecture », ESC-494).
+    | 'lines';
   message: string;
   /** When the host's limit starts over (Unix seconds). */
   reset?: number;
   /** Réglages › Services connectés settles it. */
   settings?: boolean;
+}
+
+/** A remark of the user's review, waiting under its line (`myreview::PendingNote`, ESC-494). */
+export interface PendingNote {
+  id: number;
+  path: string;
+  line: number;
+  startLine?: number;
+  side: 'left' | 'right';
+  body: string;
+  /** The text of its lines when it was written. */
+  code: string[];
+  created: number;
+  /** Its line is no longer in the diff read: it goes as a comment of the pull request, or is taken out. */
+  stale?: boolean;
+}
+
+/** « Ta relecture » waiting on this machine (`myreview::PendingReview`). */
+export interface PendingReview {
+  projectId: string;
+  hostRepo?: string;
+  number: number;
+  body: string;
+  notes: PendingNote[];
+  updatedAt: number;
+}
+
+/** The review waiting as the core places it, and whether the pull request is the user's own (a comment alone). */
+export interface PendingRead {
+  review: PendingReview;
+  own: boolean;
+}
+
+/** A verdict of a review (`forge::ReviewState`). */
+export type ReviewVerdict = 'commented' | 'approved' | 'changesRequested';
+
+/** What a publication of « Ta relecture » did (`myreview::Submitted`). */
+export interface ReviewSubmitted {
+  lines: number;
+  stale: number;
+  agentTicket?: string;
+  agentFailure?: string;
 }
 
 /** What a read of the tab gave: the data, else why it is missing. */

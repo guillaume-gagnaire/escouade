@@ -7,7 +7,8 @@
   // A comment to write on a pull request (ESC-474): a line, a thread's answer or the conversation's. Its text is a draft
   // kept in `app.prDrafts[draftKey]` until it is sent: nothing is lost by changing tabs, closing it, or reading another
   // pull request. « Aperçu » renders its Markdown as the app renders the rest. Nothing goes without the click on
-  // `submit` (or Ctrl+Entrée), which `onSend` makes; `busy` while it goes.
+  // `submit` (or Ctrl+Entrée), which `onSend` makes; `busy` while it goes. With `alt` (« Ajouter à ma relecture »,
+  // ESC-494), a second button; once a review is begun (`alt.first`), it comes first and takes Ctrl+Entrée, as on GitHub.
   let {
     draftKey,
     label,
@@ -16,6 +17,7 @@
     busy = false,
     autofocus = false,
     onSend,
+    alt,
     onCancel,
   }: {
     draftKey: string;
@@ -25,6 +27,8 @@
     busy?: boolean;
     autofocus?: boolean;
     onSend: (body: string) => void;
+    /** A second way: its label, what it says under the field, and what it does with the text. */
+    alt?: { label: string; hint: string; first: boolean; onSend: (body: string) => void };
     onCancel?: () => void;
   } = $props();
 
@@ -43,10 +47,16 @@
     onSend(text);
   }
 
+  function goAlt() {
+    if (empty || busy || !alt) return;
+    alt.onSend(text);
+  }
+
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      go();
+      if (alt?.first) goAlt();
+      else go();
     } else if (e.key === 'Escape' && onCancel) {
       e.preventDefault();
       e.stopPropagation();
@@ -90,9 +100,16 @@
       onkeydown={onKey}></textarea>
   {/if}
   <div class="foot">
-    <span class="hint">{t('prs.page.threads.publishedAs', { host })}</span>
+    <span class="hint">{alt ? alt.hint : t('prs.page.threads.publishedAs', { host })}</span>
     {#if onCancel}<button type="button" class="btn" onclick={onCancel}>{t('prs.page.threads.cancel')}</button>{/if}
-    <button type="submit" class="btn primary" disabled={empty || busy}>{busy ? t('prs.page.threads.sending') : submit}</button>
+    {#if alt}
+      <button type="submit" class="btn" class:primary={!alt.first} disabled={empty || busy}
+        >{busy ? t('prs.page.threads.sending') : submit}</button
+      >
+      <button type="button" class="btn" class:primary={alt.first} disabled={empty || busy} onclick={goAlt}>{alt.label}</button>
+    {:else}
+      <button type="submit" class="btn primary" disabled={empty || busy}>{busy ? t('prs.page.threads.sending') : submit}</button>
+    {/if}
   </div>
 </form>
 

@@ -798,7 +798,9 @@ async fn a_validated_review_is_published_with_its_line_comments() {
                     path: "src/a.rs".into(),
                     line: 12,
                     body: "Why?".into(),
+                    ..Default::default()
                 }],
+                commit: String::new(),
             },
         )
         .await
@@ -816,6 +818,7 @@ async fn a_validated_review_is_published_with_its_line_comments() {
                 state: ReviewState::Approved,
                 body: String::new(),
                 lines: vec![],
+                commit: String::new(),
             },
         )
         .await

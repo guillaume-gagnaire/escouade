@@ -86,7 +86,7 @@ const read = (over: Partial<PrControlRead> = {}, control: Partial<NonNullable<Pr
   ...over,
 });
 
-const reads = ['pr_contents', 'pr_detail', 'pr_control', 'pr_reviews'];
+const reads = ['pr_contents', 'pr_detail', 'pr_control', 'pr_reviews', 'pr_pending'];
 
 function backend(o: {
   pr?: PullRequest;

@@ -12,7 +12,7 @@ Le plugin sert deux choses d'Escouade sur le même compte : l'hébergeur de code
 
 **Merger.** Le merge suit ce que le dépôt permet (merge, squash, rebase). « Merger quand c'est vert » demande l'auto-merge de GitHub si le dépôt l'autorise ; sinon Escouade attend elle-même que la PR soit approuvée et verte, tant que l'app tourne.
 
-**Les relectures.** Le plugin lit les relectures et les commentaires de la PR, avec leurs fils. Quand tu fais relire une PR par un agent, c'est lui qui publie, en une fois, ce que tu as gardé : le texte, les commentaires sur les lignes et ton choix (« Commenter », « Demander des changements », « Approuver »). Il répond aussi sous un commentaire d'une ligne.
+**Les relectures.** Le plugin lit les relectures et les commentaires de la PR, avec leurs fils. « Ta relecture » (Escouade 2.3) : c'est lui qui publie, en une fois et à ton clic, ton texte, tes remarques sur les lignes (une plage, une ligne supprimée, sur le commit que tu as lu) et ton verdict (« Commenter », « Approuver », « Demander des changements » ; seulement « Commenter » sur ta propre PR). Il répond aussi sous un commentaire d'une ligne.
 
 **Une PR entière** (Escouade 2.3). Le plugin lit aussi la description d'une PR, ses commits, ses fichiers modifiés et ses fils de discussion, avec leurs lignes, leurs réponses et leur état (ouvert, résolu, dépassé), et les commentaires de la conversation. Les lignes du diff, Escouade les lit par git, sans passer par GitHub. Rien n'est écrit sur GitHub pour cela.
 

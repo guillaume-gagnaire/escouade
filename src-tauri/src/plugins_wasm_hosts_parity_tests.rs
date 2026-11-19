@@ -666,10 +666,21 @@ fn forge_steps(h: &'static Host, api: &str) -> Vec<Step> {
         "title": "Une PR", "body": "Son texte", "head": h.branch, "base": "main", "draft": false,
         "reviewers": ["bob"], "labels": ["bug"], "closes": 9,
     });
-    let review = json!({
-        "state": "approved", "body": "Bien vu",
-        "lines": [{ "path": "src/main.rs", "line": 3, "body": "Ici" }],
-    });
+    // GitHub's review takes a range of lines removed and the commit read since ESC-494 (`SINCE_THE_PORT`); the others
+    // ignore them, as they did.
+    let review = match h.name {
+        "github" => json!({
+            "state": "changesRequested", "body": "Bien vu", "commit": "abc",
+            "lines": [
+                { "path": "src/main.rs", "line": 3, "body": "Ici" },
+                { "path": "src/main.rs", "line": 9, "startLine": 7, "side": "left", "body": "Pourquoi l'enlever ?" },
+            ],
+        }),
+        _ => json!({
+            "state": "approved", "body": "Bien vu",
+            "lines": [{ "path": "src/main.rs", "line": 3, "body": "Ici" }],
+        }),
+    };
     let strategy = json!({ "number": h.number, "strategy": "squash" });
     let moved = format!("{api}/moved");
     let elsewhere = format!("{api}/moved-comment");
@@ -776,7 +787,9 @@ fn forge_steps(h: &'static Host, api: &str) -> Vec<Step> {
         + 1;
     let since: Vec<Step> = SINCE_THE_PORT
         .iter()
-        .filter(|(name, method, _)| *name == h.name && *method != "forge/resolve")
+        .filter(|(name, method, _)| {
+            *name == h.name && *method != "forge/resolve" && *method != "forge/review"
+        })
         .map(|(_, method, _)| match *method {
             "forge/unresolve" => Call(method, call(json!({ "number": h.number, "thread": h.comment }))),
             "forge/lineComment" => Call(
@@ -1218,8 +1231,9 @@ async fn parity(
 /// the module (`ESCOUADE_PARITY_RECORD_SINCE=1`) and reviewed. GitHub resolves a thread (it said it could not), opens one
 /// again and comments lines since ESC-474, and controls a pull request since ESC-488 (its state for the merge, who may
 /// review and its labels, a draft made ready, reviewers and labels asked and taken back, its branch updated, one check
-/// run again, its auto-merge turned off, its branch deleted); the other hosts' plugins did not change.
-const SINCE_THE_PORT: [(&str, &str, &str); 14] = [
+/// run again, its auto-merge turned off, its branch deleted), and its review takes a range, the side of a line removed
+/// and the commit read since ESC-494 (« Ta relecture »); the other hosts' plugins did not change.
+const SINCE_THE_PORT: [(&str, &str, &str); 15] = [
     ("github", "forge/resolve", "ESC-474"),
     ("github", "forge/unresolve", "ESC-474"),
     ("github", "forge/lineComment", "ESC-474"),
@@ -1234,6 +1248,7 @@ const SINCE_THE_PORT: [(&str, &str, &str); 14] = [
     ("github", "forge/rerunCheck", "ESC-488"),
     ("github", "forge/cancelAutoMerge", "ESC-488"),
     ("github", "forge/deleteBranch", "ESC-488"),
+    ("github", "forge/review", "ESC-494"),
 ];
 
 async fn host(i: usize) {
@@ -1352,6 +1367,7 @@ fn each_hosts_declared_writes_are_the_ones_its_plugin_serves() {
             ("forge/rerunCheck", w.rerun_check),
             ("forge/cancelAutoMerge", w.cancel_auto_merge),
             ("forge/deleteBranch", w.delete_branch),
+            ("forge/review", w.review),
         ] {
             // Not played: a write the plugin does not know yet (the kit's `unsupported`), so not declared.
             let served = served(method).unwrap_or(false);

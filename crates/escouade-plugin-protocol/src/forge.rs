@@ -186,20 +186,31 @@ pub enum ReviewState {
     Commented,
 }
 
-/// A comment on a line of a review to publish.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// A comment on lines of a review to publish: its last line on `side`, and its first when it holds several (ESC-494).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ReviewLine {
     pub path: String,
     pub line: u32,
     pub body: String,
+    /// Its first line when it holds several (ESC-494); a host that comments one line alone puts it on `line`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_line: Option<u32>,
+    /// The base's side for a line removed, else the tip's (ESC-494).
+    #[serde(default, skip_serializing_if = "DiffSide::is_right")]
+    pub side: DiffSide,
 }
 
-/// A review to publish on a pull request, as the user validated it.
+/// A review to publish on a pull request, as the user validated it: its verdict, its text and its comments on lines, in
+/// one review of the host (« Ta relecture », ESC-494).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReviewDraft {
     pub state: ReviewState,
     pub body: String,
     pub lines: Vec<ReviewLine>,
+    /// The commit whose diff the user read (ESC-494), for the host to put the comments there; empty: its tip now.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub commit: String,
 }
 
 /// How much of its calls a host leaves, as its answers say.
@@ -371,6 +382,13 @@ pub enum DiffSide {
     Left,
     #[default]
     Right,
+}
+
+impl DiffSide {
+    /// The tip's side: what a line comment is on unless it says otherwise.
+    pub fn is_right(&self) -> bool {
+        *self == Self::Right
+    }
 }
 
 /// A comment of a thread: its first, or an answer.

@@ -163,6 +163,9 @@ mod modes;
 mod multi_repo_tests;
 mod multiticket;
 mod multiwt;
+mod myreview;
+#[cfg(test)]
+mod myreview_tests;
 #[cfg(feature = "desktop")]
 mod navigation;
 mod notify;

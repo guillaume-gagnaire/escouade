@@ -2803,6 +2803,8 @@ pub struct PersistedState {
     pub leftover_histories: Vec<String>,
     /// The reviews written by an agent, waiting for the user or published (ESC-66).
     pub pr_reviews: Vec<crate::prreview::PrReview>,
+    /// The user's own reviews waiting to be published (« Ta relecture », ESC-494), one by pull request.
+    pub pending_reviews: Vec<crate::myreview::PendingReview>,
     /// The scheduled tasks of every project (ESC-448): this machine's alone.
     pub scheduled: Vec<ScheduledTask>,
     /// The first launch's journey (ESC-504): where it stands on this installation, never in a project's file.

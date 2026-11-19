@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- `Forge::review` (« Ta relecture », ESC-494): a `ReviewLine` also says its range (`start_line`) and its side (`side`, the base's for a line removed), a `ReviewDraft` the commit read (`commit`), on escouade-plugin-protocol 0.1.5; a plugin that ignores them publishes as before. `errors::said` also reads a list of texts in `errors` (GitHub's 422: `["Line could not be resolved"]`).
+
 ## 0.1.3
 
 - `Forge`: the control of a pull request (ESC-488), `unsupported` by default: `control` (`forge/control`, a `PrControl`), `candidates` (`forge/candidates`, `Candidates`), `set_draft`, `request_reviewers`, `remove_reviewer`, `add_labels`, `remove_label`, `update_branch` (`UpdateMethod`), `rerun_check`, `cancel_auto_merge` and `delete_branch`, on the types of escouade-plugin-protocol 0.1.4.

@@ -130,7 +130,7 @@ fn the_hosts_files_take_their_lines_from_git_and_past_the_bounds_are_cut() {
     assert!(bare[0].lines.is_empty());
 }
 
-fn node(threads: usize) -> Value {
+pub(crate) fn node(threads: usize) -> Value {
     json!({
         "number": 12, "url": "https://github.com/acme/demo/pull/12", "title": "Lien magique",
         "state": "OPEN", "isDraft": false, "headRefName": "feat/lien", "baseRefName": "main",

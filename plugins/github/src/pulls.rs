@@ -834,6 +834,38 @@ pub fn line_comment_body(c: &LineComment, commit: &str) -> Value {
     body
 }
 
+/// What `POST /pulls/<n>/reviews` takes of a review (ESC-494, « Ta relecture »): its verdict, its text and its comments on
+/// lines, each on its side and its range as a line comment is (`line_comment_body`), all on the commit the user read when
+/// it is said (GitHub's tip now otherwise).
+pub fn review_body(review: &ReviewDraft) -> Value {
+    let event = match review.state {
+        ReviewState::Approved => "APPROVE",
+        ReviewState::ChangesRequested => "REQUEST_CHANGES",
+        ReviewState::Commented => "COMMENT",
+    };
+    let comments: Vec<Value> = review
+        .lines
+        .iter()
+        .map(|l| {
+            let side = match l.side {
+                DiffSide::Left => "LEFT",
+                DiffSide::Right => "RIGHT",
+            };
+            let mut c = json!({ "path": l.path, "line": l.line, "side": side, "body": l.body });
+            if let Some(start) = l.start_line.filter(|s| *s < l.line) {
+                c["start_line"] = json!(start);
+                c["start_side"] = json!(side);
+            }
+            c
+        })
+        .collect();
+    let mut body = json!({ "event": event, "body": review.body, "comments": comments });
+    if !review.commit.is_empty() {
+        body["commit_id"] = json!(review.commit);
+    }
+    body
+}
+
 /// A login, else « ? » for a user since deleted (GitHub's « ghost »).
 fn login(v: &Value) -> String {
     v["login"].as_str().unwrap_or("?").to_string()
@@ -1549,20 +1581,10 @@ impl Forge for Github {
         review: &'a ReviewDraft,
     ) -> BoxFuture<'a, Result<()>> {
         Box::pin(async move {
-            let event = match review.state {
-                ReviewState::Approved => "APPROVE",
-                ReviewState::ChangesRequested => "REQUEST_CHANGES",
-                ReviewState::Commented => "COMMENT",
-            };
-            let lines: Vec<Value> = review
-                .lines
-                .iter()
-                .map(|l| json!({ "path": l.path, "line": l.line, "side": "RIGHT", "body": l.body }))
-                .collect();
             self.write(
                 reqwest::Method::POST,
                 &format!("{}/pulls/{number}/reviews", Self::repo_path(repo)),
-                json!({ "event": event, "body": review.body, "comments": lines }),
+                review_body(review),
             )
             .await?;
             Ok(())

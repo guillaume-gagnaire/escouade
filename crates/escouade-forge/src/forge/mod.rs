@@ -98,6 +98,13 @@ pub struct Writing {
     pub delete_branch: bool,
     /// Where it stands for its merge (`Forge::control`): a read, without which the merge box says less.
     pub control: bool,
+    /// « Ta relecture » (ESC-494): a review of the user's, its text, its verdict and its comments on lines in one
+    /// (`Forge::review`), that comments at least.
+    pub review: bool,
+    /// Its verdict may approve the pull request.
+    pub approve: bool,
+    /// Its verdict may ask for changes.
+    pub request_changes: bool,
 }
 
 impl Writing {
@@ -117,10 +124,15 @@ impl Writing {
         cancel_auto_merge: true,
         delete_branch: true,
         control: true,
+        review: true,
+        approve: true,
+        request_changes: true,
     };
     /// What the clients of GitLab, Bitbucket Cloud, Gitea and Azure DevOps do: comment, answer and resolve, not on a
     /// line nor open again (PR-9 tries them for real). Of the control of a pull request (ESC-488) they keep what they
-    /// did before, the merge (`Capabilities::merge_strategies`) and the auto-merge (`Capabilities::auto_merge`).
+    /// did before, the merge (`Capabilities::merge_strategies`) and the auto-merge (`Capabilities::auto_merge`). Their
+    /// review (ESC-494) is the one they published for an agent's (ESC-66): a text and a verdict, approving or asking for
+    /// changes (GitLab asks for none: its provider says so), its comments on lines left to the hosts that comment one.
     pub const ANSWERS: Self = Self {
         comment: true,
         line_comment: false,
@@ -136,6 +148,9 @@ impl Writing {
         cancel_auto_merge: false,
         delete_branch: false,
         control: false,
+        review: true,
+        approve: true,
+        request_changes: true,
     };
 }
 

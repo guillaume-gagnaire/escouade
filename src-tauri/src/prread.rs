@@ -713,6 +713,19 @@ impl Core {
             .unwrap_or_default()
     }
 
+    /// The pull request read whole as it is kept, fresh or not (« Ta relecture » places its remarks against it, ESC-494).
+    pub(crate) fn pr_contents_kept(
+        &self,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+    ) -> Option<PrContents> {
+        self.pr_contents
+            .lock()
+            .get(&key_of(project_id, host_repo, number))
+            .map(|k| k.contents.clone())
+    }
+
     /// How many times the pull request of `key` was marked stale.
     fn pr_mark(&self, key: &str) -> u64 {
         self.pr_marks.lock().get(key).copied().unwrap_or(0)

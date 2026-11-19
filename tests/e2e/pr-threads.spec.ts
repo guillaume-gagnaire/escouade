@@ -201,7 +201,7 @@ test('the threads: under their line, a line commented, an answer, resolved and r
   await expect(link.getByRole('textbox', { name: /ligne 3/ })).toHaveValue('Pourquoi **async** ici ?');
   await shots(page, 'pr-threads-compose');
   expect((await writes()).length).toBe(before);
-  await link.getByRole('button', { name: 'Commenter', exact: true }).click();
+  await link.getByRole('button', { name: 'Commenter maintenant', exact: true }).click();
   const mine = link.locator('.row[data-new="3"] + .under').getByRole('article');
   await expect(mine).toContainText('ada', { timeout: 30_000 });
   await expect(mine.locator('strong')).toHaveText('async');

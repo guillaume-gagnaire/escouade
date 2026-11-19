@@ -2,6 +2,26 @@
   {
     "asked": [
       {
+        "body": "{\"body\":\"Bien vu\",\"comments\":[{\"body\":\"Ici\",\"line\":3,\"path\":\"src/main.rs\",\"side\":\"RIGHT\"},{\"body\":\"Pourquoi l'enlever ?\",\"line\":9,\"path\":\"src/main.rs\",\"side\":\"LEFT\",\"start_line\":7,\"start_side\":\"LEFT\"}],\"commit_id\":\"abc\",\"event\":\"REQUEST_CHANGES\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/pulls/14768/reviews"
+      }
+    ],
+    "error": null,
+    "method": "forge/review",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
         "body": "{\"operationName\":\"ResolveThread\",\"query\":\"mutation ResolveThread($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id isResolved } } }\",\"variables\":{\"id\":\"4335329893\"}}",
         "headers": [
           ["accept", "*/*"],

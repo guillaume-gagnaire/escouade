@@ -429,11 +429,14 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `pr_detail`
 - `pr_log`
 - `pr_merge`
+- `pr_pending`
+- `pr_pending_change`
 - `pr_rerun`
 - `pr_review_discard`
 - `pr_review_note`
 - `pr_review_send`
 - `pr_review_start`
+- `pr_review_submit`
 - `pr_reviews`
 - `pr_write`
 - `project_code_host`

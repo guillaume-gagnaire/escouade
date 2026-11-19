@@ -25,6 +25,10 @@ export interface PrWriting {
   deleteBranch?: boolean;
   /** It reads where the pull request stands for its merge. */
   control?: boolean;
+  /** « Ta relecture » (ESC-494): a review of the user's, that comments at least; its verdict may approve, ask for changes. */
+  review?: boolean;
+  approve?: boolean;
+  requestChanges?: boolean;
 }
 
 export const NO_WRITING: PrWriting = { comment: false, lineComment: false, reply: false, resolve: false, reopen: false };

@@ -91,6 +91,18 @@ On a public repository, anyone can open a PR, and its title, diff, and comments 
 - The diff goes to that harness’s service, like everything you give an agent.
 - 40 comments at most, on lines of the new version.
 
+## Your review
+
+In a pull request’s view, “Your review” gathers what you say of it before you publish it, as a review on GitHub does.
+
+- **Your remarks**: “+” on a line of the Files tab, then “Add to my review” instead of “Comment now”. The remark stays under its line, marked “pending · not published”; you edit it or take it out. It waits on your machine, even if you close the view or the app.
+- **After a commit**, a remark follows its code if it moved; if its line is gone, it is marked “outdated”: it will go in your review’s text, with its place, or you take it out.
+- **The “Your review” button** of the header says how many remarks wait. Its panel has your text (in Markdown, optional except to request changes), the list of your remarks (a click leads to the line) and the verdict: “Comment”, “Approve” or “Request changes”. On your own pull request, only “Comment” is offered: the hosts refuse the rest.
+- **“Publish on GitHub”** sends it all in one review, under your account, on that click only. A refusal (token, rights, network, a line out of the diff) keeps it all pending and says why. “Give up my review” erases it all, after a confirmation.
+- **On a ticket’s pull request**, “Send it to the ticket’s agent too” (ticked for “Request changes”) gives it your text and your remarks as yours, then it fixes, checks and pushes, as with “Agent addresses the feedback”.
+
+Then the Conversation shows your review, and the “Pull requests” view and the ticket’s card read it again at once. No tool of the MCP server publishes a review in your place.
+
 ## Environments and deployments
 
 On GitHub, GitLab, and Bitbucket Cloud, Escouade follows the repository’s deployments after the merge. A done ticket’s card says where it runs, and “Tickets · Environments”, in the Kanban’s header, shows a lane per environment, from “Merged, not deployed yet” to production.

@@ -661,7 +661,9 @@ async fn a_validated_review_is_published_with_its_line_comments_then_its_verdict
             path: "src/login.ts".into(),
             line: 12,
             body: "Constant?".into(),
+            ..Default::default()
         }],
+        commit: String::new(),
     };
     let c = client(&server);
     c.review(&repo(), 42, &draft(ReviewState::ChangesRequested))

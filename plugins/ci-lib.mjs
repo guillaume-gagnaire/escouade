@@ -11,9 +11,9 @@ export const MANIFEST = 'escouade-plugin.json';
  * the module of `scripts/plugins-wasm.sh`, compiled against `crates/`. Out of this list once the crate is published, their
  * Cargo.lock written again (`sh scripts/plugin-lock.sh <name>`). GitHub 2.3.0 (ESC-452: a pull request read whole) waits for
  * escouade-plugin-kit 0.1.3 and escouade-plugin-protocol 0.1.4 (0.1.3, published from main with the 2.2.3, lacks the types of the
- * pull requests).
+ * pull requests); since ESC-494 (« Ta relecture »: a review's range, side and commit read), kit 0.1.4 and protocol 0.1.5.
  */
-export const AWAITING_PUBLICATION = { github: 'escouade-plugin-kit 0.1.3 and escouade-plugin-protocol 0.1.4' };
+export const AWAITING_PUBLICATION = { github: 'escouade-plugin-kit 0.1.4 and escouade-plugin-protocol 0.1.5' };
 
 /**
  * What judges or builds every plugin: a change there runs them all. `crates/` is the kit and the bench's library, the

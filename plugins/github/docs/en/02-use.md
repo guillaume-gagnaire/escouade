@@ -12,7 +12,7 @@ The plugin serves two things of Escouade on the same account: the GitHub code ho
 
 **Merge.** The merge follows what the repository allows (merge, squash, rebase). "Merge when green" asks for GitHub's auto-merge if the repository allows it; otherwise Escouade itself waits for the pull request to be approved and green, while the app runs.
 
-**Reviews.** The plugin reads the pull request's reviews and comments, with their threads. When you have an agent review a pull request, the plugin publishes at once what you kept: the text, the line comments and your choice ("Comment", "Request changes", "Approve"). It also replies under a line comment.
+**Reviews.** The plugin reads the pull request's reviews and comments, with their threads. "Your review" (Escouade 2.3): the plugin publishes at once, on your click, your text, your remarks on lines (a range, a line removed, on the commit you read) and your verdict ("Comment", "Approve", "Request changes"; only "Comment" on your own pull request). It also replies under a line comment.
 
 **A pull request whole** (Escouade 2.3). The plugin also reads a pull request's description, its commits, its changed files and its discussion threads, with their lines, their answers and their state (open, resolved, outdated), and the comments of the conversation. Escouade reads the lines of the diff from git, not from GitHub. Nothing is written on GitHub for it.
 

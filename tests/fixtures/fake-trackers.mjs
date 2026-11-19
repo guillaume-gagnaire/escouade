@@ -825,6 +825,8 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
               : 'Service Unavailable';
       return { status, body: { message } };
     };
+    // « Ta relecture » (ESC-494): the last verdict of the reviews the token's account (`ada`) gave on it, a comment aside.
+    const mineSays = (x) => (x.given ?? []).filter((r) => r.event !== 'COMMENT').at(-1)?.event;
     const node = (x) => ({
       number: x.number,
       url: `https://github.com/${x.repo ?? 'acme/demo'}/pull/${x.number}`,
@@ -843,8 +845,9 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       // `reviewers` the logins whose review is asked (ESC-65).
       latestOpinionatedReviews: {
         nodes: [
-          ...(x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : []),
+          ...(x.changesRequested || mineSays(x) === 'REQUEST_CHANGES' ? [{ state: 'CHANGES_REQUESTED' }] : []),
           ...Array.from({ length: x.approvals ?? (x.approved && !x.changesRequested ? 1 : 0) }, () => ({ state: 'APPROVED' })),
+          ...(mineSays(x) === 'APPROVE' ? [{ state: 'APPROVED' }] : []),
         ],
       },
       reviewThreads: { nodes: Array.from({ length: x.threads ?? (x.changesRequested ? 1 : 0) }, () => ({ isResolved: false })) },
@@ -987,14 +990,15 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       if (q.operationName === 'PrControl') {
         const x = g.pulls.find((y) => y.number === q.variables.number);
         if (!x) return send(200, { data: { repository: { deleteBranchOnMerge: false, pullRequest: null } } });
-        const approvals = x.approvals ?? (x.approved && !x.changesRequested ? 1 : 0);
-        const decision = x.changesRequested
-          ? 'CHANGES_REQUESTED'
-          : approvals > 0
-            ? 'APPROVED'
-            : x.reviewRequired
-              ? 'REVIEW_REQUIRED'
-              : null;
+        const approvals = (x.approvals ?? (x.approved && !x.changesRequested ? 1 : 0)) + (mineSays(x) === 'APPROVE' ? 1 : 0);
+        const decision =
+          x.changesRequested || mineSays(x) === 'REQUEST_CHANGES'
+            ? 'CHANGES_REQUESTED'
+            : approvals > 0
+              ? 'APPROVED'
+              : x.reviewRequired
+                ? 'REVIEW_REQUIRED'
+                : null;
         const state = x.draft
           ? 'DRAFT'
           : x.mergeable === 'CONFLICTING'
@@ -1188,9 +1192,45 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
           })),
         );
       if (m[2] === '/files') return send(200, pull.files ?? []);
+      // A review published (« Ta relecture », ESC-494), in the token's account: kept (`given`), its comments threads under
+      // their lines, its author no longer asked; `writeStatus` refuses it, `reviewStatus: 422` says a line is gone.
+      if (m[2] === '/reviews' && method === 'POST') {
+        const refused = writeRefusal(pull);
+        if (refused) return send(refused.status, refused.body);
+        if (pull.reviewStatus === 422)
+          return send(422, { message: 'Unprocessable Entity', errors: ['Line could not be resolved'], status: '422' });
+        const b = json() ?? {};
+        const id = 2000 + db.writes.length;
+        pull.given = [...(pull.given ?? []), { id, event: b.event, body: b.body ?? '', submitted: new Date().toISOString() }];
+        const threads = threadsOf(pull, true);
+        for (const [i, c] of (b.comments ?? []).entries())
+          threads.push({
+            id: `PRRT_${id}_${i}`,
+            path: c.path,
+            line: c.line,
+            startLine: c.start_line ?? null,
+            side: c.side ?? 'RIGHT',
+            comments: [{ id: id + i + 1, author: 'ada', body: c.body }],
+          });
+        pull.reviewers = (pull.reviewers ?? []).filter((r) => r !== 'ada');
+        pull.updatedAt = new Date().toISOString();
+        return send(200, { id });
+      }
       if (m[2] && method === 'POST') return send(200, { id: 1 });
-      if (m[2])
-        return send(200, pull.changesRequested ? [{ user: { login: 'bob' }, state: 'CHANGES_REQUESTED', body: 'Ajoute un test.' }] : []);
+      if (m[2]) {
+        const states = { APPROVE: 'APPROVED', REQUEST_CHANGES: 'CHANGES_REQUESTED', COMMENT: 'COMMENTED' };
+        const mine = (pull.given ?? []).map((r) => ({
+          id: r.id,
+          user: { login: 'ada' },
+          state: states[r.event] ?? 'COMMENTED',
+          body: r.body,
+          submitted_at: r.submitted,
+        }));
+        return send(200, [
+          ...(pull.changesRequested ? [{ user: { login: 'bob' }, state: 'CHANGES_REQUESTED', body: 'Ajoute un test.' }] : []),
+          ...mine,
+        ]);
+      }
       // Its description (ESC-452): `updatedAt` moves it, as a comment or a push does on GitHub.
       return lag(g.delays?.description)(200, {
         number: pull.number,

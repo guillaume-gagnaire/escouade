@@ -2,8 +2,8 @@
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","plugins/gitlab/README.fr.md","plugins/gitlab/docs/fr/","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.fr.md","plugins/gitea/docs/fr/","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs","design/pr-2-3/README.md","docs/TODO-2.3.md (Les PR dans Escouade)","src-tauri/src/prwrite.rs","plugins/github/src/pulls.rs"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383","ESC-452","ESC-474","ESC-488"]
-decisions: [104,166,187,196]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383","ESC-452","ESC-474","ESC-488","ESC-494"]
+decisions: [104,166,187,196,221]
 compared: null
 ---
 
@@ -168,3 +168,13 @@ PR-8 des PR dans Escouade. Ce que la vue de la PR change chez l'hébergeur pour 
 - **Le merge depuis la vue** (`pr_merge`) : la méthode choisie par l'utilisateur, puis, pour la PR d'un ticket, ce qu'ESC-62 fait d'un merge (le ticket « Terminé », la cible récupérée) ; la branche supprimée chez l'hébergeur et le worktree de l'agent retiré seulement quand l'hébergeur dit la PR mergée, jamais la branche d'un fork. Une PR d'agent mergée ainsi n'est pas comptée dans `pr_merged`, réservé à celles des tickets.
 - **Les refus** se nomment pour la fenêtre, en plus de ceux d'« Écrire sur une PR » : `conflict` (409, ou un hébergeur qui dit la PR non mergeable ou en conflit), `protected` (une approbation exigée, une règle de la branche protégée, une branche pas à jour) et `checkRequired` (un contrôle requis qui manque).
 - **Les droits du jeton** : un jeton GitHub classic `repo` suffit ; un jeton à droits fins demande Pull requests et Contents en écriture, et Actions en écriture pour relancer un job (docs du plugin GitHub, « Permissions »).
+
+## Ta relecture (ESC-494)
+
+PR-7 des PR dans Escouade. La relecture de l'utilisateur, publiée en une fois sous son compte et à son clic seulement (voir *Pull requests*, « Ta relecture »).
+
+- **Par l'opération de relecture** que les plugins d'hébergeur servaient déjà pour la relecture d'un agent (ESC-66) : `forge/review`, un `ReviewDraft` (son verdict, son texte, ses commentaires de lignes). Depuis la 2.3 (protocole 0.1.5, kit 0.1.4), chaque commentaire dit aussi sa plage (`startLine`) et son côté (`side`, la base pour une ligne supprimée), et la relecture le commit dont le diff a été lu (`commit`) ; un plugin qui les ignore publie comme avant.
+- **Déclarée par ses capacités** (`writing` : `review`, la relecture qui commente ; `approve` et `requestChanges`, les verdicts) : un verdict que l'hébergeur ne déclare pas n'est pas offert, et le panneau dit pourquoi. GitHub les déclare toutes, avec les commentaires de lignes (le plugin 2.3.0 les met sur leur plage, leur côté et le commit lu, en un seul `POST /pulls/<n>/reviews`). Gitea / Forgejo, Bitbucket Cloud et Azure DevOps déclarent les trois verdicts, que leur plugin savait déjà donner ; GitLab `review` et `approve` sans `requestChanges` (sa relecture publie ses notes et approuve, sans demande de changements). Sans essai réel ailleurs qu'au faux GitHub (PR-9) ; tant qu'ils ne commentent pas une ligne depuis Escouade, leur relecture n'a qu'un texte et un verdict.
+- **Sur sa propre PR**, le cœur refuse tout autre verdict que « Commenter » avant de demander quoi que ce soit : son auteur est le compte avec lequel l'hébergeur est lu (`Core::pr_me`).
+- **Les refus** : ceux d'« Écrire sur une PR », et `lines` pour un 422 d'une ligne que l'hébergeur n'a plus dans son diff (GitHub : `errors: ["Line could not be resolved"]`, que le kit lit maintenant dans la liste `errors`) ; le cœur relit alors le diff et dit dépassée la remarque qui a perdu sa ligne. Tout reste en attente.
+- **Le parcours de parité** de GitHub compte `forge/review` parmi ses opérations changées depuis le portage (`SINCE_THE_PORT`, `tests/fixtures/plugins/parity/github-host-since.json`), et le test des écritures déclarées vérifie que chaque hébergeur sert la relecture qu'il déclare.

@@ -418,7 +418,12 @@ impl Core {
     }
 
     /// The ticket whose pull request it is, in the project.
-    fn ticket_of_pr(&self, project_id: &str, number: u64, host_repo: &str) -> Option<Ticket> {
+    pub(crate) fn ticket_of_pr(
+        &self,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+    ) -> Option<Ticket> {
         self.tickets.read().iter().find_map(|t| {
             let tp = t.pr.as_ref().filter(|_| t.project_id == project_id)?;
             let full = format!("{}/{}", tp.namespace, tp.name);
@@ -513,7 +518,7 @@ impl Core {
 
     /// Written on its host (ESC-488): the following of the pull requests reads it soon (a ticket's, its auto-merge, its
     /// draft), and the window is told it changed: its view and the list « Pull requests » read it again at once.
-    fn pr_written(&self, project_id: &str, number: u64) {
+    pub(crate) fn pr_written(&self, project_id: &str, number: u64) {
         self.wake_ticket_prs();
         self.hub.emit(UiEvent::PrChanged {
             project_id: project_id.to_string(),
