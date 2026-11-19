@@ -18,10 +18,36 @@ pub fn sandbox_dir_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Opt
         .map(PathBuf::from)
 }
 
+/// The data folder of a test given none of its own (ESC-523): never the user's. Under nextest (`NEXTEST_RUN_ID`, which
+/// it gives each test and every program a test starts), `$ESCOUADE_TEST_DATA_DIR`, else [`shared_test_data_dir`]:
+/// shared by the tests and kept from one run to the next, so the pinned toolchain and Javy are downloaded once, while
+/// each test that compiles gives its own `ESCOUADE_DATA_DIR` for its copies.
+pub fn test_data_dir() -> Option<PathBuf> {
+    test_data_dir_from(|k| std::env::var_os(k))
+}
+
+pub fn test_data_dir_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
+    var("NEXTEST_RUN_ID")?;
+    Some(
+        var("ESCOUADE_TEST_DATA_DIR")
+            .filter(|d| !d.is_empty())
+            .map_or_else(shared_test_data_dir, PathBuf::from),
+    )
+}
+
+/// `escouade-test-data` in the system's cache folder (`%LOCALAPPDATA%`, `~/.cache`, `~/Library/Caches`). Not in the
+/// temporary folder: a test process of the app's crates has one of its own, removed after it (`test_tmp.rs`), and the
+/// toolchain would be downloaded again by each test.
+pub fn shared_test_data_dir() -> PathBuf {
+    dirs::cache_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("escouade-test-data")
+}
+
 /// The app's data folder as `escouade-plugin` reads it (the pinned Javy, the modules of the `run.js` plugins), moving
-/// nothing: the sandboxed folder, else `~/.escouade`.
+/// nothing: the sandboxed folder, else that of a test, else `~/.escouade`.
 pub fn tools_data_dir() -> PathBuf {
-    sandbox_dir().unwrap_or_else(|| {
+    sandbox_dir().or_else(test_data_dir).unwrap_or_else(|| {
         dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(DATA_DIR_NAME)
@@ -194,6 +220,31 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn a_test_has_a_data_folder_of_its_own_and_a_program_run_by_hand_has_none() {
+        use std::ffi::OsString;
+        let none = |_: &str| None::<OsString>;
+        assert_eq!(test_data_dir_from(none), None);
+        let nextest = |k: &str| (k == "NEXTEST_RUN_ID").then(|| OsString::from("run"));
+        assert_eq!(test_data_dir_from(nextest), Some(shared_test_data_dir()));
+        // Out of the temporary folder, which a test process of the app's crates has to itself.
+        assert!(
+            !shared_test_data_dir().starts_with(std::env::temp_dir())
+                || dirs::cache_dir().is_none()
+        );
+        let named = |k: &str| match k {
+            "NEXTEST_RUN_ID" => Some(OsString::from("run")),
+            "ESCOUADE_TEST_DATA_DIR" => Some(OsString::from("D:/tests")),
+            _ => None,
+        };
+        assert_eq!(test_data_dir_from(named), Some(PathBuf::from("D:/tests")));
+        // This test itself runs under nextest: it does not read the user's folder.
+        if std::env::var_os("NEXTEST_RUN_ID").is_some() {
+            let home = dirs::home_dir().unwrap().join(DATA_DIR_NAME);
+            assert_ne!(tools_data_dir(), home);
+        }
     }
 
     #[test]

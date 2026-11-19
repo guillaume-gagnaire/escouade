@@ -335,6 +335,12 @@ impl Held {
                 Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && cfg!(windows) => {
                     std::thread::sleep(Duration::from_millis(250));
                 }
+                // Its folder removed meanwhile (a copy of the cache taken by a pruning, ESC-523): made again.
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    let parent = path.parent().unwrap_or(Path::new("."));
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| format!("{}: {e}", parent.display()))?;
+                }
                 Err(e) => return Err(format!("{}: {e}", path.display())),
             }
         }
@@ -517,6 +523,7 @@ fn pinned_toolchain(data: &Path, say: &dyn Fn()) -> Result<PathBuf, String> {
     let _held = Held::take(tools.join(format!("rust-{VERSION}.lock")))?;
     if root.is_dir() {
         if same_as_noted(&root) {
+            crate::cache::old_toolchains(&tools, VERSION);
             return Ok(root);
         }
         log::warn!(
@@ -547,6 +554,8 @@ fn pinned_toolchain(data: &Path, say: &dyn Fn()) -> Result<PathBuf, String> {
     })();
     let _ = std::fs::remove_dir_all(&work);
     result?;
+    // The toolchain of a former version is no use to this program (ESC-523).
+    crate::cache::old_toolchains(&tools, VERSION);
     Ok(root)
 }
 
@@ -1012,14 +1021,28 @@ fn module_name(dir: &Path) -> Result<String, Failure> {
     Ok(format!("{}.wasm", name.replace('-', "_")))
 }
 
-/// The copy of a plugin a compilation works on, held until it is dropped.
+/// The copy of a plugin a compilation works on, held until it is dropped. Dropped, it notes what it weighs and keeps
+/// the cache within its bounds, itself left ([`crate::cache`], ESC-523).
 struct Copy {
     _held: Held,
+    /// The cache of the copies.
+    cache: PathBuf,
     work: PathBuf,
     /// The copy's root.
     src: PathBuf,
     /// The folder of its `Cargo.toml`.
     dir: PathBuf,
+}
+
+impl Drop for Copy {
+    fn drop(&mut self) {
+        crate::cache::note_size(&self.work);
+        crate::cache::prune(
+            &self.cache,
+            &crate::cache::Bounds::from_env(),
+            Some(&self.work),
+        );
+    }
 }
 
 /// `folder` copied to where it compiles, by its path and the compiler, for nothing around it to count.
@@ -1028,11 +1051,13 @@ fn copy_of(folder: &Path, cargo_file: &str, data: &Path) -> Result<Copy, Failure
     let absolute = std::path::absolute(folder).map_err(tool)?;
     let key = wasm::sha256(absolute.to_string_lossy().as_bytes());
     // By the compiler too: a target made by another rustc or wrapper gives a module that says nothing.
-    let work = crate::paths::plugin_rust_dir(data)
+    let cache = crate::paths::plugin_rust_dir(data);
+    let work = cache
         .join(format!("{VERSION}-{}", &canon::sha256()[..12]))
         .join(&key[..16]);
     std::fs::create_dir_all(&work).map_err(tool)?;
-    let _held = Held::take(work.join("lock")).map_err(Failure::Tools)?;
+    let _held = Held::take(work.join(crate::cache::LOCK)).map_err(Failure::Tools)?;
+    crate::cache::mark_used(&work);
     let src = work.join("src");
     if src.exists() {
         std::fs::remove_dir_all(&src).map_err(tool)?;
@@ -1042,6 +1067,7 @@ fn copy_of(folder: &Path, cargo_file: &str, data: &Path) -> Result<Copy, Failure
     let dir = dir.parent().unwrap_or(&src).to_path_buf();
     Ok(Copy {
         _held,
+        cache,
         work,
         src,
         dir,
@@ -1104,15 +1130,11 @@ pub fn build(
     let tool = |e: std::io::Error| Failure::Tools(e.to_string());
     let lock = check(folder, cargo_file)?;
     let root = toolchain(data, say).map_err(Failure::Tools)?;
-    let Copy {
-        _held,
-        work,
-        src,
-        dir,
-    } = copy_of(folder, cargo_file, data)?;
+    let copy = copy_of(folder, cargo_file, data)?;
+    let (src, dir) = (&copy.src, &copy.dir);
     let home = crate::paths::tools_dir(data).join("cargo-home");
-    let command = || cargo(&root, &home, &dir, &src, wrapper);
-    let target = work.join("target");
+    let command = || cargo(&root, &home, dir, src, wrapper);
+    let target = copy.work.join("target");
 
     let mut metadata = command();
     metadata.args([
@@ -1128,7 +1150,7 @@ pub fn build(
     }
     let read: Value =
         serde_json::from_slice(&o.stdout).map_err(|e| Failure::Tools(e.to_string()))?;
-    check_packages(&read, &lock, &src, &native_list())?;
+    check_packages(&read, &lock, src, &native_list())?;
 
     let mut compile = command();
     compile
@@ -1145,7 +1167,7 @@ pub fn build(
     if !o.status.success() {
         return Err(Failure::Tools(tail(&o.stderr)));
     }
-    let name = module_name(&dir)?;
+    let name = module_name(dir)?;
     let bytes = std::fs::read(target.join(TARGET).join("release").join(&name)).map_err(tool)?;
     wasm::reactor_form(&bytes).map_err(Failure::Tools)?;
     let text = std::fs::read_to_string(dir.join("Cargo.lock")).map_err(tool)?;

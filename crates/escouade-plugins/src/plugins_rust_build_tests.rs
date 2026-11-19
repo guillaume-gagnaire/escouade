@@ -549,9 +549,12 @@ fn program() -> PathBuf {
     dir.join(name)
 }
 
-/// The pinned toolchain, in the tools of this machine, downloaded by the first test that needs it.
+/// The pinned toolchain, downloaded by the first test that needs it into the data folder the tests share, never the
+/// user's (ESC-523, `paths::test_data_dir`): each test then compiles with a data folder of its own.
 fn toolchain() -> PathBuf {
-    rust::toolchain(&escouade_plugin_cli::paths::tools_data_dir(), &|| {}).unwrap()
+    let shared = escouade_plugin_cli::paths::test_data_dir()
+        .unwrap_or_else(escouade_plugin_cli::paths::shared_test_data_dir);
+    rust::toolchain(&shared, &|| {}).unwrap()
 }
 
 /// `escouade-plugin <args>` with data folder of its own, so no target to reuse, on the toolchain of the machine.
@@ -742,6 +745,106 @@ fn a_dependency_with_a_script_off_the_list_is_refused_before_it_runs() {
         said(&o)
     );
     assert!(!dir.join("packs").exists());
+}
+
+/// The copies of the cache of `data`, of every compiler.
+fn copies_of(data: &Path) -> Vec<PathBuf> {
+    let root = escouade_plugin_cli::paths::plugin_rust_dir(data);
+    std::fs::read_dir(&root)
+        .map(|c| {
+            c.flatten()
+                .filter(|c| !c.file_name().to_string_lossy().starts_with('.'))
+                .flat_map(|c| std::fs::read_dir(c.path()).into_iter().flatten().flatten())
+                .map(|e| e.path())
+                .filter(|p| p.is_dir())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The module of a `build --json`, by its SHA-256.
+fn module_sha(o: &Output) -> String {
+    assert!(o.status.success(), "{}", said(o));
+    let report: Value = serde_json::from_slice(&o.stdout).unwrap();
+    report["sha256"].as_str().unwrap().to_string()
+}
+
+/// ESC-523: two compilations at once in one cache bounded to nothing, each keeping the copy of the other while it
+/// works; a cache damaged then (a size that does not read, a copy half removed, a removal cut short) breaks no
+/// compilation; and `cache` says where it is, what it weighs, and empties it.
+#[test]
+fn two_builds_at_once_hold_and_a_damaged_cache_breaks_no_build() {
+    let tools = toolchain();
+    let goldens: Value = serde_json::from_slice(
+        &std::fs::read(root().join("crates/escouade-plugin-cli/goldens.json")).unwrap(),
+    )
+    .unwrap();
+    let golden = goldens["rust"]["module"].as_str().unwrap().to_string();
+    let data = test_dir("rust-build-data-cache");
+    let start = |dir: &Path| {
+        Command::new(program())
+            .args(["build", dir.to_str().unwrap(), "--json"])
+            .env("ESCOUADE_DATA_DIR", &data)
+            .env(rust::TOOLCHAIN_VAR, &tools)
+            .env(escouade_plugin_cli::cache::GB_VAR, "0")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap()
+    };
+    let (a, b) = (fixture("cache-a"), fixture("cache-b"));
+    let (one, two) = (start(&a), start(&b));
+    let (one, two) = (
+        one.wait_with_output().unwrap(),
+        two.wait_with_output().unwrap(),
+    );
+    assert_eq!(module_sha(&one), golden);
+    assert_eq!(module_sha(&two), golden);
+    // Bounded to nothing, each kept the copy of the other while it worked: one is left, or both when they ended at
+    // the same time (each held its own while it pruned).
+    let left = copies_of(&data);
+    assert!(!left.is_empty() && left.len() <= 2, "{left:?}");
+
+    // Damaged: sizes garbled, sources and part of the targets gone, a removal cut short, a stray file.
+    for copy in &left {
+        std::fs::write(copy.join("size"), "abîmé").unwrap();
+        let _ = std::fs::remove_dir_all(copy.join("src"));
+        let _ = std::fs::remove_dir_all(copy.join("target").join(rust::TARGET).join("release"));
+    }
+    let cache = escouade_plugin_cli::paths::plugin_rust_dir(&data);
+    std::fs::create_dir_all(cache.join(".trash-cut").join("target")).unwrap();
+    std::fs::write(cache.join("stray"), b"x").unwrap();
+    let o = play(&tools, &data, &["build", a.to_str().unwrap(), "--json"]);
+    assert_eq!(module_sha(&o), golden);
+    assert!(!cache.join(".trash-cut").exists());
+
+    // `cache` says it, `cache clear` empties it.
+    let o = play(&tools, &data, &["cache", "--json"]);
+    assert!(o.status.success(), "{}", said(&o));
+    let report: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(report["copies"]["path"], json!(cache));
+    let count = copies_of(&data).len();
+    assert!((1..=2).contains(&count), "{report}");
+    assert_eq!(report["copies"]["count"], count);
+    assert!(report["copies"]["bytes"].as_u64().unwrap() > 0, "{report}");
+    assert_eq!(report["copies"]["maxDays"], 7.0);
+    assert_eq!(report["toolchain"]["named"], true);
+    assert!(
+        report["toolchain"]["bytes"].as_u64().unwrap() > 0,
+        "{report}"
+    );
+    let o = play(&tools, &data, &["cache", "--lang", "fr"]);
+    let text = said(&o);
+    assert!(text.contains(&cache.display().to_string()), "{text}");
+    assert!(text.contains(&format!("{count} copies")), "{text}");
+    let o = play(&tools, &data, &["cache", "clear", "--lang", "en"]);
+    assert!(
+        said(&o).contains(&format!("{count} copies removed")),
+        "{}",
+        said(&o)
+    );
+    assert!(copies_of(&data).is_empty());
 }
 
 /// Issue #43, in Rust: the model of `create-escouade-plugin`, not built, then built by `escouade-plugin build` (on the

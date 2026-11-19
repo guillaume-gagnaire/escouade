@@ -4,6 +4,7 @@
 
 #[macro_use]
 pub mod i18n;
+pub mod cache;
 pub mod canon;
 pub mod cli;
 pub mod manifest;

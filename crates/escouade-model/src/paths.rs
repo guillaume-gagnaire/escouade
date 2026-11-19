@@ -279,9 +279,9 @@ fn data_dir_in(home: &Path, debug: bool, notes: &mut Vec<String>) -> PathBuf {
     migrate_dir(&old, &new, rename_patiently, notes)
 }
 
-/// `~/.escouade` (moved from `~/.claude-code-manager`), or the sandboxed folder.
+/// `~/.escouade` (moved from `~/.claude-code-manager`), or the sandboxed folder, or that of a test (ESC-523).
 pub fn default_data_dir() -> PathBuf {
-    if let Some(dir) = sandbox_dir() {
+    if let Some(dir) = sandbox_dir().or_else(escouade_plugin_cli::paths::test_data_dir) {
         return dir;
     }
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));

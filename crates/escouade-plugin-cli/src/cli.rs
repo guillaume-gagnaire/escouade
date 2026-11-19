@@ -33,6 +33,9 @@ pub fn usage(lang: Lang) -> String {
   escouade-plugin fetch <dossier>
       Télécharge les dépendances d'un plugin `run.wasm` depuis crates.io, sans rien lancer du
       plugin : `build` les trouve ensuite hors ligne, comme au store.
+  escouade-plugin cache [clear] [--json]
+      Dit où sont les copies des compilations `run.wasm`, la chaîne d'outils et les dépendances,
+      et ce qu'elles pèsent ; `clear` retire les copies qu'aucune compilation ne tient.
   escouade-plugin dev <dossier> [--secret <clé>=<valeur>]... [--escouade <version>]
       Le faux Escouade : lance le plugin, puis envoie ce que tu tapes :
         fact <nom> [json]       un fait (events/fact), ex. fact ticket.column
@@ -46,7 +49,9 @@ Un plugin `run.js` tourne en WASM, sans Node : la Javy épinglée ({javy}) est t
 premier besoin et vérifiée par son SHA-256 (ESCOUADE_JAVY en nomme une autre).
 Un plugin `run.wasm` se compile en Rust par une chaîne d'outils privée (rustc {rust}, {target}),
 téléchargée à son premier besoin dans le dossier des outils d'Escouade et vérifiée à chaque usage
-(ESCOUADE_RUST_TOOLCHAIN en nomme une autre). Il lui faut un Cargo.lock.
+(ESCOUADE_RUST_TOOLCHAIN en nomme une autre). Il lui faut un Cargo.lock. Il se compile dans une
+copie de son dossier, gardée pour la compilation suivante : une copie qui n'a pas servi depuis
+7 jours part, puis les plus anciennes au-delà de 5 Go (ESCOUADE_RUST_CACHE_DAYS, ESCOUADE_RUST_CACHE_GB).
 
 Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version d'Escouade, pour écrire pour une
   version à venir : la plage `escouade` du manifeste et ce que voit `initialize` se font contre elle (celle de
@@ -72,6 +77,9 @@ Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version
   escouade-plugin fetch <folder>
       Downloads the dependencies of a `run.wasm` plugin from crates.io, running nothing of the
       plugin: `build` then finds them offline, as at the store.
+  escouade-plugin cache [clear] [--json]
+      Says where the copies of the `run.wasm` compilations, the toolchain and the dependencies
+      are, and what they weigh; `clear` removes the copies no compilation holds.
   escouade-plugin dev <folder> [--secret <key>=<value>]... [--escouade <version>]
       The fake Escouade: starts the plugin, then sends what you type:
         fact <name> [json]       a fact (events/fact), e.g. fact ticket.column
@@ -85,7 +93,9 @@ A `run.js` plugin runs in WASM, without Node: the pinned Javy ({javy}) is downlo
 time it is needed and checked by its SHA-256 (ESCOUADE_JAVY names another).
 A `run.wasm` plugin compiles in Rust by a private toolchain (rustc {rust}, {target}), downloaded the
 first time it is needed into Escouade's tools folder and checked at each use
-(ESCOUADE_RUST_TOOLCHAIN names another). It needs a Cargo.lock.
+(ESCOUADE_RUST_TOOLCHAIN names another). It needs a Cargo.lock. It compiles in a copy of its
+folder, kept for the next compilation: a copy unused for 7 days goes, then the oldest beyond
+5 GB (ESCOUADE_RUST_CACHE_DAYS, ESCOUADE_RUST_CACHE_GB).
 
 Options: --lang fr|en; --escouade <version> plays the plugin as this version of Escouade, to write for a
   version to come: the manifest's `escouade` range and what `initialize` shows go by it (this
@@ -178,6 +188,19 @@ pub fn main(args: Vec<String>, more: Option<More>) -> i32 {
         // Built without escouade-js, it plays no `run.js` plugin: the release checks it is there.
         return i32::from(wasm::escouade_js().is_err());
     }
+    if command == "cache" {
+        let json = args.iter().any(|a| a == "--json");
+        return match args.get(1).map(String::as_str) {
+            None | Some("--json" | "--lang") => {
+                cache_report(&crate::paths::tools_data_dir(), lang, json)
+            }
+            Some("clear") => cache_clear(&crate::paths::tools_data_dir(), lang),
+            Some(_) => {
+                eprint!("{}", usage(lang));
+                2
+            }
+        };
+    }
     let Some(folder) = args
         .get(1)
         .filter(|a| !a.starts_with("--"))
@@ -237,6 +260,154 @@ pub fn main(args: Vec<String>, more: Option<More>) -> i32 {
             2
         }
     }
+}
+
+/// `cache`: where the compilations of the `run.wasm` plugins keep their copies, what they weigh and their bounds, and
+/// what the toolchain, cargo's home and the modules of the `run.js` plugins weigh beside them (ESC-523).
+fn cache_report(data: &Path, lang: Lang, json: bool) -> i32 {
+    use crate::cache;
+    let copies = crate::paths::plugin_rust_dir(data);
+    let used = cache::usage(&copies);
+    let bounds = cache::Bounds::from_env();
+    let named = std::env::var_os(rust::TOOLCHAIN_VAR)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from);
+    let toolchain = named.clone().unwrap_or_else(|| rust::toolchain_dir(data));
+    let home = crate::paths::tools_dir(data).join("cargo-home");
+    let modules = crate::paths::plugin_wasm_dir(data);
+    let days = bounds.age.as_secs_f64() / 86_400.0;
+    let gb = bounds.bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    if json {
+        let report = json!({
+            "data": data,
+            "copies": {
+                "path": copies,
+                "count": used.copies,
+                "busy": used.busy,
+                "bytes": used.bytes,
+                "maxDays": days,
+                "maxGb": gb,
+            },
+            "toolchain": {
+                "path": toolchain,
+                "bytes": cache::size_of(&toolchain),
+                "named": named.is_some(),
+            },
+            "cargoHome": { "path": home, "bytes": cache::size_of(&home) },
+            "modules": { "path": modules, "bytes": cache::size_of(&modules) },
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_default()
+        );
+        return 0;
+    }
+    let size = |p: &Path| {
+        if p.exists() {
+            cache::human(cache::size_of(p), lang)
+        } else {
+            tr_in!(lang, "pas encore là", "not there yet")
+        }
+    };
+    let n = |x: f64| {
+        let t = format!("{x}");
+        if matches!(lang, Lang::Fr) {
+            t.replace('.', ",")
+        } else {
+            t
+        }
+    };
+    println!(
+        "{}",
+        tr_in!(
+            lang,
+            "Copies des compilations run.wasm : {}\n  {} copies, {} ({} en cours) ; bornes : {} jours sans servir, {} Go ({}, {})",
+            "Copies of the run.wasm compilations: {}\n  {} copies, {} ({} in use); bounds: {} days unused, {} GB ({}, {})",
+            copies.display(),
+            used.copies,
+            cache::human(used.bytes, lang),
+            used.busy,
+            n(days),
+            n(gb),
+            cache::DAYS_VAR,
+            cache::GB_VAR
+        )
+    );
+    println!(
+        "{}",
+        tr_in!(
+            lang,
+            "Chaîne d'outils (rustc {}) : {}, {}{}",
+            "Toolchain (rustc {}): {}, {}{}",
+            rust::VERSION,
+            toolchain.display(),
+            size(&toolchain),
+            if named.is_some() {
+                format!(" ({})", rust::TOOLCHAIN_VAR)
+            } else {
+                String::new()
+            }
+        )
+    );
+    println!(
+        "{}",
+        tr_in!(
+            lang,
+            "Dépendances (cargo-home) : {}, {} ; cargo y retire lui-même ce qui n'a pas servi depuis un mois (trois pour les archives)",
+            "Dependencies (cargo-home): {}, {}; cargo itself removes from it what has not served for a month (three for the archives)",
+            home.display(),
+            size(&home)
+        )
+    );
+    println!(
+        "{}",
+        tr_in!(
+            lang,
+            "Modules des plugins run.js : {}, {}",
+            "Modules of the run.js plugins: {}, {}",
+            modules.display(),
+            size(&modules)
+        )
+    );
+    println!(
+        "{}",
+        tr_in!(
+            lang,
+            "`escouade-plugin cache clear` retire les copies qu'aucune compilation ne tient.",
+            "`escouade-plugin cache clear` removes the copies no compilation holds."
+        )
+    );
+    0
+}
+
+/// `cache clear`: removes every copy of the compilations that none holds now.
+fn cache_clear(data: &Path, lang: Lang) -> i32 {
+    let copies = crate::paths::plugin_rust_dir(data);
+    let pruned = crate::cache::clear(&copies);
+    let left = crate::cache::usage(&copies);
+    println!(
+        "{}",
+        tr_in!(
+            lang,
+            "{} copies retirées ({}) de {}",
+            "{} copies removed ({}) from {}",
+            pruned.copies,
+            crate::cache::human(pruned.bytes, lang),
+            copies.display()
+        )
+    );
+    if left.busy > 0 {
+        println!(
+            "{}",
+            tr_in!(
+                lang,
+                "{} copies gardées : une compilation les tient",
+                "{} copies kept: a compilation holds them",
+                left.busy
+            )
+        );
+    }
+    0
 }
 
 /// The manifest of `folder`, or what is wrong with it, said on the standard error.
