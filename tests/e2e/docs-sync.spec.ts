@@ -48,7 +48,8 @@ test('the Docs tab’s badge counts what to share, « Synchroniser » shares it,
   git(app.repo, 'add', '.');
   git(app.repo, 'commit', '-qm', 'spec');
   const remote = path.join(app.root, 'remote.git');
-  execFileSync('git', ['init', '-q', '--bare', remote]);
+  // Its HEAD named: a runner whose git starts on master would leave the teammate's clone pulling a branch that is not.
+  execFileSync('git', ['init', '-q', '--bare', '--initial-branch=main', remote]);
   git(app.repo, 'remote', 'add', 'origin', remote);
   git(app.repo, 'push', '-q', '-u', 'origin', 'main');
   const other = path.join(app.root, 'other');
