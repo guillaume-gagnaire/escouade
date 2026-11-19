@@ -5,7 +5,8 @@
 //!
 //! - **Its module.** The bundle is compiled by `escouade_plugin_cli::wasm` (ESC-328: the pinned Javy, escouade-js and
 //!   the prelude, the same in the store's image), deterministically. Then Cranelift precompiles it for this machine. Both are kept in the app's cache ([`Modules`]): the module by the
-//!   SHA-256 of what made it, the precompiled one by the app's version too, made again after an update.
+//!   SHA-256 of what made it, the precompiled one by the app's version too, made again after an update; one made by
+//!   another version of wasmtime is refused ([`module_version`]) and made again.
 //! - **A Rust module** is a reactor compiled to `wasm32-wasip1` (`crate-type = ["cdylib"]`): no `_start`, and
 //!   `escouade-turn` (rustc exports no `_initialize` from a cdylib unless told to: it is called when it is there). It is `plugin.wasm` beside the manifest: what the store published, or what the author built.
 //!   Precompiled and kept as a bundle's, under the SHA-256 of the module itself. It gets no first line.
@@ -88,6 +89,10 @@ const FILES_BYTES: usize = 1 << 20;
 /// The most linear memory `limits.memoryBytes` gets a plugin.
 pub const MEMORY_MAX: u64 = 256 << 20;
 
+/// The most a plugin may write on its standard output, and on its standard error, in one turn (ESC-542): it waits in
+/// the app's memory until the turn ends. As much as its biggest memory.
+pub const OUTPUT_MAX: usize = MEMORY_MAX as usize;
+
 /// The longest turn `limits.turnSeconds` gets a plugin.
 pub const TURN_MAX: Duration = Duration::from_secs(10);
 
@@ -132,12 +137,24 @@ impl Default for Limits {
 
 // ---- The module ------------------------------------------------------------------------------------------------
 
+/// The exact version of wasmtime the app is built with: its pin, read by build.rs.
+pub const WASMTIME_VERSION: &str = env!("ESCOUADE_WASMTIME_VERSION");
+
+/// What a precompiled module carries of the wasmtime that made it, and what [`engine`] requires to load one: its exact
+/// version. wasmtime's own key is its major version alone, and a module of the version before a correction (50.0.1
+/// under 50.0.2, ESC-542) must be made again, whatever the app's version says.
+pub fn module_version() -> String {
+    format!("wasmtime {WASMTIME_VERSION}")
+}
+
 /// The engine of every plugin: Cranelift, the epoch ticked by a thread of its own; one for the app.
 pub fn engine() -> &'static Engine {
     static ENGINE: OnceLock<Engine> = OnceLock::new();
     ENGINE.get_or_init(|| {
         let mut c = Config::new();
         c.epoch_interruption(true);
+        c.module_version(wasmtime::ModuleVersionStrategy::Custom(module_version()))
+            .expect("the key of the precompiled modules");
         let e = Engine::new(&c).expect("wasmtime's engine");
         let ticker = e.clone();
         std::thread::Builder::new()
@@ -418,7 +435,7 @@ fn precompiled(path: &Path) -> Option<Module> {
     // Read whole, not mapped: under Windows a mapped file could be neither replaced nor taken out of the cache.
     let pre = std::fs::read(path).ok()?;
     // SAFETY: a file this app wrote itself (`Module::serialize`) into its own cache, never one received;
-    // wasmtime checks it was made by this same version and configuration.
+    // wasmtime checks it was made by this same version ([`module_version`]) and configuration.
     match unsafe { Module::deserialize(engine(), &pre) } {
         Ok(m) => Some(m),
         Err(e) => {
@@ -444,14 +461,31 @@ pub fn reactor(bytes: &[u8]) -> Result<Module, String> {
 
 #[derive(Clone, Default)]
 struct Inbox(Arc<Mutex<VecDeque<u8>>>);
-#[derive(Clone, Default)]
-struct Outbox(Arc<Mutex<Vec<u8>>>);
+/// One of its two output streams, read at the end of each turn; `.1` names it for the journal.
+#[derive(Clone)]
+struct Outbox(Arc<Mutex<Vec<u8>>>, &'static str);
 
 impl Outbox {
+    fn new(stream: &'static str) -> Self {
+        Self(Arc::default(), stream)
+    }
+
     fn take(&self) -> Vec<u8> {
         std::mem::take(&mut *self.0.lock().unwrap_or_else(|e| e.into_inner()))
     }
 }
+
+/// An output past [`OUTPUT_MAX`]: what stops the instance, said in its journal as it is.
+#[derive(Debug)]
+struct Overflow(String);
+
+impl std::fmt::Display for Overflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Overflow {}
 
 impl IsTerminal for Inbox {
     fn is_terminal(&self) -> bool {
@@ -490,11 +524,21 @@ impl InputStream for Inbox {
 }
 #[wasmtime_wasi::async_trait]
 impl OutputStream for Outbox {
+    /// Past [`OUTPUT_MAX`] in one turn, the instance is stopped: what waits is held in the app's memory.
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
-        self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .extend_from_slice(&bytes);
+        let mut q = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if q.len() + bytes.len() > OUTPUT_MAX {
+            // The instance is done: what it wrote goes now, not with it.
+            *q = Vec::new();
+            return Err(wasmtime_wasi::p2::StreamError::Trap(wasmtime::Error::new(
+                Overflow(format!(
+                    "it wrote more than {} MiB on its {} in one turn",
+                    OUTPUT_MAX >> 20,
+                    self.1
+                )),
+            )));
+        }
+        q.extend_from_slice(&bytes);
         Ok(())
     }
     fn flush(&mut self) -> StreamResult<()> {
@@ -691,8 +735,8 @@ impl Instance {
         .map_err(crashed)?;
         w(linker.func_wrap("escouade", "call", escouade_call)).map_err(crashed)?;
         let inbox = Inbox::default();
-        let outbox = Outbox::default();
-        let errbox = Outbox::default();
+        let outbox = Outbox::new("standard output");
+        let errbox = Outbox::new("standard error");
         // No folder, no network, no environment, no argument: only the three streams.
         let wasi = WasiCtxBuilder::new()
             .stdin(inbox.clone())
@@ -786,6 +830,11 @@ impl Instance {
             {
                 Ok(())
             }
+            Err(e) if e.downcast_ref::<Overflow>().is_some() => Err(Fault::Crashed(
+                e.downcast_ref::<Overflow>()
+                    .map(|o| o.0.clone())
+                    .unwrap_or_default(),
+            )),
             Err(e) => Err(match e.downcast_ref::<wasmtime::Trap>() {
                 Some(wasmtime::Trap::Interrupt) => Fault::Timeout(within),
                 _ => {

@@ -11,6 +11,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Plugins : la page d’un plugin range ses réglages et ses secrets dans les groupes qu’il déclare, décrit chaque secret et accepte un texte sur plusieurs lignes, comme une configuration OpenVPN, collé ou importé d’un fichier. Un tel secret, gardé, ne se relit plus : il dit sa taille et se remplace.
 - Plugins : une commande qu’un plugin lance peut désormais contenir des jokers (un nombre, un port, un nom, un programme qu’il a lancé, un fichier de son dossier), chacun un seul mot que l’app vérifie avant de lancer quoi que ce soit, jamais une option. La fenêtre d’installation et l’onglet Permissions les montrent en pastilles de mots.
 - Un secret long (une configuration VPN avec ses certificats, jusqu’à 64 Kio) se garde maintenant au trousseau de Windows, qui refusait plus de 1 280 caractères : il y est découpé en morceaux et vérifié à chaque lecture.
+- Sécurité : les plugins tournent sur wasmtime 50.0.2 (RUSTSEC-2026-0566 et RUSTSEC-2026-0567), leurs modules précompilés par l’ancienne version sont refaits, et un plugin qui écrit plus de 256 Mio sur sa sortie en un tour est arrêté au lieu de remplir la mémoire de la machine.
 
 ## [2.2.4] — 2026-11-18
 

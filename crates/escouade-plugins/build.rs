@@ -19,4 +19,23 @@ fn main() {
         })
         .expect("the app's version in src-tauri/Cargo.toml");
     println!("cargo:rustc-env=ESCOUADE_APP_VERSION={version}");
+
+    // wasmtime's exact version (`ESCOUADE_WASMTIME_VERSION`), pinned `=x.y.z` in this crate's Cargo.toml: the key of
+    // the precompiled modules (`wasm::module_version`, ESC-542).
+    let own = "Cargo.toml";
+    println!("cargo:rerun-if-changed={own}");
+    let text = std::fs::read_to_string(own).expect("crates/escouade-plugins/Cargo.toml");
+    let wasmtime = text
+        .lines()
+        .find_map(|l| {
+            let rest = l.trim().strip_prefix("wasmtime")?.trim_start();
+            let pin = rest.strip_prefix('=')?.split('"').nth(1)?;
+            Some(
+                pin.strip_prefix('=')
+                    .expect("wasmtime pinned exactly (`=x.y.z`)")
+                    .to_string(),
+            )
+        })
+        .expect("wasmtime's version in crates/escouade-plugins/Cargo.toml");
+    println!("cargo:rustc-env=ESCOUADE_WASMTIME_VERSION={wasmtime}");
 }

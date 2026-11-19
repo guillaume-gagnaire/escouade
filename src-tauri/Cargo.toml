@@ -241,7 +241,7 @@ escouade-model = { path = "../crates/escouade-model", features = ["testing"] }
 # The harnesses as the tests have them: no program of the machine found, no keychain read (`locate`, `signin`).
 escouade-engines = { path = "../crates/escouade-engines", features = ["testing"] }
 # The modules and the archives the tests of the plugins make by hand (those that stay here: a `core`, the fake services).
-wasmtime = { version = "=50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation", "call-hook"] }
+wasmtime = { version = "=50.0.2", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation", "call-hook"] }
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
 # The host as the tests start it (the secrets in memory, the runtime of the workspace's plugins, the fake isola).

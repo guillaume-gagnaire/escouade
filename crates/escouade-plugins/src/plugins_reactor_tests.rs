@@ -570,6 +570,62 @@ async fn a_module_is_precompiled_once_by_its_sha256_and_again_for_a_new_version_
     assert_eq!(names().len(), 2);
 }
 
+/// A module precompiled by another wasmtime, under the same version of the app (ESC-542: 50.0.1 before 50.0.2, a build
+/// of development that kept its number): wasmtime's own check is on its major version alone, so the engine's key holds
+/// its exact version. Never loaded; precompiled again, without an error, then loaded from the cache.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_module_precompiled_by_another_version_of_wasmtime_is_never_loaded_and_made_again() {
+    let bytes = std::fs::read(fixture().join(wasm::MODULE_FILE)).unwrap();
+    // The engine of the app before: the same configuration, wasmtime's default key (its major version, « 50 »); and one
+    // that says it is the previous correction.
+    let old = |version: Option<&str>| {
+        let mut c = wasmtime::Config::new();
+        c.epoch_interruption(true);
+        if let Some(v) = version {
+            c.module_version(wasmtime::ModuleVersionStrategy::Custom(v.to_string()))
+                .unwrap();
+        }
+        let engine = wasmtime::Engine::new(&c).unwrap();
+        wasmtime::Module::new(&engine, &bytes)
+            .unwrap()
+            .serialize()
+            .unwrap()
+    };
+    assert!(wasm::module_version().starts_with("wasmtime 50.0."));
+    assert_ne!(wasm::module_version(), "wasmtime 50.0.1");
+    for (name, pre) in [
+        ("default", old(None)),
+        ("previous", old(Some("wasmtime 50.0.1"))),
+    ] {
+        // SAFETY: the bytes of a serialization made just above.
+        let refused = unsafe { wasmtime::Module::deserialize(wasm::engine(), &pre) }
+            .err()
+            .map(|e| format!("{e:#}"))
+            .unwrap_or_default();
+        assert!(
+            refused.contains("incompatible version"),
+            "{name}: {refused}"
+        );
+
+        let w = loaded(&format!("old-wasmtime-{name}"), Limits::default());
+        let native =
+            w.rt.modules()
+                .dir()
+                .join(format!("{}-2.2.0.cwasm", wasm::sha256(&bytes)));
+        std::fs::create_dir_all(native.parent().unwrap()).unwrap();
+        std::fs::write(&native, &pre).unwrap();
+        assert_eq!(
+            w.rt.prepare(ID).unwrap().join().unwrap(),
+            Ok(Made::Precompiled),
+            "{name}: the module of the other wasmtime is not loaded"
+        );
+        assert_ne!(std::fs::read(&native).unwrap(), pre, "{name}: replaced");
+        assert_eq!(w.rt.prepare(ID).unwrap().join().unwrap(), Ok(Made::Cache));
+        w.rt.call(ID, "probe/turns", json!({})).await.unwrap();
+        w.rt.shutdown();
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_plugin_without_its_module_or_with_no_reactor_is_refused_and_says_why() {
     // Gone before it is loaded (ESC-440): once loaded, its folder in development is watched, and a removal then reads
