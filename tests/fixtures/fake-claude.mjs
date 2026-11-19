@@ -2645,7 +2645,9 @@ function startSession() {
   // A user message that is a key of the JSON file $FAKE_CLAUDE_DEMO (tests/site-shots) plays its steps, a few tens of
   // milliseconds apart: { thinking }, { text } (streamed markdown), { tool: 'Edit', file, old, new } (made in the file of the
   // agent's folder, its patch computed from it), { tool: 'Write', file, content }, { tool: 'Bash', command, description,
-  // output }, { tool: 'Read', file, lines }, { tool: 'TodoWrite', todos }, { send: [files], caption } (SendUserFile, files of
+  // output } (with `ask`: its permission asked first, as Claude Code asks for a command outside Bypass; allowed, it runs and
+  // the turn goes on, denied, the refusal is its result and the turn goes on; ESC-505), { tool: 'Read', file, lines },
+  // { tool: 'TodoWrite', todos }, { send: [files], caption } (SendUserFile, files of
   // the agent's folder), { question: [questions] } (waits for the answer, then goes on), { hold: true } (the turn stays at
   // work: its last tool call on the card), { usage } (the session's totals so far). The turn ends with a result unless it
   // holds.
@@ -2694,6 +2696,42 @@ function startSession() {
       fs.writeFileSync(abs(step.file), step.content);
       const id = call('Write', { file_path: abs(step.file), content: step.content });
       toolResult(id, `File created successfully at: ${abs(step.file)}`);
+    } else if (step.tool === 'Bash' && step.ask) {
+      const input = { command: step.command, description: step.description ?? '' };
+      const tuid = call('Bash', input);
+      pendingAnswer = {
+        id: 'req_demo_perm',
+        tuid,
+        kind: 'demoAsk',
+        then: (r) => {
+          if (r.behavior === 'allow')
+            toolResult(tuid, step.output ?? '', { tool_use_result: { stdout: step.output ?? '', stderr: '', interrupted: false } });
+          else
+            out({
+              type: 'user',
+              message: {
+                role: 'user',
+                content: [{ type: 'tool_result', tool_use_id: tuid, content: `Refusé : ${r.message}`, is_error: true }],
+              },
+              parent_tool_use_id: null,
+            });
+          next();
+        },
+      };
+      out({
+        type: 'control_request',
+        request_id: 'req_demo_perm',
+        request: {
+          subtype: 'can_use_tool',
+          tool_name: 'Bash',
+          input,
+          tool_use_id: tuid,
+          permission_suggestions: [
+            { type: 'addRules', rules: [{ toolName: 'Bash', ruleContent: step.command }], behavior: 'allow', destination: 'localSettings' },
+          ],
+        },
+      });
+      return;
     } else if (step.tool === 'Bash') {
       const id = call('Bash', { command: step.command, description: step.description ?? '' });
       if (!step.hold) toolResult(id, step.output ?? '', { tool_use_result: { stdout: step.output ?? '', stderr: '', interrupted: false } });
@@ -3389,7 +3427,7 @@ function startSession() {
     pendingAnswer = null;
     const r = resp.response ?? {};
     if (p.kind === 'subagent') return subagentAnswered(p, r);
-    if (p.kind === 'read') return p.then(r);
+    if (p.kind === 'read' || p.kind === 'demoAsk') return p.then(r);
     if (p.kind === 'question') {
       const answers = r.updatedInput?.answers ?? {};
       toolResult(p.tuid, `Réponses : ${JSON.stringify(answers)}`, { tool_use_result: { answers } });

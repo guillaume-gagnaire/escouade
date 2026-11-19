@@ -265,9 +265,11 @@
     untrack(() => {
       app.composerPut = null;
       const rest = text.replace(/^\/\S*\s*/, '');
-      text = rest ? `${put.text} ${rest}` : `${put.text} `;
+      // A message proposed by the first launch (ESC-505) takes the whole field, and leaves the focus where it is.
+      text = put.replace ? put.text : rest ? `${put.text} ${rest}` : `${put.text} `;
       queueMicrotask(() => {
         autosize();
+        if (put.replace) return;
         ta?.focus();
         ta?.setSelectionRange(text.length, text.length);
       });

@@ -2,8 +2,8 @@
 title: "À découvrir"
 subject: "fenetre"
 sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-decouverte.png","design/onboarding-2-3/captures/c-decouverte-clair-1024.png"]
-tickets: ["ESC-503","ESC-506"]
-decisions: [200]
+tickets: ["ESC-503","ESC-505","ESC-506"]
+decisions: [200,215]
 compared: null
 ---
 
@@ -40,6 +40,7 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 - Ce que dit chaque découverte avant le geste : le poids d'un téléchargement (Whisper « base », 148 Mo, et rien de ce qu'on dit ne quitte la machine), le quota qu'un message à un agent consomme (le pilote auto, la conversation vocale, un 2ᵉ agent, « Proposer des commandes », la relecture), le jeton gardé au trousseau et le plugin installé sans réseau d'un hébergeur, le réseau du store, le jeton du serveur MCP qui n'écoute que sur la machine.
 - **Rien ne s'installe, ne se connecte, ne se télécharge ni ne s'envoie depuis la découverte** : « Essayer » ouvre le bon écran et pose une bulle sur le vrai contrôle ; le geste reste celui de l'utilisateur, sur ce contrôle, qui dit lui-même son poids ou son coût avant (le micro propose le téléchargement du modèle avec sa taille, la conversation vocale celui de sa voix).
 - Sans projet, « Essayer » d'une découverte de projet ouvre « Nouveau projet ». Sans agent, la dictée, la voix et l'ouverture d'une PR montrent « Nouvel agent ».
+- Ce que fait le premier lancement n'en coche aucune : le premier projet (un dossier, un clone, la démonstration), son premier agent et la commande que cet agent lance (ce n'est pas « Lancer le projet ») ; un agent par projet n'est pas « Un 2ᵉ agent ».
 
 ### Seulement ce qui est possible ici
 
@@ -53,6 +54,7 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 - Une station : pleine faite (« fait »), creuse à essayer (ce qu'elle demande : « 148 Mo, local », « un jeton, au trousseau »), en pointillés écartée, grise pas sur ce poste. Celle choisie a un anneau ; par défaut, la première à essayer qui ne demande rien d'abord.
 - À droite (en 1024 × 728, en bas), le détail de la station choisie : son nom et son icône, sa phrase, « Avant le geste » et ce qu'elle demande, puis « Essayer » et « Écarter » ; « Y retourner » une fois faite ; « Remettre » une fois écartée ; pourquoi elle n'est pas là.
 - Les stations sont des boutons, au clavier ; le détail est annoncé poliment au lecteur d'écran. En 1024, les lignes sous les stations et la légende se cachent, et toutes les stations restent visibles au-dessus du détail. Thèmes clair et sombre.
+- Elle s'ouvre aussi depuis la fin du premier lancement : « Voir ce qu'il y a à découvrir » à côté de « Commencer » ; jamais d'elle-même.
 
 ### Écarter, tout masquer
 
@@ -62,8 +64,8 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 ### Les bulles au bon moment
 
 - Trois moments seulement (choix O11) : le micro survolé (la dictée, sur le micro, quand le pointeur s'y pose sept dixièmes de seconde sans appuyer : un appui ouvre son propre panneau, que la bulle ne couvre pas), le premier ticket créé dans un projet (le pilote auto, sur son interrupteur, une fois le formulaire fermé) et une PR ouverte dans l'app (la relecture par un agent, sur « Relire avec un agent »).
-- **Une seule bulle à la fois, au plus une par session, jamais deux fois la même**, jamais pendant que l'utilisateur tape (une touche dans la seconde et demie), jamais pendant qu'un agent attend une permission, jamais sur une découverte faite, écartée, pas sur ce poste, ni après « Tout masquer ».
-- Un moment qui arrive pendant la frappe ou une permission attend qu'elles cessent (six secondes au plus), sinon il passe.
+- **Une seule bulle à la fois, au plus une par session, jamais deux fois la même**, jamais pendant que l'utilisateur tape (une touche dans la seconde et demie), jamais pendant qu'un agent attend une permission, jamais tant que le premier lancement est à l'écran (le micro du compositeur de son premier agent compris), jamais sur une découverte faite, écartée, pas sur ce poste, ni après « Tout masquer ».
+- Un moment qui arrive pendant la frappe, une permission ou le premier lancement attend qu'ils cessent (six secondes au plus), sinon il passe.
 - Une bulle dit la phrase de la découverte et ce qu'elle demande avant, avec « Compris », « Écarter » et « Tout ce qui reste à découvrir » (la carte). Un halo teal entoure le vrai contrôle. C'est un dialogue non modal, annoncé poliment ; Échap la ferme. Elle suit le contrôle et part avec lui.
 - **Elle ne gêne jamais** : un appui ailleurs que sur ses boutons la ferme et va à ce qu'il visait (elle laisse passer les clics hors de ses boutons) ; appuyer sur le contrôle qu'elle montre, ou se mettre à taper, la ferme aussi.
 - La bulle posée par « Essayer » sur le vrai contrôle n'a que « Compris ».

@@ -367,7 +367,7 @@ pub fn ask_access(a: &Address) -> String {
     )
 }
 
-fn folder_ok(f: &str) -> bool {
+pub(crate) fn folder_ok(f: &str) -> bool {
     !f.is_empty()
         && f.len() <= 120
         && f != "."
@@ -385,7 +385,7 @@ fn empty_dir(p: &Path) -> bool {
 
 /// Clones one repository, checked again, into `dest`: the member's credentials, a time limit, the address after
 /// `--`. `config` is given to git with `-c` (the tests' `insteadOf`).
-async fn clone_one(
+pub(crate) async fn clone_one(
     a: &Address,
     branch: &str,
     dest: &Path,

@@ -40,7 +40,13 @@ test.describe('the first start of a new installation (SEC-09)', () => {
     const settings = () => JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8'));
     await expect.poll(() => settings().agentMode).toBe('default');
     expect(settings().allowBypass).toBe(false);
+    // The first project passed, then the first agent (ESC-505), which has no project to work in: the statistics come next,
+    // whatever was passed, still unanswered, so nothing was sent before the question.
+    await journey.getByRole('button', { name: 'Plus tard' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Ton premier message' })).toBeVisible();
+    await expect(journey).toContainText('Ton premier agent a besoin d’un projet');
     await journey.getByRole('button', { name: 'Plus tard' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
+    expect(settings().telemetry ?? null).toBeNull();
   });
 });

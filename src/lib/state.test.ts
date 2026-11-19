@@ -595,6 +595,7 @@ describe('AppState start-up', () => {
       started: true,
       finished: false,
       askTelemetryAgain: false,
+      demo: '',
     };
     resetApp();
     await start({ settings: { ...SETTINGS, agentMode: '', telemetry: null, nameAsked: false }, onboarding: journey });

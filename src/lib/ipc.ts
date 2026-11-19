@@ -9,6 +9,8 @@ import type {
   Update as VsxUpdate,
 } from './vscode/extensions';
 import type {
+  Cloned,
+  FolderCheck,
   DiscoverAct,
   DiscoverView,
   OnboardingAct,
@@ -218,6 +220,14 @@ export const api = {
   onboardingView: () => invoke<OnboardingView>('onboarding_view'),
   /** A station done or passed, « Tout passer », its end, « Refaire le premier lancement »; the journey as it then is. */
   onboardingAct: (act: OnboardingAct) => invoke<OnboardingView>('onboarding_act', { act }),
+  /** The station of the first project (ESC-505) reads a folder: there, written to, a test command it can run. */
+  onboardingFolder: (path: string) => invoke<FolderCheck>('onboarding_folder', { path }),
+  /** « Cloner » of the station: the repository at `url` into `parent/folder`, by the user's own git access. */
+  onboardingClone: (url: string, parent: string, folder: string) => invoke<Cloned>('onboarding_clone', { url, parent, folder }),
+  /** « Un projet de démonstration »: written on this machine without the network, opened as a project. */
+  demoCreate: (color: string) => invoke<Project>('demo_create', { color }),
+  /** « Supprimer » of the demonstration: its project, its agents and its folder gone. */
+  demoRemove: (id: string) => invoke<void>('demo_remove', { id }),
   /** The discovery of the features (ESC-506); `microphones`: those this window found, null when it cannot tell. */
   discoverView: (microphones: number | null) => invoke<DiscoverView>('discover_view', { microphones }),
   /** Seen, « Écarter », « Remettre », « Tout masquer », a bubble shown, the band closed; the discovery as it then is. */

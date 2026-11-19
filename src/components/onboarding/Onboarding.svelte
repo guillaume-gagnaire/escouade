@@ -2,6 +2,7 @@
   import { accountName, accountsOf, engineOrder, hasAccount } from '../../lib/accounts';
   import { engineName } from '../../lib/engines';
   import { RECOMMENDED_MODE } from '../../lib/first-mode';
+  import { openMap } from '../../lib/discover.svelte';
   import { t } from '../../lib/i18n';
   import { before, close, end, leave, onboarding, refresh, skipAll, stations, statusOf, type Primary } from '../../lib/onboarding.svelte';
   import { locks } from '../../lib/locks.svelte';
@@ -10,6 +11,7 @@
   import Icon from '../Icon.svelte';
   import AccountStation from './AccountStation.svelte';
   import DefaultsStation from './DefaultsStation.svelte';
+  import AgentStation from './AgentStation.svelte';
   import HarnessStation from './HarnessStation.svelte';
   import ProjectStation from './ProjectStation.svelte';
   import TelemetryStation from './TelemetryStation.svelte';
@@ -33,6 +35,10 @@
     void app.settings.agentMode;
     void app.settings.telemetry;
     void app.projects.length;
+    // A first turn ended (ESC-505): the station of the first agent.
+    void Object.values(app.agents)
+      .map((a) => a.status + a.prompts)
+      .join();
     void locks.current;
     void refresh();
   });
@@ -68,11 +74,18 @@
     const p = app.projects[0];
     if (p) app.selectProject(p.id);
   }
+  /** The end, on the map of the discovery (ESC-506): what Escouade does beyond the first agent, each to try for real. */
+  function toMap() {
+    start();
+    openMap();
+  }
 
   function onkeydown(e: KeyboardEvent) {
     // A window over it (« Ajouter un compte… », the assistant of a project) has its own keys.
     if (app.modal || e.defaultPrevented) return;
     const target = e.target as HTMLElement;
+    // The first agent's real conversation keeps its own keys (Échap stops the agent there, its shortcuts answer its card).
+    if (target.closest('[data-onb-frame]')) return;
     if (e.key === 'Escape' && at) {
       e.preventDefault();
       void later();
@@ -111,6 +124,8 @@
       }
       case 'project':
         return app.projects[0]?.name ?? t(`onboarding.stations.${step}.todo`);
+      case 'agent':
+        return Object.values(app.agents).find((a) => a.prompts > 0)?.name ?? t(`onboarding.stations.${step}.todo`);
       case 'telemetry':
         return app.settings.telemetry ? t('shell.telemetry.yes') : t('shell.telemetry.no');
     }
@@ -169,6 +184,8 @@
           <DefaultsStation bind:primary />
         {:else if at === 'project'}
           <ProjectStation bind:primary />
+        {:else if at === 'agent'}
+          <AgentStation bind:primary />
         {:else if at === 'telemetry'}
           <TelemetryStation bind:primary />
         {:else}
@@ -198,6 +215,7 @@
           >
         {/if}
       {:else}
+        <button class="btn ghost" onclick={toMap}>{t('onboarding.end.discover')}</button>
         <button class="btn primary lg" onclick={start}>{t('onboarding.end.start')}<Icon name="right" size={13} /></button>
       {/if}
     </div>

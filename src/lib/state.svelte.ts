@@ -442,7 +442,7 @@ class AppState {
   /** Tab of the side panel: uncommitted files, the repository history or the project's workflow (ESC-194). */
   panelTab = $state<'files' | 'history' | 'workflow' | 'hosts'>('files');
   /** A text to put in an agent's composer without sending it (a door of the Workflow tab): taken by its composer, which then clears it. */
-  composerPut = $state<{ agentId: string; text: string } | null>(null);
+  composerPut = $state<{ agentId: string; text: string; replace?: boolean } | null>(null);
   /** How many messages went back to each agent's draft (`giveBack`): its composer reads the draft again. */
   draftReturned = $state<Record<string, number>>({});
   /** Side-by-side diffs (else unified), shared by the diff dialog and the split layout. */

@@ -11,20 +11,21 @@
 //! at the first station neither done nor passed.
 
 use crate::core::Core;
-use crate::model::{Onboarding, OnboardingStep, StepOutcome};
+use crate::model::{AgentStatus, Onboarding, OnboardingStep, StepOutcome};
 use escouade_policy::list::{DEFAULT_MODE, TELEMETRY};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// The version of the journey: a later one that changes a station raises it.
 pub const VERSION: u32 = 1;
 
-/// The stations, in their order (§ 4). The first project and the first agent's are ON-2's (ESC-505); the project's
-/// is here in its short form.
-pub const STEPS: [OnboardingStep; 5] = [
+/// The stations, in their order (§ 4).
+pub const STEPS: [OnboardingStep; 6] = [
     OnboardingStep::Harness,
     OnboardingStep::Account,
     OnboardingStep::Defaults,
     OnboardingStep::Project,
+    OnboardingStep::Agent,
     OnboardingStep::Telemetry,
 ];
 
@@ -38,6 +39,8 @@ pub struct Facts {
     /// The mode of the new agents is chosen (`Settings::agent_mode`).
     pub mode_chosen: bool,
     pub projects: usize,
+    /// An agent has ended a turn well (ESC-505): its first message sent by the user, its answer come.
+    pub first_reply: bool,
     /// The statistics' question is answered (`Settings::telemetry`).
     pub telemetry_answered: bool,
     /// What a policy imposes: the mode of the new agents, the statistics.
@@ -90,6 +93,8 @@ pub struct OnboardingView {
     pub finished: bool,
     /// The statistics' question passed in the journey, to ask once more at this start.
     pub ask_telemetry_again: bool,
+    /// Where the demonstration project lives (`demo::dir`), made or not: the window knows it by its folder (its band).
+    pub demo: String,
 }
 
 /// A gesture of the window on the journey.
@@ -118,6 +123,7 @@ pub fn real(step: OnboardingStep, facts: &Facts) -> bool {
         OnboardingStep::Harness | OnboardingStep::Account => facts.accounts > 0,
         OnboardingStep::Defaults => facts.mode_chosen,
         OnboardingStep::Project => facts.projects > 0,
+        OnboardingStep::Agent => facts.first_reply,
         OnboardingStep::Telemetry => facts.telemetry_answered,
     }
 }
@@ -212,6 +218,7 @@ pub fn view(saved: &Onboarding, facts: &Facts, window: bool) -> OnboardingView {
         started: saved.started.is_some(),
         finished: saved.finished.is_some(),
         ask_telemetry_again,
+        demo: String::new(),
     }
 }
 
@@ -250,6 +257,228 @@ pub fn apply(saved: &mut Onboarding, act: &Act, facts: &Facts, now: i64) {
     settle(saved, facts);
 }
 
+// === The first project (ESC-505, § 4.4) ===
+
+/// What the station of the first project reads of a folder before it is opened.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderCheck {
+    pub exists: bool,
+    /// Escouade can write in it (a project's git, its worktrees, its agents' changes need it).
+    pub writable: bool,
+    /// It has a test command Escouade recognizes, that can run here: « Lance les tests et dis-moi ce qui casse » is
+    /// proposed then (a `package.json`'s test only when Node is on the machine).
+    pub tests: bool,
+}
+
+/// Whether Escouade can write in `dir`: a file of its own made and removed at once (the only sure way, the read-only
+/// flag of a folder saying nothing under Windows).
+pub fn writable(dir: &Path) -> bool {
+    let probe = dir.join(format!(
+        ".escouade-ecriture-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
+        Ok(f) => {
+            drop(f);
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Whether the program `name` is on the `PATH`.
+pub fn on_path(name: &str) -> bool {
+    let ends: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd", ".bat"]
+    } else {
+        &[""]
+    };
+    std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path)
+            .any(|d| ends.iter().any(|e| d.join(format!("{name}{e}")).is_file()))
+    })
+}
+
+/// Whether `dir` has a test command Escouade recognizes; a `package.json`'s counts when `node` is there to run it.
+pub fn has_tests(dir: &Path, node: bool) -> bool {
+    const BUILDS: [&str; 7] = [
+        "Cargo.toml",
+        "pyproject.toml",
+        "setup.py",
+        "go.mod",
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+    ];
+    if BUILDS.iter().any(|f| dir.join(f).is_file()) {
+        return true;
+    }
+    let Ok(text) = std::fs::read_to_string(dir.join("package.json")) else {
+        return false;
+    };
+    let test = serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v["scripts"]["test"].as_str().map(str::to_owned))
+        .unwrap_or_default();
+    // npm's own placeholder is no test command.
+    node && !test.trim().is_empty() && !test.contains("no test specified")
+}
+
+/// `dir` read for the station.
+pub fn check_folder(dir: &Path, node: bool) -> FolderCheck {
+    let exists = dir.is_dir();
+    FolderCheck {
+        exists,
+        writable: exists && writable(dir),
+        tests: exists && has_tests(dir, node),
+    }
+}
+
+/// How a clone of the station went wrong: what the window says, and lets try again.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CloneFailure {
+    /// `offline`: the host could not be reached; `access`: it refused; `place`: the folder; `address`: the address;
+    /// `error`: anything else git said.
+    pub kind: String,
+    pub detail: String,
+}
+
+/// What the station's « Cloner » gives: the folder of the clone, or why there is none.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Cloned {
+    pub path: Option<String>,
+    pub failure: Option<CloneFailure>,
+}
+
+fn failed(kind: &str, detail: String) -> Cloned {
+    Cloned {
+        path: None,
+        failure: Some(CloneFailure {
+            kind: kind.into(),
+            detail,
+        }),
+    }
+}
+
+/// git could not reach the host: no network, no name resolution.
+pub fn offline_in(stderr: &str) -> bool {
+    let s = stderr.to_ascii_lowercase();
+    [
+        "could not resolve host",
+        "could not resolve hostname",
+        "temporary failure in name resolution",
+        "name or service not known",
+        "failed to connect",
+        "network is unreachable",
+        "no route to host",
+        "connection timed out",
+        "couldn't connect to server",
+    ]
+    .iter()
+    .any(|w| s.contains(w))
+}
+
+/// The address typed, checked as a team's list checks one (https or ssh, no local path, no credential in it); why not.
+pub fn clone_address(url: &str) -> Result<escouade_team::catalog::Address, String> {
+    use escouade_team::catalog::{address, BadAddress};
+    address(url).map_err(|e| match e {
+        BadAddress::Empty => tr!(
+            "Donne l’adresse du dépôt : https://… ou git@….",
+            "Give the repository’s address: https://… or git@…."
+        ),
+        BadAddress::Local => tr!(
+            "C’est un dossier, pas une adresse : choisis « Un dossier de ta machine ».",
+            "That’s a folder, not an address: pick “A folder on your machine”."
+        ),
+        BadAddress::Credential => tr!(
+            "Pas de mot de passe ni de jeton dans l’adresse : git clone avec tes accès habituels.",
+            "No password or token in the address: git clones with your usual access."
+        ),
+        BadAddress::Scheme { scheme } => tr!(
+            "Escouade clone en https:// ou en ssh, pas en {scheme}.",
+            "Escouade clones over https:// or ssh, not {scheme}."
+        ),
+        _ => {
+            let u = url.trim();
+            tr!(
+                "« {u} » n’est pas l’adresse d’un dépôt git.",
+                "“{u}” isn’t a git repository’s address."
+            )
+        }
+    })
+}
+
+/// « Cloner » of the station: the repository at `url` into `parent/folder`, by the user's own git access (nothing of
+/// Escouade's); a folder there already that is not empty is left alone and refused.
+pub async fn clone(url: &str, parent: &Path, folder: &str) -> Cloned {
+    let a = match clone_address(url) {
+        Ok(a) => a,
+        Err(why) => return failed("address", why),
+    };
+    let folder = folder.trim();
+    if !crate::team_projects::folder_ok(folder) {
+        return failed(
+            "place",
+            tr!(
+                "« {folder} » n’est pas un nom de dossier.",
+                "“{folder}” isn’t a folder name."
+            ),
+        );
+    }
+    if !parent.is_dir() {
+        let p = parent.display();
+        return failed(
+            "place",
+            tr!("{p} n’est pas un dossier.", "{p} isn’t a folder."),
+        );
+    }
+    if !writable(parent) {
+        let p = parent.display();
+        return failed(
+            "place",
+            tr!(
+                "Escouade ne peut pas écrire dans ce dossier ({p}) : choisis-en un autre.",
+                "Escouade can’t write to this folder ({p}): pick another one."
+            ),
+        );
+    }
+    let dest = parent.join(folder);
+    if dest.exists()
+        && std::fs::read_dir(&dest)
+            .map(|mut d| d.next().is_some())
+            .unwrap_or(true)
+    {
+        let p = dest.display();
+        return failed(
+            "place",
+            tr!(
+                "{p} existe déjà : choisis un autre nom de dossier.",
+                "{p} already exists: pick another folder name."
+            ),
+        );
+    }
+    if dest.exists() {
+        let _ = std::fs::remove_dir(&dest);
+    }
+    match crate::team_projects::clone_one(&a, "", &dest, &[]).await {
+        Ok(()) => Cloned {
+            path: Some(dest.to_string_lossy().to_string()),
+            failure: None,
+        },
+        Err((_, e)) if offline_in(&e) => failed("offline", e),
+        Err((true, e)) => failed("access", e),
+        Err((false, e)) => failed("error", e),
+    }
+}
+
 impl Core {
     /// What the journey reads of the app now.
     pub fn onboarding_facts(&self) -> Facts {
@@ -262,6 +491,13 @@ impl Core {
             )
         };
         let projects = self.projects.read().len();
+        // A turn ended well: some prompt sent, the agent at rest, neither stopped by its usage limit nor failed.
+        let first_reply = self.agents.read().values().any(|h| {
+            let m = &h.lock().meta;
+            m.prompts > 0
+                && matches!(m.status, AgentStatus::Idle | AgentStatus::Done)
+                && m.resume_at.is_none()
+        });
         let (mode_imposed, telemetry_imposed) = {
             let locks = self.locks.read();
             (
@@ -274,6 +510,7 @@ impl Core {
             accounts,
             mode_chosen,
             projects,
+            first_reply,
             telemetry_answered,
             mode_imposed,
             telemetry_imposed,
@@ -297,7 +534,15 @@ impl Core {
         if changed {
             self.request_save();
         }
-        shown
+        self.with_demo(shown)
+    }
+
+    /// `view` with where the demonstration project lives.
+    fn with_demo(&self, mut view: OnboardingView) -> OnboardingView {
+        view.demo = crate::demo::dir(self.data.root())
+            .to_string_lossy()
+            .to_string();
+        view
     }
 
     /// `act` on the journey; the journey as it then is.
@@ -315,7 +560,7 @@ impl Core {
             view(&saved, &facts, window)
         };
         self.request_save();
-        shown
+        self.with_demo(shown)
     }
 }
 

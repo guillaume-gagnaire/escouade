@@ -65,6 +65,7 @@ mod deeplink_tests;
 mod deleteask;
 #[cfg(test)]
 mod deleteask_tests;
+mod demo;
 mod deploys;
 #[cfg(feature = "desktop")]
 mod desktop;

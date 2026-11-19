@@ -14,7 +14,9 @@ export const onboarding = $state<{
   at: OnboardingStep | null;
   /** The harness chosen at its station, for the next ones (the account, the defaults). */
   engine: EngineId | null;
-}>({ view: null, shown: false, at: null, engine: null });
+  /** The project opened at its station (ESC-505): where the first agent works. */
+  project: string | null;
+}>({ view: null, shown: false, at: null, engine: null, project: null });
 
 /** The stations, in their order, as the core gives them. */
 export function stations(): OnboardingStep[] {
@@ -93,6 +95,7 @@ export async function redo(): Promise<void> {
   const v = await act({ kind: 'redo' });
   if (!v) return;
   onboarding.engine = null;
+  onboarding.project = null;
   onboarding.at = v.resumeAt ?? stations()[0] ?? null;
   onboarding.shown = true;
 }

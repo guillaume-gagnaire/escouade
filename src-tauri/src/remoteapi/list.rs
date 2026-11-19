@@ -490,6 +490,11 @@ escouade_command::commands! {
         commands::inspect_setup,
         commands::first_commit,
         commands::create_project,
+        // The first launch's first project (ESC-505): a folder read, a clone, the demonstration.
+        commands::onboarding_folder,
+        commands::onboarding_clone,
+        commands::demo_create,
+        commands::demo_remove,
         commands::check_authorities,
         commands::shared_preview,
         commands::suggest_worktree_steps_at,

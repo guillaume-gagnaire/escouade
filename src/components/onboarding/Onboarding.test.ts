@@ -10,7 +10,7 @@ import type { Locks, OnboardingStep, OnboardingView, StepStatus } from '../../li
 import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import Onboarding from './Onboarding.svelte';
 
-const STEPS: OnboardingStep[] = ['harness', 'account', 'defaults', 'project', 'telemetry'];
+const STEPS: OnboardingStep[] = ['harness', 'account', 'defaults', 'project', 'agent', 'telemetry'];
 
 /** The core's view: every station to do but those said. */
 function view(over: Partial<Record<OnboardingStep, StepStatus>> = {}, trigger: OnboardingView['trigger'] = 'first'): OnboardingView {
@@ -23,6 +23,7 @@ function view(over: Partial<Record<OnboardingStep, StepStatus>> = {}, trigger: O
     started: true,
     finished: false,
     askTelemetryAgain: false,
+    demo: 'C:/Users/ada/.escouade/demo/bac-a-sable',
   };
 }
 
@@ -50,7 +51,9 @@ function core(start: OnboardingView, extra: Record<string, (a: any) => unknown> 
           ? !!app.settings.agentMode
           : id === 'project'
             ? app.projects.length > 0
-            : app.settings.telemetry !== null && app.settings.telemetry !== undefined;
+            : id === 'agent'
+              ? Object.values(app.agents).some((a) => a.prompts > 0 && a.status === 'idle')
+              : app.settings.telemetry !== null && app.settings.telemetry !== undefined;
     return real ? 'done' : own;
   };
   const read = () => {
@@ -111,11 +114,12 @@ describe('the first launch (ESC-504)', () => {
       'Compte',
       'Réglages de départ',
       'Premier projet',
+      'Premier agent',
       'Statistiques',
     ]);
     expect(items[0]).toHaveAttribute('aria-current', 'step');
     expect(items[0]).toHaveTextContent('maintenant');
-    expect(screen.getByText('5 stations · environ 2 minutes')).toBeInTheDocument();
+    expect(screen.getByText('6 stations · environ 2 minutes')).toBeInTheDocument();
     const q = screen.getByRole('heading', { level: 1, name: 'Avec quel harness tes agents travaillent-ils ?' });
     await waitFor(() => expect(q).toHaveFocus());
     expect(q).toHaveAccessibleDescription(/Un harness est le programme d’agent de code de ta machine/);
@@ -283,8 +287,10 @@ describe('the first launch (ESC-504)', () => {
   });
 
   it('asks the statistics as before, neither answer put forward, then ends', async () => {
-    const backend = core(view({ harness: 'done', account: 'done', defaults: 'done', project: 'done' }), { telemetry_set: () => null });
-    takeView(view({ harness: 'done', account: 'done', defaults: 'done', project: 'done' }));
+    const backend = core(view({ harness: 'done', account: 'done', defaults: 'done', project: 'done', agent: 'done' }), {
+      telemetry_set: () => null,
+    });
+    takeView(view({ harness: 'done', account: 'done', defaults: 'done', project: 'done', agent: 'done' }));
     render(Onboarding);
     expect(await screen.findByRole('heading', { name: 'Aider à améliorer Escouade ?' })).toBeInTheDocument();
     expect(screen.getByText(/restent sur ta machine, dans ~\/.escouade/)).toBeInTheDocument();
@@ -299,20 +305,22 @@ describe('the first launch (ESC-504)', () => {
   });
 
   it('opened again, shows every station from the first with what is set in place, and closes with « Fermer »', async () => {
-    const backend = core(view({ harness: 'done', account: 'done', defaults: 'done', project: 'done', telemetry: 'done' }, 'redo'));
+    const backend = core(
+      view({ harness: 'done', account: 'done', defaults: 'done', project: 'done', agent: 'done', telemetry: 'done' }, 'redo'),
+    );
     app.settings = {
       ...app.settings,
       agentMode: 'plan',
       telemetry: true,
       accounts: [{ id: 'principal', name: 'Principal', engine: 'claude', configDir: '', claudePath: '', active: true }],
     };
-    takeView(view({ harness: 'done', account: 'done', defaults: 'done', project: 'done', telemetry: 'done' }, 'redo'));
+    takeView(view({ harness: 'done', account: 'done', defaults: 'done', project: 'done', agent: 'done', telemetry: 'done' }, 'redo'));
     render(Onboarding);
     const items = stops();
     expect(items[0]).toHaveTextContent('maintenant');
     expect(items[1]).toHaveTextContent('Principal');
     expect(items[2]).toHaveTextContent('Plan');
-    expect(items[4]).toHaveTextContent('Partager les statistiques');
+    expect(items[5]).toHaveTextContent('Partager les statistiques');
     await userEvent.click(items[2]);
     expect(onboarding.at).toBe('defaults');
     expect(screen.getByRole('radio', { name: /Plan/ })).toHaveAttribute('aria-checked', 'true');
@@ -328,6 +336,6 @@ describe('the first launch (ESC-504)', () => {
     render(Onboarding);
     expect(screen.getByRole('heading', { name: 'Which harness will your agents run on?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip all' })).toBeInTheDocument();
-    expect(screen.getByText('5 stops · about 2 minutes')).toBeInTheDocument();
+    expect(screen.getByText('6 stops · about 2 minutes')).toBeInTheDocument();
   });
 });

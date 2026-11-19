@@ -666,10 +666,14 @@ Elles changent de machine en mode serveur (table « Ce qui change de machine »)
 - `claude_locate` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `conversation_send` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `create_project` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `demo_create` : le projet de démonstration, écrit dans le dossier de données de la machine du cœur
+- `demo_remove` : le projet de démonstration, écrit dans le dossier de données de la machine du cœur
 - `docs_document_add` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `first_commit` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `inspect_folder` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `inspect_setup` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `onboarding_clone` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `onboarding_folder` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `paste_image` : l’image collée, envoyée en données par le client
 - `plugin_inspect_dev` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `plugin_inspect_folder` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)

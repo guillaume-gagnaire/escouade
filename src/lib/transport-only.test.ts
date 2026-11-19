@@ -41,6 +41,7 @@ describe('the window and the core', () => {
       // The window's own: its dialogs (a folder to pick), the system's browser for a link, its window and webview
       // (title bar, zoom, theme), the events of the pages of the launches' windows.
       'components/modals/NewProjectModal.svelte': ['@tauri-apps/plugin-dialog'],
+      'components/onboarding/ProjectStation.svelte': ['@tauri-apps/plugin-dialog'],
       'components/PagesWindow.svelte': ['@tauri-apps/api/event'],
       'components/plugins/PluginPage.svelte': ['@tauri-apps/plugin-opener'],
       'components/plugins/PluginsView.svelte': ['@tauri-apps/plugin-opener'],

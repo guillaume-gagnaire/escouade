@@ -33,7 +33,8 @@ export default {
     harness: { name: 'Harness', inline: 'le harness', todo: 'le programme des agents' },
     account: { name: 'Compte', inline: 'le compte', todo: 'celui de la machine' },
     defaults: { name: 'Réglages de départ', inline: 'les réglages de départ', todo: 'le mode des agents' },
-    project: { name: 'Premier projet', inline: 'le premier projet', todo: 'un dossier de ta machine' },
+    project: { name: 'Premier projet', inline: 'le premier projet', todo: 'un dossier, un clone ou la démo' },
+    agent: { name: 'Premier agent', inline: 'le premier agent', todo: 'un message, une réponse' },
     telemetry: { name: 'Statistiques', inline: 'les statistiques', todo: 'partagées ou non' },
   },
   harness: {
@@ -95,6 +96,143 @@ export default {
     folderHint: 'Un dépôt que tu as déjà. Escouade le lit sans rien y changer.',
     add: 'Ajouter un projet…',
     opened: 'Projet ouvert : {name}',
+    /** The four words of the product, each in a line (§ 4.4). */
+    words: {
+      label: 'Les mots d’Escouade',
+      /** Between a word and what it is. */
+      sep: ' : ',
+      project: { term: 'Un projet', text: 'un dossier, avec ses agents, son Kanban et ses docs.' },
+      agent: { term: 'Un agent', text: 'une conversation avec ton harness, qui lit et modifie le code.' },
+      worktree: { term: 'Un worktree', text: 'une copie de travail à l’agent seul : deux agents ne se gênent pas.' },
+      branch: { term: 'Une branche par agent', text: 'son travail reste à part jusqu’à ce que tu l’intègres.' },
+    },
+    /** The drawing of the branches, beside the words. */
+    schema: {
+      main: 'ta branche',
+      agent: 'agent 1 · son worktree',
+      agent2: 'agent 2',
+    },
+    browse: 'Parcourir…',
+    folderLabel: 'Le dossier du projet',
+    folderPlaceholder: 'Le dossier de ton dépôt',
+    missing: 'Ce dossier n’existe pas.',
+    notWritable: 'Escouade ne peut pas écrire dans ce dossier ({path}) : choisis-en un autre.',
+    noGit: 'Ce dossier n’est pas un dépôt git : Escouade peut en faire un, avec un premier commit.',
+    firstCommit: 'Faire un premier commit',
+    /** `{list}`: the keys the file sets. */
+    yml: 'Ce dépôt a un .escouade.yml : il règle {list}. Ses commandes se relisent avant de tourner.',
+    open: 'Ouvrir le projet',
+    clone: 'Cloner un dépôt',
+    cloneHint: 'Une adresse git, ou un dépôt de GitHub ou GitLab si tu en as connecté un.',
+    cloneUrl: 'Adresse du dépôt',
+    clonePlaceholder: 'https://github.com/acme/api.git',
+    cloneHosts: 'Tes dépôts sur {host}',
+    cloneParent: 'Dans le dossier',
+    cloneFolder: 'Nom du dossier',
+    cloneGo: 'Cloner et ouvrir',
+    cloning: 'Clonage…',
+    retry: 'Réessayer',
+    cloneOffline: 'Cloner demande le réseau. Choisis un dossier ou la démonstration, ou réessaie une fois en ligne.',
+    /** `{error}`: what git said. */
+    cloneFailed: 'Le clonage a échoué : {error}. Vérifie l’adresse et ton accès, puis réessaie.',
+    demo: 'Un projet de démonstration',
+    demoHint: 'Un petit dépôt jetable, créé sur ta machine sans réseau, pour essayer sans risque. Supprimé d’un clic.',
+    /** `{path}`: where it is written. */
+    demoWhere: 'Il s’écrit dans {path} : une liste de tâches en TypeScript, deux tests qui échouent exprès. Rien ne sort de ta machine.',
+    demoGo: 'Créer la démonstration',
+    creating: 'Création…',
+    team: 'Les projets de ton équipe',
+    /** `{team}`: its name. */
+    teamHint: '{team} partage ses projets : clone celui sur lequel tu travailles.',
+    teamGo: 'Voir les projets de {team}',
+  },
+  agent: {
+    question: 'Ton premier message',
+    /** `{harness}`: the agent's. */
+    why: 'Choisis-en un, modifie-le, puis envoie-le. Il part sur ton compte {harness} et compte dans son quota.',
+    startersLabel: 'Les messages proposés',
+    starters: {
+      explain: 'Explique-moi ce dépôt en cinq lignes.',
+      tests: 'Lance les tests et dis-moi ce qui casse.',
+      bug: 'Trouve un petit bug et propose un correctif.',
+    },
+    /** `{agent}`: its name. */
+    ready: '{agent} est prêt. Un message proposé t’attend : modifie-le ou choisis-en un autre. Rien ne part avant que tu l’envoies.',
+    frame: 'La conversation de ton premier agent',
+    preparing: 'Ton agent se prépare…',
+    /** Sent, the agent's worktree being made (at the first message). */
+    preparing2: {
+      title: 'Ton agent prépare son worktree',
+      body: 'Ton message est parti : il attend que la copie de travail de l’agent soit prête, sur sa branche à lui. Sa réponse suit, à droite.',
+    },
+    running: {
+      title: 'Ton agent travaille',
+      body: 'Sa réponse arrive en direct, à droite. Il travaille dans son worktree, sur sa branche : ton dépôt ne bouge pas.',
+      stop: 'Pour l’arrêter : Échap, ou ■ sous le message.',
+    },
+    permission: {
+      title: 'Ton agent te demande la permission',
+      /** `{mode}`: the agent's; `{allow}`, `{always}`, `{deny}`: the buttons' names, in bold. */
+      body: 'Il veut lancer une commande. En {mode}, chaque commande te demande : {allow} cette fois, {always} pour cette commande dans ce projet, ou {deny} pour qu’il cherche autrement.',
+      allow: 'Autoriser',
+      always: 'Toujours',
+      deny: 'Refuser',
+      /** The shortcuts of the permission card and of the next agent waiting, as the system writes them. */
+      keys: 'Au clavier : {allow} autorise, {always} autorise toujours. {next} t’amène au prochain agent qui attend.',
+      later: 'Plus tard, une demande comme celle-ci fait clignoter la carte de l’agent.',
+    },
+    /** Said once the message is sent. */
+    quota: 'Ton message est parti sur ton compte {harness} et compte dans son quota.',
+    asking: {
+      title: 'Ton agent te pose une question',
+      body: 'Réponds sur sa carte, à droite : il reprend dès que tu as répondu.',
+    },
+    done: {
+      title: 'Ton agent a répondu',
+      body: 'L’agent a fini, dans son worktree, sur sa branche : ton dépôt n’a pas bougé.',
+      diff: 'Voir le diff',
+      files: { one: '{count} fichier changé', other: '{count} fichiers changés' },
+      noDiff: 'Il n’a rien changé : il n’y a pas de diff à voir.',
+      /** `{agent}`: its name. */
+      where: 'Tu le retrouves dans la barre de ton projet, sous son nom « {agent} » ; d’autres messages s’écrivent sous sa conversation.',
+      diffTitle: 'Ce que {agent} a changé',
+    },
+    limit: {
+      title: 'Ce compte est à sa limite',
+      /** `{time}`: when it resets. */
+      body: 'Ce compte a atteint sa limite d’usage jusqu’à {time}. Ajoute un autre compte, ou reviens après.',
+      bodyNoTime: 'Ce compte a atteint sa limite d’usage. Ajoute un autre compte, ou reviens après.',
+      add: 'Ajouter un compte…',
+    },
+    offline: {
+      title: 'Hors ligne',
+      body: '{harness} n’a pas pu joindre son service : tu sembles hors ligne. Le message reste prêt.',
+      again: 'Remettre le message',
+    },
+    signedOut: {
+      title: '{harness} n’est pas connecté',
+      body: '{harness} n’est pas connecté : reviens à l’étape du compte.',
+      back: 'Revenir à l’étape du compte',
+    },
+    failed: {
+      title: 'Le tour a échoué',
+      /** `{error}`: what the harness said. */
+      body: 'Le tour a échoué : {error}. Réessaie, ou passe à la suite avec « Plus tard ».',
+    },
+    noProject: 'Ton premier agent a besoin d’un projet : choisis-en un à la station précédente.',
+    toProject: 'Revenir au premier projet',
+    noAccount: 'Ton premier agent a besoin d’un compte connecté : ajoute-le à la station du compte.',
+  },
+  /** The band of the demonstration project, at the top of the project (§ 4.4). */
+  demo: {
+    label: 'Bac à sable',
+    /** `{path}`: its folder. */
+    text: 'un dépôt de démonstration sur ta machine ({path}) · rien ne sort d’ici',
+    remove: 'Supprimer',
+    confirmTitle: 'Supprimer le projet de démonstration ?',
+    confirmBody:
+      'Le projet « bac-a-sable », ses agents et leurs conversations, et son dossier {path} s’effacent. Rien d’autre n’est touché.',
+    removed: 'Projet de démonstration supprimé.',
   },
   telemetry: {
     stays: 'Tes projets, ton code, tes conversations et tes comptes restent sur ta machine, dans ~/.escouade.',
@@ -104,12 +242,14 @@ export default {
   },
   end: {
     title: 'Escouade est prêt',
-    body: 'Le reste se découvre en le faisant : la voix, le Kanban, les PR…',
+    body: 'Le reste se découvre en le faisant : la voix, le Kanban, les PR… La carte t’attend dans Aide › À découvrir.',
     skipped: {
       one: '{count} étape passée : elle t’attend dans Aide › Premier lancement.',
       other: '{count} étapes passées : elles t’attendent dans Aide › Premier lancement.',
     },
     start: 'Commencer',
+    /** The map of the discovery (ESC-506), from the end of the journey. */
+    discover: 'Voir ce qu’il y a à découvrir',
   },
   /** The rail's Aide (choice O10). */
   help: {

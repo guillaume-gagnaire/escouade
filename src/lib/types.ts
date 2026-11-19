@@ -4104,7 +4104,7 @@ export interface OverseerView {
 }
 
 /** A station of the first launch's journey (ESC-504, `docs/ONBOARDING.md` § 4), in its order. */
-export type OnboardingStep = 'harness' | 'account' | 'defaults' | 'project' | 'telemetry';
+export type OnboardingStep = 'harness' | 'account' | 'defaults' | 'project' | 'agent' | 'telemetry';
 
 /** Where a station stands (`onboarding::StepStatus`): done by the real state, passed, or imposed by a policy. */
 export type StepStatus = 'todo' | 'done' | 'skipped' | 'policy';
@@ -4119,6 +4119,23 @@ export interface OnboardingView {
   started: boolean;
   finished: boolean;
   askTelemetryAgain: boolean;
+  /** Where the demonstration project lives (ESC-505), made or not: its band knows it by its folder. */
+  demo: string;
+}
+
+/** What the station of the first project reads of a folder (`onboarding::FolderCheck`, ESC-505). */
+export interface FolderCheck {
+  exists: boolean;
+  /** Escouade can write in it. */
+  writable: boolean;
+  /** A test command Escouade recognizes, that can run here (a package.json's only with Node). */
+  tests: boolean;
+}
+
+/** What « Cloner » of the station gives (`onboarding::Cloned`): the folder of the clone, or why there is none. */
+export interface Cloned {
+  path: string | null;
+  failure: { kind: 'offline' | 'access' | 'place' | 'address' | 'error'; detail: string } | null;
 }
 
 /** A gesture on the journey (`onboarding::Act`). */

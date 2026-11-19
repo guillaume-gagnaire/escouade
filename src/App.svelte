@@ -82,6 +82,7 @@
   import RecoveryBanner from './components/RecoveryBanner.svelte';
   import TeamSettingsBand from './components/team/TeamSettingsBand.svelte';
   import TeamHintBand from './components/team/TeamHintBand.svelte';
+  import DemoBand from './components/onboarding/DemoBand.svelte';
   import TeamPourModal from './components/board/TeamPourModal.svelte';
   import ConnectionBand from './components/ConnectionBand.svelte';
   import ConnectServerModal from './components/servers/ConnectServerModal.svelte';
@@ -255,6 +256,7 @@
       <TlsBanner />
       <TeamSettingsBand />
       <TeamHintBand />
+      <DemoBand />
       {#if !onboarding.shown}
         <NewBand />
       {/if}

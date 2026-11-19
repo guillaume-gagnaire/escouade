@@ -9,6 +9,7 @@
 // gesture stays the user's, on the real control, which says what it costs before.
 
 import { api } from './ipc';
+import { onboarding } from './onboarding.svelte';
 import { app } from './state.svelte';
 import type { DiscoverAct, Discovery, DiscoverItem, DiscoverLane, DiscoverView, UiEvent } from './types';
 
@@ -89,6 +90,14 @@ export function typing(now = Date.now()): boolean {
   return now - lastKey < TYPING_MS;
 }
 
+/**
+ * Not the moment for a bubble: the user types, an agent waits for a permission, or the first launch is on screen (its
+ * first agent's real composer has the microphone: no bubble over the journey, ESC-505).
+ */
+function busy(): boolean {
+  return typing() || permissionWaiting() || onboarding.shown;
+}
+
 /** An agent waits for a permission: no bubble over it. */
 export function permissionWaiting(): boolean {
   return Object.values(app.agents).some((a) => a.requests?.some((r) => r.kind === 'permission'));
@@ -134,7 +143,7 @@ export function closeMap() {
 export function offer(id: Discovery, el: HTMLElement | null | undefined, allowed = mayOffer(id)): boolean {
   if (!el || !discover.view || offeredThisSession || discover.tip) return false;
   if (!allowed) return false;
-  if (typing() || permissionWaiting()) return false;
+  if (busy()) return false;
   offeredThisSession = true;
   discover.tip = { id, el, mode: 'offer' };
   void act({ kind: 'tipped', id });
@@ -147,7 +156,7 @@ export function offer(id: Discovery, el: HTMLElement | null | undefined, allowed
  */
 export function offerWhenQuiet(id: Discovery, find: () => HTMLElement | null, allowed = mayOffer(id), tries = 12) {
   if (!allowed || offeredThisSession) return;
-  if (typing() || permissionWaiting()) {
+  if (busy()) {
     if (tries > 0) setTimeout(() => offerWhenQuiet(id, find, allowed, tries - 1), 500);
     return;
   }

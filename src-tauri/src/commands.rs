@@ -3978,6 +3978,36 @@ pub fn onboarding_act(
     core.onboarding_act(act)
 }
 
+/// The station of the first project (ESC-505) reads a folder: there, written to, a test command it can run.
+#[tauri::command(async)]
+pub fn onboarding_folder(path: String) -> crate::onboarding::FolderCheck {
+    let node = crate::onboarding::on_path("node");
+    crate::onboarding::check_folder(std::path::Path::new(path.trim()), node)
+}
+
+/// « Cloner » of the station of the first project: a repository by its address, into `parent/folder`.
+#[tauri::command]
+pub async fn onboarding_clone(
+    url: String,
+    parent: String,
+    folder: String,
+) -> crate::onboarding::Cloned {
+    crate::onboarding::clone(&url, std::path::Path::new(parent.trim()), &folder).await
+}
+
+/// « Un projet de démonstration »: the demonstration written on this machine, without the network, and opened as a
+/// project (the one there already, when it is).
+#[tauri::command]
+pub async fn demo_create(core: CoreState<'_>, color: String) -> Res<Project> {
+    core.demo_create(&color).await.map_err(err)
+}
+
+/// « Supprimer » of the demonstration's band: its project, its agents and its folder gone; refused for any other project.
+#[tauri::command]
+pub async fn demo_remove(core: CoreState<'_>, id: String) -> Res<()> {
+    core.demo_remove(&id).await.map_err(err)
+}
+
 /// The discovery of the features (ESC-506) as the window shows it. `microphones`: those the window found (`voice_info`),
 /// None when it cannot tell.
 #[tauri::command(async)]

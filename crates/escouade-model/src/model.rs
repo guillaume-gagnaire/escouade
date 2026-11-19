@@ -2826,6 +2826,8 @@ pub enum OnboardingStep {
     Defaults,
     /// Where the first agent works.
     Project,
+    /// The first agent: a message proposed, sent by the user's click, its answer, its first permission, its diff (ESC-505).
+    Agent,
     /// The usage statistics' agreement.
     Telemetry,
 }

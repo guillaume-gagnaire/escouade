@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { onboarding } from '../../lib/onboarding.svelte';
 import { closeTip, discover, go, keyPressed, offer, offerWhenQuiet, openMap, resetDiscover, TYPING_MS } from '../../lib/discover.svelte';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
@@ -257,6 +258,10 @@ describe('the bubbles at the right moment (ESC-506)', () => {
     };
     expect(offer('autopilot', el)).toBe(false);
     app.agents = {};
+    // Nor over the first launch (ESC-505): its first agent's real composer has the microphone.
+    onboarding.shown = true;
+    expect(offer('autopilot', el)).toBe(false);
+    onboarding.shown = false;
     expect(offer('autopilot', el)).toBe(true);
     closeTip();
   });
