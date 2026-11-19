@@ -434,10 +434,15 @@ async fn pairing_by_a_code_keeps_the_token_in_the_keychain_and_the_window_goes_o
     assert_eq!(link.token, token);
     assert_eq!(link.tunnel, TunnelState::Up);
     assert_eq!(b.servers.active().as_deref(), Some(id.as_str()));
-    // Back on this computer: no link, the tunnel stopped.
+    // Back on this computer: no link for the window; the tunnel stays up, the server still a space (ESC-539).
     b.servers.leave();
     assert!(b.servers.link().is_none());
     assert_eq!(b.servers.active(), None);
+    assert_eq!(
+        b.servers.link_of(&id).map(|l| l.tunnel),
+        Some(TunnelState::Up)
+    );
+    assert_eq!(b.servers.tunnels(), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -884,4 +889,138 @@ fn a_refusal_of_the_versions_keeps_how_to_update_the_server() {
     })
     .unwrap();
     assert_eq!(json["serverUpdate"]["how"], "image");
+}
+
+// ---------- several servers at once (ESC-539) ----------
+
+#[tokio::test(flavor = "multi_thread")]
+async fn two_servers_keep_each_their_tunnel_and_a_cut_of_one_never_touches_the_other() {
+    // Two `escouade-server`, behind one fake ssh: `travail` on the server port, `perso` on the next.
+    let b = bench("two", VERSION, None).await;
+    let data2 = DataDir::new(b.root.join("..").join("server-data-2"));
+    data2.ensure().unwrap();
+    let (api2, _stop2) = started(data2.clone()).await;
+    let ssh = fake_ssh(
+        &b.dir,
+        &format!(
+            "{}={},{}={}",
+            tunnel::SERVER_PORT,
+            b.port,
+            tunnel::SERVER_PORT + 1,
+            api2.addr().port()
+        ),
+        None,
+    );
+    let config = b.root.join("two-config");
+    write(
+        &config,
+        "Host travail\n  HostName escouade.acme.internal\nHost perso\n  HostName vps.example.net\n",
+    );
+    let client = b.root.join("two");
+    std::fs::create_dir_all(&client).unwrap();
+    let store = Arc::new(MemoryStore::default());
+    let servers = Servers::load(
+        &client,
+        store.clone(),
+        ssh,
+        VERSION.into(),
+        Arc::new(|_: &str| Ok(())),
+        Some(config),
+    );
+    let reached = ok(servers.attempt("travail", None, None).await);
+    let code = pairing::create(&b.data, crate::model::now_ms()).unwrap();
+    let work = ok(servers
+        .pair(&reached.attempt, &code.text, "Travail", "Poste")
+        .await);
+    let reached = ok(servers
+        .attempt("perso", Some(tunnel::SERVER_PORT + 1), None)
+        .await);
+    let code = pairing::create(&data2, crate::model::now_ms()).unwrap();
+    let home = ok(servers
+        .pair(&reached.attempt, &code.text, "Perso", "Poste")
+        .await);
+    assert_ne!(work, home);
+
+    // At the start, each server gets its tunnel, kept up.
+    servers.resume();
+    assert_eq!(servers.tunnels(), 2);
+    let up = |id: &str| servers.link_of(id).map(|l| l.tunnel) == Some(TunnelState::Up);
+    until("both tunnels up", || up(&work) && up(&home)).await;
+    let links = servers.links();
+    assert_eq!(links.len(), 2);
+    assert_eq!(links[0].server.known.name, "Travail");
+    assert_ne!(links[0].url, links[1].url, "a port each");
+    let work_url = servers.link_of(&work).unwrap().url;
+
+    // The window on Travail: through the tunnel kept up, not another.
+    ok(servers.open(&work).await);
+    assert_eq!(servers.link().unwrap().url, work_url);
+    assert_eq!(servers.tunnels(), 2);
+
+    // Perso cut, and unreachable a while: it tries again on its own; Travail's tunnel stays up the whole time.
+    std::fs::write(b.dir.join("down-perso"), "").unwrap();
+    std::fs::write(b.dir.join("cut-perso"), "").unwrap();
+    let mut seen_down = false;
+    for _ in 0..300 {
+        assert!(up(&work), "Travail's tunnel never goes down");
+        if matches!(servers.link_of(&home).map(|l| l.tunnel), Some(TunnelState::Starting { tries, .. }) if tries >= 1)
+        {
+            seen_down = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert!(seen_down, "Perso's tunnel said down");
+    // A handshake through Travail's tunnel meanwhile: it answers, with this computer's token.
+    let port: u16 = work_url
+        .trim_start_matches("ws://127.0.0.1:")
+        .split('/')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
+    crate::servers::client::hello(stream, port, VERSION, &servers.token(&work).unwrap())
+        .await
+        .expect("Travail answers while Perso is cut");
+    // Perso back, tried again on its own (« Réessayer » on its pile): up, Travail untouched.
+    std::fs::remove_file(b.dir.join("down-perso")).unwrap();
+    servers.retry_of(&home);
+    until("Perso up again", || up(&home)).await;
+    assert!(up(&work));
+    assert_eq!(servers.link_of(&work).unwrap().url, work_url);
+
+    // Back on this computer: both spaces stay connected.
+    servers.leave();
+    assert_eq!(servers.tunnels(), 2);
+    // Perso forgotten here (S15): its tunnel alone stops.
+    assert!(servers.forget(&home).await, "Perso revoked this computer");
+    assert_eq!(servers.tunnels(), 1);
+    assert_eq!(servers.links().len(), 1);
+    assert!(up(&work));
+    servers.shutdown();
+    assert_eq!(servers.tunnels(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_server_without_a_token_is_not_reached_at_the_start() {
+    let b = bench("ensure", VERSION, None).await;
+    let reached = ok(b.servers.attempt("travail", None, None).await);
+    let code = pairing::create(&b.data, crate::model::now_ms()).unwrap();
+    let id = ok(b
+        .servers
+        .pair(&reached.attempt, &code.text, "Travail", "Poste")
+        .await);
+    // Its token gone from the keychain: no tunnel, said revoked.
+    b.store.delete(&format!("server-token-{id}")).unwrap();
+    b.servers.resume();
+    assert_eq!(b.servers.tunnels(), 0);
+    match b.servers.link_of(&id).map(|l| l.tunnel) {
+        Some(TunnelState::Failed {
+            problem: Problem::Revoked { .. },
+        }) => {}
+        t => panic!("{t:?}"),
+    }
 }

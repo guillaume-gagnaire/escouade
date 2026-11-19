@@ -2,8 +2,8 @@
 title: "Raccourcis"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-392","ESC-432","ESC-464","ESC-468"]
-decisions: [128,158,176,181]
+tickets: ["ESC-392","ESC-432","ESC-464","ESC-468","ESC-539"]
+decisions: [128,158,176,181,218]
 compared: null
 ---
 
@@ -75,3 +75,11 @@ Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la 
 - L'app y prend `Ctrl+1..9`, `Ctrl+Tab`, `Ctrl+J`, `Ctrl+,`, `Ctrl+Maj+A`, le zoom (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`), `Ctrl+\` (qui y serait SIGQUIT) et, l'écran partagé ouvert, `Ctrl+Maj+\`, `Ctrl+Maj+W` et `Ctrl+Alt+flèche`.
 - Sous macOS, le shell ne reçoit jamais `Cmd` : les raccourcis de l'app y marchent, et `Cmd+C`, `Cmd+V`, `Cmd+A` restent au terminal (copier, coller, tout sélectionner).
 - Le raccourci global de l'Overseer est pris par le système avant tout terminal.
+
+### Espaces (ESC-539)
+
+Dès que ce poste connaît un serveur (voir *Les espaces*), lus par la place de la touche (AZERTY compris), jamais avec `Maj` ni AltGr, ni depuis le pavé numérique :
+
+- `Alt+1..9` (`⌃1..9` sous macOS, où `Alt` tape un caractère) : le n-ième espace, ce poste étant le premier.
+- `Ctrl+²` (la touche sous Échap, de code `Backquote`) : l'espace suivant.
+- Ils valent dans un terminal et dans la vue VS Code (qui ne reçoit plus `Alt+1..9` ni `Ctrl+²`), jamais dans un dialogue. **Une question à l'écran, là où l'on y répond, garde `Alt+1..9` pour ses options**, comme avant. Avec un seul espace, ils ne prennent rien.

@@ -5,6 +5,10 @@
   import type { ServerProblem } from '../../lib/connection.svelte';
   import { fDate, fTime } from '../../lib/format';
   import { t } from '../../lib/i18n';
+  import Rich from '../../lib/i18n/Rich.svelte';
+
+  /** The command that meets the host's key once: `ssh <host>`. */
+  const sshTo = (h: string) => `ssh ${h}`;
   import Icon from '../Icon.svelte';
 
   let {
@@ -82,7 +86,9 @@
     </p>
   {:else if problem.kind === 'hostKey'}
     <p>
-      {problem.changed ? t('servers.problem.hostKey.changedText') : t('servers.problem.hostKey.text', { host })}
+      {#if problem.changed}{t('servers.problem.hostKey.changedText')}{:else}<Rich k="servers.problem.hostKey.text"
+          >{#snippet command()}<code class="inline">{sshTo(host)}</code>{/snippet}</Rich
+        >{/if}
       {t('servers.problem.unchanged')}
     </p>
   {:else if problem.kind === 'noEscouade'}
@@ -197,5 +203,10 @@
     align-items: center;
     padding-top: 14px;
     border-top: 1px solid var(--line);
+  }
+  /* The command of the sentence, in the code font as the block of the command (ESC-539, asked of ESC-537). */
+  .inline {
+    font-family: var(--mono);
+    font-size: 0.95em;
   }
 </style>

@@ -20,13 +20,16 @@
  *   try (the tunnel may have taken another port, or stopped for good: a host key). A ping every few seconds measures the
  *   way there and back (the status bar's latency) and finds a connection that went silent. The commands of this
  *   computer's servers (`servers_*`, `server_*`) always go to its own core (`local`).
+ * - **A space in its own window** (ESC-539, S14): its page is told its space (`?space=<id>`, `here` for this
+ *   computer), and asks that space's link. The other spaces the main window reads (the piles, « Partout ») each have a
+ *   transport of their own (`spaces.svelte.ts`), with its own tries.
  * - **What the server's host publishes** (ESC-538: a chime, a notification, the count of what waits) is handed to
  *   `onHostEvent`'s listeners, which show it on this computer; a session taken again says how many events of the state
  *   it missed (`connection.missed`, « Reconnecté à Travail · 12 événements rattrapés »).
  */
 
 import { Channel as TauriChannel, invoke as tauriInvoke } from '@tauri-apps/api/core';
-import { connection, type ServerInfo, type ServerProblem, type ServerUpdate } from './connection.svelte';
+import { connection, type Connection, type ServerInfo, type ServerProblem, type ServerUpdate } from './connection.svelte';
 import { fSize } from './format';
 import { t } from './i18n';
 
@@ -203,9 +206,11 @@ export class RemoteTransport {
     private delays: number[] = RETRY_DELAYS,
     /** Where to connect now, asked before each try (on a server: this computer's core, `server_link`). */
     private refresh: (() => Promise<RemoteLink | null>) | null = null,
+    /** Where it says how it stands: the window's `connection`, or a space's own (ESC-539, the piles and « Partout »). */
+    private conn: Connection = connection,
   ) {
-    connection.state = 'connecting';
-    connection.server = link.server ?? null;
+    this.conn.state = 'connecting';
+    this.conn.server = link.server ?? null;
     if (link.tunnel?.state === 'failed' && link.tunnel.problem) {
       this.stopFor(link.tunnel.problem);
       return;
@@ -216,11 +221,30 @@ export class RemoteTransport {
   /** The tries stopped: the tunnel can no longer be made (a host key, an account refused). */
   private stopFor(problem: ServerProblem): void {
     this.stopped = true;
-    connection.problem = problem;
-    connection.state = 'refused';
-    connection.retryAt = null;
-    connection.reason = 'output' in problem ? problem.output : '';
+    this.conn.problem = problem;
+    this.conn.state = 'refused';
+    this.conn.retryAt = null;
+    this.conn.reason = 'output' in problem ? problem.output : '';
     for (const go of this.waiting.splice(0)) go();
+  }
+
+  /** Closed for good: no more tries (a space the window no longer reads, ESC-539). */
+  close(): void {
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.stopPinging();
+    const socket = this.socket;
+    this.socket = null;
+    this.ready = false;
+    for (const [, p] of this.pending) p.reject(t('remote.error.lost', { command: p.cmd }));
+    this.pending.clear();
+    socket?.close(1000, 'closed');
+  }
+
+  /** It is open: its calls go at once. */
+  get isOpen(): boolean {
+    return this.ready;
   }
 
   /** « Réessayer »: the next try now. */
@@ -246,7 +270,7 @@ export class RemoteTransport {
           return;
         }
         this.link = link;
-        connection.server = link.server ?? connection.server;
+        this.conn.server = link.server ?? this.conn.server;
         if (link.tunnel?.state === 'failed' && link.tunnel.problem) {
           this.stopFor(link.tunnel.problem);
           return;
@@ -276,7 +300,7 @@ export class RemoteTransport {
     if (!this.ready) {
       // Before the first connection, the call waits for it; after a cut, it fails at once (the band says why).
       if (this.everOpen || this.stopped) {
-        return Promise.reject(this.stopped ? connection.reason : t('remote.error.offline', { command: cmd }));
+        return Promise.reject(this.stopped ? this.conn.reason : t('remote.error.offline', { command: cmd }));
       }
       return new Promise<void>((go) => this.waiting.push(go)).then(() => this.invoke<T>(cmd, args, options));
     }
@@ -320,7 +344,7 @@ export class RemoteTransport {
     socket.binaryType = 'arraybuffer';
     let welcomed = false;
     let refusal: string | null = null;
-    connection.retryAt = null;
+    this.conn.retryAt = null;
     socket.onopen = () => {
       socket.send(JSON.stringify({ t: 'hello', version: this.link.version, token: this.link.token, session: this.session ?? undefined }));
     };
@@ -340,8 +364,8 @@ export class RemoteTransport {
           this.welcome(m);
         } else if (m.t === 'refused') {
           refusal = String(m.code ?? '');
-          connection.reason = String(namedError(refusal, '', m.error ?? refusal));
-          connection.refusal = {
+          this.conn.reason = String(namedError(refusal, '', m.error ?? refusal));
+          this.conn.refusal = {
             code: refusal,
             error: String(m.error ?? ''),
             serverVersion: typeof m.serverVersion === 'string' ? m.serverVersion : undefined,
@@ -362,22 +386,22 @@ export class RemoteTransport {
       this.socket = null;
       this.ready = false;
       this.stopPinging();
-      if (this.everOpen && connection.lostAt === null) connection.lostAt = Date.now();
+      if (this.everOpen && this.conn.lostAt === null) this.conn.lostAt = Date.now();
       // Every call left without its answer fails: never sent again (a command is not idempotent).
       for (const [, p] of this.pending) p.reject(t('remote.error.lost', { command: p.cmd }));
       this.pending.clear();
       for (const open of this.channels.values()) open.resuming = false;
       if (refusal && FINAL.has(refusal)) {
         this.stopped = true;
-        connection.state = 'refused';
+        this.conn.state = 'refused';
         for (const go of this.waiting.splice(0)) go();
         return;
       }
-      connection.state = this.everOpen ? 'lost' : 'connecting';
+      this.conn.state = this.everOpen ? 'lost' : 'connecting';
       const delay = Math.max(this.delays[Math.min(this.tries, this.delays.length - 1)], this.holdUntil - Date.now());
       this.tries++;
-      connection.tries = this.tries;
-      connection.retryAt = Date.now() + delay;
+      this.conn.tries = this.tries;
+      this.conn.retryAt = Date.now() + delay;
       this.timer = setTimeout(() => void this.tryAgain(), delay);
     };
   }
@@ -389,18 +413,18 @@ export class RemoteTransport {
     this.ready = true;
     this.everOpen = true;
     this.tries = 0;
-    connection.state = 'open';
-    connection.reason = '';
-    connection.refusal = null;
-    connection.problem = null;
-    connection.tries = 0;
-    connection.retryAt = null;
-    connection.lostAt = null;
-    connection.machine = m.machine && typeof m.machine === 'object' ? m.machine : null;
+    this.conn.state = 'open';
+    this.conn.reason = '';
+    this.conn.refusal = null;
+    this.conn.problem = null;
+    this.conn.tries = 0;
+    this.conn.retryAt = null;
+    this.conn.lostAt = null;
+    this.conn.machine = m.machine && typeof m.machine === 'object' ? m.machine : null;
     // A server's secrets are in a file of its data, not in a keychain (ESC-514).
-    connection.secretsInFile = m.secretsInFile === true;
+    this.conn.secretsInFile = m.secretsInFile === true;
     // A session taken again: the events of the state it missed (ESC-538).
-    connection.missed = again && typeof m.missed === 'number' ? m.missed : null;
+    this.conn.missed = again && typeof m.missed === 'number' ? m.missed : null;
     if (again) {
       // The terminals from where they stopped (the channels of the state are not resumed: it is read again).
       const channels = [...this.channels.entries()]
@@ -445,7 +469,7 @@ export class RemoteTransport {
     const sent = this.pingSent.get(id);
     if (sent === undefined) return;
     this.pingSent.delete(id);
-    connection.latency = Date.now() - sent;
+    this.conn.latency = Date.now() - sent;
   }
 
   private tellStale(): void {
@@ -501,6 +525,9 @@ export class RemoteTransport {
       case 'resync':
         return this.tellStale();
       case 'host':
+        // The window's own connection alone: another space's (a pile, « Partout », ESC-539) is told by its glance,
+        // named by its space, never as the space the window is on.
+        if (this.conn !== connection) return;
         for (const f of hostListeners) {
           try {
             f(m.event);
@@ -607,9 +634,13 @@ let remote: RemoteTransport | null = given ? new RemoteTransport(given) : null;
 let decided = !!given || !inTauri;
 const stale: (() => void)[] = [];
 
+/** The space this window was opened on (ESC-539: a space's own window), none for the main window. */
+export const windowSpace: string | null =
+  typeof window !== 'undefined' && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('space') : null;
+
 /** The link of a server the window is on, asked of this computer's core (ESC-537). */
 async function serverLink(): Promise<RemoteLink | null> {
-  return (await ipcInvoke<RemoteLink | null>('server_link')) ?? null;
+  return (await ipcInvoke<RemoteLink | null>('server_link', windowSpace ? { space: windowSpace } : undefined)) ?? null;
 }
 
 /** Settled once the window knows which core it speaks to: this computer's, or a server's through its tunnel. */

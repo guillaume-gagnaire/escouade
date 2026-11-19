@@ -2,9 +2,9 @@
 // and its resume after a cut.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { connection } from './connection.svelte';
+import { connection, connectionOf } from './connection.svelte';
 import { setLang } from './i18n';
-import { Channel, RemoteTransport, namedError, serverUpdateOf, type Socket } from './transport';
+import { Channel, RemoteTransport, namedError, onHostEvent, serverUpdateOf, type Socket } from './transport';
 
 /** A socket of the test: what the transport sent, and what the server answers. */
 class FakeSocket implements Socket {
@@ -391,6 +391,26 @@ describe('the transport to a server through its tunnel (ESC-537)', () => {
     expect(connection.state).toBe('lost');
     expect(connection.lostAt).not.toBeNull();
     void transport;
+  });
+
+  it('hands what the host publishes to the window from its own connection alone, never from another space’s (ESC-539)', () => {
+    const seen: unknown[] = [];
+    const stop = onHostEvent((e) => seen.push(e));
+    // Another space's connection (a pile, « Partout »), with its own state: its host's events are not the window's.
+    const own = connectionOf();
+    new RemoteTransport(link('ws://127.0.0.1:4121/remote'), open, (async () => null) as never, [5], null, own);
+    sockets[0].onopen?.();
+    sockets[0].json({ t: 'welcome', session: 's', desk: [] });
+    expect(own.state).toBe('open');
+    sockets[0].json({ t: 'host', event: { type: 'notify', id: 1, title: 'perso', body: 'x' } });
+    expect(seen).toEqual([]);
+    // The window's own: shown.
+    new RemoteTransport(link('ws://127.0.0.1:4121/remote'), open, (async () => null) as never, [5]);
+    sockets[1].onopen?.();
+    sockets[1].json({ t: 'welcome', session: 's2', desk: [] });
+    sockets[1].json({ t: 'host', event: { type: 'chime' } });
+    expect(seen).toEqual([{ type: 'chime' }]);
+    stop();
   });
 
   it('keeps a refusal whole: a revoked token says when and by whom, and the tries stop', () => {

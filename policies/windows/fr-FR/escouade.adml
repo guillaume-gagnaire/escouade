@@ -181,21 +181,21 @@ Sur le poste : Un serveur hors de la liste est refusé, avec la raison.
 
 Clé : servers.allowed (liste). Sorte : restreindre.</string>
       <string id="servers_personalSpace">Interdire l’espace perso</string>
-      <string id="servers_personalSpace_Explain">Seuls les espaces des serveurs permis s’ouvrent, pas celui du poste seul. Seule la valeur false (0) s’impose.
+      <string id="servers_personalSpace_Explain">Seuls les serveurs de la liste des serveurs permis s’ajoutent comme espaces ; sans liste, aucun. Ce poste reste un espace. Seule la valeur false (0) s’impose.
 
-Sur le poste : Lu et gardé ; appliqué avec les espaces du mode serveur (à venir).
+Sur le poste : Un serveur hors de la liste est refusé avant toute connexion, avec la raison.
 
 Clé : servers.personalSpace (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
       <string id="servers_aggregateView">Interdire la vue agrégée</string>
-      <string id="servers_aggregateView_Explain">Les espaces ne se montrent pas ensemble dans une même vue. Seule la valeur false (0) s’impose.
+      <string id="servers_aggregateView_Explain">La vue « Partout » ne montre d’un serveur de travail (de la liste des serveurs permis, ou tout serveur sans liste) que ses nombres, ni texte ni geste. Posée sur un serveur, elle vaut pour lui. Seule la valeur false (0) s’impose.
 
-Sur le poste : Lu et gardé ; appliqué avec les espaces du mode serveur (à venir).
+Sur le poste : « Partout » ne donne que les nombres de ces espaces.
 
 Clé : servers.aggregateView (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
       <string id="servers_contentlessNotifications">Notifications sans contenu</string>
-      <string id="servers_contentlessNotifications_Explain">Les notifications venues d’un serveur disent qu’il se passe quelque chose, jamais quoi. Seule la valeur true (1) s’impose.
+      <string id="servers_contentlessNotifications_Explain">Les notifications venues d’un serveur de travail (de la liste des serveurs permis, ou tout serveur sans liste) disent qu’un agent attend, jamais quoi. Posée sur un serveur, elle vaut pour lui. Seule la valeur true (1) s’impose.
 
-Sur le poste : Lu et gardé ; appliqué avec les notifications du serveur d’équipe (à venir).
+Sur le poste : Les notifications de ces espaces n’ont pas de texte.
 
 Clé : servers.contentlessNotifications (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
       <string id="servers_remoteApi">Interdire l’API distante</string>

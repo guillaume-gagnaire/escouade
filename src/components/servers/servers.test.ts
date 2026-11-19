@@ -162,6 +162,8 @@ describe('the dialog « Se connecter à un serveur »', () => {
       await userEvent.click(within(dialog).getByRole('button', { name: /Se connecter/ }));
       const shown = await within(dialog).findByRole('alertdialog');
       for (const s of says) expect(shown).toHaveTextContent(s);
+      // The command to type is in the code font, as the block of the command (asked of ESC-537, done with ESC-539).
+      if (problem.kind === 'hostKey' && !problem.changed) expect(shown.querySelector('p code')).toHaveTextContent(/^ssh acme-escouade$/);
       // The step « Connexion » in red; « Réessayer » and « Modifier l'hôte » there.
       expect(within(dialog).getAllByRole('listitem')[1]).toHaveClass('bad');
       expect(within(dialog).getByRole('button', { name: 'Réessayer' })).toBeVisible();
@@ -416,18 +418,19 @@ describe('the spaces in the rail (direction B)', () => {
     });
     const RailSpace = (await import('./RailSpace.svelte')).default;
     render(RailSpace, { props: { part: 'head' } });
-    expect(screen.getByTestId('rail-space')).toHaveTextContent('Ce poste');
-    expect(screen.getByRole('status', { name: 'Espace ouvert : Ce poste' })).toBeInTheDocument();
+    // This computer's label under its plate is « Poste » (direction B, ESC-539); its name is said whole.
+    expect(screen.getByTestId('rail-space')).toHaveTextContent('Poste');
+    expect(screen.getByRole('button', { name: 'Espace ouvert : Ce poste' })).toBeInTheDocument();
     cleanup();
     render(RailSpace, { props: { part: 'others' } });
     const nav = screen.getByRole('navigation', { name: 'Espaces' });
-    await userEvent.click(within(nav).getByRole('button', { name: 'Aller sur Travail' }));
+    await userEvent.click(within(nav).getByRole('button', { name: /^Travail,/ }));
     expect(backend.called('server_open')[0].args).toEqual({ id: 's1' });
     // Refused (here revoked): Réglages › Serveurs says why.
     await vi.waitFor(() => expect(app.modal).toEqual({ kind: 'settings', page: 'servers' }));
     cleanup();
     connection.server = TRAVAIL;
     render(RailSpace, { props: { part: 'others' } });
-    expect(screen.getByRole('button', { name: 'Aller sur Ce poste' })).toBeVisible();
+    expect(screen.getByRole('button', { name: /^Ce poste,/ })).toBeVisible();
   });
 });

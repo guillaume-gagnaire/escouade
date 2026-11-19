@@ -6,6 +6,7 @@
   import { settingsAlerts } from '../../lib/settings-alerts.svelte';
   import { searchSettings, type SearchHit } from '../../lib/settings-search';
   import { app } from '../../lib/state.svelte';
+  import { onServer } from '../../lib/connection.svelte';
   import { tip } from '../../lib/tip';
   import { shownVersion } from '../../lib/updater';
   import Icon from '../Icon.svelte';
@@ -28,7 +29,10 @@
     projectId?: string;
   }
 
-  const APP = SETTINGS_PAGES.filter((p) => p.scope === 'app' && p.id !== 'about' && p.id !== 'allProjects');
+  // « Appareils » (ESC-539): the space's, on a server alone.
+  const APP = $derived(
+    SETTINGS_PAGES.filter((p) => p.scope === 'app' && p.id !== 'about' && p.id !== 'allProjects' && (p.id !== 'devices' || onServer())),
+  );
   const PROJECT = SETTINGS_PAGES.filter((p) => p.scope === 'project');
 
   const scope = $derived(pageInfo(settingsForm.page).scope);

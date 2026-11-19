@@ -99,7 +99,8 @@ export interface BareServer {
 /** `escouade-server` started on `data` (its settings.json written already) with `env`, on `port` (0: a free one), ready. */
 export async function startBareServer(program: string, data: string, env: NodeJS.ProcessEnv, port: number): Promise<BareServer> {
   if (!fs.existsSync(program)) throw new Error(`build the server first: cargo build --bin escouade-server (missing ${program})`);
-  const out = path.join(data, '..', 'server-stdout.log');
+  // Its own log (ESC-539: two servers of one test each read their own « ready » line).
+  const out = path.join(data, '..', `${path.basename(data)}-stdout.log`);
   const fd = fs.openSync(out, 'a');
   const child: ChildProcess = spawn(program, ['run', '--data-dir', data, '--port', String(port)], { env, stdio: ['ignore', fd, fd] });
   fs.closeSync(fd);

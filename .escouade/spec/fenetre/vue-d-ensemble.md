@@ -2,8 +2,8 @@
 title: "Vue d'ensemble"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md (chapitre 2, « Notifications, vue d'ensemble, serveur MCP »)","design/esc-68/README.md","src/lib/prlist.ts"]
-tickets: ["ESC-68"]
-decisions: []
+tickets: ["ESC-68","ESC-539"]
+decisions: [218]
 compared: null
 ---
 
@@ -70,3 +70,7 @@ Tous les agents de tous les projets sur un seul écran, ceux qui attendent une r
 - La PR d'un agent ordinaire est celle qu'il a lue en dernier, quand il était affiché.
 - Sur GitLab, la liste ne dit ni la CI ni les approbations : une MR de la liste qu'aucun ticket ni agent ne tient n'y est à corriger que pour un conflit, et jamais à merger.
 - 30 PR au plus par projet, les plus récemment mises à jour.
+
+## « Partout » (ESC-539)
+
+Dès que ce poste connaît un serveur (voir *Les espaces*), l'en-tête de la vue d'ensemble a des onglets : **« Partout · 3 espaces »**, ouvert par défaut, puis un par espace. L'onglet de l'espace ouvert est la vue décrite plus haut ; « Partout » et l'onglet d'un autre espace montrent, espace par espace sous sa machine, les agents qui attendent, ceux au travail et les demandes de la boîte « À toi ». Une autorisation lisible en entier s'y accorde par « Autoriser sur Travail », sans changer d'espace ; le reste s'ouvre dans sa conversation. Avec un seul espace, rien ne change.

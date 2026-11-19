@@ -6113,8 +6113,10 @@ type ServersState<'a> = State<'a, Arc<crate::servers::Servers>>;
 /// The servers this computer knows, and the one the window is on.
 #[cfg(feature = "desktop")]
 #[tauri::command]
-pub fn servers_view(servers: ServersState) -> crate::servers::View {
-    servers.view()
+pub fn servers_view(servers: ServersState, core: CoreState) -> crate::servers::View {
+    let mut view = servers.view();
+    view.locks = Some(core.locks.read().clone());
+    view
 }
 
 /// The hosts of `~/.ssh/config`, for the dialog.
@@ -6124,11 +6126,119 @@ pub fn servers_ssh_hosts(servers: ServersState) -> Vec<crate::servers::sshconfig
     servers.ssh_hosts()
 }
 
-/// Where the window connects, on a server; none on this computer. Read before each try of the window.
+/// Where a window connects, read before each of its tries: the main window to the server it is on (none on this
+/// computer); a space's own window (ESC-539, `space`: a server's id, or `here` for this computer) to that space.
 #[cfg(feature = "desktop")]
 #[tauri::command]
-pub fn server_link(servers: ServersState) -> Option<crate::servers::Link> {
-    servers.link()
+pub fn server_link(servers: ServersState, space: Option<String>) -> Option<crate::servers::Link> {
+    match space.as_deref() {
+        None => servers.link(),
+        Some(crate::servers::window::HERE) => None,
+        Some(id) => servers.link_of(id),
+    }
+}
+
+/// Where to reach every server known (ESC-539): the piles of the rail and « Partout » open a connection of their own
+/// to each space the window is not on.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_links(servers: ServersState) -> Vec<crate::servers::Link> {
+    servers.links()
+}
+
+/// A space in its own window (ESC-539, S14): `space`, a server's id or `here`; one window per space, a second demand
+/// bringing back the first (the main window when it is on that space). `existing`: only brought back when there is
+/// one, never made. Whether a window of that space is in front now.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn space_window(
+    app: tauri::AppHandle,
+    servers: ServersState,
+    space: String,
+    existing: Option<bool>,
+) -> Res<bool> {
+    use tauri::Manager;
+    if existing == Some(true) {
+        return Ok(
+            // A window being closed may still be listed a moment: only one on screen counts.
+            match app
+                .get_webview_window(&crate::servers::window::label(&space))
+                .filter(|w| w.is_visible().unwrap_or(false))
+            {
+                Some(w) => {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                    true
+                }
+                None => false,
+            },
+        );
+    }
+    let here = space == crate::servers::window::HERE;
+    let title = if here {
+        tr!("Ce poste", "This computer")
+    } else {
+        servers
+            .view()
+            .servers
+            .into_iter()
+            .find(|s| s.known.id == space)
+            .map(|s| s.known.name)
+            .ok_or_else(|| {
+                tr!(
+                    "Ce serveur n’est plus connu de ce poste.",
+                    "This server is no longer known to this computer."
+                )
+            })?
+    };
+    let main_on = match servers.active() {
+        Some(active) => active == space,
+        None => here,
+    };
+    crate::servers::window::open(&app, &space, &title, main_on).map(|()| true)
+}
+
+/// A notification of another space (ESC-539): what a pile's glance found waiting there, named by its space in its
+/// title (« Travail · facturation · relances-impayes »). This computer's settings say whether it shows (its sound, its
+/// toast); a click brings the main window back and tells it (`space-focus`) to go to that space and that agent.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn space_notify(
+    app: tauri::AppHandle,
+    core: CoreState,
+    space: String,
+    title: String,
+    body: String,
+    agent_id: Option<String>,
+    project_id: Option<String>,
+) {
+    use tauri::Emitter;
+    let settings = core.settings.read().clone();
+    if !settings
+        .notify_for
+        .allows(crate::agent::NotifyKind::Question)
+    {
+        return;
+    }
+    if settings.sound {
+        crate::notify::play_chime();
+    }
+    if crate::notify::window_attended(&app) {
+        return;
+    }
+    crate::notify::flash(&app);
+    if settings.os_notifications {
+        let handle = app.clone();
+        crate::notify::toast(&app, &title, &body, move || {
+            crate::notify::show_main(&handle);
+            let _ = handle.emit_to(
+                "main",
+                "space-focus",
+                serde_json::json!({ "space": space, "agentId": agent_id, "projectId": project_id }),
+            );
+        });
+    }
 }
 
 /// The dialog's step « Connexion »: the policy, the tunnel to `host`, the handshake without a token.
@@ -6190,11 +6300,15 @@ pub fn server_leave(servers: ServersState) {
     servers.leave();
 }
 
-/// « Réessayer »: the tunnel started again now.
+/// « Réessayer »: the tunnel started again now: the one of the server `id` (a pile, « Partout », a space's window), or
+/// of the server the window is on.
 #[cfg(feature = "desktop")]
 #[tauri::command]
-pub fn server_retry(servers: ServersState) {
-    servers.inner().retry();
+pub fn server_retry(servers: ServersState, id: Option<String>) {
+    match id {
+        Some(id) => servers.inner().retry_of(&id),
+        None => servers.inner().retry(),
+    }
 }
 
 /// « Retirer » (S15): the server asked to revoke this computer when it answers, then forgotten here. Whether it
@@ -6217,6 +6331,51 @@ pub fn server_note(servers: ServersState, id: String, problem: crate::servers::P
 #[tauri::command]
 pub fn server_rename(servers: ServersState, id: String, name: String) {
     servers.rename(&id, &name);
+}
+
+// ---------- « Partout » and the space's devices (ESC-539) ----------
+//
+// Served: the window asks them of each space through its own connection (this computer's core over the IPC).
+
+/// What waits in this core at a glance: the piles of the rail and « Partout » read it of a space the window is not on.
+/// `counts`: the numbers alone (the window's policy denies the aggregate view for this space).
+#[tauri::command(async)]
+pub fn space_glance(core: CoreState, counts: Option<bool>) -> crate::glance::Glance {
+    core.glance(counts.unwrap_or(false))
+}
+
+/// The devices paired to this core's remote API (Réglages de l'espace › Appareils).
+#[tauri::command(async)]
+pub fn remote_devices(core: CoreState) -> Vec<crate::remoteapi::devices::Device> {
+    crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone()).list()
+}
+
+/// The device `id` revoked at the demand of the device named `by`: the API closes its connections within two seconds.
+/// False when there was none.
+#[tauri::command(async)]
+pub fn remote_device_revoke(core: CoreState, id: String, by: Option<String>) -> Res<bool> {
+    crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone())
+        .revoke_by(&id, by.as_deref().filter(|b| !b.trim().is_empty()))
+        .map_err(err)
+}
+
+/// A pairing code asked from a device already paired (S5): ten minutes, one device; it takes the place of the one that
+/// waited.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PairCode {
+    pub code: String,
+    pub expires_at: i64,
+}
+
+#[tauri::command(async)]
+pub fn remote_pair_code(core: CoreState) -> Res<PairCode> {
+    let code =
+        crate::remoteapi::pairing::create(&core.data, crate::model::now_ms()).map_err(err)?;
+    Ok(PairCode {
+        code: code.text,
+        expires_at: code.expires_at,
+    })
 }
 
 // ---------- What changes machines on a server (ESC-538) ----------

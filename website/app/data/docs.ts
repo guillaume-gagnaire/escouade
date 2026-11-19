@@ -20,6 +20,7 @@ export const DOC_GROUPS = [
       'claude-code-view',
       'remote-control',
       'connect-server',
+      'spaces',
     ],
   },
   { id: 'code', pages: ['git', 'worktrees', 'branches', 'code-hosts', 'editor', 'terminals', 'split-screen', 'launch'] },

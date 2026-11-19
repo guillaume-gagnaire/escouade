@@ -18,6 +18,10 @@ export function appTakes(label: string | null | undefined, command: string, mac:
   if (!label || label.includes(' ')) return false;
   const parts = label.toLowerCase().split('+');
   const key = parts.pop() ?? '';
+  // The spaces' keys (ESC-539, S3): Alt+1…9 (⌃1…⌃9 on macOS) and Ctrl+² (VS Code's `ctrl+` and the backquote).
+  const mods = parts.join('+');
+  if (/^[1-9]$/.test(key) && mods === (mac ? 'ctrl' : 'alt')) return true;
+  if (key === '`' && mods === 'ctrl') return true;
   const primary = mac ? 'cmd' : 'ctrl';
   if (!parts.includes(primary)) return false;
   const others = parts.filter((p) => p !== primary);

@@ -452,7 +452,10 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `refresh_usage`
 - `refresh_workflows`
 - `refuse_delete` : la suppression qu’un agent demande, refusée sur sa carte (ESC-511)
+- `remote_device_revoke` : Réglages de l’espace › Appareils (ESC-539) : un appareil appairé au cœur retiré, ses connexions fermées
+- `remote_devices` : Réglages de l’espace › Appareils (ESC-539) : les appareils appairés au cœur
 - `remote_image`
+- `remote_pair_code` : Réglages de l’espace › Appareils (ESC-539) : un code d’appairage de 10 minutes créé depuis un appareil déjà appairé (S5)
 - `remove_project`
 - `remove_workflow_file`
 - `rename_agent`
@@ -484,6 +487,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `shared_trust`
 - `shared_unkeep`
 - `shared_write`
+- `space_glance` : « Partout » et les piles (ESC-539) : ce qui attend sur le cœur, lu par la connexion de chaque espace
 - `stats`
 - `stop_bg_task`
 - `stop_subagent`
@@ -629,6 +633,7 @@ Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 - `server_forget` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_leave` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_link` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
+- `server_links` : les espaces (ESC-539) : le lien de chaque serveur connu, pour les connexions des piles et de « Partout »
 - `server_note` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_open` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_pair` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
@@ -640,6 +645,8 @@ Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 - `servers_view` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `set_held` : la fenêtre du poste : ses liens, son état, sa fin
 - `set_unsaved` : la fenêtre du poste : ses liens, son état, sa fin
+- `space_notify` : les espaces (ESC-539) : la notification d’un autre serveur, nommée par son espace, rendue par ce poste
+- `space_window` : les espaces (ESC-539) : un espace dans sa propre fenêtre, une au plus
 - `speech_delete` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `speech_download` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `speech_download_cancel` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
@@ -840,7 +847,21 @@ La spec le décrit (« Escouade à distance › Se connecter à un serveur ») ;
 - **La CSP** de la fenêtre permet `ws://127.0.0.1:*`, et rien d'autre en WebSocket : le tunnel n'écoute que là.
 - **Ce que voit l'utilisateur** : le dialogue (l'hôte, la connexion, l'appairage, l'espace), un état par échec, la machine dans la barre de titre (dès qu'un serveur est connu), la barre d'état (tunnel et latence, ou la reprise en ambre), le pied de la barre latérale, l'en-tête d'un terminal, « Nouveau projet » (sur un serveur, le sélecteur de dossier du poste disparaît : le chemin se tape, le navigateur des dossiers du serveur vient avec MS-4), l'envoi suspendu pendant une coupure (S10), l'écran d'un jeton révoqué ou d'une autre version, l'espace dans le rail (B), Réglages › Serveurs.
 - **Les essais** : Rust (`servers_tests` : `~/.ssh/config` avec `Include` et `ProxyJump`, un hôte tapé, les options de `ssh`, la lecture de sa sortie, le port libre, chaque état contre un vrai `escouade-server` derrière le faux `ssh`, la coupure et la reprise sur le même port, l'appairage par code et par SSH, la révocation datée, l'oubli révoqué sur le serveur, le ping ; `locks_policies_tests` : `servers.allowed`) ; Vitest (`servers.test.ts`, `transport.test.ts`) ; e2e (`server-connect.spec.ts` : `escouade-server` derrière le faux `ssh` de `tests/fixtures/fake-ssh.mjs`, aux deux tailles).
-- **Pas encore** : plusieurs serveurs à la fois et leurs piles (MS-5), ce qui change de machine (MS-4 : le navigateur des dossiers du serveur…), la mise à jour du serveur depuis le client (le dialogue de version dit la commande), la palette de commandes (il n'y en a pas : l'entrée est dans le menu du « + » dès qu'un serveur est connu ou qu'un projet a été fermé, et dans Réglages › Serveurs), le menu du tray.
+- **Pas encore** : ce qui change de machine (MS-4 : le navigateur des dossiers du serveur…), la mise à jour du serveur depuis le client (le dialogue de version dit la commande), la palette de commandes (il n'y en a pas : l'entrée est dans le menu du « + » dès qu'un serveur est connu ou qu'un projet a été fermé, et dans Réglages › Serveurs), le menu du tray.
+
+### Les espaces, MS-5 (ESC-539, 2026-11-18) : plusieurs serveurs dans un même Escouade
+
+La spec le décrit (« Escouade à distance › Les espaces ») ; la conception vient de [`SERVER-UX.md`](SERVER-UX.md) (§ 5, 6, 7), la direction est B (« les piles », S1), avec « Partout » d'où l'on répond sans changer d'espace (S8 et S9 suivent B).
+
+- **Un tunnel par serveur** (`servers::Servers`, `live` par serveur) : chaque serveur connu a le sien, ouvert au démarrage (`resume` → `ensure`, sauf s'il est refusé par la stratégie ou n'a plus de jeton), tenu avec ses propres essais ; aller sur ce poste ne le ferme pas, « Retirer » le ferme. `open` passe par le tunnel déjà tenu (une poignée de main avec le jeton), sinon en ouvre un. `link_of(id)`, `links()` ; `server_retry` d'un espace ne relance que son tunnel.
+- **La fenêtre lit les autres espaces** (`src/lib/spaces.svelte.ts`) : une `RemoteTransport` par serveur, chacune son état (`connectionOf`) et sa reprise, ou l'IPC de ce poste quand la fenêtre est sur un serveur ; toutes les 3 s, `space_glance`.
+- **`space_glance`** (servie, `src-tauri/src/glance.rs`) : ce qui attend (le nombre, les agents qui attendent avec leur première demande coupée à 400 caractères, ceux au travail, 40 au plus, les demandes de la boîte « À toi », 20 au plus, les projets nommés, les couleurs des trois premiers), jamais une conversation. `counts: true` (la stratégie de ce poste), ou `servers.aggregateView` à `false` sur le cœur lui-même : les nombres seuls. `contentless` dit `servers.contentlessNotifications` du cœur.
+- **Les appareils** (servies) : `remote_devices`, `remote_device_revoke` (le nom de l'appareil qui le demande gardé dans la trace ; l'API ferme ses connexions à sa relecture, 2 s), `remote_pair_code` (S5 : un code de 10 minutes créé depuis un client appairé).
+- **Un espace dans sa fenêtre** (`servers::window`, `space_window`, du bureau) : une `WebviewWindow` `space-<id>` (`space-here` pour ce poste) sur `index.html?space=<id>` ; son transport demande `server_link { space }`. Une par espace (S14) ; la capacité `default` couvre `space-*` ; la fermer la ferme (la principale va seule au tray).
+- **Les notifications** : une demande nouvelle d'un autre serveur, vue par sa lecture, est notifiée par `space_notify` (du bureau : les réglages de ce poste, le son, le toast, un clic qui émet `space-focus` à la fenêtre principale) ; celles du cœur de ce poste disent « Ce poste · … » dès qu'un serveur est connu (`TauriHost::notify`).
+- **Les stratégies** (`escouade-policy`, plus « à venir ») : `servers.personalSpace` à `false` refuse tout serveur hors de `servers.allowed` (aucun sans liste) ; `servers.aggregateView`, `servers.contentlessNotifications` s'appliquent aux serveurs de travail (de `servers.allowed`, ou tous sans liste). `servers_view` porte les verrous de ce poste, que la fenêtre lit même sur un serveur.
+- **La mémoire de trois connexions** : mesurée par l'e2e `spaces.spec.ts` (le processus de l'app et le tas JS de la fenêtre, un espace contre trois), notée au bilan du ticket.
+- **Les essais** : Rust (`servers_tests` : deux `escouade-server` derrière le faux `ssh`, chacun son tunnel, la coupure de l'un sans l'autre — `down-<hôte>` et `cut-<hôte>` du faux `ssh` —, sa reprise seule, l'oubli qui ne ferme que le sien ; `glance_tests` ; `locks_policies_tests` : `servers.personalSpace`) ; Vitest (`spaces.test.ts`) ; e2e (`spaces.spec.ts`, `test.use({ sshServer: 2 })`, aux deux tailles).
 
 ### Ce qui change de machine, MS-4 (ESC-538, 2026-11-18)
 

@@ -7,6 +7,9 @@
   import { t } from '../../lib/i18n';
   import { forgetServer, goHome, goToServer, loadServers, openConnect, retryNow, servers } from '../../lib/servers.svelte';
   import { app } from '../../lib/state.svelte';
+  import { lockLine } from '../../lib/locks.svelte';
+  import { ownLocks, spacesState } from '../../lib/spaces.svelte';
+  import type { LockedBy } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import SpacePlate from '../servers/SpacePlate.svelte';
 
@@ -25,8 +28,38 @@
       if (connection.state === 'refused') return pillOf(s) ?? { text: t('servers.settings.refused'), tone: 'err' };
       return { text: t('servers.settings.reconnecting'), tone: 'wait' };
     }
+    // Another space (ESC-539): its own connection, kept up for its pile and « Partout ».
+    const own = spacesState.watched[s.id]?.conn.state;
+    if (own === 'open') return { text: t('servers.settings.connected'), tone: 'ok' };
+    if (own === 'lost' || (own === 'connecting' && !s.problem)) return { text: t('servers.settings.reconnecting'), tone: 'wait' };
     return pillOf(s) ?? { text: t('servers.settings.notConnected'), tone: '' };
   }
+
+  /**
+   * The policies of this computer on the servers (ESC-539), each greyed with its padlock and who imposes it: what this
+   * page cannot change.
+   */
+  const policies = $derived(
+    (
+      [
+        ['servers.allowed', 'allowed'],
+        ['servers.personalSpace', 'personal'],
+        ['servers.aggregateView', 'aggregate'],
+        ['servers.contentlessNotifications', 'contentless'],
+      ] as const
+    )
+      .map(([key, name]) => {
+        const lock = ownLocks().locks[key];
+        const by: LockedBy | null | undefined = lock?.by ?? lock?.bounds?.[0]?.by;
+        if (!lock || !by) return null;
+        const list = [...(Array.isArray(lock.value) ? (lock.value as string[]) : []), ...(lock.bounds ?? []).flatMap((b) => b.allowed)];
+        if (name === 'personal' && lock.value !== false) return null;
+        if (name === 'aggregate' && lock.value !== false) return null;
+        if (name === 'contentless' && lock.value !== true) return null;
+        return { key, by, title: t(`spaces.policies.${name}.title`), text: t(`spaces.policies.${name}.text`, { list: list.join(', ') }) };
+      })
+      .filter((r) => r !== null),
+  );
 
   function pillOf(s: ServerInfo): Pill | null {
     const p = s.problem;
@@ -52,7 +85,7 @@
   /** The line under its name: what its state says, or its version and when it was seen. */
   function lineOf(s: ServerInfo): string {
     const p = s.problem;
-    if (p?.kind === 'hostKey') return t('servers.problem.hostKey.text', { host: s.ssh });
+    if (p?.kind === 'hostKey') return t('servers.problem.hostKey.text', { command: `ssh ${s.ssh}` });
     if (p?.kind === 'unreachable' || p?.kind === 'noEscouade') return p.output.split('\n').at(-1) ?? '';
     if (p?.kind === 'version')
       return p.update === 'client'
@@ -149,6 +182,19 @@
   </ul>
 {:else if servers.view}
   <p class="empty">{t('servers.settings.empty')}</p>
+{/if}
+
+{#if policies.length}
+  <h3 class="sub">{t('spaces.policies.title')}</h3>
+  <ul class="list">
+    {#each policies as r (r.key)}
+      <li class="lockrow" data-testid="server-policy" data-key={r.key}>
+        <b>{r.title}</b>
+        <span class="lk"><Icon name="lock" size={12} />{lockLine(r.by)}</span>
+        <span class="d">{r.text}</span>
+      </li>
+    {/each}
+  </ul>
 {/if}
 
 {#if servers.view}
@@ -283,5 +329,33 @@
   .confirm p {
     margin: 0;
     color: var(--soft);
+  }
+  .sub {
+    margin: 18px 0 4px;
+    font-size: 13px;
+    font-weight: 640;
+  }
+  .lockrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    align-items: baseline;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .lockrow b {
+    color: var(--soft);
+    font-weight: 620;
+  }
+  .lk {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .d {
+    font-size: 12px;
   }
 </style>

@@ -94,9 +94,9 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | Policy | Key and type | What it does | On the device |
 | --- | --- | --- | --- |
 | Allowed servers | `servers.allowed` · list · restrict | The addresses of the team servers and the servers in server mode the app may reach. Absent, all. | A server outside the list is refused, with the reason. |
-| Deny the personal space | `servers.personalSpace` · Boolean `false` (`0`) · restrict | Only the spaces of the allowed servers open, not the device’s own. Only the value false (0) is imposed. | Read and kept; applied with the spaces of the server mode (to come). |
-| Deny the aggregate view | `servers.aggregateView` · Boolean `false` (`0`) · restrict | The spaces are not shown together in one view. Only the value false (0) is imposed. | Read and kept; applied with the spaces of the server mode (to come). |
-| Notifications without content | `servers.contentlessNotifications` · Boolean `true` (`1`) · restrict | The notifications from a server say something happens, never what. Only the value true (1) is imposed. | Read and kept; applied with the team server’s notifications (to come). |
+| Deny the personal space | `servers.personalSpace` · Boolean `false` (`0`) · restrict | Only the servers of the allowed servers’ list are added as spaces; without the list, none. This device stays a space. Only the value false (0) is imposed. | A server outside the list is refused before any connection, with the reason. |
+| Deny the aggregate view | `servers.aggregateView` · Boolean `false` (`0`) · restrict | The “Everywhere” view shows only the numbers of a work server (of the allowed servers’ list, or any server without one), no text nor gesture. Set on a server, it holds for it. Only the value false (0) is imposed. | “Everywhere” gives only the numbers of these spaces. |
+| Notifications without content | `servers.contentlessNotifications` · Boolean `true` (`1`) · restrict | The notifications from a work server (of the allowed servers’ list, or any server without one) say an agent is waiting, never what. Set on a server, it holds for it. Only the value true (1) is imposed. | The notifications of these spaces carry no text. |
 | Deny the remote API | `servers.remoteApi` · Boolean `false` (`0`) · restrict | The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed. | The remote API refused at its start and at each connection. |
 
 ### Outside MCP clients

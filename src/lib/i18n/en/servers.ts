@@ -93,7 +93,7 @@ export default defineZone('servers', {
     hostKey: {
       title: 'Unknown host key',
       changedTitle: 'The key of {host} changed',
-      text: 'Escouade won’t accept a host key for you: connect once with ssh {host}.',
+      text: 'Escouade won’t accept a host key for you: connect once with {command}.',
       changedText:
         'The host’s key is no longer the one this computer knew. It may be a reinstall, or someone in between: check it with the administrator before replacing it in known_hosts.',
       copy: 'Copy the command',

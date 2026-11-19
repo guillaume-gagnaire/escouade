@@ -114,3 +114,18 @@ Dès deux espaces, **une colonne d'espaces** de 64 px s'ouvre à gauche du rail 
 ## Recommandation
 
 **A, l'aiguillage**, avec deux emprunts à C : le menu de l'espace (nouvelle fenêtre, réglages, notifications, se déconnecter, retirer) au clic droit sur la machine de la barre de titre, et une info-bulle qui détaille, espace par espace, le nombre de l'aiguillage. Les raisons sont dans [`docs/SERVER-UX.md`](../../docs/SERVER-UX.md) § 6.
+
+## Ce qui a été construit : la direction B (ESC-539)
+
+L'utilisateur a choisi **B, les piles**, le 2026-11-18. Les captures de l'app construite sont dans [`espaces/`](espaces/). Elles sont prises par l'e2e `tests/e2e/spaces.spec.ts` (`ESCOUADE_E2E_SHOTS`), à 1440 et à 1024, en sombre et en clair, contre deux `escouade-server`.
+
+| Écran | Capture | Maquette |
+| --- | --- | --- |
+| Deux espaces, ce poste en pile | `espaces/espaces-deux.png` | `captures/b-deux.png` |
+| Trois espaces, les piles (plaques à 1024) | `espaces/espaces-piles.png`, `espaces/espaces-piles-1024.png` | `captures/b-serveur.png` |
+| « Partout », la machine sur chaque demande | `espaces/espaces-partout.png` | `captures/b-trois.png` |
+| Un espace coupé, sans geste | `espaces/espaces-coupe.png` | `captures/b-coupure.png` |
+| La vue agrégée interdite : des nombres | `espaces/espaces-masque.png` | réglage de `captures/x-etats.png` |
+| Réglages de l'espace › Appareils | `espaces/espaces-appareils.png` | `captures/b-appareils.png` |
+
+`espaces/memoire.txt` donne la mémoire mesurée, avec un espace puis avec trois connectés.

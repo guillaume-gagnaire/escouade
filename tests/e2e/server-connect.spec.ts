@@ -87,7 +87,8 @@ test('connects to a server through an SSH tunnel: pairing, an agent, a cut and b
 
   // The window on the server: the machine said in the title bar, the rail, the status bar.
   await expect(page.getByTestId('title-machine')).toContainText('Travail', { timeout: 60_000 });
-  await expect(page.getByTestId('rail-space-other')).toContainText('Ce poste');
+  // This computer as a pile (direction B, ESC-539): « Poste » under its plate, its whole name said.
+  await expect(page.getByTestId('rail-space-other')).toHaveAccessibleName(/^Ce poste, /);
   // The token in the keychain of this computer, never in its settings nor its log.
   const servers = fs.readFileSync(path.join(app.data, 'servers.json'), 'utf8');
   expect(servers).toContain('Travail');

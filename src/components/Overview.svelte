@@ -20,6 +20,8 @@
   import StatusDot from './StatusDot.svelte';
   import { pendingFor, pendingLabel, pendingText } from '../lib/later';
   import { tip } from '../lib/tip';
+  import Everywhere from './servers/Everywhere.svelte';
+  import { currentId, spaceList, spacesShown, spacesState } from '../lib/spaces.svelte';
 
   // « Vue d’ensemble » (Ctrl+Shift+A): every agent of every project in one list, the ones waiting for an answer first,
   // whose permissions are answered on the spot; a line opens its agent.
@@ -465,6 +467,26 @@
 <main class="overview" bind:this={root} onfocusin={onFocusIn} aria-labelledby="ov-title">
   <header class="head">
     <h1 id="ov-title">{t('common.overview')}</h1>
+    <!-- « Partout » (ESC-539, direction B): every space at once, or one of them. -->
+    {#if spacesShown()}
+      <div class="seg" role="tablist" aria-label={t('spaces.tabs')} data-testid="overview-spaces">
+        <button
+          role="tab"
+          aria-selected={spacesState.filter === 'all'}
+          class:on={spacesState.filter === 'all'}
+          onclick={() => (spacesState.filter = 'all')}
+          >{t('spaces.everywhere')}<span class="c">{t('spaces.count', { n: spaceList().length })}</span></button
+        >
+        {#each spaceList() as s (s.id)}
+          <button
+            role="tab"
+            aria-selected={spacesState.filter === s.id}
+            class:on={spacesState.filter === s.id}
+            onclick={() => (spacesState.filter = s.id)}>{s.name}</button
+          >
+        {/each}
+      </div>
+    {/if}
     <span class="sub" use:tip={{ text: sub, cut: true }}>{sub}</span>
     <span class="keys" aria-hidden="true">
       {#if order.length}
@@ -479,7 +501,9 @@
     </span>
   </header>
   <div class="scroll">
-    {#if groups.length > 1 || waiting.length || prs.length}
+    {#if spacesShown() && spacesState.filter !== currentId()}
+      <Everywhere filter={spacesState.filter} />
+    {:else if groups.length > 1 || waiting.length || prs.length}
       <div class="list ov">
         <!-- Each value says what it is to assistive technologies (`.sr`): the headings are for the eyes. -->
         <div class="cols" aria-hidden="true">
@@ -550,6 +574,35 @@
     padding: 0 24px 0 28px;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
+  }
+  .seg {
+    display: inline-flex;
+    flex: none;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .seg button {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--soft);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .seg button.on {
+    background: var(--raise-2);
+    color: var(--text);
+  }
+  .seg .c {
+    color: var(--muted);
+    font-weight: 500;
   }
   h1 {
     flex: none;

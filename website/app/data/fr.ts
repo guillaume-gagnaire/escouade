@@ -420,6 +420,7 @@ export const fr: Catalog = {
       'claude-code-view': 'La vue terminal',
       'remote-control': 'Remote control',
       'connect-server': 'Se connecter à un serveur',
+      spaces: 'Plusieurs serveurs : les espaces',
       git: 'Git et commits',
       worktrees: 'Worktrees',
       branches: 'Branches',

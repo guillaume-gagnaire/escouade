@@ -231,7 +231,8 @@
 </script>
 
 <nav class="rail" aria-label={t('nav.rail.label')} data-tip-edge bind:this={nav}>
-  {#if !first}
+  <!-- With spaces (ESC-539, S2), this computer stays one even without a project: its head and « Partout ». -->
+  {#if !first || knowsServers()}
     <button
       class="tile global"
       aria-pressed={app.ui.view === 'overview'}

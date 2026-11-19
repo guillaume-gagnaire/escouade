@@ -146,7 +146,8 @@ fn the_capability_names_the_windows_webviews_never_a_page() {
         .iter()
         .map(|v| v.as_str().unwrap().to_string())
         .collect();
-    assert_eq!(webviews, ["main", "pagesbar-*"]);
+    // The spaces' own windows (ESC-539) are the app's too.
+    assert_eq!(webviews, ["main", "pagesbar-*", "space-*"]);
     for w in &webviews {
         let pattern = glob::Pattern::new(w).unwrap();
         assert!(!pattern.matches(&page_label("a1")), "{w}");

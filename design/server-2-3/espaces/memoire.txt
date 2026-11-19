@@ -1,0 +1,2 @@
+ · memory: one space 19 MB (app) / 12 MB (heap); three spaces 21 MB / 22 MB
+1024x728 · memory: one space 20 MB (app) / 14 MB (heap); three spaces 22 MB / 26 MB

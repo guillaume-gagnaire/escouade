@@ -15,6 +15,8 @@
   import SpacePlate from './servers/SpacePlate.svelte';
   import { connection } from '../lib/connection.svelte';
   import { knowsServers } from '../lib/servers.svelte';
+  import { spacesShown, spacesState } from '../lib/spaces.svelte';
+  import { windowSpace } from '../lib/transport';
 
   // The title bar of the 2.0 design (ESC-158), with no tabs: over the projects' rail, the logo (Windows, Linux) or the
   // room of macOS's traffic lights; over the agents' sidebar, the active project's name and its menu; the search in the
@@ -50,6 +52,8 @@
   const server = $derived(connection.server);
   const cut = $derived(server !== null && connection.state !== 'open');
   const machineShown = $derived(knowsServers());
+  // « Partout » (ESC-539, direction B): no machine in particular, each row says its own.
+  const everywhere = $derived(app.ui.view === 'overview' && spacesShown() && spacesState.filter === 'all');
 
   function openMenu() {
     if (!activeProject || !nameButton) return;
@@ -64,7 +68,10 @@
     <div class="corner" data-tauri-drag-region>
       {#if !IS_MAC}<img class="mark" src="/logo.svg" alt="Escouade" draggable="false" />{/if}
     </div>
-    {#if machineShown}
+    {#if everywhere}
+      <span class="machine" role="status" data-testid="title-machine"><Icon name="overview" size={13} /><b>{t('spaces.all')}</b></span>
+      <span class="slash" aria-hidden="true">/</span><b class="view">{t('common.overview')}</b>
+    {:else if machineShown}
       <span
         class="machine"
         class:cut
@@ -163,7 +170,8 @@
           onclick={() => {
             // Closed to the tray: no one sees a dictation under way any more.
             dictation.cancel();
-            void win.hide();
+            // A space's own window (ESC-539) closes; the main one goes to the tray.
+            void (windowSpace ? win.close() : win.hide());
           }}
         >
           <Icon name="close" size={14} />
@@ -259,6 +267,11 @@
     gap: 4px;
     font-size: 12px;
     font-weight: 600;
+  }
+  .view {
+    font-size: 13px;
+    font-weight: 620;
+    white-space: nowrap;
   }
   .slash {
     color: var(--dim);

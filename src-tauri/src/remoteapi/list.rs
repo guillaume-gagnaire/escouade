@@ -319,6 +319,11 @@ escouade_command::commands! {
         commands::overseer_send,
         commands::overseer_undo,
         commands::overseer_revoke,
+        // « Partout » and Réglages de l'espace › Appareils (ESC-539): what waits at a glance, the devices, a code.
+        commands::space_glance,
+        commands::remote_devices,
+        commands::remote_device_revoke,
+        commands::remote_pair_code,
         // The box « À toi » (ESC-509): the phone's first screen, its files' bytes in raw frames.
         commands::inbox_list,
         commands::inbox_get,
@@ -472,6 +477,9 @@ escouade_command::commands! {
         commands::servers_view,
         commands::servers_ssh_hosts,
         commands::server_link,
+        commands::server_links,
+        commands::space_window,
+        commands::space_notify,
         commands::server_attempt,
         commands::server_code_over_ssh,
         commands::server_pair,

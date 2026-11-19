@@ -9,6 +9,10 @@ export default {
       label: 'Serveurs',
       desc: 'Les serveurs Escouade que ce poste connaît. Chacun est un espace : ses projets, ses agents, ses comptes et ses réglages restent sur lui.',
     },
+    devices: {
+      label: 'Appareils',
+      desc: 'Les appareils appairés au serveur de cet espace : les lister, en retirer un, créer un code pour un nouveau.',
+    },
     agents: {
       label: 'Agents',
       desc: 'Les nouveaux agents, leurs permissions, les textes rédigés, le remote control et le pilotage d’Escouade',

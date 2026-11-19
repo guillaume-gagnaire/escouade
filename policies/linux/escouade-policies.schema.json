@@ -189,7 +189,7 @@
       "type": "boolean"
     },
     "servers.aggregateView": {
-      "description": "The spaces are not shown together in one view. Only the value false (0) is imposed. Read and kept; applied with the spaces of the server mode (to come).",
+      "description": "The “Everywhere” view shows only the numbers of a work server (of the allowed servers’ list, or any server without one), no text nor gesture. Set on a server, it holds for it. Only the value false (0) is imposed. “Everywhere” gives only the numbers of these spaces.",
       "enum": [
         false
       ],
@@ -205,7 +205,7 @@
       "type": "array"
     },
     "servers.contentlessNotifications": {
-      "description": "The notifications from a server say something happens, never what. Only the value true (1) is imposed. Read and kept; applied with the team server’s notifications (to come).",
+      "description": "The notifications from a work server (of the allowed servers’ list, or any server without one) say an agent is waiting, never what. Set on a server, it holds for it. Only the value true (1) is imposed. The notifications of these spaces carry no text.",
       "enum": [
         true
       ],
@@ -213,7 +213,7 @@
       "type": "boolean"
     },
     "servers.personalSpace": {
-      "description": "Only the spaces of the allowed servers open, not the device’s own. Only the value false (0) is imposed. Read and kept; applied with the spaces of the server mode (to come).",
+      "description": "Only the servers of the allowed servers’ list are added as spaces; without the list, none. This device stays a space. Only the value false (0) is imposed. A server outside the list is refused before any connection, with the reason.",
       "enum": [
         false
       ],

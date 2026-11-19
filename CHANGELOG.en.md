@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Server mode: several servers in one Escouade, each its own space as a pile in the projects bar, all kept connected. The “Everywhere” view shows what waits on each machine and answers it without changing space, the machine written on each request; `Alt+1`…`Alt+9` go from one space to another, and a managed computer can leave only numbers there.
 - Server mode: on a server, what belongs on your computer stays there. “New project” clones a repository or browses the server’s folders; a file an agent sends is downloaded when you open it into Downloads/Escouade (a script is never opened); a test server opens on your computer; notifications and voice are your computer’s; an account signs in from your browser.
 - Server mode, ready to deploy: a Docker image (amd64 and arm64) that runs without root and keeps everything in its volume, a Compose example and a Coolify recipe, or `install.sh`, which sets up a systemd service once the signature is checked. `escouade-server update` updates the server, its signature checked, once the agents’ turns are over.
 - First launch: your first project comes from a folder, a repository to clone or a throwaway demo project created on your machine without network, and your first agent starts from a suggested message that you edit and send yourself. Its answer, its first permission request and its diff are explained where they appear, and a usage limit, a lost connection or a signed-out account tell you what to do.

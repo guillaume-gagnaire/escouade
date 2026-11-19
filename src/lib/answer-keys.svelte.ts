@@ -22,8 +22,11 @@ const sends = (e: KeyboardEvent) =>
  * would send its text as the answer. The text stays there.
  */
 export function captureKeys(on: () => boolean, handler: (e: KeyboardEvent) => void) {
+  // Its turning on alone starts the wait: an agent that changes while its card stays the one answered (its activity, a
+  // count) does not start it again (ESC-539: `Alt+n` of the spaces was held at every change).
+  const active = $derived(on());
   $effect(() => {
-    if (!on()) return;
+    if (!active) return;
     // A monotonic clock: a change of the system's time neither ends the wait early nor makes it last.
     const since = performance.now();
     const listen = (e: KeyboardEvent) => {

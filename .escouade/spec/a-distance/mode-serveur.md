@@ -2,7 +2,7 @@
 title: "Le mode serveur"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image)","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »"]
-tickets: ["ESC-514","ESC-515","ESC-537","ESC-538"]
+tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539"]
 decisions: [202,216]
 compared: null
 ---
@@ -142,7 +142,6 @@ Il ne dit jamais de jeton, de code, de secret ni ce qu'écrit un terminal. `--de
 
 ## Pas encore
 
-- Plusieurs serveurs dans un même client, leurs espaces et leurs piles.
 - L'écran « Mettre à jour le serveur » qui lance la commande ou dit l'image (le fait est exposé : `serverUpdate`).
 - Une adresse `wss://` d'un domaine dans le client.
 - Les serveurs de langage de l'éditeur, encore refusés à distance.

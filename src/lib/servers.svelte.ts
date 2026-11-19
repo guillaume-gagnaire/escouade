@@ -8,6 +8,7 @@
 import { connection, type ServerInfo, type ServerProblem } from './connection.svelte';
 import { locale, t } from './i18n';
 import { app } from './state.svelte';
+import type { Locks } from './types';
 import { local, remoteTransport } from './transport';
 
 export interface SshHost {
@@ -23,6 +24,8 @@ export interface ServersView {
   active: string | null;
   tokensInFile: boolean;
   thisDevice: string;
+  /** This computer's policies (ESC-539), whichever core the window speaks to. */
+  locks?: Locks;
 }
 
 /** The answer of a step of the dialog (`servers::Outcome`). */

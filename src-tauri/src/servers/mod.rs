@@ -8,10 +8,14 @@
 //! - **The dialog** ([`Servers::attempt`]): the policy of this computer first (`servers.allowed`), then the tunnel and
 //!   the handshake without a token (Escouade answers? its version?), then the pairing by a code typed or got by SSH
 //!   (`escouade-server pair` run through the same host), then the handshake with the token.
-//! - **The window on a server** ([`Servers::open`]): the tunnel kept up while the window is on it — `ssh` ended is
-//!   started again at the delays of the window's own tries (250 ms … 5 s), on the same local port when it is still free;
-//!   an end that trying again cannot mend (a host key, a refused account) stops it, and says why. The window asks where
-//!   to connect ([`Servers::link`]) before each of its tries.
+//! - **The window on a server** ([`Servers::open`]): the tunnel kept up — `ssh` ended is started again at the delays
+//!   of the window's own tries (250 ms … 5 s), on the same local port when it is still free; an end that trying again
+//!   cannot mend (a host key, a refused account) stops it, and says why. The window asks where to connect
+//!   ([`Servers::link`]) before each of its tries.
+//! - **Several servers at once** (ESC-539, the spaces of direction B): every server known keeps its own tunnel up, each
+//!   with its own tries ([`Servers::resume`] at the start, [`Servers::ensure`] after a pairing): the piles of the rail
+//!   and « Partout » read each space through it, and a space opens in its own window ([`Servers::link_of`]). One that
+//!   goes down never touches another's.
 //! - **Forgetting a server** ([`Servers::forget`]): the server asked to revoke this computer when it answers (S15), its
 //!   token and its line forgotten here; the agents of the server go on.
 //!
@@ -22,6 +26,8 @@ pub mod client;
 pub mod received;
 pub mod sshconfig;
 pub mod tunnel;
+#[cfg(feature = "desktop")]
+pub mod window;
 
 use crate::integrations::secrets::{keep_secret, SecretStore};
 use crate::model::{new_id, now_ms};
@@ -225,6 +231,10 @@ pub struct View {
     pub tokens_in_file: bool,
     /// This computer's name, as a server will be told it (« DESKTOP-7QK2 · Windows »).
     pub this_device: String,
+    /// The policies of this computer (ESC-539): what « Partout » and the notifications of a work server follow, even
+    /// while the window is on a server (whose own the window reads otherwise).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locks: Option<crate::locks::Locks>,
 }
 
 /// How the tunnel of the active server stands.
@@ -296,7 +306,7 @@ fn problem<T: Serialize>(p: Problem) -> Outcome<T> {
     Outcome::Problem { problem: p }
 }
 
-/// The tunnel of the server the window is on, kept up.
+/// The tunnel of a server, kept up.
 struct Live {
     id: String,
     port: Arc<Mutex<u16>>,
@@ -318,7 +328,8 @@ pub struct Servers {
     ssh_config: Option<PathBuf>,
     saved: Mutex<Saved>,
     attempts: Mutex<HashMap<String, Attempt>>,
-    live: Mutex<Option<Live>>,
+    /// The tunnels kept up, by server.
+    live: Mutex<HashMap<String, Live>>,
     /// The ports of the server relayed to this computer (ESC-538), by the server's port: a forward of its own each.
     relays: Mutex<HashMap<u16, Arc<Tunnel>>>,
 }
@@ -369,7 +380,7 @@ impl Servers {
             ssh_config,
             saved: Mutex::new(saved),
             attempts: Mutex::new(HashMap::new()),
-            live: Mutex::new(None),
+            live: Mutex::new(HashMap::new()),
             relays: Mutex::new(HashMap::new()),
         })
     }
@@ -474,6 +485,7 @@ impl Servers {
             active: saved.active.clone(),
             tokens_in_file: !self.file_tokens().is_empty(),
             this_device: this_device(),
+            locks: None,
         }
     }
 
@@ -492,23 +504,60 @@ impl Servers {
 
     /// Where the window connects to the server it is on; none on this computer.
     pub fn link(&self) -> Option<Link> {
-        let id = self.active()?;
-        let known = self.known(&id)?;
-        let live = self.live.lock();
-        let live = live.as_ref().filter(|l| l.id == id)?;
-        let port = *live.port.lock();
-        let tunnel = live.state.lock().clone();
+        self.link_of(&self.active()?)
+    }
+
+    /// Where to connect to the server `id` (a space's own window, a pile, « Partout »): through its tunnel, or the
+    /// tunnel down for good and why. None when it is not known.
+    pub fn link_of(&self, id: &str) -> Option<Link> {
+        let known = self.known(id)?;
+        let (port, tunnel) = match self.live.lock().get(id) {
+            Some(l) => (*l.port.lock(), l.state.lock().clone()),
+            None => (
+                0,
+                TunnelState::Failed {
+                    problem: known
+                        .problem
+                        .clone()
+                        .unwrap_or(Problem::Revoked { revoked: None }),
+                },
+            ),
+        };
+        let active = self.active().as_deref() == Some(id);
         Some(Link {
             url: format!("ws://127.0.0.1:{port}{}", crate::remoteapi::proto::PATH),
-            token: self.token(&id).unwrap_or_default(),
+            token: self.token(id).unwrap_or_default(),
             version: self.version.clone(),
             server: ServerView {
-                active: true,
+                active,
                 ssh: known.dest.shown(),
                 known,
             },
             tunnel,
         })
+    }
+
+    /// The links of every server known, in their order (the spaces after this computer's).
+    pub fn links(&self) -> Vec<Link> {
+        let ids: Vec<String> = self
+            .saved
+            .lock()
+            .servers
+            .iter()
+            .map(|k| k.id.clone())
+            .collect();
+        ids.iter().filter_map(|id| self.link_of(id)).collect()
+    }
+
+    /// How many servers this computer knows.
+    pub fn count(&self) -> usize {
+        self.saved.lock().servers.len()
+    }
+
+    /// How many tunnels are kept up (the tests).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn tunnels(&self) -> usize {
+        self.live.lock().len()
     }
 
     // ---------- the dialog ----------
@@ -742,8 +791,29 @@ impl Servers {
             self.set_problem(id, Some(p.clone()));
             return problem(p);
         };
-        // The tunnel of the one before stopped; this one started, then kept up.
-        self.leave_tunnel();
+        // Its tunnel kept up already (another space was open): its handshake through it.
+        if let Some(port) = self.up_port(id).await {
+            let checked = match tokio::net::TcpStream::connect(("127.0.0.1", port)).await {
+                Ok(stream) => client::hello(stream, port, &self.version, &token).await,
+                Err(_) => Err(client::Refusal::NoEscouade {
+                    detail: String::new(),
+                }),
+            };
+            match checked {
+                Ok(welcome) => {
+                    self.opened(id, &welcome);
+                    return Outcome::Ok { value: () };
+                }
+                Err(client::Refusal::NoEscouade { .. }) => {}
+                Err(r) => {
+                    let p = Problem::of_refusal(r, None, &self.version);
+                    self.set_problem(id, Some(p.clone()));
+                    return problem(p);
+                }
+            }
+        }
+        // A tunnel of its own, then kept up.
+        self.stop_tunnel(id);
         let tunnel = match Tunnel::start(&self.ssh, &known.dest, known.remote_port, None) {
             Ok(t) => Arc::new(t),
             Err(f) => {
@@ -770,6 +840,17 @@ impl Servers {
                 return problem(p);
             }
         };
+        self.opened(id, &welcome);
+        self.keep_up(id, tunnel);
+        Outcome::Ok { value: () }
+    }
+
+    /// The server `id` reached with this computer's token: the window's from now on (the ports relayed for the server
+    /// it was on stop, ESC-538).
+    fn opened(&self, id: &str, welcome: &client::Welcome) {
+        if self.active().as_deref() != Some(id) {
+            self.stop_relays();
+        }
         self.change(|s| {
             if let Some(k) = s.servers.iter_mut().find(|k| k.id == id) {
                 k.problem = None;
@@ -779,32 +860,85 @@ impl Servers {
             }
             s.active = Some(id.to_string());
         });
-        self.keep_up(id, tunnel);
-        Outcome::Ok { value: () }
     }
 
-    /// At the app's start, on the server it was on: its tunnel started and kept up (the window connects as it comes).
+    /// The port of the tunnel of `id` once it is up (waited for while it starts); none when it is not kept up, or
+    /// failed.
+    async fn up_port(&self, id: &str) -> Option<u16> {
+        let deadline = tokio::time::Instant::now() + tunnel::READY_WAIT;
+        loop {
+            let (state, port) = {
+                let live = self.live.lock();
+                let found = live
+                    .get(id)
+                    .map(|l| (l.state.lock().clone(), *l.port.lock()));
+                drop(live);
+                found?
+            };
+            match state {
+                TunnelState::Up => return Some(port),
+                TunnelState::Failed { .. } => return None,
+                TunnelState::Starting { .. } if tokio::time::Instant::now() >= deadline => {
+                    return None
+                }
+                TunnelState::Starting { .. } => {
+                    tokio::time::sleep(Duration::from_millis(100)).await
+                }
+            }
+        }
+    }
+
+    /// At the app's start: every server known gets its tunnel, kept up (the window connects to the one it was on as it
+    /// comes; the piles and « Partout » to the others). One the policy now refuses is not reached; when the window was
+    /// on it, it is back on this computer.
     pub fn resume(self: &Arc<Self>) {
-        let Some(id) = self.active() else {
+        if let Some(id) = self.active() {
+            match self.known(&id) {
+                None => self.change(|s| s.active = None),
+                Some(known) => {
+                    if (self.policy)(&known.host).is_err() {
+                        log::warn!("servers: the server the window was on is refused by the policy: back on this computer");
+                        self.change(|s| s.active = None);
+                    }
+                }
+            }
+        }
+        let ids: Vec<String> = self
+            .saved
+            .lock()
+            .servers
+            .iter()
+            .map(|k| k.id.clone())
+            .collect();
+        for id in ids {
+            self.ensure(&id);
+        }
+    }
+
+    /// The tunnel of the server `id` kept up, unless it is already, or the policy refuses it, or this computer has no
+    /// token for it (each said as its problem).
+    pub fn ensure(self: &Arc<Self>, id: &str) {
+        if self.live.lock().contains_key(id) {
             return;
-        };
-        let Some(known) = self.known(&id) else {
-            self.change(|s| s.active = None);
+        }
+        let Some(known) = self.known(id) else {
             return;
         };
         if let Err(e) = (self.policy)(&known.host) {
-            log::warn!("servers: the server the window was on is refused by the policy: back on this computer");
             self.set_problem(
-                &id,
+                id,
                 Some(Problem::Policy {
                     message: e.to_string(),
                 }),
             );
-            self.change(|s| s.active = None);
+            return;
+        }
+        if self.token(id).is_none() {
+            self.set_problem(id, Some(Problem::Revoked { revoked: None }));
             return;
         }
         let port = tunnel::free_port().unwrap_or(0);
-        self.supervise(id, None, port);
+        self.supervise(id.to_string(), None, port);
     }
 
     /// The tunnel `tunnel` (up) of the server `id` kept up from now on.
@@ -825,13 +959,20 @@ impl Servers {
         let port = Arc::new(Mutex::new(port));
         let wake = Arc::new(tokio::sync::Notify::new());
         let stop = Arc::new(tokio::sync::Notify::new());
-        *self.live.lock() = Some(Live {
-            id: id.clone(),
-            port: port.clone(),
-            state: state.clone(),
-            wake: wake.clone(),
-            stop: stop.clone(),
-        });
+        let before = self.live.lock().insert(
+            id.clone(),
+            Live {
+                id: id.clone(),
+                port: port.clone(),
+                state: state.clone(),
+                wake: wake.clone(),
+                stop: stop.clone(),
+            },
+        );
+        if let Some(before) = before {
+            before.stop.notify_one();
+            before.stop.notify_waiters();
+        }
         let me = Arc::downgrade(self);
         tauri::async_runtime::spawn(async move {
             let mut current = first;
@@ -875,7 +1016,7 @@ impl Servers {
                 let failure = match up {
                     Ok(()) => {
                         if tries > 0 {
-                            log::info!("servers: the tunnel is up again");
+                            log::info!("servers: the tunnel of {id} is up again");
                         }
                         tries = 0;
                         since = None;
@@ -890,7 +1031,10 @@ impl Servers {
                 };
                 tunnel.stop();
                 if !failure.why.passing() {
-                    log::warn!("servers: the tunnel ended for good ({:?})", failure.why);
+                    log::warn!(
+                        "servers: the tunnel of {id} ended for good ({:?})",
+                        failure.why
+                    );
                     let p = Problem::of_failure(failure);
                     *state.lock() = TunnelState::Failed { problem: p.clone() };
                     if let Some(this) = me.upgrade() {
@@ -906,7 +1050,7 @@ impl Servers {
                 let delay = RETRY_DELAYS[(tries as usize).min(RETRY_DELAYS.len() - 1)];
                 tries += 1;
                 log::info!(
-                    "servers: the tunnel ended ({:?}): started again in {delay} ms (try {tries})",
+                    "servers: the tunnel of {id} ended ({:?}): started again in {delay} ms (try {tries})",
                     failure.why
                 );
                 *state.lock() = TunnelState::Starting { tries, since };
@@ -919,11 +1063,19 @@ impl Servers {
         });
     }
 
-    /// « Réessayer »: the tunnel started again now rather than at its next try; one that failed for good, tried again.
+    /// « Réessayer »: the tunnel of the server the window is on started again now rather than at its next try; one that
+    /// failed for good, tried again.
     pub fn retry(self: &Arc<Self>) {
+        if let Some(id) = self.active() {
+            self.retry_of(&id);
+        }
+    }
+
+    /// « Réessayer » on the space `id` (its pile, « Partout », its own window): its tunnel alone, the others untouched.
+    pub fn retry_of(self: &Arc<Self>, id: &str) {
         let failed = {
             let live = self.live.lock();
-            match live.as_ref() {
+            match live.get(id) {
                 Some(l) => {
                     l.wake.notify_one();
                     matches!(*l.state.lock(), TunnelState::Failed { .. })
@@ -932,22 +1084,23 @@ impl Servers {
                 None => None,
             }
         };
-        if let Some((id, port)) = failed {
-            self.supervise(id, None, port);
+        match failed {
+            Some((id, port)) => self.supervise(id, None, port),
+            None => self.ensure(id),
         }
     }
 
-    fn leave_tunnel(&self) {
-        self.stop_relays();
-        if let Some(live) = self.live.lock().take() {
+    fn stop_tunnel(&self, id: &str) {
+        if let Some(live) = self.live.lock().remove(id) {
             live.stop.notify_one();
             live.stop.notify_waiters();
         }
     }
 
-    /// Back on this computer: the tunnel stopped.
+    /// Back on this computer. The tunnels stay up: the servers are still spaces (their piles, « Partout »); the ports
+    /// relayed for the server the window was on stop (ESC-538).
     pub fn leave(&self) {
-        self.leave_tunnel();
+        self.stop_relays();
         self.change(|s| s.active = None);
     }
 
@@ -963,8 +1116,8 @@ impl Servers {
             let up = self
                 .live
                 .lock()
-                .as_ref()
-                .filter(|l| l.id == id && *l.state.lock() == TunnelState::Up)
+                .get(id)
+                .filter(|l| *l.state.lock() == TunnelState::Up)
                 .map(|l| *l.port.lock());
             let own = if up.is_none() {
                 Tunnel::start(&self.ssh, &known.dest, known.remote_port, None).ok()
@@ -989,6 +1142,7 @@ impl Servers {
         if self.active().as_deref() == Some(id) {
             self.leave();
         }
+        self.stop_tunnel(id);
         self.forget_token(id);
         self.change(|s| s.servers.retain(|k| k.id != id));
         log::info!(
@@ -1124,7 +1278,11 @@ impl Servers {
 
     /// The tunnels stopped: the app ends.
     pub fn shutdown(&self) {
-        self.leave_tunnel();
+        self.stop_relays();
+        let ids: Vec<String> = self.live.lock().keys().cloned().collect();
+        for id in ids {
+            self.stop_tunnel(&id);
+        }
         for (_, a) in self.attempts.lock().drain() {
             a.tunnel.stop();
         }

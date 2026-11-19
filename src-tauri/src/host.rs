@@ -171,6 +171,15 @@ impl<R: Runtime> Host for TauriHost<R> {
 
     fn notify(&self, title: &str, body: &str, on_click: Box<dyn Fn() + Send + 'static>) {
         let app = self.app.clone();
+        // Once this computer knows a server (ESC-539), its notifications say its space: « Ce poste · … ».
+        let named;
+        let title = match self.app.try_state::<Arc<crate::servers::Servers>>() {
+            Some(s) if s.count() > 0 => {
+                named = format!("{} · {title}", tr!("Ce poste", "This computer"));
+                named.as_str()
+            }
+            _ => title,
+        };
         crate::notify::toast(&self.app, title, body, move || {
             crate::notify::show_main(&app);
             on_click();

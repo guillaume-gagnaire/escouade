@@ -2,8 +2,8 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481"]
-decisions: [169,175,183,189,198,197,204,201]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539"]
+decisions: [169,175,183,189,198,197,204,201,218]
 compared: null
 ---
 
@@ -74,7 +74,9 @@ Un `REG_DWORD` 0 ou 1 devient un booléen quand la liste le dit ; une chaîne se
 | `updates.channel` | restreindre (`stable` seulement) | Réglages › Général › « Recevoir les versions bêta » |
 | `updates.automatic` | restreindre (éteint seulement) | Réglages › Général › « Installer les mises à jour automatiquement » |
 | `servers.allowed` | restreindre, une borne (adresses) | un serveur hors de la liste, refusé |
-| `servers.personalSpace`, `servers.aggregateView`, `servers.contentlessNotifications` | restreindre | lus et gardés ; appliqués avec les espaces et le serveur d'équipe (à venir) |
+| `servers.personalSpace` | restreindre (`false` seulement) | seuls les serveurs de `servers.allowed` s'ajoutent comme espaces ; sans cette liste, aucun ; ce poste reste un espace (voir *Les espaces*) |
+| `servers.aggregateView` | restreindre (`false` seulement) | « Partout » ne montre d'un serveur de travail (de `servers.allowed`, ou tout serveur sans liste) que ses nombres, ni texte ni geste ; posée sur un serveur, elle vaut pour lui |
+| `servers.contentlessNotifications` | restreindre (`true` seulement) | les notifications d'un serveur de travail disent qu'un agent attend, jamais quoi ; posée sur un serveur, elle vaut pour lui |
 | `servers.remoteApi` | restreindre (éteint seulement) | l'API distante du cœur (« Escouade à distance › L'API distante ») : refusée à son démarrage et à chaque nouvelle connexion |
 | `mcp.externalClients` | restreindre, un plafond (`denied`, `readOnly`, `allowed`) | Claude hors d'Escouade : refusé à la connexion (`denied`), ou ses outils qui écrivent refusés (`readOnly` : seuls `get_*`, `list_*`, `read_*`, `search_*`, `wait_*` passent) |
 | `team.server`, `team.fingerprint`, `team.onlyThisServer` | valeur ; restreindre | l'enrôlement (ci-dessous) |
@@ -122,10 +124,11 @@ L'interface ne fait que montrer. Une écriture de ce qui est imposé est refusé
 - **Un agent dans un mode devenu interdit** finit son tour, puis passe au mode permis le plus proche, et le dit dans sa conversation : « Le mode « auto » n'est pas permis par la stratégie de ce poste. L'agent passe en mode « acceptEdits », le plus proche permis. » Un agent qui ne travaille pas y passe aussitôt.
 - **Un agent d'un harness devenu interdit** s'arrête entre deux tours : son process est fermé à la fin de son tour (aussitôt s'il ne travaille pas), il le dit (« Le harness « claude » n'est pas permis par la stratégie de ce poste. L'agent s'arrête à la fin de son tour. »), et son message suivant est refusé.
 - **Une connexion de l'API distante déjà ouverte** quand `servers.remoteApi` passe à `false` continue ; la suivante est refusée.
+- **Les stratégies des espaces** (ESC-539) se montrent dans Réglages › Serveurs, sous « Imposé sur ce poste » : chacune grisée, son cadenas et qui l'impose ; la fenêtre les lit au cœur de ce poste même quand elle est sur un serveur. Changées à chaud, « Partout » les suit à sa lecture suivante (3 s).
 
 ## Pour les essais
 
-Un build de développement (jamais une version publiée) lit, à la place des stratégies du système, le fichier JSON que nomme `ESCOUADE_TEST_POLICIES` (`{"telemetry.enabled": false}`), et le **surveille** comme le système. C'est la source des e2e `tests/e2e/policies.spec.ts` et `tests/e2e/policies-live.spec.ts` (une stratégie posée puis retirée pendant que l'app tourne), et de `tests/e2e/vscode-extensions.spec.ts` (la liste permise des extensions imposée). Un test vérifie que ce code n'existe que sous `cfg(debug_assertions)` : une variable d'environnement ne doit ni lever ni poser une stratégie dans une version publiée (constat SEC-13 de l'audit de la 2.2.0). Le rang 5 s'essaie dans `tests/e2e/team-settings.spec.ts`, contre un vrai serveur d'équipe et deux clients.
+Un build de développement (jamais une version publiée) lit, à la place des stratégies du système, le fichier JSON que nomme `ESCOUADE_TEST_POLICIES` (`{"telemetry.enabled": false}`), et le **surveille** comme le système. C'est la source des e2e `tests/e2e/policies.spec.ts` et `tests/e2e/policies-live.spec.ts` (une stratégie posée puis retirée pendant que l'app tourne), de `tests/e2e/vscode-extensions.spec.ts` (la liste permise des extensions imposée) et de `tests/e2e/spaces.spec.ts` (`servers.aggregateView` posée puis retirée, deux serveurs connectés). Un test vérifie que ce code n'existe que sous `cfg(debug_assertions)` : une variable d'environnement ne doit ni lever ni poser une stratégie dans une version publiée (constat SEC-13 de l'audit de la 2.2.0). Le rang 5 s'essaie dans `tests/e2e/team-settings.spec.ts`, contre un vrai serveur d'équipe et deux clients.
 
 ## Le mode jugé est celui où tourne le harness (ESC-497)
 

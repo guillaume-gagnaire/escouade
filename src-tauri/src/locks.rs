@@ -851,8 +851,18 @@ impl Locks {
     /// the host typed): refused before any connection when `servers.allowed` does not hold it. An entry is a host
     /// (`escouade.acme.internal`, `ssh://escouade.acme.internal`, `user@host:port` read for its host) or a pattern of a
     /// domain (`*.acme.internal`).
+    ///
+    /// `servers.personalSpace` to `false` (ESC-539, S16): a server must be one of `servers.allowed`; without that list,
+    /// none is.
     pub fn check_ssh_server(&self, host: &str) -> Result<()> {
         let Some(lock) = self.get(SERVERS) else {
+            if self.off(PERSONAL_SPACE) {
+                let asked = ssh_host_of(host);
+                bail!(tr!(
+                    "Le serveur {asked} est refusé : la stratégie de ce poste n’ajoute que les serveurs de sa liste, et n’en pose aucune.",
+                    "Server {asked} is refused: this computer’s policy only adds the servers of its list, and sets none."
+                ));
+            }
             return Ok(());
         };
         let asked = ssh_host_of(host);

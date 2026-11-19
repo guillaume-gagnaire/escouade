@@ -19,6 +19,11 @@ describe('appTakes', () => {
       expect(appTakes(label, 'any.command', false), label).toBe(true);
     expect(appTakes('shift+cmd+n', 'x', true)).toBe(true);
     expect(appTakes('cmd+p', 'x', true)).toBe(true);
+    // The spaces' keys (ESC-539).
+    expect(appTakes('alt+2', 'x', false)).toBe(true);
+    expect(appTakes('ctrl+`', 'workbench.action.terminal.toggleTerminal', false)).toBe(true);
+    expect(appTakes('ctrl+3', 'x', true)).toBe(true);
+    expect(appTakes('alt+3', 'x', true)).toBe(false);
   });
 
   it('leaves VS Code the others, its chords, and its keys of another modifier', () => {
@@ -31,7 +36,7 @@ describe('appTakes', () => {
       'ctrl+alt+n',
       'ctrl+shift+l',
       'f1',
-      'alt+1',
+      'alt+shift+1',
       'ctrl+e',
     ])
       expect(appTakes(label, 'any.command', false), label).toBe(false);

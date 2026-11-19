@@ -129,6 +129,9 @@ mod fsedit;
 #[cfg(test)]
 mod gemini_tui_tests;
 mod git;
+mod glance;
+#[cfg(test)]
+mod glance_tests;
 mod handover;
 mod harness_scope;
 #[cfg(test)]
@@ -880,7 +883,10 @@ pub fn run() {
                     v.cancel();
                 }
                 let core = window.state::<Arc<Core>>();
-                if !core.quitting.load(Ordering::Acquire) {
+                // A space's own window (ESC-539) closes: the main window alone goes to the tray.
+                if !core.quitting.load(Ordering::Acquire)
+                    && !servers::window::is_space(window.label())
+                {
                     api.prevent_close();
                     let _ = window.hide();
                 }

@@ -111,7 +111,18 @@ export interface App {
    * computer would open (`<root>/opened.log`, ESCOUADE_OPEN_LOG) and the notifications it would show
    * (`<root>/alerts.log`, ESCOUADE_ALERT_LOG): nothing opens nor shows for real.
    */
-  ssh: { server: BareServer; program: string; dir: string; env: NodeJS.ProcessEnv } | null;
+  ssh: {
+    server: BareServer;
+    program: string;
+    dir: string;
+    env: NodeJS.ProcessEnv;
+    /**
+     * With `test.use({ sshServer: 2 })` (ESC-539, two spaces): a second `escouade-server`, host `perso` of the test's
+     * ~/.ssh/config, its own data folder; its port on the server is 46481 (the dialog's « Port d'Escouade sur le
+     * serveur »). Its fake ssh plays `down-perso` and `cut-perso` alone.
+     */
+    second: { server: BareServer; env: NodeJS.ProcessEnv } | null;
+  } | null;
 }
 
 function git(cwd: string, ...args: string[]) {
@@ -570,7 +581,7 @@ export const test = base.extend<{
   language: Language;
   preStart: { run: (root: string) => Record<string, unknown> | void };
   server: boolean;
-  sshServer: boolean;
+  sshServer: boolean | number;
 }>({
   // An `escouade-server` to connect to through the fake `ssh` (`test.use({ sshServer: true })`, ESC-537): `app.ssh`.
   sshServer: [false, { option: true }],
@@ -734,7 +745,7 @@ export const test = base.extend<{
     }
     // An `escouade-server` reached through the fake `ssh` (ESC-537): on the worktree's base + 2 when given. The app is
     // given the fake and a ~/.ssh/config of the test's; never a real SSH.
-    let sshed: { server: BareServer; program: string; dir: string; env: NodeJS.ProcessEnv } | null = null;
+    let sshed: App['ssh'] = null;
     if (sshServer) {
       const serverData = path.join(root, 'server-data');
       fs.mkdirSync(serverData);
@@ -751,20 +762,33 @@ export const test = base.extend<{
       fs.mkdirSync(path.dirname(config), { recursive: true });
       fs.writeFileSync(
         config,
-        'Host travail\n  HostName escouade.test.internal\n  User escouade\n\nHost labo-inconnu\n  HostName labo.test.internal\n  User gpu\n  ProxyJump travail\n\nHost *\n  ServerAliveInterval 30\n',
+        'Host travail\n  HostName escouade.test.internal\n  User escouade\n\nHost labo-inconnu\n  HostName labo.test.internal\n  User gpu\n  ProxyJump travail\n\n' +
+          (Number(sshServer) >= 2 ? 'Host perso\n  HostName vps.test.example\n  User escouade\n\n' : '') +
+          'Host *\n  ServerAliveInterval 30\n',
       );
       env.ESCOUADE_SSH = process.execPath;
       env.ESCOUADE_SSH_PREFIX = path.join(ROOT, 'tests', 'fixtures', 'fake-ssh.mjs');
       env.ESCOUADE_SSH_CONFIG = config;
       env.FAKE_SSH_DIR = dir;
       env.FAKE_SSH_PORTS = `46480=${bare.port}`;
+      // A second server (ESC-539): base + 3, its port on the server 46481.
+      let second: { server: BareServer; env: NodeJS.ProcessEnv } | null = null;
+      if (Number(sshServer) >= 2) {
+        const data2 = path.join(root, 'server-data-2');
+        fs.mkdirSync(data2);
+        fs.copyFileSync(path.join(data, 'settings.json'), path.join(data2, 'settings.json'));
+        const env2 = { ...env, ESCOUADE_DATA_DIR: data2 };
+        const bare2 = await startBareServer(program, data2, env2, base ? base + 3 : 0);
+        env.FAKE_SSH_PORTS += `,46481=${bare2.port}`;
+        second = { server: bare2, env: env2 };
+      }
       env.FAKE_SSH_SERVER = program;
       env.FAKE_SSH_DATA = serverData;
       env.FAKE_SSH_PORTS_FILE = portsFile;
       env.ESCOUADE_DOWNLOADS_DIR = path.join(root, 'downloads');
       env.ESCOUADE_OPEN_LOG = path.join(root, 'opened.log');
       env.ESCOUADE_ALERT_LOG = path.join(root, 'alerts.log');
-      sshed = { server: bare, program, dir, env: serverEnv };
+      sshed = { server: bare, program, dir, env: serverEnv, second };
     }
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
     let instance: Instance | null = null;
@@ -973,6 +997,7 @@ export const test = base.extend<{
       if (instance) await killApp(instance);
       await served?.stop();
       await sshed?.server.stop();
+      await sshed?.second?.server.stop();
       // The next test must not find this instance still answering on the port (it waits for that too, before it
       // starts; a test that passed does not fail for it).
       if (!(await waitForPortToClose(port))) console.warn(`port ${port} is still taken 30 s after the app was killed`);

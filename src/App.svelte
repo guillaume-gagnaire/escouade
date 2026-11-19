@@ -90,7 +90,8 @@
   import ConnectServerModal from './components/servers/ConnectServerModal.svelte';
   import ServerScreen from './components/servers/ServerScreen.svelte';
   import { connection } from './lib/connection.svelte';
-  import { loadServers } from './lib/servers.svelte';
+  import { loadServers, servers } from './lib/servers.svelte';
+  import { goToSpace, startSpaces, syncSpaces, takeOpening } from './lib/spaces.svelte';
   import Toasts from './components/Toasts.svelte';
   import Welcome from './components/Welcome.svelte';
   import PaneDrop from './components/panes/PaneDrop.svelte';
@@ -109,16 +110,45 @@
     app.init().catch((e) => (initError = String(e)));
     // The servers this computer knows (ESC-537): the machine is said once one is.
     void loadServers();
+    // The other spaces (ESC-539): a connection to each, read every few seconds; a notification of one brings it.
+    const inTauri = '__TAURI_INTERNALS__' in window;
+    const stopSpaces = inTauri ? startSpaces() : () => {};
+    let unlisten: (() => void) | null = null;
+    if (inTauri) {
+      void import('@tauri-apps/api/event').then(({ listen }) =>
+        listen<{ space: string; agentId?: string; projectId?: string }>('space-focus', (e) => {
+          void goToSpace(e.payload.space, { agentId: e.payload.agentId ?? undefined, projectId: e.payload.projectId ?? undefined });
+        }).then((u) => (unlisten = u)),
+      );
+    }
     // On a server, what its host publishes (a notification, a chime) is shown here, named by its space (ESC-538).
     const stopHost = onHostEvent(showHostEvent);
-    if (!import.meta.env.PROD) return stopHost;
+    if (!import.meta.env.PROD)
+      return () => {
+        stopHost();
+        stopSpaces();
+        unlisten?.();
+      };
     const stopChecks = watchForUpdates();
     const stopPresence = watchPresence();
     return () => {
       stopHost();
       stopChecks();
       stopPresence();
+      stopSpaces();
+      unlisten?.();
     };
+  });
+
+  // A server added or removed (ESC-539): the connections to the spaces follow.
+  $effect(() => {
+    void servers.view?.servers.map((s) => s.id).join();
+    untrack(() => void syncSpaces());
+  });
+
+  // Loaded again on a space to show an agent there (« Ouvrir » of « Partout », a notification): shown once ready.
+  $effect(() => {
+    if (app.ready) untrack(takeOpening);
   });
 
   $effect(() => {

@@ -166,6 +166,7 @@ describe('the register of the settings pages', () => {
     expect(SETTINGS_PAGES.filter((p) => p.scope === 'app').map((p) => p.id)).toEqual([
       'general',
       'servers',
+      'devices',
       'agents',
       'accounts',
       'services',
@@ -201,6 +202,7 @@ describe('the register of the settings pages', () => {
     expect(SETTINGS_PAGES.map((p) => p.label)).toEqual([
       'General',
       'Servers',
+      'Devices',
       'Agents',
       'Accounts and harnesses',
       'Connected services',

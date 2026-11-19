@@ -17,6 +17,8 @@ export type SettingsPage =
   | 'general'
   // The servers this computer knows (ESC-537).
   | 'servers'
+  // The devices paired to the server the window is on (ESC-539, Réglages de l'espace › Appareils).
+  | 'devices'
   | 'agents'
   | 'accounts'
   | 'services'
@@ -65,6 +67,7 @@ function page(id: SettingsPage, scope: SettingsScope, icon: IconName): PageInfo 
 export const SETTINGS_PAGES: PageInfo[] = [
   page('general', 'app', 'sliders'),
   page('servers', 'app', 'server'),
+  page('devices', 'app', 'monitor'),
   page('agents', 'app', 'agents'),
   page('accounts', 'app', 'user'),
   page('services', 'app', 'link'),
@@ -254,6 +257,9 @@ export const SETTINGS_ROWS: RowInfo[] = [
   // Réglages › Serveurs (ESC-537): the servers this computer knows; nothing of the settings (their list is its own file).
   row('serversKnown', 'servers', 'servers.settings.title'),
   row('serversConnect', 'servers', 'servers.connect'),
+  // Réglages de l'espace › Appareils (ESC-539).
+  row('devicesList', 'devices', 'spaces.devices.title'),
+  row('devicesCode', 'devices', 'spaces.devices.create'),
   row('version', 'about', { raw: 'Escouade' }),
   row('credits', 'about', 'settings.about.credits'),
   row('site', 'about', 'settings.about.site'),

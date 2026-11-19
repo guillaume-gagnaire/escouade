@@ -62,7 +62,8 @@ export interface Refusal {
   serverUpdate?: ServerUpdate;
 }
 
-export const connection = $state<{
+/** How a connection to a core stands: the window's (`connection`), or a space's own (ESC-539). */
+export interface Connection {
   state: ConnectionState;
   reason: string;
   secretsInFile: boolean;
@@ -76,7 +77,9 @@ export const connection = $state<{
   problem: ServerProblem | null;
   /** The events of the state the session missed during the last cut (ESC-538); null without one. */
   missed: number | null;
-}>({
+}
+
+const fresh = (): Connection => ({
   state: 'local',
   reason: '',
   secretsInFile: false,
@@ -90,6 +93,14 @@ export const connection = $state<{
   problem: null,
   missed: null,
 });
+
+export const connection = $state<Connection>(fresh());
+
+/** A connection of its own, for another space the window reads (its pile, « Partout »). */
+export function connectionOf(): Connection {
+  const c = $state<Connection>({ ...fresh(), state: 'connecting' });
+  return c;
+}
 
 /** The window is on a server (not this computer's core). */
 export const onServer = (): boolean => connection.server !== null;

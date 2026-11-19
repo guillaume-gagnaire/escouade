@@ -33,7 +33,7 @@ Once a server is known, the machine shows wherever a mistake would cost:
 
 - **The title bar**: the space’s plate and name before the project (“Work acme-escouade / billing”), or “This computer”. At 1024 pixels wide, the SSH host goes away, the name stays.
 - **The status bar**: “Work · ssh acme-escouade · 38 ms”, the round trip time.
-- **The projects bar**: the open space above its projects, the other one under the “+”, a click away.
+- **The projects bar**: the open space above its projects, the others as piles under the “+”, a click away (see [the spaces](spaces)).
 - **The foot of the sidebar**: “Work:” before the project’s folder, a server icon instead of a folder.
 - **A terminal**: “Work · escouade@vps.example.net” in its header.
 - **“New project”**: “on Work · escouade.acme.internal”; the folders are the server’s, not this computer’s (see below).

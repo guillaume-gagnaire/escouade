@@ -95,7 +95,8 @@ export default {
     hostKey: {
       title: 'Clé d’hôte inconnue',
       changedTitle: 'La clé de {host} a changé',
-      text: 'Escouade n’accepte pas de clé à ta place : connecte-toi une fois par ssh {host}.',
+      // {command}: « ssh <hôte> », written in the code font.
+      text: 'Escouade n’accepte pas de clé à ta place : connecte-toi une fois par {command}.',
       changedText:
         'La clé de l’hôte n’est plus celle que ce poste connaissait. Ce peut être une réinstallation, ou quelqu’un entre les deux : vérifie-la avec l’administrateur avant de la remplacer dans known_hosts.',
       copy: 'Copier la commande',

@@ -33,7 +33,7 @@ Dès qu’un serveur est connu, la machine se dit partout où se tromper coûter
 
 - **La barre de titre** : la plaque et le nom de l’espace avant le projet (« Travail acme-escouade / facturation »), ou « Ce poste ». À 1024 pixels de large, l’hôte SSH s’efface, le nom reste.
 - **La barre d’état** : « Travail · ssh acme-escouade · 38 ms », le temps d’un aller-retour.
-- **La barre des projets** : l’espace ouvert au-dessus de ses projets, l’autre sous le « + », à un clic.
+- **La barre des projets** : l’espace ouvert au-dessus de ses projets, les autres en piles sous le « + », à un clic (voir [les espaces](spaces)).
 - **Le pied de la barre latérale** : « Travail : » devant le dossier du projet, l’icône d’un serveur à la place d’un dossier.
 - **Un terminal** : « Travail · escouade@vps.example.net » dans son en-tête.
 - **« Nouveau projet »** : « sur Travail · escouade.acme.internal » ; les dossiers sont ceux du serveur, pas de ce poste (voir plus bas).

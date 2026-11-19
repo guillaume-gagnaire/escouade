@@ -412,3 +412,25 @@ fn a_server_reached_by_ssh_is_refused_before_any_connection_when_the_list_does_n
     // Without the policy, any server.
     assert!(locks(&[]).check_ssh_server("x.example").is_ok());
 }
+
+#[test]
+fn without_the_personal_space_only_a_server_of_the_list_is_added() {
+    // ESC-539, S16: `servers.personalSpace` to false: a server must be one of `servers.allowed`.
+    let listed = locks(&[
+        (PERSONAL_SPACE, json!(false)),
+        (SERVERS, json!(["*.acme.internal"])),
+    ]);
+    assert!(listed.check_ssh_server("escouade.acme.internal").is_ok());
+    assert!(listed.check_ssh_server("vps.example.net").is_err());
+    // Without the list, none.
+    let none = locks(&[(PERSONAL_SPACE, json!(false))]);
+    let err = none
+        .check_ssh_server("vps.example.net")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("vps.example.net"), "{err}");
+    // `true` imposes nothing.
+    assert!(locks(&[(PERSONAL_SPACE, json!(true))])
+        .check_ssh_server("vps.example.net")
+        .is_ok());
+}

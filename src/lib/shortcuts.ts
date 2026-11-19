@@ -71,6 +71,8 @@ const overviewKey = (e: KeyboardEvent) => e.shiftKey && e.key.toLowerCase() === 
 export function isAppShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   // The split screen's keys (ESC-392) leave a terminal for the app while it is split, Ctrl+\ always (it would be SIGQUIT).
   if (paneKey(e, mac)) return true;
+  // The spaces' keys (ESC-539), once there are spaces.
+  if (spaceKey(e, mac) !== null && spaceKeys.shown()) return true;
   if (e.altKey) return false;
   if (agentCycle(e)) return true;
   // The zoom of the whole window, as in VS Code's terminal (Ctrl+- would only be readline's undo there).
@@ -143,8 +145,30 @@ export function appWinsInVscode(e: KeyboardEvent, mac = IS_MAC): boolean {
   return k === 'n' || k === 'j' || k === 't' || k === ',';
 }
 
+/**
+ * The spaces' keys (ESC-539, S3), read by the key's place (AZERTY too): `Alt+1`…`Alt+9` (`⌃1`…`⌃9` on macOS, where
+ * Alt types characters) for the nth space, `Ctrl+²` (the key under Escape, `Backquote`) for the next one. Never from
+ * the numpad (Alt+digits type a character by its code on Windows), never with Shift or AltGr.
+ */
+export function spaceKey(e: KeyboardEvent, mac = IS_MAC): number | 'next' | null {
+  if (e.repeat || e.shiftKey || e.metaKey) return null;
+  if (e.code === 'Backquote' && e.ctrlKey && !e.altKey) return 'next';
+  const d = /^Digit([1-9])$/.exec(e.code)?.[1];
+  if (!d) return null;
+  return (mac ? e.ctrlKey && !e.altKey : e.altKey && !e.ctrlKey) ? Number(d) : null;
+}
+
+/** Where the spaces' keys go (`spaces.svelte.ts` sets it): whether one was taken. */
+export const spaceKeys: { go: ((k: number | 'next', target: EventTarget | null) => boolean) | null; shown: () => boolean } = {
+  go: null,
+  shown: () => false,
+};
+
 /** Runs the shortcut matching `e`. Returns true when the event was handled. */
 export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
+  // The spaces' keys (ESC-539), in the VS Code view too, never over a dialog.
+  const space = spaceKey(e, mac);
+  if (space !== null && !app.modal && spaceKeys.go?.(space, e.target)) return true;
   // In the VS Code view, its keys are its own: the app only takes those it keeps (`appWinsInVscode`).
   if (inVscode(e.target) && !appWinsInVscode(e, mac)) return false;
   // Ctrl+Alt+arrows go from pane to pane (ESC-392): an arrow types nothing, even with AltGr.

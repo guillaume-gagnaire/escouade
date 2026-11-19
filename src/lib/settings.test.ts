@@ -581,6 +581,7 @@ describe('settingsForm', () => {
     expect(names()).toEqual([
       'General',
       'Servers',
+      'Devices',
       'Agents',
       'Accounts and harnesses',
       'Connected services',

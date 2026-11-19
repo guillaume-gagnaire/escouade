@@ -8,6 +8,10 @@ export default defineZone('settings', {
       label: 'Servers',
       desc: 'The Escouade servers this computer knows. Each one is a space: its projects, agents, accounts and settings stay on it.',
     },
+    devices: {
+      label: 'Devices',
+      desc: 'The devices paired with this space’s server: list them, remove one, create a code for a new one.',
+    },
     agents: { label: 'Agents', desc: 'New agents, their permissions, written texts, remote control and driving Escouade' },
     accounts: {
       label: 'Accounts and harnesses',

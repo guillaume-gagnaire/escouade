@@ -14,6 +14,7 @@
 //   timed out connection, `…refuse…` an account refused.
 // - FAKE_SSH_DIR: each run appends its arguments to `runs.log` there; while `down` exists there, every run fails as an
 //   unreachable host; when `cut` appears there, the running forwards end (« closed by remote host ») and `cut` goes.
+//   `down-<host>` and `cut-<host>` do the same for that host alone (ESC-539: a cut of one space never touches another).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -54,7 +55,7 @@ if (!options.includes('BatchMode=yes') || !options.includes('StrictHostKeyChecki
   fail(['fake-ssh: BatchMode=yes and StrictHostKeyChecking=yes are required'], 2);
 }
 
-if (dir && fs.existsSync(path.join(dir, 'down'))) {
+if (dir && (fs.existsSync(path.join(dir, 'down')) || fs.existsSync(path.join(dir, `down-${host}`)))) {
   setTimeout(() => fail([`ssh: connect to host ${host} port 22: Connection timed out`]), 200);
 } else if (host.includes('inconnu')) {
   fail([`No ED25519 host key is known for ${host} and you have requested strict checking.`, 'Host key verification failed.']);
@@ -153,8 +154,8 @@ if (dir && fs.existsSync(path.join(dir, 'down'))) {
   };
   if (dir) {
     setInterval(() => {
-      const cut = path.join(dir, 'cut');
-      if (fs.existsSync(cut)) {
+      const cut = [path.join(dir, 'cut'), path.join(dir, `cut-${host}`)].find((f) => fs.existsSync(f));
+      if (cut) {
         try {
           fs.unlinkSync(cut);
         } catch {
