@@ -4,7 +4,9 @@
 //! - the first word is a program the core finds on the PATH ([`locate`]), never a path; no shell, and under Windows no
 //!   `.cmd` nor `.bat`, which only run through one;
 //! - the command and its arguments are an entry of `permissions.commands`, word for word; only an entry that ends in `*`
-//!   lets more follow ([`allowed`]);
+//!   lets more follow ([`allowed`]). A joker of the entry (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`,
+//!   `{path:plugin}`, ESC-528) stands for one whole word of a closed form, never an option nor `--`: a `{pid}` is one of
+//!   its programs alive, a path is a file under its root, which the host resolves and gives as its real absolute path;
 //! - `dir` is a root (`agent`, `project`), never a path, and a private project refuses it unless the plugin was turned on
 //!   for it; without `dir`, its temporary folder;
 //! - the environment is an agent's, without Escouade's own variables, plus those the plugin names ([`environment`]);
@@ -131,15 +133,220 @@ fn runs(path: &Path) -> bool {
         .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
-/// Whether `words` (the command and its arguments) are an entry of `commands`, word for word; what follows only when the
-/// entry ends in `*`.
-pub fn allowed(commands: &[Vec<String>], words: &[String]) -> bool {
-    commands.iter().any(|entry| match entry.split_last() {
-        Some((last, head)) if last == "*" => {
-            // Never a bare `*`: it would be any program.
-            !head.is_empty() && words.len() >= head.len() && words[..head.len()] == *head
+/// A word of an entry of `permissions.commands` (§5.3 of docs/PLUGINS-CONTRACT-STUDY.md, ESC-528): a literal, compared
+/// byte for byte, or a joker, a whole word of a closed form that the host checks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Word {
+    Literal(String),
+    /// `{int}`: `0|[1-9][0-9]{0,9}`, 4 294 967 295 at most.
+    Int,
+    /// `{port}`: an `{int}` of 1 to 65 535.
+    Port,
+    /// `{name}`: `[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}`, never a device of Windows.
+    Name,
+    /// `{pid}`: the pid of a program alive this very instance runs.
+    Pid,
+    /// `{path:temp}`: a file of its temporary folder, given as its real absolute path.
+    Temp,
+    /// `{path:plugin}`: a file of its own folder, the same.
+    Plugin,
+    /// A brace this host does not know (`{float}`, `--pid={int}`), or a joker first: it matches nothing, never more.
+    Never,
+}
+
+impl Word {
+    fn of(word: &str) -> Self {
+        match word {
+            "{int}" => Self::Int,
+            "{port}" => Self::Port,
+            "{name}" => Self::Name,
+            "{pid}" => Self::Pid,
+            "{path:temp}" => Self::Temp,
+            "{path:plugin}" => Self::Plugin,
+            w if w.contains(['{', '}']) => Self::Never,
+            w => Self::Literal(w.to_string()),
         }
-        _ => words == entry.as_slice(),
+    }
+
+    /// How the journal names it.
+    fn said(&self) -> &str {
+        match self {
+            Self::Literal(w) => w,
+            Self::Int => "{int}",
+            Self::Port => "{port}",
+            Self::Name => "{name}",
+            Self::Pid => "{pid}",
+            Self::Temp => "{path:temp}",
+            Self::Plugin => "{path:plugin}",
+            Self::Never => "a word no command matches",
+        }
+    }
+}
+
+/// An entry of `permissions.commands`, read once: its words, and whether a last `*` lets any more follow. Its first word
+/// is a program's name, never a joker; an entry that breaks that matches nothing.
+#[derive(Debug, Clone)]
+pub struct Entry {
+    words: Vec<Word>,
+    more: bool,
+}
+
+impl Entry {
+    /// The entry `line`, its words split as the manifest splits them (`command_holds`).
+    pub fn of(line: &str) -> Self {
+        let mut words: Vec<Word> = line.split_whitespace().map(Word::of).collect();
+        let more = words.len() > 1 && words.last() == Some(&Word::Literal("*".into()));
+        if more {
+            words.pop();
+        }
+        // Never a bare `*`, nor a joker for a program: it would be any program.
+        if !matches!(words.first(), Some(Word::Literal(w)) if w != "*") {
+            words = vec![Word::Never];
+        }
+        Self { words, more }
+    }
+
+    /// The words to run for `asked`, its jokers checked and its paths replaced; or how near it came and why not: the
+    /// words it matched, twice, and one more when it has the length asked.
+    fn check(&self, asked: &[String], held: &Held) -> Result<Matched, (usize, String)> {
+        let n = self.words.len();
+        let fits = usize::from(asked.len() == n || (self.more && asked.len() > n));
+        let mut out = Matched::default();
+        for (i, (word, a)) in self.words.iter().zip(asked).enumerate() {
+            let at = |why: String| {
+                (
+                    2 * i + fits,
+                    format!("word {} ({a:?}) is no {}: {why}", i + 1, word.said()),
+                )
+            };
+            match word {
+                Word::Literal(l) if l == a => out.words.push(a.clone()),
+                Word::Literal(_) | Word::Never => {
+                    return Err((
+                        2 * i + fits,
+                        format!("word {} is {a:?}, not {:?}", i + 1, word.said()),
+                    ))
+                }
+                _ if a == "--" || a.starts_with('-') => return Err(at("an option".into())),
+                Word::Int => {
+                    whole(a).map_err(at)?;
+                    out.words.push(a.clone());
+                }
+                Word::Port => {
+                    let n = whole(a).map_err(at)?;
+                    if !(1..=65_535).contains(&n) {
+                        return Err(at("out of 1 to 65535".into()));
+                    }
+                    out.words.push(a.clone());
+                }
+                Word::Name => {
+                    name(a).map_err(at)?;
+                    out.words.push(a.clone());
+                }
+                Word::Pid => {
+                    let n = whole(a).map_err(at)?;
+                    let pid = u32::try_from(n).map_err(|_| at("too big".into()))?;
+                    if !(held.pids)(pid) {
+                        return Err(at("no program it runs is alive with this pid".into()));
+                    }
+                    out.pids.push(pid);
+                    out.words.push(a.clone());
+                }
+                Word::Temp | Word::Plugin => {
+                    let (root, hidden) = if *word == Word::Temp {
+                        (held.temp, true)
+                    } else {
+                        (held.plugin, false)
+                    };
+                    out.words
+                        .push(super::files::file_beneath(root, a, hidden).map_err(at)?);
+                }
+            }
+        }
+        if asked.len() < n || (!self.more && asked.len() > n) {
+            let entry = if self.more { "at least " } else { "" };
+            return Err((
+                2 * asked.len().min(n),
+                format!("{} words where the entry has {entry}{n}", asked.len()),
+            ));
+        }
+        // What a last `*` lets follow, as it is.
+        out.words.extend(asked[n..].iter().cloned());
+        Ok(out)
+    }
+}
+
+/// A whole number of `{int}`: `0|[1-9][0-9]{0,9}`, 4 294 967 295 at most; no sign, no leading zero, no hexadecimal.
+fn whole(word: &str) -> Result<u64, String> {
+    let digits = word.bytes().all(|b| b.is_ascii_digit());
+    if !digits || word.is_empty() || word.len() > 10 || (word.len() > 1 && word.starts_with('0')) {
+        return Err(
+            "not a whole number of at most 10 digits, without sign nor leading zero".into(),
+        );
+    }
+    let n: u64 = word.parse().map_err(|_| "not a whole number".to_string())?;
+    if n > u64::from(u32::MAX) {
+        return Err("over 4294967295".into());
+    }
+    Ok(n)
+}
+
+/// A `{name}`: `[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}`, neither `.` nor `..` nor a device of Windows. Nothing a shell, the CRT
+/// of Windows or a program that expands its arguments again would cut or read: no `/`, `\`, `:`, `=`, `$`, `%`, quote…
+fn name(word: &str) -> Result<(), String> {
+    let bytes = word.as_bytes();
+    let ok = (1..=64).contains(&bytes.len())
+        && (bytes[0].is_ascii_alphanumeric() || bytes[0] == b'_')
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'));
+    if !ok {
+        return Err(
+            "not 1 to 64 letters, digits, _ . - that start with a letter, a digit or _".into(),
+        );
+    }
+    if super::files::windows_device(word) {
+        return Err("a device of Windows".into());
+    }
+    Ok(())
+}
+
+/// What the host knows to judge a joker: the pids of the programs alive this instance runs, and its two folders.
+pub struct Held<'a> {
+    pub pids: &'a dyn Fn(u32) -> bool,
+    pub temp: &'a std::path::Path,
+    pub plugin: &'a std::path::Path,
+}
+
+/// The words to run, once an entry matched: its paths replaced by the host. And the pids it names, checked again when it
+/// starts.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Matched {
+    pub words: Vec<String>,
+    pub pids: Vec<u32>,
+}
+
+/// What `asked` (the command and its arguments) runs, when it is an entry of `commands` (§5.3 of
+/// docs/PLUGINS-CONTRACT-STUDY.md): its literal words byte for byte, each joker one whole word of its form, never an
+/// option nor `--`, the entry of the same length but for a last `*`, after which any words follow. Or why not, said of
+/// the entry that matched furthest.
+pub fn allowed(commands: &[Entry], asked: &[String], held: &Held) -> Result<Matched, String> {
+    let mut best: Option<(usize, String)> = None;
+    for entry in commands {
+        match entry.check(asked, held) {
+            Ok(m) => return Ok(m),
+            Err((far, why)) => {
+                // The program at least: an entry of another tells nothing.
+                if far >= 2 && best.as_ref().is_none_or(|b| far > b.0) {
+                    best = Some((far, why));
+                }
+            }
+        }
+    }
+    let shown = asked.join(" ");
+    Err(match best {
+        Some((_, why)) => format!("{shown} is not in permissions.commands: {why}"),
+        None => format!("{shown} is not in permissions.commands"),
     })
 }
 
@@ -151,6 +358,9 @@ struct Live {
     waiting: Arc<AtomicUsize>,
     kill: Option<oneshot::Sender<()>>,
     job: Option<Arc<Job>>,
+    /// Its pid, what `{pid}` admits (ESC-528): taken off as soon as the host sees its end, before anything lets the
+    /// system give it again (the host holds the child: under Windows its handle, under Unix its zombie, until then).
+    pid: Option<u32>,
 }
 
 /// What the journal is told: its kind, its line.
@@ -160,7 +370,9 @@ pub type Projects = Arc<dyn Fn(&str) -> Result<PathBuf, String> + Send + Sync>;
 
 /// The programs of an instance of a plugin.
 pub struct Procs {
-    commands: Vec<Vec<String>>,
+    commands: Vec<Entry>,
+    /// Its folder, the root of `{path:plugin}`.
+    plugin: PathBuf,
     /// The variables it declares (`permissions.env`, ESC-424).
     env: Option<Vec<String>>,
     /// Its manifest is of Escouade's own hand (`builtin::first_hand`).
@@ -183,6 +395,8 @@ pub struct ProcsOf {
     pub env: Option<Vec<String>>,
     pub first_hand: bool,
     pub temp: PathBuf,
+    /// Its folder (`{path:plugin}`).
+    pub plugin: PathBuf,
     pub agents: super::files::Agents,
     pub projects: Projects,
     pub agent_env: Vec<(String, String)>,
@@ -203,11 +417,8 @@ fn proc_of(params: &Value) -> Result<u64, (i64, String)> {
 impl Procs {
     pub fn new(of: ProcsOf) -> Self {
         Self {
-            commands: of
-                .commands
-                .iter()
-                .map(|c| c.split_whitespace().map(str::to_string).collect())
-                .collect(),
+            commands: of.commands.iter().map(|c| Entry::of(c)).collect(),
+            plugin: of.plugin,
             env: of.env,
             first_hand: of.first_hand,
             temp: of.temp,
@@ -280,7 +491,7 @@ impl Procs {
         }
     }
 
-    /// `{ command, args, dir?, agent?, project?, env? }` → `{ proc }`.
+    /// `{ command, args, dir?, agent?, project?, env? }` → `{ proc, pid }`.
     fn spawn(&self, params: &Value) -> Result<Value, (i64, String)> {
         let invalid = |why: &str| (super::runtime::INVALID_PARAMS, why.to_string());
         let command = params
@@ -300,10 +511,16 @@ impl Procs {
                 );
             }
         }
+        let alive: Vec<u32> = self.live.lock().values().filter_map(|l| l.pid).collect();
+        let held = Held {
+            pids: &|pid| alive.contains(&pid),
+            temp: &self.temp,
+            plugin: &self.plugin,
+        };
+        let matched = allowed(&self.commands, &words, &held).map_err(|why| (REFUSED, why))?;
+        // The words it runs: its paths are the host's.
+        let words = matched.words;
         let shown = words.join(" ");
-        if !allowed(&self.commands, &words) {
-            return Err((REFUSED, format!("{shown} is not in permissions.commands")));
-        }
         let (dir, root) = self.folder(params)?;
         let mut named = Vec::new();
         if let Some(env) = params.get("env").filter(|e| !e.is_null()) {
@@ -328,6 +545,21 @@ impl Procs {
         }
         let program = locate(command)
             .ok_or_else(|| (FAILED, format!("no program {command} on this machine")))?;
+        // From here to its start, what it names is held: a `{pid}` is checked again, and no end takes it off meanwhile.
+        let mut live = self.live.lock();
+        if live.len() >= AT_ONCE {
+            return Err((REFUSED, format!("{AT_ONCE} programs at once at most")));
+        }
+        if let Some(gone) = matched
+            .pids
+            .iter()
+            .find(|p| !live.values().any(|l| l.pid == Some(**p)))
+        {
+            return Err((
+                REFUSED,
+                format!("{shown}: no program it runs is alive with the pid {gone} any more"),
+            ));
+        }
         let (out, set) = environment(
             std::env::vars_os().map(|(k, _)| k.to_string_lossy().into_owned()),
             &self.agent_env,
@@ -356,22 +588,25 @@ impl Procs {
         if job.is_none() {
             log::warn!("{shown} is not in a job: its tree is not killed as a whole");
         }
-        (self.told)(Kind::Message, &format!("proc/spawn: ran {shown} in {root}"));
+        let pid = child.id();
         let stdin = child.stdin.take().expect("piped");
         let stdout = child.stdout.take().expect("piped");
         let stderr = child.stderr.take().expect("piped");
         let waiting = Arc::new(AtomicUsize::new(0));
         let (input, inputs) = mpsc::unbounded_channel();
         let (kill, killed) = oneshot::channel();
-        self.live.lock().insert(
+        live.insert(
             id,
             Live {
                 input,
                 waiting: waiting.clone(),
                 kill: Some(kill),
                 job: job.clone(),
+                pid,
             },
         );
+        drop(live);
+        (self.told)(Kind::Message, &format!("proc/spawn: ran {shown} in {root}"));
         tokio::spawn(feed(stdin, inputs, waiting));
         let credit = Arc::new(Semaphore::new(CREDIT));
         let pipes = (
@@ -395,7 +630,7 @@ impl Procs {
             live: self.live.clone(),
             told: self.told.clone(),
         }));
-        Ok(json!({ "proc": id }))
+        Ok(json!({ "proc": id, "pid": pid }))
     }
 
     /// `{ proc, data?, close? }`.
@@ -450,7 +685,7 @@ impl Procs {
 
     /// The commands under way.
     #[cfg(test)]
-    fn running(&self) -> usize {
+    pub(crate) fn running(&self) -> usize {
         self.live.lock().len()
     }
 }
@@ -555,6 +790,10 @@ async fn wait(mut w: Waited) {
             w.child.wait().await
         }
     };
+    // Its pid is no `{pid}` any more, before what it left running is waited for.
+    if let Some(l) = w.live.lock().get_mut(&w.id) {
+        l.pid = None;
+    }
     let code = status.ok().and_then(|s| s.code());
     let (mut out, mut err) = w.pipes;
     // What it left running may hold its pipes: not for long.
@@ -578,37 +817,49 @@ async fn wait(mut w: Waited) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::files::AgentPlace;
     use std::time::Instant;
     use tokio::sync::mpsc::UnboundedReceiver;
 
-    fn words(c: &str) -> Vec<String> {
+    pub(crate) fn words(c: &str) -> Vec<String> {
         c.split_whitespace().map(str::to_string).collect()
     }
 
-    fn commands(list: &[&str]) -> Vec<Vec<String>> {
-        list.iter().map(|c| words(c)).collect()
+    fn commands(list: &[&str]) -> Vec<Entry> {
+        list.iter().map(|c| Entry::of(c)).collect()
+    }
+
+    /// Whether `asked` runs under `c`, for a host that runs nothing and has no folder.
+    fn runs(c: &[Entry], asked: &[String]) -> bool {
+        let nowhere = std::path::Path::new("");
+        let held = Held {
+            pids: &|_| false,
+            temp: nowhere,
+            plugin: nowhere,
+        };
+        allowed(c, asked, &held).is_ok()
     }
 
     #[test]
     fn a_command_is_an_entry_word_for_word_and_only_a_star_lets_more_follow() {
         let c = commands(&["isola ls --json", "isola down", "isola logs *", "*"]);
-        assert!(allowed(&c, &words("isola ls --json")));
-        assert!(allowed(&c, &words("isola down")));
-        assert!(allowed(&c, &words("isola logs")));
-        assert!(allowed(&c, &words("isola logs web --tail 10")));
-        assert!(!allowed(&c, &words("isola ls")));
-        assert!(!allowed(&c, &words("isola ls --json --all")));
-        assert!(!allowed(&c, &words("isola down now")));
-        assert!(!allowed(&c, &words("isola destroy")));
-        assert!(!allowed(&c, &words("ISOLA down")));
+        assert!(runs(&c, &words("isola ls --json")));
+        assert!(runs(&c, &words("isola down")));
+        assert!(runs(&c, &words("isola logs")));
+        assert!(runs(&c, &words("isola logs web --tail 10")));
+        assert!(!runs(&c, &words("isola ls")));
+        assert!(!runs(&c, &words("isola ls --json --all")));
+        assert!(!runs(&c, &words("isola down now")));
+        assert!(!runs(&c, &words("isola destroy")));
+        assert!(!runs(&c, &words("ISOLA down")));
         // A bare `*` is no program.
-        assert!(!allowed(&c, &words("rm -rf x")));
-        assert!(!allowed(&c, &[]));
+        assert!(!runs(&c, &words("rm -rf x")));
+        assert!(!runs(&c, &words("*")));
+        assert!(!runs(&c, &[]));
         // One word, not a line split again by a shell.
-        assert!(!allowed(&c, &["isola down; rm -rf x".to_string()]));
+        assert!(!runs(&c, &["isola down; rm -rf x".to_string()]));
     }
 
     #[test]
@@ -756,20 +1007,21 @@ mod tests {
         );
     }
 
-    struct Bed {
-        procs: Procs,
-        rx: UnboundedReceiver<Frame>,
+    pub(crate) struct Bed {
+        pub(crate) procs: Procs,
+        pub(crate) rx: UnboundedReceiver<Frame>,
         _tx: mpsc::UnboundedSender<Frame>,
-        told: Arc<Mutex<Vec<String>>>,
-        base: PathBuf,
+        pub(crate) told: Arc<Mutex<Vec<String>>>,
+        pub(crate) base: PathBuf,
     }
 
-    fn bed(list: &[&str]) -> Bed {
+    pub(crate) fn bed(list: &[&str]) -> Bed {
         let (tx, rx) = mpsc::unbounded_channel();
         let base =
             std::env::temp_dir().join(format!("plugin-procs-{}", uuid::Uuid::new_v4().simple()));
         std::fs::create_dir_all(base.join("wt")).unwrap();
         std::fs::create_dir_all(base.join("project")).unwrap();
+        std::fs::create_dir_all(base.join("plugin")).unwrap();
         let told: Arc<Mutex<Vec<String>>> = Arc::default();
         let t = told.clone();
         let agents: crate::files::Agents = Arc::default();
@@ -795,6 +1047,7 @@ mod tests {
             env: Some(DECLARED.iter().map(|v| v.to_string()).collect()),
             first_hand: false,
             temp: base.join("temp"),
+            plugin: base.join("plugin"),
             agents,
             projects: Arc::new(move |p| match p {
                 "open" => Ok(b.join("project")),
@@ -814,7 +1067,7 @@ mod tests {
     }
 
     impl Bed {
-        fn refused(&self, params: Value) {
+        pub(crate) fn refused(&self, params: Value) {
             let r = self.procs.serve("proc/spawn", &params);
             assert_eq!(
                 r.as_ref().err().map(|e| e.0),
@@ -823,14 +1076,14 @@ mod tests {
             );
         }
 
-        fn spawn(&self, params: Value) -> u64 {
+        pub(crate) fn spawn(&self, params: Value) -> u64 {
             self.procs.serve("proc/spawn", &params).unwrap()["proc"]
                 .as_u64()
                 .unwrap()
         }
 
         /// What comes until the end of `id`: what it wrote on `stream`, and its code.
-        async fn run(&mut self, id: u64, stream: &str) -> (String, Value) {
+        pub(crate) async fn run(&mut self, id: u64, stream: &str) -> (String, Value) {
             let mut text = String::new();
             let end = Instant::now() + Duration::from_secs(20);
             loop {

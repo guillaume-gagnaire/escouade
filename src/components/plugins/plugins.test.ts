@@ -199,6 +199,41 @@ describe('the install window', () => {
     expect(line('Lit le dossier de compte de tes agents')).toBeTruthy();
   });
 
+  it('shows each joker of a command as a pill of words, then the guard sentence once (ESC-528)', () => {
+    const commands = [
+      'unshare -Urn openvpn --config {path:temp} --script-security 1',
+      'slirp4netns --configure --mtu=65520 {pid} tap0',
+      'isola down',
+    ];
+    const wasm: Manifest = {
+      ...MANIFEST,
+      run: { command: '', wasm: 'Cargo.toml', args: [] },
+      permissions: { ...MANIFEST.permissions, commands },
+    };
+    const asks = ['run', ...commands.map((c) => `commands:${c}`)];
+    plugins.install = { kind: 'preview', preview: preview({ manifest: wasm, asks }), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    const dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    const pills = [...dialog.querySelectorAll('[data-joker]')];
+    expect(pills.map((p) => [p.getAttribute('data-joker'), p.textContent])).toEqual([
+      ['{path:temp}', 'un fichier de son dossier temporaire'],
+      ['{pid}', 'un programme qu’il a lancé'],
+    ]);
+    const command = [...dialog.querySelectorAll('[data-command]')].map((c) => c.textContent);
+    expect(command).toEqual([
+      'unshare -Urn openvpn --config un fichier de son dossier temporaire --script-security 1',
+      'slirp4netns --configure --mtu=65520 un programme qu’il a lancé tap0',
+    ]);
+    const guards = dialog.querySelectorAll('[data-joker-guard]');
+    expect(guards).toHaveLength(1);
+    expect(guards[0].textContent).toBe(
+      'Chaque pastille est un seul mot, que l’hôte vérifie : jamais une option, jamais un chemin hors de ce qu’elle dit.',
+    );
+    // Under the last command with a joker, not under the one without.
+    expect(guards[0].closest('li')?.textContent).toContain('slirp4netns');
+    expect(dialog.textContent).toContain('isola down');
+  });
+
   it('says a command of a process is only declared (ESC-333)', () => {
     const asks = ['run', 'commands:isola down'];
     plugins.install = { kind: 'preview', preview: preview({ asks }), busy: false, error: null };
@@ -338,6 +373,25 @@ describe('the permissions of a plugin', () => {
     expect(again.getAttribute('aria-checked')).toBe('false');
     await userEvent.click(again);
     expect(backend.called('plugin_set_permission')[1].args).toMatchObject({ word: 'network:hooks.slack.com', granted: true });
+  });
+  it('shows the jokers of its commands as pills, with the guard sentence, in English too (ESC-528)', async () => {
+    setLang('en');
+    const command = 'nsenter --preserve-credentials -U -n -t {pid} ip addr';
+    const manifest: Manifest = {
+      ...MANIFEST,
+      run: { command: '', wasm: 'Cargo.toml', args: [] },
+      permissions: { ...MANIFEST.permissions, commands: [command] },
+    };
+    plugins.list = [view({ manifest, asks: ['run', `commands:${command}`] })];
+    plugins.page = { kind: 'plugin', id: MANIFEST.id, tab: 'permissions' };
+    render(PluginsView);
+    const panel = await screen.findByRole('tabpanel', { name: 'Permissions' });
+    expect(panel.querySelector('[data-joker="{pid}"]')?.textContent).toBe('a program it started');
+    expect(panel.querySelector('[data-joker-guard]')?.textContent).toBe(
+      'Each pill is one word, which the host checks: never an option, never a path outside what it says.',
+    );
+    // Its switch names the command as written.
+    expect(within(panel).getByRole('switch', { name: `Runs this command on your computer ${command}: allowed` })).toBeTruthy();
   });
 });
 

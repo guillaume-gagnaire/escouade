@@ -93,6 +93,8 @@ export interface EscouadeCapabilities {
   log?: boolean;
   /** What each agent attached is given again after a restart. */
   attach?: boolean;
+  /** The jokers of permissions.commands are served: {int}, {port}, {name}, {pid}, {path:temp}, {path:plugin}, each one whole word that Escouade checks, and proc/spawn answers the pid. Without it, an entry with a joker runs nothing a plugin asks: it is refused, never wider. */
+  typedCommands?: boolean;
 }
 
 export interface InitializeParams {
@@ -390,6 +392,8 @@ export interface ProcSpawnParams {
 
 export interface ProcSpawnResult {
   proc: number;
+  /** The program's pid, what {pid} admits while it runs (capabilities.typedCommands); absent from an Escouade that does not serve the jokers. */
+  pid?: number;
 }
 
 export interface ProcRef {
@@ -599,7 +603,7 @@ export interface ToEscouade {
       fileOnly: boolean;
     };
   };
-  /** Runs a program of permissions.commands, for a plugin in WASM: the command and its arguments must be an entry word for word, more following only an entry that ends in *. The program is found on the PATH, never a path; no shell; 4 at once; it ends with the plugin. Its environment is an agent's, without Escouade's variables, plus env. Its output comes by proc/out, its end by proc/exit; proc/out may come before this answer. Each start goes to the journal. */
+  /** Runs a program of permissions.commands, for a plugin in WASM: the command and its arguments must be an entry word for word, more following only an entry that ends in *. A joker of the entry (capabilities.typedCommands) stands for one whole word of its form, never an option nor --: {int}, {port}, {name}, {pid} (a program of this instance alive), {path:temp} and {path:plugin} (a relative path of a file under that folder, which Escouade resolves and gives the program as its real absolute path). The program is found on the PATH, never a path; no shell; 4 at once; it ends with the plugin. Its environment is an agent's, without Escouade's variables, plus env. Its output comes by proc/out, its end by proc/exit; proc/out may come before this answer. Each start goes to the journal. */
   'proc/spawn': { params: ProcSpawnParams; result: ProcSpawnResult };
   /** Writes on the input of a program; close ends that input. failed past 1 MiB it has not read. */
   'proc/write': { params: ProcWriteParams; result: null };

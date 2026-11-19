@@ -415,6 +415,17 @@ export default {
     decide: 'Décide des autorisations de tes agents',
     harness: 'Lance pour ses agents ce programme de ton ordinateur, avec tes droits',
     commands: 'Lance cette commande sur ton ordinateur',
+    // Each joker of a command (ESC-528), a pill of words in place of the word the host checks.
+    jokers: {
+      int: 'un nombre',
+      port: 'un port',
+      name: 'un nom',
+      pid: 'un programme qu’il a lancé',
+      temp: 'un fichier de son dossier temporaire',
+      plugin: 'un fichier de son dossier',
+    },
+    jokerPill: 'pastille',
+    jokerGuard: 'Chaque {pill} est un seul mot, que l’hôte vérifie : jamais une option, jamais un chemin hors de ce qu’elle dit.',
     env: 'Pose cette variable d’environnement sur ce qu’il lance',
     harnessInstall: 'Donne la commande qui installe son harness',
     harnessUpdate: 'Donne la commande qui met à jour son harness',

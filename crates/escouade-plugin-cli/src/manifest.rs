@@ -749,8 +749,9 @@ impl Manifest {
     }
 
     /// What it declares of the contract (docs/PLUGINS-CONTRACT-STUDY.md) that this Escouade reads but does not serve
-    /// yet, in `lang`: profiles, a secret of each project, a joker in a command, more programs at once than 4. Such a
-    /// plugin is loaded disabled with this reason, never served by half (ESC-525). None when all it asks is served.
+    /// yet, in `lang`: profiles, a secret of each project, more programs at once than 4 (the jokers of a command are
+    /// served since ESC-528). Such a plugin is loaded disabled with this reason, never served by half (ESC-525). None
+    /// when all it asks is served.
     pub fn unserved(&self, lang: Lang) -> Option<String> {
         let mut points = Vec::new();
         let listed = |key: &str| {
@@ -775,13 +776,6 @@ impl Manifest {
                 lang,
                 "un secret propre à chaque projet (`\"scope\": \"project\"`)",
                 "a secret of each project (`\"scope\": \"project\"`)"
-            ));
-        }
-        if self.permissions.commands.iter().any(|c| has_joker(c)) {
-            points.push(tr_in!(
-                lang,
-                "des jokers dans ses commandes (`{{int}}`, `{{path:temp}}`…)",
-                "jokers in its commands (`{{int}}`, `{{path:temp}}`…)"
             ));
         }
         if let Some(n) = self.limits.processes.filter(|n| *n > PROCESSES_SERVED) {

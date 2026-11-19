@@ -209,3 +209,47 @@ test('a plugin that decides starts at its installation and when it is switched o
   await invoke('plugin_set_enabled', { id: ID, on: true });
   expect(await phase(ID)).toBe('idle');
 });
+
+// ESC-528: the jokers of a command, each a pill of words in the install window and on the tab Permissions, with the sentence
+// that says what a pill is, once; the plugin is loaded, no longer disabled as an app that does not serve them yet left it.
+test('the jokers of a command show as pills of words at the installation and on the tab Permissions', async ({ app }) => {
+  test.setTimeout(120_000);
+  const { page } = app;
+  await addProject(page, app.repo);
+  const src = path.join(app.root, 'tunnel');
+  const commands = [
+    'unshare -Urn openvpn --config {path:temp} --script-security 1',
+    'slirp4netns --configure --mtu=65520 {pid} tap0',
+    'nsenter --preserve-credentials -U -n -t {pid} ip addr',
+  ];
+  fakePlugin(src, { permissions: { commands, files: [{ root: 'temp', access: 'write' }] }, contributes: {} });
+  await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+  await pickAnswers(page, src);
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Installer Faux plugin ?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('[data-joker="{path:temp}"]')).toHaveText('un fichier de son dossier temporaire');
+  await expect(dialog.locator('[data-joker="{pid}"]')).toHaveText(['un programme qu’il a lancé', 'un programme qu’il a lancé']);
+  await expect(dialog.locator('[data-command]').first()).toHaveText(
+    'unshare -Urn openvpn --config un fichier de son dossier temporaire --script-security 1',
+  );
+  await expect(dialog.locator('[data-joker-guard]')).toHaveText(
+    'Chaque pastille est un seul mot, que l’hôte vérifie : jamais une option, jamais un chemin hors de ce qu’elle dit.',
+  );
+  // Nothing says it would stay disabled.
+  await expect(dialog).not.toContainText('ne sert pas encore');
+  await dialog.screenshot({ path: test.info().outputPath('install-jokers.png') });
+  await dialog.getByRole('button', { name: 'Installer quand même' }).click();
+  await expect(dialog).toBeHidden();
+  expect(installed(app.data).map((p) => p.id)).toEqual([ID]);
+
+  await page.getByRole('tab', { name: /Permissions/ }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Permissions' });
+  await expect(panel.locator('[data-joker]')).toHaveCount(3);
+  await expect(panel.locator('[data-joker-guard]')).toHaveCount(1);
+  await expect(panel.getByRole('switch', { name: `Lance cette commande sur ton ordinateur ${commands[1]} : permise` })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await panel.screenshot({ path: test.info().outputPath('permissions-jokers.png') });
+});

@@ -101,6 +101,10 @@ pub struct Greeting {
     pub lang: Option<String>,
     /// The version of Escouade.
     pub version: String,
+    /// Whether it serves the jokers of `permissions.commands` (`capabilities.typedCommands`: `{int}`, `{port}`, `{name}`,
+    /// `{pid}`, `{path:temp}`, `{path:plugin}`, Escouade 2.2.5 and later). An Escouade that does not refuses such an
+    /// entry, it never runs more for it.
+    pub typed_commands: bool,
 }
 
 impl Greeting {
@@ -111,6 +115,7 @@ impl Greeting {
                 .as_str()
                 .unwrap_or_default()
                 .to_string(),
+            typed_commands: params["capabilities"]["typedCommands"].as_bool() == Some(true),
         }
     }
 }
@@ -430,5 +435,8 @@ mod tests {
             (Some("en"), "2.2.0")
         );
         assert_eq!(Greeting::of(&json!({})), Greeting::default());
+        assert!(!said.typed_commands);
+        let typed = json!({ "capabilities": { "typedCommands": true } });
+        assert!(Greeting::of(&typed).typed_commands);
     }
 }

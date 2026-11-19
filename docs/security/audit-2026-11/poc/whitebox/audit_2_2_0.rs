@@ -18,7 +18,9 @@ use super::files::{Access, AgentPlace, Agents, REFUSED as FS_REFUSED};
 use super::harness::{check_launch, read_frame, write_files, Vars};
 use super::journal::Kind;
 use super::manifest::{self, Hand};
-use super::procs::{allowed, forbidden_var, var_refused, Procs, ProcsOf, REFUSED as PROC_REFUSED};
+use super::procs::{
+    allowed, forbidden_var, var_refused, Entry, Held, Procs, ProcsOf, REFUSED as PROC_REFUSED,
+};
 use super::seed::{Entry as SeedEntry, Seed};
 use super::store::{self, RevocationList};
 use super::store_keys::{self, Refused};
@@ -402,6 +404,7 @@ fn bed_with(commands: &[&str], env: Option<&[&str]>) -> Bed {
         env: env.map(|names| names.iter().map(|n| n.to_string()).collect()),
         first_hand: false,
         temp: base.join("temp"),
+        plugin: base.join("plugin"),
         agents,
         projects: Arc::new(move |_: &str| Ok(project.clone())),
         agent_env: Vec::new(),
@@ -459,10 +462,18 @@ async fn holds_a_program_or_an_argument_not_declared_is_refused() {
     ] {
         assert!(!manifest::command_holds(line), "{line}");
     }
-    assert!(!allowed(
-        &[vec!["*".to_string()]],
-        &["rm".to_string(), "-rf".to_string()]
-    ));
+    let nowhere = std::path::Path::new("");
+    let held = Held {
+        pids: &|_| false,
+        temp: nowhere,
+        plugin: nowhere,
+    };
+    assert!(allowed(
+        &[Entry::of("*")],
+        &["rm".to_string(), "-rf".to_string()],
+        &held
+    )
+    .is_err());
 }
 
 // ---- `fs/*` (`plugins/files.rs`) ------------------------------------------------------------------------------------

@@ -85,11 +85,6 @@ fn each_point_not_served_yet_is_said_in_both_languages() {
             "a secret of each project",
         ),
         (
-            json!({ "permissions": { "commands": ["slirp4netns --configure {pid} tap0"] } }),
-            "des jokers dans ses commandes",
-            "jokers in its commands",
-        ),
-        (
             json!({ "limits": { "processes": 8, "reason": "Un tunnel par projet." } }),
             "8 programmes à la fois (`limits.processes`, 4 au plus ici)",
             "8 programs at once (`limits.processes`, 4 at most here)",
@@ -114,13 +109,38 @@ fn each_point_not_served_yet_is_said_in_both_languages() {
     }
     // Several at once: each named, in one sentence.
     let mut v = base();
-    v["permissions"] = json!({ "commands": ["tool {int}"] });
+    v["contributes"] = json!({ "secrets": [{ "key": "p", "title": "P", "scope": "project" }] });
     v["limits"] = json!({ "processes": 16, "reason": "x" });
     let said = read(&v).unserved(Lang::En).unwrap();
     assert!(
-        said.contains("jokers in its commands (`{int}`, `{path:temp}`…), 16 programs at once"),
+        said.contains("a secret of each project (`\"scope\": \"project\"`), 16 programs at once"),
         "{said}"
     );
+}
+
+/// The jokers of a command are served since ESC-528: a plugin that has them loads, and runs (`procs::allowed`).
+#[test]
+fn a_plugin_with_jokers_in_its_commands_loads_ready() {
+    let mut v = base();
+    v["permissions"] = json!({ "commands": [
+        "unshare -Urn openvpn --config {path:temp} --script-security 1",
+        "slirp4netns --configure --mtu=65520 {pid} tap0",
+        "nsenter --preserve-credentials -U -n -t {pid} ip addr"
+    ] });
+    assert_eq!(read(&v).unserved(Lang::Fr), None);
+    let base_dir = temp_dir("jokers");
+    let src = base_dir.join("src");
+    folder(&src, &v);
+    let plugins = Plugins::load(DataDir::new(base_dir.join("data")), "2.2.4");
+    assert_eq!(
+        plugins.inspect_folder(&src, Lang::Fr).unwrap().refusal,
+        None
+    );
+    let view = plugins.install_folder(&src, Lang::Fr).unwrap();
+    assert_eq!(view.state, State::Ready);
+    assert!(view
+        .asks
+        .contains(&"commands:slirp4netns --configure --mtu=65520 {pid} tap0".to_string()));
 }
 
 #[test]

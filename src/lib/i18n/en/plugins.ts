@@ -413,6 +413,17 @@ export default defineZone('plugins', {
     decide: 'Decides your agents’ permissions',
     harness: 'Runs this program of your computer for its agents, with your rights',
     commands: 'Runs this command on your computer',
+    // Each joker of a command (ESC-528), a pill of words in place of the word the host checks.
+    jokers: {
+      int: 'a number',
+      port: 'a port',
+      name: 'a name',
+      pid: 'a program it started',
+      temp: 'a file of its temporary folder',
+      plugin: 'a file of its folder',
+    },
+    jokerPill: 'pill',
+    jokerGuard: 'Each {pill} is one word, which the host checks: never an option, never a path outside what it says.',
     env: 'Sets this environment variable on what it runs',
     harnessInstall: 'Gives the command that installs its harness',
     harnessUpdate: 'Gives the command that updates its harness',

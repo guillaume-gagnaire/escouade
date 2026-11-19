@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Takes `escouade-plugin-protocol` 0.1.4: `greeting().typed_commands` says whether Escouade serves the jokers of `permissions.commands` (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`), and `proc/spawn` answers the program's `pid` with its `proc`.
+- In a module, a big line (a dictation of 10 minutes is one of 25 MB) is read and written with one copy instead of three, and never doubled at its end: such a module crashed at random for lack of memory, by where its allocator stood. A plugin rebuilt on 0.1.4 has more than 32 MB to spare on that dictation.
+
 ## 0.1.2
 
 - `Hosts`: a source served from several accounts. An account after its first names its secret (`account:<name>`), and each one keeps its own client.

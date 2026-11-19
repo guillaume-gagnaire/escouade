@@ -1399,7 +1399,7 @@ impl Host {
             "escouade": { "version": rt.app_version },
             "plugin": { "id": self.id, "version": self.manifest.version },
             "lang": rt.lang(),
-            "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true },
+            "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true, "typedCommands": true },
         });
         let answer = match self
             .call_on(&conn, "initialize", &raw(&hello), rt.limits.initialize)
@@ -1577,6 +1577,7 @@ impl Host {
             env: self.manifest.permissions.env.clone(),
             first_hand: super::builtin::first_hand(&self.id),
             temp: rt.temps.join(&self.id),
+            plugin: self.folder.clone(),
             agents: self.agents.clone(),
             projects: Arc::new(move |project| {
                 me.upgrade()

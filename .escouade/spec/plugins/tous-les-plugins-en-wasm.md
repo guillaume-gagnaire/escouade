@@ -2,8 +2,8 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §8 (ESC-330)","docs/PLUGINS-DESIGN.md §8.16 (ESC-341)","docs/PLUGINS-DESIGN.md §8.17 (ESC-335)","docs/PLUGINS-DESIGN.md §8.18 (ESC-336)","docs/PLUGINS-DESIGN.md §8.19 (ESC-344)","docs/PLUGINS-DESIGN.md §8.20 (ESC-337)","docs/PLUGINS-DESIGN.md §8.22 (ESC-351)","docs/PLUGINS-DESIGN.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS-DESIGN.md §8.24 (ESC-348)","docs/PLUGINS-DESIGN.md §8.25 (ESC-345)","docs/PLUGINS-DESIGN.md §8.27 (ESC-347)","docs/PLUGINS-DESIGN.md §8.28 (ESC-350)","docs/PLUGINS-DESIGN.md §8.29 (ESC-358)","Accord de l'utilisateur du 2026-11-06 : publication et MIT d'escouade-voice","Issue GitHub #43 (mpweb01, 2026-11) : plugin.wasm attendu à la racine, SDK 0.3.0 en retard, documents qui se contredisent","docs/PLUGINS.md §1.4, §3.3, §4"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-352","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358","ESC-353","ESC-424","ESC-500"]
-decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99,103,152,209]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-352","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358","ESC-353","ESC-424","ESC-500","ESC-528"]
+decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99,103,152,209,"les-jokers-de-permissions-commands-sont"]
 compared: null
 ---
 
@@ -274,3 +274,8 @@ Ceci remplace, dans « Ce qui tourne déjà », « ou celui de l'auteur pour un 
 - **Le validateur du SDK et celui de l'app lisent le même schéma** : les champs que connaît `schemas/plugin-manifest.mjs` (et sa copie dans `@escouade-dev/plugin`) sont ceux de `schemas/plugin-1.json`, qu'écrit le lecteur de l'app, et chaque manifeste du dépôt reçoit des deux le même verdict ; un test échoue quand ils divergent. `@escouade-dev/plugin` passe en 0.4.0 (la 0.3.0 publiée ignorait `run.wasm`, `permissions.files` et `limits`), `create-escouade-plugin` en 0.5.0 ; le chef les publie.
 - **`proc/out`** porte du texte UTF-8, jamais du base64, coupé entre deux caractères, 16 Kio au plus, pas par ligne, parfois avant la réponse de `proc/spawn` ; **`proc/exit`** arrive une fois après toute la sortie, son `code` à `null` si le programme a été tué. L'`agent.id` d'un fait n'ouvre pas `fs/*` : la clé d'agent est celle d'`agent/attach` ou d'un appel d'environnement de lancement.
 - **Ce qui fait foi** pour un auteur : `docs/PLUGINS.md` et les schémas ; `docs/PLUGINS-DESIGN.md` est le document de conception, daté. Les points `menus`, `statusBar`, `badges`, `projectTemplates`, `escouadeYml` (hors `plugins.<id>`) et `workflowReaders` sont dits non servis.
+
+## Les jokers de `proc/spawn` (ESC-528)
+
+- Une entrée de `permissions.commands` peut tenir des jokers (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`) : chacun admet un seul mot de sa forme, jamais une option ni `--`, et l'entrée garde sa longueur (sauf `*` final, inchangé). Un chemin est résolu par l'hôte et passé en absolu ; un `{pid}` est un programme vivant de cette instance. La grammaire, les refus et ce que dit la fenêtre sont à *Le contrat du manifeste*.
+- `proc/spawn` rend `{ proc, pid }` ; `initialize` annonce `capabilities.typedCommands`.

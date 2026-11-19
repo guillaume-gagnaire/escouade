@@ -577,6 +577,63 @@ fn kind_of(meta: &std::fs::Metadata) -> &'static str {
     }
 }
 
+/// The names Windows gives its devices: a file named so, whatever its extension, is the device.
+const DEVICES: [&str; 4] = ["CON", "PRN", "AUX", "NUL"];
+
+/// Whether `name` names a device of Windows (`CON`, `NUL`, `COM1`, `lpt9.txt`…), whatever its case and extension: refused
+/// under every system, so that a manifest means the same everywhere (ESC-528).
+pub fn windows_device(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or(name).to_ascii_uppercase();
+    DEVICES.contains(&stem.as_str())
+        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.len() == 4
+            && stem.as_bytes()[3].is_ascii_digit())
+}
+
+/// The file `relative` names under `root`, for a joker `{path:temp}` or `{path:plugin}` of `permissions.commands`
+/// (ESC-528, §5.3 of docs/PLUGINS-CONTRACT-STUDY.md): its parts are `[A-Za-z0-9_.-]+` between `/`, none `.` nor `..`,
+/// none an option (`-` first) nor a device of Windows, `hidden` ones refused (the plugin's folder, as `files/read`). So
+/// never an absolute path, `~`, a drive, `\\?\` nor a UNC path. The host joins it to its root, resolves it as `fs/*`
+/// does (links and junctions followed), and holds it only when it stays under the root and is a file there: what it
+/// gives is that real path, in plain form, which a program reads as it was judged and which never starts with `-`.
+pub fn file_beneath(root: &Path, relative: &str, hidden: bool) -> Result<String, String> {
+    let parts: Vec<&str> = relative.split('/').collect();
+    for part in &parts {
+        let why = if part.is_empty() {
+            Some("an empty part, or an absolute path")
+        } else if !part
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+        {
+            Some("a part of other than letters, digits, _ . - (a drive, ~, \\, a space…)")
+        } else if matches!(*part, "." | "..") {
+            Some("a part . or ..")
+        } else if part.starts_with('-') {
+            Some("a part that starts with - (an option)")
+        } else if !hidden && part.starts_with('.') {
+            Some("a hidden part")
+        } else if windows_device(part) {
+            Some("a part that names a device of Windows")
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            return Err(format!("not a relative path of its folder: {why}"));
+        }
+    }
+    let root = std::fs::canonicalize(root).map_err(|_| "its folder is not there".to_string())?;
+    let joined = parts.iter().fold(root.clone(), |p, part| p.join(part));
+    let real = resolved(&joined).ok_or("a link that leads nowhere")?;
+    if !real.starts_with(&root) {
+        return Err("it leads out of its folder".into());
+    }
+    match std::fs::metadata(&real) {
+        Ok(m) if m.is_file() => Ok(plain(&real)),
+        Ok(_) => Err("it is no file".into()),
+        Err(_) => Err("no such file in its folder".into()),
+    }
+}
+
 /// The form a harness writes a path in: without the `\\?\` of Windows.
 fn plain(path: &Path) -> String {
     let text = path.to_string_lossy();
@@ -657,7 +714,7 @@ fn no_submodule(cwd: &Path, path: &Path) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::fence::Fence;
     use crate::runtime::INVALID_PARAMS;
@@ -754,7 +811,7 @@ mod tests {
     // ---- fs/* ----
 
     /// A link at `link` to the folder `to`: a junction under Windows, which needs no right.
-    fn link_folder(to: &Path, link: &Path) {
+    pub(crate) fn link_folder(to: &Path, link: &Path) {
         #[cfg(unix)]
         std::os::unix::fs::symlink(to, link).unwrap();
         #[cfg(windows)]

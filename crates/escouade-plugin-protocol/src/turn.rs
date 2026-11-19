@@ -16,17 +16,31 @@ use crate::Refusal;
 use serde_json::Value;
 use std::path::Path;
 
-/// The whole lines of what was read, the end of a line that is not there yet kept in `partial` for the next turn.
+/// The whole lines of `all` (what was kept of the last turn, then what was read), the end of a line that is not there
+/// yet left in it for the next turn. A single line, what a big message is (a dictation of 10 minutes is a line of 25 MB),
+/// becomes its `String` in place, with no copy: a module has its memory counted, and a copy of each big line made it
+/// fail at random, by where its allocator stood (ESC-528).
 #[cfg_attr(not(target_family = "wasm"), allow(dead_code))]
-fn whole_lines(partial: &mut Vec<u8>, read: &[u8]) -> Vec<String> {
-    let mut all = std::mem::take(partial);
-    all.extend_from_slice(read);
-    let end = all.iter().rposition(|b| *b == b'\n').map_or(0, |i| i + 1);
-    *partial = all.split_off(end);
-    String::from_utf8_lossy(&all)
-        .lines()
-        .map(str::to_string)
-        .collect()
+fn whole_lines(all: &mut Vec<u8>) -> Vec<String> {
+    let Some(end) = all.iter().rposition(|b| *b == b'\n').map(|i| i + 1) else {
+        return Vec::new();
+    };
+    let rest = all[end..].to_vec();
+    let mut whole = std::mem::replace(all, rest);
+    whole.truncate(end);
+    if whole[..end - 1].contains(&b'\n') {
+        return String::from_utf8_lossy(&whole)
+            .lines()
+            .map(str::to_string)
+            .collect();
+    }
+    // One line: its `\n` (and a `\r` before it) off, as `str::lines` does.
+    whole.pop();
+    if whole.last() == Some(&b'\r') {
+        whole.pop();
+    }
+    vec![String::from_utf8(whole)
+        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())]
 }
 
 /// Exports the turn of a plugin, `run` being what it runs at its start: `escouade_plugin_protocol::module!(run);`. A
@@ -107,22 +121,27 @@ mod module {
 
     /// The whole lines the host wrote since the last turn. An empty read is "nothing more for now", never an end.
     pub fn lines() -> Vec<String> {
-        let mut read = Vec::new();
-        let mut buf = [0u8; 16 * 1024];
-        let mut input = std::io::stdin().lock();
-        while let Ok(n) = input.read(&mut buf) {
-            if n == 0 {
-                break;
+        PARTIAL.with(|p| {
+            // Read after what was kept, in the same buffer: one copy of what came, not three.
+            let mut all = p.borrow_mut();
+            let mut buf = [0u8; 16 * 1024];
+            let mut input = std::io::stdin().lock();
+            while let Ok(n) = input.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                all.extend_from_slice(&buf[..n]);
             }
-            read.extend_from_slice(&buf[..n]);
-        }
-        PARTIAL.with(|p| whole_lines(&mut p.borrow_mut(), &read))
+            whole_lines(&mut all)
+        })
     }
 
     /// A line for the host, at the end of the turn.
     pub fn write(line: &str) {
         OUT.with(|o| {
             let mut o = o.borrow_mut();
+            // The line and its end at once: a push past an exact capacity would double a big line (ESC-528).
+            o.reserve(line.len() + 1);
             o.extend_from_slice(line.as_bytes());
             o.push(b'\n');
         });
@@ -136,7 +155,12 @@ mod module {
                 let mut out = std::io::stdout().lock();
                 let _ = out.write_all(&o);
                 let _ = out.flush();
-                o.clear();
+                // A big turn does not keep its memory for the next ones.
+                if o.capacity() > 1 << 20 {
+                    *o = Vec::new();
+                } else {
+                    o.clear();
+                }
             }
         });
     }
@@ -248,12 +272,21 @@ mod tests {
 
     #[test]
     fn a_line_cut_in_two_comes_whole_at_the_next_turn() {
-        let mut partial = Vec::new();
-        assert_eq!(whole_lines(&mut partial, b"one\ntw"), vec!["one"]);
-        assert_eq!(partial, b"tw");
-        assert!(whole_lines(&mut partial, b"o").is_empty());
-        assert_eq!(whole_lines(&mut partial, b"\nthree\n"), ["two", "three"]);
-        assert!(partial.is_empty());
+        let mut all = b"one\ntw".to_vec();
+        assert_eq!(whole_lines(&mut all), vec!["one"]);
+        assert_eq!(all, b"tw");
+        all.extend_from_slice(b"o");
+        assert!(whole_lines(&mut all).is_empty());
+        all.extend_from_slice(b"\nthree\n");
+        assert_eq!(whole_lines(&mut all), ["two", "three"]);
+        assert!(all.is_empty());
+        // One line, cut as `str::lines` cuts it, a `\r` before its end too; what is not UTF-8, replaced.
+        all.extend_from_slice(b"{\"big\":1}\r\n");
+        assert_eq!(whole_lines(&mut all), ["{\"big\":1}"]);
+        all.extend_from_slice(b"a\xffb\n");
+        assert_eq!(whole_lines(&mut all), ["a\u{fffd}b"]);
+        all.extend_from_slice(b"\n");
+        assert_eq!(whole_lines(&mut all), [""]);
     }
 
     #[test]

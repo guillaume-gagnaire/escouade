@@ -282,6 +282,34 @@ export interface Ask {
   orange?: boolean;
   /** What it says under it: whether Escouade enforces it (a host of a plugin in WASM) or only shows it. */
   note?: string;
+  /** A command with jokers (ESC-528): its words, each joker said in words, in a pill. */
+  pieces?: CommandPiece[];
+}
+
+/** A word of a command as the window shows it: as written, or a joker (`joker`: `{pid}`…) said in words. */
+export interface CommandPiece {
+  text: string;
+  joker?: string;
+}
+
+/** The jokers of `permissions.commands` (§5.3 of the contract's study), by what the window says of each. */
+const JOKERS = {
+  '{int}': 'plugins.ask.jokers.int',
+  '{port}': 'plugins.ask.jokers.port',
+  '{name}': 'plugins.ask.jokers.name',
+  '{pid}': 'plugins.ask.jokers.pid',
+  '{path:temp}': 'plugins.ask.jokers.temp',
+  '{path:plugin}': 'plugins.ask.jokers.plugin',
+} as const;
+
+/** The white space a command is cut on, as Rust's `split_whitespace` (never `\s`, which differs on U+FEFF and U+0085). */
+const SPACE = /[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/;
+
+/** The words of `command`, each joker said in words; null when it has none (the command shows as written). */
+export function piecesOf(command: string): CommandPiece[] | null {
+  const words = command.split(SPACE).filter(Boolean);
+  if (!words.some((w) => w in JOKERS)) return null;
+  return words.map((w) => (w in JOKERS ? { text: t(JOKERS[w as keyof typeof JOKERS]), joker: w } : { text: w }));
 }
 
 /** The title of a secret's field, or its key. */
@@ -365,6 +393,7 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
         icon: 'bash',
         text: t('plugins.ask.commands'),
         detail: what,
+        pieces: piecesOf(what) ?? undefined,
         strong: true,
         red: true,
         // A program of a plugin in WASM goes through Escouade (`proc/spawn`); a process runs what it likes.

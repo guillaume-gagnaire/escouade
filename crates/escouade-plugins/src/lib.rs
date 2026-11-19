@@ -132,6 +132,9 @@ pub mod plugins_reactor_tests;
 #[cfg(any(test, feature = "testing"))]
 #[cfg_attr(not(test), allow(dead_code, unused_imports))]
 pub mod plugins_runtime_tests;
+// The jokers of `permissions.commands` and their hostile cases (ESC-528).
+#[cfg(test)]
+mod plugins_jokers_tests;
 #[cfg(test)]
 mod plugins_rust_build_tests;
 #[cfg(any(test, feature = "testing"))]

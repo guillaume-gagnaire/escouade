@@ -62,6 +62,7 @@ fn capabilities(
         env: manifest.permissions.env.clone(),
         first_hand: crate::builtin::first_hand(&manifest.id),
         temp: scratch.join("temp"),
+        plugin: folder.to_path_buf(),
         agents: agents.clone(),
         projects: Arc::new(move |_| Ok(project.clone())),
         agent_env: Vec::new(),
@@ -316,7 +317,7 @@ impl Session {
             "escouade": { "version": app_version },
             "plugin": { "id": manifest.id, "version": manifest.version },
             "lang": "fr",
-            "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true },
+            "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true, "typedCommands": true },
         })
     }
 
