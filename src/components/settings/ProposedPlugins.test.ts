@@ -9,6 +9,7 @@ import { app } from '../../lib/state.svelte';
 import type { CatalogPlugin, StoreView } from '../../lib/store';
 import type { Project } from '../../lib/types';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
+import { installedPlugin } from '../../test/plugins';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 // The plugins a project proposes (PLG-14): the band at the head of Settings › Project names those of
@@ -85,7 +86,7 @@ function proposing(ids: unknown, over: Partial<Project> = {}): Project {
   });
 }
 
-const installed = (id: string) => ({ id, name: id, origin: { kind: 'store' } }) as unknown as PluginView;
+const installed = (id: string): PluginView => installedPlugin({ id, name: id, version: '1.0.0' });
 
 beforeEach(() => {
   setLang('fr');
