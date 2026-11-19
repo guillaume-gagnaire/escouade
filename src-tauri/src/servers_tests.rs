@@ -308,7 +308,7 @@ struct Bench {
 }
 
 async fn bench(name: &str, version: &str, refuse: Option<&'static str>) -> Bench {
-    bench_ports(name, version, refuse, "").await
+    bench_with(name, version, refuse, "", false).await
 }
 
 /// `bench`, the fake `ssh` mapping also the ports `extra` (`<remote>=<real>,…`).
@@ -318,6 +318,18 @@ async fn bench_ports(
     refuse: Option<&'static str>,
     extra: &str,
 ) -> Bench {
+    bench_with(name, version, refuse, extra, false).await
+}
+
+/// `bench_ports`, its fake `ssh` starting a process of its own for each of its tunnels (`FAKE_SSH_CHILD`) when
+/// `child`.
+async fn bench_with(
+    name: &str,
+    version: &str,
+    refuse: Option<&'static str>,
+    extra: &str,
+    child: bool,
+) -> Bench {
     let root = crate::paths::test_dir(&format!("servers-{name}"));
     let data = DataDir::new(root.join("server-data"));
     data.ensure().unwrap();
@@ -325,11 +337,14 @@ async fn bench_ports(
     let port = api.addr().port();
     let dir = root.join("ssh");
     std::fs::create_dir_all(&dir).unwrap();
-    let ssh = fake_ssh(
+    let mut ssh = fake_ssh(
         &dir,
         &format!("{}={port},{extra}", tunnel::SERVER_PORT),
         None,
     );
+    if child {
+        ssh.env.push(("FAKE_SSH_CHILD".into(), "1".into()));
+    }
     let client = root.join("client");
     std::fs::create_dir_all(&client).unwrap();
     let config = root.join(".ssh").join("config");
@@ -1022,5 +1037,204 @@ async fn a_server_without_a_token_is_not_reached_at_the_start() {
             problem: Problem::Revoked { .. },
         }) => {}
         t => panic!("{t:?}"),
+    }
+}
+
+// ---------- no tunnel outlives its owner (ESC-541) ----------
+
+/// The pids the fake `ssh` of `dir` noted: its forwards, and what they started.
+fn noted_pids(dir: &Path) -> Vec<u32> {
+    std::fs::read_to_string(dir.join("pids.log"))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.trim().parse().ok())
+        .collect()
+}
+
+/// Whether the process `pid` runs.
+fn alive(pid: u32) -> bool {
+    #[cfg(windows)]
+    // SAFETY: a handle opened, read and closed here.
+    unsafe {
+        use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
+        use windows_sys::Win32::System::Threading::{
+            GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return false;
+        }
+        let mut code = 0u32;
+        let ok = GetExitCodeProcess(h, &mut code) != 0;
+        CloseHandle(h);
+        ok && code == STILL_ACTIVE as u32
+    }
+    #[cfg(unix)]
+    {
+        // A zombie is gone, as far as this test goes: `ps` says its state.
+        let out = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        let stat = String::from_utf8_lossy(&out.stdout);
+        out.status.success() && !stat.trim().is_empty() && !stat.trim().starts_with('Z')
+    }
+}
+
+/// Waits (30 s at most) until none of `pids` runs.
+async fn all_gone(what: &str, pids: &[u32]) {
+    let until = std::time::Instant::now() + Duration::from_secs(30);
+    while std::time::Instant::now() < until {
+        if !pids.iter().any(|p| alive(*p)) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let left: Vec<u32> = pids.iter().copied().filter(|p| alive(*p)).collect();
+    // Ended by their pids, which this test started: nothing of it outlives it, even when it fails.
+    for pid in &left {
+        #[cfg(windows)]
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .output();
+        #[cfg(unix)]
+        // SAFETY: a signal to a process this test started.
+        unsafe {
+            libc::kill(*pid as i32, libc::SIGKILL);
+        }
+    }
+    panic!("{what}: still running after 30 s: {left:?}");
+}
+
+/// Two servers paired, each with its tunnel kept up (ESC-539), the window on one, a port of it relayed (ESC-538) and the
+/// dialog open (a tunnel of its own): the pids of the fake `ssh` of each, and of what each started.
+async fn tunnels_open(b: &Bench) -> Vec<u32> {
+    let reached = ok(b.servers.attempt("travail", None, None).await);
+    let code = pairing::create(&b.data, crate::model::now_ms()).unwrap();
+    let id = ok(b
+        .servers
+        .pair(&reached.attempt, &code.text, "Travail", "Poste")
+        .await);
+    ok(b.servers.open(&id).await);
+    assert_eq!(b.servers.link().unwrap().tunnel, TunnelState::Up);
+    let dev = answering(b"vite").await;
+    let relayed = b.servers.relay(dev, false).await.unwrap();
+    assert_eq!(read_from(relayed.local).await, "vite");
+    // Another space, its tunnel kept up beside the first.
+    let reached = ok(b.servers.attempt("ailleurs", None, None).await);
+    let code = pairing::create(&b.data, crate::model::now_ms()).unwrap();
+    let other = ok(b
+        .servers
+        .pair(&reached.attempt, &code.text, "Ailleurs", "Poste")
+        .await);
+    b.servers.ensure(&other);
+    let servers = b.servers.clone();
+    until("the other space's tunnel up", || {
+        servers.link_of(&other).map(|l| l.tunnel) == Some(TunnelState::Up)
+    })
+    .await;
+    assert_eq!(b.servers.tunnels(), 2);
+    ok(b.servers.attempt("travail", None, None).await);
+    let pids = noted_pids(&b.dir);
+    // The pairings', the two spaces', the relay's and the dialog's: six forwards at least, with a process each.
+    assert!(pids.len() >= 12, "{pids:?}");
+    pids
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tunnel_whose_owner_goes_without_stopping_it_ends_with_what_ssh_started() {
+    let b = bench_with("abandoned", VERSION, None, "", true).await;
+    let pids = tunnels_open(&b).await;
+    let servers = Arc::downgrade(&b.servers);
+    // The owner gone, never told to stop (no `leave`, no `shutdown`, no `cancel`).
+    drop(b);
+    assert!(
+        servers.upgrade().is_none(),
+        "nothing else holds the servers"
+    );
+    all_gone("the tunnels of servers dropped", &pids).await;
+}
+
+/// How the app ends in [`the_app_that_ends_leaves_no_tunnel_behind`]'s process: `shutdown` then `exit`, or `exit`
+/// alone (the Windows update leaves so: `updates::leave`).
+const EXIT_HELPER: &str = "ESCOUADE_TEST_SERVERS_EXIT";
+
+/// The app of [`the_app_that_ends_leaves_no_tunnel_behind`]: run in a process of its own by it alone.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "run by the_app_that_ends_leaves_no_tunnel_behind in a process of its own"]
+async fn an_app_with_tunnels_that_ends() {
+    let Some(how) = std::env::var_os(EXIT_HELPER) else {
+        return;
+    };
+    let how = how.to_string_lossy().into_owned();
+    let (mode, out) = how.split_once('|').unwrap();
+    let b = bench_with("exit", VERSION, None, "", true).await;
+    // The pids, where the test reads them: this process's temporary folder goes with it.
+    let pids = tunnels_open(&b).await;
+    let pids: Vec<String> = pids.iter().map(u32::to_string).collect();
+    std::fs::write(
+        out,
+        pids.join(
+            "
+",
+        ),
+    )
+    .unwrap();
+    if mode == "shutdown" {
+        b.servers.shutdown();
+    }
+    // As the app does: no drop, no runtime shut down.
+    std::process::exit(0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_app_that_ends_leaves_no_tunnel_behind() {
+    let dir = crate::paths::test_dir("servers-app-exit");
+    // `exit` alone: the Windows update's way out, where the system ends the tunnels with the app's Job.
+    let modes: &[&str] = if cfg!(windows) {
+        &["shutdown", "exit"]
+    } else {
+        &["shutdown"]
+    };
+    for mode in modes {
+        let out = dir.join(format!("{mode}.txt"));
+        // Nextest's pipes are not handed down: a process left behind would hold them (« leaky »).
+        #[cfg(windows)]
+        let kept = crate::test_tmp::KeptHere::std_handles();
+        let mut app = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "servers_tests::an_app_with_tunnels_that_ends",
+                "--exact",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env(EXIT_HELPER, format!("{mode}|{}", out.display()))
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        #[cfg(windows)]
+        drop(kept);
+        let mut ended = None;
+        for _ in 0..600 {
+            if let Some(status) = app.try_wait().unwrap() {
+                ended = Some(status);
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        if ended.is_none() {
+            let _ = app.kill();
+            panic!("{mode}: the app did not end in 60 s");
+        }
+        assert!(ended.unwrap().success(), "{mode}: the app failed");
+        let pids: Vec<u32> = std::fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .filter_map(|l| l.trim().parse().ok())
+            .collect();
+        assert!(pids.len() >= 12, "{mode}: {pids:?}");
+        all_gone(&format!("the tunnels of an app ended by {mode}"), &pids).await;
     }
 }

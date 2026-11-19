@@ -1,9 +1,9 @@
 ---
 title: "Se connecter à un serveur"
 subject: "a-distance"
-sources: ["docs/SERVER-UX.md (§ 2 le parcours, § 3 la connexion et ses états, § 4 dire sur quelle machine on est, § 7 S1, S4, S10, S11, S15, § 9, § 10, § 11)","design/server-2-3 (maquettes et captures : x-hote, b-connexion, b-erreur, b-coupure, x-etats, x-version, x-jeton, b-deux)","docs/REMOTE.md, « Le mode serveur », « Le tunnel : SSH d'abord », « Le client, MS-3 (ESC-537) »","src-tauri/src/servers (mod.rs, sshconfig.rs, tunnel.rs, client.rs)","src-tauri/src/remoteapi (proto.rs, server.rs, devices.rs, pairing.rs)","src/lib/transport.ts, src/lib/servers.svelte.ts, src/components/servers","tests/fixtures/fake-ssh.mjs, tests/e2e/server-connect.spec.ts, src-tauri/src/servers_tests.rs"]
-tickets: ["ESC-537","ESC-539"]
-decisions: [212,218]
+sources: ["docs/SERVER-UX.md (§ 2 le parcours, § 3 la connexion et ses états, § 4 dire sur quelle machine on est, § 7 S1, S4, S10, S11, S15, § 9, § 10, § 11)","design/server-2-3 (maquettes et captures : x-hote, b-connexion, b-erreur, b-coupure, x-etats, x-version, x-jeton, b-deux)","docs/REMOTE.md, « Le mode serveur », « Le tunnel : SSH d'abord », « Le client, MS-3 (ESC-537) »","src-tauri/src/servers (mod.rs, sshconfig.rs, tunnel.rs, client.rs)","src-tauri/src/remoteapi (proto.rs, server.rs, devices.rs, pairing.rs)","src/lib/transport.ts, src/lib/servers.svelte.ts, src/components/servers","tests/fixtures/fake-ssh.mjs, tests/e2e/server-connect.spec.ts, src-tauri/src/servers_tests.rs","crates/escouade-model/src/job.rs (le job des tunnels, ESC-541)"]
+tickets: ["ESC-537","ESC-539","ESC-541"]
+decisions: [212,218,220]
 compared: null
 ---
 
@@ -30,6 +30,7 @@ Quatre étapes, à gauche : **Hôte SSH**, **Connexion**, **Appairage**, **L'esp
 - **Jamais une clé d'hôte acceptée à la place de l'utilisateur** : `BatchMode=yes` et `StrictHostKeyChecking=yes` sont donnés sur la ligne de commande, qui l'emporte sur la config. Aucun mot de passe n'est tapé.
 - **Rien n'écoute ailleurs que sur 127.0.0.1 de ce poste.** Rien n'est envoyé au port local avant que `ssh` dise que la redirection écoute.
 - **Surveillé** : sa sortie est lue ; tombé, il est relancé aux délais de la fenêtre (250 ms, 500 ms, 1 s, 2 s, 4 s, puis toutes les 5 s), sur le même port local s'il est libre ; une fin que réessayer ne répare pas (une clé, un compte refusé) l'arrête et le dit. Il s'arrête avec l'app. **Chaque serveur connu garde le sien**, ouvert au démarrage de l'app, avec ses propres essais ; aller sur ce poste ne le ferme pas (voir *Les espaces*).
+- **Aucun tunnel ne survit à ce qui l'a ouvert** : `ssh` et ce qu'il lance (un `ProxyCommand`) tournent dans un job (un Job object sous Windows, un groupe de process ailleurs), le tunnel de chaque serveur comme chaque port relayé. Ils s'arrêtent ensemble, tout de suite : quand le dialogue se ferme, quand un serveur est retiré, quand la fenêtre quitte le serveur (ses ports relayés), quand ce qui les tient disparaît sans les arrêter, et quand l'app quitte, même pour une mise à jour. Sous Windows, le système arrête aussi le job quand l'app finit sans s'arrêter proprement (plantage, process tué). Le `ssh` qui lance `escouade-server pair` suit la même règle.
 
 ## Le jeton
 

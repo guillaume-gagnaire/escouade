@@ -9,8 +9,12 @@
 //! - **Ready when `ssh` says so**: its `-v` lines say when the forward listens (« Local forwarding listening on … »):
 //!   nothing is sent to the local port before, so nothing reaches another program that would hold it.
 //! - **Watched**: what it writes is read (the last lines kept, its `debug1:` lines left out of what is shown), its end
-//!   is known at once, and it ends with the app (`kill_on_drop`). Its failures are read into the states of
+//!   is known at once. Its failures are read into the states of
 //!   `docs/SERVER-UX.md` § 3 ([`Failure`]).
+//! - **Never outliving its owner** (ESC-541): `ssh` and what it starts (a `ProxyCommand`) run in a job
+//!   ([`crate::job::Job`]: a Job object under Windows, a process group elsewhere), ended at once, the whole of it, when
+//!   the tunnel is stopped or dropped. Under Windows the job also ends with the app however it ends (its update's
+//!   `exit`, a crash): the system closes its last handle.
 //! - **Under Windows**, OpenSSH of the system (`System32\OpenSSH\ssh.exe`), with no console.
 
 use serde::Serialize;
@@ -134,6 +138,7 @@ impl Ssh {
         }
     }
 
+    /// The command, in a process group of its own elsewhere than under Windows (for its [`Job`]).
     fn command(&self, args: &[String]) -> tokio::process::Command {
         let mut cmd = tokio::process::Command::new(&self.program);
         cmd.args(&self.prefix)
@@ -143,7 +148,42 @@ impl Ssh {
             .kill_on_drop(true);
         #[cfg(windows)]
         cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+        crate::job::isolate(&mut cmd);
         cmd
+    }
+}
+
+/// `child` and what it starts, ended together when this is dropped or ended ([`Job::terminate`]).
+struct Job(parking_lot::Mutex<Option<crate::job::Job>>);
+
+impl Job {
+    fn of(child: &tokio::process::Child) -> Job {
+        let job = crate::job::Job::for_child(child);
+        if job.is_none() {
+            log::warn!("servers: ssh is not in a job: it ends alone, without what it started");
+        }
+        Job(parking_lot::Mutex::new(job))
+    }
+
+    /// Ends the whole of it, now. Under Windows a job's end is asked, not done when the call returns: its processes
+    /// are waited for (a second at most), so that none still holds what it was handed (the app exiting right after).
+    fn end(&self) {
+        if let Some(job) = self.0.lock().take() {
+            job.terminate();
+            #[cfg(windows)]
+            {
+                let until = std::time::Instant::now() + Duration::from_secs(1);
+                while !job.pids().is_empty() && std::time::Instant::now() < until {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            }
+        }
+    }
+}
+
+impl Drop for Job {
+    fn drop(&mut self) {
+        self.end();
     }
 }
 
@@ -330,6 +370,8 @@ pub struct Tunnel {
     shared: Arc<parking_lot::Mutex<Shared>>,
     changed: Arc<tokio::sync::Notify>,
     stop: parking_lot::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    /// `ssh` and what it started.
+    job: Arc<Job>,
 }
 
 impl Tunnel {
@@ -361,6 +403,7 @@ impl Tunnel {
             output: e.to_string(),
             command: command.clone(),
         })?;
+        let job = Arc::new(Job::of(&child));
         let shared = Arc::new(parking_lot::Mutex::new(Shared::default()));
         let changed = Arc::new(tokio::sync::Notify::new());
         // What it writes, line by line.
@@ -390,7 +433,7 @@ impl Tunnel {
         // Its end, or the stop asked.
         let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
         {
-            let (shared, changed) = (shared.clone(), changed.clone());
+            let (shared, changed, job) = (shared.clone(), changed.clone(), job.clone());
             tokio::spawn(async move {
                 tokio::select! {
                     _ = child.wait() => {}
@@ -398,6 +441,8 @@ impl Tunnel {
                         let _ = child.kill().await;
                     }
                 }
+                // What it started goes with it.
+                job.end();
                 // What it wrote last comes in before its end is said.
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 shared.lock().ended = true;
@@ -411,6 +456,7 @@ impl Tunnel {
             shared,
             changed,
             stop: parking_lot::Mutex::new(Some(stop_tx)),
+            job,
         })
     }
 
@@ -499,8 +545,10 @@ impl Tunnel {
         }
     }
 
-    /// Stops `ssh`.
+    /// Stops `ssh` and what it started, at once: ended when this returns, not by a task that may never run (an app
+    /// that exits right after).
     pub fn stop(&self) {
+        self.job.end();
         if let Some(stop) = self.stop.lock().take() {
             let _ = stop.send(());
         }
@@ -536,6 +584,8 @@ pub async fn run(ssh: &Ssh, dest: &Dest, command: &str, wait: Duration) -> Resul
         output: e.to_string(),
         command: shown.clone(),
     })?;
+    // It and what it started end with this run, answered or not.
+    let _job = Job::of(&child);
     let out = match tokio::time::timeout(wait, child.wait_with_output()).await {
         Ok(Ok(out)) => out,
         Ok(Err(e)) => {

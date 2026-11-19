@@ -313,6 +313,32 @@ struct Live {
     state: Arc<Mutex<TunnelState>>,
     wake: Arc<tokio::sync::Notify>,
     stop: Arc<tokio::sync::Notify>,
+    current: Arc<Mutex<Current>>,
+}
+
+/// The tunnel its watcher runs now, held here too (ESC-541): stopped at once by whoever stops the watch, not by the
+/// watcher's task, which may never run again (the app exiting, a runtime that is never shut down).
+#[derive(Default)]
+struct Current {
+    tunnel: Option<Arc<Tunnel>>,
+    /// The watch stopped: a tunnel started meanwhile is stopped as it comes.
+    closed: bool,
+}
+
+impl Live {
+    /// The watch stopped, and its tunnel with what it started, now.
+    fn close(self) {
+        let tunnel = {
+            let mut c = self.current.lock();
+            c.closed = true;
+            c.tunnel.take()
+        };
+        if let Some(t) = tunnel {
+            t.stop();
+        }
+        self.stop.notify_one();
+        self.stop.notify_waiters();
+    }
 }
 
 /// The policy of this computer for a server's address (`Locks::check_ssh_server`).
@@ -959,6 +985,7 @@ impl Servers {
         let port = Arc::new(Mutex::new(port));
         let wake = Arc::new(tokio::sync::Notify::new());
         let stop = Arc::new(tokio::sync::Notify::new());
+        let held = Arc::new(Mutex::new(Current::default()));
         let before = self.live.lock().insert(
             id.clone(),
             Live {
@@ -967,11 +994,11 @@ impl Servers {
                 state: state.clone(),
                 wake: wake.clone(),
                 stop: stop.clone(),
+                current: held.clone(),
             },
         );
         if let Some(before) = before {
-            before.stop.notify_one();
-            before.stop.notify_waiters();
+            before.close();
         }
         let me = Arc::downgrade(self);
         tauri::async_runtime::spawn(async move {
@@ -1008,6 +1035,15 @@ impl Servers {
                     }
                 };
                 drop(this);
+                {
+                    let mut held = held.lock();
+                    if held.closed {
+                        drop(held);
+                        tunnel.stop();
+                        return;
+                    }
+                    held.tunnel = Some(tunnel.clone());
+                }
                 // Up as it says; then until it ends, or is stopped.
                 let up = tokio::select! {
                     r = tunnel.ready(tunnel::READY_WAIT) => r,
@@ -1090,10 +1126,11 @@ impl Servers {
         }
     }
 
+    /// The tunnel of the server `id` stopped, with what its `ssh` started, before this returns (ESC-541).
     fn stop_tunnel(&self, id: &str) {
-        if let Some(live) = self.live.lock().remove(id) {
-            live.stop.notify_one();
-            live.stop.notify_waiters();
+        let live = self.live.lock().remove(id);
+        if let Some(live) = live {
+            live.close();
         }
     }
 
@@ -1276,16 +1313,24 @@ impl Servers {
         }
     }
 
-    /// The tunnels stopped: the app ends.
+    /// The tunnels stopped, with what their `ssh` started, before this returns: the app ends.
     pub fn shutdown(&self) {
         self.stop_relays();
-        let ids: Vec<String> = self.live.lock().keys().cloned().collect();
-        for id in ids {
-            self.stop_tunnel(&id);
+        let lives: Vec<Live> = self.live.lock().drain().map(|(_, l)| l).collect();
+        for live in lives {
+            live.close();
         }
-        for (_, a) in self.attempts.lock().drain() {
+        let attempts: Vec<Attempt> = self.attempts.lock().drain().map(|(_, a)| a).collect();
+        for a in attempts {
             a.tunnel.stop();
         }
+    }
+}
+
+/// Servers gone without a `shutdown` (a test's, a core dropped): their tunnels end with them all the same (ESC-541).
+impl Drop for Servers {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 

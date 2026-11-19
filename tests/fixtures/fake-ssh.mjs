@@ -15,7 +15,10 @@
 // - FAKE_SSH_DIR: each run appends its arguments to `runs.log` there; while `down` exists there, every run fails as an
 //   unreachable host; when `cut` appears there, the running forwards end (« closed by remote host ») and `cut` goes.
 //   `down-<host>` and `cut-<host>` do the same for that host alone (ESC-539: a cut of one space never touches another).
-import { spawnSync } from 'node:child_process';
+//   Each forward appends its pid to `pids.log` there (ESC-541: the tests check that none outlives its owner); with
+//   FAKE_SSH_CHILD, it starts a process of its own that does nothing (as a `ProxyCommand` would), whose pid goes there
+//   too.
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -110,6 +113,16 @@ if (dir && (fs.existsSync(path.join(dir, 'down')) || fs.existsSync(path.join(dir
     }
     return ports[Number(m[2])] ?? more[Number(m[2])] ?? Number(m[2]);
   };
+  if (dir) {
+    fs.appendFileSync(path.join(dir, 'pids.log'), `${process.pid}\n`);
+    if (process.env.FAKE_SSH_CHILD) {
+      const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      fs.appendFileSync(path.join(dir, 'pids.log'), `${child.pid}\n`);
+    }
+  }
   const sockets = new Set();
   let channel = 1;
   const server = net.createServer((client) => {
