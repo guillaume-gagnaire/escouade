@@ -452,6 +452,10 @@ export default {
     networkAccount: 'Se connecte aux instances que tu lui donnes',
     networkShared: 'Parle au serveur local du harness, lancé par Escouade',
     secret: 'Garde un secret : {name}',
+    // More programs at once than the 4 a plugin has without asking (`limits.processes`, ESC-529), and its author's reason.
+    processes: 'Jusqu’à {count} programmes à la fois',
+    processesUnasked: '4 sans le demander.',
+    processesWhy: '4 sans le demander. L’auteur dit pourquoi : « {reason} ».',
   },
 
   adds: {

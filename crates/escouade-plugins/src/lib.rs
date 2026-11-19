@@ -421,6 +421,9 @@ pub fn asks(m: &Manifest) -> Vec<String> {
         out.push("decide".to_string());
     }
     out.extend(p.commands.iter().map(|w| format!("commands:{w}")));
+    if let Some(n) = processes_asked(m) {
+        out.push(format!("{PROCESSES_WORD}{n}"));
+    }
     out.extend(p.env.iter().flatten().map(|v| format!("env:{v}")));
     out.extend(p.files.iter().map(|f| format!("files:{}", f.word())));
     for (kind, words) in [
@@ -433,8 +436,42 @@ pub fn asks(m: &Manifest) -> Vec<String> {
     out
 }
 
+/// The word of the programs at once a plugin asks for beyond the 4 it has without asking (`processes:<n>`, ESC-529).
+pub const PROCESSES_WORD: &str = "processes:";
+
+/// How many programs at once `m` asks for beyond the 4 it has without asking (`limits.processes`), as the host serves
+/// them (`procs::at_once`, never more than 16); None at 4 or less, or when it runs no command: nothing to say nor to
+/// consent to.
+pub fn processes_asked(m: &Manifest) -> Option<usize> {
+    if m.run.is_none() || m.permissions.commands.is_empty() {
+        return None;
+    }
+    let n = procs::at_once(m.limits.processes);
+    (n > procs::AT_ONCE).then_some(n)
+}
+
+/// What of `wanted` the user did not consent to in `before` (an update's `grown`): a word not there, but the programs at
+/// once only when they grow (beyond 4 or beyond what was granted): fewer asks nothing (ESC-529).
+pub fn grown(wanted: &[String], before: &[String]) -> Vec<String> {
+    let at_once = |words: &[String]| {
+        words
+            .iter()
+            .filter_map(|w| w.strip_prefix(PROCESSES_WORD)?.parse::<usize>().ok())
+            .max()
+            .unwrap_or(procs::AT_ONCE)
+    };
+    wanted
+        .iter()
+        .filter(|w| match w.strip_prefix(PROCESSES_WORD) {
+            Some(n) => n.parse::<usize>().map_or(true, |n| n > at_once(before)),
+            None => !before.contains(w),
+        })
+        .cloned()
+        .collect()
+}
+
 /// Whether the permission `word` can be taken back: all but the program itself (switched off
-/// with the plugin).
+/// with the plugin). The programs at once taken back, it has the 4 it has without asking.
 pub fn revocable(word: &str) -> bool {
     word != "run" && !word.starts_with("harness") && !word.starts_with("env:")
 }
@@ -457,6 +494,11 @@ pub fn granted(m: &Manifest, revoked: &[String]) -> Manifest {
         .retain(|f| !revoked.contains(&format!("files:{}", f.word())));
     if revoked.iter().any(|w| w == "decide") {
         p.decide = false;
+    }
+    if let Some(n) = processes_asked(&m) {
+        if revoked.contains(&format!("{PROCESSES_WORD}{n}")) {
+            m.limits.processes = None;
+        }
     }
     m
 }
@@ -1458,13 +1500,7 @@ impl Plugins {
         });
         let grown = previous
             .as_ref()
-            .map(|p| {
-                wanted
-                    .iter()
-                    .filter(|w| !p.asks.contains(w))
-                    .cloned()
-                    .collect()
-            })
+            .map(|p| grown(&wanted, &p.asks))
             .unwrap_or_default();
         let read_from = dir.clone().unwrap_or_else(|| self.folder_of(&installed));
         let preview = Preview {

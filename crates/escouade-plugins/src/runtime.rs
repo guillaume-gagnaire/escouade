@@ -1587,6 +1587,7 @@ impl Host {
             agent_env: rt.agent_env.read().clone(),
             back,
             told: told.clone(),
+            processes: self.manifest.limits.processes,
         });
         super::wasm::Capabilities::new(self.access(rt), procs, told)
     }

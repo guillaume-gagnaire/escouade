@@ -68,6 +68,7 @@ fn capabilities(
         agent_env: Vec::new(),
         back,
         told: told.clone(),
+        processes: manifest.limits.processes,
     });
     let access = files::Access::new(manifest, folder, scratch.join("temp"), agents);
     wasm::Capabilities::new(access, procs, told)

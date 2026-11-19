@@ -84,11 +84,6 @@ fn each_point_not_served_yet_is_said_in_both_languages() {
             "un secret propre à chaque projet",
             "a secret of each project",
         ),
-        (
-            json!({ "limits": { "processes": 8, "reason": "Un tunnel par projet." } }),
-            "8 programmes à la fois (`limits.processes`, 4 au plus ici)",
-            "8 programs at once (`limits.processes`, 4 at most here)",
-        ),
     ];
     for (more, fr, en) in cases {
         let mut v = base();
@@ -109,12 +104,37 @@ fn each_point_not_served_yet_is_said_in_both_languages() {
     }
     // Several at once: each named, in one sentence.
     let mut v = base();
-    v["contributes"] = json!({ "secrets": [{ "key": "p", "title": "P", "scope": "project" }] });
-    v["limits"] = json!({ "processes": 16, "reason": "x" });
+    v["contributes"] = json!({
+        "secrets": [{ "key": "p", "title": "P", "scope": "project" }],
+        "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "name",
+            "fields": [{ "key": "name", "type": "string", "title": "Nom" }] }]
+    });
     let said = read(&v).unserved(Lang::En).unwrap();
     assert!(
-        said.contains("a secret of each project (`\"scope\": \"project\"`), 16 programs at once"),
+        said.contains(
+            "profiles (`contributes.profiles`), a secret of each project (`\"scope\": \"project\"`)."
+        ),
         "{said}"
+    );
+}
+
+/// The programs at once of `limits.processes` are served since ESC-529: a plugin that asks for 16 loads, and its
+/// instance holds them (`procs::at_once`).
+#[test]
+fn a_plugin_that_asks_for_more_programs_at_once_loads_ready() {
+    for n in [1, 4, 5, 8, 16] {
+        let mut v = base();
+        v["limits"] = json!({ "processes": n, "reason": "Un tunnel par projet." });
+        let m = read(&v);
+        assert_eq!(m.unserved(Lang::Fr), None, "{n}");
+        assert_eq!(
+            crate::plugins::procs::at_once(m.limits.processes),
+            n as usize
+        );
+    }
+    assert_eq!(
+        crate::plugins::procs::at_once(read(&base()).limits.processes),
+        4
     );
 }
 

@@ -450,6 +450,10 @@ export default defineZone('plugins', {
     networkAccount: 'Connects to the instances you give it',
     networkShared: 'Talks to the harness’s local server, started by Escouade',
     secret: 'Keeps a secret: {name}',
+    // More programs at once than the 4 a plugin has without asking (`limits.processes`, ESC-529), and its author's reason.
+    processes: 'Up to {count} programs at once',
+    processesUnasked: '4 without asking.',
+    processesWhy: '4 without asking. The author says why: “{reason}”.',
   },
 
   adds: {

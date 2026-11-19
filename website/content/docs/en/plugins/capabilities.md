@@ -104,6 +104,12 @@ On the bench, `escouade-plugin test <folder> --account <address>` stands for an 
 
 A value past the ceiling is brought down to it by the host: the manifest does not refuse it (the schema of the editors marks the ceiling of `fileBytes`). Below the default, `fetchSeconds`, `fetchBytes` and `fileBytes` tighten the limit; `memoryBytes` and `turnSeconds` keep the default. The window says nothing more: a limit opens nothing.
 
+`processes` says how many programs it runs at once through `proc/spawn`: 4 without it, from 1 to 16 (the manifest refuses more, and the host never gives more than 16). Beyond 4, `reason` is required: a sentence, or one per language, that says why. The install window and the Permissions tab then say “Up to 8 programs at once”, “4 without asking” and that reason; it is a permission like the others: an update that raises it asks for your consent again, a lowering does not, and taking it back leaves 4. The refusal of one program too many says the limit (`8 programs at once at most for this plugin`).
+
+```json
+"limits": { "processes": 8, "reason": { "fr": "Deux programmes par tunnel, un tunnel par projet.", "en": "Two programs a tunnel, a tunnel a project." } }
+```
+
 ### Streams and the WebSocket
 
 They are not declared: they follow `network`.
@@ -166,7 +172,7 @@ Each write and each refusal go to the journal.
 - a `dir` other than a root (`agent`, `project`), and a private project where the plugin is not on. Without `dir`, the program runs in `temp`;
 - a variable of `env` that `permissions.env` does not declare ([the variables](#the-variables-env)).
 
-Each program dies with the plugin’s instance or at `proc/kill`, with what it started. Four at once. Its output comes back as text by `proc/out` (never base64), its end by `proc/exit` with its code ([the programs](plugins/calls#the-programs-proc), with a complete example); it is no longer read past 256 KiB that have not reached the module.
+Each program dies with the plugin’s instance or at `proc/kill`, with what it started. Four at once, or what `limits.processes` asks for (see above). Its output comes back as text by `proc/out` (never base64), its end by `proc/exit` with its code ([the programs](plugins/calls#the-programs-proc), with a complete example); it is no longer read past 256 KiB that have not reached the module.
 
 **The window** says “Runs this command on your computer”, then the command, in red, one line a command.
 

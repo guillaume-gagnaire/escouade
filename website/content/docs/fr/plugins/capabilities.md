@@ -104,6 +104,12 @@ Au banc, `escouade-plugin test <dossier> --account <adresse>` tient lieu de comp
 
 Une valeur au-delà du plafond est ramenée à lui par l’hôte : le manifeste ne la refuse pas (le schéma des éditeurs marque le plafond de `fileBytes`). Sous le défaut, `fetchSeconds`, `fetchBytes` et `fileBytes` resserrent la limite ; `memoryBytes` et `turnSeconds` gardent le défaut. La fenêtre ne dit rien de plus : une limite ne donne accès à rien.
 
+`processes` dit combien de programmes il lance à la fois par `proc/spawn` : 4 sans lui, de 1 à 16 (le manifeste refuse au-delà, et l’hôte n’en donne jamais plus de 16). Au-delà de 4, `reason` est exigée : une phrase, ou une par langue, qui dit pourquoi. La fenêtre d’installation et l’onglet Permissions disent alors « Jusqu’à 8 programmes à la fois », « 4 sans le demander » et cette raison ; c’est une permission comme les autres : une mise à jour qui l’augmente redemande ton accord, une baisse non, et la retirer rend 4. Le refus d’un programme de trop dit la limite (`8 programs at once at most for this plugin`).
+
+```json
+"limits": { "processes": 8, "reason": { "fr": "Deux programmes par tunnel, un tunnel par projet.", "en": "Two programs a tunnel, a tunnel a project." } }
+```
+
 ### Les flux et le WebSocket
 
 Ils ne se déclarent pas : ils suivent `network`.
@@ -166,7 +172,7 @@ Chaque écriture et chaque refus vont au journal.
 - `dir` autre qu’une racine (`agent`, `project`), et un projet privé où le plugin n’est pas activé. Sans `dir`, le programme tourne dans `temp` ;
 - une variable de `env` que `permissions.env` ne déclare pas ([les variables](#les-variables-env)).
 
-Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu’il a lancé. Quatre à la fois. Sa sortie revient en texte par `proc/out` (jamais en base64), sa fin par `proc/exit` et son code ([les programmes](plugins/calls#les-programmes-proc), avec un exemple complet) ; elle n’est plus lue au-delà de 256 Kio qui n’ont pas atteint le module.
+Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu’il a lancé. Quatre à la fois, ou ce que demande `limits.processes` (voir plus haut). Sa sortie revient en texte par `proc/out` (jamais en base64), sa fin par `proc/exit` et son code ([les programmes](plugins/calls#les-programmes-proc), avec un exemple complet) ; elle n’est plus lue au-delà de 256 Kio qui n’ont pas atteint le module.
 
 **La fenêtre** dit « Lance cette commande sur ton ordinateur », puis la commande, en rouge, une ligne par commande.
 

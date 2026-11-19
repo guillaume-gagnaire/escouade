@@ -30,8 +30,8 @@ export const SCOPES = ['app', 'project'];
 export const LINES = [3, 20];
 /** How many programs a plugin may run at once (`limits.processes`): 4 without it, 16 at most. */
 export const PROCESSES = [1, 16];
-/** The programs at once a plugin has without asking: beyond, the app does not serve it yet (ESC-525). */
-export const PROCESSES_SERVED = 4;
+/** The programs at once a plugin has without asking: beyond, `limits.reason` is needed and the install says it. */
+export const PROCESSES_UNASKED = 4;
 /** The words of `permissions.commands` that stand for one argument of a closed form: each a whole word, never the first. */
 export const JOKERS = ['{int}', '{port}', '{name}', '{pid}', '{path:temp}', '{path:plugin}'];
 const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses', 'workflowReaders', 'launchEnvironments'];
@@ -499,7 +499,7 @@ export function validate(manifest, options = {}) {
       // The programs at once: 16 at most, and why beyond the 4 it has without asking.
       const processes = 'processes' in l ? bounded(l.processes, 'limits.processes', PROCESSES) : null;
       if ('reason' in l) text(l.reason, 'limits.reason');
-      if (processes !== null && processes > PROCESSES_SERVED && !('reason' in l)) problem('limits.reason', 'required');
+      if (processes !== null && processes > PROCESSES_UNASKED && !('reason' in l)) problem('limits.reason', 'required');
     }
   }
   if ('contributes' in o) {

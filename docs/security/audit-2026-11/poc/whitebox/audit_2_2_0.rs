@@ -410,6 +410,7 @@ fn bed_with(commands: &[&str], env: Option<&[&str]>) -> Bed {
         agent_env: Vec::new(),
         back: tx.downgrade(),
         told: Arc::new(|_: Kind, _: &str| {}),
+        processes: None,
     });
     Bed {
         procs,

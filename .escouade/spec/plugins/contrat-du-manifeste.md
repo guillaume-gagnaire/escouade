@@ -1,34 +1,34 @@
 ---
 title: "Le contrat du manifeste : réglages, secrets, profils, jokers et limite"
 subject: "plugins"
-sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts","docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §2 à §6 et §10","src/components/plugins/PluginSettings.svelte","src/lib/plugin-fields.ts","src-tauri/src/plugin_secrets.rs","design/plugins-contract-2-3/captures (release/2.3) : a-plugin, a-projet, b-profil"]
-tickets: ["ESC-525","ESC-528","ESC-526"]
-decisions: ["le-contrat-du-manifeste-est-lu-avant-d-e","les-jokers-de-permissions-commands-sont","la-page-d-un-plugin-sert-ses-groupes-ses"]
+sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/lib.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts","docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §2 à §6 et §10","src/components/plugins/PluginSettings.svelte","src/lib/plugin-fields.ts","src-tauri/src/plugin_secrets.rs","design/plugins-contract-2-3/captures (release/2.3) : a-plugin, a-projet, b-profil"]
+tickets: ["ESC-525","ESC-528","ESC-529","ESC-526"]
+decisions: ["le-contrat-du-manifeste-est-lu-avant-d-e","les-jokers-de-permissions-commands-sont","la-limite-de-programmes-d-un-plugin-est","la-page-d-un-plugin-sert-ses-groupes-ses"]
 compared: null
 ---
 
 # Le contrat du manifeste : réglages, secrets, profils, jokers et limite
 
-Ce que le manifeste d'un plugin (`escouade-plugin.json`) peut dire de ses réglages, de ses secrets, de ses profils, des programmes qu'il lance et de leur nombre. Conçu par l'étude ESC-501 (`docs/PLUGINS-CONTRACT-STUDY.md`), d'après les issues #38, #39, #40 et #42 ; choix tranchés le 2026-11-17 : les profils (direction B), la liste des jokers et rien d'autre (choix n° 7 : pas de chemin dans le projet ni dans le dossier de l'agent), et tout dans la ligne 2.2.
+Ce que le manifeste d'un plugin (`escouade-plugin.json`) peut dire de ses réglages, de ses secrets, de ses profils, des programmes qu'il lance et de leur nombre. Conçu par l'étude ESC-501 (`docs/PLUGINS-CONTRACT-STUDY.md`), d'après les issues #38, #39, #40 et #42 ; choix tranchés le 2026-11-17 : les profils (direction B), la liste des jokers et rien d'autre (choix n° 7 : pas de chemin dans le projet ni dans le dossier de l'agent), la limite de programmes déclarée et plafonnée à 16 (choix n° 8, pas un compte par projet), et tout dans la ligne 2.2.
 
 **Ce qui est fait** :
 - **ESC-525 (T1)** : le contrat est **lu, validé et refusé** par les deux lecteurs, celui de l'app (`crates/escouade-plugin-cli/src/manifest.rs`) et celui du store (`schemas/plugin-manifest.mjs`, contrôle n° 1), qui passent le même corpus (`tests/fixtures/plugins/manifests.json`) et rendent le même verdict cas par cas. Le schéma `plugin-1.json` le décrit, par ajouts.
 - **ESC-526 (T2)** : la page du plugin sert les groupes, la description d'un secret, les champs sur plusieurs lignes et l'import d'un fichier (dernière section).
 - **ESC-527 (T3)** : un secret long se garde en morceaux au trousseau.
 - **ESC-528 (T5)** : les **jokers sont servis** : l'hôte les vérifie à chaque `proc/spawn`, la fenêtre d'installation et l'onglet Permissions les montrent en mots.
-- Restent à servir : les profils et les secrets d'un projet (T4), la limite (T6).
+- **ESC-529 (T6)** : la **limite de programmes est servie** : `limits.processes` fixe le nombre de programmes à la fois, dit à l'installation au-delà de 4.
+- Restent à servir : les profils et les secrets d'un projet (T4).
 
 ## Compatibilité
 
 - **Un manifeste d'aujourd'hui se lit pareil.** Chaque ajout est facultatif ; absent, il vaut le comportement d'avant : `scope: app`, pas de groupe, une ligne, 4 programmes à la fois, pas de joker.
-- **Jamais servi à moitié.** Un plugin qui déclare un point que l'app lit mais ne sert pas encore est **chargé coupé, la raison dite**, et la fenêtre d'installation le dit avant l'installation. Trois points sont concernés :
+- **Jamais servi à moitié.** Un plugin qui déclare un point que l'app lit mais ne sert pas encore est **chargé coupé, la raison dite**, et la fenêtre d'installation le dit avant l'installation. Deux points sont encore concernés :
   - des profils (`contributes.profiles`) ;
-  - un secret de portée `project` ;
-  - `limits.processes` au-delà de 4.
+  - un secret de portée `project`.
 
-  La raison : « Ce plugin demande ce que cette version d'Escouade ne sert pas encore : … Il reste coupé plutôt que servi à moitié ; une version plus récente d'Escouade le servira. » Chaque ticket qui sert un point le retire de cette liste. Les jokers en sont sortis avec ESC-528.
+  La raison : « Ce plugin demande ce que cette version d'Escouade ne sert pas encore : … Il reste coupé plutôt que servi à moitié ; une version plus récente d'Escouade le servira. » Chaque ticket qui sert un point le retire de cette liste. Les jokers en sont sortis avec ESC-528, `limits.processes` au-delà de 4 avec ESC-529.
 - `escouade-plugin validate` dit ces points par un avertissement (⚠), sans échouer : un plugin écrit pour l'Escouade suivante se valide.
-- Ce qui se lit sans couper le plugin : `groups`, `description`, `multiline`, `lines`, `import` (servis par la page du plugin depuis ESC-526), `scope: project` sur un réglage simple, `repo`, `limits.processes` jusqu'à 4. `repo: false` est déjà tenu : la valeur de `.escouade.yml` n'est jamais prise pour ce réglage, ni pour un réglage qui a `import`.
+- Ce qui se lit sans couper le plugin : `groups`, `description`, `multiline`, `lines`, `import` (servis par la page du plugin depuis ESC-526), `scope: project` sur un réglage simple, `repo`. `repo: false` est déjà tenu : la valeur de `.escouade.yml` n'est jamais prise pour ce réglage, ni pour un réglage qui a `import`.
 
 ## Réglages et secrets
 
@@ -108,7 +108,32 @@ Le plugin demande une commande et ses arguments ; l'hôte la compare à chaque e
 
 ## La limite de programmes
 
-`limits.processes`, de 1 à 16 (code `bounds`), et `limits.reason`, un texte, exigé au-delà de 4. L'hôte garde 4 programmes à la fois tant que le ticket de la limite (T6) n'est pas fusionné : au-delà, le plugin est coupé.
+### Au manifeste
+
+- `limits.processes` : un nombre entier de **1 à 16** (code `bounds` au-delà, par les deux lecteurs). Absent, il vaut **4**, comme avant.
+- `limits.reason` : un texte, ou un texte par langue ; **exigé au-delà de 4** (code `required`). Il dit pourquoi le plugin lance autant de programmes ; la revue du store le juge.
+
+### Ce que l'hôte tient
+
+- Le nombre de programmes vivants d'une instance (`proc/spawn`, `procs::Procs`) ne dépasse jamais la limite du plugin : `limits.processes`, ou 4 sans lui. **L'hôte ne donne jamais plus de 16**, quoi que dise le manifeste (`procs::at_once` ramène tout nombre au-delà à 16 et 0 à 1), même si un manifeste refusé par le lecteur lui parvenait.
+- La limite est par instance, et une instance par plugin : elle vaut pour le plugin, tous projets confondus.
+- **Une place est rendue** dès que l'hôte voit la fin d'un programme (fini ou tué par `proc/kill`) ; le suivant peut partir.
+- **Le refus dit la limite du plugin**, dans la réponse (`-32003`) et au journal : `proc/spawn: refused, 8 programs at once at most for this plugin (limits.processes)` (« 1 program » au singulier). Le message commence toujours par « N programs at once at most », comme avant.
+- **Ce que l'hôte garde par programme**, borné : trois tuyaux, quatre tâches (l'entrée, la sortie, l'erreur, la fin), un crédit de 256 Kio non lus par le module partagé entre la sortie et l'erreur, au plus 1 Mio en attente d'entrée, deux tampons de lecture de 16 Kio, un Job object. Soit environ 1,3 Mio de l'app au pire par programme, une vingtaine de Mio à 16, plus ce que prennent les programmes eux-mêmes ; rien ne grandit sans borne.
+
+### Ce que voit l'utilisateur
+
+- **À 4 ou moins** (ou sans `limits.processes`) : rien de plus qu'avant, nulle part.
+- **Au-delà de 4**, et seulement pour un plugin qui a un programme et des `permissions.commands` : la fenêtre d'installation et l'onglet Permissions ont une ligne en gras, juste après les commandes : « Jusqu'à N programmes à la fois » (« Up to N programs at once »), et dessous « 4 sans le demander. L'auteur dit pourquoi : « raison ». » (« 4 without asking. The author says why: “reason”. »), la raison dans la langue de l'interface. Sans raison lisible : « 4 sans le demander. » seul.
+- C'est une **permission** comme les autres, le mot `processes:<N>` des permissions du plugin (`plugins::asks`) :
+  - **une mise à jour qui l'augmente redemande l'accord** (au-delà de 4, ou au-delà de ce qui était accordé : 8 → 12), la ligne marquée « nouveau » ; **une baisse ne demande rien** (12 → 8, ou retour à 4). « Tout mettre à jour » ne passe donc pas une hausse sans demander ;
+  - **elle se retire** dans l'onglet Permissions : le plugin repart avec les 4 qu'il a sans le demander. Un retrait vaut pour la limite retirée : une mise à jour qui l'augmente et que l'utilisateur accepte rend la nouvelle limite ;
+  - un plugin « En développement » suit la même règle que pour ses autres permissions.
+
+### Les apps qui ne la servent pas
+
+- Une app d'avant ESC-525 ignore `limits.processes` et garde 4 ; une app d'ESC-525 à ESC-528 charge coupé un plugin qui demande plus de 4. Le plugin dit `escouade.min`.
+- Les plugins de la première main n'ont pas `limits.processes` : `isola` garde ses 4 programmes à la fois, et rien ne change pour eux.
 
 ## La page d'un plugin : groupes, secrets décrits, plusieurs lignes, import (ESC-526, T2)
 

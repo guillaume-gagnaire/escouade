@@ -290,6 +290,67 @@ describe('the install window', () => {
     expect(backend.called('plugin_install')).toHaveLength(1);
   });
 
+  it('says more programs at once than 4, with the author’s reason, and nothing at 4 or less (ESC-529)', () => {
+    const wasm = (processes: number): Manifest => ({
+      ...MANIFEST,
+      run: { command: '', wasm: 'Cargo.toml', args: [] },
+      permissions: { ...MANIFEST.permissions, commands: ['isola down'] },
+      limits: {
+        processes,
+        reason: { fr: 'deux programmes par tunnel, un tunnel par projet', en: 'two programs a tunnel, a tunnel a project' },
+      },
+    });
+    // The core says `processes:<n>` beyond 4 only (`plugins::asks`).
+    plugins.install = {
+      kind: 'preview',
+      preview: preview({ manifest: wasm(8), asks: ['run', 'commands:isola down', 'processes:8'] }),
+      busy: false,
+      error: null,
+    };
+    const { unmount } = render(InstallModal, { step: plugins.install });
+    let dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    const line = [...dialog.querySelectorAll('.asks li')].find((l) => l.textContent?.includes('programmes à la fois'));
+    expect(line?.querySelector('.txt')?.textContent).toBe(
+      'Jusqu’à 8 programmes à la fois4 sans le demander. L’auteur dit pourquoi : « deux programmes par tunnel, un tunnel par projet ».',
+    );
+    expect(line?.classList.contains('strong')).toBe(true);
+    expect(line?.classList.contains('red')).toBe(false);
+    unmount();
+    // At 4 (or without a word), not a line more than before.
+    plugins.install = {
+      kind: 'preview',
+      preview: preview({ manifest: wasm(4), asks: ['run', 'commands:isola down'] }),
+      busy: false,
+      error: null,
+    };
+    const again = render(InstallModal, { step: plugins.install });
+    dialog = screen.getByRole('dialog', { name: 'Installer Slack ?' });
+    expect(dialog.textContent).not.toContain('à la fois');
+    expect(dialog.textContent).not.toContain('sans le demander');
+    expect(dialog.querySelectorAll('.asks li')).toHaveLength(2);
+    again.unmount();
+    // In English, and an update that raises it marks it and asks again.
+    setLang('en');
+    plugins.install = {
+      kind: 'preview',
+      preview: preview({
+        manifest: wasm(12),
+        asks: ['run', 'commands:isola down', 'processes:12'],
+        version: '1.3.0',
+        previous: { version: '1.2.0', fingerprint: 'git:aaa', asks: ['run', 'commands:isola down', 'processes:8'] },
+        grown: ['processes:12'],
+      }),
+      busy: false,
+      error: null,
+    };
+    render(InstallModal, { step: plugins.install });
+    dialog = screen.getByRole('dialog', { name: 'Update Slack?' });
+    const marked = [...dialog.querySelectorAll('.asks li')].filter((l) => l.querySelector('.new'));
+    expect(marked.map((l) => l.querySelector('.txt')?.textContent)).toEqual([
+      'Up to 12 programs at once4 without asking. The author says why: “two programs a tunnel, a tunnel a project”.',
+    ]);
+  });
+
   it('an update says what it asks for more, marked, and asks again', () => {
     plugins.install = {
       kind: 'preview',
@@ -392,6 +453,27 @@ describe('the permissions of a plugin', () => {
     );
     // Its switch names the command as written.
     expect(within(panel).getByRole('switch', { name: `Runs this command on your computer ${command}: allowed` })).toBeTruthy();
+  });
+
+  it('says its programs at once beyond 4 with the reason, and takes them back to 4 (ESC-529)', async () => {
+    const backend = fakeBackend({
+      plugins_list: () => plugins.list,
+      plugin_set_permission: (a: { word: string; granted: boolean }) =>
+        view({ choices: { enabled: true, projects: {}, revoked: a.granted ? [] : [a.word], settings: {} } }),
+    });
+    const manifest: Manifest = {
+      ...MANIFEST,
+      run: { command: '', wasm: 'Cargo.toml', args: [] },
+      limits: { processes: 16, reason: 'Un tunnel par projet.' },
+    };
+    plugins.list = [view({ manifest, asks: ['run', 'processes:16'] })];
+    plugins.page = { kind: 'plugin', id: MANIFEST.id, tab: 'permissions' };
+    render(PluginsView);
+    const panel = await screen.findByRole('tabpanel', { name: 'Permissions' });
+    expect(panel.textContent).toContain('Jusqu’à 16 programmes à la fois');
+    expect(panel.textContent).toContain('4 sans le demander. L’auteur dit pourquoi : « Un tunnel par projet ».');
+    await userEvent.click(within(panel).getByRole('switch', { name: 'Jusqu’à 16 programmes à la fois : permise' }));
+    expect(backend.called('plugin_set_permission')[0].args).toEqual({ id: MANIFEST.id, word: 'processes:16', granted: false });
   });
 });
 

@@ -11,7 +11,7 @@
 //!   for it; without `dir`, its temporary folder;
 //! - the environment is an agent's, without Escouade's own variables, plus those the plugin names ([`environment`]);
 //! - each program is in a Job object held by the plugin's instance: it dies with it, or at `proc/kill` ([`Procs::end`]);
-//! - 4 at once; what it writes is lines on the plugin's channel, and the pipe is not read past a credit of 256 KiB not yet
+//! - 4 at once, or what its manifest declares (`limits.processes`, ESC-529), never more than 16; what it writes is lines on the plugin's channel, and the pipe is not read past a credit of 256 KiB not yet
 //!   written on the module's input: a program that writes without end slows down, the app's memory does not grow.
 //!
 //! Each start goes to the journal, which masks the plugin's secrets.
@@ -37,8 +37,20 @@ use tokio::sync::{mpsc, oneshot, Semaphore};
 pub const REFUSED: i64 = super::files::REFUSED;
 /// A program that could not start, or is not there any more.
 pub const FAILED: i64 = super::files::FAILED;
-/// How many programs a plugin has at once.
+/// How many programs a plugin has at once without asking (`limits.processes` absent).
 pub const AT_ONCE: usize = 4;
+/// The most programs at once the host gives a plugin, whatever its manifest says (`manifest::PROCESSES`, §5.6 of
+/// docs/PLUGINS-CONTRACT-STUDY.md): at about 1.3 MiB of the app each at worst, some 20 MiB.
+pub const AT_ONCE_MAX: usize = 16;
+
+/// The programs at once of a plugin that declares `processes` (`limits.processes`): 4 without it, from 1 to 16.
+pub fn at_once(processes: Option<u64>) -> usize {
+    processes.map_or(AT_ONCE, |n| {
+        usize::try_from(n)
+            .unwrap_or(AT_ONCE_MAX)
+            .clamp(1, AT_ONCE_MAX)
+    })
+}
 /// What may be on its way to the module, the credit of a program's output.
 const CREDIT: usize = 256 << 10;
 /// A read of its output, at most.
@@ -384,6 +396,8 @@ pub struct Procs {
     back: Back,
     told: Told,
     live: Arc<Mutex<HashMap<u64, Live>>>,
+    /// How many may live at once ([`at_once`]).
+    at_once: usize,
     next: AtomicU64,
     /// Once the instance ended, no more.
     over: Arc<std::sync::atomic::AtomicBool>,
@@ -402,6 +416,8 @@ pub struct ProcsOf {
     pub agent_env: Vec<(String, String)>,
     pub back: mpsc::WeakUnboundedSender<Frame>,
     pub told: Told,
+    /// What its manifest declares of programs at once (`limits.processes`): [`at_once`] bounds it.
+    pub processes: Option<u64>,
 }
 
 /// `{ proc }`, or why not.
@@ -428,6 +444,7 @@ impl Procs {
             back: Back(of.back),
             told: of.told,
             live: Arc::default(),
+            at_once: at_once(of.processes),
             next: AtomicU64::new(1),
             over: Arc::default(),
         }
@@ -537,8 +554,8 @@ impl Procs {
                 named.push((k.clone(), v.to_string()));
             }
         }
-        if self.live.lock().len() >= AT_ONCE {
-            return Err((REFUSED, format!("{AT_ONCE} programs at once at most")));
+        if self.live.lock().len() >= self.at_once {
+            return Err((REFUSED, self.full()));
         }
         if self.over.load(Ordering::Acquire) {
             return Err((FAILED, "its instance has ended".into()));
@@ -547,8 +564,8 @@ impl Procs {
             .ok_or_else(|| (FAILED, format!("no program {command} on this machine")))?;
         // From here to its start, what it names is held: a `{pid}` is checked again, and no end takes it off meanwhile.
         let mut live = self.live.lock();
-        if live.len() >= AT_ONCE {
-            return Err((REFUSED, format!("{AT_ONCE} programs at once at most")));
+        if live.len() >= self.at_once {
+            return Err((REFUSED, self.full()));
         }
         if let Some(gone) = matched
             .pids
@@ -681,6 +698,13 @@ impl Procs {
                 let _ = kill.send(());
             }
         }
+    }
+
+    /// Why one more is refused: its own limit, said in the answer and the journal (ESC-529).
+    fn full(&self) -> String {
+        let n = self.at_once;
+        let programs = if n == 1 { "program" } else { "programs" };
+        format!("{n} {programs} at once at most for this plugin (limits.processes)")
     }
 
     /// The commands under way.
@@ -1016,6 +1040,11 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn bed(list: &[&str]) -> Bed {
+        bed_of(list, None)
+    }
+
+    /// The same, for a plugin that declares `processes` programs at once.
+    pub(crate) fn bed_of(list: &[&str], processes: Option<u64>) -> Bed {
         let (tx, rx) = mpsc::unbounded_channel();
         let base =
             std::env::temp_dir().join(format!("plugin-procs-{}", uuid::Uuid::new_v4().simple()));
@@ -1056,6 +1085,7 @@ pub(crate) mod tests {
             agent_env: Vec::new(),
             back: tx.downgrade(),
             told: Arc::new(move |_, l| t.lock().push(l.to_string())),
+            processes,
         });
         Bed {
             procs,
@@ -1282,6 +1312,113 @@ pub(crate) mod tests {
             }
         }
         assert_eq!(b.procs.serve("proc/spawn", &batch).unwrap_err().0, FAILED);
+    }
+
+    #[test]
+    fn the_limit_is_4_without_a_word_what_is_declared_else_and_never_more_than_16() {
+        assert_eq!(at_once(None), 4);
+        assert_eq!(at_once(Some(1)), 1);
+        assert_eq!(at_once(Some(4)), 4);
+        assert_eq!(at_once(Some(8)), 8);
+        assert_eq!(at_once(Some(16)), 16);
+        // The reader refuses these; the host holds even so.
+        assert_eq!(at_once(Some(0)), 1);
+        assert_eq!(at_once(Some(17)), 16);
+        assert_eq!(at_once(Some(u64::MAX)), 16);
+    }
+
+    /// `n` programs that live until killed, in a repository of the bed.
+    fn batches(b: &Bed, n: usize) -> (Value, Vec<u64>) {
+        let batch = json!({ "command": "git", "args": ["cat-file", "--batch"], "dir": "agent", "agent": "a" });
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(b.base.join("wt"))
+            .status()
+            .unwrap();
+        let ids = (0..n).map(|_| b.spawn(batch.clone())).collect();
+        (batch, ids)
+    }
+
+    /// Ends what `b` runs and waits for each end.
+    async fn end_all(b: &mut Bed, mut left: Vec<u64>) {
+        b.procs.end();
+        let end = Instant::now() + Duration::from_secs(30);
+        while !left.is_empty() {
+            let got = tokio::time::timeout_at(end.into(), b.rx.recv()).await;
+            let (bytes, written) = got.expect("in time").expect("open");
+            if let Some(w) = written {
+                let _ = w.send(());
+            }
+            let v: Value = serde_json::from_slice(&bytes).unwrap();
+            if v["method"] == "proc/exit" {
+                left.retain(|i| v["params"]["proc"] != *i);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_limit_by_default_is_said_when_a_fifth_is_refused() {
+        let mut b = bed(&["git cat-file --batch"]);
+        let (batch, ids) = batches(&b, 4);
+        let (code, message) = b.procs.serve("proc/spawn", &batch).unwrap_err();
+        assert_eq!(code, REFUSED);
+        assert_eq!(
+            message,
+            "4 programs at once at most for this plugin (limits.processes)"
+        );
+        let told = b.told.lock().join("\n");
+        assert!(
+            told.contains("proc/spawn: refused, 4 programs at once at most for this plugin"),
+            "{told}"
+        );
+        end_all(&mut b, ids).await;
+    }
+
+    #[tokio::test]
+    async fn a_declared_limit_holds_its_own_number() {
+        let mut b = bed_of(&["git cat-file --batch"], Some(6));
+        let (batch, ids) = batches(&b, 6);
+        assert_eq!(b.procs.running(), 6);
+        let (_, message) = b.procs.serve("proc/spawn", &batch).unwrap_err();
+        assert!(
+            message.starts_with("6 programs at once at most"),
+            "{message}"
+        );
+        end_all(&mut b, ids).await;
+        // A limit below 4 holds too.
+        let mut b = bed_of(&["git cat-file --batch"], Some(1));
+        let (batch, ids) = batches(&b, 1);
+        let (_, message) = b.procs.serve("proc/spawn", &batch).unwrap_err();
+        assert_eq!(
+            message,
+            "1 program at once at most for this plugin (limits.processes)"
+        );
+        end_all(&mut b, ids).await;
+    }
+
+    #[tokio::test]
+    async fn sixteen_at_most_the_seventeenth_is_refused_and_an_end_gives_its_place_back() {
+        // What the manifest says beyond 16 is never given: the host stops at 16.
+        let mut b = bed_of(&["git cat-file --batch"], Some(40));
+        let (batch, mut ids) = batches(&b, AT_ONCE_MAX);
+        let (code, message) = b.procs.serve("proc/spawn", &batch).unwrap_err();
+        assert_eq!(code, REFUSED);
+        assert!(
+            message.starts_with("16 programs at once at most"),
+            "{message}"
+        );
+        b.procs
+            .serve("proc/kill", &json!({ "proc": ids[0] }))
+            .unwrap();
+        let (_, code) = b.run(ids[0], "stdout").await;
+        assert_ne!(code, 0);
+        assert_eq!(b.procs.running(), AT_ONCE_MAX - 1);
+        ids.remove(0);
+        ids.push(b.spawn(batch.clone()));
+        assert_eq!(b.procs.running(), AT_ONCE_MAX);
+        b.refused(batch);
+        end_all(&mut b, ids).await;
+        assert_eq!(b.procs.running(), 0);
     }
 
     #[tokio::test]

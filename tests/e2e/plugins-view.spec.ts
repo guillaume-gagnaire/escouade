@@ -253,3 +253,55 @@ test('the jokers of a command show as pills of words at the installation and on 
   );
   await panel.screenshot({ path: test.info().outputPath('permissions-jokers.png') });
 });
+
+// ESC-529: more programs at once than the 4 a plugin has without asking, said with its author's reason at the installation
+// and on the tab Permissions; an update that raises them asks again, one that lowers them asks nothing more.
+test('more programs at once are said at the installation with the reason, and a raise asks again', async ({ app }) => {
+  test.setTimeout(120_000);
+  const { page } = app;
+  await addProject(page, app.repo);
+  const src = path.join(app.root, 'tunnel');
+  const reason = { fr: 'Deux programmes par tunnel, un tunnel par projet.', en: 'Two programs a tunnel, a tunnel a project.' };
+  const at = (version: string, processes: number) =>
+    fakePlugin(src, { version, permissions: { commands: ['isola down'] }, limits: { processes, reason }, contributes: {} });
+  at('1.0.0', 8);
+  await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+  await pickAnswers(page, src);
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  let dialog = page.getByRole('dialog', { name: 'Installer Faux plugin ?' });
+  await expect(dialog).toBeVisible();
+  const line = dialog.locator('.asks li', { hasText: 'Jusqu’à 8 programmes à la fois' });
+  await expect(line).toContainText('4 sans le demander. L’auteur dit pourquoi : « Deux programmes par tunnel, un tunnel par projet ».');
+  await expect(dialog).not.toContainText('ne sert pas encore');
+  await dialog.screenshot({ path: test.info().outputPath('install-processes.png') });
+  await dialog.getByRole('button', { name: 'Installer quand même' }).click();
+  await expect(dialog).toBeHidden();
+  expect(installed(app.data).map((p) => p.id)).toEqual([ID]);
+
+  await page.getByRole('tab', { name: /Permissions/ }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Permissions' });
+  await expect(panel.getByRole('switch', { name: 'Jusqu’à 8 programmes à la fois : permise' })).toHaveAttribute('aria-checked', 'true');
+  await expect(panel).toContainText('L’auteur dit pourquoi');
+  await panel.screenshot({ path: test.info().outputPath('permissions-processes.png') });
+
+  // Raised: the consent is asked again, the line marked.
+  at('1.1.0', 12);
+  await page.getByRole('button', { name: 'Installés' }).first().click();
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  dialog = page.getByRole('dialog', { name: 'Mettre à jour Faux plugin ?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('ton accord est redemandé');
+  await expect(dialog.locator('.asks li', { hasText: 'Jusqu’à 12 programmes à la fois' }).locator('.new')).toHaveText('nouveau');
+  await dialog.getByRole('button', { name: 'Mettre à jour' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Lowered: nothing more is asked.
+  at('1.2.0', 6);
+  await page.getByRole('button', { name: 'Installés' }).first().click();
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  dialog = page.getByRole('dialog', { name: 'Mettre à jour Faux plugin ?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.asks li', { hasText: 'Jusqu’à 6 programmes à la fois' })).toBeVisible();
+  await expect(dialog).not.toContainText('ton accord est redemandé');
+  await expect(dialog.locator('.new')).toHaveCount(0);
+});

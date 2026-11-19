@@ -105,8 +105,9 @@ pub const SCOPES: [&str; 2] = ["app", "project"];
 pub const LINES: std::ops::RangeInclusive<u64> = 3..=20;
 /// How many programs a plugin may run at once (`limits.processes`): 4 without it, 16 at most (§5.6).
 pub const PROCESSES: std::ops::RangeInclusive<u64> = 1..=16;
-/// The programs at once a plugin has without asking: `limits.processes` beyond it is not served yet (ESC-525).
-pub const PROCESSES_SERVED: u64 = 4;
+/// The programs at once a plugin has without asking: beyond, `limits.reason` is needed, the install says it and an
+/// update that raises it asks again (ESC-529).
+pub const PROCESSES_UNASKED: u64 = 4;
 /// The words of `permissions.commands` that stand for one argument of a closed form (§5.3): each a whole word, never the
 /// first. The host checks and replaces them when the program is run.
 pub const JOKERS: [&str; 6] = [
@@ -749,8 +750,8 @@ impl Manifest {
     }
 
     /// What it declares of the contract (docs/PLUGINS-CONTRACT-STUDY.md) that this Escouade reads but does not serve
-    /// yet, in `lang`: profiles, a secret of each project, more programs at once than 4 (the jokers of a command are
-    /// served since ESC-528). Such a plugin is loaded disabled with this reason, never served by half (ESC-525). None
+    /// yet, in `lang`: profiles, a secret of each project (the jokers of a command are served since ESC-528, the
+    /// programs at once of `limits.processes` since ESC-529). Such a plugin is loaded disabled with this reason, never served by half (ESC-525). None
     /// when all it asks is served.
     pub fn unserved(&self, lang: Lang) -> Option<String> {
         let mut points = Vec::new();
@@ -776,13 +777,6 @@ impl Manifest {
                 lang,
                 "un secret propre à chaque projet (`\"scope\": \"project\"`)",
                 "a secret of each project (`\"scope\": \"project\"`)"
-            ));
-        }
-        if let Some(n) = self.limits.processes.filter(|n| *n > PROCESSES_SERVED) {
-            points.push(tr_in!(
-                lang,
-                "{n} programmes à la fois (`limits.processes`, {PROCESSES_SERVED} au plus ici)",
-                "{n} programs at once (`limits.processes`, {PROCESSES_SERVED} at most here)"
             ));
         }
         if points.is_empty() {
@@ -1386,7 +1380,7 @@ impl Checker {
         if let Some(v) = o.get("reason") {
             l.reason = self.text(v, "limits.reason");
         }
-        if l.processes.is_some_and(|n| n > PROCESSES_SERVED) && !o.contains_key("reason") {
+        if l.processes.is_some_and(|n| n > PROCESSES_UNASKED) && !o.contains_key("reason") {
             self.problem("limits.reason", Code::Required);
         }
         l

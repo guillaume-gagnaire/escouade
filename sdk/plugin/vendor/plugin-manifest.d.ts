@@ -63,7 +63,7 @@ export const LINES: readonly [number, number];
 /** The programs at once a plugin may ask for (`limits.processes`), at least and at most. */
 export const PROCESSES: readonly [number, number];
 /** The programs at once a plugin has without asking. */
-export const PROCESSES_SERVED: number;
+export const PROCESSES_UNASKED: number;
 /** A name of variable: a letter or `_`, then letters, digits and `_`. */
 export function isVarName(name: unknown): boolean;
 /** Whether Escouade refuses the variable `name` to a plugin even declared (ESC-424); `firstParty`: of Escouade's own hand. */

@@ -77,6 +77,8 @@ export interface Manifest {
     files?: { root: string; access: string }[];
     decide: boolean;
   };
+  /** What it asks for beyond the host's defaults; `processes` and `reason`: its programs at once (ESC-529). */
+  limits?: { processes?: number; reason?: ManifestText };
   contributes: Record<string, unknown>;
 }
 
@@ -275,7 +277,7 @@ export function textOf(text: ManifestText | undefined, lang: string): string {
 /** A permission in words: its icon, what it says, its detail (a host, an event…), and how strong it is. */
 export interface Ask {
   word: string;
-  icon: 'term' | 'shield' | 'bash' | 'spark' | 'globe' | 'lock' | 'folder';
+  icon: 'term' | 'shield' | 'bash' | 'spark' | 'globe' | 'lock' | 'folder' | 'overview';
   text: string;
   detail: string;
   strong: boolean;
@@ -401,6 +403,23 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
         // A program of a plugin in WASM goes through Escouade (`proc/spawn`); a process runs what it likes.
         note: t(m?.run?.js || m?.run?.wasm ? 'plugins.perms.commandsApplied' : 'plugins.perms.commandsNote'),
       };
+    case 'processes': {
+      // More programs at once than the 4 it has without asking (`limits.processes`, ESC-529): the core says it only
+      // beyond 4, with the author's reason.
+      // Its last full stop goes: the sentence that quotes it ends with its own.
+      const reason = textOf(m?.limits?.reason, lang)
+        .trim()
+        .replace(/[.。]+$/, '');
+      return {
+        word,
+        icon: 'overview',
+        text: t('plugins.ask.processes', { count: Number(what) }),
+        detail: '',
+        strong: true,
+        red: false,
+        note: reason ? t('plugins.ask.processesWhy', { reason }) : t('plugins.ask.processesUnasked'),
+      };
+    }
     case 'env':
       // A variable it sets on what it runs (ESC-424): any other is refused, and the families that would change the program too.
       return {
