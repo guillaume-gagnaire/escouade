@@ -359,7 +359,7 @@ impl Program {
                 module.clone(),
                 secrets,
                 made,
-                o.wasm.asked(m.limits),
+                o.wasm.asked(&m.limits),
                 fake::Reach {
                     offline: o.offline,
                     accounts: o.accounts.clone(),

@@ -183,7 +183,7 @@ fn each_problem_says_its_field_and_why_in_both_languages() {
         [
             "`id` n'est pas un nom de domaine inversé en minuscules (`dev.exemple.slack`).",
             "`escouade.api` n'est pas une version majeure de l'API des plugins (`\"1\"`).",
-            "`contributes.settings[0].type` vaut l'un de : string, number, boolean, select.",
+            "`contributes.settings[0].type` vaut l'un de : string, number, boolean, select, profile.",
         ]
     );
     assert_eq!(

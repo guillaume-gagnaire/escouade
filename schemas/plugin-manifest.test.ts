@@ -71,7 +71,7 @@ describe('plugin-manifest', () => {
     expect(r.errors.map((e) => message(e, 'fr'))).toEqual([
       "`id` n'est pas un nom de domaine inversé en minuscules (`dev.exemple.slack`).",
       '`escouade.api` n\'est pas une version majeure de l\'API des plugins (`"1"`).',
-      "`contributes.settings[0].type` vaut l'un de : string, number, boolean, select.",
+      "`contributes.settings[0].type` vaut l'un de : string, number, boolean, select, profile.",
     ]);
     expect(message(r.errors[0], 'en')).toBe('`id` is no reversed domain name in lower case (`dev.exemple.slack`).');
     expect(message(validate({}).errors[0], 'fr')).toBe('`id` manque.');

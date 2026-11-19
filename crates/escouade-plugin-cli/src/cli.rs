@@ -278,6 +278,11 @@ fn validate(folder: &Path, lang: Lang, hand: manifest::Hand, app_version: &str) 
         eprintln!("✗ {why}");
         return 1;
     }
+    // What the contract reads but this Escouade does not serve yet (ESC-525): the manifest holds, the app will load the
+    // plugin disabled with this reason; said, not refused, so that a plugin written for the next Escouade validates.
+    if let Some(why) = m.unserved(lang) {
+        eprintln!("⚠ {why}");
+    }
     // A `run.js` plugin: its bundle is one that can run in WASM (what the store's compilation refuses, said first).
     if let Some(js) = m.run.as_ref().and_then(|r| r.js.as_ref()) {
         if let Err(why) = bundle_of(folder, js, lang) {

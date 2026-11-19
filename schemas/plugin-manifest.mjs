@@ -21,7 +21,19 @@ export const ICON_MIN = 256;
 /** The weight an icon has at most, in bytes. */
 export const ICON_BYTES = 1024 * 1024;
 
-const SETTING_TYPES = ['string', 'number', 'boolean', 'select'];
+const SETTING_TYPES = ['string', 'number', 'boolean', 'select', 'profile'];
+/** The values a field of a profile takes as its `type` (a secret field has none: `secret: true`). */
+const FIELD_TYPES = ['string', 'number', 'boolean', 'select'];
+/** Where a setting or a secret holds (`scope`): for every project (`app`, the default) or for each one (`project`). */
+export const SCOPES = ['app', 'project'];
+/** How many lines a field on several lines shows (`lines`): 6 without it. */
+export const LINES = [3, 20];
+/** How many programs a plugin may run at once (`limits.processes`): 4 without it, 16 at most. */
+export const PROCESSES = [1, 16];
+/** The programs at once a plugin has without asking: beyond, the app does not serve it yet (ESC-525). */
+export const PROCESSES_SERVED = 4;
+/** The words of `permissions.commands` that stand for one argument of a closed form: each a whole word, never the first. */
+export const JOKERS = ['{int}', '{port}', '{name}', '{pid}', '{path:temp}', '{path:plugin}'];
 const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses', 'workflowReaders', 'launchEnvironments'];
 const OPEN_POINTS = ['themes', 'webhooks', 'commands', 'menus', 'statusBar', 'badges', 'projectTemplates'];
 /**
@@ -58,8 +70,8 @@ export const FIELDS = {
   escouade: ['api', 'min', 'max'],
   run: ['command', 'js', 'wasm', 'args', 'windows', 'macos', 'linux'],
   permissions: ['events', 'network', 'secrets', 'commands', 'env', 'files', 'decide'],
-  limits: ['fetchSeconds', 'fetchBytes', 'fileBytes', 'memoryBytes', 'turnSeconds'],
-  contributes: ['settings', 'secrets', 'escouadeYml', ...POINTS_WITH_ID, ...OPEN_POINTS],
+  limits: ['fetchSeconds', 'fetchBytes', 'fileBytes', 'memoryBytes', 'turnSeconds', 'processes', 'reason'],
+  contributes: ['settings', 'secrets', 'groups', 'profiles', 'escouadeYml', ...POINTS_WITH_ID, ...OPEN_POINTS],
   store: ['categories', 'keywords', 'screenshots', 'docs'],
 };
 
@@ -135,13 +147,37 @@ export function writtenHost(url) {
 export const FILE_ROOTS = ['plugin', 'agent', 'agentRepo', 'agentHome', 'temp'];
 export const FILE_ACCESS = ['read', 'write'];
 
-/** Whether a line of `permissions.commands` holds: a program's name first, never a path, and a `*` only as its last word. */
+/**
+ * The words of a command as the app splits them (Rust's `split_whitespace`, the Unicode White_Space of `char`): not
+ * JavaScript's `\s`, which takes U+FEFF and leaves U+0085.
+ */
+const SPACE = /[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/;
+const wordsOf = (command) => command.split(SPACE).filter(Boolean);
+
+/** Whether a word of a command is one of the jokers (`JOKERS`), whole. */
+export const isJoker = (word) => JOKERS.includes(word);
+
+/** Whether a line of `permissions.commands` holds a joker. */
+export const hasJoker = (command) => wordsOf(command).some(isJoker);
+
+/**
+ * Whether a line of `permissions.commands` holds (docs/PLUGINS-CONTRACT-STUDY.md §5.3): a program's name first, never a
+ * path nor a joker; a later word is a joker whole, or a literal word without a brace; a `*` only as its last word.
+ */
 export function commandHolds(command) {
-  const words = command.split(/\s+/).filter(Boolean);
+  const words = wordsOf(command);
   if (!words.length) return false;
   const first = words[0];
-  return !/[/\\:*~]/.test(first) && !first.startsWith('.') && !words.slice(1, -1).includes('*');
+  return (
+    !/[/\\:*~{}]/.test(first) &&
+    !first.startsWith('.') &&
+    !words.slice(1, -1).includes('*') &&
+    words.slice(1).every((w) => isJoker(w) || !/[{}]/.test(w))
+  );
 }
+
+/** `.ovpn`, `.tar.gz`: an extension of a file that `import` filters on. */
+const isExtension = (s) => s.length <= 32 && /^(\.[A-Za-z0-9]+)+$/.test(s);
 
 /** A name of variable: a letter or `_`, then letters, digits and `_`. */
 export const isVarName = (name) => typeof name === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
@@ -309,6 +345,61 @@ export function validate(manifest, options = {}) {
     });
   };
   const required = (o, key, path, then) => (key in o ? then(o[key], path) : problem(path, 'required'));
+  /** A whole number of `[lo, hi]`, else `bounds`. */
+  const bounded = (v, path, [lo, hi]) => {
+    if (Number.isSafeInteger(v) && v >= lo && v <= hi) return v;
+    problem(path, 'bounds', `${lo}..${hi}`);
+    return null;
+  };
+  /** A boolean field of `it`, when it has it. */
+  const flag = (it, at, key) => {
+    if (!(key in it)) return undefined;
+    if (typeof it[key] !== 'boolean') return (problem(join(at, key), 'type', 'boolean'), undefined);
+    return it[key];
+  };
+  /**
+   * What a field says of itself beyond its key and title (ESC-525): `description`, `multiline` and `lines`
+   * (`textLike`: a `string` or a secret), `import`, and `repo` (`neverRepo`: a secret, a profile, a value imported).
+   */
+  const fieldExtras = (at, it, textLike, neverRepo) => {
+    if ('description' in it) text(it.description, join(at, 'description'));
+    const multiline = flag(it, at, 'multiline');
+    if (multiline === true && !textLike) problem(join(at, 'multiline'), 'misplaced');
+    if ('lines' in it) {
+      if (multiline === true) bounded(it.lines, join(at, 'lines'), LINES);
+      else problem(join(at, 'lines'), 'misplaced');
+    }
+    if ('import' in it) {
+      const p = join(at, 'import');
+      if (!textLike) problem(p, 'misplaced');
+      else if (!Array.isArray(it.import)) problem(p, 'type', 'array');
+      else
+        it.import.forEach((e, i) => {
+          const pe = `${p}[${i}]`;
+          const x = filled(e, pe);
+          if (x !== null && !isExtension(x)) problem(pe, 'extension');
+        });
+    }
+    if (flag(it, at, 'repo') === true && (neverRepo || 'import' in it)) problem(join(at, 'repo'), 'repo');
+  };
+  /** `scope`: one of `SCOPES`. */
+  const scope = (at, it) => {
+    if (!('scope' in it)) return;
+    const p = join(at, 'scope');
+    const x = string(it.scope, p);
+    if (x !== null && !SCOPES.includes(x)) problem(p, 'enum', SCOPES.join(', '));
+  };
+  /** `type` of `it`, required, one of `among`. */
+  const typed = (at, it, among) => {
+    const p = join(at, 'type');
+    if (!('type' in it)) return (problem(p, 'required'), null);
+    const x = string(it.type, p);
+    if (x === null) return null;
+    if (!among.includes(x)) return (problem(p, 'enum', among.join(', ')), null);
+    return x;
+  };
+  /** The kinds of `contributes.profiles` that hold, and whether each has a secret field. */
+  let kinds = [];
 
   const o = object(manifest, '');
   if (!o) return { ok: false, errors, ignored, reserved };
@@ -403,8 +494,12 @@ export function validate(manifest, options = {}) {
     const l = object(o.limits, 'limits');
     if (l) {
       ignoreOthers(l, 'limits', FIELDS.limits);
-      for (const key of FIELDS.limits)
+      for (const key of FIELDS.limits.filter((k) => k !== 'processes' && k !== 'reason'))
         if (key in l && !(Number.isSafeInteger(l[key]) && l[key] > 0)) problem(`limits.${key}`, 'type', 'positive integer');
+      // The programs at once: 16 at most, and why beyond the 4 it has without asking.
+      const processes = 'processes' in l ? bounded(l.processes, 'limits.processes', PROCESSES) : null;
+      if ('reason' in l) text(l.reason, 'limits.reason');
+      if (processes !== null && processes > PROCESSES_SERVED && !('reason' in l)) problem('limits.reason', 'required');
     }
   }
   if ('contributes' in o) {
@@ -440,21 +535,93 @@ export function validate(manifest, options = {}) {
           else if (needed) problem(p, 'required');
         }
       };
+      // The kinds of profile first (§2.2): a setting of type `profile` names one.
+      if ('profiles' in c) {
+        const list = items(c.profiles, 'contributes.profiles');
+        const ids = keys(list, 'id');
+        titled(list, 'title', true);
+        for (const [at, it] of list) {
+          const p = join(at, 'fields');
+          let fields = [];
+          if (!('fields' in it)) problem(p, 'required');
+          else if (Array.isArray(it.fields) && !it.fields.length) problem(p, 'empty');
+          else fields = items(it.fields, p);
+          keys(fields, 'key');
+          titled(fields, 'title', true);
+          let secret = false;
+          // The keys a profile can be named by: a `string` field, neither secret nor on several lines.
+          const names = [];
+          for (const [fat, field] of fields) {
+            const isSecret = flag(field, fat, 'secret') === true;
+            if ('scope' in field) problem(join(fat, 'scope'), 'misplaced');
+            let kind = null;
+            if (isSecret) {
+              secret = true;
+              if ('type' in field) problem(join(fat, 'type'), 'misplaced');
+            } else kind = typed(fat, field, FIELD_TYPES);
+            if ('of' in field) problem(join(fat, 'of'), 'misplaced');
+            fieldExtras(fat, field, isSecret || kind === 'string', true);
+            if (kind === 'string' && field.multiline !== true && typeof field.key === 'string') names.push(field.key);
+          }
+          const pn = join(at, 'nameField');
+          if (!('nameField' in it)) problem(pn, 'required');
+          else {
+            const n = string(it.nameField, pn);
+            if (n !== null && !names.includes(n)) problem(pn, 'field');
+          }
+          if (typeof it.id === 'string' && ids.includes(it.id) && !kinds.some(([k]) => k === it.id)) kinds.push([it.id, secret]);
+        }
+      }
+      const declared = [];
       if ('settings' in c) {
         const list = items(c.settings, 'contributes.settings');
-        keys(list, 'key');
+        declared.push(...keys(list, 'key'));
         for (const [at, it] of list) {
-          required(it, 'type', join(at, 'type'), (t, p) => {
-            const s = string(t, p);
-            if (s !== null && !SETTING_TYPES.includes(s)) problem(p, 'enum', SETTING_TYPES.join(', '));
-          });
+          const kind = typed(at, it, SETTING_TYPES);
+          const profile = kind === 'profile';
+          const po = join(at, 'of');
+          if ('of' in it && profile) {
+            const of = string(it.of, po);
+            if (of !== null && !kinds.some(([k]) => k === of)) problem(po, 'profile');
+          } else if (profile) problem(po, 'required');
+          else if ('of' in it) problem(po, 'misplaced');
+          scope(at, it);
+          fieldExtras(at, it, kind === 'string', profile);
         }
         titled(list, 'title', true);
       }
       if ('secrets' in c) {
         const list = items(c.secrets, 'contributes.secrets');
-        keys(list, 'key');
+        declared.push(...keys(list, 'key'));
         titled(list, 'title', true);
+        for (const [at, it] of list) {
+          scope(at, it);
+          fieldExtras(at, it, true, true);
+        }
+      }
+      // The groups of its page (§4.1): the keys of its settings and secrets, each in one group at most.
+      if ('groups' in c) {
+        const list = items(c.groups, 'contributes.groups');
+        keys(list, 'id');
+        titled(list, 'title', true);
+        const taken = [];
+        for (const [at, it] of list) {
+          if ('description' in it) text(it.description, join(at, 'description'));
+          flag(it, at, 'folded');
+          const p = join(at, 'fields');
+          if (!('fields' in it)) problem(p, 'required');
+          else if (!Array.isArray(it.fields)) problem(p, 'type', 'array');
+          else if (!it.fields.length) problem(p, 'empty');
+          else
+            it.fields.forEach((k, i) => {
+              const pk = `${p}[${i}]`;
+              const x = string(k, pk);
+              if (x === null) return;
+              if (!declared.includes(x)) problem(pk, 'field');
+              else if (taken.includes(x)) problem(pk, 'duplicate');
+              else taken.push(x);
+            });
+        }
       }
       let accounts = [];
       for (const point of POINTS_WITH_ID) {
@@ -578,6 +745,14 @@ export function validate(manifest, options = {}) {
       for (const point of RESERVED_POINTS) if (point in c) reserved.push(`contributes.${point}`);
     }
   }
+  // The secrets of a profile's (`profile:<kind>`): a kind of `contributes.profiles` with a secret field, as the store's
+  // check n° 9 holds `account:<kind>`.
+  if (isObject(o.permissions) && Array.isArray(o.permissions.secrets))
+    o.permissions.secrets.forEach((x, i) => {
+      if (typeof x !== 'string' || !x.startsWith('profile:')) return;
+      const kind = x.slice('profile:'.length);
+      if (!kinds.some(([k, secret]) => k === kind && secret)) problem(`permissions.secrets[${i}]`, 'profile');
+    });
   if ('icon' in o) {
     // A file of the folder: no address, no drive, no `..`; a PNG, never an SVG (it may carry a script).
     const s = string(o.icon, 'icon');
@@ -655,7 +830,19 @@ const WHAT = {
     exclusive: () =>
       'ne va pas avec `run.command`, `run.js` ou `run.wasm` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois.',
     cargo: () => 'doit nommer le `Cargo.toml` du plugin, jamais un binaire.',
-    command: () => "doit commencer par le nom d'un programme, jamais un chemin, et `*` n'y vient qu'en dernier mot.",
+    command: () =>
+      "doit commencer par le nom d'un programme, jamais un chemin ni un joker ; un joker (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`) est un mot entier, aucune autre accolade, et `*` n'y vient qu'en dernier mot.",
+    misplaced: () =>
+      "n'a pas sa place ici : `multiline` et `import` vont sur un réglage `string` ou un secret, `lines` avec `multiline: true`, `of` sur un réglage `profile` ; un champ de profil n'a pas de `scope`, ni de `type` s'il est secret.",
+    repo: () => "ne peut pas être vrai : un secret, un profil ou une valeur importée d'un fichier ne vient jamais de .escouade.yml.",
+    bounds: (e) => {
+      const [lo, hi] = String(e.expected).split('..');
+      return `doit être un nombre entier de ${lo} à ${hi}.`;
+    },
+    extension: () => "n'est pas une extension de fichier (`.ovpn`, `.conf`).",
+    field: () =>
+      'ne nomme pas un champ qui convient : dans un groupe, un réglage ou un secret du plugin ; en `nameField`, un champ `string` du profil, ni secret ni sur plusieurs lignes.',
+    profile: () => "n'est pas un genre de `contributes.profiles` (qui a un champ secret, pour `profile:<genre>`).",
     readOnly: () => 'ne peut pas être en écriture : le dossier du plugin ne change pas.',
     variable: () =>
       "n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiffres, `_`), hors des variables d'Escouade et des familles qui changeraient ce que lance le programme (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",
@@ -688,7 +875,19 @@ const WHAT = {
     exclusive: () =>
       'does not go with `run.command`, `run.js` or `run.wasm`: a program is a command, a JS/TS bundle or a Rust module, one of the three.',
     cargo: () => "must name the plugin's `Cargo.toml`, never a binary.",
-    command: () => "must start with a program's name, never a path, and `*` comes only as its last word.",
+    command: () =>
+      "must start with a program's name, never a path nor a joker; a joker (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`) is a whole word, no other brace, and `*` comes only as its last word.",
+    misplaced: () =>
+      'does not belong here: `multiline` and `import` go on a `string` setting or a secret, `lines` with `multiline: true`, `of` on a `profile` setting; a field of a profile has no `scope`, nor a `type` when it is secret.',
+    repo: () => 'cannot be true: a secret, a profile or a value imported from a file never comes from .escouade.yml.',
+    bounds: (e) => {
+      const [lo, hi] = String(e.expected).split('..');
+      return `must be a whole number from ${lo} to ${hi}.`;
+    },
+    extension: () => 'is no extension of a file (`.ovpn`, `.conf`).',
+    field: () =>
+      'names no field fit for it: in a group, a setting or a secret of the plugin; as `nameField`, a `string` field of the profile, neither secret nor on several lines.',
+    profile: () => 'is no kind of `contributes.profiles` (one with a secret field, for `profile:<kind>`).',
     readOnly: () => "cannot be written: the plugin's folder does not change.",
     variable: () =>
       "is no variable a plugin may set: a name (letters, digits, `_`), out of Escouade's own and of the families that would change what the program runs (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",

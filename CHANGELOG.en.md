@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - Docs: what is left to share shows as a badge on the “Docs” tab, no longer in the status bar, and a conflict stands out there. “Sync”, in the Docs space, shares your changes or, when there are none, brings in the others’.
+- Plugin authors: the manifest now takes profiles, settings by project, groups, fields on several lines, importing a file, typed jokers in commands and a limit of programs, and refuses what falls outside their grammar. A plugin that asks for one the app does not serve yet stays disabled, the reason said.
 
 ## [2.2.4] — 2026-11-18
 

@@ -130,6 +130,78 @@
           },
           "type": "array"
         },
+        "groups": {
+          "description": "Groups of its settings and secrets, in order, on its page.",
+          "items": {
+            "properties": {
+              "description": {
+                "description": "What it is for, under its title: one text, or a text by language.",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "fields": {
+                "description": "The keys of its settings and secrets, mixed, in the order they are shown; a key in one group at most.",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "folded": {
+                "description": "Folded at first, as « Advanced ».",
+                "type": "boolean"
+              },
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "title": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id", "title", "fields"],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "harnesses": {
           "description": "Harnesses.",
           "items": {
@@ -215,6 +287,134 @@
           },
           "type": "array"
         },
+        "profiles": {
+          "description": "Kinds of profile: sets of fields the user makes as many times as wanted, and that each project chooses (a setting of `type: \"profile\"`). Their secrets are asked as `profile:<id>` in `permissions.secrets`.",
+          "items": {
+            "properties": {
+              "fields": {
+                "items": {
+                  "properties": {
+                    "description": {
+                      "description": "What it is for, under its title: one text, or a text by language.",
+                      "oneOf": [
+                        {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "anyOf": [
+                            {
+                              "required": ["en"]
+                            },
+                            {
+                              "required": ["fr"]
+                            }
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "import": {
+                      "description": "The extensions of the files « Import a file… » offers (`.ovpn`): their text fills the field once; the path is never kept. Never from .escouade.yml.",
+                      "items": {
+                        "maxLength": 32,
+                        "pattern": "^(\\.[A-Za-z0-9]+)+$",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "key": {
+                      "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                      "type": "string"
+                    },
+                    "lines": {
+                      "description": "How many lines it shows, with `multiline`: 6 without it.",
+                      "maximum": 20,
+                      "minimum": 3,
+                      "type": "integer"
+                    },
+                    "multiline": {
+                      "description": "Typed on several lines (a `string` setting or a secret), 64 KiB at most.",
+                      "type": "boolean"
+                    },
+                    "secret": {
+                      "description": "Kept in the keychain, never shown again; it has no `type`.",
+                      "type": "boolean"
+                    },
+                    "title": {
+                      "description": "One text, or a text by language (`en` first, then `fr`).",
+                      "oneOf": [
+                        {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "anyOf": [
+                            {
+                              "required": ["en"]
+                            },
+                            {
+                              "required": ["fr"]
+                            }
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "type": {
+                      "description": "Needed unless it is `secret`.",
+                      "enum": ["string", "number", "boolean", "select"]
+                    }
+                  },
+                  "required": ["key", "title"],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "nameField": {
+                "description": "The key of the `string` field that names a profile (neither secret nor on several lines).",
+                "type": "string"
+              },
+              "title": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id", "title", "nameField", "fields"],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "projectTemplates": {
           "description": "Reserved, with no effect in this version: Escouade shows and calls nothing of it.",
           "items": {
@@ -225,9 +425,59 @@
         "secrets": {
           "items": {
             "properties": {
+              "description": {
+                "description": "What it is for, under its title: one text, or a text by language.",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "import": {
+                "description": "The extensions of the files « Import a file… » offers (`.ovpn`): their text fills the field once; the path is never kept. Never from .escouade.yml.",
+                "items": {
+                  "maxLength": 32,
+                  "pattern": "^(\\.[A-Za-z0-9]+)+$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
               "key": {
                 "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
                 "type": "string"
+              },
+              "lines": {
+                "description": "How many lines it shows, with `multiline`: 6 without it.",
+                "maximum": 20,
+                "minimum": 3,
+                "type": "integer"
+              },
+              "multiline": {
+                "description": "Typed on several lines (a `string` setting or a secret), 64 KiB at most.",
+                "type": "boolean"
+              },
+              "repo": {
+                "const": false,
+                "description": "A secret never comes from .escouade.yml."
+              },
+              "scope": {
+                "description": "Where it holds: for every project (`app`, the default), or for each one, set in the project's settings (`project`).",
+                "enum": ["app", "project"]
               },
               "title": {
                 "description": "One text, or a text by language (`en` first, then `fr`).",
@@ -259,7 +509,7 @@
           "type": "array"
         },
         "settings": {
-          "description": "Its settings, shown on its page in the order of this list, under « Settings ».",
+          "description": "Its settings, shown on its page in the order of this list, under « Settings » (or in their groups).",
           "items": {
             "properties": {
               "default": {
@@ -268,12 +518,43 @@
               "description": {
                 "description": "Shown under its title: one text, or a text by language (`en` first, then `fr`)."
               },
+              "import": {
+                "description": "The extensions of the files « Import a file… » offers (`.ovpn`): their text fills the field once; the path is never kept. Never from .escouade.yml.",
+                "items": {
+                  "maxLength": 32,
+                  "pattern": "^(\\.[A-Za-z0-9]+)+$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
               "key": {
                 "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
                 "type": "string"
               },
+              "lines": {
+                "description": "How many lines it shows, with `multiline`: 6 without it.",
+                "maximum": 20,
+                "minimum": 3,
+                "type": "integer"
+              },
+              "multiline": {
+                "description": "Typed on several lines (a `string` setting or a secret), 64 KiB at most.",
+                "type": "boolean"
+              },
+              "of": {
+                "description": "With `type: \"profile\"`: the id of a kind of `contributes.profiles`.",
+                "type": "string"
+              },
               "options": {
                 "description": "The choices of a `select`, in this order: each a value, or `{ \"value\": …, \"title\": … }` to show a title in its stead (one text, or a text by language)."
+              },
+              "repo": {
+                "description": "`false`: its value never comes from .escouade.yml. Never `true` for a profile or an imported value.",
+                "type": "boolean"
+              },
+              "scope": {
+                "description": "Where it holds: for every project (`app`, the default), or for each one, set in the project's settings (`project`).",
+                "enum": ["app", "project"]
               },
               "title": {
                 "description": "One text, or a text by language (`en` first, then `fr`).",
@@ -299,7 +580,8 @@
                 ]
               },
               "type": {
-                "enum": ["string", "number", "boolean", "select"]
+                "description": "`profile`: one profile of the kind `of` names, chosen by the user.",
+                "enum": ["string", "number", "boolean", "select", "profile"]
               }
             },
             "required": ["key", "type", "title"],
@@ -500,6 +782,27 @@
           "minimum": 1,
           "type": "integer"
         },
+        "processes": {
+          "description": "How many programs it may run at once (`proc/spawn`): 4 without it. Beyond 4, said at its install and with `reason`.",
+          "maximum": 16,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "reason": {
+          "description": "Why it asks for more programs at once, in a sentence: needed with `processes` beyond 4.",
+          "oneOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        },
         "turnSeconds": {
           "description": "How long a turn of its instance may take: 2 s without it.",
           "maximum": 10,
@@ -536,7 +839,7 @@
       "description": "What it asks for, shown before it is installed.",
       "properties": {
         "commands": {
-          "description": "The programs it may run (`proc/spawn`): a program's name, never a path, then its arguments, word for word. A last word `*` lets any more follow.",
+          "description": "The programs it may run (`proc/spawn`): a program's name, never a path nor a joker, then its arguments, word for word. A joker stands for one word of a closed form, written whole: `{int}`, `{port}`, `{name}`, `{pid}` (a program it runs), `{path:temp}`, `{path:plugin}`; no other brace. A last word `*` lets any more follow.",
           "items": {
             "minLength": 1,
             "type": "string"

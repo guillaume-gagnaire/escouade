@@ -803,7 +803,7 @@ impl Runtime {
             return Err(format!("{id} is no module"));
         }
         let (module, _) = self.modules.of(&folder, run, built.as_ref())?;
-        let limits = self.limits.wasm.asked(manifest.limits);
+        let limits = self.limits.wasm.asked(&manifest.limits);
         let files = super::wasm::files_of(&folder);
         let mut instance = super::wasm::Instance::start_with(&module, &files, limits, None)
             .map_err(|f| f.to_string())?;
@@ -1517,8 +1517,8 @@ impl Host {
             }));
         }
         let fetcher = super::wasm::Fetcher::new(&self.id, &self.manifest.permissions.network, &net)
-            .limited(self.manifest.limits);
-        let limits = rt.limits.wasm.asked(self.manifest.limits);
+            .limited(self.manifest.limits.clone());
+        let limits = rt.limits.wasm.asked(&self.manifest.limits);
         let (host, c) = (self.clone(), conn.clone());
         std::thread::Builder::new()
             .name(format!("plugin {}", self.id))

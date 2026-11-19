@@ -355,6 +355,12 @@ pub fn project_settings(
         else {
             continue;
         };
+        // What its author keeps off the file (`repo: false`), and a value imported from a file, never come from it
+        // (ESC-525).
+        if decl.get("repo").and_then(Value::as_bool) == Some(false) || decl.get("import").is_some()
+        {
+            continue;
+        }
         let fits = match decl.get("type").and_then(Value::as_str) {
             Some("string") => value.is_string(),
             Some("number") => value.is_number(),
@@ -377,6 +383,16 @@ pub fn project_settings(
         }
     }
     out
+}
+
+/// Why this Escouade (`app`) loads a plugin of a manifest that holds disabled, in `lang`; None when it serves it: a
+/// `run.command` is no longer started (ESC-355), a point of the contract it reads but does not serve yet is never served
+/// by half (`Manifest::unserved`, ESC-525), a range of Escouade out of this one.
+pub fn load_refusal(m: &Manifest, app: &str, lang: Lang) -> Option<String> {
+    if m.run.as_ref().is_some_and(|r| r.in_wasm().is_none()) {
+        return Some(manifest::command_refused(lang));
+    }
+    m.unserved(lang).or_else(|| m.refusal(app, lang))
 }
 
 /// What a plugin may do, a word each, the strongest first (§3.4): `run` (it runs a program),
@@ -454,7 +470,8 @@ pub fn secret_keys(m: &Manifest) -> Vec<String> {
         .filter_map(|s| s.get("key").and_then(Value::as_str).map(str::to_string))
         .collect();
     for k in &m.permissions.secrets {
-        if !k.ends_with('*') && !keys.contains(k) {
+        // The secrets of a profile (`profile:<kind>`) are its fields', kept by profile, never one key of the page.
+        if !k.ends_with('*') && !k.starts_with("profile:") && !keys.contains(k) {
             keys.push(k.clone());
         }
     }
@@ -1111,14 +1128,8 @@ impl Plugins {
                                 i.fingerprint
                             ),
                         }
-                    } else if m.run.as_ref().is_some_and(|r| r.in_wasm().is_none()) {
-                        // A command is no longer started, whatever the origin (ESC-355): its manifest reads, its sheet
-                        // says why.
-                        State::Disabled {
-                            reason: manifest::command_refused(lang),
-                        }
                     } else {
-                        match m.refusal(&self.app_version, lang) {
+                        match load_refusal(m, &self.app_version, lang) {
                             Some(reason) => State::Disabled { reason },
                             None => State::Ready,
                         }
@@ -1464,11 +1475,7 @@ impl Plugins {
             origin: installed.origin.clone(),
             fingerprint: installed.fingerprint.clone(),
             declarative: m.declarative(),
-            refusal: if m.run.as_ref().is_some_and(|r| r.in_wasm().is_none()) {
-                Some(manifest::command_refused(lang))
-            } else {
-                m.refusal(&self.app_version, lang)
-            },
+            refusal: load_refusal(&m, &self.app_version, lang),
             asks: wanted,
             previous,
             grown,

@@ -1731,6 +1731,1232 @@
       "errors": ["contributes.statusBar type"],
       "ignored": [],
       "reserved": ["contributes.badges", "contributes.statusBar"]
+    },
+    {
+      "name": "ESC-525 §2.2: profiles a project chooses, their secrets asked as profile:<kind>",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "secrets": ["profile:vpn"]
+        },
+        "contributes": {
+          "profiles": [
+            {
+              "id": "vpn",
+              "title": {
+                "fr": "Profil VPN",
+                "en": "VPN profile"
+              },
+              "nameField": "name",
+              "fields": [
+                {
+                  "key": "name",
+                  "type": "string",
+                  "title": "Nom du profil"
+                },
+                {
+                  "key": "server",
+                  "type": "string",
+                  "title": "Serveur",
+                  "description": "Le nom ou l'adresse du serveur."
+                },
+                {
+                  "key": "proto",
+                  "type": "select",
+                  "title": "Protocole",
+                  "options": ["udp", "tcp"],
+                  "default": "udp"
+                },
+                {
+                  "key": "login",
+                  "type": "string",
+                  "title": "Identifiant"
+                },
+                {
+                  "key": "password",
+                  "secret": true,
+                  "title": "Mot de passe"
+                },
+                {
+                  "key": "ovpn",
+                  "secret": true,
+                  "multiline": true,
+                  "lines": 12,
+                  "import": [".ovpn", ".conf"],
+                  "title": "Configuration OpenVPN"
+                }
+              ]
+            }
+          ],
+          "settings": [
+            {
+              "key": "profile",
+              "type": "profile",
+              "of": "vpn",
+              "scope": "project",
+              "title": "Profil VPN"
+            },
+            {
+              "key": "routes",
+              "type": "string",
+              "scope": "project",
+              "repo": true,
+              "title": "Routes par le tunnel"
+            }
+          ]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §4.1: groups that mix settings and secrets, a secret described, on several lines, imported from a file",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "secrets": ["password", "ovpn"]
+        },
+        "contributes": {
+          "groups": [
+            {
+              "id": "connection",
+              "title": {
+                "fr": "Connexion",
+                "en": "Connection"
+              },
+              "description": {
+                "fr": "Pour tous les projets, sauf ceux qui donnent les leurs."
+              },
+              "fields": ["server", "proto", "autoStart"]
+            },
+            {
+              "id": "credentials",
+              "title": {
+                "fr": "Identifiants",
+                "en": "Credentials"
+              },
+              "fields": ["login", "password", "ovpn"]
+            },
+            {
+              "id": "advanced",
+              "title": {
+                "fr": "Avancé",
+                "en": "Advanced"
+              },
+              "folded": true,
+              "fields": ["mtu", "notes"]
+            }
+          ],
+          "settings": [
+            {
+              "key": "server",
+              "type": "string",
+              "title": "Serveur",
+              "description": "Le nom ou l'adresse du serveur OpenVPN."
+            },
+            {
+              "key": "proto",
+              "type": "select",
+              "title": "Protocole",
+              "options": ["udp", "tcp"]
+            },
+            {
+              "key": "autoStart",
+              "type": "boolean",
+              "title": "Tunnel au lancement",
+              "repo": false
+            },
+            {
+              "key": "login",
+              "type": "string",
+              "title": "Identifiant"
+            },
+            {
+              "key": "mtu",
+              "type": "number",
+              "title": "MTU",
+              "scope": "project"
+            },
+            {
+              "key": "notes",
+              "type": "string",
+              "multiline": true,
+              "lines": 6,
+              "title": "Notes"
+            }
+          ],
+          "secrets": [
+            {
+              "key": "password",
+              "title": "Mot de passe",
+              "scope": "app",
+              "repo": false
+            },
+            {
+              "key": "ovpn",
+              "title": "Configuration OpenVPN",
+              "scope": "project",
+              "multiline": true,
+              "import": [".ovpn", ".conf", ".tar.gz"],
+              "description": "Le fichier .ovpn de ton fournisseur, certificats compris."
+            }
+          ]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.1: typed jokers, each a whole word, and more programs at once with a reason",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": [
+            "unshare -Urn openvpn --config {path:temp} --script-security 1",
+            "slirp4netns --configure --mtu=65520 {pid} tap0",
+            "nsenter --preserve-credentials -U -n -t {pid} ip addr"
+          ]
+        },
+        "limits": {
+          "processes": 8,
+          "reason": {
+            "fr": "Un tunnel et son réseau par projet.",
+            "en": "A tunnel and its network by project."
+          }
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.3: every joker, jokers before a last *, `--` as a literal word",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": [
+            "tool {int} {port} {name} {pid} {path:temp} {path:plugin}",
+            "nsenter -t {pid} *",
+            "tool -- {name}",
+            "tool --port {port} --name {name}"
+          ]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.3: a literal word without a brace is compared byte for byte, however it looks (`..`, an option, CON, ｛int｝)",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": ["tool .. --up CON", "tool ｛int｝ $HOME %PATH% `x`", "isola ls --json"]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.3 hostile: a joker the grammar does not know, a path in the project or of the agent",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": [
+            "tool {float}",
+            "tool {INT}",
+            "tool {path}",
+            "tool {path:}",
+            "tool {path:project}",
+            "tool {path:agent}",
+            "tool {path:agentHome}",
+            "tool {path:..}",
+            "tool {path:temp/..}",
+            "tool {name:CON}",
+            "tool {session}",
+            "tool {}"
+          ]
+        }
+      },
+      "errors": [
+        "permissions.commands[0] command",
+        "permissions.commands[1] command",
+        "permissions.commands[2] command",
+        "permissions.commands[3] command",
+        "permissions.commands[4] command",
+        "permissions.commands[5] command",
+        "permissions.commands[6] command",
+        "permissions.commands[7] command",
+        "permissions.commands[8] command",
+        "permissions.commands[9] command",
+        "permissions.commands[10] command",
+        "permissions.commands[11] command"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.3 hostile: a joker inside a word (an option glued to it, a path around it, two of them)",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": [
+            "tool --pid={int}",
+            "tool {int}{int}",
+            "tool -{int}",
+            "tool {path:temp}/x",
+            "tool ../{path:temp}",
+            "tool {{int}}",
+            "tool {int}.conf",
+            "tool x{name}"
+          ]
+        }
+      },
+      "errors": [
+        "permissions.commands[0] command",
+        "permissions.commands[1] command",
+        "permissions.commands[2] command",
+        "permissions.commands[3] command",
+        "permissions.commands[4] command",
+        "permissions.commands[5] command",
+        "permissions.commands[6] command",
+        "permissions.commands[7] command"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.3 hostile: a joker or a brace as the program",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": ["{int} x", "{name}", "{path:temp}", "to{ol x", "} x"]
+        }
+      },
+      "errors": [
+        "permissions.commands[0] command",
+        "permissions.commands[1] command",
+        "permissions.commands[2] command",
+        "permissions.commands[3] command",
+        "permissions.commands[4] command"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.3 hostile: a brace in a literal word, a joker split by spaces",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": ["tool {", "tool }", "tool { int }", "tool a}b", "tool ${HOME}", "tool %{x}"]
+        }
+      },
+      "errors": [
+        "permissions.commands[0] command",
+        "permissions.commands[1] command",
+        "permissions.commands[2] command",
+        "permissions.commands[3] command",
+        "permissions.commands[4] command",
+        "permissions.commands[5] command"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.3 hostile: a * that is not the last word stays refused, jokers or not",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": ["tool * {int}", "tool {int} * x"]
+        }
+      },
+      "errors": ["permissions.commands[0] command", "permissions.commands[1] command"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.3 hostile: words split as the host splits them (U+0085 is a space, U+FEFF is not)",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "commands": ["isola\ufeff{int}", "isola\u0085{int}", "isola\u00a0ls\u2003{name}"]
+        }
+      },
+      "errors": ["permissions.commands[0] command"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §2: a scope is app or project",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "settings": [
+            {
+              "key": "a",
+              "type": "string",
+              "title": "A",
+              "scope": "projet"
+            }
+          ],
+          "secrets": [
+            {
+              "key": "b",
+              "title": "B",
+              "scope": 1
+            }
+          ]
+        }
+      },
+      "errors": ["contributes.settings[0].scope enum", "contributes.secrets[0].scope type"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §2.3 hostile: repo is never true for a secret, a profile or a value imported from a file",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "profiles": [
+            {
+              "id": "vpn",
+              "title": "VPN",
+              "nameField": "name",
+              "fields": [
+                {
+                  "key": "name",
+                  "type": "string",
+                  "title": "Nom"
+                }
+              ]
+            }
+          ],
+          "settings": [
+            {
+              "key": "profile",
+              "type": "profile",
+              "of": "vpn",
+              "title": "Profil",
+              "repo": true
+            },
+            {
+              "key": "conf",
+              "type": "string",
+              "multiline": true,
+              "import": [".conf"],
+              "title": "Conf",
+              "repo": true
+            },
+            {
+              "key": "route",
+              "type": "string",
+              "title": "Route",
+              "repo": "yes"
+            },
+            {
+              "key": "port",
+              "type": "number",
+              "title": "Port",
+              "repo": true
+            },
+            {
+              "key": "conf2",
+              "type": "string",
+              "import": [".conf"],
+              "title": "Conf",
+              "repo": false
+            }
+          ],
+          "secrets": [
+            {
+              "key": "password",
+              "title": "Mot de passe",
+              "repo": true
+            },
+            {
+              "key": "token",
+              "title": "Jeton",
+              "repo": false
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.settings[0].repo repo",
+        "contributes.settings[1].repo repo",
+        "contributes.settings[2].repo type",
+        "contributes.secrets[0].repo repo"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §4.1: multiline, lines and import only where they belong",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "settings": [
+            {
+              "key": "a",
+              "type": "number",
+              "title": "A",
+              "multiline": true
+            },
+            {
+              "key": "b",
+              "type": "boolean",
+              "title": "B",
+              "import": [".txt"]
+            },
+            {
+              "key": "c",
+              "type": "string",
+              "title": "C",
+              "lines": 6
+            },
+            {
+              "key": "d",
+              "type": "select",
+              "title": "D",
+              "multiline": false
+            },
+            {
+              "key": "e",
+              "type": "string",
+              "title": "E",
+              "multiline": "yes"
+            },
+            {
+              "key": "f",
+              "type": "string",
+              "title": "F",
+              "multiline": false,
+              "lines": 4
+            }
+          ],
+          "secrets": [
+            {
+              "key": "s",
+              "title": "S",
+              "lines": 6
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.settings[0].multiline misplaced",
+        "contributes.settings[1].import misplaced",
+        "contributes.settings[2].lines misplaced",
+        "contributes.settings[4].multiline type",
+        "contributes.settings[5].lines misplaced",
+        "contributes.secrets[0].lines misplaced"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §4.1: lines from 3 to 20",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "settings": [
+            {
+              "key": "a",
+              "type": "string",
+              "title": "A",
+              "multiline": true,
+              "lines": 2
+            },
+            {
+              "key": "b",
+              "type": "string",
+              "title": "B",
+              "multiline": true,
+              "lines": 21
+            },
+            {
+              "key": "c",
+              "type": "string",
+              "title": "C",
+              "multiline": true,
+              "lines": "6"
+            },
+            {
+              "key": "d",
+              "type": "string",
+              "title": "D",
+              "multiline": true,
+              "lines": 6.5
+            },
+            {
+              "key": "e",
+              "type": "string",
+              "title": "E",
+              "multiline": true,
+              "lines": 3
+            },
+            {
+              "key": "f",
+              "type": "string",
+              "title": "F",
+              "multiline": true,
+              "lines": 20
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.settings[0].lines bounds",
+        "contributes.settings[1].lines bounds",
+        "contributes.settings[2].lines bounds",
+        "contributes.settings[3].lines bounds"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §4.1 hostile: import lists extensions of a file, never a path",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "secrets": [
+            {
+              "key": "a",
+              "title": "A",
+              "multiline": true,
+              "import": ["ovpn", ".", "..conf", ".a/b", "", ".tar.gz", 3, ".c:\\x", ".ovpn "]
+            },
+            {
+              "key": "b",
+              "title": "B",
+              "import": ".ovpn"
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.secrets[0].import[0] extension",
+        "contributes.secrets[0].import[1] extension",
+        "contributes.secrets[0].import[2] extension",
+        "contributes.secrets[0].import[3] extension",
+        "contributes.secrets[0].import[4] empty",
+        "contributes.secrets[0].import[6] type",
+        "contributes.secrets[0].import[7] extension",
+        "contributes.secrets[0].import[8] extension",
+        "contributes.secrets[1].import type"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §4.1: the description of a secret is a text",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "secrets": [
+            {
+              "key": "a",
+              "title": "A",
+              "description": ""
+            },
+            {
+              "key": "b",
+              "title": "B",
+              "description": 3
+            },
+            {
+              "key": "c",
+              "title": "C",
+              "description": {
+                "en": "The token."
+              }
+            }
+          ]
+        }
+      },
+      "errors": ["contributes.secrets[0].description empty", "contributes.secrets[1].description type"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §4.1: a key in one group at most, and one the plugin declares",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "settings": [
+            {
+              "key": "server",
+              "type": "string",
+              "title": "Serveur"
+            },
+            {
+              "key": "port",
+              "type": "number",
+              "title": "Port"
+            }
+          ],
+          "secrets": [
+            {
+              "key": "password",
+              "title": "Mot de passe"
+            }
+          ],
+          "groups": [
+            {
+              "id": "a",
+              "title": "A",
+              "fields": ["server", "password", "server"]
+            },
+            {
+              "id": "b",
+              "title": "B",
+              "fields": ["password", "nope", "port", 3]
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.groups[0].fields[2] duplicate",
+        "contributes.groups[1].fields[0] duplicate",
+        "contributes.groups[1].fields[1] field",
+        "contributes.groups[1].fields[3] type"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §4.1: a group's id, title and fields are needed",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "settings": [
+            {
+              "key": "server",
+              "type": "string",
+              "title": "Serveur"
+            }
+          ],
+          "groups": [
+            {
+              "title": "A",
+              "fields": ["server"]
+            },
+            {
+              "id": "b",
+              "fields": []
+            },
+            {
+              "id": "b",
+              "title": "C",
+              "folded": "yes",
+              "description": ""
+            },
+            {
+              "id": "d",
+              "title": "D",
+              "fields": "server"
+            },
+            "e"
+          ]
+        }
+      },
+      "errors": [
+        "contributes.groups[0].id required",
+        "contributes.groups[1].title required",
+        "contributes.groups[1].fields empty",
+        "contributes.groups[2].id duplicate",
+        "contributes.groups[2].folded type",
+        "contributes.groups[2].description empty",
+        "contributes.groups[2].fields required",
+        "contributes.groups[3].fields type",
+        "contributes.groups[4] type"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §2.2: a setting of type profile names a kind the plugin declares",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "profiles": [
+            {
+              "id": "vpn",
+              "title": "VPN",
+              "nameField": "name",
+              "fields": [
+                {
+                  "key": "name",
+                  "type": "string",
+                  "title": "Nom"
+                }
+              ]
+            }
+          ],
+          "settings": [
+            {
+              "key": "a",
+              "type": "profile",
+              "title": "A"
+            },
+            {
+              "key": "b",
+              "type": "profile",
+              "of": "ssh",
+              "title": "B"
+            },
+            {
+              "key": "c",
+              "type": "string",
+              "of": "vpn",
+              "title": "C"
+            },
+            {
+              "key": "d",
+              "type": "profile",
+              "of": 3,
+              "title": "D"
+            },
+            {
+              "key": "e",
+              "type": "profile",
+              "of": "vpn",
+              "title": "E",
+              "multiline": true
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.settings[0].of required",
+        "contributes.settings[1].of profile",
+        "contributes.settings[2].of misplaced",
+        "contributes.settings[3].of type",
+        "contributes.settings[4].multiline misplaced"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §2.2: a profile's fields, and the one that names it",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "profiles": [
+            {
+              "id": "a",
+              "title": "A",
+              "nameField": "password",
+              "fields": [
+                {
+                  "key": "name",
+                  "type": "string",
+                  "title": "Nom"
+                },
+                {
+                  "key": "password",
+                  "secret": true,
+                  "type": "string",
+                  "title": "Mot de passe"
+                },
+                {
+                  "key": "kind",
+                  "type": "profile",
+                  "title": "Genre"
+                },
+                {
+                  "key": "port",
+                  "title": "Port"
+                },
+                {
+                  "key": "route",
+                  "type": "string",
+                  "title": "Route",
+                  "scope": "project",
+                  "of": "a",
+                  "repo": true
+                }
+              ]
+            },
+            {
+              "id": "b",
+              "title": "B",
+              "nameField": "notes",
+              "fields": [
+                {
+                  "key": "notes",
+                  "type": "string",
+                  "multiline": true,
+                  "title": "Notes"
+                }
+              ]
+            },
+            {
+              "id": "c",
+              "title": "C",
+              "nameField": "port",
+              "fields": [
+                {
+                  "key": "port",
+                  "type": "number",
+                  "title": "Port"
+                }
+              ]
+            },
+            {
+              "id": "d",
+              "fields": []
+            },
+            {
+              "id": "e",
+              "title": "E",
+              "fields": [
+                {
+                  "key": "name",
+                  "type": "string",
+                  "title": "Nom"
+                },
+                {
+                  "key": "name",
+                  "type": "string",
+                  "title": "Nom"
+                }
+              ]
+            },
+            {
+              "id": "f",
+              "title": "F",
+              "nameField": "name",
+              "fields": [
+                {
+                  "key": "name",
+                  "type": "string"
+                },
+                {
+                  "key": "x",
+                  "secret": "yes",
+                  "title": "X"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.profiles[0].nameField field",
+        "contributes.profiles[0].fields[1].type misplaced",
+        "contributes.profiles[0].fields[2].type enum",
+        "contributes.profiles[0].fields[3].type required",
+        "contributes.profiles[0].fields[4].scope misplaced",
+        "contributes.profiles[0].fields[4].of misplaced",
+        "contributes.profiles[0].fields[4].repo repo",
+        "contributes.profiles[1].nameField field",
+        "contributes.profiles[2].nameField field",
+        "contributes.profiles[3].title required",
+        "contributes.profiles[3].fields empty",
+        "contributes.profiles[3].nameField required",
+        "contributes.profiles[4].fields[1].key duplicate",
+        "contributes.profiles[4].nameField required",
+        "contributes.profiles[5].fields[0].title required",
+        "contributes.profiles[5].fields[1].secret type",
+        "contributes.profiles[5].fields[1].type required"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §2.4 hostile: profile:<kind> asks the secrets of a declared kind that has one",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "permissions": {
+          "secrets": ["profile:vpn", "profile:ssh", "profile:plain", "profile:*", "profile:", "token"]
+        },
+        "contributes": {
+          "profiles": [
+            {
+              "id": "vpn",
+              "title": "VPN",
+              "nameField": "name",
+              "fields": [
+                {
+                  "key": "name",
+                  "type": "string",
+                  "title": "Nom"
+                },
+                {
+                  "key": "password",
+                  "secret": true,
+                  "title": "Mot de passe"
+                }
+              ]
+            },
+            {
+              "id": "plain",
+              "title": "Simple",
+              "nameField": "name",
+              "fields": [
+                {
+                  "key": "name",
+                  "type": "string",
+                  "title": "Nom"
+                }
+              ]
+            }
+          ],
+          "secrets": [
+            {
+              "key": "token",
+              "title": "Jeton"
+            }
+          ]
+        }
+      },
+      "errors": [
+        "permissions.secrets[1] profile",
+        "permissions.secrets[2] profile",
+        "permissions.secrets[3] profile",
+        "permissions.secrets[4] profile"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.6: limits.processes is 16 at most",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "limits": {
+          "processes": 17,
+          "reason": "Beaucoup."
+        }
+      },
+      "errors": ["limits.processes bounds"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.6: limits.processes is 1 at least, a whole number",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "limits": {
+          "processes": 0
+        }
+      },
+      "errors": ["limits.processes bounds"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.6: limits.processes is a number, not a text",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "limits": {
+          "processes": "8",
+          "reason": "Un tunnel."
+        }
+      },
+      "errors": ["limits.processes bounds"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.6: beyond 4 programs at once, the reason is needed",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "limits": {
+          "processes": 5
+        }
+      },
+      "errors": ["limits.reason required"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.6: the reason is a text",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "limits": {
+          "processes": 16,
+          "reason": ""
+        }
+      },
+      "errors": ["limits.reason empty"],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.6: up to 4 programs at once, no reason needed; 8.0 is 8",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "limits": {
+          "processes": 4
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "ESC-525 §5.6: a whole number written 8.0 reads as 8",
+      "manifest": {
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "limits": {
+          "processes": 8.0,
+          "reason": {
+            "en": "Two tunnels."
+          }
+        }
+      },
+      "errors": [],
+      "ignored": []
     }
   ],
   "hosts": {

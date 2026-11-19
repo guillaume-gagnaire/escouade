@@ -7,6 +7,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ## [Non publié]
 
 - Docs : ce qui reste à partager se lit sur un badge de l’onglet « Docs », plus dans la barre d’état, et un conflit s’y voit à part. « Synchroniser », dans l’espace Docs, partage tes changements ou, s’il n’y en a pas, récupère ceux des autres.
+- Auteurs de plugins : le manifeste accepte désormais des profils, des réglages par projet, des groupes, des champs sur plusieurs lignes, l’import d’un fichier, des jokers typés dans les commandes et une limite de programmes, et refuse ce qui sort de leur grammaire. Un plugin qui en demande un que l’app ne sert pas encore reste coupé, la raison dite.
 
 ## [2.2.4] — 2026-11-18
 

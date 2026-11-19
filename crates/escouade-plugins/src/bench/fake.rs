@@ -260,7 +260,7 @@ impl Session {
                 ..wasm::Net::default()
             },
         )
-        .limited(manifest.limits);
+        .limited(manifest.limits.clone());
         let scratch =
             std::env::temp_dir().join(format!("escouade-bench-{}", uuid::Uuid::new_v4().simple()));
         let reached = capabilities(

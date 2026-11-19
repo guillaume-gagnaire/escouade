@@ -105,7 +105,7 @@ pub struct Limits {
 impl Limits {
     /// These, with what a manifest asks: more memory and longer turns, up to the host's ceilings, never less. A turn that
     /// holds a decision keeps its time: the agent waits for it.
-    pub fn asked(self, manifest: super::manifest::Limits) -> Self {
+    pub fn asked(self, manifest: &super::manifest::Limits) -> Self {
         let memory = manifest
             .memory_bytes
             .map_or(self.memory, |n| self.memory.max(n.min(MEMORY_MAX) as usize));

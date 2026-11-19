@@ -2,7 +2,7 @@
 title: "Les plugins : vue d'ensemble"
 subject: "plugins"
 sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs","docs/PLUGINS-CONTRACT-STUDY.md §1.4, §3.3 (release/2.3)","website/content/docs/fr/plugins/manifest.md"]
-tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-524"]
+tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-524","ESC-525"]
 decisions: [142]
 compared: null
 ---
@@ -81,3 +81,7 @@ Un plugin déclare ses secrets (`contributes.secrets`) ; l'utilisateur les saisi
 - **« Oublier »** retire le secret du fichier ou du trousseau. Désinstaller un plugin sans garder ses secrets les retire aussi.
 - **Réglages › Plugins** montre le choix et le retire (voir *Réglages*).
 - Une stratégie de poste géré qui interdirait ce repli n'est pas dans la 2.2.
+
+## Le contrat du manifeste qui vient (ESC-525)
+
+Les deux lecteurs du manifeste lisent déjà, et refusent hors de leur grammaire, ce que l'étude ESC-501 ajoute au contrat : portée et `repo` des réglages et secrets, groupes, champs sur plusieurs lignes, import d'un fichier, profils, jokers typés des commandes, limite de programmes (*Le contrat du manifeste*). Un plugin qui en demande un point que l'app ne sert pas encore est chargé coupé, la raison dite.
