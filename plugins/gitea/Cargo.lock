@@ -143,12 +143,13 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gitea"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
  "parking_lot",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

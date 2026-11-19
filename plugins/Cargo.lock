@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-azure-devops"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-bitbucket"
-version = "2.2.3"
+version = "2.2.4"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -209,11 +209,12 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-clickup"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -271,16 +272,6 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gitea"
-version = "2.2.2"
-dependencies = [
- "anyhow",
- "escouade-plugin-kit",
- "parking_lot",
- "serde_json",
-]
-
-[[package]]
-name = "escouade-plugin-github"
 version = "2.2.3"
 dependencies = [
  "anyhow",
@@ -291,8 +282,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-plugin-github"
+version = "2.2.4"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-kit",
+ "parking_lot",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "escouade-plugin-gitlab"
-version = "2.2.3"
+version = "2.2.4"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -321,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-jira"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -347,11 +349,12 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-linear"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -396,11 +399,12 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-trello"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

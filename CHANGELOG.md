@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Une forge ou une source de tickets injoignable (pas de réseau, DNS, proxy) le dit avec quoi vérifier : la connexion, l’adresse du compte ou le proxy. Escouade la tient pour une panne passagère et réessaie plus tard. Plugins Gitea, GitHub, GitLab, Bitbucket, Azure DevOps, Trello, Jira, Linear et ClickUp.
 - Docs : ce qui reste à partager se lit sur un badge de l’onglet « Docs », plus dans la barre d’état, et un conflit s’y voit à part. « Synchroniser », dans l’espace Docs, partage tes changements ou, s’il n’y en a pas, récupère ceux des autres.
 - Auteurs de plugins : le manifeste accepte désormais des profils, des réglages par projet, des groupes, des champs sur plusieurs lignes, l’import d’un fichier, des jokers typés dans les commandes et une limite de programmes, et refuse ce qui sort de leur grammaire. Un plugin qui en demande un que l’app ne sert pas encore reste coupé, la raison dite.
 - Plugins : la page d’un plugin range ses réglages et ses secrets dans les groupes qu’il déclare, décrit chaque secret et accepte un texte sur plusieurs lignes, comme une configuration OpenVPN, collé ou importé d’un fichier. Un tel secret, gardé, ne se relit plus : il dit sa taille et se remplace.

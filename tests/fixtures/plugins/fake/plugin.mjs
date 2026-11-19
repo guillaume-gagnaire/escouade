@@ -22,7 +22,8 @@
 //   settings → asks Escouade `settings/get` (of <project>, if given), and gives back what came: { result }
 //   log     → a `log` notification of <message>, then { ok }
 // It also serves a ticket source and a code host (INT-5, ESC-211): `account/me`, `tickets/*` and `forge/*`, on a
-// few fixed records. `--untyped` answers every one with an error that is not typed; `--token-from <key>` makes every one
+// few fixed records. `--untyped` answers every one with an error that is not typed; `--fetch` asks `net/fetch` for
+// https://fake.test/me first and answers the host's refusal as it came, untyped (ESC-536); `--token-from <key>` makes every one
 // ask Escouade `secrets/get` for that key first and answer 401 (-32401) unless it is `good`; a container named `gone`
 // answers 404, `refused` a lasting refusal, `crash` fails the instance, `slow` is never answered. `forge/*` answer
 // { value, rateLimit }; `forge/merge` is not served (-32601). `--ticket-budget` makes `tickets/*` answer
@@ -165,6 +166,11 @@ const calls = [];
 function serve(id, method, p) {
   calls.push({ method, params: p });
   if (flag('--untyped')) return fail(id, -32000, 'boom');
+  if (flag('--fetch')) {
+    return ask('net/fetch', { url: 'https://fake.test/me', method: 'GET', headers: {} }).then((answer) =>
+      answer.error ? fail(id, -32000, answer.error.message) : records(id, method, p, p.container ?? p.repo?.name),
+    );
+  }
   const name = p.container ?? p.repo?.name ?? p.reader;
   if (name === 'crash') crash('crashing on a ticket call');
   const tokenKey = option('--token-from');

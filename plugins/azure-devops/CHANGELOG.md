@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.5
+
+- A service out of reach (a name the DNS does not know, no connection, a delay passed) has an error of its own, typed as a 503: Escouade asks again later, and the message says to check the connection, the account’s address or the proxy (ESC-536).
+
 ## 2.2.4
 
 - Each pull request has its link again, even when Azure DevOps leaves out its repository's `webUrl` (its lists of pull requests do): it is made from the account's address, the project and the repository, on dev.azure.com and on a Server (ESC-437).

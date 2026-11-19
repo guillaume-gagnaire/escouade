@@ -143,10 +143,12 @@ et les branche, dans `run` :
 
 ```rust
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "linear",
-        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(LinearSource)]),
-    )
+    escouade_plugin_kit::serve::run("linear", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> escouade_plugin_kit::hosts::Hosts {
+    escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(LinearSource)])
 }
 
 escouade_plugin_kit::protocol::module!(run);

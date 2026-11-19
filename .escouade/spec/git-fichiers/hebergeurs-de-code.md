@@ -2,8 +2,8 @@
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","plugins/gitlab/README.fr.md","plugins/gitlab/docs/fr/","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.fr.md","plugins/gitea/docs/fr/","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383"]
-decisions: [104]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383","ESC-536"]
+decisions: [104,"un-hebergeur-ou-une-source-injoignable-s"]
 compared: null
 ---
 
@@ -137,3 +137,12 @@ Quatre événements disent, si l'utilisateur a accepté les statistiques, que le
 Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste (trousseau du système, sinon `integrations.json`), et les appels vont de l'app à l'hébergeur, par le proxy des réglages réseau. La page Confidentialité du site le dit, avec ce que voient l'hébergeur et le service du harness (une relecture et les textes proposés lui donnent le diff), et elle liste chaque événement : un test du site la compare à `src-tauri/src/telemetry.rs`.
 
 Le site dit aussi ce qui a été essayé (page « Les hébergeurs de code ») : GitHub en lecture sur le vrai service ; ses écritures contre le faux GitHub des tests ; les autres d'après leur documentation, contre de faux serveurs. Une page ne promet pas plus que ce qui a tourné.
+
+## Un hébergeur ou une source injoignable (ESC-536)
+
+Un appel qui n'atteint pas son service (nom inconnu du DNS, connexion refusée, délai dépassé, réseau coupé) est une erreur à part. Elle vaut pour les plugins livrés Gitea / Forgejo, GitHub, GitLab, Bitbucket, Azure DevOps, Trello, Jira, Linear et ClickUp.
+
+- **Son code** : `-32503`, celui d'un HTTP 503 (`-(32000 + statut)`). Le protocole ne change pas, il n'a pas de code à lui pour « injoignable » : c'est celui d'une passerelle qui ne joint pas son serveur. Le cœur la lit comme un `HttpError` 503, une panne passagère retentée plus tard (voir *Intégrations*). Le banc de conformité la compte comme typée. Avant, ces plugins rendaient `-32000`, une erreur que le banc refuse.
+- **Son message**, dans la langue de l'interface : « Gitea injoignable : <cause>. Vérifie la connexion, l’adresse du compte ou le proxy (Réglages › Avancé › Réseau). » En anglais : « Gitea can’t be reached: <cause>. Check the connection, the account’s address or the proxy (Settings › Advanced › Network). » Pour Trello, Linear et ClickUp, dont l'adresse est fixe, le message ne parle pas de l'adresse du compte.
+- **Sans compte** (aucun jeton gardé), `account/me` et les autres appels sont refusés tout de suite par un 401 (« aucun jeton pour … »). Rien ne part sur le réseau.
+- **Le banc des plugins de la première main** (`node plugins/ci.mjs`) joue hors ligne, comme celui de la revue du store (`--offline`). Il ne dépend donc d'aucun service public : le 2026-11-18, codeberg.org, injoignable par le DNS du runner, avait fait échouer la CI de main. Chaque plugin teste lui-même l'hôte injoignable et l'absence de compte.

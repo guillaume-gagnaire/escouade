@@ -7,6 +7,8 @@
 
 pub mod pulls;
 
+mod reach;
+
 #[cfg(test)]
 #[path = "../../fake_service.rs"]
 mod fake;
@@ -57,10 +59,12 @@ impl ForgeKind for BitbucketForge {
 
 /// What its module runs, on its first turn.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "bitbucket",
-        Hosts::new(vec![Box::new(BitbucketForge)], vec![]),
-    )
+    escouade_plugin_kit::serve::run("bitbucket", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> Hosts {
+    Hosts::new(vec![Box::new(BitbucketForge)], vec![])
 }
 
 escouade_plugin_kit::protocol::module!(run);

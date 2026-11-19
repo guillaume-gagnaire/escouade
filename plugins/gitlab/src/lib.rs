@@ -8,6 +8,8 @@
 pub mod issues;
 pub mod merges;
 
+mod reach;
+
 #[cfg(test)]
 #[path = "../../fake_service.rs"]
 mod fake;
@@ -83,10 +85,12 @@ impl SourceKind for GitlabIssues {
 
 /// What its module runs, on its first turn.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "gitlab",
-        Hosts::new(vec![Box::new(GitlabForge)], vec![Box::new(GitlabIssues)]),
-    )
+    escouade_plugin_kit::serve::run("gitlab", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> Hosts {
+    Hosts::new(vec![Box::new(GitlabForge)], vec![Box::new(GitlabIssues)])
 }
 
 escouade_plugin_kit::protocol::module!(run);

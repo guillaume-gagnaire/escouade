@@ -2,6 +2,8 @@
 //! chosen through the hierarchy (workspace, space, folder, list); a task's state on the Kanban is one of the list's
 //! statuses, which each list has its own. The account's secret is the token (`secrets/get` of `account:clickup`).
 
+mod reach;
+
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
 use escouade_plugin_kit::forge::BoxFuture;
@@ -94,13 +96,7 @@ impl Clickup {
     }
 
     async fn once(&self, rb: reqwest::RequestBuilder) -> Result<Answer> {
-        let resp = rb.send().await.map_err(|e| {
-            let e = anyhow::Error::from(e.without_url());
-            anyhow!(tr!(
-                "{S} injoignable : {e:#}",
-                "{S} can’t be reached: {e:#}"
-            ))
-        })?;
+        let resp = rb.send().await.map_err(|e| reach::unreached(S, e))?;
         let status = resp.status().as_u16();
         if status == 429 {
             let reset = resp
@@ -764,10 +760,12 @@ impl SourceKind for ClickupSource {
 
 /// What its module runs, on its first turn.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "clickup",
-        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(ClickupSource)]),
-    )
+    escouade_plugin_kit::serve::run("clickup", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> escouade_plugin_kit::hosts::Hosts {
+    escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(ClickupSource)])
 }
 
 escouade_plugin_kit::protocol::module!(run);

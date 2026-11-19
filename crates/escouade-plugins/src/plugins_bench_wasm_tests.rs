@@ -294,10 +294,11 @@ fn built(dir: &Path) -> PathBuf {
     at
 }
 
-/// The review plays a plugin offline (ESC-353): a source whose service is out of reach answers by the host's refusal, which
-/// it does not type. That cannot be judged here, and is no failure: every first-hand source and host would fall on it.
+/// The review plays a plugin offline (ESC-353): its service is out of reach. A first-hand source says it typed, as the
+/// HTTP error 503 (-32503, ESC-536), which the bench judges; one that answers the host's refusal untyped is not judged
+/// (`plugins_bench_tests::offline_a_service_out_of_reach_answered_untyped_is_not_judged`).
 #[tokio::test(flavor = "multi_thread")]
-async fn offline_a_service_out_of_reach_is_not_judged_and_fails_nothing() {
+async fn offline_a_first_hand_source_out_of_reach_says_it_typed() {
     let dir = root().join("plugins/trello");
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
@@ -321,12 +322,12 @@ async fn offline_a_service_out_of_reach_is_not_judged_and_fails_nothing() {
     .await;
     assert_eq!(
         r.outcome(Scenario::Tickets).verdict,
-        Verdict::Skip,
+        Verdict::Pass,
         "{}",
         r.render(Lang::Fr)
     );
     assert!(
-        said(&r, Scenario::Tickets).contains("account/me"),
+        said(&r, Scenario::Tickets).contains("account/me: -32503"),
         "{}",
         r.render(Lang::Fr)
     );

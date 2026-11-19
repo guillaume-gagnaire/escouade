@@ -143,7 +143,9 @@ impl Gitea {
     async fn send(&self, method: Method, path: &str, body: Option<&Value>) -> Result<Value> {
         let url = format!("{}{path}", self.base);
         let make = |method, url: &str, own, body| self.request(method, url, own, body);
-        Ok(redirect::send_named(NAME, method, url, body, make).await?.0)
+        Ok(crate::reach::send_named(NAME, method, url, body, make)
+            .await?
+            .0)
     }
 
     async fn get(&self, path: &str) -> Result<Value> {
@@ -161,7 +163,7 @@ impl Gitea {
             none,
             |method, url, own, body| async move {
                 let rb = self.request(method, &url, own, body);
-                redirect::reply(NAME, rb.header("Accept", "text/plain")).await
+                crate::reach::reply(NAME, rb.header("Accept", "text/plain")).await
             },
         )
         .await?;

@@ -1,17 +1,20 @@
 //! Trello (REST API 1), with an API key and a token: the Kanban's source of Trello cards, a board's lists as the
 //! columns' states. The account's secret is `{"key":…,"token":…}` (`secrets/get` of `account:trello`).
 
+mod reach;
+
 use anyhow::Result;
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::{Credentials, SourceKind, TicketSource};
+use escouade_plugin_kit::http::encode;
 use escouade_plugin_kit::http::reqwest;
-use escouade_plugin_kit::http::{call, encode};
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
     Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
 };
 use escouade_plugin_kit::text::{criteria_of, names_criteria};
 use escouade_plugin_kit::tr_in;
+use reach::call;
 use serde_json::Value;
 
 /// The source's id, and its name in what it says.
@@ -316,10 +319,12 @@ impl SourceKind for TrelloSource {
 
 /// What its module runs, on its first turn.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "trello",
-        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(TrelloSource)]),
-    )
+    escouade_plugin_kit::serve::run("trello", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> escouade_plugin_kit::hosts::Hosts {
+    escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(TrelloSource)])
 }
 
 escouade_plugin_kit::protocol::module!(run);

@@ -397,7 +397,7 @@ impl Azure {
             None => Duration::ZERO,
         };
         self.pause(delay).await;
-        let reply = redirect::reply(NAME, rb).await?;
+        let reply = crate::reach::reply(NAME, rb).await?;
         self.learn_limit(&reply.headers);
         Ok(reply)
     }
