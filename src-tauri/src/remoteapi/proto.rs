@@ -173,6 +173,10 @@ pub enum ToClient {
         server_version: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         update: Option<String>,
+        /// With `update` at `server` (ESC-515): how to put the server at the client's version, for the client to offer
+        /// it (the screen is the client's).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        server_update: Option<ServerUpdate>,
         /// For `pairing` (ESC-537): why, for the client to say it in its words (`none`, `expired`, `wrong`, `tries`).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
@@ -307,6 +311,38 @@ pub fn reply_ok(id: u64, json: &str) -> String {
 /// The text of a `Channel` message whose data `json` is already JSON (an event, serialized once).
 pub fn channel_json(channel: u32, json: &str) -> String {
     format!(r#"{{"t":"channel","channel":{channel},"data":{json}}}"#)
+}
+
+/// How a server is put at a client's version (ESC-515): `command`, `escouade-server update --to <version>` run on the
+/// server (it checks the signature and waits for the turns), or `image`, a new image of the container (the server
+/// never changes itself there), and what to run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerUpdate {
+    pub how: String,
+    pub command: String,
+}
+
+/// The image of the server (`deploy/Dockerfile`, published by the Release).
+pub const SERVER_IMAGE: &str = "ghcr.io/guillaume-gagnaire/escouade/escouade-server";
+
+/// How to put this server at `client`'s version: `in_image`, it runs in the image of Escouade.
+pub fn server_update(client: &str, in_image: bool) -> ServerUpdate {
+    let version: String = client
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))
+        .take(32)
+        .collect();
+    if in_image {
+        ServerUpdate {
+            how: "image".into(),
+            command: format!("docker pull {SERVER_IMAGE}:{version} && docker compose up -d"),
+        }
+    } else {
+        ServerUpdate {
+            how: "command".into(),
+            command: format!("escouade-server update --to {version}"),
+        }
+    }
 }
 
 /// Which side to update when the versions differ: the older one (the server unless the client is older).

@@ -2,7 +2,8 @@ name: Release
 
 # A tag `vX.Y.Z` (pushed, or created with a release on GitHub's page) publishes a release: NSIS
 # installer (Windows), universal app and disk image (macOS), AppImage and .deb (Linux), signed
-# updater artifacts and the latest.json of the in-app updater, which holds the three systems. The app gets the tag's version.
+# updater artifacts and the latest.json of the in-app updater, which holds the three systems;
+# escouade-server for Linux x64 and arm64 (signed archives, install.sh) and its image on ghcr.io. The app gets the tag's version.
 # The release is a draft while the three builds upload to it (~30 min, each one rewriting
 # latest.json), and the last job publishes it once latest.json and every file it names are in:
 # the in-app updater reads the latest release, so it never meets a half-built one. A failed build
@@ -341,12 +342,116 @@ jobs:
           "$bin" --version
           "$bin" --version | grep -qx "escouade-js $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)"
 
+  # escouade-server (ESC-515, https://escouade.dev/docs/server/): the server mode's program for Linux x64 and arm64, each
+  # on a runner of its architecture (no emulation). On Ubuntu 22.04, as the app's Linux build: the glibc of most
+  # servers since 2022 (Debian 12, Ubuntu 22.04 and newer). scripts/server-release.sh makes the archive with the seed of
+  # the plugins, its SHA-256 and its signature (the updater's key: `escouade-server update` and deploy/install.sh check
+  # it), checked at once, then the image of the architecture, pushed by its digest alone: no tag points at it until the
+  # release is published (`server-image`). The archives, their SHA-256 and signatures and install.sh go up to the draft;
+  # the attest job attests them with the rest.
+  server:
+    name: Server (Linux ${{ matrix.arch }})
+    needs: [create, escouade-js]
+    if: github.repository == 'guillaume-gagnaire/escouade'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download escouade-js
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Download and check the seed of the plugins
+        run: npx --yes tsx@4.23.15 store/scripts/seed.ts fetch --to "$RUNNER_TEMP/seed"
+
+      - name: System libraries (whisper.cpp's tools; no WebKitGTK, no GTK, no sound)
+        run: sh scripts/linux-deps.sh server
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      - name: Server version from the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node scripts/version.mjs "$TAG"
+
+      - name: Build escouade-server without the desktop
+        working-directory: src-tauri
+        env:
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
+        run: cargo build --release --locked -p escouade --bin escouade-server --no-default-features
+
+      - name: No library of the desktop linked, and it starts in a bare Debian container
+        run: |
+          sh scripts/server-libs.sh src-tauri/target/release/escouade-server
+          docker run --rm -v "$PWD/src-tauri/target/release:/srv/bin:ro" -v "$PWD/scripts:/srv/scripts:ro" \
+            debian:trixie-slim bash /srv/scripts/server-trial.sh /srv/bin/escouade-server
+
+      - name: Log in to the GitHub Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      # The signing key only here, as in the app's build step.
+      - name: Archive, signature and image of the architecture
+        env:
+          TAG: ${{ github.ref_name }}
+          ARCH: ${{ matrix.arch }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          IMAGE: ghcr.io/${{ github.repository }}/escouade-server
+          PUSH: '1'
+        run: sh scripts/server-release.sh src-tauri/target/release/escouade-server "${TAG#v}" "$ARCH" "$RUNNER_TEMP/seed" dist
+
+      # By the release's id: a draft is not found by its tag. A file of the same name (a job started again) is replaced.
+      - name: Upload to the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.create.outputs.release-id }}
+        run: |
+          for f in dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.tar.gz.sig dist/install.sh; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            old=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
+              --jq ".[] | select(.name == \"$name\") | .id")
+            [ -z "$old" ] || gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$old"
+            curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/octet-stream" \
+              --data-binary "@$f" "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$name" >/dev/null
+            echo "uploaded $name"
+          done
+
+      - name: Keep the image's digest for the last job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: server-image-${{ matrix.arch }}
+          path: dist/image-${{ matrix.arch }}.digest
+
   # Runs only when the three builds succeeded. The updater reads the latest release, so the draft
   # is published once its latest.json holds every system and each file it names is in: the three
   # builds each rewrite latest.json, and two at the same instant can lose one's system.
   publish:
     name: Publish the release once every system is in
-    needs: [create, build]
+    needs: [create, build, server]
     if: github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     permissions:
@@ -597,3 +702,57 @@ jobs:
           for f in "$RUNNER_TEMP"/binaries/*; do
             gh attestation verify "$f" --repo "$GITHUB_REPOSITORY"
           done
+
+  # The image of escouade-server once the release is published: the two architectures' digests (the `server` job's)
+  # under one index, tagged with the version and `latest` (`beta` for a beta, never `latest`), then its provenance
+  # attested as the binaries' are (Sigstore, stored with the image), and checked as a user would:
+  #   gh attestation verify oci://ghcr.io/<repository>/escouade-server:<version> --repo <repository>
+  server-image:
+    name: Server image (ghcr.io)
+    needs: [publish, server]
+    if: github.repository == 'guillaume-gagnaire/escouade'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: The digests of the two architectures
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: server-image-*
+          merge-multiple: true
+          path: digests
+
+      - name: Tag the index of both
+        id: index
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          IMAGE: ghcr.io/${{ github.repository }}/escouade-server
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          version=${TAG#v}
+          channel=latest
+          case $version in *-*) channel=beta ;; esac
+          docker buildx imagetools create -t "$IMAGE:$version" -t "$IMAGE:$channel" \
+            "$IMAGE@$(cat digests/image-x64.digest)" "$IMAGE@$(cat digests/image-arm64.digest)"
+          docker buildx imagetools inspect "$IMAGE:$version"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$version" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "name=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.index.outputs.name }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
+
+      - name: Check the attestation as a user would
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          IMAGE: ghcr.io/${{ github.repository }}/escouade-server
+        run: gh attestation verify "oci://$IMAGE:${TAG#v}" --repo "$GITHUB_REPOSITORY"

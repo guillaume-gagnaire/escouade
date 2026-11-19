@@ -1,0 +1,47 @@
+# escouade-server with Docker Compose (https://escouade.dev/docs/server/). On the server:
+#
+#   docker compose up -d
+#   docker compose exec escouade escouade-server pair      # a pairing code, once, for 10 minutes
+#
+# Then, on your computer, a tunnel to the API, which is published on 127.0.0.1 of the server alone (never on its public
+# address):
+#
+#   ssh -N -L 46480:127.0.0.1:46480 <the server>
+#
+# and in Escouade, « Se connecter à un serveur » (Connect to a server), with the code.
+#
+# Everything is in the `escouade-data` volume: Escouade's state and secrets, the projects and their worktrees, the
+# harnesses and their sign-ins. Back it up with the service stopped (docker compose stop, then a copy of the volume).
+# An update is a new image: docker compose pull && docker compose up -d (the agents resume their sessions).
+
+services:
+  escouade:
+    image: ghcr.io/guillaume-gagnaire/escouade/escouade-server:latest
+    restart: unless-stopped
+    environment:
+      # The API on the container's network, so that the port published below reaches it. Without it, the API listens on
+      # 127.0.0.1 of the container alone, and nothing reaches it from outside.
+      ESCOUADE_SERVER_LISTEN: 0.0.0.0
+    ports:
+      # 127.0.0.1 of the host only: reached through an SSH tunnel. Never "46480:46480", which opens it to the Internet.
+      - '127.0.0.1:46480:46480'
+    volumes:
+      - escouade-data:/data
+    # Its root filesystem read-only: it writes in /data, and /tmp in memory.
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The agents' turns are cut cleanly at a stop: give it time.
+    stop_grace_period: 60s
+    # Measured on 2026-11-18 on this image (x64): the server at rest, its plugins loaded, ~235 MB and ~106 tasks
+    # (processes and threads); an agent of the tests' fake claude in a turn adds ~18 MB and ~7. A real harness weighs
+    # more (several hundred MB per working agent, and its builds): enough for a few agents at a time, to raise with them.
+    mem_limit: 4g
+    pids_limit: 2048
+
+volumes:
+  escouade-data:

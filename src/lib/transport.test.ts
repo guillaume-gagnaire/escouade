@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { connection } from './connection.svelte';
 import { setLang } from './i18n';
-import { Channel, RemoteTransport, namedError, type Socket } from './transport';
+import { Channel, RemoteTransport, namedError, serverUpdateOf, type Socket } from './transport';
 
 /** A socket of the test: what the transport sent, and what the server answers. */
 class FakeSocket implements Socket {
@@ -274,6 +274,46 @@ describe('the transport on the remote API', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('says, when the versions differ, which side to update and how to put the server at its version (ESC-515)', async () => {
+    vi.useFakeTimers();
+    try {
+      socket().onopen?.();
+      socket().json({
+        t: 'refused',
+        code: 'version',
+        error: 'Le serveur est en 2.2.9, ce client en 2.3.0 : mettre à jour le serveur.',
+        serverVersion: '2.2.9',
+        update: 'server',
+        serverUpdate: { how: 'command', command: 'escouade-server update --to 2.3.0' },
+      });
+      socket().close(1008, 'version');
+      expect(connection.state).toBe('refused');
+      expect(connection.reason).toContain('mettre à jour le serveur');
+      expect(connection.refusal).toMatchObject({
+        code: 'version',
+        serverVersion: '2.2.9',
+        update: 'server',
+        serverUpdate: { how: 'command', command: 'escouade-server update --to 2.3.0' },
+      });
+      // No other try: nothing changes by trying again.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sockets).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reads how a server in its image is updated, and nothing when the refusal does not say it', () => {
+    expect(
+      serverUpdateOf({
+        serverUpdate: { how: 'image', command: 'docker pull ghcr.io/x/escouade-server:2.3.0 && docker compose up -d' },
+      }),
+    ).toEqual({ how: 'image', command: 'docker pull ghcr.io/x/escouade-server:2.3.0 && docker compose up -d' });
+    expect(serverUpdateOf({ update: 'client' })).toBeUndefined();
+    expect(serverUpdateOf({ serverUpdate: { how: 'other', command: 'x' } })).toBeUndefined();
+    expect(serverUpdateOf({ serverUpdate: { how: 'command', command: 3 } })).toBeUndefined();
   });
 
   it('sends a raw body in binary before its call, and puts an answer in parts together', async () => {

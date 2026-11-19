@@ -46,6 +46,9 @@ pub enum Refusal {
         reason: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         revoked: Option<Revoked>,
+        /// For the server to update: how (ESC-515).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        server_update: Option<proto::ServerUpdate>,
     },
 }
 
@@ -112,6 +115,7 @@ async fn ask(
             update,
             reason,
             revoked,
+            server_update,
         } => Err(Refusal::Refused {
             code,
             error,
@@ -119,6 +123,7 @@ async fn ask(
             update,
             reason,
             revoked,
+            server_update,
         }),
         other => Ok(other),
     }

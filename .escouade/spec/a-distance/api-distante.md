@@ -1,9 +1,9 @@
 ---
 title: "L'API distante"
 subject: "a-distance"
-sources: ["docs/REMOTE.md, « La fondation commune » (points 2 à 6), « La fondation 2a », « La fondation 2b », « Le classement des commandes », « Le mode serveur, MS-1 »","src-tauri/src/remoteapi (list.rs, server.rs, proto.rs, devices.rs, pairing.rs, outbox.rs, sessions.rs, window.rs)","src-tauri/src/termlog.rs (le tampon numéroté des terminaux), src-tauri/src/tui.rs (TuiOutput)","src/lib/transport.ts (le front sur deux transports), src/lib/connection.svelte.ts, src/components/ConnectionBand.svelte","crates/escouade-command (la liste unique des commandes)","crates/escouade-policy/src/list.rs (servers.remoteApi)"]
-tickets: ["ESC-478","ESC-495","ESC-514"]
-decisions: [189,193,202]
+sources: ["docs/REMOTE.md, « La fondation commune » (points 2 à 6), « La fondation 2a », « La fondation 2b », « Le classement des commandes », « Le mode serveur, MS-1 », « Le mode serveur, MS-3 »","src-tauri/src/remoteapi (list.rs, server.rs, proto.rs, devices.rs, pairing.rs, outbox.rs, sessions.rs, window.rs)","src-tauri/src/termlog.rs (le tampon numéroté des terminaux), src-tauri/src/tui.rs (TuiOutput)","src/lib/transport.ts (le front sur deux transports), src/lib/connection.svelte.ts, src/components/ConnectionBand.svelte","crates/escouade-command (la liste unique des commandes)","crates/escouade-policy/src/list.rs (servers.remoteApi)"]
+tickets: ["ESC-478","ESC-495","ESC-514","ESC-515","ESC-537"]
+decisions: [189,193,202,216]
 compared: null
 ---
 
@@ -14,8 +14,8 @@ Le cœur d'Escouade (agents, Git, Kanban, terminaux) peut être piloté par un c
 ## Éteinte par défaut, jamais ouverte sur Internet
 
 - L'API est **éteinte** tant qu'on ne l'allume pas. Elle s'allume dans `escouade-server` (voir *Le mode serveur*), et dans les essais : un build de développement de l'app par `ESCOUADE_REMOTE_API` (le port), le cœur sans fenêtre quand il le demande.
-- Elle n'écoute que sur **127.0.0.1** : aucune autre interface, ni IPv6, sauf `escouade-server --listen`, demandé en toutes lettres et qui avertit (Docker, un tunnel, un proxy). On l'atteint par un tunnel (SSH, puis WireGuard : les tickets suivants). Pas de TLS ici : c'est le tunnel qui chiffre.
-- Avant même d'ouvrir la WebSocket, le cœur refuse (HTTP 403) une requête dont le `Host` n'est pas le bouclage (`127.0.0.1`, `localhost`, `[::1]`, avec n'importe quel port, celui d'un tunnel compris), ou qui porte l'`Origin` d'une page web : **une page web du poste ne peut pas s'y connecter**. Seule passe l'`Origin` de la fenêtre d'Escouade elle-même (`tauri://localhost`, `http://tauri.localhost`), pour que la fenêtre puisse passer par l'API.
+- Elle n'écoute que sur **127.0.0.1** : aucune autre interface, ni IPv6, sauf `escouade-server --listen`, demandé en toutes lettres et qui avertit (Docker, un tunnel, un proxy). On l'atteint par un tunnel (SSH, puis WireGuard : les tickets suivants). Pas de TLS ici : c'est le tunnel, ou le proxy TLS devant, qui chiffre.
+- Avant même d'ouvrir la WebSocket, le cœur refuse (HTTP 403) une requête dont le `Host` n'est pas le bouclage (`127.0.0.1`, `localhost`, `[::1]`, avec n'importe quel port, celui d'un tunnel compris), ou qui porte l'`Origin` d'une page web : **une page web du poste ne peut pas s'y connecter**. Seule passe l'`Origin` de la fenêtre d'Escouade elle-même (`tauri://localhost`, `http://tauri.localhost`), pour que la fenêtre puisse passer par l'API. Un serveur derrière un proxy TLS accepte en plus le nom de domaine qu'on lui donne en toutes lettres (`escouade-server --allow-host`, voir *Le mode serveur*) ; tout autre nom reste refusé.
 - Un message de plus de 16 Mo ferme la connexion ; ce qui est plus gros (un fichier écrit ou lu) passe en parties.
 - La stratégie du poste **`servers.remoteApi`** à `false` interdit l'API : elle ne démarre pas, et chaque nouvelle connexion est refusée (« L'API distante est interdite par la stratégie de ce poste (servers.remoteApi). »), un appairage compris.
 
@@ -37,7 +37,7 @@ Ne sont refusées à distance que les commandes du poste, et celles qui changent
 1. Le client ouvre `ws://127.0.0.1:<port>/remote`.
 2. **La poignée de main** : son premier message, dans les 10 secondes, donne sa version, son jeton et, s'il revient après une coupure, sa session (`{"t":"hello","version":"2.3.0","token":"…","session":"…"}`).
    - Un jeton absent, inconnu ou révoqué : refusé (`token`).
-   - Une **autre version** que celle du serveur : refusée (`version`), avec la version du serveur et le côté à mettre à jour, le plus ancien, pour que le client propose « Mettre à jour le serveur » (ou le client). L'API suit la version de l'app : il n'y a pas de compatibilité entre versions.
+   - Une **autre version** que celle du serveur : refusée (`version`), avec la version du serveur et le côté à mettre à jour, le plus ancien, pour que le client propose « Mettre à jour le serveur » (ou le client). Quand c'est le serveur, le refus dit aussi comment le mettre à la version du client (`serverUpdate`) : la commande à lancer sur lui (`escouade-server update --to <version du client>`, qui vérifie la signature et attend la fin des tours), ou, pour le serveur de l'image Docker, la nouvelle image à prendre (`docker pull …:<version>`). Le client le garde (son `Problem::Version`, et la fenêtre dans `connection.refusal.serverUpdate`) ; l'écran qui le propose reste à faire. L'API suit la version de l'app : il n'y a pas de compatibilité entre versions.
    - Trop de connexions de cet appareil, ou en tout : refusée (`too-many-connections`).
    - Acceptée : `{"t":"welcome","version","client","device","session","resumed","desk","secretsInFile"}` : la session (celle qu'il a redonnée quand elle est encore à lui, sinon une nouvelle), les commandes du poste (`desk`), que le client fait chez lui s'il a un poste, et si le cœur garde ses secrets dans un fichier plutôt qu'au trousseau (`secretsInFile` : un serveur), que le client dit là où un secret se donne.
    - **L'appairage**, à la place de la poignée de main, pour un nouvel appareil : `{"t":"pair","code":"8NUC-W6HS","name":"Portable du bureau"}`. Réponse : `{"t":"paired","device":{…},"token":"…"}`, ou un refus `pairing` (aucun code n'attend, code expiré, faux, trop d'essais) ; puis la connexion se ferme, et l'appareil revient avec son jeton.
@@ -74,7 +74,7 @@ Un client lent, muet ou hostile ne fait pas grossir la mémoire du cœur :
 - **La file d'envoi** d'une connexion est bornée (2048 messages, 8 Mo). Au-delà, les événements de l'interface se fondent en une seule relecture de l'état (le dernier état gagne), et la sortie d'un terminal n'est plus mise en file : le client est prévenu dès qu'il y a de la place, et la reprend par son numéro. Les réponses ne sont jamais jetées ; mais quand plus de 96 Mo attendent, ou que rien n'est lu pendant 30 secondes alors que quelque chose attend, la connexion est fermée (code 4002, `slow-client`).
 - **Les connexions** : 4 par appareil, 16 en tout ; 8 poignées de main en cours au plus ; après 20 poignées de main ratées dans la minute (un code d'appairage refusé en est une), les connexions suivantes sont fermées dès qu'acceptées, jusqu'à la fin de la minute.
 - **Les appels** : 256 en attente de réponse par connexion (`busy` au-delà).
-- **Ce que donne le client** est borné et vérifié : un numéro de reprise au-delà de la fin vaut la fin, 1024 terminaux par reprise, une session de 64 caractères, 32 en-têtes, un corps brut de 64 Mo au plus, un nom d'appareil de 64 caractères.
+- **Ce que donne le client** est borné et vérifié : un numéro de reprise au-delà de la fin vaut la fin, 1024 terminaux par reprise, une session de 64 caractères, 32 en-têtes, un corps brut de 64 Mo au plus, un nom d'appareil de 64 caractères ; la version qu'il donne ne passe dans la commande de mise à jour du serveur que réduite à ses chiffres, lettres, points et tirets.
 
 ## Plusieurs clients à la fois
 
@@ -96,4 +96,4 @@ Chaque commande du cœur a sa classe, dans une **liste unique** d'où l'IPC de l
 
 ## Pas encore
 
-Le tunnel lancé par l'app et « Se connecter à un serveur » (voir *Le mode serveur*) ; le téléphone.
+Une adresse `wss://` d'un domaine dans le client (le tunnel SSH et « Se connecter à un serveur » : voir *Se connecter à un serveur*) ; le téléphone.

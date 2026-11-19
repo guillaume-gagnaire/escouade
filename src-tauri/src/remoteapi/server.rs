@@ -285,6 +285,8 @@ pub struct RemoteApi {
     failures: Mutex<VecDeque<Instant>>,
     counts: Counts,
     stopped: Notify,
+    /// The names taken in a `Host` besides the loopback's (`escouade-server --allow-host`: a TLS proxy's).
+    hosts: Mutex<Arc<Vec<String>>>,
 }
 
 /// Where the API listens: a port of 127.0.0.1 (0: a free one), or a socket bound already (the window's, which is told
@@ -338,11 +340,18 @@ impl RemoteApi {
             failures: Mutex::new(VecDeque::new()),
             counts: Counts::default(),
             stopped: Notify::new(),
+            hosts: Mutex::new(Arc::new(Vec::new())),
         });
         log::info!("remote API: listening on {addr}");
         let me = api.clone();
         tokio::spawn(async move { me.accept(listener).await });
         Ok(api)
+    }
+
+    /// The names it takes in a `Host` besides the loopback's, from now on (lower case): the name a TLS proxy in front of
+    /// it serves it under (`escouade-server --allow-host`). Any other name is still refused (DNS rebinding).
+    pub fn allow_hosts(&self, hosts: Vec<String>) {
+        *self.hosts.lock() = Arc::new(hosts.into_iter().map(|h| h.to_ascii_lowercase()).collect());
     }
 
     /// Where it listens: 127.0.0.1 and its port.
@@ -556,8 +565,10 @@ impl RemoteApi {
             .max_message_size(Some(proto::MAX_MESSAGE))
             .max_frame_size(Some(proto::MAX_MESSAGE));
         // The callback's type is tungstenite's: its error, an HTTP answer, is large.
+        let hosts = self.hosts.lock().clone();
+        // The callback's type is tungstenite's: its error, an HTTP answer, is large.
         #[allow(clippy::result_large_err)]
-        let guard = |req: &Request, resp: Response| match guard(req) {
+        let guard = |req: &Request, resp: Response| match guard(req, &hosts) {
             Ok(()) => Ok(resp),
             Err((status, why)) => {
                 log::warn!("remote API: refused a connection: {why}");
@@ -591,7 +602,8 @@ impl RemoteApi {
                            server_version: Option<String>,
                            update: Option<String>,
                            reason: Option<&'static str>,
-                           revoked: Option<proto::Revoked>|
+                           revoked: Option<proto::Revoked>,
+                           server_update: Option<proto::ServerUpdate>|
          -> Vec<Message> {
             log::warn!("remote API: refused a connection ({code}): {error}");
             let mut out = Vec::new();
@@ -602,6 +614,7 @@ impl RemoteApi {
                 update,
                 reason: reason.map(str::to_string),
                 revoked,
+                server_update,
             }) {
                 out.push(Message::text(text));
             }
@@ -616,7 +629,7 @@ impl RemoteApi {
                       server_version: Option<String>,
                       update: Option<String>|
          -> Vec<Message> {
-            refuse_with(code, error, server_version, update, None, None)
+            refuse_with(code, error, server_version, update, None, None, None)
         };
 
         // The handshake: the first message, in time.
@@ -645,7 +658,7 @@ impl RemoteApi {
                             out
                         }
                         Err((code, error, reason)) => {
-                            refuse_with(code, error, None, None, reason, None)
+                            refuse_with(code, error, None, None, reason, None, None)
                         }
                     };
                     send_all(&mut sink, messages).await;
@@ -710,11 +723,22 @@ impl RemoteApi {
         } else if let Some(device) = self.devices.find(&token) {
             if version != server_version {
                 let update = proto::to_update(&server_version, &version);
-                Err(refuse(
+                // How to put the server at the client's version (ESC-515), for the client to offer it.
+                let server_update = (update == "server").then(|| {
+                    proto::server_update(
+                        &version,
+                        crate::server::status::supervisor()
+                            == Some(crate::server::status::Supervisor::Docker),
+                    )
+                });
+                Err(refuse_with(
                     codes::VERSION,
                     version_text(&server_version, &version, update),
                     Some(server_version.clone()),
                     Some(update.to_string()),
+                    None,
+                    None,
+                    server_update,
                 ))
             } else {
                 Ok(device)
@@ -734,6 +758,7 @@ impl RemoteApi {
                 None,
                 None,
                 revoked,
+                None,
             ))
         };
         let device = match refused {
@@ -1181,7 +1206,10 @@ fn version_text(server: &str, client: &str, update: &str) -> String {
 
 /// The request that opens the WebSocket, before it opens: its path, a `Host` of the loopback, no `Origin` but
 /// Escouade's own window's. Else its HTTP status and why (shown in the log: no secret there).
-fn guard(req: &Request) -> std::result::Result<(), (tauri::http::StatusCode, String)> {
+fn guard(
+    req: &Request,
+    hosts: &[String],
+) -> std::result::Result<(), (tauri::http::StatusCode, String)> {
     use tauri::http::StatusCode;
     if req.uri().path() != proto::PATH {
         return Err((
@@ -1194,7 +1222,7 @@ fn guard(req: &Request) -> std::result::Result<(), (tauri::http::StatusCode, Str
         .get("host")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
-    if !loopback_host(host) {
+    if !loopback_host(host) && !allowed_host(host, hosts) {
         return Err((
             StatusCode::FORBIDDEN,
             format!("a Host that is not the loopback ({})", shown(host)),
@@ -1226,6 +1254,15 @@ fn loopback_host(host: &str) -> bool {
         name.to_ascii_lowercase().as_str(),
         "127.0.0.1" | "localhost" | "[::1]"
     )
+}
+
+/// `host` (its port aside) is one of `hosts`, the names asked for in so many words.
+fn allowed_host(host: &str, hosts: &[String]) -> bool {
+    if host.starts_with('[') {
+        return false;
+    }
+    let name = host.split(':').next().unwrap_or("").to_ascii_lowercase();
+    !name.is_empty() && hosts.contains(&name)
 }
 
 /// A text a client gave, as the log or an answer may show it: 80 characters at most, printable ones.

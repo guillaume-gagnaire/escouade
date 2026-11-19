@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Server mode, ready to deploy: a Docker image (amd64 and arm64) that runs without root and keeps everything in its volume, a Compose example and a Coolify recipe, or `install.sh`, which sets up a systemd service once the signature is checked. `escouade-server update` updates the server, its signature checked, once the agents’ turns are over.
 - First launch: your first project comes from a folder, a repository to clone or a throwaway demo project created on your machine without network, and your first agent starts from a suggested message that you edit and send yourself. Its answer, its first permission request and its diff are explained where they appear, and a usage limit, a lost connection or a signed-out account tell you what to do.
 - Server mode: “Connect to a server” drives from here an Escouade running on your server, through an SSH tunnel the app opens with your config, your agent and your known hosts, never accepting a key for you. A pairing code (or running it from here over SSH) is enough the first time; the machine shows in the title bar, the status bar and the rail, and a cut resumes by itself, sending paused and your draft kept.
 - Security: a managed device or a team can deny the file that keeps the plugins’ secrets where there is no system keychain, and their policies also judge the model and the effort an agent gives the agent it creates. The file denied is no longer offered nor read, and Settings › Plugins shows it under a padlock.

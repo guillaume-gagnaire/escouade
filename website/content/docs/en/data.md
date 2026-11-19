@@ -69,6 +69,7 @@ Tokens aren’t in the settings:
 - **MCP server.** The token for Claude outside Escouade is in the keychain (an `mcp` entry), otherwise in `mcp-token.json`. Each agent’s is in its `mcp/<agent>.json`, which goes away with its process.
 - **Online dictation.** Each service’s key is in the keychain, one entry per service (`dictation-openai`, `dictation-groq`, `dictation-mistral`, `dictation-elevenlabs`, `dictation-deepgram`), never in a file: on Linux, it cannot be saved. “Delete the key”, in Settings › Voice, removes its entry. See [dictation](chat).
 - **Claude Code’s sign-in.** It isn’t Escouade’s: Claude Code keeps it in each account’s folder (the `.credentials.json` file), and on macOS in the keychain. See [Claude accounts](accounts).
+- **In server mode.** A server has no keychain: all these secrets, and the paired devices’ tokens, are in `secrets.json` of the data folder, readable by its owner alone, and the accounts’ sign-ins live on the server. See [What the server keeps](server#what-the-server-keeps).
 
 To remove a token, disconnect the service in Settings › Connected services: its entry leaves the keychain. See [integrations](integrations).
 

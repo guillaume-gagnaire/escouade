@@ -98,6 +98,27 @@ Une version plus ancienne que celle testée est refusée, avec la commande qui l
 
 Les versions suivantes s'installent depuis l'application. Jusqu'à la 1.5.4, la barre de statut propose « Mise à jour disponible » ; à partir de la 1.6, la mise à jour se télécharge seule, la barre de statut affiche « Mise à jour X prête · Redémarrer », et l'app redémarre d'elle-même quand elle est au repos (réglage « Installer les mises à jour automatiquement », dans « À propos »).
 
+## Mode serveur
+
+Escouade tourne aussi H24 sur un serveur sans bureau (un VPS, un conteneur), et Escouade sur ton poste le pilote à distance : `escouade-server`, pour Linux x64 et arm64 (aperçu de la 2.3, publié avec elle). Il ne sert son API que sur `127.0.0.1`, et on l'atteint par un tunnel SSH (`ssh -N -L 46480:127.0.0.1:46480 <serveur>`). Tout est dans la page [Mode serveur](https://escouade.dev/docs/server/) du site.
+
+- **Docker** : l'image `ghcr.io/guillaume-gagnaire/escouade/escouade-server` (amd64 et arm64), sans root, en lecture seule, tout dans le volume `/data` ; le port n'est publié que sur `127.0.0.1` de l'hôte.
+
+  ```sh
+  docker volume create escouade-data
+  docker run -d --name escouade --restart unless-stopped --stop-timeout 60 \
+    -e ESCOUADE_SERVER_LISTEN=0.0.0.0 -p 127.0.0.1:46480:46480 \
+    -v escouade-data:/data --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+    ghcr.io/guillaume-gagnaire/escouade/escouade-server:latest
+  docker exec escouade escouade-server pair
+  ```
+
+- **Compose et Coolify** : `deploy/docker-compose.yml` et `deploy/coolify/docker-compose.yml`.
+- **systemd** : `deploy/install.sh` (aussi dans chaque release) vérifie la somme et la signature de l'archive, pose le programme et un service de l'utilisateur (`loginctl enable-linger`) ou du système (`--system`) ; idempotent, `--uninstall` garde les données sauf `--purge`.
+- **Appairer un poste** : `escouade-server pair` affiche un code, valable une fois et 10 minutes, à donner à « Se connecter à un serveur ».
+- **Mettre à jour** : une nouvelle image en Docker ; sinon `escouade-server update`, qui vérifie la signature (la clé des mises à jour de l'app) et attend la fin des tours.
+- **Ce que garde le serveur** : les données d'Escouade et les connexions des comptes de ses harness. Sa sécurité devient celle de tes comptes : son disque, son accès SSH, ses sauvegardes.
+
 ## Données locales
 
 Tout est stocké dans `~/.escouade/` (anciennement `~/.claude-code-manager/`, déplacé au premier lancement de la 0.1.4) :

@@ -291,7 +291,7 @@ export const fr: Catalog = {
       },
       {
         q: 'Où vont mes données ?',
-        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’aux harness eux-mêmes, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards, où un ticket importé reçoit son statut et des commentaires.',
+        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’aux harness eux-mêmes, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards, où un ticket importé reçoit son statut et des commentaires. En mode serveur, tout cela vit sur ton serveur, les connexions de tes comptes comprises : sa sécurité devient la leur.',
       },
       {
         q: 'Et mes jetons Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards ?',
@@ -377,7 +377,10 @@ export const fr: Catalog = {
     },
     pageTitle: '{title} · Documentation d’Escouade',
     groups: {
-      start: { title: 'Démarrer', text: 'Ce qu’est Escouade, l’installer, choisir ses harness et faire tes premiers pas.' },
+      start: {
+        title: 'Démarrer',
+        text: 'Ce qu’est Escouade, l’installer sur ton poste ou sur un serveur, choisir ses harness et faire tes premiers pas.',
+      },
       agents: {
         title: 'Agents et conversation',
         text: 'Lancer des agents, leur parler, suivre leur travail et être prévenu quand ils ont besoin de toi.',
@@ -405,6 +408,7 @@ export const fr: Catalog = {
     pages: {
       introduction: 'Présentation',
       installation: 'Installation',
+      server: 'Mode serveur',
       harness: 'Les harness',
       'quick-start': 'Prise en main',
       interface: 'L’interface',

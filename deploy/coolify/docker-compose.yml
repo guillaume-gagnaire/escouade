@@ -1,0 +1,47 @@
+# escouade-server on Coolify (https://escouade.dev/docs/server/#coolify): a « Docker Compose » resource, this file
+# pasted as it is (or the repository and the path deploy/coolify/docker-compose.yml).
+#
+# As it is, nothing goes on the Internet: the API is published on 127.0.0.1 of the Coolify server alone, and reached
+# through an SSH tunnel to it:
+#
+#   ssh -N -L 46480:127.0.0.1:46480 <the Coolify server>
+#
+# Pairing: in Coolify, the resource › Terminal (the escouade container): escouade-server pair
+#
+# With a domain, behind Coolify's proxy (Traefik, TLS by Let's Encrypt), instead of the tunnel: uncomment the two
+# lines marked « domain » and remove the `ports`. Then the API is on the Internet behind TLS: whoever reaches the domain
+# may try to pair (a code of 40 bits, valid 10 minutes, once, 5 wrong tries) or a token (256 bits); every try is in the
+# log, and too many failures close the connections for a minute. Prefer the tunnel; a domain only with an IP allow list
+# on the proxy or a private network (Tailscale, WireGuard), and never without TLS. The client of Escouade reaches a
+# server by its SSH tunnel today; the address of a domain (wss://) comes with its ticket.
+
+services:
+  escouade:
+    image: ghcr.io/guillaume-gagnaire/escouade/escouade-server:latest
+    restart: unless-stopped
+    environment:
+      # The API on the container's network (the published port, or Coolify's proxy, reaches it).
+      - ESCOUADE_SERVER_LISTEN=0.0.0.0
+      # domain: Coolify makes a domain for the port 46480 and routes it through Traefik, in TLS.
+      # - SERVICE_FQDN_ESCOUADE_46480
+      # domain: the API takes that name in a request's Host (any other name is still refused).
+      # - ESCOUADE_SERVER_ALLOW_HOSTS=${SERVICE_FQDN_ESCOUADE}
+    ports:
+      # 127.0.0.1 of the Coolify server only: an SSH tunnel reaches it. Never "46480:46480".
+      - '127.0.0.1:46480:46480'
+    volumes:
+      - escouade-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 60s
+    # The advised limits (deploy/docker-compose.yml says the measures): a few agents at a time.
+    mem_limit: 4g
+    pids_limit: 2048
+
+volumes:
+  escouade-data:

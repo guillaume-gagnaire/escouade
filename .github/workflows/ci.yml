@@ -615,6 +615,23 @@ jobs:
           docker run --rm -v "$PWD/src-tauri/target/debug:/srv/bin:ro" -v "$PWD/scripts:/srv/scripts:ro"
           debian:trixie-slim bash /srv/scripts/server-trial.sh /srv/bin/escouade-server
 
+      # The image (ESC-515, deploy/Dockerfile) made from this build as the Release makes it from its own, then tried as a
+      # user runs it: a new volume, read-only, no capability, its HEALTHCHECK, the pairing by `docker exec`, a clean stop,
+      # a restart on the same volume, and Claude Code installed by its plugin's command into the volume. Nothing pushed.
+      - name: The image, from this build, tried as a user runs it
+        run: |
+          strip -o "$RUNNER_TEMP/escouade-server" src-tauri/target/debug/escouade-server
+          sh scripts/server-package.sh "$RUNNER_TEMP/escouade-server" 0.0.0-ci ${{ matrix.arch }} "$RUNNER_TEMP/dist"
+          docker build -f deploy/Dockerfile --build-arg VERSION=0.0.0-ci -t escouade-server:ci "$RUNNER_TEMP/dist"
+          sh scripts/server-image-test.sh escouade-server:ci --harness
+
+      # deploy/install.sh on the runner's systemd: a service of the system and of a user, idempotent, a changed archive
+      # refused, `escouade-server update` checked and restarted by systemd, uninstalled (a fake release, a key of the test's).
+      - name: install.sh with systemd
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::Retries=3 minisign
+          sudo sh scripts/server-install-test.sh "$RUNNER_TEMP/escouade-server"
+
   # The Rust tests built once, as on Windows and macOS: compiling them took 4 min and running them 9 to 13 on one runner
   # of 4 vCPUs (2026-11-10).
   linux:

@@ -1,6 +1,8 @@
 //! `escouade-server` (ESC-514, `docs/REMOTE.md`, « Le mode serveur »): its command line, the pairing of a device and its
 //! refusals (expired, given again, wrong, too many tries), the secrets in a file readable by its owner alone, the lock of
-//! the data folder, the clean stop, and a log that says neither a code nor a token.
+//! the data folder, the clean stop, and a log that says neither a code nor a token. ESC-515: the options as variables (a
+//! container's), the status the server writes for `health` and `update`, the signed archive of an update and how it is
+//! put in place, the name a TLS proxy serves the API under (`--allow-host`), the log of a new server.
 
 use crate::core_tests::repo;
 use crate::headless::{with_file_lock, Headless};
@@ -11,7 +13,9 @@ use crate::remoteapi::devices::Devices;
 use crate::remoteapi::pairing::{self, Refusal, LIFETIME_MS, MAX_TRIES};
 use crate::remoteapi::proto::{self, ToClient, ToServer};
 use crate::remoteapi::server::{Limits, RemoteApi};
-use crate::server::{self, secrets::FileStore, Args, Command, DEFAULT_PORT};
+use crate::server::{
+    self, secrets::FileStore, status, update, Args, Command, Endpoint, DEFAULT_PORT,
+};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::net::SocketAddr;
@@ -31,7 +35,7 @@ fn args(line: &str) -> Vec<String> {
 
 #[test]
 fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_run() {
-    let run = server::parse(&[]).unwrap();
+    let run = server::parse_with(&[], |_| None).unwrap();
     assert_eq!(
         run,
         Args {
@@ -39,7 +43,9 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             data_dir: None,
             port: DEFAULT_PORT,
             listen: None,
+            hosts: Vec::new(),
             debug: false,
+            update: update::Asked::default(),
         }
     );
     let a = server::parse(&args("run --data-dir /srv/escouade --port 4213 --debug")).unwrap();
@@ -447,8 +453,7 @@ async fn started(
     let task = tokio::spawn(async move {
         server::serve(
             data,
-            None,
-            0,
+            Endpoint::port(0),
             Limits::default(),
             move |api| {
                 let _ = ready_tx.send(api.clone());
@@ -576,8 +581,7 @@ async fn the_server_stops_cleanly_its_state_written_and_its_folder_let_go_and_re
     // A second server on the same folder: refused, and says why.
     let second = server::serve(
         DataDir::new(root.clone()),
-        None,
-        0,
+        Endpoint::port(0),
         Limits::default(),
         |_| {},
         async { "never" },
@@ -626,8 +630,10 @@ async fn listen_serves_on_the_address_asked_for_in_so_many_words() {
     let task = tokio::spawn(async move {
         server::serve(
             data,
-            Some("127.0.0.1".parse().unwrap()),
-            0,
+            Endpoint {
+                listen: Some("127.0.0.1".parse().unwrap()),
+                ..Endpoint::default()
+            },
             Limits::default(),
             move |api| {
                 let _ = ready_tx.send(api.addr());
@@ -649,4 +655,450 @@ async fn listen_serves_on_the_address_asked_for_in_so_many_words() {
     );
     stop_tx.send(()).unwrap();
     task.await.unwrap().unwrap();
+}
+
+// ---------- ESC-515: the options as variables, the status, the signed update, the proxy's name ----------
+
+#[test]
+fn the_variables_of_a_container_stand_for_the_options_and_an_option_given_wins() {
+    let env = |name: &str| -> Option<String> {
+        match name {
+            "ESCOUADE_SERVER_DATA" => Some("/data/escouade".into()),
+            "ESCOUADE_SERVER_PORT" => Some("4300".into()),
+            "ESCOUADE_SERVER_LISTEN" => Some("0.0.0.0".into()),
+            "ESCOUADE_SERVER_ALLOW_HOSTS" => {
+                Some(" Escouade.Example.org , other.example.org,".into())
+            }
+            _ => None,
+        }
+    };
+    let a = server::parse_with(&args("pair"), env).unwrap();
+    assert_eq!(a.command, Command::Pair);
+    assert_eq!(
+        a.data_dir.as_deref(),
+        Some(std::path::Path::new("/data/escouade"))
+    );
+    assert_eq!(a.port, 4300);
+    assert_eq!(a.listen, Some("0.0.0.0".parse().unwrap()));
+    assert_eq!(a.hosts, ["escouade.example.org", "other.example.org"]);
+    // An option given wins over its variable.
+    let b = server::parse_with(
+        &args("run --data-dir /srv/x --port 4301 --listen 127.0.0.1"),
+        env,
+    )
+    .unwrap();
+    assert_eq!(b.data_dir.as_deref(), Some(std::path::Path::new("/srv/x")));
+    assert_eq!(
+        (b.port, b.listen),
+        (4301, Some("127.0.0.1".parse().unwrap()))
+    );
+    // An empty variable is none; a wrong one says which.
+    assert_eq!(
+        server::parse_with(&[], |n| (n == "ESCOUADE_SERVER_PORT").then(String::new))
+            .unwrap()
+            .port,
+        DEFAULT_PORT
+    );
+    assert!(
+        server::parse_with(&[], |n| (n == "ESCOUADE_SERVER_PORT").then(|| "x".into())).is_err()
+    );
+    assert!(
+        server::parse_with(&[], |n| (n == "ESCOUADE_SERVER_ALLOW_HOSTS")
+            .then(|| "a b".into()))
+        .is_err()
+    );
+}
+
+#[test]
+fn health_update_and_allow_host_are_read_and_the_update_s_options_go_with_it_alone() {
+    let none = |_: &str| None;
+    assert_eq!(
+        server::parse_with(&args("health"), none).unwrap().command,
+        Command::Health
+    );
+    let u = server::parse_with(&args("update --to v2.3.1 --now"), none).unwrap();
+    assert_eq!(u.command, Command::Update);
+    assert_eq!(u.update.to.as_deref(), Some("v2.3.1"));
+    assert!(u.update.now && !u.update.beta && !u.update.check);
+    let c = server::parse_with(&args("update --beta --check"), none).unwrap();
+    assert!(c.update.beta && c.update.check);
+    assert_eq!(
+        server::parse_with(
+            &args("--allow-host Escouade.Example.org --allow-host b.example.org"),
+            none
+        )
+        .unwrap()
+        .hosts,
+        ["escouade.example.org", "b.example.org"]
+    );
+    for bad in [
+        "run --now",
+        "pair --to 2.3.0",
+        "update --to latest",
+        "update --to 2.3",
+        "update --to 2.3.0/../x",
+        "--allow-host",
+        "--allow-host a/b",
+    ] {
+        assert!(server::parse_with(&args(bad), none).is_err(), "{bad}");
+    }
+    // `update --help` is the help: nothing downloaded.
+    assert_eq!(
+        server::parse_with(&args("update --help"), none)
+            .unwrap()
+            .command,
+        Command::Help
+    );
+    let help = server::help();
+    for word in ["health", "update", "--allow-host"] {
+        assert!(help.contains(word), "{word}: {help}");
+    }
+}
+
+#[test]
+fn versions_and_the_addresses_of_the_release_s_files() {
+    for good in ["2.3.0", "10.0.12", "2.3.0-beta.4"] {
+        assert!(update::is_version(good), "{good}");
+    }
+    for bad in ["2.3", "x.y.z", "2.3.0/x", "2.3.0-beta/..", "", "2.3.0.1"] {
+        assert!(!update::is_version(bad), "{bad}");
+    }
+    assert_eq!(
+        update::archive_url(update::RELEASES, "2.3.1", "arm64"),
+        "https://github.com/guillaume-gagnaire/escouade/releases/download/v2.3.1/escouade-server-2.3.1-linux-arm64.tar.gz"
+    );
+    assert_eq!(
+        update::channel_url("http://127.0.0.1:1/r/", false),
+        "http://127.0.0.1:1/r/latest/download/latest.json"
+    );
+    assert!(update::channel_url(update::RELEASES, true).ends_with("/latest/download/beta.json"));
+    assert!(
+        ["x64", "arm64"].contains(&update::arch())
+            || !cfg!(any(target_arch = "x86_64", target_arch = "aarch64"))
+    );
+}
+
+#[test]
+fn the_server_is_checked_with_the_key_of_the_app_s_updater() {
+    let conf: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+    assert_eq!(
+        conf["plugins"]["updater"]["pubkey"].as_str(),
+        Some(update::UPDATER_PUBLIC_KEY),
+        "the server's key is the updater's"
+    );
+    // install.sh holds the same.
+    let install = include_str!("../../deploy/install.sh");
+    assert!(
+        install.contains(update::UPDATER_PUBLIC_KEY),
+        "install.sh checks with the updater's key"
+    );
+}
+
+fn fixture(name: &str) -> Vec<u8> {
+    std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures/server-update")
+            .join(name),
+    )
+    .unwrap()
+}
+
+#[test]
+fn an_archive_passes_with_its_signature_alone_and_a_byte_changed_or_another_key_is_refused() {
+    let archive = fixture("escouade-server-9.9.9-linux-x64.tar.gz");
+    let sig = String::from_utf8(fixture("escouade-server-9.9.9-linux-x64.tar.gz.sig")).unwrap();
+    let key = String::from_utf8(fixture("test-key.pub")).unwrap();
+    update::verify(&archive, &sig, &key).expect("signed by the test key");
+    let mut changed = archive.clone();
+    let last = changed.len() - 1;
+    changed[last] ^= 1;
+    assert!(update::verify(&changed, &sig, &key).is_err());
+    // The updater's key did not sign it.
+    assert!(update::verify(&archive, &sig, update::UPDATER_PUBLIC_KEY).is_err());
+    assert!(update::verify(&archive, "not base64 !", &key).is_err());
+}
+
+#[test]
+fn an_update_puts_each_file_in_place_of_its_own_and_keeps_the_old_one() {
+    let dir = crate::paths::test_dir("server-update-install");
+    std::fs::write(dir.join("escouade-server"), "old program").unwrap();
+    std::fs::create_dir_all(dir.join("seed")).unwrap();
+    std::fs::write(dir.join("seed/old"), "old seed").unwrap();
+    std::fs::write(dir.join("other"), "not the archive's").unwrap();
+    let names = update::install(&fixture("escouade-server-9.9.9-linux-x64.tar.gz"), &dir).unwrap();
+    assert_eq!(names, ["escouade-server", "seed"]);
+    let program = std::fs::read_to_string(dir.join("escouade-server")).unwrap();
+    assert!(program.contains("9.9.9"), "{program}");
+    assert!(dir.join("seed/README").is_file() && !dir.join("seed/old").exists());
+    assert_eq!(
+        std::fs::read_to_string(dir.join("escouade-server.old")).unwrap(),
+        "old program"
+    );
+    assert!(dir.join("seed.old/old").is_file());
+    assert_eq!(
+        std::fs::read_to_string(dir.join("other")).unwrap(),
+        "not the archive's"
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(dir.join("escouade-server"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(
+            mode & 0o111,
+            0o111,
+            "the program is still executable: {mode:o}"
+        );
+    }
+    // Once more: the old one before it goes.
+    update::install(&fixture("escouade-server-9.9.9-linux-x64.tar.gz"), &dir).unwrap();
+    assert!(std::fs::read_to_string(dir.join("escouade-server.old"))
+        .unwrap()
+        .contains("9.9.9"));
+    // No staging folder is left.
+    let left: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with(".escouade-server-update")
+        })
+        .collect();
+    assert!(left.is_empty());
+}
+
+/// A tar.gz of `files` (path, content), the paths written as given (even one that leaves the folder).
+fn targz(files: &[(&str, &str)]) -> Vec<u8> {
+    let mut out = Vec::new();
+    {
+        let gz = flate2::write::GzEncoder::new(&mut out, flate2::Compression::fast());
+        let mut b = tar::Builder::new(gz);
+        for (path, content) in files {
+            let mut h = tar::Header::new_old();
+            let name = &mut h.as_old_mut().name;
+            name[..path.len()].copy_from_slice(path.as_bytes());
+            h.set_size(content.len() as u64);
+            h.set_mode(0o755);
+            h.set_entry_type(tar::EntryType::Regular);
+            h.set_cksum();
+            b.append(&h, content.as_bytes()).unwrap();
+        }
+        b.into_inner().unwrap().finish().unwrap();
+    }
+    out
+}
+
+#[test]
+fn an_archive_without_the_program_or_with_a_path_out_of_its_folder_changes_nothing() {
+    let dir = crate::paths::test_dir("server-update-refused");
+    std::fs::write(dir.join("escouade-server"), "old program").unwrap();
+    assert!(update::install(&targz(&[("README", "no program")]), &dir).is_err());
+    assert!(update::install(
+        &targz(&[("escouade-server", "x"), ("../escaped", "x")]),
+        &dir
+    )
+    .is_err());
+    assert!(!dir.parent().unwrap().join("escaped").exists());
+    assert!(update::install(b"not an archive", &dir).is_err());
+    assert_eq!(
+        std::fs::read_to_string(dir.join("escouade-server")).unwrap(),
+        "old program"
+    );
+    assert!(!dir.join("escouade-server.old").exists());
+    // At the top of the archive too, not only in one folder.
+    update::install(&targz(&[("escouade-server", "new program")]), &dir).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(dir.join("escouade-server")).unwrap(),
+        "new program"
+    );
+}
+
+fn status_of(pid: u32, busy: Option<&str>, at: i64) -> status::Status {
+    status::Status {
+        pid,
+        version: VERSION.into(),
+        api: "127.0.0.1:46480".into(),
+        started_at: 0,
+        at,
+        busy: busy.map(String::from),
+        turns: 0,
+        supervisor: Some(status::Supervisor::Systemd),
+    }
+}
+
+#[test]
+fn health_needs_a_fresh_status_and_a_live_process_and_update_waits_for_the_work() {
+    let alive = |pid: u32| pid == 7;
+    assert!(status::healthy(&status_of(7, None, 1_000), 5_000, alive).is_ok());
+    assert!(status::healthy(&status_of(8, None, 1_000), 5_000, alive).is_err());
+    assert!(status::healthy(
+        &status_of(7, None, 1_000),
+        1_000 + status::STALE_MS + 1,
+        alive
+    )
+    .is_err());
+    assert_eq!(update::wait_of(None, alive), update::Wait::NotRunning);
+    assert_eq!(
+        update::wait_of(Some(&status_of(8, None, 0)), alive),
+        update::Wait::NotRunning
+    );
+    assert_eq!(
+        update::wait_of(Some(&status_of(7, None, 0)), alive),
+        update::Wait::Now
+    );
+    assert_eq!(
+        update::wait_of(Some(&status_of(7, Some("turn"), 0)), alive),
+        update::Wait::Busy("turn".into())
+    );
+    assert!(!status::busy_text("turn").is_empty());
+    // What runs the server, from its variables.
+    assert_eq!(status::supervisor_of(|_| None), None);
+    assert_eq!(
+        status::supervisor_of(|n| (n == "INVOCATION_ID").then(|| "abc".into())),
+        Some(status::Supervisor::Systemd)
+    );
+    assert_eq!(
+        status::supervisor_of(
+            |n| matches!(n, "INVOCATION_ID" | "ESCOUADE_SERVER_IMAGE").then(|| "1".into())
+        ),
+        Some(status::Supervisor::Docker)
+    );
+    // The file, written whole and read back.
+    let data = data_dir("server-status-file");
+    assert!(status::read(&data).is_none());
+    status::write(&data, &status_of(7, Some("question"), 3)).unwrap();
+    assert_eq!(status::read(&data), Some(status_of(7, Some("question"), 3)));
+    status::remove(&data);
+    assert!(status::read(&data).is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_running_server_writes_its_status_says_how_to_pair_and_removes_it_at_its_stop() {
+    let capturing = capture_log();
+    let (_dir, data) = data("server-status");
+    let (api, stop, task) = started(data.clone()).await;
+    let mut seen = None;
+    for _ in 0..100 {
+        if let Some(s) = status::read(&data) {
+            seen = Some(s);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let s = seen.expect("the status is written");
+    assert_eq!(s.pid, std::process::id());
+    assert_eq!(s.version, VERSION);
+    assert_eq!(s.busy, None, "at rest");
+    assert_eq!(s.api, format!("127.0.0.1:{}", api.addr().port()));
+    assert!(status::healthy(&s, crate::model::now_ms(), status::alive).is_ok() || !cfg!(unix));
+    stop.send(()).unwrap();
+    task.await.unwrap().unwrap();
+    assert!(status::read(&data).is_none(), "removed at the stop");
+    if capturing && std::env::var_os("NEXTEST_RUN_ID").is_some() {
+        let lines = captured().lock().unwrap().join("\n");
+        assert!(
+            lines.contains("escouade-server pair"),
+            "the log says how to pair: {lines}"
+        );
+    }
+    assert!(server::first_start_hint(Some(status::Supervisor::Docker))
+        .contains("docker exec <container> escouade-server pair"));
+    assert!(!server::first_start_hint(None).contains("docker"));
+}
+
+/// A WebSocket opened with `host` in its `Host`.
+async fn open_as(addr: SocketAddr, host: &str) -> Result<Ws, String> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let mut req = format!("ws://{addr}{}", proto::PATH)
+        .into_client_request()
+        .unwrap();
+    req.headers_mut().insert("host", host.parse().unwrap());
+    tokio_tungstenite::client_async(req, tcp)
+        .await
+        .map(|(ws, _)| ws)
+        .map_err(|e| e.to_string())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_name_a_tls_proxy_serves_the_api_under_is_taken_when_asked_for_and_any_other_still_refused(
+) {
+    let (_dir, data) = data("server-allow-host");
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+    let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+    let task = tokio::spawn(async move {
+        server::serve(
+            data,
+            Endpoint {
+                hosts: vec!["escouade.example.org".into()],
+                ..Endpoint::default()
+            },
+            Limits::default(),
+            move |api| {
+                let _ = ready_tx.send(api.addr());
+            },
+            async move {
+                let _ = stop_rx.await;
+                "SIGTERM"
+            },
+        )
+        .await
+    });
+    let addr = ready_rx.await.unwrap();
+    for host in [
+        "escouade.example.org",
+        "Escouade.Example.org:443",
+        "127.0.0.1:9",
+    ] {
+        let mut ws = open_as(addr, host)
+            .await
+            .unwrap_or_else(|e| panic!("{host}: {e}"));
+        send(
+            &mut ws,
+            &ToServer::Hello {
+                version: VERSION.into(),
+                token: String::new(),
+                session: None,
+            },
+        )
+        .await;
+        let answer = next(&mut ws).await.expect("an answer");
+        assert!(
+            matches!(&answer, ToClient::Refused { code, .. } if code == "token"),
+            "{host}: {answer:?}"
+        );
+    }
+    for host in ["evil.example.org", "escouade.example.org.evil.org", "[::2]"] {
+        let refused = open_as(addr, host).await;
+        assert!(
+            refused.is_err(),
+            "{host} is refused before the WebSocket opens"
+        );
+    }
+    stop_tx.send(()).unwrap();
+    task.await.unwrap().unwrap();
+}
+
+#[test]
+fn a_server_older_than_its_client_says_how_to_put_it_at_the_client_s_version() {
+    let by_command = proto::server_update("2.3.1", false);
+    assert_eq!(by_command.how, "command");
+    assert_eq!(by_command.command, "escouade-server update --to 2.3.1");
+    let by_image = proto::server_update("2.3.1", true);
+    assert_eq!(by_image.how, "image");
+    assert!(
+        by_image
+            .command
+            .contains("ghcr.io/guillaume-gagnaire/escouade/escouade-server:2.3.1"),
+        "{}",
+        by_image.command
+    );
+    // What a client sends is never more than a version in it.
+    assert_eq!(
+        proto::server_update("2.3.1; rm -rf ~", false).command,
+        "escouade-server update --to 2.3.1rm-rf"
+    );
 }

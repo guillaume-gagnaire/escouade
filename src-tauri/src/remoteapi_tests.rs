@@ -519,12 +519,15 @@ async fn a_client_of_another_version_is_refused_and_told_which_one_to_update() {
             error,
             server_version,
             update,
+            server_update,
             ..
         } => {
             assert_eq!(code, codes::VERSION);
             assert_eq!(server_version.as_deref(), Some(VERSION));
-            // The client is newer: « Mettre à jour le serveur ».
+            // The client is newer: « Mettre à jour le serveur », and how (ESC-515).
             assert_eq!(update.as_deref(), Some("server"));
+            let how = server_update.as_ref().expect("how to update the server");
+            assert_eq!(how.command, "escouade-server update --to 999.0.0");
             assert!(
                 error.contains(VERSION) && error.contains("999.0.0"),
                 "{error}"
@@ -535,7 +538,7 @@ async fn a_client_of_another_version_is_refused_and_told_which_one_to_update() {
     assert!(c.closed().await);
     let (mut c, refused) = Client::hello(&api, "0.0.1", &token).await;
     assert!(
-        matches!(&refused, ToClient::Refused { update: Some(u), .. } if u == "client"),
+        matches!(&refused, ToClient::Refused { update: Some(u), server_update: None, .. } if u == "client"),
         "{refused:?}"
     );
     assert!(c.closed().await);

@@ -2125,6 +2125,7 @@ dependencies = [
  "hyper-util",
  "libc",
  "log",
+ "minisign-verify 0.3.0",
  "notify",
  "objc2",
  "os_info",

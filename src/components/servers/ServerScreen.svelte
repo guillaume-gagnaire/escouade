@@ -19,7 +19,13 @@
     if (!r) return connection.state === 'refused' ? { kind: 'refused', code: 'error', message: connection.reason } : null;
     if (r.code === 'token') return { kind: 'revoked', revoked: r.revoked };
     if (r.code === 'version')
-      return { kind: 'version', server: r.serverVersion ?? '?', client: r.clientVersion ?? app.version, update: r.update ?? 'server' };
+      return {
+        kind: 'version',
+        server: r.serverVersion ?? '?',
+        client: r.clientVersion ?? app.version,
+        update: r.update ?? 'server',
+        serverUpdate: r.serverUpdate,
+      };
     if (r.code === 'policy') return { kind: 'policy', message: r.error };
     return { kind: 'refused', code: r.code, message: r.error };
   });

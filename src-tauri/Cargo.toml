@@ -87,6 +87,10 @@ notify = "8"
 rusqlite = { version = "0.41", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 base64 = "0.23"
+# escouade-server update (ESC-515): the archive of a release, its signature checked with the updater's key.
+minisign-verify = "0.3"
+flate2 = "1"
+tar = { version = "0.4", default-features = false }
 log = "0.4"
 # The system's language, in the usage statistics (`telemetry`).
 sys-locale = "0.3"
@@ -310,8 +314,6 @@ escouade-model = { path = "../crates/escouade-model", features = ["testing"] }
 escouade-engines = { path = "../crates/escouade-engines", features = ["testing"] }
 # The modules and the archives the tests of the plugins make by hand (those that stay here: a `core`, the fake services).
 wasmtime = { version = "=50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation", "call-hook"] }
-flate2 = "1"
-tar = { version = "0.4", default-features = false }
 # The host as the tests start it (the secrets in memory, the runtime of the workspace's plugins, the fake isola).
 escouade-plugins = { path = "../crates/escouade-plugins", features = ["testing"] }
 # The hosts and the sources as the tests have them (the secrets in memory, the fake services, a host served by its plugin).

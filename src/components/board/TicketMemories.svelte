@@ -26,7 +26,8 @@
     }
     try {
       const got = await teamMemoryApi.ofTicket(id, key);
-      if (id === project.id && key === ticket.key) left = got;
+      // No answer (a core without the team's memory) is none left.
+      if (id === project.id && key === ticket.key) left = Array.isArray(got) ? got : [];
     } catch {
       left = [];
     }

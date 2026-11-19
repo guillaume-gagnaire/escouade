@@ -282,8 +282,7 @@ async fn started(data: DataDir) -> (Arc<RemoteApi>, tokio::sync::oneshot::Sender
     tokio::spawn(async move {
         server::serve(
             data,
-            None,
-            0,
+            server::Endpoint::port(0),
             Limits::default(),
             move |api| {
                 let _ = ready_tx.send(api.clone());
@@ -569,10 +568,13 @@ async fn another_version_is_refused_with_the_side_to_update() {
             server,
             client,
             update,
+            server_update,
         } => {
             assert_eq!(server, VERSION);
             assert_eq!(client, "0.0.1");
             assert_eq!(update, "client");
+            // The client is the older: no command for the server (ESC-515).
+            assert_eq!(server_update, None);
         }
         p => panic!("{p:?}"),
     }
@@ -744,4 +746,44 @@ async fn the_server_answers_a_ping_at_once_and_says_the_machine_it_runs_on() {
     .await
     .unwrap();
     assert_eq!(pong, 7);
+}
+
+/// A server older than this client says how to put it at the client's version (ESC-515): the client keeps it in its
+/// problem, for « Mettre à jour le serveur ».
+#[test]
+fn a_refusal_of_the_versions_keeps_how_to_update_the_server() {
+    let how = crate::remoteapi::proto::server_update("2.3.1", false);
+    let refused = crate::servers::client::Refusal::Refused {
+        code: "version".into(),
+        error: "Le serveur est en 2.3.0, ce client en 2.3.1 : mettre à jour le serveur.".into(),
+        server_version: Some("2.3.0".into()),
+        update: Some("server".into()),
+        reason: None,
+        revoked: None,
+        server_update: Some(how.clone()),
+    };
+    match Problem::of_refusal(refused, None, "2.3.1") {
+        Problem::Version {
+            server,
+            client,
+            update,
+            server_update,
+        } => {
+            assert_eq!(
+                (server.as_str(), client.as_str(), update.as_str()),
+                ("2.3.0", "2.3.1", "server")
+            );
+            assert_eq!(server_update, Some(how));
+        }
+        p => panic!("{p:?}"),
+    }
+    // As the window reads it.
+    let json = serde_json::to_value(Problem::Version {
+        server: "2.3.0".into(),
+        client: "2.3.1".into(),
+        update: "server".into(),
+        server_update: Some(crate::remoteapi::proto::server_update("2.3.1", true)),
+    })
+    .unwrap();
+    assert_eq!(json["serverUpdate"]["how"], "image");
 }

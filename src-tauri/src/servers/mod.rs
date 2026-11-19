@@ -113,11 +113,14 @@ pub enum Problem {
     NoEscouade { output: String, command: String },
     /// The pairing code refused: `wrong`, `expired`, `none`, `tries`.
     Code { reason: String, message: String },
-    /// Not the same version: which side to update.
+    /// Not the same version: which side to update, and for the server how, when it said it (ESC-515).
+    #[serde(rename_all = "camelCase")]
     Version {
         server: String,
         client: String,
         update: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        server_update: Option<crate::remoteapi::proto::ServerUpdate>,
     },
     /// This computer's token is no longer good there: revoked (when, by whom) or unknown.
     Revoked {
@@ -148,7 +151,11 @@ impl Problem {
         }
     }
 
-    fn of_refusal(r: client::Refusal, tunnel: Option<&Tunnel>, client_version: &str) -> Problem {
+    pub(crate) fn of_refusal(
+        r: client::Refusal,
+        tunnel: Option<&Tunnel>,
+        client_version: &str,
+    ) -> Problem {
         match r {
             client::Refusal::NoEscouade { detail } => {
                 let output = tunnel
@@ -173,11 +180,13 @@ impl Problem {
                 update,
                 reason,
                 revoked,
+                server_update,
             } => match code.as_str() {
                 "version" => Problem::Version {
                     server: server_version.unwrap_or_default(),
                     client: client_version.to_string(),
                     update: update.unwrap_or_else(|| "server".into()),
+                    server_update,
                 },
                 "token" => Problem::Revoked { revoked },
                 "pairing" => Problem::Code {
@@ -555,6 +564,8 @@ impl Servers {
                 server: version.clone(),
                 client: self.version.clone(),
                 update: crate::remoteapi::proto::to_update(&version, &self.version).into(),
+                // Read before the pairing, from a refusal of the token: how is not said yet.
+                server_update: None,
             });
         }
         let name = existing

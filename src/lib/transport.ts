@@ -23,7 +23,7 @@
  */
 
 import { Channel as TauriChannel, invoke as tauriInvoke } from '@tauri-apps/api/core';
-import { connection, type ServerInfo, type ServerProblem } from './connection.svelte';
+import { connection, type ServerInfo, type ServerProblem, type ServerUpdate } from './connection.svelte';
 import { fSize } from './format';
 import { t } from './i18n';
 
@@ -100,6 +100,14 @@ const MAX_MESSAGE = 16 << 20;
 export const RETRY_DELAYS = [250, 500, 1000, 2000, 4000, 5000];
 /** The refusals that stop the tries: nothing changes by trying again. */
 const FINAL = new Set(['token', 'version', 'policy']);
+
+/** How a refusal of the versions says to put the server at the client's version (ESC-515), when it says it. */
+export function serverUpdateOf(m: Record<string, any>): ServerUpdate | undefined {
+  const how = m.serverUpdate?.how;
+  const command = m.serverUpdate?.command;
+  if ((how !== 'command' && how !== 'image') || typeof command !== 'string' || !command) return undefined;
+  return { how, command };
+}
 
 /** The text the window shows for an error the remote API named, in its own language (the core's text else). */
 export function namedError(code: string, command: string, fallback: unknown): unknown {
@@ -325,6 +333,7 @@ export class RemoteTransport {
             update: typeof m.update === 'string' ? m.update : undefined,
             clientVersion: this.link.version,
             revoked: m.revoked && typeof m.revoked === 'object' ? m.revoked : undefined,
+            serverUpdate: serverUpdateOf(m),
           };
         }
         return;

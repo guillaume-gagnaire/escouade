@@ -287,7 +287,7 @@ export const en: Catalog = {
       },
       {
         q: 'Where does my data go?',
-        a: 'Nowhere: projects, conversations and statistics stay on your machine, in ~/.escouade/. The network is only used by the harnesses themselves, to read your quotas, for updates and, if you connect them, for Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure Boards, where an imported ticket gets its status and comments.',
+        a: 'Nowhere: projects, conversations and statistics stay on your machine, in ~/.escouade/. The network is only used by the harnesses themselves, to read your quotas, for updates and, if you connect them, for Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure Boards, where an imported ticket gets its status and comments. In server mode, all of it lives on your server, your accounts’ sign-ins included: its security becomes theirs.',
       },
       {
         q: 'What about my Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure Boards tokens?',
@@ -373,7 +373,10 @@ export const en: Catalog = {
     },
     pageTitle: '{title} · Escouade documentation',
     groups: {
-      start: { title: 'Get started', text: 'What Escouade is, installing it, choosing your harnesses and your first steps.' },
+      start: {
+        title: 'Get started',
+        text: 'What Escouade is, installing it on your computer or on a server, choosing your harnesses and your first steps.',
+      },
       agents: {
         title: 'Agents and chat',
         text: 'Start agents, talk to them, follow their work and hear from them when they need you.',
@@ -401,6 +404,7 @@ export const en: Catalog = {
     pages: {
       introduction: 'Introduction',
       installation: 'Installation',
+      server: 'Server mode',
       harness: 'The harnesses',
       'quick-start': 'Quick start',
       interface: 'The interface',

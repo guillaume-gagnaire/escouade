@@ -69,6 +69,7 @@ Les jetons ne sont pas dans les réglages :
 - **Serveur MCP.** Le jeton de Claude hors Escouade est dans le trousseau (une entrée `mcp`), sinon dans `mcp-token.json`. Celui de chaque agent est dans son `mcp/<agent>.json`, qui disparaît avec son processus.
 - **Dictée en ligne.** La clé de chaque service est dans le trousseau, une entrée par service (`dictation-openai`, `dictation-groq`, `dictation-mistral`, `dictation-elevenlabs`, `dictation-deepgram`), jamais dans un fichier : sous Linux, elle ne peut pas être enregistrée. « Effacer la clé », dans Réglages › Voix, retire son entrée. Voir [la dictée](chat).
 - **Connexion de Claude Code.** Elle n’est pas à Escouade : Claude Code la garde dans le dossier de chaque compte (le fichier `.credentials.json`), et sous macOS dans le trousseau. Voir [les comptes Claude](accounts).
+- **En mode serveur.** Un serveur n’a pas de trousseau : tous ces secrets, et les jetons des appareils appairés, sont dans `secrets.json` du dossier de données, lisible de son seul propriétaire, et les connexions des comptes vivent sur le serveur. Voir [Ce que garde le serveur](server#ce-que-garde-le-serveur).
 
 Pour retirer un jeton, déconnecte le service dans Réglages › Services connectés : son entrée quitte le trousseau. Voir [les intégrations](integrations).
 

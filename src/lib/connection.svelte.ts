@@ -10,6 +10,10 @@
  * its machine), `latency` the last way there and back, `lostAt` when the connection went, `tries` and `retryAt` the
  * tries since and when the next one comes, `refusal` what the server answered when it stopped them (a revoked token
  * says when and by whom; another version says which side to update), `problem` why the tunnel itself stopped.
+ *
+ * `serverUpdate` (ESC-515), in a refusal of the versions and its problem, when the server is the one to update: how to
+ * put it at this window's version, `command` (`escouade-server update --to <version>`, run on it: it checks the
+ * signature and waits for the turns) or `image` (a new image of its container), with what to run.
  */
 export type ConnectionState = 'local' | 'connecting' | 'open' | 'lost' | 'refused';
 
@@ -28,6 +32,12 @@ export interface ServerInfo {
   active: boolean;
 }
 
+/** How to put a server at the client's version (`remoteapi::proto::ServerUpdate`, ESC-515). */
+export interface ServerUpdate {
+  how: 'command' | 'image';
+  command: string;
+}
+
 /** What went wrong with a server (`servers::Problem`, `docs/SERVER-UX.md` § 3). */
 export type ServerProblem =
   | { kind: 'policy'; message: string }
@@ -35,7 +45,7 @@ export type ServerProblem =
   | { kind: 'hostKey'; changed: boolean; output: string; command: string }
   | { kind: 'noEscouade'; output: string; command: string }
   | { kind: 'code'; reason: string; message: string }
-  | { kind: 'version'; server: string; client: string; update: string }
+  | { kind: 'version'; server: string; client: string; update: string; serverUpdate?: ServerUpdate }
   | { kind: 'revoked'; revoked?: { device: string; at: number; by?: string } }
   | { kind: 'refused'; code: string; message: string };
 
@@ -48,6 +58,8 @@ export interface Refusal {
   /** This window's version, as it said it. */
   clientVersion?: string;
   revoked?: { device: string; at: number; by?: string };
+  /** For the server to update: how (ESC-515). */
+  serverUpdate?: ServerUpdate;
 }
 
 export const connection = $state<{

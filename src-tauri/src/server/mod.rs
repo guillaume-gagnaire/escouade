@@ -8,14 +8,22 @@
 //! - `escouade-server [run]`: the server;
 //! - `escouade-server pair`: a pairing code for a new device, once and briefly (`remoteapi::pairing`);
 //! - `escouade-server devices [list]`, `devices revoke <id>`: the paired devices;
+//! - `escouade-server health`: whether the server of the folder runs and still answers (the image's `HEALTHCHECK`);
+//! - `escouade-server update [--to X.Y.Z] [--beta] [--now] [--check]`: the server at a signed version (`update`);
 //! - `--data-dir <folder>` (else `~/.escouade`), `--port <n>` (else [`DEFAULT_PORT`]), `--listen <address>` (another
-//!   interface than 127.0.0.1: for Docker, behind a tunnel or a proxy; it warns), `--debug`, `--version`, `--help`.
+//!   interface than 127.0.0.1: for Docker, behind a tunnel or a proxy; it warns), `--allow-host <name>` (a `Host`
+//!   the API takes besides the loopback's: the name a TLS proxy serves it under), `--debug`, `--version`, `--help`.
+//! - Their variables, for a container (ESC-515): `ESCOUADE_SERVER_DATA`, `ESCOUADE_SERVER_PORT`, `ESCOUADE_SERVER_LISTEN`,
+//!   `ESCOUADE_SERVER_ALLOW_HOSTS` (names separated by commas); an option given wins over its variable. So
+//!   `docker exec <container> escouade-server pair` finds the folder of the server it runs beside.
 //!
 //! Built without the desktop (`cargo build --bin escouade-server --no-default-features`: no WebKit, no GTK, docs/CRATES.md
 //! § 14); it builds with it too (the e2e under Windows).
 
 pub mod logs;
 pub mod secrets;
+pub mod status;
+pub mod update;
 
 use crate::headless::Headless;
 use crate::host::HeadlessHost;
@@ -32,6 +40,12 @@ use std::sync::Arc;
 /// The port of the remote API when `--port` gives none.
 pub const DEFAULT_PORT: u16 = 46480;
 
+/// The variables that stand for the options (an option given wins).
+pub const DATA_VAR: &str = "ESCOUADE_SERVER_DATA";
+pub const PORT_VAR: &str = "ESCOUADE_SERVER_PORT";
+pub const LISTEN_VAR: &str = "ESCOUADE_SERVER_LISTEN";
+pub const HOSTS_VAR: &str = "ESCOUADE_SERVER_ALLOW_HOSTS";
+
 /// What the command line asks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -39,6 +53,8 @@ pub enum Command {
     Pair,
     Devices,
     Revoke(String),
+    Health,
+    Update,
     Version,
     Help,
 }
@@ -51,19 +67,49 @@ pub struct Args {
     pub port: u16,
     /// Another address than 127.0.0.1, asked for in so many words.
     pub listen: Option<IpAddr>,
+    /// The names the API takes in a `Host` besides the loopback's (`--allow-host`).
+    pub hosts: Vec<String>,
     pub debug: bool,
+    /// What `update` is asked.
+    pub update: update::Asked,
 }
 
-/// The command line `args` (without the program's name). `--help` anywhere is the help, whatever else is there:
-/// never a command run in its place.
+/// The command line `args` (without the program's name), with the process's variables. `--help` anywhere is the
+/// help, whatever else is there: never a command run in its place.
 pub fn parse(args: &[String]) -> std::result::Result<Args, String> {
+    parse_with(args, |name| std::env::var(name).ok())
+}
+
+/// The same, with the variables `var` gives.
+pub fn parse_with(
+    args: &[String],
+    var: impl Fn(&str) -> Option<String>,
+) -> std::result::Result<Args, String> {
+    let var = |name: &str| {
+        var(name)
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+    };
     let mut out = Args {
         command: Command::Run,
-        data_dir: None,
+        data_dir: var(DATA_VAR).map(PathBuf::from),
         port: DEFAULT_PORT,
         listen: None,
+        hosts: Vec::new(),
         debug: false,
+        update: update::Asked::default(),
     };
+    if let Some(v) = var(PORT_VAR) {
+        out.port = port_of(&v)?;
+    }
+    if let Some(v) = var(LISTEN_VAR) {
+        out.listen = Some(ip_of(&v)?);
+    }
+    if let Some(v) = var(HOSTS_VAR) {
+        for h in v.split(',').map(str::trim).filter(|h| !h.is_empty()) {
+            out.hosts.push(host_of(h)?);
+        }
+    }
     if args
         .iter()
         .any(|a| a == "-h" || a == "--help" || a == "help")
@@ -79,6 +125,7 @@ pub fn parse(args: &[String]) -> std::result::Result<Args, String> {
         return Ok(out);
     }
     let mut words = Vec::new();
+    let mut update_flags = false;
     let mut it = args.iter();
     while let Some(arg) = it.next() {
         let (flag, inline) = match arg.split_once('=') {
@@ -94,25 +141,29 @@ pub fn parse(args: &[String]) -> std::result::Result<Args, String> {
         };
         match flag {
             "--data-dir" => out.data_dir = Some(PathBuf::from(value("--data-dir")?)),
-            "--port" => {
-                let v = value("--port")?;
-                out.port = v.parse().map_err(|_| {
-                    tr!(
-                        "--port : « {v} » n’est pas un port",
-                        "--port: “{v}” is not a port"
-                    )
-                })?;
-            }
-            "--listen" => {
-                let v = value("--listen")?;
-                out.listen = Some(v.parse().map_err(|_| {
-                    tr!(
-                        "--listen : « {v} » n’est pas une adresse IP",
-                        "--listen: “{v}” is not an IP address"
-                    )
-                })?);
+            "--port" => out.port = port_of(&value("--port")?)?,
+            "--listen" => out.listen = Some(ip_of(&value("--listen")?)?),
+            "--allow-host" => {
+                let v = host_of(&value("--allow-host")?)?;
+                out.hosts.push(v);
             }
             "--debug" => out.debug = true,
+            "--to" => {
+                update_flags = true;
+                out.update.to = Some(value("--to")?);
+            }
+            "--beta" => {
+                update_flags = true;
+                out.update.beta = true;
+            }
+            "--now" => {
+                update_flags = true;
+                out.update.now = true;
+            }
+            "--check" => {
+                update_flags = true;
+                out.update.check = true;
+            }
             f if f.starts_with('-') => {
                 return Err(tr!("option inconnue : {f}", "unknown option: {f}"))
             }
@@ -124,6 +175,8 @@ pub fn parse(args: &[String]) -> std::result::Result<Args, String> {
         ["pair"] => Command::Pair,
         ["devices"] | ["devices", "list"] => Command::Devices,
         ["devices", "revoke", id] => Command::Revoke(id.to_string()),
+        ["health"] => Command::Health,
+        ["update"] => Command::Update,
         ["devices", "revoke"] => {
             return Err(tr!(
                 "devices revoke attend l’id d’un appareil (escouade-server devices)",
@@ -138,7 +191,56 @@ pub fn parse(args: &[String]) -> std::result::Result<Args, String> {
             ))
         }
     };
+    if update_flags && out.command != Command::Update {
+        return Err(tr!(
+            "--to, --beta, --now et --check vont avec « update »",
+            "--to, --beta, --now and --check go with “update”"
+        ));
+    }
+    if let Some(to) = &out.update.to {
+        if !update::is_version(to.trim_start_matches('v')) {
+            return Err(tr!(
+                "--to : « {to} » n’est pas une version (X.Y.Z)",
+                "--to: “{to}” is not a version (X.Y.Z)"
+            ));
+        }
+    }
     Ok(out)
+}
+
+fn port_of(v: &str) -> std::result::Result<u16, String> {
+    v.parse().map_err(|_| {
+        tr!(
+            "--port : « {v} » n’est pas un port",
+            "--port: “{v}” is not a port"
+        )
+    })
+}
+
+fn ip_of(v: &str) -> std::result::Result<IpAddr, String> {
+    v.parse().map_err(|_| {
+        tr!(
+            "--listen : « {v} » n’est pas une adresse IP",
+            "--listen: “{v}” is not an IP address"
+        )
+    })
+}
+
+/// A host name (`--allow-host`), in lower case: letters, digits, dots and dashes; never one of the loopback's, which
+/// the API takes already.
+fn host_of(v: &str) -> std::result::Result<String, String> {
+    let v = v.trim().to_ascii_lowercase();
+    if v.is_empty()
+        || !v
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    {
+        return Err(tr!(
+            "--allow-host : « {v} » n’est pas un nom d’hôte",
+            "--allow-host: “{v}” is not a host name"
+        ));
+    }
+    Ok(v)
 }
 
 /// The help.
@@ -149,11 +251,14 @@ pub fn help() -> String {
          escouade-server [run]              sert l’API distante sur 127.0.0.1 (port {port})\n  \
          escouade-server pair               un code d’appairage pour un nouvel appareil (10 min, une fois)\n  \
          escouade-server devices            les appareils appairés\n  \
-         escouade-server devices revoke ID  révoque un appareil\n\n\
+         escouade-server devices revoke ID  révoque un appareil\n  \
+         escouade-server health             le serveur tourne-t-il et répond-il ? (code 0 si oui)\n  \
+         escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z, --beta, --now, --check)\n\n\
          Options :\n  \
          --data-dir DOSSIER  le dossier des données (sinon ~/.escouade)\n  \
          --port N            le port de l’API distante (sinon {port})\n  \
          --listen ADRESSE    écoute sur une autre adresse que 127.0.0.1 (Docker, un tunnel, un proxy) : à ne jamais exposer sur Internet\n  \
+         --allow-host NOM    accepte ce nom dans l’en-tête Host (celui d’un proxy TLS devant le serveur)\n  \
          --debug             le journal en détail\n  \
          --version, --help",
         "escouade-server {version}: Escouade's core without a window, driven from afar.\n\n\
@@ -161,11 +266,14 @@ pub fn help() -> String {
          escouade-server [run]              serves the remote API on 127.0.0.1 (port {port})\n  \
          escouade-server pair               a pairing code for a new device (10 min, once)\n  \
          escouade-server devices            the paired devices\n  \
-         escouade-server devices revoke ID  revokes a device\n\n\
+         escouade-server devices revoke ID  revokes a device\n  \
+         escouade-server health             does the server run and answer? (exit code 0 if so)\n  \
+         escouade-server update             puts the server at the latest signed version (--to X.Y.Z, --beta, --now, --check)\n\n\
          Options:\n  \
          --data-dir FOLDER  the data folder (else ~/.escouade)\n  \
          --port N           the port of the remote API (else {port})\n  \
          --listen ADDRESS   listens on another address than 127.0.0.1 (Docker, a tunnel, a proxy): never to expose to the Internet\n  \
+         --allow-host NAME  takes this name in the Host header (a TLS proxy's in front of the server)\n  \
          --debug            a detailed log\n  \
          --version, --help",
         version = env!("CARGO_PKG_VERSION"),
@@ -195,7 +303,13 @@ fn speak_as_the_settings(args: &[String]) {
             args.iter()
                 .find_map(|a| a.strip_prefix("--data-dir=").map(String::from))
         })
-        .map(PathBuf::from);
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var(DATA_VAR)
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .map(PathBuf::from)
+        });
     let root = named.unwrap_or_else(crate::paths::default_data_dir);
     let settings: serde_json::Value = std::fs::read(DataDir::new(root).settings_file())
         .ok()
@@ -227,6 +341,8 @@ pub fn main(args: Vec<String>) -> i32 {
         Command::Pair => pair(&args),
         Command::Devices => devices(&args),
         Command::Revoke(id) => revoke(&args, id),
+        Command::Health => health(&args),
+        Command::Update => data_of(&args).and_then(|data| update::run(&data, &args.update)),
         Command::Run => run(&args),
     };
     match done {
@@ -318,6 +434,30 @@ fn revoke(args: &Args, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// `health`: the server of the folder runs and still writes its status (`status`): exit code 0, else 1 and why.
+fn health(args: &Args) -> Result<()> {
+    let data = data_of(args)?;
+    let Some(s) = status::read(&data) else {
+        bail!(tr!(
+            "aucun serveur lancé sur {}",
+            "no server running on {}",
+            data.root().display()
+        ));
+    };
+    status::healthy(&s, crate::model::now_ms(), status::alive).map_err(|e| anyhow!(e))?;
+    println!(
+        "{}",
+        tr!(
+            "escouade-server {} en marche (processus {}, API sur {})",
+            "escouade-server {} running (process {}, API on {})",
+            s.version,
+            s.pid,
+            s.api
+        )
+    );
+    Ok(())
+}
+
 /// The folder of the resources beside the program (the seed of the plugins, `seed/`), when it has one.
 fn resources() -> Option<PathBuf> {
     std::env::current_exe()
@@ -363,12 +503,14 @@ fn run(args: &Args) -> Result<()> {
         .build()?;
     // What the core spawns runs on this runtime.
     tauri::async_runtime::set(runtime.handle().clone());
-    let listen = args.listen;
-    let port = args.port;
+    let endpoint = Endpoint {
+        listen: args.listen,
+        port: args.port,
+        hosts: args.hosts.clone(),
+    };
     let done = runtime.block_on(serve(
         data,
-        listen,
-        port,
+        endpoint,
         Limits::default(),
         |_| {},
         stop_asked(),
@@ -400,12 +542,31 @@ fn listen_on(listen: Option<IpAddr>, port: u16) -> Result<Listen> {
     }
 }
 
+/// Where the API listens, and the names it takes in a `Host` besides the loopback's.
+#[derive(Debug, Clone, Default)]
+pub struct Endpoint {
+    /// Another address than 127.0.0.1, asked for in so many words (`--listen`).
+    pub listen: Option<IpAddr>,
+    pub port: u16,
+    /// `--allow-host`.
+    pub hosts: Vec<String>,
+}
+
+impl Endpoint {
+    /// 127.0.0.1:`port`.
+    pub fn port(port: u16) -> Self {
+        Self {
+            port,
+            ..Self::default()
+        }
+    }
+}
+
 /// The server on `data`: the core started, the API served (`ready` is told it), until `stop` comes; then the API
 /// closed and the core stopped as when the app quits, its state written. On a runtime of Tokio.
 pub async fn serve(
     data: DataDir,
-    listen: Option<IpAddr>,
-    port: u16,
+    endpoint: Endpoint,
     limits: Limits,
     ready: impl FnOnce(&Arc<RemoteApi>),
     stop: impl Future<Output = &'static str>,
@@ -415,6 +576,8 @@ pub async fn serve(
     let store = Arc::new(secrets::FileStore::open(&data)?);
     let host = Arc::new(HeadlessHost::new(resources()).with_secrets(store.clone()));
     let root = data.root().to_path_buf();
+    let listen = endpoint.listen;
+    let port = endpoint.port;
     // The process groups of agents a killed server left behind, stopped before any agent starts (as the app).
     crate::agentgroups::start(root.join("agent-groups.json"));
     let headless = Headless::start_locked(lock, data, host);
@@ -429,6 +592,7 @@ pub async fn serve(
             return Err(e);
         }
     };
+    api.allow_hosts(endpoint.hosts.clone());
     let addr = api.addr();
     let shown = match listen {
         Some(ip) if !ip.is_loopback() => addr.to_string(),
@@ -448,12 +612,75 @@ pub async fn serve(
     tauri::async_runtime::spawn_blocking(move || warm.warm_claude());
     core.read_all_account_models();
     crate::selfupdate::watch(core.clone());
+    if !endpoint.hosts.is_empty() {
+        log::info!(
+            "escouade-server: the API takes the Host {} besides the loopback's (--allow-host)",
+            endpoint.hosts.join(", ")
+        );
+    }
+    // A new server: what to do to reach it, never the code itself (`pair` prints it, on its own output).
+    if api.devices().list().is_empty() {
+        log::info!("{}", first_start_hint(status::supervisor()));
+    }
+    // What it says of itself, for `health` and `update` beside it.
+    let writer = tauri::async_runtime::spawn(write_status(core.clone(), shown.clone()));
     ready(&api);
     let why = stop.await;
     log::info!("escouade-server: {why}: stopping (the agents' turns are cut, the state written)");
+    writer.abort();
+    let status_data = core.data.clone();
+    drop(core);
     stop_core(headless).await;
+    status::remove(&status_data);
     log::info!("escouade-server: stopped");
     Ok(())
+}
+
+/// What the log of a server with no paired device says: how to pair one (never a code).
+pub fn first_start_hint(supervisor: Option<status::Supervisor>) -> String {
+    let how = if supervisor == Some(status::Supervisor::Docker) {
+        "docker exec <container> escouade-server pair"
+    } else {
+        "escouade-server pair"
+    };
+    tr!(
+        "Aucun appareil appairé. Pour en appairer un : lance « {how} » sur ce serveur, puis donne le code qu’il affiche à Escouade sur ton poste (« Se connecter à un serveur »).",
+        "No paired device. To pair one: run “{how}” on this server, then give the code it prints to Escouade on your computer (“Connect to a server”)."
+    )
+}
+
+/// `server-status.json`, written again every `status::EVERY` and as soon as what would keep a restart waiting
+/// changes (`updates::busy`, as the app's automatic restart reads it), until the task is stopped.
+async fn write_status(core: Arc<crate::core::Core>, api: String) {
+    let updates = crate::updates::Updates::default();
+    let supervisor = status::supervisor();
+    let started_at = crate::model::now_ms();
+    let mut written: Option<(Option<String>, usize)> = None;
+    let mut last = std::time::Instant::now();
+    loop {
+        let now = crate::model::now_ms();
+        let snapshot = crate::updates::snapshot(&core, &updates, now);
+        let busy = crate::updates::busy(&snapshot).map(|b| status::busy_word(b).to_string());
+        let seen = (busy.clone(), snapshot.turns);
+        if written.as_ref() != Some(&seen) || last.elapsed() >= status::EVERY {
+            let s = status::Status {
+                pid: std::process::id(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                api: api.clone(),
+                started_at,
+                at: now,
+                busy,
+                turns: snapshot.turns,
+                supervisor,
+            };
+            if let Err(e) = status::write(&core.data, &s) {
+                log::warn!("escouade-server: {} not written: {e:#}", status::FILE);
+            }
+            written = Some(seen);
+            last = std::time::Instant::now();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
 }
 
 /// The core stopped off the runtime's threads (its plugins are waited for): the API closed, the agents, terminals and
