@@ -14,6 +14,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Plugins : un plugin peut demander jusqu’à 16 programmes à la fois au lieu de 4 ; la fenêtre d’installation et l’onglet Permissions le disent avec la raison de son auteur, et une mise à jour qui en demande plus redemande ton accord.
 - Un secret long (une configuration VPN avec ses certificats, jusqu’à 64 Kio) se garde maintenant au trousseau de Windows, qui refusait plus de 1 280 caractères : il y est découpé en morceaux et vérifié à chaque lecture.
 - Sécurité : les plugins tournent sur wasmtime 50.0.2 (RUSTSEC-2026-0566 et RUSTSEC-2026-0567), leurs modules précompilés par l’ancienne version sont refaits, et un plugin qui écrit plus de 256 Mio sur sa sortie en un tour est arrêté au lieu de remplir la mémoire de la machine.
+- Remote control : un agent dont tu as allumé le remote control à la main reste joignable depuis claude.ai, même inactif, et repart avec l’app. Un agent sans process le dit, « En veille : reprend au prochain message », et « Réveiller » le relie aussitôt.
 
 ## [2.2.4] — 2026-11-18
 

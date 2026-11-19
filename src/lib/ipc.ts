@@ -656,6 +656,8 @@ export const api = {
    * whether the change waits for the next launch of the Claude Code interface that is open: Escouade can't change it there.
    */
   setRemoteControl: (id: string, enabled: boolean) => invoke<boolean>('set_remote_control', { id, enabled }),
+  /** « Réveiller » (ESC-544): starts the process of an agent that holds Remote Control with none, which takes its remote session back. */
+  wakeRemote: (id: string) => invoke<void>('wake_remote', { id }),
   /** The statistics of a period: of every account (null) or of one. */
   stats: (range: string, account: string | null = null, engine: string | null = null) =>
     invoke<StatsView>('stats', { range, account, engine }),

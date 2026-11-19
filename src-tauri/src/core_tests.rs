@@ -5520,7 +5520,8 @@ async fn a_remote_agent_gets_its_remote_session_back_after_a_restart() {
 }
 
 /// ESC-417 (issue #26): a process kept for good by each linked agent filled the memory. Idle, a
-/// linked agent stops as the others do; its next process takes the same remote session back.
+/// linked agent stops as the others do; its next process takes the same remote session back. One
+/// turned on by hand does not (ESC-544, `remote_tests`): this one holds it from the setting.
 #[tokio::test]
 async fn a_linked_agent_idle_is_stopped_and_its_next_process_takes_its_remote_session_back() {
     let h = harness("remote-idle");
@@ -5528,6 +5529,8 @@ async fn a_linked_agent_idle_is_stopped_and_its_next_process_takes_its_remote_se
     let remote = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     let local = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.core.set_remote_control(&remote, true).await.unwrap();
+    h.core.settings.write().remote_control_all = true;
+    h.core.agent(&remote).unwrap().lock().meta.remote_source = Some(RemoteSource::Global);
     let session = h.agent(&remote).remote_session.unwrap();
     h.core.ensure_process(&local).await.unwrap();
     for id in [&remote, &local] {

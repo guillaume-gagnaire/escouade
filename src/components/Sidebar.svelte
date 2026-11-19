@@ -38,7 +38,17 @@
   import { answerOf, draftIfAny, draftOf, dropDraft } from '../lib/question-answers.svelte';
   import { revealHidden } from '../lib/recipe';
   import { toolLabel } from '../lib/tools';
-  import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
+  import {
+    canSwitchView,
+    copyRemoteLink,
+    inHarnessView,
+    integrateBase,
+    openRemote,
+    remoteAsleep,
+    switchView,
+    toggleRemote,
+    wakeRemote,
+  } from '../lib/agent-actions';
   import { can, canFork, engineName, offered, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
   import {
@@ -709,12 +719,22 @@
 
   function remoteItems(a: Agent): MenuItem[] {
     if (a.archived || !can(a, 'remoteControl')) return [];
-    const items: MenuItem[] = [
-      { label: '', separator: true },
+    const items: MenuItem[] = [{ label: '', separator: true }];
+    // In the Escouade view, what its link is now (ESC-544): with a process, linked; with none, asleep until its next
+    // message, which « Réveiller » brings forward.
+    if (a.remoteControl && !a.terminal) {
+      if (remoteAsleep(a))
+        items.push(
+          { label: t('nav.sidebar.menu.remoteAsleep'), heading: true },
+          { label: t('nav.sidebar.menu.remoteWake'), onClick: () => wakeRemote(a) },
+        );
+      else items.push({ label: t('nav.sidebar.menu.remoteLinked'), heading: true });
+    }
+    items.push(
       a.remoteControl
         ? { label: t('nav.sidebar.menu.remoteOff'), onClick: () => toggleRemote(a) }
         : { label: t('nav.sidebar.menu.remoteOn'), hint: t('nav.sidebar.menu.remoteOnHint'), onClick: () => toggleRemote(a) },
-    ];
+    );
     // In Claude Code's own interface, the session is the interface's: its link is offered once the interface says it is up.
     if (a.remoteControl && a.remoteUrl && (!a.terminal || a.remoteState === 'connected')) {
       items.push(
@@ -725,13 +745,15 @@
     return items;
   }
 
-  type RemoteState = 'connected' | 'connecting' | 'waiting' | 'noInterface' | 'nextLaunch' | 'unavailable' | 'stillOn';
+  type RemoteState = 'connected' | 'connecting' | 'waiting' | 'asleep' | 'noInterface' | 'nextLaunch' | 'unavailable' | 'stillOn';
 
   /** The state of the remote control icon of an agent's card, null for none: what its link is, or what keeps it. */
   function remoteStateOf(a: Agent): RemoteState | null {
     if (!can(a, 'remoteControl')) return null;
     if (!a.terminal) {
       if (!a.remoteControl) return null;
+      // No process: claude.ai sees it disconnected until its next one (ESC-544).
+      if (remoteAsleep(a)) return 'asleep';
       return a.remoteState === 'connected' ? 'connected' : a.remoteState === 'ready' ? 'connecting' : 'waiting';
     }
     // In Claude Code's view the link is the interface's, which Escouade does not drive: what it reports is the state.
@@ -1161,7 +1183,13 @@
               </span>
             {/if}
             {#if remote}
-              <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
+              <span
+                class="rc"
+                class:on={remote === 'connected'}
+                class:warn={remote === 'stillOn'}
+                class:asleep={remote === 'asleep'}
+                use:tip={remoteTitle(a, remote)}
+              >
                 <Icon name="remote" size={13} />{#if remote === 'stillOn'}<span class="bar" aria-hidden="true"></span>{/if}
               </span>
             {/if}
@@ -2095,6 +2123,10 @@
   /* Off for Escouade, still linked in the interface left open: barred, in the colour of the other warnings. */
   .rc.warn {
     color: var(--wait);
+  }
+  /* Asleep (no process, ESC-544): the session is kept, not reachable until its next process. */
+  .rc.asleep {
+    opacity: 0.55;
   }
   .rc .bar {
     position: absolute;

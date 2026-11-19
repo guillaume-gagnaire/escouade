@@ -114,14 +114,44 @@ pub(crate) fn remote_wanted(meta: &AgentMeta, global: bool, project: bool) -> Op
 /// is done (or stopped on an error) does not, nor one idle for longer. Those keep their Remote
 /// Control and the id of their remote session, with no process: the next one (a message here, a
 /// ticket, a resume) links them, and takes the same session back.
+///
+/// One whose Remote Control the user turned on by hand (`remote_by_hand`, ESC-544) always does,
+/// done or idle: it stays reachable from claude.ai, within the cap of the processes kept.
 pub(crate) fn remote_wants_process(meta: &AgentMeta, now: i64, idle_minutes: u32) -> bool {
-    if meta.status.is_active() {
+    if meta.status.is_active() || remote_by_hand(meta) {
         return true;
     }
     if matches!(meta.status, AgentStatus::Done | AgentStatus::Error) {
         return false;
     }
     idle_minutes == 0 || meta.last_activity >= now - i64::from(idle_minutes) * 60_000
+}
+
+/// How often the idle agents are looked for (`Core::stop_idle_processes`): every minute, unless
+/// `ESCOUADE_IDLE_CHECK_EVERY_MS` says otherwise (the end-to-end tests, ESC-544).
+fn idle_check_every() -> Duration {
+    std::env::var("ESCOUADE_IDLE_CHECK_EVERY_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map_or(Duration::from_secs(60), Duration::from_millis)
+}
+
+/// The delay after which an idle agent's process stops, in ms (0: never): « Arrêter les
+/// processus des agents inactifs après » `minutes`, unless `ESCOUADE_IDLE_STOP_MS` says otherwise
+/// (the end-to-end tests, which cannot wait minutes, ESC-544).
+fn idle_stop_ms(minutes: u32) -> i64 {
+    std::env::var("ESCOUADE_IDLE_STOP_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(i64::from(minutes) * 60_000)
+}
+
+/// Whether the agent of `meta` holds a Remote Control the user turned on by hand, from its menu
+/// (ESC-544): its process is never stopped for being idle, and starts with the app, within the
+/// cap of the processes the Remote Control keeps. One a setting gave keeps the rule of the idle
+/// ones.
+pub(crate) fn remote_by_hand(meta: &AgentMeta) -> bool {
+    !meta.archived && meta.remote_control && meta.remote_source == Some(RemoteSource::Hand)
 }
 
 /// A start of the Remote Control under way, counted against its cap until it is over
@@ -2598,7 +2628,7 @@ impl<R: Runtime> Core<R> {
         let c = self.clone();
         tauri::async_runtime::spawn(async move {
             loop {
-                tokio::time::sleep(Duration::from_secs(60)).await;
+                tokio::time::sleep(idle_check_every()).await;
                 c.stop_idle_processes();
             }
         });
@@ -5230,6 +5260,54 @@ impl<R: Runtime> Core<R> {
         self.start_remote(ids)
     }
 
+    /// « Réveiller » (ESC-544): the agent holds Remote Control but has no process (stopped for
+    /// being idle, over the cap, the app restarted): its process starts and takes its remote
+    /// session back, as its next message would. In the Claude Code view, its interface starts in
+    /// the background. Over the cap, the least recently active others stop (`trim_remote`): one
+    /// just started is the most recently active.
+    pub async fn wake_remote(self: &Arc<Self>, id: &str) -> Result<()> {
+        let h = self.agent(id)?;
+        let (holds, terminal) = {
+            let rt = h.lock();
+            (
+                rt.meta.remote_control && !rt.meta.archived,
+                rt.meta.terminal,
+            )
+        };
+        if !holds {
+            bail!(tr!(
+                "Le remote control de cet agent est éteint.",
+                "This agent's remote control is off."
+            ));
+        }
+        let linked = if terminal {
+            self.start_interface(id).await
+        } else {
+            match self.ensure_process(id).await {
+                Ok(p) => {
+                    let (linked, tried) = {
+                        let rt = h.lock();
+                        (rt.remote_linked, rt.remote_tried)
+                    };
+                    if linked || tried {
+                        Ok(())
+                    } else {
+                        self.link_remote(&h, &p).await
+                    }
+                }
+                Err(e) => Err(e),
+            }
+        };
+        self.emit_agent(&h);
+        self.trim_remote();
+        linked.map_err(|e| {
+            e.context(tr!(
+                "Remote control indisponible",
+                "Remote control unavailable"
+            ))
+        })
+    }
+
     /// The settings applied to the agents `ids` (all of them when the app starts, those of a
     /// project opened again): the ones left in force without a setting that covers them go,
     /// the ones a setting covers come in, and those that hold Remote Control start their process
@@ -5440,11 +5518,11 @@ impl<R: Runtime> Core<R> {
     /// agent resumes it (--resume) and reattaches it.
     pub(crate) fn stop_idle_processes(&self) {
         self.trim_remote();
-        let minutes = self.settings.read().idle_stop_minutes;
-        if minutes == 0 {
+        let delay = idle_stop_ms(self.settings.read().idle_stop_minutes);
+        if delay == 0 {
             return;
         }
-        let limit = now_ms() - minutes as i64 * 60_000;
+        let limit = now_ms() - delay;
         let agents: Vec<AgentHandle> = self.agents.read().values().cloned().collect();
         for h in agents {
             let stopped = {
@@ -5454,8 +5532,11 @@ impl<R: Runtime> Core<R> {
                 // One with a command, a monitor, a subagent or a workflow running in the background
                 // is not idle: they live in its process, which stopping would kill. Nor one waiting
                 // for a job of its session or the wake-up of a loop: they fire only in that process.
+                // Nor one whose Remote Control the user turned on by hand (ESC-544): it stays
+                // reachable, within the cap (`trim_remote`, above).
                 let idle = rt.proc.is_some()
                     && !rt.meta.status.is_active()
+                    && !remote_by_hand(&rt.meta)
                     && !rt
                         .meta
                         .plan

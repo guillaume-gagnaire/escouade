@@ -916,6 +916,7 @@ pub fn run() {
                 commands::project_environments_read,
                 commands::create_agent_on_pr,
                 commands::set_remote_control,
+                commands::wake_remote,
                 commands::stats,
                 commands::refresh_usage,
                 commands::cancel_resume,

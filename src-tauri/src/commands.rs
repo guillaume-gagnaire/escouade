@@ -2889,6 +2889,13 @@ pub async fn set_remote_control(core: CoreState<'_>, id: String, enabled: bool) 
     Ok(at_next_start)
 }
 
+/// « Réveiller » (ESC-544): the agent holds Remote Control with no process; it starts, and takes
+/// its remote session back.
+#[tauri::command]
+pub async fn wake_remote(core: CoreState<'_>, id: String) -> Res<()> {
+    core.wake_remote(&id).await.map_err(err)
+}
+
 // ---------- board ----------
 
 #[tauri::command]

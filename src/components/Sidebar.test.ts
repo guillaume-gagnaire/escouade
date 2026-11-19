@@ -745,6 +745,70 @@ describe('Sidebar remote control', () => {
     expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a1', enabled: false });
   });
 
+  it('says « Relié » for a remote agent with a process, and offers no wake-up', async () => {
+    resetApp({ projects: [project()], agents: [agent({ remoteControl: true, remoteState: 'connected', alive: true })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(items()).toContain('Relié');
+    expect(items()).not.toContain('Réveiller');
+    expect(items()).not.toContain('En veille : reprend au prochain message');
+  });
+
+  it('says a remote agent with no process is asleep, and wakes it up (ESC-544)', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [agent({ remoteControl: true, remoteSource: 'global', remoteState: null, alive: false })],
+    });
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    const tip = getByTip(card, /Remote control : en veille : reprend au prochain message/);
+    expect(tip).toHaveClass('asleep');
+    await fireEvent.contextMenu(card);
+    expect(items()).toEqual(
+      expect.arrayContaining(['En veille : reprend au prochain message', 'Réveiller', 'Désactiver le remote control']),
+    );
+    expect(items()).not.toContain('Relié');
+    expect(menu.open!.items.find((i) => i.label === 'En veille : reprend au prochain message')!.heading).toBe(true);
+    click('Réveiller');
+    await new Promise((r) => setTimeout(r));
+    expect(backend.called('wake_remote')).toEqual([{ cmd: 'wake_remote', args: { id: 'a1' } }]);
+    expect(backend.called('set_remote_control')).toEqual([]);
+  });
+
+  it('says it in English too', async () => {
+    setLang('en');
+    try {
+      resetApp({ projects: [project()], agents: [agent({ remoteControl: true, alive: false })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const card = screen.getByRole('button', { name: /refacto-auth/ });
+      expect(getByTip(card, /Remote control: asleep: resumes at the next message/)).toBeInTheDocument();
+      await fireEvent.contextMenu(card);
+      expect(items()).toEqual(expect.arrayContaining(['Asleep: resumes at the next message', 'Wake up']));
+    } finally {
+      setLang('fr');
+    }
+  });
+
+  it('says nothing of asleep for an agent without remote control, or in the Claude Code view', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [
+        agent({ alive: false }),
+        agent({ id: 'a2', name: 'tui', remoteControl: true, terminal: true, alive: false, interfaceRemote: null }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(items()).not.toContain('Réveiller');
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /^tui/ }));
+    expect(items()).not.toContain('Réveiller');
+    expect(items()).not.toContain('Relié');
+  });
+
   it('asks a worktree agent for its launch recipe from its menu', async () => {
     const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
     resetApp({ agents: [agent({ worktree: wt })] });
@@ -1933,6 +1997,8 @@ describe('Sidebar in English', () => {
       'Open beside',
       'Open below',
       '',
+      // With a process, linked (ESC-544).
+      'Linked',
       'Turn off remote control',
       'Open on claude.ai',
       'Copy the claude.ai link',

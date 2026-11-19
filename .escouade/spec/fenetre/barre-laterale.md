@@ -2,8 +2,8 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26","https://github.com/guillaume-gagnaire/escouade/pull/44"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-511"]
-decisions: [129,133,147,211]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-511","ESC-544"]
+decisions: [129,133,147,211,"un-agent-dont-le-remote-control-est-allu"]
 compared: null
 ---
 
@@ -123,14 +123,16 @@ Le remote control rend la session d'un agent Claude Code accessible depuis claud
 - Éteint par défaut. Il s'allume pour un agent, au clic droit, ou pour tous les agents d'un projet ou de l'app, par un réglage.
 - La session apparaît sur claude.ai sous le nom « projet · agent » ; pour un agent de ticket, son nom vient du ticket.
 - Un process par agent, pas pour toujours (ESC-417, issue #26 : 65 sessions en 4 minutes, 26 Go de mémoire) :
-  - Au démarrage d'Escouade et quand un réglage s'allume, Escouade ne lance que le process des agents actifs (un tour en cours, une question qui attend) ou actifs depuis moins que le délai d'arrêt des inactifs, au plus 3 à la fois, les plus récemment actifs d'abord. Un agent terminé, ou inactif depuis plus longtemps, garde son remote control et l'identifiant de sa session distante, sans process : il n'est joignable depuis claude.ai qu'après son prochain process (un message ici, un ticket, une reprise), qui le relie et rattache la même session, avec le même lien.
-  - Le process d'un agent relié s'arrête comme celui d'un autre quand l'agent est inactif depuis le délai d'arrêt des inactifs, sauf s'il tient un travail de fond (voir *Avancée d'un plan*). Sa session distante est gardée pour être rattachée.
+  - Allumé à la main (ESC-544) : l'agent reste joignable. Son process n'est jamais arrêté pour inactivité, et il démarre avec Escouade, même terminé ou inactif depuis longtemps, et rattache sa session ; seul le plafond ci-dessous l'arrête.
+  - Par un réglage : au démarrage d'Escouade et quand un réglage s'allume, Escouade ne lance que le process des agents actifs (un tour en cours, une question qui attend) ou actifs depuis moins que le délai d'arrêt des inactifs, au plus 3 à la fois, les plus récemment actifs d'abord. Un agent terminé, ou inactif depuis plus longtemps, garde son remote control et l'identifiant de sa session distante, sans process : il n'est joignable depuis claude.ai qu'après son prochain process (un message ici, un ticket, une reprise, « Réveiller »), qui le relie et rattache la même session, avec le même lien.
+  - Le process d'un agent relié par un réglage s'arrête comme celui d'un autre quand l'agent est inactif depuis le délai d'arrêt des inactifs, sauf s'il tient un travail de fond (voir *Avancée d'un plan*). Sa session distante est gardée pour être rattachée.
   - Le remote control garde au plus « Process gardés au plus » process d'agents non actifs, 8 par défaut. Au-delà, les moins récemment actifs s'arrêtent d'abord, leur session gardée ; un démarrage qui le dépasserait n'a pas lieu. Un agent actif n'est ni arrêté ni compté. Le plafond compte les process de la vue Escouade, pas les interfaces de la vue Claude Code.
   - Rien n'est lancé ni demandé pour un harness qui ne sait pas se relier : c'est sa capacité (celle que déclare son plugin, ou le moteur du cœur), pas son nom. Un agent Codex couvert par le réglage n'a donc ni process lancé ni avis.
   - Un compte que Claude Code refuse pour de bon (« Remote Control requires a claude.ai subscription ») est retenu, dans ses réglages : ni le démarrage d'Escouade ni le process d'un de ses agents ne redemandent, jusqu'à ce que ses réglages changent, qu'il se reconnecte (« Se connecter… », `/login`), ou qu'un rallumage à la main réussisse. La carte le dit une fois, par l'avis « Remote control indisponible : … ».
 - Renommer un agent renomme sa session distante. Renommer un projet renomme celles de ses agents en vue Escouade ; l'interface d'un agent en vue Claude Code garde l'ancien nom jusqu'à son prochain lancement.
 - Les messages envoyés depuis claude.ai s'affichent dans la conversation (« depuis claude.ai »). L'écho des messages envoyés depuis l'app est écarté.
 - Sur la carte, une icône d'ondes : connecté ou en attente. Au clic droit : « Ouvrir sur claude.ai », « Copier le lien ».
+- L'état dit vrai (ESC-544, vue Escouade) : au clic droit, sous un titre avant « Désactiver le remote control », l'agent qui a un process dit « Relié » ; celui qui n'en a pas (arrêté pour inactivité, au-delà du plafond, Escouade redémarré) dit « En veille : reprend au prochain message » (« Asleep: resumes at the next message »), avec « Réveiller » (« Wake up »), qui relance son process et rattache sa session distante sans changer d'où vient son remote control. Son icône d'ondes pâlit, avec l'infobulle « Remote control : en veille : reprend au prochain message (« Réveiller » le relance) ». En vue Claude Code, l'interface garde ses états (ci-dessous).
 - Couper le remote control (clic droit, réglage éteint, archivage, suppression) ferme la session distante, qui est archivée sur claude.ai. Si aucun process de l'agent ne tourne à ce moment, elle est fermée au prochain démarrage d'un process de l'agent, ou reprise avec le même lien si le remote control est revenu entre-temps. Une fermeture qui échoue est écrite dans le journal et retentée de même. Une coupure suivie d'un rallumage rapide ne mêle pas leurs effets.
 - Restaurer un agent archivé lui rend le remote control si un réglage le couvre, pas s'il était allumé à la main.
 - « Remote control indisponible : … » (le lien n'a pas pu s'établir) n'est dit qu'une fois par agent et par lancement d'Escouade, jusqu'à un lien réussi ou un rallumage à la main.
@@ -151,7 +153,7 @@ Le remote control rend la session d'un agent Claude Code accessible depuis claud
 #### En vue Claude Code
 
 - Mêmes règles. L'interface d'un agent en remote control est lancée avec `--remote-control=<projet · agent>`, en un seul argument : un nom qui commence par « - » n'est pas pris pour une option. Claude Code affiche alors le lien de la session. Quand l'interface reprend sa session (redémarrage d'Escouade, relance), il rattache la même session distante, avec le même lien. Une interface fermée archive sa session distante.
-- Au démarrage d'Escouade, l'interface d'un tel agent, s'il est actif ou l'a été depuis moins que le délai d'arrêt des inactifs, est lancée en fond, sans être ouverte, pour qu'il soit joignable. Ouvrir l'agent montre cette interface déjà lancée.
+- Au démarrage d'Escouade, l'interface d'un tel agent, s'il est actif ou l'a été depuis moins que le délai d'arrêt des inactifs, ou si son remote control a été allumé à la main (dans le plafond), est lancée en fond, sans être ouverte, pour qu'il soit joignable. Ouvrir l'agent montre cette interface déjà lancée.
 - Ces lancements, comme ceux d'un réglage, se font au plus 3 à la fois. Chacun garde sa place jusqu'à ce que l'interface soit prête, 15 s au plus.
 - Passer un agent en vue Claude Code ferme la session distante de sa vue Escouade ; son interface ouvre la sienne. Revenir en vue Escouade en ouvre une nouvelle, avec un nouveau lien. Le passage en vue Claude Code n'est pas refusé quand le remote control est allumé.
 - Escouade ne peut ni allumer ni couper le remote control d'une interface déjà ouverte : un changement vaut au prochain lancement de l'interface. Après un changement au clic droit, un toast le dit : « Pris en compte au prochain lancement de son interface Claude Code ; d'ici là, c'est sa commande /remote-control qui le fait. » Pour un réglage, c'est sa description qui le dit.
@@ -240,7 +242,7 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 - Les commandes de lancement et les terminaux ne survivent pas à un redémarrage.
 - Escouade ne peut pas changer le remote control d'une interface Claude Code déjà ouverte : le changement attend son prochain lancement.
 - Claude Code ne dit pas pourquoi il refuse le remote control : Escouade le déduit de signes indirects. Seul le refus d'un compte sans abonnement claude.ai, que Claude Code dit en clair au process relié, est retenu pour le compte.
-- Un agent terminé ou inactif, sans process, n'est pas joignable depuis claude.ai : ce qu'on y écrit à sa session n'arrive qu'à son prochain process, lancé depuis Escouade.
+- Un agent sans process (relié par un réglage et terminé ou inactif, ou au-delà du plafond) n'est pas joignable depuis claude.ai : ce qu'on y écrit à sa session n'arrive qu'à son prochain process, lancé depuis Escouade ; sa carte le dit « en veille ».
 
 ## Les onglets du haut (ESC-390)
 

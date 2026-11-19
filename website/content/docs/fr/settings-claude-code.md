@@ -120,7 +120,7 @@ Le modèle, l’effort et le mode des nouveaux agents se règlent compte par com
 | « Reprise automatique après la limite d’usage » | « continue » est envoyé à l’agent une fois le quota réinitialisé. | Activé |
 | « Vue des nouveaux agents » | « Escouade » : un nouvel agent tourne dans la conversation d’Escouade. « Terminal du harness » : il tourne dans l’interface de son harness elle-même, dans un terminal (la vue Claude Code). Affiché tant qu’un harness a une vue terminal ; les agents d’un harness qui n’en a pas restent dans la vue d’Escouade. | Escouade |
 | « Les agents tiennent une liste de tâches » | Les agents reçoivent l’outil de liste de tâches de Claude Code. | Activé |
-| « Arrêter les processus des agents inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai, remote control compris. | 30 |
+| « Arrêter les processus des agents inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai, remote control d’un réglage compris (pas celui allumé à la main). | 30 |
 | « Serveurs MCP des agents » | « Seulement Escouade » : Claude Code ne charge que le serveur d’Escouade (`--strict-mcp-config`), ni ceux de ta configuration, ni le `.mcp.json` du projet. | Tous les miens |
 
 ### Reprise automatique
@@ -141,7 +141,7 @@ Si l’agent tient une liste, Escouade montre son avancée dans le bandeau « P
 
 ### Processus inactifs
 
-Le champ est un nombre de minutes ; 0 veut dire jamais, et un champ vide vaut 0. La session d’un agent dont le processus a été arrêté reste reprenable. Un agent en remote control n’est jamais arrêté ainsi, pour rester joignable depuis claude.ai.
+Le champ est un nombre de minutes ; 0 veut dire jamais, et un champ vide vaut 0. La session d’un agent dont le processus a été arrêté reste reprenable. Un agent dont le remote control est activé à la main n’est jamais arrêté ainsi, pour rester joignable depuis claude.ai ; un agent relié par un réglage l’est, et sa session revient à son prochain message.
 
 ## Pièces jointes
 

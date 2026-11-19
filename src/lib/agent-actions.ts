@@ -131,6 +131,18 @@ export async function toggleRemote(agent: Agent) {
   else if (on) app.toast(t('git.agent.remoteOn', { name: agent.name }), 'ok');
 }
 
+/**
+ * In the Escouade view, an agent that holds Remote Control with no process (stopped for being idle, over the cap of the
+ * processes kept, the app restarted) is asleep: claude.ai sees its session disconnected until its next process
+ * (ESC-544). Its next message wakes it, or « Réveiller ».
+ */
+export const remoteAsleep = (agent: Agent) => !agent.terminal && !agent.archived && agent.remoteControl && !agent.alive;
+
+/** « Réveiller »: its process starts and takes its remote session back. */
+export async function wakeRemote(agent: Agent) {
+  await app.run(api.wakeRemote(agent.id));
+}
+
 export function openRemote(agent: Agent) {
   if (agent.remoteUrl) openUrl(agent.remoteUrl).catch((e) => app.toast(String(e), 'error'));
 }

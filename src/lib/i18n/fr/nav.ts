@@ -67,6 +67,8 @@ export default {
       connected: 'Remote control : connecté (accessible depuis claude.ai et l’app Claude)',
       connecting: 'Remote control : connexion… (accessible depuis claude.ai et l’app Claude)',
       waiting: 'Remote control : en attente de connexion (accessible depuis claude.ai et l’app Claude)',
+      /** In the Escouade view, no process (stopped for being idle, over the cap, the app restarted): claude.ai sees the session disconnected until its next one (ESC-544). */
+      asleep: 'Remote control : en veille : reprend au prochain message (« Réveiller » le relance)',
       /** An agent in Claude Code’s view with the remote control on: no interface runs (not started yet, or ended): not reachable. */
       noInterface: 'Remote control : aucune interface lancée, pas joignable pour l’instant (ouvre l’agent pour la lancer)',
       /** Its interface was started without the remote control, which its next launch has. */
@@ -143,6 +145,11 @@ export default {
       remoteOff: 'Désactiver le remote control',
       remoteOn: 'Activer le remote control',
       remoteOnHint: 'claude.ai, mobile',
+      /** A title over the remote control's entries (ESC-544): with a process, its session is reachable from claude.ai. */
+      remoteLinked: 'Relié',
+      /** With no process: claude.ai sees its session disconnected until its next message, or « Réveiller ». */
+      remoteAsleep: 'En veille : reprend au prochain message',
+      remoteWake: 'Réveiller',
       openRemote: 'Ouvrir sur claude.ai',
       copyRemoteLink: 'Copier le lien claude.ai',
       delete: 'Supprimer…',
