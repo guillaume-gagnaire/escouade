@@ -523,30 +523,7 @@ pub fn plugin_discard(core: CoreState, token: String) {
 /// removed; `keep`: its settings and its secrets kept for a later install.
 #[tauri::command(async)]
 pub fn plugin_remove(core: CoreState, id: String, keep: Option<bool>) -> Result<bool, String> {
-    let keep = keep.unwrap_or(false);
-    let keys = core
-        .plugins
-        .get(&id, crate::i18n::ui())
-        .map(|v| v.secret_keys)
-        .unwrap_or_default();
-    core.plugin_runtime.forget(&id);
-    let gone = core.plugins.remove(&id, keep).map_err(|e| e.to_string())?;
-    if gone && !keep {
-        for k in keys {
-            if let Err(e) = core
-                .secrets
-                .delete(&crate::plugins::runtime::secret_name(&id, &k))
-            {
-                log::warn!("plugin {id}: its secret {k} stays in the keychain: {e}");
-            }
-        }
-        let log = core.plugin_runtime.journal_file(&id);
-        let _ = std::fs::remove_file(&log);
-        let mut old = log.into_os_string();
-        old.push(".1");
-        let _ = std::fs::remove_file(old);
-    }
-    Ok(gone)
+    core.plugin_uninstall(&id, keep.unwrap_or(false))
 }
 
 /// A plugin installed: `None` when it is not.

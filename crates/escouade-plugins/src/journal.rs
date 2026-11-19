@@ -22,6 +22,8 @@ const TEXT_MAX: usize = 4000;
 pub const MASK: &str = "••••";
 /// A secret shorter than this is not masked: it would mask everything.
 const MASK_MIN: usize = 4;
+/// A line of a secret of several lines longer than this is masked on its own too (§4.4 of the study, ESC-527).
+const LINE_MIN: usize = 8;
 
 /// What an entry says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,16 +84,30 @@ impl Journal {
     }
 
     /// From now on, `secret` shows as `MASK`.
+    /// A secret of several lines (a configuration with its certificates, ESC-527) has each of its lines of more than
+    /// `LINE_MIN` characters masked too: a plugin that writes one line of it to its journal does not show it.
     pub fn mask(&self, secret: &str) {
         if secret.chars().count() < MASK_MIN {
             return;
         }
         let mut masked = self.masked.lock();
-        if !masked.iter().any(|s| s == secret) {
-            masked.push(secret.to_string());
-            // The longest first: one secret inside another is masked whole.
-            masked.sort_by_key(|s| std::cmp::Reverse(s.len()));
+        let lines = secret
+            .contains('\n')
+            .then(|| {
+                secret
+                    .lines()
+                    .map(|l| l.trim())
+                    .filter(|l| l.chars().count() > LINE_MIN)
+            })
+            .into_iter()
+            .flatten();
+        for s in std::iter::once(secret).chain(lines) {
+            if !masked.iter().any(|m| m == s) {
+                masked.push(s.to_string());
+            }
         }
+        // The longest first: one secret inside another is masked whole.
+        masked.sort_by_key(|s| std::cmp::Reverse(s.len()));
     }
 
     /// Notes `text`, masked and cut to its length.
@@ -190,4 +206,50 @@ pub fn read_file(file: &std::path::Path) -> Vec<Entry> {
         }
     }
     entries.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn journal() -> Journal {
+        let dir = std::env::temp_dir().join(format!(
+            "escouade-journal-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        Journal::new(dir.join("journal.jsonl"))
+    }
+
+    #[test]
+    fn a_secret_of_several_lines_has_each_long_line_masked_too() {
+        let j = journal();
+        let config =
+            "client\r\nremote vpn.acme.dev 1194\n<ca>\nMIIDdzCCAl+gAwIBAgIUP1c2xQ8\n</ca>\n";
+        j.mask(config);
+        j.push(Kind::Message, format!("whole: {config}"));
+        j.push(Kind::Message, "line: MIIDdzCCAl+gAwIBAgIUP1c2xQ8 end");
+        j.push(Kind::Message, "line: remote vpn.acme.dev 1194");
+        // Eight characters or fewer: left, or everything would be masked.
+        j.push(Kind::Message, "short: client </ca>");
+        let texts: Vec<String> = j.entries().into_iter().map(|e| e.text).collect();
+        assert_eq!(
+            texts,
+            [
+                format!("whole: {MASK}"),
+                format!("line: {MASK} end"),
+                format!("line: {MASK}"),
+                "short: client </ca>".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_secret_of_one_line_is_masked_whole_only() {
+        let j = journal();
+        j.mask("s3cr3t-token-value");
+        j.push(Kind::Message, "got s3cr3t-token-value and s3cr3t");
+        assert_eq!(j.entries()[0].text, format!("got {MASK} and s3cr3t"));
+    }
 }

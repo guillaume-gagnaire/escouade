@@ -1704,8 +1704,10 @@ impl Host {
 
     /// Its secret `key`: only one of its own (`permissions.secrets`), under its own name.
     fn secret(&self, key: &str) -> Result<Option<String>, (i64, String)> {
+        // `#` is the pieces' (ESC-527): a key `token#a1` would read a piece of `token`.
         let own = !key.is_empty()
             && !key.chars().any(char::is_control)
+            && !key.contains('#')
             && self
                 .manifest
                 .permissions

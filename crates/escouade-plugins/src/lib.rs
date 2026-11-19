@@ -459,7 +459,8 @@ pub fn granted(m: &Manifest, revoked: &[String]) -> Manifest {
 }
 
 /// The keys of a plugin's secrets: those it declares fields for (`contributes.secrets`) and those
-/// it may ask for by name (`permissions.secrets`, a pattern left out).
+/// it may ask for by name (`permissions.secrets`, a pattern left out). Never one with `#`: that is the pieces' of a long
+/// secret (ESC-527), and `contributes.secrets` takes none.
 pub fn secret_keys(m: &Manifest) -> Vec<String> {
     let mut keys: Vec<String> = m
         .contributes
@@ -468,10 +469,12 @@ pub fn secret_keys(m: &Manifest) -> Vec<String> {
         .into_iter()
         .flatten()
         .filter_map(|s| s.get("key").and_then(Value::as_str).map(str::to_string))
+        .filter(|k| !k.contains('#'))
         .collect();
     for k in &m.permissions.secrets {
         // The secrets of a profile (`profile:<kind>`) are its fields', kept by profile, never one key of the page.
-        if !k.ends_with('*') && !k.starts_with("profile:") && !keys.contains(k) {
+        if !k.ends_with('*') && !k.starts_with("profile:") && !k.contains('#') && !keys.contains(k)
+        {
             keys.push(k.clone());
         }
     }

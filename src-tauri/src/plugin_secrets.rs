@@ -59,6 +59,20 @@ pub struct SecretsFile {
     pub secrets: Vec<FileSecret>,
 }
 
+/// What « Garder » says of a secret longer than 64 KiB (ESC-527): refused, in the keychain as in the file.
+pub fn too_long() -> String {
+    too_long_in(crate::i18n::ui())
+}
+
+/// `too_long`, in `lang`.
+pub fn too_long_in(lang: crate::i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "Ce secret dépasse 64 Kio : il n’a pas été gardé.",
+        "This secret is longer than 64 KiB: it was not kept."
+    )
+}
+
 /// Why the keychain did not keep a secret, said simply: no keychain on this machine, or the one there refused (its
 /// reason, the secret never in it).
 pub fn refusal(e: &anyhow::Error, secret: &str) -> String {
@@ -73,6 +87,9 @@ pub fn refusal_in(lang: crate::i18n::Lang, e: &anyhow::Error, secret: &str) -> S
             "Pas de trousseau système sur ce poste : le secret n’a pas été gardé.",
             "No system keychain on this machine: the secret was not kept."
         );
+    }
+    if escouade_plugins::secrets::is_too_long(e) {
+        return too_long_in(lang);
     }
     let why = format!("{e:#}");
     let why = if secret.is_empty() {
@@ -123,6 +140,9 @@ impl<R: tauri::Runtime> Core<R> {
                 ))
             });
         }
+        if value.len() > escouade_plugins::secrets::SECRET_MAX {
+            return Err(SecretRefused::other(too_long()));
+        }
         if in_file {
             return self.kept.keep_in_file(&name, value).map_err(|e| {
                 log::warn!("plugin {id}: its secret {key} could not be written to its file: {e:#}");
@@ -142,6 +162,31 @@ impl<R: tauri::Runtime> Core<R> {
                 keychain_refused: true,
             }
         })
+    }
+
+    /// Uninstalls the plugin `id`: its process stopped, its copy, its settings, its secrets (each one whole, its pieces
+    /// with it: `Chunked`) and its journal removed; `keep`: its settings and its secrets kept for a later install.
+    pub fn plugin_uninstall(&self, id: &str, keep: bool) -> Result<bool, String> {
+        let keys = self
+            .plugins
+            .get(id, crate::i18n::ui())
+            .map(|v| v.secret_keys)
+            .unwrap_or_default();
+        self.plugin_runtime.forget(id);
+        let gone = self.plugins.remove(id, keep).map_err(|e| e.to_string())?;
+        if gone && !keep {
+            for k in keys {
+                if let Err(e) = self.secrets.delete(&secret_name(id, &k)) {
+                    log::warn!("plugin {id}: its secret {k} stays in the keychain: {e}");
+                }
+            }
+            let log = self.plugin_runtime.journal_file(id);
+            let _ = std::fs::remove_file(&log);
+            let mut old = log.into_os_string();
+            old.push(".1");
+            let _ = std::fs::remove_file(old);
+        }
+        Ok(gone)
     }
 
     /// « Déplacer vers le trousseau »: the secret `key` of the plugin `id` out of the file, into the keychain.

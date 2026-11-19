@@ -278,3 +278,182 @@ fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
         })
         .collect()
 }
+
+/// A configuration of `n` bytes with its certificate, of lines like an OpenVPN one's.
+fn openvpn_config(n: usize) -> String {
+    let mut c = String::from("client\nremote vpn.example.test 1194\n<ca>\n");
+    while c.len() < n {
+        c.push_str("MIIDdzCCAl+gAwIBAgIUP1c2xQ8fakefakefakefakefakefake\n");
+    }
+    c.truncate(n);
+    c
+}
+
+/// A secret of 6 KB (ESC-527): kept in pieces where Windows refuses more than 1,280 characters, read whole by the
+/// plugin, each long line masked in its journal; « Oublier », « Déplacer vers le trousseau » and the uninstall take
+/// every piece with it; more than 64 KiB is refused with its reason.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_long_secret_is_kept_in_pieces_read_whole_and_forgotten_whole() {
+    let h = harness("plugin-secrets-long");
+    let keychain = memory_of(&h.core.data);
+    let dir = h.dir.join("vpn");
+    let run = crate::plugins_runtime_tests::fake_module(&dir, &[]);
+    std::fs::write(
+        dir.join("escouade-plugin.json"),
+        json!({
+            "id": ID, "name": "VPN", "version": "1.0.0",
+            "escouade": { "api": "1", "min": "2.1.0" },
+            "run": run,
+            "permissions": { "secrets": ["config", "config#a1"] },
+            "contributes": { "secrets": [{ "key": "config", "title": "Configuration" }] },
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let id = h.core.plugins.load_dev(&dir, Lang::Fr).unwrap().id;
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
+    let name = secret_name(ID, "config");
+    let config = openvpn_config(6 * 1024);
+
+    h.core
+        .plugin_secret_set(ID, "config", &config, false)
+        .unwrap();
+    // In pieces, each under Windows' limit.
+    assert!(keychain
+        .entry(&name)
+        .unwrap()
+        .starts_with("escouade-pieces:v1:a:6:"));
+    assert_eq!(keychain.all().len(), 7);
+    assert!(keychain
+        .all()
+        .values()
+        .all(|v| v.encode_utf16().count() <= 1280));
+    assert!(h.core.plugin_secret_states(ID, vec!["config".into()])[0].kept);
+    // The plugin reads it whole, by `secrets/get`, unchanged.
+    let got = h
+        .core
+        .plugin_runtime
+        .call(
+            ID,
+            "test/do",
+            json!({ "behave": "secret", "key": "config" }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(got, json!({ "result": config }));
+    // A line of it in its journal: masked.
+    h.core
+        .plugin_runtime
+        .call(
+            ID,
+            "test/do",
+            json!({ "behave": "stderr", "lines": ["remote vpn.example.test 1194", "short: client"] }),
+        )
+        .await
+        .unwrap();
+    for _ in 0..200 {
+        if h.core
+            .plugin_runtime
+            .journal(ID)
+            .iter()
+            .any(|e| e.text.contains("short: client"))
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    let journal = h.core.plugin_runtime.journal(ID);
+    assert!(journal.iter().any(|e| e.text == "••••"), "{journal:#?}");
+    assert!(
+        journal.iter().all(|e| !e.text.contains("vpn.example.test")),
+        "{journal:#?}"
+    );
+    // A key with `#` is never the plugin's, even listed: it would read a piece.
+    let piece = h
+        .core
+        .plugin_runtime
+        .call(
+            ID,
+            "test/do",
+            json!({ "behave": "secret", "key": "config#a1" }),
+        )
+        .await;
+    assert!(format!("{piece:?}").contains("-32001"), "{piece:?}");
+    let refused = h.core.plugin_secret_states(ID, vec!["config".into()]).len();
+    assert_eq!(refused, 1);
+
+    // A piece gone: the plugin is told the keychain's error, never a secret cut short.
+    keychain.delete(&format!("{name}#a3")).unwrap();
+    let broken = h
+        .core
+        .plugin_runtime
+        .call(
+            ID,
+            "test/do",
+            json!({ "behave": "secret", "key": "config" }),
+        )
+        .await;
+    assert!(format!("{broken:?}").contains("-32002"), "{broken:?}");
+    // Kept again, then « Oublier »: nothing left.
+    h.core
+        .plugin_secret_set(ID, "config", &config, false)
+        .unwrap();
+    h.core.plugin_secret_set(ID, "config", "", false).unwrap();
+    assert!(keychain.all().is_empty(), "{:?}", keychain.all().keys());
+
+    // More than 64 KiB: refused, said, nothing written.
+    let refused = h
+        .core
+        .plugin_secret_set(ID, "config", &openvpn_config(64 * 1024 + 1), false)
+        .unwrap_err();
+    assert_eq!(
+        refused,
+        SecretRefused {
+            message: "Ce secret dépasse 64 Kio : il n’a pas été gardé.".into(),
+            keychain_refused: false,
+        }
+    );
+    let refused = h
+        .core
+        .plugin_secret_set(ID, "config", &openvpn_config(64 * 1024 + 1), true)
+        .unwrap_err();
+    assert!(!refused.keychain_refused);
+    assert!(keychain.all().is_empty() && !h.core.data.plugin_secrets_file().exists());
+    // 64 KiB exactly: kept.
+    h.core
+        .plugin_secret_set(ID, "config", &openvpn_config(64 * 1024), false)
+        .unwrap();
+
+    // In the file (no keychain), then « Déplacer vers le trousseau »: in pieces there, out of the file.
+    h.core.plugin_secret_set(ID, "config", "", false).unwrap();
+    h.core
+        .plugin_secret_set(ID, "config", &config, true)
+        .unwrap();
+    assert!(keychain.all().is_empty());
+    h.core.plugin_secret_move(ID, "config").unwrap();
+    assert_eq!(keychain.all().len(), 7);
+    assert!(!h.core.kept.in_file(&name));
+    assert_eq!(
+        h.core.secrets.get(&name).unwrap().as_deref(),
+        Some(config.as_str())
+    );
+
+    // Uninstalled: the header and every piece go, another plugin's secret stays.
+    keychain
+        .set("plugin:dev.test.other:token", "other-5678")
+        .unwrap();
+    assert!(h.core.plugin_uninstall(ID, false).unwrap());
+    assert_eq!(
+        keychain.all().into_keys().collect::<Vec<_>>(),
+        ["plugin:dev.test.other:token"]
+    );
+}
+
+#[test]
+fn a_secret_too_long_is_said_in_english_too() {
+    let e: anyhow::Error = escouade_plugins::secrets::TooLong.into();
+    assert_eq!(
+        refusal_in(Lang::En, &e, ""),
+        "This secret is longer than 64 KiB: it was not kept."
+    );
+}

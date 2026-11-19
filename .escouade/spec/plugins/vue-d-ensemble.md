@@ -1,9 +1,9 @@
 ---
 title: "Les plugins : vue d'ensemble"
 subject: "plugins"
-sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs","docs/PLUGINS-CONTRACT-STUDY.md §1.4, §3.3 (release/2.3)","website/content/docs/fr/plugins/manifest.md"]
-tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-524","ESC-525"]
-decisions: [142]
+sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs","docs/PLUGINS-CONTRACT-STUDY.md §1.4, §3.3 (release/2.3)","website/content/docs/fr/plugins/manifest.md","docs/PLUGINS-CONTRACT-STUDY.md §4.4, §7 (release/2.3, ESC-501)","crates/escouade-plugins/src/secrets.rs"]
+tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-524","ESC-525","ESC-527"]
+decisions: [142,"un-secret-long-est-garde-en-morceaux-au"]
 compared: null
 ---
 
@@ -85,3 +85,17 @@ Un plugin déclare ses secrets (`contributes.secrets`) ; l'utilisateur les saisi
 ## Le contrat du manifeste qui vient (ESC-525)
 
 Les deux lecteurs du manifeste lisent déjà, et refusent hors de leur grammaire, ce que l'étude ESC-501 ajoute au contrat : portée et `repo` des réglages et secrets, groupes, champs sur plusieurs lignes, import d'un fichier, profils, jokers typés des commandes, limite de programmes (*Le contrat du manifeste*). Un plugin qui en demande un point que l'app ne sert pas encore est chargé coupé, la raison dite.
+
+## Un secret long, en morceaux au trousseau (ESC-527)
+
+Le trousseau de Windows refuse un secret de plus de 1 280 caractères (`keyring` 3.6.3, `CRED_MAX_CREDENTIAL_BLOB_SIZE`). Une configuration OpenVPN avec ses certificats fait 4 à 8 Ko. Le magasin des secrets (`Chunked`, dans `escouade-plugins::secrets`) découpe donc un secret long. Il enveloppe le trousseau sur les trois systèmes, et le faux trousseau des tests. macOS et Linux n'ont pas la limite, mais lisent et écrivent le même format. Tous les secrets de l'app y passent : ceux des plugins, les jetons des comptes, les clés de voix, le jeton MCP.
+
+- **Un secret court** (1 200 unités UTF-16 au plus) reste une seule entrée sous son nom, comme avant. Ce qui est déjà gardé se lit comme avant.
+- **Un secret long** est coupé en morceaux de 1 200 unités UTF-16, jamais au milieu d'un caractère. Ils sont rangés sous `<nom>#a1`, `#a2`… ou `#b1`, `#b2`… Il y a deux emplacements pour que les nouveaux morceaux ne prennent jamais la place des anciens avant la bascule. L'entrée `<nom>` garde l'en-tête : `escouade-pieces:v1:<emplacement>:<nombre>:<SHA-256 du tout>`. Un secret qui commence comme un en-tête est lui aussi gardé en morceaux, pour qu'un en-tête ne soit jamais pris pour un secret.
+- **La lecture** recolle les morceaux et vérifie l'empreinte. Un morceau manquant, un morceau en trop, une empreinte fausse ou un en-tête illisible rendent une erreur, jamais un secret tronqué. Un plugin reçoit alors l'erreur du trousseau (`-32002`).
+- **L'écriture est entière ou n'est pas.** Les nouveaux morceaux sont écrits dans l'emplacement que l'en-tête ne nomme pas, et ceux qui traîneraient au-delà dans cet emplacement sont effacés. Puis l'en-tête bascule. Enfin, les anciens morceaux et les restes de l'autre emplacement sont effacés, du dernier au premier. Si un morceau est refusé, ce qui a été écrit est effacé, et l'ancien secret reste lisible. Après une coupure, on lit l'ancien secret tant que l'en-tête n'a pas basculé, le nouveau ensuite. Les restes sont effacés à l'écriture suivante ou à « Oublier ».
+- **« Oublier »** efface les morceaux des deux emplacements, puis l'en-tête. Coupé entre les deux, l'en-tête dit qu'un morceau manque : c'est une erreur, et oublier de nouveau termine le travail. La désinstallation d'un plugin et « Déplacer vers le trousseau » traitent un secret long comme un seul secret. Le fichier lisible de toi seul (ESC-499) garde toujours un secret d'un seul tenant.
+- **64 Kio au plus par secret**, au trousseau comme dans le fichier. Au-delà, rien n'est écrit, et la fenêtre dit « Ce secret dépasse 64 Kio : il n’a pas été gardé. »
+- **`#` est réservé aux morceaux.** Une clé de `contributes.secrets` n'en contient jamais (le lecteur du manifeste ne prend que lettres, chiffres, `_`, `.` et `-`). Une clé de `permissions.secrets` qui en contient n'est ni montrée ni gardée. Pour `secrets/get`, ce n'est jamais une clé du plugin (`-32001`). Le magasin refuse tout nom de morceau (`…#a<n>`, `…#b<n>`).
+- **Le journal d'un plugin** masque un secret entier, comme avant. Pour un secret de plusieurs lignes, il masque aussi chacune de ses lignes de plus de 8 caractères.
+- **Essai réel** : fait le 2026-11-18 sous Windows 11, avec le vrai trousseau et un service à part (`…trial-esc527`). Une valeur factice de 6 Ko est refusée d'un seul tenant, puis gardée en 6 morceaux, relue, réécrite dans l'autre emplacement, raccourcie, oubliée. Aucune entrée de l'essai ne reste. C'est le test ignoré d'office `real_keychain` de `crates/escouade-forge/src/integrations/secrets.rs`.

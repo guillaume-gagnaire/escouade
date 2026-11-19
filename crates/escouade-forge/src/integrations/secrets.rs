@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 // The store of the secrets the host of the plugins reads too, in `escouade-plugins`; the keychain's is here.
-pub use escouade_plugins::secrets::SecretStore;
+pub use escouade_plugins::secrets::{Chunked, SecretStore};
 
 /// The keychain's service of the app's entries, its identifier; a sandboxed run's (end-to-end
 /// tests, demos) are apart, so that its accounts never take the place of the user's.
@@ -53,12 +53,16 @@ impl Secrets {
 
 /// The system's keychain: Windows' Credential Manager, macOS' Keychain (the user's), an entry per
 /// integration under `service`.
-#[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
+/// Built in tests too, for the trial on the real keychain (`the_real_keychain_keeps_a_long_secret_in_pieces`, ignored by
+/// default), which never touches the app's entries.
+#[cfg(any(windows, target_os = "macos"))]
+#[cfg_attr(feature = "testing", allow(dead_code))]
 struct Keychain {
     service: String,
 }
 
-#[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
+#[cfg(any(windows, target_os = "macos"))]
+#[cfg_attr(feature = "testing", allow(dead_code))]
 impl Keychain {
     /// The entry `name`, in the platform's own store: never the in-memory one `keyring` falls
     /// back to without it, which would lose the secrets at the next start.
@@ -73,7 +77,7 @@ impl Keychain {
 }
 
 // Its errors say what failed (the platform's code, the attribute too long), never the secret.
-#[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
+#[cfg(any(windows, target_os = "macos"))]
 impl SecretStore for Keychain {
     fn get(&self, name: &str) -> Result<Option<String>> {
         match self.entry(name)?.get_password() {
@@ -128,15 +132,16 @@ fn sandbox_without_keychain() -> bool {
 }
 
 /// The store of the accounts of `data`: the system's keychain (the same for every folder, a
-/// sandboxed run's service apart).
+/// sandboxed run's service apart), its long secrets in pieces (`Chunked`, ESC-527). Every secret of the app goes
+/// through it: a plugin's, an account's, a voice service's, the MCP token.
 #[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
 pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     if sandbox_without_keychain() {
-        return Arc::new(Absent);
+        return Arc::new(Chunked::new(Arc::new(Absent)));
     }
-    Arc::new(Keychain {
+    Arc::new(Chunked::new(Arc::new(Keychain {
         service: keychain_service(paths::sandbox_dir().is_some()),
-    })
+    })))
 }
 
 #[cfg(all(
@@ -145,7 +150,7 @@ pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
 ))]
 pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     let _ = sandbox_without_keychain();
-    Arc::new(Absent)
+    Arc::new(Chunked::new(Arc::new(Absent)))
 }
 
 /// The secrets in memory (tests), in `escouade-plugins` (feature `testing`).
@@ -167,10 +172,10 @@ pub fn memory_of(data: &DataDir) -> Arc<MemoryStore> {
         .clone()
 }
 
-/// The store of the accounts of `data`: its memory store.
+/// The store of the accounts of `data`: its memory store, its long secrets in pieces as the keychain's.
 #[cfg(any(test, feature = "testing"))]
 pub fn store_for(data: &DataDir) -> Arc<dyn SecretStore> {
-    memory_of(data)
+    Arc::new(Chunked::new(memory_of(data)))
 }
 
 /// Where the account's secrets go: into the store, read back to check, else they stay in the file
@@ -1032,5 +1037,83 @@ mod tests {
         assert!(file(&d).contains("jira-secret"));
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
+    }
+}
+
+/// The trial on the real keychain (ESC-527), never run by itself: `cargo test -p escouade-forge --lib real_keychain --
+/// --ignored`. It works under a service of its own, apart from the app's (and a sandbox's), reads and writes no other
+/// entry, and leaves none.
+#[cfg(all(test, any(windows, target_os = "macos")))]
+mod real_keychain {
+    use super::*;
+
+    const SERVICE: &str = "dev.gagnaire.escouade.trial-esc527";
+    const NAME: &str = "plugin:dev.test.trial:config";
+
+    /// Its entries: the header, and the pieces of both slots a 6 KB secret may take (with room).
+    fn names() -> Vec<String> {
+        let mut names = vec![NAME.to_string()];
+        for slot in ['a', 'b'] {
+            names.extend((1..=10).map(|i| format!("{NAME}#{slot}{i}")));
+        }
+        names
+    }
+
+    /// Whatever happens, the trial's entries go.
+    struct Clean(Arc<Keychain>);
+
+    impl Drop for Clean {
+        fn drop(&mut self) {
+            for n in names() {
+                let _ = self.0.delete(&n);
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "the real keychain of this machine: run by hand"]
+    fn the_real_keychain_keeps_a_long_secret_in_pieces() {
+        let raw = Arc::new(Keychain {
+            service: SERVICE.to_string(),
+        });
+        let clean = Clean(raw.clone());
+        for n in names() {
+            assert_eq!(raw.get(&n).unwrap(), None, "{n} was there before the trial");
+        }
+        let line = "MIIDdzCCAl+gAwIBAgIUP1c2xQ8-fictitious-test-value-0123456789\n";
+        let config = line.repeat(6 * 1024 / line.len() + 1)[..6 * 1024].to_string();
+        // Whole, Windows refuses it: more than 1,280 characters.
+        #[cfg(windows)]
+        {
+            assert!(raw.set(NAME, &config).is_err());
+            assert_eq!(raw.get(NAME).unwrap(), None);
+        }
+        let store = Chunked::new(raw.clone());
+        keep_secret(&store, NAME, &config).unwrap();
+        let header = raw.get(NAME).unwrap().unwrap();
+        assert!(header.starts_with("escouade-pieces:v1:a:6:"), "{header}");
+        for i in 1..=6 {
+            assert!(raw.get(&format!("{NAME}#a{i}")).unwrap().is_some());
+        }
+        assert_eq!(raw.get(&format!("{NAME}#a7")).unwrap(), None);
+        assert_eq!(store.get(NAME).unwrap().as_deref(), Some(config.as_str()));
+        // Kept again (the other slot), short, then forgotten: nothing left.
+        let other = config.replace("fictitious", "imaginary!");
+        keep_secret(&store, NAME, &other).unwrap();
+        assert!(raw
+            .get(NAME)
+            .unwrap()
+            .unwrap()
+            .starts_with("escouade-pieces:v1:b:6:"));
+        assert_eq!(raw.get(&format!("{NAME}#a1")).unwrap(), None);
+        keep_secret(&store, NAME, "short-trial-value").unwrap();
+        assert_eq!(raw.get(&format!("{NAME}#b1")).unwrap(), None);
+        keep_secret(&store, NAME, &config).unwrap();
+        store.delete(NAME).unwrap();
+        assert_eq!(store.get(NAME).unwrap(), None);
+        for n in names() {
+            assert_eq!(raw.get(&n).unwrap(), None, "{n} left in the keychain");
+        }
+        drop(clean);
     }
 }
