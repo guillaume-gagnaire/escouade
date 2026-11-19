@@ -320,9 +320,18 @@ export function openTerminal(projectId: string, shell: string, name: string, pla
   return interactive((cols, rows, onData) => api.termSpawn({ projectId, shell, name, ...place, cols, rows }, onData));
 }
 
-/** « Se connecter… »: the Claude account's `claude` in a terminal of its own, where the user signs in. */
-export function openAccountLogin(accountId: string): Promise<TermInfo> {
-  return interactive((cols, rows, onData) => api.accountLogin(accountId, cols, rows, onData));
+/**
+ * « Se connecter… »: the Claude account's `claude` in a terminal of its own, where the user signs in. `onText`: its output as
+ * text too (on a server, the sign-in's address is read from it, ESC-538).
+ */
+export function openAccountLogin(accountId: string, onText?: (text: string) => void): Promise<TermInfo> {
+  const decoder = new TextDecoder();
+  return interactive((cols, rows, onData) =>
+    api.accountLogin(accountId, cols, rows, (d) => {
+      onData(d);
+      onText?.(decoder.decode(d, { stream: true }));
+    }),
+  );
 }
 
 /**

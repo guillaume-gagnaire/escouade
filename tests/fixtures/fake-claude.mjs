@@ -2070,6 +2070,8 @@ function startSession() {
       ['vue-face.png', png(160, 100, [214, 120, 60])],
       ['vue-dessus.png', png(120, 120, [60, 130, 210])],
       ['contrat.pdf', Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n')],
+      // « [script] » (ESC-538): a script too, which a window on a server only downloads, never opens.
+      ...(text.includes('[script]') ? [['rejouer.sh', Buffer.from('#!/bin/sh\necho relance\n')]] : []),
     ].map(([name, bytes]) => {
       const file = path.join(dir, name);
       fs.writeFileSync(file, bytes);

@@ -81,6 +81,12 @@ pub trait Host: Send + Sync + 'static {
     fn secrets_in_file(&self) -> bool {
         false
     }
+    /// The notification `id` this host published was clicked on the client that showed it (ESC-538): what its click
+    /// does (the agent shown) is done. False when it is not known (too old, or a host that shows its own).
+    fn clicked(&self, _id: u64) -> bool {
+        false
+    }
+
     /// The machine the core runs on, which a client of the remote API says (ESC-537, `welcome`).
     fn machine(&self) -> Option<crate::remoteapi::proto::Machine> {
         Some(crate::remoteapi::this_machine())
@@ -187,9 +193,10 @@ impl<R: Runtime> Host for TauriHost<R> {
         match &what {
             Opened::Url(url) => open(What::Url(url)),
             Opened::Path(path) => open(What::Path(path)),
-            Opened::Reveal(path) => {
-                crate::fsedit::reveal(crate::fsedit::Reveal::Select(path.clone()))
-            }
+            Opened::Reveal(path) => match crate::outside::logged(&What::Reveal(path)) {
+                Some(done) => done,
+                None => crate::fsedit::reveal(crate::fsedit::Reveal::Select(path.clone())),
+            },
         }
     }
 
@@ -214,8 +221,15 @@ impl<R: Runtime> Host for TauriHost<R> {
 pub enum HostEvent {
     Chime,
     Flash,
-    Notify { title: String, body: String },
-    Waiting { count: usize },
+    /// `id`: what its click does is kept, for the client that renders it to ask (`Host::clicked`, ESC-538).
+    Notify {
+        id: u64,
+        title: String,
+        body: String,
+    },
+    Waiting {
+        count: usize,
+    },
     Open(Opened),
 }
 
@@ -228,7 +242,16 @@ pub struct HeadlessHost {
     subscribers: Mutex<Vec<tokio::sync::mpsc::UnboundedSender<HostEvent>>>,
     /// The secrets' store it gives the core (`escouade-server`'s file), if any.
     secrets: Option<Arc<dyn crate::integrations::secrets::SecretStore>>,
+    /// What a click on its last notifications does (ESC-538): the client that showed one asks it by its id.
+    clicks: Mutex<std::collections::VecDeque<(u64, Click)>>,
+    next_click: std::sync::atomic::AtomicU64,
 }
+
+/// What a click on a notification does.
+type Click = Box<dyn Fn() + Send + 'static>;
+
+/// The notifications whose click a client may still ask.
+pub const KEPT_CLICKS: usize = 64;
 
 impl Default for HeadlessHost {
     fn default() -> Self {
@@ -245,6 +268,8 @@ impl HeadlessHost {
             origins: FileOrigins::default(),
             subscribers: Mutex::new(Vec::new()),
             secrets: None,
+            clicks: Mutex::new(std::collections::VecDeque::new()),
+            next_click: std::sync::atomic::AtomicU64::new(1),
         }
     }
 
@@ -301,8 +326,19 @@ impl Host for HeadlessHost {
         self.publish(HostEvent::Flash);
     }
 
-    fn notify(&self, title: &str, body: &str, _on_click: Box<dyn Fn() + Send + 'static>) {
+    fn notify(&self, title: &str, body: &str, on_click: Box<dyn Fn() + Send + 'static>) {
+        let id = self
+            .next_click
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        {
+            let mut clicks = self.clicks.lock();
+            clicks.push_back((id, on_click));
+            while clicks.len() > KEPT_CLICKS {
+                clicks.pop_front();
+            }
+        }
         self.publish(HostEvent::Notify {
+            id,
             title: title.to_string(),
             body: body.to_string(),
         });
@@ -340,5 +376,20 @@ impl Host for HeadlessHost {
 
     fn secrets_in_file(&self) -> bool {
         self.secrets.is_some()
+    }
+
+    fn clicked(&self, id: u64) -> bool {
+        let click = {
+            let mut clicks = self.clicks.lock();
+            let at = clicks.iter().position(|(i, _)| *i == id);
+            at.and_then(|at| clicks.remove(at))
+        };
+        match click {
+            Some((_, f)) => {
+                f();
+                true
+            }
+            None => false,
+        }
     }
 }

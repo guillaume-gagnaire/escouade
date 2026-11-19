@@ -74,6 +74,8 @@ export const connection = $state<{
   retryAt: number | null;
   refusal: Refusal | null;
   problem: ServerProblem | null;
+  /** The events of the state the session missed during the last cut (ESC-538); null without one. */
+  missed: number | null;
 }>({
   state: 'local',
   reason: '',
@@ -86,6 +88,7 @@ export const connection = $state<{
   retryAt: null,
   refusal: null,
   problem: null,
+  missed: null,
 });
 
 /** The window is on a server (not this computer's core). */

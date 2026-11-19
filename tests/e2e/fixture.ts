@@ -105,6 +105,11 @@ export interface App {
    * serveur » through the fake `ssh` (tests/fixtures/fake-ssh.mjs, given to the app by ESCOUADE_SSH), the hosts of a
    * test `~/.ssh/config` (ESCOUADE_SSH_CONFIG): `travail` (the server), `labo-inconnu` (an unknown host key). `dir`: the
    * fake's folder (`down`, `cut`).
+   *
+   * What changes machines (ESC-538), of the test's: the server's home folder for « Un dossier du serveur » (the test's
+   * root, ESCOUADE_BROWSE_HOME), this computer's downloads (`<root>/downloads`, ESCOUADE_DOWNLOADS_DIR), what this
+   * computer would open (`<root>/opened.log`, ESCOUADE_OPEN_LOG) and the notifications it would show
+   * (`<root>/alerts.log`, ESCOUADE_ALERT_LOG): nothing opens nor shows for real.
    */
   ssh: { server: BareServer; program: string; dir: string; env: NodeJS.ProcessEnv } | null;
 }
@@ -735,7 +740,11 @@ export const test = base.extend<{
       fs.mkdirSync(serverData);
       fs.copyFileSync(path.join(data, 'settings.json'), path.join(serverData, 'settings.json'));
       const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
-      const serverEnv = { ...env, ESCOUADE_DATA_DIR: serverData };
+      const dir = path.join(root, 'fake-ssh');
+      fs.mkdirSync(dir);
+      // The ports a program of the server takes later (the fake `codex login`'s), mapped by the fake `ssh` (ESC-538).
+      const portsFile = path.join(dir, 'ports');
+      const serverEnv = { ...env, ESCOUADE_DATA_DIR: serverData, ESCOUADE_BROWSE_HOME: root, FAKE_SSH_PORTS_FILE: portsFile };
       const program = serverProgram(EXE);
       const bare = await startBareServer(program, serverData, serverEnv, base ? base + 2 : 0);
       const config = path.join(root, 'ssh-home', '.ssh', 'config');
@@ -744,8 +753,6 @@ export const test = base.extend<{
         config,
         'Host travail\n  HostName escouade.test.internal\n  User escouade\n\nHost labo-inconnu\n  HostName labo.test.internal\n  User gpu\n  ProxyJump travail\n\nHost *\n  ServerAliveInterval 30\n',
       );
-      const dir = path.join(root, 'fake-ssh');
-      fs.mkdirSync(dir);
       env.ESCOUADE_SSH = process.execPath;
       env.ESCOUADE_SSH_PREFIX = path.join(ROOT, 'tests', 'fixtures', 'fake-ssh.mjs');
       env.ESCOUADE_SSH_CONFIG = config;
@@ -753,6 +760,10 @@ export const test = base.extend<{
       env.FAKE_SSH_PORTS = `46480=${bare.port}`;
       env.FAKE_SSH_SERVER = program;
       env.FAKE_SSH_DATA = serverData;
+      env.FAKE_SSH_PORTS_FILE = portsFile;
+      env.ESCOUADE_DOWNLOADS_DIR = path.join(root, 'downloads');
+      env.ESCOUADE_OPEN_LOG = path.join(root, 'opened.log');
+      env.ESCOUADE_ALERT_LOG = path.join(root, 'alerts.log');
       sshed = { server: bare, program, dir, env: serverEnv };
     }
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.

@@ -33,6 +33,8 @@ struct Session {
     live: usize,
     /// When its last connection ended.
     left: Instant,
+    /// The events of the hub emitted when it ended (`Hub::emitted`): those since, its client missed (ESC-538).
+    seen: u64,
 }
 
 #[derive(Default)]
@@ -91,6 +93,7 @@ impl Sessions {
                 order: VecDeque::new(),
                 live: 1,
                 left: now,
+                seen: 0,
             },
         );
         (id, false)
@@ -102,6 +105,23 @@ impl Sessions {
             s.live = s.live.saturating_sub(1);
             s.left = now;
         }
+    }
+
+    /// The events of the hub emitted as a connection of the session ends (`Hub::emitted`).
+    pub fn note_seen(&self, id: &str, emitted: u64) {
+        if let Some(s) = self.all.lock().get_mut(id) {
+            s.seen = emitted;
+        }
+    }
+
+    /// The events emitted since the session's last connection ended, for a client that takes it again: none for a
+    /// session never left.
+    pub fn missed(&self, id: &str, emitted: u64) -> Option<u64> {
+        self.all
+            .lock()
+            .get(id)
+            .filter(|s| s.seen > 0)
+            .map(|s| emitted.saturating_sub(s.seen))
     }
 
     /// The terminal of `channel` in the session `id` (its output, `replay`), from now on.

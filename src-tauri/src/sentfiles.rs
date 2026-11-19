@@ -380,6 +380,27 @@ fn not_run(lang: crate::i18n::Lang, name: &str) -> anyhow::Error {
     ))
 }
 
+/// The heaviest file a client downloads from a server (ESC-538): a report, an export, a build; not a disk image.
+pub(crate) const MAX_DOWNLOAD: u64 = 512 << 20;
+
+/// The bytes of `path`, refused past [`MAX_DOWNLOAD`] before they are read.
+pub(crate) fn read_bounded(path: &Path, lang: crate::i18n::Lang) -> anyhow::Result<Vec<u8>> {
+    let size = std::fs::metadata(path)?.len();
+    if size > MAX_DOWNLOAD {
+        let (mb, max) = (size >> 20, MAX_DOWNLOAD >> 20);
+        anyhow::bail!(tr_in!(
+            lang,
+            "Ce fichier pèse {mb} Mo : un fichier se télécharge jusqu’à {max} Mo. Il reste sur le serveur.",
+            "This file weighs {mb} MB: a file downloads up to {max} MB. It stays on the server."
+        ));
+    }
+    let mut bytes = Vec::with_capacity(size as usize);
+    std::fs::File::open(path)?
+        .take(MAX_DOWNLOAD)
+        .read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
 /// `path` opened with its application, or shown in its folder (`reveal`), on the host's machine.
 pub(crate) fn open_or_reveal(
     host: &dyn crate::host::Host,
@@ -732,6 +753,43 @@ impl crate::core::Core {
                 lang,
             )?;
             open_or_reveal(&*host, path, reveal)
+        })
+        .await?
+    }
+
+    /// The bytes of the file `index` of a call (ESC-538): what a client on a server downloads to its own computer,
+    /// rather than opening it on the server. Read as `target` finds it (its fence kept), a program or a script too:
+    /// the client keeps it, never opens it. Refused past [`MAX_DOWNLOAD`].
+    pub async fn sent_file_bytes(
+        &self,
+        id: &str,
+        item: &str,
+        index: usize,
+    ) -> anyhow::Result<Vec<u8>> {
+        let (folder, cwd, input, sent, fence) = self.sent_call(id, item)?;
+        let lang = crate::i18n::ui();
+        tokio::task::spawn_blocking(move || {
+            let path = target(
+                &folder,
+                &cwd,
+                &input,
+                sent.as_ref(),
+                index,
+                true,
+                &fence,
+                lang,
+            )?;
+            read_bounded(&path, lang)
+        })
+        .await?
+    }
+
+    /// The bytes of the image a message of the agent `id` shows by a local path (ESC-538), for a client on a server.
+    pub async fn agent_local_bytes(&self, id: &str, src: &str) -> anyhow::Result<Vec<u8>> {
+        let cwd = self.agent(id)?.lock().meta.cwd.clone();
+        let (fence, src, lang) = (self.agent_fence(id), src.to_string(), crate::i18n::ui());
+        tokio::task::spawn_blocking(move || {
+            read_bounded(&local_target(&cwd, &src, true, &fence, lang)?, lang)
         })
         .await?
     }

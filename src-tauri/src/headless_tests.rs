@@ -146,6 +146,7 @@ async fn a_host_without_a_window_publishes_what_the_desktop_shows_to_each_subscr
     let all = [
         HostEvent::Chime,
         HostEvent::Notify {
+            id: 1,
             title: "t".into(),
             body: "b".into(),
         },

@@ -28,7 +28,18 @@
   let was = connection.state;
   $effect(() => {
     const state = connection.state;
-    if (server && was === 'lost' && state === 'open') app.toast(t('servers.band.reconnected', { name: server.name }), 'ok');
+    if (server && was === 'lost' && state === 'open') {
+      // How many events of the state it caught up (ESC-538), when the server says.
+      const missed = connection.missed;
+      app.toast(
+        missed === null
+          ? t('servers.band.reconnected', { name: server.name })
+          : missed === 0
+            ? t('moves.reconnectedNone', { name: server.name })
+            : t('moves.reconnected', { name: server.name, count: missed }),
+        'ok',
+      );
+    }
     was = state;
   });
 </script>

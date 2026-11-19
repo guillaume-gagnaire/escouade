@@ -36,13 +36,29 @@ Once a server is known, the machine shows wherever a mistake would cost:
 - **The projects bar**: the open space above its projects, the other one under the “+”, a click away.
 - **The foot of the sidebar**: “Work:” before the project’s folder, a server icon instead of a folder.
 - **A terminal**: “Work · escouade@vps.example.net” in its header.
-- **“New project”**: “on Work · escouade.acme.internal”; the folders are the server’s, not this computer’s, and the path is typed.
+- **“New project”**: “on Work · escouade.acme.internal”; the folders are the server’s, not this computer’s (see below).
+- **A file an agent sends**: “sent from Work · copied to this computer in …”.
+- **Secrets**: “Kept in a file on Work” wherever a key is given.
+- **Notifications**: the space’s name first, “Work · billing · reminders”.
+
+## What happens on the server, and what stays on this computer
+
+On a server, the projects, the agents and their files are there; you, your browser, your microphone and your folders stay here. Nothing the server sends opens on this computer without your click.
+
+- **A new project**: “Clone a repository” (the server clones with its own git keys), or “A folder of the server”: its folders, whether they are repositories and on which branch, those that are projects already, and the room left on its disk.
+- **What you send**: a project’s logo, an attached file, a pasted image go from this computer to the server, always as a copy.
+- **What an agent sends you**: “Open” downloads it then into `Downloads/Escouade/Work` and opens the copy. A program or a script never opens: “Download to this computer” copies it and shows it in its folder. “See on the server” shows it in the Files panel.
+- **A test server** (Launch, or a link to `localhost`): its port is relayed to this computer, and the page opens here, hot reload included.
+- **Notifications, sound, flashing** are this computer’s; their choices (Settings › Notifications) are the server’s.
+- **Voice** is this computer’s: its microphone, its transcription, its keys and its settings. Only the text goes to the server.
+- **Signing an account in** (Codex, Claude Code, Gemini CLI…): the harness runs on the server; “Open the page on this computer” opens the sign-in page here. When it comes back to `localhost` (Codex, Gemini CLI), Escouade relays that return to the server; otherwise paste the code it shows into the terminal (Claude Code), or type the device code on the page (Copilot CLI). The account stays on the server.
+- **Secrets** (keys of Cursor, of services, of plugins) are kept in a file on the server, readable by its own account alone: a server has no keychain.
 
 ## When the connection drops
 
 Agents keep working on the server: closing the app, turning this computer off or losing the network does not stop them. A band says “Connection to Work lost at 14:32”, the next try, and that what you see is from 14:32. Escouade restarts the tunnel and the connection by itself (after 250 ms, then further apart, every 5 s at most); “Try again” does it now, “Go to This computer” brings you back here.
 
-During the cut, sending is paused: your draft stays in the input, nothing is queued. Once back, the screen is read again whole, terminals resume where they were, and “Reconnected to Work” shows.
+During the cut, sending is paused: your draft stays in the input, nothing is queued. Once back, the screen is read again whole, terminals resume where they were, and “Reconnected to Work · caught up on 12 events” shows.
 
 ## What the failures say
 

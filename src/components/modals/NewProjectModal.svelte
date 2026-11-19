@@ -7,7 +7,7 @@
   import { repoLabel } from '../../lib/repos';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
-  import { knowLogo, logoUrl, pickLogo } from '../../lib/project-logo.svelte';
+  import { knowLogo, logoUrl, pickLogo, saveLogo } from '../../lib/project-logo.svelte';
   import { cleanLabel, cleanLetters, initials, tileText } from '../../lib/project-rail';
   import TileFace from '../TileFace.svelte';
   import { projectPalette } from '../../lib/plugin-theme.svelte';
@@ -23,6 +23,8 @@
   import WorktreesStep from '../wizard/WorktreesStep.svelte';
   import Icon from '../Icon.svelte';
   import TeamClone from '../team/TeamClone.svelte';
+  import CloneRepo from '../servers/CloneRepo.svelte';
+  import ServerFolders from '../servers/ServerFolders.svelte';
   import { teamProjectsApi } from '../../lib/team-projects';
   import { teamSettingsApi } from '../../lib/team-settings';
   import Modal from './Modal.svelte';
@@ -42,6 +44,17 @@
   const cloneFrom = existing ? null : (from?.clone ?? null);
   /** Its repositories are there: the wizard goes on with their folder. */
   let cloned = $state(false);
+
+  // On a server (ESC-538, docs/SERVER-UX.md § 4): the folders are the server's. « Cloner un dépôt » first (the usual
+  // way), or « Un dossier du serveur » (its browser); the system's picker, this computer's, never shows.
+  let source = $state<'clone' | 'folder'>(startPath ? 'folder' : 'clone');
+  /** The folder of the server the browser shows: where a clone goes. */
+  let browseAt = $state('');
+  if (connection.server && !existing)
+    void api
+      .fsBrowse()
+      .then((l) => (browseAt ||= l.path))
+      .catch(() => {});
 
   const used = new Set(app.projects.map((p) => p.color));
   form.path = startPath;
@@ -93,7 +106,7 @@
       if (await app.run(api.updateProject(next).then(() => true))) out = next;
     }
     if (logoPick || (logoRemoved && out.logo)) {
-      const saved = await app.run(api.setProjectLogo(out.id, logoPick?.path ?? null));
+      const saved = await app.run(saveLogo(out.id, logoPick?.path ?? null, logoPick?.url));
       if (saved) {
         if (logoPick) knowLogo(saved, logoPick.url);
         out = { ...out, logo: saved.logo };
@@ -337,26 +350,46 @@
           {#if cloneFrom}<p class="lead">
               {t('teamProjects.clone.cloned', { path: tildify(form.path.trim()), team: cloneFrom.teamName })}
             </p>{/if}
+          {#if connection.server}
+            <p class="server-lead" data-testid="server-lead">
+              <Icon name="server" size={14} />{t('moves.browse.lead', { name: connection.server.name, host: connection.server.host })}
+            </p>
+            <div class="sources" role="tablist" aria-label={t('moves.browse.sources')}>
+              <button role="tab" class="src" aria-selected={source === 'clone'} onclick={() => (source = 'clone')}
+                ><Icon name="download" size={13} />{t('moves.browse.clone')}</button
+              >
+              <button role="tab" class="src" aria-selected={source === 'folder'} onclick={() => (source = 'folder')}
+                ><Icon name="folder" size={13} />{t('moves.browse.folder')}</button
+              >
+            </div>
+            {#if source === 'clone'}
+              <CloneRepo
+                parent={browseAt}
+                oncloned={(p) => {
+                  form.path = p;
+                }}
+              />
+            {:else}
+              <ServerFolders selected={form.path.trim()} onpick={(p) => (form.path = p)} onlisting={(l) => (browseAt = l.path)} />
+            {/if}
+          {/if}
           <div class="w-fld">
             <span class="lab">{t('common.folder')}</span>
             <div class="row">
               <!-- svelte-ignore a11y_autofocus -->
               <input
+                aria-label={t('common.folder')}
                 class="field mono path-in"
                 bind:value={form.path}
                 placeholder={t('shell.newProject.pathPlaceholder')}
                 spellcheck="false"
                 autofocus
               />
-              <!-- The system's folder picker is this computer's: never on a server, whose folders are typed (its browser comes
-                   with MS-4). -->
+              <!-- The system's folder picker is this computer's: never on a server, whose folders are browsed above. -->
               {#if !connection.server}<button class="btn" onclick={browse}
                   ><Icon name="folder" size={14} />{t('shell.newProject.browse')}</button
                 >{/if}
             </div>
-            {#if connection.server}<span class="on-server-note"
-                ><Icon name="server" size={12} />{t('servers.newProject.folders', { name: connection.server.name })}</span
-              >{/if}
             <span class="git" style:color={gitLine.color} use:tip={info?.repos?.length ? t('repos.wizard.foundHint') : undefined}
               ><span class="gd" style:background={gitLine.color}></span>{gitLine.text}</span
             >
@@ -741,12 +774,46 @@
     gap: 5px;
     color: var(--soft);
   }
-  .on-server-note {
+  /* On a server (ESC-538): where the folders are, then where the project comes from. */
+  .server-lead {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 9px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .sources {
+    display: flex;
+    gap: 6px;
+  }
+  .src {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 7px;
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--line-2);
     color: var(--muted);
-    font-size: 12px;
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .src[aria-selected='true'] {
+    color: var(--text);
+    background: var(--hover);
+    box-shadow: inset 0 0 0 1px var(--line-3, var(--line-2));
+    font-weight: 600;
+  }
+  .src:focus-visible {
+    outline: 2px solid var(--focus, var(--p-ink));
+    outline-offset: 2px;
   }
   .chip-sm.path {
     flex: 0 1 auto;

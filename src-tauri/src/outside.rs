@@ -112,7 +112,33 @@ fn spawn(launch: &Launch) -> Result<()> {
 }
 
 /// Opens `what` outside Escouade (see the module's comment).
+/// The e2e (a build of development, `ESCOUADE_OPEN_LOG`): what would be opened written to that file, nothing opened
+/// for real (ESC-538). None otherwise.
+pub fn logged(what: &What) -> Option<Result<()>> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    let log = std::env::var_os("ESCOUADE_OPEN_LOG").filter(|v| !v.is_empty())?;
+    let line = match what {
+        What::Url(u) => format!("url {u}"),
+        What::Path(p) => format!("path {}", p.display()),
+        What::Reveal(p) => format!("reveal {}", p.display()),
+    };
+    Some((|| {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log)?;
+        writeln!(f, "{line}")?;
+        Ok(())
+    })())
+}
+
 pub fn open(what: What) -> Result<()> {
+    if let Some(done) = logged(&what) {
+        return done;
+    }
     if in_wsl() {
         let Some(launch) = wsl_launch(what, crate::which::find, wslpath_w, Path::is_dir) else {
             bail!(tr!(

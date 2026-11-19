@@ -1,5 +1,7 @@
+import { onServer } from './connection.svelte';
 import { api } from './ipc';
 import { openUrl } from './opener';
+import { receive, received, showReceived } from './server-moves.svelte';
 
 /** Where an image the viewer shows comes from: what « Ouvrir » and « Afficher dans le dossier » act on. */
 export type ImageSource =
@@ -41,8 +43,24 @@ function viewed(img: HTMLImageElement): ViewedImage {
   return { name: d.name || img.alt || path.split(/[\\/]/).pop() || '', url: img.src, source };
 }
 
-/** The image's file opened with its application or shown in its folder (`reveal`); one of the web, in the browser. */
-export function openSource(s: ImageSource, reveal: boolean): Promise<void> {
+/** The key of the copy a window on a server makes of an agent's file (`server-moves.svelte.ts`). */
+export function copyKey(s: Exclude<ImageSource, { kind: 'remote' }>): string {
+  return s.kind === 'sent' ? `${s.agent}|${s.item}|${s.index}` : `local|${s.agent}|${s.src}`;
+}
+
+/**
+ * The image's file opened with its application or shown in its folder (`reveal`); one of the web, in the browser. On a
+ * server (ESC-538, S12): the file is the server's, downloaded to this computer, its copy opened or shown there.
+ */
+export async function openSource(s: ImageSource, reveal: boolean, name = ''): Promise<void> {
+  if (onServer() && s.kind !== 'remote') {
+    const key = copyKey(s);
+    const had = received[key];
+    if (had) return showReceived(had, reveal);
+    const bytes = () => (s.kind === 'sent' ? api.sentFileBytes(s.agent, s.item, s.index) : api.agentLocalBytes(s.agent, s.src));
+    await receive(key, name || (s.kind === 'local' ? s.src.split(/[\\/]/).pop() || 'image' : 'image'), bytes, reveal ? 'reveal' : 'open');
+    return;
+  }
   if (s.kind === 'sent') return api.sentFileOpen(s.agent, s.item, s.index, reveal);
   if (s.kind === 'local') return api.agentLocalOpen(s.agent, s.src, reveal);
   return openUrl(s.src);

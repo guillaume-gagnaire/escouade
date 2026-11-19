@@ -2,7 +2,7 @@
 title: "Nouveau projet"
 subject: "Projets"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-94","ESC-167","ESC-168","ESC-142","ESC-163","ESC-89","ESC-309","ESC-481"]
+tickets: ["ESC-94","ESC-167","ESC-168","ESC-142","ESC-163","ESC-89","ESC-309","ESC-481","ESC-537","ESC-538"]
 decisions: []
 compared: "2026-10-31T10:06:22+01:00"
 gaps: [{"text":"La page dit que la fenêtre fait 840 px de large. Le code ouvre la modale à 900 px (`width={900}`).","code":["src/components/modals/NewProjectModal.svelte"]}]
@@ -91,3 +91,12 @@ Le dossier est revérifié à la lecture du chemin, au changement de projet copi
 
 - Réglages › Projets › « Assistant de configuration » › « Ouvrir l'assistant… » remplace les réglages par l'assistant sur ce projet, titré « Configurer <projet> ». Pas de dossier à choisir. Points de départ : « Garder la configuration actuelle » (par défaut), la copie (des autres projets ouverts), la configuration recommandée ou zéro. Ni premier agent, ni « Créer sans l'assistant ».
 - « Enregistrer », au récapitulatif, enregistre les réglages et le Kanban, nom et couleur compris ; les sources liées du projet sont gardées ; le reste du brouillon des réglages est abandonné. « ✦ Remplir automatiquement » lit alors le dossier du projet.
+
+### Sur un serveur (ESC-538)
+
+Quand la fenêtre est sur un serveur, le dossier du projet est un dossier **du serveur** (voir *Ce qui change de machine*) :
+
+- En tête de Départ : « Les dossiers sont ceux de Travail (escouade.acme.internal), pas de ce poste : le projet et ses agents vivront sur le serveur. » ; « sur Travail · escouade.acme.internal » à côté du titre.
+- Deux sources : « Cloner un dépôt » (en premier, choisie par défaut) et « Un dossier du serveur » (le navigateur des dossiers du serveur : dépôt et branche, « Déjà un projet », la place libre de son disque). Le chemin se tape aussi. « Parcourir… », le sélecteur du poste, n'apparaît pas.
+- Le logo choisi est une image du poste : ses octets sont envoyés au serveur, jamais son chemin.
+- Le reste de l'assistant ne change pas : il lit le dossier sur le serveur.

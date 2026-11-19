@@ -2,8 +2,11 @@
 // is a new file), kept for the rest of the run. Shown in an `<img>`: an SVG's scripts never run.
 
 import { open } from '@tauri-apps/plugin-dialog';
+import { onServer } from './connection.svelte';
 import { t } from './i18n';
 import { api } from './ipc';
+import { baseName, bytesOfDataUrl } from './server-moves.svelte';
+import { local } from './transport';
 import { app } from './state.svelte';
 import type { Project } from './types';
 
@@ -48,8 +51,18 @@ export async function pickLogo(): Promise<{ path: string; url: string } | null> 
     filters: [{ name: t('settings.project.logoFilter'), extensions: LOGO_EXTENSIONS }],
   });
   if (typeof path !== 'string') return null;
-  const url = await app.run(api.readLogo(path));
+  // The image is this computer's: read here, whichever core the window speaks to (ESC-538).
+  const url = await app.run(onServer() ? local<string>('read_logo', { path }) : api.readLogo(path));
   return url ? { path, url } : null;
+}
+
+/**
+ * The logo chosen (`path` of this computer, its preview `url`) saved as the project's, or removed (null). On a server,
+ * the image is sent as bytes, never its path, which is this computer's (ESC-538).
+ */
+export function saveLogo(id: string, path: string | null, url?: string | null) {
+  if (path && url && onServer()) return api.setProjectLogoBytes(id, baseName(path), bytesOfDataUrl(url));
+  return api.setProjectLogo(id, path);
 }
 
 /** For the tests: nothing known. */

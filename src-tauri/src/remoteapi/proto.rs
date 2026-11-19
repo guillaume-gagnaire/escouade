@@ -152,6 +152,10 @@ pub enum ToClient {
         /// own core.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         machine: Option<Machine>,
+        /// A session taken again (`resumed`): the events of the state emitted since its client left (ESC-538,
+        /// « Reconnecté à Travail · 12 événements rattrapés »). The state itself is read again whole.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        missed: Option<u64>,
     },
     /// The device forgot the server (ESC-537): its token is revoked. The connection then closes.
     Unpaired {},

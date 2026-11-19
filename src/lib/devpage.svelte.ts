@@ -7,6 +7,7 @@
 import { t } from './i18n';
 import { api } from './ipc';
 import { openUrl } from './opener';
+import { onThisComputer } from './server-moves.svelte';
 import { app } from './state.svelte';
 import type { Agent, PageBounds, PageEvent, PagesOpen, Project } from './types';
 import { loadModes, nextMode, saveMode, type PageMode } from './devpage-key';
@@ -80,7 +81,9 @@ export async function openLaunchPage(agent: Agent, address: string): Promise<Pag
     return where;
   }
   const title = pageTitle(agent, address);
-  const view = await api.devpageOpen(agent.id, title, address, where === 'window', null);
+  // On a server (ESC-538): its test server relayed to a port of this computer, where the page opens.
+  const here = await onThisComputer(address);
+  const view = await api.devpageOpen(agent.id, title, here, where === 'window', null);
   devpages.pages[agent.id] = { url: view.url, title, phase: 'loading', detached: view.detached };
   // Its width, as it was chosen at its last launch (the « Pages » window lays it out by it).
   const mode = modeOf(agent.id);
@@ -137,6 +140,7 @@ export function openPageBeside(agentId: string, zone: 'right' | 'bottom' = 'righ
 
 /** Back, forward, reload, or an address typed in its bar. */
 export function go(agentId: string, action: 'back' | 'forward' | 'reload' | 'to', to?: string) {
+  if (action === 'to' && to) return app.run(onThisComputer(to).then((here) => api.devpageGo(agentId, action, here)));
   return app.run(api.devpageGo(agentId, action, to));
 }
 

@@ -7,6 +7,8 @@
   import { t } from './lib/i18n';
   import { api } from './lib/ipc';
   import { app } from './lib/state.svelte';
+  import { showHostEvent } from './lib/server-moves.svelte';
+  import { onHostEvent } from './lib/transport';
   import { dictation } from './lib/dictation.svelte';
   import { conversation } from './lib/conversation.svelte';
   import { dictationKey, handleShortcut, holdPrint, inVscode } from './lib/shortcuts';
@@ -107,10 +109,13 @@
     app.init().catch((e) => (initError = String(e)));
     // The servers this computer knows (ESC-537): the machine is said once one is.
     void loadServers();
-    if (!import.meta.env.PROD) return;
+    // On a server, what its host publishes (a notification, a chime) is shown here, named by its space (ESC-538).
+    const stopHost = onHostEvent(showHostEvent);
+    if (!import.meta.env.PROD) return stopHost;
     const stopChecks = watchForUpdates();
     const stopPresence = watchPresence();
     return () => {
+      stopHost();
       stopChecks();
       stopPresence();
     };

@@ -80,8 +80,22 @@ pub(crate) fn read_in(lang: Lang, path: &Path) -> Result<Logo> {
         ));
     }
     let bytes = std::fs::read(path).map_err(unreadable)?;
-    let Some((ext, media_type)) = (bytes.len() <= MAX_LOGO).then(|| kind_of(&bytes)).flatten()
-    else {
+    checked(lang, &name, bytes)
+}
+
+/// The logo of `bytes` sent by a client of the remote API (`name`: its file's name, for what is said), checked as a
+/// file is (`read_in`): the image of this computer sent to a server (ESC-538).
+pub(crate) fn checked(lang: Lang, name: &str, bytes: Vec<u8>) -> Result<Logo> {
+    if bytes.len() > MAX_LOGO {
+        let size = size_label(lang, bytes.len());
+        let max = size_label(lang, MAX_LOGO);
+        bail!(tr_in!(
+            lang,
+            "« {name} » pèse {size} : un logo pèse {max} au plus.",
+            "“{name}” weighs {size}: a logo weighs {max} at most."
+        ));
+    }
+    let Some((ext, media_type)) = kind_of(&bytes) else {
         bail!(tr_in!(
             lang,
             "« {name} » n’est pas une image PNG, JPEG, WebP, SVG ou ICO.",
@@ -114,6 +128,14 @@ pub(crate) fn import(
         bail!("project id {project_id}");
     }
     let logo = read_in(lang, source)?;
+    keep(data, project_id, &logo)
+}
+
+/// The logo `logo`, checked already, copied under the project (`import`): its file's name.
+pub(crate) fn keep(data: &DataDir, project_id: &str, logo: &Logo) -> Result<String> {
+    if !is_plain_id(project_id) {
+        bail!("project id {project_id}");
+    }
     let dir = data.project_files(project_id);
     std::fs::create_dir_all(&dir)?;
     let file = format!("logo-{}.{}", new_id(), logo.ext);

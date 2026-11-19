@@ -220,6 +220,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `agent_folder_principal`
 - `agent_folder_rename`
 - `agent_git_sync`
+- `agent_local_bytes`
 - `agent_local_image`
 - `agent_logout`
 - `agent_merge_check`
@@ -260,6 +261,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `claude_memory_take`
 - `claude_update_status`
 - `clean_worktrees`
+- `clone_repo`
 - `closed_projects`
 - `code_search`
 - `commit_direct`
@@ -323,6 +325,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `forges`
 - `forget_repo`
 - `fs_base`
+- `fs_browse`
 - `fs_create`
 - `fs_delete`
 - `fs_mkdir`
@@ -352,6 +355,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `harness_enable_in`
 - `harness_plugin_of`
 - `harness_scope`
+- `host_notification_click`
 - `http_ready`
 - `inbox_answer` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur ; les fichiers de la réponse arrivent par `attach_*`, en octets bruts
 - `inbox_closing` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
@@ -467,10 +471,12 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `secrets_file` : les secrets des plugins gardés dans un fichier (ESC-499) : le fichier et le trousseau de la machine du cœur
 - `secrets_file_remove` : les secrets des plugins gardés dans un fichier (ESC-499) : le fichier et le trousseau de la machine du cœur
 - `send_message`
+- `sent_file_bytes`
 - `sent_files`
 - `set_agent_account`
 - `set_agent_options`
 - `set_agent_view`
+- `set_project_logo_bytes`
 - `set_remote_control`
 - `set_ui`
 - `set_workflow_removed`
@@ -604,14 +610,19 @@ Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 - `devpage_open` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
 - `devpage_place` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
 - `devpage_show` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `local_voice_get` : ce qui change de machine, côté poste (ESC-538) : les fichiers reçus du serveur, ses ports relayés, ses notifications montrées, les réglages de la voix
+- `local_voice_set` : ce qui change de machine, côté poste (ESC-538) : les fichiers reçus du serveur, ses ports relayés, ses notifications montrées, les réglages de la voix
 - `open_url` : la fenêtre du poste : ses liens, son état, sa fin
 - `overseer_hotkey_press` : le raccourci global du poste
 - `overseer_shortcut_set` : le raccourci global du poste
 - `overseer_voice_start` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `play_chime` : la fenêtre du poste : ses liens, son état, sa fin
 - `quit_app` : la fenêtre du poste : ses liens, son état, sa fin
+- `received_save` : ce qui change de machine, côté poste (ESC-538) : les fichiers reçus du serveur, ses ports relayés, ses notifications montrées, les réglages de la voix
+- `received_show` : ce qui change de machine, côté poste (ESC-538) : les fichiers reçus du serveur, ses ports relayés, ses notifications montrées, les réglages de la voix
 - `restart_for_restore` : la fenêtre du poste : ses liens, son état, sa fin
 - `save_image` : un dialogue du poste : le client enregistre l’image lui-même
+- `server_alert` : ce qui change de machine, côté poste (ESC-538) : les fichiers reçus du serveur, ses ports relayés, ses notifications montrées, les réglages de la voix
 - `server_attempt` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_cancel` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_code_over_ssh` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
@@ -621,6 +632,8 @@ Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 - `server_note` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_open` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_pair` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
+- `server_relay` : ce qui change de machine, côté poste (ESC-538) : les fichiers reçus du serveur, ses ports relayés, ses notifications montrées, les réglages de la voix
+- `server_relays` : ce qui change de machine, côté poste (ESC-538) : les fichiers reçus du serveur, ses ports relayés, ses notifications montrées, les réglages de la voix
 - `server_rename` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `server_retry` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
 - `servers_ssh_hosts` : les serveurs que connaît ce poste, leur tunnel SSH et leur jeton (ESC-537) : toujours ceux du poste, quel que soit le cœur de la fenêtre
@@ -732,27 +745,29 @@ Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-serve
 
   - Il prend la config, l'agent et les `known_hosts` de l'utilisateur.
   - Rien de nouveau n'est exposé sur le VPS, et Escouade ne gère aucune clé SSH.
-  - Une seule redirection suffit : le reste (terminaux, serveurs de test) passe dans la connexion de l'API.
+  - Une seule redirection suffit à l'API : les terminaux passent dans sa connexion ; un serveur de test ou le retour d'une connexion de compte prend une redirection de plus, à la demande (ESC-538).
 - **Plus tard.** WireGuard intégré (celui du téléphone, plus bas) et Tailscale s'il est installé, pour qui n'a pas SSH, ou pour un téléphone.
 
 ### Ce qui change de machine
 
-| Quoi | Aujourd'hui | En mode serveur |
-| --- | --- | --- |
-| Choisir un dossier (assistant « Nouveau projet ») | Sélecteur du système | Un navigateur des dossiers du serveur, servi par le cœur ; cloner un dépôt devient le cas courant |
-| Logo d'un projet | Chemin d'une image | L'image envoyée au serveur |
-| Fichiers joints | Chemin d'origine (Windows) ou copie | Toujours une copie envoyée |
-| Coller une image | Presse-papiers lu par le cœur sous Linux | Lu par le client, envoyé |
-| Fichiers envoyés par un agent | « Ouvrir » et « Afficher dans le dossier » sur la machine du cœur | Téléchargés sur le poste ; « Ouvrir » ouvre la copie (jamais un exécutable, comme ESC-171) ; « Afficher » les montre dans le panneau Fichiers |
-| « Afficher dans l'Explorateur » | Explorateur du système | Panneau Fichiers, ou caché |
-| Serveur de test d'un agent (Lancement) | 127.0.0.1 du poste | Un port local du client, relayé dans la connexion vers le 127.0.0.1 du serveur (WebSocket du rechargement à chaud compris) |
-| Notifications, son, clignotement, tray | Par le cœur | Un événement, rendu par le client ; le cœur ne notifie plus rien lui-même |
-| Voix (micro, Whisper, Piper, voix en ligne) | Micro et haut-parleurs de la machine du cœur | Sur le poste : le module voix (sans aucune dépendance à Tauri) tourne dans le client et envoie le texte ; la clé d'une voix en ligne reste au trousseau du poste |
-| Connexion d'un compte | CLI lancé dans un PTY, navigateur ouvert sur la même machine | L'adresse de connexion s'ouvre sur le poste ; le retour par `localhost` est à essayer harness par harness (coller un code, code d'appareil) |
-| Secrets (clés de Cursor, des intégrations, des voix) | Trousseau (Windows, macOS) | Un fichier lisible du seul propriétaire, dans les données du serveur (pas de Secret Service sur un VPS), et l'interface le dit |
-| Mise à jour | L'app se met à jour | Le client et le serveur, chacun le sien ; le serveur avec la même signature que l'updater ; le client propose de mettre le serveur à sa version |
-| Serveur MCP | 127.0.0.1 du poste | 127.0.0.1 du serveur : les agents du serveur l'atteignent ; un Claude Code du poste qui pilote Escouade passera par le tunnel (plus tard) |
-| WSL | Windows | Sans objet |
+La dernière colonne dit ce que fait le client depuis MS-4 (ESC-538, « Ce qui change de machine, MS-4 » plus bas).
+
+| Quoi | Aujourd'hui | En mode serveur | Côté client (ESC-538) |
+| --- | --- | --- | --- |
+| Choisir un dossier (assistant « Nouveau projet ») | Sélecteur du système | Un navigateur des dossiers du serveur, servi par le cœur ; cloner un dépôt devient le cas courant | Fait : « Cloner un dépôt » d'abord, « Un dossier du serveur » (`fs_browse`, `clone_repo`) |
+| Logo d'un projet | Chemin d'une image | L'image envoyée au serveur | Fait : lue sur le poste, ses octets envoyés (`set_project_logo_bytes`) |
+| Fichiers joints | Chemin d'origine (Windows) ou copie | Toujours une copie envoyée | Fait : toujours une copie (corps bruts, ESC-495) |
+| Coller une image | Presse-papiers lu par le cœur sous Linux | Lu par le client, envoyé | Fait : `clipboard_image` du poste, puis l'envoi d'une image collée |
+| Fichiers envoyés par un agent | « Ouvrir » et « Afficher dans le dossier » sur la machine du cœur | Téléchargés sur le poste ; « Ouvrir » ouvre la copie (jamais un exécutable, comme ESC-171) ; « Afficher » les montre dans le panneau Fichiers | Fait (S12) : `sent_file_bytes`, `agent_local_bytes`, puis `received_save` sur le poste ; « Voir sur le serveur » |
+| « Afficher dans l'Explorateur » | Explorateur du système | Panneau Fichiers, ou caché | Fait : le panneau Fichiers pour un projet, caché pour les dossiers des données |
+| Serveur de test d'un agent (Lancement) | 127.0.0.1 du poste | Un port local du client, relayé vers le 127.0.0.1 du serveur (WebSocket du rechargement à chaud compris) | Fait : une redirection SSH de plus par port (`server_relay`), pas dans la connexion de l'API (voir plus bas) |
+| Notifications, son, clignotement, tray | Par le cœur | Un événement, rendu par le client ; le cœur ne notifie plus rien lui-même | Fait : `server_alert` sur le poste, le nom de l'espace en tête, le clic rendu au serveur (`host_notification_click`) |
+| Voix (micro, Whisper, Piper, voix en ligne) | Micro et haut-parleurs de la machine du cœur | Sur le poste : le module voix tourne dans le client et envoie le texte ; la clé d'une voix en ligne reste au trousseau du poste | Fait : ses commandes étaient du poste (`desk`) ; ses réglages sont maintenant ceux du poste (`local_voice_get`, `local_voice_set`) |
+| Connexion d'un compte | CLI lancé dans un PTY, navigateur ouvert sur la même machine | L'adresse de connexion s'ouvre sur le poste ; le retour par `localhost` relayé, sinon un code (S13) | Fait : la page ouverte au clic, le retour relayé sur le même port, sinon le code ; harness par harness plus bas |
+| Secrets (clés de Cursor, des intégrations, des voix) | Trousseau (Windows, macOS) | Un fichier lisible du seul propriétaire, dans les données du serveur (pas de Secret Service sur un VPS), et l'interface le dit | Fait : « Gardée dans un fichier sur Travail » là où un secret se donne ; les clés de la voix restent au poste |
+| Mise à jour | L'app se met à jour | Le client et le serveur, chacun le sien ; le serveur avec la même signature que l'updater ; le client propose de mettre le serveur à sa version | Pas ici : la mise à jour signée du serveur est d'ESC-515 (`escouade-server update`, `serverUpdate` dans le refus de version) ; l'écran « Mettre à jour le serveur » du client reste à faire |
+| Serveur MCP | 127.0.0.1 du poste | 127.0.0.1 du serveur : les agents du serveur l'atteignent ; un Claude Code du poste qui pilote Escouade passera par le tunnel (plus tard) | Rien à faire : il marche tel quel sur le serveur ; le pilotage depuis le poste reste à faire |
+| WSL | Windows | Sans objet | Fait : sur un serveur, Réglages › Avancé ne montre que bash |
 
 ### Ce qui marche tel quel
 
@@ -826,6 +841,34 @@ La spec le décrit (« Escouade à distance › Se connecter à un serveur ») ;
 - **Ce que voit l'utilisateur** : le dialogue (l'hôte, la connexion, l'appairage, l'espace), un état par échec, la machine dans la barre de titre (dès qu'un serveur est connu), la barre d'état (tunnel et latence, ou la reprise en ambre), le pied de la barre latérale, l'en-tête d'un terminal, « Nouveau projet » (sur un serveur, le sélecteur de dossier du poste disparaît : le chemin se tape, le navigateur des dossiers du serveur vient avec MS-4), l'envoi suspendu pendant une coupure (S10), l'écran d'un jeton révoqué ou d'une autre version, l'espace dans le rail (B), Réglages › Serveurs.
 - **Les essais** : Rust (`servers_tests` : `~/.ssh/config` avec `Include` et `ProxyJump`, un hôte tapé, les options de `ssh`, la lecture de sa sortie, le port libre, chaque état contre un vrai `escouade-server` derrière le faux `ssh`, la coupure et la reprise sur le même port, l'appairage par code et par SSH, la révocation datée, l'oubli révoqué sur le serveur, le ping ; `locks_policies_tests` : `servers.allowed`) ; Vitest (`servers.test.ts`, `transport.test.ts`) ; e2e (`server-connect.spec.ts` : `escouade-server` derrière le faux `ssh` de `tests/fixtures/fake-ssh.mjs`, aux deux tailles).
 - **Pas encore** : plusieurs serveurs à la fois et leurs piles (MS-5), ce qui change de machine (MS-4 : le navigateur des dossiers du serveur…), la mise à jour du serveur depuis le client (le dialogue de version dit la commande), la palette de commandes (il n'y en a pas : l'entrée est dans le menu du « + » dès qu'un serveur est connu ou qu'un projet a été fermé, et dans Réglages › Serveurs), le menu du tray.
+
+### Ce qui change de machine, MS-4 (ESC-538, 2026-11-18)
+
+La spec le décrit (« Escouade à distance › Ce qui change de machine »), avec les pages Nouveau projet, Conversation (les fichiers envoyés), Comptes et Notifications. Les choix S12 et S13 sont ceux par défaut de [`SERVER-UX.md`](SERVER-UX.md) § 7. Sur ce poste, rien ne change.
+
+- **Les dossiers du serveur** (`src-tauri/src/serverfolders.rs`, servi) : `fs_browse` liste un dossier (des dossiers seulement, les cachés laissés, 500 au plus et le reste compté, un chemin absolu) : dépôt et branche (lue dans `.git/HEAD`, un worktree compris), déjà un projet, la place du disque (`statvfs`, `GetDiskFreeSpaceExW`) ; il s'ouvre sur `~/projets` (ou `projects`, `dev`, `src`, `code`). `clone_repo` clone une adresse https ou ssh vérifiée comme celles d'une équipe (`escouade_team::catalog::address`) par le git du serveur (`team_projects::clone_one`). La fenêtre : `ServerFolders.svelte`, `CloneRepo.svelte` dans « Nouveau projet ».
+- **Les fichiers envoyés** : le logo en octets (`set_project_logo_bytes`, vérifié par `projectlogo::checked`) ; les fichiers joints toujours copiés (`file-origin.ts` ne donne aucune origine sur un serveur) ; le presse-papiers du poste (`local('clipboard_image')`).
+- **Les fichiers reçus** (S12) : `sent_file_bytes`, `agent_local_bytes` (servis, 512 Mo au plus) ; sur le poste `received_save` (`servers::received`) : `Téléchargements/Escouade/<espace>`, le type lu dans les octets (un exécutable PE, ELF ou Mach-O, un `#!` : un programme ; une image ou un PDF gardent leur extension), un nom de programme ou de script jamais ouvert, la copie jamais exécutable et marquée `Zone.Identifier` (zone 3) sous Windows, `received_show` ne rouvre qu'une copie de ce dossier.
+- **Les ports relayés** : `server_relay` lance une redirection de plus (`ssh -N -L 127.0.0.1:<poste>:127.0.0.1:<serveur>`, les options sûres du tunnel), le même port s'il est libre (`same` l'exige, pour le retour d'une connexion), arrêtée en quittant le serveur. **Pas dans la connexion de l'API** comme l'écrivait « Le tunnel : SSH d'abord » : une redirection SSH de plus ne demande rien de nouveau au serveur et porte tout TCP (la WebSocket du rechargement à chaud comprise) ; un tunnel sans SSH (WireGuard, le téléphone) demandera ce relai dans l'API. La fenêtre réécrit l'adresse de bouclage du serveur (`onThisComputer`) dans `openUrl` et la page d'un lancement.
+- **Les notifications** : `HostEvent::Notify` porte un `id` ; l'hôte sans fenêtre garde l'action de ses 64 dernières (`Host::clicked`, `host_notification_click`). La fenêtre rend chaque événement de l'hôte par `server_alert` sur le poste (pas de clignotement ni de notification si la fenêtre est regardée), le titre « <espace> · <titre> » ; un `open` n'est jamais suivi. Le `welcome` d'une session reprise porte `missed` (`Hub::emitted`, `Sessions::note_seen`) : « Reconnecté à Travail · 12 événements rattrapés ».
+- **La voix** : ses commandes étaient déjà du poste ; ses réglages le sont maintenant aussi sur un serveur (`local_voice_get`, `local_voice_set`, `withPosteVoice`).
+- **La connexion d'un compte** (S13, `ServerSignIn.svelte`) : l'adresse lue dans la sortie du terminal (`loginLink` : le `redirect_uri` qui vise `localhost`, le serveur local dit avant, un code d'appareil), ouverte au clic, le retour relayé sur le même port. D'après les flux de connexion de chaque harness, sans compte réel connecté :
+
+  | Harness | Son retour | Sur un serveur |
+  | --- | --- | --- |
+  | Codex | `localhost:1455` (`redirect_uri`) | Relayé |
+  | Gemini CLI, Antigravity CLI | `127.0.0.1:<port>` (`redirect_uri`) | Relayé |
+  | Claude Code | `localhost` quand son navigateur s'ouvre, sinon une page de secours qui affiche un code | Le code à coller |
+  | Copilot CLI | Code d'appareil de GitHub | Le code tapé sur la page |
+  | Cursor CLI | La page, le CLI attend le lien du compte | La page suffit (ou la clé) |
+  | OpenCode | Selon le fournisseur | Selon le fournisseur |
+  | Mistral Vibe | Une clé | La clé, en fichier sur le serveur |
+
+  L'essai réel (un harness connecté sur le VPS d'essai, le navigateur sur le poste) reste à faire avec l'utilisateur.
+- **Les secrets** : `SecretsOnServer.svelte` (« Gardée dans un fichier sur Travail ») dans la fenêtre d'un compte à clé, les services connectés et les secrets des plugins.
+- **« Afficher dans l'Explorateur »** : `openProjectFolder` ouvre le panneau Fichiers sur un serveur ; `openPath` refuse un chemin du serveur ; les boutons des dossiers des données sont cachés.
+- **Les essais** : Rust (`server_moves_tests` : la liste des dossiers, ses bornes, le clone et ses refus, le logo en octets, les fichiers reçus et leur type, le clic d'une notification, les événements manqués ; `servers_tests` : un port relayé, le même port ou rien) ; Vitest (`server-moves.test.ts`, `servers/moves.test.ts`) ; e2e (`server-moves.spec.ts`, sur `escouade-server` derrière le faux `ssh`, aux deux tailles : un projet dans un dossier du serveur, un fichier joint, un fichier reçu et un script refusé, un port relayé, une notification nommée, la connexion d'un faux `codex login` relayée). Les crochets des e2e, en build de développement seulement : `ESCOUADE_BROWSE_HOME`, `ESCOUADE_DOWNLOADS_DIR`, `ESCOUADE_OPEN_LOG`, `ESCOUADE_ALERT_LOG`.
+- **Pas encore** : l'écran « Mettre à jour le serveur » du client (la mise à jour signée est d'ESC-515) ; les serveurs de langage de l'éditeur à distance ; un Claude Code du poste qui pilote le serveur MCP du serveur ; les notifications sans contenu d'une stratégie (`servers.contentlessNotifications`, avec les espaces, MS-5).
 
 ## Le téléphone
 
@@ -1047,16 +1090,17 @@ Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un se
 - [x] `escouade-server` pour Linux x64 et arm64, sans WebKit ni GTK ; `escouade-server pair` et `devices` ; ses journaux ; l'arrêt propre à SIGTERM (ESC-514, `src-tauri/src/server`, le job « Server (Linux) »).
 - [ ] Le service systemd et sa commande d'installation ; l'image Docker.
 - [x] Les secrets dans un fichier lisible du seul propriétaire, sur un serveur ; le fait dit au client (`welcome.secretsInFile`) (ESC-514).
-- [ ] L'interface dit que les secrets d'un serveur sont en fichier (avec « Se connecter à un serveur »).
+- [x] L'interface dit que les secrets d'un serveur sont en fichier (ESC-538, `SecretsOnServer.svelte`).
 - [ ] La mise à jour du serveur (même signature que l'updater), proposée par le client à sa version.
-- [ ] Dans le client : « Se connecter à un serveur » (hôte SSH, appairage), la machine dans la barre de titre, le retour en local.
-- [ ] La table « Ce qui change de machine » :
+- [x] Dans le client : « Se connecter à un serveur » (hôte SSH, appairage), la machine dans la barre de titre, le retour en local (ESC-537).
+- [x] La table « Ce qui change de machine » (ESC-538) :
   - le navigateur des dossiers du serveur ;
   - l'envoi des logos et des fichiers joints ;
   - le téléchargement des fichiers des agents ;
   - les ports des serveurs de test relayés ;
   - les notifications rendues par le client ;
-  - la voix sur le poste.
+  - la voix sur le poste ;
+  - la connexion d'un compte relayée ou par code, les secrets en fichier dits, « Afficher dans l'Explorateur » vers le panneau Fichiers.
 - [x] Un e2e `escouade-server` + client par une redirection locale (ESC-514, `tests/e2e/server.spec.ts`).
 
 **Téléphone**

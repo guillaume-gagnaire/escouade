@@ -6,7 +6,9 @@
 import { t } from './i18n';
 import { api } from './ipc';
 import { forgetLaunches, runsOfCommand } from './launch-actions';
-import { knowLogo, logoUrl, pickLogo } from './project-logo.svelte';
+import { knowLogo, logoUrl, pickLogo, saveLogo } from './project-logo.svelte';
+import { onServer } from './connection.svelte';
+import { savePosteVoice } from './server-moves.svelte';
 import { app } from './state.svelte';
 import type {
   BoardSettings,
@@ -649,6 +651,15 @@ class SettingsForm {
     try {
       const diff = changes(settingsOf(this.#base.settings), settingsOf(this.settings));
       for (const k of this.badNumbers) delete diff[k];
+      // On a server, the voice is this computer's (ESC-538): its settings saved here, not on the server.
+      if (onServer() && diff.voice) {
+        const voice = $state.snapshot(this.settings.voice);
+        if ((await app.run(savePosteVoice(voice).then(() => true))) === true) {
+          app.settings = { ...app.settings, voice };
+          this.#base = { ...this.#base, settings: { ...this.#base.settings, voice } };
+        } else ok = false;
+        delete diff.voice;
+      }
       if (!empty(diff)) {
         const next = { ...$state.snapshot(app.settings), ...diff };
         const shells = await app.run(api.saveSettings(next));
@@ -736,7 +747,7 @@ class SettingsForm {
   }
 
   async #saveLogo(id: string, logo: string): Promise<boolean> {
-    const saved = await app.run(api.setProjectLogo(id, logo || null));
+    const saved = await app.run(saveLogo(id, logo || null, this.logoPreviews[logo]));
     const p = app.projects.find((x) => x.id === id);
     if (!saved) return false;
     const url = this.logoPreviews[logo];

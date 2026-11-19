@@ -103,7 +103,36 @@ if (argv[0] === 'exec') {
     process.stdout.write('Successfully logged in\r\n');
     process.exit(0);
   };
-  if (process.env.FAKE_CODEX_LOGIN_WAIT) process.stdin.once('data', done);
+  if (process.env.FAKE_CODEX_LOGIN_RELAY) {
+    // As Codex does (ESC-538, S13): a local server waits for the page's return on localhost, its address said in the
+    // page's `redirect_uri`. On the e2e's « server » (this machine), the port said is free here and the fake `ssh` maps it
+    // to the one it listens on (FAKE_SSH_PORTS_FILE), as two machines would have the same port each.
+    const http = await import('node:http');
+    const net = await import('node:net');
+    const said = await new Promise((resolve) => {
+      const probe = net.createServer().listen(0, '127.0.0.1', () => {
+        const p = probe.address().port;
+        probe.close(() => resolve(p));
+      });
+    });
+    const server = http.createServer((req, res) => {
+      if (!req.url?.startsWith('/auth/callback?code=')) {
+        res.writeHead(404).end();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain' }).end('Signed in to Codex. You may close this page.');
+      server.close();
+      done();
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const real = server.address().port;
+      if (process.env.FAKE_SSH_PORTS_FILE) fs.appendFileSync(process.env.FAKE_SSH_PORTS_FILE, `${said}=${real}\n`);
+      const back = encodeURIComponent(`http://localhost:${said}/auth/callback`);
+      process.stdout.write(
+        `If your browser did not open, navigate to this URL to authenticate:\r\n\r\nhttps://auth.openai.com/oauth/authorize?response_type=code&client_id=app_test&redirect_uri=${back}&scope=openid\r\n`,
+      );
+    });
+  } else if (process.env.FAKE_CODEX_LOGIN_WAIT) process.stdin.once('data', done);
   else done();
 }
 // `exec` and `login` end the process themselves: neither the interface nor the app-server below is played.

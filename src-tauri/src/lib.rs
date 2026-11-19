@@ -273,8 +273,12 @@ mod sentfiles;
 #[cfg(test)]
 mod sentfiles_tests;
 pub mod server;
+// What changes machines in server mode (ESC-538): the folders of the server, for « Nouveau projet ».
+#[cfg(test)]
+mod server_moves_tests;
 #[cfg(test)]
 mod server_tests;
+mod serverfolders;
 // « Se connecter à un serveur » (ESC-537): the client of the server mode, its SSH tunnel and its pairing.
 #[cfg(feature = "desktop")]
 mod servers;

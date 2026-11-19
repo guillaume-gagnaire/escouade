@@ -2,7 +2,7 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-usage/real-2.1.314.json","tests/fixtures/quota-pace.json","design/settings-2-2/PROPOSITION.md","docs/PROTOCOL.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-497","ESC-511"]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-497","ESC-511","ESC-538"]
 decisions: [20,24,123,154,160,213,161,198,197,211]
 compared: "2026-10-31T17:26:28+01:00"
 ---
@@ -267,3 +267,10 @@ Le mode jugé est celui où le harness de l'agent tourne vraiment, pas seulement
 - **Les stratégies imposées jugent ce même mode** (ESC-497) : `permissions.allowBypass`, `permissions.modes` et `permissions.defaultMode`, du poste comme d'une équipe, jugent le mode où le harness tourne, sur chacun de ces chemins. Le détail est dans « Réglages imposés », « Le mode jugé est celui où tourne le harness ».
 
 - **« Autoriser le mode Bypass » éteint pendant qu'un agent tourne en Bypass** (ESC-497) : son process, ou son interface, ne reste pas en vie. Au repos, il s'arrête aussitôt ; en plein tour, il finit son tour puis s'arrête. La conversation le dit avec la raison du refus, et son mode ne change pas. Son message, « Relancer », sa vue, la reprise programmée et le démarrage d'avance sont refusés de même tant que le réglage est éteint.
+
+## Sur un serveur (ESC-538)
+
+Quand la fenêtre est sur un serveur, ses comptes sont ceux du serveur : gardés là-bas, utilisés par ses agents, jamais sur le poste (voir *Ce qui change de machine*).
+
+- **Se connecter** : le harness tourne dans un terminal du serveur, où aucun navigateur ne s'ouvre. Au-dessus de ce terminal, « Connecter le compte sur Travail » : dès que le terminal donne l'adresse de la page de connexion, « Ouvrir la page sur ce poste » l'ouvre dans le navigateur du poste (au clic, jamais d'elle-même ; « Copier l'adresse » aussi). Quand la page renvoie à `localhost` (Codex, Gemini CLI, Antigravity CLI), le poste écoute ce même port et le relaie au serveur ; sinon le code de la page se colle dans le terminal (Claude Code), ou le code d'appareil se tape sur la page (Copilot CLI). Toujours : « Le compte sera gardé sur Travail, pas sur ce poste. »
+- **Les clés** (Cursor, Mistral Vibe) sont gardées par le serveur, dans un fichier de ses données : « Gardée dans un fichier sur Travail · … Pas dans le trousseau de ce poste. »

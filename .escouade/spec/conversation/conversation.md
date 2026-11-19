@@ -2,7 +2,7 @@
 title: "Conversation"
 subject: "Conversation"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-398","ESC-400","ESC-416"]
+tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-398","ESC-400","ESC-416","ESC-538"]
 decisions: [136]
 compared: "2026-10-30T05:32:58+01:00"
 gaps: [{"text":"La spec dit que l'en-tête se replie sous 1000 px (Tokens et Fichiers s'effacent, la vue cachée perd son mot) et sous 760 px (Durée aussi, boutons réduits à l'icône), puis sous 580 px pour les chiffres. Le code utilise d'autres seuils échelonnés. À 1100 px, Durée et le mot de la vue cachée disparaissent. À 960 px, c'est Fichiers. À 880 px, c'est Tokens. À 800 px, les boutons passent à l'icône. À 680 px, le sélecteur de disposition disparaît. À 440 px, les vues en segments disparaissent. Seul le seuil de 580 px pour les chiffres correspond.","code":["src/components/Conversation.svelte"]}]
@@ -167,3 +167,12 @@ La conversation est la vue d'un agent dans Escouade : son en-tête, ses messages
 - Limite : avec Escouade 2.2.x, le plugin 2.2.5 seul dit le refus (raison du blocage, notification) mais ne coupe pas l'historique ; la coupe vient avec le cœur suivant.
 
 - Tant que l'agent reste en erreur sur ce refus, sa carte de la barre latérale dit « Refusé » (infobulle « Refusé par un safeguard d’Anthropic ») au lieu de « Erreur », et le bandeau au-dessus du champ dit « Un safeguard d’Anthropic a refusé le dernier tour. Ton prochain message relance Claude sans lui. » au lieu de « … sur la même session ».
+
+## Les fichiers envoyés, sur un serveur (ESC-538)
+
+Quand la fenêtre est sur un serveur, les fichiers qu'un agent envoie (`SendUserFile`) sont sur le serveur (voir *Ce qui change de machine*, S12) :
+
+- Leur ligne dit « sur Travail » ; « Ouvrir » télécharge le fichier sur le poste à ce moment-là, dans `Téléchargements/Escouade/Travail`, et ouvre la copie. Ensuite : « Téléchargé », « envoyé depuis Travail · copié sur ce poste dans … », « Ouvrir la copie », « Afficher sur ce poste ».
+- Un programme ou un script (par ses octets ou par son nom) ne s'ouvre jamais : « un script ne s'ouvre pas d'Escouade : il se télécharge seulement », et son seul bouton, « Télécharger sur ce poste », fait la copie et la montre dans son dossier.
+- « Voir sur le serveur » montre le fichier dans le panneau Fichiers.
+- La visionneuse d'images fait de même pour ses images.

@@ -866,6 +866,11 @@ impl RemoteApi {
                 .collect(),
             secrets_in_file: core.host.secrets_in_file(),
             machine: core.host.machine(),
+            missed: if resumed {
+                self.sessions.missed(&conn.session, core.hub.emitted())
+            } else {
+                None
+            },
         });
         // What the host publishes (a process without a window), pushed as it comes.
         let host_events = core.host.events().map(|mut events| {
@@ -956,6 +961,8 @@ impl RemoteApi {
             task.abort();
         }
         self.live.lock().retain(|_, c| !Arc::ptr_eq(c, &conn));
+        self.sessions
+            .note_seen(&conn.session, core.hub.emitted().max(1));
         self.sessions.leave(&conn.session, Instant::now());
         core.forget_client(&client);
         self.counts

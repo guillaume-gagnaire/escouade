@@ -1,6 +1,8 @@
 // Files attached to a message: images, PDFs and text files go in the message, as Claude reads them; any other file, or
 // one too big for the message, goes by its path (a copy the backend keeps, or the file itself).
 
+import { onServer } from './connection.svelte';
+import { local } from './transport';
 import { fBytes } from './format';
 import { t } from './i18n';
 import { api } from './ipc';
@@ -278,7 +280,8 @@ export async function clipboardImage(): Promise<File | null> {
   if (readingClipboard) return null;
   readingClipboard = true;
   try {
-    const png = await api.clipboardImage();
+    // On a server (ESC-538), the clipboard is this computer's: read here, then sent as any image pasted.
+    const png = onServer() ? await local<ArrayBuffer>('clipboard_image') : await api.clipboardImage();
     return png.byteLength ? new File([png], 'image.png', { type: 'image/png' }) : null;
   } finally {
     readingClipboard = false;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import SecretsOnServer from '../servers/SecretsOnServer.svelte';
   import { locale, t } from '../../lib/i18n';
   import { keyLockedBy, lockLine, SECRETS_FILE_KEY } from '../../lib/locks.svelte';
   import Icon from '../Icon.svelte';
@@ -143,6 +144,7 @@
   <section>
     <h4>{t('plugins.settings.secrets')}</h4>
     <p class="hint">{t(file && !file.keychain ? 'plugins.settings.secretNoteNoKeychain' : 'plugins.settings.secretNote')}</p>
+    <SecretsOnServer />
     {#each secretFields as s (s.key)}
       {@const why = refused[s.key]}
       <div class="row" role="group" aria-label={s.title}>

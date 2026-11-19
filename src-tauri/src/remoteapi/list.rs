@@ -408,6 +408,13 @@ escouade_command::commands! {
         commands::discover_act,
         commands::mcp_declare_status,
         commands::mcp_manual_command,
+        // What changes machines on a server (ESC-538): the server's side, served as it is.
+        commands::fs_browse,
+        commands::clone_repo,
+        commands::set_project_logo_bytes,
+        commands::sent_file_bytes,
+        commands::agent_local_bytes,
+        commands::host_notification_click,
     }
     // The desktop's only: refused at a distance (`desk-only`).
     desk {
@@ -475,6 +482,15 @@ escouade_command::commands! {
         commands::server_forget,
         commands::server_note,
         commands::server_rename,
+        // What changes machines on a server (ESC-538): this computer's side (the downloads, the ports relayed, the
+        // notifications shown).
+        commands::received_save,
+        commands::received_show,
+        commands::server_relay,
+        commands::server_relays,
+        commands::server_alert,
+        commands::local_voice_get,
+        commands::local_voice_set,
     }
     // They change machines in server mode, and work as they are: served.
     moves_served {

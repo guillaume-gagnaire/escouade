@@ -1,4 +1,5 @@
 import { Channel, invoke } from './transport';
+import type { BrowseListing } from './server-browse';
 import type {
   Card as VsxCard,
   ExtState as VsxState,
@@ -353,6 +354,19 @@ export const api = {
   updateProject: (project: Project) => invoke<void>('update_project', { project }),
   /** « Choisir une image… » (`path`, copied under the project) or « Retirer » (null) of its logo (ESC-167). */
   setProjectLogo: (id: string, path: string | null) => invoke<Project>('set_project_logo', { id, path }),
+  /** The logo from an image's bytes (ESC-538): on a server, the image of this computer is sent, never its path. */
+  setProjectLogoBytes: (id: string, name: string, bytes: Uint8Array) =>
+    invoke<Project>('set_project_logo_bytes', bytes, {
+      headers: { 'x-project': encodeURIComponent(id), 'x-name': encodeURIComponent(name) },
+    }),
+  /** « Un dossier du serveur » (ESC-538): a folder of the core's machine, its folders (repository, branch, project), its disk. */
+  fsBrowse: (path?: string) => invoke<BrowseListing>('fs_browse', path ? { path } : {}),
+  /** « Cloner un dépôt » (ESC-538): `url` cloned into `parent/folder` on the core's machine; the folder made. */
+  cloneRepo: (url: string, parent: string, folder: string) => invoke<string>('clone_repo', { url, parent, folder }),
+  /** The bytes of a file an agent sent (ESC-538), for a window on a server, which downloads it to this computer. */
+  sentFileBytes: (agentId: string, itemId: string, index: number) => invoke<ArrayBuffer>('sent_file_bytes', { agentId, itemId, index }),
+  /** The bytes of an image a message shows by a local path (ESC-538). */
+  agentLocalBytes: (agentId: string, src: string) => invoke<ArrayBuffer>('agent_local_bytes', { agentId, src }),
   /** The project’s logo as a `data:` URL, for its tile; null when it has none. */
   projectLogo: (id: string) => invoke<string | null>('project_logo', { id }),
   /** The image of `path` as a logo would be taken (`data:` URL), or why it would be refused. */

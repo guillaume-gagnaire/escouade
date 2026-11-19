@@ -36,13 +36,29 @@ Dès qu’un serveur est connu, la machine se dit partout où se tromper coûter
 - **La barre des projets** : l’espace ouvert au-dessus de ses projets, l’autre sous le « + », à un clic.
 - **Le pied de la barre latérale** : « Travail : » devant le dossier du projet, l’icône d’un serveur à la place d’un dossier.
 - **Un terminal** : « Travail · escouade@vps.example.net » dans son en-tête.
-- **« Nouveau projet »** : « sur Travail · escouade.acme.internal » ; les dossiers sont ceux du serveur, pas de ce poste, et le chemin se tape.
+- **« Nouveau projet »** : « sur Travail · escouade.acme.internal » ; les dossiers sont ceux du serveur, pas de ce poste (voir plus bas).
+- **Un fichier envoyé par un agent** : « envoyé depuis Travail · copié sur ce poste dans … ».
+- **Les secrets** : « Gardée dans un fichier sur Travail » là où une clé se donne.
+- **Les notifications** : le nom de l’espace en tête, « Travail · facturation · relances ».
+
+## Ce qui se passe sur le serveur, et ce qui reste sur ce poste
+
+Sur un serveur, les projets, les agents et leurs fichiers sont là-bas ; toi, ton navigateur, ton micro et tes dossiers restez ici. Rien de ce que le serveur envoie ne s’ouvre sur ce poste sans ton clic.
+
+- **Un nouveau projet** : « Cloner un dépôt » (le serveur clone avec ses propres clés git), ou « Un dossier du serveur » : ses dossiers, s’ils sont des dépôts et sur quelle branche, ceux qui sont déjà des projets, et la place libre de son disque.
+- **Ce que tu envoies** : le logo d’un projet, un fichier joint, une image collée partent de ce poste vers le serveur, toujours en copie.
+- **Ce qu’un agent t’envoie** : « Ouvrir » le télécharge à ce moment-là dans `Téléchargements/Escouade/Travail` et ouvre la copie. Un programme ou un script ne s’ouvre jamais : « Télécharger sur ce poste » le copie et le montre dans son dossier. « Voir sur le serveur » le montre dans le panneau Fichiers.
+- **Un serveur de test** (Lancement, ou un lien vers `localhost`) : son port est relayé sur ce poste, et la page s’ouvre ici, rechargement à chaud compris.
+- **Les notifications, le son, le clignotement** sont ceux de ce poste ; leur choix (Réglages › Notifications) est celui du serveur.
+- **La voix** est celle de ce poste : son micro, sa transcription, ses clés et ses réglages. Seul le texte part vers le serveur.
+- **Connecter un compte** (Codex, Claude Code, Gemini CLI…) : le harness tourne sur le serveur ; « Ouvrir la page sur ce poste » ouvre la page de connexion ici. Quand elle revient sur `localhost` (Codex, Gemini CLI), Escouade relaie ce retour au serveur ; sinon, colle dans le terminal le code qu’elle affiche (Claude Code), ou tape sur la page le code de l’appareil (Copilot CLI). Le compte reste sur le serveur.
+- **Les secrets** (clés de Cursor, des services, des plugins) sont gardés dans un fichier du serveur, lisible de son seul compte : un serveur n’a pas de trousseau.
 
 ## Quand la connexion tombe
 
 Les agents continuent sur le serveur : fermer l’app, éteindre ce poste ou couper le réseau ne les arrête pas. Une bande dit « Connexion à Travail perdue à 14:32 », le prochain essai et que ce que tu vois date de 14:32. Escouade relance le tunnel et la connexion seul (après 250 ms, puis de plus en plus loin, toutes les 5 s au plus) ; « Réessayer » le fait tout de suite, « Aller sur Ce poste » te ramène ici.
 
-Pendant la coupure, l’envoi est suspendu : ton brouillon reste dans la zone de saisie, rien ne part en file. À la reprise, l’écran est relu en entier, les terminaux reprennent où ils en étaient, et « Reconnecté à Travail » s’affiche.
+Pendant la coupure, l’envoi est suspendu : ton brouillon reste dans la zone de saisie, rien ne part en file. À la reprise, l’écran est relu en entier, les terminaux reprennent où ils en étaient, et « Reconnecté à Travail · 12 événements rattrapés » s’affiche.
 
 ## Ce que disent les échecs
 

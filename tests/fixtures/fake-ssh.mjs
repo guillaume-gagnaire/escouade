@@ -4,6 +4,8 @@
 //
 // - `ssh -N -L 127.0.0.1:<local>:127.0.0.1:<remote> … <host>`: a local forward, as `ssh -L` makes it, to 127.0.0.1 of
 //   this machine (the « server »), its remote port mapped by FAKE_SSH_PORTS (`46480=4122,…`; unmapped: the same port).
+//   FAKE_SSH_PORTS_FILE: more of them, a line `<remote>=<real>` each, read at each connection (a port a program of
+//   the « server » took after the forward started: the fake `codex login`'s, ESC-538).
 //   It says what `ssh -v` says once ready (« Authenticated to … », « Local forwarding listening on … »); a connection
 //   nothing answers says « channel 2: open failed: connect failed: Connection refused », as `ssh` does.
 // - `ssh … <host> <command>`: `escouade-server pair` runs FAKE_SSH_SERVER `pair --data-dir FAKE_SSH_DATA` and prints
@@ -89,12 +91,29 @@ if (dir && fs.existsSync(path.join(dir, 'down'))) {
       .filter(Boolean)
       .map((p) => p.split('=').map(Number)),
   );
-  const remote = ports[Number(m[2])] ?? Number(m[2]);
+  /** The real port of the remote one, read again at each connection (FAKE_SSH_PORTS_FILE may have grown). */
+  const remoteOf = () => {
+    const file = process.env.FAKE_SSH_PORTS_FILE;
+    let more = {};
+    try {
+      if (file)
+        more = Object.fromEntries(
+          fs
+            .readFileSync(file, 'utf8')
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .map((l) => l.split('=').map(Number)),
+        );
+    } catch {
+      // not there yet
+    }
+    return ports[Number(m[2])] ?? more[Number(m[2])] ?? Number(m[2]);
+  };
   const sockets = new Set();
   let channel = 1;
   const server = net.createServer((client) => {
     channel++;
-    const upstream = net.connect({ host: '127.0.0.1', port: remote });
+    const upstream = net.connect({ host: '127.0.0.1', port: remoteOf() });
     sockets.add(client);
     sockets.add(upstream);
     let opened = false;

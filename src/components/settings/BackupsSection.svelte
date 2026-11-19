@@ -5,6 +5,7 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { openPath } from '../../lib/opener';
+  import { connection } from '../../lib/connection.svelte';
   import { errorText } from '../../lib/refusal';
   import { app } from '../../lib/state.svelte';
   import type { BackupCopy, BackupDiff, BackupFile, BackupsView, LostHistory } from '../../lib/types';
@@ -218,7 +219,7 @@
       </div>
       <div class="actions">
         <button class="btn" disabled={busy} onclick={now}><Icon name="restore" size={14} />{t('backups.now')}</button>
-        <button class="btn" onclick={openFolder}><Icon name="folder" size={14} />{t('backups.open')}</button>
+        {#if !connection.server}<button class="btn" onclick={openFolder}><Icon name="folder" size={14} />{t('backups.open')}</button>{/if}
       </div>
     </div>
 

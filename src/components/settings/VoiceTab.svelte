@@ -7,6 +7,7 @@
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
+  import { connection } from '../../lib/connection.svelte';
   import type { VoiceInfo } from '../../lib/types';
   import Chips from './Chips.svelte';
   import { onlineVoice } from '../../lib/online-voice.svelte';
@@ -111,6 +112,10 @@
 <!-- « Transcription » (choice 34 of the 2.0 design): local or online first, what goes online said under it, then the
      microphone, the shortcut, the language and Whisper's models. -->
 <Group title={t('voice.settings.transcription')}>
+  <!-- On a server (ESC-538): the voice is this computer's, its settings saved here; only the text goes there. -->
+  {#if connection.server}<p class="on-poste" data-testid="voice-on-poste">
+      {t('moves.voice.onPoste', { name: connection.server.name })}
+    </p>{/if}
   <Row label={t('voice.settings.engine')} desc={t('voice.settings.engineDesc')} row="dictation">
     <Chips
       label={t('voice.settings.engine')}
@@ -334,5 +339,10 @@
   }
   .dl .gauge {
     flex: 1;
+  }
+  .on-poste {
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-size: 12px;
   }
 </style>

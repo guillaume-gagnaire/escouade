@@ -1,7 +1,7 @@
 // The projects' rail (ESC-158, the 2.0 design): a tile per open project, on the left, as Slack's workspaces. What a
 // tile says of its project, the project's menu (its tile's right click, its name in the title bar) and its order.
 
-import { openPath } from './opener';
+import { openProjectFolder } from './opener';
 import { t } from './i18n';
 import { api } from './ipc';
 import type { MenuItem } from './menu.svelte';
@@ -170,7 +170,11 @@ export function projectMenu(p: Project): MenuItem[] {
     {
       label: t('nav.titleBar.menu.openFolder'),
       icon: 'folder',
-      onClick: () => openPath(p.path).catch((err) => app.toast(String(err), 'error')),
+      // On a server, the panel of the files (ESC-538): the folder is the server's.
+      onClick: () =>
+        openProjectFolder(p, (id) => void app.openEditor({ projectId: id, source: 'project' })).catch((err) =>
+          app.toast(String(err), 'error'),
+        ),
     },
     { label: '', separator: true },
     { label: t('nav.rail.up'), icon: 'up', hint: t('nav.rail.upKey'), disabled: i <= 0, onClick: () => moveProject(p.id, -1) },

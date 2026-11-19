@@ -2,7 +2,9 @@
   import { fileCategory } from '../../lib/attachments';
   import { speakerOf } from '../../lib/engines';
   import { fList, fSize } from '../../lib/format';
-  import { galleryOf } from '../../lib/gallery';
+  import { connection } from '../../lib/connection.svelte';
+  import { copyKey, galleryOf } from '../../lib/gallery';
+  import { downloading, receive, received, receivedText, showReceived } from '../../lib/server-moves.svelte';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -60,6 +62,27 @@
   };
 
   const act = (index: number, reveal: boolean) => app.run(api.sentFileOpen(agentId, item.id, index, reveal));
+
+  // On a server (ESC-538, S12): the files are the server's. « Ouvrir » downloads it to this computer
+  // (Téléchargements/Escouade/<espace>) and opens the copy; a program or a script is only downloaded and shown in its
+  // folder; « Voir sur le serveur » shows it in the panel of the files, on the server.
+  const server = $derived(connection.server);
+  const keyOf = (index: number) => copyKey({ kind: 'sent', agent: agentId, item: item.id, index });
+  async function download(index: number, name: string, mode: 'open' | 'reveal') {
+    const key = keyOf(index);
+    const had = received[key];
+    if (had) return void app.run(showReceived(had, mode === 'reveal' || had.runnable));
+    const got = await app.run(receive(key, name, () => api.sentFileBytes(agentId, item.id, index), mode));
+    if (got && (got.runnable || !got.opened)) app.toast(receivedText(got), 'ok');
+  }
+  /** « Voir sur le serveur »: the file in the panel of the files of the agent's folder. */
+  function seeOnServer(index: number) {
+    const agent = app.agents[agentId];
+    const named = files[index] ? String(item.input?.files?.[index] ?? '') : '';
+    if (!agent || !named) return;
+    const abs = /^([a-zA-Z]:)?[\\/]/.test(named) ? named : `${agent.cwd.replace(/[\\/]+$/, '')}/${named}`;
+    void app.openEditor({ projectId: agent.projectId, source: agentId, abs });
+  }
 </script>
 
 <div class="sent" data-sent={item.id}>
@@ -97,7 +120,7 @@
       {#each rows as f (f.index)}
         {@const v = f.view}
         {@const there = v?.state === 'ok'}
-        <div class="row" class:off={v && !there}>
+        <div class="row" class:off={v && !there} class:on-server={!!server}>
           {#if v?.kind === 'image' && v.url}
             <button class="th pic" aria-label={t('conv.sent.view', { name: f.name })} onclick={view}
               ><img
@@ -128,10 +151,48 @@
               {:else}
                 {#if v.size != null}<span class="size">{fSize(v.size)}</span>{/if}
                 {#if v.big}<span>· {t('conv.sent.big')}</span>{/if}
+                {#if server}
+                  {@const copy = received[keyOf(f.index)]}
+                  {#if copy && !copy.runnable}
+                    <span class="where" data-testid="sent-copied"
+                      >· {t('moves.files.sentFrom', { name: server.name })} · {t('moves.files.copiedTo', { folder: copy.folder })}</span
+                    >
+                  {:else if v.runnable || copy?.runnable}
+                    <span class="where">· {t('moves.files.onServer', { name: server.name })} · {t('moves.files.runnable')}</span>
+                  {:else}
+                    <span class="where">· {t('moves.files.onServer', { name: server.name })}</span>
+                  {/if}
+                {/if}
               {/if}
             </span>
           </span>
-          {#if there}
+          {#if there && server}
+            {@const copy = received[keyOf(f.index)]}
+            {@const busy = downloading[keyOf(f.index)]}
+            <span class="acts" data-testid="sent-acts">
+              {#if copy && !copy.runnable}<span class="got"><Icon name="check" size={11} />{t('moves.files.downloaded')}</span>{/if}
+              {#if v.runnable || copy?.runnable}
+                <!-- A program or a script: downloaded only, shown in its folder; never opened from here. -->
+                <button class="act" disabled={busy} onclick={() => download(f.index, f.name, 'reveal')}
+                  ><Icon name="download" size={13} /><span class="lbl">{t('moves.files.download')}</span></button
+                >
+              {:else}
+                <button
+                  class="act"
+                  disabled={busy}
+                  aria-label={t('conv.sent.openName', { name: f.name })}
+                  onclick={() => download(f.index, f.name, 'open')}
+                  ><Icon name="ext" size={13} /><span class="lbl">{copy ? t('moves.files.openCopy') : t('common.open')}</span></button
+                >
+                {#if copy}<button class="act" onclick={() => download(f.index, f.name, 'reveal')}
+                    ><Icon name="folder" size={13} /><span class="lbl">{t('moves.files.revealCopy')}</span></button
+                  >{/if}
+              {/if}
+              <button class="act ghost" onclick={() => seeOnServer(f.index)}
+                ><Icon name="server" size={13} /><span class="lbl">{t('moves.files.seeOnServer')}</span></button
+              >
+            </span>
+          {:else if there}
             <span class="acts">
               <!-- A program or a script the agent sent is never run from here: shown in its folder only. -->
               {#if !v.runnable}
@@ -291,6 +352,45 @@
     align-items: center;
     gap: 4px;
     color: var(--wait);
+  }
+  /* On a server (ESC-538): where the file is, where its copy went. */
+  .where {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .got {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 6px;
+    border-radius: 999px;
+    color: var(--run);
+    box-shadow: inset 0 0 0 1px currentColor;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  /* On a server, a file is a line of its own: its name and where it is, then its actions, which wrap below it. */
+  .row.on-server {
+    flex-wrap: wrap;
+    width: 100%;
+    height: auto;
+    min-height: 40px;
+    padding: 6px 6px 6px 8px;
+  }
+  .row.on-server .nm {
+    flex: 1 1 260px;
+  }
+  .row.on-server .acts {
+    flex-wrap: wrap;
+  }
+  .row.on-server .lbl {
+    white-space: nowrap;
+  }
+  .act.ghost {
+    color: var(--muted);
+  }
+  .act:disabled {
+    opacity: 0.5;
   }
   .off .fname {
     color: var(--soft);

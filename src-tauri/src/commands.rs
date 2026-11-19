@@ -1362,6 +1362,24 @@ pub fn set_project_logo(core: CoreState, id: String, path: Option<String>) -> Re
     core.set_project_logo(&id, path.as_deref()).map_err(err)
 }
 
+/// The project's logo from an image's bytes, raw (ESC-538): on a server, the image chosen on this computer is sent,
+/// never its path. Headers: `x-project`, `x-name` (the file's name, for what is said).
+#[tauri::command(async)]
+pub fn set_project_logo_bytes(core: CoreState, request: crate::remoteapi::Body) -> Res<Project> {
+    let Some(bytes) = request.raw() else {
+        return Err(tr!(
+            "Les octets d’un logo viennent bruts, pas en JSON.",
+            "The bytes of a logo come raw, not as JSON."
+        ));
+    };
+    let Some(id) = header(&request, "x-project") else {
+        return Err(tr!("Projet non dit.", "No project said."));
+    };
+    let name = header(&request, "x-name").unwrap_or_else(|| "logo".into());
+    core.set_project_logo_bytes(&id, &name, bytes.to_vec())
+        .map_err(err)
+}
+
 /// « Recherche par le sens » (ESC-254): the vectors' model, whether it is downloaded.
 #[tauri::command(async)]
 pub fn vectors_model(core: CoreState) -> crate::vectors::wiring::VectorsModelInfo {
@@ -1390,6 +1408,47 @@ pub fn vectors_model_delete(core: CoreState) -> Res<crate::vectors::wiring::Vect
 #[tauri::command(async)]
 pub fn project_logo(core: CoreState, id: String) -> Option<String> {
     core.project_logo(&id)
+}
+
+/// « Un dossier du serveur » (ESC-538): a folder of the core's machine listed for « Nouveau projet », its folders only
+/// (repository and branch, project already), the room left on its disk; without a path, where the browser opens.
+#[tauri::command]
+pub async fn fs_browse(
+    core: CoreState<'_>,
+    path: Option<String>,
+) -> Res<crate::serverfolders::Listing> {
+    // The e2e's « home » (a build of development): a folder of the test's, never the user's.
+    let test_home = cfg!(debug_assertions)
+        .then(|| std::env::var_os("ESCOUADE_BROWSE_HOME").filter(|v| !v.is_empty()))
+        .flatten()
+        .map(std::path::PathBuf::from);
+    let home = test_home
+        .or_else(dirs::home_dir)
+        .unwrap_or_else(|| std::path::PathBuf::from("/"));
+    let projects: Vec<(String, String)> = core
+        .projects
+        .read()
+        .iter()
+        .map(|p| (p.path.clone(), p.name.clone()))
+        .collect();
+    tokio::task::spawn_blocking(move || {
+        let at = match path.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+            Some(p) => std::path::PathBuf::from(p),
+            None => crate::serverfolders::start(&home),
+        };
+        crate::serverfolders::list(&at, &home, &projects)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(err)
+}
+
+/// « Cloner un dépôt » (ESC-538): `url` (https or ssh) cloned into `parent/folder` on the core's machine; the folder.
+#[tauri::command]
+pub async fn clone_repo(url: String, parent: String, folder: String) -> Res<String> {
+    crate::serverfolders::clone(&url, std::path::Path::new(parent.trim()), &folder, &[])
+        .await
+        .map_err(err)
 }
 
 /// The image of `path` as a logo would be taken, as a `data:` URL: the preview of a logo chosen
@@ -2890,6 +2949,41 @@ pub async fn sent_file_open(
     core.open_sent_file(&agent_id, &item_id, index, reveal)
         .await
         .map_err(err)
+}
+
+/// The file `index` an agent sent, in raw bytes (ESC-538): what a client on a server downloads to its own computer
+/// (S12), a program or a script too (kept there, never opened). Binary frames on the remote API, never base64.
+#[tauri::command]
+pub async fn sent_file_bytes(
+    core: CoreState<'_>,
+    agent_id: String,
+    item_id: String,
+    index: usize,
+) -> Res<tauri::ipc::Response> {
+    core.sent_file_bytes(&agent_id, &item_id, index)
+        .await
+        .map(tauri::ipc::Response::new)
+        .map_err(err)
+}
+
+/// The image a message of the agent shows by a local path, in raw bytes (ESC-538), for a client on a server.
+#[tauri::command]
+pub async fn agent_local_bytes(
+    core: CoreState<'_>,
+    agent_id: String,
+    src: String,
+) -> Res<tauri::ipc::Response> {
+    core.agent_local_bytes(&agent_id, &src)
+        .await
+        .map(tauri::ipc::Response::new)
+        .map_err(err)
+}
+
+/// A notification of the core's host was clicked on the client that showed it (ESC-538): what its click does (the
+/// agent shown) is done, its events to the clients. False when it is no longer known.
+#[tauri::command(async)]
+pub fn host_notification_click(core: CoreState, id: u64) -> bool {
+    core.host.clicked(id)
 }
 
 /// An image of the web a message shows (https), downloaded by the core at the user's click: its
@@ -6123,4 +6217,158 @@ pub fn server_note(servers: ServersState, id: String, problem: crate::servers::P
 #[tauri::command]
 pub fn server_rename(servers: ServersState, id: String, name: String) {
     servers.rename(&id, &name);
+}
+
+// ---------- What changes machines on a server (ESC-538) ----------
+//
+// This computer's side of what a server's window does here: the files of its agents kept in the downloads, its ports
+// relayed, its notifications shown. Always this computer's (`desk`).
+
+/// A file of a server's agent received on this computer (S12): its bytes, raw, kept in `Téléchargements/Escouade/<espace>`
+/// (headers `x-space`, `x-name`), then opened (`x-open: 1`) unless it is a program or a script, or shown in its folder
+/// (`x-reveal: 1`). What it became.
+#[cfg(feature = "desktop")]
+#[tauri::command(async)]
+pub fn received_save(
+    core: CoreState,
+    request: crate::remoteapi::Body,
+) -> Res<crate::servers::received::Received> {
+    let Some(bytes) = request.raw() else {
+        return Err(tr!(
+            "Les octets d’un fichier reçu viennent bruts, pas en JSON.",
+            "The bytes of a received file come raw, not as JSON."
+        ));
+    };
+    let space = header(&request, "x-space").unwrap_or_default();
+    let name = header(&request, "x-name").unwrap_or_else(|| "fichier".into());
+    let downloads = crate::servers::received::downloads();
+    let mut got = crate::servers::received::save(&downloads, &space, &name, bytes).map_err(err)?;
+    let path = std::path::PathBuf::from(&got.path);
+    if request.header("x-open") == Some("1") && !got.runnable {
+        core.host
+            .open(crate::host::Opened::Path(path))
+            .map_err(err)?;
+        got.opened = true;
+    } else if request.header("x-reveal") == Some("1") || request.header("x-open") == Some("1") {
+        core.host
+            .open(crate::host::Opened::Reveal(path))
+            .map_err(err)?;
+    }
+    Ok(got)
+}
+
+/// A copy received before, opened again or shown in its folder: only one of Escouade's downloads, never a program or a
+/// script opened.
+#[cfg(feature = "desktop")]
+#[tauri::command(async)]
+pub fn received_show(core: CoreState, path: String, reveal: bool) -> Res<()> {
+    let downloads = crate::servers::received::downloads();
+    let file = crate::servers::received::shown(&downloads, std::path::Path::new(&path), reveal)
+        .map_err(err)?;
+    core.host
+        .open(if reveal {
+            crate::host::Opened::Reveal(file)
+        } else {
+            crate::host::Opened::Path(file)
+        })
+        .map_err(err)
+}
+
+/// The port `port` of the server the window is on relayed to this computer's 127.0.0.1 (a test server; `same`: the
+/// return of a sign-in on `localhost`, only on the same port). The ports, or why not.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn server_relay(
+    servers: ServersState<'_>,
+    port: u16,
+    same: Option<bool>,
+) -> Res<crate::servers::Outcome<crate::servers::Relayed>> {
+    Ok(match servers.relay(port, same.unwrap_or(false)).await {
+        Ok(value) => crate::servers::Outcome::Ok { value },
+        Err(problem) => crate::servers::Outcome::Problem { problem },
+    })
+}
+
+/// The ports relayed now.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_relays(servers: ServersState) -> Vec<crate::servers::Relayed> {
+    servers.relays()
+}
+
+/// What a server's host published, shown on this computer (ESC-538): `chime`, `flash`, `notify` (`title` already named
+/// by its space, `body`; `clicked` told when the user clicks it), `waiting` (the tray's count). The taskbar and the
+/// notification only when the window is not looked at, as the desktop does. Whether it was shown.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn server_alert(
+    core: CoreState,
+    kind: String,
+    title: Option<String>,
+    body: Option<String>,
+    count: Option<usize>,
+    clicked: Channel<bool>,
+) -> bool {
+    // The e2e read what would be shown, nothing shown for real.
+    if cfg!(debug_assertions) {
+        if let Some(log) = std::env::var_os("ESCOUADE_ALERT_LOG").filter(|v| !v.is_empty()) {
+            use std::io::Write;
+            let line =
+                serde_json::json!({ "kind": kind, "title": title, "body": body, "count": count });
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log)
+            {
+                let _ = writeln!(f, "{line}");
+            }
+            if kind == "notify" {
+                let _ = clicked.send(true);
+            }
+            return true;
+        }
+    }
+    match kind.as_str() {
+        "chime" => core.host.chime(),
+        "waiting" => core
+            .host
+            .show_waiting(count.unwrap_or(0), crate::i18n::ui()),
+        "flash" if !core.host.attended() => core.host.flash(),
+        "notify" if !core.host.attended() => {
+            core.host.notify(
+                &title.unwrap_or_default(),
+                &body.unwrap_or_default(),
+                Box::new(move || {
+                    let _ = clicked.send(true);
+                }),
+            );
+        }
+        _ => return false,
+    }
+    true
+}
+
+/// The voice's settings of this computer (ESC-538): on a server, the window shows and saves these, not the server's —
+/// the microphone, the transcription and the keys of the voice are this computer's.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub fn local_voice_get(core: CoreState) -> crate::model::VoiceSettings {
+    core.settings.read().voice.clone()
+}
+
+/// The voice's settings of this computer saved (ESC-538), the others as they are.
+#[cfg(feature = "desktop")]
+#[tauri::command(async)]
+pub fn local_voice_set(
+    core: CoreState,
+    voice_state: Maybe<Arc<crate::voice::Voice>>,
+    voice: crate::model::VoiceSettings,
+) -> Res<()> {
+    let mut settings = core.settings.read().clone();
+    settings.voice = voice;
+    core.save_window_settings(settings).map_err(err)?;
+    if let Some(v) = voice_state.get() {
+        v.conversation_tune(&conv_choice(&core.settings.read(), &*core.secrets, &v.catalog).0);
+    }
+    Ok(())
 }

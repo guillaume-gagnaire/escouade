@@ -2,7 +2,7 @@
 title: "Notifications"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md (chapitre 2, « Notifications, vue d'ensemble, serveur MCP »)","src-tauri/src/prnews.rs"]
-tickets: ["ESC-68"]
+tickets: ["ESC-68","ESC-538"]
 decisions: []
 compared: null
 ---
@@ -72,3 +72,13 @@ Elles ne demandent rien à l'hébergeur : une notification est l'écart entre de
 - Une nouvelle n'arrive qu'avec la lecture qui la voit : toutes les minutes fenêtre devant et toutes les 5 minutes sinon pour une PR de ticket et un déploiement suivi ; seulement quand l'agent est affiché pour la PR d'un agent ordinaire ; seulement quand la liste du projet est lue (vue « Pull requests », vue d'ensemble ouverte, outil `list_pull_requests`) pour une relecture demandée.
 - Ce qui change pendant que l'app est fermée est dit à la prochaine lecture pour une PR suivie, mais pas pour une relecture demandée : la première lecture d'une liste après le démarrage ne dit rien.
 - Essayé contre le faux GitHub seulement. Essai réel à faire sur GitHub ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps suivent leur documentation.
+
+## Sur un serveur (ESC-538)
+
+Quand la fenêtre est sur un serveur (voir *Ce qui change de machine*), le serveur ne notifie rien lui-même : il pousse au client ce qu'il montrerait, et le poste le rend.
+
+- Le carillon, le clignotement de la barre des tâches (le rebond du Dock), la notification système et le compte de ce qui attend (le tray) sont ceux du poste.
+- Les réglages qui décident (« Me prévenir pour », le son, les notifications du système) sont ceux du serveur, que la fenêtre montre ; le poste ajoute la règle du bureau : pas de clignotement ni de notification quand on regarde la fenêtre.
+- Le titre porte **le nom de l'espace** en tête : « Travail · <projet> · <agent> », sous l'en-tête Escouade du système.
+- Un clic fait ce qu'il ferait sur le bureau (montrer l'agent) : le poste le demande au serveur, qui garde l'action de ses 64 dernières notifications.
+- Après une coupure, un message bref : « Reconnecté à Travail · 12 événements rattrapés » (« rien de neuf » sans aucun).

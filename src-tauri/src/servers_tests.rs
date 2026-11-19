@@ -308,6 +308,16 @@ struct Bench {
 }
 
 async fn bench(name: &str, version: &str, refuse: Option<&'static str>) -> Bench {
+    bench_ports(name, version, refuse, "").await
+}
+
+/// `bench`, the fake `ssh` mapping also the ports `extra` (`<remote>=<real>,…`).
+async fn bench_ports(
+    name: &str,
+    version: &str,
+    refuse: Option<&'static str>,
+    extra: &str,
+) -> Bench {
     let root = crate::paths::test_dir(&format!("servers-{name}"));
     let data = DataDir::new(root.join("server-data"));
     data.ensure().unwrap();
@@ -315,7 +325,11 @@ async fn bench(name: &str, version: &str, refuse: Option<&'static str>) -> Bench
     let port = api.addr().port();
     let dir = root.join("ssh");
     std::fs::create_dir_all(&dir).unwrap();
-    let ssh = fake_ssh(&dir, &format!("{}={port}", tunnel::SERVER_PORT), None);
+    let ssh = fake_ssh(
+        &dir,
+        &format!("{}={port},{extra}", tunnel::SERVER_PORT),
+        None,
+    );
     let client = root.join("client");
     std::fs::create_dir_all(&client).unwrap();
     let config = root.join(".ssh").join("config");
@@ -746,6 +760,90 @@ async fn the_server_answers_a_ping_at_once_and_says_the_machine_it_runs_on() {
     .await
     .unwrap();
     assert_eq!(pong, 7);
+}
+
+// ---------- the ports relayed (ESC-538) ----------
+
+/// A server of the test that answers each connection with `hello`: a test server of an agent, or a sign-in waiting
+/// for its return on `localhost`.
+async fn answering(hello: &'static [u8]) -> u16 {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        while let Ok((mut s, _)) = listener.accept().await {
+            use tokio::io::AsyncWriteExt;
+            let _ = s.write_all(hello).await;
+        }
+    });
+    port
+}
+
+async fn read_from(port: u16) -> String {
+    use tokio::io::AsyncReadExt;
+    let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
+    let mut got = vec![0u8; 64];
+    let n = tokio::time::timeout(Duration::from_secs(20), s.read(&mut got))
+        .await
+        .unwrap()
+        .unwrap();
+    String::from_utf8_lossy(&got[..n]).to_string()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_port_of_the_server_is_relayed_to_this_computer_and_a_sign_in_on_the_same_port_or_not_at_all(
+) {
+    // The server's test server, on a port this computer has taken too (they are the same machine here): another port.
+    let dev = answering(b"vite").await;
+    // A sign-in waiting on the server's port 1455 (Codex), which the fake ssh maps to a port of the test.
+    let login = answering(b"callback").await;
+    let wanted = tunnel::free_port().unwrap();
+    let b = bench_ports("relay", VERSION, None, &format!("{wanted}={login}")).await;
+    // Not on a server: nothing relayed.
+    match b.servers.relay(dev, false).await {
+        Err(Problem::Refused { code, .. }) => assert_eq!(code, "relay"),
+        r => panic!("{r:?}"),
+    }
+    let reached = ok(b.servers.attempt("travail", None, None).await);
+    let code = pairing::create(&b.data, crate::model::now_ms()).unwrap();
+    let id = ok(b
+        .servers
+        .pair(&reached.attempt, &code.text, "Travail", "Poste")
+        .await);
+    ok(b.servers.open(&id).await);
+    let relayed = b.servers.relay(dev, false).await.unwrap();
+    assert_eq!(relayed.remote, dev);
+    assert_ne!(relayed.local, dev);
+    assert_eq!(read_from(relayed.local).await, "vite");
+    // Asked again: the same relay.
+    assert_eq!(b.servers.relay(dev, false).await.unwrap(), relayed);
+    assert_eq!(b.servers.relays(), vec![relayed]);
+    // Its forward as the tunnel's: on the loopback alone, nothing asked, no key accepted.
+    let runs = std::fs::read_to_string(b.dir.join("runs.log")).unwrap();
+    let line = runs
+        .lines()
+        .find(|l| l.contains(&format!("127.0.0.1:{}:127.0.0.1:{dev}", relayed.local)))
+        .expect("the relay's ssh");
+    assert!(
+        line.contains("BatchMode=yes") && line.contains("StrictHostKeyChecking=yes"),
+        "{line}"
+    );
+    // A sign-in's return, on the same port: relayed there, or refused when this computer has it taken.
+    let same = b.servers.relay(wanted, true).await.unwrap();
+    assert_eq!(same.local, wanted);
+    assert_eq!(read_from(wanted).await, "callback");
+    match b.servers.relay(dev, true).await {
+        Err(Problem::Refused { code, .. }) => assert_eq!(code, "relay-busy"),
+        r => panic!("{r:?}"),
+    }
+    // Back on this computer: every relay stopped.
+    b.servers.leave();
+    assert!(b.servers.relays().is_empty());
+    until("the relay's port let go", || {
+        std::net::TcpListener::bind(("127.0.0.1", relayed.local)).is_ok()
+    })
+    .await;
 }
 
 /// A server older than this client says how to put it at the client's version (ESC-515): the client keeps it in its

@@ -1,10 +1,11 @@
 // Global application state (Svelte 5 runes) fed by the backend event channel.
 
+import { loadPosteVoice, withPosteVoice } from './server-moves.svelte';
 import { setLocks } from './locks.svelte';
 import { openUrl } from './opener';
 import { teams } from './teams.svelte';
 import { api } from './ipc';
-import { onStale } from './transport';
+import { onStale, transportReady } from './transport';
 import { overseer } from './overseer.svelte';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
@@ -848,6 +849,9 @@ class AppState {
 
   async init() {
     this.early = [];
+    // On a server, the voice's settings are this computer's (ESC-538): read before the state is taken.
+    await transportReady;
+    await loadPosteVoice();
     const s = await api.subscribe((e) => (this.early ? this.early.push(e) : this.onEvent(e)));
     // First: what is shown from here on is written in it.
     if (s.lang) this.takeLang(s.lang);
@@ -922,7 +926,7 @@ class AppState {
     this.autopilotPause = s.autopilotPause ?? null;
     this.projectPauses = s.projectPauses ?? {};
     this.accounts = s.accounts ?? [];
-    this.settings = s.settings;
+    this.settings = withPosteVoice(s.settings);
     this.usage = s.usage;
     this.git = s.git;
     this.shells = s.shells;
@@ -1085,7 +1089,7 @@ class AppState {
         setLocks(e.locks, e.teams);
         // A policy changed while the app runs brought the settings within it (TS-12): taken, and by an open form.
         if (e.settings) {
-          this.settings = e.settings;
+          this.settings = withPosteVoice(e.settings);
           for (const f of this.#imposed) f(e.settings);
         }
         break;

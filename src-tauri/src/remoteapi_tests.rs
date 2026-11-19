@@ -495,6 +495,8 @@ async fn the_handshake_passes_with_a_device_token_and_the_server_s_version_and_a
             secrets_in_file: false,
             // The machine it runs on (ESC-537).
             machine: Some(crate::remoteapi::this_machine()),
+            // A new session: nothing missed.
+            missed: None,
         }
     );
     assert_eq!(api.clients(), 1);

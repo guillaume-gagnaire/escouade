@@ -15,6 +15,7 @@
   import Row from './Row.svelte';
   import ServiceBadge from './ServiceBadge.svelte';
   import Switch from './Switch.svelte';
+  import SecretsOnServer from '../servers/SecretsOnServer.svelte';
 
   // « Services connectés », a page of Escouade (design/settings-2-2/PROPOSITION.md §2, page 4): the code hosts, the
   // accounts of the ticket sources (connected at once, apart from the draft), and the sync and automatic import of every
@@ -89,6 +90,8 @@
 </header>
 
 <Group title={t('integrations.accounts.title')} note={t('integrations.accounts.note')}>
+  <!-- On a server, the tokens of the services are kept in a file of its data (ESC-538). -->
+  <SecretsOnServer />
   {#if !sources.length}<NoPlugin text={t('settings.noPlugin.sources')} />{/if}
   {#each sources as id (id)}
     {@const a = account(id)}

@@ -19,6 +19,7 @@
 //! computer's 127.0.0.1.
 
 pub mod client;
+pub mod received;
 pub mod sshconfig;
 pub mod tunnel;
 
@@ -250,6 +251,16 @@ pub struct Link {
     pub tunnel: TunnelState,
 }
 
+/// A port of the server relayed to this computer (ESC-538).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Relayed {
+    /// This computer's port, on 127.0.0.1.
+    pub local: u16,
+    /// The server's port, on its 127.0.0.1.
+    pub remote: u16,
+}
+
 /// The first steps of the dialog: a tunnel open to a host, before (or for) a pairing.
 struct Attempt {
     tunnel: Arc<Tunnel>,
@@ -308,6 +319,8 @@ pub struct Servers {
     saved: Mutex<Saved>,
     attempts: Mutex<HashMap<String, Attempt>>,
     live: Mutex<Option<Live>>,
+    /// The ports of the server relayed to this computer (ESC-538), by the server's port: a forward of its own each.
+    relays: Mutex<HashMap<u16, Arc<Tunnel>>>,
 }
 
 fn entry(id: &str) -> String {
@@ -357,6 +370,7 @@ impl Servers {
             saved: Mutex::new(saved),
             attempts: Mutex::new(HashMap::new()),
             live: Mutex::new(None),
+            relays: Mutex::new(HashMap::new()),
         })
     }
 
@@ -924,6 +938,7 @@ impl Servers {
     }
 
     fn leave_tunnel(&self) {
+        self.stop_relays();
         if let Some(live) = self.live.lock().take() {
             live.stop.notify_one();
             live.stop.notify_waiters();
@@ -1010,6 +1025,101 @@ impl Servers {
                 k.name = name;
             }
         });
+    }
+
+    // ---------- the ports relayed ----------
+
+    /// The port `remote` of the server the window is on (its 127.0.0.1) relayed to a port of this computer's 127.0.0.1
+    /// (ESC-538): a test server of an agent (« Lancement »), or the return of a sign-in that waits on `localhost` (S13).
+    /// A forward of its own (`ssh -N -L`, the same safe options as the tunnel), kept while the window is on that
+    /// server. `same`: only on the same port (the sign-in's return names it), else the same one when it is free, else
+    /// another. The relay already there is given again while it runs.
+    pub async fn relay(&self, remote: u16, same: bool) -> std::result::Result<Relayed, Problem> {
+        let refused = |message: String| Problem::Refused {
+            code: "relay".into(),
+            message,
+        };
+        if remote == 0 {
+            return Err(refused("port 0".into()));
+        }
+        let Some(id) = self.active() else {
+            return Err(refused(tr!(
+                "La fenêtre n’est pas sur un serveur.",
+                "The window is not on a server."
+            )));
+        };
+        let Some(known) = self.known(&id) else {
+            return Err(gone());
+        };
+        if let Some(t) = self.relays.lock().get(&remote).filter(|t| t.alive()) {
+            if !same || t.port == remote {
+                return Ok(Relayed {
+                    local: t.port,
+                    remote,
+                });
+            }
+        }
+        let free = |p: u16| std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, p)).is_ok();
+        let local = if free(remote) {
+            Some(remote)
+        } else if same {
+            return Err(Problem::Refused {
+                code: "relay-busy".into(),
+                message: tr!(
+                    "Le port {remote} est déjà pris sur ce poste : le retour par localhost ne peut pas être relayé.",
+                    "Port {remote} is already taken on this computer: the return through localhost can’t be relayed."
+                ),
+            });
+        } else {
+            None
+        };
+        let tunnel =
+            Tunnel::start(&self.ssh, &known.dest, remote, local).map_err(Problem::of_failure)?;
+        tunnel
+            .ready(tunnel::READY_WAIT)
+            .await
+            .map_err(Problem::of_failure)?;
+        let tunnel = Arc::new(tunnel);
+        let relayed = Relayed {
+            local: tunnel.port,
+            remote,
+        };
+        // Still on that server: kept; else let go.
+        if self.active().as_deref() == Some(id.as_str()) {
+            if let Some(old) = self.relays.lock().insert(remote, tunnel) {
+                old.stop();
+            }
+            log::info!(
+                "servers: the server's port {remote} relayed to this computer's {}",
+                relayed.local
+            );
+        } else {
+            tunnel.stop();
+        }
+        Ok(relayed)
+    }
+
+    /// The ports relayed now: the server's and this computer's.
+    pub fn relays(&self) -> Vec<Relayed> {
+        let mut out: Vec<Relayed> = self
+            .relays
+            .lock()
+            .iter()
+            .filter(|(_, t)| t.alive())
+            .map(|(r, t)| Relayed {
+                local: t.port,
+                remote: *r,
+            })
+            .collect();
+        out.sort_by_key(|r| r.remote);
+        out
+    }
+
+    /// Every relay stopped (the window leaves the server, or the app ends).
+    pub fn stop_relays(&self) {
+        for (_, t) in self.relays.lock().drain() {
+            t.stop();
+        }
     }
 
     /// The tunnels stopped: the app ends.

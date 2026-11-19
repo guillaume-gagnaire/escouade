@@ -28,6 +28,8 @@ pub struct Hub {
     /// The last terminals that ended, and their exit codes: a client that comes back after a cut missed their
     /// `TerminalExit` (ESC-495), and reads them in the state it reads again (`InitialState::exited_terminals`).
     exits: Mutex<std::collections::VecDeque<TermExit>>,
+    /// The events emitted since the start: a client back after a cut is told how many it missed (ESC-538).
+    emitted: std::sync::atomic::AtomicU64,
 }
 
 /// The most terminals' ends kept.
@@ -108,6 +110,11 @@ fn kind_of(event: &UiEvent) -> String {
 }
 
 impl Hub {
+    /// The events emitted since the start.
+    pub fn emitted(&self) -> u64 {
+        self.emitted.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// The channel of the client whose call runs now (the webview's, or a client's of the remote API), which gets
     /// the events from now on.
     pub fn set_channel(&self, channel: Channel<UiEvent>) {
@@ -150,6 +157,8 @@ impl Hub {
     }
 
     pub fn emit(&self, event: UiEvent) {
+        self.emitted
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if let Some(line) = self.meter.lock().count(&event, Instant::now()) {
             log::warn!("{line}");
         }

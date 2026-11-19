@@ -156,7 +156,7 @@
   async function save() {
     if (current && (await app.run(api.saveImage(current.url, current.name)))) app.toast(t('conv.sent.saved'));
   }
-  const open = (reveal: boolean) => current?.source && app.run(openSource(current.source, reveal));
+  const open = (reveal: boolean) => current?.source && app.run(openSource(current.source, reveal, current.name));
 
   onMount(() => closer?.focus());
 

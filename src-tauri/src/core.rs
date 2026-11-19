@@ -9634,6 +9634,19 @@ impl Core {
             }
             None => String::new(),
         };
+        self.logo_kept(id, file)
+    }
+
+    /// The project's logo from the bytes of an image a client sent (ESC-538: the image of this computer, for a
+    /// server), checked as a file is.
+    pub fn set_project_logo_bytes(&self, id: &str, name: &str, bytes: Vec<u8>) -> Result<Project> {
+        self.project(id)?;
+        let logo = crate::projectlogo::checked(i18n::ui(), name, bytes)?;
+        let file = crate::projectlogo::keep(&self.data, id, &logo)?;
+        self.logo_kept(id, file)
+    }
+
+    fn logo_kept(&self, id: &str, file: String) -> Result<Project> {
         let updated = {
             let mut projects = self.projects.write();
             let Some(cur) = projects.iter_mut().find(|x| x.id == id) else {

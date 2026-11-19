@@ -12,6 +12,9 @@
   import type { Account, EngineId, MachineAccount, ShareMode } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
+  import { connection } from '../../lib/connection.svelte';
+  import SecretsOnServer from '../servers/SecretsOnServer.svelte';
+  import ServerSignIn from '../servers/ServerSignIn.svelte';
 
   // « Ajouter un compte… » (ESC-128): for a harness (`engine`, else the one picked here), the machine's account (its
   // Principal: its usual folder, as it is), offered when its harness is signed in there and it is not added yet; or a new
@@ -163,6 +166,8 @@
   let error = $state<string | null>(null);
   /** The sign-in's terminal, while it runs. */
   let termId = $state<string | null>(null);
+  /** On a server (ESC-538, S13): what the sign-in's terminal wrote, its address read from it. */
+  let loginText = $state('');
   let box = $state<HTMLDivElement>();
   /** Signed in: with which email. */
   let signedIn = $state<{ email: string | null } | null>(null);
@@ -379,7 +384,8 @@
         before = await look().catch(again);
         if (closed) return;
       }
-      const info = await openAccountLogin(account.id);
+      loginText = '';
+      const info = await openAccountLogin(account.id, connection.server ? (s) => (loginText = (loginText + s).slice(-16_000)) : undefined);
       if (closed) return disposeTerminal(info.id);
       termId = info.id;
       clearInterval(poll);
@@ -493,6 +499,8 @@
       onkeydown={(e) => e.key === 'Enter' && (account ? saveKey() : create())}
     />
     <span class="help">{t(keySays.hint)}</span>
+    <!-- On a server, its secrets are in a file of its data, not in this computer's keychain (ESC-538). -->
+    <SecretsOnServer one />
   </div>
 {/snippet}
 
@@ -607,7 +615,8 @@
     {@render keyField()}
   {:else}
     <div class="w-fld">
-      <span class="lab">{t('accounts.modal.signIn')}</span>
+      <span class="lab">{connection.server ? t('moves.login.title', { name: connection.server.name }) : t('accounts.modal.signIn')}</span>
+      {#if connection.server && termId && !signedIn}<ServerSignIn text={loginText} />{/if}
       {#if termId}<div class="term" bind:this={box}></div>{/if}
       <p class="said" class:ok={signedIn} role="status">
         {#if signedIn}
@@ -615,9 +624,11 @@
             ? t('accounts.modal.connected', { email: signedIn.email })
             : t('accounts.modal.connectedNoEmail')}
         {:else if !(exited && !signedIn)}
-          <span class="spin" aria-hidden="true"></span>{t(says.hint)}
+          <span class="spin" aria-hidden="true"></span>{connection.server
+            ? t('moves.login.hint', { name: connection.server.name })
+            : t(says.hint)}
         {:else}
-          {t(says.hint)}
+          {connection.server ? t('moves.login.hint', { name: connection.server.name }) : t(says.hint)}
         {/if}
       </p>
     </div>

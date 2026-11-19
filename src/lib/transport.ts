@@ -20,6 +20,9 @@
  *   try (the tunnel may have taken another port, or stopped for good: a host key). A ping every few seconds measures the
  *   way there and back (the status bar's latency) and finds a connection that went silent. The commands of this
  *   computer's servers (`servers_*`, `server_*`) always go to its own core (`local`).
+ * - **What the server's host publishes** (ESC-538: a chime, a notification, the count of what waits) is handed to
+ *   `onHostEvent`'s listeners, which show it on this computer; a session taken again says how many events of the state
+ *   it missed (`connection.missed`, « Reconnecté à Travail · 12 événements rattrapés »).
  */
 
 import { Channel as TauriChannel, invoke as tauriInvoke } from '@tauri-apps/api/core';
@@ -31,6 +34,18 @@ type Args = Record<string, unknown> | Uint8Array | ArrayBuffer | number[];
 type Options = Parameters<typeof tauriInvoke>[2];
 
 let nextChannel = 1;
+
+/** Who shows what the server's host publishes (`server-moves.svelte.ts`). */
+const hostListeners: ((event: any) => void)[] = [];
+
+/** `f` gets what the host of the core the window speaks to publishes (a server's: its notifications, ESC-538). */
+export function onHostEvent(f: (event: any) => void): () => void {
+  hostListeners.push(f);
+  return () => {
+    const i = hostListeners.indexOf(f);
+    if (i >= 0) hostListeners.splice(i, 1);
+  };
+}
 
 /** A channel the core sends messages on, given as an argument of a call (`__CHANNEL__:<id>`, as Tauri's). */
 export class Channel<T = unknown> {
@@ -384,6 +399,8 @@ export class RemoteTransport {
     connection.machine = m.machine && typeof m.machine === 'object' ? m.machine : null;
     // A server's secrets are in a file of its data, not in a keychain (ESC-514).
     connection.secretsInFile = m.secretsInFile === true;
+    // A session taken again: the events of the state it missed (ESC-538).
+    connection.missed = again && typeof m.missed === 'number' ? m.missed : null;
     if (again) {
       // The terminals from where they stopped (the channels of the state are not resumed: it is read again).
       const channels = [...this.channels.entries()]
@@ -483,6 +500,15 @@ export class RemoteTransport {
         return this.resume(m.channel);
       case 'resync':
         return this.tellStale();
+      case 'host':
+        for (const f of hostListeners) {
+          try {
+            f(m.event);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        return;
       default:
         return;
     }

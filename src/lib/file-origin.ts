@@ -8,6 +8,7 @@
 // copied, as is a file the host does not know (a screenshot pasted) or one whose host fails to answer. Whatever fails gives null,
 // never an error.
 
+import { onServer } from './connection.svelte';
 import { api } from './ipc';
 import { OS, type Os } from './platform';
 
@@ -20,7 +21,8 @@ interface WebView2 {
  * origin to attach it by: it is no file of the disk, or the system has no host to read it. The path itself is not kept here.
  */
 export async function fileOrigins(files: File[], os: Os = OS): Promise<(string | null)[]> {
-  if (os === 'windows') return fromWebView2(files);
+  // On a server (ESC-538), a file of this computer is never where the agents are: always a copy, sent.
+  if (os === 'windows' && !onServer()) return fromWebView2(files);
   return files.map(() => null);
 }
 

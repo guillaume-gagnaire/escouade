@@ -2,7 +2,7 @@
 title: "Le mode serveur"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image)","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »"]
-tickets: ["ESC-514","ESC-515","ESC-537"]
+tickets: ["ESC-514","ESC-515","ESC-537","ESC-538"]
 decisions: [202,216]
 compared: null
 ---
@@ -11,14 +11,14 @@ compared: null
 
 Escouade tourne sur une machine sans bureau (un VPS, un conteneur), H24, et le client de bureau la pilote à distance par l'API distante (voir *L'API distante*), à travers un tunnel. Le cœur (agents, harness, worktrees, Kanban, terminaux, serveur MCP) tourne sur le serveur ; le client n'en est qu'une vue : le fermer, éteindre le poste ou couper le réseau ne touche à aucun agent.
 
-Ce qui est livré : le programme du serveur, `escouade-server` (MS-1) ; le client qui s'y connecte, par un tunnel SSH qu'il ouvre lui-même, décrit dans *Se connecter à un serveur* (ESC-537) ; et la distribution du serveur (ESC-515) : l'image Docker, un Compose d'exemple et une recette Coolify, le script d'installation systemd, la mise à jour signée, la release. Le guide de l'utilisateur est la page « Mode serveur » de la documentation du site.
+Ce qui est livré : le programme du serveur, `escouade-server` (MS-1) ; le client qui s'y connecte, par un tunnel SSH qu'il ouvre lui-même, décrit dans *Se connecter à un serveur* (ESC-537) ; et la distribution du serveur (ESC-515) : l'image Docker, un Compose d'exemple et une recette Coolify, le script d'installation systemd, la mise à jour signée, la release ; et ce qui change de machine (ESC-538 : les dossiers du serveur, les fichiers envoyés et reçus, les ports relayés, les notifications, la voix, les comptes, les secrets), décrit dans *Ce qui change de machine*. Le guide de l'utilisateur est la page « Mode serveur » de la documentation du site.
 
 ## `escouade-server`
 
 - Un binaire pour **Linux x64 et arm64**, qui ne lie **ni WebKit ni GTK** (ni D-Bus, ni le son, ni X11 ou Wayland) : il démarre et tourne sans aucun affichage, dans un conteneur Debian nu. La CI le construit pour les deux architectures, vérifie ses bibliothèques et le démarre dans un tel conteneur. La release le construit sur Ubuntu 22.04 : il tourne sur Debian 12, Ubuntu 22.04 et plus récents.
 - Il se construit aussi sous Windows et macOS, pour les essais ; seul Linux est livré.
 - Il prend le **dossier de données** (`~/.escouade`, ou `--data-dir`) et le tient : un second Escouade sur le même dossier est refusé, avec un message clair (« Escouade tourne déjà sur ce dossier de données (…) : un seul à la fois. »).
-- Il charge le cœur comme l'app de bureau (projets, agents, Kanban, Git, plugins, comptes), sans fenêtre : ce que le bureau montrerait (une notification, un carillon, le compte de ce qui attend, un lien à ouvrir) est poussé aux clients, qui le rendent chez eux.
+- Il charge le cœur comme l'app de bureau (projets, agents, Kanban, Git, plugins, comptes), sans fenêtre : ce que le bureau montrerait (une notification, un carillon, le compte de ce qui attend) est poussé aux clients, qui le rendent chez eux ; le clic d'une notification revient au serveur, qui garde l'action de ses 64 dernières. Ce qu'il demanderait d'ouvrir (un lien, un de ses fichiers) n'est jamais ouvert par un client sans geste.
 - Il sert l'API distante sur **127.0.0.1** (port 46480, ou `--port`). On l'atteint par un tunnel (`ssh -L <port local>:127.0.0.1:46480 <hôte>`).
 - Il s'arrête proprement à **SIGTERM** (systemd, `docker stop`) ou Ctrl+C : l'API se ferme, les tours en cours des agents sont coupés (chacun reprend sa session au démarrage suivant, comme quand on quitte l'app), l'état est écrit, le dossier est lâché.
 - Il dit ce qu'il fait dans `server-status.json`, dans son dossier : son processus, sa version, l'adresse de son API, ce qui le tient occupé (un tour, une question, une tâche de fond, un lancement, un terminal servi depuis moins de 5 minutes : ce qui retient aussi le redémarrage automatique de l'app), réécrit toutes les 5 secondes et aussitôt que cela change, retiré à l'arrêt propre. `health` et `update` le lisent. Il ne contient aucun secret.
@@ -65,10 +65,10 @@ Un VPS n'a pas de trousseau (pas de Secret Service, pas de session). Les secrets
 
 - les jetons des appareils ;
 - les clés des intégrations ;
-- les clés de Cursor et des voix en ligne ;
+- les clés de Cursor et de Mistral Vibe ;
 - les secrets des plugins.
 
-Le serveur le dit à chaque client : le message d'accueil de l'API porte `secretsInFile`, que le client lit pour l'afficher là où un secret se donne. Il porte aussi la machine du serveur (son nom et le compte du service), que le client affiche. Les harness, eux, se connectent sur le serveur et y gardent leurs propres jetons : **la sécurité des comptes devient celle du serveur**, son disque, son accès SSH, ses sauvegardes. La documentation, le script d'installation et la FAQ « Où vont mes données ? » le disent.
+Le serveur le dit à chaque client : le message d'accueil de l'API porte `secretsInFile`, que le client affiche là où un secret se donne (« Gardée dans un fichier sur Travail », voir *Ce qui change de machine*). Il porte aussi la machine du serveur (son nom et le compte du service), que le client affiche. Les clés des voix en ligne, elles, restent au trousseau du poste : la voix est celle du poste. Les harness, eux, se connectent sur le serveur et y gardent leurs propres jetons : **la sécurité des comptes devient celle du serveur**, son disque, son accès SSH, ses sauvegardes. La documentation, le script d'installation et la FAQ « Où vont mes données ? » le disent.
 
 ## L'image Docker
 
@@ -145,4 +145,4 @@ Il ne dit jamais de jeton, de code, de secret ni ce qu'écrit un terminal. `--de
 - Plusieurs serveurs dans un même client, leurs espaces et leurs piles.
 - L'écran « Mettre à jour le serveur » qui lance la commande ou dit l'image (le fait est exposé : `serverUpdate`).
 - Une adresse `wss://` d'un domaine dans le client.
-- Ce qui change de machine : le navigateur des dossiers du serveur, les fichiers des agents téléchargés, les ports des serveurs de test relayés, les notifications rendues par le client, la voix sur le poste.
+- Les serveurs de langage de l'éditeur, encore refusés à distance.

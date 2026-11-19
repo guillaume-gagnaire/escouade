@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '../Icon.svelte';
-  import { openPath } from '../../lib/opener';
+  import { openProjectFolder } from '../../lib/opener';
   import { t } from '../../lib/i18n';
   import { choosesEngine, engineOptions } from '../../lib/engines';
   import { bounded, HARNESSES_KEY, locksFor } from '../../lib/locks.svelte';
@@ -73,8 +73,13 @@
     {#snippet extra()}
       <span class="more path mono" use:tip={{ text: project.path, cut: true }}>{project.path}</span>
     {/snippet}
-    <button class="btn" onclick={() => openPath(project.path).catch((err) => app.toast(String(err), 'error'))}
-      ><Icon name="folder" size={14} />{t('common.open')}</button
+    <button
+      class="btn"
+      onclick={() =>
+        openProjectFolder(project, (id) => {
+          app.modal = null;
+          void app.openEditor({ projectId: id, source: 'project' });
+        }).catch((err) => app.toast(String(err), 'error'))}><Icon name="folder" size={14} />{t('common.open')}</button
     >
   </Row>
   <Row label={t('common.color')} desc={t('settings.project.colorDesc')}>

@@ -4,6 +4,7 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { openPath } from '../../lib/opener';
+  import { connection } from '../../lib/connection.svelte';
   import { IS_MAC } from '../../lib/platform';
   import { settingsForm, type NumberSetting } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -126,7 +127,8 @@
   title={t('settings.groups.terminals')}
   note={t('settings.terminals.detected', { list: app.shells.map((x) => x.label).join(', ') || t('settings.terminals.none') })}
 >
-  {#if IS_MAC}
+  <!-- On a server (ESC-538), its shells are its own (Linux): no PowerShell, Git Bash nor WSL of this computer. -->
+  {#if IS_MAC || connection.server}
     {@render text('bash', t('settings.terminals.auto'), s.bashPath, (v) => (s.bashPath = v))}
   {:else}
     {@render text('PowerShell 7', t('settings.terminals.auto'), s.pwshPath, (v) => (s.pwshPath = v))}
@@ -166,7 +168,8 @@
 <Group title={t('settings.groups.localData')}>
   <Row label={t('common.folder')}>
     {#snippet extra()}<span class="more mono data">{dataDir ? tildify(dataDir) : '~/.escouade'}</span>{/snippet}
-    {#if dataDir}
+    <!-- On a server, the data folder is the server's: nothing to open on this computer (ESC-538). -->
+    {#if dataDir && !connection.server}
       <button class="btn" onclick={() => openPath(dataDir!).catch((e) => app.toast(String(e), 'error'))}
         ><Icon name="folder" size={14} />{t('nav.titleBar.menu.openFolder')}</button
       >
