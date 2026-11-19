@@ -298,8 +298,10 @@ async fn the_check_reads_the_endpoints_of_the_configuration_and_the_network_of_t
     let rig = Rig::new().await;
     // `plugins.updater.endpoints` of the configuration: the origin's. With no proxy in the
     // settings the system's is followed, as the plugin does (not asked here: a test never goes
-    // through the proxy of the machine it runs on).
-    let checker = Checker::new(rig.app.handle(), &Settings::default()).unwrap();
+    // through the proxy of the machine it runs on). On the loopback, a debug build reads them.
+    let checker = Checker::new(rig.app.handle(), &Settings::default())
+        .unwrap()
+        .expect("a test's server is read in a debug build");
     assert_eq!(
         checker.endpoints,
         vec![rig.origin.url(LATEST).parse::<Url>().unwrap()]
@@ -946,4 +948,29 @@ async fn without_the_betas_a_beta_found_in_latest_json_is_not_offered() {
     // With them, it is.
     let found = rig.found(&rig.checker_with_betas(true)).await;
     assert_eq!(found.version, "99.0.0-beta.1");
+}
+
+// ---------- a debug build and the real server (ESC-543) ----------
+
+#[tokio::test]
+async fn a_debug_build_with_no_test_server_checks_nothing_and_says_so_when_asked() {
+    // An address that is not this machine's, as GitHub's latest.json is not (`.invalid` never
+    // resolves: nothing leaves even if this broke).
+    let app = app(&["https://escouade.invalid/latest.json".into()]);
+    assert!(Checker::new(app.handle(), &Settings::default())
+        .unwrap()
+        .is_none());
+    let updates = Updates::default();
+    let quiet = within(check(app.handle(), &Settings::default(), &updates, false)).await;
+    assert!(matches!(quiet, Checked::None), "{quiet:?}");
+    let t = trouble(within(check(app.handle(), &Settings::default(), &updates, true)).await);
+    assert!(t.show);
+    assert!(
+        t.message
+            .starts_with("les mises à jour sont coupées dans un build de debug"),
+        "{}",
+        t.message
+    );
+    // Not a failure of the network: no series that would end up shown by itself.
+    assert_eq!(*updates.check_streak.lock(), Streak::default());
 }
