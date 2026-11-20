@@ -1,8 +1,8 @@
 ---
 title: "Les plugins : vue d'ensemble"
 subject: "plugins"
-sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs"]
-tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-520"]
+sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs","docs/PLUGINS-CONTRACT-STUDY.md §1.4, §3.3 (release/2.3)","website/content/docs/fr/plugins/manifest.md"]
+tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-520","ESC-524"]
 decisions: [142,204]
 compared: null
 ---
@@ -28,9 +28,18 @@ Un **programme natif** (`run.command`) ne démarre plus, quelle que soit l'origi
 - un thème ;
 - un harness : décrit par ACP sans code (*Les harness ACP décrits*), ou, pour la première main, par un module (*Le contrat des harness en process*) ;
 - un genre de compte, une source du Kanban, un hébergeur de code, un service de voix, un environnement de lancement ;
-- des réglages et des secrets, rendus par Escouade.
+- des réglages et des secrets, rendus par Escouade. Un réglage a `key`, `type` (`string`, `number`, `boolean`, `select`) et `title`, et peut avoir `description` (montrée sous son titre), `default` (sa valeur tant que l'utilisateur n'en a pas choisi) et, pour un `select`, `options` ; la page du plugin les montre dans l'ordre du manifeste, les réglages puis les secrets.
 
-Le manifeste réserve `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml`, et le lecteur de workflow a son contrat, mais rien de l'app ne s'en sert encore. Les outils MCP apportés par un plugin, les textes rédigés, les langues, les statistiques, Ctrl+K, les canaux de notification déclarés et les vues libres ne sont pas construits.
+Le lecteur de workflow a son contrat, mais rien de l'app ne l'appelle encore. Les outils MCP apportés par un plugin, les textes rédigés, les langues, les statistiques, Ctrl+K, les canaux de notification déclarés et les vues libres ne sont pas construits.
+
+## Les points réservés (ESC-524)
+
+Le manifeste réserve `menus`, `statusBar`, `badges` et `projectTemplates` (et lit puis ignore `escouadeYml`, que la documentation ne cite plus). Ils restent acceptés, de la forme d'aujourd'hui : aucun manifeste publié n'est refusé pour eux. Mais rien ne les sert, donc :
+
+- **la fenêtre ne les annonce pas** : ni dans « Ce qu'il ajoute » (fenêtre d'installation, depuis un dossier ou le store, et page du plugin), ni dans la ligne de Réglages › Plugins, et ils ne rangent pas un plugin dans « Outils ». Un plugin qui ne déclare qu'eux n'ajoute rien, et le dit comme un plugin sans contribution ;
+- **`escouade-plugin validate` et le contrôle du manifeste du store** (le lecteur partagé) disent chacun d'eux « réservé, sans effet dans cette version », un avertissement : la version passe.
+
+Concevoir `statusBar` (le plus demandé) est laissé à une étude à part.
 
 ## D'où ils viennent
 

@@ -17,11 +17,13 @@ import git from './git';
 import handover from './handover';
 import heat from './heat';
 import integrations from './integrations';
+import inbox from './inbox';
 import mcp from './mcp';
 import memory from './memory';
 import backups from './backups';
 import onboarding from './onboarding';
 import discover from './discover';
+import inboxViews from './inboxViews';
 import vectors from './vectors';
 import nav from './nav';
 import plan from './plan';
@@ -52,6 +54,7 @@ import workflow from './workflow';
 import workflowSettings from './workflowSettings';
 
 export const en = defineCatalog({
+  inbox,
   common,
   format,
   editor,
@@ -77,6 +80,7 @@ export const en = defineCatalog({
   backups,
   onboarding,
   discover,
+  inboxViews,
   vectors,
   branches,
   plan,

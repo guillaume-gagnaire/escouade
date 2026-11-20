@@ -25,6 +25,8 @@ beforeEach(() => {
   app.enginesFound = ['claude', 'codex', 'opencode'];
   plugins.list = firstHandPlugins();
   plugins.loaded = true;
+  // The MCP server on: the rows of the box « À toi » are on their page (ESC-513).
+  app.settings = { ...app.settings, mcpEnabled: true };
 });
 
 afterEach(() => {
@@ -34,6 +36,14 @@ afterEach(() => {
 });
 
 describe('the search of the settings', () => {
+  // ESC-513: the box « À toi » rests on the MCP server: off, the search does not lead to its summary.
+  it('leads to the summary of the box only while the MCP server is on', () => {
+    expect(found(rowLabel('inboxSummary'), 'inboxSummary')).toBe(true);
+    app.settings = { ...app.settings, mcpEnabled: false };
+    expect(found(rowLabel('inboxSummary'), 'inboxSummary')).toBe(false);
+    expect(found('boîte', 'inboxSummary')).toBe(false);
+  });
+
   // Each row of the register, by its label in each language, whatever the language of the interface: as written, then
   // in capitals without its accents.
   for (const ui of ['fr', 'en'] as const)

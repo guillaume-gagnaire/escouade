@@ -1,9 +1,9 @@
 ---
 title: "La boîte « À toi »"
 subject: "harness"
-sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15)","design/inbox-2-3/README.md","docs/REMOTE.md (Le classement des commandes)"]
-tickets: ["ESC-508","ESC-509","ESC-520"]
-decisions: [210,204]
+sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 16 et § 18 pour le reversement)","design/inbox-2-3/README.md (direction B, captures b-)","docs/REMOTE.md (Le classement des commandes)"]
+tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540"]
+decisions: [210,204,"l-ecran-de-la-boite-a-toi-une-vue-de-tou","la-boite-a-toi-montre-ce-qui-attend-aill",222]
 compared: null
 ---
 
@@ -11,7 +11,7 @@ compared: null
 
 Ce qu'un agent attend de l'utilisateur **sans s'arrêter de travailler** : un choix entre des options (avec leurs rendus à comparer), un oui ou non (un feu vert), une réponse libre, une tâche que l'utilisateur seul peut faire. L'agent la dépose par le serveur MCP (`ask_user`) et continue ; la réponse lui revient en message, marquée comme venant de l'utilisateur, et **ne déclenche rien d'autre**. La boîte repose sur le serveur MCP : serveur éteint, pas de boîte.
 
-IN-1 (ESC-509) livre le cœur, les outils et les commandes de la fenêtre ; l'écran (IN-2, direction B « La file ») et ce qu'Escouade y verse de lui-même, les notifications et la distance (IN-3) suivent.
+IN-1 (ESC-509) livre le cœur, les outils et les commandes de la fenêtre ; IN-2 (ESC-510) l'écran, dans la direction B « La file » ; IN-3 (ESC-513) ce qu'Escouade y verse de lui-même, le résumé des notifications et la consigne aux agents (plus bas). La distance (le téléphone) vient avec la 2.3.
 
 ## Comportement
 
@@ -38,8 +38,8 @@ IN-1 (ESC-509) livre le cœur, les outils et les commandes de la fenêtre ; l'é
 - **Bornes**, tenues avant de lire : 12 fichiers par demande (options comprises), d'abord le nombre ; 25 Mo par fichier, sur la taille annoncée d'un contenu en base64 ou celle du fichier ouvert ; 64 Mo par demande ; 1 Go pour toute la boîte.
 - **Le chemin** : un agent d'Escouade ne donne qu'un fichier de son dossier de travail, par un chemin relatif à lui ou complet, vérifié sur le fichier ouvert (les liens qui en sortent refusés, mêmes mots qu'un fichier absent) ; Claude hors Escouade, un chemin complet ; ou le contenu en base64 avec son nom. Mêmes refus que pour un ticket (réseau, appareil, pas un fichier ordinaire).
 - **Copiés** dans `<données>/asks/<id>/files/<uniq>/<nom>`, nom nettoyé : ils **survivent au worktree** de l'agent. Un dépôt refusé ne laisse ni demande ni fichier.
-- **Gardés 30 jours** après la fin de la demande, puis effacés (au démarrage, puis à chaque passage de la boîte) ; la demande dit alors « fichiers effacés ». « Vider les fichiers des demandes closes » les efface tous d'un coup, et la place qu'ils prennent se lit.
-- Servis à la fenêtre par la demande et le fichier, jamais par un chemin : `inbox_file` rend 4 Mo au plus à la fois, en base64. « Ouvrir » ne passe jamais au système un programme, un script, une page HTML ni un SVG : ceux-là n'ont que « Afficher dans le dossier ».
+- **Gardés 30 jours** après la fin de la demande (« Garder les fichiers des demandes closes » : 7, 30 ou 90 jours ; toute autre valeur vaut 30), puis effacés (au démarrage, puis à chaque passage de la boîte) ; la demande dit alors « fichiers effacés », et `get_ask_file` le dit avec le nombre de jours réglé. « Vider les fichiers des demandes closes » les efface tous d'un coup, et la place qu'ils prennent se lit (Réglages › Avancé › Données locales).
+- Servis à la fenêtre par la demande et le fichier, jamais par un chemin : `inbox_file` rend 4 Mo au plus à la fois, en base64. « Ouvrir » ne passe jamais au système un programme, un script, une page HTML ni un SVG : ceux-là n'ont que « Afficher dans le dossier ». « Enregistrer sous… » (`inbox_save_file`) copie la copie du cœur là où l'utilisateur le choisit dans la boîte du système, que le cœur ouvre.
 
 ### La réponse rendue à l'agent
 
@@ -62,24 +62,106 @@ IN-1 (ESC-509) livre le cœur, les outils et les commandes de la fenêtre ; l'é
 ### Serveur MCP éteint
 
 - Les outils n'existent pas (le serveur ne tourne pas) ; les commandes de la fenêtre disent « La boîte « À toi » est fermée avec le serveur MCP », et `inbox_list` rend une boîte fermée, vide.
+- **Rien de la boîte ne se montre** : ni tuile, ni compteur, ni raccourci, ni vue (une vue ouverte se ferme). Allumé ou éteint, la fenêtre le suit aussitôt, sans redémarrer.
+- **Éteindre avec des demandes ouvertes le demande d'abord** : « Éteindre le serveur MCP ? 4 demandes de tes agents t'attendent dans la boîte « À toi ». Éteint, la boîte se ferme : elles sont gardées, sans que tu les voies ni que leurs agents puissent les lire, jusqu'à ce que tu le rallumes. Elles se périment à leur date. », les trois premiers titres (« et N autres »), « Les demandes de permission, les tickets à valider et les décisions proposées ne bougent pas : tu les retrouves où ils sont aujourd'hui. » ; « Ouvrir la boîte », « Annuler » (les réglages reviennent), « Éteindre quand même ». Rien n'attend : il s'éteint sans rien demander. `inbox_closing` donne ce que dit la question.
 - Les demandes sont **gardées, figées**, avec leurs fichiers : leur date court toujours, un agent supprimé les retire, une réponse déjà donnée part quand même. Rallumé, la boîte revient avec elles, et un ticket qui en attendait une attend toujours.
-- `inbox_closing` donne ce que demande la question avant d'éteindre (le nombre de demandes ouvertes, les trois premiers titres).
+
+### L'écran (ESC-510, direction B « La file »)
+
+- **Sa place** : une vue de tous les projets, ouverte par la tuile « À toi » de la barre des projets, sous « Vue d'ensemble », ou par `Ctrl+Maj+J` (voir *Barre des projets*, *Raccourcis*) ; elle prend la place du projet, des stats ou de la vue d'ensemble, et `Échap`, la tuile ou le raccourci reviennent à ce qu'elle couvrait.
+- **La file**, à gauche (300 px, 236 sous 1100 px de fenêtre) : « À toi » et le compte de la portée ; la portée « Tous » ou « Ce projet » (le dernier projet affiché) ; la jauge, une case par ligne (verte traitée aujourd'hui, ambre un agent arrêté, claire celle qui est ouverte) ; « 3 traitées aujourd'hui · il en reste 9 » ; puis les groupes : « Tes agents se sont arrêtés » (ambre ; les demandes de permission, les questions et les plans de ces agents, la plus ancienne d'abord, réglés sur place : les vues d'IN-3, plus bas ; un agent arrêté sans vue, comme celui qui demande une suppression, mène à sa conversation), « Aujourd'hui » (urgente, revenue de « Plus tard », attendue par un ticket ou déposée aujourd'hui ; l'urgente d'abord, puis la revenue, puis la plus ancienne), « Plus tôt », « Plus tard » (replié, avec l'heure du retour) et « Répondu récemment » (7 jours, 50 au plus : la réponse, qui, l'heure, « lue par <agent> » ; retirée, périmée).
+- **Une ligne** : l'icône de sa sorte, le titre, depuis quand ; le projet (sa couleur), l'agent (son nom d'aujourd'hui), ses fichiers (« 1 PDF, 6 images ») ou sa sorte, « aujourd'hui » ou « revenue de Plus tard » ; un choix montre sous elle la première image de chaque option (repris de la direction D). Un point marque une demande pas encore ouverte.
+- **Une demande à la fois**, à droite : la barre « ‹ 3 sur 9 › », les touches `J` `K` `L`, « Aller à l'agent », « Le ticket » (son agent, sinon le Kanban) ; puis la sorte (« Aujourd'hui » en ambre), le projet, l'agent (« chef d'escouade »), le ticket, depuis quand ; le titre ; le texte, rendu en Markdown assaini comme la conversation (rien de distant sans clic) ; un choix, ses options sur leurs **planches** (son rendu sombre, ou le premier ; la ligne de crédits : lettre, nom, description, « 2 images ») et le **sceau** « Recommandé par l'agent » à demi hors de la planche recommandée ; une tâche, ses étapes à cocher ; ses fichiers ; « Recommandé : B · Cartes empilées. » et pourquoi ; « Ta réponse débloque : … » et les tickets qui l'attendent. Une demande reportée dit jusqu'à quand (« La remettre maintenant ») ; laissée à un agent, à qui (« La reprendre »).
+- **La réponse, en bas** : un choix, ses options (« Recommandé » sur la sienne ; la réponse part de l'option recommandée, jamais choisie sans l'utilisateur) et « Comparer en grand » ; « Un mot pour l'agent (facultatif) » (« Ce que tu as vu » pour une tâche), le trombone (un fichier joint à la réponse, copié comme un brouillon), le micro (la dictée de la conversation), « Plus tard », puis le geste : « Choisir B » (plusieurs : « Envoyer 2 »), « Non, pas encore » / « Oui, publie » (les mots de l'agent, sinon « Non » / « Oui »), « Je ne le ferai pas » / « C'est fait », « Envoyer » (une réponse libre, partie du texte proposé). Dessous : « Ta réponse part à <agent>, qui la lit à son prochain tour ; tu peux revenir dessus tant qu'il ne l'a pas lue. », pour un feu vert « Un feu vert : toi seul y réponds… », et « Laisser <chef> trancher » quand le réglage le permet (jamais un feu vert ni une tâche).
+- **Au clavier** (hors d'un champ, d'un menu, d'une boîte de dialogue) : `J` / `K` (ou `↓` / `↑` hors de la file) suivante, précédente ; `1` à `6` une option ; `Entrée` le geste principal (pas sur un bouton qui a le focus) ; `L` « Plus tard » ; dans la file, `↓` / `↑` d'une ligne à l'autre. Une réponse envoyée ou une demande reportée ouvre la suivante ; la boîte ouverte s'ouvre sur la première qui attend, sans la marquer vue.
+- **« Plus tard »** : « Dans 1 heure », « Ce soir, 18:00 » (avant 17:00), « Demain, 9:00 », « Lundi, 9:00 » (sauf si demain est lundi), « Choisir… » (une date et une heure).
+- **Envoyée** : « Ta réponse à « … » part dans 10 s · Annuler » en haut du panneau ; « Annuler » la reprend et la rouvre. Une demande répondue montre sa trace : la réponse, qui (« toi », « <agent>, délégué »), quand, par quel geste (clic, clavier, voix), « Envoyée à » / « Pas encore lue par » / « Lue par <agent> », « Revenir sur ma réponse » tant qu'elle n'est pas lue, « Changer d'avis… » ensuite (la conversation de l'agent, un message prêt à compléter) ; avec `decision`, que l'agent la propose dans Docs › Décisions, « Voir les décisions » ; son histoire.
+- **Comparer en grand** : par-dessus la fenêtre, les options côte à côte sur leurs planches, le sceau ; « Sombre · Clair · Les deux » quand une option a un rendu clair (son nom finit par `-clair` ou `-light`) et un sombre ; `1` `2` `3`, `←` `→`, `Espace` (l'option seule dans la visionneuse), `Entrée`, `Échap` ; « Un mot pour l'agent » et « Choisir B » en bas.
+- **Les fichiers** : une image en vignette (sa taille en pixels et en octets), qui ouvre la visionneuse de la conversation (les images de la demande, zoom, « Copier l'image », « Enregistrer sous… », « Ouvrir », « Afficher dans le dossier ») ; un PDF lu à côté du texte (dessous sous 1100 px), le premier ouvert, « Lire » pour un autre, « 3 pages » dès qu'il est lu ; un Markdown dessiné sous la liste, comme la conversation ; les autres (Word compris sur la 2.2) avec leur nom, leur taille, « Ouvrir » (« Afficher dans le dossier » pour un programme, un script, une page ou un SVG) et « Enregistrer sous… ».
+- **Le PDF** est dessiné par pdf.js (`pdfjs-dist`, chargé à la première lecture), sans sa couche de scripts ni XFA, rien chargé du web (son worker et ses décodeurs WebAssembly sont des fichiers de l'app, les polices manquantes celles du système), la politique de la fenêtre inchangée : une page à la fois sur un canevas, blanche dans les deux thèmes, à la largeur du panneau ; « 3 sur 12 » où une page tapée mène, précédente et suivante (`←` `→`, Page précédente, Page suivante, Début, Fin), les vignettes des 30 premières pages, le zoom (50 % à 300 %), « Chercher » (les pages dont le texte tient les mots, casse et accents à part), « Plein écran » (`Échap` en sort). Ses liens et ses formulaires ne vivent pas. Un PDF protégé : « L'aperçu de ce fichier ne s'affiche pas : ce PDF est protégé par un mot de passe. »
+- **La boîte vide** : « Rien ne t'attend », ce qui y arrive, les quatre sortes (« Un choix — entre des options, avec leurs rendus à comparer. »…), et que le compteur de la barre de gauche dit quand une demande arrive.
+- **Accessibilité** : la file est une liste de boutons (`aria-current` sur la ouverte) ; les options, des boutons radio (ou des cases avec `multi`), `aria-keyshortcuts` ; une demande arrivée depuis la dernière lecture est dite par une région `status` (« Nouvelle demande de design-tableau : … »), sans prendre le focus ; la comparaison et le PDF en plein écran tiennent le focus ; tout se fait au clavier ; clair et sombre, français et anglais.
+- **Le compteur** : sur la tuile, tous projets (voir *Barre des projets*) ; le titre de la file, la portée.
+
+### Statistiques d'usage
+
+Si l'utilisateur les laisse : `inbox_opened` (`from` : `tile`, `shortcut`, `settings`, `notification` (le clic sur le résumé) ; `scope`), `ask_answered` (`kind`, `delay` par tranche, `via`, `followed` pour un choix recommandé), `ask_snoozed`, `ask_reopened`, `inbox_compare_opened`, `inbox_attachment_opened` (`type`). Jamais un texte, un nom ni un chemin. Ce que seule la fenêtre voit passe par `inbox_track`, qui ne compte que ces valeurs-là.
 
 ### Les commandes de la fenêtre
 
-`inbox_list` (d'un projet ou de tous, avec le nom du projet, sa marque privée, la clé du ticket et les agents à qui la laisser), `inbox_get`, `inbox_file`, `inbox_open_file` (« Ouvrir », « Afficher dans le dossier »), `inbox_answer` (avec les fichiers joints), `inbox_snooze`, `inbox_delegate`, `inbox_reopen`, `inbox_seen`, `inbox_closing`, `inbox_weight`, `inbox_erase_closed_files`. L'événement `inbox` dit à la fenêtre que la boîte d'un projet a changé.
+`inbox_list` (d'un projet ou de tous, avec le nom du projet, sa marque privée, la clé du ticket et les agents à qui la laisser), `inbox_get`, `inbox_file`, `inbox_open_file` (« Ouvrir », « Afficher dans le dossier »), `inbox_save_file` (« Enregistrer sous… »), `inbox_answer` (avec les fichiers joints), `inbox_snooze`, `inbox_delegate`, `inbox_reopen`, `inbox_seen`, `inbox_closing`, `inbox_weight`, `inbox_erase_closed_files`, `inbox_track` ; pour les vues d'IN-3, `inbox_views`, `inbox_view_act` et `inbox_view_snooze`. L'événement `inbox` dit à la fenêtre que la boîte d'un projet a changé : elle la relit.
+
+## Réglages
+
+Sous « Les agents peuvent piloter Escouade » (Réglages › Agents › Piloter Escouade) :
+
+- « La boîte « À toi » » : ce qu'elle est, « Ouvrir la boîte » ; serveur éteint, grisée, « Éteinte avec le serveur ».
+- « Garder les fichiers des demandes closes » : 7, 30 (défaut) ou 90 jours (`inboxKeepDays`), grisé serveur éteint.
+- « Les agents peuvent répondre aux demandes des autres agents » : la délégation (voir plus haut).
+- Réglages › Avancé › Données locales : « Boîte « À toi » », ce que pèsent ses fichiers, « Vider les fichiers des demandes closes ».
+- Le résumé des notifications de la boîte se règle dans Réglages › Notifications (voir plus bas).
 
 ## Sécurité
 
-- Le texte et les fichiers d'une demande sont des **données d'agent**, qui peuvent relayer un tiers : lus par un autre agent que leur auteur (`get_ask`, `list_asks`, `wait_ask`, `get_ask_file`), ils sont marqués comme une donnée de tiers, jamais une consigne.
-- **Projet privé** : ses demandes ne sont trouvées que par ses agents, avec les mêmes mots qu'une demande qui n'existe pas ; ses agents n'en déposent dans aucun autre projet. La fenêtre les montre, marquées.
+- Le texte et les fichiers d'une demande sont des **données d'agent**, qui peuvent relayer un tiers : lus par un autre agent que leur auteur (`get_ask`, `list_asks`, `wait_ask`, `get_ask_file`), ils sont marqués comme une donnée de tiers, jamais une consigne. Dans la fenêtre, le Markdown est assaini, rien de distant ne se charge sans clic, une image est un `data:` de la copie du cœur, un PDF n'exécute rien, un programme ne s'ouvre jamais.
+- **Projet privé** : ses demandes ne sont trouvées que par ses agents, avec les mêmes mots qu'une demande qui n'existe pas ; ses agents n'en déposent dans aucun autre projet. La fenêtre les montre, marquées « Projet privé ».
 - **Les journaux** : `app.log` ne dit que « ask a-12 deposited by agent e6e0… (choice, 3 options, 7 files) », « answered », « withdrawn », « read »… ; l'activité du serveur MCP ne garde que le projet, la sorte et le numéro, jamais le texte, un chemin ni un nom de fichier.
 
 ## Limites
 
 - `wait_ask` attend 240 s au plus (120 par défaut), comme `wait_ticket`, sous le délai d'un client HTTP.
-- Un ticket attend une demande par `tickets` d'`ask_user` ; `after: ["ask:…"]` de `create_ticket` et la carte du ticket qui le dit viennent avec l'écran.
-- L'écran, le compteur, les vues de ce qu'Escouade sait déjà, les notifications, l'Overseer et le téléphone ne sont pas dans IN-1.
+- Un ticket attend une demande par `tickets` d'`ask_user` ; `after: ["ask:…"]` de `create_ticket` et la carte du ticket qui le dit ne sont pas encore là.
+- Sur la 2.2 : un Word et un CSV sont des fichiers à ouvrir (les aperçus de l'éditeur sont sur la 2.3) ; pas de sélection de plusieurs demandes ni de gestes communs, pas de bulle de la première fois, pas de choix d'option à la voix. Ce que le reversement dans la 2.3 doit réunir est dans `docs/INBOX.md` § 18.
+
+## Ce qu'Escouade y verse de lui-même (IN-3, ESC-513)
+
+### Des vues sur l'état réel
+
+La boîte montre aussi ce qui attend déjà l'utilisateur ailleurs, lu dans l'état à chaque lecture (`inbox_views`), jamais copié :
+
+| Vue | D'où | Gestes dans la boîte | Groupe |
+| --- | --- | --- | --- |
+| « Autorisation », « Question », « Plan » · « l'agent s'est arrêté » | Les demandes bloquantes d'un agent dont le process tourne (pas celles de la vue Claude Code, que son terminal pose) | « Autoriser », « Toujours autoriser » quand la carte l'offre, « Refuser » avec un mot ; une question d'une seule question à options : ses options puis « Répondre », sinon « Répondre dans la conversation » ; un plan : « Approuver le plan », « Refuser » | « Tes agents se sont arrêtés », en tête, la plus ancienne d'abord |
+| « Ticket à valider » | Un ticket « À tester » | « Valider » (comme la carte du Kanban : les lancements de test arrêtés, la question des fichiers non enregistrés de l'éditeur), « Renvoyer à l'agent » avec ce qu'il faut changer | « Aujourd'hui » |
+| « Ticket bloqué » | Un ticket qui ne bouge plus seul (conflit, tests, refus) | Un conflit : « L'agent résout », « Annuler » ; « En cours » : « Reprendre » | « Aujourd'hui » |
+| « Décision proposée » | Une décision proposée du registre | « Accepter » | « Plus tôt » |
+| « Docs à partager » | Les changements des docs non partagés, comme l'onglet Docs les sait | « Partager » | « Plus tôt » |
+| « Relecture » | Une PR dont l'hébergeur demande la relecture au compte lu, pas la sienne ni un brouillon, d'après la dernière liste lue (jamais lue pour la boîte) | « Ouvrir la PR » (un lien : rien ne se fait dans la boîte) | « Aujourd'hui » |
+
+- **Synchronisées dans les deux sens** : réglée ailleurs (la conversation, le Kanban, Docs), une vue quitte la boîte aussitôt ; les faits qui changent une source (`agent.status`, `request.*`, `ticket.*`, `tests.result`, `decision.*`, `docs.*`) font relire la boîte, comme les événements des tickets, des agents, des docs à partager et des PR. Réglée dans la boîte (`inbox_view_act`), c'est le geste de sa source, par les mêmes fonctions, **sur la vue que l'utilisateur a lue** : réglée entre-temps, le geste est refusé (« C'est déjà réglé ailleurs : la boîte se met à jour. ») et rien n'est refait. Un geste qui ne va pas avec la vue est refusé.
+- **« Plus tard » sur une vue** (`inbox_view_snooze`) : elle quitte les comptes jusqu'à l'heure dite (les heures de « Plus tard » de l'écran, sans « Choisir… »), sa source intacte, gardé dans l'état durable ; revenue à l'heure, ou « Remettre dans la boîte ». **Jamais une demande bloquante** : « Ton agent s'est arrêté pour cette demande : elle ne se reporte pas, elle attend ta réponse. »
+- **Dans l'écran de la boîte** : les lignes des vues sont dans la file, dans ses groupes (les bloquantes dans « Tes agents se sont arrêtés », les tickets et les relectures dans « Aujourd'hui », les décisions et les docs dans « Plus tôt », celles qu'on a reportées dans « Plus tard ») ; une vue ouverte se lit dans le panneau, avec les gestes de sa source, et `J`, `K` passent de l'une à l'autre. Un agent arrêté sans vue (une suppression qu'il demande, un agent de la vue Claude Code) garde sa ligne qui mène à sa conversation.
+- **Les comptes** : `inbox_views` rend `blocking` (les bloquantes, tous projets) et `total`. Le compteur de la tuile compte les demandes ouvertes, les agents arrêtés (comme « N en attente », jamais une demande bloquante deux fois) et les vues non bloquantes non reportées, tous projets. Une vue d'un projet privé est marquée comme telle.
+- Serveur MCP éteint, `inbox_views` ne rend rien : ni ligne, ni compte, ni geste.
+
+### Le résumé des notifications
+
+Jamais une alerte par demande : un **résumé** des demandes asynchrones. La première après un calme attend 2 minutes, pour regrouper ce qui arrive ensemble, puis une notification du système : titre « <projet> · À toi » (« Escouade · À toi » quand plusieurs projets), corps « 2 demandes t'attendent dans À toi : un choix de design-tableau, un feu vert de chef-atlas. » (trois sortes au plus, puis « … »). Ensuite une au plus toutes les 30 minutes, ou toutes les heures, selon « Résumé de la boîte « À toi » » (Réglages › Notifications).
+
+- **Jamais le titre ni le texte d'une demande** : sa sorte et son auteur seulement.
+- **Ni carillon, ni barre des tâches qui clignote** ; les demandes bloquantes gardent leurs notifications d'aujourd'hui.
+- Une demande n'est dite qu'**une fois** ; dite de nouveau seulement revenue de « Plus tard ». Une demande vue dans la boîte, laissée à un agent ou reportée ne compte pas. Fenêtre devant, rien n'est dit (la boîte et son compteur sont là) ; ce que l'utilisateur n'a pas vu est dit une fois la fenêtre quittée.
+- Serveur MCP éteint, ou notifications du système éteintes, ou « Jamais (le compteur seul) » : rien ; ce qui est arrivé entre-temps n'est pas dit au rallumage.
+- Un clic sur le résumé ramène la fenêtre sur la boîte, sur le projet quand il n'en dit qu'un (`inboxOpen`).
+- `app.log` ne dit que « inbox summary told (2 requests, 1 projects) ».
+
+### La délégation, une seule règle
+
+« Les agents peuvent répondre aux demandes des autres agents » se juge par une seule règle (`delegation.rs`) pour les demandes de la boîte que l'utilisateur laisse à un agent et pour les demandes bloquantes (`answer_permission`, `answer_question`) : « Personne » refuse tout agent, chef compris ; « Seulement le chef d'escouade » laisse le chef du projet de la demande seul ; « Tous les agents », tous. Les mêmes agents sont refusés pour la même raison, chaque refus dit où le régler ; jamais un agent ne répond à sa propre demande.
+
+### La consigne aux agents
+
+Les instructions du serveur MCP (données à chaque harness, serveur allumé seulement) et la mémoire partagée du projet (`deposer-une-demande-a-toi`) disent quand déposer une demande plutôt que de l'écrire dans son bilan : un choix entre des options rendues (maquettes, directions), les choix d'une étude, un feu vert (publier, signer, supprimer, dépenser), un essai que seul l'utilisateur peut faire, un fichier à supprimer à la main ; les rendus joints à leurs options (clair et sombre), la recommandation et ce que la réponse débloque ; retirer ce qui n'a plus lieu d'être, jamais deux pour la même chose ; une question qui bloque reste une question ; jamais de secret.
+
+### Ce qui se mesure
+
+Si l'utilisateur a accepté les statistiques : `ask_created` (sorte, auteur, fichiers par tranche, recommandation, décision), `ask_withdrawn`, `ask_expired` (sorte), `inbox_view_settled` (source et geste), `inbox_summary_shown` (demandes par tranche). Jamais un texte, un nom ni un chemin.
+
+### Limites de la 2.2
+
+- L'Overseer (ses nouvelles, la voix, sa délégation), l'API distante et le téléphone, les réglages imposés, l'invitation d'équipe et la station de l'onboarding viennent avec la 2.3 (`docs/INBOX.md` § 18).
+- Une relecture écrite par un agent qui attend d'être publiée n'est pas une vue ; une « Relecture » n'est connue qu'après une lecture de la liste des PR du projet.
+- Les docs à partager sont ce que l'onglet Docs a lu en dernier : un projet dont les docs n'ont pas été lues depuis le démarrage n'en montre pas.
 
 ## À distance (ESC-520)
 
@@ -90,3 +172,13 @@ Reversée dans la 2.3, la boîte est servie par l'API distante du cœur. C'est l
 - **Les fichiers d'une réponse** arrivent du client en corps bruts, par les fichiers joints (`attach_open`, `attach_chunk`, `attach_finish`), puis `inbox_answer` les nomme.
 - **« Ouvrir » et « Afficher dans le dossier »** (`inbox_open_file`) agissent sur la machine du cœur. La commande change de machine en mode serveur : elle est refusée à distance (`not-served-yet`) jusqu'au mode serveur, qui la changera en téléchargement sur le poste.
 - Ce qui reste (le serveur d'équipe, l'Overseer, les relectures de PR, le téléphone) est dans `docs/INBOX.md`, « Ce que la 2.2 ne livre pas ».
+
+### L'écran et ce qu'Escouade y verse, à distance (ESC-540)
+
+Reversés dans la 2.3 avec la 2.2.4, l'écran (IN-2) et les vues (IN-3) sont servis de même : une fenêtre connectée à un serveur (*Se connecter à un serveur*) lit et règle la boîte du serveur, comme un client distant.
+
+- **Servies à un client distant** : `inbox_views` (les vues, lues dans l'état du cœur à chaque lecture, avec `blocking` et `total`), `inbox_view_act` (le geste de la source, sur la vue lue : « Accepter » une décision la fait accepter au registre du cœur), `inbox_view_snooze` (« Plus tard » sur une vue, gardé dans l'état durable du cœur) et `inbox_track` (ce que la fenêtre voit de la boîte, compté sur le cœur dont c'est la boîte). L'événement `inbox` dit au client que la boîte a bougé, une décision proposée comme une demande déposée.
+- **« Enregistrer sous… »** (`inbox_save_file`) ouvre le dialogue du système de la machine du cœur et y écrit la copie : comme « Ouvrir », elle change de machine en mode serveur et est refusée à distance (`not-served-yet`), jusqu'à ce qu'elle devienne un téléchargement enregistré par le client (`inbox_file_bytes` sert déjà les octets). Ni l'une ni l'autre n'est « du poste seulement » : une telle commande part au cœur du poste, qui n'a pas la demande.
+- **Le résumé des notifications** passe par l'hôte du cœur (`Host::notify`) : le bureau montre sa notification et ramène sa fenêtre sur la boîte ; un cœur sans fenêtre (`escouade-server`) la publie pour ses clients.
+
+- **« Ouvrir » et « Afficher dans le dossier » d'une fenêtre sur un serveur** (ESC-540, sur le chemin d'ESC-538) : la fenêtre ne demande pas au serveur d'ouvrir le fichier (`inbox_open_file` y reste refusée) ; elle télécharge ses octets (`inbox_file_bytes`), en garde la copie sur le poste (`Téléchargements/Escouade/<espace>`, `received_save`), puis l'ouvre ou la montre là ; ouvert de nouveau, c'est la copie, sans nouveau téléchargement. « Enregistrer sous… » reste refusé à distance.

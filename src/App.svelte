@@ -67,6 +67,10 @@
   import UpdateModal from './components/modals/UpdateModal.svelte';
   import ClaudeMemoryModal from './components/modals/ClaudeMemoryModal.svelte';
   import Overview from './components/Overview.svelte';
+  import InboxQueue from './components/inbox/InboxQueue.svelte';
+  import InboxScreen from './components/inbox/InboxScreen.svelte';
+  import { inbox } from './lib/inbox/inbox.svelte';
+  import { inboxViews } from './lib/inbox/views.svelte';
   import ProjectRail from './components/ProjectRail.svelte';
   import { railWidth } from './lib/rail-width.svelte';
   import { sideWidth } from './lib/side-width.svelte';
@@ -224,6 +228,35 @@
     return () => clearInterval(timer);
   });
 
+  // The box « À toi » (ESC-510) is the MCP server's (docs/INBOX.md § 6): read as the core tells it changed, and as the server
+  // is turned on; off, nothing of it stays (its view closes, its count goes), without a restart.
+  $effect(() => {
+    void app.inboxTick;
+    const on = app.ready && app.settings.mcpEnabled;
+    untrack(() => {
+      if (on) void inbox.load();
+      else {
+        inbox.clear();
+        if (app.ui.view === 'inbox') app.closeInbox();
+      }
+    });
+  });
+
+  // What Escouade puts in the box of its own (ESC-513): its views read once the server is on (then by their sources'
+  // events, `inboxViews.take`), gone when it is off; the scope the summary's click asked for.
+  $effect(() => {
+    const on = app.ready && app.settings.mcpEnabled;
+    untrack(() => (on ? void inboxViews.load() : inboxViews.reset()));
+  });
+  $effect(() => {
+    const scope = app.inboxScopeAsked;
+    if (!scope) return;
+    untrack(() => {
+      inbox.scope = scope;
+      app.inboxScopeAsked = null;
+    });
+  });
+
   const warmSelected = createWarmer((id) => api.warmAgent(id).catch(() => {}));
   $effect(() => warmSelected(app.agent));
 
@@ -311,6 +344,9 @@
         <div class="work"></div>
       {:else if app.ui.view === 'overview'}
         <div class="work"><Overview /></div>
+      {:else if app.ui.view === 'inbox' && app.settings.mcpEnabled}
+        <InboxQueue />
+        <div class="work"><InboxScreen /></div>
       {:else if app.ui.view === 'stats'}
         <div class="work"><Stats /></div>
       {:else if app.ui.view === 'discover'}

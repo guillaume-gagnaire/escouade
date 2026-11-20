@@ -412,6 +412,7 @@ export const en: Catalog = {
       chat: 'The conversation',
       plan: 'Plan progress',
       overview: 'Keeping track of agents',
+      inbox: 'The “Your turn” box',
       notifications: 'Notifications',
       'claude-code-view': 'The terminal view',
       'remote-control': 'Remote control',

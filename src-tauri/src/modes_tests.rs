@@ -752,3 +752,262 @@ fn the_installation_says_a_harness_runs_in_bypass_alone_or_declares_no_mode() {
     // Not one a user may take back: it is what the harness is.
     assert!(!crate::plugins::revocable("harnessBypass:Unharnessed"));
 }
+
+// ---------- « Autoriser le mode Bypass » turned off while an agent runs in Bypass (ESC-497) ----------
+
+/// An agent that runs in Bypass: of a harness whose one mode is Bypass (asked « Demander », it runs in Bypass), or of a
+/// harness of several modes, Bypass chosen.
+#[derive(Clone, Copy, Debug)]
+enum InBypass {
+    OneMode,
+    Chosen,
+}
+
+impl InBypass {
+    /// A new agent of it, made as the window makes it while Bypass is allowed: its process starts ahead (`warm`).
+    async fn make(self, h: &Harness, p: &Project) -> AgentMeta {
+        let (engine, mode) = match self {
+            InBypass::OneMode => (with_account(h, &ONE_BYPASS), "default"),
+            InBypass::Chosen => (with_account(h, &NO_ASK), BYPASS),
+        };
+        let a = h
+            .core
+            .create_agent_with(
+                &p.id,
+                AgentOptions {
+                    engine: Some(engine),
+                    mode: Some(mode.into()),
+                    select: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap()
+            .meta;
+        assert_eq!(a.mode, BYPASS, "{self:?}");
+        a
+    }
+
+    /// Whether a refusal says why: Bypass not allowed, and how its harness runs.
+    fn said_in(self, why: &str) -> bool {
+        why.contains("Autoriser le mode Bypass")
+            && match self {
+                InBypass::OneMode => why.contains("Sans Filet ne tourne qu’en Bypass"),
+                InBypass::Chosen => why.contains("Le mode Bypass n’est pas autorisé"),
+            }
+    }
+}
+
+/// Made while Bypass is allowed, Bypass chosen on a harness of several modes, its process starts ahead (`warm`), in
+/// Bypass. « Autoriser le mode Bypass » turned off while it is at rest: that process stops at once, its conversation says
+/// why, and nothing starts it again — its message, « Relancer », its view, the planned resume, a warm-up — each refused
+/// with the same reason. A harness whose one mode is Bypass is `modes_policies_tests`' (`Off::Setting`), with the
+/// policies.
+#[tokio::test]
+async fn a_process_started_ahead_in_bypass_chosen_stops_when_bypass_is_turned_off_and_nothing_starts_it_again(
+) {
+    {
+        let case = InBypass::Chosen;
+        let h = harness(&format!("esc521-ahead-{case:?}"));
+        let (p, _) = h.project(false).await;
+        allow_bypass(&h, true);
+        let a = case.make(&h, &p).await;
+        // Its warm-up: up, in Bypass (allowed then).
+        h.wait("its process started ahead", |h| h.alive(&a.id))
+            .await;
+        allow_bypass(&h, false);
+        h.wait("its process stopped", |h| !h.alive(&a.id)).await;
+        h.wait("its notice", |h| {
+            notices(h, &a.id)
+                .iter()
+                .any(|n| case.said_in(n) && n.contains("L’agent s’arrête"))
+        })
+        .await;
+        // Its message.
+        let why = h
+            .core
+            .send_message(&a.id, "Bonjour".into(), Vec::new())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(case.said_in(&why), "{case:?}: {why}");
+        assert!(!h.alive(&a.id));
+        assert!(!answered(&h, &a.id));
+        // « Relancer ».
+        let why = h.core.restart_process(&a.id).await.unwrap_err().to_string();
+        assert!(case.said_in(&why), "{case:?}: {why}");
+        assert!(!h.alive(&a.id));
+        // Its view (« Vue terminal »).
+        let why = h
+            .core
+            .open_agent_terminal(&a.id, (80, 24), true, |_| {})
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(case.said_in(&why), "{case:?}: {why}");
+        // The planned resume after the usage limit.
+        h.core.settings.write().auto_resume = true;
+        h.core.agent(&a.id).unwrap().lock().meta.resume_at = Some(1);
+        h.core.resume_due().await;
+        assert!(
+            notices(&h, &a.id)
+                .iter()
+                .any(|n| n.starts_with("Reprise automatique impossible") && case.said_in(n)),
+            "{case:?}: {:?}",
+            notices(&h, &a.id)
+        );
+        // A warm-up (a new selection, a change of account…).
+        assert!(h.core.ensure_process_for(&a.id, true).await.is_err());
+        assert!(!h.alive(&a.id), "{case:?}");
+        assert_eq!(h.agent(&a.id).mode, BYPASS, "its mode stays");
+    }
+}
+
+/// A process that runs in Bypass while « Autoriser le mode Bypass » is off (a change its settling did not reach yet):
+/// a message is not given to it; it stops at once, said.
+#[tokio::test]
+async fn a_live_process_in_bypass_is_given_no_message_once_bypass_is_off() {
+    let h = harness("esc521-live");
+    let (p, _) = h.project(false).await;
+    allow_bypass(&h, true);
+    let a = InBypass::OneMode.make(&h, &p).await;
+    h.wait("its process started ahead", |h| h.alive(&a.id))
+        .await;
+    // Off, without the settling of a change of the settings.
+    h.core.settings.write().allow_bypass = Some(false);
+    assert!(h.alive(&a.id));
+    let why = h
+        .core
+        .send_message(&a.id, "Bonjour".into(), Vec::new())
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(InBypass::OneMode.said_in(&why), "{why}");
+    assert!(!h.alive(&a.id));
+    assert!(!answered(&h, &a.id));
+    assert!(notices(&h, &a.id)
+        .iter()
+        .any(|n| InBypass::OneMode.said_in(n) && n.ends_with("L’agent s’arrête.")));
+}
+
+/// The same agent, Bypass chosen, at work when « Autoriser le mode Bypass » is turned off: its turn is not cut (« Un
+/// agent dans un mode devenu interdit finit son tour »), then, its turn over (`turn_ended`), its process stops, said.
+/// A harness whose one mode is Bypass is `modes_policies_tests`' (`Off::Setting`).
+#[tokio::test]
+async fn an_agent_at_work_in_bypass_chosen_when_bypass_is_turned_off_ends_its_turn_then_stops() {
+    {
+        let case = InBypass::Chosen;
+        let h = harness(&format!("esc521-at-work-{case:?}"));
+        let (p, _) = h.project(false).await;
+        allow_bypass(&h, true);
+        let a = case.make(&h, &p).await;
+        h.wait("its process started ahead", |h| h.alive(&a.id))
+            .await;
+        // At work: settled at the end of its turn.
+        h.core.agent(&a.id).unwrap().lock().meta.status = AgentStatus::Running;
+        allow_bypass(&h, false);
+        assert!(h.alive(&a.id), "{case:?}: not cut during its turn");
+        assert!(
+            !notices(&h, &a.id).iter().any(|n| case.said_in(n)),
+            "{case:?}: nothing said yet"
+        );
+        h.core.agent(&a.id).unwrap().lock().meta.status = AgentStatus::Idle;
+        h.core
+            .turn_ended(&a.id, crate::board::TurnEnd::Interrupted)
+            .await;
+        assert!(!h.alive(&a.id), "{case:?}");
+        assert!(
+            notices(&h, &a.id)
+                .iter()
+                .any(|n| case.said_in(n) && n.contains("L’agent s’arrête à la fin de son tour")),
+            "{case:?}: {:?}",
+            notices(&h, &a.id)
+        );
+        // Nothing starts it again.
+        assert!(h.core.ensure_process_for(&a.id, true).await.is_err());
+        assert!(!h.alive(&a.id), "{case:?}");
+    }
+}
+
+/// What the window was sent of the agent `id`.
+fn agent_events(h: &Harness, id: &str) -> usize {
+    h.events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "agent" && e["agent"]["id"] == id)
+        .count()
+}
+
+/// A judgement of the mode that changes nothing — its harness runs it in its own mode — tells the window nothing and
+/// asks no save: a warm-up that comes after the window read the agent sends it nothing more (ESC-521, the CI of Linux).
+/// One that changes its mode tells it, once.
+#[tokio::test]
+async fn a_judgement_of_the_mode_that_changes_nothing_tells_the_window_nothing() {
+    let h = harness("esc521-settle-quiet");
+    let (p, _) = h.project(false).await;
+    allow_bypass(&h, true);
+    let e = with_account(&h, &NO_ASK);
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(e),
+                mode: Some("acceptEdits".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
+    // Its warm-up over, then archived (its process stopped, nothing starts it again): nothing else tells the window of
+    // it meanwhile.
+    h.wait("its process started ahead", |h| h.alive(&a.id))
+        .await;
+    h.core.archive_agent(&a.id, true).await.unwrap();
+    assert!(!h.alive(&a.id));
+    let sent = agent_events(&h, &a.id);
+    h.core.settle_mode(&a.id).unwrap();
+    h.core.judge_start(&a.id).unwrap();
+    assert_eq!(agent_events(&h, &a.id), sent, "nothing changed");
+    // Kept in a mode its harness lacks: it goes in the one it runs in, told once.
+    h.core.agent(&a.id).unwrap().lock().meta.mode = "default".into();
+    h.core.settle_mode(&a.id).unwrap();
+    assert_eq!(h.agent(&a.id).mode, "plan");
+    assert_eq!(agent_events(&h, &a.id), sent + 1);
+    h.core.settle_mode(&a.id).unwrap();
+    assert_eq!(agent_events(&h, &a.id), sent + 1);
+}
+
+/// An agent that does not run in Bypass goes on when « Autoriser le mode Bypass » is turned off.
+#[tokio::test]
+async fn an_agent_that_does_not_run_in_bypass_goes_on_when_bypass_is_turned_off() {
+    let h = harness("esc521-not-bypass");
+    let (p, _) = h.project(false).await;
+    allow_bypass(&h, true);
+    let e = with_account(&h, &NO_ASK);
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(e),
+                mode: Some("acceptEdits".into()),
+                select: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
+    h.wait("its process started ahead", |h| h.alive(&a.id))
+        .await;
+    allow_bypass(&h, false);
+    h.core.settle_locked_mode(&a.id).await;
+    assert!(h.alive(&a.id));
+    h.core
+        .send_message(&a.id, "Bonjour".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("its answer", |h| answered(h, &a.id)).await;
+}

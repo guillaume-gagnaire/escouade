@@ -116,6 +116,25 @@ const OPEN_POINTS: [&str; 7] = [
     "badges",
     "projectTemplates",
 ];
+/// The points the manifest reserves: read for their shape, served by nothing, so said by `validate`
+/// as « reserved, no effect in this version »: a warning, never a refusal, for a published manifest
+/// to hold (ESC-524).
+pub const RESERVED_POINTS: [&str; 5] = [
+    "menus",
+    "statusBar",
+    "badges",
+    "projectTemplates",
+    "escouadeYml",
+];
+
+/// What `validate` says of a reserved point at `path` (`contributes.statusBar`), in `lang`.
+pub fn reserved_point(path: &str, lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "`{path}` est réservé, sans effet dans cette version : Escouade n'en montre ni n'en appelle rien.",
+        "`{path}` is reserved, with no effect in this version: Escouade shows and calls nothing of it."
+    )
+}
 
 /// What is wrong with a field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -709,11 +728,14 @@ pub fn version(s: &str) -> Version {
 }
 
 /// What the reader made of a manifest: the manifest when it holds, else every field that is
-/// wrong; and the fields it ignored either way.
+/// wrong; and, either way, the fields it ignored and the reserved points it declares.
 #[derive(Debug, Clone)]
 pub struct Read {
     pub manifest: Result<Manifest, Vec<Problem>>,
     pub ignored: Vec<String>,
+    /// The points of `RESERVED_POINTS` it declares, by their path (`contributes.statusBar`): a
+    /// warning, never a refusal.
+    pub reserved: Vec<String>,
 }
 
 /// Reads the text of a manifest, for a plugin of `hand`.
@@ -736,6 +758,7 @@ fn read_with(text: &str, hand: Hand, file: Option<FileOf>) -> Read {
                 expected: Some("object".into()),
             }]),
             ignored: Vec::new(),
+            reserved: Vec::new(),
         },
     }
 }
@@ -758,6 +781,7 @@ pub fn check_with(v: &Value, hand: Hand, file: Option<FileOf>) -> Read {
             _ => Err(c.problems),
         },
         ignored: c.ignored,
+        reserved: c.reserved,
     }
 }
 
@@ -765,6 +789,7 @@ pub fn check_with(v: &Value, hand: Hand, file: Option<FileOf>) -> Read {
 struct Checker {
     problems: Vec<Problem>,
     ignored: Vec<String>,
+    reserved: Vec<String>,
     hand: Hand,
 }
 
@@ -1684,6 +1709,11 @@ impl Checker {
         known.extend(OPEN_POINTS);
         self.ignore_others(o, "contributes", &known);
         let path = |k: &str| join("contributes", k);
+        for point in RESERVED_POINTS {
+            if o.contains_key(point) {
+                self.reserved.push(path(point));
+            }
+        }
         if let Some(v) = o.get("settings") {
             let items = self.items(v, &path("settings"));
             self.keys(&items, "key");
@@ -1909,10 +1939,24 @@ pub fn schema() -> Value {
         "properties": {
             "settings": {
                 "type": "array",
+                "description": "Its settings, shown on its page in the order of this list, under « Settings ».",
                 "items": {
                     "type": "object",
                     "required": ["key", "type", "title"],
-                    "properties": { "key": key, "type": { "enum": SETTING_TYPES }, "title": text },
+                    "properties": {
+                        "key": key,
+                        "type": { "enum": SETTING_TYPES },
+                        "title": text,
+                        "description": {
+                            "description": "Shown under its title: one text, or a text by language (`en` first, then `fr`).",
+                        },
+                        "default": {
+                            "description": "Its value until the user sets one, of its type (for a `select`, one of its options); without it, empty, or false for a `boolean`.",
+                        },
+                        "options": {
+                            "description": "The choices of a `select`, in this order: each a value, or `{ \"value\": …, \"title\": … }` to show a title in its stead (one text, or a text by language).",
+                        },
+                    },
                 },
             },
             "secrets": {
@@ -1932,11 +1976,11 @@ pub fn schema() -> Value {
             "themes": open("Themes."),
             "webhooks": open("Webhooks, without code."),
             "commands": open("Commands run on an event."),
-            "menus": open("Menus."),
-            "statusBar": open("Items of the status bar."),
-            "badges": open("Badges of the cards."),
-            "projectTemplates": open("Templates of the project wizard."),
-            "escouadeYml": { "type": "object", "description": "Its keys of .escouade.yml." },
+            "menus": open("Reserved, with no effect in this version: Escouade shows and calls nothing of it."),
+            "statusBar": open("Reserved, with no effect in this version: Escouade shows and calls nothing of it."),
+            "badges": open("Reserved, with no effect in this version: Escouade shows and calls nothing of it."),
+            "projectTemplates": open("Reserved, with no effect in this version: Escouade shows and calls nothing of it."),
+            "escouadeYml": { "type": "object", "description": "Reserved, with no effect in this version: read and ignored." },
         },
     });
     let limits = json!({

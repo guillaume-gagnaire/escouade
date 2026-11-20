@@ -620,6 +620,8 @@ impl Core {
 
     /// Saves `port` as the MCP server's.
     fn keep_mcp_port(&self, port: u16) -> Result<()> {
+        // Taken and written under one lock: the last change of the settings wins (ESC-535).
+        let _one = self.settings_writing.lock();
         let bytes = {
             let mut s = self.settings.write();
             s.mcp_port = port;

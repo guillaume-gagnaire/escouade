@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-import { addProject, expect, send, test } from './fixture';
+import { addProject, closeSettings, expect, openSettingsPage, send, test } from './fixture';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const MANIFEST = path.join(ROOT, 'tests', 'fixtures', 'plugins', 'bypass-only', 'escouade-plugin.json');
@@ -112,6 +112,25 @@ test.describe('a new agent of a harness whose one mode is Bypass, Bypass allowed
     await send(page, 'bonjour');
     await expect(page.getByText('Unharnessed a reçu : bonjour')).toBeVisible();
     await expect(page.getByRole('button', { name: /^Mode/ })).toContainText('Bypass');
+  });
+
+  // ESC-521 (ESC-497 on the 2.2): « Autoriser le mode Bypass » turned off while its process runs in Bypass: the process
+  // stops, its conversation says why, and its next message is refused.
+  test('stops when Bypass is turned off, and says why', async ({ app }) => {
+    const { page } = app;
+    await installAndOpen(page, app.repo);
+    await send(page, 'bonjour');
+    await expect(page.getByText('Unharnessed a reçu : bonjour')).toBeVisible();
+    const dialog = await openSettingsPage(page, 'Agents');
+    const allow = dialog.getByRole('switch', { name: 'Autoriser le mode Bypass' });
+    await expect(allow).toHaveAttribute('aria-checked', 'true');
+    await allow.click();
+    await expect(allow).toHaveAttribute('aria-checked', 'false');
+    await closeSettings(dialog);
+    await expect(page.getByText(/Unharnessed ne tourne qu’en Bypass .* L’agent s’arrête/).first()).toBeVisible();
+    await send(page, 'encore');
+    await expect(page.getByText(/Unharnessed ne tourne qu’en Bypass .*ou choisis un autre harness\.$/).first()).toBeVisible();
+    await expect(page.getByText('Unharnessed a reçu : encore')).toHaveCount(0);
   });
 });
 

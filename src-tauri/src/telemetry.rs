@@ -122,6 +122,54 @@ pub enum Event {
     PrReviewStarted {
         forge: &'static str,
     },
+    /// A view of the box « À toi » settled in the box (ESC-513): its source (`permission`,
+    /// `question`, `plan`, `ticketReview`, `ticketBlocked`, `decision`, `docs`) and the gesture.
+    InboxViewSettled {
+        source: &'static str,
+        act: &'static str,
+    },
+    /// An agent left a request in the box (ESC-513): its kind, who left it (`agent`, `chef`,
+    /// `client`), how many files by range, whether it recommends and whether it decides.
+    AskCreated {
+        kind: &'static str,
+        author: &'static str,
+        files: &'static str,
+        recommendation: bool,
+        decision: bool,
+    },
+    /// Its author took it back.
+    AskWithdrawn {
+        kind: &'static str,
+    },
+    /// Its date passed without an answer.
+    AskExpired {
+        kind: &'static str,
+    },
+    /// The summary of the box was told: how many requests, by range (`1`, `2-3`, `4+`).
+    InboxSummaryShown {
+        requests: &'static str,
+    },
+    /// The box « À toi » opened (ESC-510): from where, on what.
+    InboxOpened {
+        from: &'static str,
+        scope: &'static str,
+    },
+    /// A request of the box answered by the user: its sort, how long it waited (in a bracket), how, and whether the
+    /// agent's recommendation was followed (a choice with one).
+    AskAnswered {
+        kind: &'static str,
+        delay: &'static str,
+        via: &'static str,
+        followed: Option<bool>,
+    },
+    AskSnoozed,
+    AskReopened,
+    /// « Comparer en grand ».
+    InboxCompareOpened,
+    /// A file of a request looked at: its sort (image, pdf, markdown, word, csv, other).
+    InboxAttachmentOpened {
+        kind: &'static str,
+    },
 }
 
 impl Event {
@@ -157,6 +205,17 @@ impl Event {
             Event::PrMerged { .. } => "pr_merged",
             Event::CiFixStarted { .. } => "ci_fix_started",
             Event::PrReviewStarted { .. } => "pr_review_started",
+            Event::InboxViewSettled { .. } => "inbox_view_settled",
+            Event::InboxSummaryShown { .. } => "inbox_summary_shown",
+            Event::AskCreated { .. } => "ask_created",
+            Event::AskWithdrawn { .. } => "ask_withdrawn",
+            Event::AskExpired { .. } => "ask_expired",
+            Event::InboxOpened { .. } => "inbox_opened",
+            Event::AskAnswered { .. } => "ask_answered",
+            Event::AskSnoozed => "ask_snoozed",
+            Event::AskReopened => "ask_reopened",
+            Event::InboxCompareOpened => "inbox_compare_opened",
+            Event::InboxAttachmentOpened { .. } => "inbox_attachment_opened",
         }
     }
 
@@ -203,12 +262,41 @@ impl Event {
             Event::PrMerged { forge } | Event::PrReviewStarted { forge } => {
                 json!({ "forge": forge })
             }
+            Event::InboxViewSettled { source, act } => json!({ "source": source, "act": act }),
+            Event::InboxSummaryShown { requests } => json!({ "requests": requests }),
+            Event::AskCreated {
+                kind,
+                author,
+                files,
+                recommendation,
+                decision,
+            } => json!({
+                "kind": kind,
+                "author": author,
+                "files": files,
+                "recommendation": yes(*recommendation),
+                "decision": yes(*decision),
+            }),
+            Event::AskWithdrawn { kind } | Event::AskExpired { kind } => json!({ "kind": kind }),
             Event::CiFixStarted { from, autopilot } => {
                 json!({ "from": from, "by": if *autopilot { "autopilot" } else { "user" } })
             }
             Event::IntegrationConnected { service } | Event::TicketsImported { service } => {
                 json!({ "service": service })
             }
+            Event::InboxOpened { from, scope } => json!({ "from": from, "scope": scope }),
+            Event::AskAnswered {
+                kind,
+                delay,
+                via,
+                followed,
+            } => match followed {
+                Some(f) => {
+                    json!({ "kind": kind, "delay": delay, "via": via, "followed": yes(*f) })
+                }
+                None => json!({ "kind": kind, "delay": delay, "via": via }),
+            },
+            Event::InboxAttachmentOpened { kind } => json!({ "type": kind }),
             _ => json!({}),
         };
         match props {
@@ -823,6 +911,34 @@ mod tests {
                 autopilot: false,
             },
             Event::PrReviewStarted { forge: "gitea" },
+            Event::InboxViewSettled {
+                source: "ticketReview",
+                act: "approve",
+            },
+            Event::InboxSummaryShown { requests: "2-3" },
+            Event::AskCreated {
+                kind: "choice",
+                author: "agent",
+                files: "4-12",
+                recommendation: true,
+                decision: false,
+            },
+            Event::AskWithdrawn { kind: "task" },
+            Event::AskExpired { kind: "confirm" },
+            Event::InboxOpened {
+                from: "tile",
+                scope: "all",
+            },
+            Event::AskAnswered {
+                kind: "choice",
+                delay: "hour",
+                via: "keyboard",
+                followed: Some(true),
+            },
+            Event::AskSnoozed,
+            Event::AskReopened,
+            Event::InboxCompareOpened,
+            Event::InboxAttachmentOpened { kind: "pdf" },
         ];
         let names: std::collections::HashSet<_> = events.iter().map(Event::name).collect();
         assert_eq!(names.len(), events.len());
@@ -882,6 +998,45 @@ mod tests {
         assert_eq!(
             Value::Object(Event::PrReviewStarted { forge: "gitea" }.props()),
             json!({ "forge": "gitea" })
+        );
+        // The box « À toi » (ESC-510): never a text, a name or a path, only brackets and sorts.
+        assert_eq!(
+            Value::Object(
+                Event::AskAnswered {
+                    kind: "choice",
+                    delay: "ten_minutes",
+                    via: "click",
+                    followed: Some(false)
+                }
+                .props()
+            ),
+            json!({ "kind": "choice", "delay": "ten_minutes", "via": "click", "followed": "no" })
+        );
+        assert_eq!(
+            Value::Object(
+                Event::AskAnswered {
+                    kind: "task",
+                    delay: "longer",
+                    via: "voice",
+                    followed: None
+                }
+                .props()
+            ),
+            json!({ "kind": "task", "delay": "longer", "via": "voice" })
+        );
+        assert_eq!(
+            Value::Object(
+                Event::InboxOpened {
+                    from: "shortcut",
+                    scope: "all"
+                }
+                .props()
+            ),
+            json!({ "from": "shortcut", "scope": "all" })
+        );
+        assert_eq!(
+            Value::Object(Event::InboxAttachmentOpened { kind: "image" }.props()),
+            json!({ "type": "image" })
         );
     }
 

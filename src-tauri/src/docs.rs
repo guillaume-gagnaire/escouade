@@ -729,14 +729,15 @@ impl Space {
             return Ok(());
         };
         let path = page_path(rel).ok_or_else(|| bad_page(rel))?;
+        // Read, changed and written under one lock: two checks of pages at once keep both (ESC-535).
+        static WRITING: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+        let _one = WRITING.lock();
         let mut all = self.checks();
         all.insert(path, Check { compared, gaps });
         if let Some(dir) = file.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let tmp = file.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(&all)?)?;
-        std::fs::rename(&tmp, file)?;
+        crate::paths::write_atomic(file, &serde_json::to_vec_pretty(&all)?)?;
         Ok(())
     }
 

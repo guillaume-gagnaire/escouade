@@ -75,6 +75,8 @@
     margin: 0;
     color: var(--soft);
     line-height: 1.55;
+    /* A list in the text (the requests of the box « À toi » before the server is turned off, ESC-510), line by line. */
+    white-space: pre-line;
   }
   .lead {
     display: inline-flex;

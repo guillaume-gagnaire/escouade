@@ -148,9 +148,13 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
       ['a page of the project', win.locator('.s-i.sub:not([aria-current])').first(), pwin.locator('.a-i.sub:not(.on)').first(), []],
       ['its tile', win.locator('.s-head .tile'), pwin.locator('.a-main .head .tile'), []],
     );
+  // The bar has « Serveurs » (ESC-537), which the previews of direction A lack: a page below it is a row lower there,
+  // its place compared but for its height on the window.
+  const below = new Set(['the page chosen', 'a page of the project']);
+  const at = (what: string, r: number[]) => (below.has(what) ? [r[0], r[2], r[3]] : r);
   for (const [what, a, p, skip] of pairs) {
     expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toLookLike(await lookBut(p, ...skip));
-    if (!skip.length && !small) expect.soft(await place(a), `${what}'s place, ${where}`).toLookLike(await place(p));
+    if (!skip.length && !small) expect.soft(at(what, await place(a)), `${what}'s place, ${where}`).toLookLike(at(what, await place(p)));
   }
   // The settings: a group's title, a row, its label and what it does, a switch, segments, « Avancé » folded, wherever
   // both have one.
@@ -229,8 +233,9 @@ test('the bar goes from page to page by the keyboard, and « Avancé » unfolds 
   const nav = dialog.getByRole('navigation');
   await settingsEntry(dialog, 'Général').focus();
   await page.keyboard.press('ArrowDown');
-  await expect(settingsEntry(dialog, 'Agents')).toHaveAttribute('aria-current', 'page');
-  await expect(settingsEntry(dialog, 'Agents')).toBeFocused();
+  // « Serveurs » (ESC-537) comes next.
+  await expect(settingsEntry(dialog, 'Serveurs')).toHaveAttribute('aria-current', 'page');
+  await expect(settingsEntry(dialog, 'Serveurs')).toBeFocused();
   await page.keyboard.press('End');
   await expect(settingsEntry(dialog, 'À propos')).toHaveAttribute('aria-current', 'page');
   await page.keyboard.press('ArrowUp');
@@ -402,8 +407,8 @@ test('the settings open still with prefers-reduced-motion, their icons drawn', a
     .first()
     .evaluate((e) => getComputedStyle(e, '::after').transitionDuration);
   expect(Number.parseFloat(knob)).toBeLessThan(0.01);
-  // Each page of Escouade its icon, « Tous les projets » and « À propos » too, and « Fermer ».
-  await expect(win.locator('.s-i svg[data-icon]')).toHaveCount(11);
+  // Each page of Escouade its icon (« Serveurs » too, ESC-537), « Tous les projets » and « À propos » too, and « Fermer ».
+  await expect(win.locator('.s-i svg[data-icon]')).toHaveCount(12);
   await expect(win.getByRole('button', { name: 'Fermer' }).locator('svg[data-icon="close"]')).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });

@@ -4,7 +4,7 @@
 // a click, its return relayed or the code to paste), the secrets kept in a file on the server, the voice of this
 // computer, « Reconnecté à Travail · 12 événements rattrapés ». On this computer, none of it shows.
 
-import { cleanup, render, screen, within } from '@testing-library/svelte';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -12,7 +12,9 @@ import { connection, type ServerInfo } from '../../lib/connection.svelte';
 import { setLang } from '../../lib/i18n';
 import { received } from '../../lib/server-moves.svelte';
 import { app } from '../../lib/state.svelte';
+import { askFile, windowAsk } from '../../test/inbox';
 import { fakeBackend, resetApp } from '../../test/ipc';
+import AskAttachments from '../inbox/AskAttachments.svelte';
 import ConnectionBand from '../ConnectionBand.svelte';
 import SentFiles from '../conv/SentFiles.svelte';
 import CloneRepo from './CloneRepo.svelte';
@@ -193,6 +195,44 @@ describe('the files an agent sent, on a server (S12)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Ouvrir rapport.pdf' }));
     expect(backend.called('sent_file_open')).toHaveLength(1);
     expect(screen.queryByText(/Voir sur le serveur/)).toBeNull();
+  });
+});
+
+describe('the files of a request of the box « À toi », on a server (ESC-540)', () => {
+  it('downloads a file to this computer to open it, then opens the copy; nothing is opened on the server', async () => {
+    const backend = fakeBackend({
+      inbox_file_bytes: () => new Uint8Array([1, 2]).buffer,
+      received_save: () => ({
+        path: 'C:/Dl/Escouade/Travail/etude.docx',
+        folder: 'C:/Dl/Escouade/Travail',
+        name: 'etude.docx',
+        kind: 'other',
+        runnable: false,
+        opened: true,
+      }),
+    });
+    const word = askFile({ file: 'w1/etude.docx', name: 'etude.docx', kind: 'word', mediaType: 'application/zip', size: 48_000 });
+    render(AskAttachments, { props: { ask: windowAsk({ kind: 'confirm', options: [], files: [word] }), files: [word] } });
+    await userEvent.click(screen.getByTestId('ask-open'));
+    await waitFor(() => expect(backend.called('received_save')).toHaveLength(1));
+    expect(backend.called('inbox_file_bytes')[0].args).toEqual({ id: 'a-1', file: 'w1/etude.docx' });
+    expect(backend.called('inbox_open_file')).toHaveLength(0);
+    // Opened again: the copy, not a new download.
+    await userEvent.click(screen.getByTestId('ask-open'));
+    await waitFor(() =>
+      expect(backend.called('received_show').at(-1)?.args).toEqual({ path: 'C:/Dl/Escouade/Travail/etude.docx', reveal: false }),
+    );
+    expect(backend.called('inbox_file_bytes')).toHaveLength(1);
+  });
+
+  it('opens the file on this computer when the window is on it', async () => {
+    connection.server = null;
+    const backend = fakeBackend({});
+    const word = askFile({ file: 'w1/etude.docx', name: 'etude.docx', kind: 'word', mediaType: 'application/zip', size: 48_000 });
+    render(AskAttachments, { props: { ask: windowAsk({ kind: 'confirm', options: [], files: [word] }), files: [word] } });
+    await userEvent.click(screen.getByTestId('ask-open'));
+    await waitFor(() => expect(backend.called('inbox_open_file')[0]?.args).toEqual({ id: 'a-1', file: 'w1/etude.docx', reveal: false }));
+    expect(backend.called('inbox_file_bytes')).toHaveLength(0);
   });
 });
 

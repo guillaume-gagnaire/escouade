@@ -188,6 +188,8 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('remoteKeepMax', 'agents', 'settings.claude.remoteKeepMax', s('remoteKeepMax')),
   row('mcp', 'agents', 'mcp.section.enable', s('mcpEnabled')),
   row('agentsAnswer', 'agents', 'mcp.section.answer', s('agentsAnswer')),
+  row('inbox', 'agents', 'inbox.settings.box'),
+  row('inboxKeep', 'agents', 'inbox.settings.keep', s('inboxKeepDays')),
   row('mcpDeclared', 'agents', 'mcp.section.list'),
   row('idleStop', 'agents', 'settings.claude.idleStop', { advanced: true, ...s('idleStopMinutes') }),
   row('agentsMcp', 'agents', 'settings.claude.agentsMcp', { advanced: true, ...s('agentsMcp') }),
@@ -226,6 +228,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
 
   // Notifications › Me prévenir pour, Pull requests et déploiements, Canaux, Son.
   row('notifyFor', 'notifications', 'settings.notifications.notifyFor', s('notifyFor')),
+  row('inboxSummary', 'notifications', 'inboxViews.summary.label', s('inboxSummary')),
   row('osNotifications', 'notifications', 'settings.notifications.systemName', s('osNotifications')),
   row('sound', 'notifications', 'settings.notifications.soundOn', s('sound')),
 
@@ -252,6 +255,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('localData', 'advanced', 'settings.about.localData'),
   // The team server's screens (TS-3), until the team has its own place (TS-4).
   row('teamServer', 'advanced', 'team.entry.row'),
+  row('inboxWeight', 'advanced', 'inbox.settings.weight'),
 
   // À propos.
   // Réglages › Serveurs (ESC-537): the servers this computer knows; nothing of the settings (their list is its own file).

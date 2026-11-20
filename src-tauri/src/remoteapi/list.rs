@@ -340,6 +340,12 @@ escouade_command::commands! {
         commands::inbox_closing,
         commands::inbox_weight,
         commands::inbox_erase_closed_files,
+        // What Escouade puts in the box of its own (ESC-513): views on the core's state, their gestures those of their
+        // sources, served as these are; and what the window alone sees of the box, counted on the core (ESC-510).
+        commands::inbox_views,
+        commands::inbox_view_act,
+        commands::inbox_view_snooze,
+        commands::inbox_track,
         commands::ticket_update,
         commands::ticket_delete,
         commands::clean_worktrees,
@@ -553,6 +559,9 @@ escouade_command::commands! {
         commands::fs_reveal,
         commands::sent_file_open,
         commands::inbox_open_file,
+        // « Enregistrer sous… » of a request's file (ESC-510): the system's dialog and the copy on the core's machine; a
+        // download to the client in server mode, as `inbox_open_file` (`inbox_file_bytes` serves the bytes already).
+        commands::inbox_save_file,
         commands::agent_local_open,
     }
 }

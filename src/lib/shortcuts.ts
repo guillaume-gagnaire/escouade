@@ -214,6 +214,13 @@ export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
     app.newAgentMenu++;
     return true;
   }
+  // Ctrl+Maj+J opens the box « À toi » (ESC-510, choice I4), only with the MCP server on; Ctrl+J goes to the next agent
+  // stopped, as before.
+  if (k === 'j' && e.shiftKey) {
+    if (!app.settings.mcpEnabled) return false;
+    app.toggleInbox('shortcut');
+    return true;
+  }
   if (k === 'j') {
     app.nextWaiting();
     return true;

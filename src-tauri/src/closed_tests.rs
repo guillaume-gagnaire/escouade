@@ -67,6 +67,16 @@ async fn agent_that_talked(h: &Harness, project_id: &str) -> String {
     id
 }
 
+/// The state made impossible to save: the place of its file is a folder that holds a file, which nothing replaces (each
+/// write has a temporary file of its own since ESC-535: a folder in the way of one no longer stops it). Gives that
+/// place, to be removed for the state to save again.
+fn state_unsavable(h: &Harness) -> PathBuf {
+    let place = h.core.data.state_file();
+    let _ = std::fs::remove_file(&place);
+    std::fs::create_dir_all(place.join("inside")).unwrap();
+    place
+}
+
 fn conversation_log(h: &Harness, agent_id: &str) -> PathBuf {
     conv::log_path(&h.core.data.conversations(), agent_id)
 }
@@ -1062,9 +1072,8 @@ async fn a_state_that_cannot_be_saved_leaves_the_file_of_the_project_that_came_b
     let (p, r) = h.project(false).await;
     let a = agent_that_talked(&h, &p.id).await;
     close(&h, &p.id).await;
-    // A folder where the state's temporary file goes: nothing can be saved.
-    let tmp = h.core.data.state_file().with_extension("tmp");
-    std::fs::create_dir_all(&tmp).unwrap();
+    // Nothing can be saved.
+    let place = state_unsavable(&h);
 
     let back = add_again(&h, &r).await;
 
@@ -1075,7 +1084,7 @@ async fn a_state_that_cannot_be_saved_leaves_the_file_of_the_project_that_came_b
     assert!(h.core.data.closed_project_file(&p.id).exists());
     assert!(h.core.closed_projects().is_empty());
     // Saved at last, and the app started again: the project and its agent are there, the file is not.
-    std::fs::remove_dir(&tmp).unwrap();
+    std::fs::remove_dir_all(&place).unwrap();
     h.core.save_now();
     let (re, _app) = restarted(&h);
     assert!(re.project(&p.id).is_ok() && re.agent(&a).is_ok());
@@ -1785,8 +1794,7 @@ async fn a_history_left_beside_its_open_project_is_ignored_everywhere() {
     let a = agent_that_talked(&h, &p.id).await;
     close(&h, &p.id).await;
     // The state cannot be saved: the project is back, its file stays beside it.
-    let tmp = h.core.data.state_file().with_extension("tmp");
-    std::fs::create_dir_all(&tmp).unwrap();
+    state_unsavable(&h);
     add_again(&h, &r).await;
     assert!(h.core.data.closed_project_file(&p.id).exists());
     let items = h.items(&a);

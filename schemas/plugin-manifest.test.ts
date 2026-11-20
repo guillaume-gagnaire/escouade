@@ -1,7 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FIELDS, FILE_ACCESS, FILE_ROOTS, hostCovered, message, validate, validateText, writtenHost } from './plugin-manifest.mjs';
+import {
+  FIELDS,
+  FILE_ACCESS,
+  FILE_ROOTS,
+  hostCovered,
+  message,
+  reservedMessage,
+  validate,
+  validateText,
+  writtenHost,
+} from './plugin-manifest.mjs';
 
 // The store's library on the cases it shares with the app's reader (src-tauri/src/plugins_tests.rs): the same fields
 // wrong, for the same reasons, and the same fields ignored.
@@ -14,6 +24,8 @@ interface Case {
   files?: Record<string, { png?: [number, number]; size?: number; text?: string }>;
   errors: string[];
   ignored: string[];
+  /** The reserved points it declares, none when absent (ESC-524). */
+  reserved?: string[];
 }
 
 const file = path.join(__dirname, '..', 'tests', 'fixtures', 'plugins', 'manifests.json');
@@ -43,6 +55,7 @@ describe('plugin-manifest', () => {
       const errors = r.errors.map((e) => `${e.path} ${e.code}`);
       expect(errors.sort()).toEqual([...c.errors].sort());
       expect(r.ignored.sort()).toEqual([...c.ignored].sort());
+      expect(r.reserved.sort()).toEqual([...(c.reserved ?? [])].sort());
       expect(r.ok).toBe(c.errors.length === 0);
     });
   }
@@ -159,5 +172,26 @@ describe('the fields known', () => {
     const item = schema.properties.permissions.properties.files.items.properties;
     expect([...FILE_ROOTS].sort()).toEqual([...item.root.enum].sort());
     expect([...FILE_ACCESS].sort()).toEqual([...item.access.enum].sort());
+  });
+});
+
+// The points the manifest reserves (ESC-524): said in the app's words, a warning beside a manifest that holds.
+describe('the reserved points', () => {
+  it('are said as reserved, with no effect in this version, in both languages, and refuse nothing', () => {
+    const r = validate({
+      id: 'dev.exemple.x',
+      name: 'X',
+      version: '1.0.0',
+      escouade: { api: '1', min: '2.1.0' },
+      contributes: { statusBar: [{ id: 's' }] },
+    });
+    expect(r.ok).toBe(true);
+    expect(r.reserved).toEqual(['contributes.statusBar']);
+    expect(reservedMessage('contributes.statusBar', 'fr')).toBe(
+      "`contributes.statusBar` est réservé, sans effet dans cette version : Escouade n'en montre ni n'en appelle rien.",
+    );
+    expect(reservedMessage('contributes.statusBar', 'en')).toBe(
+      '`contributes.statusBar` is reserved, with no effect in this version: Escouade shows and calls nothing of it.',
+    );
   });
 });

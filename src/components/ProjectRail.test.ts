@@ -14,6 +14,8 @@ import { PROJECT_COLORS } from '../lib/theme';
 import { agent, fakeBackend, gitInfo, project, resetApp } from '../test/ipc';
 import ConfirmModal from './modals/ConfirmModal.svelte';
 import ProjectRail from './ProjectRail.svelte';
+import { inboxViews } from '../lib/inbox/views.svelte';
+import { inbox } from '../lib/inbox/inbox.svelte';
 
 const tile = (name: string | RegExp) => screen.getByRole('tab', { name: typeof name === 'string' ? new RegExp(`^${name}`) : name });
 const tiles = () => screen.getAllByRole('tab');
@@ -49,6 +51,35 @@ describe('ProjectRail', () => {
       ],
     });
     menu.close();
+  });
+
+  // ESC-513: the views of what waits elsewhere count on the box's one tile (ESC-510), besides its requests and its agents
+  // stopped (those of « N en attente »), their blocking views counted once with their agent; nothing with the server off.
+  it('counts the views of the box on its tile, once, and nothing while the MCP server is off', async () => {
+    const view = (key: string, group: string, agentId: string | null = null) => ({
+      key,
+      group,
+      agentId,
+      snoozedUntil: null,
+      projectId: 'p1',
+    });
+    fakeBackend({
+      inbox_list: () => ({ enabled: true, asks: [], open: 0 }),
+      inbox_views: () => ({
+        enabled: true,
+        views: [view('req:a1:r1', 'stopped', 'a1'), view('ticket:t1', 'today'), view('docs:p1', 'earlier')],
+        blocking: 1,
+        total: 3,
+      }),
+    });
+    app.settings = { ...app.settings, mcpEnabled: true };
+    await inbox.load();
+    await inboxViews.load();
+    render(ProjectRail);
+    // Two agents stop (a1, a2): the view of a1's request is not counted again; the ticket and the docs are.
+    expect(screen.getByTestId('inbox-count')).toHaveTextContent('4');
+    inbox.reset();
+    inboxViews.reset();
   });
 
   it('has a tile per open project, in their order, with their colour and their two letters', () => {

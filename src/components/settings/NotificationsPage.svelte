@@ -3,6 +3,7 @@
   import { api } from '../../lib/ipc';
   import { IS_MAC } from '../../lib/platform';
   import { settingsForm } from '../../lib/settings.svelte';
+  import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
@@ -28,6 +29,18 @@
     {/each}
   </div>
 </Group>
+{#if app.settings.mcpEnabled}
+  <!-- The box « À toi » rests on the MCP server (ESC-513): off, its summary has no setting. -->
+  <Group title={t('inboxViews.summary.title')}>
+    <Row label={t('inboxViews.summary.label')} desc={t('inboxViews.summary.labelDesc')}>
+      <select class="field select" aria-label={t('inboxViews.summary.label')} bind:value={s.inboxSummary}>
+        {#each ['every30', 'hourly', 'never'] as const as k (k)}
+          <option value={k}>{t(`inboxViews.summary.${k}`)}</option>
+        {/each}
+      </select>
+    </Row>
+  </Group>
+{/if}
 <Group title={t('settings.notifications.hosts')} note={t('settings.notifications.hostsNote')}>
   <div class="checks">
     {#each ['prCiFailed', 'prChanges', 'prApproved', 'prMerged', 'prConflict', 'prReview', 'deployOk', 'deployFailed'] as const as k (k)}

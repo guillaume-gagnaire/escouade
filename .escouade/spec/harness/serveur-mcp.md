@@ -2,8 +2,8 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)","https://github.com/guillaume-gagnaire/escouade/pull/44"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-509","ESC-511","ESC-518"]
-decisions: [153,211,210]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-509","ESC-511","ESC-518","ESC-513"]
+decisions: [153,211,210,"la-boite-a-toi-montre-ce-qui-attend-aill"]
 compared: null
 ---
 
@@ -332,3 +332,9 @@ Huit outils servent les demandes asynchrones des agents (voir *La boîte « À t
 - Ce qu'un autre agent que l'auteur lit d'une demande est marqué comme une donnée de tiers. Une demande d'un projet privé est introuvable pour les autres, mot pour mot comme une demande qui n'existe pas. Le journal de l'activité garde le projet, la sorte et le numéro, jamais un texte ni un chemin.
 - Serveur éteint, ces outils n'existent pas ; les demandes ouvertes sont gardées, figées, jusqu'au rallumage.
 - Le nom d'un outil ne contient jamais « accepter » ; `answer_ask` est, avec `answer_permission` et `answer_question`, le seul qui porte « answer ».
+
+## La consigne de la boîte « À toi » (ESC-513)
+
+Les instructions que le serveur donne à chaque harness disent, en plus de ce qui précède : quand un agent attend quelque chose de l'utilisateur sans être bloqué (un choix entre des options rendues, maquettes ou directions ; les choix d'une étude ; un feu vert pour publier, signer, supprimer ou dépenser ; un essai que seul l'utilisateur peut faire, sur un vrai compte ou un téléphone ; un fichier à supprimer à la main), il le dépose dans la boîte « À toi » par `ask_user` au lieu de l'écrire seulement dans son bilan, puis continue : ses rendus joints à leurs options (clair et sombre), sa recommandation et ce que la réponse débloque ; il attend la réponse en message (ou par `get_ask`), retire une demande qui n'a plus lieu d'être (`withdraw_ask`), n'en dépose jamais deux pour la même chose ; une question qui le bloque reste une question de la conversation ; jamais de secret dans une demande. Serveur éteint, il n'y a ni outil ni consigne. La même consigne est dans la mémoire partagée du projet Escouade (`deposer-une-demande-a-toi`).
+
+« Les agents peuvent répondre aux demandes des autres agents » se juge par la même règle pour `answer_permission`, `answer_question` et `answer_ask` (voir *La boîte « À toi »*, « La délégation, une seule règle »).

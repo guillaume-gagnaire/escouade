@@ -7,7 +7,9 @@ import { receive, received, showReceived } from './server-moves.svelte';
 export type ImageSource =
   | { kind: 'sent'; agent: string; item: string; index: number }
   | { kind: 'local'; agent: string; src: string }
-  | { kind: 'remote'; src: string };
+  | { kind: 'remote'; src: string }
+  /** A file of a request of the box « À toi » (ESC-510), by its request and its copy's name. */
+  | { kind: 'ask'; id: string; file: string };
 
 export interface ViewedImage {
   name: string;
@@ -45,7 +47,15 @@ function viewed(img: HTMLImageElement): ViewedImage {
 
 /** The key of the copy a window on a server makes of an agent's file (`server-moves.svelte.ts`). */
 export function copyKey(s: Exclude<ImageSource, { kind: 'remote' }>): string {
+  if (s.kind === 'ask') return `ask|${s.id}|${s.file}`;
   return s.kind === 'sent' ? `${s.agent}|${s.item}|${s.index}` : `local|${s.agent}|${s.src}`;
+}
+
+/** The bytes of the file of `s` on the server, and the name its copy takes on this computer. */
+function bytesOf(s: Exclude<ImageSource, { kind: 'remote' }>, name: string): [() => Promise<ArrayBuffer>, string] {
+  if (s.kind === 'sent') return [() => api.sentFileBytes(s.agent, s.item, s.index), name || 'image'];
+  if (s.kind === 'ask') return [() => api.inboxFileBytes(s.id, s.file), name || s.file];
+  return [() => api.agentLocalBytes(s.agent, s.src), name || s.src.split(/[\\/]/).pop() || 'image'];
 }
 
 /**
@@ -57,12 +67,14 @@ export async function openSource(s: ImageSource, reveal: boolean, name = ''): Pr
     const key = copyKey(s);
     const had = received[key];
     if (had) return showReceived(had, reveal);
-    const bytes = () => (s.kind === 'sent' ? api.sentFileBytes(s.agent, s.item, s.index) : api.agentLocalBytes(s.agent, s.src));
-    await receive(key, name || (s.kind === 'local' ? s.src.split(/[\\/]/).pop() || 'image' : 'image'), bytes, reveal ? 'reveal' : 'open');
+    // A file of the box too (ESC-540): its request's bytes (`inbox_file_bytes`), its copy opened or shown here.
+    const [bytes, named] = bytesOf(s, name);
+    await receive(key, named, bytes, reveal ? 'reveal' : 'open');
     return;
   }
   if (s.kind === 'sent') return api.sentFileOpen(s.agent, s.item, s.index, reveal);
   if (s.kind === 'local') return api.agentLocalOpen(s.agent, s.src, reveal);
+  if (s.kind === 'ask') return api.inboxOpenFile(s.id, s.file, reveal);
   return openUrl(s.src);
 }
 

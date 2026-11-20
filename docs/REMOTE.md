@@ -368,6 +368,10 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `inbox_reopen` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
 - `inbox_seen` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
 - `inbox_snooze` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_track` : la boîte « À toi » (ESC-510) : ce que la fenêtre seule voit de la boîte (ouverte, « Comparer en grand », un fichier regardé), compté sur le cœur dont c’est la boîte
+- `inbox_view_act` : la boîte « À toi » (ESC-513) : le geste d’une vue est celui de sa source (permission, ticket, décision, docs), sur l’état du cœur
+- `inbox_view_snooze` : la boîte « À toi » (ESC-513) : « Plus tard » sur une vue, gardé dans l’état durable du cœur
+- `inbox_views` : la boîte « À toi » (ESC-513) : ce qu’Escouade y verse de lui-même, lu dans l’état du cœur à chaque lecture
 - `inbox_weight` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
 - `integrate_base`
 - `integration_connect`
@@ -716,6 +720,7 @@ Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-serve
 - `file_origin` : l’origine d’un fichier déposé sur le poste (Windows) : lue par le client et envoyée en mode serveur
 - `fs_reveal` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
 - `inbox_open_file` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur (`inbox_file_bytes` le sert déjà)
+- `inbox_save_file` : « Enregistrer sous… » d’un fichier de la boîte (ESC-510) : le dialogue du système et la copie sur la machine du cœur : téléchargé sur le poste et enregistré par le client en mode serveur (`inbox_file_bytes` le sert déjà)
 - `lsp_log` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
 - `lsp_release` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
 - `lsp_release_view` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements

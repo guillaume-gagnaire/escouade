@@ -62,6 +62,7 @@ mod cursor_tui_tests;
 mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
+mod delegation;
 mod deleteask;
 #[cfg(test)]
 mod deleteask_tests;
@@ -145,6 +146,12 @@ mod hotkey;
 #[cfg(test)]
 mod hotkey_tests;
 mod hub;
+mod inboxnotify;
+#[cfg(test)]
+mod inboxnotify_tests;
+mod inboxviews;
+#[cfg(test)]
+mod inboxviews_tests;
 mod integrations;
 #[cfg(test)]
 mod integrations_tests;
@@ -187,6 +194,8 @@ mod remote_tests;
 pub mod remoteapi;
 #[cfg(test)]
 mod remoteapi_tests;
+#[cfg(test)]
+mod save_tests;
 // What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
 use escouade_plan::{plan, planfiles};
 // The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).

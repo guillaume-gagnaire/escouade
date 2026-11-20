@@ -9,6 +9,7 @@ import { recentFiles } from '../lib/editor/quick-open';
 import { fileSearches } from '../lib/editor/search.svelte';
 import { gitSync } from '../lib/git-sync.svelte';
 import { mcp } from '../lib/mcp.svelte';
+import { inbox } from '../lib/inbox/inbox.svelte';
 import { dictation } from '../lib/dictation.svelte';
 import { conversation } from '../lib/conversation.svelte';
 import { clearDrafts } from '../lib/question-answers.svelte';
@@ -87,6 +88,7 @@ export const SETTINGS: Settings = {
   claudePath: '',
   sound: true,
   osNotifications: true,
+  inboxSummary: 'every30',
   notifyFor: {
     questions: true,
     done: true,
@@ -495,6 +497,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   viewUnsaved.reset();
   buffers.reset();
   mcp.reset();
+  inbox.reset();
   dictation.clear();
   conversation.clear();
   clearDrafts();

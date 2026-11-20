@@ -1627,6 +1627,103 @@ async fn a_remote_client_gets_the_requests_of_the_box_their_files_in_bytes_and_a
     h.stop();
 }
 
+/// What Escouade puts in the box of its own (ESC-513, ESC-540) is served too: a remote client is told the box moved
+/// when a decision is proposed, reads its view, puts it off and back, accepts it from the box (its source, the register,
+/// knows it), and its counts are the core's. What the window sees of the box is counted on the core; « Enregistrer
+/// sous… » is the core's machine's dialog, refused for now (`not-served-yet`).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_remote_client_gets_what_escouade_puts_in_the_box_and_settles_it_there() {
+    let (dir, h, api, token) = served("remote-inbox-views").await;
+    h.core.settings.write().mcp_enabled = true;
+    let mut c = Client::connect(&api, &token).await;
+    c.ok("subscribe", json!({"channel": "__CHANNEL__:1"})).await;
+    let p = project(&mut c, &dir).await;
+    let pid = p["id"].as_str().unwrap().to_string();
+    let proposed = h
+        .core
+        .docs_space(&pid, None)
+        .await
+        .unwrap()
+        .decision_revise(
+            None,
+            crate::docs::DecisionPatch {
+                title: Some("Trois échéances".into()),
+                context: Some("Le contexte.".into()),
+                decision: Some("Ce qui est décidé.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    c.until("the box moved", |m| {
+        channel_data(m, 1).is_some_and(|d| d["type"] == "inbox" && d["projectId"] == pid.as_str())
+    })
+    .await;
+    let key = format!("decision:{pid}:{}", proposed.id);
+    let views = c.ok("inbox_views", json!({"projectId": null})).await;
+    let view = views["views"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["key"] == key.as_str())
+        .unwrap_or_else(|| panic!("its view: {views}"))
+        .clone();
+    assert_eq!(view["source"], "decision");
+    assert_eq!(view["title"], "Trois échéances");
+    let total = views["total"].as_u64().unwrap();
+    assert!(total >= 1, "{views}");
+    // « Plus tard »: out of the counts, its source alone; then back.
+    let later = 4_102_444_800_000i64;
+    c.ok("inbox_view_snooze", json!({"key": key, "until": later}))
+        .await;
+    let put_off = c.ok("inbox_views", json!({"projectId": pid})).await;
+    assert_eq!(put_off["total"].as_u64().unwrap(), total - 1, "{put_off}");
+    c.ok("inbox_view_snooze", json!({"key": key, "until": null}))
+        .await;
+    assert_eq!(
+        c.ok("inbox_views", json!({"projectId": pid})).await["total"],
+        total
+    );
+    // Accepted from the box: the register knows it, the view is gone.
+    c.ok(
+        "inbox_view_act",
+        json!({"key": key, "act": {"act": "accept"}}),
+    )
+    .await;
+    let after = h.core.docs_space(&pid, None).await.unwrap();
+    let got = after
+        .decision(&crate::docs::Ref::Id(proposed.id.clone()))
+        .unwrap();
+    assert_eq!(got.state, crate::docs::State::Accepted);
+    let views = c.ok("inbox_views", json!({"projectId": null})).await;
+    assert!(
+        !views["views"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v["key"] == key.as_str()),
+        "{views}"
+    );
+    // What the window sees of the box, counted on the core.
+    c.ok("inbox_track", json!({"event": "compare"})).await;
+    // « Enregistrer sous… »: the system's dialog of the core's machine, not at a distance yet.
+    let id = c.next;
+    c.next += 1;
+    c.send(&ToServer::Call {
+        id,
+        cmd: "inbox_save_file".into(),
+        args: json!({"id": "a-1", "file": "f-1"})
+            .as_object()
+            .unwrap()
+            .clone(),
+        body: None,
+        headers: Default::default(),
+    })
+    .await;
+    let reply = c.reply_to(id, "inbox_save_file").await;
+    assert_eq!(code_of(&reply), Some(codes::NOT_SERVED_YET), "{reply:?}");
+    h.stop();
+}
+
 // ---------- the bounded queue and the sessions, alone ----------
 
 #[test]

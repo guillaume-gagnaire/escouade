@@ -55,6 +55,8 @@ export interface Validation {
   errors: ManifestError[];
   /** The fields Escouade does not know, ignored. */
   ignored: string[];
+  /** The reserved points it declares (`contributes.statusBar`): no effect in this version, a warning, never an error. */
+  reserved: string[];
 }
 
 export interface ValidateOptions {
@@ -71,6 +73,8 @@ export const RESERVED_PREFIX: string;
 export const ESCOUADE_DIR: string;
 export const ICON_MIN: number;
 export const ICON_BYTES: number;
+/** The points the manifest reserves: `menus`, `statusBar`, `badges`, `projectTemplates`, `escouadeYml` (ESC-524). */
+export const RESERVED_POINTS: readonly string[];
 /** The fields known, object by object (`''` the manifest itself): the properties of plugin-1.json. */
 export const FIELDS: Readonly<Record<string, readonly string[]>>;
 /** An icon's path as the folder's files are named: `/` between its parts, without `./` in front. */
@@ -80,3 +84,5 @@ export function iconProblems(bytes: Uint8Array): ('png' | 'heavy' | 'square' | '
 export function validate(manifest: unknown, options?: ValidateOptions): Validation;
 export function validateText(text: string, options?: ValidateOptions): Validation;
 export function message(error: ManifestError, lang?: 'fr' | 'en'): string;
+/** What is said of a reserved point at `path`: « reserved, no effect in this version ». */
+export function reservedMessage(path: string, lang?: 'fr' | 'en'): string;

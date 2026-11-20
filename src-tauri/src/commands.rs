@@ -6074,8 +6074,13 @@ pub fn inbox_answer(
     answer: crate::asks::AnswerIn,
     files: Option<Vec<AttachedFile>>,
 ) -> Res<crate::asks::WindowAsk> {
-    core.inbox_answer(&id, answer, files.unwrap_or_default())
-        .map_err(err)
+    let a = core
+        .inbox_answer(&id, answer, files.unwrap_or_default())
+        .map_err(err)?;
+    if let Some(event) = crate::asks::answered_event(&a.ask) {
+        core.telemetry.track(event);
+    }
+    Ok(a)
 }
 
 /// The box closed with the server: what its commands say.
@@ -6099,6 +6104,9 @@ pub fn inbox_snooze(
 ) -> Res<crate::asks::WindowAsk> {
     inbox_open(&core)?;
     let a = core.ask_snooze(&id, until).map_err(err)?;
+    if until.is_some() {
+        core.telemetry.track(Event::AskSnoozed);
+    }
     core.inbox_get(&a.id).map_err(err)
 }
 
@@ -6119,7 +6127,38 @@ pub fn inbox_delegate(
 pub fn inbox_reopen(core: CoreState, id: String) -> Res<crate::asks::WindowAsk> {
     inbox_open(&core)?;
     let a = core.ask_reopen(&id).map_err(err)?;
+    core.telemetry.track(Event::AskReopened);
     core.inbox_get(&a.id).map_err(err)
+}
+
+/// What the window alone sees of the box (ESC-510): opened (`from`: tile, shortcut, settings; `scope`: all, project),
+/// « Comparer en grand », a file looked at (`kind`). Only these values are counted: anything else is dropped.
+#[tauri::command(async)]
+pub fn inbox_track(
+    core: CoreState,
+    event: String,
+    from: Option<String>,
+    scope: Option<String>,
+    kind: Option<String>,
+) {
+    let pick = |v: Option<String>, of: &[&'static str]| -> Option<&'static str> {
+        v.and_then(|v| of.iter().copied().find(|x| *x == v))
+    };
+    let tracked = match event.as_str() {
+        "opened" => pick(from, &["tile", "shortcut", "settings", "notification"]).map(|from| {
+            Event::InboxOpened {
+                from,
+                scope: pick(scope, &["all", "project"]).unwrap_or("all"),
+            }
+        }),
+        "compare" => Some(Event::InboxCompareOpened),
+        "attachment" => pick(kind, &["image", "pdf", "markdown", "word", "csv", "other"])
+            .map(|kind| Event::InboxAttachmentOpened { kind }),
+        _ => None,
+    };
+    if let Some(e) = tracked {
+        core.telemetry.track(e);
+    }
 }
 
 /// The user saw the request.
@@ -6376,6 +6415,62 @@ pub fn server_note(servers: ServersState, id: String, problem: crate::servers::P
 #[tauri::command]
 pub fn server_rename(servers: ServersState, id: String, name: String) {
     servers.rename(&id, &name);
+}
+
+/// What Escouade puts in the box of its own (ESC-513): the views on what already waits for the user
+/// elsewhere, of a project or of all, with the counts of every project. Nothing while the MCP
+/// server is off.
+#[tauri::command]
+pub async fn inbox_views(
+    core: CoreState<'_>,
+    project_id: Option<String>,
+) -> Res<crate::inboxviews::InboxViews> {
+    Ok(core.inbox_views(project_id.as_deref()).await)
+}
+
+/// A gesture on a view of the box: the one of its source, on the view the user read.
+#[tauri::command]
+pub async fn inbox_view_act(
+    core: CoreState<'_>,
+    key: String,
+    act: crate::inboxviews::ViewAct,
+) -> Res<()> {
+    core.inbox_view_act(&key, act).await.map_err(err)
+}
+
+/// « Plus tard » on a view (`until`, epoch ms; none brings it back): its source is not touched.
+#[tauri::command]
+pub async fn inbox_view_snooze(core: CoreState<'_>, key: String, until: Option<i64>) -> Res<()> {
+    core.inbox_view_snooze(&key, until).await.map_err(err)
+}
+
+/// « Enregistrer sous… » of a request's file (ESC-510): its copy written where the user picks in the system's dialog,
+/// which the core opens; the window never gives a path. False when the user cancels.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn inbox_save_file(
+    app: tauri::AppHandle,
+    core: CoreState<'_>,
+    id: String,
+    file: String,
+) -> Res<bool> {
+    use tauri_plugin_dialog::DialogExt;
+    let (f, from) = core.inbox_file_copy(&id, &file).map_err(err)?;
+    tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<bool> {
+        let Some(path) = app
+            .dialog()
+            .file()
+            .set_file_name(&f.name)
+            .blocking_save_file()
+        else {
+            return Ok(false);
+        };
+        std::fs::copy(from, path.into_path()?)?;
+        Ok(true)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(err)
 }
 
 // ---------- « Partout » and the space's devices (ESC-539) ----------

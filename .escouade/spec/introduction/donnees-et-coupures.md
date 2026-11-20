@@ -1,9 +1,9 @@
 ---
 title: "Données locales et coupures"
 subject: "introduction"
-sources: ["Ticket ESC-469 (perte de state.json le 2026-11-15)","Ticket ESC-487 (l'écran des copies, après la reconstruction à la main du Kanban le 2026-11-15)","crates/escouade-plugin-cli/src/paths.rs","crates/escouade-model/src/backups.rs","crates/escouade-model/src/backup_view.rs","src-tauri/src/copies.rs","src-tauri/src/mcp/read.rs","src-tauri/src/conv.rs","src-tauri/src/core.rs","src/components/RecoveryBanner.svelte","src/components/settings/BackupsSection.svelte","website/content/docs/fr/data.md","website/content/docs/fr/troubleshooting.md"]
-tickets: ["ESC-469","ESC-487","ESC-499"]
-decisions: [180,191]
+sources: ["Ticket ESC-469 (perte de state.json le 2026-11-15)","Ticket ESC-487 (l'écran des copies, après la reconstruction à la main du Kanban le 2026-11-15)","crates/escouade-plugin-cli/src/paths.rs","crates/escouade-model/src/backups.rs","crates/escouade-model/src/backup_view.rs","src-tauri/src/copies.rs","src-tauri/src/mcp/read.rs","src-tauri/src/conv.rs","src-tauri/src/core.rs","src/components/RecoveryBanner.svelte","src/components/settings/BackupsSection.svelte","website/content/docs/fr/data.md","website/content/docs/fr/troubleshooting.md","Ticket ESC-535 (app.log du poste de l'utilisateur, « cannot save state … os error 2 » à la sortie pour une mise à jour, 2026-11-17 et 2026-11-18)","src-tauri/src/save_tests.rs"]
+tickets: ["ESC-469","ESC-487","ESC-499","ESC-535"]
+decisions: [180,191,"un-temporaire-propre-a-chaque-ecriture-e"]
 compared: null
 ---
 
@@ -17,10 +17,21 @@ Origine : le 2026-11-15, une coupure a laissé `state.json` (8,7 Mo) à sa taill
 
 ### L'écriture
 
-- **Ce qui ne se refait pas** est écrit pour tenir à une coupure : un fichier temporaire à côté (`<nom>.tmp`), ses données forcées sur le disque (`sync_all`), puis mis à sa place ; le dossier est forcé aussi (Unix : `sync_all` du dossier ; Windows : remplacement « write-through », `MoveFileExW` avec `MOVEFILE_WRITE_THROUGH`, et le renommage ordinaire si Windows le refuse, les données étant déjà sur le disque). Après une coupure, le fichier a son contenu d'avant ou le nouveau, entier. Le temporaire est effacé quand l'écriture échoue, et l'erreur est rendue à l'appelant.
-- Cela vaut pour l'état (`state.json`), les réglages, `plugins.json`, les intégrations (écrites lisibles par l'utilisateur seul), les historiques des projets fermés, la file de synchronisation, les groupes de process des agents, les fichiers des workflows et leur suivi, la mémoire partagée, les tickets partagés, la planification des docs, les choix gardés d'un plugin, la liste de révocation du store, une conversation récrite (compactée ou copiée) et les petits fichiers (identifiant des statistiques, note de mise à jour).
-- **Les caches**, refaits quand ils manquent ou ne se lisent pas, gardent l'écriture légère (temporaire et renommage, rien de forcé) : modules des plugins compilés et précompilés, Javy et escouade-js du dossier des outils, catalogue du store, texte tiré des documents, lecture des workflows d'un projet (`workflows.json`), catalogue des voix en ligne.
+- **Ce qui ne se refait pas** est écrit pour tenir à une coupure : un fichier temporaire à côté, propre à cette écriture (`<fichier>.<process>-<n>.tmp`, par exemple `state.json.4242-17.tmp`), ses données forcées sur le disque (`sync_all`), puis mis à sa place ; le dossier est forcé aussi (Unix : `sync_all` du dossier ; Windows : remplacement « write-through », `MoveFileExW` avec `MOVEFILE_WRITE_THROUGH`, et le renommage ordinaire si Windows le refuse, les données étant déjà sur le disque). Après une coupure, le fichier a son contenu d'avant ou le nouveau, entier. Le temporaire est effacé quand l'écriture échoue, et l'erreur est rendue à l'appelant.
+- **Deux écritures d'un même fichier au même moment** (deux fils, ou l'app et `escouade-plugin`) ne partagent jamais de temporaire : aucune n'échoue, et le fichier a le contenu entier de l'une d'elles, celle mise en place la dernière (ESC-535). Avec un seul nom pour toutes (`<nom>.tmp` jusqu'en 2.2.3), la seconde trouvait le sien déjà renommé par la première (« os error 2 »), ou en renommait un que l'autre remplissait encore.
+- **Un fichier dont le contenu doit suivre l'ordre de ses changements** prend son instantané et l'écrit sous un même verrou, pour que le dernier instantané pris soit le dernier écrit :
+  - l'état (`state.json`) : toutes ses sauvegardes passent par un seul chemin sérialisé (l'arrêt, la sauvegarde périodique de 400 ms, la fermeture ou le retour d'un projet, la suppression d'un ticket qui a des images) ;
+  - les réglages : la sauvegarde de la fenêtre, le port du serveur MCP, l'identifiant de l'utilisateur et les changements propres au cœur (refus du Remote Control, mode Bypass) ;
+  - la liste des plugins installés, l'index de la mémoire partagée (réécrit d'après la liste de ses souvenirs), les vérifications des pages de la spec.
+- **Un temporaire laissé par un plantage** (celui d'un autre process, vieux d'une minute au moins) est effacé à la première écriture dans son dossier, une fois par dossier et par lancement ; un temporaire récent (une écriture en cours d'un autre process) et les fichiers de l'utilisateur restent.
+- Cela vaut pour l'état (`state.json`), les réglages, `plugins.json`, les intégrations (écrites lisibles par l'utilisateur seul), les historiques des projets fermés, la file de synchronisation, les groupes de process des agents, les fichiers des workflows et leur suivi, la mémoire partagée, les tickets partagés, la planification des docs et les vérifications de ses pages, les choix gardés d'un plugin, la liste de révocation du store, une conversation récrite (compactée ou copiée) et les petits fichiers (identifiant des statistiques, note de mise à jour).
+- **Les caches**, refaits quand ils manquent ou ne se lisent pas, gardent l'écriture légère (temporaire propre et renommage, rien de forcé) : modules des plugins compilés et précompilés, Javy et escouade-js du dossier des outils, catalogue du store, texte tiré des documents, lecture des workflows d'un projet (`workflows.json`), catalogue des voix en ligne.
 - **Le coût**, mesuré sur le poste de l'utilisateur (Windows 11, NVMe) : 8,1 ms médian (10,3 ms au plus) pour un état de 9 Mo écrit forcé, contre 3,5 ms en écriture légère ; 2,8 ms pour 1 Mo, 2,2 ms pour 64 Ko. L'état est sauvé au plus toutes les 400 ms quand il a changé : la cadence n'est pas bornée davantage, le surcoût étant de quelques millisecondes par sauvegarde. La mesure se rejoue par le test ignoré `what_a_forced_write_costs` de `escouade-plugin-cli`.
+
+### La sortie
+
+- À la sortie (« Quitter », la fermeture du système, l'arrêt pour installer une mise à jour), l'arrêt (`Core::shutdown`) arrête les agents, les terminaux et les plugins, puis sauve l'état une dernière fois. Pendant ce temps, la sauvegarde périodique peut écrire aussi (ce que les agents qui s'arrêtent et les plugins ont changé) : les deux passent l'une après l'autre (voir l'écriture).
+- **Une dernière sauvegarde ratée est réessayée une fois** avant que l'app se ferme. Le journal (`app.log`) le dit : l'échec et la nouvelle tentative (« the last save as the app stops failed, tried again »), puis la réussite (« state saved as the app stops, at the second try ») ou la perte (« the state is not saved as the app stops, its last changes are lost »).
 
 ### Les copies
 
@@ -94,5 +105,7 @@ Aucun : l'écriture forcée, les copies et la reprise ne se coupent pas.
 - Les fichiers mis de côté par une reprise ou un démarrage ne sont jamais effacés par Escouade : l'utilisateur les supprime à la main.
 - Le coût n'est mesuré que sur un disque NVMe ; un disque dur lent coûterait davantage par sauvegarde de l'état.
 - Le remplacement write-through refusé par Windows (fichier tenu ouvert par un autre programme sans le droit de le remplacer) retombe sur le renommage ordinaire : les données sont sur le disque, le renommage attend la prochaine écriture du système.
+- Ce qui change après la dernière sauvegarde de la sortie (une ligne tardive d'un agent arrêté) n'est sauvé que si la sauvegarde périodique passe avant la fin du process : un agent tué à la sortie ne change plus son état (son tour coupé est gardé « en cours », pour être repris au démarrage suivant).
+- Un `<nom>.tmp` laissé par une version d'avant la 2.2.4 (nom unique pour toutes les écritures) n'est pas effacé : seuls les temporaires au nom propre à une écriture le sont.
 
 - **`plugin-secrets.json`** (ESC-499) : les secrets des plugins que l'utilisateur a choisi de garder dans un fichier, sur un poste sans trousseau. Il est écrit par le même chemin atomique, lisible de son seul propriétaire dès sa création, et n'est jamais dans les copies (`backups::FILES` ne le liste pas). S'il est illisible au démarrage, il est mis de côté (`plugin-secrets.unreadable.json`, droits gardés), et le choix est à refaire.

@@ -13,6 +13,7 @@
   import { openOutside, siteUrl } from '../lib/links';
   import { redo } from '../lib/onboarding.svelte';
   import { discover, openMap } from '../lib/discover.svelte';
+  import { inbox } from '../lib/inbox/inbox.svelte';
   import { tip } from '../lib/tip';
   import type { Project } from '../lib/types';
   import Icon from './Icon.svelte';
@@ -241,6 +242,39 @@
       onclick={() => app.toggleOverview()}
       ><Icon name="overview" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.overview')}</span></span></button
     >
+    <!-- The box « À toi » (ESC-510, direction B): only while the MCP server is on, its count of every project (the requests
+         open and the agents stopped, those of « N en attente »), amber when an agent is stopped. -->
+    {#if app.settings.mcpEnabled}
+      {@const c = inbox.count}
+      <button
+        class="tile global inbox"
+        aria-pressed={app.ui.view === 'inbox'}
+        aria-label={t('inbox.tile.aria', { count: c.total })}
+        aria-keyshortcuts="Control+Shift+J"
+        use:tip={{
+          title: t('inbox.tile.label'),
+          kbd: kbd('Ctrl+Shift+J'),
+          rows: [
+            t('inbox.tile.tip'),
+            t('inbox.tile.counts', {
+              asks: t('inbox.tile.asks', { count: c.asks }),
+              stopped: t('inbox.tile.stopped', { count: c.stopped }),
+            }),
+            // What Escouade puts in it of its own (ESC-513): tickets, decisions, docs, reviews.
+            ...(c.views ? [t('inboxViews.tileViews', { count: c.views })] : []),
+          ],
+          side: 'right',
+          aria: false,
+        }}
+        onclick={() => app.toggleInbox('tile', inbox.scope)}
+        data-testid="inbox-tile"
+        ><Icon name="inbox" />{#if c.total}<span class="badge" class:wt={c.stopped > 0} data-testid="inbox-count" aria-hidden="true"
+            >{c.total}</span
+          >{/if}<span class="lbl" aria-hidden="true"
+          ><span class="tx">{t('inbox.tile.label')}</span>{#if c.total}<span class="n">{c.total}</span>{/if}</span
+        ></button
+      >
+    {/if}
     <div class="sep"></div>
     <!-- The open space, once this computer knows a server (ESC-537, direction B). -->
     {#if knowsServers()}<RailSpace part="head" />{/if}
@@ -480,6 +514,27 @@
     box-shadow:
       0 0 0 2px var(--frame),
       0 0 0 4px var(--p-ink);
+  }
+  /* The count of the box: a pill on the tile's corner, brand when only requests wait, amber when an agent is stopped. */
+  .badge {
+    position: absolute;
+    top: -5px;
+    right: -6px;
+    display: grid;
+    place-items: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--brand);
+    color: var(--on-primary);
+    box-shadow: 0 0 0 2px var(--frame);
+    font: 700 10.5px/1 var(--font);
+    font-variant-numeric: tabular-nums;
+  }
+  .badge.wt {
+    background: var(--wait);
+    color: var(--on-wait);
   }
   .tile.add {
     background: transparent;

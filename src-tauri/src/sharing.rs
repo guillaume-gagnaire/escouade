@@ -1371,6 +1371,8 @@ impl Core {
             .map(|o| String::from_utf8_lossy(&o).trim().to_string())
             .unwrap_or_default();
         let id = person_id(&email).unwrap_or_else(new_share_id);
+        // Taken and written under one lock: the last change of the settings wins (ESC-535).
+        let _one = self.settings_writing.lock();
         let bytes = {
             let mut s = self.settings.write();
             if !s.user_id.is_empty() {

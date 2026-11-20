@@ -1,9 +1,9 @@
 ---
 title: "Livraison et mises à jour"
 subject: "Introduction"
-sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs"]
-tickets: ["ESC-374","ESC-380"]
-decisions: [114]
+sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh"]
+tickets: ["ESC-374","ESC-380","ESC-533"]
+decisions: [114,"windows-l-installeur-d-une-mise-a-jour-a"]
 compared: null
 ---
 
@@ -80,6 +80,9 @@ Elle prévient 30 s avant, par la notification « Escouade redémarre pour se me
 
 - Toujours après l'arrêt propre de l'app (préparations, agents et terminaux arrêtés, état sauvegardé), borné à 15 s.
 - Windows : l'installeur NSIS en mode `quiet` (aucune fenêtre), lancé après cet arrêt. macOS : le paquet `.app` est remplacé en place, puis l'app redémarre.
+- Windows : une mise à jour attend d'abord que l'app qui l'a lancée ait fini de sortir, 30 s au plus : tant qu'un process tient encore `escouade.exe`. Windows met du temps à défaire un gros process, qu'il ne peut alors plus arrêter : sans cette attente, le contrôle « app ouverte » de l'installeur échouait et l'installeur silencieux abandonnait sans rien dire (événement 10006 du Restart Manager). Une app restée vraiment ouverte au-delà est fermée par ce contrôle, comme avant. Une installation à la main n'attend pas.
+- Windows : un autre programme du dossier qui tourne pendant l'installation (`escouade-hook`, `escouade-plugin`, lancés hors de l'app) est mis de côté sous `<nom>.<n>.old`, son process continuant dessus, et le nouveau écrit à sa place : le dossier n'est jamais à moitié à jour. Ce qui a été mis de côté part à l'installation suivante, une fois que rien ne le fait plus tourner, ou à la désinstallation ; une installation qui échoue le remet à sa place.
+- Windows : une mise à jour qui devait relancer l'app et ne s'installe pas la relance quand même, sur sa version : elle dit alors que la mise à jour n'a pas pu s'installer (voir *Après l'installation*), au lieu de disparaître sans rien.
 - Une installation ratée avant l'arrêt laisse l'app tourner ; après, l'app redémarre telle qu'elle était.
 - Redémarrée d'elle-même, l'app revient comme elle était : cachée dans la zone de notification ou la barre des menus, réduite dans la barre des tâches ou le Dock, derrière une autre app sans prendre le focus, ou devant (noté dans `update.json` du dossier de données).
 - Quitter avec une mise à jour prête l'installe sans relancer l'app : « Quitter », et sous macOS aussi Cmd+Q ou le Dock, si le paquet est modifiable sans administrateur.
@@ -122,3 +125,4 @@ Sur GitHub Actions :
 - Sous macOS, quand remplacer l'app demanderait le mot de passe d'un administrateur, l'app ne redémarre jamais d'elle-même.
 - Une fin de session Windows n'installe rien.
 - Les notes montrées par la modale « Escouade X est prête » sont en français, quelle que soit la langue de l'interface.
+- Sous Windows, c'est l'installeur de la nouvelle version qui tourne : l'attente de la sortie de l'app, la mise de côté des programmes en cours d'usage et la relance après un échec valent dès la mise à jour vers la version qui les porte, même lancée par une app plus ancienne.

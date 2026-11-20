@@ -356,7 +356,7 @@ impl Core {
         self.request_save();
         let text = text.to_string();
         let _ = self.with_agent(id, |rt, fx| {
-            rt.notice("warning", text, fx);
+            rt.notice("warn", text, fx);
             Ok(())
         });
         true
@@ -410,6 +410,19 @@ impl Core {
         let project_id = self.agent(id)?.lock().meta.project_id.clone();
         let locks = self.locks_for(&project_id);
         let allowed = self.bypass_allowed_in(&project_id);
+        // Its harness runs it in its own mode: nothing changes, so the window is told nothing and nothing is saved (a
+        // warm-up that comes after the window read the agent sends it nothing more, ESC-521).
+        let same = {
+            let h = self.agent(id)?;
+            let rt = h.lock();
+            let engine = crate::engine::of(&rt.meta);
+            runs_in(&rt.meta.mode, &offered(engine))
+                .filter(|m| *m == rt.meta.mode)
+                .map(|m| (engine, m))
+        };
+        if let Some((engine, mode)) = same {
+            return check_in(engine, &mode, &mode, allowed, &locks, lang);
+        }
         // Its mode shown as its harness runs it, refused or not.
         let (engine, asked, mode) = self.with_agent(id, |rt, fx| {
             let engine = crate::engine::of(&rt.meta);

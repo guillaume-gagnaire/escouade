@@ -1,0 +1,659 @@
+//! What Escouade puts in the box « À toi » of its own (ESC-513, docs/INBOX.md § 5): views on what
+//! already waits for the user elsewhere, never copies. The requests an agent stopped for
+//! (permission, question, plan), the tickets « À tester » and the blocked ones, the decisions
+//! proposed, the docs to share and the reviews a code host asks of the user are read from the
+//! state each time the box is read: settled elsewhere (in the conversation, on the board, in Docs),
+//! a view is gone at once. Settled in the box (`inbox_view_act`), it is the same gesture as at its
+//! source, through the same functions, on the view the user read: one settled meanwhile is refused,
+//! never acted on again.
+//!
+//! « Plus tard » puts a view out of the box until a time without touching its source; a blocking
+//! request is never put off (its agent waits). Like the box, the views exist only while the MCP
+//! server is on: off, nothing of them shows, and every source keeps its place of today.
+
+use crate::core::Core;
+use crate::model::{now_ms, Column, PendingView, UiEvent};
+use anyhow::{anyhow, bail, Result};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashSet};
+use std::sync::{Arc, Weak};
+
+/// Where a view comes from.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ViewSource {
+    /// A permission an agent stopped for.
+    Permission,
+    /// A question (`AskUserQuestion`).
+    Question,
+    /// A plan to approve (`ExitPlanMode`).
+    Plan,
+    /// A ticket « À tester »: « Ticket à valider ».
+    TicketReview,
+    /// A ticket that no longer moves on by itself (a conflict, failed tests, a refusal).
+    TicketBlocked,
+    /// A decision proposed, waiting to be accepted.
+    Decision,
+    /// The changes of a project's docs not shared yet.
+    Docs,
+    /// A pull request whose review the code host asks of the user (« Ta relecture »).
+    Review,
+}
+
+/// The group a view goes in (§ 10.2): « Tes agents se sont arrêtés », « Aujourd'hui », « Plus tôt ».
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ViewGroup {
+    Stopped,
+    Today,
+    Earlier,
+}
+
+/// A view, as the window shows it: one line of the list, and what its gestures name.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxItem {
+    /// What names it, for its gestures and « Plus tard »: `req:<agent>:<request>`, `ticket:<id>`,
+    /// `blocked:<id>`, `decision:<project>:<id>`, `docs:<project>`, `review:<project>:<repo>:<n>`.
+    pub key: String,
+    pub source: ViewSource,
+    pub group: ViewGroup,
+    pub project_id: String,
+    pub project_name: String,
+    pub private: bool,
+    /// What it is about, in one line: the command or the file asked for, the question, the ticket's
+    /// title, the decision's, the pull request's; empty for the docs (the window says how many).
+    pub title: String,
+    /// Since when it waits (epoch ms); 0 when its source does not say.
+    pub since: i64,
+    pub agent_id: Option<String>,
+    pub agent_name: Option<String>,
+    pub ticket_id: Option<String>,
+    pub ticket_key: Option<String>,
+    /// Put off until then (« Plus tard »): out of the counts until it comes back.
+    pub snoozed_until: Option<i64>,
+    /// A request an agent stopped for, as its card in the conversation has it.
+    pub request: Option<PendingView>,
+    /// A ticket: its column, why it is blocked, whether by a conflict, sent without all its
+    /// criteria.
+    pub column: Option<Column>,
+    pub blocked: Option<String>,
+    pub conflict: bool,
+    pub partial: bool,
+    /// A decision: its id (how a proposal is cited).
+    pub decision: Option<String>,
+    /// The docs: how many files to share.
+    pub files: u32,
+    /// A pull request: its number, its link and the host's word (PR, MR).
+    pub number: Option<u64>,
+    pub url: Option<String>,
+    pub word: Option<String>,
+}
+
+impl InboxItem {
+    fn new(key: String, source: ViewSource, group: ViewGroup, project: (&str, &str, bool)) -> Self {
+        Self {
+            key,
+            source,
+            group,
+            project_id: project.0.to_string(),
+            project_name: project.1.to_string(),
+            private: project.2,
+            title: String::new(),
+            since: 0,
+            agent_id: None,
+            agent_name: None,
+            ticket_id: None,
+            ticket_key: None,
+            snoozed_until: None,
+            request: None,
+            column: None,
+            blocked: None,
+            conflict: false,
+            partial: false,
+            decision: None,
+            files: 0,
+            number: None,
+            url: None,
+            word: None,
+        }
+    }
+
+    pub fn blocking(&self) -> bool {
+        self.group == ViewGroup::Stopped
+    }
+}
+
+/// The views as the window reads them.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxViews {
+    /// The MCP server is wanted: off, no box (and no view).
+    pub enabled: bool,
+    /// Of the project asked, or of all: the blocking first (the oldest first), then the others,
+    /// the oldest first; those put off last.
+    pub views: Vec<InboxItem>,
+    /// The requests agents stopped for, every project (« N en attente »).
+    pub blocking: usize,
+    /// All that waits for the user in the box, every project: the views not put off and the
+    /// requests open (not put off): what « à toi » counts.
+    pub total: usize,
+}
+
+/// A gesture on a view: the same as at its source.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(tag = "act", rename_all = "camelCase")]
+pub enum ViewAct {
+    /// « Autoriser » a permission, or approve a plan.
+    Allow,
+    /// « Toujours autoriser », when the card offers it.
+    Always,
+    /// « Refuser », with a word for the agent.
+    Deny { message: Option<String> },
+    /// The answers to a question, by question.
+    Answer { answers: serde_json::Value },
+    /// « Valider » a ticket « À tester ».
+    Approve,
+    /// « Renvoyer à l'agent », with what to change.
+    Reject { comment: String },
+    /// « Reprendre » a blocked ticket « En cours ».
+    Resume,
+    /// « L'agent résout » a conflict.
+    Resolve,
+    /// « Annuler » a conflict.
+    Dismiss,
+    /// « Accepter » a decision proposed.
+    Accept,
+    /// « Partager » the docs.
+    Share,
+}
+
+impl ViewAct {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Allow => "allow",
+            Self::Always => "always",
+            Self::Deny { .. } => "deny",
+            Self::Answer { .. } => "answer",
+            Self::Approve => "approve",
+            Self::Reject { .. } => "reject",
+            Self::Resume => "resume",
+            Self::Resolve => "resolve",
+            Self::Dismiss => "dismiss",
+            Self::Accept => "accept",
+            Self::Share => "share",
+        }
+    }
+
+    /// Whether this gesture is one of the view's source.
+    fn fits(&self, v: &InboxItem) -> bool {
+        use ViewSource as S;
+        match (self, v.source) {
+            (Self::Allow | Self::Deny { .. }, S::Permission | S::Plan) => true,
+            (Self::Always, S::Permission) => v.request.as_ref().is_some_and(|r| r.can_always),
+            (Self::Answer { .. }, S::Question) => true,
+            (Self::Approve | Self::Reject { .. }, S::TicketReview) => true,
+            (Self::Resume, S::TicketBlocked) => v.column == Some(Column::Doing) && !v.conflict,
+            (Self::Resolve | Self::Dismiss, S::TicketBlocked) => v.conflict,
+            (Self::Accept, S::Decision) => true,
+            (Self::Share, S::Docs) => true,
+            _ => false,
+        }
+    }
+}
+
+/// What the box keeps of its views: their « Plus tard ».
+#[derive(Debug, Default)]
+pub struct ViewSnoozes {
+    pub until: BTreeMap<String, i64>,
+}
+
+/// The day of a decision (`YYYY-MM-DD`), as epoch ms at midnight UTC; 0 when it says none.
+fn day_ms(date: &str) -> i64 {
+    chrono::NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d")
+        .ok()
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .map(|d| d.and_utc().timestamp_millis())
+        .unwrap_or(0)
+}
+
+/// The first line that says something, cut to the 140 characters of a request's title.
+pub(crate) fn first_line(s: &str) -> String {
+    let line = s
+        .lines()
+        .map(|l| l.trim().trim_start_matches('#').trim())
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+    let mut out: String = line.chars().take(140).collect();
+    if line.chars().count() > 140 {
+        out.pop();
+        out.push('…');
+    }
+    out
+}
+
+fn kind_of(view: &PendingView) -> ViewSource {
+    match (view.kind.as_str(), view.tool.as_str()) {
+        ("question", _) => ViewSource::Question,
+        (_, "ExitPlanMode") => ViewSource::Plan,
+        _ => ViewSource::Permission,
+    }
+}
+
+fn same_login(a: &str, b: &str) -> bool {
+    !a.is_empty() && a.eq_ignore_ascii_case(b)
+}
+
+/// The order of the list: the blocking first, then the others, the oldest first; put off last.
+fn ordered(views: &mut [InboxItem]) {
+    views.sort_by(|a, b| {
+        (a.snoozed_until.is_some(), !a.blocking(), a.since, &a.key).cmp(&(
+            b.snoozed_until.is_some(),
+            !b.blocking(),
+            b.since,
+            &b.key,
+        ))
+    });
+}
+
+impl Core {
+    /// The views of every project, as the state has them now; their « Plus tard » applied, those
+    /// whose time came back taken out of it.
+    pub async fn inbox_view_items(self: &Arc<Self>) -> Vec<InboxItem> {
+        let projects = self.projects.read().clone();
+        let known: HashSet<&str> = projects.iter().map(|p| p.id.as_str()).collect();
+        let of = |id: &str| {
+            projects
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| (p.id.clone(), p.name.clone(), p.private))
+        };
+        let mut views = Vec::new();
+
+        // The requests agents stopped for, as their cards in the conversation have them: those of a
+        // process that is still there (in the Claude Code view, its terminal asks).
+        let keys: BTreeMap<String, String> = self
+            .tickets
+            .read()
+            .iter()
+            .map(|t| (t.id.clone(), t.key.clone()))
+            .collect();
+        let handles: Vec<_> = self.agents.read().values().cloned().collect();
+        for h in handles {
+            let rt = h.lock();
+            let m = &rt.meta;
+            if m.archived || m.terminal || rt.proc.is_none() {
+                continue;
+            }
+            let Some((pid, pname, private)) = of(&m.project_id) else {
+                continue;
+            };
+            for w in rt.waiting() {
+                let source = kind_of(&w.view);
+                let mut v = InboxItem::new(
+                    format!("req:{}:{}", m.id, w.view.id),
+                    source,
+                    ViewGroup::Stopped,
+                    (&pid, &pname, private),
+                );
+                v.title = match source {
+                    ViewSource::Question => w
+                        .view
+                        .questions
+                        .first()
+                        .map(|q| first_line(&q.question))
+                        .unwrap_or_default(),
+                    _ => first_line(&w.view.arg),
+                };
+                v.since = w.since;
+                v.agent_id = Some(m.id.clone());
+                v.agent_name = Some(m.name.clone());
+                v.ticket_id = m.ticket_id.clone();
+                v.ticket_key = m.ticket_id.as_ref().and_then(|t| keys.get(t).cloned());
+                v.request = Some(w.view);
+                views.push(v);
+            }
+        }
+
+        // The tickets « À tester » and the blocked ones, as the board shows them.
+        let tickets = self.tickets.read().clone();
+        for t in &tickets {
+            if t.shared.as_ref().is_some_and(|s| s.hidden) || t.column == Column::Done {
+                continue;
+            }
+            let Some((pid, pname, private)) = of(&t.project_id) else {
+                continue;
+            };
+            let (source, key) = if t.blocked.is_some() {
+                (ViewSource::TicketBlocked, format!("blocked:{}", t.id))
+            } else if t.column == Column::Review {
+                (ViewSource::TicketReview, format!("ticket:{}", t.id))
+            } else {
+                continue;
+            };
+            let mut v = InboxItem::new(key, source, ViewGroup::Today, (&pid, &pname, private));
+            v.title = first_line(&t.title);
+            v.since = t.review_at.or(t.started_at).unwrap_or(t.created_at);
+            v.ticket_id = Some(t.id.clone());
+            v.ticket_key = Some(t.key.clone());
+            v.column = Some(t.column);
+            v.blocked = t.blocked.clone();
+            v.conflict = t.conflict;
+            v.partial = t.partial;
+            if let Some(a) = t.agent_id.as_deref().and_then(|a| self.agent(a).ok()) {
+                let rt = a.lock();
+                v.agent_id = Some(rt.meta.id.clone());
+                v.agent_name = Some(rt.meta.name.clone());
+            }
+            views.push(v);
+        }
+
+        // The decisions proposed, of every project whose docs can be read.
+        for (pid, pname, private) in projects.iter().map(|p| (&p.id, &p.name, p.private)) {
+            let Ok(space) = self.docs_space(pid, None).await else {
+                continue;
+            };
+            for d in space.decisions() {
+                if d.state != crate::docs::State::Proposed || d.id.is_empty() {
+                    continue;
+                }
+                let mut v = InboxItem::new(
+                    format!("decision:{pid}:{}", d.id),
+                    ViewSource::Decision,
+                    ViewGroup::Earlier,
+                    (pid, pname, private),
+                );
+                v.title = first_line(&d.title);
+                v.since = day_ms(&d.date);
+                v.decision = Some(d.id.clone());
+                if d.origin == "ticket" && !d.origin_ref.is_empty() {
+                    v.ticket_key = Some(d.origin_ref.clone());
+                    v.ticket_id = tickets
+                        .iter()
+                        .find(|t| t.project_id == *pid && t.key == d.origin_ref)
+                        .map(|t| t.id.clone());
+                }
+                views.push(v);
+            }
+        }
+
+        // The docs to share, as the Docs tab was last told of them.
+        let shares: Vec<(String, u32)> = self
+            .docs_shares
+            .lock()
+            .iter()
+            .filter(|(_, m)| m.pending > 0 && m.pending != u32::MAX)
+            .map(|(p, m)| (p.clone(), m.pending))
+            .collect();
+        for (p, n) in shares {
+            let Some((pid, pname, private)) = of(&p) else {
+                continue;
+            };
+            let mut v = InboxItem::new(
+                format!("docs:{pid}"),
+                ViewSource::Docs,
+                ViewGroup::Earlier,
+                (&pid, &pname, private),
+            );
+            v.files = n;
+            views.push(v);
+        }
+
+        // The reviews the host asks of the user, in the lists as they were last read (never read
+        // for the box: it says what the views « Pull requests » and « Vue d’ensemble » last saw).
+        let lists: Vec<(String, crate::prview::ProjectPrs)> = self
+            .pr_lists
+            .lock()
+            .iter()
+            .filter(|(p, _)| known.contains(p.as_str()))
+            .filter_map(|(p, l)| l.read.as_ref().map(|r| (p.clone(), r.2.clone())))
+            .collect();
+        for (p, list) in lists {
+            let Some((pid, pname, private)) = of(&p) else {
+                continue;
+            };
+            for pr in &list.prs {
+                let open = pr.state == crate::forge::PrState::Open && !pr.draft;
+                let asked = pr.reviewers.iter().any(|r| same_login(r, &list.me));
+                if !open || !asked || same_login(&pr.author, &list.me) {
+                    continue;
+                }
+                let mut v = InboxItem::new(
+                    format!("review:{pid}:{}:{}", pr.host_repo.to_lowercase(), pr.number),
+                    ViewSource::Review,
+                    ViewGroup::Today,
+                    (&pid, &pname, private),
+                );
+                v.title = first_line(&pr.title);
+                v.since = (pr.created as i64).saturating_mul(1000);
+                v.number = Some(pr.number);
+                v.url = Some(pr.url.clone());
+                v.word = Some(list.word.clone());
+                views.push(v);
+            }
+        }
+
+        // « Plus tard »: those whose time came back return; those whose view went are forgotten.
+        let now = now_ms();
+        let present: HashSet<String> = views.iter().map(|v| v.key.clone()).collect();
+        let changed = {
+            let mut s = self.inbox_snoozes.lock();
+            let before = s.until.len();
+            s.until.retain(|k, t| *t > now && present.contains(k));
+            for v in views.iter_mut().filter(|v| !v.blocking()) {
+                v.snoozed_until = s.until.get(&v.key).copied();
+            }
+            before != s.until.len()
+        };
+        if changed {
+            self.request_save();
+        }
+        ordered(&mut views);
+        views
+    }
+
+    /// `inbox_views`: the views of a project or of all, and the counts of every project. Nothing
+    /// while the MCP server is off.
+    pub async fn inbox_views(self: &Arc<Self>, project_id: Option<&str>) -> InboxViews {
+        if !self.inbox_enabled() {
+            return InboxViews {
+                enabled: false,
+                views: Vec::new(),
+                blocking: 0,
+                total: 0,
+            };
+        }
+        let all = self.inbox_view_items().await;
+        let blocking = all.iter().filter(|v| v.blocking()).count();
+        let asks = self
+            .asks
+            .lock()
+            .list
+            .iter()
+            .filter(|a| a.state == crate::asks::AskState::Open)
+            .count();
+        let total = asks + all.iter().filter(|v| v.snoozed_until.is_none()).count();
+        InboxViews {
+            enabled: true,
+            views: all
+                .into_iter()
+                .filter(|v| project_id.is_none_or(|p| v.project_id == p))
+                .collect(),
+            blocking,
+            total,
+        }
+    }
+
+    /// The view `key` as it is now; an error that says it was settled elsewhere when it is gone.
+    async fn inbox_view(self: &Arc<Self>, key: &str) -> Result<InboxItem> {
+        if !self.inbox_enabled() {
+            bail!(tr!(
+                "La boîte « À toi » est fermée avec le serveur MCP : allume-le dans Réglages › Agents › Piloter Escouade.",
+                "The “Your turn” box is closed with the MCP server: turn it on in Settings › Agents › Drive Escouade."
+            ));
+        }
+        self.inbox_view_items()
+            .await
+            .into_iter()
+            .find(|v| v.key == key)
+            .ok_or_else(|| {
+                anyhow!(tr!(
+                    "C’est déjà réglé ailleurs : la boîte se met à jour.",
+                    "It was already settled elsewhere: the box is updating."
+                ))
+            })
+    }
+
+    /// `inbox_view_act`: a gesture on a view, the one of its source, on the view the user read
+    /// (one settled meanwhile is refused). Its source then knows it: the agent goes on, the ticket
+    /// moves, the decision is accepted, the docs are shared.
+    pub async fn inbox_view_act(self: &Arc<Self>, key: &str, act: ViewAct) -> Result<()> {
+        let v = self.inbox_view(key).await?;
+        if !act.fits(&v) {
+            bail!(tr!(
+                "Ce geste ne va pas avec cette ligne de la boîte.",
+                "This gesture doesn’t go with this line of the box."
+            ));
+        }
+        let name = act.name();
+        let ticket = || v.ticket_id.clone().unwrap_or_default();
+        let request = || {
+            (
+                v.agent_id.clone().unwrap_or_default(),
+                v.request.as_ref().map(|r| r.id.clone()).unwrap_or_default(),
+            )
+        };
+        match act {
+            ViewAct::Allow | ViewAct::Always => {
+                let (agent, req) = request();
+                let how = if act == ViewAct::Always {
+                    "always"
+                } else {
+                    "allow"
+                };
+                self.answer_permission(&agent, &req, how, None)?;
+            }
+            ViewAct::Deny { message } => {
+                let (agent, req) = request();
+                self.answer_permission(&agent, &req, "deny", message)?;
+            }
+            ViewAct::Answer { answers } => {
+                let (agent, req) = request();
+                self.answer_question(&agent, &req, answers)?;
+            }
+            ViewAct::Approve => {
+                self.ticket_approve(&ticket()).await?;
+                self.telemetry
+                    .track(crate::telemetry::Event::TicketApproved);
+            }
+            ViewAct::Reject { comment } => self.ticket_reject(&ticket(), &comment).await?,
+            ViewAct::Resume => self.ticket_resume(&ticket()).await?,
+            ViewAct::Resolve => self.ticket_resolve_conflict(&ticket()).await?,
+            ViewAct::Dismiss => self.ticket_dismiss(&ticket())?,
+            ViewAct::Accept => {
+                let id = v.decision.clone().unwrap_or_default();
+                self.docs_accept_decision(&v.project_id, &crate::docs::Ref::Id(id))
+                    .await?;
+                self.docs_changed(&v.project_id).await;
+            }
+            ViewAct::Share => {
+                self.docs_share(&v.project_id, None, false).await?;
+            }
+        }
+        log::info!("inbox view {} {name}", v.source_name());
+        self.telemetry
+            .track(crate::telemetry::Event::InboxViewSettled {
+                source: v.source_name(),
+                act: name,
+            });
+        self.inbox_view_told(&v.project_id);
+        Ok(())
+    }
+
+    /// « Plus tard » on a view: out of the box until `until` (ms), its source untouched; None
+    /// brings it back now. Never a request an agent stopped for: its agent waits.
+    pub async fn inbox_view_snooze(self: &Arc<Self>, key: &str, until: Option<i64>) -> Result<()> {
+        let v = self.inbox_view(key).await?;
+        if v.blocking() {
+            bail!(tr!(
+                "Ton agent s’est arrêté pour cette demande : elle ne se reporte pas, elle attend ta réponse.",
+                "Your agent stopped for this request: it is not put off, it waits for your answer."
+            ));
+        }
+        {
+            let mut s = self.inbox_snoozes.lock();
+            match until {
+                Some(t) if t > now_ms() => {
+                    s.until.insert(key.to_string(), t);
+                }
+                _ => {
+                    s.until.remove(key);
+                }
+            }
+        }
+        self.request_save();
+        self.inbox_view_told(&v.project_id);
+        Ok(())
+    }
+
+    /// The window reads the box again: a view of this project changed.
+    pub(crate) fn inbox_view_told(&self, project_id: &str) {
+        self.hub.emit(UiEvent::Inbox {
+            project_id: project_id.to_string(),
+        });
+    }
+}
+
+impl InboxItem {
+    /// Its source, as the log and the statistics say it.
+    pub fn source_name(&self) -> &'static str {
+        match self.source {
+            ViewSource::Permission => "permission",
+            ViewSource::Question => "question",
+            ViewSource::Plan => "plan",
+            ViewSource::TicketReview => "ticketReview",
+            ViewSource::TicketBlocked => "ticketBlocked",
+            ViewSource::Decision => "decision",
+            ViewSource::Docs => "docs",
+            ViewSource::Review => "review",
+        }
+    }
+}
+
+/// The facts that change a view's source tell the window to read the box again: a request asked
+/// or answered, an agent's status, a ticket's column or conflict, a decision proposed or accepted,
+/// the docs written. The board's and the conversation's own events still tell their places.
+pub struct ViewsSink {
+    pub core: Weak<Core>,
+}
+
+impl crate::facts::Sink for ViewsSink {
+    fn take(&self, fact: &Arc<crate::facts::Fact>) {
+        use crate::facts::Body as B;
+        let moves = matches!(
+            fact.body,
+            B::AgentStatus { .. }
+                | B::AgentStopped { .. }
+                | B::RequestPermission { .. }
+                | B::RequestQuestion { .. }
+                | B::RequestAnswered { .. }
+                | B::TicketColumn { .. }
+                | B::TicketApproved {}
+                | B::TicketRejected { .. }
+                | B::TicketConflict { .. }
+                | B::TestsResult { .. }
+                | B::DecisionProposed { .. }
+                | B::DecisionAccepted { .. }
+                | B::DocsWritten { .. }
+                | B::DocsFiled { .. }
+        );
+        let Some(project) = fact.project.as_ref().filter(|_| moves) else {
+            return;
+        };
+        if let Some(core) = self.core.upgrade() {
+            if core.inbox_enabled() {
+                core.inbox_view_told(&project.id);
+            }
+        }
+    }
+}

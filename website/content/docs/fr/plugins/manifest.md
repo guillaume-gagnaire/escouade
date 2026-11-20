@@ -122,7 +122,7 @@ Un chemin absolu ou qui remonte avec `..` est refusé : un plugin ne lance que c
 
 `contributes` regroupe ce que le plugin ajoute. Escouade vérifie déjà leur forme :
 
-- `settings` : ses réglages, chacun avec une clé (`key`), un type (`string`, `number`, `boolean` ou `select`) et un titre (`title`) ;
+- `settings` : ses réglages, montrés sur sa page dans l’ordre du manifeste. Chacun a une clé (`key`), un type (`string`, `number`, `boolean` ou `select`) et un titre (`title`) ; il peut avoir une `description` (un texte, ou un texte par langue), montrée sous son titre, une valeur par défaut (`default`, de son type ; sans elle, vide, ou `false` pour un `boolean`) et, pour un `select`, ses choix (`options`), dans l’ordre : chacun une valeur (`"udp"`), ou `{ "value": "udp", "title": "UDP" }` pour montrer un titre à sa place ;
 - `secrets` : les secrets qu’il garde, chacun avec une clé et un titre ;
 - `accounts` : un genre de compte, partagé par ses autres points ;
 - `ticketSources`, `forges` et `harnesses` : une source du Kanban, un hébergeur de code, un harness ; chacun avec un `id`, et le compte qu’il utilise (`account`) parmi ceux de `accounts` ;
@@ -130,7 +130,7 @@ Un chemin absolu ou qui remonte avec `..` est refusé : un plugin ne lance que c
 - `workflowReaders` : un lecteur de workflows, pour apprendre à Escouade un workflow qu’elle ne lit pas seule (le contrat est fixé, mais **Escouade ne l’appelle pas encore**). Chacun a un `id` et `files`, les globs (depuis le dossier du projet, sans `..`) des fichiers qu’il reçoit ; voir [Le lecteur de workflow](plugins/events#le-lecteur-de-workflow) ;
 - `themes` : des thèmes, décrits dans [Les thèmes](plugins/themes) ;
 - `webhooks` et `commands` : un webhook ou une commande sur un fait, décrits dans [Les événements](plugins/events) ;
-- `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : **réservés, pas servis**. Le manifeste les accepte et `escouade-plugin validate` en juge la forme, mais Escouade n’en montre rien et n’en appelle rien aujourd’hui : n’écris pas un plugin qui compte dessus. Seuls les réglages d’un plugin dans `.escouade.yml` (`plugins.<id>`) sont lus.
+- `menus`, `statusBar`, `badges` et `projectTemplates` : **réservés, sans effet dans cette version**. Le manifeste les accepte toujours, mais Escouade n’en montre rien, ne les compte pas dans ce qu’apporte le plugin et n’en appelle rien ; `escouade-plugin validate` et le store le disent par un avertissement, jamais un refus. N’écris pas un plugin qui compte dessus. Les réglages d’un plugin dans `.escouade.yml` se donnent sous `plugins.<id>`, avec les clés de `settings`.
 
 Un même plugin peut tenir plusieurs points : un plugin GitHub donne ses issues au Kanban et suit ses PR sur un seul compte.
 

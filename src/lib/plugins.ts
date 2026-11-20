@@ -428,7 +428,10 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
 /** The permissions of `words`, in words, the strongest first (they come in that order). */
 export const asksOf = (words: string[], m: Manifest | null, lang: string) => words.map((w) => askOf(w, m, lang));
 
-/** What a plugin adds, in words: a line per extension point it fills, with where to find it. */
+/**
+ * What a plugin adds, in words: a line per extension point it fills, with where to find it. The points the manifest
+ * reserves (`menus`, `statusBar`, `badges`, `projectTemplates`) do nothing yet: never said (ESC-524).
+ */
 export function contributionsOf(m: Manifest | null, lang: string): string[] {
   if (!m) return [];
   const out: string[] = [];
@@ -450,10 +453,6 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
       | 'forges'
       | 'launchEnvironments'
       | 'accounts'
-      | 'menus'
-      | 'statusBar'
-      | 'badges'
-      | 'projectTemplates'
       | 'settings'
       | 'secrets'
     ),
@@ -466,10 +465,6 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
     ['accounts', 'accounts'],
     ['webhooks', 'webhooks'],
     ['commands', 'commands'],
-    ['menus', 'menus'],
-    ['statusBar', 'statusBar'],
-    ['badges', 'badges'],
-    ['projectTemplates', 'projectTemplates'],
     ['settings', 'settings'],
     ['secrets', 'secrets'],
   ];
@@ -486,7 +481,7 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
 export const CATEGORIES = ['harnesses', 'kanban', 'forges', 'themes', 'notifications', 'permissions', 'tools', 'languages'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-/** The categories of a plugin, from what it adds and asks. */
+/** The categories of a plugin, from what it adds and asks; never from a reserved point, which does nothing (ESC-524). */
 export function categoriesOf(p: PluginView): Category[] {
   const m = p.manifest;
   if (!m) return [];
@@ -498,7 +493,7 @@ export function categoriesOf(p: PluginView): Category[] {
   if (has('themes')) out.push('themes');
   if (has('webhooks') || has('notifications')) out.push('notifications');
   if (m.permissions.decide || has('permissionRules')) out.push('permissions');
-  if (has('commands') || has('menus') || has('statusBar') || has('badges') || has('launchEnvironments')) out.push('tools');
+  if (has('commands') || has('launchEnvironments')) out.push('tools');
   if (has('languages')) out.push('languages');
   return out;
 }

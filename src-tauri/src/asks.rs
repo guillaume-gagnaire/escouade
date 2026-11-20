@@ -13,7 +13,7 @@
 
 use crate::core::Core;
 use crate::i18n::{self, Lang};
-use crate::model::{now_ms, AgentsAnswer, Column, UiEvent};
+use crate::model::{now_ms, Column, UiEvent};
 use anyhow::{anyhow, bail, Result};
 pub use escouade_model::asks::*;
 use std::collections::HashSet;
@@ -53,8 +53,17 @@ pub(crate) const EXPIRES_DEFAULT: u32 = 14;
 pub(crate) const EXPIRES_MAX: u32 = 30;
 /// The time to take an answer back before it goes (§ 8.6).
 pub(crate) const UNDO_MS: i64 = 10_000;
-/// The files of a closed request are kept that long (§ 4.4).
+/// The files of a closed request are kept that long (§ 4.4), unless « Garder les fichiers des demandes closes »
+/// says 7 or 90 (`Settings::inbox_keep_days`, ESC-510).
 pub(crate) const FILES_KEPT_DAYS: i64 = 30;
+
+/// The days a closed request's files are kept, as « Garder les fichiers des demandes closes » says: 7, 30 or 90.
+pub(crate) fn kept_days(setting: u32) -> i64 {
+    match setting {
+        7 | 90 => i64::from(setting),
+        _ => FILES_KEPT_DAYS,
+    }
+}
 /// A closed request stays in the history that long, and so many at most.
 pub(crate) const KEPT_DAYS: i64 = 90;
 pub(crate) const CLOSED_MAX: usize = 300;
@@ -1069,6 +1078,23 @@ impl Core {
             kept.files.len()
         );
         self.inbox_told(project_id);
+        // Its summary, once the requests that come with it are gathered (ESC-513).
+        self.inbox_summary_soon();
+        self.telemetry.track(crate::telemetry::Event::AskCreated {
+            kind: kept.kind.as_str(),
+            author: match (&kept.author.agent, kept.author.chef) {
+                (None, _) => "client",
+                (Some(_), true) => "chef",
+                (Some(_), false) => "agent",
+            },
+            files: match kept.files.len() {
+                0 => "0",
+                1..=3 => "1-3",
+                _ => "4-12",
+            },
+            recommendation: kept.recommend.is_some(),
+            decision: kept.decision,
+        });
         Ok(kept)
     }
 
@@ -1284,6 +1310,9 @@ impl Core {
             Ok(a.clone())
         })?;
         log::info!("ask {id} withdrawn");
+        self.telemetry.track(crate::telemetry::Event::AskWithdrawn {
+            kind: a.kind.as_str(),
+        });
         self.block_waiting(&a);
         self.inbox_told(&a.project_id);
         Ok(a)
@@ -1548,14 +1577,15 @@ impl Core {
             .iter()
             .find(|p| p.id == a.project_id)
             .and_then(|p| p.chef.clone());
-        match self.settings.read().agents_answer {
-            AgentsAnswer::All => Ok(()),
-            AgentsAnswer::Chef if chef.as_deref() == Some(agent) => Ok(()),
-            AgentsAnswer::Chef => bail!(tr!(
+        // The same rule as for the requests an agent stopped for (ESC-513).
+        let setting = self.settings.read().agents_answer;
+        match crate::delegation::may_answer(setting, chef.as_deref(), agent) {
+            Ok(()) => Ok(()),
+            Err(crate::delegation::Refusal::NotTheChef) => bail!(tr!(
                 "Seul le chef d’escouade du projet reçoit une demande : il se choisit dans Réglages › Projets › Équipe.",
                 "Only the project’s squad lead is left a request: it is chosen in Settings › Projects › Team."
             )),
-            AgentsAnswer::Nobody => bail!(tr!(
+            Err(crate::delegation::Refusal::Nobody) => bail!(tr!(
                 "Aucun agent ne répond aux demandes des autres : permets-le dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux demandes des autres agents »).",
                 "No agent answers the others’ requests: allow it in Settings › Agents › Drive Escouade (“Agents can answer the other agents’ requests”)."
             )),
@@ -1641,6 +1671,7 @@ impl Core {
     /// days, and the request itself after 90 (300 kept at most).
     pub fn asks_sweep(self: &Arc<Self>) {
         let now = now_ms();
+        let files_kept = kept_days(self.settings.read().inbox_keep_days);
         let projects: HashSet<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
         let tickets: Vec<(String, Column)> = self
             .tickets
@@ -1726,7 +1757,7 @@ impl Core {
                 };
                 if a.files_erased_at.is_none()
                     && !a.files.is_empty()
-                    && closed_at + FILES_KEPT_DAYS * DAY_MS <= now
+                    && closed_at + files_kept * DAY_MS <= now
                 {
                     a.files_erased_at = Some(now);
                     record(a, now, "filesErased", String::new());
@@ -1764,6 +1795,11 @@ impl Core {
             let _ = std::fs::remove_dir_all(self.ask_dir(&id));
         }
         for a in &closed {
+            if a.state == AskState::Expired {
+                self.telemetry.track(crate::telemetry::Event::AskExpired {
+                    kind: a.kind.as_str(),
+                });
+            }
             self.block_waiting(a);
         }
         for p in changed {
@@ -1832,10 +1868,12 @@ impl Core {
             ));
         };
         if a.files_erased_at.is_some() {
+            let days = kept_days(self.settings.read().inbox_keep_days);
             bail!(tr!(
-                "Les fichiers de la demande {id} ont été effacés, 30 jours après sa fin.",
-                "The files of request {id} were erased, 30 days after it ended.",
-                id = a.id
+                "Les fichiers de la demande {id} ont été effacés, {days} jours après sa fin.",
+                "The files of request {id} were erased, {days} days after it ended.",
+                id = a.id,
+                days = days
             ));
         }
         let dir = self.ask_dir(&a.id);
@@ -2096,6 +2134,16 @@ impl Core {
         Ok(self.window_ask(a))
     }
 
+    /// The copy of a request's file, for « Enregistrer sous… » (ESC-510): the box open, never a path out of the request's
+    /// folder.
+    pub fn inbox_file_copy(&self, id: &str, file: &str) -> Result<(AskFile, PathBuf)> {
+        if !self.inbox_enabled() {
+            return Err(self.inbox_closed());
+        }
+        let a = self.ask(id)?;
+        self.ask_file(&a, Some(file), None)
+    }
+
     /// What the question before turning the server off lists.
     pub fn inbox_closing(&self) -> InboxClosing {
         let all = self.asks_all();
@@ -2105,6 +2153,45 @@ impl Core {
             titles: open.iter().take(3).map(|a| a.title.clone()).collect(),
         }
     }
+}
+
+/// The statistics' event of an answer the user gave (ESC-510): its sort, how long it waited, how, whether the
+/// recommendation was followed. None for an answer that is not the user's.
+pub(crate) fn answered_event(a: &Ask) -> Option<crate::telemetry::Event> {
+    let ans = a.answer.as_ref()?;
+    if ans.by.is_some() {
+        return None;
+    }
+    let waited = (ans.at - a.created_at).max(0);
+    let delay = if waited < 10 * 60_000 {
+        "ten_minutes"
+    } else if waited < 3_600_000 {
+        "hour"
+    } else if waited < DAY_MS {
+        "day"
+    } else {
+        "longer"
+    };
+    let via = match ans.via {
+        AskVia::Click => "click",
+        AskVia::Keyboard => "keyboard",
+        AskVia::Voice => "voice",
+        AskVia::Phone => "phone",
+        AskVia::Delegated => "delegated",
+    };
+    let followed = match (
+        &a.kind,
+        a.recommend.as_ref().and_then(|r| r.option.as_ref()),
+    ) {
+        (AskKind::Choice, Some(rec)) => Some(ans.options.len() == 1 && ans.options[0] == *rec),
+        _ => None,
+    };
+    Some(crate::telemetry::Event::AskAnswered {
+        kind: a.kind.as_str(),
+        delay,
+        via,
+        followed,
+    })
 }
 
 /// Whether « Ouvrir » may hand a file to the system: never a program or a script (by its name, or

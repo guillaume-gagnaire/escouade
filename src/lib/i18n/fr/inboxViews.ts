@@ -1,0 +1,81 @@
+// La boîte « À toi » (ESC-513, docs/INBOX.md § 5, § 10.2, § 11) : ce qu’Escouade y verse de lui-même, des vues sur
+// ce qui attend déjà ailleurs, et le résumé de ses notifications.
+export default {
+  // La sorte d’une vue, en tête de sa ligne.
+  kind: {
+    permission: 'Autorisation',
+    question: 'Question',
+    plan: 'Plan',
+    ticketReview: 'Ticket à valider',
+    ticketBlocked: 'Ticket bloqué',
+    decision: 'Décision proposée',
+    docs: 'Docs à partager',
+    review: 'Relecture',
+  },
+  /** Ce qu’une demande bloquante dit de son agent. */
+  stopped: 'l’agent s’est arrêté',
+  /** The tooltip of the box's tile: the views it counts besides the requests and the agents stopped. */
+  tileViews: {
+    one: '{count} autre chose à régler (ticket, décision, docs, relecture)',
+    other: '{count} autres choses à régler (tickets, décisions, docs, relectures)',
+  },
+  /** Le titre d’une vue qui n’en a pas. */
+  docsTitle: { one: '{count} fichier des docs à partager', other: '{count} fichiers des docs à partager' },
+  planTitle: 'Approuver le plan',
+  prTitle: '{word} #{number} · {title}',
+  since: 'depuis {since}',
+  until: 'jusqu’à {when}',
+  partial: 'sans tous ses critères',
+  conflict: 'conflit',
+  // Les gestes, ceux de la source.
+  act: {
+    allow: 'Autoriser',
+    always: 'Toujours autoriser',
+    deny: 'Refuser',
+    answer: 'Répondre',
+    inConversation: 'Répondre dans la conversation',
+    approvePlan: 'Approuver le plan',
+    approve: 'Valider',
+    reject: 'Renvoyer à l’agent',
+    rejectSend: 'Renvoyer',
+    rejectLabel: 'Ce qu’il faut changer',
+    rejectPlaceholder: 'Ce qui ne va pas, ce qu’il faut refaire…',
+    resume: 'Reprendre',
+    resolve: 'L’agent résout',
+    dismiss: 'Annuler',
+    accept: 'Accepter',
+    share: 'Partager',
+    openPr: 'Ouvrir la {word}',
+    agent: 'Aller à l’agent',
+    board: 'Voir dans le Kanban',
+    docs: 'Ouvrir dans Docs',
+    test: '▶ Tester',
+  },
+  denyLabel: 'Un mot pour l’agent (facultatif)',
+  answerLabel: 'Ta réponse',
+  /** « Plus tard » et ses heures (§ 8.4). */
+  later: {
+    button: 'Plus tard',
+    back: 'Remettre dans la boîte',
+    blocking: 'Ton agent s’est arrêté pour cette demande : elle attend ta réponse, elle ne se reporte pas.',
+  },
+  /** Sous les gestes d’une vue : ce qu’ils font. */
+  note: {
+    request: 'Ta réponse part à {agent}, comme depuis sa conversation.',
+    ticket: 'Les mêmes gestes que sa carte du Kanban : valider le merge selon les réglages du projet.',
+    decision: 'Acceptée, elle prend son numéro dans le registre des décisions, comme depuis Docs.',
+    docs: 'Partager publie les changements des docs, comme le bouton « Partager » de l’onglet Docs.',
+    review: 'La relecture se fait chez l’hébergeur : Escouade l’a lue dans la dernière liste des PR.',
+  },
+  settled: 'Réglé ailleurs : la boîte s’est mise à jour.',
+  /** Le réglage du résumé, dans Réglages › Notifications. */
+  summary: {
+    title: 'Boîte « À toi »',
+    label: 'Résumé de la boîte « À toi »',
+    labelDesc:
+      'Jamais une alerte par demande : un résumé de ce que tes agents attendent de toi sans s’arrêter, ni carillon ni clignotement. Les demandes de permission et les questions gardent leurs notifications.',
+    every30: 'Un résumé, toutes les 30 min au plus',
+    hourly: 'Un résumé par heure',
+    never: 'Jamais (le compteur seul)',
+  },
+} as const;

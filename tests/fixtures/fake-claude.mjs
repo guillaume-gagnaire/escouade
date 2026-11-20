@@ -2769,30 +2769,127 @@ function startSession() {
     next();
   }
 
-  // [demande] (ESC-509): the renders and the PDF written in its folder, then a choice of three options left by ask_user.
-  function askTurn() {
-    const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001', 'hex');
-    const dir = path.join(process.cwd(), 'design');
-    fs.mkdirSync(dir, { recursive: true });
-    for (const n of ['a', 'b', 'c']) {
-      fs.writeFileSync(path.join(dir, `${n}.png`), png);
-      fs.writeFileSync(path.join(dir, `${n}-clair.png`), png);
-    }
-    fs.writeFileSync(path.join(dir, 'etude.pdf'), Buffer.from('%PDF-1.7\n%\xE2\xE3\xCF\xD3\n', 'latin1'));
-    const renders = (n) => [{ path: `design/${n}.png` }, { path: `design/${n}-clair.png` }];
-    escouadeTool('ask_user', {
-      kind: 'choice',
-      title: 'Choisis la direction du tableau de bord',
-      body: 'J’ai rendu trois directions, en sombre et en clair.',
-      options: [
-        { label: 'Colonnes de chiffres', files: renders('a') },
-        { label: 'Cartes empilées', files: renders('b') },
-        { label: 'Tableau dense', files: renders('c') },
-      ],
-      recommend: { option: 'b', why: 'Les adhérents arrivent du mobile.' },
-      unblocks: 'Le reste du tableau démarre sur la direction choisie',
-      files: [{ path: 'design/etude.pdf' }],
-    })
+  // [demande] (ESC-509, ESC-510): the renders and the PDF written in its folder, then a choice of three options left by
+  // ask_user. The renders are real images (a dashboard drawn in a few blocks, dark and light) and the PDF a real one of
+  // three pages, which the box draws.
+
+  /** A PNG of `w` × `h` pixels: its ground, then blocks `[x, y, w, h, [r, g, b]]` (in pixels). */
+  function drawn(w, h, ground, blocks) {
+    const px = Buffer.alloc(w * h * 3);
+    const fill = (x0, y0, bw, bh, [r, g, b]) => {
+      for (let y = Math.max(0, y0); y < Math.min(h, y0 + bh); y++)
+        for (let x = Math.max(0, x0); x < Math.min(w, x0 + bw); x++) px.set([r, g, b], (y * w + x) * 3);
+    };
+    fill(0, 0, w, h, ground);
+    for (const b of blocks) fill(...b);
+    const raw = Buffer.concat(
+      Array.from({ length: h }, (_, y) => Buffer.concat([Buffer.from([0]), px.subarray(y * w * 3, (y + 1) * w * 3)])),
+    );
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(w, 0);
+    ihdr.writeUInt32BE(h, 4);
+    ihdr[8] = 8;
+    ihdr[9] = 2;
+    const crcOf = (buf) => {
+      let c = 0xffffffff;
+      for (const x of buf) {
+        c ^= x;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      }
+      return (c ^ 0xffffffff) >>> 0;
+    };
+    const chunk = (type, data) => {
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length);
+      const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+      const sum = Buffer.alloc(4);
+      sum.writeUInt32BE(crcOf(body));
+      return Buffer.concat([len, body, sum]);
+    };
+    return Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk('IHDR', ihdr),
+      chunk('IDAT', zlib.deflateSync(raw)),
+      chunk('IEND', Buffer.alloc(0)),
+    ]);
+  }
+
+  /** A render of a direction of the dashboard: `n` 0, 1 or 2, `light` its light theme. */
+  function render(n, light) {
+    const W = 480;
+    const H = 300;
+    const bg = light ? [246, 247, 249] : [17, 19, 23];
+    const card = light ? [255, 255, 255] : [30, 33, 39];
+    const line = light ? [214, 217, 222] : [58, 62, 70];
+    const blue = [86, 140, 240];
+    const green = [64, 190, 120];
+    const amber = [232, 170, 70];
+    const top = [
+      [0, 0, W, 34, card],
+      [16, 12, 60, 10, line],
+    ];
+    if (n === 0)
+      return drawn(W, H, bg, [
+        ...top,
+        ...[0, 1, 2, 3].map((i) => [16 + i * 116, 50, 104, 54, card]),
+        ...[0, 1, 2, 3].map((i) => [28 + i * 116, 72, 60, 12, i === 1 ? blue : line]),
+        [16, 118, 448, 120, card],
+        ...Array.from({ length: 12 }, (_, i) => [36 + i * 35, 220 - ((i * 37) % 80) - 20, 22, ((i * 37) % 80) + 20, blue]),
+        [16, 250, 448, 36, card],
+      ]);
+    if (n === 1)
+      return drawn(W, H, bg, [
+        ...top,
+        [16, 50, 448, 80, card],
+        [36, 76, 140, 22, line],
+        [300, 66, 140, 46, blue],
+        [16, 142, 220, 70, card],
+        [244, 142, 220, 70, card],
+        [36, 172, 100, 14, green],
+        [264, 172, 100, 14, amber],
+        [16, 224, 448, 60, card],
+      ]);
+    return drawn(W, H, bg, [
+      ...top,
+      [16, 50, 448, 236, card],
+      ...Array.from({ length: 14 }, (_, r) => [
+        [32, 64 + r * 15, 90, 5, line],
+        [140, 64 + r * 15, 70, 5, line],
+        [230, 64 + r * 15, 70, 5, line],
+        [330, 64 + r * 15, 40, 7, r % 4 === 1 ? amber : green],
+      ]).flat(),
+    ]);
+  }
+
+  /** A PDF of a few pages (a title, a sentence, a bar chart on each), made here, which pdf.js draws. */
+  function study(pages) {
+    const objs = [];
+    const kids = pages.map((_, i) => `${4 + i * 2} 0 R`).join(' ');
+    objs.push('<< /Type /Catalog /Pages 2 0 R >>');
+    objs.push(`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`);
+    objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    pages.forEach(([title, text, bars], i) => {
+      const chart = bars.map((h, j) => `${j === 1 ? '0.34 0.55 0.94' : '0.62 0.64 0.68'} rg ${120 + j * 130} 300 80 ${h} re f`).join('\n');
+      const content = `BT /F1 22 Tf 60 760 Td (${title}) Tj ET\nBT /F1 12 Tf 60 730 Td (${text}) Tj ET\nBT /F1 9 Tf 480 800 Td (${i + 1} / ${pages.length}) Tj ET\n${chart}\n`;
+      objs.push(
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`,
+      );
+      objs.push(`<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}endstream`);
+    });
+    let out = '%PDF-1.7\n%\xE2\xE3\xCF\xD3\n';
+    const at = [];
+    objs.forEach((o, i) => {
+      at.push(Buffer.byteLength(out, 'latin1'));
+      out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+    });
+    const xref = Buffer.byteLength(out, 'latin1');
+    out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${at.map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}`;
+    out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return Buffer.from(out, 'latin1');
+  }
+
+  function leave(args) {
+    escouadeTool('ask_user', args)
       .then((r) => {
         const left = JSON.parse(r.content[0].text);
         streamText(`Demande ${left.id} déposée (${left.files} fichiers), je continue mon travail.`);
@@ -2804,6 +2901,77 @@ function startSession() {
       });
   }
 
+  function askTurn() {
+    const dir = path.join(process.cwd(), 'design');
+    fs.mkdirSync(dir, { recursive: true });
+    ['a', 'b', 'c'].forEach((n, i) => {
+      fs.writeFileSync(path.join(dir, `${n}.png`), render(i, false));
+      fs.writeFileSync(path.join(dir, `${n}-clair.png`), render(i, true));
+    });
+    fs.writeFileSync(
+      path.join(dir, 'etude.pdf'),
+      study([
+        ['1. Les trois directions', 'Colonnes, cartes, tableau dense : la meme donnee.', [120, 180, 90]],
+        ['2. Sur le mobile', 'Les adherents arrivent du mobile a 72 %.', [80, 260, 110]],
+        ['3. Ce que coute chaque offre', 'B coute un peu plus, sans contrat.', [140, 170, 120]],
+      ]),
+    );
+    const renders = (n) => [{ path: `design/${n}.png` }, { path: `design/${n}-clair.png` }];
+    leave({
+      kind: 'choice',
+      title: 'Choisis la direction du tableau de bord',
+      body: 'J’ai rendu trois directions, en sombre et en clair.',
+      options: [
+        { label: 'Colonnes de chiffres', description: 'Une barre à gauche, les chiffres en tête.', files: renders('a') },
+        { label: 'Cartes empilées', description: 'Les cartes de l’app mobile.', files: renders('b') },
+        { label: 'Tableau dense', description: 'Tout en lignes, filtrable.', files: renders('c') },
+      ],
+      recommend: { option: 'b', why: 'Les adhérents arrivent du mobile.' },
+      unblocks: 'Le reste du tableau démarre sur la direction choisie',
+      files: [{ path: 'design/etude.pdf' }],
+    });
+  }
+
+  /** [demande-oui], [demande-tache], [demande-texte] (ESC-510). */
+  function askOther(kind) {
+    const dir = path.join(process.cwd(), 'design');
+    fs.mkdirSync(dir, { recursive: true });
+    if (kind === 'confirm') {
+      fs.writeFileSync(
+        path.join(dir, 'notes-1.4.0.md'),
+        '# Notes de la 1.4.0\n\n- Connexion par lien magique\n- Export CSV des commandes\n- 10 corrections\n',
+      );
+      return leave({
+        kind: 'confirm',
+        title: 'Publier atlas-web 1.4.0 en production ?',
+        body: 'Tout est prêt pour la 1.4.0 : la CI est verte sur `main`.',
+        yesLabel: 'Oui, publie',
+        noLabel: 'Non, pas encore',
+        gate: true,
+        urgency: 'today',
+        unblocks: 'Le tag v1.4.0, le déploiement et l’annonce',
+        files: [{ path: 'design/notes-1.4.0.md' }],
+      });
+    }
+    if (kind === 'task') {
+      fs.writeFileSync(path.join(dir, 'apercu-qr.png'), render(1, true));
+      return leave({
+        kind: 'task',
+        title: 'Essaie la connexion par lien magique sur un vrai téléphone',
+        body: 'Les e2e passent, mais seul un vrai téléphone dit si le lien ouvre l’app.',
+        steps: ['Lance l’aperçu du worktree.', 'Scanne le QR code avec ton téléphone.', 'Touche le lien dans le mail.'],
+        unblocks: 'Le ticket passe « À tester »',
+        files: [{ path: 'design/apercu-qr.png' }],
+      });
+    }
+    return leave({
+      kind: 'answer',
+      title: 'Quelle phrase d’accueil pour l’e-mail de bienvenue ?',
+      recommend: { text: 'Bienvenue au club : ton espace adhérent t’attend.', why: 'Court, et il tutoie comme le site.' },
+      unblocks: 'L’e-mail de bienvenue part en relecture',
+    });
+  }
+
   function onUser(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
     const demo = demoTurn(text);
@@ -2812,9 +2980,24 @@ function startSession() {
     // their path in its folder, and a PDF of its own, through Escouade's tools (its --mcp-config server), then ends its turn
     // as an agent that goes on working; the answer that comes back to it is said.
     if (text.includes('[demande]')) return askTurn();
+    // The other sorts (ESC-510): a go-ahead with its notes in Markdown, a task with its steps and a capture, an answer
+    // with a text proposed.
+    if (text.includes('[demande-oui]')) return askOther('confirm');
+    if (text.includes('[demande-tache]')) return askOther('task');
+    if (text.includes('[demande-texte]')) return askOther('answer');
     if (text.startsWith('[Escouade · ta demande') || text.startsWith('[Escouade · your request')) {
       const id = text.match(/(a-\d+)/)?.[1];
-      const chosen = text.match(/(?:a choisi|chose) ([A-F]) ·/)?.[1] ?? '?';
+      const chosen =
+        text.match(/(?:a choisi|chose) ([A-F]) ·/)?.[1] ??
+        (/a répondu oui|answered yes/.test(text)
+          ? 'oui'
+          : /a répondu non|answered no/.test(text)
+            ? 'non'
+            : /l’a fait|did it/.test(text)
+              ? 'fait'
+              : /a répondu :|answered:/.test(text)
+                ? 'texte'
+                : '?');
       streamText(`Réponse reçue pour ${id} : ${chosen}`);
       result();
       return;

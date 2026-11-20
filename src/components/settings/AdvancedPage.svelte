@@ -1,6 +1,6 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog';
-  import { tildify } from '../../lib/format';
+  import { fSize, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { openPath } from '../../lib/opener';
@@ -68,6 +68,21 @@
       .then((d) => (dataDir = d))
       .catch(() => {});
   });
+
+  // What the files of the box « À toi » weigh (ESC-510), and « Vider les fichiers des demandes closes ».
+  let inboxWeight = $state<number | null>(null);
+  $effect(() => {
+    api
+      .inboxWeight()
+      .then((n) => (inboxWeight = n))
+      .catch(() => {});
+  });
+  async function eraseInbox() {
+    const freed = await app.run(api.inboxEraseClosedFiles());
+    if (freed === undefined) return;
+    app.toast(t('inbox.settings.erased', { size: fSize(freed) }), 'ok');
+    inboxWeight = await api.inboxWeight().catch(() => inboxWeight);
+  }
 </script>
 
 {#snippet text(label: string, hint: string, value: string, set: (v: string) => void, placeholder = '', row?: string)}
@@ -175,6 +190,12 @@
       >
     {/if}
   </Row>
+  {#if inboxWeight !== null}
+    <Row label={t('inbox.settings.weight')} desc={t('inbox.settings.weightDesc')}>
+      {#snippet extra()}<span class="more" data-testid="inbox-weight">{fSize(inboxWeight ?? 0)}</span>{/snippet}
+      <button class="btn" onclick={eraseInbox}><Icon name="trash" size={14} />{t('inbox.settings.erase')}</button>
+    </Row>
+  {/if}
 </Group>
 
 <!-- The copies of what is not made again (ESC-487): see them, compare them, take one back. -->

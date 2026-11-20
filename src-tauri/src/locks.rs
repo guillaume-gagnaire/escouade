@@ -1580,7 +1580,7 @@ impl crate::core::Core {
             "{why} The agent goes to the mode “{to}”, the nearest allowed."
         );
         let _ = self.with_agent(id, |rt, fx| {
-            rt.notice("warning", text, fx);
+            rt.notice("warn", text, fx);
             Ok(())
         });
     }

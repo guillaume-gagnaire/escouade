@@ -470,11 +470,20 @@ IN-1 (ESC-509) est sur `main`, pour une 2.2.x, et reversé dans `release/2.3` (E
 
 - **L'API distante** : les commandes de la boîte sont dans la liste unique (`remoteapi/list.rs`, `docs/REMOTE.md`), servies à un client distant ; `inbox_file_bytes` donne un fichier d'une demande en octets bruts (trames binaires d'ESC-495, en parties au-delà de 16 Mo) et les fichiers d'une réponse arrivent par `attach_*`, en corps bruts. `inbox_open_file` ouvre sur la machine du cœur : refusée à distance (`not-served-yet`) jusqu'au mode serveur, qui la changera en téléchargement sur le poste.
 
-Ce qui reste, pour les tickets qui suivent (IN-2 et IN-3 arrivent encore sur `main`, et se reverseront de même) :
+IN-2 (ESC-510) et IN-3 (ESC-513), sortis dans la 2.2.4, sont reversés dans `release/2.3` par ESC-540. Ce que la 2.3 y a ajouté :
 
-- **Le serveur d'équipe** : une demande d'un projet d'équipe reste sur le poste de l'agent qui l'a déposée ; ni partagée, ni vue des autres membres (la boîte d'une équipe, I12).
-- **L'Overseer** : ses nouvelles et sa délégation (`leave_to_user`) ne passent pas encore par la boîte ; il n'y répond pas pour l'utilisateur.
-- **Les relectures de PR** de la 2.3 (l'agent relecteur, PR-5) : la vue « Relecture » du § 5 est à brancher sur elles avec IN-3.
+- **L'écran et les vues à distance** : `inbox_views`, `inbox_view_act`, `inbox_view_snooze` (ce qu'Escouade verse de lui-même, lu dans l'état du cœur) et `inbox_track` (ce que la fenêtre voit de la boîte, compté sur le cœur dont c'est la boîte) sont servies ; l'événement `inbox` dit au client que la boîte a bougé. Une fenêtre connectée à un serveur (ESC-537) lit et règle donc la boîte du serveur. `inbox_save_file` (« Enregistrer sous… », le dialogue du système de la machine du cœur) change de machine comme `inbox_open_file` : refusée à distance (`not-served-yet`). Ni l'une ni l'autre n'est `desk` : une commande `desk` part au cœur du poste, qui n'a pas la demande.
+- **Un seul jugement du mode** : l'arrêt en Bypass de la 2.2 (ESC-521) est celui de la 2.3 (ESC-497, `judge_start`, `settle_mode` et les stratégies) ; le jugement d'un mode inchangé n'émet plus l'agent ni ne sauvegarde, sur la 2.3 aussi.
+
+Ce qui reste, pour les tickets qui suivent :
+
+- **Enregistrer un fichier depuis un client distant** : « Ouvrir » et « Afficher dans le dossier » d'une fenêtre sur un serveur téléchargent déjà le fichier sur le poste (ESC-540, par `inbox_file_bytes` et `received_save` d'ESC-538) ; « Enregistrer sous… » (`inbox_save_file`) reste refusé à distance, à faire de même avec le dialogue du poste. Le téléphone a son propre chemin.
+- **Le serveur d'équipe** : une demande d'un projet d'équipe reste sur le poste de l'agent qui l'a déposée ; ni partagée, ni vue des autres membres (la boîte d'une équipe, I12) ; la vue « Invitation » n'existe pas.
+- **L'Overseer** : ses nouvelles et sa délégation (`leave_to_user`) ne passent pas encore par la boîte ; il n'y répond pas pour l'utilisateur, et `delegation::may_answer` ne le dit pas.
+- **Les relectures de PR** de la 2.3 (l'agent relecteur, PR-5, ESC-494 non fusionné) : la vue « Relecture » du § 5 ne connaît que la relecture que l'hébergeur demande.
+- **Word, CSV et Markdown par les aperçus de l'éditeur** (§ 4.3) : un `.docx` et un CSV restent des « autres fichiers » dans la boîte.
+- **Les réglages imposés** : `locks.rs` ne connaît ni `inboxKeepDays` ni `inboxSummary`.
+- **La station de l'onboarding** (§ 14) et la bulle de la première fois.
 - **Le téléphone** : son écran (I15) et le push, avec l'app mobile.
 
 ## 17. Ce qui se mesure
@@ -486,3 +495,28 @@ Statistiques d'usage anonymes, si l'utilisateur les laisse (à lister dans la pa
 - `ask_answered` : `kind`, délai par tranche (moins de 10 min, d'une heure, d'un jour, plus), `via` (clic, clavier, voix, téléphone, délégué), `followedRecommendation` ;
 - `ask_snoozed`, `ask_withdrawn`, `ask_expired`, `ask_reopened` ; `inbox_compare_opened` ; `inbox_attachment_opened` (`type` : image, pdf, markdown, word, csv, autre) ;
 - ce qu'on veut savoir : combien de demandes par jour et par agent (les bornes sont-elles justes ?), le délai de réponse (la boîte raccourcit-elle l'attente ?), combien sont périmées sans réponse (le résumé suffit-il ?), combien suivent la recommandation.
+
+**Ce que mesurent IN-2 et IN-3, sur `main`** : IN-2 (ESC-510) compte `inbox_opened` (`from` : `tile`, `shortcut`, `settings` ou `notification` ; `scope`), `ask_answered`, `ask_snoozed`, `ask_reopened`, `inbox_compare_opened` et `inbox_attachment_opened` ; IN-3 (ESC-513) compte `ask_created` (`kind`, `author` : `agent`, `chef` ou `client`, `files` : `0`, `1-3` ou `4-12`, `recommendation`, `decision`), `ask_withdrawn` et `ask_expired` (`kind`), et deux événements de plus : `inbox_view_settled` (une vue réglée dans la boîte : `source` et `act`) et `inbox_summary_shown` (le résumé montré : `requests` par tranche, `1`, `2-3` ou `4+`).
+
+## 18. Ce que la 2.2 ne livre pas
+
+IN-1 (ESC-509), IN-2 (ESC-510) et IN-3 (ESC-513) sortent dans une 2.2.x, depuis `main`, puis se reversent dans `release/2.3`. Ce que cette conception suppose de la 2.3 et que `main` n'a pas est laissé au reversement.
+
+### Ce que `main` livre
+
+- **IN-1** : le modèle, les outils MCP, les pièces jointes, les commandes de la fenêtre.
+- **IN-2** : l'écran (direction B), sa tuile dans la barre des projets et son compteur, `Ctrl+Maj+J`, la comparaison en grand, le lecteur de PDF, la réponse au clavier, « Plus tard », la trace, ses réglages (`inboxKeepDays`).
+- **IN-3** : les vues du § 5 que `main` sait (les demandes bloquantes, permission, question et plan ; les tickets à valider et bloqués ; les décisions proposées ; les docs à partager ; les relectures que l'hébergeur demande à l'utilisateur, d'après la dernière liste lue des PR), synchronisées dans les deux sens (`inbox_views`, `inbox_view_act` sur la vue lue, refusé quand elle a été réglée ailleurs ; « Plus tard » sur une vue par `inbox_view_snooze`, gardé dans l'état, jamais sur une bloquante) ; le résumé des notifications du § 11 et son réglage « Résumé de la boîte « À toi » » (30 min, 1 h, jamais) dans Réglages › Notifications ; une seule règle de délégation pour les demandes de la boîte et les demandes bloquantes (`delegation.rs`) ; la consigne du § 13 dans les instructions du serveur MCP et la mémoire partagée (`deposer-une-demande-a-toi`).
+- **Les vues dans l'écran** : la file d'IN-2 (`InboxQueue`) montre les lignes d'IN-3 (`InboxViewRow`) dans ses groupes : les demandes bloquantes dans « Tes agents se sont arrêtés », les tickets et les relectures dans « Aujourd'hui », les décisions et les docs dans « Plus tôt », celles qu'on a reportées dans « Plus tard ». Une vue ouverte se lit dans le panneau de l'écran (`InboxViewPane`), et `J`, `K` passent de l'une à l'autre comme d'une demande à l'autre. Un agent arrêté sans vue (une suppression qu'il demande, ESC-511 ; un agent de la vue Claude Code) garde la ligne d'IN-2, qui mène à sa conversation. Le compteur de la tuile reste celui d'IN-2, augmenté des vues non bloquantes non reportées : les agents arrêtés y comptent comme dans « N en attente », jamais une demande bloquante deux fois. Un clic sur le résumé ouvre la boîte (`inboxOpen`), sur le projet quand le résumé n'en disait qu'un.
+
+### Laissé au reversement dans `release/2.3`
+
+- **L'aperçu PDF** : sur `main`, il vit hors de toute vue, dans `src/lib/previews/pdf.ts` (le cœur de pdf.js seul, une page dessinée sur un canevas, la recherche par le texte des pages), lu par `PdfReader.svelte` de la boîte ; `pdfjs-dist` est à la version de `release/2.3` (6.4.299). Sur `release/2.3`, la vue VS Code a le sien (`src/lib/vscode/previews/pdf.ts`, le lecteur à défilement de pdf.js) : le reversement garde les deux fichiers ou fait lire au second le premier, et réunit `package.json` et `package-lock.json` (la même version, rien à choisir). La politique de la fenêtre n'a pas changé sur `main` (le worker est un script de l'app, `script-src 'self'`) ; celle de `release/2.3`, plus stricte et plus longue (`worker-src 'self' blob:`, `object-src 'none'`…), l'emporte. Fait par ESC-540 : les deux fichiers gardés, `pdfjs-dist` le même des deux côtés, la politique de `release/2.3` intacte.
+- **Word, CSV et l'aperçu Markdown de l'éditeur** : `mammoth` et les aperçus de la vue VS Code n'existent que sur `release/2.3`. Sur `main`, un `.docx` et un CSV sont des « autres fichiers » (nom, taille, « Ouvrir », « Enregistrer sous… ») et un Markdown joint passe par le rendu assaini de la conversation. Le reversement peut les montrer par les aperçus de l'éditeur (§ 4.3).
+- **L'API distante** (`remoteapi`, `docs/REMOTE.md`) : fait par ESC-520 pour IN-1 et par ESC-540 pour IN-2 et IN-3 (voir § 16, « Ce que la 2.2 ne livre pas »). `inbox_save_file` et `inbox_open_file` y changent de machine (refusées à distance) plutôt que d'être `desk`, et `inbox_track` est servie. Le push du téléphone portera le même résumé.
+- **Les réglages imposés** (équipe, poste) : rien n'impose la boîte ni ses réglages (`inboxKeepDays`, `inboxSummary`) ; voir au reversement si `locks.rs` doit les connaître.
+- **L'Overseer** (`main` ne l'a pas) : compter la boîte dans ses nouvelles (« 3 choses t'attendent dans À toi »), son arc « ce qui attend l'utilisateur », la lecture de la boîte à la voix, et sa délégation (il répond aux demandes que l'utilisateur lui laisse, sa garde des consignes s'applique). Au reversement, `delegation::may_answer` doit aussi dire l'Overseer.
+- **Le serveur d'équipe** : rien de la boîte n'y va (I12) ; la vue « Invitation » (« Rejoindre », « Plus tard ») n'existe pas sur `main`.
+- **La station de l'onboarding** (§ 14, ESC-503) : « Le serveur MCP et la boîte « À toi » » vient avec l'onboarding de la 2.3.
+- **Les relectures écrites par un agent** (`pr_reviews`, ESC-66) attendant d'être publiées ne sont pas une vue : seule « Ta relecture » (la relecture demandée par l'hébergeur) en est une.
+- **Ce que l'écran d'IN-2 ne fait pas encore** : la sélection de plusieurs demandes (`Maj`+clic, `x`) et leurs gestes communs (§ 8.3), la bulle de la première fois (§ 6.3, avec l'onboarding), la dictée d'une option (§ 8.7, hors 2.3 aussi). Les liens d'un PDF ne sont pas actifs : la page est une image.
