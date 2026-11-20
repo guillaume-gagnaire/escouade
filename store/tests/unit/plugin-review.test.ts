@@ -103,6 +103,9 @@ describe('the leads', () => {
       'host',
     ]);
     expect(findLeads(files(exampleFiles('high-contrast')), [])).toEqual([]);
+    // The SDK's method `require(capability) {` (0.5.0) is no require whose name is computed; a call with a variable still is.
+    expect(findLeads(new Map([['a.mjs', Buffer.from('class P { require(capability) { return capability; } }')]]), [])).toEqual([]);
+    expect(findLeads(new Map([['a.mjs', Buffer.from('const m = require(name);')]]), []).map((l) => l.kind)).toEqual(['dynamic']);
     // Its id dev.escouade.* is no folder of Escouade's (ESC-314), the folder .escouade/ still is.
     expect(findLeads(new Map([['a.mjs', Buffer.from("readFileSync('.escouade/x')")]]), []).map((l) => l.kind)).toContain('secrets');
   });
