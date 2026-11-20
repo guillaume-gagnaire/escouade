@@ -139,6 +139,10 @@ as_user() {
   runuser -u esc-user -- env HOME=/home/esc-user XDG_RUNTIME_DIR="/run/user/$uid" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" ESCOUADE_INSTALL_URL="$url" ESCOUADE_INSTALL_PUBKEY="$pubkey" "$@"
 }
+# The checkout is under the runner's home, which another user may not enter: the user runs a copy, as one downloaded.
+cp "$install" "$work/install.sh"
+chmod 644 "$work/install.sh"
+install=$work/install.sh
 as_user sh "$install" >"$work/out" 2>&1 || { cat "$work/out"; fail "install.sh as a user failed"; }
 as_user systemctl --user is-active --quiet escouade-server || fail "the user's service does not run"
 [ -f /home/esc-user/.config/systemd/user/escouade-server.service ] || fail "no unit of the user"
