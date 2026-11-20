@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.5] — 2026-11-20
 
 - Auteurs de plugins : le SDK et le kit Rust lisent les profils, les réglages d’un projet et le pid d’un programme lancé, et refusent clairement sur une Escouade trop ancienne ; le banc de conformité juge aussi les profils, les secrets sur plusieurs lignes, les jokers et la limite de programmes, et la documentation gagne un guide « Des identifiants par projet ».
 - Une forge ou une source de tickets injoignable (pas de réseau, DNS, proxy) le dit avec quoi vérifier : la connexion, l’adresse du compte ou le proxy. Escouade la tient pour une panne passagère et réessaie plus tard. Plugins Gitea, GitHub, GitLab, Bitbucket, Azure DevOps, Trello, Jira, Linear et ClickUp.

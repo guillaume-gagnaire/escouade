@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.5] — 2026-11-20
 
 - Plugin authors: the SDK and the Rust kit read profiles, a project’s settings and the pid of a program they run, and refuse clearly on an Escouade too old for them; the conformance bench also judges profiles, multi-line secrets, jokers and the program limit, and the documentation gains a “Credentials per project” guide.
 - A code host or ticket source that can’t be reached (no network, DNS, proxy) says so with what to check: the connection, the account’s address or the proxy. Escouade takes it for a passing outage and tries again later. Gitea, GitHub, GitLab, Bitbucket, Azure DevOps, Trello, Jira, Linear and ClickUp plugins.
