@@ -5,9 +5,9 @@
 // read: one settled meanwhile is refused (« Réglé ailleurs »).
 import { invoke } from '../transport';
 import type { Key } from '../i18n';
-import type { Column, PendingRequest } from '../types';
+import type { Column, EngineId, PendingRequest } from '../types';
 
-export type ViewSource = 'permission' | 'question' | 'plan' | 'ticketReview' | 'ticketBlocked' | 'decision' | 'docs' | 'review';
+export type ViewSource = 'permission' | 'question' | 'plan' | 'ticketReview' | 'ticketBlocked' | 'decision' | 'docs' | 'review' | 'handoff';
 export type ViewGroup = 'stopped' | 'today' | 'earlier';
 
 /** A view, as `inbox_views` gives it (`inboxviews::InboxItem`). */
@@ -39,6 +39,10 @@ export interface InboxItem {
   number: number | null;
   url: string | null;
   word: string | null;
+  /** A passage (TS-17): who passes the agent, the harness it ran on, the branch pushed. */
+  by?: string | null;
+  engine?: string | null;
+  branch?: string | null;
 }
 
 export interface InboxViews {
@@ -63,7 +67,8 @@ export type ViewAct =
   | { act: 'dismiss' }
   | { act: 'retarget'; target: string }
   | { act: 'accept' }
-  | { act: 'share' };
+  | { act: 'share' }
+  | { act: 'take'; engine: EngineId | null };
 
 export const readViews = (projectId: string | null = null) => invoke<InboxViews>('inbox_views', { projectId });
 export const actOnView = (key: string, act: ViewAct) => invoke<void>('inbox_view_act', { key, act });
@@ -86,6 +91,7 @@ export interface Gesture {
     | 'accept'
     | 'share'
     | 'openPr'
+    | 'take'
     | 'test';
   label: Key;
   primary?: boolean;
@@ -135,6 +141,8 @@ export function gesturesOf(v: InboxItem): Gesture[] {
       return [{ id: 'share', label: 'inboxViews.act.share', primary: true, inBox: true }];
     case 'review':
       return [{ id: 'openPr', label: 'inboxViews.act.openPr', primary: true, inBox: false }];
+    case 'handoff':
+      return [{ id: 'take', label: 'inboxViews.act.take', primary: true, inBox: true }];
   }
 }
 

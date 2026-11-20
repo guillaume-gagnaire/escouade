@@ -9,6 +9,8 @@
 
   const text = $derived.by(() => {
     const words = { harness: engineName(item.to), from: engineName(item.from) };
+    // An agent a teammate passed (TS-17): « Passé par Alice · suite sur Codex ».
+    if (item.by) return t('handover.separator.passed', { name: item.by, harness: words.harness });
     if (!item.limited) return t('handover.separator.asked', words);
     if (item.until === null) return t('handover.separator.limited', words);
     return t('handover.separator.limitedUntil', { ...words, time: fTime(item.until) });

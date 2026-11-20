@@ -3,7 +3,8 @@
   import { t } from '../../lib/i18n';
   import { hueOf, initialOf } from '../../lib/sharing';
   import { app } from '../../lib/state.svelte';
-  import { assigneeLine, conflictLine, holderLine, localOnly, teamBoardApi } from '../../lib/teamboard';
+  import { takeFromCard } from '../../lib/handoff';
+  import { assigneeLine, conflictLine, handoffLine, holderLine, localOnly, teamBoardApi } from '../../lib/teamboard';
   import type { Project, Ticket } from '../../lib/types';
 
   // A ticket of a team's Kanban (TS-6): who holds it and since when (« injoignable depuis 12 min » when their machine no
@@ -11,10 +12,25 @@
   // conflicts this machine lost (« Bob a changé le titre en même temps · Reprendre le mien »).
   let { ticket, project }: { ticket: Ticket; project: Project | null | undefined } = $props();
 
-  const holder = $derived(holderLine(ticket));
+  // During a passage its band says who holds it (« Passé à Bob », « Alice te passe ») : the holder line would say the claim the
+  // server handed, not who works on it.
+  const holder = $derived(ticket.team?.handoff ? null : holderLine(ticket));
   const assignee = $derived(assigneeLine(ticket));
   const conflicts = $derived(ticket.team?.conflicts ?? []);
   const local = $derived(localOnly(ticket, project));
+  // A passage of its agent under way (TS-17): « Alice te passe DEM-41 · Prendre », « Passé à Bob · Annuler le passage ».
+  const handoff = $derived(handoffLine(ticket));
+  let taking = $state(false);
+
+  async function take() {
+    if (taking) return;
+    taking = true;
+    try {
+      await takeFromCard(ticket.id);
+    } finally {
+      taking = false;
+    }
+  }
 
   function act(e: Event, f: () => unknown) {
     e.stopPropagation();
@@ -24,6 +40,26 @@
 
 {#if local}
   <span class="local" data-team-local><Icon name="lock" size={13} /><span>{t('teamBoard.card.localOnly')}</span></span>
+{/if}
+{#if handoff}
+  <div class="band handoff {handoff.tone}" role="status" data-team-handoff={handoff.tone}>
+    <Icon name="team" size={14} /><span>{handoff.text}</span>
+    {#if handoff.tone !== 'between'}
+      <div class="row">
+        {#if handoff.tone === 'incoming'}
+          <button class="btn small primary" disabled={taking} data-testid="team-handoff-take-card" onclick={(e) => act(e, take)}
+            >{taking ? t('teamBoard.handoff.taking') : t('teamBoard.handoff.take')}</button
+          >
+        {:else}
+          <button
+            class="btn small"
+            data-testid="team-handoff-cancel"
+            onclick={(e) => act(e, () => app.run(teamBoardApi.handoffCancel(ticket.id)))}>{t('teamBoard.handoff.cancel')}</button
+          >
+        {/if}
+      </div>
+    {/if}
+  </div>
 {/if}
 {#if holder}
   <div class="holder {holder.tone}" role="status" data-team-holder={holder.tone}>
@@ -92,6 +128,22 @@
   .band > :global(.icon),
   .holder.interrupted > :global(.icon) {
     color: var(--wait);
+  }
+  .band.handoff.incoming {
+    background: var(--p-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent);
+  }
+  .band.handoff.incoming > :global(.icon) {
+    color: var(--p-ink);
+  }
+  .band.handoff.outgoing,
+  .band.handoff.between {
+    background: rgba(var(--fg-rgb), 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .band.handoff.outgoing > :global(.icon),
+  .band.handoff.between > :global(.icon) {
+    color: var(--muted);
   }
   .band.quiet > :global(.icon) {
     color: var(--muted);

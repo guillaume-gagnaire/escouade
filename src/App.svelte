@@ -90,6 +90,8 @@
   import TeamHintBand from './components/team/TeamHintBand.svelte';
   import DemoBand from './components/onboarding/DemoBand.svelte';
   import TeamPourModal from './components/board/TeamPourModal.svelte';
+  import TeamHandoffModal from './components/board/TeamHandoffModal.svelte';
+  import TeamHandoffTakeModal from './components/board/TeamHandoffTakeModal.svelte';
   import ConnectionBand from './components/ConnectionBand.svelte';
   import ConnectServerModal from './components/servers/ConnectServerModal.svelte';
   import ServerScreen from './components/servers/ServerScreen.svelte';
@@ -514,6 +516,10 @@
   <TeamModal step={app.modal.step} link={app.modal.link} teamId={app.modal.teamId} expected={app.modal.expected} />
 {:else if app.modal?.kind === 'teamPour'}
   <TeamPourModal projectId={app.modal.projectId} />
+{:else if app.modal?.kind === 'teamHandoff'}
+  <TeamHandoffModal ticketId={app.modal.ticketId} />
+{:else if app.modal?.kind === 'teamHandoffTake'}
+  <TeamHandoffTakeModal ticketId={app.modal.ticketId} engines={app.modal.engines} onPick={app.modal.onPick} onCancel={app.modal.onCancel} />
 {:else if app.modal?.kind === 'notes'}
   <UpdateModal version={app.modal.version} notes={app.modal.notes} installed />
 {:else if app.modal?.kind === 'convSearch'}

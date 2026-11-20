@@ -3520,6 +3520,51 @@ pub fn ticket_team_resume(core: CoreState, id: String) -> Res<Ticket> {
     core.team_resume(&id).map_err(err)
 }
 
+/// What the window of the passage of a ticket's agent shows (TS-17): its branch, its remote, its work, whom it can go to.
+#[tauri::command]
+pub async fn ticket_team_handoff_plan(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<crate::teamhandoff::HandoffPlan> {
+    core.team_handoff_plan(&id).await.map_err(err)
+}
+
+/// « Passer » a ticket's agent to a teammate or to the team's machine (TS-17).
+#[tauri::command]
+pub async fn ticket_team_handoff(
+    core: CoreState<'_>,
+    id: String,
+    to: String,
+    wip: crate::teamhandoff::Wip,
+) -> Res<()> {
+    core.team_handoff(&id, &to, wip).await.map_err(err)
+}
+
+/// « Annuler le passage » of a ticket's agent not taken yet (TS-17).
+#[tauri::command]
+pub async fn ticket_team_handoff_cancel(core: CoreState<'_>, id: String) -> Res<()> {
+    core.team_handoff_cancel(&id).await.map_err(err)
+}
+
+/// The harnesses this machine can take a passage on (TS-17).
+#[tauri::command(async)]
+pub fn ticket_team_handoff_engines(
+    core: CoreState,
+    id: String,
+) -> Res<crate::teamhandoff::TakeChoice> {
+    core.team_handoff_engines(&id).map_err(err)
+}
+
+/// « Prendre » the agent a teammate passed (TS-17), on `engine` when given.
+#[tauri::command]
+pub async fn ticket_team_handoff_take(
+    core: CoreState<'_>,
+    id: String,
+    engine: Option<crate::model::EngineId>,
+) -> Res<()> {
+    core.team_handoff_take(&id, engine).await.map_err(err)
+}
+
 /// « Reprendre le mien » (`keepMine`) or « Prendre le sien » of a conflict of a ticket of the team (TS-6).
 #[tauri::command(async)]
 pub fn ticket_team_settle(

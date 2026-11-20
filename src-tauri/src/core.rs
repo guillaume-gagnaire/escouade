@@ -1091,6 +1091,11 @@ pub struct Core {
     pub(crate) team_link: RwLock<Option<Arc<crate::teams::Teams>>>,
     /// The tickets of a team's Kanban deleted here, by project and object: they leave the journal at its next reading.
     pub(crate) team_deleted: Mutex<Vec<(String, String)>>,
+    /// This core runs as a machine in server mode (TS-17): it says so in the team's projects, and takes at once the
+    /// agents passed to it.
+    pub(crate) team_machine: AtomicBool,
+    /// The passages this machine takes now (TS-17), by ticket: one at a time each.
+    pub(crate) handoffs_taking: Mutex<HashSet<String>>,
     /// When each team's Kanban last read its claims from the server (TS-6).
     pub(crate) team_claims_at: Mutex<HashMap<String, std::time::Instant>>,
     /// Agents whose turn the app's previous stop cut (active when saved): their tickets go on.
@@ -2305,6 +2310,8 @@ impl Core {
             start_refusals: Mutex::new(HashMap::new()),
             team_link: RwLock::new(None),
             team_deleted: Mutex::default(),
+            team_machine: AtomicBool::new(!cfg!(feature = "desktop")),
+            handoffs_taking: Mutex::default(),
             team_claims_at: Mutex::default(),
             cut_turns: Mutex::new(cut_turns),
             gh: RwLock::new(locate_gh()),

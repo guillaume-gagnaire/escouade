@@ -328,6 +328,15 @@ Choix tranché (§15.2) : C14-B (la validation des souvenirs d'agent est un rég
 
 Les tests du cœur (`src-tauri/src/teammemory_tests.rs`, deux dossiers de données contre le vrai serveur) : une proposition lue des seuls agents de son auteur, puis gardée et lue de l'autre poste avec sa provenance, et le disque du serveur sans nom ni texte ; un écart, une adresse inconnue, un souvenir gardé qui reste une donnée après des données de tiers ; la validation éteinte, puis imposée par l'équipe ; une pierre tombale qui va partout, l'historique au journal ; une quarantaine posée hors ligne, qui tient, puis va à l'autre poste à son retour et prend ce qu'il a écrit hors ligne, puis levée ; une provenance qui ne tient pas à sa signature, refusée ; un secret refusé ; l'import du dépôt par le geste. `mcp/teammemory_tests.rs` : la provenance, les marques et l'avis, la session marquée après une donnée de tiers, aucun outil qui valide. L'e2e `tests/e2e/team-memory.spec.ts` (serveur sur `ESCOUADE_PORT_BASE + 6`) : deux clients et le faux `claude`.
 
+## Passer un agent (TS-17)
+
+`handoff.rs`, sur les prises de `team/claims.rs`.
+
+- **La prise passée** : `Team::hand_claim` la donne à un appareil du projet sous un jeton neuf (le serveur refuse `not_in_project` un appareil révoqué, sans accès, ou soi-même) ; `Claim::handed_by` dit qui l'a passée tant qu'elle n'est pas prise ; `Team::withdraw_claim` la reprend tant que le destinataire ne l'a pas prise (`claim_lost` ensuite). Le bail d'une prise passée est de 14 jours (`Limits::hand_lease`).
+- **L'offre** : un objet `handoff` du journal du projet (`Offer` : le ticket, sa prise, de quel appareil à quel autre, la branche et son dépôt distant, patch ou non, le harness). Elle s'efface à la reprise et à l'abandon (`end_handoff`). Ne la croire qu'avec la prise : celle que le serveur dit passée à cet appareil, par l'appareil qu'elle nomme.
+- **Le dépôt** : un fichier du serveur scellé comme un objet du projet (`Team::deposit`), la conversation et le patch ; effacé avec l'offre (`delete_file`).
+- **Les machines** : `set_machine` écrit `machine: true` sur l'objet `person` de l'appareil, `machines` les lit.
+
 ## Les coûts de l'équipe (TS-16)
 
 Choix tranché (§15.2) : C15, un réglage de l'équipe, « par projet » d'office. La page de spec est « Les coûts et les quotas de l'équipe ». `costs.rs` tient ce que la crate fait des coûts ; le cœur (`src-tauri/src/teamcosts.rs`, `teams_costs.rs`) fait les totaux depuis les Stats et pèse les budgets.

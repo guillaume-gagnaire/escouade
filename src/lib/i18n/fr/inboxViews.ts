@@ -11,6 +11,7 @@ export default {
     decision: 'Décision proposée',
     docs: 'Docs à partager',
     review: 'Relecture',
+    handoff: 'Agent passé',
   },
   /** Ce qu’une demande bloquante dit de son agent. */
   stopped: 'l’agent s’est arrêté',
@@ -53,6 +54,7 @@ export default {
     board: 'Voir dans le Kanban',
     docs: 'Ouvrir dans Docs',
     test: '▶ Tester',
+    take: 'Prendre',
   },
   denyLabel: 'Un mot pour l’agent (facultatif)',
   answerLabel: 'Ta réponse',
@@ -69,7 +71,11 @@ export default {
     decision: 'Acceptée, elle prend son numéro dans le registre des décisions, comme depuis Docs.',
     docs: 'Partager publie les changements des docs, comme le bouton « Partager » de l’onglet Docs.',
     review: 'La relecture se fait chez l’hébergeur : Escouade l’a lue dans la dernière liste des PR.',
+    handoff:
+      'Escouade récupère la branche {branch}, fait un worktree, applique le travail en cours, puis l’agent repart ici sur ton harness et ton compte, avec un dossier de passation.',
   },
+  /** An agent a teammate passes (TS-17). */
+  handoffTitle: '{name} te passe {key} · {title}',
   settled: 'Réglé ailleurs : la boîte s’est mise à jour.',
   /** Le réglage du résumé, dans Réglages › Notifications. */
   summary: {

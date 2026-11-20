@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS claims (
     claimed_at BIGINT NOT NULL,
     renewed_at BIGINT NOT NULL,
     last_holder BYTEA,
+    handed_by BYTEA,
     PRIMARY KEY (team_id, project_id, ticket_id)
 );
 CREATE TABLE IF NOT EXISTS project_keys (
@@ -111,7 +112,7 @@ CREATE TABLE IF NOT EXISTS project_keys (
 ";
 
 const CLAIM_COLUMNS: &str =
-    "ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder";
+    "ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder, handed_by";
 
 fn claim_row(r: &tokio_postgres::Row) -> Claim {
     let id = |v: Option<Vec<u8>>| v.and_then(|v| <Id>::try_from(v).ok());
@@ -124,6 +125,7 @@ fn claim_row(r: &tokio_postgres::Row) -> Claim {
         claimed_at: r.get(5),
         renewed_at: r.get(6),
         last_holder: id(r.get(7)),
+        handed_by: id(r.get(8)),
     }
 }
 
@@ -151,11 +153,11 @@ async fn put_claim(
     claim: &Claim,
 ) -> Result<()> {
     c.execute(
-        "INSERT INTO claims (team_id, project_id, ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        "INSERT INTO claims (team_id, project_id, ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder, handed_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          ON CONFLICT (team_id, project_id, ticket_id) DO UPDATE SET holder = excluded.holder, until = excluded.until,
            token = excluded.token, version = excluded.version, claimed_at = excluded.claimed_at,
-           renewed_at = excluded.renewed_at, last_holder = excluded.last_holder",
+           renewed_at = excluded.renewed_at, last_holder = excluded.last_holder, handed_by = excluded.handed_by",
         &[
             &team.as_slice(),
             &project.as_slice(),
@@ -167,6 +169,7 @@ async fn put_claim(
             &claim.claimed_at,
             &claim.renewed_at,
             &claim.last_holder.as_ref().map(|h| h.as_slice()),
+            &claim.handed_by.as_ref().map(|h| h.as_slice()),
         ],
     )
     .await?;
@@ -345,7 +348,13 @@ async fn read_entries(
 #[async_trait]
 impl Store for Postgres {
     async fn migrate(&self) -> Result<()> {
-        Ok(self.client.lock().await.batch_execute(SCHEMA).await?)
+        let client = self.client.lock().await;
+        client.batch_execute(SCHEMA).await?;
+        // A base made before a ticket could be handed (TS-17).
+        client
+            .batch_execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS handed_by BYTEA")
+            .await?;
+        Ok(())
     }
 
     async fn ping(&self) -> Result<()> {
@@ -1095,7 +1104,11 @@ impl Store for Postgres {
             current.as_ref().and_then(|c| c.holder),
         )
         .await?;
-        let claim = decide(current, ticket, device, ask, now, lease, ok)?;
+        let to_ok = match ask {
+            ClaimAsk::Hand { to, .. } => holder_ok(&tx, &team, &project, Some(to)).await?,
+            _ => true,
+        };
+        let claim = decide_with(current, ticket, device, ask, now, lease, ok, to_ok)?;
         put_claim(&tx, &team, &project, &claim).await?;
         tx.commit().await?;
         Ok(claim)

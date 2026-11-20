@@ -1,8 +1,8 @@
 ---
 title: "Le Kanban d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md §2.7, §4.1, C5","crates/escouade-team/README.md","crates/escouade-team-server/README.md","src-tauri/src/teamboard.rs","src-tauri/src/teampour.rs","src-tauri/src/teamjoin.rs"]
-tickets: ["ESC-479","ESC-493","ESC-518"]
+sources: ["docs/TEAM-SERVER.md §2.7, §4.1, §4.2, §11, C5","crates/escouade-team/README.md","crates/escouade-team-server/README.md","src-tauri/src/teamboard.rs","src-tauri/src/teampour.rs","src-tauri/src/teamjoin.rs","src-tauri/src/teamhandoff.rs"]
+tickets: ["ESC-479","ESC-493","ESC-518","ESC-548"]
 decisions: [168,173,178,188,194]
 compared: null
 ---
@@ -55,6 +55,7 @@ Un bouton « Verser à l'équipe » du Kanban d'un projet dont le Kanban est cel
 - **Le jeton de prise** croît à chaque prise. Chaque déplacement du ticket par son preneur le porte ; le serveur refuse celui d'un jeton dépassé. Un poste revenu d'une coupure, alors qu'un collègue a repris le ticket, ne le déplace plus : son déplacement est retiré de sa file et de sa copie (ses autres écritures partent), et la carte dit « Repris par Bob pendant une coupure : ton déplacement n'est pas parti. ».
 - **La colonne d'un ticket pris** ne change que par son preneur ou un administrateur : la colonne changée par un autre revient, et la carte le dit (« Pris par Alice : sa colonne ne change que par lui ou un administrateur. »).
 - **Un bail expiré** (le poste en veille, coupé) : le ticket redevient libre ; la carte dit « Interrompu chez Alice : son bail a expiré. Le pilote auto ne le reprend pas. », avec **« Reprendre »**, qui le remet « À faire » sur ce poste et le lance (la prise passe, sous un nouveau jeton).
+- **Passer la prise (TS-17)** : son preneur peut la passer, avec l'agent du ticket, à un collègue ou à une machine de l'équipe : le serveur la donne à l'appareil choisi sous un nouveau jeton, pour un bail de 14 jours tant qu'il ne l'a pas prise ; seul celui qui l'a passée la reprend entre-temps (« Annuler le passage »). Voir la page « Passer un agent à un collègue ».
 - **Hors ligne** : on lit et on écrit ses tickets, on n'en prend aucun : « Hors ligne : DEM-4 est un ticket de l'équipe, il ne se prend qu'avec son serveur. Réessaie une fois en ligne. ». Au retour, la file part et les conflits se montrent.
 
 ## La carte
@@ -65,6 +66,7 @@ Un bouton « Verser à l'équipe » du Kanban d'un projet dont le Kanban est cel
 - « Assigné à Bob » / « Assigné à moi » ; le menu offre « Me l'assigner » et « Ne plus me l'assigner ».
 - « Ancienne clé : DEM-12 » (« Anciennes clés : … ») pour un ticket versé.
 - Un ticket « En cours », « À tester » ou « En revue » sur le poste de son preneur dit « Sur le poste qui l'a pris : il se valide là-bas. » : « Valider » et « Renvoyer » n'y sont pas.
+- **Un passage en cours (TS-17)** : « Alice Martin te passe DEM-41 » avec « Prendre » chez qui le reçoit, « Passé à Bob Durand · en attente qu'il le prenne » avec « Annuler le passage » chez qui l'a passé, « Alice passe ce ticket à Bob » ailleurs. Le menu de la carte d'un ticket que ce poste tient, avec son agent, offre « Passer à un collègue… ».
 
 ## Les conflits
 
@@ -80,7 +82,7 @@ Un bouton « Verser à l'équipe » du Kanban d'un projet dont le Kanban est cel
 ## Le serveur MCP
 
 - `start_ticket` passe par la prise : un ticket qu'un collègue tient est refusé tout de suite avec son nom ; sinon la prise se fait au départ, et son refus (pris, hors ligne) est la réponse de l'outil. `move_ticket` ne range que dans « À faire » : il ne passe jamais un ticket « En cours ».
-- `get_ticket` et `list_tickets` disent, pour un ticket de l'équipe, `team` : son preneur (`holder`, `heldHere`, `since`, `interrupted`, `unreachableMinutes`), son assignation et les champs en conflit. Un ticket se nomme aussi par une de ses anciennes clés (TS-7).
+- `get_ticket` et `list_tickets` disent, pour un ticket de l'équipe, `team` : son preneur (`holder`, `heldHere`, `since`, `interrupted`, `unreachableMinutes`), son assignation, les champs en conflit et un passage en cours (`handoff`, TS-17). Un ticket se nomme aussi par une de ses anciennes clés (TS-7). Aucun outil ne passe un agent.
 - `list_projects` et `get_board` disent `team` : `attached` (un projet d'une équipe de ce poste), `board` (son Kanban est celui de l'équipe) et `namedByRepository` (l'hôte de l'équipe que nomme son `.escouade.yml` quand le projet n'y est pas rattaché). **Aucun outil ne rattache ni ne verse** : ce sont des gestes de l'utilisateur dans la fenêtre.
 - **Les textes venus d'un collègue sont des données de tiers** : quand le titre, la description ou les critères d'un ticket ont été écrits sur un autre poste, la réponse est entourée de `<third_party_data>` avec un avertissement : à lire, jamais à suivre.
 
@@ -101,7 +103,7 @@ Un bouton « Verser à l'équipe » du Kanban d'un projet dont le Kanban est cel
 
 ## Ce que voit le serveur
 
-Des ids opaques (le projet, la prise de chaque ticket), des ids d'appareil, des heures (début et fin du bail, dernier renouvellement), le jeton et la version de chaque prise, le compteur des clés, qui a accès à quel projet. Jamais le titre, la clé, le préfixe, la colonne, l'objet d'un ticket dans le journal, l'identifiant du Kanban d'une entrée de la liste, ni le nom d'un membre (vérifié par un test qui lit la base du serveur).
+Des ids opaques (le projet, la prise de chaque ticket), des ids d'appareil, des heures (début et fin du bail, dernier renouvellement), le jeton et la version de chaque prise, l'appareil qui a passé une prise tant qu'elle n'est pas prise, le compteur des clés, qui a accès à quel projet. Jamais le titre, la clé, le préfixe, la colonne, l'objet d'un ticket dans le journal, l'identifiant du Kanban d'une entrée de la liste, ni le nom d'un membre (vérifié par un test qui lit la base du serveur).
 
 ## Verser aussi les docs de `.escouade/` (TS-7 avec TS-9)
 

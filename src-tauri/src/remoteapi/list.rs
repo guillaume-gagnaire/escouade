@@ -363,6 +363,12 @@ escouade_command::commands! {
         commands::project_team_pour,
         commands::project_team_hint_dismiss,
         commands::ticket_team_resume,
+        // Passing an agent to a teammate or to the team's machine (TS-17).
+        commands::ticket_team_handoff_plan,
+        commands::ticket_team_handoff,
+        commands::ticket_team_handoff_cancel,
+        commands::ticket_team_handoff_engines,
+        commands::ticket_team_handoff_take,
         commands::ticket_team_settle,
         commands::ticket_team_assign,
         commands::ticket_team_local,

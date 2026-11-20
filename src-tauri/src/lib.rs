@@ -323,6 +323,7 @@ mod teamcosts_tests;
 mod teamdocs;
 #[cfg(test)]
 mod teamdocs_tests;
+mod teamhandoff;
 mod teamjoin;
 mod teammemory;
 mod teampour;

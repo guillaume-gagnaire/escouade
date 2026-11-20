@@ -13,6 +13,7 @@ export default defineZone('handover', {
     limitedUntil: 'Continued on {harness} · {from} quota spent until {time}',
     limited: 'Continued on {harness} · {from} quota spent',
     asked: 'Continued on {harness} · the agent was on {from}',
+    passed: 'Passed by {name} · continued on {harness}',
   },
   file: {
     title: 'Handover file',

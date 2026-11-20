@@ -209,6 +209,9 @@ pub struct Claim {
     pub renewed_at: i64,
     #[serde(default, with = "opt_bytes", skip_serializing_if = "Option::is_none")]
     pub last_holder: Option<Vec<u8>>,
+    /// The device that handed it to its holder (TS-17), while the holder has not taken it yet.
+    #[serde(default, with = "opt_bytes", skip_serializing_if = "Option::is_none")]
+    pub handed_by: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -220,6 +223,14 @@ pub struct ClaimRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ClaimToken {
     pub token: u64,
+}
+
+/// Hands a claim to another device of the project (TS-17), under its token.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HandRequest {
+    pub token: u64,
+    #[serde(with = "serde_bytes")]
+    pub to: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

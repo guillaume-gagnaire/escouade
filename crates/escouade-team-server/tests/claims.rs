@@ -20,6 +20,7 @@ both!(
     a_revoked_holder_holds_nothing,
     the_counter_gives_each_number_once,
     a_claim_goes_out_live_to_the_projects_devices_alone,
+    a_ticket_handed_goes_to_its_new_holder,
 );
 
 fn path(p: &[u8; 16], rest: &str) -> String {
@@ -397,5 +398,71 @@ async fn a_claim_goes_out_live_to_the_projects_devices_alone(b: Backend) {
         carol_live.next(Duration::from_millis(500)).await.is_none(),
         "Carol hears nothing of it"
     );
+    s.finish().await;
+}
+
+/// TS-17: a ticket handed goes to a device of the project under a new token, for the longer lease of a hand; the one
+/// that handed writes nothing more under its old token, takes it back while it was not taken, and not after. A hand to
+/// a device out of the project is refused, the claim unchanged.
+async fn a_ticket_handed_goes_to_its_new_holder(b: Backend) {
+    let s = TestServer::start(&b).await;
+    let admin = s.new_team().await;
+    let bob = s.add_device(&admin).await;
+    let carol = s.add_device(&admin).await;
+    let p = random::<16>();
+    let kept = AccessWire {
+        everyone: false,
+        devices: vec![
+            serde_bytes::ByteBuf::from(admin.id.clone()),
+            serde_bytes::ByteBuf::from(bob.id.clone()),
+        ],
+    };
+    let _ = put_access(&admin, &p, &kept).await;
+    let t = random::<16>();
+    let a = take(&admin, &p, &t, None).await.ok();
+    let hand = |d: &Device, to: &Device, token: u64| {
+        let body = HandRequest {
+            token,
+            to: to.id.clone(),
+        };
+        let url = path(&p, &format!("/claims/{}/hand", hex::encode(t)));
+        let client = d.client.clone();
+        async move { client.post::<_, ClaimAnswer>(&url, &body).await }
+    };
+    // Carol is not of the project: refused, nothing changed.
+    let (status, problem) = hand(&admin, &carol, a.claim.token).await.refused();
+    assert_eq!(
+        (status, problem.error.as_str()),
+        (StatusCode::CONFLICT, "not_in_project")
+    );
+    assert_eq!(detail(&problem).holder, Some(id(&admin)));
+    let h = hand(&admin, &bob, a.claim.token).await.ok();
+    assert_eq!(
+        (h.claim.holder, h.claim.token, h.claim.handed_by),
+        (Some(id(&bob)), 2, Some(id(&admin)))
+    );
+    assert_eq!(h.claim.until - h.now, 14 * 24 * 3600, "a lease of 14 days");
+    assert_eq!(
+        fenced_append(&admin, &p, &t, a.claim.token)
+            .await
+            .refused()
+            .1
+            .error,
+        "stale_token"
+    );
+    // Abandoned: the admin takes it back, then hands it again; Bob takes it.
+    let w = ask(&admin, &p, &t, "withdraw", 2).await.ok();
+    assert_eq!((w.claim.holder, w.claim.token), (Some(id(&admin)), 3));
+    let h = hand(&admin, &bob, 3).await.ok();
+    let mine = take(&bob, &p, &t, Some(h.claim.version)).await.ok();
+    assert_eq!((mine.claim.holder, mine.claim.token), (Some(id(&bob)), 5));
+    assert_eq!(
+        ask(&admin, &p, &t, "withdraw", 4).await.refused().1.error,
+        "claim_lost"
+    );
+    assert!(matches!(
+        fenced_append(&bob, &p, &t, 5).await,
+        Answer::Ok(_)
+    ));
     s.finish().await;
 }

@@ -210,6 +210,14 @@ pub mod wire {
         pub token: u64,
     }
 
+    /// Hands a claim to another device of the project (TS-17), under its token.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct HandRequest {
+        pub token: u64,
+        #[serde(with = "serde_bytes")]
+        pub to: Vec<u8>,
+    }
+
     /// A project's claims, and the server's time (seconds), which the leases are counted in.
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
@@ -379,6 +387,12 @@ fn store_problem(e: StoreError) -> Problem {
             StatusCode::CONFLICT,
             "stale_token",
             "a write under a claim token that is no longer the current one",
+        )
+        .with_detail(&c),
+        StoreError::NotInProject(c) => Problem::new(
+            StatusCode::CONFLICT,
+            "not_in_project",
+            "the device a ticket is handed to is not one of this project",
         )
         .with_detail(&c),
         StoreError::Backend(e) => {
@@ -1041,7 +1055,10 @@ async fn claim_ask(
     let project = path_id(project)?;
     let ticket = path_id(ticket)?;
     may(app, authed, &project).await?;
-    let lease = claim_lease(app);
+    let lease = match ask {
+        ClaimAsk::Hand { .. } => app.limits.hand_lease.as_secs().max(1) as i64,
+        _ => claim_lease(app),
+    };
     let at = now();
     let claim = app
         .store
@@ -1122,6 +1139,49 @@ pub async fn release_claim(
         &project,
         &ticket,
         ClaimAsk::Release { token: req.token },
+    )
+    .await
+}
+
+/// Hands a ticket to another device of the project (TS-17, §11): it holds it at once, under a new token, until it
+/// takes it or gives it back; 409 `not_in_project` for a device revoked, without access, or the holder itself.
+pub async fn hand_claim(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path((project, ticket)): Path<(String, String)>,
+    Cbor(req): Cbor<HandRequest>,
+) -> Result<Cbor<ClaimAnswer>, Problem> {
+    let to: Id = req
+        .to
+        .as_slice()
+        .try_into()
+        .map_err(|_| Problem::bad_request("bad_device", "a device id is 16 bytes"))?;
+    claim_ask(
+        &app,
+        &authed,
+        &project,
+        &ticket,
+        ClaimAsk::Hand {
+            token: req.token,
+            to,
+        },
+    )
+    .await
+}
+
+/// Takes back a ticket this device handed, while its new holder has not taken it (the passage abandoned).
+pub async fn withdraw_claim(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path((project, ticket)): Path<(String, String)>,
+    Cbor(req): Cbor<TokenRequest>,
+) -> Result<Cbor<ClaimAnswer>, Problem> {
+    claim_ask(
+        &app,
+        &authed,
+        &project,
+        &ticket,
+        ClaimAsk::Withdraw { token: req.token },
     )
     .await
 }

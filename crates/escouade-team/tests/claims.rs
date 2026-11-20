@@ -26,6 +26,7 @@ both!(
     the_server_sees_opaque_ids_devices_and_hours,
     the_numbers_of_the_tickets_come_from_the_server,
     offline_no_claim_then_the_conflicts_show,
+    a_ticket_handed_with_its_deposit,
 );
 
 type Crew = Vec<(Place, Team)>;
@@ -421,7 +422,9 @@ async fn the_server_sees_opaque_ids_devices_and_hours(b: Backend) {
             "version",
             "claimed_at",
             "renewed_at",
-            "last_holder"
+            "last_holder",
+            // The device that handed the ticket, while it is not taken (TS-17).
+            "handed_by"
         ]
     );
     let keys: i64 = db
@@ -541,4 +544,126 @@ async fn offline_no_claim_then_the_conflicts_show(b: Backend) {
     let seen = alice.replica(&p).unwrap().object(&t).unwrap().unwrap();
     assert_eq!(seen.fields["title"], json!("Titre de Bob"));
     w.finish().await;
+}
+
+/// TS-17: Alice passes a ticket to Bob. Its deposit (the conversation, a patch) is encrypted on the server, the offer is
+/// in the journal for Bob alone to act on, the claim is Bob's under a new token at once (Alice's old one writes no
+/// more). Abandoned, Alice takes it back and the deposit is erased; offered again, Bob takes it (a new token), reads the
+/// deposit, and erases it with the offer. A machine in server mode says so in the project.
+async fn a_ticket_handed_with_its_deposit(b: Backend) {
+    use escouade_team::handoff::Offer;
+    let w = World::on(&b).await;
+    let mut c = crew(&w, 2).await;
+    let p = project(&mut c).await;
+    let claim = claim_id();
+    let bob_device = device(&c[1].1);
+    let alice_device = device(&c[0].1);
+    let a = c[0].1.take_claim(p, claim, None).await.unwrap();
+    let deposit = b"{\"items\":[\"le journal\"],\"patch\":\"diff --git\"}".to_vec();
+    let offer_for = |file: String| Offer {
+        ticket: "00".repeat(16),
+        claim: hex::encode(claim),
+        from: hex::encode(alice_device.0),
+        to: hex::encode(bob_device.0),
+        file,
+        branch: "ticket/dem-41".into(),
+        remote: "origin".into(),
+        patch: true,
+        engine: "claude".into(),
+        agent: "Agent 1".into(),
+        at: 1,
+    };
+    let file = c[0].1.deposit(p, &deposit).await.unwrap();
+    let offer = offer_for(hex::encode(file.0));
+    let object = c[0].1.offer_handoff(p, &offer).unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    let h = c[0]
+        .1
+        .hand_claim(p, claim, a.claim.token, bob_device)
+        .await
+        .unwrap();
+    assert_eq!(h.claim.token, a.claim.token + 1, "the token grows");
+    assert_eq!(h.claim.holder, Some(bob_device.0.to_vec()));
+    assert_eq!(h.claim.handed_by, Some(alice_device.0.to_vec()));
+    // A hand to oneself, or under the old token, is refused.
+    let again = c[0].1.hand_claim(p, claim, a.claim.token, bob_device).await;
+    assert_eq!(refused(again.unwrap_err()).0, "claim_lost");
+    // Bob reads the offer and the deposit, which the server keeps encrypted.
+    c[1].1.sync_project(p).await.unwrap();
+    let offers = c[1].1.handoffs(p).unwrap();
+    assert_eq!(offers, vec![(object, offer.clone())]);
+    assert_eq!(c[1].1.get_file(file).await.unwrap(), Some(deposit.clone()));
+    if matches!(b, Backend::Sqlite) {
+        for entry in walk(&w.server.folder) {
+            let bytes = std::fs::read(&entry).unwrap_or_default();
+            assert!(
+                !bytes.windows(10).any(|x| x == b"le journal"),
+                "the deposit is never in clear on the server: {}",
+                entry.display()
+            );
+        }
+    }
+    // Abandoned: Alice takes it back; the deposit and the offer go.
+    let back = c[0]
+        .1
+        .withdraw_claim(p, claim, h.claim.token)
+        .await
+        .unwrap();
+    assert_eq!(back.claim.holder, Some(alice_device.0.to_vec()));
+    c[0].1.end_handoff(p, object).unwrap();
+    c[0].1.delete_file(file).await.unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    c[1].1.sync_project(p).await.unwrap();
+    assert!(c[1].1.handoffs(p).unwrap().is_empty());
+    assert_eq!(c[1].1.get_file(file).await.unwrap(), None);
+    // Offered again: Bob takes it under a new token; Alice no longer takes it back.
+    let file = c[0].1.deposit(p, &deposit).await.unwrap();
+    let object = c[0]
+        .1
+        .offer_handoff(p, &offer_for(hex::encode(file.0)))
+        .unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    let h = c[0]
+        .1
+        .hand_claim(p, claim, back.claim.token, bob_device)
+        .await
+        .unwrap();
+    let mine = c[1].1.take_claim(p, claim, None).await.unwrap();
+    assert_eq!(mine.claim.token, h.claim.token + 1);
+    assert_eq!(mine.claim.handed_by, None);
+    let late = c[0].1.withdraw_claim(p, claim, h.claim.token).await;
+    assert_eq!(refused(late.unwrap_err()).0, "claim_lost");
+    c[1].1.sync_project(p).await.unwrap();
+    assert_eq!(c[1].1.get_file(file).await.unwrap(), Some(deposit));
+    c[1].1.end_handoff(p, object).unwrap();
+    c[1].1.delete_file(file).await.unwrap();
+    c[1].1.sync_project(p).await.unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    assert!(c[0].1.handoffs(p).unwrap().is_empty());
+    assert_eq!(c[0].1.get_file(file).await.unwrap(), None);
+    // Bob's device says it is a machine in server mode: Alice sees it.
+    assert!(c[1].1.set_machine(p, true).unwrap());
+    assert!(!c[1].1.set_machine(p, true).unwrap());
+    c[1].1.sync_project(p).await.unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    assert_eq!(
+        c[0].1.machines(p).unwrap().into_iter().collect::<Vec<_>>(),
+        vec![bob_device]
+    );
+    w.finish().await;
+}
+
+fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                out.extend(walk(&p));
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    out
 }

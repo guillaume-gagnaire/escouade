@@ -77,6 +77,7 @@ fn the_holder_says_interrupted_and_unreachable() {
         claimed_at: 100,
         renewed_at: renewed,
         last_holder: None,
+        handed_by: None,
     };
     let h = holder_of(&claim([2; 16], 800, 200), 300, &me, Some("Alice".into())).unwrap();
     assert_eq!(

@@ -156,6 +156,10 @@ export type Modal =
     }
   /** « Verser à l'équipe » (TS-7): the tickets of before poured into the team's Kanban, after a preview. */
   | { kind: 'teamPour'; projectId: string }
+  /** « Passer à un collègue… » (TS-17): the agent of a ticket of the team passed to a teammate or to the team's machine. */
+  | { kind: 'teamHandoff'; ticketId: string }
+  /** « Choisis ton harness » to take an agent passed whose harness this machine does not have (TS-17). */
+  | { kind: 'teamHandoffTake'; ticketId: string; engines: EngineId[]; onPick: (e: EngineId) => void; onCancel?: () => void }
   /** ESC-255: what Claude Code remembers of a project, offered once to its shared memory, memory by memory. */
   | { kind: 'claudeMemory'; projectId: string; offered: OfferedMemory[] }
   /**

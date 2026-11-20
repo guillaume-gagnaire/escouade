@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS claims (
     claimed_at INTEGER NOT NULL,
     renewed_at INTEGER NOT NULL,
     last_holder BLOB,
+    handed_by BLOB,
     PRIMARY KEY (team_id, project_id, ticket_id)
 );
 CREATE TABLE IF NOT EXISTS project_keys (
@@ -111,7 +112,7 @@ CREATE TABLE IF NOT EXISTS project_keys (
 ";
 
 const CLAIM_COLUMNS: &str =
-    "ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder";
+    "ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder, handed_by";
 
 fn claim_row(r: &rusqlite::Row) -> rusqlite::Result<Claim> {
     let id = |v: Option<Vec<u8>>| v.and_then(|v| <Id>::try_from(v).ok());
@@ -124,6 +125,7 @@ fn claim_row(r: &rusqlite::Row) -> rusqlite::Result<Claim> {
         claimed_at: r.get(5)?,
         renewed_at: r.get(6)?,
         last_holder: id(r.get(7)?),
+        handed_by: id(r.get(8)?),
     })
 }
 
@@ -140,11 +142,11 @@ fn claim_of(c: &Connection, team: &Id, project: &Id, ticket: &[u8]) -> Result<Op
 
 fn put_claim(c: &Connection, team: &Id, project: &Id, claim: &Claim) -> Result<()> {
     c.execute(
-        "INSERT INTO claims (team_id, project_id, ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        "INSERT INTO claims (team_id, project_id, ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder, handed_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          ON CONFLICT (team_id, project_id, ticket_id) DO UPDATE SET holder = excluded.holder, until = excluded.until,
            token = excluded.token, version = excluded.version, claimed_at = excluded.claimed_at,
-           renewed_at = excluded.renewed_at, last_holder = excluded.last_holder",
+           renewed_at = excluded.renewed_at, last_holder = excluded.last_holder, handed_by = excluded.handed_by",
         params![
             team.as_slice(),
             project.as_slice(),
@@ -155,7 +157,8 @@ fn put_claim(c: &Connection, team: &Id, project: &Id, claim: &Claim) -> Result<(
             claim.version as i64,
             claim.claimed_at,
             claim.renewed_at,
-            claim.last_holder.as_ref().map(|h| h.as_slice())
+            claim.last_holder.as_ref().map(|h| h.as_slice()),
+            claim.handed_by.as_ref().map(|h| h.as_slice())
         ],
     )?;
     Ok(())
@@ -354,6 +357,8 @@ impl Store for Sqlite {
                 ("projects", "commits", "INTEGER NOT NULL DEFAULT 0"),
                 ("project_entries", "kind", "INTEGER NOT NULL DEFAULT 0"),
                 ("project_entries", "epoch", "INTEGER"),
+                // A base made before a ticket could be handed (TS-17).
+                ("claims", "handed_by", "BLOB"),
             ] {
                 let has: bool = c
                     .prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?1"))?
@@ -1034,7 +1039,11 @@ impl Store for Sqlite {
                 &project,
                 current.as_ref().and_then(|c| c.holder),
             )?;
-            let claim = decide(current, ticket, device, ask, now, lease, ok)?;
+            let to_ok = match ask {
+                ClaimAsk::Hand { to, .. } => holder_ok(&tx, &team, &project, Some(to))?,
+                _ => true,
+            };
+            let claim = decide_with(current, ticket, device, ask, now, lease, ok, to_ok)?;
             put_claim(&tx, &team, &project, &claim)?;
             tx.commit()?;
             Ok(claim)

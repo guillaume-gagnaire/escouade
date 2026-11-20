@@ -1907,6 +1907,37 @@ pub struct TeamTicket {
     pub dismissed: Vec<String>,
     /// The server refused a move of this machine: a teammate took the ticket over meanwhile (the fencing token).
     pub refused: Option<String>,
+    /// A passage of its agent under way (TS-17, §11): offered to this machine, or by it.
+    pub handoff: Option<TeamHandoff>,
+}
+
+/// A passage of a ticket's agent to a teammate or to the team's machine (TS-17), as the journal offers it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TeamHandoff {
+    /// The offer's object in the journal (hex).
+    pub object: String,
+    /// Who passes it, and to whom (their names as their members wrote them; the device of each, hex).
+    pub from_name: String,
+    pub from_device: String,
+    pub to_name: String,
+    pub to_device: String,
+    /// It is offered to this machine (« Alice te passe DEM-41 · Prendre »), or by it (« Passé à Bob · Annuler »).
+    pub incoming: bool,
+    pub outgoing: bool,
+    /// It goes to a machine in server mode.
+    pub machine: bool,
+    /// The branch pushed, its remote, and whether the uncommitted work goes as a patch.
+    pub branch: String,
+    pub remote: String,
+    pub patch: bool,
+    /// The harness its agent ran on (its id), and the agent's name.
+    pub engine: String,
+    pub agent: String,
+    /// When it was offered (ms).
+    pub at: i64,
+    /// This machine's agent that was passed (the outgoing side): it goes on with the ticket if the passage is abandoned.
+    pub agent_id: Option<String>,
 }
 
 /// Who holds a ticket of the team (§4.2).

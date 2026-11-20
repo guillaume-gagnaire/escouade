@@ -59,10 +59,17 @@ pub type Shared = Arc<App>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Boxed: a refused claim carries its claim, which makes the error large (clippy's `result_large_err`).
     #[error(transparent)]
-    Store(#[from] db::StoreError),
+    Store(Box<db::StoreError>),
     #[error(transparent)]
     Blobs(#[from] files::BlobError),
+}
+
+impl From<db::StoreError> for Error {
+    fn from(e: db::StoreError) -> Self {
+        Error::Store(Box::new(e))
+    }
 }
 
 pub struct Server {
@@ -183,6 +190,14 @@ impl Server {
             .route(
                 "/v1/projects/{project}/claims/{ticket}/release",
                 post(api::release_claim),
+            )
+            .route(
+                "/v1/projects/{project}/claims/{ticket}/hand",
+                post(api::hand_claim),
+            )
+            .route(
+                "/v1/projects/{project}/claims/{ticket}/withdraw",
+                post(api::withdraw_claim),
             )
             .route("/v1/projects/{project}/keys", post(api::next_key))
             .route(

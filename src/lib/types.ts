@@ -1581,6 +1581,59 @@ export interface TeamTicket {
   conflicts: TeamConflict[];
   dismissed: string[];
   refused: string | null;
+  /** A passage of its agent under way (TS-17): offered to this machine, or by it. */
+  handoff?: TeamHandoff | null;
+}
+
+/** A passage of a ticket's agent to a teammate or to the team's machine (TS-17). */
+export interface TeamHandoff {
+  object: string;
+  fromName: string;
+  fromDevice: string;
+  toName: string;
+  toDevice: string;
+  /** Offered to this machine (« Alice te passe DEM-41 · Prendre »), or by it (« Passé à Bob · Annuler »). */
+  incoming: boolean;
+  outgoing: boolean;
+  /** To a machine in server mode. */
+  machine: boolean;
+  branch: string;
+  remote: string;
+  patch: boolean;
+  engine: string;
+  agent: string;
+  at: number;
+  agentId: string | null;
+}
+
+/** Whom an agent can be passed to (TS-17). */
+export interface HandoffTarget {
+  device: string;
+  name: string;
+  machine: boolean;
+  mine: boolean;
+}
+
+/** What the window of the passage shows (TS-17). */
+export interface HandoffPlan {
+  ticketId: string;
+  key: string;
+  title: string;
+  agentId: string | null;
+  agentName: string;
+  engine: EngineId | null;
+  branch: string;
+  remote: string;
+  dirty: string[];
+  running: boolean;
+  targets: HandoffTarget[];
+  refusal: string | null;
+}
+
+/** The harnesses this machine can take a passage on (TS-17). */
+export interface TakeChoice {
+  preferred: EngineId | null;
+  engines: EngineId[];
 }
 
 /** A file of a ticket other than an image: a copy in the ticket's folder, `files/<file>`. */
@@ -2706,6 +2759,8 @@ export interface HandoverItem extends Base {
   limited: boolean;
   /** When that quota resets (ms), if known. */
   until: number | null;
+  /** Passed by a teammate (TS-17): their name. */
+  by?: string;
 }
 /** The sign-in an agent waits for (`Agent.signIn`): its account's, another than `stamp`. */
 export interface SignInWait {

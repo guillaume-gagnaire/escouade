@@ -11,6 +11,7 @@ export default defineZone('inboxViews', {
     decision: 'Proposed decision',
     docs: 'Docs to share',
     review: 'Review',
+    handoff: 'Agent passed',
   },
   stopped: 'the agent has stopped',
   /** The tooltip of the box's tile: the views it counts besides the requests and the agents stopped. */
@@ -50,6 +51,7 @@ export default defineZone('inboxViews', {
     board: 'See on the board',
     docs: 'Open in Docs',
     test: '▶ Test',
+    take: 'Take',
   },
   denyLabel: 'A word for the agent (optional)',
   answerLabel: 'Your answer',
@@ -64,7 +66,10 @@ export default defineZone('inboxViews', {
     decision: 'Accepted, it takes its number in the register of decisions, as from Docs.',
     docs: 'Sharing publishes the changes of the docs, as the “Share” button of the Docs tab.',
     review: 'The review is done on the host: Escouade read it in the last list of pull requests.',
+    handoff:
+      'Escouade fetches the branch {branch}, makes a worktree, applies the work in progress, then the agent goes on here on your harness and account, with a handover file.',
   },
+  handoffTitle: '{name} passes you {key} · {title}',
   settled: 'Settled elsewhere: the box has updated.',
   summary: {
     title: 'Box “Your turn”',

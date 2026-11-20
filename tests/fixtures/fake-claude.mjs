@@ -45,7 +45,7 @@
 // every agent is told of the shared memory, « Le projet a une mémoire partagée… »), it plays the ticket's agent: it writes
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
-// [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
+// [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s ([lent:600] so many seconds), [recette] a launch
 // recipe (its process on the second port of its block), [question] a question first (the turn goes
 // on once it is answered), [fin-d-abord] an interrupted turn's end sent before the answer to the
 // interrupt, [commite] its work committed by itself (every file of its folder, a copied .env forced
@@ -1438,9 +1438,10 @@ function startSession() {
       workflowFacts(JSON.parse(facts[1]), false, true).catch((e) => process.stderr.write(`faits-workflow: ${e.stack}\n`));
       return;
     }
-    if (all.includes('[lent]')) {
+    const slow = /\[lent(?::(\d+))?\]/.exec(all);
+    if (slow) {
       streamText('Je commence…');
-      slowTimer = setTimeout(() => result(), 30_000);
+      slowTimer = setTimeout(() => result(), Number(slow[1] ?? 30) * 1000);
       return;
     }
     // [spec:<project>] (ESC-263): a ticket that changes how the product behaves keeps the spec, as its protocol asks,

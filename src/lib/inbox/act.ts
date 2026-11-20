@@ -11,6 +11,7 @@ import { app } from '../state.svelte';
 import { stopTests } from '../test-launch.svelte';
 import { actOnView, snoozeView, type Gesture, type InboxItem, type ViewAct } from './views';
 import { inboxViews } from './views.svelte';
+import { takeHandoff } from '../handoff';
 
 /** Sends `act` on `v`; the box is read again whatever came of it. Whether it went. */
 export async function act(v: InboxItem, a: ViewAct): Promise<boolean> {
@@ -36,6 +37,7 @@ export function goToSource(v: InboxItem) {
       return goToAgent(v);
     case 'ticketReview':
     case 'ticketBlocked':
+    case 'handoff':
       app.closeInbox();
       return app.openBoard(v.projectId);
     case 'decision':
@@ -58,6 +60,7 @@ export function placeOf(v: InboxItem): { label: string; icon: IconName } | null 
       return v.agentId ? { label: t('inboxViews.act.agent'), icon: 'agents' } : null;
     case 'ticketReview':
     case 'ticketBlocked':
+    case 'handoff':
       return { label: t('inboxViews.act.board'), icon: 'kanban' };
     case 'decision':
     case 'docs':
@@ -108,6 +111,9 @@ export function run(v: InboxItem, g: Gesture): Promise<boolean> {
       return act(v, { act: 'deny', message: null });
     case 'approve':
       return approve(v);
+    // « Prendre » an agent passed (TS-17): on its harness when this machine has it, else the one the user picks.
+    case 'take':
+      return takeHandoff(v.ticketId ?? '', (engine) => act(v, { act: 'take', engine }));
     case 'inConversation':
       goToAgent(v);
       return Promise.resolve(true);

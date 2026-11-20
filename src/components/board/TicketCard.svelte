@@ -37,7 +37,7 @@
   import { harnessHeld } from '../../lib/engines';
   import { isMulti, repoLabel, touchedRepos } from '../../lib/repos';
   import { alsoOn, authorName, hueOf, initialOf, isMine, isTheirs, sharedFile, theirsLine } from '../../lib/sharing';
-  import { heldElsewhere, isTeamBoard, teamBoardApi, teamElsewhere } from '../../lib/teamboard';
+  import { handoffOffered, heldElsewhere, isTeamBoard, teamBoardApi, teamElsewhere } from '../../lib/teamboard';
   import TeamTicketBand from './TeamTicketBand.svelte';
   import { shareTicket } from '../../lib/share-actions';
   import { docsStore } from '../../lib/docs.svelte';
@@ -259,6 +259,10 @@
         ...(heldElsewhere(ticket)
           ? []
           : [{ label: t('teamBoard.menu.local'), onClick: () => app.run(teamBoardApi.local(ticket.id, true)) }]),
+        // Its agent passed to a teammate or to the team's machine (TS-17).
+        ...(handoffOffered(ticket, project)
+          ? [{ label: t('teamBoard.handoff.menu'), onClick: () => (app.modal = { kind: 'teamHandoff', ticketId: ticket.id }) }]
+          : []),
       ];
     }
     const on = !!ticket.shared && !ticket.shared.gone;

@@ -21,6 +21,7 @@ pub mod costs;
 pub mod escrow;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing;
+pub mod handoff;
 pub mod keychain;
 pub mod merge;
 pub mod pairing;

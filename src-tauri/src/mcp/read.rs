@@ -528,6 +528,24 @@ pub(crate) struct TeamView {
     assignee: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     conflicts: Vec<String>,
+    /// A passage of its agent under way (TS-17): an agent never passes one, the user does, from the window.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    handoff: Option<HandoffView>,
+}
+
+/// A passage of a ticket's agent under way, as the tools say it (TS-17).
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HandoffView {
+    from: String,
+    to: String,
+    /// To a machine in server mode.
+    machine: bool,
+    branch: String,
+    /// Offered to this machine (to take in the window), or by it.
+    to_here: bool,
+    from_here: bool,
+    since: i64,
 }
 
 pub(crate) fn team_view(t: &Ticket) -> Option<TeamView> {
@@ -543,6 +561,15 @@ pub(crate) fn team_view(t: &Ticket) -> Option<TeamView> {
             .clone()
             .or_else(|| x.assignee.as_ref().map(|_| String::new())),
         conflicts: x.conflicts.iter().map(|c| c.field.clone()).collect(),
+        handoff: x.handoff.as_ref().map(|h| HandoffView {
+            from: h.from_name.clone(),
+            to: h.to_name.clone(),
+            machine: h.machine,
+            branch: h.branch.clone(),
+            to_here: h.incoming,
+            from_here: h.outgoing,
+            since: h.at,
+        }),
     })
 }
 

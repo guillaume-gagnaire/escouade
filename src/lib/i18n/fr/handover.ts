@@ -19,6 +19,8 @@ export default {
     limitedUntil: 'Suite sur {harness} · quota {from} épuisé jusqu’à {time}',
     limited: 'Suite sur {harness} · quota {from} épuisé',
     asked: 'Suite sur {harness} · l’agent était sur {from}',
+    /** An agent a teammate passed (TS-17): the conversation of before is above. */
+    passed: 'Passé par {name} · suite sur {harness}',
   },
   /** The first message of the agent on its new harness, folded. */
   file: {

@@ -38,6 +38,8 @@ pub enum ViewSource {
     Docs,
     /// A pull request whose review the code host asks of the user (« Ta relecture »).
     Review,
+    /// An agent a teammate passes to this machine (TS-17): « Alice te passe DEM-41 · Prendre ».
+    Handoff,
 }
 
 /// The group a view goes in (§ 10.2): « Tes agents se sont arrêtés », « Aujourd'hui », « Plus tôt ».
@@ -93,6 +95,10 @@ pub struct InboxItem {
     pub number: Option<u64>,
     pub url: Option<String>,
     pub word: Option<String>,
+    /// A passage: who passes the agent, the harness it ran on (its id), and the branch pushed.
+    pub by: Option<String>,
+    pub engine: Option<String>,
+    pub branch: Option<String>,
 }
 
 impl InboxItem {
@@ -123,6 +129,9 @@ impl InboxItem {
             number: None,
             url: None,
             word: None,
+            by: None,
+            engine: None,
+            branch: None,
         }
     }
 
@@ -176,6 +185,10 @@ pub enum ViewAct {
     Accept,
     /// « Partager » the docs.
     Share,
+    /// « Prendre » an agent a teammate passes, on `engine` (its own when none).
+    Take {
+        engine: Option<crate::model::EngineId>,
+    },
 }
 
 impl ViewAct {
@@ -193,6 +206,7 @@ impl ViewAct {
             Self::Retarget { .. } => "retarget",
             Self::Accept => "accept",
             Self::Share => "share",
+            Self::Take { .. } => "take",
         }
     }
 
@@ -209,6 +223,7 @@ impl ViewAct {
             (Self::Retarget { .. }, S::TicketBlocked) => v.other_line.is_some(),
             (Self::Accept, S::Decision) => true,
             (Self::Share, S::Docs) => true,
+            (Self::Take { .. }, S::Handoff) => true,
             _ => false,
         }
     }
@@ -336,6 +351,36 @@ impl Core {
 
         // The tickets « À tester » and the blocked ones, as the board shows them.
         let tickets = self.tickets.read().clone();
+        // The agents a teammate passes to this machine (TS-17).
+        for t in &tickets {
+            let Some(h) = t
+                .team
+                .as_ref()
+                .and_then(|x| x.handoff.as_ref())
+                .filter(|h| h.incoming)
+            else {
+                continue;
+            };
+            let Some((pid, pname, private)) = of(&t.project_id) else {
+                continue;
+            };
+            let mut v = InboxItem::new(
+                format!("handoff:{}", t.id),
+                ViewSource::Handoff,
+                ViewGroup::Today,
+                (&pid, &pname, private),
+            );
+            v.title = first_line(&t.title);
+            v.since = h.at;
+            v.ticket_id = Some(t.id.clone());
+            v.ticket_key = Some(t.key.clone());
+            v.column = Some(t.column);
+            v.agent_name = Some(h.agent.clone());
+            v.by = Some(h.from_name.clone());
+            v.engine = Some(h.engine.clone());
+            v.branch = Some(h.branch.clone());
+            views.push(v);
+        }
         for t in &tickets {
             if t.shared.as_ref().is_some_and(|s| s.hidden) || t.column == Column::Done {
                 continue;
@@ -584,6 +629,9 @@ impl Core {
             ViewAct::Share => {
                 self.docs_share(&v.project_id, None, false).await?;
             }
+            ViewAct::Take { engine } => {
+                self.team_handoff_take(&ticket(), engine).await?;
+            }
         }
         log::info!("inbox view {} {name}", v.source_name());
         self.telemetry
@@ -641,6 +689,7 @@ impl InboxItem {
             ViewSource::Decision => "decision",
             ViewSource::Docs => "docs",
             ViewSource::Review => "review",
+            ViewSource::Handoff => "handoff",
         }
     }
 }

@@ -2127,7 +2127,7 @@ impl Core {
         if !forced {
             self.track(Event::TicketStarted { autopilot: true });
         }
-        if let Err(e) = self.launch_ticket_agent(project, &t).await {
+        if let Err(e) = self.launch_ticket_agent(project, &t, None).await {
             log::warn!("ticket {}: start failed: {e:#}", t.key);
             // Only while it is still this start's: one sent back to do meanwhile (its agent
             // archived or deleted), or started again with another agent, stays as it is.
@@ -2197,7 +2197,7 @@ impl Core {
     /// The account a ticket's agent starts on (ESC-153): the one the ticket is set to while it may
     /// still take it (`lost_account`); one that may not sends the ticket back to « Auto », which
     /// its card and a notification say. « Auto »: the one a new agent of its project goes to.
-    fn ticket_start_account(
+    pub(crate) fn ticket_start_account(
         self: &Arc<Self>,
         project: &Project,
         t: &Ticket,
@@ -2414,7 +2414,14 @@ impl Core {
     /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of
     /// ports (none when isola runs the project's services), the protocol appended to its system
     /// prompt; then, its worktree set up, its first message.
-    async fn launch_ticket_agent(self: &Arc<Self>, project: &Project, t: &Ticket) -> Result<()> {
+    /// `handed`: an agent a teammate passed (TS-17): its patch applied, its conversation above, the handover file as its
+    /// first message.
+    pub(crate) async fn launch_ticket_agent(
+        self: &Arc<Self>,
+        project: &Project,
+        t: &Ticket,
+        handed: Option<crate::teamhandoff::HandedIn>,
+    ) -> Result<()> {
         let s = &project.board;
         // Its own target (ESC-552), else the board's: what its worktree starts from and goes to.
         let target = self.ticket_target(project, t).await;
@@ -2531,6 +2538,9 @@ impl Core {
             .is_ok_and(|x| x.column == Column::Doing && x.agent_id.as_deref() == Some(&agent_id));
         if !still_ours || self.live_agent(&agent_id).is_none() {
             return Ok(());
+        }
+        if let Some(handed) = handed {
+            return self.go_on_handed(&agent_id, t, handed).await;
         }
         let failure = self
             .agent(&agent_id)

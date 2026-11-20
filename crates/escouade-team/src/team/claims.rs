@@ -60,6 +60,34 @@ impl Team {
         self.heard(answer)
     }
 
+    /// Hands a ticket to another device of the project (TS-17, §11), under this device's token: the other device holds
+    /// it at once under a new token, and this one's old token writes nothing more.
+    pub async fn hand_claim(
+        &mut self,
+        project: ProjectId,
+        claim: [u8; 16],
+        token: u64,
+        to: DeviceId,
+    ) -> Result<ClaimAnswer, Error> {
+        let answer = self
+            .client
+            .hand_claim(&project.0, &claim, token, &to.0)
+            .await;
+        self.heard(answer)
+    }
+
+    /// Takes back a ticket this device handed, under the token of the hand, while it was not taken (the passage
+    /// abandoned): `claim_lost` once it was.
+    pub async fn withdraw_claim(
+        &mut self,
+        project: ProjectId,
+        claim: [u8; 16],
+        token: u64,
+    ) -> Result<ClaimAnswer, Error> {
+        let answer = self.client.withdraw_claim(&project.0, &claim, token).await;
+        self.heard(answer)
+    }
+
     /// A project's claims, with the server's time.
     pub async fn claims(&mut self, project: ProjectId) -> Result<Claims, Error> {
         let answer = self.client.claims(&project.0).await;

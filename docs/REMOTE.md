@@ -585,6 +585,11 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `ticket_share`
 - `ticket_start`
 - `ticket_team_assign`
+- `ticket_team_handoff`
+- `ticket_team_handoff_cancel`
+- `ticket_team_handoff_engines`
+- `ticket_team_handoff_plan`
+- `ticket_team_handoff_take`
 - `ticket_team_local`
 - `ticket_team_resume`
 - `ticket_team_settle`

@@ -164,6 +164,9 @@ pub struct Claim {
     /// The device that held it last, after a release or a take-over.
     #[serde(default, with = "opt_id", skip_serializing_if = "Option::is_none")]
     pub last_holder: Option<Id>,
+    /// The device that handed it to its holder (TS-17, §11), while the holder has not taken it yet: it may take it back.
+    #[serde(default, with = "opt_id", skip_serializing_if = "Option::is_none")]
+    pub handed_by: Option<Id>,
 }
 
 mod opt_id {
@@ -198,6 +201,7 @@ impl Claim {
             claimed_at: 0,
             renewed_at: 0,
             last_holder: None,
+            handed_by: None,
         }
     }
 }
@@ -219,6 +223,11 @@ pub enum ClaimAsk {
     Renew { token: u64 },
     /// Give it back.
     Release { token: u64 },
+    /// Hand it to another device of the project (TS-17, §11), under its token: that device holds it at once, under a new
+    /// token, for a longer lease, until it takes it (a new token again) or gives it back.
+    Hand { token: u64, to: Id },
+    /// Take back a ticket this device handed, under the token of the hand, while its new holder has not taken it.
+    Withdraw { token: u64 },
 }
 
 /// The most claims a project keeps (one per ticket ever taken).
@@ -226,6 +235,7 @@ pub const MAX_CLAIMS: i64 = 100_000;
 
 /// What a claim becomes (the same for both bases): `holder_ok` says its holder is still a device of the project (not
 /// revoked, still with access); a holder gone holds nothing.
+#[cfg(test)]
 pub(crate) fn decide(
     current: Option<Claim>,
     ticket: Id,
@@ -234,6 +244,21 @@ pub(crate) fn decide(
     now: i64,
     lease: i64,
     holder_ok: bool,
+) -> Result<Claim> {
+    decide_with(current, ticket, device, ask, now, lease, holder_ok, true)
+}
+
+/// [`decide`], `to_ok` saying whether the device a hand goes to is one of the project (TS-17).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn decide_with(
+    current: Option<Claim>,
+    ticket: Id,
+    device: Id,
+    ask: ClaimAsk,
+    now: i64,
+    lease: i64,
+    holder_ok: bool,
+    to_ok: bool,
 ) -> Result<Claim> {
     let c = current.unwrap_or_else(|| Claim::free(ticket));
     let held_by_other = c.holder.is_some_and(|h| h != device) && c.until > now && holder_ok;
@@ -253,6 +278,7 @@ pub(crate) fn decide(
                 claimed_at: now,
                 renewed_at: now,
                 last_holder: c.holder.filter(|h| *h != device).or(c.last_holder),
+                handed_by: None,
                 ..c
             })
         }
@@ -276,6 +302,42 @@ pub(crate) fn decide(
                 version: c.version + 1,
                 renewed_at: now,
                 last_holder: Some(device),
+                handed_by: None,
+                ..c
+            })
+        }
+        ClaimAsk::Hand { token, to } => {
+            if c.holder != Some(device) || c.token != token {
+                return Err(StoreError::ClaimLost(c));
+            }
+            if to == device || !to_ok {
+                return Err(StoreError::NotInProject(c));
+            }
+            Ok(Claim {
+                holder: Some(to),
+                until: now + lease,
+                token: c.token + 1,
+                version: c.version + 1,
+                claimed_at: now,
+                renewed_at: now,
+                last_holder: Some(device),
+                handed_by: Some(device),
+                ..c
+            })
+        }
+        ClaimAsk::Withdraw { token } => {
+            if c.handed_by != Some(device) || c.token != token || c.holder.is_none() {
+                return Err(StoreError::ClaimLost(c));
+            }
+            Ok(Claim {
+                holder: Some(device),
+                until: now + lease,
+                token: c.token + 1,
+                version: c.version + 1,
+                claimed_at: now,
+                renewed_at: now,
+                last_holder: c.holder,
+                handed_by: None,
                 ..c
             })
         }
@@ -379,6 +441,9 @@ pub enum StoreError {
     /// A holder's write under a token that is no longer the current one.
     #[error("the claim token is stale")]
     StaleToken(Claim),
+    /// A hand to a device that is not one of the project's (TS-17): revoked, without access, or the holder itself.
+    #[error("that device is not one of this project")]
+    NotInProject(Claim),
     #[error("the base: {0}")]
     Backend(String),
 }
@@ -655,6 +720,55 @@ mod tests {
         assert_eq!(b.token, 2);
         let renewed = decide(Some(b), T, B, ClaimAsk::Renew { token: 2 }, 400, 600, true).unwrap();
         assert_eq!((renewed.until, renewed.renewed_at), (1000, 400));
+    }
+
+    /// TS-17: a hand gives the ticket to another device under a new token; it takes it (a new token again), or the one
+    /// that handed takes it back while it did not. Nobody else does, and a hand to a device out of the project fails.
+    #[test]
+    fn a_hand_moves_the_claim_and_its_token_grows() {
+        const C: Id = [4; 16];
+        let a = decide(None, T, A, ClaimAsk::Take { expected: None }, 0, 600, true).unwrap();
+        let hand = |to| ClaimAsk::Hand { token: 1, to };
+        let out = decide_with(Some(a.clone()), T, A, hand(B), 10, 9000, true, false);
+        assert!(matches!(out, Err(StoreError::NotInProject(_))));
+        let out = decide_with(Some(a.clone()), T, A, hand(A), 10, 9000, true, true);
+        assert!(matches!(out, Err(StoreError::NotInProject(_))));
+        let out = decide_with(Some(a.clone()), T, C, hand(B), 10, 9000, true, true);
+        assert!(matches!(out, Err(StoreError::ClaimLost(_))));
+        let h = decide_with(Some(a.clone()), T, A, hand(B), 10, 9000, true, true).unwrap();
+        assert_eq!(
+            (h.holder, h.token, h.until, h.handed_by, h.last_holder),
+            (Some(B), 2, 9010, Some(A), Some(A))
+        );
+        // A's old token writes nothing more; a third device does not take it, nor take it back.
+        let f = Fence {
+            ticket: T,
+            token: 1,
+        };
+        assert!(matches!(
+            fenced(Some(h.clone()), &f, A),
+            Err(StoreError::StaleToken(_))
+        ));
+        let take = ClaimAsk::Take { expected: None };
+        assert!(matches!(
+            decide(Some(h.clone()), T, C, take, 20, 600, true),
+            Err(StoreError::Taken(_))
+        ));
+        let back = ClaimAsk::Withdraw { token: 2 };
+        assert!(matches!(
+            decide(Some(h.clone()), T, C, back, 20, 600, true),
+            Err(StoreError::ClaimLost(_))
+        ));
+        // The abandon: A takes it back, under a new token.
+        let w = decide(Some(h.clone()), T, A, back, 20, 600, true).unwrap();
+        assert_eq!((w.holder, w.token, w.handed_by), (Some(A), 3, None));
+        // The take: B takes it, under a new token; A no longer takes it back.
+        let b = decide(Some(h.clone()), T, B, take, 20, 600, true).unwrap();
+        assert_eq!((b.holder, b.token, b.handed_by), (Some(B), 3, None));
+        assert!(matches!(
+            decide(Some(b), T, A, back, 30, 600, true),
+            Err(StoreError::ClaimLost(_))
+        ));
     }
 
     #[test]

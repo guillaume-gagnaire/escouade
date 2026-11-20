@@ -44,7 +44,7 @@ use crate::storage::{SqliteStorage, TeamProvider, STATE_FILE};
 use crate::wire::{self, Entry, Kind, TeamMessage};
 use crate::{CryptoError, Error};
 
-mod claims;
+pub(crate) mod claims;
 mod sync;
 
 pub use sync::{ProjectSynced, Refused, SyncState};

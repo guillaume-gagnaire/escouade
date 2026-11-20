@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: pass a ticket’s agent to a teammate or to the team’s machine in server mode, from its card. Its branch is pushed at your gesture, its work in progress and its conversation go encrypted; whoever takes it goes on on their own harness and account, with a handover file.
 - Settings › Features: turn off with one switch what you don’t use (Kanban, Docs, editor, cost, statistics, workflows, scheduled tasks, Overseer, voice). It really disappears, its MCP tools and what it did in the background included, and its data come back when you turn it on again; after the update everything stays on, and a managed device or a team can impose one.
 - Team server: the team’s costs and quotas, totals by day encrypted for its administrators alone (never a prompt or a turn), by project by default or by member if the team chooses it and tells you. The month’s budgets are weighed before each start, a warning reaches the administrator’s “Your turn” box, and beyond a budget the autopilot can stop.
 - A ticket can aim at its own target branch, other than the Kanban’s (a 2.2 fix while the Kanban aims at 2.3): chosen in its window, shown on its card and in the “Your turn” box, followed up to the merge or the pull request. And an approval whose branch started from another line than its target stops before any merge, says why and lets you choose the target, handing nothing to the agent.

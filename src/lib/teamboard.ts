@@ -5,7 +5,7 @@
 import { invoke } from './transport';
 import { fTime } from './format';
 import { t } from './i18n';
-import type { Column, Project, TeamConflict, TeamHint, Ticket } from './types';
+import type { Column, EngineId, HandoffPlan, Project, TakeChoice, TeamConflict, TeamHint, Ticket } from './types';
 
 /** A ticket of the preview of « Verser à l'équipe » (TS-7). */
 export interface PourItem {
@@ -67,6 +67,16 @@ export const teamBoardApi = {
     invoke<Poured>('project_team_pour', { project, files, tickets, docs }),
   /** « Ne plus proposer pour ce projet » on the band of the team a repository names. */
   dismissHint: (project: string) => invoke<Project>('project_team_hint_dismiss', { project }),
+  /** What the window of the passage of a ticket's agent shows (TS-17). */
+  handoffPlan: (id: string) => invoke<HandoffPlan>('ticket_team_handoff_plan', { id }),
+  /** « Passer » the agent to the device `to`, its uncommitted work committed « en cours » or in a patch. */
+  handoff: (id: string, to: string, wip: 'commit' | 'patch') => invoke<void>('ticket_team_handoff', { id, to, wip }),
+  /** « Annuler le passage » while it was not taken. */
+  handoffCancel: (id: string) => invoke<void>('ticket_team_handoff_cancel', { id }),
+  /** The harnesses this machine can take the passage on. */
+  handoffEngines: (id: string) => invoke<TakeChoice>('ticket_team_handoff_engines', { id }),
+  /** « Prendre » the agent passed, on `engine` (its own when null). */
+  handoffTake: (id: string, engine: EngineId | null) => invoke<void>('ticket_team_handoff_take', { id, engine }),
 };
 
 /** A ticket of a project by its key, or by a key it had before it was poured into its team's Kanban (TS-7). */
@@ -179,4 +189,28 @@ export function teamElsewhere(ticket: Ticket): boolean {
 export function heldElsewhere(ticket: Ticket): boolean {
   const h = ticket.team?.holder;
   return !!h && !h.mine && !h.interrupted;
+}
+
+export interface HandoffLine {
+  text: string;
+  /** incoming: « Prendre » is offered; outgoing: « Annuler le passage »; between: two teammates. */
+  tone: 'incoming' | 'outgoing' | 'between';
+}
+
+/** What the card says of a passage of its agent under way (TS-17); null when there is none. */
+export function handoffLine(ticket: Ticket): HandoffLine | null {
+  const h = ticket.team?.handoff;
+  if (!h) return null;
+  const from = h.fromName || t('teamBoard.card.someone');
+  const to = h.machine
+    ? t('teamBoard.handoff.machine', { name: h.toName || t('teamBoard.card.someone') })
+    : h.toName || t('teamBoard.card.someone');
+  if (h.incoming) return { text: t('teamBoard.handoff.incoming', { name: from, key: ticket.key }), tone: 'incoming' };
+  if (h.outgoing) return { text: t('teamBoard.handoff.outgoing', { name: to }), tone: 'outgoing' };
+  return { text: t('teamBoard.handoff.between', { from, to }), tone: 'between' };
+}
+
+/** Whether the agent of this ticket can be passed from here: a ticket of the team this machine holds, with its agent. */
+export function handoffOffered(ticket: Ticket, project: Project | null | undefined): boolean {
+  return isTeamBoard(project) && !ticket.teamLocal && !!ticket.agentId && !!ticket.team?.holder?.mine && !ticket.team?.handoff;
 }

@@ -181,7 +181,7 @@ pub fn provisional_key(prefix: &str, n: u32) -> String {
     format!("{prefix}-L{n}")
 }
 
-fn object_of(hex_id: &str) -> Option<ObjectId> {
+pub(crate) fn object_of(hex_id: &str) -> Option<ObjectId> {
     let mut out = [0u8; 16];
     hex::decode_to_slice(hex_id, &mut out).ok()?;
     Some(ObjectId(out))
@@ -251,6 +251,7 @@ pub fn start_refusal(t: &Ticket) -> Option<String> {
                 claimed_at: 0,
                 renewed_at: 0,
                 last_holder: None,
+                handed_by: None,
             }),
         }),
         Some(&h.name),
@@ -313,7 +314,10 @@ impl Core {
     }
 
     /// The team and the journal of a project's Kanban, when it is a team's.
-    fn team_project_of(&self, project: &Project) -> Option<(Arc<Teams>, String, ProjectId)> {
+    pub(crate) fn team_project_of(
+        &self,
+        project: &Project,
+    ) -> Option<(Arc<Teams>, String, ProjectId)> {
         let team = project.team.clone()?;
         let pid = object_of(project.team_project.as_deref()?)?;
         Some((self.teams_link()?, team, ProjectId(pid.0)))
@@ -396,7 +400,14 @@ impl Core {
                 .is_none_or(|at| at.elapsed() > Duration::from_secs(5));
         let mut team = shared.lock().await;
         let out = match board_in_step(
-            &mut team, pid, &project, &snapshot, &deleted, &my_name, fresh,
+            &mut team,
+            pid,
+            &project,
+            &snapshot,
+            &deleted,
+            &my_name,
+            fresh,
+            self.team_machine.load(Ordering::Relaxed),
         )
         .await
         {
@@ -413,6 +424,8 @@ impl Core {
                 .insert(project_id.to_string(), std::time::Instant::now());
         }
         self.apply_board(project_id, out);
+        // The passages of its agents (TS-17), offered here or from here.
+        self.read_handoffs(project_id).await;
     }
 
     /// What a reading brought, applied to the tickets: a field a teammate changed is taken when this machine did not
@@ -895,7 +908,8 @@ fn member_names(team: &mut escouade_team::Team, pid: ProjectId) -> BTreeMap<Memb
     out
 }
 
-/// The work of a reading, under the team's lock (the module's doc).
+/// The work of a reading, under the team's lock (the module's doc). `machine`: this core runs in server mode (TS-17).
+#[allow(clippy::too_many_arguments)]
 async fn board_in_step(
     team: &mut escouade_team::Team,
     pid: ProjectId,
@@ -904,6 +918,7 @@ async fn board_in_step(
     deleted: &[String],
     my_name: &str,
     fresh: bool,
+    machine: bool,
 ) -> Result<Outcome, TeamError> {
     let me = DeviceId(team.client().device());
     // Offline as last heard (the team's watch and its live feed find the server again): nothing is asked of it, the
@@ -912,6 +927,8 @@ async fn board_in_step(
     let my_member = team.identity().member;
     let admin = team.is_admin().unwrap_or(false);
     let _ = team.set_name(pid, my_name);
+    // A machine in server mode says so: a passage offers it as the team's machine (TS-17).
+    let _ = team.set_machine(pid, machine);
     for o in deleted.iter().filter_map(|o| object_of(o)) {
         let _ = team.delete_ticket(pid, o);
     }

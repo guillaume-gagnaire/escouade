@@ -53,6 +53,8 @@ pub struct Limits {
     pub enrollment_ttl_max: Duration,
     /// The lease of a ticket's claim (TS-6, §4.2): 10 minutes, renewed every 3 while its agent runs.
     pub claim_lease: Duration,
+    /// The lease of a ticket handed to a teammate (TS-17, §11): 14 days, while they have not taken it.
+    pub hand_lease: Duration,
 }
 
 impl Default for Limits {
@@ -70,6 +72,7 @@ impl Default for Limits {
             session_ttl: Duration::from_secs(15 * 60),
             enrollment_ttl_max: Duration::from_secs(7 * 24 * 3600),
             claim_lease: Duration::from_secs(10 * 60),
+            hand_lease: Duration::from_secs(14 * 24 * 3600),
         }
     }
 }

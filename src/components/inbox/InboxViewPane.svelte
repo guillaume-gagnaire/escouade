@@ -70,6 +70,8 @@
         return t('inboxViews.note.docs');
       case 'review':
         return t('inboxViews.note.review');
+      case 'handoff':
+        return t('inboxViews.note.handoff', { branch: view.branch ?? '' });
     }
   });
 

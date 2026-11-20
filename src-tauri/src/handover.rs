@@ -394,6 +394,26 @@ pub fn dossier(d: &Dossier) -> String {
     body(d, out)
 }
 
+/// The handover file of an agent passed by a teammate (TS-17, C16-A): what the new session on this machine's harness
+/// and account is told first. `by`: who passed it; `d.from`: the harness it ran on there.
+pub fn passed(d: &Dossier, by: &str) -> String {
+    let lang = d.lang;
+    let from = d.from;
+    let mut out = tr_in!(
+        lang,
+        "# Passation : suite d’un travail que {by} t’a passé\n\nTu reprends le travail d’un agent que {by} faisait tourner sur {from}, sur son poste. Tu es sur ce poste, dans un nouveau dossier de travail, sur la même branche, poussée par {by} ; son travail non commité y est (dans un commit « en cours » ou appliqué tel quel). Ce dossier de passation résume la conversation jusqu’ici. Continue là où il s’est arrêté, sans refaire ce qui est fait ; vérifie l’état des fichiers avant de les modifier.\n\n",
+        "# Handover: going on with work {by} passed to you\n\nYou take over the work of an agent {by} ran on {from}, on their machine. You are on this machine, in a new working folder, on the same branch, pushed by {by}; its uncommitted work is there (in an “in progress” commit or applied as it was). This handover file sums up the conversation so far. Go on where it stopped, without redoing what is done; check the files before you change them.\n\n"
+    );
+    if let Some(ticket) = d.ticket {
+        out.push_str(&tr_in!(
+            lang,
+            "Ce travail est le ticket {ticket}. Son protocole (critères d’acceptation, boucle, bilan) est dans tes consignes : suis-le comme avant.\n\n",
+            "This work is the ticket {ticket}. Its protocol (acceptance criteria, loop, report) is in your instructions: follow it as before.\n\n"
+        ));
+    }
+    body(d, out)
+}
+
 /// What a new session of the agent's own harness is told when its session could not be taken back (ESC-491): the
 /// same file, worded as a resume, after its instructions.
 pub fn recap(d: &Dossier) -> String {
@@ -575,6 +595,14 @@ fn separator(from: EngineId, to: EngineId, limited: bool, until: Option<i64>) ->
     })
 }
 
+/// What the conversation shows where an agent passed by a teammate goes on here (TS-17): « Passé par Alice · suite
+/// sur Codex », the conversation of before above it, to read.
+pub(crate) fn passed_separator(from: EngineId, to: EngineId, by: &str) -> Value {
+    let mut v = separator(from, to, false, None);
+    v["by"] = json!(by);
+    v
+}
+
 impl Core {
     /// How the account `id` stands for an agent now: out when it may not take one (not signed in,
     /// an agent of it waiting for its reset, a pause after a usage limit, out for its quota:
@@ -671,7 +699,7 @@ impl Core {
     }
 
     /// Whether the program of `engine` is found for the account an agent of `project` would go to.
-    fn engine_found_for(&self, engine: EngineId, project: &str) -> bool {
+    pub(crate) fn engine_found_for(&self, engine: EngineId, project: &str) -> bool {
         let all = self.settings.read().clone();
         let settings = self.project_accounts(&all, engine, project);
         let Some(first) = settings.accounts.iter().find(|a| a.active) else {
@@ -770,7 +798,7 @@ impl Core {
     }
 
     /// What git says of the agent's folder for its handover file.
-    async fn changes_of(&self, cwd: &str, base: Option<&str>) -> Changes {
+    pub(crate) async fn changes_of(&self, cwd: &str, base: Option<&str>) -> Changes {
         let text = |args: Vec<String>| async move {
             let args: Vec<&str> = args.iter().map(String::as_str).collect();
             crate::git::text(cwd, &args).await.unwrap_or_default()

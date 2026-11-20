@@ -960,6 +960,42 @@ impl ServerClient {
         self.claim_token(project, ticket, "release", token).await
     }
 
+    /// Hands a ticket to another device of the project (TS-17): it holds it at once, under a new token, until it takes
+    /// it or gives it back. `not_in_project` for a device revoked, without access, or this one.
+    pub async fn hand_claim(
+        &self,
+        project: &[u8; 16],
+        ticket: &[u8; 16],
+        token: u64,
+        to: &[u8; 16],
+    ) -> Result<ClaimAnswer, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                format!(
+                    "/v1/projects/{}/claims/{}/hand",
+                    hex::encode(project),
+                    hex::encode(ticket)
+                ),
+                &HandRequest {
+                    token,
+                    to: to.to_vec(),
+                },
+            ))
+            .await?;
+        ok_cbor(reply)
+    }
+
+    /// Takes back a ticket this device handed, under the token of the hand, while it was not taken.
+    pub async fn withdraw_claim(
+        &self,
+        project: &[u8; 16],
+        ticket: &[u8; 16],
+        token: u64,
+    ) -> Result<ClaimAnswer, ClientError> {
+        self.claim_token(project, ticket, "withdraw", token).await
+    }
+
     /// A project's claims, with the server's time.
     pub async fn claims(&self, project: &[u8; 16]) -> Result<Claims, ClientError> {
         let reply = self
