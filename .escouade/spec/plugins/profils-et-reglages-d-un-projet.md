@@ -1,8 +1,8 @@
 ---
 title: "Les profils d'un plugin et ses réglages d'un projet"
 subject: "plugins"
-sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.1 à §1.3, §2, §3, §6 à §8 et §10 (choix n° 1 à 4 tranchés le 2026-11-17)","design/plugins-contract-2-3/captures (release/2.3) : b-plugin, b-profil, b-projet","issues GitHub #38 et #39 (un auteur de plugin tiers)","crates/escouade-plugins/src/profiles.rs","crates/escouade-plugins/src/runtime.rs","src-tauri/src/plugin_profiles.rs","src-tauri/src/plugin_secrets.rs","src-tauri/src/projectfile.rs","src/lib/plugin-profiles.ts","src/components/plugins/PluginProfiles.svelte","src/components/plugins/ProfileModal.svelte","src/components/settings/ProjectPluginsPage.svelte","schemas/plugin-protocol-1.json"]
-tickets: ["ESC-530"]
+sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.1 à §1.3, §2, §3, §6 à §8 et §10 (choix n° 1 à 4 tranchés le 2026-11-17)","design/plugins-contract-2-3/captures (release/2.3) : b-plugin, b-profil, b-projet","issues GitHub #38 et #39 (un auteur de plugin tiers)","crates/escouade-plugins/src/profiles.rs","crates/escouade-plugins/src/runtime.rs","src-tauri/src/plugin_profiles.rs","src-tauri/src/plugin_secrets.rs","src-tauri/src/projectfile.rs","src/lib/plugin-profiles.ts","src/components/plugins/PluginProfiles.svelte","src/components/plugins/ProfileModal.svelte","src/components/settings/ProjectPluginsPage.svelte","schemas/plugin-protocol-1.json","crates/escouade-plugin-kit/src/serve.rs","sdk/plugin/src/index.ts","sdk/plugin/src/testing.ts","crates/escouade-plugins/src/bench/fake.rs","website/content/docs/fr/plugins/project-credentials.md"]
+tickets: ["ESC-530","ESC-531"]
 decisions: ["les-profils-d-un-plugin-et-ses-reglages"]
 compared: null
 ---
@@ -67,7 +67,8 @@ Réglages › Projets › *projet* › **Plugins**, entre « Tickets importés �
 - `profiles/get { kind, profile }` : les champs simples du profil (jamais un secret), `null` s'il n'en a pas de cet identifiant.
 - `secrets/get { key, profile }` : le champ secret `key` du profil. Refusé `-32602` pour un identifiant qui n'en est pas un ou qu'il n'a pas, et pour une clé qui n'est pas un champ secret de son genre ; `-32001` sans `profile:<genre>` dans ses permissions (retirée par l'utilisateur comprise).
 - `secrets/get { key }` répond comme avant. **Une clé qui n'est qu'un champ secret d'un profil, demandée sans `profile`, est refusée (`-32602`)** : une confusion ne rend jamais un autre secret.
-- Le kit (`escouade-plugin-kit` 0.1.3, avec le protocole 0.1.4) : `secret_of(profile, key)`, `profiles(kind)`, `profile(kind, id)`. Une app qui ne sert pas les profils ignore `profile` : le plugin vérifie `greeting().profiles` et dit `escouade.min`.
+- Le kit (`escouade-plugin-kit` 0.1.4, avec le protocole 0.1.4 ; 0.1.3 n'a jamais été publié) : `settings(project)`, `profile_of(project, setting)`, `secret_of(profile, key)`, `profiles(kind)`, `profile(kind, id)`. Le SDK (`@escouade-dev/plugin` 0.5.0) : `p.settings(project)`, `p.profiles.of`, `p.profiles.list`, `p.profiles.get`, `p.secret(key, { profile })` (ESC-531).
+- **Une app qui ne sert pas les profils** ignorerait `profile` et rendrait un autre secret : le kit (`Cx::require`) et le SDK (`p.require`) vérifient `capabilities.profiles` reçu à `initialize` et refusent l'appel avant de l'envoyer (`-32601`), en disant la version qui les sert (`ESCOUADE_MIN`, 2.2.5). Le plugin dit `escouade.min` ; `escouade-plugin validate` avertit (⚠) un `min` plus ancien.
 
 ## La sécurité (étude §2.3)
 
@@ -84,8 +85,13 @@ Réglages › Projets › *projet* › **Plugins**, entre « Tickets importés �
 - Les profils et un réglage de portée `project` ne coupent plus un plugin. **Un secret de portée `project`** (direction A de l'étude, non retenue) reste lu et coupe toujours le plugin (*Le contrat du manifeste*).
 - L'export de tout le projet (« Exporter vers .escouade.yml ») n'écrit toujours pas `plugins.*`.
 
+## Pour l'auteur (ESC-531)
+
+- **Le faux Escouade du SDK**, donné le manifeste, sert les profils (`profiles`), les rangs d'un réglage de projet (`projectValues`, `projectSettings`, `off`) et les refus d'un secret de profil comme l'app.
+- **Le banc de conformité** sert un profil du banc par genre, choisi par le projet du banc (`bench-project`), et juge le scénario « Profils » : un refus d'Escouade (`secrets/get`, `profiles/*`, `settings/get`) ou un secret de profil écrit sur la sortie d'erreur ou dans un `log` le fait échouer.
+- **La documentation du site** (fr et en) : la page `plugins/project-credentials` (« Des identifiants par projet ») suit un tunnel par projet de bout en bout ; `plugins/manifest`, `plugins/calls`, `plugins/api`, `plugins/sdk`, `plugins/rust`, `plugins/testing`, `plugins/versioning` et `escouade-yml` disent les profils, la portée projet, ce que `.escouade.yml` peut et ne peut pas.
+
 ## Limites
 
 - Les réglages recommandés ou imposés par une équipe (rangs 2 et 5) et par un poste géré (rang 6) arrivent avec la 2.3 (TS-13, ESC-532).
-- Le SDK JavaScript (`@escouade-dev/plugin`) n'a pas encore d'appel pour les profils, et le banc de conformité ne les sert pas : ESC-531 (T9), avec la documentation du site.
 - Un profil n'a pas de groupes à lui : ses champs simples, puis ses secrets.

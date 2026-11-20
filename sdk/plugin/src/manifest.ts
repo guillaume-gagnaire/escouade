@@ -98,7 +98,7 @@ export interface Manifest {
       multiline?: boolean;
       /** A secret never comes from .escouade.yml. */
       repo?: false;
-      /** Where it holds: for every project (`app`, the default), or for each one, set in the project's settings (`project`). */
+      /** `app`, the default. `project` is read but not served: the plugin stays disabled, the reason said. A secret of each project goes in a profile (`contributes.profiles`). */
       scope?: 'app' | 'project';
       /** One text, or a text by language (`en` first, then `fr`). */
       title: string | Record<string, string>;
@@ -122,7 +122,7 @@ export interface Manifest {
       options?: unknown;
       /** `false`: its value never comes from .escouade.yml. Never `true` for a profile or an imported value. */
       repo?: boolean;
-      /** Where it holds: for every project (`app`, the default), or for each one, set in the project's settings (`project`). */
+      /** Where it holds: for every project (`app`, the default), or for each one, set in the project's settings by its ranks: this machine's value, then the project's .escouade.yml, then `default` (`project`, Escouade 2.2.5 and later). */
       scope?: 'app' | 'project';
       /** One text, or a text by language (`en` first, then `fr`). */
       title: string | Record<string, string>;
@@ -175,7 +175,7 @@ export interface Manifest {
     fileBytes?: number;
     /** How much linear memory its instance may take: 64 MiB without it. */
     memoryBytes?: number;
-    /** How many programs it may run at once (`proc/spawn`): 4 without it. Beyond 4, said at its install and with `reason`. */
+    /** How many programs it may run at once (`proc/spawn`), for the plugin, all projects together: 4 without it, 16 at most. Beyond 4, said at its install and with `reason`; an update that raises it asks again (Escouade 2.2.5 and later: an older one keeps 4). */
     processes?: number;
     /** Why it asks for more programs at once, in a sentence: needed with `processes` beyond 4. */
     reason?: string | Record<string, string>;
@@ -186,7 +186,7 @@ export interface Manifest {
   name: string | Record<string, string>;
   /** What it asks for, shown before it is installed. */
   permissions?: {
-    /** The programs it may run (`proc/spawn`): a program's name, never a path nor a joker, then its arguments, word for word. A joker stands for one word of a closed form, written whole: `{int}`, `{port}`, `{name}`, `{pid}` (a program it runs), `{path:temp}`, `{path:plugin}`; no other brace. A last word `*` lets any more follow. */
+    /** The programs it may run (`proc/spawn`): a program's name, never a path nor a joker, then its arguments, word for word. A joker stands for one word of a closed form, written whole, never an option: `{int}`, `{port}`, `{name}`, `{pid}` (a program it runs), `{path:temp}`, `{path:plugin}` (a file of that folder, given as its real path); no other brace (Escouade 2.2.5 and later: an older one matches nothing). A last word `*` lets any more follow. */
     commands?: string[];
     decide?: boolean;
     /** The variables it may set on what it runs (`proc/spawn`, the launches of its harnesses), shown before it is installed; any other is refused. Never Escouade's own nor `LD_*`, `DYLD_*`, `GIT_*` (but `GIT_AUTHOR_*`, `GIT_COMMITTER_*`), `PYTHON*`, `RUBY*`, `PERL*`, `NODE_*`, `JAVA_TOOL_OPTIONS`, `npm_config_*`, `*_PROXY`, `SSL_*`, `XDG_*`, `HOME`, `USERPROFILE`, `APPDATA`, `PATH`. */

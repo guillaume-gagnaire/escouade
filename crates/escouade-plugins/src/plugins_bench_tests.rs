@@ -84,8 +84,20 @@ fn said(r: &Report, s: Scenario) -> String {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_fake_plugin_passes_every_scenario() {
     let r = bench(&fake_points("pass", &[])).await;
+    // Those of the contract of 2.2.5 do not concern it (plugins_bench_wasm_tests: the plugin that takes them).
+    let contract = [
+        Scenario::Profiles,
+        Scenario::Multiline,
+        Scenario::Commands,
+        Scenario::Limit,
+    ];
     for o in &r.outcomes {
-        assert_eq!(o.verdict, Verdict::Pass, "{}", r.render(Lang::En));
+        let wanted = if contract.contains(&o.scenario) {
+            Verdict::Skip
+        } else {
+            Verdict::Pass
+        };
+        assert_eq!(o.verdict, wanted, "{}", r.render(Lang::En));
     }
     assert!(r.passed());
     assert_eq!(r.plugin, "dev.test.fake 1.0.0");
@@ -280,7 +292,7 @@ async fn the_report_says_what_is_missing_in_both_languages() {
     assert!(fr.contains("✗ Fermeture"), "{fr}");
     assert!(fr.contains("Ce qui manque : répondre à `shutdown`"), "{fr}");
     assert!(fr.contains("✓ Initialisation"), "{fr}");
-    assert!(fr.contains("8 réussis, 1 échoués, 2 sans objet"), "{fr}");
+    assert!(fr.contains("8 réussis, 1 échoués, 6 sans objet"), "{fr}");
     let m = r.measure.as_ref().expect("measured");
     assert_eq!(m.calls, 50);
     assert!(m.median_us > 0 && m.p99_us >= m.median_us);

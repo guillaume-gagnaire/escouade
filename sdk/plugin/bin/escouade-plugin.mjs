@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { message, validateText } from '../vendor/plugin-manifest.mjs';
+import { belowContract, message, validateText } from '../vendor/plugin-manifest.mjs';
 import { nativeBin } from './native.mjs';
 
 const FILE = 'escouade-plugin.json';
@@ -110,6 +110,9 @@ function validate(folder) {
     .filter((p) => p && p !== '{escouade}' && !existsSync(join(folder, p)));
   for (const p of missing) console.error(t(`✗ run : ${p} n'est pas dans le dossier`, `✗ run: ${p} is not in the folder`));
   if (missing.length) return 1;
+  // What it takes of the contract of 2.2.5 with an older escouade.min (ESC-531): said, never refused.
+  const below = belowContract(m, lang);
+  if (below) console.error(`⚠ ${below}`);
   console.log(t(`✓ ${m.id} ${m.version} : le manifeste est valide`, `✓ ${m.id} ${m.version}: the manifest holds`));
   return 0;
 }

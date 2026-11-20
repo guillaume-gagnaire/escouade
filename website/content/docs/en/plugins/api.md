@@ -33,10 +33,10 @@ Escouade’s first message is `initialize`. It gives the version of the protocol
   "method": "initialize",
   "params": {
     "protocolVersion": 1,
-    "escouade": { "version": "2.1.1" },
+    "escouade": { "version": "2.2.5" },
     "plugin": { "id": "dev.escouade.slack", "version": "1.1.0" },
     "lang": "en",
-    "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true }
+    "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true, "typedCommands": true, "profiles": true }
   }
 }
 ```
@@ -48,6 +48,7 @@ The plugin answers the version it speaks and its own capabilities:
 ```
 
 - `lang` is the language of the interface (`fr`, `en`), for what the plugin writes for the user.
+- `capabilities` says what Escouade serves. Since 2.2.5: `typedCommands`, the jokers of `permissions.commands`, and `profiles`, the profiles and the settings of each project. A plugin that uses them says `escouade.min`; the SDK and the kit check the capability before the call ([versioning](plugins/versioning#the-contract-of-2-2-5)).
 - Another version, or an answer without a version, stops the plugin, with the reason: “it speaks version 2 of the protocol; this Escouade speaks version 1”.
 - Without an answer within 10 seconds, the plugin is stopped too.
 - Nothing else is sent to it before its answer: what comes meanwhile waits in a queue.
@@ -88,6 +89,8 @@ On a machine without a keychain (Linux, WSL), the user may choose to keep them i
 - **Only its own.** The key must be one of its `permissions.secrets`; a pattern ending with `*` takes in several (`account:*`). Any other key is refused with `-32001` and noted in the journal, even another plugin’s written in full: `plugin:dev.other:token` is not a key of its permissions.
 - A plugin never gets the secret of an account, a harness or an integration of Escouade.
 - A secret given to the plugin is masked (`••••`) everywhere in its journal, its standard error included.
+- **Of a profile**: `secrets/get { key, profile }` gives a secret field of a profile, with `profile:<kind>` in `permissions.secrets`. Its name in the keychain is `plugin:<id>:profile:<kind>:<profile>:<key>`, `<profile>` drawn by Escouade. A field of a profile asked without its profile is refused (`-32602`), never another secret given ([credentials per project](plugins/project-credentials)).
+- **On several lines**: a long secret (a configuration with its certificates, 64 KiB at most) comes whole; the journal masks each of its lines of more than 8 characters.
 
 ## Crashes and restarts
 

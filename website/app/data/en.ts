@@ -454,6 +454,7 @@ export const en: Catalog = {
       'plugins/rust': 'The Rust kit',
       'plugins/capabilities': 'The host’s capabilities',
       'plugins/calls': 'The calls',
+      'plugins/project-credentials': 'Credentials per project',
       'plugins/testing': 'Testing a plugin',
       'plugins/themes': 'Themes',
       'plugins/harnesses': 'A described ACP harness',

@@ -58,3 +58,76 @@ describe('the plugin of both transports', () => {
     expect(imports.sort()).toEqual(['node:fs', 'node:readline']);
   });
 });
+
+describe('the plugin of the contract of 2.2.5 (ESC-531)', () => {
+  const FOLDER = join(ROOT, 'tests', 'fixtures', 'plugins', 'sdk-contract');
+
+  it('has its dist/plugin.mjs built from its src/ with this SDK', async () => {
+    const esbuild = createRequire(import.meta.url)('esbuild') as typeof import('esbuild');
+    const built = await esbuild.build({
+      absWorkingDir: ROOT,
+      entryPoints: ['tests/fixtures/plugins/sdk-contract/src/main.ts'],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node20',
+      write: false,
+      logLevel: 'silent',
+    });
+    const committed = readFileSync(join(FOLDER, 'dist', 'plugin.mjs'), 'utf8');
+    expect(
+      lf(built.outputFiles[0].text) === lf(committed),
+      'npx esbuild tests/fixtures/plugins/sdk-contract/src/main.ts --bundle --platform=node --format=esm --target=node20 --outfile=tests/fixtures/plugins/sdk-contract/dist/plugin.mjs',
+    ).toBe(true);
+  });
+
+  it('runs its tunnel in the fake Escouade as in the app: the profile chosen, five programs at once, every word admitted', async () => {
+    const { plugin } = await import('../../../tests/fixtures/plugins/sdk-contract/src/plugin');
+    const { connect } = await import('./testing');
+    const manifest = JSON.parse(readFileSync(join(FOLDER, 'escouade-plugin.json'), 'utf8'));
+    const profile = '0123456789abcdef';
+    const fake = connect(plugin, {
+      manifest,
+      version: '2.2.5',
+      profiles: {
+        vpn: [
+          {
+            id: profile,
+            fields: { name: 'Acme', server: 'vpn.acme.example', proto: 'tcp' },
+            secrets: { ovpn: 'client\nremote a 1194\n', password: 'p' },
+          },
+        ],
+      },
+      projectValues: { 'bench-project': { profile } },
+      secrets: { notes: 'one\ntwo' },
+      files: { 'rules.txt': readFileSync(join(FOLDER, 'rules.txt'), 'utf8') },
+    });
+    await fake.initialize();
+    const done = fake.fact('ticket.column');
+    // Its programs end as they are closed, or at once for the checks.
+    for (let turn = 0; turn < 50 && fake.spawned.length < 6; turn++) {
+      await new Promise((r) => setTimeout(r, 5));
+      for (const program of [...fake.programs.values()])
+        if (program.closed || program.asked[1] === 'hash-object' || program.asked[2] === 'version') await fake.exit(program.proc, 0);
+    }
+    for (let turn = 0; turn < 50 && fake.programs.size; turn++) {
+      await new Promise((r) => setTimeout(r, 5));
+      for (const program of [...fake.programs.values()])
+        if (program.closed || program.asked[2] === 'version') await fake.exit(program.proc, 0);
+    }
+    await done;
+    expect(fake.refusals).toEqual([]);
+    expect(fake.spawned.map((s) => s.words.slice(1).join(' '))).toEqual([
+      'cat-file --batch',
+      `column --mode=plain --width ${fake.spawned[0].pid}`,
+      'column --mode=plain --padding 2',
+      `hash-object /escouade/plugins/temp/dev.test.plugin/tunnel.ovpn`,
+      `hash-object /escouade/plugins/dev.test.plugin/rules.txt`,
+      '--no-pager version',
+    ]);
+    expect(fake.logs.map((l) => l.message)).toEqual([
+      'profile Acme: vpn.acme.example in tcp, 3 lines of configuration, a password, notes, routes 10.0.0.0/8',
+      'tunnel checked: 0 0 0 0 0 0',
+    ]);
+  });
+});

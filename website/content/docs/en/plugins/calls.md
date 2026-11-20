@@ -357,7 +357,7 @@ pub async fn words(cx: &Cx) -> Result<Value, Refusal> {
 
 ## The programs: `proc/*`
 
-`proc/spawn { command, args?, dir?, agent?, project?, env? }` → `{ proc }`, `proc/write { proc, data, close? }`, `proc/kill { proc }`, then the notifications `proc/out { proc, stream, data }` and `proc/exit { proc, code }`.
+`proc/spawn { command, args?, dir?, agent?, project?, env? }` → `{ proc, pid }`, `proc/write { proc, data, close? }`, `proc/kill { proc }`, then the notifications `proc/out { proc, stream, data }` and `proc/exit { proc, code }`.
 
 `command` and `args` must be a line of `permissions.commands`:
 
@@ -366,6 +366,8 @@ pub async fn words(cx: &Cx) -> Result<Value, Refusal> {
 ```json
     "commands": ["git status --short", "git log *", "git --version"]
 ```
+
+A joker of the entry (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`) takes one word of its form ([the jokers](plugins/capabilities#the-jokers)). `pid` is the program’s, which `{pid}` admits while it runs; an Escouade without `capabilities.typedCommands` does not give it.
 
 **What comes back.**
 
@@ -490,6 +492,8 @@ Running a program takes time: do not do it in a decision, which has 500 ms.
 
 `{ key }` → the secret, or `null` when none is kept. The key must be in `permissions.secrets`, and declared in `contributes.secrets`. Another one answers `-32001`. For an account: `account:<name>`, with `account:*` in `permissions.secrets`.
 
+`{ key, profile }` (Escouade 2.2.5, `capabilities.profiles`) → the secret field `key` of the profile `profile`, or `null`. `profile` is the id `settings/get` or `profiles/list` gives, and `permissions.secrets` must have `profile:<kind>`. An id that is none or that the plugin does not have, a key that is no secret field of that kind: `-32602`; without `profile:<kind>`: `-32001`. A key that is only a secret field of a profile, asked **without** `profile`, is refused (`-32602`): never another secret in its place.
+
 `sdk/doc-examples/ts/src/settings.ts` (excerpt)
 
 ```ts
@@ -512,6 +516,8 @@ pub async fn token(cx: &Cx) -> Result<Option<String>, Refusal> {
 
 `{}` or `{ project }` → an object by key of `contributes.settings`, without those left at their default. With a project, what its `.escouade.yml` gives it under `plugins.<id>` comes first.
 
+A setting of `"scope": "project"` comes by its ranks: this machine’s value for the project, then the file’s (unless `"repo": false` or `import`), then `default`. A `"type": "profile"` setting gives the id of the profile chosen, or `null`; never the one the file names. Of a project where the plugin is not on, the defaults alone ([the settings of a project](plugins/manifest#the-settings-of-a-project)).
+
 `sdk/doc-examples/ts/src/settings.ts` (excerpt)
 
 ```ts
@@ -533,6 +539,19 @@ pub async fn channel(cx: &Cx, project: &Value) -> Result<Value, Refusal> {
     Ok(settings["channel"].clone())
 }
 ```
+
+### `profiles/list` and `profiles/get`
+
+Escouade 2.2.5, `capabilities.profiles`. `{ kind }` → the profiles of that kind, in the order the user created them: their id, drawn by Escouade, and their name (`nameField`). `{ kind, profile }` → the simple fields of a profile, never a secret, or `null` when it has none of that id. A kind the plugin does not declare: `-32602`.
+
+```json
+{"jsonrpc":"2.0","id":7,"method":"profiles/list","params":{"kind":"vpn"}}
+{"jsonrpc":"2.0","id":7,"result":[{"id":"0f3c9a1b2d4e5f60","name":"Client A"}]}
+{"jsonrpc":"2.0","id":8,"method":"profiles/get","params":{"kind":"vpn","profile":"0f3c9a1b2d4e5f60"}}
+{"jsonrpc":"2.0","id":8,"result":{"name":"Client A","server":"vpn.client-a.example","proto":"udp"}}
+```
+
+The SDK calls them `p.profiles.list`, `p.profiles.get` and `p.profiles.of`, the kit `Cx::profiles`, `Cx::profile` and `Cx::profile_of`; all refuse before the call an Escouade that does not serve profiles. The whole case: [credentials per project](plugins/project-credentials).
 
 ## The journal
 

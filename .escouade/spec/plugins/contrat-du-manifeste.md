@@ -2,7 +2,7 @@
 title: "Le contrat du manifeste : réglages, secrets, profils, jokers et limite"
 subject: "plugins"
 sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/lib.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts","docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §2 à §6 et §10","src/components/plugins/PluginSettings.svelte","src/lib/plugin-fields.ts","src-tauri/src/plugin_secrets.rs","design/plugins-contract-2-3/captures (release/2.3) : a-plugin, a-projet, b-profil","crates/escouade-plugins/src/profiles.rs"]
-tickets: ["ESC-525","ESC-528","ESC-529","ESC-526","ESC-530"]
+tickets: ["ESC-525","ESC-528","ESC-529","ESC-526","ESC-530","ESC-531"]
 decisions: ["le-contrat-du-manifeste-est-lu-avant-d-e","les-jokers-de-permissions-commands-sont","la-limite-de-programmes-d-un-plugin-est","la-page-d-un-plugin-sert-ses-groupes-ses","les-profils-d-un-plugin-et-ses-reglages"]
 compared: null
 ---
@@ -154,3 +154,23 @@ L'onglet « Réglages » de la page d'un plugin sert `groups`, `description` d'u
 - **Une configuration de plus de 1 280 caractères** (6 Ko avec ses certificats) se garde aussi sous Windows : le trousseau la reçoit en morceaux (ESC-527). Un trousseau qui refuse quand même fait dire la raison à « Garder » (le message d'ESC-499), et le fichier lisible de l'utilisateur seul est proposé.
 - Tout tient à 1024 × 728, en français et en anglais. L'e2e `plugin-groups.spec.ts` le vérifie avec un plugin de test.
 - **Le journal du plugin** masque un secret entier, comme avant. Pour un secret sur plusieurs lignes, il masque aussi chacune de ses lignes de plus de 8 caractères (étude §4.4, un seul masquage partagé avec ESC-527). Un plugin qui écrit la configuration ligne par ligne n'en montre donc rien de lisible ; une ligne courte comme `client` reste, sinon elle masquerait tout.
+
+## Ce que voit l'auteur : SDK, kit, `validate`, banc (ESC-531, T9)
+
+- **Le kit Rust 0.1.4 et le SDK 0.5.0** lisent profils, réglages d'un projet et `pid` de `proc/spawn` (`Cx::settings`, `profile_of`, `profiles`, `profile`, `secret_of`, `spawn`, `spawn_typed` ; `p.settings`, `p.profiles.*`, `p.secret(key, { profile })`, `p.runProgram`, `p.runTyped`). Ils vérifient `capabilities.profiles` et `capabilities.typedCommands` reçus à `initialize` avant l'appel, et le refusent (`-32601`) en disant la version qui les sert : une app ancienne ignorerait `profile` et rendrait un autre secret.
+- **`escouade.min` du contrat**, en un seul endroit : `x-escouadeMin` de `schemas/plugin-protocol-1.json` (2.2.5). `node scripts/escouade-min.mjs <version>` l'écrit partout où il est dit (`ESCOUADE_MIN` du protocole et du SDK, `CONTRACT_MIN` des deux lecteurs, la documentation, le plugin de test) ; `scripts/escouade-min.test.ts` échoue si une copie diffère.
+- **`validate`** (le cœur et le SDK, mêmes mots) avertit (⚠), sans refuser, un manifeste qui prend des profils, un réglage de chaque projet, des jokers ou `limits.processes` avec un `escouade.min` plus ancien : « `escouade.min` dit 2.2.0, mais ce plugin prend …, qu'Escouade sert depuis 2.2.5 : une version plus ancienne ne les servirait pas. `escouade.min` devrait dire 2.2.5. »
+- **Ses messages disent le champ et pourquoi à cet endroit** :
+  - une commande refusée dit son mot fautif : un premier mot qui n'est pas un programme, un `*` avant la fin, un chemin qu'aucun joker ne nomme (`{path:project}`), un joker collé à autre chose (`--pid={pid}`), une autre accolade (`{float}`) ;
+  - `misplaced` selon le champ : `multiline` et `import` sur un réglage `string` ou un secret, `lines` avec `multiline: true`, `of` sur un réglage `profile`, ni `scope` ni `of` sur un champ de profil, pas de `type` sur un champ secret ;
+  - `field` distingue une clé de groupe qui ne nomme rien et un `nameField` qui ne nomme pas un champ `string` d'une ligne non secret ; `profile` distingue `permissions.secrets` et `of` ;
+  - une liste `fields` vide, `limits.reason` absente au-delà de 4, `limits.processes` hors de 1 à 16, le `type` manquant d'un champ de profil.
+- **Le banc de conformité** joue quinze scénarios ; les quatre du contrat, sans objet quand le manifeste ne les déclare pas :
+  - « Profils » : un profil du banc par genre, choisi par le projet du banc, servi comme l'app ; échoue sur un refus d'Escouade ou un secret de profil écrit ;
+  - « Secret de plusieurs lignes » : chaque secret `multiline` (du plugin ou d'un profil) donné sur plusieurs lignes ; échoue si l'une de ses lignes de plus de 8 caractères est écrite sur la sortie d'erreur ou dans un `log` ;
+  - « Jokers des commandes » : les programmes que demande le plugin, lancés pour de vrai par les règles de l'app (sans objet hors ligne, le banc de la revue) ; échoue sur un `proc/spawn` refusé hors de la limite ;
+  - « Limite de programmes » : échoue sur un refus pour la limite.
+- Après un fait, le banc attend que le plugin se taise (300 ms sans rien de nouveau, 3 s au plus) pour juger en entier ce qu'il en fait.
+- `tests/fixtures/plugins/sdk-contract`, un plugin sur le SDK compilé en WASM par le banc, prend profils, secrets sur plusieurs lignes, jokers et `limits.processes` à 5, et passe le banc ; trois variantes (sans `profile:vpn`, une commande retirée, une limite à 2) échouent au scénario attendu.
+- **Le faux Escouade du SDK**, donné le manifeste, sert `proc/spawn` sur `permissions.commands` (chaque joker, `{pid}` parmi ses programmes, `limits.processes`) et les profils comme l'app.
+- **Le schéma publié** (`plugin-1.json`) dit qu'un secret de portée `project` est lu mais coupe le plugin, et la version qui sert les jokers et `limits.processes`. La documentation du site (fr et en) et `docs/PLUGINS.md` décrivent le tout, avec le guide « Des identifiants par projet ».

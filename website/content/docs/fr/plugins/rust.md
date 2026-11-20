@@ -217,6 +217,22 @@ escouade_plugin_protocol::module!(run);
 
 Le contrat est dans `escouade_plugin_protocol::engine`. Le cœur lance le programme de l’agent et lit sa sortie ; le plugin dit comment le lancer, puis traduit ses lignes en éléments de conversation. `std::process::id` se remplace par `turn::instance_id`, et `std::fs` par `turn::read_file`, sous une racine de `permissions.files`. Un client ACP se branche par `escouade_acp::Agent`, dont `frames` lit les lignes de l’agent.
 
+## Les profils et les réglages d’un projet
+
+Le kit 0.1.4 (Escouade 2.2.5) donne à `Cx` ce que sert le [contrat de la 2.2.5](plugins/versioning#le-contrat-de-la-2-2-5) :
+
+| Aide | Ce qu’elle fait |
+| --- | --- |
+| `settings(Some(projet))` | Ses réglages, ceux d’un projet par leurs rangs ; sans projet, ceux de l’utilisateur. |
+| `profile_of(projet, réglage)` | Le profil qu’a choisi un projet par son réglage `profile` : son identifiant, ou `None`. |
+| `profiles(genre)`, `profile(genre, id)` | Ses profils (identifiants et noms), les champs simples de l’un. |
+| `secret_of(profil, clé)` | Un champ secret d’un profil, sur plusieurs lignes compris. |
+| `spawn(params)` | Lance un programme : `Spawned { proc, pid }`, `pid` quand Escouade le donne. |
+| `spawn_typed(params)` | Pour une entrée à jokers : `(proc, pid)`, le pid toujours là. |
+| `require(Capability::Profiles \| Capability::TypedCommands)`, `greeting()` | Ce qu’Escouade a annoncé à `initialize`, et le refus (`-32601`) qui dit la version qui le sert (`escouade_plugin_protocol::ESCOUADE_MIN`). |
+
+`profile_of`, `profiles`, `profile`, `secret_of` et `spawn_typed` vérifient la capacité avant de rien demander : une Escouade plus ancienne ignorerait `profile` et rendrait un autre secret. Chaque aide a son exemple dans la documentation du crate. Le cas complet : [des identifiants par projet](plugins/project-credentials).
+
 ## Ce que la compilation refuse
 
 `escouade-plugin build` compile comme le store, et `escouade-plugin validate` dit la même chose sans rien lancer. Un plugin compile **seul dans son dossier**, sur une copie, avec rustc 1.98.0 et `wasm32-wasip1` que la commande télécharge elle-même, un profil imposé et `--locked` : pour les mêmes sources et le même `Cargo.lock`, le module est le même à l’octet sous Windows et sous Linux.

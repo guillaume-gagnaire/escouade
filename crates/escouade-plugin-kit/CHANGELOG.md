@@ -1,10 +1,15 @@
 # Changelog
 
-## 0.1.3
+## 0.1.4
 
-- Profiles (`contributes.profiles`, Escouade 2.2.5): `secret_of(profile, key)` asks a secret field of a profile, `profiles(kind)` the profiles of a kind, `profile(kind, id)` the simple fields of one; `greeting().profiles` says whether Escouade serves them.
+0.1.3 was never published: its changes come with this one. It needs Escouade 2.2.5 for what follows (`escouade_plugin_protocol::ESCOUADE_MIN`, the `escouade.min` of a plugin that uses it).
+
+- Profiles (`contributes.profiles`): `secret_of(profile, key)` asks a secret field of a profile, `profiles(kind)` the profiles of a kind, `profile(kind, id)` the simple fields of one, `profile_of(project, setting)` the profile a project chose.
+- `settings(project)`: the settings, those of a project by their ranks (this machine's value for the project, its `.escouade.yml`, the default).
+- `spawn(params)` runs a program and gives its `proc` and its `pid` (`Spawned`); `spawn_typed(params)`, for an entry with jokers, wants the pid.
+- `Cx::require(Capability::Profiles | Capability::TypedCommands)` refuses (`-32601`) before the call when Escouade did not announce it at `initialize`: an older Escouade would ignore the profile of `secrets/get` and answer another secret. `secret_of`, `profiles`, `profile`, `profile_of` and `spawn_typed` check it themselves. `Cx::greeting()` is what Escouade said.
 - Takes `escouade-plugin-protocol` 0.1.4: `greeting().typed_commands` says whether Escouade serves the jokers of `permissions.commands` (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`), and `proc/spawn` answers the program's `pid` with its `proc`.
-- In a module, a big line (a dictation of 10 minutes is one of 25 MB) is read and written with one copy instead of three, and never doubled at its end: such a module crashed at random for lack of memory, by where its allocator stood. A plugin rebuilt on 0.1.4 has more than 32 MB to spare on that dictation.
+- In a module, a big line (a dictation of 10 minutes is one of 25 MB) is read and written with one copy instead of three, and never doubled at its end: such a module crashed at random for lack of memory, by where its allocator stood. A plugin rebuilt on it has more than 32 MB to spare on that dictation.
 
 ## 0.1.2
 

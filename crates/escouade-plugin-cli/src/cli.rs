@@ -18,7 +18,8 @@ pub fn usage(lang: Lang) -> String {
 
   escouade-plugin test <dossier> [--json] [--measure [n]] [--wasm <module>] [--offline] [--account <adresse>] [--escouade <version>]
       Joue le banc de conformité : initialisation, version refusée, délais, un fait reçu,
-      une décision, un secret, plantage, fermeture. Code de sortie 1 si un scénario échoue.
+      une décision, un secret, plantage, fermeture, et les profils, les secrets de plusieurs lignes, les
+      jokers des commandes et la limite de programmes. Code de sortie 1 si un scénario échoue.
       --wasm joue ce module (celui du store) au lieu de compiler le plugin ;
       --offline refuse tout fetch, quoi que dise permissions.network ;
       --account donne une adresse à {{account}}, comme l'aurait saisie l'utilisateur.
@@ -57,7 +58,8 @@ Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version
 
   escouade-plugin test <folder> [--json] [--measure [n]] [--wasm <module>] [--offline] [--account <address>] [--escouade <version>]
       Plays the conformance bench: initialization, version refused, delays, a fact received,
-      a decision, a secret, crash, shutdown. Exit code 1 when a scenario fails.
+      a decision, a secret, crash, shutdown, and the profiles, the multi-line secrets, the command jokers
+      and the program limit. Exit code 1 when a scenario fails.
       --wasm plays this module (the store's) instead of compiling the plugin;
       --offline refuses every fetch, whatever permissions.network says;
       --account gives {{account}} an address, as the user would have typed it.
@@ -281,6 +283,10 @@ fn validate(folder: &Path, lang: Lang, hand: manifest::Hand, app_version: &str) 
     // What the contract reads but this Escouade does not serve yet (ESC-525): the manifest holds, the app will load the
     // plugin disabled with this reason; said, not refused, so that a plugin written for the next Escouade validates.
     if let Some(why) = m.unserved(lang) {
+        eprintln!("⚠ {why}");
+    }
+    // What it takes of the contract of 2.2.5 with an `escouade.min` older than that (ESC-531).
+    if let Some(why) = m.below_contract(lang) {
         eprintln!("⚠ {why}");
     }
     // A `run.js` plugin: its bundle is one that can run in WASM (what the store's compilation refuses, said first).

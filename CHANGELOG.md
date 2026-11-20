@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Auteurs de plugins : le SDK et le kit Rust lisent les profils, les réglages d’un projet et le pid d’un programme lancé, et refusent clairement sur une Escouade trop ancienne ; le banc de conformité juge aussi les profils, les secrets sur plusieurs lignes, les jokers et la limite de programmes, et la documentation gagne un guide « Des identifiants par projet ».
 - Une forge ou une source de tickets injoignable (pas de réseau, DNS, proxy) le dit avec quoi vérifier : la connexion, l’adresse du compte ou le proxy. Escouade la tient pour une panne passagère et réessaie plus tard. Plugins Gitea, GitHub, GitLab, Bitbucket, Azure DevOps, Trello, Jira, Linear et ClickUp.
 - Docs : ce qui reste à partager se lit sur un badge de l’onglet « Docs », plus dans la barre d’état, et un conflit s’y voit à part. « Synchroniser », dans l’espace Docs, partage tes changements ou, s’il n’y en a pas, récupère ceux des autres.
 - Auteurs de plugins : le manifeste accepte désormais des profils, des réglages par projet, des groupes, des champs sur plusieurs lignes, l’import d’un fichier, des jokers typés dans les commandes et une limite de programmes, et refuse ce qui sort de leur grammaire. Un plugin qui en demande un que l’app ne sert pas encore reste coupé, la raison dite.

@@ -267,7 +267,7 @@ fn the_grammar_of_the_jokers_holds_word_by_word() {
         .map(|p| p.message(Lang::Fr))
         .collect();
     assert!(
-        said.contains(&"`limits.processes` doit être un nombre entier de 1 à 16.".to_string()),
+        said.contains(&"`limits.processes` doit être un nombre entier de 1 à 16 : les programmes à la fois, 4 sans le demander.".to_string()),
         "{said:?}"
     );
     assert!(
@@ -276,4 +276,88 @@ fn the_grammar_of_the_jokers_holds_word_by_word() {
         ),
         "{said:?}"
     );
+}
+
+/// What `escouade-plugin validate` says of each refusal of the contract (ESC-531): the field, and why it is refused there,
+/// in the words of plugin-manifest.mjs (schemas/plugin-manifest.test.ts holds the same sentences).
+#[test]
+fn validate_says_the_field_and_why_for_the_fields_of_the_contract() {
+    let mut v = base();
+    v["permissions"] = json!({
+        "secrets": ["profile:wifi"],
+        "commands": ["openvpn --config {path:project}", "slirp4netns --pid={pid}", "{int}", "nsenter * -t {pid}", "a {float}"]
+    });
+    v["limits"] = json!({ "processes": 8 });
+    v["contributes"] = json!({
+        "groups": [{ "id": "g", "title": "G", "fields": ["nowhere"] }, { "id": "h", "title": "H", "fields": [] }],
+        "settings": [{ "key": "n", "type": "number", "title": "N", "multiline": true, "of": "vpn" }],
+        "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "password", "fields": [
+            { "key": "password", "secret": true, "type": "string", "title": "P" },
+            { "key": "server", "title": "S", "scope": "project" }
+        ] }]
+    });
+    let problems = manifest::check(&v, Hand::Third).manifest.unwrap_err();
+    let said = |lang| -> Vec<String> { problems.iter().map(|p| p.message(lang)).collect() };
+    let fr = said(Lang::Fr);
+    for line in [
+        "`permissions.commands[0]` `{path:project}` n'est pas un joker : un chemin n'est que `{path:temp}` ou `{path:plugin}`, jamais un fichier du projet ni d'un agent, que le dépôt choisirait.",
+        "`permissions.commands[1]` `--pid={pid}` colle un joker à autre chose : un joker est un mot entier (`--pid {pid}`, jamais `--pid={pid}`).",
+        "`permissions.commands[2]` commence par `{int}` : le premier mot est le nom d'un programme, trouvé sur le PATH, jamais un chemin, un `*` ni un joker.",
+        "`permissions.commands[3]` a un `*` avant son dernier mot : `*` ne vient qu'à la fin, pour les mots qui suivent.",
+        "`permissions.commands[4]` `{float}` n'est pas un joker (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`) : une accolade n'a pas sa place dans un autre mot.",
+        "`permissions.secrets[0]` nomme un genre que `contributes.profiles` ne déclare pas, ou sans champ secret : `profile:<genre>` demande les secrets des profils de ce genre.",
+        "`limits.reason` manque : au-delà de 4 programmes à la fois, une phrase dit pourquoi, que l'utilisateur lit à l'installation.",
+        "`contributes.groups[0].fields[0]` ne nomme aucun réglage ni secret du plugin (`contributes.settings`, `contributes.secrets`).",
+        "`contributes.groups[1].fields` est une liste vide : au moins un champ.",
+        "`contributes.settings[0].multiline` ne va que sur un réglage `string` ou un secret.",
+        "`contributes.settings[0].of` ne va que sur un réglage `\"type\": \"profile\"`, dont il dit le genre.",
+        "`contributes.profiles[0].nameField` doit nommer un champ `string` du profil, ni secret ni sur plusieurs lignes : le nom du profil dans les listes.",
+        "`contributes.profiles[0].fields[0].type` n'a pas sa place sur un champ secret d'un profil : un secret est un texte.",
+        "`contributes.profiles[0].fields[1].scope` n'a pas sa place sur un champ de profil : un profil vaut pour chaque projet qui le choisit.",
+        "`contributes.profiles[0].fields[1].type` manque : un champ de profil est d'un type (`string`, `number`, `boolean`, `select`), ou `\"secret\": true`.",
+    ] {
+        assert!(fr.contains(&line.to_string()), "{line}\nnot in:\n{}", fr.join("\n"));
+    }
+    let en = said(Lang::En);
+    assert!(
+        en.contains(&"`limits.reason` is missing: beyond 4 programs at once, a sentence says why, which the user reads at the installation.".to_string()),
+        "{}",
+        en.join("\n")
+    );
+    v["limits"] = json!({ "processes": 17, "reason": "R" });
+    let problems = manifest::check(&v, Hand::Third).manifest.unwrap_err();
+    assert!(problems.iter().any(|p| p.message(Lang::En)
+        == "`limits.processes` must be a whole number from 1 to 16: the programs at once, 4 without asking."));
+}
+
+/// A plugin that takes the contract of 2.2.5 with an older `escouade.min` is told so by `validate`, never refused (ESC-531);
+/// the version is the protocol's, said in one place (scripts/escouade-min.mjs).
+#[test]
+fn validate_warns_a_plugin_of_the_contract_whose_min_is_older() {
+    assert_eq!(
+        manifest::CONTRACT_MIN,
+        escouade_plugin_protocol::ESCOUADE_MIN
+    );
+    let mut v = base();
+    v["permissions"] = json!({ "commands": ["tunnel --port {port}"] });
+    v["limits"] = json!({ "processes": 2 });
+    v["contributes"] = json!({ "settings": [{ "key": "routes", "type": "string", "scope": "project", "title": "R" }] });
+    let said = read(&v).below_contract(Lang::En).expect("said");
+    assert_eq!(
+        said,
+        format!(
+            "`escouade.min` says 2.2.0, but this plugin takes settings of each project, jokers in `permissions.commands`, \
+             `limits.processes`, which Escouade serves since {0}: an older version would not serve them. `escouade.min` \
+             should say {0}.",
+            manifest::CONTRACT_MIN
+        )
+    );
+    assert!(read(&v)
+        .below_contract(Lang::Fr)
+        .unwrap()
+        .contains("des réglages propres à chaque projet"));
+    v["escouade"]["min"] = json!(manifest::CONTRACT_MIN);
+    assert_eq!(read(&v).below_contract(Lang::En), None);
+    // A plugin of today is told nothing.
+    assert_eq!(read(&base()).below_contract(Lang::En), None);
 }

@@ -16,7 +16,7 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 /** The version of @escouade-dev/plugin a new plugin depends on (a test holds it to sdk/plugin/package.json). */
-export const SDK_VERSION = '^0.4.0';
+export const SDK_VERSION = '^0.5.0';
 export const KINDS = ['program', 'rust', 'declarative'];
 const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), 'templates');
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$/;

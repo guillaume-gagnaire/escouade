@@ -20,6 +20,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 /// The major version of the protocol, which `escouade.api` of a manifest and `protocolVersion` of the handshake name.
 pub const PROTOCOL: u64 = 1;
 
+/// The version of Escouade that serves the profiles and the settings of each project (`capabilities.profiles`), the
+/// jokers of `permissions.commands` (`capabilities.typedCommands`) and `limits.processes`: the `escouade.min` a
+/// plugin says when it takes one of them. An older Escouade cuts such a plugin, the reason said, rather than ignore what
+/// it asks. Its one source is `x-escouadeMin` of schemas/plugin-protocol-1.json (`node scripts/escouade-min.mjs`).
+pub const ESCOUADE_MIN: &str = "2.2.5";
+
 /// The methods Escouade calls on every plugin.
 pub mod method {
     /// Comes first: the version of the protocol, who speaks, what is on offer.
@@ -112,7 +118,8 @@ pub struct Greeting {
 }
 
 impl Greeting {
-    fn of(params: &Value) -> Self {
+    /// What the params of `initialize` say.
+    pub fn of(params: &Value) -> Self {
         Self {
             lang: params["lang"].as_str().map(str::to_string),
             version: params["escouade"]["version"]
@@ -429,6 +436,23 @@ mod tests {
         hello.lang = None;
         let v = serde_json::to_value(&hello).unwrap();
         assert_eq!(serde_json::from_value::<Hello>(v).unwrap(), hello);
+    }
+
+    #[test]
+    fn escouade_min_is_the_one_of_the_schema() {
+        // In the repository only: the crate published has no schema beside it.
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../schemas/plugin-protocol-1.json"
+        );
+        let Ok(text) = std::fs::read_to_string(path) else {
+            return;
+        };
+        let schema: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            schema["x-escouadeMin"]["version"], ESCOUADE_MIN,
+            "node scripts/escouade-min.mjs <version> writes it everywhere"
+        );
     }
 
     #[test]

@@ -212,7 +212,7 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 | Clé | Type | Valeurs | Absente | Exemple |
 |---|---|---|---|---|
 | `plugins.recommended` | Liste d’identifiants de plugins | les identifiants du [store](plugins/installer) (`dev.escouade.slack`) | aucun plugin proposé | `recommended: [dev.escouade.slack]` |
-| `plugins.<id>` | Réglages du plugin `<id>` | une clé par réglage qu’il déclare : un texte, un nombre, `true` ou `false` | ses réglages de chaque machine | voir ci-dessous |
+| `plugins.<id>` | Réglages du plugin `<id>` | une clé par réglage qu’il déclare : un texte, un nombre, `true` ou `false` ; pour un réglage de profil, le nom d’un profil qu’il propose | ses réglages de chaque machine | voir ci-dessous |
 
 ```yaml
 plugins:
@@ -226,6 +226,8 @@ plugins:
 Les plugins que le projet **propose**, comme les extensions recommandées de VS Code. À l’ouverture du projet, Escouade dit combien il en manque sur ta machine ; en tête de Réglages › Projets › Projet, une bande les nomme, chacun avec ce qu’il demande et « Voir dans le store », qui ouvre sa page dans la vue Plugins. Rien n’est installé ni activé seul : un dépôt cloné ne doit pas pouvoir lancer un programme. L’installation reste ton geste, plugin par plugin, après la fenêtre qui montre ses permissions. Un plugin installé quitte la bande ; « Pas pour ce projet » la fait taire sur cette machine, et elle ne revient que pour un plugin que le fichier proposerait plus tard. Un identifiant qui n’en est pas un (`Slack`) est signalé et ignoré.
 
 Sous `plugins.<id>`, les réglages que le projet donne au plugin : ceux qu’il déclare (`contributes.settings`), avec une valeur de leur type, passent devant ceux de sa page quand il les demande pour ce projet (`settings/get` avec le projet, voir [l’API des plugins](plugins/api)). Une clé qu’il ne déclare pas, ou l’un de ses secrets, ne lui est jamais donnée : **jamais de secret dans ce fichier**, ils vont au trousseau du système, par sa page. Un projet privé ne donne rien à un plugin qui n’y est pas activé.
+
+Un réglage que le plugin dit de chaque projet (`"scope": "project"`) se règle aussi dans Réglages › Projets › *projet* › Plugins : la valeur de cette machine y passe devant celle du fichier, et « Écrire dans .escouade.yml » écrit cette seule clé. Un réglage que son auteur écarte (`"repo": false`), ou qui importe un fichier, ne vient jamais du fichier. Pour un réglage de profil, le fichier ne fait que **proposer** un profil par son nom : la page Plugins du projet le dit dans une bande, et c’est toi qui choisis ([des identifiants par projet](plugins/project-credentials)).
 
 Ces clés restent celles du fichier : elles ne sont pas des réglages du projet, ne sont pas marquées dans la fenêtre, et « Exporter vers .escouade.yml » les garde telles qu’elles sont écrites.
 

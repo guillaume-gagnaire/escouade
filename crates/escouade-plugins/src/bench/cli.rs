@@ -129,6 +129,8 @@ fn show_seen(s: &Seen) -> String {
         Seen::Unserved { method } => format!("→ {method}: unknown method"),
         Seen::Notification { method } => format!("→ notification {method}"),
         Seen::Stray { line } => format!("→ (answers nothing) {line}"),
+        Seen::Profile { method, said } => format!("→ {method}: {said}"),
+        Seen::Refused { method, message } => format!("→ {method}: refused, {message}"),
     }
 }
 

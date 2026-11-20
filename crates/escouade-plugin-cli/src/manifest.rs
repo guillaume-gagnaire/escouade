@@ -108,6 +108,10 @@ pub const PROCESSES: std::ops::RangeInclusive<u64> = 1..=16;
 /// The programs at once a plugin has without asking: beyond, `limits.reason` is needed, the install says it and an
 /// update that raises it asks again (ESC-529).
 pub const PROCESSES_UNASKED: u64 = 4;
+
+/// The version of Escouade that serves the profiles, the settings of each project, the jokers and `limits.processes`:
+/// `escouade_plugin_protocol::ESCOUADE_MIN` (a test holds them equal; `node scripts/escouade-min.mjs` writes both).
+pub const CONTRACT_MIN: &str = "2.2.5";
 /// The words of `permissions.commands` that stand for one argument of a closed form (§5.3): each a whole word, never the
 /// first. The host checks and replaces them when the program is run.
 pub const JOKERS: [&str; 6] = [
@@ -256,13 +260,32 @@ impl Problem {
             format!("`{}`", self.path)
         };
         let expected = self.expected.as_deref().unwrap_or("");
+        // The last part of its path (`multiline` of `contributes.settings[0].multiline`): what is said of a field of the
+        // contract depends on which one it is (ESC-531).
+        let last = self.path.rsplit('.').next().unwrap_or("");
+        let in_profile = self.path.contains("profiles[") && self.path.contains(".fields[");
         let what = match self.code {
+            Code::Required if self.path == "limits.reason" => tr_in!(
+                lang,
+                "manque : au-delà de 4 programmes à la fois, une phrase dit pourquoi, que l'utilisateur lit à l'installation.",
+                "is missing: beyond 4 programs at once, a sentence says why, which the user reads at the installation."
+            ),
+            Code::Required if in_profile && last == "type" => tr_in!(
+                lang,
+                "manque : un champ de profil est d'un type (`string`, `number`, `boolean`, `select`), ou `\"secret\": true`.",
+                "is missing: a field of a profile is of a type (`string`, `number`, `boolean`, `select`), or `\"secret\": true`."
+            ),
             Code::Required => tr_in!(lang, "manque.", "is missing."),
             Code::Type => tr_in!(
                 lang,
                 "devrait être {}.",
                 "should be {}.",
                 type_name(lang, expected)
+            ),
+            Code::Empty if last == "fields" => tr_in!(
+                lang,
+                "est une liste vide : au moins un champ.",
+                "is an empty list: one field at least."
             ),
             Code::Empty => tr_in!(
                 lang,
@@ -332,6 +355,43 @@ impl Problem {
                 "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
                 "goes to a host `permissions.network` does not declare: the user would not see it."
             ),
+            Code::Command if expected.starts_with("program:") => {
+                let w = &expected["program:".len()..];
+                tr_in!(
+                    lang,
+                    "commence par `{w}` : le premier mot est le nom d'un programme, trouvé sur le PATH, jamais un chemin, un `*` ni un joker.",
+                    "starts with `{w}`: the first word is a program's name, found on the PATH, never a path, a `*` nor a joker."
+                )
+            }
+            Code::Command if expected == "star" => tr_in!(
+                lang,
+                "a un `*` avant son dernier mot : `*` ne vient qu'à la fin, pour les mots qui suivent.",
+                "has a `*` before its last word: `*` only comes at the end, for the words that follow."
+            ),
+            Code::Command if expected.starts_with("path:") => {
+                let w = &expected["path:".len()..];
+                tr_in!(
+                    lang,
+                    "`{w}` n'est pas un joker : un chemin n'est que `{{path:temp}}` ou `{{path:plugin}}`, jamais un fichier du projet ni d'un agent, que le dépôt choisirait.",
+                    "`{w}` is no joker: a path is only `{{path:temp}}` or `{{path:plugin}}`, never a file of the project nor of an agent, which the repository would choose."
+                )
+            }
+            Code::Command if expected.starts_with("glued:") => {
+                let w = &expected["glued:".len()..];
+                tr_in!(
+                    lang,
+                    "`{w}` colle un joker à autre chose : un joker est un mot entier (`--pid {{pid}}`, jamais `--pid={{pid}}`).",
+                    "`{w}` glues a joker to something else: a joker is a whole word (`--pid {{pid}}`, never `--pid={{pid}}`)."
+                )
+            }
+            Code::Command if expected.starts_with("brace:") => {
+                let w = &expected["brace:".len()..];
+                tr_in!(
+                    lang,
+                    "`{w}` n'est pas un joker (`{{int}}`, `{{port}}`, `{{name}}`, `{{pid}}`, `{{path:temp}}`, `{{path:plugin}}`) : une accolade n'a pas sa place dans un autre mot.",
+                    "`{w}` is no joker (`{{int}}`, `{{port}}`, `{{name}}`, `{{pid}}`, `{{path:temp}}`, `{{path:plugin}}`): a brace has no place in another word."
+                )
+            }
             Code::Command => tr_in!(
                 lang,
                 "doit commencer par le nom d'un programme, jamais un chemin ni un joker ; un joker (`{{int}}`, `{{port}}`, `{{name}}`, `{{pid}}`, `{{path:temp}}`, `{{path:plugin}}`) est un mot entier, aucune autre accolade, et `*` n'y vient qu'en dernier mot.",
@@ -357,6 +417,36 @@ impl Problem {
                 "ne nomme pas la session à reprendre : un argument doit contenir `{{session}}`.",
                 "does not name the session to resume: an argument must hold `{{session}}`."
             ),
+            Code::Misplaced if last == "multiline" => tr_in!(
+                lang,
+                "ne va que sur un réglage `string` ou un secret.",
+                "only goes on a `string` setting or a secret."
+            ),
+            Code::Misplaced if last == "import" => tr_in!(
+                lang,
+                "ne va que sur un réglage `string` ou un secret : il remplit le champ d'un fichier lu une fois.",
+                "only goes on a `string` setting or a secret: it fills the field from a file read once."
+            ),
+            Code::Misplaced if last == "lines" => tr_in!(
+                lang,
+                "ne va qu'avec `multiline: true` : les lignes que montre la zone de texte.",
+                "only goes with `multiline: true`: the lines the text area shows."
+            ),
+            Code::Misplaced if last == "of" && !in_profile => tr_in!(
+                lang,
+                "ne va que sur un réglage `\"type\": \"profile\"`, dont il dit le genre.",
+                "only goes on a `\"type\": \"profile\"` setting, whose kind it says."
+            ),
+            Code::Misplaced if last == "scope" || last == "of" => tr_in!(
+                lang,
+                "n'a pas sa place sur un champ de profil : un profil vaut pour chaque projet qui le choisit.",
+                "has no place on a field of a profile: a profile holds for each project that chooses it."
+            ),
+            Code::Misplaced if last == "type" => tr_in!(
+                lang,
+                "n'a pas sa place sur un champ secret d'un profil : un secret est un texte.",
+                "has no place on a secret field of a profile: a secret is a text."
+            ),
             Code::Misplaced => tr_in!(
                 lang,
                 "n'a pas sa place ici : `multiline` et `import` vont sur un réglage `string` ou un secret, `lines` avec `multiline: true`, `of` sur un réglage `profile` ; un champ de profil n'a pas de `scope`, ni de `type` s'il est secret.",
@@ -369,26 +459,50 @@ impl Problem {
             ),
             Code::Bounds => {
                 let (lo, hi) = expected.split_once("..").unwrap_or((expected, expected));
-                tr_in!(
+                let mut said = tr_in!(
                     lang,
                     "doit être un nombre entier de {lo} à {hi}.",
                     "must be a whole number from {lo} to {hi}."
-                )
+                );
+                if self.path == "limits.processes" {
+                    said.pop();
+                    said.push_str(&tr_in!(
+                        lang,
+                        " : les programmes à la fois, 4 sans le demander.",
+                        ": the programs at once, 4 without asking."
+                    ));
+                }
+                said
             }
             Code::Extension => tr_in!(
                 lang,
                 "n'est pas une extension de fichier (`.ovpn`, `.conf`).",
                 "is no extension of a file (`.ovpn`, `.conf`)."
             ),
+            Code::Field if last == "nameField" => tr_in!(
+                lang,
+                "doit nommer un champ `string` du profil, ni secret ni sur plusieurs lignes : le nom du profil dans les listes.",
+                "must name a `string` field of the profile, neither secret nor on several lines: the profile's name in the lists."
+            ),
+            Code::Field if self.path.starts_with("contributes.groups") => tr_in!(
+                lang,
+                "ne nomme aucun réglage ni secret du plugin (`contributes.settings`, `contributes.secrets`).",
+                "names no setting nor secret of the plugin (`contributes.settings`, `contributes.secrets`)."
+            ),
             Code::Field => tr_in!(
                 lang,
                 "ne nomme pas un champ qui convient : dans un groupe, un réglage ou un secret du plugin ; en `nameField`, un champ `string` du profil, ni secret ni sur plusieurs lignes.",
                 "names no field fit for it: in a group, a setting or a secret of the plugin; as `nameField`, a `string` field of the profile, neither secret nor on several lines."
             ),
+            Code::Profile if self.path.starts_with("permissions.secrets") => tr_in!(
+                lang,
+                "nomme un genre que `contributes.profiles` ne déclare pas, ou sans champ secret : `profile:<genre>` demande les secrets des profils de ce genre.",
+                "names a kind `contributes.profiles` does not declare, or one without a secret field: `profile:<kind>` asks for the secrets of the profiles of that kind."
+            ),
             Code::Profile => tr_in!(
                 lang,
-                "n'est pas un genre de `contributes.profiles` (qui a un champ secret, pour `profile:<genre>`).",
-                "is no kind of `contributes.profiles` (one with a secret field, for `profile:<kind>`)."
+                "ne nomme aucun genre de `contributes.profiles`.",
+                "names no kind of `contributes.profiles`."
             ),
             Code::ReadOnly => tr_in!(
                 lang,
@@ -749,6 +863,60 @@ impl Manifest {
         self.escouade.refusal(app, lang)
     }
 
+    /// What it takes of the contract that Escouade serves since [`CONTRACT_MIN`], when its `escouade.min` is older (ESC-531),
+    /// in `lang`: `validate` says it, never refuses it. An older Escouade would not serve it: it refuses a `profile`
+    /// setting, ignores the scope of a setting, refuses an entry with jokers and keeps 4 programs at once.
+    pub fn below_contract(&self, lang: Lang) -> Option<String> {
+        if version(&self.escouade.min) >= version(CONTRACT_MIN) {
+            return None;
+        }
+        let listed = |key: &str| {
+            self.contributes
+                .get(key)
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        };
+        let settings = listed("settings");
+        let mut points = Vec::new();
+        if !listed("profiles").is_empty()
+            || settings
+                .iter()
+                .any(|s| s.get("type").and_then(Value::as_str) == Some("profile"))
+        {
+            points.push(tr_in!(lang, "des profils", "profiles"));
+        }
+        if settings
+            .iter()
+            .any(|s| s.get("scope").and_then(Value::as_str) == Some("project"))
+        {
+            points.push(tr_in!(
+                lang,
+                "des réglages propres à chaque projet",
+                "settings of each project"
+            ));
+        }
+        if self.permissions.commands.iter().any(|c| has_joker(c)) {
+            points.push(tr_in!(
+                lang,
+                "des jokers dans `permissions.commands`",
+                "jokers in `permissions.commands`"
+            ));
+        }
+        if self.limits.processes.is_some() {
+            points.push("`limits.processes`".to_string());
+        }
+        if points.is_empty() {
+            return None;
+        }
+        let (min, points) = (&self.escouade.min, points.join(", "));
+        Some(tr_in!(
+            lang,
+            "`escouade.min` dit {min}, mais ce plugin prend {points}, qu'Escouade sert depuis {CONTRACT_MIN} : une version plus ancienne ne les servirait pas. `escouade.min` devrait dire {CONTRACT_MIN}.",
+            "`escouade.min` says {min}, but this plugin takes {points}, which Escouade serves since {CONTRACT_MIN}: an older version would not serve them. `escouade.min` should say {CONTRACT_MIN}."
+        ))
+    }
+
     /// What it declares of the contract (docs/PLUGINS-CONTRACT-STUDY.md) that this Escouade reads but does not serve
     /// yet, in `lang`: a secret of each project (direction A of the study, not chosen). The jokers of a command are served
     /// since ESC-528, the programs at once of `limits.processes` since ESC-529, the profiles since ESC-530. Such a plugin is
@@ -958,6 +1126,29 @@ pub fn command_holds(command: &str) -> bool {
         && !first.starts_with('.')
         && !rest[..args].contains(&"*")
         && rest.iter().all(|w| is_joker(w) || !w.contains(['{', '}']))
+}
+
+/// What breaks a line of `permissions.commands` that does not hold, for its message (ESC-531): `program:<word>` (its first
+/// word is no program's name), `star` (a `*` before its last word), `path:<word>` (a path no joker names: of the
+/// project, of an agent), `glued:<word>` (a joker inside a word), `brace:<word>` (another brace); empty when it holds.
+pub fn command_fault(command: &str) -> String {
+    let words: Vec<&str> = command.split_whitespace().collect();
+    let Some((first, rest)) = words.split_first() else {
+        return "program:".into();
+    };
+    if first.contains(['/', '\\', ':', '*', '~', '{', '}']) || first.starts_with('.') {
+        return format!("program:{first}");
+    }
+    let args = rest.len().saturating_sub(1);
+    if rest[..args].contains(&"*") {
+        return "star".into();
+    }
+    match rest.iter().find(|w| !is_joker(w) && w.contains(['{', '}'])) {
+        Some(w) if JOKERS.iter().any(|j| w.contains(j)) => format!("glued:{w}"),
+        Some(w) if w.starts_with("{path:") => format!("path:{w}"),
+        Some(w) => format!("brace:{w}"),
+        None => String::new(),
+    }
 }
 
 /// Whether a word of a command is one of the jokers (`JOKERS`), whole.
@@ -1696,7 +1887,11 @@ impl Checker {
         }
         for (i, command) in p.commands.clone().iter().enumerate() {
             if !command_holds(command) {
-                self.problem(&format!("permissions.commands[{i}]"), Code::Command);
+                self.problems.push(Problem {
+                    path: format!("permissions.commands[{i}]"),
+                    code: Code::Command,
+                    expected: Some(command_fault(command)),
+                });
             }
         }
         if let Some(v) = o.get("env") {
@@ -2312,13 +2507,18 @@ pub fn schema() -> Value {
     // Apart: the macro of the whole schema would reach its limit of recursion.
     let commands = json!({
         "type": "array",
-        "description": "The programs it may run (`proc/spawn`): a program's name, never a path nor a joker, then its arguments, word for word. A joker stands for one word of a closed form, written whole: `{int}`, `{port}`, `{name}`, `{pid}` (a program it runs), `{path:temp}`, `{path:plugin}`; no other brace. A last word `*` lets any more follow.",
+        "description": "The programs it may run (`proc/spawn`): a program's name, never a path nor a joker, then its arguments, word for word. A joker stands for one word of a closed form, written whole, never an option: `{int}`, `{port}`, `{name}`, `{pid}` (a program it runs), `{path:temp}`, `{path:plugin}` (a file of that folder, given as its real path); no other brace (Escouade 2.2.5 and later: an older one matches nothing). A last word `*` lets any more follow.",
         "items": { "type": "string", "minLength": 1 },
     });
     // What a field says of itself beyond its key and title (ESC-525).
     let scope = json!({
         "enum": SCOPES,
-        "description": "Where it holds: for every project (`app`, the default), or for each one, set in the project's settings (`project`).",
+        "description": "Where it holds: for every project (`app`, the default), or for each one, set in the project's settings by its ranks: this machine's value, then the project's .escouade.yml, then `default` (`project`, Escouade 2.2.5 and later).",
+    });
+    // A secret of each project is read but not served: the plugin is loaded disabled (`Manifest::unserved`).
+    let secret_scope = json!({
+        "enum": SCOPES,
+        "description": "`app`, the default. `project` is read but not served: the plugin stays disabled, the reason said. A secret of each project goes in a profile (`contributes.profiles`).",
     });
     let multiline = json!({
         "type": "boolean",
@@ -2373,7 +2573,7 @@ pub fn schema() -> Value {
             "key": key,
             "title": text,
             "description": description,
-            "scope": scope,
+            "scope": secret_scope,
             "repo": { "const": false, "description": "A secret never comes from .escouade.yml." },
             "multiline": multiline,
             "lines": lines,
@@ -2513,7 +2713,7 @@ pub fn schema() -> Value {
                 "type": "integer",
                 "minimum": PROCESSES.start(),
                 "maximum": PROCESSES.end(),
-                "description": "How many programs it may run at once (`proc/spawn`): 4 without it. Beyond 4, said at its install and with `reason`.",
+                "description": "How many programs it may run at once (`proc/spawn`), for the plugin, all projects together: 4 without it, 16 at most. Beyond 4, said at its install and with `reason`; an update that raises it asks again (Escouade 2.2.5 and later: an older one keeps 4).",
             },
             "reason": {
                 "description": "Why it asks for more programs at once, in a sentence: needed with `processes` beyond 4.",

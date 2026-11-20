@@ -2,6 +2,9 @@
 /** JSON-RPC 2.0 over the standard input and output of a plugin's program, one message per line. The one source of the protocol's types: the TypeScript of @escouade-dev/plugin is generated from it (sdk/plugin/scripts/generate.mjs), and the Rust tests of the core hold it to what the core sends (plugins_protocol_schema). */
 export const PROTOCOL_VERSION = 1;
 
+/** The version of Escouade that serves the profiles and the settings of each project (capabilities.profiles), the jokers of permissions.commands (capabilities.typedCommands) and limits.processes: the escouade.min a plugin says when it takes one of them. Its one source: node scripts/escouade-min.mjs <version> writes it everywhere it is said. */
+export const ESCOUADE_MIN = '2.2.5';
+
 /** The facts of Escouade. */
 export type FactName =
   | 'agent.created'

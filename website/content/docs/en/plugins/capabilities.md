@@ -110,6 +110,8 @@ A value past the ceiling is brought down to it by the host: the manifest does no
 "limits": { "processes": 8, "reason": { "fr": "Deux programmes par tunnel, un tunnel par projet.", "en": "Two programs a tunnel, a tunnel a project." } }
 ```
 
+Why a limit: the module is isolated, the program it runs is not, it has your rights. Bounding their number bounds what a plugin that loops, or that means harm, can take from the machine (processor, memory, windows) and what the app holds for each one (about 1.3 MiB at worst). The limit holds for the plugin, all projects together; a place is given back as soon as a program has ended. An Escouade older than 2.2.5 keeps 4.
+
 ### Streams and the WebSocket
 
 They are not declared: they follow `network`.
@@ -180,6 +182,35 @@ Each program dies with the plugin’s instance or at `proc/kill`, with what it s
 > The module is isolated, the program it runs is not: it has the user’s rights. An entry in `*` on a general program (`git *`, `docker *`) opens everything again, through `git -c core.sshCommand=…` for example. This is the strongest capability: ask for exact lines, and expect to justify a `*` at the review.
 
 `permissions.commands` is not `contributes.commands`, which runs a shell line on a fact, after the user’s agreement ([the events](plugins/events#a-command-on-a-fact)).
+
+### The jokers
+
+A word that varies, a port, a pid, a file, is written by a **joker**: a whole word, which the host checks at each `proc/spawn` (Escouade 2.2.5, `capabilities.typedCommands`).
+
+```json
+"commands": [
+  "unshare -Urn openvpn --config {path:temp} --script-security 1",
+  "slirp4netns --configure --mtu=65520 {pid} tap0",
+  "tunnel --port {port} --name {name} --retries {int}"
+]
+```
+
+| Joker | What it admits | The window says |
+| --- | --- | --- |
+| `{int}` | `0`, or a number without a leading zero, of 10 digits at most, 4,294,967,295 at most; no sign, no hexadecimal | “a number” |
+| `{port}` | an `{int}` from 1 to 65,535 | “a port” |
+| `{name}` | 1 to 64 ASCII letters, digits, `_`, `.` or `-`, that starts with a letter, a digit or `_`; never a device name of Windows (`CON`, `NUL`, `COM1`…) | “a name” |
+| `{pid}` | the pid of a living program **this** instance of the plugin started (`proc/spawn` gives it with `proc`) | “a program it started” |
+| `{path:temp}` | the relative path of a file of its temporary folder; the host gives the program its resolved absolute path | “a file of its temporary folder” |
+| `{path:plugin}` | the same, under the plugin’s folder, without a hidden part | “a file of its folder” |
+
+- **Never an option**: a joker takes neither `--` nor a word that starts with `-`.
+- **The entry keeps its length**: one word more or less is refused; only a last `*` lets other words follow.
+- **A path is the host’s**: its parts are letters, digits, `_`, `.` or `-`, neither `.` nor `..`; so never an absolute path, `~`, a drive letter nor a UNC path. Resolved, links followed, it must stay under its root and be a file.
+- **Refused in the manifest**, the field and the reason said by `escouade-plugin validate`: an unknown joker (`{float}`), a joker inside a word (`--pid={int}`), a joker as the first word, a brace in another word, `{path:project}` and `{path:agent}`. A path of the project would be a file the repository chooses: a cloned repository would put there a configuration that runs its scripts. A plugin that needs one reads it (`fs/read`), judges it, then writes it in its temporary folder.
+- **Narrower than `*`**: `*` admits any number of words, options included; a joker, one word of a closed form.
+- **The journal** says each refusal with the faulty word (`word 3 ("-x") is no {name}: an option`), and each run with the real words, resolved paths included.
+- **An older Escouade** compares a joker as a literal word: the entry matches nothing, never more.
 
 ## The variables: `env`
 

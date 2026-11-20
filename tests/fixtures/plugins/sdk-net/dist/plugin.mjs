@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 
 // sdk/plugin/src/protocol.ts
 var PROTOCOL_VERSION = 1;
+var ESCOUADE_MIN = "2.2.5";
 var ERRORS = {
   /** A line that is not JSON. */
   parse: -32700,
@@ -153,6 +154,10 @@ function wasmHost() {
   const h = g.__esc;
   return typeof g.Javy === "object" && g.Javy !== null && typeof h?.listen === "function" && typeof h.write === "function" ? h : void 0;
 }
+var SERVES = {
+  profiles: "the profiles and the settings of each project",
+  typedCommands: "the jokers of permissions.commands"
+};
 var matches = (pattern, name) => pattern.endsWith("*") ? name.startsWith(pattern.slice(0, -1)) : pattern === name;
 var Plugin = class {
   constructor(options = {}) {
@@ -199,13 +204,59 @@ var Plugin = class {
     this.closing.push(handler);
     return this;
   }
-  /** Its secret `key` (one of `permissions.secrets`), from the system's keychain; `null` when none is kept. */
-  secret(key) {
-    return this.call("secrets/get", { key });
+  /**
+   * Whether Escouade said at `initialize` that it serves `capability`; else an `RpcError` `ERRORS.methodNotFound` that
+   * says which version does (`ESCOUADE_MIN`, the `escouade.min` of the manifest), thrown before anything is asked.
+   */
+  require(capability) {
+    if (this.escouade?.capabilities?.[capability] === true) return;
+    const version = this.escouade?.escouade?.version ?? "before initialize";
+    throw new RpcError(
+      ERRORS.methodNotFound,
+      `this Escouade (${version}) does not serve ${SERVES[capability]} (capabilities.${capability}): Escouade ${ESCOUADE_MIN} does, the escouade.min the plugin's manifest should say`
+    );
   }
   /**
+   * Its secret `key` (one of `permissions.secrets`), from the system's keychain; `null` when none is kept. With
+   * `profile` (an id of `profiles.list`, or of a `profile` setting), the secret field `key` of that profile, which
+   * `permissions.secrets` holds by `profile:<kind>`: refused before the call by an Escouade without
+   * `capabilities.profiles`, which would give the plugin's own `key` instead.
+   */
+  async secret(key, options = {}) {
+    if (options.profile === void 0) return this.call("secrets/get", { key });
+    this.require("profiles");
+    return this.call("secrets/get", { key, profile: options.profile });
+  }
+  /**
+   * Its profiles (`contributes.profiles`), which the user makes on its page and each project chooses. Each call is refused
+   * before it is sent by an Escouade without `capabilities.profiles`.
+   */
+  profiles = {
+    /** Its profiles of `kind`, in the order the user made them: their ids, drawn by Escouade, and their names. */
+    list: async (kind) => {
+      this.require("profiles");
+      return this.call("profiles/list", { kind });
+    },
+    /** The simple fields of its profile `profile` of `kind` (never a secret: `secret(key, { profile })`), `null` when none. */
+    get: async (kind, profile) => {
+      this.require("profiles");
+      return this.call("profiles/get", { kind, profile });
+    },
+    /**
+     * The profile the project `project` chose by its `profile` setting `setting`: its id, `null` while it chose none.
+     * Only the user chooses it, never a `.escouade.yml`.
+     */
+    of: async (project, setting) => {
+      this.require("profiles");
+      const v = (await this.settings(project))[setting];
+      return typeof v === "string" ? v : null;
+    }
+  };
+  /**
    * Its settings (`contributes.settings`) as the user set them; with `project` (the `project.id` of a fact), those the
-   * project's `.escouade.yml` gives it (`plugins.<id>`) over them, where it is on.
+   * project's `.escouade.yml` gives it (`plugins.<id>`) over them, where it is on. A setting of each project
+   * (`"scope": "project"`) goes by its ranks: this machine's value for the project, then the file's, then its `default`;
+   * a `profile` setting gives the id of the profile chosen, or `null`.
    */
   settings(project) {
     return this.call("settings/get", project ? { project } : {});
@@ -240,13 +291,25 @@ var Plugin = class {
    * word; never a shell. What it writes comes to `onOut`; `exited` says how it ended.
    */
   async runProgram(params, onOut) {
-    const { proc } = await this.call("proc/spawn", params);
-    return this.programOf(proc, onOut);
+    const { proc, pid } = await this.call("proc/spawn", params);
+    return this.programOf(proc, pid, onOut);
   }
-  programOf(proc, onOut) {
+  /**
+   * Runs a program whose entry of `permissions.commands` has jokers (`{int}`, `{port}`, `{name}`, `{pid}`,
+   * `{path:temp}`, `{path:plugin}`), as `runProgram`; its `pid` is always there. Refused before the call by an Escouade
+   * without `capabilities.typedCommands`, which would refuse the entry anyway.
+   */
+  async runTyped(params, onOut) {
+    this.require("typedCommands");
+    const program = await this.runProgram(params, onOut);
+    if (program.pid === void 0) throw new RpcError(ERRORS.internal, "proc/spawn answered no pid");
+    return program;
+  }
+  programOf(proc, pid, onOut) {
     const heard = this.programs.get(proc);
     const program = {
       proc,
+      ...pid === void 0 ? {} : { pid },
       exited: new Promise((resolve) => {
         this.programs.set(proc, { onOut, onExit: resolve });
       }),

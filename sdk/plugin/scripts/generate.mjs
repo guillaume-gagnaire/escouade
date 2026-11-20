@@ -94,6 +94,8 @@ export function protocolTs(schema, source = 'schemas/plugin-protocol-1.json') {
   let out = HEADER(source);
   out += doc(schema.description, '');
   out += `export const PROTOCOL_VERSION = ${schema['x-protocolVersion']};\n\n`;
+  if (schema['x-escouadeMin'])
+    out += doc(schema['x-escouadeMin'].description, '') + `export const ESCOUADE_MIN = ${quote(schema['x-escouadeMin'].version)};\n\n`;
   for (const [name, def] of Object.entries(schema.definitions)) out += declaration(name, def) + '\n';
   const facts = schema.definitions.FactName.enum;
   out += `/** Every fact, in the order of the schema. */\nexport const FACT_NAMES: readonly FactName[] = [${facts.map(quote).join(', ')}];\n\n`;

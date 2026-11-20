@@ -58,10 +58,18 @@ pub enum Scenario {
     Tickets,
     /// A code host: `account/me` and a pull request read, or refused by a typed error (INT-5).
     Forge,
+    /// Its profiles: asked by the ids Escouade gives, of its own kinds, their secrets never written out (ESC-531).
+    Profiles,
+    /// A secret on several lines: no line of it written out.
+    Multiline,
+    /// The jokers of `permissions.commands`: each program it ran admitted by an entry.
+    Commands,
+    /// `limits.processes`: never more programs at once than it declares.
+    Limit,
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 11] = [
+    pub const ALL: [Scenario; 15] = [
         Scenario::Manifest,
         Scenario::Initialize,
         Scenario::Version,
@@ -73,6 +81,10 @@ impl Scenario {
         Scenario::Shutdown,
         Scenario::Tickets,
         Scenario::Forge,
+        Scenario::Profiles,
+        Scenario::Multiline,
+        Scenario::Commands,
+        Scenario::Limit,
     ];
 
     pub fn label(self, lang: Lang) -> &'static str {
@@ -88,6 +100,10 @@ impl Scenario {
             Scenario::Shutdown => ("Fermeture", "Shutdown"),
             Scenario::Tickets => ("Source de tickets", "Ticket source"),
             Scenario::Forge => ("Hébergeur", "Code host"),
+            Scenario::Profiles => ("Profils", "Profiles"),
+            Scenario::Multiline => ("Secret de plusieurs lignes", "Multi-line secret"),
+            Scenario::Commands => ("Jokers des commandes", "Command jokers"),
+            Scenario::Limit => ("Limite de programmes", "Program limit"),
         };
         match lang {
             Lang::Fr => fr,
@@ -524,13 +540,9 @@ impl Bench<'_> {
     }
 
     fn secrets(&self, m: &Manifest) -> HashMap<String, String> {
-        // A value for each key it may ask; a pattern's keys are made as they are asked.
-        m.permissions
-            .secrets
-            .iter()
-            .filter(|k| !k.ends_with('*'))
-            .map(|k| (k.clone(), format!("bench-secret-{}-{k}", self.nonce)))
-            .collect()
+        // A value for each key it may ask, on several lines for a multi-line one; a pattern's keys are made as they are
+        // asked.
+        fake::bench_secrets(m, &format!("bench-secret-{}", self.nonce))
     }
 
     fn start(&self, m: &Manifest, program: &Program) -> std::io::Result<Session> {
@@ -845,8 +857,17 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
                 .filter(|s| matches!(s, Seen::Stray { .. }))
                 .count();
             first.notify("events/fact", &fact(name));
-            // What it does of the fact, then whether it still answers.
-            tokio::time::sleep(Duration::from_millis(300)).await;
+            // What it does of the fact (its programs, its profiles: ESC-531), until it settles, 3 s at most; then whether it
+            // still answers.
+            let mut was = usize::MAX;
+            for _ in 0..10 {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                let now = first.seen().len();
+                if now == was {
+                    break;
+                }
+                was = now;
+            }
             let probe = first
                 .call(UNKNOWN, &json!({}), timeout_of(UNKNOWN) + b.o.grace)
                 .await;
@@ -1214,6 +1235,7 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
     }
 
     secret(b, m);
+    contract(b, m);
     measure
 }
 
@@ -1378,6 +1400,287 @@ fn secret(b: &mut Bench, m: &Manifest) {
                 "no secret asked for during the bench"
             ),
         );
+    }
+}
+
+/// The scenarios of the contract of 2.2.5 (ESC-531), over every session: its profiles, its secrets on several lines, the
+/// jokers of its commands and its limit of programs.
+fn contract(b: &mut Bench, m: &Manifest) {
+    let lang = b.o.lang;
+    let mark = format!("bench-secret-{}", b.nonce);
+    let written: Vec<String> = b
+        .seen
+        .iter()
+        .filter_map(|s| match s {
+            Seen::Stderr { line } | Seen::Stray { line } => Some(line.clone()),
+            Seen::Log { message, .. } => Some(message.clone()),
+            _ => None,
+        })
+        .filter(|l| !l.starts_with("proc/spawn: "))
+        .collect();
+    let seen = b.seen.clone();
+    let refused = |methods: &[&str]| -> Vec<String> {
+        seen.iter()
+            .filter_map(|s| match s {
+                Seen::Refused { method, message } if methods.contains(&method.as_str()) => {
+                    Some(format!("{method}: {message}"))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+
+    // Profiles.
+    let kinds = super::profiles::kinds(m);
+    if kinds.is_empty() {
+        b.set(
+            Scenario::Profiles,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "il ne déclare aucun profil (`contributes.profiles`)",
+                "it declares no profile (`contributes.profiles`)"
+            ),
+            None,
+        );
+    } else {
+        let no = refused(&[
+            "secrets/get",
+            "profiles/list",
+            "profiles/get",
+            "settings/get",
+        ]);
+        let profile_leak = kinds.iter().flat_map(|k| k.secrets()).any(|key| {
+            let value = format!("{mark}-{key}");
+            written.iter().any(|l| l.contains(&value))
+        });
+        let asked: Vec<String> = b
+            .seen
+            .iter()
+            .filter_map(|s| match s {
+                Seen::Profile { said, .. } => Some(said.clone()),
+                _ => None,
+            })
+            .fold(Vec::new(), |mut v, said| {
+                if !v.contains(&said) {
+                    v.push(said);
+                }
+                v
+            });
+        if let Some(why) = no.first() {
+            b.fail(
+                Scenario::Profiles,
+                tr_in!(lang, "Escouade a refusé {why}", "Escouade refused {why}"),
+                tr_in!(
+                    lang,
+                    "demander un profil par l'identifiant que donnent `settings/get` ou `profiles/list`, d'un genre qu'il déclare, un champ secret de ce genre, avec `profile:<genre>` dans `permissions.secrets`.",
+                    "ask for a profile by the id `settings/get` or `profiles/list` gives, of a kind it declares, a secret field of that kind, with `profile:<kind>` in `permissions.secrets`."
+                ),
+            );
+        } else if profile_leak && !asked.is_empty() {
+            b.fail(
+                Scenario::Profiles,
+                tr_in!(
+                    lang,
+                    "il a écrit un secret d'un profil sur sa sortie d'erreur ou dans un `log`",
+                    "it wrote a secret of a profile on its standard error or in a `log`"
+                ),
+                tr_in!(
+                    lang,
+                    "ne jamais écrire un secret, d'un profil comme du plugin.",
+                    "never write a secret out, of a profile as of the plugin."
+                ),
+            );
+        } else if asked.is_empty() {
+            b.pass(
+                Scenario::Profiles,
+                tr_in!(
+                    lang,
+                    "aucun profil demandé pendant le banc",
+                    "no profile asked for during the bench"
+                ),
+            );
+        } else {
+            b.pass(
+                Scenario::Profiles,
+                tr_in!(
+                    lang,
+                    "a demandé {} : ses profils, par leurs identifiants",
+                    "asked for {}: its profiles, by their ids",
+                    asked.join(", ")
+                ),
+            );
+        }
+    }
+
+    // Secrets on several lines: theirs, and those of its profiles.
+    let made = format!("bench-secret-{}", b.nonce);
+    let mut lines: Vec<(String, String)> = Vec::new();
+    for (key, value) in fake::bench_secrets(m, &made) {
+        if value.contains('\n') {
+            lines.push((key, value));
+        }
+    }
+    for kind in &kinds {
+        for f in &kind.fields {
+            let key = f.get("key").and_then(Value::as_str).unwrap_or_default();
+            if kind.has_secret(key) && f.get("multiline").and_then(Value::as_bool) == Some(true) {
+                lines.push((key.to_string(), fake::multiline_secret(&made, key)));
+            }
+        }
+    }
+    if lines.is_empty() {
+        b.set(
+            Scenario::Multiline,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "aucun secret sur plusieurs lignes (`multiline`)",
+                "no secret on several lines (`multiline`)"
+            ),
+            None,
+        );
+    } else {
+        let leaked = lines.iter().find_map(|(key, value)| {
+            fake::telling_lines(value)
+                .into_iter()
+                .any(|line| written.iter().any(|w| w.contains(line)))
+                .then_some(key.clone())
+        });
+        let keys: Vec<&str> = lines.iter().map(|(k, _)| k.as_str()).collect();
+        match leaked {
+            Some(key) => b.fail(
+                Scenario::Multiline,
+                tr_in!(
+                    lang,
+                    "il a écrit une ligne du secret {key:?} sur sa sortie d'erreur ou dans un `log`",
+                    "it wrote a line of the secret {key:?} on its standard error or in a `log`"
+                ),
+                tr_in!(
+                    lang,
+                    "n'écrire aucune ligne d'un secret : le journal masque chaque ligne de plus de 8 caractères, pas les autres sorties.",
+                    "write no line of a secret: the journal masks each line of more than 8 characters, no other output does."
+                ),
+            ),
+            None => b.pass(
+                Scenario::Multiline,
+                tr_in!(
+                    lang,
+                    "{} donnés sur plusieurs lignes, aucune écrite",
+                    "{} given on several lines, none written out",
+                    keys.join(", ")
+                ),
+            ),
+        }
+    }
+
+    // The jokers of its commands, and its limit.
+    let ran: Vec<String> = b
+        .seen
+        .iter()
+        .filter_map(|s| match s {
+            Seen::Stderr { line } => line
+                .strip_prefix("proc/spawn: ran ")
+                .map(|r| r.rsplit_once(" in ").map_or(r, |(w, _)| w).to_string()),
+            _ => None,
+        })
+        .collect();
+    let spawns = refused(&["proc/spawn"]);
+    let (over, others): (Vec<String>, Vec<String>) = spawns
+        .into_iter()
+        .partition(|r| r.contains("(limits.processes)"));
+    let jokers = m
+        .permissions
+        .commands
+        .iter()
+        .any(|c| c.split_whitespace().any(|w| w.contains('{')));
+    if !jokers {
+        b.set(
+            Scenario::Commands,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "aucun joker dans `permissions.commands`",
+                "no joker in `permissions.commands`"
+            ),
+            None,
+        );
+    } else if b.o.offline {
+        b.set(
+            Scenario::Commands,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "hors ligne : aucun programme ne tourne ici, chaque entrée se lit à la revue",
+                "offline: no program runs here, each entry is read at the review"
+            ),
+            None,
+        );
+    } else if let Some(why) = others.first() {
+        b.fail(
+            Scenario::Commands,
+            tr_in!(lang, "Escouade a refusé {why}", "Escouade refused {why}"),
+            tr_in!(
+                lang,
+                "ne lancer que des entrées de `permissions.commands`, chaque joker par un seul mot de sa forme, jamais une option, un `{{pid}}` d'un programme qu'il a lancé et qui tourne.",
+                "run only entries of `permissions.commands`, each joker by one word of its form, never an option, a `{{pid}}` of a program it runs that is alive."
+            ),
+        );
+    } else if ran.is_empty() {
+        b.pass(
+            Scenario::Commands,
+            tr_in!(
+                lang,
+                "aucun programme lancé pendant le banc",
+                "no program run during the bench"
+            ),
+        );
+    } else {
+        b.pass(
+            Scenario::Commands,
+            tr_in!(
+                lang,
+                "a lancé {}, chaque mot admis",
+                "ran {}, each word admitted",
+                ran.join(" ; ")
+            ),
+        );
+    }
+    match m.limits.processes {
+        None => b.set(
+            Scenario::Limit,
+            Verdict::Skip,
+            tr_in!(
+                lang,
+                "pas de `limits.processes` : 4 programmes à la fois",
+                "no `limits.processes`: 4 programs at once"
+            ),
+            None,
+        ),
+        Some(n) => {
+            let at_once = super::procs::at_once(Some(n));
+            if let Some(why) = over.first() {
+                b.fail(
+                    Scenario::Limit,
+                    tr_in!(lang, "Escouade a refusé {why}", "Escouade refused {why}"),
+                    tr_in!(
+                        lang,
+                        "attendre la fin d'un programme (`proc/exit`) avant d'en lancer un de plus que les {at_once} déclarés.",
+                        "wait for a program's end (`proc/exit`) before running one more than the {at_once} declared."
+                    ),
+                );
+            } else {
+                b.pass(
+                    Scenario::Limit,
+                    tr_in!(
+                        lang,
+                        "{at_once} à la fois déclarés, tenus ({} lancés pendant le banc)",
+                        "{at_once} at once declared, held ({} run during the bench)",
+                        ran.len()
+                    ),
+                );
+            }
+        }
     }
 }
 

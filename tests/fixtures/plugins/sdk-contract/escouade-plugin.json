@@ -1,0 +1,68 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.test.sdk-contract",
+  "name": "The contract of 2.2.5",
+  "version": "1.0.0",
+  "description": {
+    "en": "A plugin written for the SDK that takes profiles, secrets on several lines, jokers and a limit of programs (ESC-531).",
+    "fr": "Un plugin écrit pour le SDK qui prend des profils, des secrets sur plusieurs lignes, des jokers et une limite de programmes (ESC-531)."
+  },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.2.5" },
+  "run": { "js": "dist/plugin.mjs" },
+  "activation": ["event:ticket.column"],
+  "permissions": {
+    "events": ["ticket.column"],
+    "secrets": ["profile:vpn", "notes"],
+    "files": [{ "root": "temp", "access": "write" }],
+    "commands": [
+      "git cat-file --batch",
+      "git column --mode=plain --width {pid}",
+      "git column --mode=plain --padding {int}",
+      "git hash-object {path:temp}",
+      "git hash-object {path:plugin}",
+      "git --no-pager {name}"
+    ]
+  },
+  "limits": { "processes": 5, "reason": "A tunnel, its network and the checks of its configuration run together." },
+  "contributes": {
+    "groups": [{ "id": "tunnel", "title": { "en": "Tunnel", "fr": "Tunnel" }, "fields": ["profile", "routes", "notes"] }],
+    "profiles": [
+      {
+        "id": "vpn",
+        "title": { "en": "VPN profile", "fr": "Profil VPN" },
+        "nameField": "name",
+        "fields": [
+          { "key": "name", "type": "string", "title": { "en": "Name", "fr": "Nom" } },
+          { "key": "server", "type": "string", "title": { "en": "Server", "fr": "Serveur" } },
+          {
+            "key": "proto",
+            "type": "select",
+            "title": { "en": "Protocol", "fr": "Protocole" },
+            "options": ["udp", "tcp"],
+            "default": "udp"
+          },
+          { "key": "password", "secret": true, "title": { "en": "Password", "fr": "Mot de passe" } },
+          {
+            "key": "ovpn",
+            "secret": true,
+            "multiline": true,
+            "import": [".ovpn", ".conf"],
+            "title": { "en": "OpenVPN configuration", "fr": "Configuration OpenVPN" }
+          }
+        ]
+      }
+    ],
+    "settings": [
+      { "key": "profile", "type": "profile", "of": "vpn", "scope": "project", "title": { "en": "VPN profile", "fr": "Profil VPN" } },
+      {
+        "key": "routes",
+        "type": "string",
+        "scope": "project",
+        "default": "10.0.0.0/8",
+        "title": { "en": "Routes through the tunnel", "fr": "Routes par le tunnel" }
+      }
+    ],
+    "secrets": [{ "key": "notes", "multiline": true, "title": { "en": "Notes", "fr": "Notes" } }]
+  }
+}

@@ -68,10 +68,14 @@ void plugin.start();
 | `decidePermission(fonction)` | Répond à `permissions/decide` : `allow`, `deny` avec un `message`, ou `ask`, qui laisse la main à l’utilisateur. Sans fonction, la réponse est `ask`. |
 | `secret(clé)` | Demande à Escouade l’un de ses secrets (`secrets/get`) ; `null` si aucun n’est gardé. Une autre clé échoue par l’erreur `-32001`. |
 | `settings(projet?)` | Demande ses réglages (`settings/get`) ; avec l’id d’un projet, ceux que son `.escouade.yml` lui donne (`plugins.<id>`) passent devant. |
+| `secret(clé, { profile })` | Un champ secret d’un profil (`secrets/get` avec `profile`), sur plusieurs lignes compris. |
+| `profiles.list(genre)`, `profiles.get(genre, id)`, `profiles.of(projet, réglage)` | Ses profils (identifiants et noms), les champs simples de l’un, celui qu’a choisi un projet ou `null` ([des identifiants par projet](plugins/project-credentials)). |
+| `require('profiles' \| 'typedCommands')` | Échoue par `RpcError` `ERRORS.methodNotFound` si Escouade n’a pas annoncé cette capacité à `initialize`, avec la version qui la sert (`ESCOUADE_MIN`). Les appels des profils et `runTyped` le font d’eux-mêmes, avant de rien demander : une Escouade plus ancienne ignorerait `profile` et rendrait un autre secret. |
 | `log.debug/info/warn/error(message)` | Une ligne de son journal (`log`). |
 | `file(chemin)` | Lit un fichier de son dossier en texte (`files/read`), un sous-dossier compris (`data/words.txt`), 256 Ko au plus, sous Node comme en WASM : jamais son manifeste, un fichier caché ou un chemin qui en sort (`RpcError` `ERRORS.refused`) ; un fichier absent échoue par `ERRORS.notFound`. |
 | `fs.read/text/write/stat/list/canon(fichier)` | Les dossiers de `permissions.files`, en WASM ([les fichiers](plugins/calls#les-fichiers)). |
 | `runProgram(params, onOut?)` | Lance une ligne de `permissions.commands`, en WASM : `exited`, `write`, `close`, `kill` ([les programmes](plugins/calls#les-programmes-proc)). |
+| `runTyped(params, onOut?)` | Comme `runProgram`, pour une entrée à jokers : son `pid` est toujours là, et une Escouade sans `capabilities.typedCommands` est refusée avant l’appel. `runProgram` rend aussi `pid` quand Escouade le donne. |
 | `openStream(p, url, init?)`, `openSocket(p, url, headers?)` | Importées à part : une réponse lue au fil de l’eau et un WebSocket, en WASM ([le réseau](plugins/calls#le-reseau)). |
 | `handle(méthode, fonction)` | Sert une autre méthode (un point d’extension à venir). Lance `new RpcError(code, message)` pour répondre une erreur. |
 | `onInitialize(fonction)`, `onShutdown(fonction)` | Appelée à `initialize`, ou avant la réponse à `shutdown` (800 ms au plus : Escouade attend une seconde). |
@@ -133,6 +137,13 @@ test('a force push is refused, the rest left to the user', async () => {
 ```
 
 `fact(nom, champs)` envoie un fait et attend ses fonctions ; `decide(champs)` demande une décision ; `call` et `notify` envoient le reste. Les champs donnés remplacent ceux du banc (le projet « Banc », le ticket `BEN-1`, une commande `npm test`). Le faux garde ce que le plugin a écrit au journal (`logs`), les secrets qu’il a demandés (`secretsAsked`) et ses traces ; `secrets` donne leurs valeurs, et une clé hors d’elles est refusée, comme dans Escouade.
+
+Donné le manifeste (`manifest`), le faux sert ce que sert l’app depuis la [2.2.5](plugins/versioning#le-contrat-de-la-2-2-5), par ses règles :
+
+- `profiles` : par genre, les profils de l’utilisateur (`id`, `fields`, `secrets`) ; `profiles/list`, `profiles/get` et les secrets d’un profil, avec les refus de l’app ;
+- `projectValues` (les valeurs de cette machine par projet, un profil choisi compris), `projectSettings` (le `.escouade.yml` de chaque projet) et `off` (les projets où le plugin n’est pas actif) : `settings/get` d’un projet par ses rangs ;
+- `proc/spawn` sur `permissions.commands` : chaque joker vérifié, `{pid}` parmi ses programmes vivants, `{path:temp}` parmi `temp` (et ce que le plugin y écrit par `fs/write`), `{path:plugin}` parmi `files`, `limits.processes` tenu. Il garde `programs` (ceux qui tournent), `spawned` (tous, avec les mots qu’ils lanceraient) et `refusals` ; `exit(proc, code)` en termine un, `out(proc, data)` écrit pour lui ;
+- `capabilities: { profiles: false, typedCommands: false }` joue une Escouade plus ancienne.
 
 ## La commande
 

@@ -50,6 +50,8 @@ export const FILE_ROOTS: string[];
 export const FILE_ACCESS: string[];
 /** Whether a line of `permissions.commands` holds: a program's name first, never a path nor a joker; a joker a whole word. */
 export function commandHolds(command: string): boolean;
+/** What breaks a line of permissions.commands that does not hold (`program:<word>`, `star`, `path:<word>`, `glued:<word>`, `brace:<word>`), for its message; empty when it holds. */
+export function commandFault(command: string): string;
 /** The words of `permissions.commands` that stand for one argument of a closed form (ESC-525). */
 export const JOKERS: readonly string[];
 /** Whether a word of a command is one of the jokers, whole. */
@@ -107,3 +109,7 @@ export function validateText(text: string, options?: ValidateOptions): Validatio
 export function message(error: ManifestError, lang?: 'fr' | 'en'): string;
 /** What is said of a reserved point at `path`: « reserved, no effect in this version ». */
 export function reservedMessage(path: string, lang?: 'fr' | 'en'): string;
+/** The version of Escouade that serves the profiles, the settings of each project, the jokers and limits.processes. */
+export const CONTRACT_MIN: string;
+/** What a manifest takes of the contract served since CONTRACT_MIN when its escouade.min is older: a warning of validate, or null. */
+export function belowContract(manifest: unknown, lang?: 'fr' | 'en'): string | null;

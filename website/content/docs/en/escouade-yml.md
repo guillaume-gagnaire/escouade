@@ -212,7 +212,7 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 | Key | Type | Values | Missing | Example |
 |---|---|---|---|---|
 | `plugins.recommended` | List of plugins’ ids | the ids of the [store](plugins/installer) (`dev.escouade.slack`) | no plugin proposed | `recommended: [dev.escouade.slack]` |
-| `plugins.<id>` | Settings of the plugin `<id>` | one key by setting it declares: a text, a number, `true` or `false` | its settings of each machine | see below |
+| `plugins.<id>` | Settings of the plugin `<id>` | one key by setting it declares: a text, a number, `true` or `false`; for a profile setting, the name of a profile it proposes | its settings of each machine | see below |
 
 ```yaml
 plugins:
@@ -226,6 +226,8 @@ plugins:
 The plugins the project **proposes**, like VS Code’s recommended extensions. When the project opens, Escouade says how many your machine lacks; at the head of Settings › Projects › Project, a band names them, each with what it asks for and “See in the store”, which opens its page in the view Plugins. Nothing is installed nor switched on by itself: a cloned repository must not be able to run a program. Installing stays your gesture, plugin by plugin, after the window that shows its permissions. An installed plugin leaves the band; “Not for this project” silences it on this machine, and it comes back only for a plugin the file would propose later. An id that is none (`Slack`) is told and ignored.
 
 Under `plugins.<id>`, the settings the project gives the plugin: those it declares (`contributes.settings`), with a value of their type, go before those of its page when it asks for them for this project (`settings/get` with the project, see [the plugins’ API](plugins/api)). A key it does not declare, or one of its secrets, is never given to it: **never a secret in this file**, they go to the system’s keychain, through its page. A private project gives nothing to a plugin not switched on in it.
+
+A setting the plugin says is each project’s (`"scope": "project"`) is also set in Settings › Projects › *project* › Plugins: this machine’s value comes there before the file’s, and “Write into .escouade.yml” writes that key alone. A setting its author keeps out (`"repo": false`), or that imports a file, never comes from the file. For a profile setting, the file only **proposes** a profile by its name: the project’s Plugins page says it in a band, and you choose ([credentials per project](plugins/project-credentials)).
 
 These keys stay the file’s: they are no settings of the project, are not marked in the window, and “Export to .escouade.yml” keeps them as they are written.
 

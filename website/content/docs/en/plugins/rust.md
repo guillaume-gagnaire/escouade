@@ -217,6 +217,22 @@ escouade_plugin_protocol::module!(run);
 
 The contract is in `escouade_plugin_protocol::engine`. The core starts the agent’s program and reads its output; the plugin says how to start it, then turns its lines into items of the conversation. `std::process::id` is replaced by `turn::instance_id`, and `std::fs` by `turn::read_file`, under a root of `permissions.files`. An ACP client plugs in through `escouade_acp::Agent`, whose `frames` reads the agent’s lines.
 
+## Profiles and the settings of a project
+
+The kit 0.1.4 (Escouade 2.2.5) gives `Cx` what the [contract of 2.2.5](plugins/versioning#the-contract-of-2-2-5) serves:
+
+| Helper | What it does |
+| --- | --- |
+| `settings(Some(project))` | Its settings, those of a project by their ranks; without a project, the user’s. |
+| `profile_of(project, setting)` | The profile a project chose by its `profile` setting: its id, or `None`. |
+| `profiles(kind)`, `profile(kind, id)` | Its profiles (ids and names), the simple fields of one. |
+| `secret_of(profile, key)` | A secret field of a profile, on several lines included. |
+| `spawn(params)` | Runs a program: `Spawned { proc, pid }`, `pid` when Escouade gives it. |
+| `spawn_typed(params)` | For an entry with jokers: `(proc, pid)`, the pid always there. |
+| `require(Capability::Profiles \| Capability::TypedCommands)`, `greeting()` | What Escouade announced at `initialize`, and the refusal (`-32601`) that says the version that serves it (`escouade_plugin_protocol::ESCOUADE_MIN`). |
+
+`profile_of`, `profiles`, `profile`, `secret_of` and `spawn_typed` check the capability before asking anything: an older Escouade would ignore `profile` and give another secret. Each helper has its example in the crate’s documentation. The whole case: [credentials per project](plugins/project-credentials).
+
 ## What the compilation refuses
 
 `escouade-plugin build` compiles as the store does, and `escouade-plugin validate` says the same without running anything. A plugin compiles **alone in its folder**, on a copy, with rustc 1.98.0 and `wasm32-wasip1`, which the command downloads itself, an imposed profile and `--locked`: for the same sources and the same `Cargo.lock`, the module is the same to the byte under Windows and under Linux.

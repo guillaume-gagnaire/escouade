@@ -109,6 +109,26 @@ mod tests {
                         Ok(json!("slow"))
                     }
                     "secret" => Ok(json!(cx.secret("account:x").await?)),
+                    "vpn" => {
+                        let profile = cx.profile_of("p1", "profile").await?;
+                        let password = match &profile {
+                            Some(p) => cx.secret_of(p, "password").await?,
+                            None => None,
+                        };
+                        Ok(json!({ "profile": profile, "password": password }))
+                    }
+                    "list" => Ok(json!(cx.profiles("vpn").await?)),
+                    "fields" => Ok(json!(cx.profile("vpn", "pr1").await?)),
+                    "tunnel" => {
+                        let (proc, pid) = cx
+                            .spawn_typed(json!({ "command": "slirp4netns", "args": ["41"] }))
+                            .await?;
+                        Ok(json!([proc, pid]))
+                    }
+                    "spawn" => {
+                        let s = cx.spawn(json!({ "command": "isola" })).await?;
+                        Ok(json!([s.proc, s.pid]))
+                    }
                     other => Err(Refusal::not_found(other)),
                 }
             })
@@ -157,6 +177,151 @@ mod tests {
             (done["id"].clone(), done["result"].clone()),
             (json!(7), json!("ghp_x"))
         );
+    }
+
+    async fn send(w: &mut tokio::io::DuplexStream, v: Value) {
+        w.write_all(format!("{v}\n").as_bytes()).await.unwrap();
+    }
+
+    /// `initialize` with these capabilities, and its answer read.
+    async fn greet(
+        w: &mut tokio::io::DuplexStream,
+        r: &mut tokio::io::Lines<BufReader<tokio::io::DuplexStream>>,
+        capabilities: Value,
+    ) {
+        let hello = json!({ "jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+            "protocolVersion": 1, "escouade": { "version": "2.2.4" }, "capabilities": capabilities } });
+        send(w, hello).await;
+        assert_eq!(next(r).await["id"], 0);
+    }
+
+    /// Escouade's answer to the plugin's last request.
+    async fn reply(
+        w: &mut tokio::io::DuplexStream,
+        r: &mut tokio::io::Lines<BufReader<tokio::io::DuplexStream>>,
+        method: &str,
+        result: Value,
+    ) -> Value {
+        let ask = next(r).await;
+        assert_eq!(ask["method"], method, "{ask}");
+        send(
+            w,
+            json!({ "jsonrpc": "2.0", "id": ask["id"], "result": result }),
+        )
+        .await;
+        ask["params"].clone()
+    }
+
+    #[tokio::test]
+    async fn an_escouade_that_does_not_serve_profiles_is_never_asked_for_one() {
+        let (mut w, mut r) = session().await;
+        greet(&mut w, &mut r, json!({ "batch": true, "secrets": true })).await;
+        for method in ["vpn", "list", "fields", "tunnel"] {
+            send(
+                &mut w,
+                json!({ "jsonrpc": "2.0", "id": 1, "method": method }),
+            )
+            .await;
+            // The refusal comes at once: no request of the plugin before it.
+            let done = next(&mut r).await;
+            assert_eq!(done["id"], 1, "{method} asked Escouade: {done}");
+            assert_eq!(done["error"]["code"], code::METHOD_NOT_FOUND);
+            let said = done["error"]["message"].as_str().unwrap();
+            assert!(said.contains("(2.2.4)"), "{said}");
+            assert!(
+                said.contains(escouade_plugin_protocol::ESCOUADE_MIN),
+                "{said}"
+            );
+            assert!(said.contains("escouade.min"), "{said}");
+        }
+        // A program without jokers runs on it, without a pid.
+        send(
+            &mut w,
+            json!({ "jsonrpc": "2.0", "id": 2, "method": "spawn" }),
+        )
+        .await;
+        reply(&mut w, &mut r, "proc/spawn", json!({ "proc": 3 })).await;
+        assert_eq!(next(&mut r).await["result"], json!([3, null]));
+    }
+
+    #[tokio::test]
+    async fn the_profile_of_a_project_its_secret_its_fields_and_a_pid() {
+        let (mut w, mut r) = session().await;
+        greet(
+            &mut w,
+            &mut r,
+            json!({ "profiles": true, "typedCommands": true }),
+        )
+        .await;
+        send(
+            &mut w,
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "vpn" }),
+        )
+        .await;
+        let asked = reply(
+            &mut w,
+            &mut r,
+            "settings/get",
+            json!({ "profile": "pr1", "routes": "10.0.0.0/8" }),
+        )
+        .await;
+        assert_eq!(asked, json!({ "project": "p1" }));
+        let asked = reply(&mut w, &mut r, "secrets/get", json!("hunter2")).await;
+        assert_eq!(asked, json!({ "key": "password", "profile": "pr1" }));
+        assert_eq!(
+            next(&mut r).await["result"],
+            json!({ "profile": "pr1", "password": "hunter2" })
+        );
+
+        // A project that chose none: no secret asked.
+        send(
+            &mut w,
+            json!({ "jsonrpc": "2.0", "id": 2, "method": "vpn" }),
+        )
+        .await;
+        reply(&mut w, &mut r, "settings/get", json!({ "profile": null })).await;
+        assert_eq!(
+            next(&mut r).await["result"],
+            json!({ "profile": null, "password": null })
+        );
+
+        send(
+            &mut w,
+            json!({ "jsonrpc": "2.0", "id": 3, "method": "list" }),
+        )
+        .await;
+        let asked = reply(
+            &mut w,
+            &mut r,
+            "profiles/list",
+            json!([{ "id": "pr1", "name": "Acme" }]),
+        )
+        .await;
+        assert_eq!(asked, json!({ "kind": "vpn" }));
+        assert_eq!(next(&mut r).await["result"], json!([["pr1", "Acme"]]));
+
+        send(
+            &mut w,
+            json!({ "jsonrpc": "2.0", "id": 4, "method": "fields" }),
+        )
+        .await;
+        let asked = reply(&mut w, &mut r, "profiles/get", json!(null)).await;
+        assert_eq!(asked, json!({ "kind": "vpn", "profile": "pr1" }));
+        assert_eq!(next(&mut r).await["result"], json!(null));
+
+        send(
+            &mut w,
+            json!({ "jsonrpc": "2.0", "id": 5, "method": "tunnel" }),
+        )
+        .await;
+        reply(
+            &mut w,
+            &mut r,
+            "proc/spawn",
+            json!({ "proc": 7, "pid": 41823 }),
+        )
+        .await;
+        assert_eq!(next(&mut r).await["result"], json!([7, 41823]));
     }
 
     #[tokio::test]

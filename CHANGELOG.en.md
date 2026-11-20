@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Plugin authors: the SDK and the Rust kit read profiles, a project’s settings and the pid of a program they run, and refuse clearly on an Escouade too old for them; the conformance bench also judges profiles, multi-line secrets, jokers and the program limit, and the documentation gains a “Credentials per project” guide.
 - A code host or ticket source that can’t be reached (no network, DNS, proxy) says so with what to check: the connection, the account’s address or the proxy. Escouade takes it for a passing outage and tries again later. Gitea, GitHub, GitLab, Bitbucket, Azure DevOps, Trello, Jira, Linear and ClickUp plugins.
 - Docs: what is left to share shows as a badge on the “Docs” tab, no longer in the status bar, and a conflict stands out there. “Sync”, in the Docs space, shares your changes or, when there are none, brings in the others’.
 - Plugin authors: the manifest now takes profiles, settings by project, groups, fields on several lines, importing a file, typed jokers in commands and a limit of programs, and refuses what falls outside their grammar. A plugin that asks for one the app does not serve yet stays disabled, the reason said.

@@ -357,7 +357,7 @@ pub async fn words(cx: &Cx) -> Result<Value, Refusal> {
 
 ## Les programmes : `proc/*`
 
-`proc/spawn { command, args?, dir?, agent?, project?, env? }` → `{ proc }`, `proc/write { proc, data, close? }`, `proc/kill { proc }`, puis les notifications `proc/out { proc, stream, data }` et `proc/exit { proc, code }`.
+`proc/spawn { command, args?, dir?, agent?, project?, env? }` → `{ proc, pid }`, `proc/write { proc, data, close? }`, `proc/kill { proc }`, puis les notifications `proc/out { proc, stream, data }` et `proc/exit { proc, code }`.
 
 `command` et `args` doivent être une ligne de `permissions.commands` :
 
@@ -366,6 +366,8 @@ pub async fn words(cx: &Cx) -> Result<Value, Refusal> {
 ```json
     "commands": ["git status --short", "git log *", "git --version"]
 ```
+
+Un joker de l’entrée (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`) prend un seul mot de sa forme ([les jokers](plugins/capabilities#les-jokers)). `pid` est celui du programme, que `{pid}` admet tant qu’il tourne ; une Escouade sans `capabilities.typedCommands` ne le rend pas.
 
 **Ce qui revient.**
 
@@ -490,6 +492,8 @@ Lancer un programme prend du temps : ne le fais pas dans une décision, qui a 50
 
 `{ key }` → le secret, ou `null` si aucun n’est gardé. La clé doit être dans `permissions.secrets`, et déclarée dans `contributes.secrets`. Une autre répond `-32001`. Pour un compte : `account:<nom>`, avec `account:*` dans `permissions.secrets`.
 
+`{ key, profile }` (Escouade 2.2.5, `capabilities.profiles`) → le champ secret `key` du profil `profile`, ou `null`. `profile` est l’identifiant que donnent `settings/get` ou `profiles/list`, et `permissions.secrets` doit avoir `profile:<genre>`. Un identifiant qui n’en est pas un ou que le plugin n’a pas, une clé qui n’est pas un champ secret de ce genre : `-32602` ; sans `profile:<genre>` : `-32001`. Une clé qui n’est qu’un champ secret d’un profil, demandée **sans** `profile`, est refusée (`-32602`) : jamais un autre secret à sa place.
+
 `sdk/doc-examples/ts/src/settings.ts` (extrait)
 
 ```ts
@@ -512,6 +516,8 @@ pub async fn token(cx: &Cx) -> Result<Option<String>, Refusal> {
 
 `{}` ou `{ project }` → un objet par clé de `contributes.settings`, sans celles laissées à leur valeur par défaut. Avec un projet, ce que son `.escouade.yml` lui donne sous `plugins.<id>` passe devant.
 
+Un réglage de `"scope": "project"` vient par ses rangs : la valeur de cette machine pour le projet, puis celle du fichier (sauf `"repo": false` ou `import`), puis `default`. Un réglage `"type": "profile"` rend l’identifiant du profil choisi, ou `null` ; jamais celui que nomme le fichier. D’un projet où le plugin n’est pas actif, seuls les défauts ([les réglages d’un projet](plugins/manifest#les-reglages-d-un-projet)).
+
 `sdk/doc-examples/ts/src/settings.ts` (extrait)
 
 ```ts
@@ -533,6 +539,19 @@ pub async fn channel(cx: &Cx, project: &Value) -> Result<Value, Refusal> {
     Ok(settings["channel"].clone())
 }
 ```
+
+### `profiles/list` et `profiles/get`
+
+Escouade 2.2.5, `capabilities.profiles`. `{ kind }` → les profils de ce genre, dans l’ordre où l’utilisateur les a créés : leur identifiant, tiré par Escouade, et leur nom (`nameField`). `{ kind, profile }` → les champs simples d’un profil, jamais un secret, ou `null` s’il n’en a pas de cet identifiant. Un genre que le plugin ne déclare pas : `-32602`.
+
+```json
+{"jsonrpc":"2.0","id":7,"method":"profiles/list","params":{"kind":"vpn"}}
+{"jsonrpc":"2.0","id":7,"result":[{"id":"0f3c9a1b2d4e5f60","name":"Client A"}]}
+{"jsonrpc":"2.0","id":8,"method":"profiles/get","params":{"kind":"vpn","profile":"0f3c9a1b2d4e5f60"}}
+{"jsonrpc":"2.0","id":8,"result":{"name":"Client A","server":"vpn.client-a.example","proto":"udp"}}
+```
+
+Le SDK les appelle `p.profiles.list`, `p.profiles.get` et `p.profiles.of`, le kit `Cx::profiles`, `Cx::profile` et `Cx::profile_of` ; tous refusent avant l’appel une Escouade qui ne sert pas les profils. Le cas complet : [des identifiants par projet](plugins/project-credentials).
 
 ## Le journal
 
