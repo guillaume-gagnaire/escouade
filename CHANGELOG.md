@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Une image jointe au message, ou au formulaire d’un ticket, s’agrandit d’un clic sur sa vignette, avant l’envoi : elle s’ouvre dans la visionneuse de la conversation, avec les autres images du message.
+
 ## [2.2.5] — 2026-11-20
 
 - Auteurs de plugins : le SDK et le kit Rust lisent les profils, les réglages d’un projet et le pid d’un programme lancé, et refusent clairement sur une Escouade trop ancienne ; le banc de conformité juge aussi les profils, les secrets sur plusieurs lignes, les jokers et la limite de programmes, et la documentation gagne un guide « Des identifiants par projet ».

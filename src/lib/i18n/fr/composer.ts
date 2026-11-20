@@ -37,6 +37,8 @@ export default {
     tooBig: '{name} dépasse {max}',
     notText: "{name} n'est pas un fichier texte : il ne peut pas être joint.",
     remove: 'Retirer {name}',
+    /** An image's thumbnail, which shows it full size in the conversation's viewer (ESC-555). */
+    view: 'Agrandir {name}',
     /** The name of the bar that shows a copy going on. */
     copying: 'Copie de {name}',
     /** A file past the size the settings warn at: copied to the disk, or kept where it is. */

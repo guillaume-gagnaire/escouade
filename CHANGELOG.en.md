@@ -4,6 +4,10 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- An image attached to a message, or to a ticket’s form, now opens full size with a click on its thumbnail before it is sent: it shows in the conversation’s viewer, with the message’s other images.
+
 ## [2.2.5] — 2026-11-20
 
 - Plugin authors: the SDK and the Rust kit read profiles, a project’s settings and the pid of a program they run, and refuse clearly on an Escouade too old for them; the conformance bench also judges profiles, multi-line secrets, jokers and the program limit, and the documentation gains a “Credentials per project” guide.

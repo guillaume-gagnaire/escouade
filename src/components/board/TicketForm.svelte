@@ -30,6 +30,9 @@
   import type { DictationTarget } from '../../lib/dictation.svelte';
   import { fSize } from '../../lib/format';
   import AttachmentChip from '../AttachmentChip.svelte';
+  import ImageChip from '../ImageChip.svelte';
+  import ImageViewer from '../conv/ImageViewer.svelte';
+  import { draftGallery, type ViewedImage } from '../../lib/gallery';
   import EngineMark from '../EngineMark.svelte';
   import Icon from '../Icon.svelte';
   import MicButton from '../MicButton.svelte';
@@ -134,6 +137,8 @@
   let fileInput = $state<HTMLInputElement>();
   let form = $state<HTMLDivElement>();
   let imageList = $state<HTMLUListElement>();
+  /** Its images seen full size (ESC-555), in the conversation's viewer, over the window. */
+  let viewing = $state<{ images: ViewedImage[]; index: number } | null>(null);
   let fileList = $state<HTMLUListElement>();
   let descriptionField = $state<HTMLTextAreaElement>();
 
@@ -740,20 +745,16 @@
               {@const label =
                 images.length > 1 ? t('board.form.images.ranked', { name: img.name, n: i + 1, total: images.length }) : img.name}
               <!-- Screenshots are all named image.png: with several images, each has its rank in its label. -->
-              <li class="att img" use:tip={{ text: label, cut: true }}>
-                {#if img.url}
-                  <img class="th" src={img.url} alt={label} />
-                {:else}
-                  <span class="th wait" role="img" aria-label={t('board.form.images.loading', { name: label })}></span>
-                {/if}
-                <span class="nm2"
-                  ><b>{img.name}</b><span
-                    >{img.size ? t('board.form.images.kindSize', { size: fSize(img.size) }) : t('board.form.images.kind')}</span
-                  ></span
-                >
-                <button class="x rm" aria-label={t('board.form.images.remove', { name: label })} onclick={() => removeImage(i)}
-                  ><Icon name="close" size={14} /></button
-                >
+              <li>
+                <ImageChip
+                  name={img.name}
+                  url={img.url}
+                  {label}
+                  detail={img.size ? t('board.form.images.kindSize', { size: fSize(img.size) }) : t('board.form.images.kind')}
+                  removeLabel={t('board.form.images.remove', { name: label })}
+                  onopen={() => (viewing = draftGallery(images, i))}
+                  onremove={() => removeImage(i)}
+                />
               </li>
             {/each}
           </ul>
@@ -919,6 +920,10 @@
   {/snippet}
 </Modal>
 
+{#if viewing}
+  <ImageViewer images={viewing.images} bind:index={viewing.index} onclose={() => (viewing = null)} />
+{/if}
+
 {#if choosing}
   <BranchPicker over {projectId} anchor={branchButton} mode="pick" onclose={() => (choosing = false)} onpick={(b) => (branch = b.name)} />
 {/if}
@@ -1013,63 +1018,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-  }
-  .att {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    max-width: 260px;
-    height: 40px;
-    padding: 0 6px;
-    border-radius: 9px;
-    background: rgba(var(--fg-rgb), 0.04);
-    box-shadow: inset 0 0 0 1px var(--line-2);
-    font-size: 12px;
-  }
-  .att .th {
-    flex: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    object-fit: cover;
-  }
-  .att .th.wait {
-    background: rgba(var(--fg-rgb), 0.06);
-  }
-  .nm2 {
-    display: grid;
-    min-width: 0;
-    line-height: 1.25;
-  }
-  .nm2 b {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 550;
-  }
-  .nm2 span {
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .x {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .x:hover {
-    background: var(--hover);
-    color: var(--text);
   }
   .attach {
     height: 40px;

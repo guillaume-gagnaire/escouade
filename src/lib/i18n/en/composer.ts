@@ -33,6 +33,8 @@ export default defineZone('composer', {
     tooBig: '{name} is over {max}',
     notText: '{name} isn’t a text file, so it can’t be attached.',
     remove: 'Remove {name}',
+    /** An image's thumbnail, which shows it full size in the conversation's viewer (ESC-555). */
+    view: 'Enlarge {name}',
     copying: 'Copying {name}',
     warnCopy: 'Big file: {size}, copied to the disk',
     warnOrigin: 'Big file: {size}, attached where it is, not copied',

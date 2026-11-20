@@ -53,6 +53,9 @@
   import { insertAt } from '../lib/dictation';
   import type { DictationTarget } from '../lib/dictation.svelte';
   import AttachmentChip from './AttachmentChip.svelte';
+  import ImageChip from './ImageChip.svelte';
+  import ImageViewer from './conv/ImageViewer.svelte';
+  import { draftGallery, type ViewedImage } from '../lib/gallery';
   import DictationBand from './DictationBand.svelte';
   import Icon from './Icon.svelte';
   import ConversationButton from './ConversationButton.svelte';
@@ -71,6 +74,8 @@
   let text = $state(initial.text);
   let files = $state<DraftAttachment[]>(initial.files);
   let ta = $state<HTMLTextAreaElement>();
+  /** The images attached seen full size (ESC-555), in the conversation's viewer; closed, the focus goes back to the thumbnail. */
+  let viewing = $state<{ images: ViewedImage[]; index: number } | null>(null);
   let trigger = $state<Trigger | null>(null);
   /** `mark`: where an interactive command opens (ESC-401), said before it is pressed. */
   let suggestions = $state<{ label: string; detail: string; value: string; mark?: string }[]>([]);
@@ -820,13 +825,14 @@
       <div class="atts">
         {#each files as f, i (i)}
           {#if f.url}
-            <span class="att img" use:tip={{ text: f.name, cut: true }}>
-              <img class="th" src={f.url} alt={f.name} />
-              <span class="nm2"><b>{f.name}</b><span>{fSize(f.size)}</span></span>
-              <button class="x" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => remove(i)}
-                ><Icon name="close" size={14} /></button
-              >
-            </span>
+            <ImageChip
+              name={f.name}
+              url={f.url}
+              detail={fSize(f.size)}
+              removeLabel={t('composer.attachments.remove', { name: f.name })}
+              onopen={() => (viewing = draftGallery(files, i))}
+              onremove={() => remove(i)}
+            />
           {:else}
             <AttachmentChip attachment={f} onremove={() => remove(i)} />
           {/if}
@@ -941,6 +947,10 @@
     </div>
   </div>
 </div>
+
+{#if viewing}
+  <ImageViewer images={viewing.images} bind:index={viewing.index} onclose={() => (viewing = null)} />
+{/if}
 
 <style>
   .composer-wrap {
@@ -1079,60 +1089,6 @@
     flex-wrap: wrap;
     gap: 6px;
     padding: 10px 10px 0;
-  }
-  .att {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    max-width: 260px;
-    height: 40px;
-    padding: 0 6px;
-    border-radius: 9px;
-    background: rgba(var(--fg-rgb), 0.04);
-    box-shadow: inset 0 0 0 1px var(--line-2);
-    font-size: 12px;
-  }
-  .att .th {
-    flex: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    object-fit: cover;
-  }
-  .nm2 {
-    display: grid;
-    min-width: 0;
-    line-height: 1.25;
-  }
-  .nm2 b {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 550;
-  }
-  .nm2 span {
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .x {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .x:hover {
-    background: var(--hover);
-    color: var(--text);
   }
   /* The `/` commands and the files of `@`, above the field. */
   .suggest {
