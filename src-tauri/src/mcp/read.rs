@@ -745,6 +745,13 @@ pub(crate) struct TicketView {
     /// Its agent's branch, else the existing one it takes up; None before its agent starts. Kept
     /// once the ticket is done.
     branch: Option<String>,
+    /// Its own target branch (ESC-552), over the Kanban's; left out when it goes to the Kanban's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target: Option<String>,
+    /// Its validation stopped because its branch carries commits of this other branch that its
+    /// target lacks (ESC-552): `update_ticket` with `target` chooses its target. Left out otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    other_line: Option<String>,
     /// Its agent's worktree, kept once the ticket is done even when the cleanup removed it.
     worktree: Option<String>,
     /// Of a project of several repositories (ESC-169): those its agent's worktree has.
@@ -941,6 +948,8 @@ pub(crate) fn ticket_view(core: &Core, t: &Ticket) -> TicketView {
             .as_ref()
             .map(|w| w.branch.clone())
             .or_else(|| Some(t.branch.clone()).filter(|b| !b.is_empty())),
+        target: Some(t.target.clone()).filter(|b| !b.is_empty()),
+        other_line: t.other_line.clone(),
         repos: agent_repos(worktree.as_ref()),
         worktree: worktree.map(|w| w.path),
         blocked: t.blocked.clone(),

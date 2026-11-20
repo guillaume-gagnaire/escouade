@@ -3597,6 +3597,12 @@ pub fn ticket_dismiss(core: CoreState, id: String) -> Res<()> {
     core.ticket_dismiss(&id).map_err(err)
 }
 
+/// « Choisir la cible de ce ticket » (ESC-552): its own target, the board's when empty.
+#[tauri::command]
+pub async fn ticket_set_target(core: CoreState<'_>, id: String, target: String) -> Res<Ticket> {
+    core.ticket_set_target(&id, &target).await.map_err(err)
+}
+
 /// « Rafraîchir » of the column « En revue » (ESC-59): its pull requests are read now.
 #[tauri::command]
 pub async fn ticket_prs_refresh(core: CoreState<'_>, project_id: String) -> Res<usize> {

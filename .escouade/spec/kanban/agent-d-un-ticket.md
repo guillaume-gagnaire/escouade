@@ -2,8 +2,8 @@
 title: "Agent d'un ticket"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-123","ESC-416"]
-decisions: []
+tickets: ["ESC-123","ESC-416","ESC-552"]
+decisions: [227]
 compared: null
 ---
 
@@ -60,3 +60,9 @@ Chaque ticket lancé a son agent, dans un worktree à lui. L'agent boucle : à c
 
 - Archiver ou supprimer l'agent d'un ticket « En cours » ou « À tester » renvoie le ticket « À faire ».
 - Depuis la barre latérale, archiver demande d'abord « Archiver <agent> ? » (« Son ticket <clé> repartira « À faire ». »).
+
+### Un ticket qui a sa cible (ESC-552)
+
+- « La branche cible » ci-dessus est celle du ticket quand il en a une (voir *Tickets*), sinon celle du Kanban : sa branche `ticket/<clé>` en part, et c'est la base de son worktree (« Intégrer », le retard, la PR de l'agent).
+- Le pilote auto le démarre sur elle ; une cible du ticket que le dépôt n'a plus bloque ce ticket seul : « La branche cible « x » n'existe pas dans le dépôt. »
+- Une branche reprise ne peut pas être la cible du ticket.

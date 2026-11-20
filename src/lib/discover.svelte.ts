@@ -91,11 +91,13 @@ export function typing(now = Date.now()): boolean {
 }
 
 /**
- * Not the moment for a bubble: the user types, an agent waits for a permission, or the first launch is on screen (its
- * first agent's real composer has the microphone: no bubble over the journey, ESC-505).
+ * Not the moment for a bubble: the user types, an agent waits for a permission, the first launch is on screen (its
+ * first agent's real composer has the microphone: no bubble over the journey, ESC-505), or a window is open over the
+ * screen: the control the bubble would point at is under it, and Échap is the window's (ESC-522: the bubble of the first
+ * ticket, come late, showed over the window of the next one and took the Échap that asks to give up what was typed).
  */
 function busy(): boolean {
-  return typing() || permissionWaiting() || onboarding.shown;
+  return typing() || permissionWaiting() || onboarding.shown || app.modal !== null;
 }
 
 /** An agent waits for a permission: no bubble over it. */

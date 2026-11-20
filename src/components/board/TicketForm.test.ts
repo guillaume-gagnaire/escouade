@@ -44,6 +44,56 @@ const fields = () => [
 describe('TicketForm', () => {
   beforeEach(() => resetApp());
 
+  describe('its target (ESC-552)', () => {
+    const LIST = [branchInfo({ name: 'main', current: true, worktree: 'C:\\code\\demo-api' }), branchInfo({ name: 'release/2.3' })];
+    const field = () => screen.getByRole('button', { name: /^Cible/ });
+    const open = (props: Props = {}) => {
+      app.projects = [project({ board: { ...project().board, target: 'release/2.3' } })];
+      const backend = fakeBackend({ branch_list: () => LIST });
+      const { onsubmit } = show(props);
+      return { backend, onsubmit };
+    };
+    const title = () => screen.getByRole('textbox', { name: 'Titre du ticket' });
+
+    it('goes to the Kanban’s by default, which it names, and sends nothing of it', async () => {
+      const { onsubmit } = open();
+      expect(field()).toHaveTextContent('Celle du Kanban (release/2.3)');
+      await userEvent.click(field());
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['Celle du Kanban (release/2.3)', 'Une autre branche…']);
+      menu.close();
+      await userEvent.type(title(), 'Seul{Enter}');
+      expect(onsubmit.mock.calls[0][0]).not.toHaveProperty('target');
+    });
+
+    it('sends another branch chosen in the picker, and gives an edited ticket’s own up for the Kanban’s', async () => {
+      const { onsubmit } = open();
+      await userEvent.click(field());
+      menu.open!.items[1].onClick!();
+      menu.close();
+      const picker = await screen.findByRole('dialog', { name: /branche/i });
+      await userEvent.click(await within(picker).findByText('main'));
+      await waitFor(() => expect(field()).toHaveTextContent('main'));
+      await userEvent.type(title(), 'Correctif 2.2{Enter}');
+      expect(onsubmit.mock.calls[0][0].target).toBe('main');
+      cleanup();
+      const edited = open({ ticket: ticket({ target: 'main' }) });
+      expect(field()).toHaveTextContent('main');
+      await userEvent.click(field());
+      menu.open!.items[0].onClick!();
+      menu.close();
+      await waitFor(() => expect(field()).toHaveTextContent('Celle du Kanban (release/2.3)'));
+      await userEvent.type(title(), '{Enter}');
+      expect(edited.onsubmit.mock.calls[0][0].target).toBe('');
+    });
+
+    it('is not offered in a project of several repositories', () => {
+      app.projects = [project({ repos: [{ path: 'api' }, { path: 'web' }] as never })];
+      fakeBackend();
+      show();
+      expect(screen.queryByRole('button', { name: /^Cible/ })).toBeNull();
+    });
+  });
+
   describe('its branch', () => {
     const LIST = [
       branchInfo({ name: 'main', current: true, worktree: 'C:\\code\\demo-api' }),

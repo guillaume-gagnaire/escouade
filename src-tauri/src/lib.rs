@@ -343,6 +343,8 @@ mod testlaunch;
 mod text;
 #[cfg(test)]
 mod ticket_accounts_tests;
+#[cfg(test)]
+mod ticket_target_tests;
 mod ticketfiles;
 mod ticketimages;
 mod ticketprs;

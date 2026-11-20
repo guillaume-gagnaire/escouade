@@ -1,9 +1,9 @@
 ---
 title: "Validation"
 subject: "Kanban"
-sources: ["docs/SPEC.md"]
-tickets: ["ESC-143","ESC-259","ESC-263","ESC-59","ESC-61"]
-decisions: [58]
+sources: ["docs/SPEC.md","Ticket ESC-552 (constat du 2026-11-20 : ESC-531, ticket de la 2.2, validé dans release/2.3)"]
+tickets: ["ESC-143","ESC-259","ESC-263","ESC-59","ESC-61","ESC-552"]
+decisions: [58,227]
 compared: null
 ---
 
@@ -73,3 +73,13 @@ En cas de conflit, selon le réglage : me demander (« L'agent résout » / « A
 Dans l'onglet « Kanban » du projet : l'action après validation (« ⚙ Après validation : … » dans l'en-tête), la façon de merger (merge commit, squash ou rebase), la PR en brouillon, ses relecteurs et ses étiquettes par défaut (noms séparés par des virgules), la conduite en cas de conflit, la commande de tests, et « Supprimer le worktree d'un ticket terminé ou supprimé » (allumé par défaut).
 
 Avec « Valider + PR », deux réglages de plus pour la suite de la revue (voir *En revue*) : « Répondre sous les fils corrigés » (éteint par défaut : rien ne se publie sous les fils sans lui, et aucun fil n'est jamais résolu par Escouade), et « Mise à jour de la branche » d'une PR en conflit avec sa cible (Merge par défaut, ou Rebase poussé avec `--force-with-lease`).
+
+### La cible et la garde de la ligne (ESC-552)
+
+- La cible d'une validation est celle du ticket, sinon celle du Kanban (voir *Tickets*) : le merge s'y fait, la PR la vise, l'issue la nomme (« ⤵ Mergé dans main · squash »).
+- **Avant toute étape** d'une validation qui merge ou ouvre une PR (avant les tests, le commit et le merge), la branche du ticket doit descendre de sa cible. Elle n'en descend pas quand elle porte des commits que la cible n'a pas et qu'une autre branche, locale ou distante, a aussi : une branche partie de `main` porte les commits de `main` qui ne sont pas dans `release/2.3`. Ne comptent pas : la branche du ticket, la cible et leurs copies distantes, ni les branches des tickets et des agents (leurs préfixes). Le critère est dans la décision proposée par ESC-552.
+- La validation s'arrête alors : le ticket reste « À tester », bloqué avec « « ticket/esc-531 » ne part pas de sa cible release/2.3 : elle porte 12 commits de main que release/2.3 n'a pas. Rien n'est fusionné : choisis la cible de ce ticket. » (« 1 commit » au singulier). Rien n'est fusionné, ni dans la cible ni dans la branche ; rien n'est dit à l'agent, qui n'est pas archivé ; la notification « bloqué » part comme pour un conflit.
+- La carte offre « Choisir la cible de ce ticket » à la place de « L'agent résout » : un menu avec d'abord la branche d'où elle part (« Sa branche en part »), puis « Celle du Kanban (release/2.3) » et les autres branches locales (sans celles des tickets). Une cible choisie lève l'arrêt (`ticket_set_target`) ; « Valider » valide dedans, la garde jugée de nouveau.
+- « L'agent résout » (et la conduite « l'agent résout » d'un conflit) ne fusionne jamais la cible dans une branche d'une autre ligne : refusé avec la même raison, l'agent n'est pas prévenu.
+- Une validation qui pousse seulement, ou laisse en l'état, n'a pas de garde : elle ne touche pas la cible.
+- D'un projet à plusieurs dépôts : ni cible par ticket ni garde, chaque dépôt garde sa base.

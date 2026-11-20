@@ -183,6 +183,18 @@ export default defineZone('branches', {
     existing: 'Take up an existing branch…',
     /** The tooltip of that entry. */
     existingKept: 'Escouade never deletes this branch, even once the ticket is approved.',
+    /** Its own target (ESC-552): the “Target branch” field, and what the card and the box say of it. */
+    target: 'Target',
+    targetBoardNone: 'The Kanban’s',
+    /** `{branch}`: the Kanban’s target. */
+    targetBoard: 'The Kanban’s ({branch})',
+    targetOther: 'Another branch…',
+    targetHelp: 'The worktree starts from this branch, the approval merges into it, the PR goes to it.',
+    chip: 'to {branch}',
+    chipTitle: 'This ticket goes to {branch}, not {board}, the Kanban’s target.',
+    choose: 'Choose this ticket’s target',
+    /** Under the branch its validation stopped for, in the menu of “Choose this ticket’s target”. */
+    otherLine: 'Its branch starts from it',
   },
   /** “Merged branches”: the clean-up. */
   merged: {

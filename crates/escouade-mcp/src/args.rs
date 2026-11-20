@@ -448,6 +448,10 @@ pub struct CreateTicketArgs {
         description = "Share it with the team (true): Escouade writes its file .escouade/tickets/<id>.yml in the project's folder and keeps its status up to date; the user commits it, Escouade never does. Left out: as the project's « Partager chaque nouveau ticket » says. Refused while the user has given no name."
     )]
     pub shared: Option<bool>,
+    #[schemars(
+        description = "Its own target branch, over the Kanban's for this ticket alone: its worktree starts from it, its validation merges into it, its pull request goes to it (a local branch, or a remote one like origin/main through the local branch made to track it). Leave it out, or give the Kanban's, for the Kanban's. A branch the repository does not have is refused, and so is one in a project of several repositories."
+    )]
+    pub target: Option<String>,
 }
 
 /// A file to attach to a ticket, as `create_ticket` and `update_ticket` take it.
@@ -570,6 +574,10 @@ pub struct UpdateTicketArgs {
         description = "true shares it with the team (its file .escouade/tickets/<id>.yml, committed by the user), false stops sharing it (its file is deleted, to be committed). Any column. Leave it out to keep it."
     )]
     pub shared: Option<bool>,
+    #[schemars(
+        description = "Its own target branch, over the Kanban's (the Kanban's: empty or its name). Given alone, in any column but Done, never while its validation runs: its agent's worktree goes to it too, and a validation stopped because its branch does not start from its target is no longer blocked. Leave it out to keep it."
+    )]
+    pub target: Option<String>,
 }
 
 /// Where `move_ticket` puts a ticket.

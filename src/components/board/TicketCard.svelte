@@ -336,6 +336,30 @@
     f();
   }
 
+  /** Its own target (ESC-552), when it is not the Kanban's: « vers main » beside its key. */
+  const ownTarget = $derived(ticket.target && ticket.target !== s.target ? ticket.target : null);
+  let targetButton = $state<HTMLButtonElement>();
+  /**
+   * « Choisir la cible de ce ticket » (ESC-552): the branch its validation stopped for first (its branch starts from it),
+   * then the Kanban's and the other local branches. The block goes once one is chosen: « Valider » again.
+   */
+  async function chooseTarget() {
+    const el = targetButton;
+    if (!el) return;
+    const branches = ((await app.run(api.gitBranches(project.id))) as string[] | undefined) ?? [];
+    const line = ticket.otherLine ?? '';
+    const set = (b: string) => void app.run(api.ticketSetTarget(ticket.id, b));
+    const current = ticket.target || s.target;
+    const others = branches.filter((b) => b !== line && b !== s.target && !b.startsWith(project.ticketBranchPrefix || 'ticket/'));
+    menu.showAt(el, [
+      ...(line ? [{ label: line, detail: t('branches.ticket.otherLine'), icon: 'branch' as IconName, onClick: () => set(line) }] : []),
+      ...(s.target && s.target !== line
+        ? [{ label: t('branches.ticket.targetBoard', { branch: s.target }), checked: current === s.target, onClick: () => set('') }]
+        : []),
+      ...others.map((b) => ({ label: b, checked: current === b, onClick: () => set(b) })),
+    ]);
+  }
+
   /** « Merger » / « Merger quand c'est vert » (ESC-62): what it did said by a toast. */
   async function merge(whenGreen: boolean) {
     const p = ticket.pr;
@@ -444,6 +468,17 @@
         use:tip={t('board.card.ownAccount', { account: ownAccount })}>{ownAccount}</span
       >{/if}
     {#if own}<span class="own" role="img" aria-label={own.label} use:tip={own.label}>{own.text}</span>{/if}
+    {#if ownTarget}
+      <!-- Its own target, not the Kanban's (ESC-552): where its worktree starts and its validation goes. -->
+      <span
+        class="own mono"
+        data-ticket-target
+        role="img"
+        aria-label={t('branches.ticket.chipTitle', { branch: ownTarget, board: s.target })}
+        use:tip={t('branches.ticket.chipTitle', { branch: ownTarget, board: s.target })}
+        >{t('branches.ticket.chip', { branch: ownTarget })}</span
+      >
+    {/if}
     {#if theirs && ticket.shared?.author.name}
       <!-- Another one's ticket (choice 117): their name, a disc of a hue drawn from their id. -->
       <span class="who" aria-label={t('share.card.by', { name: authorName(ticket) })}
@@ -773,6 +808,13 @@
           >
           <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketFinishAnyway(ticket.id)))}
             >{t('board.pr.finishAnyway')}</button
+          >
+        </div>
+      {:else if ticket.column === 'review' && ticket.otherLine}
+        <!-- Its branch does not start from its target (ESC-552): nothing merged, nothing told its agent; its target to choose. -->
+        <div class="row">
+          <button class="btn small" data-choose-target aria-haspopup="menu" bind:this={targetButton} onclick={(e) => act(e, chooseTarget)}
+            ><Icon name="branch" size={14} />{t('branches.ticket.choose')}</button
           >
         </div>
       {:else if ticket.conflict}

@@ -299,6 +299,29 @@ describe('the bubbles at the right moment (ESC-506)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  it('never over a window open, whose control it would point at under it, and waits for the window to close', async () => {
+    // ESC-522: the bubble of the first ticket, come late on a loaded machine, showed over the window of the next ticket
+    // and took its Échap: the window never asked to give up what was typed.
+    await ready(view({}, { tips: ['autopilot'] }));
+    app.modal = { kind: 'newProject' };
+    expect(offer('autopilot', el)).toBe(false);
+    offerWhenQuiet('autopilot', () => el, true);
+    expect(discover.tip).toBeNull();
+    app.modal = null;
+    await waitFor(() => expect(discover.tip?.id).toBe('autopilot'), { timeout: 1500 });
+    closeTip();
+  });
+
+  it('leaves when a window opens over the screen: Échap is for the window then', async () => {
+    await ready();
+    render(DiscoverTip);
+    offer('dictation', el);
+    await screen.findByRole('dialog');
+    app.modal = { kind: 'newProject' };
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    app.modal = null;
+  });
+
   it('a moment that comes while the user types waits for the typing to stop', async () => {
     await ready();
     keyPressed();

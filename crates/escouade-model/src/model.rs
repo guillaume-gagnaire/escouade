@@ -1537,6 +1537,15 @@ pub struct Ticket {
     /// local one or a remote one (`origin/feat`); empty: its own branch, `ticket/<key>`, made at
     /// its start.
     pub branch: String,
+    /// Its own target branch (« Branche cible » in its form, `create_ticket`, ESC-552), over the
+    /// board's for this ticket alone: its worktree starts from it, its validation merges into it,
+    /// its pull request goes to it. Empty: the board's, and for a ticket saved before.
+    pub target: String,
+    /// Its validation stopped before any merge (ESC-552): its branch carries commits of this other
+    /// branch that its target does not have, as if it had started from there. Its card offers
+    /// « Choisir la cible de ce ticket », this branch first. None otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub other_line: Option<String>,
     /// The model and the effort of this ticket's agent alone (« Modèle » and « Effort » in its
     /// form, or `start_ticket`); empty: « Auto », the board's, else the account's.
     pub model: String,

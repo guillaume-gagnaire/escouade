@@ -180,6 +180,7 @@ pub(crate) fn closed_ticket(mut t: Ticket, lang: Lang) -> Ticket {
     if t.step.take().is_some() {
         t.blocked = Some(approval_interrupted(lang));
         t.conflict = false;
+        t.other_line = None;
     } else if t.column == Column::Doing && t.blocked.is_none() {
         t.blocked = Some(project_closed_during(lang));
     }

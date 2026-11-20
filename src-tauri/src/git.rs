@@ -1210,6 +1210,98 @@ pub async fn ahead_of(repo: &str, base: &str, branch: &str) -> Result<u32> {
     })
 }
 
+/// The other line a branch came from (ESC-552, `other_line`): a branch whose commits it carries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OtherLine {
+    /// Its name without the remote's (`main` for `origin/main`): what to choose as the target.
+    pub branch: String,
+    /// How many commits of `branch` not on the target it has too.
+    pub commits: u32,
+}
+
+/// Whether `branch` does not descend from `target` (ESC-552): the branch, local or remote, that
+/// has commits of `branch` which `target` does not have, as a branch started from `main` has
+/// `main`'s for a target `release/2.3`. Not counted: `branch` and `target` themselves and their
+/// remote copies (an older push of the branch, a target fetched since), the branches whose name
+/// starts with one of `own` (the agents' and the tickets' own: one made from this one). A branch
+/// that holds `branch` whole counts: a ticket started from `main` that has nothing of its own yet
+/// is `main` itself. Of several, the one with the most of them, a local one first, then the shortest name. None when the commits of
+/// `branch` past `target` are its own alone, or when it has none.
+pub async fn other_line(
+    repo: &str,
+    branch: &str,
+    target: &str,
+    own: &[&str],
+) -> Result<Option<OtherLine>> {
+    let total = ahead_of(repo, target, branch).await?;
+    if total == 0 {
+        return Ok(None);
+    }
+    let refs = text(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads",
+            "refs/remotes",
+        ],
+    )
+    .await?;
+    let mut best: Option<(OtherLine, bool)> = None;
+    for full in refs.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let (name, local) = if let Some(n) = full.strip_prefix("refs/heads/") {
+            (n, true)
+        } else if let Some(rest) = full.strip_prefix("refs/remotes/") {
+            // `<remote>/<name>`; `<remote>/HEAD` names another one.
+            match rest.split_once('/') {
+                Some((_, "HEAD")) | None => continue,
+                Some((_, n)) => (n, false),
+            }
+        } else {
+            continue;
+        };
+        if name == branch
+            || name == target
+            || own.iter().any(|p| !p.is_empty() && name.starts_with(p))
+        {
+            continue;
+        }
+        let without = text(
+            repo,
+            &[
+                "rev-list",
+                "--count",
+                branch,
+                &format!("^{target}"),
+                &format!("^{full}"),
+            ],
+        )
+        .await?;
+        let without: u32 = without.trim().parse().unwrap_or(total);
+        let shared = total.saturating_sub(without);
+        if shared == 0 {
+            continue;
+        }
+        let better = match &best {
+            None => true,
+            Some((b, b_local)) => {
+                (shared, local, std::cmp::Reverse(name.len()))
+                    > (b.commits, *b_local, std::cmp::Reverse(b.branch.len()))
+            }
+        };
+        if better {
+            best = Some((
+                OtherLine {
+                    branch: name.to_string(),
+                    commits: shared,
+                },
+                local,
+            ));
+        }
+    }
+    Ok(best.map(|(b, _)| b))
+}
+
 /// Moves the local branch `branch` to `to` (a ref, `refs/remotes/origin/main`) when that is a
 /// fast-forward, without fetching nor touching any folder: refused when `branch` has a commit `to`
 /// has not, and when it is checked out (its folder would no longer match it). Nothing is moved

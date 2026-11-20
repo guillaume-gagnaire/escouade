@@ -375,6 +375,7 @@ escouade_command::commands! {
         commands::ticket_reject,
         commands::ticket_resolve_conflict,
         commands::ticket_dismiss,
+        commands::ticket_set_target,
         commands::ticket_prs_refresh,
         commands::target_cis,
         commands::ci_refresh,

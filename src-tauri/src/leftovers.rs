@@ -187,12 +187,13 @@ impl Core {
         let Ok(h) = self.agent(id) else {
             return Cleaned::Nothing;
         };
-        let (pid, wt, archived) = {
+        let (pid, wt, archived, ticket_id) = {
             let rt = h.lock();
             (
                 rt.meta.project_id.clone(),
                 rt.meta.worktree.clone(),
                 rt.meta.archived,
+                rt.meta.ticket_id.clone(),
             )
         };
         let (Some(wt), true, Ok(project)) = (wt, archived, self.project(&pid)) else {
@@ -241,7 +242,11 @@ impl Core {
                 }
             };
         }
-        let target = self.target_of(&project).await;
+        // A ticket's agent: its ticket's target (ESC-552), else the board's.
+        let target = match ticket_id.and_then(|t| self.ticket(&t).ok()) {
+            Some(t) => self.ticket_target(&project, &t).await,
+            None => self.target_of(&project).await,
+        };
         let found = unsaved_work(&project.path, &wt, &target).await;
         if let Some(unsaved) = found.unsaved {
             let reason = unsaved.text(i18n::ui());

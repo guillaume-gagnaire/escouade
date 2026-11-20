@@ -299,6 +299,27 @@ describe('a view opened in the panel', () => {
     await waitFor(() => expect(acts()).toEqual([['blocked:t1', { act: 'resolve' }]]));
   });
 
+  it('says on its line where a ticket of its own target goes, and nothing for one of the Kanban’s (ESC-552)', async () => {
+    await show([ticketView({ target: 'main' }), ticketView({ key: 'ticket:t2', ticketId: 't2', target: null })]);
+    const [own, kanban] = rows();
+    expect(within(own).getByTestId('ivw-target')).toHaveTextContent('vers main');
+    expect(within(kanban).queryByTestId('ivw-target')).toBeNull();
+  });
+
+  it('targets the branch a validation stopped for, from the box (ESC-552)', async () => {
+    render(InboxViewPane, {
+      view: ticketView({
+        key: 'blocked:t1',
+        source: 'ticketBlocked',
+        blocked: '« ticket/dem-12 » ne part pas de sa cible release/2.3',
+        otherLine: 'main',
+      }),
+    });
+    expect(screen.queryByRole('button', { name: 'L’agent résout' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Viser main' }));
+    await waitFor(() => expect(acts()).toEqual([['blocked:t1', { act: 'retarget', target: 'main' }]]));
+  });
+
   it('accepts a decision, shares the docs, and opens a review on its host', async () => {
     const { unmount } = render(InboxViewPane, { view: decisionView() });
     await userEvent.click(screen.getByRole('button', { name: 'Accepter' }));

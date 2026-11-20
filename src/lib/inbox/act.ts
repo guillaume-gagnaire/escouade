@@ -102,6 +102,8 @@ export function run(v: InboxItem, g: Gesture): Promise<boolean> {
     case 'accept':
     case 'share':
       return act(v, { act: g.id });
+    case 'retarget':
+      return act(v, { act: 'retarget', target: v.otherLine ?? '' });
     case 'deny':
       return act(v, { act: 'deny', message: null });
     case 'approve':

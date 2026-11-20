@@ -1251,6 +1251,10 @@ export interface Ticket {
   external: ExternalRef | null;
   /** An existing branch its agent takes up; empty: its own, `ticket/<key>`, made at its start. */
   branch: string;
+  /** Its own target branch, over the Kanban's (« Branche cible », ESC-552); empty or absent: the Kanban's. */
+  target?: string;
+  /** Its validation stopped before any merge (ESC-552): its branch carries commits of this branch that its target lacks. */
+  otherLine?: string | null;
   /** The model its agent runs, over the Kanban's (« Modèle » in its form, or the MCP `start_ticket`); empty: « Auto », the Kanban's, else the account's. */
   model: string;
   /** The effort its agent runs at, over the Kanban's; empty: « Auto », the Kanban's, else the account's. */
@@ -1663,6 +1667,8 @@ export interface TicketDraft {
   after: string[];
   /** An existing branch for its agent to take up; absent or empty: the ticket's own. Given again when editing, to keep it. */
   branch?: string;
+  /** Its own target branch (ESC-552); empty: the Kanban's; absent: it stays as it is. */
+  target?: string;
   /** Its images, the whole list; absent: they stay as they are. */
   images?: DraftImage[];
   /** Its other files, the whole list; absent: they stay as they are. */

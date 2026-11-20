@@ -80,6 +80,11 @@ pub struct InboxItem {
     pub blocked: Option<String>,
     pub conflict: bool,
     pub partial: bool,
+    /// A ticket of its own target (ESC-552), when it is not the board's: « vers main » on its line.
+    pub target: Option<String>,
+    /// Its validation stopped for another line (ESC-552): the branch it came from, which
+    /// « Choisir la cible » offers first.
+    pub other_line: Option<String>,
     /// A decision: its id (how a proposal is cited).
     pub decision: Option<String>,
     /// The docs: how many files to share.
@@ -111,6 +116,8 @@ impl InboxItem {
             blocked: None,
             conflict: false,
             partial: false,
+            target: None,
+            other_line: None,
             decision: None,
             files: 0,
             number: None,
@@ -162,6 +169,9 @@ pub enum ViewAct {
     Resolve,
     /// « Annuler » a conflict.
     Dismiss,
+    /// « Viser <branche> »: the ticket's target set to the branch its validation stopped for
+    /// (ESC-552), or to another.
+    Retarget { target: String },
     /// « Accepter » a decision proposed.
     Accept,
     /// « Partager » the docs.
@@ -180,6 +190,7 @@ impl ViewAct {
             Self::Resume => "resume",
             Self::Resolve => "resolve",
             Self::Dismiss => "dismiss",
+            Self::Retarget { .. } => "retarget",
             Self::Accept => "accept",
             Self::Share => "share",
         }
@@ -195,6 +206,7 @@ impl ViewAct {
             (Self::Approve | Self::Reject { .. }, S::TicketReview) => true,
             (Self::Resume, S::TicketBlocked) => v.column == Some(Column::Doing) && !v.conflict,
             (Self::Resolve | Self::Dismiss, S::TicketBlocked) => v.conflict,
+            (Self::Retarget { .. }, S::TicketBlocked) => v.other_line.is_some(),
             (Self::Accept, S::Decision) => true,
             (Self::Share, S::Docs) => true,
             _ => false,
@@ -268,6 +280,13 @@ impl Core {
                 .find(|p| p.id == id)
                 .map(|p| (p.id.clone(), p.name.clone(), p.private))
         };
+        // The board's target branch of a project (ESC-552: a ticket's own is said when it differs).
+        let board_of = |id: &str| {
+            projects
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| p.board.target.trim())
+        };
         let mut views = Vec::new();
 
         // The requests agents stopped for, as their cards in the conversation have them: those of a
@@ -340,6 +359,9 @@ impl Core {
             v.blocked = t.blocked.clone();
             v.conflict = t.conflict;
             v.partial = t.partial;
+            v.target = Some(t.target.trim().to_string())
+                .filter(|own| !own.is_empty() && Some(own.as_str()) != board_of(&t.project_id));
+            v.other_line = t.other_line.clone();
             if let Some(a) = t.agent_id.as_deref().and_then(|a| self.agent(a).ok()) {
                 let rt = a.lock();
                 v.agent_id = Some(rt.meta.id.clone());
@@ -550,6 +572,9 @@ impl Core {
             ViewAct::Resume => self.ticket_resume(&ticket()).await?,
             ViewAct::Resolve => self.ticket_resolve_conflict(&ticket()).await?,
             ViewAct::Dismiss => self.ticket_dismiss(&ticket())?,
+            ViewAct::Retarget { target } => {
+                self.ticket_set_target(&ticket(), &target).await?;
+            }
             ViewAct::Accept => {
                 let id = v.decision.clone().unwrap_or_default();
                 self.docs_accept_decision(&v.project_id, &crate::docs::Ref::Id(id))

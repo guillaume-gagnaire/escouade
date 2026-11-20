@@ -27,6 +27,8 @@ export default {
   until: 'jusqu’à {when}',
   partial: 'sans tous ses critères',
   conflict: 'conflit',
+  /** A ticket of its own target (ESC-552), on its line. */
+  to: 'vers {branch}',
   // Les gestes, ceux de la source.
   act: {
     allow: 'Autoriser',
@@ -43,6 +45,7 @@ export default {
     resume: 'Reprendre',
     resolve: 'L’agent résout',
     dismiss: 'Annuler',
+    retarget: 'Viser {branch}',
     accept: 'Accepter',
     share: 'Partager',
     openPr: 'Ouvrir la {word}',

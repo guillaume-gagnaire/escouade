@@ -5,6 +5,7 @@
   // dialog that is not modal, told politely to a screen reader; Échap or a key typed elsewhere closes it.
   import { onDestroy } from 'svelte';
   import { closeTip, discover, dismiss, openMap } from '../../lib/discover.svelte';
+  import { app } from '../../lib/state.svelte';
   import { t } from '../../lib/i18n';
   import Icon from '../Icon.svelte';
 
@@ -34,6 +35,12 @@
       ax: Math.max(14, Math.min(r.left + r.width / 2 - left - 6, w - 26)),
     };
   }
+
+  // A window opened over the screen: a bubble offered at the right moment goes, its control is under the window and
+  // Échap is the window's (ESC-522). One that shows where a gesture of the map is may be in that window: it stays.
+  $effect(() => {
+    if (app.modal && tip?.mode === 'offer') closeTip();
+  });
 
   let timer: ReturnType<typeof setInterval> | undefined;
   $effect(() => {

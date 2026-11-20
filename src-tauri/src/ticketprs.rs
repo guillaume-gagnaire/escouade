@@ -297,6 +297,7 @@ pub fn settle(
             t.column = Column::Done;
             t.blocked = None;
             t.conflict = false;
+            t.other_line = None;
             t.outcome = Some(merged_outcome(i18n::ui(), &word, n, &target));
             t.outcome_claude = Some(merged_outcome(claude, &word, n, &target));
             t.outcome_url = Some(tp.url.clone());

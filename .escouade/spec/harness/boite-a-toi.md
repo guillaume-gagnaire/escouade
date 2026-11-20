@@ -2,8 +2,8 @@
 title: "La boîte « À toi »"
 subject: "harness"
 sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 16 et § 18 pour le reversement)","design/inbox-2-3/README.md (direction B, captures b-)","docs/REMOTE.md (Le classement des commandes)"]
-tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540"]
-decisions: [210,204,"l-ecran-de-la-boite-a-toi-une-vue-de-tou","la-boite-a-toi-montre-ce-qui-attend-aill",222]
+tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552"]
+decisions: [210,204,"l-ecran-de-la-boite-a-toi-une-vue-de-tou","la-boite-a-toi-montre-ce-qui-attend-aill",222,227]
 compared: null
 ---
 
@@ -182,3 +182,9 @@ Reversés dans la 2.3 avec la 2.2.4, l'écran (IN-2) et les vues (IN-3) sont ser
 - **Le résumé des notifications** passe par l'hôte du cœur (`Host::notify`) : le bureau montre sa notification et ramène sa fenêtre sur la boîte ; un cœur sans fenêtre (`escouade-server`) la publie pour ses clients.
 
 - **« Ouvrir » et « Afficher dans le dossier » d'une fenêtre sur un serveur** (ESC-540, sur le chemin d'ESC-538) : la fenêtre ne demande pas au serveur d'ouvrir le fichier (`inbox_open_file` y reste refusée) ; elle télécharge ses octets (`inbox_file_bytes`), en garde la copie sur le poste (`Téléchargements/Escouade/<espace>`, `received_save`), puis l'ouvre ou la montre là ; ouvert de nouveau, c'est la copie, sans nouveau téléchargement. « Enregistrer sous… » reste refusé à distance.
+
+### La cible d'un ticket dans la boîte (ESC-552)
+
+- Une vue « Ticket à valider » ou « Ticket bloqué » d'un ticket qui a sa propre cible, autre que celle du Kanban, le dit sur sa ligne, après sa sorte : « vers main » (`InboxItem::target`).
+- « Valider » depuis la boîte suit la même garde que la carte (voir *Validation*) : une branche qui ne part pas de sa cible arrête la validation avant toute fusion, et le ticket devient une vue « Ticket bloqué ».
+- Cette vue (`otherLine`, la branche d'où part celle du ticket) a un geste : « Viser main » (`inbox_view_act` `retarget`, avec la branche), qui donne cette cible au ticket et lève l'arrêt ; il redevient « Ticket à valider », « vers main » sur sa ligne. Ni « L'agent résout » ni « Annuler » : il n'y a pas de conflit.

@@ -19,6 +19,7 @@ export function viewTitle(v: InboxItem): string {
 /** A gesture's label: « Ouvrir la PR » names the host's word. */
 export function gestureLabel(v: InboxItem, g: Gesture): string {
   if (g.id === 'openPr') return t('inboxViews.act.openPr', { word: v.word ?? 'PR' });
+  if (g.id === 'retarget') return t('inboxViews.act.retarget', { branch: v.otherLine ?? '' });
   // The others take nothing.
   return (t as (k: Key) => string)(g.label);
 }

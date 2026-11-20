@@ -2097,6 +2097,7 @@ impl Core {
             if t.step.take().is_some() {
                 t.blocked = Some(approval_interrupted(lang.ui));
                 t.conflict = false;
+                t.other_line = None;
             }
         }
         // The harnesses of the agents, for the sort of the seed (ESC-373) once the accounts are read.

@@ -30,6 +30,10 @@ export interface InboxItem {
   blocked: string | null;
   conflict: boolean;
   partial: boolean;
+  /** A ticket of its own target (ESC-552), when it is not the Kanban’s: « vers main » on its line. */
+  target?: string | null;
+  /** Its validation stopped for another line (ESC-552): the branch it came from, which « Viser » offers. */
+  otherLine?: string | null;
   decision: string | null;
   files: number;
   number: number | null;
@@ -57,6 +61,7 @@ export type ViewAct =
   | { act: 'resume' }
   | { act: 'resolve' }
   | { act: 'dismiss' }
+  | { act: 'retarget'; target: string }
   | { act: 'accept' }
   | { act: 'share' };
 
@@ -77,6 +82,7 @@ export interface Gesture {
     | 'resume'
     | 'resolve'
     | 'dismiss'
+    | 'retarget'
     | 'accept'
     | 'share'
     | 'openPr'
@@ -120,6 +126,8 @@ export function gesturesOf(v: InboxItem): Gesture[] {
           { id: 'resolve', label: 'inboxViews.act.resolve', primary: true, inBox: true },
           { id: 'dismiss', label: 'inboxViews.act.dismiss', inBox: true },
         ];
+      // Its validation stopped for another line (ESC-552): its target set to the branch it came from, then « Valider ».
+      if (v.otherLine) return [{ id: 'retarget', label: 'inboxViews.act.retarget', primary: true, inBox: true }];
       return v.column === 'doing' ? [{ id: 'resume', label: 'inboxViews.act.resume', primary: true, inBox: true }] : [];
     case 'decision':
       return [{ id: 'accept', label: 'inboxViews.act.accept', primary: true, inBox: true }];

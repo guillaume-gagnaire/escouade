@@ -25,6 +25,8 @@ export default defineZone('inboxViews', {
   until: 'until {when}',
   partial: 'without all its criteria',
   conflict: 'conflict',
+  /** A ticket of its own target (ESC-552), on its line. */
+  to: 'to {branch}',
   act: {
     allow: 'Allow',
     always: 'Always allow',
@@ -40,6 +42,7 @@ export default defineZone('inboxViews', {
     resume: 'Resume',
     resolve: 'The agent resolves',
     dismiss: 'Cancel',
+    retarget: 'Target {branch}',
     accept: 'Accept',
     share: 'Share',
     openPr: 'Open the {word}',

@@ -429,6 +429,8 @@ pub(super) async fn create_ticket(
         )?,
         // Its own branch: the tools do not name an existing one.
         branch: String::new(),
+        // Its own target (ESC-552): the board's when left out.
+        target: a.target.clone(),
         // Last: files named by a path are read only once the rest is checked.
         images: match a.images {
             Some(list) => Some(images::drafts(core, caller, list, 0).await?),
@@ -489,10 +491,11 @@ pub(super) async fn update_ticket(
         && a.model.is_none()
         && a.effort.is_none()
         && a.shared.is_none()
+        && a.target.is_none()
     {
         return Err(ToolError::Failed(tr!(
-            "Rien à modifier : donne au moins un des champs title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model, effort ou shared.",
-            "Nothing to change: give at least one of the fields title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model, effort or shared."
+            "Rien à modifier : donne au moins un des champs title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model, effort, shared ou target.",
+            "Nothing to change: give at least one of the fields title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model, effort, shared or target."
         )));
     }
     // Shared or no longer, and nothing else (ESC-190): in any column.
@@ -506,7 +509,29 @@ pub(super) async fn update_ticket(
         && remove_files.is_empty()
         && a.account.is_none()
         && a.model.is_none()
-        && a.effort.is_none();
+        && a.effort.is_none()
+        && a.target.is_none();
+    // Its target alone (ESC-552): in any column but « Terminé », as « Choisir la cible de ce ticket »,
+    // the branch checked at once.
+    let only_target = a.title.is_none()
+        && a.description.is_none()
+        && a.criteria.is_none()
+        && a.after.is_none()
+        && add.is_empty()
+        && remove.is_empty()
+        && add_files.is_empty()
+        && remove_files.is_empty()
+        && a.account.is_none()
+        && a.model.is_none()
+        && a.effort.is_none()
+        && a.shared.is_none();
+    if let (true, Some(target)) = (only_target, a.target.as_deref()) {
+        let updated = core
+            .ticket_set_target(&t.id, target)
+            .await
+            .map_err(refusal)?;
+        return json(&ticket_view(core, &updated));
+    }
     if let (true, Some(on)) = (only_shared, a.shared) {
         let (c, id) = (core.clone(), t.id.clone());
         let updated = tokio::task::spawn_blocking(move || c.ticket_share(&id, on))
@@ -551,6 +576,7 @@ pub(super) async fn update_ticket(
         },
         // Not the tools' to change: the ticket keeps the branch the window gave it.
         branch: t.branch.clone(),
+        target: a.target.clone(),
         // Its images and its files stay as they are unless a list is built below.
         images: None,
         files: None,
@@ -2384,6 +2410,7 @@ fn sub_draft(
         max_loops: 0,
         after,
         branch: String::new(),
+        target: None,
         images: None,
         files: None,
         // The harness of the tickets of the list: their project's, and « Auto » for the rest.

@@ -344,6 +344,58 @@ pub(crate) fn error_line(e: &anyhow::Error) -> String {
     board::first_line(&format!("{e:#}"))
 }
 
+/// Why a validation stopped before any merge (ESC-552): the ticket's branch does not descend from
+/// its target, it carries commits of `line` the target does not have.
+pub(crate) fn other_line_reason(
+    lang: Lang,
+    branch: &str,
+    target: &str,
+    line: &git::OtherLine,
+) -> String {
+    let (from, n) = (&line.branch, line.commits);
+    if n == 1 {
+        tr_in!(
+            lang,
+            "« {branch} » ne part pas de sa cible {target} : elle porte 1 commit de {from} que {target} n’a pas. Rien n’est fusionné : choisis la cible de ce ticket.",
+            "“{branch}” doesn’t start from its target {target}: it carries 1 commit of {from} that {target} doesn’t have. Nothing is merged: choose this ticket’s target."
+        )
+    } else {
+        tr_in!(
+            lang,
+            "« {branch} » ne part pas de sa cible {target} : elle porte {n} commits de {from} que {target} n’a pas. Rien n’est fusionné : choisis la cible de ce ticket.",
+            "“{branch}” doesn’t start from its target {target}: it carries {n} commits of {from} that {target} doesn’t have. Nothing is merged: choose this ticket’s target."
+        )
+    }
+}
+
+/// Refused: a ticket's own target in a project of several repositories (ESC-169), where each
+/// repository has its own.
+fn multi_target_refusal(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Dans un projet de plusieurs dépôts, chaque dépôt garde sa branche cible : un ticket n’en a pas d’autre.",
+        "In a project of several repositories, each repository keeps its target branch: a ticket has no other."
+    )
+}
+
+/// Refused: a ticket's own target that the repository does not have.
+fn target_missing(lang: Lang, target: &str) -> String {
+    tr_in!(
+        lang,
+        "La branche cible « {target} » n’existe pas dans le dépôt.",
+        "The target branch “{target}” doesn’t exist in the repository."
+    )
+}
+
+/// Refused: the branch a ticket takes up is its own target, which it is merged into.
+fn own_target_refusal(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "C’est la branche cible de ce ticket : son agent n’y travaille pas directement.",
+        "It’s this ticket’s target branch: its agent doesn’t work on it directly."
+    )
+}
+
 /// The tests run before a validation stop after this.
 const TEST_LIMIT: Duration = Duration::from_secs(20 * 60);
 
@@ -360,6 +412,9 @@ pub struct TicketDraft {
     pub after: Vec<String>,
     /// An existing branch for its agent to take up; empty: the ticket's own, `ticket/<key>`.
     pub branch: String,
+    /// Its own target branch (« Branche cible », ESC-552), over the board's: empty, the board's;
+    /// None, absent, it stays as it is (the imports, a tool that does not name it).
+    pub target: Option<String>,
     /// Its images, the whole list, in their order; None: they stay as they are (the tools of the
     /// MCP server, the imports).
     pub images: Option<Vec<DraftImage>>,
@@ -531,6 +586,21 @@ impl Core {
         let engine = d.engine.flatten().unwrap_or(project.engine());
         let account = self.ticket_account(&project, engine, d.account.as_deref())?;
         let branch = self.ticket_branch(&project, &d.branch).await?;
+        // Its own target (ESC-552), checked before a key is used up: empty for the board's.
+        let board_target = match project.board.target.trim() {
+            "" => git::head_branch(&project.path).await,
+            board => board.to_string(),
+        };
+        let target = self
+            .ticket_target_name(
+                &project,
+                d.target.as_deref().unwrap_or_default(),
+                &board_target,
+            )
+            .await?;
+        if !branch.is_empty() && branch == target {
+            bail!(own_target_refusal(i18n::ui()));
+        }
         let id = new_id();
         let dir = self.data.ticket_dir(&id);
         let checked = ticketimages::check(&dir, &[], d.images.as_deref().unwrap_or_default())?;
@@ -616,6 +686,7 @@ impl Core {
             created_at: now_ms(),
             external,
             branch,
+            target,
             images,
             files,
             engine: d.engine.flatten(),
@@ -716,6 +787,96 @@ impl Core {
         Ok(branch)
     }
 
+    /// The target a ticket's form or a tool names (ESC-552), as the ticket keeps it: empty for the
+    /// board's (none named, or the board's own, `board`), else a local branch of the repository
+    /// (a remote one, `origin/main`, through the local branch made to track it). Refused in a
+    /// project of several repositories, and for a branch the repository does not have.
+    pub(crate) async fn ticket_target_name(
+        &self,
+        project: &Project,
+        asked: &str,
+        board: &str,
+    ) -> Result<String> {
+        let asked = branch_name(asked)?;
+        if asked.is_empty() || asked == board.trim() {
+            return Ok(String::new());
+        }
+        if project.is_multi() {
+            bail!(multi_target_refusal(i18n::ui()));
+        }
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        let local = if git::branch_exists(&root, &asked).await {
+            asked.clone()
+        } else if git::ref_exists(&root, &format!("refs/remotes/{asked}")).await {
+            git::branch_track(&root, &asked).await?
+        } else {
+            bail!(target_missing(i18n::ui(), &asked));
+        };
+        Ok(if local == board.trim() {
+            String::new()
+        } else {
+            local
+        })
+    }
+
+    /// The ticket's target branch (ESC-552): its own, else the board's (`target_of`).
+    pub(crate) async fn ticket_target(&self, project: &Project, t: &Ticket) -> String {
+        match t.target.trim() {
+            "" => self.target_of(project).await,
+            own => own.to_string(),
+        }
+    }
+
+    /// « Choisir la cible de ce ticket » (ESC-552): its own target set to `target` (the board's
+    /// when empty or the board's own), in any column but « Terminé » and never while its
+    /// validation runs. The worktree of its agent goes to it too (« Intégrer », the delay counted
+    /// on it), and a validation stopped for another line is no longer blocked: « Valider » again.
+    pub async fn ticket_set_target(self: &Arc<Self>, id: &str, target: &str) -> Result<Ticket> {
+        let t = self.ticket(id)?;
+        let project = self.project(&t.project_id)?;
+        let board = self.target_of(&project).await;
+        let own = self.ticket_target_name(&project, target, &board).await?;
+        let effective = if own.is_empty() {
+            board.clone()
+        } else {
+            own.clone()
+        };
+        if !t.branch.is_empty() && t.branch == effective {
+            bail!(own_target_refusal(i18n::ui()));
+        }
+        let updated = self.edit_ticket(id, |x| {
+            if x.column == Column::Done {
+                bail!(tr!(
+                    "Ce ticket est terminé : sa cible ne change plus.",
+                    "This ticket is done: its target no longer changes."
+                ));
+            }
+            if x.step.is_some() {
+                bail!(Refusal::ApprovingAlready);
+            }
+            x.target = own.clone();
+            if x.other_line.take().is_some() {
+                x.blocked = None;
+            }
+            Ok(x.clone())
+        })?;
+        // Its agent's worktree goes to it: what « Intégrer » brings in, what its delay counts.
+        if let Some(agent) = updated.agent_id.as_deref() {
+            let _ = self.with_agent(agent, |rt, fx| {
+                if let Some(w) = rt.meta.worktree.as_mut().filter(|w| !w.is_multi()) {
+                    if w.base_branch != effective {
+                        w.base_branch = effective.clone();
+                        fx.save = true;
+                    }
+                }
+                Ok(())
+            });
+            self.git.refresh(&project.id);
+        }
+        self.schedule();
+        Ok(updated)
+    }
+
     /// Only a ticket "À faire" changes. It never comes after a ticket that waits for it already.
     pub fn ticket_update(self: &Arc<Self>, id: &str, d: TicketDraft) -> Result<Ticket> {
         let title = d.title.trim().to_string();
@@ -732,6 +893,34 @@ impl Core {
             .unwrap_or_default();
         if !branch.is_empty() && branch == target.trim() {
             bail!(target_branch_refusal(i18n::ui()));
+        }
+        // Its own target (ESC-552): empty for the board's; its existence is the start's to check, as
+        // the branch's is.
+        let own_target = match &d.target {
+            Some(asked) => {
+                let asked = branch_name(asked)?;
+                let multi = self
+                    .ticket(id)
+                    .and_then(|t| self.project(&t.project_id))
+                    .is_ok_and(|p| p.is_multi());
+                if !asked.is_empty() && asked != target.trim() && multi {
+                    bail!(multi_target_refusal(i18n::ui()));
+                }
+                Some(if asked == target.trim() {
+                    String::new()
+                } else {
+                    asked
+                })
+            }
+            None => None,
+        };
+        let kept_target = self.ticket(id).map(|t| t.target).unwrap_or_default();
+        let effective = match own_target.as_deref().unwrap_or(&kept_target) {
+            "" => target.trim().to_string(),
+            own => own.to_string(),
+        };
+        if !branch.is_empty() && branch == effective {
+            bail!(own_target_refusal(i18n::ui()));
         }
         // Its account, on the harness it will have: one named is checked; a harness changed that
         // the account it had does not run sets it back to « Auto », as the form does.
@@ -836,6 +1025,9 @@ impl Core {
                 t.max_loops = board::max_loops(d.max_loops);
                 t.after = after;
                 t.branch = branch;
+                if let Some(own) = &own_target {
+                    t.target = own.clone();
+                }
                 if let Some(engine) = d.engine {
                     t.engine = engine;
                 }
@@ -1920,6 +2112,7 @@ impl Core {
             t.partial = false;
             t.blocked = None;
             t.conflict = false;
+            t.other_line = None;
             t.reminded = false;
             t.started_at = Some(now_ms());
             // A new agent from the target branch: nothing of an earlier attempt is in place.
@@ -2223,7 +2416,11 @@ impl Core {
     /// prompt; then, its worktree set up, its first message.
     async fn launch_ticket_agent(self: &Arc<Self>, project: &Project, t: &Ticket) -> Result<()> {
         let s = &project.board;
-        let target = self.target_of(project).await;
+        // Its own target (ESC-552), else the board's: what its worktree starts from and goes to.
+        let target = self.ticket_target(project, t).await;
+        if !t.target.trim().is_empty() && !git::branch_exists(&project.path, &target).await {
+            bail!(target_missing(i18n::ui(), &target));
+        }
         let settings = self.settings.read().clone();
         // What it is told, from its protocol to its first message.
         let lang = self.lang().claude;
@@ -3044,6 +3241,7 @@ impl Core {
             }
             t.blocked = None;
             t.conflict = false;
+            t.other_line = None;
             t.step = Some(tr!("Validation…", "Approving…"));
             Ok(t.clone())
         })
@@ -3088,7 +3286,15 @@ impl Core {
         let agent_id = t.agent_id.clone().ok_or(Refusal::NoAgent)?;
         let meta = self.agent(&agent_id)?.lock().meta.clone();
         let wt = meta.worktree.clone().ok_or(Refusal::AgentWithoutWorktree)?;
-        let target = self.target_of(&project).await;
+        let target = self.ticket_target(&project, t).await;
+        // A branch that does not descend from its target (ESC-552) stops here, before its tests and
+        // any merge: nothing goes into the target, nothing into the branch, its agent is told nothing.
+        if matches!(s.action.as_str(), "merge" | "pr") {
+            if let Some(line) = self.other_line_of(&project, &wt, &target).await {
+                self.stop_on_other_line(t, &agent_id, &wt.branch, &target, line)?;
+                return Ok(());
+            }
+        }
         // Its test launches stop first: their servers would hold the worktree's files and ports.
         self.stop_test_runs(&agent_id);
         // Tests.
@@ -3287,6 +3493,7 @@ impl Core {
             x.step = None;
             x.blocked = None;
             x.conflict = false;
+            x.other_line = None;
             x.outcome = Some(outcome.ui);
             x.outcome_claude = Some(outcome.claude);
             x.outcome_url = outcome.url;
@@ -3408,6 +3615,57 @@ impl Core {
                 board::fallback_commit(t)
             }
         }
+    }
+
+    /// The other line the branch of `wt` came from (ESC-552, `git::other_line`): its target lacks
+    /// commits it has, which that branch has too. Not looked for in a project of several
+    /// repositories (each one's own target), nor when git cannot tell (nothing stopped then).
+    pub(crate) async fn other_line_of(
+        &self,
+        project: &Project,
+        wt: &Worktree,
+        target: &str,
+    ) -> Option<git::OtherLine> {
+        if wt.is_multi() || target.is_empty() {
+            return None;
+        }
+        let own = [
+            project.ticket_branch_prefix.as_str(),
+            project.agent_branch_prefix.as_str(),
+        ];
+        match git::other_line(&wt.path, &wt.branch, target, &own).await {
+            Ok(line) => line,
+            Err(e) => {
+                log::warn!("branch {}: its line not read: {e:#}", wt.branch);
+                None
+            }
+        }
+    }
+
+    /// A validation stopped before any merge (ESC-552): to test still, blocked with why, the
+    /// branch it came from kept for « Choisir la cible de ce ticket ». Its agent is told nothing.
+    fn stop_on_other_line(
+        self: &Arc<Self>,
+        t: &Ticket,
+        agent_id: &str,
+        branch: &str,
+        target: &str,
+        line: git::OtherLine,
+    ) -> Result<()> {
+        let reason = other_line_reason(i18n::ui(), branch, target, &line);
+        log::info!("ticket {}: {reason}", t.key);
+        self.edit_ticket(&t.id, |x| {
+            if !validating(x, agent_id) {
+                bail!(Refusal::Changed);
+            }
+            x.step = None;
+            x.conflict = false;
+            x.blocked = Some(reason.clone());
+            x.other_line = Some(line.branch.clone());
+            Ok(())
+        })?;
+        self.notify_ticket(&t.id, false);
+        Ok(())
     }
 
     /// The merge step: in the project's folder when the target is checked out there (refused with
@@ -3753,8 +4011,12 @@ impl Core {
             .worktree
             .clone()
             .ok_or(Refusal::AgentWithoutWorktree)?;
-        let target = self.target_of(&project).await;
+        let target = self.ticket_target(&project, &t).await;
         // Nothing goes into the worktree of an agent archived meanwhile, or at work.
+        // Never the target of another line into its branch (ESC-552): refused, the agent told nothing.
+        if let Some(line) = self.other_line_of(&project, &wt, &target).await {
+            bail!(other_line_reason(i18n::ui(), &wt.branch, &target, &line));
+        }
         self.still_validating(id, &agent_id)?;
         let rebase = project.board.strategy == "rebase";
         let text = if wt.is_multi() {
@@ -3856,6 +4118,7 @@ impl Core {
             }
             t.blocked = None;
             t.conflict = false;
+            t.other_line = None;
             Ok(())
         })
     }

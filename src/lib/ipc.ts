@@ -913,6 +913,7 @@ export const api = {
   ticketReject: (id: string, comment: string) => invoke<void>('ticket_reject', { id, comment }),
   ticketResolveConflict: (id: string) => invoke<void>('ticket_resolve_conflict', { id }),
   ticketDismiss: (id: string) => invoke<void>('ticket_dismiss', { id }),
+  ticketSetTarget: (id: string, target: string) => invoke<Ticket>('ticket_set_target', { id, target }),
   /** « Rafraîchir » of the column « En revue » (ESC-59): how many pull requests were read. */
   ticketPrsRefresh: (projectId: string) => invoke<number>('ticket_prs_refresh', { projectId }),
   /** A ticket whose pull request was closed without a merge: done all the same, or back to do. */

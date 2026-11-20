@@ -7,6 +7,7 @@
   import { MAX_FILES, draftFiles, filesChanged, keptFile, ticketPlace, type FormFile } from '../../lib/ticket-files';
   import { NotImageError, draftImages, imagesChanged, readTicketImage, shownImage, type FormImage } from '../../lib/ticket-images';
   import { menu } from '../../lib/menu.svelte';
+  import { isMulti } from '../../lib/repos';
   import { keyLabel, primaryKey } from '../../lib/platform';
   import { ariaEnter } from '../../lib/shortcuts';
   import { app, type TicketFormDraft } from '../../lib/state.svelte';
@@ -74,6 +75,7 @@
     maxLoops: ticket?.maxLoops ?? (task?.maxLoops || 5),
     after: ticket?.after ?? [],
     branch: ticket?.branch ?? '',
+    target: ticket?.target ?? '',
     engine: ticket?.engine ?? task?.engine ?? null,
     options: {
       account: ticket?.account ?? task?.account ?? '',
@@ -103,6 +105,10 @@
   let after = $state(untrack(() => [...(resume?.after ?? start.after)]));
   /** The existing branch its agent takes up; empty: the ticket's own, made when it starts. */
   let branch = $state(untrack(() => resume?.branch ?? start.branch));
+  /** Its own target branch (« Branche cible », ESC-552); empty: the Kanban's. */
+  let target = $state(untrack(() => resume?.target ?? start.target));
+  let targetButton = $state<HTMLButtonElement>();
+  let choosingTarget = $state(false);
   /** The harness of its agents (« Harness », from two harnesses found on); null: the project's. */
   let engine = $state<EngineId | null>(untrack(() => (resume?.engine !== undefined ? resume.engine : start.engine)));
   let engineButton = $state<HTMLButtonElement>();
@@ -259,6 +265,7 @@
       criteria !== start.criteria ||
       maxLoops !== start.maxLoops ||
       branch !== start.branch ||
+      target !== start.target ||
       engine !== start.engine ||
       options.account !== start.options.account ||
       options.model !== start.options.model ||
@@ -299,6 +306,7 @@
         maxLoops,
         after: [...after],
         branch,
+        target,
         engine,
         options: { ...options },
         images: images.map((i) => ({ ...i })),
@@ -588,6 +596,31 @@
     ]);
   }
 
+  /** The Kanban's target, which a ticket goes to unless it has its own (ESC-552). */
+  const boardTarget = $derived(app.projects.find((p) => p.id === projectId)?.board.target ?? '');
+  /** Of several repositories (ESC-169): each one keeps its own target, a ticket has none. */
+  const multiRepo = $derived(isMulti(app.projects.find((p) => p.id === projectId)));
+  const boardLabel = $derived(
+    boardTarget ? t('branches.ticket.targetBoard', { branch: boardTarget }) : t('branches.ticket.targetBoardNone'),
+  );
+  const targetShown = $derived(target || boardLabel);
+
+  function targetMenu() {
+    if (!targetButton) return;
+    menu.showAt(targetButton, [
+      { label: boardLabel, checked: !target, onClick: () => (target = '') },
+      {
+        label: t('branches.ticket.targetOther'),
+        title: t('branches.ticket.targetHelp'),
+        // Once the menu has given the focus back to its button: the picker gives it back there in turn.
+        onClick: async () => {
+          await tick();
+          choosingTarget = true;
+        },
+      },
+    ]);
+  }
+
   function branchMenu() {
     if (!branchButton) return;
     menu.showAt(branchButton, [
@@ -720,6 +753,8 @@
         after: [...after],
         // Said only when it matters: a branch taken up, or the one of an edited ticket given up (empty).
         ...(branch || start.branch ? { branch } : {}),
+        // Its own target (ESC-552): said when there is one, or when an edited ticket gives its own up.
+        ...(target || start.target ? { target } : {}),
         // Its harness, null for the project's; its account, model and effort, empty for « Auto ».
         engine,
         account: options.account,
@@ -995,6 +1030,23 @@
             <Icon name="branch" size={14} /><b class="mono" id="{uid}-branch-value">{branch || own}</b><Icon name="down" size={14} />
           </button>
         </div>
+        {#if !multiRepo}
+          <!-- Its own target (ESC-552): the Kanban's unless another is chosen. -->
+          <div class="fld" role="group" aria-label={t('branches.ticket.target')}>
+            <span class="lb" id="{uid}-target">{t('branches.ticket.target')}</span>
+            <button
+              class="select pick"
+              data-ticket-target-field
+              bind:this={targetButton}
+              aria-haspopup="menu"
+              aria-labelledby="{uid}-target {uid}-target-value"
+              use:tip={targetShown}
+              onclick={targetMenu}
+            >
+              <Icon name="branch" size={14} /><b class="mono" id="{uid}-target-value">{targetShown}</b><Icon name="down" size={14} />
+            </button>
+          </div>
+        {/if}
         {#if candidates.length}
           <!-- « Après », a menu's button as in the preview: the tickets checked, the list and its search in its popover. -->
           <div class="fld after" role="group" aria-label={t('board.form.after')}>
@@ -1114,6 +1166,16 @@
 
 {#if choosing}
   <BranchPicker over {projectId} anchor={branchButton} mode="pick" onclose={() => (choosing = false)} onpick={(b) => (branch = b.name)} />
+{/if}
+{#if choosingTarget}
+  <BranchPicker
+    over
+    {projectId}
+    anchor={targetButton}
+    mode="target"
+    onclose={() => (choosingTarget = false)}
+    onpick={(b) => (target = b.name === boardTarget ? '' : b.name)}
+  />
 {/if}
 
 <style>

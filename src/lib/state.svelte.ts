@@ -293,6 +293,8 @@ export interface TicketFormDraft {
   maxLoops: number;
   after: string[];
   branch: string;
+  /** Its own target branch (ESC-552); absent: the ticket's. */
+  target?: string;
   /** Its harness (null: the project's); absent: the ticket's. */
   engine?: EngineId | null;
   /** Its account, model and effort (empty: « Auto »); absent: the ticket's. */

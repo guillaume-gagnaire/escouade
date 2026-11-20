@@ -190,6 +190,18 @@ export default {
     existing: 'Reprendre une branche existante…',
     /** The tooltip of that entry. */
     existingKept: 'Escouade ne supprime jamais cette branche, même une fois le ticket validé.',
+    /** Its own target (ESC-552): the « Branche cible » field, and what the card and the box say of it. */
+    target: 'Cible',
+    targetBoardNone: 'Celle du Kanban',
+    /** `{branch}`: the Kanban’s target. */
+    targetBoard: 'Celle du Kanban ({branch})',
+    targetOther: 'Une autre branche…',
+    targetHelp: 'Le worktree part de cette branche, la validation y fusionne, la PR la vise.',
+    chip: 'vers {branch}',
+    chipTitle: 'Ce ticket vise {branch}, pas {board}, la cible du Kanban.',
+    choose: 'Choisir la cible de ce ticket',
+    /** Under the branch its validation stopped for, in the menu of « Choisir la cible ». */
+    otherLine: 'Sa branche en part',
   },
   /** « Branches mergées » : the clean-up. */
   merged: {

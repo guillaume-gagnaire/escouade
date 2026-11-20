@@ -6250,3 +6250,56 @@ async fn the_tools_are_refused_what_the_policies_lock() {
         "{said}"
     );
 }
+
+#[tokio::test]
+async fn a_ticket_gets_its_own_target_by_the_tools_and_changes_it_in_any_column_but_done() {
+    let h = harness("mcp-act-ticket-target");
+    let p = project(&h).await;
+    git(std::path::Path::new(&p.path), &["branch", "release"]);
+    let c = external(&h).await;
+    let made = read(
+        &c,
+        "create_ticket",
+        json!({ "project": "DEMO", "title": "Correctif 2.2", "target": "release" }),
+    )
+    .await;
+    // Said by get_ticket while it is not the Kanban's.
+    assert_eq!(made["target"], "release");
+    let id = made["id"].as_str().unwrap().to_string();
+    assert_eq!(stored(&h, &id).target, "release");
+    let e = refused(
+        &c,
+        "create_ticket",
+        json!({ "project": "DEMO", "title": "Ailleurs", "target": "nulle-part" }),
+    )
+    .await;
+    assert!(e.contains("n’existe pas"), "{e}");
+    // Under way, then to test: its target alone changes, its agent's worktree with it.
+    h.core
+        .edit_ticket(&id, |t| {
+            t.column = Column::Review;
+            Ok(())
+        })
+        .unwrap();
+    let back = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": id, "target": "main" }),
+    )
+    .await;
+    assert!(back.get("target").is_none(), "{back}");
+    assert_eq!(stored(&h, &id).target, "");
+    h.core
+        .edit_ticket(&id, |t| {
+            t.column = Column::Done;
+            Ok(())
+        })
+        .unwrap();
+    let e = refused(
+        &c,
+        "update_ticket",
+        json!({ "ticket": id, "target": "release" }),
+    )
+    .await;
+    assert!(e.contains("terminé"), "{e}");
+}

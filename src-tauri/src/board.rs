@@ -331,6 +331,7 @@ pub fn turn_end(
     }
     t.blocked = None;
     t.conflict = false;
+    t.other_line = None;
     // The progress is the agent's own account, whatever became of its criteria: the last list
     // given replaces the previous, and none leaves it.
     if let (TurnEnd::Finished(_), Some(progress)) = (end, report.and_then(|r| r.progress.as_ref()))
@@ -866,6 +867,7 @@ pub fn back_to_todo(t: &mut Ticket) {
     t.partial = false;
     t.blocked = None;
     t.conflict = false;
+    t.other_line = None;
     t.step = None;
     t.reminded = false;
     t.forced = false;
@@ -888,6 +890,7 @@ pub fn back_to_work(t: &mut Ticket) {
     t.partial = false;
     t.blocked = None;
     t.conflict = false;
+    t.other_line = None;
     t.step = None;
     t.review_at = None;
     t.reminded = false;

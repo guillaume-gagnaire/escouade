@@ -581,6 +581,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `ticket_reject`
 - `ticket_resolve_conflict`
 - `ticket_resume`
+- `ticket_set_target`
 - `ticket_share`
 - `ticket_start`
 - `ticket_team_assign`

@@ -252,6 +252,33 @@ describe('TicketCard', () => {
     expect(backend.called('ticket_dismiss')).toHaveLength(1);
   });
 
+  it('says « vers main » beside its key when its own target is not the Kanban’s, and nothing otherwise (ESC-552)', () => {
+    fakeBackend();
+    const p = project({ board: board({ target: 'release/2.3' }) });
+    const { unmount } = show(ticket({ target: 'main' }), p);
+    const chip = document.querySelector('[data-ticket-target]')!;
+    expect(chip).toHaveTextContent('vers main');
+    expect(chip).toHaveAttribute('aria-label', 'Ce ticket vise main, pas release/2.3, la cible du Kanban.');
+    unmount();
+    show(ticket({ target: '' }), p);
+    expect(document.querySelector('[data-ticket-target]')).toBeNull();
+  });
+
+  it('offers to choose the target of a ticket whose branch starts elsewhere, the branch it starts from first (ESC-552)', async () => {
+    const backend = fakeBackend({ git_branches: () => ['main', 'release/2.3', 'ticket/dem-4', 'feat/x'] });
+    const p = project({ board: board({ target: 'release/2.3' }) });
+    show(doing({ column: 'review', blocked: '« ticket/dem-1 » ne part pas de sa cible release/2.3', otherLine: 'main' }), p);
+    // Neither « L'agent résout » (nothing is merged into its branch) nor a conflict's.
+    expect(screen.queryByRole('button', { name: "L'agent résout" })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Choisir la cible de ce ticket' }));
+    await waitFor(() => expect(menu.open).not.toBeNull());
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['main', 'Celle du Kanban (release/2.3)', 'feat/x']);
+    expect(menu.open!.items[0].detail).toBe('Sa branche en part');
+    menu.open!.items[0].onClick!();
+    await waitFor(() => expect(backend.called('ticket_set_target')).toHaveLength(1));
+    expect(backend.called('ticket_set_target')[0].args).toEqual({ id: 't1', target: 'main' });
+  });
+
   it('retries a validation that failed', async () => {
     const backend = fakeBackend();
     show(doing({ column: 'review', blocked: 'Validation interrompue' }));

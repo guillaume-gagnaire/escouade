@@ -1,9 +1,9 @@
 ---
 title: "Tickets"
 subject: "Kanban"
-sources: ["docs/SPEC.md"]
-tickets: ["ESC-95","ESC-141","ESC-153"]
-decisions: []
+sources: ["docs/SPEC.md","Ticket ESC-552 (constat du 2026-11-20 : ESC-531, ticket de la 2.2, validé dans release/2.3)"]
+tickets: ["ESC-95","ESC-141","ESC-153","ESC-552"]
+decisions: [227]
 compared: null
 ---
 
@@ -84,3 +84,13 @@ Un ticket décrit un travail à confier à un agent : un titre, une description,
 - Supprimer un ticket le retire des tickets qui l'attendaient.
 - Sur la carte « À faire » : « ⏸ après DEM-3 » (« ⏸ après DEM-3 et DEM-4 ») tant qu'un ticket attendu n'est pas « Terminé ».
 - « Lancer » demande alors « Lancer DEM-5 ? » (« DEM-5 attend DEM-3, pas encore terminé. Le lancer quand même ? », bouton « Lancer quand même »). Un ticket lancé à la main part sans attendre.
+
+### Sa branche cible (ESC-552)
+
+- « Cible » est un champ de la fenêtre, à côté de « Branche » : « Celle du Kanban (`release/2.3`) » par défaut, ou « Une autre branche… », qui ouvre le sélecteur de la branche cible du Kanban (les branches locales, sauf celles des agents et des tickets). Il n'y est pas dans un projet de plusieurs dépôts, où chaque dépôt garde sa cible.
+- Elle remplace celle du Kanban pour ce ticket seul : son worktree en part, sa validation y fusionne, sa PR la vise, le « retard » de son agent (« Intégrer ») se compte sur elle (voir *Agent d'un ticket*, *Validation*).
+- Le ticket la garde vide quand elle est celle du Kanban (nommée ou non) : il suit alors la cible du Kanban, même si elle change.
+- Par le serveur MCP : `target` de `create_ticket` (une branche que le dépôt n'a pas est refusée : « La branche cible « x » n'existe pas dans le dépôt. » ; une branche distante, `origin/main`, passe par la branche locale qui la suit) et d'`update_ticket`. Donnée seule, `update_ticket` la change dans toute colonne sauf « Terminé », jamais pendant une validation, comme « Choisir la cible de ce ticket ». `get_ticket` dit `target` quand le ticket a la sienne.
+- Changée sur un ticket parti, la branche de base du worktree de son agent la suit.
+- Refusé : reprendre comme « Branche » la cible du ticket (« C'est la branche cible de ce ticket : son agent n'y travaille pas directement. »).
+- Sur la carte, dans toutes les colonnes, quand elle n'est pas celle du Kanban : « vers main » à côté de la clé, au survol « Ce ticket vise main, pas release/2.3, la cible du Kanban. ».

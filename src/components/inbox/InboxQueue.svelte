@@ -134,6 +134,11 @@
         {#if v.group === 'stopped'}<b class="wk">{t(`inboxViews.kind.${v.source}`)}</b>{:else}<span class="ell" data-testid="ivw-kind"
             >{t(`inboxViews.kind.${v.source}`)}</span
           >{/if}
+        {#if v.target}
+          <!-- A ticket of its own target (ESC-552), not the Kanban's: where its validation goes. -->
+          <span aria-hidden="true">·</span>
+          <span class="ell mono" data-testid="ivw-target">{t('inboxViews.to', { branch: v.target })}</span>
+        {/if}
       {/if}
     </span>
   </button>
