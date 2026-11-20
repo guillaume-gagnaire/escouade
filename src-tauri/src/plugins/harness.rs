@@ -769,6 +769,11 @@ impl ProcessEngine {
         fence_by_core: bool,
         bypass: bool,
     ) -> Result<proto::TerminalLaunch> {
+        let mut params = params;
+        // Its settings for the agent's project (ESC-553): a module cannot ask for them during its turn.
+        if let Value::Object(s) = self.rt.settings_of(&self.plugin, Some(&place.project)) {
+            params.settings = s;
+        }
         // Where its `fs/*` reach for the time of the call: no agent is attached, the interface is not the plugin's.
         let _ = self.rt.place_agent(&self.plugin, &params.agent, place);
         let told = self.call(method::TERMINAL_LAUNCH, &params).await;

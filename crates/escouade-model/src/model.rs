@@ -2215,6 +2215,11 @@ pub struct AgentMeta {
     /// « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal (`tui`), not
     /// over the stream that Escouade's conversation view drives. Never a ticket's agent.
     pub terminal: bool,
+    /// Its session started in Claude Code's Code Mode (ESC-553, its transcript's `repl-mode`): Claude Code resumes it in
+    /// its interface alone, the variable set, and refuses it in stream-json. It stays in « Vue Claude Code » for good, and
+    /// Escouade never starts its stream, by the automatic resume nor by a ticket.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub code_mode: bool,
     /// « Vue <harness> » of a harness whose interface joins the agent's process
     /// (`Engine::attaches`, OpenCode): the interface shows in a terminal (`AgentRt::attach`), while
     /// the process goes on as in Escouade's view. Never with `terminal`, nor for a ticket's agent.

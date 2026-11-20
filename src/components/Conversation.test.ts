@@ -1935,6 +1935,45 @@ describe('« Vue Claude Code »', () => {
     expect(b.called('set_agent_view')[0].args).toEqual({ id: 'vt2', terminal: false });
   });
 
+  it('says an agent in Code Mode resumes in its terminal, and never goes back to Escouade’s view (ESC-553)', async () => {
+    setLang('fr');
+    const a = agent({ id: 'cm1', status: 'done', terminal: true, codeMode: true });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [] });
+    const { container } = render(Conversation, { agent: a, project: project() });
+    const band = screen.getByRole('region', { name: 'En Code Mode : cet agent se reprend dans son terminal' });
+    expect(band).toHaveTextContent('Claude Code ne la reprend que dans son interface');
+    // Over its terminal, nothing to open.
+    expect(within(band).queryByRole('button')).toBeNull();
+    expect(container.querySelector('.tui')).not.toBeNull();
+    const back = screen.getByRole('button', { name: 'Vue Escouade' });
+    expect(back).toBeDisabled();
+    await userEvent.click(back);
+    expect(b.called('set_agent_view')).toHaveLength(0);
+  });
+
+  it('opens the terminal of an agent in Code Mode shown in its conversation (ESC-553)', async () => {
+    setLang('en');
+    // Marked as its stream was refused: its conversation is shown, its terminal one click away.
+    const a = agent({ id: 'cm2', status: 'idle', terminal: false, codeMode: true });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    const band = screen.getByRole('region', { name: 'In Code Mode: this agent resumes in its terminal' });
+    await userEvent.click(within(band).getByRole('button', { name: 'Open the terminal' }));
+    expect(b.called('set_agent_view')[0].args).toEqual({ id: 'cm2', terminal: true });
+  });
+
+  it('says nothing of Code Mode for an agent not in it', () => {
+    setLang('fr');
+    const a = agent({ id: 'cm3', status: 'done', terminal: true });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    expect(screen.queryByTestId('code-mode')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Vue Escouade' })).toBeEnabled();
+  });
+
   it('is never offered to a ticket’s agent', () => {
     setLang('fr');
     const a = agent({ id: 'vt3', status: 'done', ticketId: 'k1' });

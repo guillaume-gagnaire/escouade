@@ -652,6 +652,9 @@
         ? [
             {
               label: t(inHarnessView(a) ? 'nav.sidebar.menu.toRich' : 'nav.sidebar.menu.toTerminal', { engine: engineName(a.engine) }),
+              // In Code Mode (ESC-553), it resumes in its terminal alone.
+              disabled: inHarnessView(a) && !!a.codeMode,
+              title: inHarnessView(a) && a.codeMode ? t('conv.codeMode.noRich') : undefined,
               onClick: () => switchView(a),
             },
           ]

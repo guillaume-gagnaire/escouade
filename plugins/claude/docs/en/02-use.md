@@ -35,6 +35,18 @@ A permission card has “Allow”, “Deny” and, when Claude Code suggests a r
 
 The Claude Code view runs the agent in Claude Code’s own interface, in a terminal of the window, on the same conversation: Escouade stops one and resumes the session in the other. Its permissions are answered in that interface. A ticket’s agent stays in Escouade’s view.
 
+## Experimental features
+
+On the plugin’s page, Settings tab, the “Experimental features” group turns on flags of Claude Code for every project; the Plugins page of a project sets them otherwise for it (“As for every project”, “On”, “Off”). A repository’s `.escouade.yml` never turns them on.
+
+- **Code Mode** (`CLAUDE_CODE_EXPERIMENTAL_CODE_MODE`, Claude Code 2.1.323 or later, 2.1.326 with the Agent Teams): Claude writes JavaScript that makes its tool calls (the `REPL` tool). It takes a Claude subscription or a Console account, and Opus 5.5, Sonnet 5.5, Haiku 5.5 or Fable 5.2.
+- **Agent Teams** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, 2.1.32 or later): a session leads teammates.
+- **Other flags**: names of `CLAUDE_CODE_EXPERIMENTAL_*` alone, each set to 1. Any other name is left out, and the conversation says so.
+
+They go to the Claude Code view alone, in the private settings file of its interface: never to Escouade’s conversation, a discussion nor a ticket’s agent, which Claude Code runs in stream-json, where these flags do nothing. Code Mode is not passed, and the conversation says why, with Remote Control, an account that goes through a gateway or a cloud provider, a Claude Code too old or a model that does not take it. The first time, Claude Code asks in the terminal to confirm (“Yes, turn on Code Mode”).
+
+An agent whose session starts in Code Mode keeps it: Claude Code resumes such a session in its interface alone. Its conversation says so (“In Code Mode: this agent resumes in its terminal”), “Escouade view” stays greyed out, and Escouade never starts it again in stream-json, by the automatic resume nor by a ticket. Its interface resumes it with Code Mode, even turned off since, and without Remote Control.
+
 ## A discussion of the Docs tab
 
 A discussion changes nothing: Claude Code runs there without its tools that write or run a command (`Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Bash`, `PowerShell`, `Monitor`, `EnterWorktree`), whatever the mode.

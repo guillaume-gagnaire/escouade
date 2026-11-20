@@ -7,6 +7,7 @@
 //! (`view`): the core hands on the lines of the session's transcript (`view/translate`).
 
 pub mod client;
+pub mod experimental;
 pub mod localcmd;
 pub mod terminal;
 pub mod translate;
@@ -162,8 +163,11 @@ impl Plugin {
                 asked(self.agent(&c.agent)?.ask(c.request))
             }
             method::TERMINAL_LAUNCH => {
+                // What the core tells beyond the published protocol, read from the same parameters (ESC-553).
+                let more: experimental::Context =
+                    serde_json::from_value(params.clone()).unwrap_or_default();
                 let p: TerminalParams = read(params)?;
-                give(terminal::launch(&p))
+                give(terminal::launch_with(&p, &more))
             }
             method::ACCOUNT_READ => {
                 let r: AccountRead = read(params)?;

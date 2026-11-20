@@ -46,7 +46,7 @@ mod vibe_tui;
 mod view;
 
 pub use crate::text::strip_ansi;
-pub use transcript::HookOutcome;
+pub use transcript::{code_mode_line, HookOutcome};
 // What a notification is about, which the settings name: in `escouade-model` (docs/CRATES.md).
 pub use escouade_model::notify::NotifyKind;
 

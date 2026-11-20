@@ -139,7 +139,8 @@ describe('SettingsModal', () => {
     await userEvent.click(tab('site'));
     expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
-    expect(entries().slice(8, 19)).toEqual([
+    // « Plugins »: the settings of each project of the plugin Claude Code (its experimental features, ESC-553).
+    expect(entries().slice(8, 20)).toEqual([
       'demo-api',
       'site',
       'Projet',
@@ -147,6 +148,7 @@ describe('SettingsModal', () => {
       'Lancement',
       'Kanban',
       'Tickets importés',
+      'Plugins',
       'Équipe',
       'Confidentialité',
       'Tous les projets',

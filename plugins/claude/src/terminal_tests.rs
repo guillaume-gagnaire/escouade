@@ -225,3 +225,63 @@ fn the_quota_of_an_account_is_what_get_usage_tells_once_initialize_is_answered()
     });
     assert_eq!((models.done, models.error), (None, None));
 }
+
+/// ESC-553: the experimental features go in the `env` of the interface's private settings, where Claude Code reads Code
+/// Mode (« Code Mode (experimental) is on » with it there, 2.1.329), never on its stream's launch; what is not passed is
+/// said.
+#[test]
+fn the_experimental_features_go_in_the_private_settings_of_the_interface_alone() {
+    use crate::experimental::{key, Context, AGENT_TEAMS, CODE_MODE};
+    let settings = json!({ key::CODE_MODE: true, key::AGENT_TEAMS: true })
+        .as_object()
+        .cloned()
+        .unwrap();
+    let c = Context {
+        settings,
+        version: Some("2.1.329".into()),
+        ..Context::default()
+    };
+    let t = launch_with(&params(), &c);
+    let file: Value = serde_json::from_str(&t.launch.files[0].text).unwrap();
+    assert_eq!(file["env"], json!({ CODE_MODE: "1", AGENT_TEAMS: "1" }));
+    assert!(file["hooks"]["PreToolUse"].is_array());
+    // Never a variable of the process's, nor an argument.
+    assert!(t.launch.env.is_empty());
+    assert!(!t.launch.args.iter().any(|a| a.contains("EXPERIMENTAL")));
+    assert_eq!(t.warn, None);
+    // Without the settings (a core of before), nothing.
+    let before = launch(&params());
+    let file: Value = serde_json::from_str(&before.launch.files[0].text).unwrap();
+    assert!(file.get("env").is_none());
+    // Refused, its remote control kept, and the reason said.
+    let remote = launch_with(
+        &TerminalParams {
+            remote: Some("demo".into()),
+            lang: "en".into(),
+            ..params()
+        },
+        &c,
+    );
+    let file: Value = serde_json::from_str(&remote.launch.files[0].text).unwrap();
+    assert_eq!(file["env"], json!({ AGENT_TEAMS: "1" }));
+    assert!(has(&remote.launch.args, "--remote-control=demo"));
+    assert!(remote
+        .warn
+        .as_deref()
+        .is_some_and(|w| w.starts_with("Code Mode not passed to the interface: Remote Control")));
+}
+
+/// ESC-553: the plugin reads what the core tells beyond the published protocol from the parameters of `terminal/launch`.
+#[test]
+fn the_context_is_read_from_the_parameters_of_terminal_launch() {
+    let mut v = serde_json::to_value(params()).unwrap();
+    v["settings"] = json!({ "experimental.codeMode": true });
+    v["version"] = json!("2.1.329");
+    v["gateway"] = json!("CLAUDE_CODE_USE_BEDROCK");
+    v["terminalOnly"] = json!(true);
+    let c: crate::experimental::Context = serde_json::from_value(v).unwrap();
+    assert_eq!(c.settings["experimental.codeMode"], true);
+    assert_eq!(c.version.as_deref(), Some("2.1.329"));
+    assert_eq!(c.gateway.as_deref(), Some("CLAUDE_CODE_USE_BEDROCK"));
+    assert!(c.terminal_only);
+}

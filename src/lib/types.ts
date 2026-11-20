@@ -1715,6 +1715,11 @@ export interface Agent {
   /** « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal, not in Escouade's conversation view. */
   terminal: boolean;
   /**
+   * Its session started in Claude Code's Code Mode (ESC-553): it is resumed in its terminal alone, never in the
+   * conversation's stream. Absent when it did not.
+   */
+  codeMode?: boolean;
+  /**
    * « Vue OpenCode »: its harness's interface, in a terminal, joined to the process Escouade drives, which goes on (the
    * conversation keeps up with what is done there). Never with `terminal`.
    */

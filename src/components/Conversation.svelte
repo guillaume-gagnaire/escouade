@@ -624,6 +624,24 @@
   {/if}
 {/snippet}
 
+<!-- Its session in Claude Code's Code Mode (ESC-553): resumed in its terminal alone. Over its terminal it says so; over the
+     conversation it opens the terminal. -->
+{#snippet codeModeBand()}
+  {#if agent.codeMode}
+    <div class="banner code-mode" class:top={harnessView} role="region" aria-label={t('conv.codeMode.title')} data-testid="code-mode">
+      <div class="what">
+        <strong>{t('conv.codeMode.title')}</strong>
+        <span>{t('conv.codeMode.text')}</span>
+      </div>
+      {#if !harnessView && !agent.archived}
+        <button class="btn primary" onclick={() => app.run(api.setAgentView(agent.id, true))}
+          ><Icon name="term" size={14} />{t('conv.codeMode.open')}</button
+        >
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
 <!-- Its harness off for its project (ESC-404): it does not start nor get anything until « Activer », the same agreement as
      before a first agent. -->
 {#snippet harnessCard()}
@@ -778,7 +796,8 @@
           <button
             aria-pressed={!harnessView && !pageView}
             aria-label={t('conv.header.toRich')}
-            use:tip={harnessView ? t('conv.header.toRichHint') : undefined}
+            disabled={harnessView && !!agent.codeMode}
+            use:tip={harnessView ? t(agent.codeMode ? 'conv.codeMode.noRich' : 'conv.header.toRichHint') : undefined}
             onclick={() => {
               showPage(agent.id, false);
               if (harnessView) switchView(agent);
@@ -844,6 +863,7 @@
     <DevPage {agent} />
   {:else if harnessView && !agent.archived}
     {@render harnessCard()}
+    {@render codeModeBand()}
     {@render nextStart()}
     <AgentTerminal {agent} />
   {:else}
@@ -1022,6 +1042,7 @@
         </div>
       {/if}
       {@render harnessCard()}
+      {@render codeModeBand()}
       {@render nextStart()}
       <Composer {agent} />
     {/if}
@@ -1671,20 +1692,23 @@
   .banner.held {
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--warn, var(--p)) 45%, transparent);
   }
-  .banner.next {
+  .banner.next,
+  .banner.code-mode {
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent);
   }
   /* Above the terminal of the Claude Code view rather than above the composer. */
   .banner.top {
     margin-top: 10px;
   }
-  .next .what {
+  .next .what,
+  .code-mode .what {
     display: flex;
     flex-direction: column;
     gap: 3px;
     min-width: 0;
   }
-  .next strong {
+  .next strong,
+  .code-mode strong {
     color: var(--text);
     font-weight: 600;
   }

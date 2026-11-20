@@ -1236,6 +1236,9 @@ pub struct Core<R: Runtime = Wry> {
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
+    /// The hooks its interfaces called, as they came (tests only: the real runs read them, ESC-553).
+    #[cfg(test)]
+    pub(crate) tui_hooks: Mutex<Vec<Value>>,
     /// The languages the native menus were written again in (tests only: they have none).
     #[cfg(test)]
     pub(crate) relabels: Mutex<Vec<i18n::Lang>>,
@@ -2308,6 +2311,8 @@ impl<R: Runtime> Core<R> {
             target_ci: RwLock::new(BTreeMap::new()),
             #[cfg(test)]
             alerts: Mutex::default(),
+            #[cfg(test)]
+            tui_hooks: Mutex::default(),
             #[cfg(test)]
             relabels: Mutex::default(),
             #[cfg(test)]
@@ -3826,6 +3831,11 @@ impl<R: Runtime> Core<R> {
         // question goes only with « Autoriser le mode Bypass » (SEC-09, ESC-489). Refused, what still runs of it stops,
         // said (`judge_start`, ESC-497).
         self.judge_start(id)?;
+        // Its session in Claude Code's Code Mode (ESC-553): resumed in its interface alone, whatever its view, whatever
+        // starts it (the automatic resume, a ticket, a message).
+        if h.lock().meta.code_mode {
+            bail!(crate::agent::code_mode_line());
+        }
         // In the Claude Code view, its interface has the session (`tui`).
         if h.lock().meta.terminal {
             bail!(tr!(
@@ -3846,6 +3856,18 @@ impl<R: Runtime> Core<R> {
         let account = self.agent_account(h)?;
         // A Cursor account without its key would run as the machine's sign-in (ESC-43).
         accounts::key_ready(&account)?;
+        // A session it resumes or copies that its transcript says in Code Mode (started in a terminal before it was
+        // marked, or the original of a copy): marked, and refused as above (ESC-553).
+        if self.code_mode_session_of(h, &account, &settings) {
+            let mut fx = Effects::default();
+            let (pid, name, view) = {
+                let mut rt = h.lock();
+                rt.mark_code_mode(&mut fx);
+                (rt.meta.project_id.clone(), rt.meta.name.clone(), rt.view())
+            };
+            self.apply(id, &pid, &name, fx, Some(view));
+            bail!(crate::agent::code_mode_line());
+        }
         let program = accounts::program(&account, &settings)
             .ok_or_else(|| anyhow!(engine::missing_line(harness.id(), i18n::ui())))?;
         // Starting an agent is the gesture by which a harness described by anyone's plugin may be asked its version.

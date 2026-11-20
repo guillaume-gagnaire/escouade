@@ -2,8 +2,8 @@
 title: "Claude Code en plugin"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §4 (INT-10.5)","docs/PLUGINS-DESIGN.md §8.27 (ESC-347)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-226","plugins/claude/README.en.md"]
-tickets: ["ESC-226","ESC-347","ESC-352","ESC-364","ESC-369"]
-decisions: []
+tickets: ["ESC-226","ESC-347","ESC-352","ESC-364","ESC-369","ESC-553"]
+decisions: ["les-fonctionnalites-experimentales-de-cl"]
 compared: null
 ---
 
@@ -17,14 +17,19 @@ La conversation des agents de Claude Code passe par le plugin de première main 
 - Il pose `initialize` comme première ligne, puis dit au cœur les commandes et les modèles du compte, et que l'agent est prêt.
 - Ce que Claude Code écrit lui arrive et repart en éléments de la conversation : textes et raisonnements au fil de l'écriture, appels avec leur diff, sous-agents et tâches de fond, cartes de permission et questions, estimation du tour en cours, fin de tour avec le coût par modèle, quota, limite d'usage, connexion perdue.
 - Un changement de modèle, d'effort ou de mode, une interruption, un titre, une tâche arrêtée et le lien à claude.ai passent par le protocole de contrôle : le cœur attend la réponse de Claude Code, comme avant.
+- Il décrit aussi le lancement de la vue terminal (`terminal/launch`) : ses arguments et son fichier de réglages privé (`--settings`), où il met ses hooks et, depuis la 2.2.8, le bloc `env` de ses fonctionnalités expérimentales (voir *Pilotage de Claude Code*, « Fonctionnalités expérimentales »).
 
-Son manifeste ne déclare aucune permission : ni réseau, ni secret, ni fichier, ni commande. L'hôte l'applique. Il demande seulement les plafonds de mémoire et de temps d'un tour (`limits`) : un message peut porter 24 Mio en base64.
+Son manifeste déclare une seule variable que ses lancements posent (`permissions.env` : `CLAUDE_CODE_ARTIFACT`) ; ni réseau, ni secret, ni fichier, ni commande. L'hôte l'applique. Il demande seulement les plafonds de mémoire et de temps d'un tour (`limits`) : un message peut porter 24 Mio en base64. Ses fonctionnalités expérimentales ne sont pas des variables du process : elles vont dans le fichier de réglages privé de la vue terminal, que Claude Code lit.
+
+Ses réglages (2.2.8) : le groupe « Fonctionnalités expérimentales » (`experimental.codeMode`, `experimental.agentTeams`, `experimental.others`, pour tous les projets), et les mêmes pour un projet (`experimental.project.*`, portée `project`), tous `repo: false`.
 
 ## Ce qui reste au cœur
 
-Le moteur `Claude` du registre garde ce qui n'est pas la conversation : ses capacités, les comptes, les modèles d'un compte sans agent, les textes rédigés (`claude -p`), la vue terminal et ses hooks, le serveur MCP d'Escouade. L'état de chaque agent reste au cœur : sa conversation, son plan, ses demandes en attente. Une lecture d'un fichier que l'utilisateur a joint reste acceptée sans carte, par le cœur.
+Le moteur `Claude` du registre garde ce qui n'est pas la conversation : ses capacités, les comptes, les modèles d'un compte sans agent, les textes rédigés (`claude -p`), la vue terminal et ses hooks, le serveur MCP d'Escouade. L'état de chaque agent reste au cœur : sa conversation, son plan, ses demandes en attente, et sa marque de Code Mode (lue dans le transcript, `repl-mode`), qui lui refuse le flux stream-json. Une lecture d'un fichier que l'utilisateur a joint reste acceptée sans carte, par le cœur.
 
-La lecture d'une connexion (ce que Claude Code garde dans son dossier et, sous macOS, son trousseau, l'empreinte d'une connexion) est au cœur seul, dans `src-tauri/src/engine/claude/signin.rs` : le plugin ne voit jamais une connexion. Il ne garde que les mots d'un tour qui l'a perdue, pour les traduire. Le cœur garde aussi ce qui décide : relancer un agent une fois sa connexion bonne, et le quota lu au point d'accès OAuth avec les réglages réseau de l'app.
+La lecture d'une connexion (ce que Claude Code garde dans son dossier et, sous macOS, son trousseau, l'empreinte d'une connexion) est au cœur seul, dans la crate `escouade-engines` (`signin.rs`, réexportée par `src-tauri/src/engine/claude/mod.rs`) : le plugin ne voit jamais une connexion. Il ne garde que les mots d'un tour qui l'a perdue, pour les traduire. Le cœur garde aussi ce qui décide : relancer un agent une fois sa connexion bonne, et le quota lu au point d'accès OAuth avec les réglages réseau de l'app.
+
+**Ce que `terminal/launch` reçoit en plus (ESC-553).** Un module ne peut pas demander ses réglages pendant un tour : le cœur les lui passe avec l'appel (`settings`, ceux du plugin pour le projet de l'agent, par leurs rangs), avec la version du harness qu'il a lue (`version`), le nom de ce qui route le compte ailleurs que l'API d'Anthropic (`gateway`, jamais une valeur) et si la session ne se reprend que dans son terminal (`terminalOnly`). Le plugin les lit dans les paramètres bruts : il se compile toujours contre le protocole 0.1.2 publié, qui ne les a pas, et un cœur d'avant ne les donne pas (rien n'est passé).
 
 **La vue Claude Code passe par le module** (`view/translate`, ESC-352) : le cœur lit le transcript et passe ses lignes au plugin, une seule traduction pour les deux vues. Le coût d'un tour de la vue reste calculé par le cœur, sur l'usage de ses messages aux prix publics, et rendu au plugin avec la fin du tour. Voir *Le contrat des harness en process*.
 
@@ -34,4 +39,4 @@ Coupé pour l'app ou pas chargé, un agent de Claude Code dit au lancement « Le
 
 ## Une discussion ne lance rien (ESC-364)
 
-Une discussion perd les outils qui écrivent ou lancent une commande, et ceux qui lui restent sont refusés d'office s'ils arrivent : `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Bash`, `PowerShell` (le shell ordinaire de Claude Code sous Windows), `Monitor` et `EnterWorktree`, qui crée un worktree. La liste est tenue des deux côtés, le plugin et le cœur, qui ne se lient pas : un test du cœur vérifie qu'elles sont les mêmes.
+Une discussion perd les outils qui écrivent ou lancent une commande, et ceux qui lui restent sont refusés d'office s'ils arrivent : `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Bash`, `PowerShell` (le shell ordinaire de Claude Code sous Windows), `Monitor` et `EnterWorktree`, qui crée un worktree. La liste est tenue des deux côtés, le plugin et le cœur, qui ne se lient pas : un test du cœur vérifie qu'elles sont les mêmes. Le Code Mode, qui lance du code, n'est jamais passé à une discussion.

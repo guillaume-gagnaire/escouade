@@ -203,6 +203,27 @@ const sessionKept = (id) => {
   const folders = fs.existsSync(projects) ? fs.readdirSync(projects) : [];
   return folders.some((f) => fs.existsSync(path.join(projects, f, `${id}.jsonl`)));
 };
+// A session started in Code Mode (ESC-553): its transcript holds `{"type":"repl-mode","replMode":true}`, as Claude Code
+// 2.1.329 writes it before its first message.
+const inCodeMode = (id) => {
+  const projects = path.join(configDir, 'projects');
+  const folders = fs.existsSync(projects) ? fs.readdirSync(projects) : [];
+  return folders.some((f) => {
+    const file = path.join(projects, f, `${id}.jsonl`);
+    if (!fs.existsSync(file)) return false;
+    return fs
+      .readFileSync(file, 'utf8')
+      .split('\n')
+      .some((l) => {
+        try {
+          const e = JSON.parse(l);
+          return e.type === 'repl-mode' && e.replMode === true;
+        } catch {
+          return false;
+        }
+      });
+  });
+};
 // Out of quota, for as long as the file is there.
 const limited = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-limit'));
 // The sign-in no longer refreshed (ESC-162): by the file, then for good in this process.
@@ -649,6 +670,24 @@ function tuiSession() {
     quit(`No conversation found with session ID: ${resume}\r\n`);
     return;
   }
+  // Code Mode (ESC-553), as Claude Code 2.1.329: its variable from the process or the `env` of --settings; never with
+  // Remote Control; a session started in it resumes only with it, one started without it resumes without it.
+  const codeModeAsked = process.env.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE === '1' || settings.env?.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE === '1';
+  const startedInCodeMode = resume && configDir && inCodeMode(resume);
+  if (startedInCodeMode && !codeModeAsked) {
+    quit(
+      `This session was started in Code Mode (experimental), which is off, so it can't be resumed. To resume it, set the environment variable CLAUDE_CODE_EXPERIMENTAL_CODE_MODE to 1, then run claude --resume ${resume}\r\n`,
+    );
+    return;
+  }
+  const withRemote = flag('--remote-control') !== undefined;
+  const codeMode = codeModeAsked && !withRemote && (!resume || startedInCodeMode);
+  // No space: ConPTY draws a run of spaces as a cursor move.
+  const codeModeLine = !codeModeAsked
+    ? ''
+    : codeMode
+      ? 'Code-Mode-(experimental)-is-on\r\n'
+      : "Code-Mode-(experimental)-isn't-available:-for-now-it-doesn't-work-with-Remote-Control.\r\n";
   const sessionId = flag('--session-id') ?? resume ?? `sess-${process.pid}`;
   const file = sessionFile(sessionId);
   const model = argv[argv.indexOf('--model') + 1] ?? 'sonnet';
@@ -692,7 +731,7 @@ function tuiSession() {
   process.stdin.setEncoding('utf8');
   // No space: ConPTY draws a run of spaces as a cursor move (ESC[nC). Pastes come bracketed
   // (ESC[200~ … ESC[201~), as Claude Code asks for them.
-  process.stdout.write('\x1b[?2004hfake-claude-tui\r\n');
+  process.stdout.write('\x1b[?2004hfake-claude-tui\r\n' + codeModeLine);
   // With `tui-slow-start`, the rest of its start waits half a second, as on a loaded runner (ESC-125).
   if (fs.existsSync(side('tui-slow-start'))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
   // With `tui-paste-late`, as the real one under Windows while it starts (ESC-12): it is listed in the registry, then
@@ -713,6 +752,7 @@ function tuiSession() {
     begun = true;
     fs.mkdirSync(path.dirname(file), { recursive: true });
     write({ type: 'permission-mode', permissionMode: argv[argv.indexOf('--permission-mode') + 1] ?? 'default' });
+    if (codeMode) write({ type: 'repl-mode', replMode: true });
   };
   // The size of its terminal, as Claude Code's interface reads it to draw (ink: process.stdout.rows): each one it had is added
   // to <dir>/fake-tui-size.jsonl. Read from the console itself, not from the 'resize' event, which a pseudo-console may not send.
@@ -1016,6 +1056,13 @@ function startSession() {
   // A session of another account (or none) is not in this one's folder.
   if (resume?.startsWith('missing') || (resume && configDir && !sessionKept(resume))) {
     process.stderr.write(`No conversation found with session ID: ${resume}\n`);
+    process.exit(1);
+  }
+  // Code Mode (ESC-553): never in stream-json, as Claude Code 2.1.329 refuses it.
+  if (resume && configDir && inCodeMode(resume)) {
+    process.stderr.write(
+      `Failed to resume session: This session was started in Code Mode (experimental), which isn't available because for now it only works in the interactive terminal, so it can't be resumed here. Resume it in the terminal: set the environment variable CLAUDE_CODE_EXPERIMENTAL_CODE_MODE to 1, then run claude --resume ${resume}\n`,
+    );
     process.exit(1);
   }
   const at = argv.find((a) => a.startsWith('--resume-session-at='))?.slice('--resume-session-at='.length);

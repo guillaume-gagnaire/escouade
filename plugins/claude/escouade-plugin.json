@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.claude-code",
   "name": "Claude Code",
-  "version": "2.2.7",
+  "version": "2.2.8",
   "description": {
     "fr": "Claude Code comme harness : la conversation, sa vue terminal, les permissions, le plan, le quota et le coût par compte.",
     "en": "Claude Code as a harness: the conversation, its terminal view, permissions, the plan, the quota and the cost per account."
@@ -15,7 +15,7 @@
   "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/claude",
   "escouade": {
     "api": "1",
-    "min": "2.2.0"
+    "min": "2.2.5"
   },
   "run": {
     "wasm": "Cargo.toml"
@@ -57,6 +57,155 @@
           "unix": "curl -fsSL https://claude.ai/install.sh | bash"
         },
         "updateCommand": "claude update"
+      }
+    ],
+    "groups": [
+      {
+        "id": "experimental",
+        "title": {
+          "en": "Experimental features",
+          "fr": "Fonctionnalités expérimentales"
+        },
+        "description": {
+          "en": "Claude Code’s experimental flags, for every project. They may change or go in any version of Claude Code. Each project can set them otherwise in its own settings.",
+          "fr": "Les drapeaux expérimentaux de Claude Code, pour tous les projets. Ils peuvent changer ou disparaître à toute version de Claude Code. Chaque projet peut les régler autrement dans ses propres réglages."
+        },
+        "fields": ["experimental.codeMode", "experimental.agentTeams", "experimental.others"]
+      }
+    ],
+    "settings": [
+      {
+        "key": "experimental.codeMode",
+        "type": "boolean",
+        "default": false,
+        "repo": false,
+        "title": {
+          "en": "Code Mode",
+          "fr": "Code Mode"
+        },
+        "description": {
+          "en": "Claude writes JavaScript that makes its tool calls (the REPL tool). Claude Code 2.1.323 or later (2.1.326 with the Agent Teams), a Claude subscription or a Console account, Opus 5.5, Sonnet 5.5, Haiku 5.5 or Fable 5.2. Passed to the terminal view alone: never to the conversation nor to a ticket’s agent. An agent whose session starts in Code Mode is resumed in its terminal only. Not passed, and said, with Remote Control or an account routed through a gateway or a cloud provider.",
+          "fr": "Claude écrit du JavaScript qui fait ses appels d’outils (l’outil REPL). Claude Code 2.1.323 ou plus (2.1.326 avec les Agent Teams), un abonnement Claude ou un compte Console, Opus 5.5, Sonnet 5.5, Haiku 5.5 ou Fable 5.2. Passé à la vue terminal seulement : jamais à la conversation ni à un agent de ticket. Un agent dont la session commence en Code Mode ne se reprend plus que dans son terminal. Pas passé, et dit, avec le remote control ou un compte qui passe par une passerelle ou un fournisseur cloud."
+        }
+      },
+      {
+        "key": "experimental.agentTeams",
+        "type": "boolean",
+        "default": false,
+        "repo": false,
+        "title": {
+          "en": "Agent Teams",
+          "fr": "Agent Teams"
+        },
+        "description": {
+          "en": "A session leads teammates, each a session of its own, who share a task list and write to each other. Claude Code 2.1.32 or later. Teams form in an interactive session only: passed to the terminal view alone.",
+          "fr": "Une session mène des coéquipiers, chacun une session à lui, qui partagent une liste de tâches et s’écrivent. Claude Code 2.1.32 ou plus. Une équipe ne se forme que dans une session interactive : passé à la vue terminal seulement."
+        }
+      },
+      {
+        "key": "experimental.others",
+        "type": "string",
+        "default": "",
+        "repo": false,
+        "title": {
+          "en": "Other flags",
+          "fr": "Autres drapeaux"
+        },
+        "description": {
+          "en": "Names of CLAUDE_CODE_EXPERIMENTAL_* alone, separated by spaces or commas, each set to 1 in the terminal view. Any other name is left out, and said.",
+          "fr": "Des noms de CLAUDE_CODE_EXPERIMENTAL_* seulement, séparés par des espaces ou des virgules, chacun posé à 1 dans la vue terminal. Tout autre nom est laissé de côté, et c’est dit."
+        }
+      },
+      {
+        "key": "experimental.project.codeMode",
+        "type": "select",
+        "scope": "project",
+        "default": "inherit",
+        "repo": false,
+        "options": [
+          {
+            "value": "inherit",
+            "title": {
+              "en": "As for every project",
+              "fr": "Comme pour tous les projets"
+            }
+          },
+          {
+            "value": "on",
+            "title": {
+              "en": "On",
+              "fr": "Activé"
+            }
+          },
+          {
+            "value": "off",
+            "title": {
+              "en": "Off",
+              "fr": "Désactivé"
+            }
+          }
+        ],
+        "title": {
+          "en": "Code Mode",
+          "fr": "Code Mode"
+        },
+        "description": {
+          "en": "In the terminal view of this project’s agents.",
+          "fr": "Dans la vue terminal des agents de ce projet."
+        }
+      },
+      {
+        "key": "experimental.project.agentTeams",
+        "type": "select",
+        "scope": "project",
+        "default": "inherit",
+        "repo": false,
+        "options": [
+          {
+            "value": "inherit",
+            "title": {
+              "en": "As for every project",
+              "fr": "Comme pour tous les projets"
+            }
+          },
+          {
+            "value": "on",
+            "title": {
+              "en": "On",
+              "fr": "Activé"
+            }
+          },
+          {
+            "value": "off",
+            "title": {
+              "en": "Off",
+              "fr": "Désactivé"
+            }
+          }
+        ],
+        "title": {
+          "en": "Agent Teams",
+          "fr": "Agent Teams"
+        },
+        "description": {
+          "en": "In the terminal view of this project’s agents.",
+          "fr": "Dans la vue terminal des agents de ce projet."
+        }
+      },
+      {
+        "key": "experimental.project.others",
+        "type": "string",
+        "default": "",
+        "scope": "project",
+        "repo": false,
+        "title": {
+          "en": "Other flags",
+          "fr": "Autres drapeaux"
+        },
+        "description": {
+          "en": "Names of CLAUDE_CODE_EXPERIMENTAL_*, instead of those of every project; empty: those of every project; none: none.",
+          "fr": "Des noms de CLAUDE_CODE_EXPERIMENTAL_*, à la place de ceux de tous les projets ; vide : ceux de tous les projets ; aucun : aucun."
+        }
       }
     ]
   },

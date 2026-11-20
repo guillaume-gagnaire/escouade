@@ -15,11 +15,12 @@
 use crate::accounts;
 use crate::agent::{AgentHandle, Effects, TuiRun};
 use crate::core::Core;
+use crate::engine::claude_terminal;
 pub use crate::engine::claude_terminal::find_transcript;
+#[cfg(test)]
+use crate::engine::Engine;
 use crate::engine::Escouade;
 use crate::engine::TerminalView;
-#[cfg(test)]
-use crate::engine::{claude_terminal, Engine};
 use crate::handover::{self, Relay};
 use crate::model::*;
 use crate::pty::{PtyManager, TermInfo};
@@ -904,7 +905,52 @@ pub(crate) fn ticket_refusal() -> anyhow::Error {
     ))
 }
 
+/// What sends the requests of an account of Claude Code elsewhere than Anthropic's API (ESC-553): its launch's variables
+/// `env`, the app's environment (not in the tests), the `env` and `apiKeyHelper` of its `settings.json` (read, never
+/// written).
+fn claude_gateway(env: &[(String, String)], config_dir: &Path) -> Option<String> {
+    let settings_json = std::fs::read_to_string(config_dir.join("settings.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok());
+    let var = |name: &str| {
+        env.iter()
+            .rev()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.clone())
+            .or_else(|| (!cfg!(test)).then(|| std::env::var(name).ok()).flatten())
+    };
+    claude_terminal::gateway(&var, settings_json.as_ref())
+}
+
+/// Why the agent `m` may not go back to Escouade's conversation: its session is in Claude Code's Code Mode (ESC-553).
+pub(crate) fn code_mode_refusal() -> anyhow::Error {
+    anyhow!(crate::agent::code_mode_line())
+}
+
 impl<R: Runtime> Core<R> {
+    /// Whether the session the agent `h` resumes or copies is in Claude Code's Code Mode, by its transcript in its
+    /// account's folder (ESC-553): Claude Code resumes it in its interface alone.
+    pub(crate) fn code_mode_session_of(
+        &self,
+        h: &AgentHandle,
+        account: &Account,
+        settings: &Settings,
+    ) -> bool {
+        let (engine, session) = {
+            let rt = h.lock();
+            let m = &rt.meta;
+            (m.engine, m.session_id.clone().or_else(|| m.fork_of.clone()))
+        };
+        if engine != EngineId::CLAUDE {
+            return false;
+        }
+        let Some(session) = session else {
+            return false;
+        };
+        let dir = accounts::config_dir(account, settings);
+        find_transcript(&dir, &session).is_some_and(|p| claude_terminal::code_mode_session(&p))
+    }
+
     /// The port of the hooks' server, once started.
     #[cfg(test)]
     pub(crate) fn hooks_port(&self) -> Option<u16> {
@@ -944,6 +990,10 @@ impl<R: Runtime> Core<R> {
             }
             if terminal && rt.meta.ticket_id.is_some() {
                 return Err(ticket_refusal());
+            }
+            // Its stream would not resume its session (ESC-553).
+            if !terminal && rt.meta.code_mode {
+                return Err(code_mode_refusal());
             }
             if terminal {
                 view_of(&rt.meta)?;
@@ -1466,16 +1516,27 @@ impl<R: Runtime> Core<R> {
         if harness.models_by_alias() {
             self.fit_claude_model(h);
         }
+        // A session it resumes that its transcript says in Code Mode, started before it was marked (ESC-553).
+        if !h.lock().meta.code_mode && self.code_mode_session_of(h, &account, &settings) {
+            let _ = self.with_agent(id, |rt, fx| {
+                rt.mark_code_mode(fx);
+                Ok(())
+            });
+        }
         let started = now_ms();
-        let (meta, new_session, remote, cwd, name, gen, transcript, since) = {
+        let (meta, new_session, remote, no_remote, cwd, name, gen, transcript, since) = {
             let mut rt = h.lock();
             // A session of its own from the start, when the harness takes its name: its log is
             // known before any hook.
             let new_session = (rt.meta.session_id.is_none() && view.names_its_session())
                 .then(|| uuid::Uuid::new_v4().to_string());
-            // Without the option once an interface closed right after starting with it.
-            let remote =
-                (rt.meta.remote_control && !rt.remote_fallback).then(|| self.remote_name(&rt.meta));
+            // Without the option once an interface closed right after starting with it; never in Code Mode, which
+            // Claude Code does not start with it (« Code Mode (experimental) isn't available: for now it doesn't
+            // work in background jobs, in teammates' panes or with Remote Control. », 2.1.329), and which its
+            // session needs (ESC-553).
+            let no_remote = rt.meta.remote_control && rt.meta.code_mode;
+            let remote = (rt.meta.remote_control && !rt.remote_fallback && !rt.meta.code_mode)
+                .then(|| self.remote_name(&rt.meta));
             // As it was before the new session is its: what the interface is started from.
             let meta = rt.meta.clone();
             if let Some(s) = new_session.clone() {
@@ -1509,6 +1570,7 @@ impl<R: Runtime> Core<R> {
                 meta,
                 new_session,
                 remote,
+                no_remote,
                 rt.meta.cwd.clone(),
                 rt.meta.name.clone(),
                 rt.gen,
@@ -1631,6 +1693,13 @@ impl<R: Runtime> Core<R> {
             env_names,
             path: std::env::var_os("PATH").map(|p| p.to_string_lossy().into_owned()),
             lang: crate::i18n::ui().tag().to_string(),
+            // Its plugin's settings come with the call (`terminal_launch`).
+            settings: serde_json::Map::new(),
+            version: crate::engine::registry::version(harness, &program).await,
+            gateway: (harness.id() == EngineId::CLAUDE)
+                .then(|| claude_gateway(&env, &config_dir))
+                .flatten(),
+            terminal_only: h.lock().meta.code_mode,
         };
         let place = crate::plugins::files::AgentPlace {
             cwd: PathBuf::from(&cwd),
@@ -1688,6 +1757,15 @@ impl<R: Runtime> Core<R> {
         env.extend(launch.env.drain(..).map(|v| (v.name, v.value)));
         env.extend(launch.remove_env.drain(..).map(|k| (k, String::new())));
         no_proxy(&mut env);
+        if no_remote {
+            let _ = self.with_agent(id, |rt, fx| {
+                rt.notice("warn", tr!(
+                    "Le remote control n’est pas lancé : Claude Code ne le prend pas en Code Mode, et la session de cet agent en a besoin.",
+                    "Remote Control is not started: Claude Code does not take it in Code Mode, which this agent’s session needs."
+                ), fx);
+                Ok(())
+            });
+        }
         if let Some(text) = told.warn {
             log::warn!("agent {id}: {harness_name}'s interface: {text}");
             let _ = self.with_agent(id, |rt, fx| {
@@ -2223,6 +2301,8 @@ impl<R: Runtime> Core<R> {
 
     /// A hook of the agent's interface: what it tells, after what its transcript said before.
     pub(crate) fn on_tui_hook(self: &Arc<Self>, id: &str, hook: Value) {
+        #[cfg(test)]
+        self.tui_hooks.lock().push(hook.clone());
         self.read_transcript(id);
         let Ok(h) = self.agent(id) else { return };
         // A `claude` of WSL tells its transcript by its Linux path.

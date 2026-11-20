@@ -75,6 +75,15 @@ fn permission_body_in(lang: Lang, tool: &str, input: &Value, cwd: &str) -> Strin
             tr_in!(lang, "Approuver le plan", "Approve the plan"),
             plan.unwrap_or_default(),
         )
+    } else if tool == "REPL" {
+        // Code Mode's code (ESC-553), by what it says it does: its JavaScript is never a line to read here.
+        (
+            tr_in!(lang, "Lancer du code", "Run code"),
+            input["description"]
+                .as_str()
+                .map(one_line)
+                .unwrap_or_default(),
+        )
     } else {
         (
             tr_in!(lang, "Autoriser {tool}", "Allow {tool}"),
@@ -597,6 +606,33 @@ mod tests {
         assert_eq!(
             permission_body("Read", &json!({ "file_path": "D:/autre/notes.md" }), "C:/p"),
             "Autoriser Read : D:/autre/notes.md ?"
+        );
+    }
+
+    /// ESC-553: Code Mode's code (`REPL`) asked by an `ask` rule, by what it says it does; the calls the code makes are
+    /// asked under their own names, as they reach the hooks (`PermissionRequest` of `Bash`, 2.1.329).
+    #[test]
+    fn code_modes_code_is_asked_by_its_description_and_its_calls_by_their_names() {
+        let code = json!({
+            "code": "const r = await $`mkdir e-made`.nothrow();\nr.exitCode",
+            "description": "Create e-made folder in working directory",
+        });
+        assert_eq!(
+            permission_body_in(Lang::Fr, "REPL", &code, "C:/p"),
+            "Lancer du code : Create e-made folder in working directory ?"
+        );
+        assert_eq!(
+            permission_body_in(Lang::En, "REPL", &json!({ "code": "1" }), "C:/p"),
+            "Run code?"
+        );
+        assert_eq!(
+            permission_body_in(
+                Lang::Fr,
+                "Bash",
+                &json!({ "command": "cd 'C:/p' && mkdir e-made" }),
+                "C:/p"
+            ),
+            "Autoriser Bash : cd 'C:/p' && mkdir e-made ?"
         );
     }
 
