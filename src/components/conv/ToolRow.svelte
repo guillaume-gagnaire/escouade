@@ -4,6 +4,7 @@
   import { callTitle, isSubagentCall } from '../../lib/subagents';
   import { artifactLink, fullInput, hasDiff, isQuietTool, toolArg, toolIcon, toolLabel, toolResultSummary } from '../../lib/tools';
   import { openOutside } from '../../lib/links';
+  import { app } from '../../lib/state.svelte';
   import type { ConvItem, ToolItem } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Markdown from './Markdown.svelte';
@@ -76,7 +77,8 @@
   >
     <span class="ic" aria-hidden="true"><Icon name={toolIcon(item.name)} size={14} /></span>
     <span class="badge">{toolLabel(item.name)}</span>
-    {#if file}
+    {#if file && app.feature('editor')}
+      <!-- The file opens in the editor, when it is on (F-1). -->
       <button
         class="arg link"
         aria-label={t('conv.tool.openFile', { path: arg })}

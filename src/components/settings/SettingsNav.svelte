@@ -3,6 +3,7 @@
   import { t } from '../../lib/i18n';
   import { keyLabel, primaryKey } from '../../lib/platform';
   import { pageInfo, SETTINGS_PAGES, settingsForm, type SettingsPage } from '../../lib/settings.svelte';
+  import { pageShown } from '../../lib/settings-pages';
   import { settingsAlerts } from '../../lib/settings-alerts.svelte';
   import { searchSettings, type SearchHit } from '../../lib/settings-search';
   import { app } from '../../lib/state.svelte';
@@ -31,9 +32,17 @@
 
   // « Appareils » (ESC-539): the space's, on a server alone.
   const APP = $derived(
-    SETTINGS_PAGES.filter((p) => p.scope === 'app' && p.id !== 'about' && p.id !== 'allProjects' && (p.id !== 'devices' || onServer())),
+    SETTINGS_PAGES.filter(
+      (p) =>
+        p.scope === 'app' &&
+        p.id !== 'about' &&
+        p.id !== 'allProjects' &&
+        (p.id !== 'devices' || onServer()) &&
+        pageShown(p.id, app.settings),
+    ),
   );
-  const PROJECT = SETTINGS_PAGES.filter((p) => p.scope === 'project');
+  // A page of a feature switched off goes with it (F-1): Overseer, Voix, Kanban, Tickets.
+  const PROJECT = $derived(SETTINGS_PAGES.filter((p) => p.scope === 'project' && pageShown(p.id, app.settings)));
 
   const scope = $derived(pageInfo(settingsForm.page).scope);
   /** The project unfolded: the one chosen, while a page of a project is on screen. */

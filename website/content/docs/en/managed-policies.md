@@ -52,6 +52,20 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | --- | --- | --- | --- |
 | Editor’s allowed extensions | `extensions.allowed` · JSON · restrict | A JSON object like VS Code’s extensions.allowed: its keys are * (all), a publisher of Open VSX or an extension (publisher.name), its values true, false, stable (no pre-release) or the list of the versions allowed. The most precise key says it. An object that names anything allows only what it names. It adds to the lists of the settings and of the .escouade.yml files: an extension must be allowed by each. | General › “Editor’s allowed extensions”, grayed; an extension outside the list is refused before any download, and an installed extension it leaves out is no longer loaded. |
 
+### Features
+
+| Policy | Key and type | What it does | On the device |
+| --- | --- | --- | --- |
+| Kanban feature | `features.kanban` · Boolean `true`, `false` · value | Tickets, the autopilot and ticket sources: true turns it on, false turns it off (its tab, its MCP tools, its autopilot). Its tickets are kept. | Settings › Features › Kanban, grayed. |
+| Editor feature | `features.editor` · Boolean `true`, `false` · value | Opening, editing and searching the project’s files: true turns it on, false turns it off (the editor view, Ctrl P, its language servers). | Settings › Features › Editor, grayed. |
+| Docs space feature | `features.docs` · Boolean `true`, `false` · value | The specification, decisions, documents and discussions: true turns it on, false turns it off (its tab, its MCP tools). Its pages are kept. | Settings › Features › Docs space, grayed. |
+| Cost feature | `features.cost` · Boolean `true`, `false` · value | The cost of turns, agents and tickets, and the cache temperature: true turns it on, false turns it off. | Settings › Features › Cost, grayed. |
+| Statistics feature | `features.stats` · Boolean `true`, `false` · value | Activity and spending over time: true turns it on, false turns it off (its view). It has nothing to do with telemetry (telemetry.enabled). | Settings › Features › Statistics, grayed. |
+| Workflows feature | `features.workflows` · Boolean `true`, `false` · value | A project’s chains of agents and skills: true turns it on, false turns it off (its tab, its MCP tool, their reading). | Settings › Features › Workflows, grayed. |
+| Scheduled tasks feature | `features.scheduled` · Boolean `true`, `false` · value | Tickets that come back at a set time: true turns it on, false turns it off (its tasks no longer run). It also goes with the Kanban. | Settings › Features › Scheduled tasks, grayed. |
+| Overseer feature | `features.overseer` · Boolean `true`, `false` · value | The agent that drives every project: true turns it on, false turns it off (its screen, its shortcut, its MCP tools; it stops). | Settings › Features › Overseer, grayed. |
+| Voice feature | `features.voice` · Boolean `true`, `false` · value | Dictation and spoken conversation: true turns it on, false turns it off (the microphone, its shortcut, the listening). | Settings › Features › Voice, grayed. |
+
 ### Projects
 
 | Policy | Key and type | What it does | On the device |

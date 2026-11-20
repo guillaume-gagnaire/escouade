@@ -52,6 +52,20 @@ Chaque stratégie a une clé, le même nom partout : la valeur du registre, la c
 | --- | --- | --- | --- |
 | Extensions permises de l’éditeur | `extensions.allowed` · JSON · restreindre | Un objet JSON comme extensions.allowed de VS Code : ses clés sont * (toutes), un éditeur d’Open VSX ou une extension (éditeur.nom), ses valeurs true, false, stable (pas de préversion) ou la liste des versions permises. La clé la plus précise dit. Un objet qui nomme quelque chose ne permet que ce qu’il nomme. Il s’ajoute aux listes des réglages et des fichiers .escouade.yml : une extension doit être permise par chacune. | Général › « Extensions permises de l’éditeur », grisé ; une extension hors de la liste est refusée avant tout téléchargement, et une extension installée qu’elle exclut n’est plus chargée. |
 
+### Fonctionnalités
+
+| Stratégie | Clé et type | Ce qu’elle fait | Sur le poste |
+| --- | --- | --- | --- |
+| Fonctionnalité Kanban | `features.kanban` · booléen `true`, `false` · valeur | Les tickets, le pilote auto et les sources de tickets : true l’allume, false la coupe (son onglet, ses outils MCP, son pilote auto). Ses tickets restent. | Réglages › Fonctionnalités › Kanban, grisé. |
+| Fonctionnalité Éditeur | `features.editor` · booléen `true`, `false` · valeur | Ouvrir, modifier et rechercher dans les fichiers du projet : true l’allume, false la coupe (la vue de l’éditeur, Ctrl P, ses serveurs de langage). | Réglages › Fonctionnalités › Éditeur, grisé. |
+| Fonctionnalité Espace Docs | `features.docs` · booléen `true`, `false` · valeur | La spécification, les décisions, les documents et les discussions : true l’allume, false la coupe (son onglet, ses outils MCP). Ses pages restent. | Réglages › Fonctionnalités › Espace Docs, grisé. |
+| Fonctionnalité Coût | `features.cost` · booléen `true`, `false` · valeur | Le coût des tours, des agents et des tickets, et la température du cache : true l’allume, false la coupe. | Réglages › Fonctionnalités › Coût, grisé. |
+| Fonctionnalité Statistiques | `features.stats` · booléen `true`, `false` · valeur | L’activité et les dépenses dans le temps : true l’allume, false la coupe (sa vue). Elle n’a rien à voir avec la télémétrie (telemetry.enabled). | Réglages › Fonctionnalités › Statistiques, grisé. |
+| Fonctionnalité Workflows | `features.workflows` · booléen `true`, `false` · valeur | Les enchaînements d’agents et de skills d’un projet : true l’allume, false la coupe (son onglet, son outil MCP, leur lecture). | Réglages › Fonctionnalités › Workflows, grisé. |
+| Fonctionnalité Tâches programmées | `features.scheduled` · booléen `true`, `false` · valeur | Les tickets qui reviennent à heure fixe : true l’allume, false la coupe (ses tâches ne partent plus). Elle part aussi avec le Kanban. | Réglages › Fonctionnalités › Tâches programmées, grisé. |
+| Fonctionnalité Overseer | `features.overseer` · booléen `true`, `false` · valeur | L’agent qui pilote tous les projets : true l’allume, false la coupe (son écran, son raccourci, ses outils MCP ; il s’arrête). | Réglages › Fonctionnalités › Overseer, grisé. |
+| Fonctionnalité Voix | `features.voice` · booléen `true`, `false` · valeur | La dictée et la conversation à voix haute : true l’allume, false la coupe (le micro, son raccourci, l’écoute). | Réglages › Fonctionnalités › Voix, grisé. |
+
 ### Projets
 
 | Stratégie | Clé et type | Ce qu’elle fait | Sur le poste |

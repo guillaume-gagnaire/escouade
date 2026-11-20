@@ -2,7 +2,7 @@
 title: "À découvrir"
 subject: "fenetre"
 sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-decouverte.png","design/onboarding-2-3/captures/c-decouverte-clair-1024.png"]
-tickets: ["ESC-503","ESC-505","ESC-506","ESC-512"]
+tickets: ["ESC-503","ESC-505","ESC-506","ESC-512","ESC-550"]
 decisions: [200,215,223]
 compared: null
 ---
@@ -95,3 +95,7 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 - Les événements de statistiques de la découverte (`discover_done`, `discover_dismissed`, `discover_hidden`) viennent avec ON-4 (ESC-507), avec la page de confidentialité du site.
 - Escouade à distance n'est pas une découverte tant que le mode serveur n'a pas son réglage.
 - L'absence de sortie son n'est pas lue : seule l'absence de micro retire la voix.
+
+## Une fonctionnalité coupée (ESC-550)
+
+Les découvertes d'une fonctionnalité coupée (voir *Fonctionnalités*) quittent la carte, ses bulles et son compte : celles du Kanban (Écrire un ticket, Le pilote auto, Valider un ticket, Les sources de tickets), de l'Espace Docs (La spec et les décisions), de l'Éditeur (L'éditeur) et de la Voix (Dicter un message, Parler à un agent). Elles ne sont ni absentes ni écartées : elles ne sont pas là. Rallumée, la fonctionnalité les ramène ; une découverte faite revient cochée.

@@ -318,10 +318,23 @@ pub fn set_ui(core: CoreState, ui: UiState) {
 pub fn save_settings(
     core: CoreState,
     voice: Maybe<Arc<crate::voice::Voice>>,
+    lsp: Maybe<Arc<crate::lsp::Manager>>,
     settings: Settings,
 ) -> Res<Vec<ShellInfo>> {
     let remote_was_on = core.settings.read().remote_control_all;
     core.save_window_settings(settings.clone()).map_err(err)?;
+    // A feature switched off (F-1): the dictation and the conversation stop listening, the language servers stop.
+    if !core.feature_on(crate::features::Feature::Voice) {
+        if let Some(voice) = voice.get() {
+            voice.cancel();
+            voice.conversation_stop();
+        }
+    }
+    if !core.feature_on(crate::features::Feature::Editor) {
+        if let Some(lsp) = lsp.get() {
+            lsp.shutdown();
+        }
+    }
     // An account saved (a code host's among them): the CI of the targets read at once (ESC-63).
     core.wake_ticket_prs();
     // A conversation under way takes the voice, its language, pace and volume (ESC-115).
@@ -4252,6 +4265,8 @@ fn voice_err(e: crate::voice::VoiceError) -> String {
 /// time, and the answer waits for them.
 #[tauri::command(async)]
 pub fn voice_start(core: CoreState, voice: VoiceState) -> Res<crate::voice::Started> {
+    // The feature Voix off (F-1).
+    core.feature_check(crate::features::Feature::Voice)?;
     // The dictation turned off by this device's policy (TS-12).
     core.locks
         .read()
@@ -4496,6 +4511,8 @@ pub fn conversation_start(
     core: CoreState,
     voice: VoiceState,
 ) -> Res<crate::voice::conversation::ConvStarted> {
+    // The feature Voix off (F-1).
+    core.feature_check(crate::features::Feature::Voice)?;
     let (choice, lang) = conv_choice(&core.settings.read(), &*core.secrets, &voice.catalog);
     // The engine and the model that read, never the text: Piper and its voice, or the service and its model.
     let (engine, model, id) = match &choice.online {
@@ -5969,6 +5986,8 @@ pub async fn lsp_start(
     agent_id: Option<String>,
     server: String,
 ) -> Res<LspStart> {
+    // The feature Éditeur off (F-1): no language server starts.
+    core.feature_check(crate::features::Feature::Editor)?;
     let inputs = core.lsp_inputs(&project_id, agent_id).await.map_err(err)?;
     let refused = |r: crate::lsp::Refused| LspStart {
         info: None,

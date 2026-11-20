@@ -649,7 +649,9 @@ class SettingsForm {
     this.busy = true;
     let ok = true;
     try {
-      const diff = changes(settingsOf(this.#base.settings), settingsOf(this.settings));
+      // A copy: what is sent becomes the base, which must not follow the draft's nested objects (`features`, `notifyFor`):
+      // a second change in one of them would no longer be one.
+      const diff = $state.snapshot(changes(settingsOf(this.#base.settings), settingsOf(this.settings))) as Partial<Settings>;
       for (const k of this.badNumbers) delete diff[k];
       // On a server, the voice is this computer's (ESC-538): its settings saved here, not on the server.
       if (onServer() && diff.voice) {

@@ -508,7 +508,7 @@
         <!-- Each value says what it is to assistive technologies (`.sr`): the headings are for the eyes. -->
         <div class="cols" aria-hidden="true">
           <span>{t('common.agent')}</span><span>{t('stats.overview.activity')}</span><span class="model">{t('common.model')}</span><span
-            class="num">{t('common.cost')}</span
+            class="num">{app.feature('cost') ? t('common.cost') : ''}</span
           ><span class="num ctx">{t('stats.overview.context')}</span><span class="num since">{t('stats.overview.since')}</span>
         </div>
         {#each groups as g (g.key)}

@@ -122,19 +122,22 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
   if (!small) expect.soft(await place(win), `the window's place, ${where}`).toLookLike(await place(pwin));
   expect.soft(await lookBut(win, ...size), `the window, ${where}`).toLookLike(await lookBut(pwin, ...size));
   const project = route === 'a-projet';
+  // At 1028 × 779, a project unfolded in the bar, with « Fonctionnalités » (ESC-550), makes it scroll: its scrollbar
+  // narrows its entries and its foot.
+  const narrowed = small && project ? ['width'] : [];
   const pairs: [string, Locator, Locator, string[]][] = [
     ['the bar', win.locator('.s-nav'), pwin.locator('.a-nav'), small ? ['height'] : []],
     ['the search', win.locator('.s-nav .search'), pwin.locator('.a-nav .field.search'), []],
     ['its shortcut', win.locator('.s-nav kbd'), pwin.locator('.a-nav kbd'), ['width']],
     ['a heading of the bar', win.locator('.s-h').first(), pwin.locator('.a-h').first(), ['width']],
-    ['the page chosen', win.locator('.s-i[aria-current="page"]'), pwin.locator('.a-i.on'), []],
+    ['the page chosen', win.locator('.s-i[aria-current="page"]'), pwin.locator('.a-i.on'), narrowed],
     [
       'another page',
       win.locator('.s-i:not([aria-current]):not(.sub):not([aria-expanded])').first(),
       pwin.locator('.a-i:not(.on):not(.sub)').first(),
-      [],
+      narrowed,
     ],
-    ['the foot of the bar', win.locator('.s-nav .bot'), pwin.locator('.a-bot'), []],
+    ['the foot of the bar', win.locator('.s-nav .bot'), pwin.locator('.a-bot'), narrowed],
     ['the version', win.locator('.s-nav .ver'), pwin.locator('.a-bot .ver'), ['width']],
     ['the header', win.locator('.s-head'), pwin.locator('.a-main .head'), size],
     ['the page’s title', win.locator('.s-head h1'), pwin.locator('.a-main .head h1'), ['width']],
@@ -145,7 +148,7 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
   ];
   if (project)
     pairs.push(
-      ['a page of the project', win.locator('.s-i.sub:not([aria-current])').first(), pwin.locator('.a-i.sub:not(.on)').first(), []],
+      ['a page of the project', win.locator('.s-i.sub:not([aria-current])').first(), pwin.locator('.a-i.sub:not(.on)').first(), narrowed],
       ['its tile', win.locator('.s-head .tile'), pwin.locator('.a-main .head .tile'), []],
     );
   // The bar has « Serveurs » (ESC-537), which the previews of direction A lack: a page below it is a row lower there,
@@ -233,7 +236,9 @@ test('the bar goes from page to page by the keyboard, and « Avancé » unfolds 
   const nav = dialog.getByRole('navigation');
   await settingsEntry(dialog, 'Général').focus();
   await page.keyboard.press('ArrowDown');
-  // « Serveurs » (ESC-537) comes next.
+  // « Fonctionnalités » (ESC-550) comes next, then « Serveurs » (ESC-537).
+  await expect(settingsEntry(dialog, 'Fonctionnalités')).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('ArrowDown');
   await expect(settingsEntry(dialog, 'Serveurs')).toHaveAttribute('aria-current', 'page');
   await expect(settingsEntry(dialog, 'Serveurs')).toBeFocused();
   await page.keyboard.press('End');
@@ -407,8 +412,9 @@ test('the settings open still with prefers-reduced-motion, their icons drawn', a
     .first()
     .evaluate((e) => getComputedStyle(e, '::after').transitionDuration);
   expect(Number.parseFloat(knob)).toBeLessThan(0.01);
-  // Each page of Escouade its icon (« Serveurs » too, ESC-537), « Tous les projets » and « À propos » too, and « Fermer ».
-  await expect(win.locator('.s-i svg[data-icon]')).toHaveCount(12);
+  // Each page of Escouade its icon (« Serveurs » too, ESC-537, « Fonctionnalités », ESC-550), « Tous les projets » and
+  // « À propos » too, and « Fermer ».
+  await expect(win.locator('.s-i svg[data-icon]')).toHaveCount(13);
   await expect(win.getByRole('button', { name: 'Fermer' }).locator('svg[data-icon="close"]')).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });

@@ -13,6 +13,7 @@ De haut en bas : le champ « Rechercher un réglage », les pages d’Escouade
 | Page | Ce qu’elle règle |
 |---|---|
 | « Général » | Apparence, langues, mises à jour, ton nom et les statistiques d’usage |
+| « Fonctionnalités » | Ce qu’Escouade te montre : chaque fonctionnalité s’allume ou se coupe en entier |
 | [« Agents »](settings-claude-code) | Les nouveaux agents, les textes rédigés, le remote control, le serveur MCP |
 | [« Comptes et harness »](settings-accounts) | Chaque harness et ses comptes, et ce qui se passe quand un quota est épuisé |
 | [« Services connectés »](settings-integrations) | Les hébergeurs de code et les comptes des sources de tickets |
@@ -46,6 +47,14 @@ Un point ambre au bout d’une entrée de la barre dit qu’une page attend quel
 Il n’y a ni « Annuler » ni « Enregistrer » : comme dans les réglages de macOS ou de VS Code, un choix (un interrupteur, un menu, une commande ajoutée) s’applique et s’enregistre aussitôt, un texte quand tu quittes son champ ou après une courte pause dans la frappe. Fermer la fenêtre (la croix, `Échap` ou un clic sur le fond) enregistre ce qui attendait encore.
 
 Une saisie qui ne peut pas être enregistrée le dit sur sa ligne, et la valeur d’avant reste tant qu’elle n’est pas corrigée : un projet sans nom, une commande de lancement sans nom ou sans ligne de commande, un dossier des worktrees ou un préfixe de branche refusé, un nombre vidé.
+
+## La page « Fonctionnalités »
+
+Chaque fonctionnalité d’Escouade s’allume ou se coupe d’un interrupteur : Kanban, Éditeur, Espace Docs, Coût (la température du cache comprise), Statistiques, Workflows, Tâches programmées, Overseer et Voix. L’essentiel, « Agents et conversation » (les agents, leur conversation, le panneau Git, les terminaux et les lancements), est en tête et ne se coupe pas.
+
+Une fonctionnalité coupée disparaît vraiment : son onglet, ses boutons, ses menus, son raccourci, ses outils MCP (un agent qui les appelle quand même reçoit la raison) et ses découvertes dans Aide › À découvrir. Ce qu’elle faisait en fond s’arrête : le pilote auto, les tâches programmées, l’Overseer, la lecture des workflows, les serveurs de langage, l’écoute de la voix. Ses données restent (tickets, pages, tâches, journal) et reviennent quand tu la rallumes. Chaque ligne dit ce qu’elle emporte. Les tâches programmées partent avec le Kanban : leurs passages sont des tickets.
+
+Après la mise à jour qui apporte cette page, tout reste allumé, et la ligne d’une fonctionnalité que tu utilisais déjà le dit (« Utilisée sur 2 projets »). Un poste géré ou une équipe peut en imposer une, allumée ou coupée ([Stratégies du poste](managed-policies)) : sa ligne est grisée, avec qui l’impose.
 
 ## La page « Général »
 

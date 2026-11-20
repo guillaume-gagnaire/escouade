@@ -580,6 +580,7 @@ describe('settingsForm', () => {
     flushSync();
     expect(names()).toEqual([
       'General',
+      'Features',
       'Servers',
       'Devices',
       'Agents',

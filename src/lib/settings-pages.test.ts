@@ -94,6 +94,8 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   languageServersTrusted: true,
   extensionsAllowed: true,
   overseer: true,
+  features: true,
+  featuresUsed: true,
 };
 
 const PROJECT_KEYS: Record<Exclude<keyof ProjectDraft, 'board'>, true> = {
@@ -167,6 +169,7 @@ describe('the register of the settings pages', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(SETTINGS_PAGES.filter((p) => p.scope === 'app').map((p) => p.id)).toEqual([
       'general',
+      'features',
       'servers',
       'devices',
       'agents',
@@ -203,6 +206,7 @@ describe('the register of the settings pages', () => {
     flushSync();
     expect(SETTINGS_PAGES.map((p) => p.label)).toEqual([
       'General',
+      'Features',
       'Servers',
       'Devices',
       'Agents',
@@ -469,5 +473,14 @@ describe('the names of the rows', () => {
       for (const r of SETTINGS_ROWS) expect(r.label, `${r.id} in ${lang}`).not.toMatch(/[{}]/);
     }
     setLang('fr');
+  });
+});
+
+describe('the rows of the features (F-1, ESC-550)', () => {
+  it('has one row per feature, named as its policy locks it', async () => {
+    const { FEATURES, featureRow } = await import('./features');
+    const rows = rowsOf('features').map((r) => r.id);
+    expect(rows).toEqual(FEATURES.map(featureRow));
+    for (const r of rowsOf('features')) expect(r.settings).toEqual(['features']);
   });
 });

@@ -145,8 +145,13 @@
   function fileMenu(e: MouseEvent, f: FileChange) {
     menu.show(e, [
       // A deleted file has nothing to open.
-      { label: t('common.openInEditor'), onClick: () => openInEditor(f), disabled: f.status === 'D' },
-      { label: '', separator: true },
+      // The editor a feature (F-1): off, its entry goes.
+      ...(app.feature('editor')
+        ? [
+            { label: t('common.openInEditor'), onClick: () => openInEditor(f), disabled: f.status === 'D' },
+            { label: '', separator: true },
+          ]
+        : []),
       discardItem(f, diffOwner(f)),
     ]);
   }
@@ -285,7 +290,7 @@
           <span class="cnt"><span class="add">+{f.add}</span><span class="del">−{f.del}</span></span>
         </button>
         <!-- A sibling of the row's button, not inside it. -->
-        {#if f.status !== 'D'}
+        {#if f.status !== 'D' && app.feature('editor')}
           <button
             class="edit icon-btn"
             aria-label={t('git.files.openNamed', { name: basename(f.path) })}

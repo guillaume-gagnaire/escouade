@@ -9,7 +9,7 @@ import { tIn, type Lang } from './i18n';
 import { harnessInstalled, installedEngines, installedOf } from './installed';
 import { SERVICE_IDS } from './integrations';
 import { app } from './state.svelte';
-import { pageInfo, SETTINGS_PAGES, SETTINGS_ROWS, type RowInfo, type SettingsPage } from './settings-pages';
+import { pageInfo, pageShown, rowOfFeatureShown, SETTINGS_PAGES, SETTINGS_ROWS, type RowInfo, type SettingsPage } from './settings-pages';
 
 const LANGS: Lang[] = ['fr', 'en'];
 
@@ -63,11 +63,11 @@ const SHOWN: Record<string, () => boolean> = {
 };
 
 /** Whether the row is on its page, as the plugins installed have it. */
-export const rowShown = (r: RowInfo) => SHOWN[r.id]?.() ?? true;
+export const rowShown = (r: RowInfo) => (SHOWN[r.id]?.() ?? true) && rowOfFeatureShown(r, app.settings);
 
 /** Every row, and every page, with its texts in both languages folded. Read at each search: the catalogs are loaded. */
 function docs(): Doc[] {
-  const pages: Doc[] = SETTINGS_PAGES.map((p) => ({
+  const pages: Doc[] = SETTINGS_PAGES.filter((p) => pageShown(p.id, app.settings)).map((p) => ({
     page: p.id,
     row: null,
     labels: LANGS.map((l) => normalize(tIn(l, `settings.pages.${p.id}.label`))),

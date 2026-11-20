@@ -1001,6 +1001,18 @@ impl Locks {
                 }
             }
         }
+        // The features imposed on or off (F-1, ESC-550). Not before they are settled (`Core::settle_features`), which
+        // brings them within the locks itself.
+        if let Some(features) = s.features.as_mut() {
+            for f in crate::features::Feature::ALL {
+                if let Some(Value::Bool(on)) = self.value(f.policy()) {
+                    if features.get(f) != *on {
+                        features.set(f, *on);
+                        changed.push(f.policy());
+                    }
+                }
+            }
+        }
         changed
     }
 
@@ -1432,10 +1444,13 @@ impl crate::core::Core {
             .deny(locks.check_secrets_file().err().map(|e| e.to_string()));
         *self.locks.write() = locks;
         *self.team_locks.write() = by_team;
+        let before = self.settings.read().clone();
         let changed = {
             let locks = self.locks.read();
             locks.clamp_settings(&mut self.settings.write())
         };
+        // A feature imposed on or off while the app runs (F-1): what it does in the background follows.
+        self.features_changed(&before);
         let settings = (!changed.is_empty()).then(|| {
             log::info!("policies: settings brought within {changed:?}");
             let telemetry = self.settings.read().telemetry;

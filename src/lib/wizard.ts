@@ -18,10 +18,10 @@ export type Start = 'file' | 'copy' | 'recommended' | 'blank' | 'current';
 /** The steps, in their order. */
 export type StepId = 'start' | 'copied' | 'worktrees' | 'launch' | 'kanban' | 'account' | 'integrations' | 'summary';
 
-/** The steps of the assistant: « Réglages copiés » only when copying. */
-export function stepsFor(start: Start): StepId[] {
+/** The steps of the assistant: « Réglages copiés » only when copying; the Kanban and its sources only while it is on (F-1). */
+export function stepsFor(start: Start, kanban = true): StepId[] {
   const all: StepId[] = ['start', 'copied', 'worktrees', 'launch', 'kanban', 'account', 'integrations', 'summary'];
-  return start === 'copy' ? all : all.filter((s) => s !== 'copied');
+  return all.filter((s) => (s !== 'copied' || start === 'copy') && (kanban || (s !== 'kanban' && s !== 'integrations')));
 }
 
 /**

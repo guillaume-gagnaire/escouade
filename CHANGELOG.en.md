@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Settings › Features: turn off with one switch what you don’t use (Kanban, Docs, editor, cost, statistics, workflows, scheduled tasks, Overseer, voice). It really disappears, its MCP tools and what it did in the background included, and its data come back when you turn it on again; after the update everything stays on, and a managed device or a team can impose one.
 - Team server: the team’s costs and quotas, totals by day encrypted for its administrators alone (never a prompt or a turn), by project by default or by member if the team chooses it and tells you. The month’s budgets are weighed before each start, a warning reaches the administrator’s “Your turn” box, and beyond a budget the autopilot can stop.
 - “Your review” in a pull request’s view: your remarks wait under their line, on your machine and even after a restart, then go with your text and your verdict (comment, approve, request changes) in one review on the host, on your click. The changes requested on a ticket’s pull request can go straight back to its agent.
 - Compiling a plugin in Rust no longer fills your disk: the compilation copies unused for 7 days go, the cache stays under 5 GB, and `escouade-plugin cache` says where it is and what it weighs (`cache clear` empties it).

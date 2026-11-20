@@ -164,17 +164,17 @@
       <ul class="recap" aria-label={t('conv.turn.editedFiles')}>
         {#each edits as e (e.path)}
           <li>
-            <Icon name="edit" size={14} /><button
-              class="path link mono"
-              use:tip={t('common.openInEditor')}
-              onclick={() =>
-                app.openEditor({
-                  projectId: agent.projectId,
-                  source: agent.worktree ? agent.id : 'project',
-                  // A file outside the agent's folder is recapped by its absolute path.
-                  abs: isAbsPath(e.path) ? e.path : `${agent.cwd}/${e.path}`,
-                })}>{e.path}</button
-            ><span class="add">+{e.add}</span><span class="del">−{e.del}</span>
+            <Icon name="edit" size={14} />{#if app.feature('editor')}<button
+                class="path link mono"
+                use:tip={t('common.openInEditor')}
+                onclick={() =>
+                  app.openEditor({
+                    projectId: agent.projectId,
+                    source: agent.worktree ? agent.id : 'project',
+                    // A file outside the agent's folder is recapped by its absolute path.
+                    abs: isAbsPath(e.path) ? e.path : `${agent.cwd}/${e.path}`,
+                  })}>{e.path}</button
+              >{:else}<span class="path mono">{e.path}</span>{/if}<span class="add">+{e.add}</span><span class="del">−{e.del}</span>
           </li>
         {/each}
       </ul>

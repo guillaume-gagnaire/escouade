@@ -2,7 +2,7 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539"]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-550"]
 decisions: [169,175,183,189,198,197,204,201,218]
 compared: null
 ---
@@ -155,3 +155,12 @@ Reversée dans la 2.3, la 2.2.3 ajoute deux choses que les stratégies du poste 
 - **Dans la fenêtre** : au champ d'un secret que le trousseau a refusé, le cadenas et « Imposé par … : le fichier des secrets est interdit sur ce poste, seul le trousseau système garde un secret. » remplacent l'offre du fichier. Dans Réglages › Plugins, le groupe du fichier dit « Imposé par … : ce fichier n'est plus lu. Déplace ses secrets vers le trousseau depuis la page de chaque plugin, ou retire-le. »
 - **Le compte, le modèle et l'effort qu'un agent donne à celui qu'il crée** (`create_agent`, PR 44) : avant que rien ne soit fait, le harness du compte choisi passe par `harnesses.allowed`, le modèle demandé par `harnesses.allowedModels` et l'effort demandé par `harnesses.maxEffort`. Un effort demandé au-dessus du plafond est refusé, en disant qui l'impose, et rien n'est créé. Un effort laissé à son compte descend au plafond, comme pour toute création. Le mode est jugé comme pour les autres créations (ESC-497).
 - **Le pilote ACP** (ESC-491) passe par le même jugement du mode. La session neuve d'après un redémarrage démarre par `judge_start`. Un tour que le harness lance seul compte comme un travail : un mode devenu interdit pendant ce tour arrête le process à la fin du tour, avec sa raison.
+
+## Les fonctionnalités (ESC-550)
+
+| Clé | Sorte | Ce qu'elle verrouille ou refuse |
+| --- | --- | --- |
+| `features.kanban`, `features.editor`, `features.docs`, `features.cost`, `features.stats`, `features.workflows`, `features.scheduled`, `features.overseer`, `features.voice` | valeur, un booléen : `true` impose la fonctionnalité allumée, `false` coupée | Réglages › Fonctionnalités, sa ligne grisée avec le cadenas ; coupée, ce qu'elle emporte part (ses vues, ses outils MCP refusés en nommant qui l'impose, ce qu'elle fait en fond), voir *Fonctionnalités* |
+
+- Ce sont des clés de l'app : une équipe les impose tant que le poste en est, comme la voix ou les mises à jour.
+- Une seule catégorie de plus dans l'ADMX, les profils, le schéma de `/etc` et la page du site : « Fonctionnalités ».

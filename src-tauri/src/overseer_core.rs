@@ -149,10 +149,10 @@ impl crate::facts::Sink for Sink {
 }
 
 impl Core {
-    /// It is to run: turned on, and Escouade's tools given to the agents.
+    /// It is to run: turned on, Escouade's tools given to the agents, and its feature on (F-1).
     pub fn overseer_wanted(&self) -> bool {
         let s = self.settings.read();
-        s.overseer.enabled && s.mcp_enabled
+        s.overseer.enabled && s.mcp_enabled && s.feature(crate::features::Feature::Overseer)
     }
 
     /// Its agent, when made.
@@ -269,7 +269,10 @@ impl Core {
     pub(crate) fn overseer_hotkey(&self) {
         let (on, spec) = {
             let s = self.settings.read();
-            (s.overseer.enabled, s.overseer.shortcut.clone())
+            (
+                s.overseer.enabled && s.feature(crate::features::Feature::Overseer),
+                s.overseer.shortcut.clone(),
+            )
         };
         if let Err(e) = self.overseer.hotkey.apply(on.then_some(spec.as_str())) {
             log::warn!("overseer: shortcut {spec} not registered: {}", e.text());

@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537","ESC-550"]
 decisions: [118,119,120,121,123,124,126,145,147,181]
 compared: null
 ---
@@ -199,3 +199,10 @@ Sur la page Plugins, entre « Proposés par Escouade » et « Sécurité », seu
 ## Serveurs (ESC-537)
 
 Une page d'Escouade de plus, juste après Général : **« Serveurs »**, « Les serveurs Escouade que ce poste connaît, leur état, s'y connecter ou les retirer ». Elle est à l'app sur ce poste, quel que soit le cœur où est la fenêtre, et ne règle aucune clé des réglages : la liste des serveurs a son propre fichier. Ce qu'elle montre et ses gestes sont décrits dans *Escouade à distance › Se connecter à un serveur* ; la barre devient « Escouade » : Général, Serveurs, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé.
+
+## Fonctionnalités (ESC-550)
+
+Une page d'Escouade de plus, juste après Général : **« Fonctionnalités »**, « Ce qu’Escouade te montre : chaque fonctionnalité s’allume ou se coupe en entier. ». Elle a l'essentiel, toujours allumé, puis un interrupteur par fonctionnalité, avec ce qu'elle emporte quand on la coupe (voir *Fonctionnalités*). La barre devient « Escouade » : Général, Fonctionnalités, Serveurs, Agents, Comptes et harness, Services connectés, Overseer, Voix, Notifications, Plugins, Avancé.
+
+- Le registre a une rangée par fonctionnalité (`featureKanban`, `featureEditor`, `featureDocs`, `featureCost`, `featureStats`, `featureWorkflows`, `featureScheduled`, `featureOverseer`, `featureVoice`), qui règle la clé `features` des réglages ; `featuresUsed`, le relevé fait à la mise à jour, est au cœur seul.
+- **Une fonctionnalité coupée emporte ses pages et ses rangées** : la barre et la recherche n'ont plus Overseer (Overseer coupé), Voix (Voix coupée), ni pour un projet Kanban et Tickets importés (Kanban coupé). Dans les autres pages, ses rangées partent : « Taille du texte de l'éditeur », « Serveurs de langage » et « Extensions permises de l'éditeur » (Éditeur), « Économies du cache dans la barre d'état » (Coût), « Branche des docs » (Espace Docs), le groupe « Workflow » (Workflows).

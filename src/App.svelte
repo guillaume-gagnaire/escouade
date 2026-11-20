@@ -155,6 +155,13 @@
     if (app.ready) untrack(takeOpening);
   });
 
+  // A feature switched off while its view is shown (F-1): the statistics leave for the project, the Overseer's screen
+  // closes.
+  $effect(() => {
+    if (app.ui.view === 'stats' && !app.feature('stats')) untrack(() => app.closeStats());
+    if (overseer.open && !app.feature('overseer')) overseer.open = false;
+  });
+
   $effect(() => {
     void app.ui.view;
     void app.project?.color;
@@ -347,7 +354,7 @@
       {:else if app.ui.view === 'inbox' && app.settings.mcpEnabled}
         <InboxQueue />
         <div class="work"><InboxScreen /></div>
-      {:else if app.ui.view === 'stats'}
+      {:else if app.ui.view === 'stats' && app.feature('stats')}
         <div class="work"><Stats /></div>
       {:else if app.ui.view === 'discover'}
         <!-- Aide › À découvrir (ESC-506). -->
@@ -431,7 +438,7 @@
   <StatusBar />
 </div>
 
-{#if overseer.open}
+{#if overseer.open && app.feature('overseer')}
   <OverseerScreen />
 {/if}
 

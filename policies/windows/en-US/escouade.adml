@@ -11,6 +11,7 @@
       <string id="cat_harnesses">Harnesses and models</string>
       <string id="cat_plugins">Plugins</string>
       <string id="cat_editor">Editor</string>
+      <string id="cat_features">Features</string>
       <string id="cat_projects">Projects</string>
       <string id="cat_network">Proxy and certificates</string>
       <string id="cat_privacy">Telemetry and voice</string>
@@ -231,6 +232,60 @@ Key: team.fingerprint (string). Sort: value.</string>
 On the device: Another team server is refused, with the reason.
 
 Key: team.onlyThisServer (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="features_kanban">Kanban feature</string>
+      <string id="features_kanban_Explain">Tickets, the autopilot and ticket sources: true turns it on, false turns it off (its tab, its MCP tools, its autopilot). Its tickets are kept.
+
+On the device: Settings › Features › Kanban, grayed.
+
+Key: features.kanban (Boolean, true, false). Sort: value.</string>
+      <string id="features_editor">Editor feature</string>
+      <string id="features_editor_Explain">Opening, editing and searching the project’s files: true turns it on, false turns it off (the editor view, Ctrl P, its language servers).
+
+On the device: Settings › Features › Editor, grayed.
+
+Key: features.editor (Boolean, true, false). Sort: value.</string>
+      <string id="features_docs">Docs space feature</string>
+      <string id="features_docs_Explain">The specification, decisions, documents and discussions: true turns it on, false turns it off (its tab, its MCP tools). Its pages are kept.
+
+On the device: Settings › Features › Docs space, grayed.
+
+Key: features.docs (Boolean, true, false). Sort: value.</string>
+      <string id="features_cost">Cost feature</string>
+      <string id="features_cost_Explain">The cost of turns, agents and tickets, and the cache temperature: true turns it on, false turns it off.
+
+On the device: Settings › Features › Cost, grayed.
+
+Key: features.cost (Boolean, true, false). Sort: value.</string>
+      <string id="features_stats">Statistics feature</string>
+      <string id="features_stats_Explain">Activity and spending over time: true turns it on, false turns it off (its view). It has nothing to do with telemetry (telemetry.enabled).
+
+On the device: Settings › Features › Statistics, grayed.
+
+Key: features.stats (Boolean, true, false). Sort: value.</string>
+      <string id="features_workflows">Workflows feature</string>
+      <string id="features_workflows_Explain">A project’s chains of agents and skills: true turns it on, false turns it off (its tab, its MCP tool, their reading).
+
+On the device: Settings › Features › Workflows, grayed.
+
+Key: features.workflows (Boolean, true, false). Sort: value.</string>
+      <string id="features_scheduled">Scheduled tasks feature</string>
+      <string id="features_scheduled_Explain">Tickets that come back at a set time: true turns it on, false turns it off (its tasks no longer run). It also goes with the Kanban.
+
+On the device: Settings › Features › Scheduled tasks, grayed.
+
+Key: features.scheduled (Boolean, true, false). Sort: value.</string>
+      <string id="features_overseer">Overseer feature</string>
+      <string id="features_overseer_Explain">The agent that drives every project: true turns it on, false turns it off (its screen, its shortcut, its MCP tools; it stops).
+
+On the device: Settings › Features › Overseer, grayed.
+
+Key: features.overseer (Boolean, true, false). Sort: value.</string>
+      <string id="features_voice">Voice feature</string>
+      <string id="features_voice_Explain">Dictation and spoken conversation: true turns it on, false turns it off (the microphone, its shortcut, the listening).
+
+On the device: Settings › Features › Voice, grayed.
+
+Key: features.voice (Boolean, true, false). Sort: value.</string>
     </stringTable>
     <presentationTable>
       <presentation id="permissions_modes">

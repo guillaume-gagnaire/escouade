@@ -1309,7 +1309,7 @@ Pour isola seulement, à ce jour, et pour les tiers.
 - **Un seul hôte.** Javy sort un module cœur WASI p1 : `run.js` et `run.wasm` partagent `Instance`, `serve`, les limites, le journal.
 - **WASI p2 n'apporterait rien ici.** Ses `wasi:http` et `wasi:sockets` sont ce qu'Escouade ne veut pas donner à un module : le réseau passe par `net/*`, jugé par l'hôte. Le contrat reste le JSON-RPC, qu'un WIT ne remplacerait qu'à grand prix pour trente méthodes déjà écrites et testées.
 - **Le composant ne coûte pas cher en Rust, mais il ne sert à rien ici** : Linear compile aussi en `wasm32-wasip2`, 487 155 o contre 459 364 o, sans changer de source. Il demanderait la partie composants de wasmtime et un second chemin dans l'hôte, pour rien de plus. Sa reproductibilité n'a pas été essayée. En JS, ESC-319 avait vu un composant 10 fois plus lourd (§5.3).
-- **Le risque** : WASI p1 est figé. wasmtime le sert et l'app épingle wasmtime (=50.0.1) ; `wasm32-wasip1` est une cible de niveau 2 de Rust. Si elle disparaissait un jour, la voie serait `wasi-sdk` et un adaptateur p1 → p2, sans toucher aux plugins.
+- **Le risque** : WASI p1 est figé. wasmtime le sert et l'app épingle wasmtime (=50.0.2) ; `wasm32-wasip1` est une cible de niveau 2 de Rust. Si elle disparaissait un jour, la voie serait `wasi-sdk` et un adaptateur p1 → p2, sans toucher aux plugins.
 
 **Le manifeste.** `"run": { "wasm": "Cargo.toml" }` : le manifeste Cargo du plugin, jamais un binaire. Le `.wasm` n'est pas commité. Rust seulement pour commencer ; le nom laisse la place à d'autres langages.
 

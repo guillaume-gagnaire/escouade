@@ -59,7 +59,21 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
     ] {
         assert!(def(key).is_some(), "{key} missing from the list");
     }
-    assert_eq!(POLICIES.len(), 33);
+    // The switches of the features (F-1, ESC-550): one per feature, imposed on or off.
+    for key in [
+        "features.kanban",
+        "features.docs",
+        "features.editor",
+        "features.cost",
+        "features.stats",
+        "features.workflows",
+        "features.scheduled",
+        "features.overseer",
+        "features.voice",
+    ] {
+        assert!(def(key).is_some(), "{key} missing from the list");
+    }
+    assert_eq!(POLICIES.len(), 42);
 }
 
 #[test]
@@ -79,6 +93,10 @@ fn each_key_says_its_type_from_its_form() {
 fn a_key_that_restricts_says_the_one_value_it_may_impose_and_its_example_is_it() {
     for d in POLICIES {
         match d.form {
+            // A feature's switch (F-1) is imposed either way: on or off.
+            Form::Flag { restricted: None } if d.category == Category::Features => {
+                assert_eq!(d.sort, Sort::Value, "{}", d.key);
+            }
             Form::Flag { restricted } => {
                 assert_eq!(d.sort, Sort::Restrict, "{}", d.key);
                 let r = restricted.unwrap_or_else(|| panic!("{} says its restricted value", d.key));

@@ -312,7 +312,8 @@
    */
   const docsShown = $derived.by(() => {
     const p = app.ui.view === 'project' ? app.project : null;
-    if (!p) return null;
+    // The Docs space off (F-1): its docs are not told.
+    if (!p || !app.feature('docs')) return null;
     const d = app.docsShare[p.id];
     return app.docsOn || d?.pending || d?.conflict ? p.id : null;
   });
@@ -396,9 +397,13 @@
         </button>
         <span id="quota-description" hidden>{quotaLines.join('. ')}</span>
       {/if}
-      <span class="it" use:tip={today.estimated ? estimateHint(today) : undefined}>{t('shell.status.today')} <b>{fSpentUsd(today)}</b></span
-      >
-      {#if app.settings.cacheSavingsInBar && cacheSaved > 0}
+      <!-- The day's cost and what the cache saved: the feature Coût's (F-1). -->
+      {#if app.feature('cost')}
+        <span class="it" use:tip={today.estimated ? estimateHint(today) : undefined}
+          >{t('shell.status.today')} <b>{fSpentUsd(today)}</b></span
+        >
+      {/if}
+      {#if app.settings.cacheSavingsInBar && cacheSaved > 0 && app.feature('cost')}
         <!-- What the agents' cache saved today (ESC-398), when « Économies du cache dans la barre d’état » is on (ESC-421,
              off by default); the word alone under 1240 pixels, the sentence in its tooltip. -->
         <span class="it heat-today" data-heat-today use:tip={t('heat.todayHint')}

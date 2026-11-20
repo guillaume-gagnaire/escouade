@@ -122,7 +122,7 @@
     <span data-tauri-drag-region></span>
   {/if}
   <div class="right" data-tauri-drag-region>
-    {#if app.settings.overseer?.enabled && !first}
+    {#if app.settings.overseer?.enabled && app.feature('overseer') && !first}
       <!-- The Overseer's discussion (ESC-462): its screen comes with OV-2. -->
       <button
         class="btn-bar"
@@ -137,7 +137,7 @@
         <span class="lbl">{t('overseer.panel.open')}</span>
       </button>
     {/if}
-    {#if activeProject && !first}
+    {#if activeProject && !first && app.feature('editor')}
       <button
         class="btn-bar"
         data-discover="editor"

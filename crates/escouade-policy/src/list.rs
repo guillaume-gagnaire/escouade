@@ -87,6 +87,7 @@ pub enum Category {
     Harnesses,
     Plugins,
     Editor,
+    Features,
     Projects,
     Network,
     Privacy,
@@ -98,11 +99,12 @@ pub enum Category {
 }
 
 impl Category {
-    pub const ALL: [Category; 12] = [
+    pub const ALL: [Category; 13] = [
         Category::Permissions,
         Category::Harnesses,
         Category::Plugins,
         Category::Editor,
+        Category::Features,
         Category::Projects,
         Category::Network,
         Category::Privacy,
@@ -120,6 +122,7 @@ impl Category {
             Category::Harnesses => "harnesses",
             Category::Plugins => "plugins",
             Category::Editor => "editor",
+            Category::Features => "features",
             Category::Projects => "projects",
             Category::Network => "network",
             Category::Privacy => "privacy",
@@ -138,6 +141,7 @@ impl Category {
             Category::Harnesses => ("Harness et modèles", "Harnesses and models"),
             Category::Plugins => ("Plugins", "Plugins"),
             Category::Editor => ("Éditeur", "Editor"),
+            Category::Features => ("Fonctionnalités", "Features"),
             Category::Projects => ("Projets", "Projects"),
             Category::Network => ("Proxy et certificats", "Proxy and certificates"),
             Category::Privacy => ("Télémétrie et voix", "Telemetry and voice"),
@@ -278,6 +282,15 @@ pub const MCP_EXTERNAL: &str = "mcp.externalClients";
 pub const TEAM_SERVER: &str = "team.server";
 pub const TEAM_FINGERPRINT: &str = "team.fingerprint";
 pub const ONLY_THIS_SERVER: &str = "team.onlyThisServer";
+pub const FEATURE_KANBAN: &str = "features.kanban";
+pub const FEATURE_DOCS: &str = "features.docs";
+pub const FEATURE_EDITOR: &str = "features.editor";
+pub const FEATURE_COST: &str = "features.cost";
+pub const FEATURE_STATS: &str = "features.stats";
+pub const FEATURE_WORKFLOWS: &str = "features.workflows";
+pub const FEATURE_SCHEDULED: &str = "features.scheduled";
+pub const FEATURE_OVERSEER: &str = "features.overseer";
+pub const FEATURE_VOICE: &str = "features.voice";
 
 const fn off() -> Form {
     Form::Flag {
@@ -977,7 +990,150 @@ pub const POLICIES: &[Def] = &[
             locks: "Another team server is refused, with the reason.",
         },
     },
+    // ---------- features (F-1, ESC-550) ----------
+    feature(
+        FEATURE_KANBAN,
+        &["featureKanban"],
+        Text {
+            title: "Fonctionnalité Kanban",
+            help: "Les tickets, le pilote auto et les sources de tickets : true l’allume, false la coupe (son onglet, ses outils MCP, son pilote auto). Ses tickets restent.",
+            locks: "Réglages › Fonctionnalités › Kanban, grisé.",
+        },
+        Text {
+            title: "Kanban feature",
+            help: "Tickets, the autopilot and ticket sources: true turns it on, false turns it off (its tab, its MCP tools, its autopilot). Its tickets are kept.",
+            locks: "Settings › Features › Kanban, grayed.",
+        },
+    ),
+    feature(
+        FEATURE_EDITOR,
+        &["featureEditor"],
+        Text {
+            title: "Fonctionnalité Éditeur",
+            help: "Ouvrir, modifier et rechercher dans les fichiers du projet : true l’allume, false la coupe (la vue de l’éditeur, Ctrl P, ses serveurs de langage).",
+            locks: "Réglages › Fonctionnalités › Éditeur, grisé.",
+        },
+        Text {
+            title: "Editor feature",
+            help: "Opening, editing and searching the project’s files: true turns it on, false turns it off (the editor view, Ctrl P, its language servers).",
+            locks: "Settings › Features › Editor, grayed.",
+        },
+    ),
+    feature(
+        FEATURE_DOCS,
+        &["featureDocs"],
+        Text {
+            title: "Fonctionnalité Espace Docs",
+            help: "La spécification, les décisions, les documents et les discussions : true l’allume, false la coupe (son onglet, ses outils MCP). Ses pages restent.",
+            locks: "Réglages › Fonctionnalités › Espace Docs, grisé.",
+        },
+        Text {
+            title: "Docs space feature",
+            help: "The specification, decisions, documents and discussions: true turns it on, false turns it off (its tab, its MCP tools). Its pages are kept.",
+            locks: "Settings › Features › Docs space, grayed.",
+        },
+    ),
+    feature(
+        FEATURE_COST,
+        &["featureCost"],
+        Text {
+            title: "Fonctionnalité Coût",
+            help: "Le coût des tours, des agents et des tickets, et la température du cache : true l’allume, false la coupe.",
+            locks: "Réglages › Fonctionnalités › Coût, grisé.",
+        },
+        Text {
+            title: "Cost feature",
+            help: "The cost of turns, agents and tickets, and the cache temperature: true turns it on, false turns it off.",
+            locks: "Settings › Features › Cost, grayed.",
+        },
+    ),
+    feature(
+        FEATURE_STATS,
+        &["featureStats"],
+        Text {
+            title: "Fonctionnalité Statistiques",
+            help: "L’activité et les dépenses dans le temps : true l’allume, false la coupe (sa vue). Elle n’a rien à voir avec la télémétrie (telemetry.enabled).",
+            locks: "Réglages › Fonctionnalités › Statistiques, grisé.",
+        },
+        Text {
+            title: "Statistics feature",
+            help: "Activity and spending over time: true turns it on, false turns it off (its view). It has nothing to do with telemetry (telemetry.enabled).",
+            locks: "Settings › Features › Statistics, grayed.",
+        },
+    ),
+    feature(
+        FEATURE_WORKFLOWS,
+        &["featureWorkflows"],
+        Text {
+            title: "Fonctionnalité Workflows",
+            help: "Les enchaînements d’agents et de skills d’un projet : true l’allume, false la coupe (son onglet, son outil MCP, leur lecture).",
+            locks: "Réglages › Fonctionnalités › Workflows, grisé.",
+        },
+        Text {
+            title: "Workflows feature",
+            help: "A project’s chains of agents and skills: true turns it on, false turns it off (its tab, its MCP tool, their reading).",
+            locks: "Settings › Features › Workflows, grayed.",
+        },
+    ),
+    feature(
+        FEATURE_SCHEDULED,
+        &["featureScheduled"],
+        Text {
+            title: "Fonctionnalité Tâches programmées",
+            help: "Les tickets qui reviennent à heure fixe : true l’allume, false la coupe (ses tâches ne partent plus). Elle part aussi avec le Kanban.",
+            locks: "Réglages › Fonctionnalités › Tâches programmées, grisé.",
+        },
+        Text {
+            title: "Scheduled tasks feature",
+            help: "Tickets that come back at a set time: true turns it on, false turns it off (its tasks no longer run). It also goes with the Kanban.",
+            locks: "Settings › Features › Scheduled tasks, grayed.",
+        },
+    ),
+    feature(
+        FEATURE_OVERSEER,
+        &["featureOverseer"],
+        Text {
+            title: "Fonctionnalité Overseer",
+            help: "L’agent qui pilote tous les projets : true l’allume, false la coupe (son écran, son raccourci, ses outils MCP ; il s’arrête).",
+            locks: "Réglages › Fonctionnalités › Overseer, grisé.",
+        },
+        Text {
+            title: "Overseer feature",
+            help: "The agent that drives every project: true turns it on, false turns it off (its screen, its shortcut, its MCP tools; it stops).",
+            locks: "Settings › Features › Overseer, grayed.",
+        },
+    ),
+    feature(
+        FEATURE_VOICE,
+        &["featureVoice"],
+        Text {
+            title: "Fonctionnalité Voix",
+            help: "La dictée et la conversation à voix haute : true l’allume, false la coupe (le micro, son raccourci, l’écoute).",
+            locks: "Réglages › Fonctionnalités › Voix, grisé.",
+        },
+        Text {
+            title: "Voice feature",
+            help: "Dictation and spoken conversation: true turns it on, false turns it off (the microphone, its shortcut, the listening).",
+            locks: "Settings › Features › Voice, grayed.",
+        },
+    ),
 ];
+
+/// A feature's switch (F-1, ESC-550): imposed on or off, by the managed device or a team.
+const fn feature(key: &'static str, rows: &'static [&'static str], fr: Text, en: Text) -> Def {
+    Def {
+        key,
+        sort: Sort::Value,
+        form: Form::Flag { restricted: None },
+        rows,
+        within: None,
+        category: Category::Features,
+        later: false,
+        example: "false",
+        fr,
+        en,
+    }
+}
 
 /// The policy of a key.
 pub fn def(key: &str) -> Option<&'static Def> {

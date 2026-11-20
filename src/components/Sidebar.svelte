@@ -596,12 +596,17 @@
         ? []
         : [
             // Its worktree waits for its first message (ESC-156): neither opens in the project's folder meanwhile.
-            {
-              label: t('common.openInEditor'),
-              disabled: !!a.worktreePending,
-              title: a.worktreePending ? t('nav.sidebar.worktreeLaterTitle') : undefined,
-              onClick: () => app.openEditor({ projectId: a.projectId, source: a.worktree ? a.id : 'project' }),
-            },
+            // The editor a feature (F-1): off, its entry goes.
+            ...(app.feature('editor')
+              ? [
+                  {
+                    label: t('common.openInEditor'),
+                    disabled: !!a.worktreePending,
+                    title: a.worktreePending ? t('nav.sidebar.worktreeLaterTitle') : undefined,
+                    onClick: () => app.openEditor({ projectId: a.projectId, source: a.worktree ? a.id : 'project' }),
+                  },
+                ]
+              : []),
             // In its worktree, else in the project's folder (the backend knows which).
             {
               label: t('nav.sidebar.menu.openTerminal'),
@@ -974,9 +979,12 @@
         app.closePrs(project.id);
       }}>{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
     >
-    <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
-      >Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
-    >
+    <!-- The Kanban and the Docs space each a feature (F-1): off, their tab goes. -->
+    {#if app.feature('kanban')}
+      <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
+        >Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
+      >
+    {/if}
     {#if prsTab}
       <!-- The project's open pull requests (ESC-65), in the host's word: « PR », « MR » on GitLab; only with a code host. -->
       <button
@@ -989,7 +997,9 @@
           >{/if}</button
       >
     {/if}
-    <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}>{t('docs.tab')}</button>
+    {#if app.feature('docs')}
+      <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}>{t('docs.tab')}</button>
+    {/if}
   </div>
 
   {#if app.docsOn}
@@ -1561,7 +1571,7 @@
               <div class="a-top">
                 <StatusDot status="done" />
                 <span class="name">{a.name}</span>
-                <span class="a-state status">{fUsd(a.cost)}</span>
+                {#if app.feature('cost')}<span class="a-state status">{fUsd(a.cost)}</span>{/if}
               </div>
               {#if a.worktreeKept}
                 <!-- Its ticket over, its worktree stayed: what it holds would be lost (ESC-143). -->
@@ -1573,8 +1583,10 @@
       {/if}
     </div>
 
-    <!-- « Programmées » (ESC-448), above the launches (place A of programmees-barre.png). -->
-    <ScheduledSection {project} />
+    <!-- « Programmées » (ESC-448), above the launches (place A of programmees-barre.png); gone with its feature (F-1). -->
+    {#if app.feature('scheduled')}
+      <ScheduledSection {project} />
+    {/if}
     <RunsSection {project} />
 
     <section class="sec terms" class:folded={termsFolded} aria-label={t('nav.sidebar.terminals')}>
@@ -1639,13 +1651,16 @@
       class="foot-row"
       aria-label={t('nav.sidebar.browseFolder', { path: tildify(project.path) })}
       use:tip={{ text: project.path, aria: false }}
+      disabled={!app.feature('editor')}
       onclick={() => app.openEditor({ projectId: project.id, source: 'project' })}
     >
       <!-- On a server (ESC-537): the space's name before the folder, a server in place of a folder. -->
       <Icon name={connection.server ? 'server' : 'folder'} size={14} />{#if connection.server}<b
           class="on-server"
           data-testid="side-machine">{t('servers.sidebar.on', { name: connection.server.name })}</b
-        >{/if}<span class="grow mono path">{tildify(project.path)}</span><span class="browse" aria-hidden="true">{t('common.browse')}</span>
+        >{/if}<span class="grow mono path">{tildify(project.path)}</span>{#if app.feature('editor')}<span class="browse" aria-hidden="true"
+          >{t('common.browse')}</span
+        >{/if}
     </button>
     <div class="foot-row">
       <Icon name="branch" size={14} />
@@ -2861,9 +2876,14 @@
     color: var(--muted);
     font-size: 12px;
   }
-  button.foot-row:hover {
+  button.foot-row:hover:not(:disabled) {
     background: var(--hover);
     color: var(--text);
+  }
+  /* The editor off (F-1): the folder is said, not browsed. */
+  button.foot-row:disabled {
+    cursor: default;
+    opacity: 1;
   }
   .foot-row .grow {
     flex: 1;

@@ -1808,3 +1808,30 @@ fn a_session_keeps_its_terminals_within_its_bounds_and_is_forgotten_in_time() {
     s.forget_device("phone");
     assert!(s.find(&fresh, "phone", 0).is_none());
 }
+
+// The features (F-1, ESC-550): a client at a distance shows its core's switches, and switches them there.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_client_at_a_distance_reads_and_switches_the_features_of_its_core() {
+    use crate::features::Feature;
+    let (_dir, h, api, token) = served("remote-features").await;
+    // Its core has the Docs space off.
+    {
+        let mut s = h.core.settings.read().clone();
+        s.features
+            .get_or_insert_with(Default::default)
+            .set(Feature::Docs, false);
+        h.core.save_settings(s).unwrap();
+    }
+    let mut c = Client::connect(&api, &token).await;
+    let initial = c.ok("subscribe", json!({"channel": "__CHANNEL__:1"})).await;
+    assert_eq!(initial["settings"]["features"]["docs"], json!(false));
+    assert_eq!(initial["settings"]["features"]["kanban"], json!(true));
+    // Switched back on from the client: the core has it on.
+    let mut settings = initial["settings"].clone();
+    settings["features"]["docs"] = json!(true);
+    settings["features"]["voice"] = json!(false);
+    c.ok("save_settings", json!({ "settings": settings })).await;
+    assert!(h.core.feature_on(Feature::Docs));
+    assert!(!h.core.feature_on(Feature::Voice));
+    h.stop();
+}

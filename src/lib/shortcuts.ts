@@ -117,7 +117,8 @@ export function holdPrint(e: KeyboardEvent, mac = IS_MAC): boolean {
  */
 function openQuickOpen() {
   const project = app.project;
-  if (!project || app.modal) return;
+  // The palette of the files is the editor's (F-1): off, Ctrl+P does nothing (still taken: it would print the page).
+  if (!project || app.modal || !app.feature('editor')) return;
   const source = app.editorActive ? app.editor[project.id].source : app.agent?.worktree ? app.agent.id : 'project';
   app.modal = { kind: 'quickOpen', projectId: project.id, source };
 }
@@ -302,6 +303,8 @@ function handlePaneKey(e: KeyboardEvent, mac: boolean): boolean {
  */
 export function dictationKey(e: KeyboardEvent, mac = IS_MAC): boolean {
   if (dictation.recording) return false;
+  // The feature Voix off (F-1): its shortcut is no one's.
+  if (!app.feature('voice')) return false;
   const spec = app.settings.voice?.shortcut || DEFAULT_SHORTCUT;
   if (e.type === 'keyup') {
     if (e.code !== parseShortcut(spec)?.code) return false;

@@ -1993,6 +1993,13 @@ impl Core {
         }
         // Before a policy imposes a mode: what the settings say of the user alone.
         let fresh = settings.agent_mode.is_empty();
+        // The features (F-1): a new installation has them as it should until the assistant of F-2 chooses; one that ran
+        // before settles them from what it uses, once its state is read (`settle_features`).
+        if !existed && settings.features.is_none() {
+            settings.features = Some(crate::features::Features::all(
+                escouade_model::features::NEW_INSTALL,
+            ));
+        }
         // First: what the backend writes from now on (the menus, its texts) is in these languages.
         let lang = i18n::configure(&settings.language, &settings.claude_language);
         log::info!("languages: {lang:?}");
@@ -2419,6 +2426,8 @@ impl Core {
         core.migrate_private_harnesses();
         // Once (SEC-09): « Autoriser le mode Bypass » on for an installation that already uses it.
         core.settle_bypass();
+        // Once (F-1): the features an updated installation uses kept on.
+        core.settle_features();
         // The projects and the agents brought within what the policies lock (TS-11), the settings written as they are.
         if !clamped.is_empty() {
             core.write_settings_file();
@@ -2785,7 +2794,10 @@ impl Core {
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 let s = c.settings.read().integrations.clone();
                 let every = Duration::from_secs(u64::from(s.import_every.clamp(1, 24 * 60)) * 60);
-                if s.auto_import && last.is_none_or(|l| l.elapsed() >= every) {
+                if s.auto_import
+                    && c.feature_on(crate::features::Feature::Kanban)
+                    && last.is_none_or(|l| l.elapsed() >= every)
+                {
                     last = Some(std::time::Instant::now());
                     c.auto_import().await;
                 }
@@ -3001,6 +3013,12 @@ impl Core {
         if s.user_id.is_empty() {
             s.user_id = self.settings.read().user_id.clone();
         }
+        // The features (F-1): a client that does not know them keeps the backend's switches; what was in use at the
+        // update is the backend's alone.
+        if s.features.is_none() {
+            s.features = self.settings.read().features.clone();
+        }
+        s.features_used = self.settings.read().features_used.clone();
         s.normalize_attachments();
         s.normalize_mid_turn_delay();
         s.normalize_display();
@@ -3094,6 +3112,8 @@ impl Core {
         {
             self.overseer_sync();
         }
+        // A feature switched on or off (F-1): what it does in the background follows.
+        self.features_changed(&before_settings);
         // A program of a plugin gets the network of now.
         self.plugin_runtime
             .set_agent_env(self.settings.read().network_env());

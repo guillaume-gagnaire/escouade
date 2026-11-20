@@ -584,6 +584,96 @@
       <key>pfm_type</key>
       <string>boolean</string>
     </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Tickets, the autopilot and ticket sources: true turns it on, false turns it off (its tab, its MCP tools, its autopilot). Its tickets are kept. On the device: Settings › Features › Kanban, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.kanban</string>
+      <key>pfm_title</key>
+      <string>Kanban feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Opening, editing and searching the project’s files: true turns it on, false turns it off (the editor view, Ctrl P, its language servers). On the device: Settings › Features › Editor, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.editor</string>
+      <key>pfm_title</key>
+      <string>Editor feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The specification, decisions, documents and discussions: true turns it on, false turns it off (its tab, its MCP tools). Its pages are kept. On the device: Settings › Features › Docs space, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.docs</string>
+      <key>pfm_title</key>
+      <string>Docs space feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The cost of turns, agents and tickets, and the cache temperature: true turns it on, false turns it off. On the device: Settings › Features › Cost, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.cost</string>
+      <key>pfm_title</key>
+      <string>Cost feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Activity and spending over time: true turns it on, false turns it off (its view). It has nothing to do with telemetry (telemetry.enabled). On the device: Settings › Features › Statistics, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.stats</string>
+      <key>pfm_title</key>
+      <string>Statistics feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>A project’s chains of agents and skills: true turns it on, false turns it off (its tab, its MCP tool, their reading). On the device: Settings › Features › Workflows, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.workflows</string>
+      <key>pfm_title</key>
+      <string>Workflows feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Tickets that come back at a set time: true turns it on, false turns it off (its tasks no longer run). It also goes with the Kanban. On the device: Settings › Features › Scheduled tasks, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.scheduled</string>
+      <key>pfm_title</key>
+      <string>Scheduled tasks feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The agent that drives every project: true turns it on, false turns it off (its screen, its shortcut, its MCP tools; it stops). On the device: Settings › Features › Overseer, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.overseer</string>
+      <key>pfm_title</key>
+      <string>Overseer feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Dictation and spoken conversation: true turns it on, false turns it off (the microphone, its shortcut, the listening). On the device: Settings › Features › Voice, grayed.</string>
+      <key>pfm_name</key>
+      <string>features.voice</string>
+      <key>pfm_title</key>
+      <string>Voice feature</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
   </array>
   <key>pfm_title</key>
   <string>Escouade</string>

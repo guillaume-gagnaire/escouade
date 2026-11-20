@@ -60,7 +60,9 @@ import {
   type PaneLayout,
   type PaneZone,
 } from './panes';
+import { featureOn } from './features';
 import type {
+  Feature,
   DeleteAsk,
   AccountView,
   InitialState,
@@ -588,20 +590,18 @@ class AppState {
   lang = $state<LangInfo>({ ui: 'fr', system: 'fr', claude: 'fr' });
 
   project = $derived(this.projects.find((p) => p.id === this.ui.activeProject) ?? null);
-  /** The board of the project on screen is shown. */
-  boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id]);
-  /** The Docs tab of the project on screen is shown (ESC-258). */
-  docsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.board[this.project.id]);
+  /** Whether the feature `f` is on (F-1, ESC-550): the core's switches, in the settings (`lib/features.ts`). */
+  feature(f: Feature): boolean {
+    return featureOn(this.settings, f);
+  }
+  /** The board of the project on screen is shown: never while the Kanban is off (F-1). */
+  boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id] && this.feature('kanban'));
+  /** The Docs tab of the project on screen is shown (ESC-258): never while the Docs space is off (F-1). */
+  docsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.boardOn && this.feature('docs'));
   /** The « Pull requests » view of the project on screen is shown (ESC-65). */
-  prsOn = $derived(
-    this.ui.view === 'project' &&
-      !!this.project &&
-      !!this.prs[this.project.id] &&
-      !this.board[this.project.id] &&
-      !this.docs[this.project.id],
-  );
+  prsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.prs[this.project.id] && !this.boardOn && !this.docsOn);
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
-  editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on));
+  editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on) && this.feature('editor'));
   split = $derived(this.ui.layout === 'split');
   /** Estimated cost of the turns running now (their exact cost joins `usage.todayCost` at their end). */
   liveCost = $derived(Object.values(this.agents).reduce((sum, a) => sum + (a.liveCost ?? 0), 0));
@@ -1348,7 +1348,13 @@ class AppState {
     this.uiTimer = setTimeout(() => api.setUi($state.snapshot(this.ui)).catch(() => {}), 250);
   }
 
+  /** The settings window holds the tint while it is open (SettingsModal): the app's own comes back when it closes. */
+  tintHeld = false;
+
   applyTheme() {
+    // The settings window tints itself by its page (its scope): a project changed under it leaves its tint, which closing
+    // it gives back to the app.
+    if (this.tintHeld) return;
     applyTheme(this.ui.view === 'project' && this.project ? this.project.color : null);
   }
 
@@ -1360,7 +1366,15 @@ class AppState {
   }
 
   openStats() {
+    if (!this.feature('stats')) return;
     this.ui.view = 'stats';
+    this.persistUi();
+  }
+
+  /** The statistics left for the project on screen (their feature off, F-1). */
+  closeStats() {
+    if (this.ui.view !== 'stats') return;
+    this.ui.view = 'project';
     this.persistUi();
   }
 
@@ -1569,7 +1583,7 @@ class AppState {
 
   /** A content of the project `p` still there to show. */
   paneExists(p: Project, x: PaneItem): boolean {
-    if (x.kind === 'editor') return true;
+    if (x.kind === 'editor') return this.feature('editor');
     if (x.kind === 'agent') return this.agents[x.id]?.projectId === p.id && !this.agents[x.id].archived;
     if (x.kind === 'page') return this.agents[x.id]?.projectId === p.id && !this.agents[x.id].archived && this.pages.open(x.id);
     if (x.kind === 'term') return this.terminals.some((t) => t.id === x.id && t.projectId === p.id);
@@ -1792,7 +1806,7 @@ class AppState {
 
   /** Shows the board of a project in the main area, in place of the agents, a terminal, a launch log and the editor. */
   openBoard(projectId = this.ui.activeProject) {
-    if (!projectId) return;
+    if (!projectId || !this.feature('kanban')) return;
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = true;
@@ -1813,7 +1827,7 @@ class AppState {
    * the board, a terminal, a launch log and the editor.
    */
   openDocs(projectId = this.ui.activeProject, space?: DocsSpaceId, page?: string | null) {
-    if (!projectId) return;
+    if (!projectId || !this.feature('docs')) return;
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = false;
@@ -2019,7 +2033,7 @@ class AppState {
    */
   async openEditor(req: { projectId?: string; source: string; path?: string; abs?: string; line?: number; col?: number }) {
     const projectId = req.projectId ?? this.ui.activeProject;
-    if (!projectId) return;
+    if (!projectId || !this.feature('editor')) return;
     // The file comes first: one outside the source's folder opens nothing, the editor stays as it was.
     let path = req.path;
     if (!path && req.abs) {

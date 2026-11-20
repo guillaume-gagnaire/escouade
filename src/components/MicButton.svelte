@@ -54,75 +54,79 @@
   }
 </script>
 
-<div class="mic-wrap">
-  {#if panel && phase !== 'idle'}
-    <div class="panel" class:below role="status" aria-live="polite" data-voice-phase={phase}>
-      {#if phase === 'starting'}
-        <span class="muted">{t('voice.panel.starting')}</span>
-      {:else if phase === 'listening'}
-        <div class="row">
-          <span class="dot" aria-hidden="true"></span>
-          <span class="strong">{t('voice.panel.listening')}</span>
-          <span class="time mono">{duration(dictation.ms)}</span>
-        </div>
-        <Level level={dictation.level} label={t('voice.panel.level')} />
-        {#if dictation.partial}
-          <p class="partial" data-voice-partial><span>{dictation.partial}</span></p>
+<!-- The feature Voix off (F-1): no microphone anywhere. -->
+{#if app.feature('voice')}
+  <div class="mic-wrap">
+    {#if panel && phase !== 'idle'}
+      <div class="panel" class:below role="status" aria-live="polite" data-voice-phase={phase}>
+        {#if phase === 'starting'}
+          <span class="muted">{t('voice.panel.starting')}</span>
+        {:else if phase === 'listening'}
+          <div class="row">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="strong">{t('voice.panel.listening')}</span>
+            <span class="time mono">{duration(dictation.ms)}</span>
+          </div>
+          <Level level={dictation.level} label={t('voice.panel.level')} />
+          {#if dictation.partial}
+            <p class="partial" data-voice-partial><span>{dictation.partial}</span></p>
+          {/if}
+          <span class="muted small">{t('voice.panel.hint', { key })}</span>
+        {:else if phase === 'transcribing'}
+          <span class="muted"
+            >{app.settings.voice?.transcription === 'online'
+              ? t('voice.panel.transcribingOnline', { service: onlineService(app.settings.voice.onlineService).label })
+              : t('voice.panel.transcribing')}</span
+          >
+          {#if dictation.partial}
+            <p class="partial" data-voice-partial><span>{dictation.partial}</span></p>
+          {/if}
+        {:else if phase === 'offer' && dictation.offer}
+          <span class="strong">{t('voice.panel.offerTitle')}</span>
+          <span class="muted small">{t('voice.panel.offerBody', { model: dictation.offer.model, size: fBytes(dictation.offer.size) })}</span
+          >
+          <div class="actions">
+            <button class="btn ghost" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
+            <button class="btn primary" onclick={() => dictation.download()}>{t('voice.panel.download')}</button>
+          </div>
+        {:else if phase === 'downloading' && progress}
+          <span class="muted small"
+            >{t('voice.panel.downloading', { model: progress.model, done: fBytes(progress.done), total: fBytes(progress.total) })}</span
+          >
+          <div class="gauge dl" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pct)}>
+            <div class="fill" style:width="{pct}%"></div>
+          </div>
+          <div class="actions">
+            <button class="btn ghost" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
+          </div>
         {/if}
-        <span class="muted small">{t('voice.panel.hint', { key })}</span>
-      {:else if phase === 'transcribing'}
-        <span class="muted"
-          >{app.settings.voice?.transcription === 'online'
-            ? t('voice.panel.transcribingOnline', { service: onlineService(app.settings.voice.onlineService).label })
-            : t('voice.panel.transcribing')}</span
-        >
-        {#if dictation.partial}
-          <p class="partial" data-voice-partial><span>{dictation.partial}</span></p>
-        {/if}
-      {:else if phase === 'offer' && dictation.offer}
-        <span class="strong">{t('voice.panel.offerTitle')}</span>
-        <span class="muted small">{t('voice.panel.offerBody', { model: dictation.offer.model, size: fBytes(dictation.offer.size) })}</span>
-        <div class="actions">
-          <button class="btn ghost" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
-          <button class="btn primary" onclick={() => dictation.download()}>{t('voice.panel.download')}</button>
-        </div>
-      {:else if phase === 'downloading' && progress}
-        <span class="muted small"
-          >{t('voice.panel.downloading', { model: progress.model, done: fBytes(progress.done), total: fBytes(progress.total) })}</span
-        >
-        <div class="gauge dl" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pct)}>
-          <div class="fill" style:width="{pct}%"></div>
-        </div>
-        <div class="actions">
-          <button class="btn ghost" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
-        </div>
-      {/if}
-    </div>
-  {/if}
-  <!-- Hovered the first time (ESC-506): the dictation offered, in a bubble on it, once. -->
-  <button
-    class="icon-btn mic"
-    data-discover="dictation"
-    onmouseenter={(e) => hovered(e.currentTarget)}
-    onmouseleave={unhovered}
-    class:on={listening}
-    class:busy={phase === 'transcribing' || phase === 'starting'}
-    aria-pressed={listening}
-    aria-label={listening ? t('voice.button.stop') : t('voice.button.label')}
-    aria-keyshortcuts={(app.settings.voice?.shortcut || DEFAULT_SHORTCUT).replace('Mod', 'Control')}
-    use:tip={t('voice.button.title', { key })}
-    onpointerdown={(e) => {
-      unhovered();
-      down(e);
-    }}
-    onpointerup={() => dictation.release()}
-    onpointercancel={() => dictation.release()}
-    onkeydown={(e) => key_(e, true)}
-    onkeyup={(e) => key_(e, false)}
-  >
-    <Icon name="mic" size={14} />
-  </button>
-</div>
+      </div>
+    {/if}
+    <!-- Hovered the first time (ESC-506): the dictation offered, in a bubble on it, once. -->
+    <button
+      class="icon-btn mic"
+      data-discover="dictation"
+      onmouseenter={(e) => hovered(e.currentTarget)}
+      onmouseleave={unhovered}
+      class:on={listening}
+      class:busy={phase === 'transcribing' || phase === 'starting'}
+      aria-pressed={listening}
+      aria-label={listening ? t('voice.button.stop') : t('voice.button.label')}
+      aria-keyshortcuts={(app.settings.voice?.shortcut || DEFAULT_SHORTCUT).replace('Mod', 'Control')}
+      use:tip={t('voice.button.title', { key })}
+      onpointerdown={(e) => {
+        unhovered();
+        down(e);
+      }}
+      onpointerup={() => dictation.release()}
+      onpointercancel={() => dictation.release()}
+      onkeydown={(e) => key_(e, true)}
+      onkeyup={(e) => key_(e, false)}
+    >
+      <Icon name="mic" size={14} />
+    </button>
+  </div>
+{/if}
 
 <style>
   .mic-wrap {

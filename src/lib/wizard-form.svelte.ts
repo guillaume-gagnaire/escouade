@@ -71,7 +71,7 @@ export class WizardForm {
     }
   }
 
-  steps = $derived(stepsFor(this.start));
+  steps = $derived(stepsFor(this.start, app.feature('kanban')));
   source = $derived(app.projects.find((p) => p.id === this.sourceId) ?? null);
   /** The other projects open, those the assistant may copy: never a private one (« Projet privé », nothing of it goes to another project). */
   sources = $derived.by(() => app.projects.filter((p) => p.id !== this.project?.id && !p.private));

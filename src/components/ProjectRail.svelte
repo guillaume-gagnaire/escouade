@@ -359,14 +359,17 @@
       >{/if}<span class="lbl" aria-hidden="true"><span class="tx">{t('onboarding.help.label')}</span></span></button
   >
   {#if !first}
-    <button
-      class="tile global"
-      aria-pressed={app.ui.view === 'stats'}
-      aria-label={t('nav.rail.stats')}
-      use:tip={{ title: t('nav.rail.stats'), rows: [t('nav.rail.statsTip')], side: 'right', aria: false }}
-      onclick={() => (app.ui.view === 'stats' && app.ui.activeProject ? app.selectProject(app.ui.activeProject) : app.openStats())}
-      ><Icon name="stats" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.stats')}</span></span></button
-    >
+    <!-- The statistics a feature (F-1): off, their tile goes. -->
+    {#if app.feature('stats')}
+      <button
+        class="tile global"
+        aria-pressed={app.ui.view === 'stats'}
+        aria-label={t('nav.rail.stats')}
+        use:tip={{ title: t('nav.rail.stats'), rows: [t('nav.rail.statsTip')], side: 'right', aria: false }}
+        onclick={() => (app.ui.view === 'stats' && app.ui.activeProject ? app.selectProject(app.ui.activeProject) : app.openStats())}
+        ><Icon name="stats" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.stats')}</span></span></button
+      >
+    {/if}
     <button
       class="tile global"
       aria-pressed={app.ui.view === 'plugins'}

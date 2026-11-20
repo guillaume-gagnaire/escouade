@@ -169,8 +169,8 @@
   <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')} shared="git.commit_mode">
     <Chips label={t('settings.project.commit')} options={COMMIT_MODES} bind:value={draft.commitMode} />
   </Row>
-  {#if !(live.team && app.teamDocsOn[live.id])}
-    <!-- On the team server (TS-9), the docs follow no branch. -->
+  {#if !(live.team && app.teamDocsOn[live.id]) && app.feature('docs')}
+    <!-- On the team server (TS-9), the docs follow no branch; the Docs space off, neither (F-1). -->
     <Row label={t('docs.branch.label')} desc={t('docs.branch.desc')} wide>
       <DocsBranchField bind:value={draft.docsBranch} />
     </Row>

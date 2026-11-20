@@ -5,6 +5,7 @@ export default {
   // The pages of the window: their name and what they set (under the title, in the header).
   pages: {
     general: { label: 'Général', desc: 'Thème, zoom, langue, mises à jour et ce qui te concerne' },
+    features: { label: 'Fonctionnalités', desc: 'Ce qu’Escouade te montre : chaque fonctionnalité s’allume ou se coupe en entier.' },
     servers: {
       label: 'Serveurs',
       desc: 'Les serveurs Escouade que ce poste connaît. Chacun est un espace : ses projets, ses agents, ses comptes et ses réglages restent sur lui.',

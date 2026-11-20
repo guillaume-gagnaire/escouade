@@ -4,6 +4,7 @@ import { defineZone } from '../types';
 export default defineZone('settings', {
   pages: {
     general: { label: 'General', desc: 'Theme, zoom, language, updates and what concerns you' },
+    features: { label: 'Features', desc: 'What Escouade shows you: each feature turns on or off as a whole.' },
     servers: {
       label: 'Servers',
       desc: 'The Escouade servers this computer knows. Each one is a space: its projects, agents, accounts and settings stay on it.',

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fHeat, heatClock, heatDetail, heatLabel, heatTone, temperature } from '../lib/heat.svelte';
   import { t } from '../lib/i18n';
+  import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tip';
   import type { Agent } from '../lib/types';
 
@@ -36,7 +37,8 @@
   });
 </script>
 
-{#if detail}
+<!-- The temperature is the feature Coût's (F-1, choice of docs/FEATURES.md § 3): off, it goes with it. -->
+{#if detail && app.feature('cost')}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
     class="fig fig-heat"
@@ -76,7 +78,7 @@
       </div>
     {/if}
   </div>
-{:else}
+{:else if app.feature('cost')}
   <span
     class="heat on-card {tone}"
     role="img"

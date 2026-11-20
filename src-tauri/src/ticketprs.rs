@@ -810,13 +810,17 @@ impl Core {
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(Duration::from_secs(10)).await;
             loop {
-                if let Err(e) = self.ticket_prs_refresh(None).await {
-                    log::info!("tickets' pull requests not read: {e:#}");
+                // The Kanban off (F-1): its tickets' pull requests, CI and environments are not read; they are again once
+                // it is on.
+                if self.feature_on(crate::features::Feature::Kanban) {
+                    if let Err(e) = self.ticket_prs_refresh(None).await {
+                        log::info!("tickets' pull requests not read: {e:#}");
+                    }
+                    // The targets' CI and the branches the tickets pushed, in the same pass (ESC-63).
+                    self.branch_cis_refresh(None, false).await;
+                    // The environments the done tickets go to, at the same pace (ESC-67).
+                    self.deploys_refresh(None).await;
                 }
-                // The targets' CI and the branches the tickets pushed, in the same pass (ESC-63).
-                self.branch_cis_refresh(None, false).await;
-                // The environments the done tickets go to, at the same pace (ESC-67).
-                self.deploys_refresh(None).await;
                 let wait = every(self.window_in_front.load(Ordering::Acquire));
                 tokio::select! {
                     _ = tokio::time::sleep(wait) => {}

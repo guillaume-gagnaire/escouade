@@ -237,6 +237,20 @@ pub struct Settings {
     pub name_asked: bool,
     /// « Overseer » (Réglages › Overseer, ESC-462): the agent that drives every project but the private ones.
     pub overseer: OverseerSettings,
+    /// « Fonctionnalités » (Réglages › Fonctionnalités, F-1, ESC-550): each whole feature on or off. None in settings
+    /// saved before it: the first start that knows them settles them from what the installation uses
+    /// (`Core::settle_features`); a new installation has them all on.
+    pub features: Option<crate::features::Features>,
+    /// What the installation already used when the switches were settled at an update (`Core::settle_features`): kept
+    /// on, and said by the assistant of F-2. Written once, by the backend alone.
+    pub features_used: Vec<crate::features::FeatureUse>,
+}
+
+impl Settings {
+    /// Whether the feature `f` is on (`Features::on`): on until the switches are settled.
+    pub fn feature(&self, f: crate::features::Feature) -> bool {
+        self.features.as_ref().is_none_or(|s| s.on(f))
+    }
 }
 
 /// The Overseer's settings (ESC-462, docs/OVERSEER.md § « Comment il est fait »): whether it runs, and on what. Off
@@ -859,6 +873,8 @@ impl Default for Settings {
             name_asked: false,
             user_name_cleared: false,
             overseer: OverseerSettings::default(),
+            features: None,
+            features_used: Vec::new(),
         }
     }
 }

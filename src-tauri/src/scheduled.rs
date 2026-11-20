@@ -230,6 +230,8 @@ pub(crate) enum Pass {
     Missed,
     /// The ticket of the run before is « À faire » or « En cours » still.
     Running,
+    /// The feature « Tâches programmées » is off (F-1): no task runs, its due times pass.
+    FeatureOff,
 }
 
 impl Pass {
@@ -244,6 +246,10 @@ impl Pass {
             Pass::Running => Some(tr!(
                 "La dernière échéance a passé son tour : le ticket d'avant tournait encore.",
                 "The last due time passed its turn: the ticket before was still running."
+            )),
+            Pass::FeatureOff => Some(tr!(
+                "La fonctionnalité Tâches programmées était coupée à la dernière échéance : la tâche attend la suivante.",
+                "The Scheduled tasks feature was off at the last due time: the task waits for the next one."
             )),
         }
     }
@@ -562,6 +568,8 @@ impl Core {
         let _one = self.scheduled_lock.lock().await;
         let now = self.schedule_clock.now();
         let started = self.schedule_clock.started();
+        // Off (F-1, with the Kanban too), no task runs: each due time passes, said on its row.
+        let off = !self.feature_on(crate::features::Feature::Scheduled);
         let tasks = self.scheduled.read().clone();
         let projects: HashSet<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
         let mut changed = false;
@@ -572,7 +580,11 @@ impl Core {
                 continue;
             }
             let busy = running(&self.tickets.read(), &task);
-            match decide(&task, now, started, busy, &Local) {
+            let due = match decide(&task, now, started, busy, &Local) {
+                Due::Run(at) if off => Due::Pass(at, Pass::FeatureOff),
+                due => due,
+            };
+            match due {
                 Due::Nothing => {}
                 Due::Pass(at, why) => {
                     log::info!("scheduled task {}: due time {at} passed ({why:?})", task.id);

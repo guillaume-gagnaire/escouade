@@ -16,6 +16,7 @@
   import BoardTab from '../settings/BoardTab.svelte';
   import ClosedProjects from '../settings/ClosedProjects.svelte';
   import GitPage from '../settings/GitPage.svelte';
+  import FeaturesPage from '../settings/FeaturesPage.svelte';
   import GeneralPage from '../settings/GeneralPage.svelte';
   import LaunchPage from '../settings/LaunchPage.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
@@ -85,8 +86,11 @@
     void settingsForm.flush();
   };
 
+  // Its tint held while it is open: a project changed under it (an event) does not take it back.
+  app.tintHeld = true;
   onDestroy(() => {
     flush();
+    app.tintHeld = false;
     app.applyTheme();
   });
 
@@ -198,6 +202,8 @@
             {/if}
           {:else if info.id === 'general'}
             <GeneralPage />
+          {:else if info.id === 'features'}
+            <FeaturesPage />
           {:else if info.id === 'servers'}
             <ServersPage />
           {:else if info.id === 'devices'}

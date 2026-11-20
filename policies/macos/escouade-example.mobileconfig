@@ -25,6 +25,24 @@
         <key>vscodevim.vim</key>
         <string>stable</string>
       </dict>
+      <key>features.cost</key>
+      <false/>
+      <key>features.docs</key>
+      <false/>
+      <key>features.editor</key>
+      <false/>
+      <key>features.kanban</key>
+      <false/>
+      <key>features.overseer</key>
+      <false/>
+      <key>features.scheduled</key>
+      <false/>
+      <key>features.stats</key>
+      <false/>
+      <key>features.voice</key>
+      <false/>
+      <key>features.workflows</key>
+      <false/>
       <key>harnesses.allowed</key>
       <array>
         <string>claude</string>

@@ -15,6 +15,51 @@
       "title": "Editor’s allowed extensions",
       "type": "object"
     },
+    "features.cost": {
+      "description": "The cost of turns, agents and tickets, and the cache temperature: true turns it on, false turns it off. Settings › Features › Cost, grayed.",
+      "title": "Cost feature",
+      "type": "boolean"
+    },
+    "features.docs": {
+      "description": "The specification, decisions, documents and discussions: true turns it on, false turns it off (its tab, its MCP tools). Its pages are kept. Settings › Features › Docs space, grayed.",
+      "title": "Docs space feature",
+      "type": "boolean"
+    },
+    "features.editor": {
+      "description": "Opening, editing and searching the project’s files: true turns it on, false turns it off (the editor view, Ctrl P, its language servers). Settings › Features › Editor, grayed.",
+      "title": "Editor feature",
+      "type": "boolean"
+    },
+    "features.kanban": {
+      "description": "Tickets, the autopilot and ticket sources: true turns it on, false turns it off (its tab, its MCP tools, its autopilot). Its tickets are kept. Settings › Features › Kanban, grayed.",
+      "title": "Kanban feature",
+      "type": "boolean"
+    },
+    "features.overseer": {
+      "description": "The agent that drives every project: true turns it on, false turns it off (its screen, its shortcut, its MCP tools; it stops). Settings › Features › Overseer, grayed.",
+      "title": "Overseer feature",
+      "type": "boolean"
+    },
+    "features.scheduled": {
+      "description": "Tickets that come back at a set time: true turns it on, false turns it off (its tasks no longer run). It also goes with the Kanban. Settings › Features › Scheduled tasks, grayed.",
+      "title": "Scheduled tasks feature",
+      "type": "boolean"
+    },
+    "features.stats": {
+      "description": "Activity and spending over time: true turns it on, false turns it off (its view). It has nothing to do with telemetry (telemetry.enabled). Settings › Features › Statistics, grayed.",
+      "title": "Statistics feature",
+      "type": "boolean"
+    },
+    "features.voice": {
+      "description": "Dictation and spoken conversation: true turns it on, false turns it off (the microphone, its shortcut, the listening). Settings › Features › Voice, grayed.",
+      "title": "Voice feature",
+      "type": "boolean"
+    },
+    "features.workflows": {
+      "description": "A project’s chains of agents and skills: true turns it on, false turns it off (its tab, its MCP tool, their reading). Settings › Features › Workflows, grayed.",
+      "title": "Workflows feature",
+      "type": "boolean"
+    },
     "harnesses.allowed": {
       "description": "The list of the harnesses agents may use, by their id (claude, codex, copilot, cursor, opencode, gemini…). An agent of a harness no longer allowed stops at the end of its turn. The harness of a project, an agent, a ticket: a harness not allowed is grayed and refused.",
       "items": {

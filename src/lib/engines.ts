@@ -35,8 +35,9 @@ export function canFork(who: { engine: EngineId | null | undefined }): boolean {
   return !!fork && fork !== 'none';
 }
 
-/** Whether the harness of `who` tells what a turn costs, exactly or estimated (none: no cost shown). */
+/** Whether the harness of `who` tells what a turn costs, exactly or estimated (none: no cost shown), and the feature Coût is on (F-1). */
 export function showsCost(who: { engine: EngineId | null | undefined }): boolean {
+  if (!app.feature('cost')) return false;
   const cost = capsOf(who.engine)?.cost;
   return !!cost && cost !== 'none';
 }
@@ -61,7 +62,7 @@ export function usageSite(engine: EngineId | null | undefined): string {
  * whose usage is on its own page only.
  */
 export function dayCostStandsIn(engine: EngineId | null | undefined): boolean {
-  return capsOf(engine)?.quota === 'none' && (!usagePage(engine) || showsCost({ engine }));
+  return app.feature('cost') && capsOf(engine)?.quota === 'none' && (!usagePage(engine) || showsCost({ engine }));
 }
 
 /** Whether an account of `engine` other than its machine's goes by an API key rather than a sign-in (Cursor CLI, ESC-43; Mistral Vibe, ESC-267). */

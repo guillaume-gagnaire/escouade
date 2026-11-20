@@ -113,6 +113,8 @@ pub struct Facts {
     pub microphones: Option<usize>,
     /// Why a policy denies a discovery, by discovery (its words, said by the policy).
     pub denied: Vec<(Discovery, String)>,
+    /// The discoveries of the features switched off (F-1, `features::discoveries`): gone from the map.
+    pub off: Vec<Discovery>,
 }
 
 /// Why a discovery is not on this device.
@@ -293,6 +295,11 @@ pub fn all() -> impl Iterator<Item = Discovery> {
         .filter(|id| in_version(*id))
 }
 
+/// Every discovery shown here: those of this version, but those of a feature switched off (F-1).
+pub fn shown(f: &Facts) -> impl Iterator<Item = Discovery> + '_ {
+    all().filter(|id| !f.off.contains(id))
+}
+
 /// « 2.3 » of « 2.3.0-beta.4 ».
 pub fn release_of(version: &str) -> String {
     version.split('.').take(2).collect::<Vec<_>>().join(".")
@@ -312,7 +319,7 @@ pub fn band(saved: &Onboarding, f: &Facts, version: &str, window: bool) -> Optio
 
 /// The discovery as the window shows it.
 pub fn view(saved: &Onboarding, f: &Facts, version: &str, window: bool) -> DiscoverView {
-    let items: Vec<DiscoverItem> = all()
+    let items: Vec<DiscoverItem> = shown(f)
         .map(|id| {
             let status = status(id, saved, f);
             DiscoverItem {
@@ -472,6 +479,7 @@ impl Core {
                 .unwrap_or_else(|| locks.imposed(origins));
             denied.push((Discovery::Plugin, why));
         }
+        let off = crate::features::discoveries_off(&self.settings.read());
         let team_server_known = locks.enrollment().is_some()
             || locks
                 .value(escouade_policy::list::SERVERS)
@@ -494,6 +502,7 @@ impl Core {
             team_server_known,
             microphones,
             denied,
+            off,
         }
     }
 

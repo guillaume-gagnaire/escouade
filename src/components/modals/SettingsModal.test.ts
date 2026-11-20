@@ -99,6 +99,7 @@ describe('SettingsModal', () => {
         .map((t) => t.textContent?.trim());
     expect(entries()).toEqual([
       'Général',
+      'Fonctionnalités',
       'Serveurs',
       'Agents',
       'Comptes et harness',
@@ -118,7 +119,23 @@ describe('SettingsModal', () => {
       within(nav())
         .getAllByRole('button')
         .map((t) => t.querySelector('svg')?.dataset.icon ?? (t.querySelector('.sq') ? 'sq' : null)),
-    ).toEqual(['sliders', 'server', 'agents', 'user', 'link', 'sparkle', 'mic', 'bell', 'puzzle', 'term', 'sq', 'sq', 'folder', 'info']);
+    ).toEqual([
+      'sliders',
+      'blocks',
+      'server',
+      'agents',
+      'user',
+      'link',
+      'sparkle',
+      'mic',
+      'bell',
+      'puzzle',
+      'term',
+      'sq',
+      'sq',
+      'folder',
+      'info',
+    ]);
     expect([...nav().querySelectorAll('.s-h')].map((g) => g.textContent)).toEqual(['Escouade', 'Projets']);
     // The search (R8).
     expect(within(nav()).getByRole('searchbox', { name: 'Rechercher un réglage' })).toBeEnabled();
@@ -141,7 +158,7 @@ describe('SettingsModal', () => {
     await userEvent.click(tab('site'));
     expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
-    expect(entries().slice(10, 21)).toEqual([
+    expect(entries().slice(11, 22)).toEqual([
       'demo-api',
       'site',
       'Projet',
@@ -1591,6 +1608,7 @@ describe('SettingsModal in English', () => {
         .map((x) => x.textContent?.trim()),
     ).toEqual([
       'General',
+      'Features',
       'Servers',
       'Agents',
       'Accounts and harnesses',

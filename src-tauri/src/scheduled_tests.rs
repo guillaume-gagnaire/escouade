@@ -630,3 +630,47 @@ async fn a_scheduled_ticket_waits_for_a_place_of_the_board_as_one_launched_by_ha
     assert_eq!((t.column, t.forced), (Column::Todo, true));
     assert_eq!(h.tickets_of_task(&id).len(), 1);
 }
+
+/// Sets the switch of `f` (F-1) as Réglages › Fonctionnalités does, without the save's side effects.
+fn switch(h: &Harness, f: crate::features::Feature, on: bool) {
+    h.core
+        .settings
+        .write()
+        .features
+        .get_or_insert_with(Default::default)
+        .set(f, on);
+}
+
+#[tokio::test]
+async fn the_feature_off_its_tasks_no_longer_run_and_come_back_with_it_kept() {
+    use crate::features::Feature;
+    let h = harness("sch-feature-off");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t0 = half_minute();
+    h.clock_at(t0);
+    let task = h
+        .core
+        .scheduled_create(&p.id, draft("Revue [ok]", cron("* * * * *")))
+        .unwrap();
+    let id = task.task.id.clone();
+    // Off: its due time passes, no ticket made, said on its row.
+    switch(&h, Feature::Scheduled, false);
+    h.clock_at(t0 + MIN);
+    assert!(h.core.scheduled_tick().await.is_empty());
+    assert!(h.tickets_of_task(&id).is_empty());
+    let passed = h.task(&id);
+    assert_eq!(passed.last_due, Some(t0 + 30_000));
+    assert!(passed.last_note.unwrap().contains("Tâches programmées"));
+    // With the Kanban off too: its runs are tickets.
+    switch(&h, Feature::Scheduled, true);
+    switch(&h, Feature::Kanban, false);
+    h.clock_at(t0 + 2 * MIN);
+    assert!(h.core.scheduled_tick().await.is_empty());
+    // On again: the task is still there and runs at its next due time, not for those that passed.
+    switch(&h, Feature::Kanban, true);
+    assert_eq!(h.core.scheduled_view(&id).unwrap().task.title, "Revue [ok]");
+    h.clock_at(t0 + 3 * MIN);
+    assert_eq!(h.core.scheduled_tick().await.len(), 1);
+    assert_eq!(h.tickets_of_task(&id).len(), 1);
+}

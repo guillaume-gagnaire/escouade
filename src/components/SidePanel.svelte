@@ -20,7 +20,8 @@
   let { project, agent, docked = false }: { project: Project; agent: Agent | null; docked?: boolean } = $props();
 
   let count = $state(0);
-  const tab = $derived(app.panelTab);
+  // The workflows a feature (F-1): off, their tab goes and the files take its place.
+  const tab = $derived(app.panelTab === 'workflow' && !app.feature('workflows') ? 'files' : app.panelTab);
   /** The agents that follow a workflow of the project (ESC-194), « Tickets » too (ESC-197): the count of its tab. */
   const following = $derived(
     followers([
@@ -43,9 +44,11 @@
     <button role="tab" id="side-tab-history" aria-selected={tab === 'history'} onclick={() => (app.panelTab = 'history')}>
       {t('nav.sidePanel.history')}
     </button>
-    <button role="tab" id="side-tab-workflow" aria-selected={tab === 'workflow'} onclick={() => (app.panelTab = 'workflow')}>
-      {t('workflow.tab')}{#if following}{' '}<span class="n">{following}</span>{/if}
-    </button>
+    {#if app.feature('workflows')}
+      <button role="tab" id="side-tab-workflow" aria-selected={tab === 'workflow'} onclick={() => (app.panelTab = 'workflow')}>
+        {t('workflow.tab')}{#if following}{' '}<span class="n">{following}</span>{/if}
+      </button>
+    {/if}
     <button role="tab" id="side-tab-hosts" aria-selected={tab === 'hosts'} onclick={() => (app.panelTab = 'hosts')}>
       {t('nav.sidePanel.hosts', { word })}{#if failed && agent}<span
           class="dot"

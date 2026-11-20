@@ -223,7 +223,9 @@
 </Group>
 
 <!-- Its workflows (ESC-195, #loops-settings): what was read, and the steps as corrected. The panel Workflow opens here. -->
-<WorkflowSection {project} />
+{#if app.feature('workflows')}
+  <WorkflowSection {project} />
+{/if}
 
 <style>
   /* What validating a ticket does: the radios of the windows (`.w-radio`, src/app.css, lot 11a). */

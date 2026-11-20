@@ -22,7 +22,7 @@
   const pct = $derived(progress && progress.total ? Math.min(100, (progress.done / progress.total) * 100) : 0);
 </script>
 
-{#if phase !== 'idle'}
+{#if phase !== 'idle' && app.feature('voice')}
   <div class="dict" class:offer={phase === 'offer' || phase === 'downloading'} role="status" aria-live="polite" data-voice-phase={phase}>
     {#if phase === 'starting'}
       <span class="muted">{t('voice.panel.starting')}</span>

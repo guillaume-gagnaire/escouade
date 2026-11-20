@@ -24,6 +24,9 @@
     <category name="editor" displayName="$(string.cat_editor)">
       <parentCategory ref="escouade" />
     </category>
+    <category name="features" displayName="$(string.cat_features)">
+      <parentCategory ref="escouade" />
+    </category>
     <category name="projects" displayName="$(string.cat_projects)">
       <parentCategory ref="escouade" />
     </category>
@@ -354,6 +357,96 @@
       <enabledValue>
         <decimal value="1" />
       </enabledValue>
+    </policy>
+    <policy name="features_kanban" class="Both" displayName="$(string.features_kanban)" explainText="$(string.features_kanban_Explain)" key="Software\Policies\Escouade" valueName="features.kanban">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="features_editor" class="Both" displayName="$(string.features_editor)" explainText="$(string.features_editor_Explain)" key="Software\Policies\Escouade" valueName="features.editor">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="features_docs" class="Both" displayName="$(string.features_docs)" explainText="$(string.features_docs_Explain)" key="Software\Policies\Escouade" valueName="features.docs">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="features_cost" class="Both" displayName="$(string.features_cost)" explainText="$(string.features_cost_Explain)" key="Software\Policies\Escouade" valueName="features.cost">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="features_stats" class="Both" displayName="$(string.features_stats)" explainText="$(string.features_stats_Explain)" key="Software\Policies\Escouade" valueName="features.stats">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="features_workflows" class="Both" displayName="$(string.features_workflows)" explainText="$(string.features_workflows_Explain)" key="Software\Policies\Escouade" valueName="features.workflows">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="features_scheduled" class="Both" displayName="$(string.features_scheduled)" explainText="$(string.features_scheduled_Explain)" key="Software\Policies\Escouade" valueName="features.scheduled">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="features_overseer" class="Both" displayName="$(string.features_overseer)" explainText="$(string.features_overseer_Explain)" key="Software\Policies\Escouade" valueName="features.overseer">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="features_voice" class="Both" displayName="$(string.features_voice)" explainText="$(string.features_voice_Explain)" key="Software\Policies\Escouade" valueName="features.voice">
+      <parentCategory ref="features" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
     </policy>
   </policies>
 </policyDefinitions>

@@ -1676,9 +1676,17 @@ impl Core {
         let _pass = self.board_lock.lock().await;
         // The window is told of the pause whatever else holds the tickets back.
         self.refresh_pause();
+        // The Kanban off (F-1): no ticket starts, the autopilot's nor one forced; they go on once it is on again.
+        if !self.feature_on(crate::features::Feature::Kanban) {
+            return;
+        }
         let projects: Vec<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
         let mut missing = false;
         for project_id in projects {
+            // The Kanban turned off while the pass goes on (F-1): nothing more starts.
+            if !self.feature_on(crate::features::Feature::Kanban) {
+                return;
+            }
             // As it is now: the starts of the projects before it took seconds.
             let Ok(p) = self.project(&project_id) else {
                 continue;

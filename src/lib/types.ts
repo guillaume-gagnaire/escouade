@@ -144,6 +144,10 @@ export interface Settings {
   voice: VoiceSettings;
   /** « Overseer » (ESC-462): the agent that drives every project but the private ones. Absent from the tests made before it. */
   overseer?: OverseerSettings;
+  /** « Fonctionnalités » (F-1, ESC-550): each whole feature on or off; null until the core settled them (`lib/features.ts`). */
+  features?: Features | null;
+  /** What the installation used when it was updated to the version that brought them: the backend's alone. */
+  featuresUsed?: FeatureUse[];
   /** « Serveurs de langage » (ESC-446), by the id of the server: on or off, its path, its arguments. */
   languageServers?: Record<string, LanguageServerSetting>;
   /** The projects trusted with their own language servers: the backend’s (`lsp_trust`), never saved from the window. */
@@ -4415,4 +4419,17 @@ export interface AskAnswerIn {
   steps?: boolean[];
   note?: string;
   via?: AskVia;
+}
+
+/** A feature switched on or off as a whole (F-1, ESC-550, `escouade_model::features::Feature`). */
+export type Feature = 'kanban' | 'docs' | 'editor' | 'cost' | 'stats' | 'workflows' | 'scheduled' | 'overseer' | 'voice';
+
+/** The switches of the features (`Settings.features`). */
+export type Features = Record<Feature, boolean>;
+
+/** A feature the installation already used when it was updated (`Core::settle_features`). */
+export interface FeatureUse {
+  feature: Feature;
+  /** On how many projects; 0 when not by project. */
+  projects: number;
 }

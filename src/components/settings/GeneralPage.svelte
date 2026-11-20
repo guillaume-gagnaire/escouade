@@ -320,13 +320,16 @@
 
 <!-- The editor's font size and its language servers, and the id that tells a namesake apart. -->
 <Group advanced="general">
-  {@render size('editorFontSize')}
-  <Row label={t('settings.lsp.title')} desc={t('settings.lsp.titleDesc')} wide>
-    <LanguageServers />
-  </Row>
-  <Row label={t('settings.extensions.title')} desc={t('settings.extensions.titleDesc')} wide row="extensionsAllowed">
-    <ExtensionsAllowed />
-  </Row>
+  <!-- The editor's, gone with it (F-1). -->
+  {#if app.feature('editor')}
+    {@render size('editorFontSize')}
+    <Row label={t('settings.lsp.title')} desc={t('settings.lsp.titleDesc')} wide>
+      <LanguageServers />
+    </Row>
+    <Row label={t('settings.extensions.title')} desc={t('settings.extensions.titleDesc')} wide row="extensionsAllowed">
+      <ExtensionsAllowed />
+    </Row>
+  {/if}
   {#if s.userId}
     <Row label={t('share.settings.id')} desc={t('share.settings.idDesc')}>
       <span class="chip mono">{s.userId}</span>

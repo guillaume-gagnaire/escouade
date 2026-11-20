@@ -16,6 +16,7 @@ import format from './format';
 import git from './git';
 import handover from './handover';
 import heat from './heat';
+import features from './features';
 import integrations from './integrations';
 import inbox from './inbox';
 import mcp from './mcp';
@@ -76,6 +77,7 @@ export const en = defineCatalog({
   accounts,
   handover,
   heat,
+  features,
   mcp,
   memory,
   backups,

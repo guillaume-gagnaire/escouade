@@ -6,7 +6,8 @@
 import { t, tIn, type Key, type Lang } from './i18n';
 import type { IconName } from './icons';
 import { lockedBy } from './locks.svelte';
-import type { BoardSettings, LockedBy, Settings } from './types';
+import { featureOn } from './features';
+import type { BoardSettings, Feature, LockedBy, Settings } from './types';
 import type { ProjectDraft } from './settings.svelte';
 
 /** Who a page sets: Escouade, or the project chosen. */
@@ -15,6 +16,8 @@ export type SettingsScope = 'app' | 'project';
 export type SettingsPage =
   // Escouade's, in the order of the bar.
   | 'general'
+  // The features switched on or off (F-1, ESC-550).
+  | 'features'
   // The servers this computer knows (ESC-537).
   | 'servers'
   // The devices paired to the server the window is on (ESC-539, Réglages de l'espace › Appareils).
@@ -66,6 +69,7 @@ function page(id: SettingsPage, scope: SettingsScope, icon: IconName): PageInfo 
 /** The pages, in the order of the bar: Escouade's, « À propos », each project's, then « Tous les projets ». */
 export const SETTINGS_PAGES: PageInfo[] = [
   page('general', 'app', 'sliders'),
+  page('features', 'app', 'blocks'),
   page('servers', 'app', 'server'),
   page('devices', 'app', 'monitor'),
   page('agents', 'app', 'agents'),
@@ -158,6 +162,17 @@ function descOf(lang: Lang, label: Key): string {
 const s = (...settings: (keyof Settings)[]) => ({ settings });
 
 export const SETTINGS_ROWS: RowInfo[] = [
+  // Fonctionnalités (F-1): one switch per feature, each its own row, which a policy locks (`features.<id>`).
+  row('featureKanban', 'features', 'features.kanban.name', s('features')),
+  row('featureEditor', 'features', 'features.editor.name', s('features')),
+  row('featureDocs', 'features', 'features.docs.name', s('features')),
+  row('featureCost', 'features', 'features.cost.name', s('features')),
+  row('featureStats', 'features', 'features.stats.name', s('features')),
+  row('featureWorkflows', 'features', 'features.workflows.name', s('features')),
+  row('featureScheduled', 'features', 'features.scheduled.name', s('features')),
+  row('featureOverseer', 'features', 'features.overseer.name', s('features')),
+  row('featureVoice', 'features', 'features.voice.name', s('features')),
+
   // Général › Apparence, Langue, Mises à jour, Toi; Avancé.
   row('policyWarnings', 'general', 'settings.locks.warnings'),
   row('theme', 'general', 'settings.app.theme', s('theme')),
@@ -365,7 +380,42 @@ export const SETTINGS_ELSEWHERE: (keyof Settings)[] = [
   'mcpPort',
   // Trusted by the editor’s question (`lsp_trust`, ESC-446), never by a save of the window.
   'languageServersTrusted',
+  // What was in use at the update that brought the features (F-1): the backend's alone.
+  'featuresUsed',
 ];
+
+/** The pages a feature takes with it (F-1): gone from the bar and the search while it is off. */
+export const PAGE_FEATURES: Partial<Record<SettingsPage, Feature>> = {
+  overseer: 'overseer',
+  voice: 'voice',
+  board: 'kanban',
+  tickets: 'kanban',
+};
+
+/** The rows of other pages a feature takes with it (F-1). */
+export const ROW_FEATURES: Record<string, Feature> = {
+  editorFontSize: 'editor',
+  languageServers: 'editor',
+  extensionsAllowed: 'editor',
+  cacheSavingsInBar: 'cost',
+  docsBranch: 'docs',
+  workflowsEnabled: 'workflows',
+  workflowsAutoRead: 'workflows',
+  workflowsInRepo: 'workflows',
+  workflowSteps: 'workflows',
+};
+
+/** Whether the page `id` is there: its feature on. */
+export function pageShown(id: SettingsPage, s: Pick<Settings, 'features'>): boolean {
+  const f = PAGE_FEATURES[id];
+  return !f || featureOn(s, f);
+}
+
+/** Whether the row `r` is there: its page, and its own feature, on. */
+export function rowOfFeatureShown(r: RowInfo, s: Pick<Settings, 'features'>): boolean {
+  const f = ROW_FEATURES[r.id];
+  return pageShown(r.page, s) && (!f || featureOn(s, f));
+}
 
 /** The keys of a board set by the app alone: the prefix and the number of its next ticket. */
 export const BOARD_ELSEWHERE: BoardKey[] = ['prefix', 'nextNumber'];

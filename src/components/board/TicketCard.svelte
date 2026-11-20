@@ -92,7 +92,9 @@
   /** Of several repositories (ESC-169): those its agent changed, while it is tested. */
   const changedRepos = $derived(ticket.column === 'review' && agent && isMulti(project) ? touchedRepos(project, agent).map(repoLabel) : []);
   /** What every agent of the ticket used so far: the card of a finished ticket keeps the cost it was closed with. */
-  const used = $derived(ticket.column === 'doing' || ticket.column === 'review' ? ticketSpent(ticket, app.agents) : null);
+  const used = $derived(
+    (ticket.column === 'doing' || ticket.column === 'review') && app.feature('cost') ? ticketSpent(ticket, app.agents) : null,
+  );
   /**
    * Its own model and effort, which its agent runs over the Kanban's (empty: the Kanban's): the chip beside the key. The
    * effort is left out when the model its agent runs (the ticket's, else the Kanban's, else its account's) takes none:

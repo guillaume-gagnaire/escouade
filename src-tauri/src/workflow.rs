@@ -2113,8 +2113,8 @@ impl crate::core::Core {
 
     async fn refresh_workflows_now(&self, project_id: &str, force: bool) -> anyhow::Result<Scan> {
         let project = self.project(project_id)?;
-        // « Pas de workflow pour ce projet » (ESC-309): neither read nor written.
-        if !project.workflows_enabled {
+        // « Pas de workflow pour ce projet » (ESC-309), or the feature Workflows off (F-1): neither read nor written.
+        if !project.workflows_enabled || !self.feature_on(crate::features::Feature::Workflows) {
             return Ok(Scan::off());
         }
         let file = self.data.workflows_file(project_id);
@@ -2216,7 +2216,7 @@ impl crate::core::Core {
         let Ok(project) = self.project(project_id) else {
             return local;
         };
-        if !project.workflows_enabled {
+        if !project.workflows_enabled || !self.feature_on(crate::features::Feature::Workflows) {
             return Scan::off();
         }
         let folder =
@@ -2332,6 +2332,10 @@ impl crate::core::Core {
     /// Every project's workflows looked at again (the app starting, the window back to the front):
     /// at most once every `ALL_EVERY`, never two at a time.
     pub fn refresh_all_workflows(self: &std::sync::Arc<Self>) {
+        // The feature off (F-1): none is read.
+        if !self.feature_on(crate::features::Feature::Workflows) {
+            return;
+        }
         {
             let mut last = LAST_ALL.lock();
             if last.is_some_and(|at| at.elapsed() < ALL_EVERY) {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { conversation } from '../lib/conversation.svelte';
   import { conversationOf } from '../lib/conversations.svelte';
+  import { app } from '../lib/state.svelte';
   import { fBytes } from '../lib/format';
   import { t } from '../lib/i18n';
   import { tip } from '../lib/tip';
@@ -38,45 +39,48 @@
   }
 </script>
 
-<div class="conv-wrap">
-  <!-- What to download first; once it listens, the conversation fills the window (ConversationOverlay). -->
-  {#if phase === 'offer' || phase === 'downloading'}
-    <div class="panel" role="status" aria-live="polite" data-conversation-phase={phase}>
-      {#if phase === 'offer' && conversation.offer}
-        <span class="small">
-          {conversation.offer.kind === 'model'
-            ? t('voice.conversation.offerModel', { model: conversation.offer.id, size: fBytes(conversation.offer.size) })
-            : t('voice.conversation.offerVoice', { voice: conversation.offer.id, size: fBytes(conversation.offer.size) })}
-        </span>
-        <div class="actions">
-          <button class="btn ghost" onclick={() => conversation.stop()}>{t('voice.conversation.cancel')}</button>
-          <button class="btn primary" onclick={() => conversation.download()}>{t('voice.conversation.download')}</button>
-        </div>
-      {:else if phase === 'downloading' && progress}
-        <span class="muted small"
-          >{t('voice.conversation.downloading', { name: progress.id, done: fBytes(progress.done), total: fBytes(progress.total) })}</span
-        >
-        <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pct)}>
-          <div class="fill" style:transform="scaleX({pct / 100})"></div>
-        </div>
-        <div class="actions">
-          <button class="btn ghost" onclick={() => conversation.stop()}>{t('voice.conversation.cancel')}</button>
-        </div>
-      {/if}
-    </div>
-  {/if}
-  <button
-    class="icon-btn conv"
-    data-discover="voice"
-    class:on={mine && conversation.active}
-    aria-pressed={mine && conversation.active}
-    aria-label={t('voice.conversation.button')}
-    use:tip={t('voice.conversation.buttonTitle')}
-    onclick={toggle}
-  >
-    <Icon name="wave" size={14} />
-  </button>
-</div>
+<!-- The feature Voix off (F-1): no spoken conversation. -->
+{#if app.feature('voice')}
+  <div class="conv-wrap">
+    <!-- What to download first; once it listens, the conversation fills the window (ConversationOverlay). -->
+    {#if phase === 'offer' || phase === 'downloading'}
+      <div class="panel" role="status" aria-live="polite" data-conversation-phase={phase}>
+        {#if phase === 'offer' && conversation.offer}
+          <span class="small">
+            {conversation.offer.kind === 'model'
+              ? t('voice.conversation.offerModel', { model: conversation.offer.id, size: fBytes(conversation.offer.size) })
+              : t('voice.conversation.offerVoice', { voice: conversation.offer.id, size: fBytes(conversation.offer.size) })}
+          </span>
+          <div class="actions">
+            <button class="btn ghost" onclick={() => conversation.stop()}>{t('voice.conversation.cancel')}</button>
+            <button class="btn primary" onclick={() => conversation.download()}>{t('voice.conversation.download')}</button>
+          </div>
+        {:else if phase === 'downloading' && progress}
+          <span class="muted small"
+            >{t('voice.conversation.downloading', { name: progress.id, done: fBytes(progress.done), total: fBytes(progress.total) })}</span
+          >
+          <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pct)}>
+            <div class="fill" style:transform="scaleX({pct / 100})"></div>
+          </div>
+          <div class="actions">
+            <button class="btn ghost" onclick={() => conversation.stop()}>{t('voice.conversation.cancel')}</button>
+          </div>
+        {/if}
+      </div>
+    {/if}
+    <button
+      class="icon-btn conv"
+      data-discover="voice"
+      class:on={mine && conversation.active}
+      aria-pressed={mine && conversation.active}
+      aria-label={t('voice.conversation.button')}
+      use:tip={t('voice.conversation.buttonTitle')}
+      onclick={toggle}
+    >
+      <Icon name="wave" size={14} />
+    </button>
+  </div>
+{/if}
 
 <style>
   .conv-wrap {

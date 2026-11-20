@@ -13,6 +13,7 @@ From top to bottom: the “Search settings” field, Escouade’s pages, each pr
 | Page | What it sets |
 |---|---|
 | “General” | Appearance, languages, updates, your name and usage statistics |
+| “Features” | What Escouade shows you: each feature turns on or off as a whole |
 | [“Agents”](settings-claude-code) | New agents, written texts, remote control, the MCP server |
 | [“Accounts and harnesses”](settings-accounts) | Each harness and its accounts, and what happens when a quota runs out |
 | [“Connected services”](settings-integrations) | Code hosts and the accounts of the ticket sources |
@@ -46,6 +47,14 @@ An amber dot at the end of an entry of the bar says a page is waiting on you; it
 There is no “Cancel” and no “Save”: as in the settings of macOS or VS Code, a choice (a switch, a menu, a command added) applies and saves at once, a text when you leave its field or after a short pause in the typing. Closing the window (the cross, `Esc`, or a click on the backdrop) saves what was still waiting.
 
 An entry that can’t be saved says so on its row, and the value from before stays until it is fixed: a project without a name, a launch command without a name or a command line, a worktrees folder or a branch prefix refused, a number emptied.
+
+## The “Features” page
+
+Each feature of Escouade turns on or off with one switch: Kanban, Editor, Docs space, Cost (the cache temperature included), Statistics, Workflows, Scheduled tasks, Overseer and Voice. The essentials, “Agents and conversation” (the agents, their conversation, the Git panel, the terminals and the launches), come first and cannot be turned off.
+
+A feature turned off really disappears: its tab, its buttons, its menus, its shortcut, its MCP tools (an agent that calls them anyway is told why) and its discoveries in Help › Discover. What it did in the background stops: the autopilot, the scheduled tasks, the Overseer, the reading of the workflows, the language servers, the voice listening. Its data are kept (tickets, pages, tasks, journal) and come back when you turn it on again. Each row says what it takes with it. The scheduled tasks go with the Kanban: their runs are tickets.
+
+After the update that brings this page, everything stays on, and the row of a feature you already used says so (“In use on 2 projects”). A managed device or a team can impose one, on or off ([Device policies](managed-policies)): its row is grayed, with who imposes it.
 
 ## The “General” page
 

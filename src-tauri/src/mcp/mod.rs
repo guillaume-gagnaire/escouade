@@ -27,6 +27,8 @@ mod docs;
 mod docs_tests;
 #[cfg(test)]
 mod engines_tests;
+#[cfg(test)]
+mod features_tests;
 mod files;
 #[cfg(test)]
 mod files_tests;

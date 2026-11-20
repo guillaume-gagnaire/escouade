@@ -112,6 +112,7 @@ mod engines_tests;
 mod facts;
 #[cfg(test)]
 mod facts_tests;
+mod features;
 mod fence;
 #[cfg(test)]
 mod fence_tests;

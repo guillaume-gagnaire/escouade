@@ -53,10 +53,18 @@ Escouade a beaucoup grandi : Kanban, Docs, coût, statistiques, workflows, tâch
 - Comment ça marche, pour la doc : le modèle relit toute la conversation à chaque tour ; le début déjà lu est gardé en cache quelques minutes et relu pour ~5 à 10 % du prix ; chaque relecture remet le compteur à zéro ; après une pause plus longue que la durée de vie, tout est relu au plein tarif (exemple sur Opus 5.5 avec 100 k tokens de contexte : ≈ 0,02 $ au chaud, ≈ 0,40 à 0,50 $ à froid).
 - Maquettes : `design/features/temperature.png`, `temperature-echelle.png` (retenues) ; `ecarte-thermometre-jauge.png` (la première idée, une jauge, écartée pour un chiffre).
 
+## Ce qui est livré
+
+- **§ 3, la température du cache** : ESC-398, ESC-421 (spec « Température du cache »).
+- **§ 1, le socle (F-1, ESC-550)**, spec « Fonctionnalités » :
+  - le registre unique, dans le cœur (`escouade_model::features`) : les neuf fonctionnalités, l'essentiel sans interrupteur, les Tâches programmées qui partent avec le Kanban ;
+  - chaque interrupteur dans le registre des réglages (`features.<id>`), imposable par le poste géré et l'équipe (`features.kanban` … `features.voice` dans la liste unique des stratégies) ;
+  - ce que chacune emporte quand on la coupe : la table complète est dans la spec. Ses vues, ses boutons, ses menus, ses raccourcis et `Ctrl+P` disparaissent ; ses outils MCP sont absents et refusés avec la raison ; ses découvertes partent ; ce qu'elle fait en fond s'arrête (pilote auto, import, tâches programmées, Overseer, lecture des workflows, serveurs de langage, écoute de la voix). Ses données restent ;
+  - Réglages › Fonctionnalités (direction A), sans « Revoir la présentation » tant que l'assistant n'existe pas ;
+  - la reprise après la mise à jour : ce qu'on utilise est relevé une fois (`featuresUsed`, avec le nombre de projets) et reste allumé. Le reste suit la valeur d'une installation neuve, **tout allumé** jusqu'à l'assistant (décision proposée « Fonctionnalités : tout allumé sur une installation neuve… »).
+
 ## Ce qui reste au constructeur
 
-- Ce que chaque fonctionnalité emporte quand on la coupe (onglets, boutons, colonnes, menus, outils MCP, tâches de fond).
-- La migration : relever ce qu'un utilisateur utilise déjà (projets avec des tickets, workflows lus, stats ouvertes…) pour le garder allumé.
-- Les seuils exacts des signaux de proposition.
+- **F-2, l'assistant** (§ 1) : une fonctionnalité par écran, au premier lancement (dans la suite de l'onboarding de la 2.3) et à la première mise à jour qui apporte le choix. Il lit `featuresUsed` pour dire « Tu l'utilises déjà sur 2 projets : il reste allumé ». « Passer » ne garde que l'essentiel et ce qui est utilisé. « Revoir la présentation » s'ajoute dans Réglages › Fonctionnalités. La fenêtre des nouveautés propose l'interrupteur d'une fonctionnalité nouvelle. Si l'assistant fait le choix d'une installation neuve, seule la constante `NEW_INSTALL` change.
+- **F-3, les propositions au bon moment** (§ 2) : les signaux de départ et leurs seuils exacts, la petite fenêtre en bas à droite, « Pas maintenant » et « Ne plus proposer » (réversible dans Réglages › Fonctionnalités).
 - La courbe de la température (linéaire sur la durée de vie, ou plus fine) et ses couleurs, accessibles dans les deux thèmes.
-- Le découpage en tickets : la température (indépendante, petite), puis les fonctionnalités et leur assistant, puis les propositions.

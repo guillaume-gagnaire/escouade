@@ -4,6 +4,15 @@
     "dracula-theme": true,
     "vscodevim.vim": "stable"
   },
+  "features.cost": false,
+  "features.docs": false,
+  "features.editor": false,
+  "features.kanban": false,
+  "features.overseer": false,
+  "features.scheduled": false,
+  "features.stats": false,
+  "features.voice": false,
+  "features.workflows": false,
   "harnesses.allowed": [
     "claude",
     "codex"

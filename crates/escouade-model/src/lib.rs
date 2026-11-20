@@ -19,6 +19,7 @@ pub mod branchci;
 pub mod discussion;
 pub mod docs;
 pub mod docsplan;
+pub mod features;
 pub mod fence;
 pub mod git;
 pub mod heat;
