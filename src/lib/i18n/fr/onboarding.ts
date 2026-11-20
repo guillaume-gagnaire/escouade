@@ -33,6 +33,7 @@ export default {
     harness: { name: 'Harness', inline: 'le harness', todo: 'le programme des agents' },
     account: { name: 'Compte', inline: 'le compte', todo: 'celui de la machine' },
     defaults: { name: 'Réglages de départ', inline: 'les réglages de départ', todo: 'le mode des agents' },
+    hookups: { name: 'Ce que tu veux brancher', inline: 'ce que tu veux brancher', todo: 'tickets, voix, hébergeur' },
     project: { name: 'Premier projet', inline: 'le premier projet', todo: 'un dossier, un clone ou la démo' },
     agent: { name: 'Premier agent', inline: 'le premier agent', todo: 'un message, une réponse' },
     telemetry: { name: 'Statistiques', inline: 'les statistiques', todo: 'partagées ou non' },
@@ -88,6 +89,77 @@ export default {
     /** ESC-489: a harness whose only mode is Bypass. */
     onlyBypass: '{harness} ne tourne qu’en Bypass : ses agents agiront sans demander.',
     keep: 'Garder {mode}',
+  },
+  /** « Ce que tu veux brancher » (ESC-512): a card per hookup, none ticked. */
+  hookups: {
+    question: 'Que veux-tu brancher ?',
+    why: 'Rien n’est coché : coche ce qui te sert. Rien ne s’installe, ne se connecte ni ne se télécharge sans ton geste ; ce que tu passes t’attend dans À découvrir et dans les Réglages.',
+    /** The cards' group, for a screen reader. */
+    cards: 'Les branchements',
+    /** Under the station's name in the line, once gone through: `{count}` cards plugged in. */
+    plugged: { one: '{count} branché', other: '{count} branchés' },
+    nothing: 'rien de branché',
+    later: 'Plus tard',
+    /** `{name}`: the card's title. */
+    laterLabel: 'Plus tard : {name}',
+    done: 'Branché',
+    passed: 'Passé · à reprendre',
+    /** `{by}`: « Imposé par la stratégie de ce poste ». */
+    locked: 'Verrouillé · {by}',
+    /** The real list of what a card offers, its names joined. */
+    sources: {
+      title: 'Une source de tickets',
+      body: 'Les tickets de {list} arrivent dans le Kanban : un agent les prend et les fait avancer. Il faut un jeton de la source, puis un projet ou un tableau à relier.',
+      pick: 'Quelle source ?',
+      /** What each source imports, and what it asks. A source the window does not know has the generic line. */
+      asks: {
+        jira: 'Les tickets d’un projet Jira · ton site, ton e-mail et un jeton d’API',
+        trello: 'Les cartes d’un tableau Trello · une clé et un jeton d’API',
+        github: 'Les issues d’un dépôt GitHub · un jeton GitHub (ou celui de gh)',
+        linear: 'Les tickets d’une équipe Linear · une clé d’API',
+        clickup: 'Les tâches d’une liste ClickUp · une clé d’API personnelle',
+        gitlab: 'Les issues d’un projet GitLab · le compte de l’hébergeur GitLab',
+        azure: 'Les work items d’un projet Azure Boards · le compte de l’hébergeur Azure DevOps',
+        other: 'Ses tickets dans le Kanban · un jeton de la source',
+      },
+      link: 'Le projet ou le tableau se relie ensuite à chaque projet, dans ses Réglages › Tickets importés.',
+    },
+    voice: {
+      title: 'La voix',
+      body: 'Veux-tu dicter ou parler à tes agents ? Whisper sur ta machine, rien n’en sort ; ou un service en ligne, avec ta clé.',
+      pick: 'Qui transcrit ce que tu dis ?',
+      local: 'Whisper, sur ta machine',
+      /** `{model}`, `{size}`: the model to download. */
+      localHint:
+        'Le modèle « {model} » : {size} à télécharger une fois, gardés sur ton disque. Rien de ce que tu dis ne quitte ta machine.',
+      download: 'Télécharger ({size})',
+      /** `{done}`, `{total}`: sizes. */
+      downloading: 'Téléchargement : {done} sur {total}',
+      cancel: 'Annuler le téléchargement',
+      ready: 'Modèle « {model} » prêt',
+      online: 'Un service en ligne',
+      onlineHint: 'Plus rapide sur une petite machine. Chaque dictée part chez le service choisi, avec ta clé.',
+      service: 'Le service',
+      /** `{service}`, `{host}`: what leaves the machine, and where to. */
+      sends: 'Ce qui part chez {service} ({host}) : l’audio de tes dictées, rien d’autre. Ta clé reste dans le trousseau du système.',
+      tryTitle: 'Essaie le micro',
+      tryHint: 'Clique sur le micro, dis une phrase, puis reclique : elle s’écrit ici. Rien n’est envoyé à un agent.',
+      tryField: 'Ta phrase dictée',
+      conversation: 'La voix qui lit les réponses dans une conversation se règle dans Réglages › Voix.',
+    },
+    forge: {
+      title: 'Un hébergeur de code',
+      body: 'Les PR et la CI des tickets dans Escouade, sur {list}. Il faut un jeton de l’hébergeur, gardé dans le trousseau du système.',
+      pick: 'Quel hébergeur ?',
+    },
+    /** `{plugin}`: its name. */
+    plugin: 'Escouade installe le plugin {plugin}, depuis l’app, sans réseau.',
+    pluginInstalled: 'Plugin {plugin} installé.',
+    /** Not in the seed: the store's, installed in Plugins with its permissions read. */
+    pluginStore: 'Son plugin vient du store : installe-le depuis Plugins, ses permissions sous les yeux.',
+    /** `{list}`: the store's other plugins of the kind, from its catalogue already read. */
+    alsoStore: 'Aussi dans le store : {list}. Ils s’installent depuis Plugins.',
+    offline: 'Hors ligne : ceci demande le réseau. La carte t’attend dans À découvrir, tu la reprendras une fois en ligne.',
   },
   project: {
     question: 'Où travaille ton premier agent ?',

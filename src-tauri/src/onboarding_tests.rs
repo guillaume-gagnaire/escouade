@@ -37,6 +37,7 @@ fn a_device_already_set_up_never_has_it_imposed() {
         projects: 2,
         first_reply: true,
         telemetry_answered: true,
+        forge_connected: true,
         ..Default::default()
     };
     assert!(!view(&saved, &old, true).open);
@@ -101,7 +102,152 @@ fn left_half_way_it_opens_again_at_the_first_station_neither_done_nor_passed() {
     assert!(v.open);
     assert_eq!(v.trigger, Some(Trigger::Resume));
     assert_eq!(status_of(&v, OnboardingStep::Defaults), StepStatus::Skipped);
-    assert_eq!(v.resume_at, Some(OnboardingStep::Project));
+    assert_eq!(v.resume_at, Some(OnboardingStep::Hookups));
+}
+
+fn card(v: &OnboardingView, h: Hookup) -> StepStatus {
+    v.hookups.iter().find(|c| c.id == h).unwrap().status
+}
+
+#[test]
+fn what_to_plug_in_comes_after_the_starting_settings_and_before_the_project_nothing_ticked() {
+    let at = |s| STEPS.iter().position(|x| *x == s).unwrap();
+    assert_eq!(
+        at(OnboardingStep::Hookups),
+        at(OnboardingStep::Defaults) + 1
+    );
+    assert_eq!(at(OnboardingStep::Project), at(OnboardingStep::Hookups) + 1);
+    // A new installation: the three cards, none ticked, none done.
+    let v = view(&Onboarding::default(), &fresh(), true);
+    assert_eq!(
+        v.hookups.iter().map(|c| c.id).collect::<Vec<_>>(),
+        [Hookup::Sources, Hookup::Voice, Hookup::Forge]
+    );
+    assert!(v.hookups.iter().all(|c| c.status == StepStatus::Todo));
+    assert_eq!(status_of(&v, OnboardingStep::Hookups), StepStatus::Todo);
+    // Kept in the state as it was written, read back by a version that has the cards.
+    let old: Onboarding =
+        serde_json::from_value(serde_json::json!({ "version": 1, "steps": { "harness": "done" } }))
+            .unwrap();
+    assert!(old.hookups.is_empty());
+}
+
+#[test]
+fn a_card_passed_waits_in_the_discovery_one_plugged_in_stays_and_the_station_passed_passes_them_all(
+) {
+    let facts = Facts {
+        accounts: 1,
+        mode_chosen: true,
+        ..fresh()
+    };
+    let mut saved = Onboarding::default();
+    // The voice plugged in at the station, the sources passed by their « Plus tard ».
+    let card_act = |h, outcome| Act::Hookup { hookup: h, outcome };
+    apply(
+        &mut saved,
+        &card_act(Hookup::Voice, StepOutcome::Done),
+        &facts,
+        1,
+    );
+    apply(
+        &mut saved,
+        &card_act(Hookup::Sources, StepOutcome::Skipped),
+        &facts,
+        2,
+    );
+    let v = view(&saved, &facts, true);
+    assert_eq!(card(&v, Hookup::Voice), StepStatus::Done);
+    assert_eq!(card(&v, Hookup::Sources), StepStatus::Skipped);
+    assert_eq!(card(&v, Hookup::Forge), StepStatus::Todo);
+    // « Plus tard » on a card plugged in never undoes it.
+    apply(
+        &mut saved,
+        &card_act(Hookup::Voice, StepOutcome::Skipped),
+        &facts,
+        3,
+    );
+    assert_eq!(
+        card(&view(&saved, &facts, true), Hookup::Voice),
+        StepStatus::Done
+    );
+    // The station passed whole: the card left untouched is passed with it.
+    apply(
+        &mut saved,
+        &Act::Step {
+            step: OnboardingStep::Hookups,
+            outcome: StepOutcome::Skipped,
+        },
+        &facts,
+        4,
+    );
+    let v = view(&saved, &facts, true);
+    assert_eq!(card(&v, Hookup::Forge), StepStatus::Skipped);
+    assert_eq!(card(&v, Hookup::Voice), StepStatus::Done);
+    // « Tout passer » on a new installation: every card passed, to find again in the discovery.
+    let mut all = Onboarding::default();
+    apply(&mut all, &Act::SkipAll, &fresh(), 9);
+    let v = view(&all, &fresh(), true);
+    assert!(v.hookups.iter().all(|c| c.status == StepStatus::Skipped));
+}
+
+#[test]
+fn what_is_plugged_in_elsewhere_ticks_its_card_and_the_station_and_a_policy_locks_the_voice() {
+    let facts = Facts {
+        forge_connected: true,
+        ..fresh()
+    };
+    let v = view(&Onboarding::default(), &facts, true);
+    assert_eq!(card(&v, Hookup::Forge), StepStatus::Done);
+    assert_eq!(card(&v, Hookup::Sources), StepStatus::Todo);
+    assert_eq!(status_of(&v, OnboardingStep::Hookups), StepStatus::Done);
+    let off = Facts {
+        dictation_off: true,
+        ..fresh()
+    };
+    assert_eq!(
+        card(&view(&Onboarding::default(), &off, true), Hookup::Voice),
+        StepStatus::Policy
+    );
+}
+
+fn offer(kind: Hookup, id: &str, installed: bool, seed: bool, denied: Option<&str>) -> Offer {
+    Offer {
+        kind,
+        id: id.into(),
+        name: id.into(),
+        plugin: Some(format!("dev.escouade.{id}")),
+        installed,
+        seed,
+        denied: denied.map(Into::into),
+    }
+}
+
+#[test]
+fn the_station_installs_the_plugin_of_what_is_chosen_and_nothing_else() {
+    let offers = [
+        offer(Hookup::Sources, "trello", false, true, None),
+        offer(Hookup::Sources, "jira", false, true, None),
+        offer(Hookup::Sources, "linear", true, true, None),
+        offer(Hookup::Sources, "clickup", false, false, None),
+        offer(Hookup::Voice, "openai", false, true, Some("imposé")),
+        offer(Hookup::Forge, "gitlab", false, true, None),
+    ];
+    // Trello chosen: Trello's plugin, from the seed; not Jira's, not GitLab's.
+    assert_eq!(
+        to_install(&offers, Hookup::Sources, "trello"),
+        Ok(Some("dev.escouade.trello".into()))
+    );
+    // Installed already, or not in the seed (the store's, from Plugins): nothing.
+    assert_eq!(to_install(&offers, Hookup::Sources, "linear"), Ok(None));
+    assert_eq!(to_install(&offers, Hookup::Sources, "clickup"), Ok(None));
+    // Denied by a policy: refused, with why.
+    assert_eq!(
+        to_install(&offers, Hookup::Voice, "openai"),
+        Err("imposé".into())
+    );
+    // Not offered by that card: refused.
+    assert!(to_install(&offers, Hookup::Forge, "trello").is_err());
+    assert!(to_install(&offers, Hookup::Sources, "evil").is_err());
 }
 
 #[test]
@@ -228,6 +374,77 @@ fn an_installation_set_up_before_never_opens_it_unless_asked() {
     assert_eq!(status_of(&v, OnboardingStep::Defaults), StepStatus::Done);
 }
 
+#[test]
+fn the_offers_are_read_in_the_registry_the_seed_and_the_policies() {
+    let dir = test_dir("onboarding-offers");
+    let data = DataDir::new(dir.join("data"));
+    let core = load(&data);
+    let offers = core.onboarding_offers();
+    let of = |k: Hookup| {
+        offers
+            .iter()
+            .filter(|o| o.kind == k)
+            .map(|o| o.id.as_str())
+            .collect::<Vec<_>>()
+    };
+    // The sources as the registry declares them, in its order; each with its plugin.
+    let sources: Vec<String> = crate::integrations::source::declared()
+        .into_iter()
+        .map(|d| d.id)
+        .collect();
+    assert_eq!(
+        of(Hookup::Sources),
+        sources.iter().map(String::as_str).collect::<Vec<_>>()
+    );
+    assert_eq!(of(Hookup::Voice), crate::plugins::sort::VOICES.to_vec());
+    assert_eq!(
+        of(Hookup::Forge),
+        crate::plugins::sort::FORGES
+            .iter()
+            .map(|(k, _)| *k)
+            .collect::<Vec<_>>()
+    );
+    assert!(offers
+        .iter()
+        .all(|o| o.plugin.is_some() && o.denied.is_none()));
+    // A policy that turns the voice on line off: every voice service said denied, by whom.
+    let managed = crate::locks::Managed {
+        values: [
+            (VOICE_ONLINE, serde_json::json!(false)),
+            (
+                escouade_policy::list::PLUGINS_DENIED,
+                serde_json::json!(["dev.escouade.trello"]),
+            ),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_owned(), (v, "HKLM".to_owned())))
+        .collect(),
+        warnings: Vec::new(),
+    };
+    *core.locks.write() =
+        crate::locks::Locks::compute(escouade_policy::list::POLICIES, None, &managed);
+    let offers = core.onboarding_offers();
+    let denied = |k: Hookup, id: &str| {
+        offers
+            .iter()
+            .find(|o| o.kind == k && o.id == id)
+            .unwrap()
+            .denied
+            .clone()
+    };
+    assert!(offers
+        .iter()
+        .filter(|o| o.kind == Hookup::Voice)
+        .all(|o| o.denied.is_some()));
+    assert!(denied(Hookup::Sources, "trello")
+        .unwrap()
+        .contains("dev.escouade.trello"));
+    assert_eq!(denied(Hookup::Sources, "jira"), None);
+    // The core refuses what a policy denies, whatever the window shows.
+    assert!(core.onboarding_need(Hookup::Sources, "trello").is_err());
+    assert!(core.onboarding_need(Hookup::Voice, "openai").is_err());
+}
+
 // === ON-2 (ESC-505): the first project and the first agent ===
 
 #[test]
@@ -242,8 +459,10 @@ fn the_first_agent_is_a_station_between_the_project_and_the_statistics_done_by_a
         projects: 1,
         ..fresh()
     };
+    // « Ce que tu veux brancher » (ESC-512) passed: nothing plugged in.
     let saved = Onboarding {
         started: Some(1),
+        steps: [(OnboardingStep::Hookups, StepOutcome::Skipped)].into(),
         ..Default::default()
     };
     let v = view(&saved, &facts, true);

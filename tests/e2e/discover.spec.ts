@@ -98,7 +98,9 @@ test.describe('the discovery of the features', () => {
     for (const lane of ['Planifier', 'Coder', 'Relire', 'Livrer', 'Piloter'])
       await expect(page.getByRole('list', { name: lane, exact: true })).toBeVisible();
     await expect(stop(page, 'team')).toHaveAttribute('data-status', 'absent');
-    await expect(page.getByText(/^0 sur 17 · /)).toBeVisible();
+    await expect(page.getByText(/^0 sur 18 · /)).toBeVisible();
+    // A source of tickets to import (ESC-512: the card of the first launch passed comes back here).
+    await expect(stop(page, 'sources')).toHaveAttribute('data-status', 'todo');
     // The dictation says its weight before anything is downloaded.
     await stop(page, 'dictation').click();
     await expect(page.getByTestId('discover-detail')).toContainText('148 Mo');
@@ -152,7 +154,7 @@ test.describe('the discovery of the features', () => {
 
     await openMap(page);
     await expect(stop(page, 'dictation')).toHaveAttribute('data-status', 'done');
-    await expect(page.getByText(/^5 sur 17 · /)).toBeVisible();
+    await expect(page.getByText(/^5 sur 18 · /)).toBeVisible();
     // One dismissed: « Le serveur MCP ».
     await stop(page, 'mcp').click();
     await page.getByTestId('discover-detail').getByRole('button', { name: 'Écarter' }).click();
@@ -240,7 +242,7 @@ test.describe('a device whose policy cuts the dictation', () => {
       await expect(stop(page, id)).toHaveAttribute('data-status', 'absent');
       await expect(stop(page, id)).toContainText('non permis sur ce poste');
     }
-    await expect(page.getByText(/^0 sur 15 · /)).toBeVisible();
+    await expect(page.getByText(/^0 sur 16 · /)).toBeVisible();
     await stop(page, 'dictation').click();
     const detail = page.getByTestId('discover-detail');
     await expect(detail).toContainText('voice.dictation');

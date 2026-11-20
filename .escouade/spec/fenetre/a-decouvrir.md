@@ -2,8 +2,8 @@
 title: "À découvrir"
 subject: "fenetre"
 sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-decouverte.png","design/onboarding-2-3/captures/c-decouverte-clair-1024.png"]
-tickets: ["ESC-503","ESC-505","ESC-506"]
-decisions: [200,215]
+tickets: ["ESC-503","ESC-505","ESC-506","ESC-512"]
+decisions: [200,215,223]
 compared: null
 ---
 
@@ -20,6 +20,7 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 | Planifier | Écrire un ticket | le Kanban, sur « Nouveau ticket » | un ticket existe ou a été créé |
 | | Le pilote auto | le Kanban, sur son interrupteur | il a lancé un ticket de lui-même (il est allumé par défaut : l'interrupteur ne compte pas) |
 | | La spec et les décisions | l'onglet Docs | l'onglet Docs ouvert |
+| | Importer des tickets | Réglages › Services connectés | un compte d'une source de tickets connecté (le sien, ou celui de l'hébergeur qui sert GitLab Issues, Azure Boards) |
 | Coder | Dicter un message | la conversation d'un agent, sur le micro | une dictée a donné du texte |
 | | Parler à un agent | la conversation d'un agent, sur le bouton de la conversation vocale | une conversation vocale a commencé |
 | | Un terminal | la barre du projet, sur le « + » des terminaux | un terminal ouvert |
@@ -36,8 +37,9 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 | | Un 2ᵉ compte | Réglages › Comptes et harness | deux comptes de harness |
 | | Ton équipe | « Rejoindre une équipe » | une équipe rejointe ou créée, ou un projet d'équipe |
 
+- **Les cartes passées au premier lancement** (« Ce que tu veux brancher », ESC-512) s'y retrouvent, à essayer tant qu'elles ne sont pas faites : la source de tickets dans « Importer des tickets », la voix dans « Dicter un message », l'hébergeur dans « Connecter GitHub ». Une carte branchée au premier lancement fait la découverte par l'état réel (le compte connecté).
 - Une découverte qui en demande une autre d'abord le dit sous sa station (« après « Connecter GitHub » ») et son bouton devient « D'abord : Connecter GitHub » : le pilote auto et la validation après un ticket, la PR dans Escouade et l'ouverture d'une PR après un hébergeur, la relecture après une PR vue.
-- Ce que dit chaque découverte avant le geste : le poids d'un téléchargement (Whisper « base », 148 Mo, et rien de ce qu'on dit ne quitte la machine), le quota qu'un message à un agent consomme (le pilote auto, la conversation vocale, un 2ᵉ agent, « Proposer des commandes », la relecture), le jeton gardé au trousseau et le plugin installé sans réseau d'un hébergeur, le réseau du store, le jeton du serveur MCP qui n'écoute que sur la machine.
+- Ce que dit chaque découverte avant le geste : le poids d'un téléchargement (Whisper « base », 148 Mo, et rien de ce qu'on dit ne quitte la machine), le quota qu'un message à un agent consomme (le pilote auto, la conversation vocale, un 2ᵉ agent, « Proposer des commandes », la relecture), le jeton gardé au trousseau et le plugin installé sans réseau d'un hébergeur ou d'une source, le réseau du store, le jeton du serveur MCP qui n'écoute que sur la machine.
 - **Rien ne s'installe, ne se connecte, ne se télécharge ni ne s'envoie depuis la découverte** : « Essayer » ouvre le bon écran et pose une bulle sur le vrai contrôle ; le geste reste celui de l'utilisateur, sur ce contrôle, qui dit lui-même son poids ou son coût avant (le micro propose le téléchargement du modèle avec sa taille, la conversation vocale celui de sa voix).
 - Sans projet, « Essayer » d'une découverte de projet ouvre « Nouveau projet ». Sans agent, la dictée, la voix et l'ouverture d'une PR montrent « Nouvel agent ».
 - Ce que fait le premier lancement n'en coche aucune : le premier projet (un dossier, un clone, la démonstration), son premier agent et la commande que cet agent lance (ce n'est pas « Lancer le projet ») ; un agent par projet n'est pas « Un 2ᵉ agent ».
@@ -50,7 +52,7 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 
 ### La carte
 
-- En tête : « À découvrir », « 5 sur 17 · chaque station t'amène au vrai geste » (faites, sur ce que ce poste peut faire), « Tout masquer » et « Retour au projet ». Puis le tronc, « Installé · harness, compte, projet, premier agent », et les cinq voies, chacune avec son coude vers le tronc, aux couleurs des voies du git graph.
+- En tête : « À découvrir », « 5 sur 18 · chaque station t'amène au vrai geste » (faites, sur ce que ce poste peut faire), « Tout masquer » et « Retour au projet ». Puis le tronc, « Installé · harness, compte, projet, premier agent », et les cinq voies, chacune avec son coude vers le tronc, aux couleurs des voies du git graph.
 - Une station : pleine faite (« fait »), creuse à essayer (ce qu'elle demande : « 148 Mo, local », « un jeton, au trousseau »), en pointillés écartée, grise pas sur ce poste. Celle choisie a un anneau ; par défaut, la première à essayer qui ne demande rien d'abord.
 - À droite (en 1024 × 728, en bas), le détail de la station choisie : son nom et son icône, sa phrase, « Avant le geste » et ce qu'elle demande, puis « Essayer » et « Écarter » ; « Y retourner » une fois faite ; « Remettre » une fois écartée ; pourquoi elle n'est pas là.
 - Les stations sont des boutons, au clavier ; le détail est annoncé poliment au lecteur d'écran. En 1024, les lignes sous les stations et la légende se cachent, et toutes les stations restent visibles au-dessus du détail. Thèmes clair et sombre.
@@ -72,7 +74,7 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 
 ### Où elle se retrouve
 
-- Aide › À découvrir (« 5 sur 17 : la voix, le Kanban, les PR… », ou « Masqué : la carte reste ici »), et Réglages › Général › « À découvrir » › « Ouvrir la carte ».
+- Aide › À découvrir (« 5 sur 18 : la voix, le Kanban, les PR… », ou « Masqué : la carte reste ici »), et Réglages › Général › « À découvrir » › « Ouvrir la carte ».
 - Un point teal sur l'icône Aide du rail tant qu'une découverte possible ici n'est ni faite ni écartée, sauf après « Tout masquer » ; le lecteur d'écran l'entend (« Il reste des choses à découvrir »).
 
 ### Nouveau dans la version

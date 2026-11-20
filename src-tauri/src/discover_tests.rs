@@ -26,15 +26,15 @@ fn every_discovery_has_its_lane_and_the_map_is_in_its_order() {
     let ids: Vec<Discovery> = all().collect();
     // Escouade remote is not in this version: never shown.
     assert!(!ids.contains(&Discovery::Remote));
-    assert_eq!(ids.len(), 18);
+    assert_eq!(ids.len(), 19);
     assert_eq!(ids[0], Discovery::Ticket);
     assert_eq!(lane_of(Discovery::Dictation), Lane::Code);
     assert_eq!(lane_of(Discovery::Approve), Lane::Ship);
     assert_eq!(lane_of(Discovery::Team), Lane::Drive);
     let v = view(&Onboarding::default(), &set_up(), "2.3.0", true);
-    assert_eq!(v.items.len(), 18);
+    assert_eq!(v.items.len(), 19);
     assert_eq!(
-        v.total, 17,
+        v.total, 18,
         "no team server: the team is not on this device"
     );
     assert_eq!(v.done, 0);
@@ -141,7 +141,7 @@ fn dismissed_it_is_never_offered_again_until_put_back() {
     assert_eq!(item(&v, Discovery::Voice).status, DiscoverStatus::Dismissed);
     assert!(!v.tips.contains(&Discovery::Voice));
     // Still on the map, counted among what this device has.
-    assert_eq!(v.total, 17);
+    assert_eq!(v.total, 18);
     apply(
         &mut saved,
         &Act::Restore {
@@ -196,7 +196,7 @@ fn a_bubble_is_shown_once_and_hide_all_stops_bubbles_and_the_dot() {
     assert!(!v.dot);
     assert!(v.tips.is_empty());
     // The map is still there, every discovery on it.
-    assert_eq!(v.items.len(), 18);
+    assert_eq!(v.items.len(), 19);
     apply(&mut saved, &Act::Hide { hidden: false }, &f, "2.3.0");
     assert!(view(&saved, &f, "2.3.0", true).dot);
 }
@@ -238,7 +238,7 @@ fn a_discovery_shows_only_where_it_can_be_done() {
         assert!(!v.tips.contains(&id), "never offered");
     }
     // Not counted among what this device has.
-    assert_eq!(v.total, 15);
+    assert_eq!(v.total, 16);
     // Unknown (a client without the voice): not hidden for that.
     let v = view(
         &saved,
@@ -400,4 +400,23 @@ fn the_core_reads_the_policies_and_keeps_what_was_done_and_dismissed_across_a_re
         );
     }
     assert_eq!(item(&v, Discovery::Team).status, DiscoverStatus::Todo);
+}
+
+#[test]
+fn a_source_of_tickets_passed_at_the_first_launch_waits_on_the_map_until_one_is_connected() {
+    // ESC-512: the card « Une source de tickets » passed comes back here, in Planifier, to try.
+    let saved = Onboarding::default();
+    let v = view(&saved, &set_up(), "2.3.0", true);
+    let it = item(&v, Discovery::Sources);
+    assert_eq!(it.lane, Lane::Plan);
+    assert_eq!(it.status, DiscoverStatus::Todo);
+    // An account of a source connected, wherever it was: done.
+    let f = Facts {
+        sources_connected: true,
+        ..set_up()
+    };
+    assert_eq!(
+        item(&view(&saved, &f, "2.3.0", true), Discovery::Sources).status,
+        DiscoverStatus::Done
+    );
 }

@@ -19,7 +19,12 @@ use serde::{Deserialize, Serialize};
 pub const LANES: [(Lane, &[Discovery]); 5] = [
     (
         Lane::Plan,
-        &[Discovery::Ticket, Discovery::Autopilot, Discovery::Docs],
+        &[
+            Discovery::Ticket,
+            Discovery::Autopilot,
+            Discovery::Docs,
+            Discovery::Sources,
+        ],
     ),
     (
         Lane::Code,
@@ -96,6 +101,8 @@ pub struct Facts {
     pub accounts: usize,
     /// A code host connected (an account of GitHub, GitLab…).
     pub forge_connected: bool,
+    /// An account of a source of tickets (ESC-512): its own, or the code host's that serves GitLab Issues, Azure Boards.
+    pub sources_connected: bool,
     pub pr_reviews: usize,
     pub mcp_on: bool,
     /// A project of a team.
@@ -201,6 +208,7 @@ pub fn real(id: Discovery, f: &Facts) -> bool {
         Discovery::Ticket => f.tickets > 0,
         Discovery::SecondAgent => f.agents_in_a_project >= 2,
         Discovery::Forge => f.forge_connected,
+        Discovery::Sources => f.sources_connected,
         Discovery::PrReview => f.pr_reviews > 0,
         Discovery::Approve => f.ticket_done,
         Discovery::OpenPr => f.ticket_pr,
@@ -439,6 +447,7 @@ impl Core {
             (s.accounts.len(), s.mcp_enabled)
         };
         let forge_connected = !crate::forge::accounts::all(&self.accounts.read()).is_empty();
+        let sources_connected = self.onboarding_facts().sources_connected;
         let pr_reviews = self.pr_reviews.read().len();
         let locks = self.locks.read();
         let mut denied = Vec::new();
@@ -478,6 +487,7 @@ impl Core {
             agents_in_a_project,
             accounts,
             forge_connected,
+            sources_connected,
             pr_reviews,
             mcp_on,
             team_project,

@@ -417,6 +417,9 @@ escouade_command::commands! {
         // The first launch's journey (ESC-504): shown in the window alone.
         commands::onboarding_view,
         commands::onboarding_act,
+        // « Ce que tu veux brancher » (ESC-512): what it offers, and the plugin of what is chosen from the seed.
+        commands::onboarding_offers,
+        commands::onboarding_need,
         // The discovery of the features (ESC-506).
         commands::discover_view,
         commands::discover_act,

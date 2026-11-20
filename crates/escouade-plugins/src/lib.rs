@@ -2229,6 +2229,16 @@ impl Plugins {
             .collect()
     }
 
+    /// Whether the plugin `id` is installed.
+    pub fn is_installed(&self, id: &str) -> bool {
+        self.loaded.read().iter().any(|l| l.installed.id == id)
+    }
+
+    /// Whether the app's seed holds the plugin `id`: it installs from it with no network.
+    pub fn in_seed(&self, id: &str) -> bool {
+        self.seed.has(id)
+    }
+
     /// Whether the user took the plugin `id` of the seed away: what is missing is said so, and proposed.
     pub fn uninstalled(&self, id: &str) -> bool {
         self.seed.has(id) && !self.loaded.read().iter().any(|l| l.installed.id == id)

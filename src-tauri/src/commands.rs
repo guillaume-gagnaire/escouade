@@ -4117,6 +4117,24 @@ pub fn onboarding_act(
     core.onboarding_act(act)
 }
 
+/// What « Ce que tu veux brancher » offers (ESC-512): the sources of tickets, the voice services, the code hosts, read
+/// in the registry, the seed and the installed plugins, with what a policy denies.
+#[tauri::command(async)]
+pub fn onboarding_offers(core: CoreState) -> Vec<crate::onboarding::Offer> {
+    core.onboarding_offers()
+}
+
+/// A thing chosen on a card of « Ce que tu veux brancher » (ESC-512): its plugin from the seed, with no network, and
+/// nothing else; its view, or why it is refused.
+#[tauri::command(async)]
+pub fn onboarding_need(
+    core: CoreState,
+    kind: crate::model::Hookup,
+    id: String,
+) -> Result<Option<crate::plugins::PluginView>, crate::plugins::Refusal> {
+    core.onboarding_need(kind, &id)
+}
+
 /// The station of the first project (ESC-505) reads a folder: there, written to, a test command it can run.
 #[tauri::command(async)]
 pub fn onboarding_folder(path: String) -> crate::onboarding::FolderCheck {

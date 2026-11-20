@@ -2860,6 +2860,8 @@ pub enum OnboardingStep {
     Account,
     /// The mode of the new agents (the model and the effort said, not asked).
     Defaults,
+    /// « Ce que tu veux brancher » (ESC-512): the ticket sources, the voice, the code host, a card each, none ticked.
+    Hookups,
     /// Where the first agent works.
     Project,
     /// The first agent: a message proposed, sent by the user's click, its answer, its first permission, its diff (ESC-505).
@@ -2875,6 +2877,18 @@ pub enum StepOutcome {
     Done,
     /// « Plus tard », or « Tout passer »: it never comes back by itself, it waits in Aide › Premier lancement.
     Skipped,
+}
+
+/// A card of the station « Ce que tu veux brancher » (ESC-512): what the first launch offers to plug in, nothing ticked.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum Hookup {
+    /// A source of tickets (Jira, Trello, GitHub Issues…): its account, connected by Réglages › Services connectés' form.
+    Sources,
+    /// The dictation and the voice: Whisper on the machine, or a service on line with its key.
+    Voice,
+    /// A code host, for the pull requests and the CI.
+    Forge,
 }
 
 /// The first launch's journey of this installation (ESC-504, `docs/ONBOARDING.md` § 5), kept in `state.json`.
@@ -2893,6 +2907,8 @@ pub struct Onboarding {
     pub steps: BTreeMap<OnboardingStep, StepOutcome>,
     /// The statistics' question passed at the journey was asked once more at a later start: never again.
     pub telemetry_asked_again: bool,
+    /// What the user did with each card of « Ce que tu veux brancher » (ESC-512): a card passed waits in the discovery.
+    pub hookups: BTreeMap<Hookup, StepOutcome>,
     /// The discovery of the features (ESC-506, `docs/ONBOARDING.md` § 7): what became of each, kept done once the real
     /// state made it so, or dismissed (it never comes back by itself).
     pub discover: BTreeMap<Discovery, DiscoverOutcome>,
@@ -2913,6 +2929,9 @@ pub enum Discovery {
     Autopilot,
     /// The spec and the decisions (the tab Docs).
     Docs,
+    /// A source of tickets connected (Jira, Trello, GitHub Issues…): its tickets on the board (ESC-512, the card of
+    /// « Ce que tu veux brancher » passed comes back here).
+    Sources,
     /// Code: dictate a message.
     Dictation,
     /// A spoken conversation with an agent.

@@ -35,17 +35,17 @@ export const ALLOWED: Allowed[] = [
 
   // L5 — integrations, boardSettings
   {
-    file: 'src/components/settings/ServicesPage.svelte',
+    file: 'src/components/settings/SourceAccount.svelte',
     text: 'atlas.atlassian.net',
     why: 'un exemple de site Jira, le même dans toutes les langues',
   },
   {
-    file: 'src/components/settings/ServicesPage.svelte',
+    file: 'src/components/settings/SourceAccount.svelte',
     text: 'ada@atlas.dev',
     why: 'un exemple d’adresse, la même dans toutes les langues',
   },
   {
-    file: 'src/components/settings/ServicesPage.svelte',
+    file: 'src/components/settings/SourceAccount.svelte',
     text: 'gh auth login',
     why: 'la commande de GitHub CLI, la même dans toutes les langues',
   },

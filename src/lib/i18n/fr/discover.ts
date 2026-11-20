@@ -106,6 +106,13 @@ export default {
       meta: 'onglet Docs',
       facts: 'Une décision proposée par un agent attend ton accord, à la validation de son ticket.',
     },
+    sources: {
+      name: 'Importer des tickets',
+      line: 'Les tickets de Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards dans ton Kanban : un agent les prend et les fait avancer.',
+      meta: 'un jeton, au trousseau',
+      facts:
+        'Un jeton de la source, gardé dans le trousseau du système. Escouade installe le plugin de la source depuis l’app, sans réseau ; la connexion, elle, demande le réseau.',
+    },
     dictation: {
       name: 'Dicter un message',
       line: 'Maintiens le micro sous le message, parle, relâche : ton texte arrive dans le champ, prêt à relire. Essaie d’abord le micro dans Réglages › Voix.',

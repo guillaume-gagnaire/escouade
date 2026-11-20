@@ -226,7 +226,7 @@ export function go(id: Discovery) {
   discover.tip = null;
   const pid = projectId();
   // What needs a project starts with one.
-  const needsProject = !['plugin', 'mcp', 'account', 'team', 'forge', 'remote'].includes(id);
+  const needsProject = !['plugin', 'mcp', 'account', 'team', 'forge', 'sources', 'remote'].includes(id);
   if (needsProject && !pid) {
     app.modal = { kind: 'newProject' };
     return;
@@ -254,6 +254,7 @@ export function go(id: Discovery) {
       app.modal = { kind: 'settings', page: 'launch', projectId: pid! };
       return;
     case 'forge':
+    case 'sources':
       app.modal = { kind: 'settings', page: 'services' };
       return;
     case 'prView':

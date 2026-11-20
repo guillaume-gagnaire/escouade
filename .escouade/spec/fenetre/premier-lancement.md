@@ -2,14 +2,14 @@
 title: "Premier lancement"
 subject: "fenetre"
 sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-harness.png","design/onboarding-2-3/captures/c-modes-clair-1024.png","design/onboarding-2-3/captures/c-projet.png","design/onboarding-2-3/captures/c-agent.png","design/onboarding-2-3/captures/c-agent-clair-1024.png"]
-tickets: ["ESC-503","ESC-504","ESC-505","ESC-506"]
-decisions: [195,215]
+tickets: ["ESC-503","ESC-504","ESC-505","ESC-506","ESC-512"]
+decisions: [195,215,223]
 compared: null
 ---
 
 ## Ce que c'est
 
-Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le harness, son compte, le mode des nouveaux agents, le premier projet, le premier agent et l'accord des statistiques. Il prend toute la fenêtre, sauf la barre de titre et la barre de statut, et dessine ses stations comme les commits du git graph (direction C « La ligne » de `docs/ONBOARDING.md`). Il ne règle rien à sa façon : chaque station écrit ce qu'écrivent les réglages, par les mêmes appels, et chacune se passe. Il se prolonge ensuite dans la découverte des fonctionnalités, page « À découvrir ».
+Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le harness, son compte, le mode des nouveaux agents, ce qu'on veut brancher (sources de tickets, voix, hébergeur de code), le premier projet, le premier agent et l'accord des statistiques. Il prend toute la fenêtre, sauf la barre de titre et la barre de statut, et dessine ses stations comme les commits du git graph (direction C « La ligne » de `docs/ONBOARDING.md`). Il ne règle rien à sa façon : chaque station écrit ce qu'écrivent les réglages, par les mêmes appels et les mêmes composants, et chacune se passe. Il se prolonge ensuite dans la découverte des fonctionnalités, page « À découvrir ».
 
 ## Comportement
 
@@ -17,27 +17,28 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 
 - **De lui-même**, au premier démarrage d'une **nouvelle installation** seulement : des réglages sans mode pour les nouveaux agents (SEC-09 : un `settings.json` d'avant reçoit `auto` à son chargement) et aucun projet. Jamais sur un poste déjà réglé, même sans compte, même après une mise à jour.
 - **Repris** : fermé au milieu (la fenêtre, l'app, une coupure), il rouvre au démarrage suivant, à la première station ni faite ni passée. Fini ou « Tout passer », il ne revient plus de lui-même.
-- **Refait** : Aide › Premier lancement (l'icône Aide du rail) et Réglages › Général › « Refaire le premier lancement » le rouvrent sur n'importe quel poste. Toutes les stations s'y montrent depuis la première, avec la valeur en place sur la ligne (« Claude Code », « Principal », « Demander »). Rien n'est remis à zéro : refaire ne retire ni compte ni projet. Il se ferme par « Fermer ».
+- **Refait** : Aide › Premier lancement (l'icône Aide du rail) et Réglages › Général › « Refaire le premier lancement » le rouvrent sur n'importe quel poste. Toutes les stations s'y montrent depuis la première, avec la valeur en place sur la ligne (« Claude Code », « Principal », « Demander », « 2 branchés »). Rien n'est remis à zéro : refaire ne retire ni compte ni projet. Il se ferme par « Fermer ».
 - Un client de l'API distante ne le voit jamais.
 
 ### L'état gardé
 
-- Par installation, dans `state.json` (l'état durable, ESC-469), jamais dans `.escouade.yml` : la version du parcours, quand il a commencé et fini, s'il est refait, et ce que l'utilisateur a fait à chaque station (faite, passée).
+- Par installation, dans `state.json` (l'état durable, ESC-469), jamais dans `.escouade.yml` : la version du parcours, quand il a commencé et fini, s'il est refait, ce que l'utilisateur a fait à chaque station (faite, passée) et à chaque carte de « Ce que tu veux brancher » (`hookups` : branchée, passée).
 - **Le parcours lit l'état réel** : une station est faite quand ce qu'elle règle l'est, où que ce soit (un compte ajouté dans Réglages coche celle du compte). Une station faite le reste, même si l'état change ensuite : un compte retiré ne rouvre rien.
   - harness et compte : un compte ajouté ;
   - réglages de départ : le mode des nouveaux agents choisi ;
+  - ce que tu veux brancher : quelque chose de branché, où que ce soit (un compte d'une source de tickets, d'un hébergeur de code, ou la dictée en ligne avec la clé de son service) ;
   - premier projet : un projet ouvert ;
   - premier agent : un agent qui a fini un tour sans erreur (un message envoyé, l'agent au repos, ni arrêté par la limite d'usage ni en échec) ;
   - statistiques : l'accord donné ou refusé.
-- Le cœur relit la vue à chaque changement de ces réglages, des projets, de l'état des agents ou des réglages imposés. La vue dit aussi où vit le projet de démonstration (`demo`), qu'il existe ou non.
+- Le cœur relit la vue à chaque changement de ces réglages, des projets, de l'état des agents ou des réglages imposés, et à chaque geste sur une carte de ce qu'on branche. La vue dit aussi où vit le projet de démonstration (`demo`), qu'il existe ou non.
 - Le parcours et la découverte ne se cochent pas l'un l'autre : le premier projet, la démonstration et le premier agent ne font aucune découverte (un seul agent par projet n'est pas « Un 2ᵉ agent », une commande que lance l'agent n'est pas « Lancer le projet »), et une découverte faite ne fait aucune station.
 
 ### La fenêtre
 
-- **À gauche, la ligne** (une `nav`, « Les stations du premier lancement ») : « Premier lancement », « 6 stations · environ 2 minutes », puis une station par question. Faite : un nœud plein et sa valeur (le nom du projet, celui du premier agent) ; en cours : teal, « maintenant » (`aria-current="step"`) ; passée : creuse, « passé · à reprendre » ; imposée : pleine, « imposé » ; à faire : en pointillés. Chaque station est un bouton qui y mène. Sous la ligne, les voies de la découverte (« Ensuite : À découvrir », Planifier · Coder · Relire · Livrer · Piloter, décoratives) et, en bas, « Tout se passe et se reprend. Le parcours revient depuis Aide › Premier lancement. » avec « Tout passer » (« Fermer » quand il est refait).
-- **À droite, la station** : « Station 2 · le compte », sa question (le `h1`, qui prend le focus à chaque station) et son pourquoi (sa description), ses choix (un groupe radio, le choix recommandé déjà pris, « Recommandé » en pastille).
+- **À gauche, la ligne** (une `nav`, « Les stations du premier lancement ») : « Premier lancement », « 7 stations · environ 2 minutes », puis une station par question. Faite : un nœud plein et sa valeur (le nom du projet, celui du premier agent) ; en cours : teal, « maintenant » (`aria-current="step"`) ; passée : creuse, « passé · à reprendre » ; imposée : pleine, « imposé » ; à faire : en pointillés. Chaque station est un bouton qui y mène. Sous la ligne, les voies de la découverte (« Ensuite : À découvrir », Planifier · Coder · Relire · Livrer · Piloter, décoratives) et, en bas, « Tout se passe et se reprend. Le parcours revient depuis Aide › Premier lancement. » avec « Tout passer » (« Fermer » quand il est refait).
+- **À droite, la station** : « Station 2 · le compte », sa question (le `h1`, qui prend le focus à chaque station) et son pourquoi (sa description), ses choix (un groupe radio, le choix recommandé déjà pris, « Recommandé » en pastille ; des cases à cocher, aucune cochée, à la station de ce qu'on branche).
 - **Le pied** : « Retour », « ↑ ↓ choisir · Entrée valider » (caché en 1024), « Plus tard » et le bouton principal (« Continuer », « Garder Édits auto », « Ouvrir le projet »…).
-- **Au clavier** : ↑ ↓ vont d'un choix à l'autre en sautant ceux qui ne se prennent pas (depuis la question, ↑ ↓ amènent aux choix), Espace prend le choix qui a le focus, Entrée fait le bouton principal, Échap fait « Plus tard ». Rien de cela tant qu'une fenêtre est ouverte par-dessus (« Ajouter un compte… », l'assistant d'un projet, le diff), ni dans la conversation encadrée du premier agent, qui garde ses touches (Échap y arrête l'agent, ses raccourcis répondent à sa carte).
+- **Au clavier** : ↑ ↓ vont d'un choix à l'autre en sautant ceux qui ne se prennent pas (depuis la question, ↑ ↓ amènent aux choix), Espace prend le choix (ou coche la carte) qui a le focus, Entrée fait le bouton principal, Échap fait « Plus tard » (dans un champ, Échap quitte seulement le champ). Rien de cela tant qu'une fenêtre est ouverte par-dessus (« Ajouter un compte… », l'assistant d'un projet, le diff), ni dans la conversation encadrée du premier agent, qui garde ses touches (Échap y arrête l'agent, ses raccourcis répondent à sa carte).
 - **Aucune bulle de la découverte** ne vient sur le parcours tant qu'il est à l'écran, pas même celle du micro survolé dans le compositeur du premier agent : une bulle qui attend son moment attend comme pendant la frappe (six secondes au plus), puis passe.
 - **Tailles** : 1440 × 900 et 1024 × 728, sans défilement en travers ; en 1024, la ligne passe à 248 px et la station se resserre. Une station trop haute défile en elle-même.
 - **Animation** : l'arrivée d'une station monte de 8 px en 240 ms ; avec « réduire les animations », un fondu seulement.
@@ -67,7 +68,28 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 - Un harness qui ne tourne qu'en Bypass le dit (ESC-489) : « Mistral Vibe ne tourne qu'en Bypass : ses agents agiront sans demander. »
 - « Garder Édits auto » écrit « Mode par défaut des agents » (`agentMode`), comme Réglages › Agents.
 
-### Station 4, le premier projet
+### Station 4, ce que tu veux brancher (ESC-512)
+
+- « Que veux-tu brancher ? » — « Rien n'est coché : coche ce qui te sert. Rien ne s'installe, ne se connecte ni ne se télécharge sans ton geste ; ce que tu passes t'attend dans À découvrir et dans les Réglages. »
+- Après les réglages de départ et avant le premier projet : un hébergeur branché ici donne à la station du projet ses dépôts à cloner (ON-2).
+- **Trois cartes à cocher** (un groupe « Les branchements », chaque carte une case `checkbox` décrite par sa phrase), **aucune cochée d'avance**, chacune avec ce qu'elle sert et ce qu'elle demande, et son propre « Plus tard » une fois cochée (« Plus tard : Une source de tickets ») :
+  - **« Une source de tickets »** — « Les tickets de Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards arrivent dans le Kanban : un agent les prend et les fait avancer. Il faut un jeton de la source, puis un projet ou un tableau à relier. »
+  - **« La voix »** — « Veux-tu dicter ou parler à tes agents ? Whisper sur ta machine, rien n'en sort ; ou un service en ligne, avec ta clé. »
+  - **« Un hébergeur de code »** — « Les PR et la CI des tickets dans Escouade, sur GitHub, GitLab, Bitbucket, Gitea et Azure DevOps. Il faut un jeton de l'hébergeur, gardé dans le trousseau du système. »
+- **La liste est celle du cœur**, jamais écrite dans la fenêtre (`onboarding_offers`) : les sources du registre, les services de voix et les hébergeurs des tables du tri de l'amorce, chacun avec son plugin, s'il est installé, si l'amorce le tient, et ce qu'une stratégie en refuse. Les autres plugins du store de la même catégorie, d'après son catalogue déjà lu (rien n'est demandé au réseau), sont nommés : « Aussi dans le store : … Ils s'installent depuis Plugins. »
+- **Cocher une carte** ouvre ses choix ; rien ne s'installe encore. **Choisir une chose** (Trello, Mistral, GitLab) est le geste : son plugin, et lui seul, s'installe depuis l'amorce, sans réseau (`onboarding_need`, le tri de l'amorce ; « Plugin Trello installé. »). Un plugin que l'amorce ne tient pas vient du store : « Son plugin vient du store : installe-le depuis Plugins, ses permissions sous les yeux. » ; la station ne l'installe pas.
+- **Une source** : chacune dit ce qu'elle importe et ce qu'elle demande (« Les cartes d'un tableau Trello · une clé et un jeton d'API » ; une source que la fenêtre ne connaît pas : « Ses tickets dans le Kanban · un jeton de la source »). Choisie, son formulaire de connexion s'ouvre **dans la station**, le bloc même de Réglages › Services connectés (`SourceAccount`) : mêmes champs, même vérification, ses secrets gardés là où ils le sont toujours (le trousseau, ou le fichier dit sans trousseau, ESC-499). GitLab Issues et Azure Boards se connectent par le formulaire de leur hébergeur (`ForgesSection`). « Le projet ou le tableau se relie ensuite à chaque projet, dans ses Réglages › Tickets importés. »
+- **La voix** : « Qui transcrit ce que tu dis ? »
+  - « Whisper, sur ta machine » — « Le modèle « base » : 141 Mo à télécharger une fois, gardés sur ton disque. Rien de ce que tu dis ne quitte ta machine. » Le poids est dit avant ; « Télécharger (141 Mo) » le télécharge, suivi d'une jauge (« Téléchargement : 52 Mo sur 141 Mo »), annulable (« Annuler le téléchargement » : rien n'est gardé). Prêt : « Modèle « base » prêt ».
+  - « Un service en ligne » — « Plus rapide sur une petite machine. Chaque dictée part chez le service choisi, avec ta clé. » Les services sont ceux du cœur (OpenAI, Groq, Mistral, ElevenLabs, Deepgram). Choisi : son plugin, puis la dictée en ligne sur lui (`voice.transcription`, `voice.onlineService`, ce qu'écrit Réglages › Voix), ce qui part dit (« Ce qui part chez Mistral (api.mistral.ai) : l'audio de tes dictées, rien d'autre. Ta clé reste dans le trousseau du système. ») et la ligne de sa clé, celle de Réglages › Voix.
+  - Prête, la voix s'essaie : « Essaie le micro » — « Clique sur le micro, dis une phrase, puis reclique : elle s'écrit ici. Rien n'est envoyé à un agent. » (le bouton « Dicter » des champs de l'app, dans un champ de la station). « La voix qui lit les réponses dans une conversation se règle dans Réglages › Voix. »
+- **Un hébergeur** : choisi, son plugin, puis le formulaire « Connecter… » de Réglages › Services connectés, ouvert sur son type.
+- **« Continuer »** : chaque carte branchée est faite (une carte se coche aussi par l'état réel : un compte d'une source ou d'un hébergeur, la dictée en ligne avec sa clé ; la voix sur la machine, par son modèle prêt) ; chaque autre carte, cochée ou non, est **passée**. « Plus tard » au pied passe la station et toutes ses cartes ; « Tout passer » aussi. Sous la station, la ligne dit « 2 branchés » ou « rien de branché ».
+- **Une carte passée** se retrouve dans la découverte (Aide › À découvrir, ON-3 : la source de tickets, la dictée, l'hébergeur) et dans sa page de Réglages (Services connectés, Voix ; installer son plugin se fait dans Plugins, les réglages ne listant toujours que ce qu'apportent les plugins installés). Le parcours refait la montre « Passé · à reprendre ».
+- **Hors ligne** (le système le dit) : ce qui demande le réseau le dit et attend (« Hors ligne : ceci demande le réseau. La carte t'attend dans À découvrir, tu la reprendras une fois en ligne. ») ; « Télécharger » ne se prend pas ; le plugin de l'amorce s'installe tout de même.
+- Le second harness et le serveur MCP pour un autre client n'y sont pas : le premier est la station du harness et Réglages › Comptes et harness ; le second ouvre une porte de la machine, que le premier lancement n'ouvre pas. Les deux restent à la découverte.
+
+### Station 5, le premier projet
 
 - « Où travaille ton premier agent ? » — « Un projet est un dossier, avec ses agents, son Kanban et ses docs. Chaque agent y travaille dans son worktree, sur sa branche : deux agents ne se gênent pas, et rien n'entre dans ta branche sans toi. »
 - **Les mots d'Escouade**, à côté d'un dessin de branches (ta branche, « agent 1 · son worktree », « agent 2 », décoratif) : « Un projet : un dossier, avec ses agents, son Kanban et ses docs. » ; « Un agent : une conversation avec ton harness, qui lit et modifie le code. » ; « Un worktree : une copie de travail à l'agent seul : deux agents ne se gênent pas. » ; « Une branche par agent : son travail reste à part jusqu'à ce que tu l'intègres. »
@@ -84,9 +106,9 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 - Un dossier qui est déjà là sans être la démonstration n'est jamais touché : « … existe déjà et n'est pas le projet de démonstration : déplace-le, puis réessaie. »
 - **Sa bande**, en haut du projet (hors du parcours) : « **Bac à sable** · un dépôt de démonstration sur ta machine (~/.escouade/demo/bac-a-sable) · rien ne sort d'ici » et « Supprimer ». « Supprimer » demande « Supprimer le projet de démonstration ? » (« Le projet « bac-a-sable », ses agents et leurs conversations, et son dossier … s'effacent. Rien d'autre n'est touché. »), puis ferme le projet en effaçant son historique et retire son dossier entier ; « Projet de démonstration supprimé. ». Le cœur refuse de supprimer ainsi tout autre projet ou dossier. Il n'est jamais retiré de lui-même.
 
-### Station 5, le premier agent
+### Station 6, le premier agent
 
-- **Créé par le parcours** dans le projet de la station 4, avec ce qu'ont réglé les stations d'avant : son harness, le modèle et l'effort de son compte, le mode des nouveaux agents. Le projet avait déjà un agent : c'est lui. Sans projet : « Ton premier agent a besoin d'un projet : choisis-en un à la station précédente. » (« Revenir au premier projet ») ; sans compte : « Ton premier agent a besoin d'un compte connecté : ajoute-le à la station du compte. » (« Revenir à l'étape du compte ») ; aucun agent n'est créé alors.
+- **Créé par le parcours** dans le projet de la station 5, avec ce qu'ont réglé les stations d'avant : son harness, le modèle et l'effort de son compte, le mode des nouveaux agents. Le projet avait déjà un agent : c'est lui. Sans projet : « Ton premier agent a besoin d'un projet : choisis-en un à la station précédente. » (« Revenir au premier projet ») ; sans compte : « Ton premier agent a besoin d'un compte connecté : ajoute-le à la station du compte. » (« Revenir à l'étape du compte ») ; aucun agent n'est créé alors.
 - **À droite, sa vraie conversation, encadrée** (« La conversation de ton premier agent ») : son en-tête, ses messages, sa carte de permission et son compositeur, comme partout dans l'app. En 1024, elle passe sous l'explication.
 - **Le premier message** : « Ton premier message » — « Choisis-en un, modifie-le, puis envoie-le. Il part sur ton compte Claude Code et compte dans son quota. » Les messages proposés (un groupe radio) : « Explique-moi ce dépôt en cinq lignes. », « Lance les tests et dis-moi ce qui casse. » (seulement si le projet a une commande de test qu'Escouade reconnaît et qui peut tourner ici : `Cargo.toml`, `pyproject.toml`, `setup.py`, `go.mod`, `pom.xml`, `build.gradle`, ou un `package.json` avec un script `test` quand Node est sur la machine), « Trouve un petit bug et propose un correctif. ». Le premier est pris ; sur la démonstration, c'est « Lance les tests ». Le message pris est mis dans le compositeur, modifiable ; un autre pris le remplace. « tests-qui-cassent est prêt. Un message proposé t'attend : modifie-le ou choisis-en un autre. Rien ne part avant que tu l'envoies. » **Rien ne part sans le clic** de l'utilisateur sur le bouton d'envoi du compositeur (ou Entrée dans le champ).
 - **Envoyé, en préparation** : le premier message attend que le worktree de l'agent soit fait (au premier message, sous son nom) ; la station le dit aussitôt : « Ton agent prépare son worktree » — « Ton message est parti : il attend que la copie de travail de l'agent soit prête, sur sa branche à lui. Sa réponse suit, à droite. », et la conversation le montre « En attente de la préparation… ». Jamais « Ton premier message » une fois envoyé.
@@ -99,7 +121,7 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
   - pas connecté (clé refusée, connexion perdue) : « Claude Code n'est pas connecté » — « Claude Code n'est pas connecté : reviens à l'étape du compte. » et « Revenir à l'étape du compte » ;
   - tout autre échec : « Le tour a échoué : {ce qu'a dit le harness}. Réessaie, ou passe à la suite avec « Plus tard ». » et « Remettre le message ».
 
-### Station 6, les statistiques
+### Station 7, les statistiques
 
 - Posée au premier lancement quoi que l'utilisateur ait passé avant (le premier projet, le premier agent), avant que rien ne parte : la réponse reste vide jusque-là (SEC-09).
 - La question de toujours (« Aider à améliorer Escouade ? », ses textes, son lien « Ce qui est envoyé, en détail »), le même réglage, plus : « Tes projets, ton code, tes conversations et tes comptes restent sur ta machine, dans ~/.escouade. » « Non merci » et « Partager les statistiques » ont le même poids. Répondre finit le parcours.
@@ -114,11 +136,13 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 
 - Le parcours remplace l'enchaînement du premier démarrage : la fenêtre du mode (`FirstModeModal`, retirée), puis celle des statistiques, puis celle du nom pour l'équipe. Le nom n'est plus demandé au premier lancement : il l'est au premier partage (choix O8).
 - L'écran sans projet (`Welcome`) reste celui d'après le parcours, et celui d'un poste réglé.
+- Le bloc d'une source de tickets de Réglages › Services connectés est un composant (`SourceAccount`), que la station de ce qu'on branche montre aussi.
 
 ### Réglages imposés
 
 - Une station qu'une stratégie impose est faite et verrouillée, avec qui l'impose (« Imposé par la stratégie de ce poste », « Imposé par l'équipe Acme ») : le mode des nouveaux agents (`permissions.defaultMode`), les statistiques (`telemetry.enabled` : « Éteintes par la stratégie de ce poste. »). Elle se traverse en un « Continuer ».
 - Un harness que `harnesses.allowed` ne permet pas est grisé, « non permis par la stratégie de ce poste », jamais recommandé ; un seul permis : « Codex est le seul harness permis sur ce poste. » Un mode que `permissions.modes` refuse est grisé avec sa raison ; « Autoriser le mode Bypass » imposé est dit sous Bypass.
+- **Ce que tu veux brancher** (choix O12, montrer verrouillé avec qui l'impose) : la dictée coupée (`voice.dictation`) verrouille la carte de la voix (« Verrouillé · Imposé par la stratégie de ce poste ») ; la voix en ligne interdite (`voice.onlineAllowed`) grise « Un service en ligne », Whisper sur la machine restant ; un plugin que `plugins.denied`, `plugins.allowed` ou `plugins.allowedOrigins` refuse grise sa source ou son hébergeur, avec la raison du cœur ; une carte dont tout est refusé est verrouillée. Le cœur refuse d'installer ce qu'une stratégie refuse (`onboarding_need`), quoi que montre la fenêtre.
 - Le parcours ne contourne jamais un refus du cœur : il montre ce que le cœur refuserait.
 
 ### L'aide
@@ -127,19 +151,21 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 
 ## Réglages
 
-- Aucun réglage à lui : il écrit `engineOrder`, les comptes, `agentMode`, les projets et `telemetry`, comme leurs pages.
+- Aucun réglage à lui : il écrit `engineOrder`, les comptes, `agentMode`, `voice.transcription` et `voice.onlineService`, les comptes des sources et des hébergeurs, la clé d'un service de voix, les projets et `telemetry`, comme leurs pages.
 - Réglages › Général › Toi › « Premier lancement » › « Refaire le premier lancement ».
 
 ## Commandes
 
 - `onboarding_view`, `onboarding_act` : la vue du parcours et ses gestes (la fenêtre seule le montre).
+- `onboarding_offers` : ce qu'offrent les cartes de ce qu'on branche ; `onboarding_need` : le plugin de ce qui y est choisi, depuis l'amorce, et lui seul.
 - `onboarding_folder` : un dossier lu pour la station du projet (là, écrit, une commande de test qui peut tourner) ; `onboarding_clone` : le clone par une adresse ; `demo_create`, `demo_remove` : le projet de démonstration. Servies à distance comme les autres commandes de chemins (`docs/REMOTE.md`).
 
 ## Limites
 
-- La bande « Nouveau dans la 2.3 » d'un poste mis à jour et la découverte (Aide › À découvrir) ont leur page, « À découvrir » ; une nouvelle installation ne voit jamais la bande. Les fonctionnalités à brancher (sources de tickets, voix) sont d'ON-1b (ESC-512) ; les événements de statistiques du parcours d'ON-4 (ESC-507).
+- La bande « Nouveau dans la 2.3 » d'un poste mis à jour et la découverte (Aide › À découvrir) ont leur page, « À découvrir » ; une nouvelle installation ne voit jamais la bande. Les événements de statistiques du parcours sont d'ON-4 (ESC-507) ; la station de ce qu'on branche n'en ajoute aucun (un plugin installé compte déjà comme `plugin_installed`).
 - Une invitation d'équipe ouverte au premier lancement n'est pas encore une station : la station du projet propose les projets d'une équipe déjà rejointe.
 - Le clone ne propose que les dépôts des hébergeurs connectés qui servent aussi une source de tickets (GitHub, GitLab) ; un dépôt d'un autre se clone par son adresse.
 - « Lance les tests » sur la démonstration demande Node 22.18 ou plus récent pour tourner ; la station ne vérifie que la présence de Node.
 - Le parcours dit les raccourcis réels de la carte de permission (Ctrl+Entrée, Ctrl+Maj+Entrée), pas « 1, 2 ou 3 » des maquettes : l'app n'en a pas d'autres.
+- Le modèle de Whisper proposé à la station de ce qu'on branche est celui des réglages (« base » par défaut) ; les autres se choisissent dans Réglages › Voix.
 - Un poste qui a fermé la question du mode sans répondre avant la 2.3 (son mode vide, des projets) n'est pas un poste neuf : le parcours ne s'ouvre pas, le mode recommandé reste en vigueur.

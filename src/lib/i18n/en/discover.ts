@@ -89,6 +89,13 @@ export default defineZone('discover', {
       meta: 'Docs tab',
       facts: 'A decision an agent proposes waits for your approval, when you approve its ticket.',
     },
+    sources: {
+      name: 'Import tickets',
+      line: 'Tickets from Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure Boards on your board: an agent picks them up and moves them along.',
+      meta: 'a token, in the keychain',
+      facts:
+        'A token from the source, kept in the system keychain. Escouade installs the source’s plugin from the app, offline; connecting needs the network.',
+    },
     dictation: {
       name: 'Dictate a message',
       line: 'Hold the mic under the message, speak, release: your text lands in the field, ready to review. Try the mic first in Settings › Voice.',

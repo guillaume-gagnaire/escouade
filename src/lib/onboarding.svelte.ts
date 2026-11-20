@@ -3,7 +3,7 @@
 // `state.json`) and reads the real state of the app: the window shows it and asks it again after each change.
 
 import { api } from './ipc';
-import type { EngineId, OnboardingAct, OnboardingStep, OnboardingView, StepStatus } from './types';
+import type { EngineId, Hookup, OnboardingAct, OnboardingStep, OnboardingView, StepStatus } from './types';
 
 export const onboarding = $state<{
   /** What the core said last; null until the start. */
@@ -26,6 +26,19 @@ export function stations(): OnboardingStep[] {
 /** Where `step` stands. */
 export function statusOf(step: OnboardingStep): StepStatus {
   return onboarding.view?.steps.find((s) => s.id === step)?.status ?? 'todo';
+}
+
+/** Where a card of « Ce que tu veux brancher » stands (ESC-512). */
+export function cardStatus(h: Hookup): StepStatus {
+  return onboarding.view?.hookups?.find((c) => c.id === h)?.status ?? 'todo';
+}
+
+/**
+ * The cards passed (their « Plus tard », left unticked, or the station passed): what the discovery (ON-3, Aide › À
+ * découvrir) offers again, and the pages of Réglages that plug them in. A card a policy locks is not one.
+ */
+export function passedHookups(): Hookup[] {
+  return (onboarding.view?.hookups ?? []).filter((c) => c.status === 'skipped').map((c) => c.id);
 }
 
 /** The view of the start (`InitialState.onboarding`): shown when the core says so, at its station. */

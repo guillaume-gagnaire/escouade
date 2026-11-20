@@ -11,19 +11,21 @@
 //! at the first station neither done nor passed.
 
 use crate::core::Core;
-use crate::model::{AgentStatus, Onboarding, OnboardingStep, StepOutcome};
-use escouade_policy::list::{DEFAULT_MODE, TELEMETRY};
+use crate::model::{AgentStatus, Hookup, Onboarding, OnboardingStep, StepOutcome};
+use escouade_policy::list::{DEFAULT_MODE, DICTATION, TELEMETRY, VOICE_ONLINE};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// The version of the journey: a later one that changes a station raises it.
 pub const VERSION: u32 = 1;
 
-/// The stations, in their order (§ 4).
-pub const STEPS: [OnboardingStep; 6] = [
+/// The stations, in their order (§ 4). « Ce que tu veux brancher » (ESC-512) comes after the starting settings and before
+/// the project: a code host connected there gives the project's station its repositories to clone.
+pub const STEPS: [OnboardingStep; 7] = [
     OnboardingStep::Harness,
     OnboardingStep::Account,
     OnboardingStep::Defaults,
+    OnboardingStep::Hookups,
     OnboardingStep::Project,
     OnboardingStep::Agent,
     OnboardingStep::Telemetry,
@@ -46,6 +48,13 @@ pub struct Facts {
     /// What a policy imposes: the mode of the new agents, the statistics.
     pub mode_imposed: bool,
     pub telemetry_imposed: bool,
+    /// What is plugged in already (ESC-512), wherever it was: an account of a source of tickets, of a code host, a voice
+    /// service on line with its key.
+    pub sources_connected: bool,
+    pub forge_connected: bool,
+    pub voice_ready: bool,
+    /// The dictation turned off by a policy (`voice.dictation`): the voice's card is shown locked.
+    pub dictation_off: bool,
 }
 
 /// Where a station stands.
@@ -64,6 +73,35 @@ pub enum StepStatus {
 pub struct StepView {
     pub id: OnboardingStep,
     pub status: StepStatus,
+}
+
+/// The cards of « Ce que tu veux brancher » (ESC-512), in their order. A second harness and the MCP server for another
+/// client stay in the discovery (`docs/ONBOARDING.md` § 7, `second-agent` and `mcp`): the first is the harness station's
+/// and Réglages › Comptes et harness', the second opens a door of the machine, which a first launch does not.
+pub const HOOKUPS: [Hookup; 3] = [Hookup::Sources, Hookup::Voice, Hookup::Forge];
+
+/// Where a card stands: plugged in (wherever it was), passed (by its « Plus tard », or the station's), imposed by a policy,
+/// or still to do. A card passed waits in the discovery (ON-3) and in its page of Réglages.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HookupView {
+    pub id: Hookup,
+    pub status: StepStatus,
+}
+
+/// A thing a card of « Ce que tu veux brancher » offers (ESC-512): a source of tickets, a voice service on line, a code
+/// host; its plugin, whether it is installed, whether the seed holds it (it installs then with no network), and why a
+/// policy denies it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Offer {
+    pub kind: Hookup,
+    pub id: String,
+    pub name: String,
+    pub plugin: Option<String>,
+    pub installed: bool,
+    pub seed: bool,
+    pub denied: Option<String>,
 }
 
 /// Why the journey is open.
@@ -93,6 +131,8 @@ pub struct OnboardingView {
     pub finished: bool,
     /// The statistics' question passed in the journey, to ask once more at this start.
     pub ask_telemetry_again: bool,
+    /// The cards of « Ce que tu veux brancher » (ESC-512).
+    pub hookups: Vec<HookupView>,
     /// Where the demonstration project lives (`demo::dir`), made or not: the window knows it by its folder (its band).
     pub demo: String,
 }
@@ -114,6 +154,40 @@ pub enum Act {
     Redo,
     /// The statistics' question passed in the journey asked once more: never again.
     TelemetryAskedAgain,
+    /// A card of « Ce que tu veux brancher » plugged in, or passed (its « Plus tard », or left unticked when the station
+    /// goes on).
+    Hookup {
+        hookup: Hookup,
+        outcome: StepOutcome,
+    },
+}
+
+/// Whether what `facts` say makes the card `h` plugged in, wherever it was.
+pub fn hookup_real(h: Hookup, facts: &Facts) -> bool {
+    match h {
+        Hookup::Sources => facts.sources_connected,
+        Hookup::Voice => facts.voice_ready,
+        Hookup::Forge => facts.forge_connected,
+    }
+}
+
+/// Where the card `h` stands.
+pub fn hookup_status(h: Hookup, saved: &Onboarding, facts: &Facts) -> StepStatus {
+    if h == Hookup::Voice && facts.dictation_off {
+        return StepStatus::Policy;
+    }
+    if hookup_real(h, facts) {
+        return StepStatus::Done;
+    }
+    match saved.hookups.get(&h) {
+        Some(StepOutcome::Done) => StepStatus::Done,
+        Some(StepOutcome::Skipped) => StepStatus::Skipped,
+        // The station passed whole (its « Plus tard », « Tout passer »): each card not plugged in is passed with it.
+        None if saved.steps.get(&OnboardingStep::Hookups) == Some(&StepOutcome::Skipped) => {
+            StepStatus::Skipped
+        }
+        None => StepStatus::Todo,
+    }
 }
 
 /// Whether what `facts` say makes `step` done, wherever it was set.
@@ -122,6 +196,8 @@ pub fn real(step: OnboardingStep, facts: &Facts) -> bool {
         // A harness is chosen once an account of it is added: a harness found alone is not chosen yet.
         OnboardingStep::Harness | OnboardingStep::Account => facts.accounts > 0,
         OnboardingStep::Defaults => facts.mode_chosen,
+        // Something plugged in already (a migration, Réglages): the station has done its work.
+        OnboardingStep::Hookups => HOOKUPS.iter().any(|&h| hookup_real(h, facts)),
         OnboardingStep::Project => facts.projects > 0,
         OnboardingStep::Agent => facts.first_reply,
         OnboardingStep::Telemetry => facts.telemetry_answered,
@@ -218,6 +294,13 @@ pub fn view(saved: &Onboarding, facts: &Facts, window: bool) -> OnboardingView {
         started: saved.started.is_some(),
         finished: saved.finished.is_some(),
         ask_telemetry_again,
+        hookups: HOOKUPS
+            .iter()
+            .map(|&id| HookupView {
+                id,
+                status: hookup_status(id, saved, facts),
+            })
+            .collect(),
         demo: String::new(),
     }
 }
@@ -253,6 +336,15 @@ pub fn apply(saved: &mut Onboarding, act: &Act, facts: &Facts, now: i64) {
             saved.redo = true;
         }
         Act::TelemetryAskedAgain => saved.telemetry_asked_again = true,
+        Act::Hookup { hookup, outcome } => {
+            // A card plugged in stays so: « Plus tard » on it, shown again, never undoes it.
+            if !(*outcome == StepOutcome::Skipped
+                && (saved.hookups.get(hookup) == Some(&StepOutcome::Done)
+                    || hookup_real(*hookup, facts)))
+            {
+                saved.hookups.insert(*hookup, *outcome);
+            }
+        }
     }
     settle(saved, facts);
 }
@@ -498,12 +590,33 @@ impl Core {
                 && matches!(m.status, AgentStatus::Idle | AgentStatus::Done)
                 && m.resume_at.is_none()
         });
-        let (mode_imposed, telemetry_imposed) = {
+        let (mode_imposed, telemetry_imposed, dictation_off) = {
             let locks = self.locks.read();
             (
                 locks.value(DEFAULT_MODE).is_some(),
                 locks.value(TELEMETRY).is_some(),
+                locks.value(DICTATION) == Some(&serde_json::Value::Bool(false)),
             )
+        };
+        let (sources_connected, forge_connected) = {
+            let a = self.accounts.read();
+            let own = [&a.jira, &a.trello, &a.github, &a.linear, &a.clickup]
+                .iter()
+                .any(|x| x.is_some());
+            // GitLab Issues and Azure Boards are served by their code host's account.
+            let hosted = a.forges.iter().any(|f| {
+                crate::integrations::source::registry()
+                    .services()
+                    .iter()
+                    .any(|s| s.as_str() == f.kind)
+            });
+            (own || hosted, a.github.is_some() || !a.forges.is_empty())
+        };
+        let voice_ready = {
+            let s = self.settings.read();
+            s.voice.transcription == "online"
+                && crate::voice::online::usable_keys(&s, &*self.secrets)
+                    .contains(&s.voice.online_service)
         };
         Facts {
             fresh: self.fresh,
@@ -514,9 +627,99 @@ impl Core {
             telemetry_answered,
             mode_imposed,
             telemetry_imposed,
+            sources_connected,
+            forge_connected,
+            voice_ready,
+            dictation_off,
         }
     }
 
+    /// What « Ce que tu veux brancher » offers (ESC-512), read in the registry of the sources, the tables of the voice
+    /// services and of the code hosts, the seed and the installed plugins: never written down in the window. Nothing is
+    /// read on the network.
+    pub fn onboarding_offers(&self) -> Vec<Offer> {
+        use crate::plugins::{builtin, sort};
+        let lang = crate::i18n::ui();
+        let locks = self.locks.read();
+        let online_off = locks.value(VOICE_ONLINE) == Some(&serde_json::Value::Bool(false));
+        let offer = |kind: Hookup, id: &str, name: String, plugin: Option<String>| {
+            let denied = match &plugin {
+                _ if kind == Hookup::Voice && online_off => Some(locks.imposed(VOICE_ONLINE)),
+                Some(p) => locks
+                    .check_plugin(p, "store-verified")
+                    .err()
+                    .map(|e| e.to_string()),
+                None => None,
+            };
+            Offer {
+                kind,
+                id: id.to_string(),
+                name,
+                installed: plugin
+                    .as_deref()
+                    .is_some_and(|p| self.plugins.is_installed(p)),
+                seed: plugin.as_deref().is_some_and(|p| self.plugins.in_seed(p)),
+                plugin,
+                denied,
+            }
+        };
+        let mut out = Vec::new();
+        for k in crate::integrations::source::registry().all() {
+            out.push(offer(
+                Hookup::Sources,
+                k.id(),
+                k.label().to_string(),
+                k.plugin().map(str::to_string),
+            ));
+        }
+        for id in sort::VOICES {
+            let plugin = sort::of_voice(id);
+            let name = plugin
+                .as_deref()
+                .and_then(|p| builtin::name(p, lang))
+                .unwrap_or_else(|| id.to_string());
+            out.push(offer(Hookup::Voice, id, name, plugin));
+        }
+        for (kind, plugin) in sort::FORGES {
+            let name = builtin::name(plugin, lang).unwrap_or_else(|| kind.to_string());
+            out.push(offer(Hookup::Forge, kind, name, Some(plugin.to_string())));
+        }
+        out
+    }
+
+    /// The plugin of what was chosen on a card of « Ce que tu veux brancher » (ESC-512), from the seed with no network,
+    /// and nothing else: the gesture is the user's consent (ESC-373). None when it is installed already, or the seed does
+    /// not hold it (it is then the store's, installed from Plugins, its permissions read); refused when a policy denies
+    /// it or the card offers no such thing.
+    pub fn onboarding_need(
+        &self,
+        kind: Hookup,
+        id: &str,
+    ) -> Result<Option<crate::plugins::PluginView>, crate::plugins::Refusal> {
+        match to_install(&self.onboarding_offers(), kind, id) {
+            Err(why) => Err(crate::plugins::Refusal::other(why)),
+            Ok(Some(p)) => self.install_seed_plugin(&p),
+            Ok(None) => Ok(None),
+        }
+    }
+}
+
+/// The plugin to install from the seed for `id` chosen on the card `kind`, among `offers`: its own, and only when it is
+/// not installed and the seed holds it; refused when a policy denies it or the card does not offer it.
+pub fn to_install(offers: &[Offer], kind: Hookup, id: &str) -> Result<Option<String>, String> {
+    let Some(o) = offers.iter().find(|o| o.kind == kind && o.id == id) else {
+        return Err(tr!(
+            "« {id} » n'est pas offert ici.",
+            "“{id}” is not offered here."
+        ));
+    };
+    if let Some(why) = &o.denied {
+        return Err(why.clone());
+    }
+    Ok(o.plugin.clone().filter(|_| !o.installed && o.seed))
+}
+
+impl Core {
     /// The journey as the window shows it. Opened by itself at a new installation's first start, it is kept as started
     /// (left half-way, it opens again); the stations the real state made done since are kept as done.
     pub fn onboarding_view(&self) -> OnboardingView {

@@ -13,6 +13,7 @@
   import DefaultsStation from './DefaultsStation.svelte';
   import AgentStation from './AgentStation.svelte';
   import HarnessStation from './HarnessStation.svelte';
+  import HookupsStation from './HookupsStation.svelte';
   import ProjectStation from './ProjectStation.svelte';
   import TelemetryStation from './TelemetryStation.svelte';
 
@@ -95,7 +96,7 @@
       else start();
     } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !target.closest('[role=radiogroup]')) {
       // From the question, to its choices.
-      const radio = document.querySelector<HTMLElement>('.onb [role=radio][tabindex="0"]');
+      const radio = document.querySelector<HTMLElement>('.onb [role=radio][tabindex="0"], .onb [role=checkbox][data-card]');
       if (radio) {
         e.preventDefault();
         radio.focus();
@@ -121,6 +122,10 @@
       case 'defaults': {
         const m = (app.settings.agentMode?.trim() || RECOMMENDED_MODE) as 'acceptEdits';
         return t(`composer.mode.${m}.label`);
+      }
+      case 'hookups': {
+        const n = onboarding.view?.hookups?.filter((c) => c.status === 'done').length ?? 0;
+        return n ? t('onboarding.hookups.plugged', { count: n }) : t('onboarding.hookups.nothing');
       }
       case 'project':
         return app.projects[0]?.name ?? t(`onboarding.stations.${step}.todo`);
@@ -182,6 +187,8 @@
           <AccountStation bind:primary />
         {:else if at === 'defaults'}
           <DefaultsStation bind:primary />
+        {:else if at === 'hookups'}
+          <HookupsStation bind:primary />
         {:else if at === 'project'}
           <ProjectStation bind:primary />
         {:else if at === 'agent'}

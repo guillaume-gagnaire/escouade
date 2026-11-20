@@ -17,6 +17,7 @@
     ticket: 'kanban',
     autopilot: 'flow',
     docs: 'page',
+    sources: 'kanban',
     dictation: 'mic',
     voice: 'wave',
     terminal: 'term',

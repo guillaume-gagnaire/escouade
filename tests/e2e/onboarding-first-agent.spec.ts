@@ -53,7 +53,10 @@ async function fitsAcross(page: Page) {
   expect(over).toBeLessThanOrEqual(0);
 }
 
-/** The harness and the starting settings, each by Entrée on the recommended choice: the station of the first project. */
+/**
+ * The harness and the starting settings, each by Entrée on the recommended choice, then « Ce que tu veux brancher »
+ * (ESC-512) gone on with nothing ticked: the station of the first project.
+ */
 async function toProject(page: Page) {
   await expect(page.getByRole('heading', { level: 1, name: 'Avec quel harness tes agents travaillent-ils ?' })).toBeFocused();
   // The machine's sign-in read: until then the harness is not chosen yet, and Entrée has nothing to go on with.
@@ -62,6 +65,8 @@ async function toProject(page: Page) {
   await expect(claude).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Quand tes agents doivent-ils te demander ?' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu brancher ?' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Où travaille ton premier agent ?' })).toBeVisible();
 }
@@ -158,7 +163,7 @@ for (const theme of ['dark', 'light'] as const)
       await journey.getByRole('button', { name: /^Continuer/ }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
       const line = page.getByRole('navigation', { name: 'Les stations du premier lancement' }).getByRole('listitem');
-      await expect(line.nth(3)).toContainText('bac-a-sable');
+      await expect(line.nth(4)).toContainText('bac-a-sable');
       await journey.getByRole('button', { name: 'Non merci' }).click();
       // The end leads on to the map « À découvrir » (ESC-506): nothing of the first launch, the demo nor its agent ticked
       // a discovery by itself, and no bubble comes over it.
@@ -262,6 +267,6 @@ test.describe('the first agent on an account at its usage limit', () => {
     await journey.getByRole('button', { name: 'Plus tard' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
     const line = page.getByRole('navigation', { name: 'Les stations du premier lancement' }).getByRole('listitem');
-    await expect(line.nth(4)).toContainText('passé · à reprendre');
+    await expect(line.nth(5)).toContainText('passé · à reprendre');
   });
 });

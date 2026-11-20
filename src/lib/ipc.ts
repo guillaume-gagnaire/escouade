@@ -14,6 +14,8 @@ import type {
   FolderCheck,
   DiscoverAct,
   DiscoverView,
+  Hookup,
+  HookupOffer,
   OnboardingAct,
   OnboardingView,
   BackupDiff,
@@ -227,6 +229,10 @@ export const api = {
   onboardingView: () => invoke<OnboardingView>('onboarding_view'),
   /** A station done or passed, « Tout passer », its end, « Refaire le premier lancement »; the journey as it then is. */
   onboardingAct: (act: OnboardingAct) => invoke<OnboardingView>('onboarding_act', { act }),
+  /** What « Ce que tu veux brancher » offers (ESC-512): the sources, the voice services, the code hosts, read by the core. */
+  onboardingOffers: () => invoke<HookupOffer[]>('onboarding_offers'),
+  /** A thing chosen on a card: its plugin from the seed, with no network, and nothing else (null: nothing to install). */
+  onboardingNeed: (kind: Hookup, id: string) => invoke<unknown>('onboarding_need', { kind, id }),
   /** The station of the first project (ESC-505) reads a folder: there, written to, a test command it can run. */
   onboardingFolder: (path: string) => invoke<FolderCheck>('onboarding_folder', { path }),
   /** « Cloner » of the station: the repository at `url` into `parent/folder`, by the user's own git access. */

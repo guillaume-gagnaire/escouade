@@ -71,8 +71,11 @@ test.describe('a first launch with Claude Code signed in on the machine', () => 
     await expect(modes.nth(1)).toHaveAttribute('aria-checked', 'true');
     await expect(modes.nth(1)).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('heading', { level: 1, name: 'Où travaille ton premier agent ?' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu brancher ?' })).toBeFocused();
     await expect.poll(() => settings().agentMode).toBe('default');
+    // « Ce que tu veux brancher » (ESC-512): nothing ticked, Entrée goes on, each card passed.
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { level: 1, name: 'Où travaille ton premier agent ?' })).toBeVisible();
     // Échap is « Plus tard »: the project passed, « à reprendre » on the line; the first agent, with no project, says so
     // and is passed too (ESC-505).
     await page.keyboard.press('Escape');
@@ -81,7 +84,9 @@ test.describe('a first launch with Claude Code signed in on the machine', () => 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
     const line = page.getByRole('navigation', { name: 'Les stations du premier lancement' });
-    await expect(line.getByRole('listitem').nth(3)).toContainText('passé · à reprendre');
+    await expect(line.getByRole('listitem').nth(3)).toContainText('rien de branché');
+    await expect(line.getByRole('listitem').nth(4)).toContainText('passé · à reprendre');
+    await expect(line.getByRole('listitem').nth(5)).toContainText('passé · à reprendre');
     await expect(line.getByRole('listitem').nth(1)).toContainText('Principal');
     await expect(line.getByRole('listitem').nth(2)).toContainText('Demander');
     await journey.getByRole('button', { name: 'Non merci' }).click();
@@ -97,10 +102,12 @@ test.describe('a first launch with Claude Code signed in on the machine', () => 
       harness: 'done',
       account: 'done',
       defaults: 'done',
+      hookups: 'done',
       project: 'skipped',
       agent: 'skipped',
       telemetry: 'done',
     });
+    expect(state().onboarding.hookups).toEqual({ sources: 'skipped', voice: 'skipped', forge: 'skipped' });
 
     // Started again: never opened by itself once it ended, nor the questions of before (the mode, the statistics).
     page = await app.restart();
@@ -156,7 +163,7 @@ test.describe('a first launch with no harness on the machine', () => {
     await expect(page.getByRole('region', { name: 'Aucun harness trouvé' })).toBeVisible();
     const state = () => read(path.join(app.root, 'data', 'state.json'));
     await expect.poll(() => state().onboarding?.finished ?? null).not.toBeNull();
-    expect(Object.values(state().onboarding.steps)).toEqual(['skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped']);
+    expect(Object.values(state().onboarding.steps)).toEqual(['skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped']);
     // The statistics passed: asked once more at the next start, as the window of before, then never again.
     page = await app.restart();
     const ask = page.getByRole('dialog', { name: 'Aider à améliorer Escouade ?' });
@@ -212,6 +219,16 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(page.getByRole('heading', { level: 1, name: 'Quand tes agents doivent-ils te demander ?' })).toBeVisible();
       await whole('modes');
       await page.keyboard.press('Enter');
+      await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu brancher ?' })).toBeVisible();
+      await whole('brancher');
+      // A card ticked, its choices open: still whole in the window (the station scrolls inside, never across).
+      await journey.getByRole('checkbox', { name: 'La voix' }).click();
+      await journey.getByRole('radio', { name: /Whisper, sur ta machine/ }).click();
+      await expect(journey.getByRole('button', { name: /^Télécharger/ })).toBeVisible();
+      await whole('brancher-voix');
+      await journey.getByRole('checkbox', { name: 'Une source de tickets' }).click();
+      await whole('brancher-sources');
+      await journey.getByRole('button', { name: /^Continuer/ }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Où travaille ton premier agent ?' })).toBeVisible();
       await whole('projet');
       await page.keyboard.press('Escape');

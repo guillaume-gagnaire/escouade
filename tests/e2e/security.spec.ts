@@ -36,10 +36,16 @@ test.describe('the first start of a new installation (SEC-09)', () => {
     await expect(journey.getByRole('radio', { name: /Bypass/ })).toHaveAttribute('aria-disabled', 'true');
     await journey.getByRole('radio', { name: /^Demander/ }).click();
     await journey.getByRole('button', { name: /Garder Demander/ }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Où travaille ton premier agent ?' })).toBeVisible();
     const settings = () => JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8'));
     await expect.poll(() => settings().agentMode).toBe('default');
     expect(settings().allowBypass).toBe(false);
+    // « Ce que tu veux brancher » (ESC-512): nothing ticked, gone on with nothing plugged in, the statistics still unasked.
+    await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu brancher ?' })).toBeVisible();
+    for (const card of await journey.getByRole('group', { name: 'Les branchements' }).getByRole('checkbox').all())
+      await expect(card).toHaveAttribute('aria-checked', 'false');
+    await journey.getByRole('button', { name: /^Continuer/ }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Où travaille ton premier agent ?' })).toBeVisible();
+    expect(settings().telemetry ?? null).toBeNull();
     // The first project passed, then the first agent (ESC-505), which has no project to work in: the statistics come next,
     // whatever was passed, still unanswered, so nothing was sent before the question.
     await journey.getByRole('button', { name: 'Plus tard' }).click();

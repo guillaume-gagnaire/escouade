@@ -4157,10 +4157,27 @@ export interface OverseerView {
 }
 
 /** A station of the first launch's journey (ESC-504, `docs/ONBOARDING.md` § 4), in its order. */
-export type OnboardingStep = 'harness' | 'account' | 'defaults' | 'project' | 'agent' | 'telemetry';
+export type OnboardingStep = 'harness' | 'account' | 'defaults' | 'hookups' | 'project' | 'agent' | 'telemetry';
 
 /** Where a station stands (`onboarding::StepStatus`): done by the real state, passed, or imposed by a policy. */
 export type StepStatus = 'todo' | 'done' | 'skipped' | 'policy';
+
+/** A card of « Ce que tu veux brancher » (ESC-512, `model::Hookup`), in its order. */
+export type Hookup = 'sources' | 'voice' | 'forge';
+
+/** A thing a card offers (`onboarding::Offer`): read in the registry, the seed and the installed plugins, never written down here. */
+export interface HookupOffer {
+  kind: Hookup;
+  /** The source's service, the voice service's id, the code host's kind. */
+  id: string;
+  name: string;
+  plugin: string | null;
+  installed: boolean;
+  /** The seed holds it: it installs with no network. */
+  seed: boolean;
+  /** Why a policy denies it. */
+  denied: string | null;
+}
 
 /** The journey as the core tells it (`onboarding::OnboardingView`). */
 export interface OnboardingView {
@@ -4172,6 +4189,8 @@ export interface OnboardingView {
   started: boolean;
   finished: boolean;
   askTelemetryAgain: boolean;
+  /** The cards of « Ce que tu veux brancher » (ESC-512): a card passed waits in the discovery. */
+  hookups?: { id: Hookup; status: StepStatus }[];
   /** Where the demonstration project lives (ESC-505), made or not: its band knows it by its folder. */
   demo: string;
 }
@@ -4197,7 +4216,8 @@ export type OnboardingAct =
   | { kind: 'skipAll' }
   | { kind: 'finish' }
   | { kind: 'redo' }
-  | { kind: 'telemetryAskedAgain' };
+  | { kind: 'telemetryAskedAgain' }
+  | { kind: 'hookup'; hookup: Hookup; outcome: 'done' | 'skipped' };
 
 /** A deletion an agent asks of the user (`Agent.deleteAsk`): who asks (an agent's id), since when, and for its worktree. */
 export interface DeleteAsk {
@@ -4220,6 +4240,7 @@ export type Discovery =
   | 'ticket'
   | 'autopilot'
   | 'docs'
+  | 'sources'
   | 'dictation'
   | 'voice'
   | 'terminal'
