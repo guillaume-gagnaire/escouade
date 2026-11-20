@@ -113,6 +113,7 @@ export default defineZone('wizard', {
   },
   account: {
     remoteAll: 'Already on for all agents (Settings › Agents).',
+    thisProject: 'this project',
     noAccount: 'No {harness} account: this project’s agents and tickets won’t start until one is added.',
     reserved: 'Accounts reserved to this project',
     reservedDesc:

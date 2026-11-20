@@ -446,7 +446,8 @@ test('the private project, the cleaned worktrees and the quotas look as the 2.0 
             ['a harness of « Ses fichiers »', '.fence li .engine', '.fence b', ['width']],
             ['« Garde-fou »', '.fence .smark:not(.barrier)', '.fence .smark:not(.barrier)', ['width']],
             ['« Barrière »', '.fence .smark.barrier', '.fence .smark.barrier', ['width']],
-            ['a shared account', '.acct-note.warn', '.acct-note.warn', ['width', 'height']],
+            // Said as a fact, not in the colour of a wait (ESC-556).
+            ['a shared account', '[data-testid="private-shared"]', '.acct-note.shared', ['width', 'height']],
           ],
           `#private, ${where}`,
         );

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { awayOf, shareAgain } from '../../lib/accounts';
   import { engineName } from '../../lib/engines';
   import { forwardTargets } from '../../lib/handover';
   import { t } from '../../lib/i18n';
@@ -13,13 +14,25 @@
 
   const harness = $derived(engineName(engine));
   const other = $derived(forwardTargets(agent)[0] ?? null);
+  /** Its project has no account because one is reserved elsewhere (ESC-556): that one, with « Partager à nouveau ». */
+  const away = $derived(awayOf(agent.projectId, engine));
 </script>
 
 <div class="limit" role="group" aria-label={text} data-testid="no-account">
   <div class="lt"><Icon name="user" size={14} />{text}</div>
-  <p>{t('conv.noAccount.body', { harness })}</p>
+  {#if away}
+    <p data-testid="reserved-away">{away.text}</p>
+  {:else}
+    <p>{t('conv.noAccount.body', { harness })}</p>
+  {/if}
   <div class="row-btns">
-    <button class="btn primary" onclick={() => (app.modal = { kind: 'account', engine })}>{t('accounts.tab.addTo', { harness })}</button>
+    {#if away}
+      {@const a = away.account}
+      <button class="btn primary" onclick={() => shareAgain($state.snapshot(a), [agent.projectId])}>{t('accounts.away.shareAgain')}</button>
+    {/if}
+    <button class="btn" class:primary={!away} onclick={() => (app.modal = { kind: 'account', engine })}
+      >{t('accounts.tab.addTo', { harness })}</button
+    >
     {#if other}
       <button class="btn" onclick={() => app.run(api.continueOnEngine(agent.id, other))}
         >{t('handover.continueOn', { harness: engineName(other) })}</button

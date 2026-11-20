@@ -120,6 +120,8 @@ export default {
   account: {
     remoteAll: 'Déjà allumé pour tous les agents (Réglages › Agents).',
     /** ESC-128: its harness has no account yet. */
+    /** ESC-556 : le projet pas encore fait, nommé dans la confirmation d'une réservation. */
+    thisProject: 'ce projet',
     noAccount: 'Aucun compte {harness} : les agents et les tickets de ce projet ne démarreront qu’une fois un compte ajouté.',
     /** A private project's accounts (ESC-163): reserved to it alone once it is made. */
     reserved: 'Comptes réservés à ce projet',

@@ -125,6 +125,21 @@ describe('Board', () => {
     expect(app.modal).toEqual({ kind: 'account', engine: 'claude' });
   });
 
+  // ESC-556: no account serves it because its only one is reserved to another project: that one and its project named,
+  // with « Partager à nouveau ».
+  it('names the account reserved to another project and shares it again', async () => {
+    app.projects.push(project({ id: 'p9', name: 'client', private: true }));
+    app.settings.accounts = [{ id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true, projects: ['p9'] }];
+    const b = fakeBackend({ account_update: ({ account }) => [account] });
+    render(Board, { project: app.projects[0] });
+    const band = screen.getByTestId('reserved-away');
+    expect(band).toHaveTextContent(/^« Principal » est réservé à « client » : « demo-api » n’a plus de compte Claude Code actif./);
+    await userEvent.click(within(band).getByRole('button', { name: 'Partager à nouveau' }));
+    // It then serves both open projects: reserved to none, as before.
+    expect(b.called('account_update')[0].args.account.projects).toEqual([]);
+    await expect.poll(() => screen.queryByTestId('reserved-away')).toBeNull();
+  });
+
   it('says why the autopilot is paused, and resumes it at once on demand', async () => {
     const backend = fakeBackend();
     const at = new Date();

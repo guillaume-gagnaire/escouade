@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { addAccount, defaultEngine, hasAccount, pausedAccounts, pauseOf, quotaOf } from '../../lib/accounts';
+  import { addAccount, awayOf, defaultEngine, hasAccount, pausedAccounts, pauseOf, quotaOf, shareAgain } from '../../lib/accounts';
   import { busy, COLUMNS, columnTickets, pauseLabel, placesLabel, settingsSummary } from '../../lib/board';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -50,6 +50,8 @@
   /** The project's harness has no account (ESC-128): « Ajouter un compte… » beside why nothing starts. */
   const engine = $derived(project.engine ?? defaultEngine());
   const noAccount = $derived(!hasAccount(engine));
+  /** No account serves it, one being reserved to other projects (ESC-556): that one, who holds it, « Partager à nouveau ». */
+  const away = $derived(awayOf(project.id, engine));
   /** « Environnements » only for a project whose code host reads deployments (ESC-390). */
   const envsTab = $derived(hasTab(app.codeHosts[project.id], 'deployments'));
   /** The view « Environnements » in place of the tickets (ESC-67). */
@@ -173,6 +175,14 @@
       {/if}
     </div>
   </header>
+  {#if away}
+    {@const a = away.account}
+    <div class="band pause" role="status" data-testid="reserved-away">
+      <Icon name="user" size={14} />
+      <span class="why" use:tip={{ text: away.text, cut: true }}>{away.text}</span>
+      <button class="btn" onclick={() => shareAgain($state.snapshot(a), [project.id])}>{t('accounts.away.shareAgain')}</button>
+    </div>
+  {/if}
   {#if pause}
     <!-- A band of its own under the header: its text and its button would not fit in it. -->
     <div class="band pause" role="status">

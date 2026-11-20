@@ -1018,8 +1018,10 @@ impl<R: Runtime> Core<R> {
             return Err(accounts::no_account_of(engine));
         }
         if !accounts::serves_any(&self.settings.read(), engine, Some(&project)) {
-            let name = self.project(&project).map_or(project, |p| p.name);
-            return Err(accounts::no_account(&name, engine));
+            let name = self
+                .project(&project)
+                .map_or_else(|_| project.clone(), |p| p.name);
+            return Err(accounts::no_account(&project, &name, engine));
         }
         self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
@@ -1408,7 +1410,7 @@ impl<R: Runtime> Core<R> {
         }
         if !accounts::serves_any(&all, engine, Some(project_id)) {
             let name = project.map_or_else(|| project_id.to_string(), |p| p.name);
-            return Err(accounts::no_account(&name, engine));
+            return Err(accounts::no_account(project_id, &name, engine));
         }
         let settings = self.project_accounts(&all, engine, project_id);
         let preferred =

@@ -5031,9 +5031,10 @@ async fn a_new_project_no_account_would_serve_is_made_without_its_first_agent_an
         .filter(|e| e["type"] == "toast")
         .map(|e| e["text"].as_str().unwrap().to_string())
         .collect();
+    // Marked with the project (ESC-556): the window offers « Partager à nouveau » on the account reserved elsewhere.
     assert_eq!(
         toasts,
-        ["Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes et harness."]
+        [format!("no-account:claude@{}|Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes et harness.", q.id)]
     );
 }
 
@@ -9212,6 +9213,34 @@ async fn without_an_account_of_its_harness_nothing_starts_and_the_window_is_told
             .downcast_ref::<crate::accounts::NoAccount>()
             .map(|n| n.engine),
         Some(EngineId::CODEX)
+    );
+}
+
+/// ESC-556: its only account reserved to another project, a project is refused with its id, so that
+/// the window names the account reserved elsewhere and offers « Partager à nouveau ».
+#[tokio::test]
+async fn a_project_whose_account_is_reserved_elsewhere_is_refused_with_its_id() {
+    let h = harness("esc556-reserved-away");
+    let (p, _) = h.project(false).await;
+    let mut s = h.core.settings.read().clone();
+    s.accounts
+        .iter_mut()
+        .find(|a| a.id == "principal")
+        .unwrap()
+        .projects = vec!["client".into()];
+    h.core.save_settings(s).unwrap();
+    let refused = h.core.create_agent(&p.id, None).await.unwrap_err();
+    let no = refused
+        .downcast_ref::<crate::accounts::NoAccount>()
+        .expect("for want of an account serving it");
+    assert_eq!(no.project.as_deref(), Some(p.id.as_str()));
+    let told = crate::accounts::marked(&refused, refused.to_string());
+    assert!(
+        told.starts_with(&format!(
+            "no-account:claude@{}|Aucun compte Claude Code actif ne sert le projet",
+            p.id
+        )),
+        "{told}"
     );
 }
 

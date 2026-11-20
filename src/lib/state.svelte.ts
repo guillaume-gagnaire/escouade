@@ -18,7 +18,7 @@ import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
 import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
-import { errorText, missingAccountOf } from './refusal';
+import { errorText, missingAccountOf, missingAccountProjectOf } from './refusal';
 import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
 import type { IconName } from './icons';
 import type { SettingsPage } from './settings-pages';
@@ -2191,6 +2191,20 @@ class AppState {
   refused(e: unknown) {
     const engine = missingAccountOf(e);
     if (!engine) return this.toast(errorText(e), 'error');
+    // Its project has no account because one is reserved elsewhere (ESC-556): « Partager à nouveau » on that one.
+    const project = missingAccountProjectOf(e);
+    const away = project
+      ? (this.settings.accounts ?? []).find(
+          (a) => a.active && (a.engine ?? 'claude') === engine && !!a.projects?.length && !a.projects.includes(project),
+        )
+      : undefined;
+    if (project && away) {
+      const a = $state.snapshot(away);
+      return this.toast(errorText(e), 'error', {
+        label: t('accounts.away.shareAgain'),
+        onClick: () => void import('./accounts').then((m) => m.shareAgain(a, [project])),
+      });
+    }
     this.toast(errorText(e), 'error', { label: t('accounts.tab.add'), onClick: () => (this.modal = { kind: 'account', engine }) });
   }
 }

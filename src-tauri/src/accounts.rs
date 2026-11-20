@@ -1689,9 +1689,13 @@ pub(crate) fn ticket_refusal(
 
 /// Refused: the harness `engine` has no account (ESC-128): nothing starts on it before one is
 /// added. The window offers « Ajouter un compte… » on that harness with it (`commands::err`).
+/// With `project` (ESC-556): the harness has accounts, but none active serves that project (each
+/// reserved to others, or off); the window names the account reserved elsewhere, with « Partager
+/// à nouveau ».
 #[derive(Debug)]
 pub struct NoAccount {
     pub engine: EngineId,
+    pub project: Option<String>,
     text: String,
 }
 
@@ -1705,9 +1709,14 @@ impl std::error::Error for NoAccount {}
 
 /// What the window is told of the refusal `e` (said as `text`): one for want of an account comes
 /// as `no-account:<harness>|<text>`, which the window shows with « Ajouter un compte… » on that
-/// harness (`refusal.ts`).
+/// harness (`refusal.ts`); one for a project no account serves, `no-account:<harness>@<project>|<text>`.
 pub fn marked(e: &anyhow::Error, text: String) -> String {
     match e.downcast_ref::<NoAccount>() {
+        Some(NoAccount {
+            engine,
+            project: Some(p),
+            ..
+        }) => format!("no-account:{engine}@{p}|{text}"),
         Some(no) => format!("no-account:{}|{text}", no.engine),
         None => text,
     }
@@ -1718,6 +1727,7 @@ pub(crate) fn no_account_of(engine: EngineId) -> anyhow::Error {
     let harness = engine::by_name(engine);
     anyhow::Error::new(NoAccount {
         engine,
+        project: None,
         text: tr!(
             "Aucun compte {harness} : ajoute-en un dans Réglages › Comptes et harness.",
             "No {harness} account: add one in Settings › Accounts and harnesses."
@@ -1731,13 +1741,18 @@ pub fn has_any(settings: &Settings, engine: EngineId) -> bool {
 }
 
 /// Refused: no active account of `engine` serves the project `name` (all are reserved to others,
-/// or off; none at all: `no_account_of`): nothing starts for it on that harness.
-pub(crate) fn no_account(name: &str, engine: EngineId) -> anyhow::Error {
+/// or off; none at all: `no_account_of`): nothing starts for it on that harness. A `NoAccount` of
+/// the project `id`: the window names the account reserved elsewhere, with « Partager à nouveau ».
+pub(crate) fn no_account(id: &str, name: &str, engine: EngineId) -> anyhow::Error {
     let harness = engine::by_name(engine);
-    anyhow::anyhow!(tr!(
-        "Aucun compte {harness} actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte {harness} actif, dans Réglages › Comptes et harness.",
-        "No active {harness} account serves the project “{name}”: tick it under “Reserved to projects” on an active {harness} account, in Settings › Accounts and harnesses."
-    ))
+    anyhow::Error::new(NoAccount {
+        engine,
+        project: Some(id.to_string()),
+        text: tr!(
+            "Aucun compte {harness} actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte {harness} actif, dans Réglages › Comptes et harness.",
+            "No active {harness} account serves the project “{name}”: tick it under “Reserved to projects” on an active {harness} account, in Settings › Accounts and harnesses."
+        ),
+    })
 }
 
 /// Refused: no active account of `engine` serves agents of no project (every one is reserved).

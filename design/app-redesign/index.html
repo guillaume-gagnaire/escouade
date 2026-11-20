@@ -6800,23 +6800,17 @@
         margin-top: 2px;
         color: var(--muted);
       }
-      .acct-note.warn {
-        background: var(--wait-bg);
-        box-shadow: inset 0 0 0 1px var(--wait-line);
-      }
-      .acct-note.warn svg {
-        color: var(--wait);
-      }
       .acct-note .grow {
         flex: 1;
       }
-      .acct-note.warn {
+      /* A shared account (ESC-556): said as a fact, neutral, its buttons under the text. */
+      .acct-note {
         flex-wrap: wrap;
       }
-      .acct-note.warn .grow {
+      .acct-note .grow {
         flex-basis: calc(100% - 30px);
       }
-      .acct-note.warn .btn:first-of-type {
+      .acct-note .btn:first-of-type {
         margin-left: 22px;
       }
       .acct-note .btn {
@@ -12003,8 +11997,8 @@ If your browser did not open, navigate to this URL to authenticate:
                   </div>
                   <p class="note">Un garde-fou est une règle du harness, qu’une commande peut contourner ; une barrière tient pour toutes ses commandes. Un agent déjà lancé prend ce réglage avant son prochain tour.</p>
                   <div class="sub-h" id="sh-private-accounts"><b>Ses comptes</b><span>Sessions, mémoire et historique du harness partagés avec aucun autre projet</span></div>
-                  <div class="acct-note"><svg class="i s14"><use href="#i-check-c" /></svg><span class="grow">Compte réservé à ce projet : « Client Acme ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet.</span></div>
-                  <div class="acct-note warn"><svg class="i s14"><use href="#i-shield" /></svg><span class="grow">Ses agents peuvent partir sur « Principal » de Codex, un compte partagé avec d’autres projets : sessions, mémoire, historique et réglages globaux de Codex y sont communs.</span><button class="btn">Réserver Principal à ce projet</button><button class="btn">Ajouter un compte réservé…</button></div>
+                  <div class="acct-note"><svg class="i s14"><use href="#i-check-c" /></svg><span class="grow">Compte réservé à ce projet : « Client Acme ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet.</span><button class="btn">Ne plus le réserver</button></div>
+                  <div class="acct-note shared"><svg class="i s14"><use href="#i-info" /></svg><span class="grow">Ses agents partent aussi sur « Principal » de Codex, un compte partagé avec d’autres projets. Ses sessions restent à lui : les agents des autres projets se voient refuser leurs dossiers. Restent communs : la connexion, la configuration, les instructions globales (AGENTS.md), l’historique et les mémoires de Codex. Pour tout séparer, réserve-lui un compte : c’est facultatif, une isolation de plus.</span><button class="btn">Réserver Principal à ce projet</button><button class="btn">Ajouter un compte réservé…</button></div>
                   <div class="sr">
                     <div class="lab"><b>Comptes partagés à la limite</b><span>À la limite d’usage de ses comptes réservés, ses agents peuvent continuer sur un compte partagé. Éteint, ils attendent la remise à zéro.</span></div>
                     <div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="Comptes partagés à la limite"></button></div>

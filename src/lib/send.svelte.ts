@@ -3,7 +3,7 @@
 import type { DraftAttachment } from './attachments';
 import { conversationOf } from './conversations.svelte';
 import { api } from './ipc';
-import { errorText, missingAccountOf } from './refusal';
+import { errorText, missingAccountOf, missingAccountProjectOf } from './refusal';
 import { app } from './state.svelte';
 
 export function sendDraft(agentId: string, body: string, files: DraftAttachment[]): Promise<void> {
@@ -18,6 +18,6 @@ export function sendDraft(agentId: string, body: string, files: DraftAttachment[
 /** Says why a message was refused: in its conversation for want of an account (choice 19), else in a toast. */
 export function reportRefusal(owner: string, e: unknown) {
   const missing = missingAccountOf(e);
-  if (missing) conversationOf(owner).noAccount = { engine: missing, text: errorText(e) };
+  if (missing) conversationOf(owner).noAccount = { engine: missing, text: errorText(e), project: missingAccountProjectOf(e) };
   else app.toast(errorText(e), 'error');
 }

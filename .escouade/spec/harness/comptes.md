@@ -2,8 +2,8 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-usage/real-2.1.314.json","tests/fixtures/quota-pace.json","design/settings-2-2/PROPOSITION.md","docs/PROTOCOL.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-511","ESC-521"]
-decisions: [20,24,123,154,160,213,161,198,211,"sur-la-2-2-ce-qui-tourne-en-bypass-s-arr"]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-511","ESC-521","ESC-556"]
+decisions: [20,24,123,154,160,213,161,198,211,"sur-la-2-2-ce-qui-tourne-en-bypass-s-arr","un-compte-partage-protege-les-sessions-d"]
 compared: "2026-10-31T17:26:28+01:00"
 ---
 
@@ -181,15 +181,33 @@ Une session ne passe pas d'un harness à l'autre : c'est une passation, qui dém
 
 ### Un compte réservé au projet privé
 
-- Deux projets sur le même compte partagent son dossier (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`…) : sessions, mémoire, historique, réglages globaux du harness. Un compte « réservé à ce projet » est un compte dont « Réservé aux projets » ne contient que lui.
-- Dans les réglages d'un projet privé (Réglages › Projets, groupe « Confidentialité », dès que l'interrupteur est allumé, avant même d'enregistrer), la rangée « Comptes » dit, pour son harness par défaut et selon son brouillon :
-  - « Compte réservé à ce projet : « Pro ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet. » (avec, pour le compte de la machine, « Le compte de la machine reste celui de Claude Code hors d’Escouade. ») ;
-  - et/ou, en couleur d'attente, les comptes partagés où ses agents peuvent encore aller : « Ses agents peuvent partir sur « Principal » et « Pro », des comptes partagés avec d’autres projets : sessions, mémoire, historique et réglages globaux de Claude Code y sont communs. »
-- Pour y remédier :
+- Deux projets sur le même compte partagent son dossier (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`…). Un projet privé n'y perd pas ses sessions : la clôture de ses fichiers les refuse aux agents des autres projets, harness par harness, et ce qui reste commun (connexion, réglages, mémoire globale, historique des prompts de Claude Code…) est dit (voir *Projets privés*, « Sur un compte partagé »). Un compte « réservé à ce projet » est un compte dont « Réservé aux projets » ne contient que lui : il sépare aussi ce qui reste commun. Un projet privé ne réserve rien de lui-même.
+- Dans les réglages d'un projet privé (Réglages › Projets, groupe « Confidentialité », dès que l'interrupteur est allumé, avant même d'enregistrer), la rangée « Comptes » dit, pour son harness par défaut et selon son brouillon, comme une information (couleur neutre, jamais celle d'une attente : un compte partagé est un choix légitime) :
+  - « Compte réservé à ce projet : « Pro ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet. » (avec, pour le compte de la machine, « Le compte de la machine reste celui de Claude Code hors d’Escouade. »), et par compte réservé « Ne plus le réserver » (enregistré tout de suite : il sert de nouveau tous les projets, ou les autres projets de sa liste ; rien n'est demandé, personne n'y perd) ;
+  - et/ou les comptes partagés où ses agents vont aussi, ce que ses sessions y gardent et ce qui reste commun, la réservation en isolation de plus, facultative : « Ses agents partent aussi sur « Principal », un compte partagé avec d’autres projets. Ses sessions restent à lui : les agents des autres projets se voient refuser leurs dossiers. Restent communs : la connexion, les réglages, la mémoire globale (CLAUDE.md) et l’historique des prompts de Claude Code. Pour tout séparer, réserve-lui un compte : c’est facultatif, une isolation de plus. » Ce qui reste commun est dit par harness : Codex (connexion, configuration, `AGENTS.md`, historique, mémoires), Copilot CLI (connexion, configuration), OpenCode (configuration, fournisseurs), Cursor CLI, Mistral Vibe, Antigravity CLI et Gemini CLI (la connexion ou la clé et le quota, chaque agent ayant déjà son dossier), un autre harness (sa connexion et ses réglages globaux).
+- Pour tout séparer :
   - « Ajouter un compte réservé… » : la modale « Ajouter un compte », un nouveau compte proposé d'abord, qui dit « Réservé au projet « client » : … ». Le compte créé, ou celui de la machine, est réservé à ce projet seul, puis la modale revient aux réglages du projet, brouillon intact ;
-  - par compte partagé, « Réserver <compte> à ce projet » (enregistré tout de suite, comme dans Réglages › Comptes et harness ; les autres projets n'y partent plus).
-- Dans Réglages › Comptes et harness, un compte où part encore un projet privé qui ne l'a pas à lui seul le dit (« Le projet privé « client » part encore sur ce compte, partagé avec d’autres projets. »), avec « Réserver à « client » » quand il n'y en a qu'un.
-- **Pas de bascule sur un compte partagé.** Un projet privé est « confiné » tant que « Comptes partagés à la limite » est éteint. Confiné, et avec au moins un compte actif réservé à lui seul sur un harness, il ne part que sur ceux-là (et sur son « Compte préféré », le choix de l'utilisateur) sur ce harness : nouveaux agents et tickets restent sur son compte au-delà du seuil, le pilote auto attend son compte (pause du projet), la reprise automatique d'un agent de ticket ne va que sur un autre compte à lui, et le passage automatique à un autre harness seulement si le compte qu'il y prendrait est à lui. Sans compte à lui, il garde ses comptes partagés (ce que dit l'avertissement), mais aucune bascule automatique ne le fait changer de compte : il attend la remise à zéro. À la main, « Reprendre sur <compte> » et « Continuer sur <harness> » restent offerts : c'est la permission de l'utilisateur.
+  - par compte partagé, « Réserver <compte> à ce projet » (enregistré tout de suite, comme dans Réglages › Comptes et harness ; les autres projets n'y partent plus), après la confirmation ci-dessous quand elle s'impose.
+- Dans Réglages › Comptes et harness, un compte où part aussi un projet privé qui ne l'a pas à lui seul le dit, sans couleur d'attente (« Le projet privé « client » part aussi sur ce compte : ses sessions restent à lui, la connexion et les réglages du compte sont communs. »), avec « Réserver à « client » » quand il n'y en a qu'un.
+
+### Réserver sans priver les autres projets (ESC-556)
+
+- **Demandé d'abord.** Partout où l'on réserve (« Réserver <compte> à ce projet » de la Confidentialité, une case de « Réservé aux projets » cochée ou décochée et « Réserver à « client » » dans Réglages › Comptes et harness, une case « Comptes réservés à ce projet » de l'assistant « Nouveau projet »), une réservation qui laisserait un ou plusieurs projets ouverts sans compte actif de ce harness (projets qu'un compte actif sert maintenant et qu'aucun ne servirait après, ceux de la nouvelle liste exceptés) ouvre une confirmation par-dessus la page, qui garde ce qu'elle tient (brouillon, étapes de l'assistant) :
+  - titre : « Réserver « Firmin.ai » à « client » ? » (« Changer les projets de « Pro » ? » quand la liste n'est pas un seul projet) ;
+  - ce qui se passera : le seul compte actif du harness, « C’est ton seul compte Claude Code : tes 3 autres projets (« a », « b » et « c ») n’en auront plus, leurs agents et leurs tickets ne démarreront plus. » (« ton projet « a » n’en aura plus… » pour un seul) ; sinon « « Pro » est le dernier compte Claude Code de « a » : ce projet n’en aura plus… » ;
+  - « Pour défaire : « Partager à nouveau », là où ces projets disent qu’ils n’ont plus de compte. » ;
+  - quand la réservation va à un seul projet : « Pour isoler « client » sans priver personne, ajoute-lui un compte réservé. » et le bouton « Ajouter un compte réservé… » (la modale « Ajouter un compte » réservée à ce projet ; ouverte de Réglages › Comptes et harness, elle y revient ; dans l'assistant, le compte ajouté est coché, réservé au projet une fois fait) ;
+  - « Annuler » (rien n'est enregistré, la case revient comme elle était) et « Réserver quand même ».
+- Une réservation qui ne prive personne (un autre compte actif sert les autres projets, un seul projet ouvert, un compte désactivé) est enregistrée sans rien demander, comme avant.
+
+### Un projet sans compte, un compte réservé ailleurs (ESC-556)
+
+- Un projet qu'aucun compte actif de son harness ne sert parce qu'un compte est réservé à d'autres projets nomme ce compte et ceux qui le tiennent, avec « Partager à nouveau » : « « Firmin.ai » est réservé à « client » : « site » n’a plus de compte Claude Code actif. » (« à d’autres projets » quand ce sont des projets fermés) :
+  - dans la conversation, la carte d'un message refusé faute de compte (le refus arrive marqué `no-account:<harness>@<projet>|<texte>`), « Partager à nouveau » d'abord, « Ajouter un compte Claude Code… » ensuite ; un toast du même refus ailleurs a « Partager à nouveau » ;
+  - au Kanban, une bande sous l'en-tête, tant qu'aucun compte ne le sert ;
+  - dans Réglages › Comptes et harness, sous « Aucun compte actif… ne sert « site » », une ligne par compte réservé ailleurs, qui nomme les projets qu'il rendrait.
+- « Partager à nouveau » ajoute le ou les projets à la liste du compte, enregistré tout de suite ; une liste qui couvrirait alors tous les projets ouverts redevient vide (« Tous les projets »), comme avant la réservation.
+- **Pas de bascule sur un compte partagé.** Un projet privé est « confiné » tant que « Comptes partagés à la limite » est éteint. Confiné, et avec au moins un compte actif réservé à lui seul sur un harness, il ne part que sur ceux-là (et sur son « Compte préféré », le choix de l'utilisateur) sur ce harness : nouveaux agents et tickets restent sur son compte au-delà du seuil, le pilote auto attend son compte (pause du projet), la reprise automatique d'un agent de ticket ne va que sur un autre compte à lui, et le passage automatique à un autre harness seulement si le compte qu'il y prendrait est à lui. Sans compte à lui, il garde ses comptes partagés (ce que dit la rangée « Comptes »), mais aucune bascule automatique ne le fait changer de compte : il attend la remise à zéro. À la main, « Reprendre sur <compte> » et « Continuer sur <harness> » restent offerts : c'est la permission de l'utilisateur.
 
 ### Statistiques et serveur MCP
 
