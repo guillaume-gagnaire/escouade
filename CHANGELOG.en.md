@@ -15,7 +15,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Plugins: a plugin can ask for up to 16 programs at once instead of 4; the install window and the Permissions tab say so with its author’s reason, and an update that asks for more asks for your consent again.
 - A long secret (a VPN configuration with its certificates, up to 64 KiB) can now be kept in the Windows keychain, which refused more than 1,280 characters: it is cut into pieces there and checked at each read.
 - Plugins: a plugin can have profiles (a server and its credentials, say) that you make on its page and that each project chooses, and settings of each project, gathered on a new Plugins page of the project’s settings. A .escouade.yml can propose a profile there, never choose it, and a setting is written into the file key by key.
-- Security: plugins run on wasmtime 50.0.2 (RUSTSEC-2026-0566 and RUSTSEC-2026-0567), their modules precompiled by the previous version are made again, and a plugin that writes more than 256 MiB on its output in one turn is stopped instead of filling the machine’s memory.
+- Security: plugins run on wasmtime 50.0.3 (RUSTSEC-2026-0566, RUSTSEC-2026-0567 and RUSTSEC-2026-0587, an escape from the files sandbox on Windows), their modules precompiled by the previous version are made again, and a plugin that writes more than 256 MiB on its output in one turn is stopped instead of filling the machine’s memory.
 - Remote control: an agent whose remote control you turned on by hand stays reachable from claude.ai, even idle, and starts again with the app. An agent with no process says so, “Asleep: resumes at the next message”, and “Wake up” links it at once.
 
 ## [2.2.4] — 2026-11-18
