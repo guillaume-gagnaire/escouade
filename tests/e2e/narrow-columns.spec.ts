@@ -61,9 +61,12 @@ function overflows(root: Locator, rows: string[] = []) {
           out.push(`${name(el)} on ${tops.size} lines`);
       }
     }
+    // A mark drawn on the corner of its tile's icon by design, which overlaps it on purpose: the dot of « Aide » (something
+    // left to discover, ESC-506), the count of the box « À toi » (ESC-510).
+    const mark = (el: Element) => el.matches('nav.rail .tile > .help-dot, nav.rail .tile > .badge');
     for (const sel of rows)
       for (const row of top.querySelectorAll(sel)) {
-        const kids = [...row.children].filter(shown).map((el) => [el, el.getBoundingClientRect()] as const);
+        const kids = [...row.children].filter((el) => shown(el) && !mark(el)).map((el) => [el, el.getBoundingClientRect()] as const);
         for (let i = 0; i < kids.length; i++)
           for (let j = i + 1; j < kids.length; j++) {
             const [a, ra] = kids[i];
