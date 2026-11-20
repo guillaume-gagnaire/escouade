@@ -304,6 +304,8 @@ impl Core {
             }
         });
         self.team_boards_soon();
+        // The costs of the teams (TS-16): their totals once an hour, their budgets weighed.
+        self.start_team_costs();
     }
 
     pub(crate) fn teams_link(&self) -> Option<Arc<Teams>> {

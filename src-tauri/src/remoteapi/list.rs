@@ -85,6 +85,12 @@ escouade_command::commands! {
         commands::team_memory_of_ticket,
         commands::team_memory_set_review,
         commands::team_forget,
+        // The costs and the quotas of the team (TS-16, ESC-547).
+        commands::team_costs,
+        commands::team_costs_ack,
+        commands::team_costs_untold,
+        commands::team_cost_notice,
+        commands::team_costs_send,
         commands::team_settings,
         commands::team_settings_check,
         commands::team_settings_propose,

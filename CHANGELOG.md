@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : les coûts et les quotas de l’équipe, des totaux par jour chiffrés pour ses seuls administrateurs (jamais un prompt ni un tour), par projet d’office ou par membre si l’équipe le choisit et te le dit. Les budgets du mois sont pesés avant chaque lancement, une alerte arrive dans la boîte « À toi » de l’administrateur, et au-delà le pilote auto peut s’arrêter.
 - « Ta relecture » dans la vue d’une PR : tes remarques attendent sous leur ligne, sur ton poste et même après un redémarrage, puis partent avec ton texte et ton verdict (commenter, approuver, demander des changements) en une seule relecture chez l’hébergeur, à ton clic. Les changements demandés sur la PR d’un ticket peuvent revenir aussitôt à son agent.
 - Compiler un plugin en Rust ne remplit plus ton disque : les copies de compilation qui n’ont pas servi depuis 7 jours partent, le cache reste sous 5 Go, et `escouade-plugin cache` dit où il est et ce qu’il pèse (`cache clear` le vide).
 - Mode serveur : plusieurs serveurs dans un même Escouade, chacun son espace en pile dans la barre des projets, tous tenus connectés. La vue « Partout » montre ce qui attend sur chaque machine et y répond sans changer d’espace, la machine écrite sur chaque demande ; `Alt+1`…`Alt+9` passent d’un espace à l’autre, et un poste géré peut n’y laisser que des nombres.

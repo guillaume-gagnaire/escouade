@@ -10,6 +10,7 @@
 
 pub mod beacon;
 pub mod content;
+pub mod costkey;
 pub mod device;
 pub mod history;
 pub mod hlc;
@@ -31,6 +32,7 @@ mod vectors;
 use openmls::prelude::Ciphersuite;
 
 pub use beacon::Beacon;
+pub use costkey::CostKey;
 pub use device::{
     Change, Checkpoint, HeadCheck, PendingCommit, Processed, Publication, SavedState, TeamDevice,
 };

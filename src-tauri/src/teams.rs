@@ -474,6 +474,10 @@ pub struct Teams {
     /// The teams whose live feed told of a claim (a ticket taken, renewed, given back) since their Kanban last read the
     /// claims (TS-6).
     claim_frames: Mutex<std::collections::BTreeSet<String>>,
+    /// What each team's costs are on this device, as last read (TS-16).
+    cost_views: Mutex<BTreeMap<String, escouade_team::costs::View>>,
+    /// This device's member in each team (hex), as last read.
+    cost_members: Mutex<BTreeMap<String, String>>,
 }
 
 /// Where a reading of a team is told: the team's id (TS-9).
@@ -493,6 +497,10 @@ pub use team_files::{SettingsDraft, TeamSettingsView};
 #[path = "teams_catalog.rs"]
 mod team_catalog;
 pub use team_catalog::{CatalogOf, MemberView};
+
+#[path = "teams_costs.rs"]
+mod team_costs;
+pub use team_costs::month_now;
 
 impl Teams {
     /// The teams of the data folder's `teams` (made if needed), each opened from its state and the keychain.
@@ -543,6 +551,8 @@ impl Teams {
             on_docs: Mutex::default(),
             on_projects: Mutex::default(),
             claim_frames: Mutex::default(),
+            cost_views: Mutex::default(),
+            cost_members: Mutex::default(),
         };
         let known = teams.known.lock().clone();
         for k in known {
@@ -1064,6 +1074,7 @@ impl Teams {
                         Ok(()) => {
                             self.read_settings(id, &mut t).await;
                             self.read_catalog(&mut t).await;
+                            self.read_costs(id, &mut t).await;
                             Ok(())
                         }
                         Err(e) => Err(e),
@@ -1143,6 +1154,8 @@ impl Teams {
             return Err("L’équipe est en cours d’usage : réessaie.".to_string());
         }
         self.forget_settings(id);
+        self.cost_views.lock().remove(id);
+        self.cost_members.lock().remove(id);
         self.known.lock().retain(|k| k.id != id);
         self.save();
         (self.changed)();

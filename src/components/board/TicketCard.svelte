@@ -22,6 +22,7 @@
   import { openAddress } from '../../lib/recipe';
   import { estimateHint, fSpentUsd } from '../../lib/spend';
   import { app } from '../../lib/state.svelte';
+  import { budgetAsk } from '../../lib/team-costs';
   import { anyRunning, flows, stopTests, testAgent } from '../../lib/test-launch.svelte';
   import type { Project, Ticket } from '../../lib/types';
   import { cardActivity } from '../../lib/sidebar';
@@ -175,16 +176,18 @@
   }
 
   /** "Lancer": a ticket that waits for others starts without them only once the user agrees. */
-  function launch() {
+  async function launch() {
     const start = () => app.run(api.ticketStart(ticket.id));
-    if (!awaited.length) {
+    // A ticket of a team: its budgets weighed first (TS-16), « Le projet api a dépensé 92 % de son budget du mois ».
+    const budget = project.team ? await budgetAsk(project.id) : null;
+    if (!awaited.length && !budget) {
       start();
       return;
     }
     app.modal = {
       kind: 'confirm',
       title: t('board.card.launchTitle', { key: ticket.key }),
-      body: launchAnyway(ticket.key, awaited),
+      body: [budget, awaited.length ? launchAnyway(ticket.key, awaited) : ''].filter(Boolean).join(' '),
       confirm: t('board.card.launchAnyway'),
       onConfirm: start,
     };

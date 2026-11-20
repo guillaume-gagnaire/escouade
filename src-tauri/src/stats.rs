@@ -63,6 +63,21 @@ pub struct Stats {
     conn: Mutex<Option<Connection>>,
 }
 
+/// A line of the turns table, as the totals of a team read it (`Stats::turn_lines`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TurnLine {
+    pub ts: i64,
+    pub project: String,
+    pub agent: String,
+    pub engine: String,
+    pub model: String,
+    pub account: String,
+    pub input: u64,
+    pub cache: u64,
+    pub output: u64,
+    pub cost: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Bucket {
@@ -290,6 +305,52 @@ impl Stats {
             Ok((r.get::<_, String>(0)?, r.get::<_, f64>(1)?))
         });
         rows.into_iter().flatten().flatten().collect()
+    }
+
+    /// The lines of the turns of `projects` since `since` (ms), oldest first: what the totals of a team are made of
+    /// (TS-16, `teamcosts`). Never a prompt nor a reply: the table holds none.
+    pub fn turn_lines(&self, since: i64, projects: &[String]) -> Vec<TurnLine> {
+        let guard = self.conn.lock();
+        let Some(c) = guard.as_ref() else {
+            return Vec::new();
+        };
+        let Ok(mut stmt) = c.prepare(
+            "SELECT ts, project_id, agent_id, engine, model, account, input, cache, output, cost FROM turns WHERE ts >= ?1 ORDER BY ts",
+        ) else {
+            return Vec::new();
+        };
+        let rows = stmt.query_map([since], |r| {
+            Ok(TurnLine {
+                ts: r.get(0)?,
+                project: r.get(1)?,
+                agent: r.get(2)?,
+                engine: r.get(3)?,
+                model: r.get(4)?,
+                account: r.get(5)?,
+                input: r.get::<_, i64>(6)?.max(0) as u64,
+                cache: r.get::<_, i64>(7)?.max(0) as u64,
+                output: r.get::<_, i64>(8)?.max(0) as u64,
+                cost: r.get(9)?,
+            })
+        });
+        rows.into_iter()
+            .flatten()
+            .flatten()
+            .filter(|l| projects.contains(&l.project))
+            .collect()
+    }
+
+    /// Writes a turn at `ts` (the tests of the totals of a team).
+    #[cfg(test)]
+    pub fn record_turns_on(
+        &self,
+        ts: i64,
+        account: &str,
+        agent_id: &str,
+        project_id: &str,
+        rows: &[TurnRow],
+    ) {
+        self.record_turns_at(ts, account, agent_id, project_id, rows);
     }
 
     /// Whether a turn or a message was ever written on `account`: it served (ESC-128).

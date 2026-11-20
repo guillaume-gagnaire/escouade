@@ -20,6 +20,8 @@
   import { envsView } from '../../lib/envs-view.svelte';
   import EnvsMenu from './EnvsMenu.svelte';
   import { isTeamBoard } from '../../lib/teamboard';
+  import { teamCostsApi, type CostNotice } from '../../lib/team-costs';
+  import { lockedBy, lockLine, locksFor } from '../../lib/locks.svelte';
 
   let { project: given }: { project: Project } = $props();
 
@@ -72,6 +74,30 @@
       (envData?.readAt ? ` · ${t('envs.view.read', { since: fAgo(envData.readAt / 1000, app.now) })}` : ''),
   );
 
+  /** The budgets of a team's project (TS-16): beyond one with « le pilote auto s'arrête », its autopilot is stopped. Read
+   *  again with the project and each minute. */
+  let budget = $state<CostNotice | null>(null);
+  $effect(() => {
+    const id = project.id;
+    if (!project.team) {
+      budget = null;
+      return;
+    }
+    const read = () =>
+      teamCostsApi
+        .notice(id)
+        .then((n) => (budget = n ?? null))
+        .catch(() => (budget = null));
+    void read();
+    const every = setInterval(read, 60_000);
+    return () => clearInterval(every);
+  });
+  const budgetStop = $derived(budget?.stops ? t('teamCosts.notice.stopped', { text: budget.text }) : '');
+  /** A budget of the team, or of this member, beyond it: the switch greyed by the lock of TS-11. */
+  const autopilotLock = $derived(lockedBy('autoAssign', locksFor(project)));
+  /** Locked, it is off whatever the board says: nothing starts by itself. */
+  const autopilotOn = $derived(s.autopilot && !autopilotLock);
+
   async function toggleAutopilot() {
     // The project comes back through the backend's event, in order with any newer one: its answer is not written over it.
     await app.run(api.boardSet(project.id, { ...$state.snapshot(s), autopilot: !s.autopilot }));
@@ -108,12 +134,13 @@
           class="auto"
           data-discover="autopilot"
           role="switch"
-          aria-checked={s.autopilot}
+          aria-checked={autopilotOn}
           aria-label={t('board.header.autopilot')}
-          use:tip={t('board.header.autopilotTitle')}
+          use:tip={autopilotLock ? lockLine(autopilotLock) : t('board.header.autopilotTitle')}
+          disabled={!!autopilotLock}
           onclick={toggleAutopilot}
         >
-          <span class="l">{s.autopilot ? t('board.header.autopilot') : t('board.header.autopilotOff')}</span><span
+          <span class="l">{autopilotOn ? t('board.header.autopilot') : t('board.header.autopilotOff')}</span><span
             class="knob"
             aria-hidden="true"
           ></span>
@@ -192,6 +219,13 @@
       <span class="why" use:tip={{ text: paused, cut: true }}>{paused}</span>
       {#if over}<span class="over" use:tip={{ text: over, cut: true }}>{over}</span>{/if}
       <button class="btn" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
+    </div>
+  {/if}
+  {#if budgetStop}
+    <!-- A budget of the team gone beyond (TS-16): the autopilot's tickets wait; one launched by hand is told first. -->
+    <div class="band pause" role="status" data-testid="budget-stop">
+      <Icon name="pause" size={14} />
+      <span class="why" use:tip={{ text: budgetStop, cut: true }}>{budgetStop}</span>
     </div>
   {/if}
   {#if redHold && targetCi}
@@ -469,6 +503,11 @@
   }
   .auto[aria-checked='true'] .knob::after {
     left: 14px;
+  }
+  /* Locked by the team (TS-16, a budget gone beyond): greyed, its tooltip says who imposes it. */
+  .auto:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
   /* A narrower board: « Après validation : » goes (in its tooltip), the summary is cut. */
   @container board (max-width: 1000px) {

@@ -1,7 +1,19 @@
 <script lang="ts" module>
   /** Where the window of the teams is (TS-3). */
   export type TeamStep =
-    'home' | 'create' | 'words' | 'created' | 'invite' | 'join' | 'device' | 'pairJoin' | 'recover' | 'settings' | 'projects';
+    | 'home'
+    | 'create'
+    | 'words'
+    | 'created'
+    | 'invite'
+    | 'join'
+    | 'device'
+    | 'pairJoin'
+    | 'recover'
+    | 'settings'
+    | 'projects'
+    | 'costs'
+    | 'told';
 </script>
 
 <script lang="ts">
@@ -21,6 +33,8 @@
   import TeamRecover from './TeamRecover.svelte';
   import TeamProjects from './TeamProjects.svelte';
   import TeamSettings from './TeamSettings.svelte';
+  import TeamCosts from './TeamCosts.svelte';
+  import TeamCostsTold from './TeamCostsTold.svelte';
 
   let {
     step: first = 'home',
@@ -59,12 +73,25 @@
   }
 
   const team = $derived(teams.byId(teamId));
+
+  function titleOf(s: TeamStep): string {
+    if (s === 'projects') return t('teamProjects.title');
+    if (s === 'costs') return t('teamCosts.title');
+    if (s === 'told') return t('teamCosts.told.title');
+    return t(`team.title.${s}`);
+  }
   const wide = $derived(
-    step === 'home' || step === 'words' || step === 'device' || step === 'invite' || step === 'settings' || step === 'projects',
+    step === 'home' ||
+      step === 'words' ||
+      step === 'device' ||
+      step === 'invite' ||
+      step === 'settings' ||
+      step === 'projects' ||
+      step === 'costs',
   );
 </script>
 
-<Modal title={step === 'projects' ? t('teamProjects.title') : t(`team.title.${step}`)} width={wide ? 640 : 520} onclose={close}>
+<Modal title={titleOf(step)} width={step === 'costs' ? 760 : wide ? 640 : 520} onclose={close}>
   {#if step === 'home'}
     <TeamHome
       onstep={(s, id) => go(s, id ?? null)}
@@ -94,6 +121,10 @@
     <TeamInvite {teamId} onback={() => go('home')} />
   {:else if step === 'projects' && teamId}
     <TeamProjects {teamId} onback={() => go('home')} />
+  {:else if step === 'costs' && teamId}
+    <TeamCosts {teamId} onback={() => go('home')} />
+  {:else if step === 'told' && teamId}
+    <TeamCostsTold {teamId} name={team?.name ?? ''} ondone={close} onsee={() => go('costs')} />
   {:else if step === 'settings' && teamId}
     <TeamSettings {teamId} onback={() => go('home')} />
   {:else if step === 'device' && teamId}

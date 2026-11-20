@@ -1402,10 +1402,31 @@ impl crate::core::Core {
         for w in &locks.warnings {
             log::warn!("policies: {w}");
         }
-        let by_team: BTreeMap<String, Locks> = teams
+        let mut by_team: BTreeMap<String, Locks> = teams
             .iter()
             .map(|(id, t)| (id.clone(), Locks::compute(KEYS, Some(t), &managed)))
             .collect();
+        // A budget of the team, or of this member, gone beyond with `costs.stopAutopilot` (TS-16): the autopilot of
+        // every project of the team is stopped, its switch greyed with who imposes it.
+        for (id, name) in self.team_cost_locks() {
+            let team = teams.get(&id).map_or(name, |t| t.team.clone());
+            let locks = by_team.entry(id.clone()).or_default();
+            locks.locks.insert(
+                crate::teamcosts::STOP.to_owned(),
+                Lock {
+                    key: crate::teamcosts::STOP.to_owned(),
+                    value: Some(Value::Bool(false)),
+                    by: Some(LockedBy::Team { team }),
+                    bounds: Vec::new(),
+                    layers: Vec::new(),
+                },
+            );
+            locks
+                .rows
+                .entry("autoAssign".to_owned())
+                .or_default()
+                .push(crate::teamcosts::STOP.to_owned());
+        }
         // The file of the plugins' secrets, of the app (never a project's): denied or allowed again at once (ESC-520).
         self.kept
             .deny(locks.check_secrets_file().err().map(|e| e.to_string()));

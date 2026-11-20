@@ -510,6 +510,11 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `target_cis`
 - `task_output`
 - `team_confirm_words`
+- `team_cost_notice`
+- `team_costs`
+- `team_costs_ack`
+- `team_costs_send`
+- `team_costs_untold`
 - `team_create`
 - `team_docs_choose`
 - `team_docs_dismiss`

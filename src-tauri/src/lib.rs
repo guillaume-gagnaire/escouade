@@ -316,6 +316,9 @@ mod taskout;
 mod team_projects;
 mod team_settings;
 mod teamboard;
+mod teamcosts;
+#[cfg(test)]
+mod teamcosts_tests;
 mod teamdocs;
 #[cfg(test)]
 mod teamdocs_tests;

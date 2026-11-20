@@ -47,6 +47,7 @@ import spaces from './spaces';
 import moves from './moves';
 import teamProjects from './teamProjects';
 import teamDocs from './teamDocs';
+import teamCosts from './teamCosts';
 import wizard from './wizard';
 import voice from './voice';
 import plugins from './plugins';
@@ -105,4 +106,5 @@ export const en = defineCatalog({
   moves,
   teamProjects,
   teamDocs,
+  teamCosts,
 });

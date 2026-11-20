@@ -816,9 +816,24 @@ const JOIN_PAGE: &str = include_str!("join.html");
 /// only its writers are known here.
 pub const CATALOG_STREAM: Id = *b"escouade/project";
 
-/// The streams of the team itself (its list of projects, its settings, the proposals of its members, TS-7): open to
-/// every device of the team, always. Nobody restricts them, or a member could shut the administrators out of them.
-pub const TEAM_STREAMS: [Id; 3] = [CATALOG_STREAM, *b"escouade/setting", *b"escouade/propose"];
+/// The stream of the administrators' key of the costs (`escouade_team::costs::KEY_STREAM`, TS-16): its public half and
+/// its wraps for the administrators' devices, written by an administrator alone.
+pub const COST_KEY_STREAM: Id = *b"escouade/costkey";
+
+/// The stream of the totals of the costs (`escouade_team::costs::TOTALS_STREAM`, TS-16): every member writes there
+/// what its device spent, sealed to the administrators' key.
+pub const COST_TOTALS_STREAM: Id = *b"escouade/costsum";
+
+/// The streams of the team itself (its list of projects, its settings, the proposals of its members, TS-7, the costs,
+/// TS-16): open to every device of the team, always. Nobody restricts them, or a member could shut the administrators
+/// out of them.
+pub const TEAM_STREAMS: [Id; 5] = [
+    CATALOG_STREAM,
+    *b"escouade/setting",
+    *b"escouade/propose",
+    COST_KEY_STREAM,
+    COST_TOTALS_STREAM,
+];
 
 async fn append(
     app: &Shared,
@@ -915,6 +930,13 @@ pub async fn append_project(
     if project == CATALOG_STREAM && !authed.is_admin() {
         return Err(Problem::forbidden(
             "only an administrator writes the team's list of projects",
+        ));
+    }
+    // The administrators' key of the costs (TS-16) likewise: a member who wrote one would have the totals sealed to a
+    // key of its own (the clients refuse it at the reading too).
+    if project == COST_KEY_STREAM && !authed.is_admin() {
+        return Err(Problem::forbidden(
+            "only an administrator writes the key of the costs",
         ));
     }
     let appended = append(&app, &authed, Stream::Project(project), req).await?;

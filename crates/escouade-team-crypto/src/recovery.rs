@@ -222,7 +222,7 @@ pub struct Sealed {
     pub ciphertext: Vec<u8>,
 }
 
-fn hpke_seal(
+pub(crate) fn hpke_seal(
     crypto: &impl OpenMlsCrypto,
     public: &[u8],
     info: &[u8],
@@ -238,7 +238,7 @@ fn hpke_seal(
     })
 }
 
-fn hpke_open(
+pub(crate) fn hpke_open(
     crypto: &impl OpenMlsCrypto,
     private: &[u8],
     info: &[u8],

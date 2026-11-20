@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: the team’s costs and quotas, totals by day encrypted for its administrators alone (never a prompt or a turn), by project by default or by member if the team chooses it and tells you. The month’s budgets are weighed before each start, a warning reaches the administrator’s “Your turn” box, and beyond a budget the autopilot can stop.
 - “Your review” in a pull request’s view: your remarks wait under their line, on your machine and even after a restart, then go with your text and your verdict (comment, approve, request changes) in one review on the host, on your click. The changes requested on a ticket’s pull request can go straight back to its agent.
 - Compiling a plugin in Rust no longer fills your disk: the compilation copies unused for 7 days go, the cache stays under 5 GB, and `escouade-plugin cache` says where it is and what it weighs (`cache clear` empties it).
 - Server mode: several servers in one Escouade, each its own space as a pile in the projects bar, all kept connected. The “Everywhere” view shows what waits on each machine and answers it without changing space, the machine written on each request; `Alt+1`…`Alt+9` go from one space to another, and a managed computer can leave only numbers there.

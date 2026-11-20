@@ -4,6 +4,8 @@
 
 import { invoke } from './transport';
 import { teamSettingsApi, type TeamSettingsView } from './team-settings';
+import { teamCostsApi } from './team-costs';
+import { app } from './state.svelte';
 
 export interface AlarmView {
   kind: 'fork' | 'rollback' | 'rewritten' | 'journal';
@@ -116,6 +118,25 @@ class Teams {
     }
     this.loaded = true;
     await this.loadSettings();
+    await this.tellGrain();
+  }
+
+  /** The teams whose « par membre » this session offered to tell already (TS-16, C15). */
+  private told = new Set<string>();
+
+  /** A team gone « par membre » is told to its member at the next opening, before its totals carry its name. */
+  async tellGrain() {
+    if (!this.list.some((x) => x.joined)) return;
+    let untold: [string, string][] = [];
+    try {
+      untold = (await teamCostsApi.untold()) ?? [];
+    } catch {
+      return;
+    }
+    const next = untold.find(([id]) => !this.told.has(id));
+    if (!next || app.modal) return;
+    this.told.add(next[0]);
+    app.modal = { kind: 'team', step: 'told', teamId: next[0] };
   }
 
   async loadSettings() {

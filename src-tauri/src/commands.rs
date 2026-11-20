@@ -5470,6 +5470,43 @@ pub async fn team_forget(teams: TeamsState<'_>, team: String) -> Res<()> {
     teams.forget(&team).await
 }
 
+// ---------- The costs and the quotas of the team (TS-16) ----------
+
+/// The table of a team's costs: every device's totals on an administrator's device, this device's own on a member's,
+/// with the rules of the team and its budgets weighed.
+#[tauri::command]
+pub async fn team_costs(core: CoreState<'_>, team: String) -> Res<crate::teamcosts::TeamCostsView> {
+    core.team_costs_view(&team).await.map_err(err)
+}
+
+/// The member saw that the team sees its totals by day, « par membre » (C15): they carry its name from now on.
+#[tauri::command]
+pub fn team_costs_ack(core: CoreState<'_>, team: String) {
+    core.team_costs_ack(&team);
+}
+
+/// The teams « par membre » whose screen this device's member has not seen yet: `[id, name]`.
+#[tauri::command]
+pub fn team_costs_untold(core: CoreState<'_>) -> Vec<(String, String)> {
+    core.team_costs_untold()
+}
+
+/// What a start in a project is told of the budgets of its team (80 % or more of one), none otherwise.
+#[tauri::command]
+pub fn team_cost_notice(
+    core: CoreState<'_>,
+    project: String,
+) -> Option<crate::teamcosts::CostNotice> {
+    core.team_cost_notice(&project)
+}
+
+/// Sends this device's totals of every team now, then weighs the budgets (« Envoyer maintenant »).
+#[tauri::command]
+pub async fn team_costs_send(core: CoreState<'_>) -> Res<()> {
+    core.inner().clone().team_costs_pass(true).await;
+    Ok(())
+}
+
 // ---------- The team's signed .escouade.yml (TS-13) ----------
 
 /// The team's settings as this device read them: the version in force, the history, what waits for this device.

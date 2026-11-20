@@ -588,6 +588,37 @@ describe('TicketCard of a ticket that comes after others', () => {
     expect(app.ui.selectedAgent.p1).toBeUndefined();
   });
 
+  it('tells the budget of a team’s project before launching one of its tickets (TS-16)', async () => {
+    const backend = fakeBackend({
+      team_cost_notice: () => ({
+        text: 'Le projet api a dépensé 92 % de son budget du mois',
+        pct: 92,
+        over: false,
+        stops: false,
+        team: 'ACME',
+      }),
+    });
+    show(ticket({ key: 'DEM-5' }), project({ board: board({ autopilot: false }), team: 'acme' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Lancer' }));
+    expect(backend.called('team_cost_notice')).toEqual([{ cmd: 'team_cost_notice', args: { project: 'p1' } }]);
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      body: 'Le projet api a dépensé 92 % de son budget du mois. Le lancer quand même ?',
+      confirm: 'Lancer quand même',
+    });
+    expect(backend.called('ticket_start')).toEqual([]);
+    await (app.modal as any).onConfirm(false);
+    expect(backend.called('ticket_start')).toEqual([{ cmd: 'ticket_start', args: { id: 't1' } }]);
+  });
+
+  it('launches at once a ticket of a team under its budgets', async () => {
+    const backend = fakeBackend({ team_cost_notice: () => null });
+    show(ticket({ key: 'DEM-5' }), project({ board: board({ autopilot: false }), team: 'acme' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Lancer' }));
+    expect(app.modal).toBeNull();
+    expect(backend.called('ticket_start')).toEqual([{ cmd: 'ticket_start', args: { id: 't1' } }]);
+  });
+
   it('launches at once a ticket whose tickets before are done', async () => {
     const backend = fakeBackend();
     show(ticket({ key: 'DEM-5', after: ['t4'] }), manual());

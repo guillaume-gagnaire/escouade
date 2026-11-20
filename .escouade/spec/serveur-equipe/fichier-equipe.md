@@ -2,8 +2,8 @@
 title: "Le .escouade.yml d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.5, §6.6, §15.2 (C12-B), §16 (TS-13)","crates/escouade-team/src/settings.rs","src-tauri/src/team_settings.rs, src-tauri/src/teams_settings.rs"]
-tickets: ["ESC-471","ESC-480","ESC-493"]
-decisions: [183,186,194]
+tickets: ["ESC-471","ESC-480","ESC-493","ESC-547"]
+decisions: [183,186,194,225]
 compared: null
 ---
 
@@ -102,3 +102,13 @@ L'écran est dans la fenêtre des équipes, bouton « Réglages de l'équipe » 
 - **Proposer une version** : le fichier en YAML, prérempli de la version en vigueur ; « Relire le changement » montre le diff, ce qui ne s'appliquera pas, et si la version attendra une seconde signature ; « Signer et publier » la signe par la clé de cet appareil, sous le nom qu'il donne (gardé pour la fois suivante).
 - **Cosigner** la version proposée d'un autre administrateur, depuis l'historique.
 - L'éditeur confortable, clé par clé, viendra avec TS-4.
+
+## Les coûts (TS-16)
+
+Trois clés de l'équipe seule (le poste géré n'en a pas), lues par l'app et non par le verrou ni par le fichier d'un projet (page « Les coûts et les quotas de l'équipe ») :
+
+- `costs.grain` (valeur) : `project` d'office, ou `member` (C15) ;
+- `costs.budgets` (valeur) : `team`, `projects` (par nom ou id de journal), `members` (par id, ou `*`), en dollars par mois ;
+- `costs.stopAutopilot` (restreindre) : au-delà d'un budget, le pilote auto s'arrête.
+
+Imposées (`enforced`) ou recommandées (`defaults`), elles valent pareil : la version imposée passe devant.

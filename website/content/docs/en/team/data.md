@@ -21,6 +21,7 @@ The team server is installed by your team, on a machine it chooses (see [Install
 | Taking a ticket | which device holds it, until when, its token, the counter of the keys: in clear, without saying which ticket it is | | there |
 | The spec, decisions, documents | the pages, the decisions, the uploaded files | the extracted text, the index, the vectors | there, as the team chooses |
 | The shared memory | the memories and their signed provenance; an agent’s proposed until a human keeps them | the index and the vectors | there, with the docs |
+| The costs | totals by day, once an hour: by project, harness and model, the tokens, the estimated cost, the highest quota of the day, and the total of each ticket by its key; encrypted for the administrators alone; your name only if the team chose “by member” | the detail of each turn, the prompts, the replies, the files, the tickets’ titles | there |
 
 The spec, decisions, documents and memory go to the server by a gesture: “On the team server” in the project’s settings, or “Pour into the team” on the Kanban. The team can also keep them in the repository, as before. A project’s tickets go only if its Kanban is shared with the team.
 
@@ -34,9 +35,19 @@ The shared memory of a team’s project (see [the shared memory](shared-memory))
 - **An administrator puts in quarantine** what a ticket’s agent wrote, or a member or one of their devices since a date, after a preview of what goes: the rule holds on every device, for what comes later too. The history stays in the team’s journal.
 - **A secret is refused** at the writing: a token, a private key, a webhook’s address. An address the project doesn’t know is shown at its approval.
 
+## The team’s costs
+
+Your device works out what your agents spend on the team’s projects, and sends only **totals by day**, once an hour. Never a prompt, a reply, a file name, a ticket’s title or a turn.
+
+- **Encrypted for the administrators alone**, by a key of their own, apart: the team server does not see the costs, and the other members do not read yours. An administrator who leaves reads nothing of what goes after.
+- **By project**, by default: your totals go without your name, and the administrators see each project, never a person. The team may switch to **by member**: Escouade tells you so the next time you open it (“Your team sees your totals by day”), and your totals carry your name only once you read that screen. The server still knows which device writes, as for everything else.
+- **You see what goes up of you** in the teams’ window, “Costs”: your totals by day, the team’s choice in one sentence, the last thing sent as it went, and what waits to be sent (offline, the totals wait on your device).
+- A Claude Max or ChatGPT Pro account has no cost per turn: what goes is an **API equivalent**, marked as such.
+- The team’s budgets are in its settings file: your device weighs them before a start (“The project api spent 92% of its budget for the month”).
+
 ## What never goes there
 
-- **Harness accounts**: your sign-in to Claude Code, Codex and the others, your quotas. The team server sees none of them; each member uses their own.
+- **Harness accounts**: your sign-in to Claude Code, Codex and the others. The team server sees none of them; each member uses their own. Of your quotas, only the highest percentage of the day goes, in the totals of the costs, encrypted for the administrators.
 - **Secrets and tokens**: those of connected services, code hosts, API keys. They stay in your machine’s keychain.
 - **Agents’ conversations**: their logs stay in `~/.escouade/conversations/`.
 - **The code**: it stays with your code host (GitHub, GitLab…). Cloning a team project goes through your own git accounts; the team server gives no git access and keeps no credential.

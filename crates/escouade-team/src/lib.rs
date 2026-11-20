@@ -17,6 +17,7 @@
 
 pub mod catalog;
 pub mod client;
+pub mod costs;
 pub mod escrow;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing;

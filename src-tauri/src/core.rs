@@ -960,6 +960,8 @@ pub struct Core {
     pub team_locks: RwLock<BTreeMap<String, crate::locks::Locks>>,
     /// What each team sets on its projects, of the keys of a project's file (TS-13): by team id.
     pub team_layers: RwLock<BTreeMap<String, crate::team_settings::Layers>>,
+    /// The teams' costs on this device (TS-16, `teamcosts`): their rules, the projects a budget stops.
+    pub(crate) team_costs: Mutex<crate::teamcosts::TeamCosts>,
     /// The usage statistics, once the user agreed to them (`telemetry`).
     pub telemetry: Arc<Telemetry>,
     pub projects: RwLock<Vec<Project>>,
@@ -2223,6 +2225,7 @@ impl Core {
             team_policies: RwLock::new(BTreeMap::new()),
             team_locks: RwLock::new(BTreeMap::new()),
             team_layers: RwLock::new(BTreeMap::new()),
+            team_costs: Mutex::new(Default::default()),
             projects: RwLock::new(state.projects),
             tickets: RwLock::new(tickets),
             ui: RwLock::new(state.ui),

@@ -43,6 +43,12 @@ impl Classify for CoreKeys {
         if key == INSTALL {
             return Some(Sort::Executable);
         }
+        // The costs (TS-16): the grain and the budgets are values, the autopilot stopped beyond them restricts.
+        match key {
+            crate::teamcosts::GRAIN | crate::teamcosts::BUDGETS => return Some(Sort::Value),
+            crate::teamcosts::STOP => return Some(Sort::Restrict),
+            _ => {}
+        }
         if key == projectfile::RECOMMENDED {
             return Some(Sort::Value);
         }
@@ -53,6 +59,11 @@ impl Classify for CoreKeys {
             Sort::Value
         })
     }
+}
+
+/// Whether a key is one of the costs (TS-16): read by `teamcosts`, neither a lock nor a project's key.
+pub fn is_cost(key: &str) -> bool {
+    key.starts_with("costs.")
 }
 
 /// Whether a key is one of the policies (the locks hold it), not of a project's file.
@@ -278,7 +289,7 @@ pub fn split(id: &str, name: &str, view: &View) -> (Option<TeamPolicies>, Layers
     let version = view.versions.iter().find(|v| v.number == applied);
     let pick = |m: &BTreeMap<String, Value>, policy: bool| -> BTreeMap<String, Value> {
         m.iter()
-            .filter(|(k, _)| is_policy(k) == policy && CORE_KEYS.sort(k).is_some())
+            .filter(|(k, _)| is_policy(k) == policy && CORE_KEYS.sort(k).is_some() && !is_cost(k))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     };
@@ -307,6 +318,11 @@ impl crate::core::Core {
         view: Option<&View>,
     ) {
         let (policies, layers) = view.map(|v| split(id, name, v)).unwrap_or_default();
+        self.set_team_cost_rules(
+            id,
+            name,
+            view.filter(|v| v.applied.is_some()).map(|v| &v.effective),
+        );
         self.set_team_policies_of(id, policies);
         let changed = {
             let mut all = self.team_layers.write();

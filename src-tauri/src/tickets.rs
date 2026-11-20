@@ -1744,11 +1744,14 @@ impl Core {
                 let mut held: HashMap<(EngineId, bool, Option<String>), bool> = HashMap::new();
                 // « Pause quand la CI de la cible est rouge » (ESC-63): the autopilot's alone.
                 let red = self.red_target_holds(&p);
+                // A budget of the team gone beyond, with « le pilote auto s'arrête » (TS-16): the autopilot's alone,
+                // a ticket launched by hand still starts (the window told the budget first).
+                let budget = self.team_cost_stop(&p.id).is_some();
                 // A ticket that waits for a request of the box « À toi » not answered yet (ESC-509): the
                 // autopilot leaves it, as one that comes after another not done.
                 let asked = self.tickets_waiting_asks();
                 board::to_start(&tickets, &p.id, &p.board, |t| {
-                    if (red || asked.contains(&t.id)) && !t.forced {
+                    if (red || budget || asked.contains(&t.id)) && !t.forced {
                         return true;
                     }
                     let e = engine_of(t);

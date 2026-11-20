@@ -21,6 +21,7 @@ Le serveur d’équipe est installé par ton équipe, sur une machine qu’elle 
 | La prise d’un ticket | quel appareil le tient, jusqu’à quand, son jeton, le compteur des clés : en clair, sans dire quel ticket c’est | | là |
 | La spec, les décisions, les documents | les pages, les décisions, les fichiers déposés | le texte extrait, l’index, les vecteurs | là, au choix de l’équipe |
 | La mémoire partagée | les souvenirs et leur provenance signée ; ceux d’un agent proposés jusqu’à ce qu’un humain les garde | l’index et les vecteurs | là, avec les docs |
+| Les coûts | des totaux par jour, une fois par heure : par projet, harness et modèle, les tokens, le coût estimé, le plus haut quota du jour, et le total de chaque ticket par sa clé ; chiffrés pour les seuls administrateurs ; ton nom seulement si l’équipe a choisi « par membre » | le détail de chaque tour, les prompts, les réponses, les fichiers, le titre des tickets | là |
 
 La spec, les décisions, les documents et la mémoire partent sur le serveur par un geste : « Sur le serveur d’équipe » dans les réglages du projet, ou « Verser à l’équipe » sur le Kanban. L’équipe peut aussi les garder dans le dépôt, comme avant. Les tickets d’un projet ne partent que si son Kanban est partagé avec l’équipe.
 
@@ -34,9 +35,19 @@ La mémoire partagée d’un projet d’équipe (voir [la mémoire partagée](sh
 - **Un administrateur met en quarantaine** ce qu’a écrit l’agent d’un ticket, ou un membre ou l’un de ses appareils depuis une date, après un aperçu de ce qui part : la règle vaut sur tous les postes, aussi pour ce qui arrive plus tard. L’historique reste au journal de l’équipe.
 - **Un secret est refusé** à l’écriture : un jeton, une clé privée, l’adresse d’un webhook. Une adresse que le projet ne connaît pas est montrée à la validation.
 
+## Les coûts de l’équipe
+
+Ton poste calcule ce que dépensent tes agents sur les projets de l’équipe, et n’envoie que des **totaux par jour**, une fois par heure. Jamais un prompt, une réponse, un nom de fichier, le titre d’un ticket ni un tour.
+
+- **Chiffrés pour les seuls administrateurs**, par une clé à eux, à part : le serveur d’équipe ne voit pas les coûts, et les autres membres ne lisent pas les tiens. Un administrateur qui part ne lit rien de ce qui part après.
+- **Par projet**, d’office : tes totaux partent sans ton nom, et les administrateurs voient chaque projet, jamais une personne. L’équipe peut passer **par membre** : Escouade te le dit à ta prochaine ouverture (« Ton équipe voit tes totaux par jour »), et tes totaux ne portent ton nom qu’une fois l’écran lu. Le serveur, lui, sait toujours quel appareil écrit, comme pour tout le reste.
+- **Tu vois ce qui remonte de toi** dans la fenêtre des équipes, « Coûts » : tes totaux par jour, le grain de l’équipe en une phrase, le dernier envoi tel quel, et ce qui attend d’être envoyé (hors ligne, les totaux attendent sur ton poste).
+- Un compte Claude Max ou ChatGPT Pro n’a pas de coût par tour : ce qui part est un **équivalent en API**, marqué comme tel.
+- Les budgets de l’équipe sont dans son fichier de réglages : ton poste les pèse avant un lancement (« Le projet api a dépensé 92 % de son budget du mois »).
+
 ## Ce qui n’y part jamais
 
-- **Les comptes des harness** : ta connexion à Claude Code, Codex et les autres, tes quotas. Le serveur d’équipe n’en voit aucun ; chaque membre utilise les siens.
+- **Les comptes des harness** : ta connexion à Claude Code, Codex et les autres. Le serveur d’équipe n’en voit aucun ; chaque membre utilise les siens. De tes quotas, seul le plus haut pourcentage du jour part, dans les totaux des coûts, chiffré pour les administrateurs.
 - **Les secrets et les jetons** : ceux des services connectés, des hébergeurs de code, des clés d’API. Ils restent dans le trousseau de ton poste.
 - **Les conversations des agents** : leurs journaux restent dans `~/.escouade/conversations/`.
 - **Le code** : il reste chez ton hébergeur de code (GitHub, GitLab…). Cloner un projet de l’équipe passe par tes propres comptes git ; le serveur d’équipe ne donne aucun accès git et ne garde aucun identifiant.
