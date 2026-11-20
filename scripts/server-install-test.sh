@@ -135,8 +135,12 @@ useradd --create-home --shell /bin/sh esc-user
 uid=$(id -u esc-user)
 loginctl enable-linger esc-user
 for _ in $(seq 1 50); do [ -S "/run/user/$uid/bus" ] && break; sleep 0.2; done
+# The runner's own XDG_CONFIG_HOME (/home/runner/.config) and TMPDIR would follow runuser: the user gets its own, as a
+# login of its own would.
 as_user() {
   runuser -u esc-user -- env HOME=/home/esc-user XDG_RUNTIME_DIR="/run/user/$uid" \
+    XDG_CONFIG_HOME=/home/esc-user/.config XDG_DATA_HOME=/home/esc-user/.local/share XDG_STATE_HOME=/home/esc-user/.local/state \
+    XDG_CACHE_HOME=/home/esc-user/.cache TMPDIR=/tmp \
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" ESCOUADE_INSTALL_URL="$url" ESCOUADE_INSTALL_PUBKEY="$pubkey" "$@"
 }
 # The checkout is under the runner's home, which another user may not enter: the user runs a copy, as one downloaded.
