@@ -23,6 +23,7 @@ import type {
   WorktreeStep,
   WorktreeSuggestion,
 } from './types';
+import { runUrlProblem } from './run-url';
 import { branchPrefixProblem, worktreesRootProblem } from './worktrees';
 import { DEFAULT_FETCH } from './fetch';
 import { rowsOf, SETTINGS_PAGES, type RowInfo, type SettingsPage } from './settings-pages';
@@ -401,10 +402,12 @@ class SettingsForm {
   projectProblems(id: string) {
     const d = this.projects[id];
     const p = app.projects.find((x) => x.id === id);
-    if (!d || !p) return { name: false, commands: false, dir: null, agentPrefix: false, ticketPrefix: false };
+    if (!d || !p) return { name: false, commands: false, urls: false, dir: null, agentPrefix: false, ticketPrefix: false };
     return {
       name: !d.name.trim(),
       commands: d.runCommands.some((c) => !c.name.trim() || !c.command.trim()),
+      /** An address to open that is not http(s) (ESC-560), said on its own field. */
+      urls: d.runCommands.some((c) => !!runUrlProblem(c.url ?? '')),
       ...worktreesProblems(p.path, d),
     };
   }
@@ -414,7 +417,7 @@ class SettingsForm {
     const p = this.projectProblems(id);
     const out: (keyof ProjectFields)[] = [];
     if (p.name) out.push('name');
-    if (p.commands) out.push('runCommands');
+    if (p.commands || p.urls) out.push('runCommands');
     if (p.dir) out.push('worktreeDir');
     if (p.agentPrefix) out.push('agentBranchPrefix');
     if (p.ticketPrefix) out.push('ticketBranchPrefix');
@@ -543,7 +546,15 @@ class SettingsForm {
 
   /** A launch command for the project on screen in the modal, run by the first shell found. */
   addCommand() {
-    this.project?.runCommands.push({ id: crypto.randomUUID(), name: '', command: '', shell: app.shells[0]?.id ?? 'pwsh', cwd: '' });
+    this.project?.runCommands.push({
+      id: crypto.randomUUID(),
+      name: '',
+      command: '',
+      shell: app.shells[0]?.id ?? 'pwsh',
+      cwd: '',
+      url: '',
+      openIn: 'page',
+    });
   }
 
   /** A worktree step for the project on screen in the modal, run by the first shell found. */

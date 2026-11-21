@@ -9334,6 +9334,12 @@ impl<R: Runtime> Core<R> {
                 String::new()
             }
         };
+        // The address a launch command opens is http or https (ESC-560): another is refused, the
+        // window having held it back already.
+        for c in &p.run_commands {
+            crate::testlaunch::check_run_url(&c.url, crate::i18n::ui())
+                .map_err(|e| anyhow::anyhow!("« {} » : {e}", c.name.trim()))?;
+        }
         let mut projects = self.projects.write();
         let cur = projects
             .iter_mut()

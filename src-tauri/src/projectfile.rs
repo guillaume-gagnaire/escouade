@@ -29,7 +29,7 @@ use yaml_edit::{
 };
 
 use crate::model::{
-    CommitMode, EngineId, FetchMode, Project, RunCommand, WorktreeBase, WorktreeStep,
+    CommitMode, EngineId, FetchMode, Project, RunCommand, RunOpen, WorktreeBase, WorktreeStep,
     FETCH_EVERY_MAX, FETCH_EVERY_MIN, FETCH_TIMEOUT_MAX, FETCH_TIMEOUT_MIN,
 };
 
@@ -724,6 +724,32 @@ fn rel_dir(node: &Node) -> Result<String, Invalid> {
     Ok(dir)
 }
 
+/// The address a launch command opens (ESC-560): http or https, checked as the window checks it.
+fn run_url(node: &Node) -> Result<String, Invalid> {
+    let url = text_of(node)?;
+    crate::testlaunch::check_run_url(&url, crate::i18n::ui())
+        .map_err(|e| (node.line, e.to_string()))?;
+    Ok(url)
+}
+
+/// Where it opens: `page` (empty, the default) or `browser`.
+fn open_in(node: &Node) -> Result<String, Invalid> {
+    match text_of(node)?.as_str() {
+        "" | "page" => Ok(String::new()),
+        "browser" => Ok("browser".into()),
+        other => Err((
+            node.line,
+            tr!(
+                "« {other} » : « open_in » vaut page ou browser",
+                "“{other}”: “open_in” is page or browser"
+            ),
+        )),
+    }
+}
+
+/// The fields of a launch command left out of its value when empty (`launch_value` too).
+const OPTIONAL: [&str; 2] = ["url", "open_in"];
+
 /// The steps or launch commands of a list: an item that cannot be read is told and left out.
 fn items(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, Invalid> {
     let list: Vec<&Node> = match &node.v {
@@ -734,14 +760,16 @@ fn items(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, Inv
     };
     let launch = k.kind == Kind::Launch;
     let fields: &[&str] = if launch {
-        &["name", "command", "shell", "cwd"]
+        &["name", "command", "shell", "cwd", "url", "open_in"]
     } else {
         &["command", "shell", "cwd"]
     };
     let mut out = Vec::new();
     for item in list {
         let mut m = Map::new();
-        for f in fields {
+        // The address of a command (ESC-560) is in its value only when given: the commands
+        // approved before it keep their fingerprint.
+        for f in fields.iter().filter(|f| !OPTIONAL.contains(f)) {
             m.insert(f.to_string(), json!(""));
         }
         let read: Result<(), Invalid> = (|| {
@@ -755,7 +783,12 @@ fn items(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, Inv
                             warnings.push(unknown(&format!("{}.{f}", k.path), *line, fields));
                             continue;
                         }
-                        let v = if f == "cwd" { rel_dir(n)? } else { text_of(n)? };
+                        let v = match f.as_str() {
+                            "cwd" => rel_dir(n)?,
+                            "url" => run_url(n)?,
+                            "open_in" => open_in(n)?,
+                            _ => text_of(n)?,
+                        };
                         m.insert(f.clone(), json!(v));
                     }
                 }
@@ -786,7 +819,10 @@ fn items(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, Inv
             Ok(())
         })();
         match read {
-            Ok(()) => out.push(Value::Object(m)),
+            Ok(()) => {
+                m.retain(|k, v| !(OPTIONAL.contains(&k.as_str()) && v.as_str() == Some("")));
+                out.push(Value::Object(m))
+            }
             Err((line, why)) => {
                 let path = k.path;
                 warnings.push(warn(
@@ -943,7 +979,23 @@ fn steps_value(steps: &[WorktreeStep]) -> Value {
 fn launch_value(cmds: &[RunCommand]) -> Value {
     Value::Array(
         cmds.iter()
-            .map(|c| json!({ "name": c.name.trim(), "command": c.command.trim(), "shell": c.shell, "cwd": c.cwd.trim() }))
+            .map(|c| {
+                let mut v = json!({
+                    "name": c.name.trim(),
+                    "command": c.command.trim(),
+                    "shell": c.shell,
+                    "cwd": c.cwd.trim(),
+                });
+                // Only when set, as `items` reads them: the fingerprint of a command without them
+                // is the one it had before ESC-560.
+                if !c.url.trim().is_empty() {
+                    v["url"] = json!(c.url.trim());
+                }
+                if c.open_in == RunOpen::Browser {
+                    v["open_in"] = json!("browser");
+                }
+                v
+            })
             .collect(),
     )
 }
@@ -1035,6 +1087,12 @@ fn launch_from(v: &Value, old: &[RunCommand]) -> Vec<RunCommand> {
                         command: field(c, "command"),
                         shell: field(c, "shell"),
                         cwd: field(c, "cwd"),
+                        url: field(c, "url"),
+                        open_in: if field(c, "open_in") == "browser" {
+                            RunOpen::Browser
+                        } else {
+                            RunOpen::Page
+                        },
                     }
                 })
                 .collect()
@@ -1277,7 +1335,7 @@ fn push_text(list: &Sequence, s: &str) {
 fn item_mapping(v: &Value) -> Mapping {
     let m = Mapping::new();
     if let Some(o) = v.as_object() {
-        for f in ["name", "command", "shell", "cwd"] {
+        for f in ["name", "command", "shell", "cwd", "url", "open_in"] {
             let s = o.get(f).map(str_of).unwrap_or_default();
             if !s.is_empty() {
                 put_text(&m, f, &s);
@@ -1468,6 +1526,16 @@ fn schema_of(k: &Key) -> Value {
             "cwd".into(),
             json!({ "type": "string", "description": "A folder relative to the repository (or the worktree)." }),
         );
+        if launch {
+            props.insert(
+                "url".into(),
+                json!({ "type": "string", "description": "An http or https address opened once it answers; ${ESCOUADE_PORT_BASE:-3000} follows the ports of a worktree." }),
+            );
+            props.insert(
+                "open_in".into(),
+                json!({ "type": "string", "enum": ["page", "browser"], "description": "The page of a launch inside Escouade (the default), or the system's browser." }),
+            );
+        }
         json!({
             "type": "object",
             "properties": props,

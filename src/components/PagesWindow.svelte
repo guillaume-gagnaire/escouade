@@ -138,12 +138,15 @@
         onclick={() => act(api.devpageDevtools(page.agentId))}
         ><Icon name="code" size={14} />{t('devpage.devtools')}<kbd>{shortcut}</kbd></button
       >
-      <button
-        class="btn icon-only"
-        aria-label={t('devpage.attach')}
-        use:tip={t('devpage.attach')}
-        onclick={() => act(api.devpageDetach(page.agentId, false))}><Icon name="collapse" size={14} /></button
-      >
+      <!-- The page of a launch command run in its project (ESC-560) has no agent's view to go back to. -->
+      {#if !page.agentless}
+        <button
+          class="btn icon-only"
+          aria-label={t('devpage.attach')}
+          use:tip={t('devpage.attach')}
+          onclick={() => act(api.devpageDetach(page.agentId, false))}><Icon name="collapse" size={14} /></button
+        >
+      {/if}
       <button class="btn icon-only" aria-label={t('devpage.system')} use:tip={t('devpage.system')} onclick={() => act(openUrl(page.url))}
         ><Icon name="ext" size={14} /></button
       >

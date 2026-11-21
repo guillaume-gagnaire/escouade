@@ -2,8 +2,8 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26","https://github.com/guillaume-gagnaire/escouade/pull/44"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-511","ESC-544"]
-decisions: [129,133,147,211,254]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-511","ESC-544","ESC-560"]
+decisions: [129,133,147,211,254,"une-commande-de-lancement-ouvre-son-adre"]
 compared: null
 ---
 
@@ -256,3 +256,16 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 ### Température du cache sur la carte (ESC-398)
 
 - Au bout de la ligne du modèle, à droite : la température du cache de l'agent (« 100 °C » → « 0 °C », « — °C » quand son harness ne dit rien), dans la couleur de sa chaleur, son sens en mots pour les lecteurs d'écran et en infobulle. Voir *Température du cache*.
+
+## Lancement : ouvrir une adresse quand l'app répond (ESC-560)
+
+Complète *Lancement* ci-dessus.
+
+- Chaque commande de lancement a, sous sa ligne, la case « Ouvrir à son lancement » (décochée par défaut). Cochée : le champ « Adresse à ouvrir » (`http://localhost:3000` en exemple) et « Où l'ouvrir » : « Page de lancement » (par défaut) ou « Navigateur ». La décocher retire l'adresse.
+- L'adresse est une adresse `http://` ou `https://` avec un hôte, vérifiée à la saisie : une autre (`file:`, `javascript:`, `ftp:`, `localhost:3000` sans schéma) est dite sous le champ (« Seule une adresse http:// ou https:// s'ouvre. ») et les commandes enregistrées restent celles d'avant tant qu'elle y est. Le cœur refuse de même une telle adresse à l'enregistrement.
+- Elle peut nommer les ports qu'un worktree donne à ses lancements, comme le fait un shell : `${ESCOUADE_PORT_BASE}` et `${ESCOUADE_PORT_END}`, avec une valeur pour le projet après `:-` (`http://localhost:${ESCOUADE_PORT_BASE:-3000}`). Aucune autre variable : « « HOME » n'est pas une variable de l'adresse : seulement ESCOUADE_PORT_BASE, ESCOUADE_PORT_END. » L'aide du champ le dit.
+- Quand l'ouvrir : à chaque lancement de la commande (▶, « Tout lancer », « Relancer », dans le projet ou un worktree), Escouade demande l'adresse comme « ▶ Tester » le fait pour les processus d'une recette, par le même code : une requête toutes les 500 ms, 2 s au plus chacune, 3 min au plus depuis le lancement ; jamais un délai fixe. Son log le dit : « Escouade ouvrira <adresse> dès que l'adresse répondra. », puis « Ouverte dans la page de l'agent : … », « Ouverte dans la fenêtre « Pages » du projet : … » ou « Ouverte dans le navigateur : … ».
+- Une commande qui s'arrête d'elle-même (plantée, ou terminée) avant que l'adresse réponde n'ouvre rien, et son log le dit : « « Front » s'est arrêtée avant que <adresse> réponde : rien ne s'ouvre. ». Arrêtée par l'utilisateur : rien n'est dit. Pas de réponse en 3 min : « Pas de réponse de <adresse> après 3 min : rien ne s'ouvre. ». Relancée, c'est le nouveau lancement qui attend.
+- Où : « Navigateur », ou un projet dont « Ouvrir les pages des lancements » est « Dans le navigateur du système » : le navigateur du système. Sinon une page de lancement (voir *La page du lancement*) : lancée dans le worktree d'un agent, la page de cet agent (« refacto-auth · Front »), là où le projet met ses pages ; lancée dans le projet, un onglet de la fenêtre « Pages » du projet, un par commande (« Front »). Une page déjà ouverte est rechargée, jamais doublée.
+- Dans le worktree d'un agent, `${ESCOUADE_PORT_BASE}` prend le premier port de l'agent : `localhost:${ESCOUADE_PORT_BASE:-3000}` devient `localhost:4120`. Dans le projet, la valeur après `:-` ; sans elle, l'adresse ne s'ouvre pas et le log dit comment lui en donner une.
+- `.escouade.yml` peut porter l'adresse d'une commande (`url`, `open_in`, voir *.escouade.yml*) : elle n'est appliquée qu'avec la commande, une fois approuvée.

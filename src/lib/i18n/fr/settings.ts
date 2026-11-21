@@ -614,6 +614,14 @@ export default {
     namePlaceholder: 'ex. Front',
     commandPlaceholder: 'ex. npm run dev',
     subfolderHint: '(vide = dossier du projet)',
+    /** « Ouvrir à son lancement » of a launch command (ESC-560). `{example}`: an address that follows a worktree's ports. */
+    openOnLaunch: 'Ouvrir à son lancement',
+    openUrl: 'Adresse à ouvrir',
+    openUrlPlaceholder: 'http://localhost:3000',
+    openUrlHint:
+      'Ouverte dès qu’elle répond, comme « ▶ Tester » ; rien ne s’ouvre si la commande s’arrête avant. Dans le worktree d’un agent, la commande reçoit ses ports : {example} suit son ESCOUADE_PORT_BASE (ESCOUADE_PORT_END aussi), 3000 dans le projet.',
+    openIn: 'Où l’ouvrir',
+    openIns: { page: 'Page de lancement', browser: 'Navigateur' },
     subfolderPlaceholder: 'ex. apps/web',
     noCommandsYet: "Aucune commande pour l'instant.",
     close: 'Fermer le projet',

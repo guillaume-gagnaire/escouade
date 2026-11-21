@@ -147,8 +147,17 @@
                 "description": "As the window shows it.",
                 "type": "string"
               },
+              "open_in": {
+                "description": "The page of a launch inside Escouade (the default), or the system's browser.",
+                "enum": ["page", "browser"],
+                "type": "string"
+              },
               "shell": {
                 "description": "pwsh, powershell, bash, zsh, wsl…; the system's default one when empty or not found.",
+                "type": "string"
+              },
+              "url": {
+                "description": "An http or https address opened once it answers; ${ESCOUADE_PORT_BASE:-3000} follows the ports of a worktree.",
                 "type": "string"
               }
             },
@@ -171,8 +180,17 @@
               "description": "As the window shows it.",
               "type": "string"
             },
+            "open_in": {
+              "description": "The page of a launch inside Escouade (the default), or the system's browser.",
+              "enum": ["page", "browser"],
+              "type": "string"
+            },
             "shell": {
               "description": "pwsh, powershell, bash, zsh, wsl…; the system's default one when empty or not found.",
+              "type": "string"
+            },
+            "url": {
+              "description": "An http or https address opened once it answers; ${ESCOUADE_PORT_BASE:-3000} follows the ports of a worktree.",
               "type": "string"
             }
           },

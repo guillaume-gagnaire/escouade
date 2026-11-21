@@ -5,7 +5,8 @@
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
-  import type { PagesOpen, Project } from '../../lib/types';
+  import { runUrlProblem } from '../../lib/run-url';
+  import type { PagesOpen, Project, RunOpen } from '../../lib/types';
   import Chips from './Chips.svelte';
   import Facts from './Facts.svelte';
   import Group from './Group.svelte';
@@ -26,6 +27,16 @@
     (['agent', 'window', 'system'] as const).map((value) => ({ value, label: t(`settings.project.pagesOpens.${value}`) })),
   );
 
+  /** « Où l'ouvrir » of a launch command's address (ESC-560). */
+  const OPEN_INS = $derived<{ value: RunOpen; label: string }[]>(
+    (['page', 'browser'] as const).map((value) => ({ value, label: t(`settings.project.openIns.${value}`) })),
+  );
+  /** « Ouvrir à son lancement » ticked, by command: its address may still be empty. */
+  let opening = $state<Record<string, boolean>>({});
+  const opens = (c: { id: string; url?: string }) => opening[c.id] ?? !!c.url?.trim();
+  /** An address that follows a worktree's ports, as the help of the field shows it. */
+  const EXAMPLE = 'http://localhost:${ESCOUADE_PORT_BASE:-3000}';
+
   const launchProposal = $derived(settingsForm.launchProposal[project.id]);
   let launchButton = $state<HTMLButtonElement>();
 </script>
@@ -45,6 +56,7 @@
       </div>
     {/if}
     {#each draft.runCommands as c, i (c.id)}
+      {@const problem = runUrlProblem(c.url ?? '')}
       <fieldset class="cmd-row">
         <legend class="sr">{t('settings.project.commandN', { n: i + 1 })}</legend>
         <input
@@ -82,6 +94,34 @@
           aria-label={t('common.delete')}
           onclick={() => draft.runCommands.splice(i, 1)}><Icon name="trash" size={14} /></button
         >
+        <div class="open">
+          <label class="check"
+            ><input
+              type="checkbox"
+              checked={opens(c)}
+              onchange={(e) => {
+                opening[c.id] = e.currentTarget.checked;
+                if (e.currentTarget.checked) c.openIn ??= 'page';
+                else c.url = '';
+              }}
+            />{t('settings.project.openOnLaunch')}</label
+          >
+          {#if opens(c)}
+            <input
+              class="field mono url"
+              aria-label={t('settings.project.openUrl')}
+              aria-invalid={!!problem}
+              aria-describedby="url-help-{c.id}"
+              spellcheck="false"
+              bind:value={c.url}
+              placeholder={t('settings.project.openUrlPlaceholder')}
+            />
+            <Chips label={t('settings.project.openIn')} options={OPEN_INS} bind:value={() => c.openIn ?? 'page', (v) => (c.openIn = v)} />
+            <p class="hint" class:error={!!problem} id="url-help-{c.id}">
+              {problem ?? t('settings.project.openUrlHint', { example: EXAMPLE })}
+            </p>
+          {/if}
+        </div>
       </fieldset>
     {:else}
       <p class="empty">{t('settings.project.noCommandsYet')}</p>
@@ -167,6 +207,40 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
   }
+  /* « Ouvrir à son lancement », under the command it belongs to. */
+  .open {
+    grid-column: 2 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    min-width: 0;
+    margin-bottom: 6px;
+  }
+  .check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .open .url {
+    flex: 1 1 220px;
+    width: auto;
+    min-width: 0;
+  }
+  .hint {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .hint.error {
+    color: var(--del);
+  }
   .del:hover:not(:disabled) {
     color: var(--del);
   }
@@ -217,7 +291,8 @@
       display: none;
     }
     .cmd-row .field:nth-of-type(3),
-    .cmd-row select {
+    .cmd-row select,
+    .open {
       grid-column: 2 / span 1;
     }
   }

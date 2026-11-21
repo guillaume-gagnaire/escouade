@@ -97,6 +97,27 @@ export default defineZone('runs', {
     exited: '{name} stopped',
     notRunning: '{name} isn’t running',
   },
+  /** The address a launch command opens once it answers (ESC-560), as its log says it. */
+  open: {
+    waiting: 'Escouade will open {url} as soon as it answers.',
+    opened: {
+      page: 'Opened in the agent’s page: {url}',
+      window: 'Opened in the project’s “Pages” window: {url}',
+      browser: 'Opened in the browser: {url}',
+    },
+    ended: '“{name}” stopped before {url} answered: nothing opens.',
+    late: 'No answer from {url} after {minutes} min: nothing opens.',
+    cannot: 'The address doesn’t open: {why}',
+  },
+  /** What is wrong with the address of a launch command, as it is typed. `{example}`: the variable with a value. */
+  url: {
+    scheme: 'Only an http:// or https:// address opens.',
+    notAnAddress: 'This isn’t an address (http://localhost:3000, for example).',
+    noHost: 'The host is missing (http://localhost:3000, for example).',
+    unclosed: 'A variable of the address isn’t closed.',
+    unknownVar: '“{name}” isn’t a variable of the address: only {list}.',
+    noValue: 'The address names {name}, which a launch in the project doesn’t have: give it a value for the project ({example}).',
+  },
   /** The window of “▶ Test”. */
   testLaunch: {
     title: 'Test {name}',

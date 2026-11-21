@@ -543,6 +543,14 @@ export default defineZone('settings', {
     namePlaceholder: 'e.g. Front',
     commandPlaceholder: 'e.g. npm run dev',
     subfolderHint: '(blank = project folder)',
+    /** “Open on launch” of a launch command (ESC-560). `{example}`: an address that follows a worktree's ports. */
+    openOnLaunch: 'Open on launch',
+    openUrl: 'Address to open',
+    openUrlPlaceholder: 'http://localhost:3000',
+    openUrlHint:
+      'Opened as soon as it answers, as “▶ Test” does; nothing opens if the command stops first. In an agent’s worktree, the command gets its ports: {example} follows its ESCOUADE_PORT_BASE (ESCOUADE_PORT_END too), 3000 in the project.',
+    openIn: 'Where to open it',
+    openIns: { page: 'Launch page', browser: 'Browser' },
     subfolderPlaceholder: 'e.g. apps/web',
     noCommandsYet: 'No commands yet.',
     close: 'Close the project',

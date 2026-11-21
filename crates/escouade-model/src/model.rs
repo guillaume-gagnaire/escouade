@@ -1514,6 +1514,24 @@ pub struct RunCommand {
     pub shell: String,
     /// Folder relative to the project's, empty for the project itself.
     pub cwd: String,
+    /// « Ouvrir à son lancement » (ESC-560): an http or https address opened once it answers,
+    /// empty for none. It may name the ports a worktree gives its launches, as a shell does:
+    /// `${ESCOUADE_PORT_BASE}`, `${ESCOUADE_PORT_END}`, with a value for the project after `:-`.
+    pub url: String,
+    /// Where `url` opens: the page of a launch inside Escouade, or the system's browser.
+    pub open_in: RunOpen,
+}
+
+/// Where the address of a launch command opens (ESC-560).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RunOpen {
+    /// The page of a launch, as « ▶ Tester » opens it (where the project's « Ouvrir les pages
+    /// des lancements » says).
+    #[default]
+    Page,
+    /// The system's browser.
+    Browser,
 }
 
 /// A command run in a worktree once it is made (its setup) or before it is removed (its
@@ -4662,10 +4680,11 @@ mod run_command_tests {
             "runCommands": [{ "id": "c1", "name": "Front", "command": "npm run dev", "shell": "pwsh", "cwd": "web" }] });
         let p: Project = serde_json::from_value(with.clone()).unwrap();
         assert_eq!(p.run_commands[0].cwd, "web");
-        assert_eq!(
-            serde_json::to_value(&p).unwrap()["runCommands"],
-            with["runCommands"]
-        );
+        // Saved again with no address to open, in a page (ESC-560).
+        let mut again = with["runCommands"].clone();
+        again[0]["url"] = json!("");
+        again[0]["openIn"] = json!("page");
+        assert_eq!(serde_json::to_value(&p).unwrap()["runCommands"], again);
     }
 
     // ----- INT-3: an open harness id, kept as it was -----

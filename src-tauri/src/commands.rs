@@ -4600,14 +4600,28 @@ pub fn devpage_open(
     url: String,
     detached: bool,
     bounds: Option<crate::devpage::Bounds>,
+    project_id: Option<String>,
 ) -> Res<crate::devpage::PageView> {
-    let project_id = core
-        .agent(&agent_id)
-        .map_err(err)?
-        .lock()
-        .meta
-        .project_id
-        .clone();
+    // A launch command run in its project (ESC-560): a page without an agent, keyed
+    // `run:<project>:<command>`, in the project's « Pages » window alone.
+    let (project_id, detached) = match project_id {
+        Some(p) => {
+            if !agent_id.starts_with(&format!("{}{p}:", crate::devpage::RUN_PREFIX)) {
+                return Err("not the page of a launch of this project".into());
+            }
+            core.project(&p).map_err(err)?;
+            (p, true)
+        }
+        None => (
+            core.agent(&agent_id)
+                .map_err(err)?
+                .lock()
+                .meta
+                .project_id
+                .clone(),
+            detached,
+        ),
+    };
     let own = own_of(&app);
     crate::devpage::open(
         &app,

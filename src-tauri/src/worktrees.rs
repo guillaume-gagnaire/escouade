@@ -654,6 +654,7 @@ pub fn parse_run_suggestion(answer: &str, root: &Path, shell: &str) -> Option<Ru
                     command: e.command,
                     shell: shell.to_string(),
                     cwd: e.cwd,
+                    ..Default::default()
                 });
             }
         }

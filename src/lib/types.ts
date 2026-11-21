@@ -1033,6 +1033,8 @@ export interface PageView {
   detached: boolean;
   /** The width it is shown at: the whole room, a tablet's, a phone's. */
   mode?: 'full' | 'tablet' | 'mobile';
+  /** The page of a launch command run in its project (ESC-560): no agent's view to go back to. */
+  agentless?: boolean;
 }
 
 /** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
@@ -1064,7 +1066,16 @@ export interface RunCommand {
   shell: string;
   /** Folder relative to the project's, empty for the project itself. */
   cwd: string;
+  /**
+   * « Ouvrir à son lancement » (ESC-560): an http(s) address opened once it answers, empty for none. It may name the
+   * ports of a worktree, `${ESCOUADE_PORT_BASE:-3000}` (`run-url.ts`).
+   */
+  url?: string;
+  /** Where `url` opens: the page of a launch, or the system's browser (the page when absent). */
+  openIn?: RunOpen;
 }
+
+export type RunOpen = 'page' | 'browser';
 
 /** The launch commands Claude suggests for a project, and how many it gave that were refused (not one plain line, or too long). */
 export interface RunSuggestion {

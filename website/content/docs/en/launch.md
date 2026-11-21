@@ -59,6 +59,22 @@ A command’s log fills the main area when you click its row. The header gives i
 
 Agents’ test launches (the “▶ Test” button, see [testing](testing)) appear in the same section, under the agent’s name, once launched. They are followed the same way.
 
+## Opening an address on launch
+
+A command can open the app it launches, by itself, as soon as it answers: no more watching the log to click its address.
+
+1. In Settings › Projects › Launch, tick “Open on launch” under the command.
+2. Type “Address to open”, for example `http://localhost:5173/`. Only an `http://` or `https://` address is accepted: any other is told under the field (“Only an http:// or https:// address opens.”) and nothing is saved while it is there.
+3. Choose “Where to open it”: “Launch page” (the default) or “Browser”.
+
+At each launch, Escouade asks the address every half second, as “▶ Test” does, until it answers (an error page counts: the server is up), 3 minutes at most. The command’s log says so: “Escouade will open http://localhost:5173/ as soon as it answers.”, then where it opened.
+
+- **Launch page**: a [launch page](browser) of Escouade. Run in an agent’s worktree, it is that agent’s page; run in the project, a tab of the project’s “Pages” window, one per command. Restarting reloads the same page, without opening another. If the project opens its pages “In the system browser”, it is the browser.
+- **Browser**: the system’s browser.
+- If the command stops by itself (crashed, or done) before the address answers, nothing opens and the log says so: ““Front” stopped before http://localhost:5173/ answered: nothing opens.” After 3 minutes without an answer, nothing opens either. Stopped by you, nothing is said.
+
+In an agent’s worktree, the command gets its ports (see below): the address can follow them by naming them as a shell does, `${ESCOUADE_PORT_BASE}` and `${ESCOUADE_PORT_END}`, with the value to take in the project after `:-`. With `http://localhost:${ESCOUADE_PORT_BASE:-5173}/` and `npm run dev -- --port ${ESCOUADE_PORT_BASE:-5173}` under bash, the command opens `localhost:5173` in the project and `localhost:4120` in the worktree of an agent whose ports start at 4120. No other variable is allowed in an address.
+
 ## In an agent’s worktree
 
 A command also runs in an agent’s worktree, to see its work running without merging it.

@@ -882,8 +882,56 @@ describe('SettingsModal', () => {
     await afterGesture();
 
     const saved = backend.called('update_project').at(-1)!.args.project.runCommands;
-    expect(saved).toEqual([FRONT, { id: expect.any(String), name: 'API', command: 'cargo run', shell: 'bash', cwd: '' }]);
+    expect(saved).toEqual([
+      FRONT,
+      { id: expect.any(String), name: 'API', command: 'cargo run', shell: 'bash', cwd: '', url: '', openIn: 'page' },
+    ]);
     expect(app.projects[0].runCommands).toEqual(saved);
+  });
+
+  it('opens a command’s address on its launch, checked as it is typed, in a launch page or the browser (ESC-560)', async () => {
+    const backend = backendSaving();
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
+    const front = within(screen.getByRole('group', { name: 'Commande 1' }));
+    // Off by default: no address to type.
+    const tick = front.getByRole('checkbox', { name: 'Ouvrir à son lancement' });
+    expect(tick).not.toBeChecked();
+    expect(front.queryByLabelText('Adresse à ouvrir')).toBeNull();
+    await userEvent.click(tick);
+    await afterGesture();
+    const saves = backend.called('update_project').length;
+    const url = front.getByLabelText('Adresse à ouvrir');
+    // Its help says how it follows the ports of a worktree.
+    expect(url).toHaveAccessibleDescription(/\$\{ESCOUADE_PORT_BASE:-3000\} suit son ESCOUADE_PORT_BASE/);
+    const where = within(front.getByRole('group', { name: 'Où l’ouvrir' }));
+    expect(where.getByRole('button', { name: 'Page de lancement' })).toHaveAttribute('aria-pressed', 'true');
+
+    // Another scheme: said on the field, and nothing of the commands saved.
+    await fireEvent.input(url, { target: { value: 'file:///C:/Windows/win.ini' } });
+    await afterGesture();
+    expect(url).toHaveAttribute('aria-invalid', 'true');
+    expect(url).toHaveAccessibleDescription('Seule une adresse http:// ou https:// s’ouvre.');
+    expect(backend.called('update_project')).toHaveLength(saves);
+    await fireEvent.input(url, { target: { value: 'http://localhost:${HOME}/' } });
+    expect(url).toHaveAccessibleDescription(
+      '« HOME » n’est pas une variable de l’adresse : seulement ESCOUADE_PORT_BASE, ESCOUADE_PORT_END.',
+    );
+
+    // An http address, in the browser: saved with the command.
+    await fireEvent.input(url, { target: { value: 'http://localhost:${ESCOUADE_PORT_BASE:-5173}/' } });
+    await userEvent.click(where.getByRole('button', { name: 'Navigateur' }));
+    await afterGesture();
+    expect(url).toHaveAttribute('aria-invalid', 'false');
+    expect(backend.called('update_project').at(-1)!.args.project.runCommands[0]).toEqual({
+      ...FRONT,
+      url: 'http://localhost:${ESCOUADE_PORT_BASE:-5173}/',
+      openIn: 'browser',
+    });
+    // Unticked: no address any more.
+    await userEvent.click(tick);
+    await afterGesture();
+    expect(front.queryByLabelText('Adresse à ouvrir')).toBeNull();
+    expect(backend.called('update_project').at(-1)!.args.project.runCommands[0].url).toBe('');
   });
 
   it('says on its row a command without a name or a line, and a project without a name, and saves neither (ESC-380)', async () => {
