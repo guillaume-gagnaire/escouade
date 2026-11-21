@@ -1,9 +1,9 @@
 ---
-number: null
+number: 238
 id: "la-2-2-5-reversee-dans-la-2-3-une-seule"
 title: "La 2.2.5 reversée dans la 2.3 : une seule borne de la sortie d'un tour, protocole 0.1.6 et kit 0.1.5, profils et réglages par projet servis à distance"
 date: "2026-11-20"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-563"
 pages: ["plugins/programmes-js-ts-en-wasm","docs/docs-dans-le-depot","git-fichiers/hebergeurs-de-code"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/programmes-js-ts-en-wasm","added":6,"removed":6},{"page":"docs/docs-dans-le-depot","added":1,"removed":1},{"page":"git-fichiers/hebergeurs-de-code","added":4,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:11:11+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

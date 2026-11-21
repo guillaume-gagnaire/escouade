@@ -3,7 +3,7 @@ title: "Les programmes JS/TS des plugins, en WASM sans Node"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §5 (ESC-319, ESC-320, ESC-321, ESC-322, ESC-323)","docs/STORE.md §3.3, §3.4, §4.2, §5.2","prototypes/wasm-plugins/","Demande de l'utilisateur du 2026-11-01 : « je veux pas rendre node obligatoire… chaque plugin ts qui est soumis sera buildé en wasm »","Revue d'ESC-319 par le chef (2026-11-01) : l'adresse résolue","Consigne du chef au lancement d'ESC-323 (2026-11-01) : pas de socket Docker","Consignes du chef au lancement d'ESC-324 (2026-11-01) : le banc de run.js dans l'hôte WASM","Décisions de l'utilisateur des 2026-11-02 et 2026-11-04 (ESC-328) : le compilateur dans l'image du store, avant la 2.2.0","src-tauri/src/plugins/wasm.rs","src-tauri/src/plugins/store.rs","src-tauri/src/plugins/files.rs","src-tauri/src/plugins/bench/","crates/escouade-plugin-cli/","scripts/escouade-js.sh","store/Dockerfile","store/scripts/image-test.mjs","store/server/utils/compile.ts","store/server/utils/checks.ts","store/scripts/plugin-review/","sdk/plugin/src/index.ts","sdk/plugin/bin/escouade-plugin.mjs","schemas/plugin-protocol-1.json","docs/security/audit-2026-11/rapport.md (SEC-11)","crates/escouade-plugins/src/wasm.rs","crates/escouade-plugins/build.rs","RUSTSEC-2026-0566 (GHSA-5m8g-xhq4-4h93, wasmtime PR 15317)","RUSTSEC-2026-0567 (GHSA-2674-w29h-wqvj, wasmtime PR 15314)"]
 tickets: ["ESC-319","ESC-320","ESC-321","ESC-322","ESC-323","ESC-324","ESC-326","ESC-328","ESC-332","ESC-470","ESC-542","ESC-563"]
-decisions: [29,32,36,38,43,46,"le-cache-des-modules-wasm-suit-la-versio","la-2-2-5-reversee-dans-la-2-3-une-seule"]
+decisions: [29,32,36,38,43,46,"le-cache-des-modules-wasm-suit-la-versio",238]
 compared: null
 ---
 
