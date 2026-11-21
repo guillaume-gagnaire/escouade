@@ -190,6 +190,146 @@ jobs:
           sudo apparmor_parser -r store/deploy/apparmor-bubblewrap
           node store/scripts/image-test.mjs escouade-store:ci src-tauri/escouade-js/target/escouade-js.wasm.sha256
 
+  # The phone's Rust (crates/escouade-mobile, MO-3, docs/MOBILE.md) and its Capacitor plugin (apps/mobile-plugin): a
+  # package of its own (its lock, its toolchain), out of the app's jobs, built only when it, the plugin or their scripts
+  # change; a skipped job counts as passed. Linux runs its tests (the machine's side, with a WireGuard peer of test) and
+  # builds Android's libraries and the plugin's AAR; a Mac builds the XCFramework and the plugin's Swift package for the
+  # simulator. Nothing is signed: the artifacts are there to be looked at, never published.
+  mobile-changes:
+    name: Mobile (what changed)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    timeout-minutes: 5
+    outputs:
+      mobile: ${{ steps.filter.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            mobile:
+              - 'crates/escouade-mobile/**'
+              - 'apps/mobile-plugin/**'
+              - 'scripts/mobile-android.sh'
+              - 'scripts/mobile-ios.sh'
+              - 'deny.toml'
+              - '.github/workflows/ci.yml'
+
+  mobile-android:
+    name: Mobile (Rust tests, Android build)
+    needs: mobile-changes
+    if: needs.mobile-changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: crates/escouade-mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile-plugin/package-lock.json
+
+      - name: Rust toolchain (pinned in crates/escouade-mobile/rust-toolchain.toml)
+        run: rustup toolchain install && rustup target add aarch64-linux-android x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: crates/escouade-mobile
+
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-nextest,cargo-deny@0.20.2,cargo-ndk@4.1.2
+
+      # The runner's NDK (ANDROID_NDK_LATEST_HOME) and Java 21 (Capacitor 8's), and Gradle 8.14.3, checked against its
+      # published SHA-256, for the plugin's AAR.
+      - name: NDK, Java and Gradle
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          curl -sSfL -o "$RUNNER_TEMP/gradle.zip" https://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+          echo "bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531  $RUNNER_TEMP/gradle.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          echo "GRADLE=$RUNNER_TEMP/gradle-8.14.3/bin/gradle" >> "$GITHUB_ENV"
+
+      # The machine, without the tunnel (what the core will take to seal, MO-6), and Android's two ABIs (ring's C wants
+      # the NDK's compiler, hence cargo ndk).
+      - name: Format and Clippy
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo clippy --locked --all-targets --no-default-features -- -D warnings
+          cargo ndk -P 26 -t arm64-v8a -t x86_64 clippy --locked --all-targets --features uniffi -- -D warnings
+
+      - name: Tests (nextest)
+        run: cargo nextest run --locked --all-features --no-fail-fast
+
+      # With the generator of the bindings (--all-features): its licenses too.
+      - name: cargo deny
+        run: cargo deny --locked --all-features check
+
+      - name: Android libraries, Kotlin bindings and the plugin's AAR (unsigned)
+        working-directory: .
+        run: bash scripts/mobile-android.sh --aar
+
+      - name: The plugin's TypeScript API
+        working-directory: apps/mobile-plugin
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Upload the plugin's AAR
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-plugin-android
+          path: apps/mobile-plugin/android/build/outputs/aar/
+          retention-days: 7
+
+  mobile-ios:
+    name: Mobile (iOS build)
+    needs: mobile-changes
+    # Not for Dependabot's pull requests (see the rule above `jobs:`).
+    if: needs.mobile-changes.outputs.mobile == 'true' && github.actor != 'dependabot[bot]'
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: crates/escouade-mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rust toolchain (pinned in crates/escouade-mobile/rust-toolchain.toml)
+        run: rustup toolchain install && rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: crates/escouade-mobile
+          shared-key: mobile-ios
+
+      - name: Clippy for iOS (the device and the simulator)
+        run: |
+          cargo clippy --locked --features uniffi --target aarch64-apple-ios -- -D warnings
+          cargo clippy --locked --features uniffi --target aarch64-apple-ios-sim -- -D warnings
+
+      # The XCFramework, the Swift bindings, then the plugin's Swift package (Capacitor by SwiftPM) for the simulator.
+      - name: XCFramework, Swift bindings and the plugin (unsigned)
+        working-directory: .
+        run: bash scripts/mobile-ios.sh --build
+
+      - name: Upload the XCFramework and its Swift bindings
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-plugin-ios
+          path: |
+            apps/mobile-plugin/ios/escouade_mobileFFI.xcframework
+            apps/mobile-plugin/ios/Sources/EscouadeMobileCore
+          retention-days: 7
+
   # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS-DESIGN.md §5): built once for wasm32-wasip1 with the
   # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.
   escouade-js:

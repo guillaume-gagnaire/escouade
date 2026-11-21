@@ -6,7 +6,14 @@ export default defineConfig({
   plugins: [svelte(), svelteTesting()],
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.ts', 'schemas/**/*.test.ts', 'scripts/**/*.test.ts', 'sdk/**/*.test.ts', 'tests/e2e/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      'schemas/**/*.test.ts',
+      'scripts/**/*.test.ts',
+      'sdk/**/*.test.ts',
+      'tests/e2e/**/*.test.ts',
+      'apps/mobile-plugin/test/**/*.test.ts',
+    ],
     // A plugin's template runs its own tests, with node --test, once written (sdk/scripts/template-ci.mjs).
     exclude: [...configDefaults.exclude, 'sdk/create-escouade-plugin/templates/**'],
     setupFiles: ['./src/test/setup.ts'],

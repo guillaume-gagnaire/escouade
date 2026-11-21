@@ -14,5 +14,13 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts", "vitest.config.ts", "tests/**/*.ts", "playwright.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "tests/**/*.ts",
+    "playwright.config.ts",
+    "apps/mobile-plugin/test/**/*.ts"
+  ]
 }

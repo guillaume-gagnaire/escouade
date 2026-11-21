@@ -1,0 +1,72 @@
+[package]
+name = "escouade-mobile"
+version = "0.1.0"
+description = "Escouade's phone side (MO-3, docs/MOBILE.md): the WireGuard peer of the app, its local proxy to the remote API, and the opening of sealed notifications; bound to Kotlin and Swift by UniFFI for the Capacitor plugin"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.91"
+# Built into the mobile app only (apps/mobile-plugin): never published.
+publish = false
+
+[lib]
+# lib: the tests and the core (which seals what this opens); cdylib: Android (JNA loads libescouade_mobile.so);
+# staticlib: iOS (the XCFramework).
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[features]
+default = ["tunnel"]
+# The WireGuard peer and the local proxy. Without it, the sealed notifications alone: what the core needs to seal
+# them (MO-6), with neither boringtun nor smoltcp.
+tunnel = ["dep:boringtun", "dep:smoltcp", "dep:mio"]
+# The UniFFI scaffolding, for the Kotlin and Swift bindings of the Capacitor plugin.
+uniffi = ["dep:uniffi", "tunnel"]
+# The bindings' generator (`cargo run --features uniffi-cli --bin uniffi-bindgen -- generate …`).
+uniffi-cli = ["uniffi", "uniffi/cli"]
+
+[dependencies]
+# The sealed notifications: XChaCha20-Poly1305 under a key derived (HKDF-SHA256) from the pairing's.
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+getrandom = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+zeroize = "1"
+subtle = "2"
+# The tunnel: WireGuard in user space (no system VPN, no driver), a TCP/IP stack inside the app, and the readiness of
+# the UDP socket and of the local connections (one thread, no busy loop).
+boringtun = { version = "0.7.1", default-features = false, optional = true }
+smoltcp = { version = "0.14", default-features = false, features = ["std", "medium-ip", "proto-ipv4", "socket-tcp"], optional = true }
+mio = { version = "1", features = ["net", "os-poll"], optional = true }
+uniffi = { version = "0.32", optional = true }
+
+[dev-dependencies]
+# The test's WebSocket, through the proxy and the tunnel.
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["uniffi-cli"]
+
+# Small: what the phone downloads.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+# The bindings are generated from the machine's debug library, which keeps the symbols UniFFI reads.
+strip = true
+
+# The tunnel's tests need the tunnel (`--no-default-features` leaves the notifications alone).
+[[test]]
+name = "tunnel"
+required-features = ["tunnel"]
+
+# A package of its own (its lock, its toolchain), like fuzz/ and plugins/: nothing of it reaches src-tauri/Cargo.lock,
+# and the app's jobs do not build it: its own jobs do (mobile-android, mobile-ios in .github/workflows/ci.yml), when it or
+# the plugin (apps/mobile-plugin) changes.
+[workspace]

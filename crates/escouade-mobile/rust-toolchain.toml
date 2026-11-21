@@ -1,0 +1,5 @@
+# The app's toolchain (src-tauri/rust-toolchain.toml). The phone's targets are added by scripts/mobile-*.sh.
+[toolchain]
+channel = "1.98.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

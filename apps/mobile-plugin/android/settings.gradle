@@ -1,0 +1,3 @@
+// The plugin built on its own (the CI's job, scripts/mobile-android.sh); inside the app, the app's settings rule.
+include ':capacitor-android'
+project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')

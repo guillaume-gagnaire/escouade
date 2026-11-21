@@ -1,0 +1,11 @@
+# Built by scripts/mobile-android.sh and scripts/mobile-ios.sh from crates/escouade-mobile, never committed.
+node_modules/
+dist/
+android/build/
+android/.gradle/
+android/src/main/jniLibs/
+android/src/main/java/uniffi/
+ios/escouade_mobileFFI.xcframework/
+ios/Sources/EscouadeMobileCore/
+.build/
+.swiftpm/

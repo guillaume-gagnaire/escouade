@@ -24,3 +24,7 @@ prototypes/**/target
 store/deploy/seccomp-bubblewrap.json
 # Generated from the single list of the policies (crates/escouade-policy, TS-12): its test compares them byte for byte.
 policies/**/*.json
+# What scripts/mobile-android.sh, mobile-ios.sh and Gradle build into the mobile plugin (apps/mobile-plugin/.gitignore).
+apps/mobile-plugin/android/build
+apps/mobile-plugin/android/.gradle
+apps/mobile-plugin/dist

@@ -1,0 +1,39 @@
+{
+  "name": "@escouade/capacitor-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Escouade's mobile app's Rust (crates/escouade-mobile) in Capacitor, through UniFFI: the tunnel of a space and its local proxy, the sealed notifications",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "android/src/main/",
+    "android/build.gradle",
+    "ios/Sources/",
+    "ios/escouade_mobileFFI.xcframework/",
+    "Package.swift"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    },
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2",
+    "typescript": "~6.0.3"
+  }
+}

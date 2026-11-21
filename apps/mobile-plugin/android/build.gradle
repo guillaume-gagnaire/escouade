@@ -1,0 +1,56 @@
+// MO-3: the mobile app's Rust (crates/escouade-mobile) in Capacitor under Android. scripts/mobile-android.sh puts
+// libescouade_mobile.so in src/main/jniLibs (cargo-ndk) and the Kotlin bindings in src/main/java/uniffi
+// (uniffi-bindgen) before Gradle, never committed. The versions are those of the study's Capacitor 8 (ESC-445).
+buildscript {
+    ext.kotlin_version = project.hasProperty('kotlin_version') ? rootProject.ext.kotlin_version : '2.2.10'
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace = 'dev.escouade.mobile.plugin'
+    compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 26
+        // The ABIs cargo-ndk builds: phones (arm64) and the emulator (x86_64).
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+        consumerProguardFiles 'proguard-rules.pro'
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    kotlinOptions {
+        jvmTarget = '21'
+    }
+    lint {
+        abortOnError = false
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    // What UniFFI's Kotlin bindings load the library with.
+    implementation 'net.java.dev.jna:jna:5.17.0@aar'
+}

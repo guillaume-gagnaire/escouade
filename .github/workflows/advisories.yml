@@ -1,7 +1,8 @@
 name: Advisories
 
 # The advisories of the dependencies (SEC-02 of the security audit of 2026-11, ESC-422): `cargo deny check advisories` for
-# the app (src-tauri) and the plugins' workspace (plugins), `npm audit --omit=dev` for the app, the store and the site. On
+# the app (src-tauri), the plugins' workspace (plugins) and the phone's crate (crates/escouade-mobile, MO-3), `npm audit
+# --omit=dev` for the app, the store and the site. On
 # every pull request and every push on main, and every night: an advisory published after the last merge fails the night's
 # run. Its own workflow, so that the CI's concurrency and path filters do not touch it. The rules (and the advisories
 # ignored, each with its reason) are in deny.toml at the root. The nightly run is only in guillaume-gagnaire/escouade: a
@@ -30,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [src-tauri, plugins]
+        dir: [src-tauri, plugins, crates/escouade-mobile]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

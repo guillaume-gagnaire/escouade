@@ -39,6 +39,10 @@ ignore = [
     # never P-256, P-384 nor K-256, which is what crypto-bigint 0.5 serves; elliptic-curve 0.13 takes no 0.7.
     { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 (timing): only through the P-256/P-384/K-256 of openmls_rust_crypto and hpke-rs, which the team suite 0x0003 never uses; fixed in 0.7, which elliptic-curve 0.13 does not take" },
     { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 is unmaintained (hax-lib macros of libcrux, through hpke-rs and openmls); no fixed version, build-time only" },
+    # The phone's crate (crates/escouade-mobile, MO-3), checked with --all-features: basic-toml comes only through
+    # uniffi_bindgen (askama), the generator of the Kotlin and Swift bindings (its `uniffi-cli` feature, a build tool),
+    # never in the library the app ships.
+    { id = "RUSTSEC-2026-0374", reason = "basic-toml is unmaintained (no known flaw): only in uniffi_bindgen's askama, the bindings' generator run at build time (escouade-mobile's uniffi-cli feature), never in the phone's library" },
 ]
 
 [sources]
