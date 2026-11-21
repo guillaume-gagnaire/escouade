@@ -831,6 +831,7 @@ pub fn run() {
                 commands::inbox_views,
                 commands::inbox_view_act,
                 commands::inbox_view_snooze,
+                commands::inbox_view_reopen,
                 commands::memory_forget,
                 commands::claude_memory_offer,
                 commands::claude_memory_take,

@@ -269,3 +269,32 @@ impl Ask {
         self.files.iter().map(|f| f.size).sum()
     }
 }
+
+/// What a squad lead's mark on a view of the box says (ESC-557).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum MarkKind {
+    /// « Je m'en occupe »: it no longer counts as waiting for the user, shown apart with its note.
+    #[default]
+    Claimed,
+    /// « Réglé » another way: out of the box, in its trace, whence the user puts it back.
+    Settled,
+}
+
+/// The mark the squad lead left on a view of the box (`claim_inbox_view`, `settle_inbox_view`), by
+/// the view's key: who, when, its note, and the state of its source then (`sign`): its source
+/// changed (the ticket left « À tester » and came back), the mark falls.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ViewMark {
+    pub kind: MarkKind,
+    /// What it says: « vérification en cours, chaîne de tests », « fusionné à la main en 79fe7aec ».
+    pub note: String,
+    /// The agent that left it; None for Claude outside Escouade.
+    pub by: Option<String>,
+    /// Its name then.
+    pub by_name: String,
+    pub at: i64,
+    /// The state of the view's source when it was left.
+    pub sign: String,
+}

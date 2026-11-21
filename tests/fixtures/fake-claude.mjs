@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
 // message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
@@ -2773,6 +2773,21 @@ function startSession() {
       });
   }
 
+  // The squad lead's marks on the box (ESC-557): [chef-prend KEY] takes the ticket KEY in hand (« vérification en
+  // cours, chaîne de tests »), [chef-regle KEY] ticks it as settled (« fusionné à la main sur main en 79fe7aec »).
+  function markTurn(tool, key, note, said) {
+    escouadeTool(tool, { ticket: key, note })
+      .then((r) => {
+        const got = JSON.parse(r.content[0].text);
+        streamText(`${said} ${key} (il en reste ${got.waiting}).`);
+        result();
+      })
+      .catch((e) => {
+        streamText(`${tool} a échoué : ${e.message}`);
+        result();
+      });
+  }
+
   function askTurn() {
     const dir = path.join(process.cwd(), 'design');
     fs.mkdirSync(dir, { recursive: true });
@@ -2857,6 +2872,10 @@ function startSession() {
     if (text.includes('[demande-oui]')) return askOther('confirm');
     if (text.includes('[demande-tache]')) return askOther('task');
     if (text.includes('[demande-texte]')) return askOther('answer');
+    const claim = text.match(/\[chef-prend ([A-Z]+-\d+)\]/);
+    if (claim) return markTurn('claim_inbox_view', claim[1], 'vérification en cours, chaîne de tests', 'Je m’occupe de');
+    const settle = text.match(/\[chef-regle ([A-Z]+-\d+)\]/);
+    if (settle) return markTurn('settle_inbox_view', settle[1], 'fusionné à la main sur main en 79fe7aec', 'Réglé :');
     if (text.startsWith('[Escouade · ta demande') || text.startsWith('[Escouade · your request')) {
       const id = text.match(/(a-\d+)/)?.[1];
       const chosen =

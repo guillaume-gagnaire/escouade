@@ -153,6 +153,7 @@ export default {
     stepsTicked: '{done} étapes sur {total} cochées',
     noteLine: 'Son mot : « {note} »',
     withdrawn: 'Retirée par {agent} : {reason}',
+    withdrawnBare: 'Retirée par {agent}',
     expired: 'Périmée le {date}',
     retired: 'Retirée par Escouade : {reason}',
     filesErased: 'Fichiers effacés le {date}',

@@ -124,6 +124,8 @@ export default {
     waitAsk: 'Attendre une réponse',
     getAskFile: 'Lire un fichier d’une demande',
     answerAsk: 'Répondre à une demande laissée',
+    claimInboxView: 'Prendre en charge une ligne d’« À toi »',
+    settleInboxView: 'Cocher une ligne d’« À toi » comme réglée',
   },
   progress: {
     /** What a status line an agent reported (`report_progress`) is, for assistive technologies; the line is the agent's own words. */

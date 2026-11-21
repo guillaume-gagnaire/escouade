@@ -4898,6 +4898,13 @@ pub async fn inbox_view_snooze(core: CoreState<'_>, key: String, until: Option<i
     core.inbox_view_snooze(&key, until).await.map_err(err)
 }
 
+/// « Remettre dans la boîte » (ESC-557): a view the squad lead took in hand or ticked as settled waits for the user
+/// again; its source is not touched.
+#[tauri::command]
+pub async fn inbox_view_reopen(core: CoreState<'_>, key: String) -> Res<()> {
+    core.inbox_view_reopen(&key).await.map_err(err)
+}
+
 /// « Enregistrer sous… » of a request's file (ESC-510): its copy written where the user picks in the system's dialog,
 /// which the core opens; the window never gives a path. False when the user cancels.
 #[tauri::command]

@@ -144,6 +144,7 @@ export default defineZone('inbox', {
     stepsTicked: '{done} of {total} steps ticked',
     noteLine: 'Your word: “{note}”',
     withdrawn: 'Withdrawn by {agent}: {reason}',
+    withdrawnBare: 'Withdrawn by {agent}',
     expired: 'Expired on {date}',
     retired: 'Taken out by Escouade: {reason}',
     filesErased: 'Files erased on {date}',

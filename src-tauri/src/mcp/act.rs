@@ -1171,7 +1171,7 @@ pub(super) async fn set_board<R: Runtime>(
 
 /// An agent does not act on its own ticket: the one it works on (its ticket names it, or its own
 /// record names the ticket). `why` says it, in the words of the tool.
-fn not_own_ticket<R: Runtime>(
+pub(super) fn not_own_ticket<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     t: &Ticket,

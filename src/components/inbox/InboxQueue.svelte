@@ -73,7 +73,10 @@
   /** A closed request's line: its answer, who, when, read or not. */
   function answerLine(a: WindowAsk): string {
     const ans = a.answer;
-    if (a.state === 'withdrawn') return t('inbox.sent.withdrawn', { agent: a.author.name, reason: a.reason ?? '' });
+    if (a.state === 'withdrawn')
+      return a.reason
+        ? t('inbox.sent.withdrawn', { agent: a.author.name, reason: a.reason })
+        : t('inbox.sent.withdrawnBare', { agent: a.author.name });
     if (a.state === 'expired') return t('inbox.sent.expired', { date: fDate(a.closedAt ?? a.expiresAt) });
     if (a.state === 'retired') return t('inbox.sent.retired', { reason: a.reason ?? '' });
     if (!ans) return '';
@@ -112,20 +115,31 @@
   <!-- A view of what waits elsewhere (ESC-513): its source, what, who, since when; its gestures in the panel. -->
   <button
     class="row-ask"
-    class:wt={v.group === 'stopped'}
+    class:wt={v.group === 'stopped' && !v.mark}
+    class:done={v.mark?.kind === 'settled'}
+    class:lead={v.mark?.kind === 'claimed'}
     class:on={inbox.selected === key}
     aria-current={inbox.selected === key}
     onclick={() => inbox.select(key)}
     data-testid="ivw-row"
     data-key={v.key}
     data-source={v.source}
+    data-mark={v.mark?.kind ?? null}
   >
-    <span class="ic"><Icon name={VIEW_ICON[v.source]} /></span>
+    <span class="ic"><Icon name={v.mark?.kind === 'settled' ? 'check' : VIEW_ICON[v.source]} /></span>
     <span class="t ell">{viewTitle(v)}</span>
-    <span class="tm">{v.snoozedUntil ? '' : v.since ? fSince(v.since, now) : ''}</span>
+    <span class="tm">{v.mark ? fSince(v.mark.at, now) : v.snoozedUntil ? '' : v.since ? fSince(v.since, now) : ''}</span>
     <span class="s">
       <span class="pdot" style:background={colorOf(v.projectId)}></span>
-      {#if v.snoozedUntil}
+      {#if v.mark?.kind === 'settled'}
+        <span class="ell" data-testid="ivw-settled-line"
+          >{t('inboxViews.mark.settledLine', { name: v.mark.byName, note: v.mark.note })}</span
+        >
+      {:else if v.mark}
+        <span class="ell nm">{v.mark.byName}</span>
+        <span aria-hidden="true">·</span>
+        <span class="ell" data-testid="ivw-claim-note">{v.mark.note}</span>
+      {:else if v.snoozedUntil}
         <Icon name="clock" size={11} />
         <span class="ell">{t('inbox.queue.until', { when: fLater(v.snoozedUntil, now) })}</span>
       {:else}
@@ -238,6 +252,15 @@
         {#each g.earlier as it (itemKey(it))}{@render row(it)}{/each}
       </div>
     {/if}
+    {#if g.claimed.length}
+      <!-- What the squad lead took in hand (ESC-557): out of the counts, still there to read and to act on. -->
+      <h2 class="grp" data-testid="ivw-claimed-group">
+        <Icon name="agents" size={12} />{t('inboxViews.mark.group')} <span class="c">{g.claimed.length}</span>
+      </h2>
+      <div class="list">
+        {#each g.claimed as v (v.key)}{@render viewRow(v, `view:${v.key}`)}{/each}
+      </div>
+    {/if}
     {#if g.later.length || g.laterViews.length}
       <h2 class="grp">
         <button class="fold" aria-expanded={laterOpen} onclick={() => (laterOpen = !laterOpen)} data-testid="inbox-later">
@@ -269,9 +292,11 @@
         </div>
       {/if}
     {/if}
-    {#if g.recent.length}
+    {#if g.recent.length || g.settled.length}
       <h2 class="grp"><Icon name="check" size={12} />{t('inbox.queue.recent')}</h2>
       <div class="list" data-testid="inbox-recent">
+        <!-- The views the squad lead ticked as settled (ESC-557): their trace, whence the user puts them back. -->
+        {#each g.settled as v (v.key)}{@render viewRow(v, `view:${v.key}`)}{/each}
         {#each g.recent as a (a.id)}
           <button
             class="row-ask done"
@@ -525,6 +550,9 @@
   }
   .row-ask.done .ic {
     color: var(--run);
+  }
+  .row-ask.lead .ic {
+    color: var(--teal-ink);
   }
   .pdot {
     width: 8px;

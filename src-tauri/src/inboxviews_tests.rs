@@ -480,3 +480,327 @@ async fn a_fact_that_moves_a_view_has_the_window_read_the_box_again() {
         .any(|e| e["type"] == "inbox" && e["projectId"] == p.id.as_str());
     assert!(told);
 }
+
+// ---------- the squad lead's marks (ESC-557) ----------
+
+fn lead() -> Marker {
+    Marker {
+        agent: Some("a-chef".into()),
+        name: "overseer-fable".into(),
+    }
+}
+
+async fn view_of(h: &Harness, key: &str) -> InboxItem {
+    views(h)
+        .await
+        .views
+        .into_iter()
+        .find(|v| v.key == key)
+        .expect("the view")
+}
+
+#[tokio::test]
+async fn the_lead_takes_a_ticket_to_test_in_hand_it_no_longer_waits_and_falls_once_its_source_changes(
+) {
+    let h = harness("inbox-views-claim");
+    on(&h);
+    let (p, _) = h.project(false).await;
+    let (t, _) = crate::tickets_tests::reviewed(&h, &p.id, "Fichier [ok]").await;
+    let key = format!("ticket:{}", t.id);
+    assert_eq!(views(&h).await.total, 1);
+
+    let claimed = h
+        .core
+        .inbox_view_claim(&key, &lead(), "  vérification en cours,\n chaîne de tests ")
+        .await
+        .unwrap();
+    let mark = claimed.mark.clone().unwrap();
+    assert_eq!(mark.kind, crate::asks::MarkKind::Claimed);
+    assert_eq!(mark.note, "vérification en cours, chaîne de tests");
+    assert_eq!(mark.by_name, "overseer-fable");
+    // No longer waiting for the user, still there to read, with its note; its source untouched.
+    let v = views(&h).await;
+    assert_eq!(v.total, 0);
+    let still = view_of(&h, &key).await;
+    assert_eq!(
+        still.mark.as_ref().map(|m| m.note.as_str()),
+        Some(mark.note.as_str())
+    );
+    assert_eq!(h.ticket(&t.id).column, Column::Review);
+    // Kept across a restart.
+    h.core.save_state().unwrap();
+    let app = tauri::test::mock_app();
+    let data = crate::paths::DataDir::new(h.dir.join("data"));
+    let (again, _rx): (
+        std::sync::Arc<crate::core::Core<tauri::test::MockRuntime>>,
+        _,
+    ) = crate::core::Core::load(app.handle().clone(), data);
+    assert_eq!(
+        again
+            .inbox_snoozes
+            .lock()
+            .marks
+            .get(&key)
+            .map(|m| m.note.clone()),
+        Some(mark.note.clone())
+    );
+    drop(again);
+
+    // Given back: it waits for the user again.
+    h.core.inbox_view_release(&key).await.unwrap();
+    assert_eq!(views(&h).await.total, 1);
+    assert!(h.core.inbox_view_release(&key).await.is_err());
+
+    // The ticket left « À tester » and came back (another time « À tester »), read or not between: the mark fell.
+    h.core
+        .inbox_view_claim(&key, &lead(), "je regarde")
+        .await
+        .unwrap();
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.review_at = Some(x.review_at.unwrap_or(0) + 1);
+            Ok(())
+        })
+        .unwrap();
+    assert!(view_of(&h, &key).await.mark.is_none());
+    assert!(h.core.inbox_snoozes.lock().marks.is_empty());
+    assert_eq!(views(&h).await.total, 1);
+    // Out of « À tester »: its view gone, the mark forgotten with it.
+    h.core
+        .inbox_view_claim(&key, &lead(), "je regarde")
+        .await
+        .unwrap();
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.column = Column::Doing;
+            Ok(())
+        })
+        .unwrap();
+    assert!(!keys(&h).await.contains(&key));
+    assert!(h.core.inbox_snoozes.lock().marks.is_empty());
+    // A move told by its fact drops it at once, before any read.
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.column = Column::Review;
+            Ok(())
+        })
+        .unwrap();
+    h.core
+        .inbox_view_claim(&key, &lead(), "je regarde")
+        .await
+        .unwrap();
+    h.core.inbox_marks_ticket_moved(&t.id);
+    assert!(h.core.inbox_snoozes.lock().marks.is_empty());
+}
+
+#[tokio::test]
+async fn a_view_taken_in_hand_can_still_be_settled_by_the_user() {
+    let h = harness("inbox-views-claim-user");
+    on(&h);
+    let (p, _) = h.project(false).await;
+    let (t, _) = crate::tickets_tests::reviewed(&h, &p.id, "Fichier [ok]").await;
+    let key = format!("ticket:{}", t.id);
+    h.core
+        .inbox_view_claim(&key, &lead(), "vérification en cours")
+        .await
+        .unwrap();
+    h.core.inbox_view_act(&key, ViewAct::Approve).await.unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Done);
+    assert!(!keys(&h).await.contains(&key));
+    assert!(h.core.inbox_snoozes.lock().marks.is_empty());
+}
+
+#[tokio::test]
+async fn the_lead_settles_a_ticket_merged_by_hand_into_the_trace_and_the_user_puts_it_back() {
+    let h = harness("inbox-views-settle");
+    on(&h);
+    let (p, _) = h.project(false).await;
+    let (t, _) = crate::tickets_tests::reviewed(&h, &p.id, "Fichier [ok]").await;
+    let key = format!("ticket:{}", t.id);
+    // Taken in hand first, then settled: one mark, the last.
+    h.core
+        .inbox_view_claim(&key, &lead(), "vérification en cours")
+        .await
+        .unwrap();
+    let settled = h
+        .core
+        .inbox_view_settle(&key, &lead(), "fusionné à la main sur main en 79fe7aec")
+        .await
+        .unwrap();
+    let mark = settled.mark.unwrap();
+    assert_eq!(mark.kind, crate::asks::MarkKind::Settled);
+    assert_eq!(mark.note, "fusionné à la main sur main en 79fe7aec");
+    assert_eq!(views(&h).await.total, 0);
+    // Its source untouched: the ticket still « À tester ».
+    assert_eq!(h.ticket(&t.id).column, Column::Review);
+    // Settled, it is not taken in hand again.
+    let e = h
+        .core
+        .inbox_view_claim(&key, &lead(), "x")
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("déjà cochée comme réglée"), "{e}");
+    // The user puts it back.
+    h.core.inbox_view_reopen(&key).await.unwrap();
+    assert!(view_of(&h, &key).await.mark.is_none());
+    assert_eq!(views(&h).await.total, 1);
+    // Settled again, it comes back by itself once its source changes (« À tester » again).
+    h.core
+        .inbox_view_settle(&key, &lead(), "fusionné")
+        .await
+        .unwrap();
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.review_at = Some(x.review_at.unwrap_or(0) + 5);
+            Ok(())
+        })
+        .unwrap();
+    assert!(view_of(&h, &key).await.mark.is_none());
+    assert_eq!(views(&h).await.total, 1);
+
+    // A blocked ticket too.
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.blocked = Some("Conflit avec main".into());
+            x.conflict = true;
+            Ok(())
+        })
+        .unwrap();
+    let blocked = format!("blocked:{}", t.id);
+    h.core
+        .inbox_view_settle(&blocked, &lead(), "conflit résolu à la main")
+        .await
+        .unwrap();
+    assert_eq!(views(&h).await.total, 0);
+    // Its block changed: back.
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.blocked = Some("Les tests échouent".into());
+            x.conflict = false;
+            Ok(())
+        })
+        .unwrap();
+    assert!(view_of(&h, &blocked).await.mark.is_none());
+}
+
+#[tokio::test]
+async fn what_stays_the_users_gesture_is_never_marked_and_a_note_says_something() {
+    let h = harness("inbox-views-marks-refused");
+    on(&h);
+    let (p, _) = h.project(false).await;
+    // The docs to share, a review the host asks: neither taken in hand nor settled.
+    h.core.docs_shares.lock().insert(
+        p.id.clone(),
+        crate::docsshare::Memo {
+            pending: 2,
+            conflict: None,
+        },
+    );
+    let docs = format!("docs:{}", p.id);
+    for settle in [false, true] {
+        let e = if settle {
+            h.core.inbox_view_settle(&docs, &lead(), "partagé").await
+        } else {
+            h.core.inbox_view_claim(&docs, &lead(), "je partage").await
+        }
+        .unwrap_err();
+        assert!(e.to_string().contains("geste de l’utilisateur"), "{e}");
+    }
+    let list = crate::prview::ProjectPrs {
+        word: "PR".into(),
+        prs: vec![crate::forge::PullRequest {
+            number: 7,
+            url: "https://example.com/pr/7".into(),
+            title: "PR 7".into(),
+            state: crate::forge::PrState::Open,
+            author: "ada".into(),
+            reviewers: vec!["lea".into()],
+            ..Default::default()
+        }],
+        me: "lea".into(),
+    };
+    h.core.pr_lists.lock().entry(p.id.clone()).or_default().read =
+        Some((std::time::Instant::now(), now_ms(), list));
+    let review = keys(&h)
+        .await
+        .into_iter()
+        .find(|k| k.starts_with("review:"))
+        .unwrap();
+    let e = h
+        .core
+        .inbox_view_settle(&review, &lead(), "relu")
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("reste la sienne"), "{e}");
+    assert!(h
+        .core
+        .inbox_view_claim(&review, &lead(), "je relis")
+        .await
+        .is_err());
+
+    // A request an agent stopped for: taken in hand (out of « Tes agents se sont arrêtés »), never ticked.
+    let id = asking(&h, &p, "permission").await;
+    let req = format!("req:{id}:req_perm");
+    let e = h
+        .core
+        .inbox_view_settle(&req, &lead(), "réglé")
+        .await
+        .unwrap_err();
+    assert!(
+        e.to_string().contains("attend une réponse, pas une coche"),
+        "{e}"
+    );
+    let before = views(&h).await.total;
+    h.core
+        .inbox_view_claim(&req, &lead(), "je regarde la commande")
+        .await
+        .unwrap();
+    assert_eq!(views(&h).await.total, before - 1);
+    assert_eq!(views(&h).await.blocking, 1, "its agent still waits");
+
+    // A decision that comes from no ticket is the user's to accept; one of a ticket is settled.
+    let space = h.core.docs_space(&p.id, None).await.unwrap();
+    let alone = space
+        .decision_revise(None, decision("Sans ticket"))
+        .unwrap();
+    let alone = format!("decision:{}:{}", p.id, alone.id);
+    let e = h
+        .core
+        .inbox_view_settle(&alone, &lead(), "acceptée")
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("ne vient d’aucun ticket"), "{e}");
+    let mut of_ticket = decision("D'un ticket");
+    of_ticket.origin = Some("ticket".into());
+    of_ticket.origin_ref = Some("ESC-1".into());
+    let merged = space.decision_revise(None, of_ticket).unwrap();
+    let merged = format!("decision:{}:{}", p.id, merged.id);
+    h.core
+        .inbox_view_settle(&merged, &lead(), "reversée avec ESC-1")
+        .await
+        .unwrap();
+    assert!(view_of(&h, &merged).await.mark.is_some());
+
+    // A note says something, briefly, and never a secret.
+    for (note, said) in [
+        ("   ", "Dis en une phrase"),
+        (&"x".repeat(201)[..], "200 caractères"),
+        ("ghp_abcdefghijklmnopqrstuvwxyz0123456789", "secret"),
+    ] {
+        let e = h
+            .core
+            .inbox_view_claim(&alone, &lead(), note)
+            .await
+            .unwrap_err();
+        assert!(e.to_string().contains(said), "{note}: {e}");
+    }
+
+    // The server off: nothing is marked.
+    h.core.settings.write().mcp_enabled = false;
+    let e = h
+        .core
+        .inbox_view_claim(&alone, &lead(), "x")
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("fermée avec le serveur MCP"), "{e}");
+}

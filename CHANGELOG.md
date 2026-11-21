@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Claude Code : le plugin a un réglage « Fonctionnalités expérimentales », pour tous les projets puis par projet, qui allume le Code Mode, les Agent Teams ou d’autres drapeaux `CLAUDE_CODE_EXPERIMENTAL_*` dans la vue terminal. Un agent passé en Code Mode le dit et reste dans son terminal, seul endroit où Claude Code le reprend.
 - Une image jointe au message, ou au formulaire d’un ticket, s’agrandit d’un clic sur sa vignette, avant l’envoi : elle s’ouvre dans la visionneuse de la conversation, avec les autres images du message.
 - Projets privés : réserver un compte qui laisserait tes autres projets sans compte demande d’abord, en disant lesquels, et propose d’ajouter un compte réservé à la place ; « Partager à nouveau » le leur rend en un clic. Un compte partagé n’est plus présenté comme une alerte : les sessions du projet privé y restent refusées aux agents des autres projets, et ce qui reste commun est dit.
+- Boîte « À toi » : ce que ton chef d’escouade est en train de vérifier ne compte plus comme t’attendant et se lit à part, dans « Le chef s’en occupe », avec sa note ; ce qu’il a réglé par un autre chemin, comme un ticket fusionné à la main, part dans la trace « Réglé par… », d’où tu peux le remettre. Une demande retirée par son agent dit pourquoi.
 
 ## [2.2.5] — 2026-11-20
 

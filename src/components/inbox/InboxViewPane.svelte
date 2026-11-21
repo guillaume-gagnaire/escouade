@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fSince } from '../../lib/format';
   import { t } from '../../lib/i18n';
-  import { act, later, run } from '../../lib/inbox/act';
+  import { act, later, putBack, run } from '../../lib/inbox/act';
   import { fLater, laterTimes } from '../../lib/inbox/inbox.svelte';
   import { answerable, blocking, gesturesOf, type Gesture, type InboxItem } from '../../lib/inbox/views';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
@@ -48,7 +48,23 @@
     }
   }
 
+  /**
+   * A gesture of the line. On a line the squad lead took in hand (ESC-557), the user is asked first: the lead is checking
+   * it, its note said.
+   */
   function gesture(g: Gesture) {
+    const m = view.mark;
+    if (m?.kind !== 'claimed' || !g.inBox) return doGesture(g);
+    app.modal = {
+      kind: 'confirm',
+      title: t('inboxViews.mark.confirmTitle', { name: m.byName }),
+      body: t('inboxViews.mark.confirmBody', { note: m.note }),
+      confirm: gestureLabel(view, g),
+      onConfirm: () => doGesture(g),
+    };
+  }
+
+  function doGesture(g: Gesture) {
     if (g.id === 'deny') denying = true;
     else if (g.id === 'reject') rejecting = true;
     else if (g.id === 'answer') void go(act(view, { act: 'answer', answers: picked }));
@@ -101,6 +117,26 @@
     </div>
   </header>
 
+  {#if view.mark}
+    <!-- What the squad lead said of it (ESC-557): on it, or settled another way, with its note. -->
+    <div class="mark" class:settled={view.mark.kind === 'settled'} data-testid="ivw-mark" data-mark={view.mark.kind}>
+      <div class="who">
+        <Icon name={view.mark.kind === 'settled' ? 'check-c' : 'agents'} size={13} />
+        {t(view.mark.kind === 'settled' ? 'inboxViews.mark.settled' : 'inboxViews.mark.claimed', {
+          name: view.mark.byName,
+          when: fLater(view.mark.at),
+        })}
+      </div>
+      <p class="said">{t('inboxViews.mark.note', { note: view.mark.note })}</p>
+      <p class="desc">{t(view.mark.kind === 'settled' ? 'inboxViews.mark.settledNote' : 'inboxViews.mark.claimedNote')}</p>
+      <div>
+        <button class="btn small" class:primary={view.mark.kind === 'settled'} onclick={() => void putBack(view)} data-gesture="putBack"
+          >{t('inboxViews.mark.reopen')}</button
+        >
+      </div>
+    </div>
+  {/if}
+
   {#if view.request && view.source !== 'question'}
     <div class="what">
       <div class="tool">{toolLabel(view.request.tool)}</div>
@@ -139,7 +175,7 @@
     <div class="form">
       <RejectForm onsubmit={(comment) => go(act(view, { act: 'reject', comment }))} oncancel={() => (rejecting = false)} />
     </div>
-  {:else}
+  {:else if view.mark?.kind !== 'settled'}
     <div class="acts">
       {#each gestures as g (g.id)}
         <button
@@ -161,7 +197,7 @@
       {/if}
     </div>
   {/if}
-  <p class="note">{note}</p>
+  {#if view.mark?.kind !== 'settled'}<p class="note">{note}</p>{/if}
 </section>
 
 <style>
@@ -231,6 +267,31 @@
   }
   .blocked {
     color: var(--warn-ink);
+  }
+  .mark {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    border-radius: var(--r);
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .mark .who {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--teal-ink);
+  }
+  .mark.settled .who {
+    color: var(--run);
+  }
+  .mark .said {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+    overflow-wrap: anywhere;
   }
   .question {
     display: grid;

@@ -10,6 +10,20 @@ import type { Column, PendingRequest } from '../types';
 export type ViewSource = 'permission' | 'question' | 'plan' | 'ticketReview' | 'ticketBlocked' | 'decision' | 'docs' | 'review';
 export type ViewGroup = 'stopped' | 'today' | 'earlier';
 
+/**
+ * What the squad lead said of a view (ESC-557, `claim_inbox_view`, `settle_inbox_view`): « Le chef s'en occupe »
+ * (`claimed`: it no longer counts as waiting for the user, and shows apart with its note) or « Réglé par … »
+ * (`settled`: out of the box, in its trace, whence the user puts it back). It falls once its source changes.
+ */
+export interface ViewMark {
+  kind: 'claimed' | 'settled';
+  note: string;
+  by: string | null;
+  byName: string;
+  at: number;
+  sign: string;
+}
+
 /** A view, as `inbox_views` gives it (`inboxviews::InboxItem`). */
 export interface InboxItem {
   key: string;
@@ -35,6 +49,8 @@ export interface InboxItem {
   number: number | null;
   url: string | null;
   word: string | null;
+  /** The squad lead took it in hand, or ticked it as settled (ESC-557). */
+  mark: ViewMark | null;
 }
 
 export interface InboxViews {
@@ -63,6 +79,8 @@ export type ViewAct =
 export const readViews = (projectId: string | null = null) => invoke<InboxViews>('inbox_views', { projectId });
 export const actOnView = (key: string, act: ViewAct) => invoke<void>('inbox_view_act', { key, act });
 export const snoozeView = (key: string, until: number | null) => invoke<void>('inbox_view_snooze', { key, until });
+/** « Remettre dans la boîte »: a view the squad lead marked waits for the user again (ESC-557). */
+export const reopenView = (key: string) => invoke<void>('inbox_view_reopen', { key });
 
 /** A gesture of a line, as its source has it: what it does, its label, and whether it is the line's first. */
 export interface Gesture {
@@ -138,6 +156,9 @@ export function answerable(v: InboxItem): boolean {
 
 /** A view never put off: its agent waits for it. */
 export const blocking = (v: InboxItem) => v.group === 'stopped';
+
+/** It waits for the user: not put off, not marked by the squad lead (ESC-557). */
+export const waitsForUser = (v: InboxItem) => !v.snoozedUntil && !v.mark;
 
 /** The signature of what an agent says of its requests: the box is read again when it changes, not at each token. */
 export function requestsMark(a: { status: string; requests?: { id: string }[] } | undefined): string {

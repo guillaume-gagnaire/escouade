@@ -111,6 +111,8 @@ export default defineZone('mcp', {
     waitAsk: 'Wait for an answer',
     getAskFile: 'Read a file of a request',
     answerAsk: 'Answer a request left to you',
+    claimInboxView: 'Take a line of “Your turn” in hand',
+    settleInboxView: 'Tick a line of “Your turn” as settled',
   },
   progress: {
     label: 'What the agent says it is doing',

@@ -63,6 +63,19 @@ export default defineZone('inboxViews', {
     review: 'The review is done on the host: Escouade read it in the last list of pull requests.',
   },
   settled: 'Settled elsewhere: the box has updated.',
+  /** What the squad lead said of it (ESC-557): taken in hand, or ticked as settled. */
+  mark: {
+    group: 'The lead is on it',
+    claimed: '{name} is on it · {when}',
+    settled: 'Settled by {name} · {when}',
+    settledLine: 'Settled by {name}: {note}',
+    note: '“{note}”',
+    reopen: 'Put back in the box',
+    claimedNote: 'It no longer counts as waiting for you. You can still settle it yourself.',
+    settledNote: 'It left your box; it comes back by itself if its source changes again.',
+    confirmTitle: '{name} is checking it',
+    confirmBody: 'Their note: “{note}”. Settle it yourself anyway?',
+  },
   summary: {
     title: 'Box “Your turn”',
     label: 'Summary of the box “Your turn”',

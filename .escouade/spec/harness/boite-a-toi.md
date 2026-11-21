@@ -1,9 +1,9 @@
 ---
 title: "La boîte « À toi »"
 subject: "harness"
-sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 18)","design/inbox-2-3/README.md (direction B, captures b-)"]
-tickets: ["ESC-508","ESC-509","ESC-510","ESC-513"]
-decisions: [210,240,242]
+sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 5.1 pour ESC-557 ; § 18)","design/inbox-2-3/README.md (direction B, captures b-)","Demande de l'utilisateur du 2026-11-20 (ESC-557) : « quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans \"à toi\", afin d'être toujours à jour »"]
+tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-557"]
+decisions: [210,240,242,"le-chef-d-escouade-prend-en-charge-et-co"]
 compared: null
 ---
 
@@ -162,3 +162,40 @@ Si l'utilisateur a accepté les statistiques : `ask_created` (sorte, auteur, fic
 - L'Overseer (ses nouvelles, la voix, sa délégation), l'API distante et le téléphone, les réglages imposés, l'invitation d'équipe et la station de l'onboarding viennent avec la 2.3 (`docs/INBOX.md` § 18).
 - Une relecture écrite par un agent qui attend d'être publiée n'est pas une vue ; une « Relecture » n'est connue qu'après une lecture de la liste des PR du projet.
 - Les docs à partager sont ce que l'onglet Docs a lu en dernier : un projet dont les docs n'ont pas été lues depuis le démarrage n'en montre pas.
+
+## Le chef d'escouade tient la boîte à jour (ESC-557)
+
+Une vue reste lue à sa source ; le chef d'escouade y pose une **marque**, gardée dans l'état durable par la clé de la vue, avec l'état de sa source quand il l'a posée. Demandé le 2026-11-20, après que l'utilisateur a validé depuis la boîte trois tickets que le chef vérifiait encore.
+
+### « Je m'en occupe » (`claim_inbox_view`)
+
+- Le chef prend en charge une vue qu'il est en train de traiter : un ticket « À tester » qu'il vérifie, un ticket bloqué, les demandes d'un agent arrêté (celles de maintenant ; une nouvelle arrive dans la boîte), une décision proposée. Avec une **note** courte (« vérification en cours, chaîne de tests ») : une ligne, 200 caractères au plus, jamais un secret.
+- La vue **ne compte plus comme t'attendant** : elle quitte « Tes agents se sont arrêtés », « Aujourd'hui » et « Plus tôt », et le nombre de la tuile, de l'en-tête et de « il en reste » ; un agent arrêté dont le chef a pris toutes les demandes n'y compte plus non plus (« N en attente » de la barre d'état, qui dit les agents arrêtés, ne change pas).
+- Elle **reste lisible** dans un groupe « Le chef s'en occupe » de la file, après « Plus tôt » : son titre, le nom du chef, sa note, depuis quand. Ouverte, le panneau dit « overseer-fable s'en occupe · 15:02 », la note entre guillemets, « Ça ne compte plus comme t'attendant. Tu peux toujours la régler toi-même. », et « Remettre dans la boîte ».
+- **L'utilisateur peut toujours agir dessus** (valider, refuser, renvoyer…) : son geste demande d'abord « overseer-fable est en train de la vérifier · Sa note : « … ». La régler toi-même quand même ? », avec le geste pour bouton.
+- Elle **tombe d'elle-même** quand sa source change (le ticket quitte « À tester » puis y revient, son blocage change, la décision est révisée), ou quand le chef la rend (`release: true`).
+
+### « Réglé » (`settle_inbox_view`)
+
+- Le chef coche comme réglée une vue qu'il a réglée **par un autre chemin**, avec une note qui dit comment (« fusionné à la main sur main en 79fe7aec ») : un ticket à valider ou bloqué (par exemple un ticket de la ligne 2.2 fusionné à la main, qui reste « À tester » jusqu'à ce que sa carte soit fermée), ou la décision proposée d'un ticket.
+- La vue **sort de la boîte et passe dans sa trace**, dans « Répondu récemment » : « Réglé par overseer-fable : fusionné à la main sur main en 79fe7aec ». Ouverte, elle n'a plus ses gestes : « Réglé par overseer-fable · 15:10 », sa note, « Elle est sortie de ta boîte ; elle y revient d'elle-même si sa source change encore. », et **« Remettre dans la boîte »** (`inbox_view_reopen`), qui la rend à l'utilisateur. Sa source n'est pas touchée ; quand elle part (la carte fermée), la ligne part avec elle.
+- Une vue réglée **revient d'elle-même** si sa source change encore (le ticket revient « À tester »).
+- **Jamais ce qui reste le geste de l'utilisateur**, chaque refus dit pourquoi : partager les docs ; une relecture que l'hébergeur lui demande ; un feu vert (`gate`) ; une tâche ; une demande où un agent s'est arrêté (elle attend une réponse, pas une coche) ; une décision qui ne vient d'aucun ticket (l'utilisateur l'accepte). Une demande de la boîte se règle par son auteur (`withdraw_ask`, avec une note) ou par `answer_ask` quand l'utilisateur l'a laissée.
+
+### Qui
+
+- Le même réglage que les réponses, « Les agents peuvent répondre aux demandes des autres agents » (une seule règle, `delegation.rs`) : « Personne » refuse tout agent ; « Seulement le chef d'escouade », le chef du projet de la vue seul ; « Tous les agents », chacun. Claude hors Escouade, comme pour les permissions et les questions. Jamais un agent sur son propre ticket ni sur ses propres demandes.
+- Serveur MCP éteint, rien ne se marque ; les marques gardées reviennent avec lui.
+- `app.log` dit « inbox view ticketReview claimed », « settled », « released », « put back », jamais la note ; l'activité du serveur MCP garde le ticket nommé, jamais la note.
+
+### Le retrait d'une demande
+
+`withdraw_ask` prend sa raison comme **une note visible** de l'utilisateur dans la trace : « Retirée par chef-atlas : tranché dans la conversation du chef : B », dans « Répondu récemment » et dans le panneau de la demande ; sans raison, « Retirée par chef-atlas ». Une raison qui ressemble à un secret est refusée.
+
+### La consigne aux agents
+
+Les instructions du serveur MCP ajoutent : retirer une demande avec une note qui dit comment elle a été tranchée ; chef d'escouade d'un projet, tenir la boîte à jour : prendre en charge un ticket « À tester » qu'on vérifie (`claim_inbox_view`, avec ce qu'on fait), cocher comme réglé ce qu'on a réglé par un autre chemin (`settle_inbox_view`, avec comment), jamais ce qui reste le geste de l'utilisateur.
+
+### Les commandes de la fenêtre
+
+`inbox_views` rend la marque de chaque vue (`mark` : `kind` `claimed` ou `settled`, `note`, `byName`, `at`) et ne compte pas les vues marquées dans `total` ; `inbox_view_reopen` remet une vue marquée dans la boîte. Sur la 2.2, l'API distante n'existe pas encore : au reversement dans la 2.3, `inbox_view_reopen` y est servie avec les autres commandes de la boîte (`docs/INBOX.md` § 18).

@@ -1290,7 +1290,8 @@ impl<R: Runtime> Core<R> {
         result
     }
 
-    /// `withdraw_ask`: its author takes it back, with its reason.
+    /// `withdraw_ask`: its author takes it back, with its reason: the note the user reads in its trace (« tranché
+    /// dans la conversation du chef : B », ESC-557), never a secret.
     pub fn ask_withdraw(self: &Arc<Self>, asker: &Asker, id: &str, reason: &str) -> Result<Ask> {
         let reason = one_line(reason);
         if chars(&reason) > REASON_MAX {
@@ -1299,6 +1300,9 @@ impl<R: Runtime> Core<R> {
                 &tr!("La raison", "The reason"),
                 REASON_MAX
             ));
+        }
+        if looks_secret(&reason) {
+            bail!(secret(i18n::ui()));
         }
         let now = now_ms();
         let a = self.own_waiting(asker, id, |a| {

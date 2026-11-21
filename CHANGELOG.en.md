@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Claude Code: the plugin has an “Experimental features” setting, for every project then by project, that turns on Code Mode, Agent Teams or other `CLAUDE_CODE_EXPERIMENTAL_*` flags in the terminal view. An agent in Code Mode says so and stays in its terminal, the only place Claude Code resumes it.
 - An image attached to a message, or to a ticket’s form, now opens full size with a click on its thumbnail before it is sent: it shows in the conversation’s viewer, with the message’s other images.
 - Private projects: reserving an account that would leave your other projects without one asks first, naming them, and offers to add a reserved account instead; “Share again” gives it back to them in one click. A shared account is no longer shown as a warning: the private project’s sessions stay refused there to the other projects’ agents, and what stays common is said.
+- “Your turn” box: what your squad lead is checking no longer counts as waiting for you and reads apart, in “The lead is on it”, with its note; what it settled another way, such as a ticket merged by hand, goes to the “Settled by…” trace, whence you can put it back. A request its agent withdraws says why.
 
 ## [2.2.5] — 2026-11-20
 

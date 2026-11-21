@@ -36,6 +36,8 @@ mod http;
 mod images;
 #[cfg(test)]
 mod images_tests;
+#[cfg(test)]
+mod inbox_marks_tests;
 pub(crate) mod install;
 #[cfg(test)]
 mod install_tests;

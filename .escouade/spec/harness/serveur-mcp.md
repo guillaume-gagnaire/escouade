@@ -2,8 +2,8 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","https://github.com/guillaume-gagnaire/escouade/pull/44"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-509","ESC-511","ESC-513"]
-decisions: [153,211,210,242]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-509","ESC-511","ESC-513","ESC-557"]
+decisions: [153,211,210,242,"le-chef-d-escouade-prend-en-charge-et-co"]
 compared: null
 ---
 
@@ -291,3 +291,13 @@ Huit outils servent les demandes asynchrones des agents (voir *La boîte « À t
 Les instructions que le serveur donne à chaque harness disent, en plus de ce qui précède : quand un agent attend quelque chose de l'utilisateur sans être bloqué (un choix entre des options rendues, maquettes ou directions ; les choix d'une étude ; un feu vert pour publier, signer, supprimer ou dépenser ; un essai que seul l'utilisateur peut faire, sur un vrai compte ou un téléphone ; un fichier à supprimer à la main), il le dépose dans la boîte « À toi » par `ask_user` au lieu de l'écrire seulement dans son bilan, puis continue : ses rendus joints à leurs options (clair et sombre), sa recommandation et ce que la réponse débloque ; il attend la réponse en message (ou par `get_ask`), retire une demande qui n'a plus lieu d'être (`withdraw_ask`), n'en dépose jamais deux pour la même chose ; une question qui le bloque reste une question de la conversation ; jamais de secret dans une demande. Serveur éteint, il n'y a ni outil ni consigne. La même consigne est dans la mémoire partagée du projet Escouade (`deposer-une-demande-a-toi`).
 
 « Les agents peuvent répondre aux demandes des autres agents » se juge par la même règle pour `answer_permission`, `answer_question` et `answer_ask` (voir *La boîte « À toi »*, « La délégation, une seule règle »).
+
+## Les marques du chef d'escouade sur la boîte « À toi » (ESC-557)
+
+- **`claim_inbox_view`** (« Je m'en occupe ») : une ligne de la boîte, une seule (`ticket`, `agent`, `decision` avec `project` ; `ask`, `docs` et `pullRequest` pour s'entendre dire pourquoi c'est refusé), avec une `note` (200 caractères) ; `release: true` la rend. La ligne ne compte plus comme attendant l'utilisateur et se lit dans « Le chef s'en occupe ».
+- **`settle_inbox_view`** (« Réglé ») : un ticket à valider ou bloqué, la décision proposée d'un ticket, réglés par un autre chemin, avec une `note` qui dit comment ; la ligne passe dans la trace, d'où l'utilisateur la remet. Jamais les docs à partager, une relecture que l'hébergeur demande à l'utilisateur, un feu vert, une tâche, une demande bloquante, une décision sans ticket, ni son propre ticket : refusé, avec la raison.
+- Les deux rendent les lignes (`key`, `source`, `title`, `project`, `ticket`, `mark` : `kind`, `note`, `by`, `at`) et `waiting`, ce qui attend encore l'utilisateur. Une marque tombe d'elle-même quand la source de sa ligne change.
+- **Qui** : « Les agents peuvent répondre aux demandes des autres agents », la même règle que `answer_permission`, `answer_question` et `answer_ask` (« Personne », le chef du projet seul, tous) ; Claude hors Escouade comme pour les permissions. Ce qu'ils nomment se trouve parmi ce que l'appelant voit : un ticket d'un projet privé reste introuvable aux agents des autres projets, dans les mêmes mots.
+- **`withdraw_ask`** : sa raison est la note que l'utilisateur lit dans la trace (« tranché dans la conversation du chef : B ») ; jamais un secret.
+- **La consigne** des instructions du serveur ajoute : retirer une demande avec une note qui dit comment elle a été tranchée ; chef d'escouade, prendre en charge un ticket « À tester » qu'on vérifie et cocher comme réglé ce qu'on a réglé par un autre chemin, jamais ce qui reste le geste de l'utilisateur.
+- Le journal d'activité garde le ticket, l'agent, la décision ou le projet nommés, jamais la note.

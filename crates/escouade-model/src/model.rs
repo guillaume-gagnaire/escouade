@@ -2594,6 +2594,9 @@ pub struct PersistedState {
     /// « Plus tard » on a view of the box (ESC-513): until when (epoch ms), by the view's key. Its
     /// source is not touched.
     pub inbox_snoozes: BTreeMap<String, i64>,
+    /// What the squad lead said of a view of the box (ESC-557): « Le chef s'en occupe », or
+    /// « Réglé par … », by the view's key. It falls once its source changes.
+    pub inbox_marks: BTreeMap<String, crate::asks::ViewMark>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

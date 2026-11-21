@@ -1993,6 +1993,7 @@ impl<R: Runtime> Core<R> {
         };
         let inbox_snoozes = crate::inboxviews::ViewSnoozes {
             until: std::mem::take(&mut state.inbox_snoozes),
+            marks: std::mem::take(&mut state.inbox_marks),
         };
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
@@ -2742,7 +2743,10 @@ impl<R: Runtime> Core<R> {
             let b = self.asks.lock();
             (b.list.clone(), b.seq)
         };
-        let inbox_snoozes = self.inbox_snoozes.lock().until.clone();
+        let (inbox_snoozes, inbox_marks) = {
+            let s = self.inbox_snoozes.lock();
+            (s.until.clone(), s.marks.clone())
+        };
         PersistedState {
             projects,
             agents,
@@ -2757,6 +2761,7 @@ impl<R: Runtime> Core<R> {
             asks,
             ask_seq,
             inbox_snoozes,
+            inbox_marks,
         }
     }
 
