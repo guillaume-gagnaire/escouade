@@ -51,7 +51,9 @@ jobs:
           npm ci
           cd mobile-study/capacitor && npm ci
       - name: Construire l'APK
-        run: bash mobile-study/capacitor/build-android.sh
+        run: |
+          chmod +x mobile-study/capacitor/android/gradlew   # commité depuis Windows, sans son bit x
+          bash mobile-study/capacitor/build-android.sh
       - name: Nommer l'APK
         run: |
           mkdir -p out
