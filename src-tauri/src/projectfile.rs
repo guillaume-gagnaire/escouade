@@ -1508,6 +1508,52 @@ pub fn write(existing: Option<&str>, values: &[(&str, Value)]) -> Result<String>
     Ok(out)
 }
 
+/// The file with the setting `key` of the plugin `id` set to `v` (`plugins.<id>.<key>`, « Écrire dans .escouade.yml » of
+/// the page Plugins of a project, ESC-530), written over `existing` as `write` does: its comments, its order and the keys
+/// it does not know kept. A simple value alone (a text, a number, true or false): never a secret nor a profile, which the
+/// caller never gives.
+pub fn write_plugin(existing: Option<&str>, id: &str, key: &str, v: &Value) -> Result<String> {
+    if !crate::plugins::manifest::is_id(id) || key.is_empty() || key.contains(['\n', '\r']) {
+        bail!("{PLUGINS}.{id}.{key}: not a plugin's setting");
+    }
+    let text = write(existing, &[])?;
+    let doc = Document::from_str(&text).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let root = doc
+        .as_mapping()
+        .ok_or_else(|| anyhow::anyhow!("{FILE}: no mapping"))?;
+    // A group new to the file starts with a placeholder for its first key (see `put_list`).
+    if root.get_mapping(PLUGINS).is_none() {
+        let g = Mapping::new();
+        g.set(id, "");
+        root.set(PLUGINS, g);
+    }
+    let plugins = root
+        .get_mapping(PLUGINS)
+        .ok_or_else(|| anyhow::anyhow!("{FILE}: {PLUGINS}"))?;
+    if plugins.get_mapping(id).is_none() {
+        let g = Mapping::new();
+        g.set(key, "");
+        plugins.set(id, g);
+    }
+    let mine = plugins
+        .get_mapping(id)
+        .ok_or_else(|| anyhow::anyhow!("{FILE}: {PLUGINS}.{id}"))?;
+    match v {
+        Value::Bool(b) => mine.set(key, *b),
+        Value::Number(n) => match n.as_i64() {
+            Some(i) => mine.set(key, i),
+            None => mine.set(key, n.as_f64().unwrap_or_default()),
+        },
+        Value::String(s) => put_text(&mine, key, s),
+        _ => bail!("{PLUGINS}.{id}.{key}: a text, a number, true or false"),
+    }
+    let mut out = doc.to_string();
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    Ok(out)
+}
+
 /// Whether the project's value of a key goes into the file: not an empty target branch (set by the
 /// first ticket), nor `bypassPermissions` (`MODES`).
 fn writable(k: &str, v: &Value) -> bool {

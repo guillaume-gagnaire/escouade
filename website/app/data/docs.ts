@@ -54,6 +54,7 @@ export const DOC_GROUPS = [
       'plugins/capabilities',
       'plugins/api',
       'plugins/calls',
+      'plugins/project-credentials',
       'plugins/events',
       'plugins/permission-rules',
       'plugins/themes',

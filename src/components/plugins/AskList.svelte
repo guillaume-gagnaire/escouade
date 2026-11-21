@@ -1,7 +1,9 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
+  import Rich from '../../lib/i18n/Rich.svelte';
   import type { Ask } from '../../lib/plugins';
   import Icon from '../Icon.svelte';
+  import { tip } from '../../lib/tip';
 
   // What a plugin may do, a line per permission, the strongest first (§3.4): the program in bold, the agents'
   // permissions in red. `grown`: the words new since the installed version, marked. `revoked` and `onToggle`: each line
@@ -17,15 +19,28 @@
     revoked?: string[];
     onToggle?: (word: string, granted: boolean) => void;
   } = $props();
+
+  // The sentence that says what a pill is, once, under the last command that has one (ESC-528).
+  const guardAt = $derived(asks.map((a) => !!a.pieces).lastIndexOf(true));
 </script>
 
 <ul class="asks">
-  {#each asks as a (a.word)}
+  {#each asks as a, i (a.word)}
     {@const off = revoked?.includes(a.word) ?? false}
     <li class:strong={a.strong} class:red={a.red} class:orange={a.orange} class:off>
       <Icon name={a.icon} size={14} />
       <span class="txt"
-        >{a.text}{#if a.detail}<small class="mono">{a.detail}</small>{/if}{#if a.note}<small>{a.note}</small
+        >{a.text}{#if a.pieces}<small class="mono words" data-command
+            >{#each a.pieces as p, j (j)}{#if j}{' '}{/if}{#if p.joker}<span
+                  class="joker"
+                  use:tip={{ text: p.joker, aria: false }}
+                  data-joker={p.joker}>{p.text}</span
+                >{:else}{p.text}{/if}{/each}</small
+          >{:else if a.detail}<small class="mono">{a.detail}</small>{/if}{#if a.note}<small>{a.note}</small>{/if}{#if i === guardAt}<small
+            class="guard"
+            data-joker-guard
+            ><Rich k="plugins.ask.jokerGuard">{#snippet pill()}<span class="joker">{t('plugins.ask.jokerPill')}</span>{/snippet}</Rich
+            ></small
           >{/if}{#if onToggle && a.word === 'run'}<small>{t('plugins.perms.runNote')}</small>{/if}</span
       >
       {#if grown.includes(a.word)}<span class="new">{t('plugins.install.grownMark')}</span>{/if}
@@ -89,6 +104,24 @@
   }
   small.mono {
     font-size: 11px;
+  }
+  /* A command with jokers: its words, each joker a pill said in words (the font of the interface, not the code's). */
+  .words {
+    color: var(--soft);
+    line-height: 1.9;
+  }
+  .joker {
+    display: inline-block;
+    padding: 0 6px;
+    border-radius: 5px;
+    font-family: var(--font);
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1.6;
+    color: var(--warn-ink);
+    background: oklch(from var(--wait) l c h / 0.1);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+    white-space: nowrap;
   }
   .new {
     align-self: center;

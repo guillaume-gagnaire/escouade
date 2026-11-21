@@ -114,6 +114,14 @@ escouade_command::commands! {
         commands::plugin_set_setting,
         commands::plugin_secrets,
         commands::plugin_set_secret,
+        // A plugin's profiles and its settings of each project (ESC-530): kept by the core, its keychain or its file for
+        // a profile's secrets, the project's `.escouade.yml` on the core's machine, whichever machine the client is on.
+        commands::plugin_profile_secrets,
+        commands::plugin_profile_save,
+        commands::plugin_profile_secret,
+        commands::plugin_profile_delete,
+        commands::plugin_project_set,
+        commands::plugin_project_write,
         // The plugins' secrets kept in a file, without a keychain (ESC-499): the file of the core's machine.
         commands::plugin_secret_move,
         commands::secrets_file,
@@ -165,6 +173,8 @@ escouade_command::commands! {
         commands::docs_share,
         commands::docs_share_resolve,
         commands::docs_share_cancel,
+        // « Synchroniser » with nothing to share (ESC-534): a fetch and a merge in the project's folder, the core's.
+        commands::docs_pull,
         commands::docs_import_plan,
         commands::docs_import,
         commands::docs_recent,
@@ -290,6 +300,8 @@ escouade_command::commands! {
         commands::project_environments_read,
         commands::create_agent_on_pr,
         commands::set_remote_control,
+        // « Réveiller » (ESC-544): the agent starts on the core, as any other.
+        commands::wake_remote,
         commands::stats,
         commands::refresh_usage,
         commands::cancel_resume,

@@ -205,7 +205,7 @@ impl Bitbucket {
             b.roll(now());
             b.used = b.used.saturating_add(1);
         }
-        let reply = redirect::reply(NAME, rb).await?;
+        let reply = crate::reach::reply(NAME, rb).await?;
         self.learn(&reply.headers);
         Ok(reply)
     }

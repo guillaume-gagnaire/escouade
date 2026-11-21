@@ -102,7 +102,12 @@ const PATTERNS: Pattern[] = [
     re: /\beval\s*\(|\bnew\s+Function\s*\(|\bvm\.(?:runIn\w+|Script|compileFunction)\b|\bsetTimeout\s*\(\s*['"`]/,
     why: 'code construit à l’exécution',
   },
-  { kind: 'dynamic', re: /\bimport\s*\(\s*(?!['"`]\.{0,2}\/)|\brequire\s*\(\s*[^'"`\s)]/, why: 'import ou require dont le nom se calcule' },
+  // A method or a function named require (`require(capability) {`, the SDK's own since 0.5.0) is no require.
+  {
+    kind: 'dynamic',
+    re: /\bimport\s*\(\s*(?!['"`]\.{0,2}\/)|\brequire\s*\(\s*(?![^()]*\)\s*\{)[^'"`\s)]/,
+    why: 'import ou require dont le nom se calcule',
+  },
   { kind: 'dynamic', re: /\bimport\s*\(\s*['"`]https?:/, why: 'import d’une URL' },
   {
     kind: 'obscure',

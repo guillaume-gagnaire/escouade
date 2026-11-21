@@ -51,7 +51,7 @@ They are agents of Escouade like the others: the same conversation, and their qu
 
 The discussions are cards under “New discussion”, each marked “Brainstorm” or “Discussion”, with its state: “Question”, “Answering”, “Draft” (changes proposed not poured yet), “Poured”.
 
-A discussion open shows the conversation on the left, and on the right **“What will go in the spec”**: the changes proposed page by page (a new section, the sentences taken away struck through and the new ones in green) and the decisions proposed. A cross takes a proposal out. **“Pour into the spec”** writes the pages on the docs branch, and the decisions in the register, proposed: they are accepted in one click in the Decisions. Nothing is shared: the status bar says how many changes wait for “Share”.
+A discussion open shows the conversation on the left, and on the right **“What will go in the spec”**: the changes proposed page by page (a new section, the sentences taken away struck through and the new ones in green) and the decisions proposed. A cross takes a proposal out. **“Pour into the spec”** writes the pages on the docs branch, and the decisions in the register, proposed: they are accepted in one click in the Decisions. Nothing is shared: the badge of the “Docs” tab says how many changes wait for “Sync”.
 
 “Ask the spec”, at the top of the specification, opens a discussion with the spec writer. A project without a spec offers “Write a first spec from the code”: the spec writer reads the code and proposes a first version, filed by subject (it costs tokens, hence the gesture).
 
@@ -125,15 +125,18 @@ Escouade says where it filed it and why; “Move to” puts it in another folder
 
 ## Sharing the docs
 
-While the Docs tab is open, or while the docs have changes, the status bar says “Docs on the branch main · 2 changes to share”. The changes are the files of `.escouade/spec`, `decisions` and `documents` changed and not sent yet.
+**The badge of the “Docs” tab** says how many changes of the docs wait to be shared (“3 changes of the docs to share” in its tooltip), whatever tab is open. A conflict stands out there, in red with a “!”. No badge: everything is shared. The changes are the files of `.escouade/spec`, `decisions` and `documents` changed and not sent yet.
 
-“Share” first brings in what the others shared, then saves (commits) the files of the docs, and them alone, and sends them (push). The code you change meanwhile is left alone.
+**“Sync”**, in the head of each space of the docs, is always there. Beside it, the docs branch and what is left to share (“2 to share”, or “up to date”).
 
-- When the branch also has commits of code not sent yet, Escouade tells you first: “Share everything” sends them with the docs, “Cancel” does nothing.
-- When two people changed the same pages, the status bar names them: “The agent resolves” hands the conflict to a writer agent, who keeps what each one meant; “Cancel” puts the docs back as they were. You share again once it is done.
+- **With changes to share**, it first brings in what the others shared, then saves (commits) the files of the docs, and them alone, and sends them (push). The code you change meanwhile is left alone.
+- **With nothing to share**, it brings in what the others sent on the docs branch, sending nothing, and says so: “Docs up to date.” or “2 changes brought in.”.
+- While it runs, it says “Syncing…” and does not start again.
+- When the branch also has commits of code not sent yet, Escouade tells you before sending the docs: “Share everything” sends them along, “Cancel” does nothing.
+- When two people changed the same pages, “Conflict in the docs” takes the button’s place (its tooltip names the pages): “The agent resolves” hands the conflict to a writer agent, who keeps what each one meant; “Cancel” puts the docs back as they were. You sync again once it is done.
 
 > [!NOTE]
-> Escouade never shares by itself: nothing is committed or pushed without a click on “Share”.
+> Escouade never shares by itself: nothing is committed or pushed without a click on “Sync”.
 
 ## The docs branch
 

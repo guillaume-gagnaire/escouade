@@ -120,7 +120,7 @@ New agents’ model, effort and mode are set account by account, on the [“Acco
 | “Auto-resume after the usage limit” | “continue” is sent to the agent once the quota has reset. | On |
 | “New agents’ view” | “Escouade”: a new agent runs in Escouade’s conversation. “Harness terminal”: it runs in its harness’s own interface, in a terminal (the Claude Code view). Shown while a harness has a terminal view; the agents of a harness with none stay in Escouade’s view. | Escouade |
 | “Agents keep a task list” | Agents get Claude Code’s task list tool. | On |
-| “Stop idle agent processes after” (minutes, 0 = never) | The Claude process of an idle agent is stopped after this delay, remote control included. | 30 |
+| “Stop idle agent processes after” (minutes, 0 = never) | The Claude process of an idle agent is stopped after this delay, remote control from a setting included (not one turned on by hand). | 30 |
 | “Agents’ MCP servers” | “Escouade only”: Claude Code loads Escouade’s server alone (`--strict-mcp-config`), not those of your configuration, nor the project’s `.mcp.json`. | All of mine |
 
 ### Auto-resume
@@ -141,7 +141,7 @@ If the agent keeps a list, Escouade shows its progress in the “Plan” banner;
 
 ### Idle processes
 
-The field is a number of minutes; 0 means never, and an empty field counts as 0. The session of an agent whose process was stopped stays resumable. An agent in remote control is never stopped this way, so that it stays reachable from claude.ai.
+The field is a number of minutes; 0 means never, and an empty field counts as 0. The session of an agent whose process was stopped stays resumable. An agent whose remote control is turned on by hand is never stopped this way, so that it stays reachable from claude.ai; one linked by a setting is, and its session comes back at its next message.
 
 ## Attachments
 

@@ -1,12 +1,13 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { docsStore } from '../../lib/docs.svelte';
-import { shareDocs } from '../../lib/docs-share';
+import { syncDocs } from '../../lib/docs-share';
+import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
 import type { DocsPage, DocsTree } from '../../lib/types';
-import DocsShareItem from './DocsShareItem.svelte';
+import DocsSync from './DocsSync.svelte';
 import DocsSidebar from './DocsSidebar.svelte';
 import DocsView from './DocsView.svelte';
 
@@ -231,39 +232,156 @@ describe('the Docs tab', () => {
   });
 });
 
-describe('sharing the docs', () => {
-  beforeEach(() => resetApp({ projects: [project({ docsBranch: 'docs' })] }));
+describe('the synchronisation of the docs (ESC-534)', () => {
+  beforeEach(() => {
+    resetApp({ projects: [project({ docsBranch: 'docs' })] });
+    docsStore.syncing = {};
+  });
 
-  it('says the docs branch and what is left to share, and shares at the click', async () => {
-    const b = backend({ docs_share: () => ({ kind: 'done', committed: 2, message: 'm', pulled: false }) });
+  const go = () => screen.getByRole('button', { name: /^(Synchroniser|Synchronisation…)$/ });
+
+  it('is always there: the docs branch and « à jour » with nothing to share', () => {
+    backend();
+    app.docsShare.p1 = { pending: 0, conflict: null };
+    render(DocsSync, { projectId: 'p1' });
+    const sync = document.querySelector('[data-docs-sync]')!;
+    expect(sync).toHaveAttribute('data-state', 'up');
+    expect(sync).toHaveTextContent('docs');
+    expect(sync).toHaveTextContent('à jour');
+    expect(go()).toBeEnabled();
+  });
+
+  it('says what is left to share and shares it as « Partager » did', async () => {
+    const b = backend({
+      docs_pending: () => ({ files: ['a', 'b'], count: 2, codeCommits: 0, conflict: null }),
+      docs_share: () => ({ kind: 'done', committed: 2, message: 'm', pulled: true, received: 1 }),
+    });
     app.docsShare.p1 = { pending: 2, conflict: null };
-    render(DocsShareItem, { projectId: 'p1' });
-    const item = screen.getByText('2 changements à partager').closest('[data-docs-share]')!;
-    expect(item).toHaveTextContent('Docs sur la branche docs');
-    await userEvent.click(screen.getByRole('button', { name: 'Partager' }));
+    render(DocsSync, { projectId: 'p1' });
+    expect(document.querySelector('[data-docs-sync]')).toHaveAttribute('data-state', 'pending');
+    expect(document.querySelector('[data-pending]')).toHaveTextContent('2 à partager');
+    await userEvent.click(go());
     await waitFor(() => expect(b.called('docs_share')).toHaveLength(1));
     expect(b.called('docs_share')[0].args).toMatchObject({ id: 'p1', withCode: false });
+    expect(b.called('docs_pull')).toHaveLength(0);
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('2 changements des docs partagés. 1 changement récupéré.'));
+  });
+
+  it('with nothing to share, brings in what the others pushed and says it', async () => {
+    const b = backend({
+      docs_pending: () => ({ files: [], count: 0, codeCommits: 4, conflict: null }),
+      docs_pull: () => ({ kind: 'done', committed: 0, message: '', pulled: true, received: 2 }),
+    });
+    app.docsShare.p1 = { pending: 0, conflict: null };
+    render(DocsSync, { projectId: 'p1' });
+    await userEvent.click(go());
+    await waitFor(() => expect(b.called('docs_pull')).toHaveLength(1));
+    // Code not pushed is not asked about: nothing leaves.
+    expect(app.modal).toBeNull();
+    expect(b.called('docs_share')).toHaveLength(0);
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('2 changements récupérés.'));
+  });
+
+  it('says « Docs à jour » when nothing came', async () => {
+    const b = backend({
+      docs_pending: () => ({ files: [], count: 0, codeCommits: 0, conflict: null }),
+      docs_pull: () => ({ kind: 'nothing' }),
+    });
+    await syncDocs('p1');
+    expect(b.called('docs_pull')).toHaveLength(1);
+    expect(app.toasts.at(-1)?.text).toBe('Docs à jour.');
+  });
+
+  it('says it runs and is not run again meanwhile', async () => {
+    let finish: (v: unknown) => void = () => {};
+    const b = backend({
+      docs_pending: () => ({ files: [], count: 0, codeCommits: 0, conflict: null }),
+      docs_pull: () => new Promise((r) => (finish = r)),
+    });
+    app.docsShare.p1 = { pending: 0, conflict: null };
+    render(DocsSync, { projectId: 'p1' });
+    await userEvent.click(go());
+    await waitFor(() => expect(b.called('docs_pull')).toHaveLength(1));
+    expect(go()).toHaveTextContent('Synchronisation…');
+    expect(go()).toBeDisabled();
+    expect(go()).toHaveAttribute('aria-busy', 'true');
+    await syncDocs('p1');
+    expect(b.called('docs_pull')).toHaveLength(1);
+    finish({ kind: 'nothing' });
+    await waitFor(() => expect(go()).toBeEnabled());
+    expect(go()).toHaveTextContent('Synchroniser');
   });
 
   it('asks before code not pushed leaves with the docs', async () => {
     const b = backend({
       docs_pending: () => ({ files: [], count: 1, codeCommits: 3, conflict: null }),
-      docs_share: () => ({ kind: 'done', committed: 1, message: 'm', pulled: false }),
+      docs_share: () => ({ kind: 'done', committed: 1, message: 'm', pulled: false, received: 0 }),
     });
-    await shareDocs('p1');
+    await syncDocs('p1');
     expect(b.called('docs_share')).toHaveLength(0);
     expect(app.modal).toMatchObject({ kind: 'confirm', confirm: 'Tout partager' });
+    expect((app.modal as { body: string }).body).toContain('3 commits de code');
     await (app.modal as { onConfirm: (o: boolean) => Promise<void> }).onConfirm(false);
     expect(b.called('docs_share')[0].args).toMatchObject({ withCode: true });
   });
 
-  it('hands a conflict to the writer agent or cancels it, never in lines of git', async () => {
-    const b = backend({ docs_share_resolve: () => ({ files: ['.escouade/spec/a/b.md'], target: 'origin/docs', agentId: 'w1' }) });
-    app.docsShare.p1 = { pending: 1, conflict: { files: ['.escouade/spec/a/b.md'], target: 'origin/docs', agentId: null } };
-    render(DocsShareItem, { projectId: 'p1' });
-    expect(screen.getByRole('status')).toHaveTextContent('Deux personnes ont modifié les mêmes pages');
+  it('keeps a conflict, shown in place of the button with its two gestures, never in lines of git', async () => {
+    // The core keeps the conflict: what is left to share tells it again.
+    let conflict: object | null = null;
+    const b = backend({
+      docs_pending: () => ({ files: [], count: 1, codeCommits: 0, conflict }),
+      docs_share: () => {
+        conflict = { files: ['.escouade/spec/a/b.md'], target: 'origin/docs', agentId: null };
+        return { kind: 'conflict', conflict };
+      },
+      docs_share_resolve: () => ({ files: ['.escouade/spec/a/b.md'], target: 'origin/docs', agentId: 'w1' }),
+    });
+    app.docsShare.p1 = { pending: 1, conflict: null };
+    render(DocsSync, { projectId: 'p1' });
+    await userEvent.click(go());
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('Conflit dans les docs');
+    expect(status).not.toHaveTextContent('<<<<');
+    expect(screen.queryByRole('button', { name: 'Synchroniser' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Annuler' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'L’agent résout' }));
     await waitFor(() => expect(b.called('docs_share_resolve')).toHaveLength(1));
     expect(await screen.findByText('L’agent rédacteur résout le conflit')).toBeInTheDocument();
+  });
+
+  it('cancels a conflict: the button comes back', async () => {
+    const b = backend({ docs_share_cancel: () => null });
+    app.docsShare.p1 = { pending: 1, conflict: { files: ['.escouade/spec/a/b.md'], target: 'origin/docs', agentId: null } };
+    render(DocsSync, { projectId: 'p1' });
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    await waitFor(() => expect(b.called('docs_share_cancel')).toHaveLength(1));
+    expect(await screen.findByRole('button', { name: 'Synchroniser' })).toBeInTheDocument();
+  });
+
+  it('sits in the head of every space of the Docs tab', async () => {
+    backend({ docs_pending: () => ({ files: [], count: 0, codeCommits: 0, conflict: null }) });
+    app.openDocs('p1');
+    for (const space of ['spec', 'decisions', 'documents'] as const) {
+      app.docsSpace.p1 = space;
+      const { unmount } = render(DocsView, { project: app.projects[0] });
+      expect(await screen.findByRole('button', { name: 'Synchroniser' })).toBeInTheDocument();
+      expect(screen.getByRole('banner')).toContainElement(screen.getByRole('button', { name: 'Synchroniser' }));
+      unmount();
+    }
+  });
+
+  it('is written in English', async () => {
+    setLang('en');
+    onTestFinished(() => setLang('fr'));
+    backend();
+    app.docsShare.p1 = { pending: 3, conflict: null };
+    const { unmount } = render(DocsSync, { projectId: 'p1' });
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    expect(document.querySelector('[data-pending]')).toHaveTextContent('3 to share');
+    unmount();
+    app.docsShare.p1 = { pending: 3, conflict: { files: ['x'], target: 'origin/docs', agentId: null } };
+    render(DocsSync, { projectId: 'p1' });
+    expect(screen.getByRole('status')).toHaveTextContent('Conflict in the docs');
+    expect(screen.getByRole('button', { name: 'The agent resolves' })).toBeInTheDocument();
   });
 });

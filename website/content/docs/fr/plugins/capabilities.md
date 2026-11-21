@@ -104,6 +104,14 @@ Au banc, `escouade-plugin test <dossier> --account <adresse>` tient lieu de comp
 
 Une valeur au-delà du plafond est ramenée à lui par l’hôte : le manifeste ne la refuse pas (le schéma des éditeurs marque le plafond de `fileBytes`). Sous le défaut, `fetchSeconds`, `fetchBytes` et `fileBytes` resserrent la limite ; `memoryBytes` et `turnSeconds` gardent le défaut. La fenêtre ne dit rien de plus : une limite ne donne accès à rien.
 
+`processes` dit combien de programmes il lance à la fois par `proc/spawn` : 4 sans lui, de 1 à 16 (le manifeste refuse au-delà, et l’hôte n’en donne jamais plus de 16). Au-delà de 4, `reason` est exigée : une phrase, ou une par langue, qui dit pourquoi. La fenêtre d’installation et l’onglet Permissions disent alors « Jusqu’à 8 programmes à la fois », « 4 sans le demander » et cette raison ; c’est une permission comme les autres : une mise à jour qui l’augmente redemande ton accord, une baisse non, et la retirer rend 4. Le refus d’un programme de trop dit la limite (`8 programs at once at most for this plugin`).
+
+```json
+"limits": { "processes": 8, "reason": { "fr": "Deux programmes par tunnel, un tunnel par projet.", "en": "Two programs a tunnel, a tunnel a project." } }
+```
+
+Pourquoi une limite : le module est isolé, le programme qu’il lance ne l’est pas, il a tes droits. Borner leur nombre borne ce qu’un plugin qui boucle, ou qui veut nuire, peut prendre à la machine (processeur, mémoire, fenêtres) et ce que l’app tient pour chacun (environ 1,3 Mio au pire). La limite vaut pour le plugin, tous projets confondus ; une place se rend dès qu’un programme a fini. Une Escouade plus ancienne que 2.2.5 garde 4.
+
 ### Les flux et le WebSocket
 
 Ils ne se déclarent pas : ils suivent `network`.
@@ -166,7 +174,7 @@ Chaque écriture et chaque refus vont au journal.
 - `dir` autre qu’une racine (`agent`, `project`), et un projet privé où le plugin n’est pas activé. Sans `dir`, le programme tourne dans `temp` ;
 - une variable de `env` que `permissions.env` ne déclare pas ([les variables](#les-variables-env)).
 
-Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu’il a lancé. Quatre à la fois. Sa sortie revient en texte par `proc/out` (jamais en base64), sa fin par `proc/exit` et son code ([les programmes](plugins/calls#les-programmes-proc), avec un exemple complet) ; elle n’est plus lue au-delà de 256 Kio qui n’ont pas atteint le module.
+Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu’il a lancé. Quatre à la fois, ou ce que demande `limits.processes` (voir plus haut). Sa sortie revient en texte par `proc/out` (jamais en base64), sa fin par `proc/exit` et son code ([les programmes](plugins/calls#les-programmes-proc), avec un exemple complet) ; elle n’est plus lue au-delà de 256 Kio qui n’ont pas atteint le module.
 
 **La fenêtre** dit « Lance cette commande sur ton ordinateur », puis la commande, en rouge, une ligne par commande.
 
@@ -174,6 +182,35 @@ Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu
 > Le module est isolé, le programme qu’il lance ne l’est pas : il a les droits de l’utilisateur. Une entrée en `*` sur un programme généraliste (`git *`, `docker *`) rouvre tout, par `git -c core.sshCommand=…` par exemple. C’est la capacité la plus forte : demande des lignes exactes, et attends-toi à justifier un `*` à la revue.
 
 `permissions.commands` n’est pas `contributes.commands`, qui lance une ligne de shell sur un fait, après l’accord de l’utilisateur ([les événements](plugins/events#une-commande-sur-un-fait)).
+
+### Les jokers
+
+Un mot qui varie, un port, un pid, un fichier, s’écrit par un **joker** : un mot entier, que l’hôte vérifie à chaque `proc/spawn` (Escouade 2.2.5, `capabilities.typedCommands`).
+
+```json
+"commands": [
+  "unshare -Urn openvpn --config {path:temp} --script-security 1",
+  "slirp4netns --configure --mtu=65520 {pid} tap0",
+  "tunnel --port {port} --name {name} --retries {int}"
+]
+```
+
+| Joker | Ce qu’il admet | La fenêtre dit |
+| --- | --- | --- |
+| `{int}` | `0`, ou un nombre sans zéro en tête, de 10 chiffres au plus, 4 294 967 295 au plus ; ni signe, ni hexadécimal | « un nombre » |
+| `{port}` | un `{int}` de 1 à 65 535 | « un port » |
+| `{name}` | 1 à 64 lettres ASCII, chiffres, `_`, `.` ou `-`, qui commence par une lettre, un chiffre ou `_` ; jamais un nom de périphérique de Windows (`CON`, `NUL`, `COM1`…) | « un nom » |
+| `{pid}` | le pid d’un programme vivant que **cette** instance du plugin a lancé (`proc/spawn` le rend avec `proc`) | « un programme qu’il a lancé » |
+| `{path:temp}` | le chemin relatif d’un fichier de son dossier temporaire ; l’hôte passe au programme son chemin absolu résolu | « un fichier de son dossier temporaire » |
+| `{path:plugin}` | de même, sous le dossier du plugin, sans partie cachée | « un fichier de son dossier » |
+
+- **Jamais une option** : un joker ne prend ni `--` ni un mot qui commence par `-`.
+- **L’entrée garde sa longueur** : un mot de plus ou de moins est refusé ; seul un `*` final laisse suivre d’autres mots.
+- **Un chemin est celui de l’hôte** : ses parties sont des lettres, des chiffres, `_`, `.` ou `-`, ni `.` ni `..` ; donc jamais un chemin absolu, `~`, une lettre de lecteur ni un chemin UNC. Résolu, liens suivis, il doit rester sous sa racine et être un fichier.
+- **Refusé au manifeste**, le champ et la raison dits par `escouade-plugin validate` : un joker inconnu (`{float}`), un joker dans un mot (`--pid={int}`), un joker en premier mot, une accolade dans un autre mot, `{path:project}` et `{path:agent}`. Un chemin du projet serait un fichier que choisit le dépôt : un dépôt cloné y mettrait une configuration qui lance ses scripts. Un plugin qui en a besoin le lit (`fs/read`), le juge, puis l’écrit dans son dossier temporaire.
+- **Plus étroit que `*`** : `*` admet n’importe combien de mots, options comprises ; un joker, un seul mot d’une forme fermée.
+- **Le journal** dit chaque refus avec le mot fautif (`word 3 ("-x") is no {name}: an option`), et chaque lancement avec les mots réels, chemins résolus compris.
+- **Une Escouade plus ancienne** compare un joker comme un mot littéral : l’entrée ne correspond à rien, jamais à plus.
 
 ## Les variables : `env`
 

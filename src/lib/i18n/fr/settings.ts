@@ -40,6 +40,10 @@ export default {
     launch: { label: 'Lancement', desc: 'Les commandes qui lancent ce projet, et où s’ouvrent ses pages' },
     board: { label: 'Kanban', desc: 'Les tickets validés, le pilote auto, les agents des tickets et le workflow' },
     tickets: { label: 'Tickets importés', desc: 'Les sources liées à ce projet et la correspondance de leurs statuts' },
+    projectPlugins: {
+      label: 'Plugins',
+      desc: 'Ce que les plugins actifs dans ce projet te demandent pour lui. Les autres réglages d’un plugin sont dans sa page.',
+    },
     team: { label: 'Équipe', desc: 'Le Kanban partagé, les réglages partagés (.escouade.yml) et la mémoire partagée' },
     privacy: { label: 'Confidentialité', desc: 'Ce que ce projet garde pour lui : ses fichiers, ses comptes, ses plugins' },
     allProjects: { label: 'Tous les projets', desc: 'Ce que reçoit un nouveau projet, et les projets fermés' },
@@ -468,6 +472,8 @@ export default {
 
   // The « Projets » tab: one project's own settings.
   project: {
+    pluginFields: 'Profils et réglages des plugins pour ce projet',
+    pluginFieldsDesc: 'Ce que les plugins actifs dans ce projet te demandent pour lui : un profil, une route, un salon.',
     identity: 'Identité',
     nameLabel: 'Nom du projet',
     engine: 'Harness par défaut',

@@ -420,7 +420,18 @@ describe('AccountsTab', () => {
     const b = backend({ account_update: (a: { account: Account }) => [a.account, pro] });
     render(SettingsModal, { page: 'accounts' });
     expect(screen.getByRole('status').textContent).toBe('');
-    await userEvent.click(within(row('Principal')).getByRole('checkbox', { name: 'demo' }));
+    // Its only active account kept to « demo »: asked first (ESC-556), the box back as it was when cancelled.
+    const demo = within(row('Principal')).getByRole('checkbox', { name: 'demo' });
+    await userEvent.click(demo);
+    const ask = screen.getByRole('dialog', { name: 'Réserver « Principal » à « demo » ?' });
+    expect(within(ask).getByTestId('reserve-confirm')).toHaveTextContent(
+      'C’est ton seul compte Claude Code : tes 2 autres projets (« infra » et « web ») n’en auront plus, leurs agents et leurs tickets ne démarreront plus.',
+    );
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    expect(demo).not.toBeChecked();
+    expect(b.called('account_update')).toHaveLength(0);
+    await userEvent.click(demo);
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver quand même' }));
     expect(b.called('account_update')[0].args.account).toEqual({ ...PRINCIPAL, projects: ['p1'] });
     // Pro switched off: no account serves the others any more, and the tab says so.
     const status = screen.getByRole('status');
@@ -435,6 +446,11 @@ describe('AccountsTab', () => {
         'Aucun compte actif de son harness par défaut ne sert « infra » : ses agents et ses tickets ne démarrent pas.',
       ),
     );
+    // The account that holds it named, with « Partager à nouveau » (ESC-556): it serves every project again.
+    const away = screen.getByTestId('reserved-away');
+    expect(away).toHaveTextContent('« Principal » est réservé à « demo » et « web » : « infra » n’a plus de compte Claude Code actif.');
+    await userEvent.click(within(away).getByRole('button', { name: 'Partager à nouveau' }));
+    expect(b.called('account_update').at(-1)!.args.account).toEqual({ ...PRINCIPAL, projects: [] });
   });
 
   it('does not remove an account agents still run on', async () => {
@@ -1019,7 +1035,8 @@ describe('AccountsTab: an account a private project shares (ESC-141)', () => {
   it('says a private project still goes to it, and reserves it to that project alone', async () => {
     const b = backend({ account_update: ({ account }) => [PRINCIPAL, account] });
     render(SettingsModal, { page: 'accounts' });
-    const said = 'Le projet privé « client » part encore sur ce compte, partagé avec d’autres projets.';
+    const said =
+      'Le projet privé « client » part aussi sur ce compte : ses sessions restent à lui, la connexion et les réglages du compte sont communs.';
     expect(within(row('Principal')).getByText(said)).toBeVisible();
     expect(within(row('Pro')).getByText(said)).toBeVisible();
     await userEvent.click(within(row('Pro')).getByRole('button', { name: 'Réserver à « client »' }));
@@ -1028,11 +1045,23 @@ describe('AccountsTab: an account a private project shares (ESC-141)', () => {
     await waitFor(() => expect(screen.queryByText(said)).not.toBeInTheDocument());
   });
 
+  it('asks before « Réserver à « client » » takes the only account of the other projects', async () => {
+    app.settings.accounts = [PRINCIPAL];
+    const b = backend({ account_update: ({ account }) => [account] });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(row('Principal')).getByRole('button', { name: 'Réserver à « client » '.trim() }));
+    expect(screen.getByTestId('reserve-confirm')).toHaveTextContent(
+      'C’est ton seul compte Claude Code : ton projet « site » n’en aura plus',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver quand même' }));
+    expect(b.called('account_update')[0].args.account).toEqual({ ...PRINCIPAL, projects: ['p1'] });
+  });
+
   it('says nothing of an account reserved to the private project alone, nor of a project that is not private', () => {
     backend();
     app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['p1'] }];
     app.projects[0].sharedOnLimit = false;
     render(SettingsModal, { page: 'accounts' });
-    expect(screen.queryByText(/part encore sur ce compte/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/part aussi sur ce compte/)).not.toBeInTheDocument();
   });
 });

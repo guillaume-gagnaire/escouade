@@ -3,6 +3,7 @@
 mod files;
 mod net;
 mod procs;
+mod profiles;
 mod settings;
 mod socket;
 mod timers;
@@ -48,6 +49,15 @@ impl Plugin for Examples {
                 "example/kill" => return procs::stop(cx, &params).await,
                 "example/settings" => return settings::channel(cx, &params).await,
                 "example/secret" => return Ok(json!(settings::token(cx).await?)),
+                "example/profile" => {
+                    return Ok(json!(profiles::profile_of(cx, &text(&params)).await?))
+                }
+                "example/password" => {
+                    return Ok(json!(
+                        profiles::secret_of(cx, &text(&params), "password").await?
+                    ))
+                }
+                "example/tunnel" => return profiles::tunnel(cx).await,
                 other => return Err(Refusal::not_found(other)),
             }
             Ok(Value::Null)

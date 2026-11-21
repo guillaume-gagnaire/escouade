@@ -84,8 +84,20 @@ fn said(r: &Report, s: Scenario) -> String {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_fake_plugin_passes_every_scenario() {
     let r = bench(&fake_points("pass", &[])).await;
+    // Those of the contract of 2.2.5 do not concern it (plugins_bench_wasm_tests: the plugin that takes them).
+    let contract = [
+        Scenario::Profiles,
+        Scenario::Multiline,
+        Scenario::Commands,
+        Scenario::Limit,
+    ];
     for o in &r.outcomes {
-        assert_eq!(o.verdict, Verdict::Pass, "{}", r.render(Lang::En));
+        let wanted = if contract.contains(&o.scenario) {
+            Verdict::Skip
+        } else {
+            Verdict::Pass
+        };
+        assert_eq!(o.verdict, wanted, "{}", r.render(Lang::En));
     }
     assert!(r.passed());
     assert_eq!(r.plugin, "dev.test.fake 1.0.0");
@@ -280,7 +292,7 @@ async fn the_report_says_what_is_missing_in_both_languages() {
     assert!(fr.contains("✗ Fermeture"), "{fr}");
     assert!(fr.contains("Ce qui manque : répondre à `shutdown`"), "{fr}");
     assert!(fr.contains("✓ Initialisation"), "{fr}");
-    assert!(fr.contains("8 réussis, 1 échoués, 2 sans objet"), "{fr}");
+    assert!(fr.contains("8 réussis, 1 échoués, 6 sans objet"), "{fr}");
     let m = r.measure.as_ref().expect("measured");
     assert_eq!(m.calls, 50);
     assert!(m.median_us > 0 && m.p99_us >= m.median_us);
@@ -395,6 +407,28 @@ async fn the_source_and_host_scenarios_play_the_calls_of_the_adapters() {
         .as_deref()
         .unwrap()
         .contains("-32401"));
+}
+
+/// Offline (the review's bench, ESC-353), a plugin whose service is out of reach and which answers the host's refusal
+/// untyped is not judged: no failure, the calls said. A first-hand plugin types it (-32503, ESC-536), and is judged.
+#[tokio::test(flavor = "multi_thread")]
+async fn offline_a_service_out_of_reach_answered_untyped_is_not_judged() {
+    let dir = fake_points("offline", &["--fetch"]);
+    let path = dir.join("escouade-plugin.json");
+    let mut m: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    m["permissions"]["network"] = json!(["fake.test"]);
+    std::fs::write(&path, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let o = Options {
+        offline: true,
+        ..options()
+    };
+    let r = run(&dir, &o).await;
+    for s in [Scenario::Tickets, Scenario::Forge] {
+        assert_eq!(verdict(&r, s), Verdict::Skip, "{}", r.render(Lang::En));
+        assert!(said(&r, s).contains("account/me"), "{}", r.render(Lang::En));
+    }
+    assert!(r.passed(), "{}", r.render(Lang::En));
 }
 
 /// ESC-326: `validate --escouade <version>` judges a plugin for another version of Escouade than the build's: the

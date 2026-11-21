@@ -196,6 +196,9 @@ type Reading<'a> = Pin<Box<dyn Future<Output = Result<Option<Arc<dyn Release>>>>
 pub trait Release: Send + Sync {
     fn version(&self) -> &str;
     fn notes(&self) -> &str;
+    /// Where its installer is downloaded from (latest.json's `url`): a debug build takes one from
+    /// a test's server only (`may_fetch`).
+    fn url(&self) -> &Url;
     /// Downloads it and checks its signature.
     fn fetch(&self) -> Fetching<'_>;
     /// Reads `latest.json` again, a new check with the same settings: what it finds now. A link
@@ -294,6 +297,10 @@ impl<R: Runtime> Release for PluginRelease<R> {
         &self.update.version
     }
 
+    fn url(&self) -> &Url {
+        &self.update.download_url
+    }
+
     fn notes(&self) -> &str {
         self.update.body.as_deref().unwrap_or_default()
     }
@@ -351,6 +358,9 @@ impl Package for PluginPackage {
 pub struct Ready {
     pub version: String,
     pub notes: String,
+    /// Where its installer came from (`Release::url`): a debug build installs one from a test's
+    /// server only (`may_fetch`).
+    source: Url,
     package: Box<dyn Package>,
 }
 
@@ -601,6 +611,10 @@ impl Updates {
             ))
         })?;
         let version = release.version().to_string();
+        if !may_fetch(cfg!(debug_assertions), release.url()) {
+            log::warn!("{DEBUG_REFUSED}: {} not downloaded", release.url());
+            bail!(debug_refused());
+        }
         let started = {
             let mut ready = self.ready.lock();
             if ready.as_ref().is_some_and(|r| r.version == version) {
@@ -621,6 +635,7 @@ impl Updates {
         *ready = Some(Arc::new(Ready {
             version,
             notes: release.notes().to_string(),
+            source: release.url().clone(),
             package,
         }));
         Ok(true)
@@ -780,14 +795,18 @@ struct Checker<R: Runtime> {
 #[cfg(feature = "desktop")]
 impl<R: Runtime> Checker<R> {
     /// A check through the network settings as they are now.
-    fn new(app: &AppHandle<R>, settings: &Settings) -> Result<Self> {
-        Ok(Self {
+    /// None: the check is off (`endpoints_of`).
+    fn new(app: &AppHandle<R>, settings: &Settings) -> Result<Option<Self>> {
+        let Some(configured) = configured_endpoints(app)? else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
             app: app.clone(),
             net: Network::from_settings(settings)?,
             beta: settings.beta_updates,
-            endpoints: endpoints_for(&configured_endpoints(app)?, settings.beta_updates),
+            endpoints: endpoints_for(&configured, settings.beta_updates),
             pause: RETRY_PAUSE,
-        })
+        }))
     }
 
     /// A release of this check's.
@@ -930,18 +949,13 @@ impl<R: Runtime> Checker<R> {
     }
 }
 
-/// Where latest.json is, from the plugin's configuration (`plugins.updater.endpoints`); in a
-/// debug build, `ESCOUADE_UPDATE_ENDPOINT` when set (the end-to-end tests' server).
+/// Where latest.json is (`endpoints_of`): the plugin's configuration (`plugins.updater.endpoints`)
+/// and, in a debug build, `ESCOUADE_UPDATE_ENDPOINT`. None: the check is off (a debug build with
+/// no test's server).
 #[cfg(feature = "desktop")]
-fn configured_endpoints<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<Url>> {
-    if cfg!(debug_assertions) {
-        let given = std::env::var("ESCOUADE_UPDATE_ENDPOINT").unwrap_or_default();
-        if !given.trim().is_empty() {
-            return Ok(vec![given.trim().parse()?]);
-        }
-    }
+fn configured_endpoints<R: Runtime>(app: &AppHandle<R>) -> Result<Option<Vec<Url>>> {
     let config = app.config();
-    let endpoints: Vec<Url> = config
+    let configured: Vec<Url> = config
         .plugins
         .0
         .get("updater")
@@ -951,16 +965,96 @@ fn configured_endpoints<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<Url>> {
         .flatten()
         .filter_map(|e| e.as_str()?.parse().ok())
         .collect();
-    if endpoints.is_empty() {
+    let given = std::env::var("ESCOUADE_UPDATE_ENDPOINT").ok();
+    endpoints_of(cfg!(debug_assertions), given.as_deref(), configured)
+}
+
+/// What a check reads (ESC-543). A release build: the `configured` addresses, `given`
+/// (`ESCOUADE_UPDATE_ENDPOINT`) never. A `debug` build reads a test's server only: `given`, else
+/// the configured addresses when all of them are on this machine (a Rust test's app); never the
+/// real server (the latest.json of `tauri.conf.json`), whose version a test's app or a developer's
+/// build would download, then install at « Quitter » over the app installed on the machine.
+/// None: the check is off.
+pub fn endpoints_of(
+    debug: bool,
+    given: Option<&str>,
+    configured: Vec<Url>,
+) -> Result<Option<Vec<Url>>> {
+    if debug {
+        let given = given.unwrap_or_default().trim();
+        if !given.is_empty() {
+            return Ok(Some(vec![given.parse()?]));
+        }
+        let local = !configured.is_empty() && configured.iter().all(test_server);
+        return Ok(local.then_some(configured));
+    }
+    if configured.is_empty() {
         bail!("Updater does not have any endpoints set.");
     }
-    Ok(endpoints)
+    Ok(Some(configured))
+}
+
+/// An address on this machine (`localhost`, 127.0.0.0/8, `::1`): a test's server.
+pub fn test_server(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
+/// An installer at `url` may be downloaded and installed: always by a release build; by a `debug`
+/// one, from a test's server only (`test_server`), never a real version of Escouade.
+pub fn may_fetch(debug: bool, url: &Url) -> bool {
+    !debug || test_server(url)
+}
+
+/// What the log says of the check a debug build does not make (`endpoints_of`).
+pub const DEBUG_OFF: &str =
+    "update check off in a debug build: no ESCOUADE_UPDATE_ENDPOINT, the real server is never read";
+
+/// What the log says of an installer a debug build refuses (`may_fetch`).
+pub const DEBUG_REFUSED: &str =
+    "a debug build only downloads and installs an update from a test's server";
+
+/// What the window is told of the check a debug build does not make, asked for by hand.
+fn debug_off() -> String {
+    tr!(
+        "les mises à jour sont coupées dans un build de debug (ESCOUADE_UPDATE_ENDPOINT donne un serveur de test)",
+        "updates are off in a debug build (ESCOUADE_UPDATE_ENDPOINT gives a test server)"
+    )
+}
+
+/// What the window is told of an installer a debug build refuses.
+fn debug_refused() -> String {
+    tr!(
+        "un build de debug ne télécharge et n'installe une mise à jour que depuis un serveur de test",
+        "a debug build only downloads and installs an update from a test server"
+    )
+}
+
+/// The answer of a check that is off: nothing new, or why for the user who asked.
+fn off(manual: bool) -> Checked {
+    if !manual {
+        return Checked::None;
+    }
+    Checked::Failed {
+        trouble: Trouble {
+            message: debug_off(),
+            show: true,
+            page: None,
+        },
+    }
 }
 
 /// Looks for a newer release through the network settings as they are now, the proxy and the
 /// certificate checks of the settings; the update found is kept for its download. None found: the
 /// one downloaded, if any, was withdrawn. A failure is told with its cause, and shown (`manual`: the
-/// user asked) or kept quiet until it goes on (`Updates::check_failed`).
+/// user asked) or kept quiet until it goes on (`Updates::check_failed`). A debug build with no
+/// test's server checks nothing (`endpoints_of`): nothing new, or said so to the user who asked.
 #[cfg(feature = "desktop")]
 pub async fn check<R: Runtime>(
     app: &AppHandle<R>,
@@ -969,7 +1063,15 @@ pub async fn check<R: Runtime>(
     manual: bool,
 ) -> Checked {
     match Checker::new(app, settings) {
-        Ok(checker) => Arc::new(checker).run(updates, manual).await,
+        Ok(Some(checker)) => {
+            let read: Vec<&str> = checker.endpoints.iter().map(Url::as_str).collect();
+            log::info!("update check reads {}", read.join(", "));
+            Arc::new(checker).run(updates, manual).await
+        }
+        Ok(None) => {
+            log::info!("{DEBUG_OFF}");
+            off(manual)
+        }
         Err(e) => Checked::Failed {
             trouble: updates.check_failed(&e, manual, now_ms()),
         },
@@ -1136,6 +1238,12 @@ pub fn install_ready(
     let Some(ready) = updates.ready() else {
         return Ok(false);
     };
+    // Never the installer of a real version in a debug build, whatever downloaded it: it installs
+    // in the folder of the app installed on the machine, which it closes first.
+    if !may_fetch(cfg!(debug_assertions), &ready.source) {
+        log::error!("{DEBUG_REFUSED}: {} not installed", ready.source);
+        bail!(debug_refused());
+    }
     if updates.installing.swap(true, Ordering::AcqRel) {
         return Ok(false);
     }
@@ -1848,6 +1956,8 @@ mod tests {
         /// What reading latest.json again finds, and how many times it was read.
         again: Mutex<Again>,
         readings: AtomicUsize,
+        /// Where its installer is: a test's server unless a test says otherwise.
+        url: Url,
     }
 
     enum Again {
@@ -1875,12 +1985,17 @@ mod tests {
             name: "first",
             again: Mutex::new(Again::Nothing),
             readings: AtomicUsize::new(0),
+            url: "http://127.0.0.1:9/setup.exe".parse().unwrap(),
         }
     }
 
     impl Release for FakeRelease {
         fn version(&self) -> &str {
             &self.version
+        }
+
+        fn url(&self) -> &Url {
+            &self.url
         }
 
         fn notes(&self) -> &str {
@@ -2710,6 +2825,135 @@ mod tests {
             AfterUpdate::window(&take_note(&h.core.data, "1.6.0")),
             Window::Front
         );
+    }
+
+    // ---------- a debug build and the real server (ESC-543) ----------
+
+    fn url(text: &str) -> Url {
+        text.parse().unwrap()
+    }
+
+    /// The real latest.json, as `tauri.conf.json` gives it to the builds.
+    fn real_endpoints() -> Vec<Url> {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let endpoints: Vec<Url> = conf["plugins"]["updater"]["endpoints"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| url(e.as_str().unwrap()))
+            .collect();
+        assert!(!endpoints.is_empty());
+        endpoints
+    }
+
+    #[test]
+    fn a_debug_build_without_a_test_server_never_reads_the_real_latest_json() {
+        let real = real_endpoints();
+        assert_eq!(endpoints_of(true, None, real.clone()).unwrap(), None);
+        assert_eq!(endpoints_of(true, Some("  "), real.clone()).unwrap(), None);
+        // Nor a configuration of which one address only is on the loopback.
+        let mixed = vec![url("http://127.0.0.1:4120/latest.json"), real[0].clone()];
+        assert_eq!(endpoints_of(true, None, mixed).unwrap(), None);
+        assert_eq!(endpoints_of(true, None, vec![]).unwrap(), None);
+    }
+
+    #[test]
+    fn a_debug_build_reads_the_test_server_it_is_given_or_a_configuration_on_the_loopback() {
+        let local = "http://127.0.0.1:4120/latest.json";
+        assert_eq!(
+            endpoints_of(true, Some(local), real_endpoints()).unwrap(),
+            Some(vec![url(local)])
+        );
+        // The Rust tests' app: its configuration is their fake server.
+        let configured = vec![url("http://localhost:4121/latest.json")];
+        assert_eq!(
+            endpoints_of(true, None, configured.clone()).unwrap(),
+            Some(configured)
+        );
+        assert!(endpoints_of(true, Some("not an address"), vec![]).is_err());
+    }
+
+    #[test]
+    fn a_release_build_reads_its_configuration_whatever_the_variable_says() {
+        let real = real_endpoints();
+        let given = Some("http://127.0.0.1:4120/latest.json");
+        assert_eq!(
+            endpoints_of(false, given, real.clone()).unwrap(),
+            Some(real.clone())
+        );
+        assert_eq!(endpoints_of(false, None, real.clone()).unwrap(), Some(real));
+        assert!(endpoints_of(false, None, vec![]).is_err());
+    }
+
+    #[test]
+    fn a_test_server_is_one_on_this_machine() {
+        for local in [
+            "http://127.0.0.1:9/latest.json",
+            "http://127.4.5.6/x",
+            "http://localhost:4170/setup.exe",
+            "http://LOCALHOST/x",
+            "http://[::1]:4170/x",
+        ] {
+            assert!(test_server(&url(local)), "{local}");
+        }
+        for remote in [
+            "https://github.com/guillaume-gagnaire/escouade/releases/latest/download/latest.json",
+            "https://escouade.dev/latest.json",
+            "http://10.0.0.2/x",
+            "http://localhost.example.com/x",
+            "http://0.0.0.0/x",
+        ] {
+            assert!(!test_server(&url(remote)), "{remote}");
+        }
+        let real = url("https://github.com/me/app/releases/download/v2.2.4/Escouade-setup.exe");
+        assert!(!may_fetch(true, &real));
+        assert!(may_fetch(false, &real));
+        assert!(may_fetch(true, &url("http://127.0.0.1:4170/setup.exe")));
+    }
+
+    /// A release whose installer is GitHub's: a real version.
+    fn real_release(version: &str) -> FakeRelease {
+        FakeRelease {
+            url: url("https://github.com/me/app/releases/download/v2.2.4/Escouade-setup.exe"),
+            ..release(version)
+        }
+    }
+
+    #[tokio::test]
+    async fn a_debug_build_never_downloads_a_real_version() {
+        let u = Updates::default();
+        let r = Arc::new(real_release("2.2.4"));
+        let found = u.offer(r.clone());
+        let e = u.download(found.id).await.unwrap_err();
+        assert!(format!("{e:#}").contains("serveur de test"), "{e:#}");
+        assert_eq!(r.fetches.load(Ordering::Acquire), 0);
+        assert!(u.ready().is_none());
+    }
+
+    #[tokio::test]
+    async fn a_debug_build_never_installs_a_real_version_not_at_a_restart_nor_when_it_closes() {
+        let h = harness("upd-debug-real");
+        let u = Updates::default();
+        let log = Log::default();
+        // However it got there.
+        *u.ready.lock() = Some(Arc::new(Ready {
+            version: "2.2.4".into(),
+            notes: String::new(),
+            source: real_release("2.2.4").url,
+            package: Box::new(FakePackage {
+                log: log.clone(),
+                install: Install::Ok,
+            }),
+        }));
+        assert!(restart(&h.core, &u, Window::Front, |_| panic!("left")).is_err());
+        let closed = closing(&h.core, &u, Duration::from_secs(5), |_| panic!("left"));
+        // The app closes as usual, its installer never run nor the app stopped for it.
+        assert_eq!(closed, Closing::Close);
+        assert!(log.lock().is_empty());
+        assert!(!u.installing.load(Ordering::Acquire));
+        assert!(!h.core.quitting.load(Ordering::Acquire));
+        assert!(take_note(&h.core.data, "2.2.4").is_none());
     }
 
     #[tokio::test]

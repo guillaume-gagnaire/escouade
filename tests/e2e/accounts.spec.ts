@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Page } from '@playwright/test';
 import { addProject, expect, send, test, openAdvanced, openSettingsPage, closeSettings } from './fixture';
 
 // Two Claude accounts, both simulated: Principal is the app's own Claude Code folder (the app is started with a
@@ -88,11 +89,11 @@ test.describe('a private project, two accounts, the first out of quota', () => {
     await openSettingsPage(dialog, 'Confidentialité');
     await dialog.getByRole('switch', { name: 'Projet privé' }).click();
     // Made private, it says what it still shares, and how to have an account of its own.
-    await expect(dialog.getByText(/^Ses agents peuvent partir sur « Principal » et « Pro », des comptes partagés/)).toBeVisible();
+    await expect(dialog.getByText(/^Ses agents partent aussi sur « Principal » et « Pro », des comptes partagés/)).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Ajouter un compte réservé…' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Réserver Principal à ce projet' }).click();
     await expect(dialog.getByText(/^Compte réservé à ce projet : « Principal »/)).toBeVisible();
-    await expect(dialog.getByText(/^Ses agents peuvent partir sur/)).toBeHidden();
+    await expect(dialog.getByText(/^Ses agents partent aussi sur/)).toBeHidden();
     await expect(dialog.getByRole('switch', { name: 'Comptes partagés à la limite' })).toHaveAttribute('aria-checked', 'false');
     await closeSettings(dialog);
 
@@ -115,6 +116,108 @@ test.describe('a private project, two accounts, the first out of quota', () => {
     // The autopilot waits for Principal alone, the project's own: Pro, under its threshold, would not hold it back.
     await expect(page.getByRole('status').filter({ hasText: /Pilote auto en pause.*Le compte Principal a passé le seuil/ })).toBeVisible();
     expect(processes(app.launches())).toEqual([principalDir(app.root)]);
+  });
+});
+
+/**
+ * The captures of the ESC-556 screens, when ESCOUADE_E2E_SHOTS is set: in both themes, at 1440 × 900 and 1024 × 728; the
+ * window as it was after.
+ */
+async function shots(page: Page, name: string) {
+  const dir = process.env.ESCOUADE_E2E_SHOTS;
+  if (!dir) return;
+  const was = page.viewportSize();
+  for (const size of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 728 },
+  ])
+    for (const t of ['light', 'dark'] as const) {
+      await page.setViewportSize(size);
+      await page.evaluate((t) => {
+        document.documentElement.dataset.theme = t;
+        document.documentElement.style.colorScheme = t;
+      }, t);
+      // Once the dialog has finished opening.
+      await page.evaluate(() =>
+        Promise.all(
+          document
+            .getAnimations()
+            .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+            .map((a) => a.finished.catch(() => null)),
+        ),
+      );
+      await page.screenshot({ path: path.join(dir, `${name}-${size.width}x${size.height}-${t}.png`) });
+    }
+  if (was) await page.setViewportSize(was);
+}
+
+// ESC-556: a single account, two projects, one made private. Reserving the account to it asks first, and says the other
+// project loses it; cancelled, nothing changes. Confirmed, the other project names the account and who holds it, and
+// « Partager à nouveau » gives it back.
+test.describe('one account, two projects, one made private', () => {
+  test.use({
+    preStart: {
+      run: (root: string) => {
+        fs.mkdirSync(principalDir(root), { recursive: true });
+        fs.writeFileSync(path.join(principalDir(root), '.credentials.json'), SIGNED_IN);
+        return {};
+      },
+    },
+  });
+
+  test('asks before reserving its only account, changes nothing when refused, and the other project gets it back', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo, { firstAgent: false });
+    await addProject(page, app.repo, { name: 'client', firstAgent: false });
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await openSettingsPage(dialog, 'Confidentialité', { project: 'client' });
+    await dialog.getByRole('switch', { name: 'Projet privé' }).click();
+    // Shared, said as a fact: what its sessions keep, what stays common, the reservation optional.
+    const shared = dialog.getByTestId('private-shared');
+    await expect(shared).toContainText('Ses agents partent aussi sur « Principal », un compte partagé avec d’autres projets.');
+    await expect(shared).toContainText('Ses sessions restent à lui');
+    await expect(shared).toContainText('c’est facultatif, une isolation de plus');
+    // « Réserver » asks first, and says what follows.
+    await dialog.getByRole('button', { name: 'Réserver Principal à ce projet' }).click();
+    const ask = page.getByRole('dialog', { name: 'Réserver « Principal » à « client » ?' });
+    await expect(ask.getByTestId('reserve-confirm')).toHaveText(
+      'C’est ton seul compte Claude Code : ton projet « demo-api » n’en aura plus, ses agents et ses tickets ne démarreront plus.',
+    );
+    await expect(ask.getByRole('button', { name: 'Ajouter un compte réservé…' })).toBeVisible();
+    await shots(page, 'reserve-confirm');
+    // Refused: nothing changes, on screen or on the disk.
+    await ask.getByRole('button', { name: 'Annuler' }).click();
+    await expect(ask).toBeHidden();
+    await expect(shared).toBeVisible();
+    await shared.scrollIntoViewIfNeeded();
+    await shots(page, 'private-accounts-row');
+    await expect(dialog.getByTestId('private-own')).toHaveCount(0);
+    const saved = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
+    const reserved = () => {
+      try {
+        return (saved().accounts ?? []).flatMap((a: { projects?: string[] }) => a.projects ?? []);
+      } catch {
+        return [];
+      }
+    };
+    expect(reserved()).toEqual([]);
+    // Accepted: kept to « client » alone.
+    await dialog.getByRole('button', { name: 'Réserver Principal à ce projet' }).click();
+    await ask.getByRole('button', { name: 'Réserver quand même' }).click();
+    await expect(dialog.getByTestId('private-own')).toContainText('Compte réservé à ce projet : « Principal ».');
+    await expect(dialog.getByRole('button', { name: 'Ne plus le réserver' })).toBeVisible();
+    await closeSettings(dialog);
+
+    // The other project has no account left: its Kanban names the account and who holds it, with « Partager à nouveau ».
+    await page.getByRole('tab', { name: /^demo-api/ }).click();
+    await page.getByRole('button', { name: /^Kanban/ }).click();
+    const band = page.getByTestId('reserved-away');
+    await expect(band).toContainText('« Principal » est réservé à « client » : « demo-api » n’a plus de compte Claude Code actif.');
+    await band.getByRole('button', { name: 'Partager à nouveau' }).click();
+    await expect(band).toBeHidden();
+    // Shared again with every project, as before.
+    await expect.poll(reserved).toEqual([]);
   });
 });
 

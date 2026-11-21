@@ -35,7 +35,6 @@
   import { branchSummary, isMulti, repoLabel } from '../lib/repos';
   import { menu } from '../lib/menu.svelte';
   import Icon from './Icon.svelte';
-  import DocsShareItem from './docs/DocsShareItem.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
   import { tip } from '../lib/tip';
 
@@ -306,17 +305,6 @@
       t('shell.status.sync.lastFetch', { when: fetched }),
     ].join('\n');
   });
-  /**
-   * The project whose docs the bar tells of (ESC-258): the one on screen, on its Docs tab, or elsewhere while its docs have
-   * changes to share or a conflict.
-   */
-  const docsShown = $derived.by(() => {
-    const p = app.ui.view === 'project' ? app.project : null;
-    // The Docs space off (F-1): its docs are not told.
-    if (!p || !app.feature('docs')) return null;
-    const d = app.docsShare[p.id];
-    return app.docsOn || d?.pending || d?.conflict ? p.id : null;
-  });
   /** A shortcut as the bar writes it: « Ctrl J ». */
   const kbd = (s: string) => keyLabel(s).split('+').join(' ');
 </script>
@@ -414,10 +402,6 @@
       {/if}
       <!-- The tunnel to the server the window is on (ESC-537): its space, its SSH host, its latency; the next try while cut. -->
       <TunnelItem />
-      {#if docsShown}
-        <span class="vsep"></span>
-        <span class="it"><DocsShareItem projectId={docsShown} /></span>
-      {/if}
       {#if repo}
         <span class="vsep"></span>
         <button

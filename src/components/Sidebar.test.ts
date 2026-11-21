@@ -745,6 +745,70 @@ describe('Sidebar remote control', () => {
     expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a1', enabled: false });
   });
 
+  it('says « Relié » for a remote agent with a process, and offers no wake-up', async () => {
+    resetApp({ projects: [project()], agents: [agent({ remoteControl: true, remoteState: 'connected', alive: true })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(items()).toContain('Relié');
+    expect(items()).not.toContain('Réveiller');
+    expect(items()).not.toContain('En veille : reprend au prochain message');
+  });
+
+  it('says a remote agent with no process is asleep, and wakes it up (ESC-544)', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [agent({ remoteControl: true, remoteSource: 'global', remoteState: null, alive: false })],
+    });
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    const tip = getByTip(card, /Remote control : en veille : reprend au prochain message/);
+    expect(tip).toHaveClass('asleep');
+    await fireEvent.contextMenu(card);
+    expect(items()).toEqual(
+      expect.arrayContaining(['En veille : reprend au prochain message', 'Réveiller', 'Désactiver le remote control']),
+    );
+    expect(items()).not.toContain('Relié');
+    expect(menu.open!.items.find((i) => i.label === 'En veille : reprend au prochain message')!.heading).toBe(true);
+    click('Réveiller');
+    await new Promise((r) => setTimeout(r));
+    expect(backend.called('wake_remote')).toEqual([{ cmd: 'wake_remote', args: { id: 'a1' } }]);
+    expect(backend.called('set_remote_control')).toEqual([]);
+  });
+
+  it('says it in English too', async () => {
+    setLang('en');
+    try {
+      resetApp({ projects: [project()], agents: [agent({ remoteControl: true, alive: false })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const card = screen.getByRole('button', { name: /refacto-auth/ });
+      expect(getByTip(card, /Remote control: asleep: resumes at the next message/)).toBeInTheDocument();
+      await fireEvent.contextMenu(card);
+      expect(items()).toEqual(expect.arrayContaining(['Asleep: resumes at the next message', 'Wake up']));
+    } finally {
+      setLang('fr');
+    }
+  });
+
+  it('says nothing of asleep for an agent without remote control, or in the Claude Code view', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [
+        agent({ alive: false }),
+        agent({ id: 'a2', name: 'tui', remoteControl: true, terminal: true, alive: false, interfaceRemote: null }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(items()).not.toContain('Réveiller');
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /^tui/ }));
+    expect(items()).not.toContain('Réveiller');
+    expect(items()).not.toContain('Relié');
+  });
+
   it('asks a worktree agent for its launch recipe from its menu', async () => {
     const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
     resetApp({ agents: [agent({ worktree: wt })] });
@@ -1933,6 +1997,8 @@ describe('Sidebar in English', () => {
       'Open beside',
       'Open below',
       '',
+      // With a process, linked (ESC-544).
+      'Linked',
       'Turn off remote control',
       'Open on claude.ai',
       'Copy the claude.ai link',
@@ -3734,5 +3800,59 @@ describe('Sidebar agent folders', () => {
     await waitFor(() => expect(backend.called('agent_folder_delete')).toHaveLength(1));
     expect(backend.called('agent_folder_delete')[0].args).toMatchObject({ projectId: 'p1', folderId: 'f1' });
     expect(app.modal).toBeNull();
+  });
+});
+
+describe('the Docs tab’s badge (ESC-534)', () => {
+  const docsTab = () => screen.getByRole('button', { name: /^Docs/ });
+
+  it('counts the changes of the docs to share, read when the project shows, and nothing when up to date', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    const b = fakeBackend({ docs_pending: () => ({ files: ['a', 'b', 'c'], count: 3, codeCommits: 0, conflict: null }) });
+    render(Sidebar, { project: project() });
+    await waitFor(() => expect(docsTab()).toHaveAccessibleName('Docs, 3 changements des docs à partager'));
+    expect(b.called('docs_pending')[0].args).toEqual({ id: 'p1' });
+    const badge = within(docsTab()).getByTestId('docs-badge');
+    // Read as the other tabs' badges: the same class, the count, its tooltip.
+    expect(badge).toHaveClass('badge');
+    expect(badge).toHaveTextContent('3');
+    expect(badge).toHaveAttribute('data-state', 'pending');
+    expect(getByTip(document.body, '3 changements des docs à partager')).toBe(badge);
+    // Not on the Docs tab: still true, told by the core's events.
+    expect(app.docsOn).toBe(false);
+    app.docsShare.p1 = { pending: 1, conflict: null };
+    await waitFor(() => expect(docsTab()).toHaveAccessibleName('Docs, 1 changement des docs à partager'));
+    app.docsShare.p1 = { pending: 0, conflict: null };
+    await waitFor(() => expect(docsTab()).toHaveAccessibleName('Docs'));
+    expect(within(docsTab()).queryByTestId('docs-badge')).toBeNull();
+  });
+
+  it('marks a conflict apart, the writer agent resolving it too', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    fakeBackend();
+    app.docsShare.p1 = { pending: 2, conflict: { files: ['.escouade/spec/a/b.md'], target: 'origin/main', agentId: null } };
+    render(Sidebar, { project: project() });
+    const badge = within(docsTab()).getByTestId('docs-badge');
+    expect(badge).toHaveAttribute('data-state', 'conflict');
+    expect(badge).toHaveClass('badge', 'conflict');
+    expect(badge).toHaveTextContent('!');
+    expect(docsTab()).toHaveAccessibleName('Docs, conflit dans les docs');
+    expect(getByTip(document.body, 'Conflit dans les docs')).toBe(badge);
+    app.docsShare.p1 = { pending: 2, conflict: { files: ['.escouade/spec/a/b.md'], target: 'origin/main', agentId: 'w1' } };
+    await tick();
+    expect(within(docsTab()).getByTestId('docs-badge')).toHaveAttribute('data-state', 'conflict');
+  });
+
+  it('is written in English', async () => {
+    setLang('en');
+    onTestFinished(() => setLang('fr'));
+    resetApp({ projects: [project()], agents: [agent()] });
+    fakeBackend();
+    app.docsShare.p1 = { pending: 2, conflict: null };
+    render(Sidebar, { project: project() });
+    expect(docsTab()).toHaveAccessibleName('Docs, 2 changes of the docs to share');
+    expect(getByTip(document.body, '2 changes of the docs to share')).toBeInTheDocument();
+    app.docsShare.p1 = { pending: 2, conflict: { files: ['x'], target: 'origin/main', agentId: null } };
+    await waitFor(() => expect(docsTab()).toHaveAccessibleName('Docs, conflict in the docs'));
   });
 });

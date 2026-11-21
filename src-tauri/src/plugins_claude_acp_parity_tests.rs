@@ -313,7 +313,7 @@ fn the_biggest_message_passes_through_the_module() {
         memory_bytes: manifest["limits"]["memoryBytes"].as_u64(),
         ..Default::default()
     };
-    let limits = crate::plugins::wasm::Limits::default().asked(asked);
+    let limits = crate::plugins::wasm::Limits::default().asked(&asked);
     let fetcher = Fetcher::new("dev.escouade.claude-code", &[], &net);
     let mut p = Hosted::within(m, fetcher, limits);
     let attach =

@@ -299,6 +299,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `docs_pending`
 - `docs_plan`
 - `docs_plan_cancel`
+- `docs_pull` : « Synchroniser » sans rien à partager (ESC-534) : la récupération et la fusion dans le dossier du projet, celui du cœur
 - `docs_recent`
 - `docs_share`
 - `docs_share_cancel`
@@ -415,6 +416,12 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `plugin_install`
 - `plugin_install_seed`
 - `plugin_need_engine`
+- `plugin_profile_delete`
+- `plugin_profile_save` : les profils d'un plugin (ESC-530), gardés par le cœur
+- `plugin_profile_secret` : le secret d'un profil, au trousseau (ou dans le fichier) de la machine du cœur, comme `plugin_set_secret`
+- `plugin_profile_secrets`
+- `plugin_project_set` : les réglages d'un plugin par projet (ESC-530), gardés par le cœur
+- `plugin_project_write` : écrit le `.escouade.yml` du projet, dans son dossier sur la machine du cœur
 - `plugin_remove`
 - `plugin_run`
 - `plugin_secret_move` : les secrets des plugins gardés dans un fichier (ESC-499) : le fichier et le trousseau de la machine du cœur
@@ -611,6 +618,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `vsx_set_enabled`
 - `vsx_set_theme`
 - `vsx_updates`
+- `wake_remote` : « Réveiller » (ESC-544) : l'agent démarre sur le cœur, comme un autre
 - `warm_agent`
 - `workflow_refine_plan`
 

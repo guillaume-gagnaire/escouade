@@ -630,6 +630,27 @@ describe('TicketForm, its images', () => {
     );
   });
 
+  it('shows its images full size in the conversation’s viewer, Échap closing it alone (ESC-555)', async () => {
+    const backend = fakeBackend();
+    show();
+    await userEvent.type(description(), 'Voir les captures');
+    paste(description(), { files: [capture('a.png'), capture('b.png')], types: ['Files'] });
+    const thumb = await screen.findByRole('button', { name: 'Agrandir b.png (2/2)' });
+    await userEvent.click(thumb);
+    const viewer = await screen.findByRole('dialog', { name: 'Visionneuse d’images' });
+    expect(within(viewer).getByText('2 sur 2')).toBeInTheDocument();
+    expect(within(viewer).queryByRole('button', { name: /dossier/ })).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Visionneuse d’images' })).toBeNull());
+    expect(app.modal).not.toBeNull();
+    expect(thumb).toHaveFocus();
+    expect(description()).toHaveValue('Voir les captures');
+    // « × » takes it away without opening anything.
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer a.png (1/2)' }));
+    expect(screen.queryByRole('dialog', { name: 'Visionneuse d’images' })).toBeNull();
+    expect(backend.called('ticket_images')).toHaveLength(0);
+  });
+
   it('takes an image pasted in any field of the window, or dropped on it', async () => {
     const backend = fakeBackend();
     show();
@@ -768,9 +789,9 @@ describe('TicketForm, its images', () => {
       within(list)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Retirer image.png (1/2)', 'Retirer image.png (2/2)']);
-    // The tooltip names it as well.
-    expect(within(list).getByAltText('image.png (2/2)').closest('li')).toHaveAttribute('data-tip', 'image.png (2/2)');
+    ).toEqual(['Agrandir image.png (1/2)', 'Retirer image.png (1/2)', 'Agrandir image.png (2/2)', 'Retirer image.png (2/2)']);
+    // The tooltip names it as well, with what a click does (ESC-555).
+    expect(within(list).getByAltText('image.png (2/2)').closest('button')).toHaveAttribute('data-tip', 'Agrandir image.png (2/2)');
     await userEvent.click(screen.getByRole('button', { name: 'Retirer image.png (1/2)' }));
     expect(within(list).getByAltText('image.png')).toBeInTheDocument();
     expect(within(list).getByRole('button', { name: 'Retirer image.png' })).toBeInTheDocument();

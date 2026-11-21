@@ -17,6 +17,11 @@
     projectionMode,
     projectsWithoutAccount,
     meterKey,
+    engineOfProject,
+    reservedAway,
+    reservedTo,
+    shareAgain,
+    strandedBy,
   } from '../../lib/accounts';
   import {
     byKey as goesByKey,
@@ -41,6 +46,7 @@
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import type {
+    Project,
     Account,
     AccountStatus,
     ClaudeLocated,
@@ -56,6 +62,7 @@
   import ModelFavorites from './ModelFavorites.svelte';
   import NoPlugin from './NoPlugin.svelte';
   import Row from './Row.svelte';
+  import ReserveConfirm from './ReserveConfirm.svelte';
   import Switch from './Switch.svelte';
   import Icon from '../Icon.svelte';
   import QuotaMeter from '../QuotaMeter.svelte';
@@ -350,13 +357,59 @@
     return next;
   }
 
-  /** The project ticked or unticked in « Réservé aux projets ». */
-  function reserve(a: Account, project: string, on: boolean) {
-    void edit(a.id, (now) => {
-      const others = (now.projects ?? []).filter((p) => p !== project);
-      return { projects: on ? [...others, project] : others };
-    });
+  /** The project ticked or unticked in « Réservé aux projets »: asked first when it leaves open projects without an account (ESC-556). */
+  function reserve(a: Account, project: string, on: boolean, box?: HTMLInputElement) {
+    const others = (a.projects ?? []).filter((p) => p !== project);
+    const next = on ? [...others, project] : others;
+    const stranded = strandedBy(a, next);
+    const run = () =>
+      edit(a.id, (now) => {
+        const rest = (now.projects ?? []).filter((p) => p !== project);
+        return { projects: on ? [...rest, project] : rest };
+      });
+    if (!stranded.length) return void run();
+    asking = { account: a, stranded, target: on && next.length === 1 ? project : undefined, run, box, was: !on };
   }
+
+  /** « Réserver à « client » », under an account a private project shares: asked first as a ticked project is. */
+  function reserveTo(a: Account, project: string) {
+    const stranded = strandedBy(a, [project]);
+    const run = () => save({ ...plain(a), projects: [project] });
+    if (!stranded.length) return void run();
+    asking = { account: a, stranded, target: project, run };
+  }
+
+  /** A reservation asked first (ESC-556); `box` the box ticked, put back as it `was` when it is cancelled. */
+  let asking = $state<{
+    account: Account;
+    stranded: Project[];
+    target?: string;
+    run: () => Promise<unknown>;
+    box?: HTMLInputElement;
+    was?: boolean;
+  } | null>(null);
+  function cancelAsking() {
+    if (asking?.box && asking.was !== undefined) asking.box.checked = asking.was;
+    asking = null;
+  }
+  const nameOf = (id: string) => app.projects.find((p) => p.id === id)?.name ?? id;
+
+  /**
+   * The accounts reserved elsewhere that the projects without an account could go to again (« Partager à nouveau »): each
+   * with the projects it would serve again, those it is reserved to named.
+   */
+  const awayRows = $derived.by(() => {
+    const rows: { account: Account; projects: Project[] }[] = [];
+    for (const p of orphans) {
+      const a = reservedAway(p.id, engineOfProject(p))[0];
+      if (!a) continue;
+      const row = rows.find((r) => r.account.id === a.id);
+      if (row) row.projects.push(p);
+      else rows.push({ account: a, projects: [p] });
+    }
+    return rows;
+  });
+  const quotedList = (list: { name: string }[]) => fList(list.map((p) => t('accounts.tab.quoted', { name: p.name })));
 
   /** A field left: what it says saved when it changed, else (or refused) as it was. */
   async function commit(a: Account, input: HTMLInputElement, field: 'name' | 'claudePath') {
@@ -457,6 +510,52 @@
 
 <!-- Always there, empty while every project has an account: a screen reader hears it fill. (Above the groups: between two, it would part their hairline.) -->
 <p class="orphans" class:on={orphans.length > 0} role="status">{orphansText}</p>
+<!-- A project without an account because one is reserved elsewhere (ESC-556): that account, who holds it, and « Partager à nouveau ». -->
+{#each awayRows as r (r.account.id)}
+  {@const owners = reservedTo(r.account)}
+  <div class="away" data-testid="reserved-away">
+    <span
+      >{t('accounts.away.text', {
+        count: r.projects.length,
+        name: accountName(r.account),
+        owners: owners.length ? quotedList(owners) : t('accounts.away.owners'),
+        projects: quotedList(r.projects),
+        harness: engineName(engineOfAccount(r.account)),
+      })}</span
+    >
+    <button
+      class="btn"
+      use:tip={t('accounts.away.shareAgainTitle')}
+      onclick={() =>
+        shareAgain(
+          plain(r.account),
+          r.projects.map((p) => p.id),
+        )}>{t('accounts.away.shareAgain')}</button
+    >
+  </div>
+{/each}
+{#if asking}
+  <ReserveConfirm
+    account={asking.account}
+    stranded={asking.stranded}
+    target={asking.target ? nameOf(asking.target) : undefined}
+    onConfirm={async () => {
+      const run = asking?.run;
+      // Confirmed: the box keeps what was ticked.
+      if (asking) asking.was = undefined;
+      await run?.();
+    }}
+    onAdd={asking.target
+      ? () => {
+          const target = asking?.target;
+          const engine = engineOfAccount(asking!.account);
+          cancelAsking();
+          app.modal = { kind: 'account', engine, reserveFor: target, back: 'accounts' };
+        }
+      : undefined}
+    onclose={cancelAsking}
+  />
+{/if}
 <span id="accounts-last-active" hidden>{t('accounts.tab.lastActive')}</span>
 {#if !groups.length}
   <NoPlugin text={t('settings.noPlugin.harnesses')} />
@@ -688,7 +787,7 @@
                       <input
                         type="checkbox"
                         checked={reserved.includes(p.id)}
-                        onchange={(e) => reserve(a, p.id, e.currentTarget.checked)}
+                        onchange={(e) => reserve(a, p.id, e.currentTarget.checked, e.currentTarget)}
                       />
                       <i class:lit={!reserved.length || reserved.includes(p.id)} style:--dot={p.color} aria-hidden="true"></i>{p.name}
                     </label>
@@ -718,11 +817,7 @@
                   })}
                 </p>
                 {#if sharing.length === 1}
-                  <button
-                    class="btn"
-                    use:tip={t('accounts.private.reserveTitle')}
-                    onclick={() => save({ ...plain(a), projects: [sharing[0].id] })}
-                  >
+                  <button class="btn" use:tip={t('accounts.private.reserveTitle')} onclick={() => reserveTo(a, sharing[0].id)}>
                     {t('accounts.private.reserveTo', { name: sharing[0].name })}
                   </button>
                 {/if}
@@ -1210,6 +1305,19 @@
   }
   .orphans.on {
     margin-top: 16px;
+  }
+  .away {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--soft);
+  }
+  .away .btn {
+    height: 26px;
   }
   .refused {
     color: var(--del);

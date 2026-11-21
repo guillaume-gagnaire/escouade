@@ -59,8 +59,8 @@ webpki-roots = "1"
 # The JS/TS plugins (`run.js`, ESC-320, docs/PLUGINS-DESIGN.md §5): their module compiled by Javy, run by wasmtime in the
 # app's process (Cranelift, WASI preview 1 alone: no folder, no socket, only the three standard streams). Its compiler is
 # optimized in a build of development (`[profile.dev.package.cranelift-codegen]`… of `src-tauri/Cargo.toml`).
-wasmtime = { version = "=50.0.2", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation", "call-hook"] }
-wasmtime-wasi = { version = "=50.0.2", default-features = false, features = ["p1"] }
+wasmtime = { version = "=50.0.3", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation", "call-hook"] }
+wasmtime-wasi = { version = "=50.0.3", default-features = false, features = ["p1"] }
 bytes = "1"
 
 [dev-dependencies]

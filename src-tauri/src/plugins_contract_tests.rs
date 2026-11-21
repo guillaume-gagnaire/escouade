@@ -1,0 +1,363 @@
+//! Tests of the contract of a plugin's manifest (ESC-525, docs/PLUGINS-CONTRACT-STUDY.md on `release/2.3`): what the
+//! app reads but does not serve yet is never served by half, the plugin loaded disabled with the reason; what it serves
+//! of it already (`repo: false`, an imported value) is held; a manifest of today reads as it did.
+
+use crate::i18n::Lang;
+use crate::paths::DataDir;
+use crate::plugins::manifest::{self, Hand};
+use crate::plugins::{Plugins, State};
+use serde_json::{json, Value};
+use std::path::{Path, PathBuf};
+
+fn temp_dir(name: &str) -> PathBuf {
+    let dir =
+        std::env::temp_dir().join(format!("contract-{name}-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn base() -> Value {
+    json!({
+        "id": "dev.exemple.tunnel",
+        "name": "Tunnel",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" }
+    })
+}
+
+fn read(v: &Value) -> manifest::Manifest {
+    manifest::check(v, Hand::Third).manifest.unwrap()
+}
+
+fn folder(dir: &Path, manifest: &Value) {
+    std::fs::create_dir_all(dir).unwrap();
+    std::fs::write(
+        dir.join(manifest::FILE),
+        serde_json::to_string_pretty(manifest).unwrap(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_manifest_of_today_and_one_of_what_is_served_ask_for_nothing_unserved() {
+    // Today's: no scope, no group, one line, 4 programs, no joker.
+    let mut today = base();
+    today["permissions"] =
+        json!({ "commands": ["isola ls --json", "isola down"], "secrets": ["token"] });
+    today["contributes"] = json!({
+        "settings": [{ "key": "channel", "type": "string", "title": "Salon" }],
+        "secrets": [{ "key": "token", "title": "Jeton" }]
+    });
+    let m = read(&today);
+    assert_eq!(m.unserved(Lang::Fr), None);
+    assert_eq!(m.limits, manifest::Limits::default());
+    // What reads and is shown as before on an app that does not draw it yet: groups, descriptions, several lines, an
+    // import, a scope `app`, a project setting, `repo`, up to 4 programs.
+    let mut more = today.clone();
+    more["contributes"]["groups"] =
+        json!([{ "id": "a", "title": "A", "folded": true, "fields": ["token", "channel"] }]);
+    more["contributes"]["settings"][0]["scope"] = json!("project");
+    more["contributes"]["settings"][0]["repo"] = json!(false);
+    more["contributes"]["secrets"][0] = json!({
+        "key": "token", "title": "Jeton", "scope": "app", "multiline": true, "lines": 8,
+        "import": [".ovpn"], "description": "Le fichier."
+    });
+    more["limits"] = json!({ "processes": 4 });
+    let m = read(&more);
+    assert_eq!(m.limits.processes, Some(4));
+    assert_eq!(m.unserved(Lang::En), None);
+    // Profiles and a `profile` setting of each project are served since ESC-530.
+    let mut profiles = today.clone();
+    profiles["permissions"]["secrets"] = json!(["profile:vpn"]);
+    profiles["contributes"] = json!({
+        "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "name", "fields": [
+            { "key": "name", "type": "string", "title": "Nom" },
+            { "key": "password", "secret": true, "title": "Mot de passe" }
+        ] }],
+        "settings": [{ "key": "profile", "type": "profile", "of": "vpn", "scope": "project", "title": "Profil" }]
+    });
+    assert_eq!(read(&profiles).unserved(Lang::Fr), None);
+}
+
+#[test]
+fn each_point_not_served_yet_is_said_in_both_languages() {
+    let cases = [(
+        json!({ "contributes": { "secrets": [{ "key": "p", "title": "P", "scope": "project" }] } }),
+        "un secret propre à chaque projet",
+        "a secret of each project",
+    )];
+    for (more, fr, en) in cases {
+        let mut v = base();
+        for (k, x) in more.as_object().unwrap() {
+            v[k] = x.clone();
+        }
+        let m = read(&v);
+        let said = m.unserved(Lang::Fr).unwrap();
+        assert!(
+            said.starts_with(
+                "Ce plugin demande ce que cette version d'Escouade ne sert pas encore : "
+            ),
+            "{said}"
+        );
+        assert!(said.contains(fr), "{said}");
+        assert!(said.ends_with("Il reste coupé plutôt que servi à moitié ; une version plus récente d'Escouade le servira."), "{said}");
+        assert!(m.unserved(Lang::En).unwrap().contains(en));
+    }
+}
+
+/// The programs at once of `limits.processes` are served since ESC-529: a plugin that asks for 16 loads, and its
+/// instance holds them (`procs::at_once`).
+#[test]
+fn a_plugin_that_asks_for_more_programs_at_once_loads_ready() {
+    for n in [1, 4, 5, 8, 16] {
+        let mut v = base();
+        v["limits"] = json!({ "processes": n, "reason": "Un tunnel par projet." });
+        let m = read(&v);
+        assert_eq!(m.unserved(Lang::Fr), None, "{n}");
+        assert_eq!(
+            crate::plugins::procs::at_once(m.limits.processes),
+            n as usize
+        );
+    }
+    assert_eq!(
+        crate::plugins::procs::at_once(read(&base()).limits.processes),
+        4
+    );
+}
+
+/// The jokers of a command are served since ESC-528: a plugin that has them loads, and runs (`procs::allowed`).
+#[test]
+fn a_plugin_with_jokers_in_its_commands_loads_ready() {
+    let mut v = base();
+    v["permissions"] = json!({ "commands": [
+        "unshare -Urn openvpn --config {path:temp} --script-security 1",
+        "slirp4netns --configure --mtu=65520 {pid} tap0",
+        "nsenter --preserve-credentials -U -n -t {pid} ip addr"
+    ] });
+    assert_eq!(read(&v).unserved(Lang::Fr), None);
+    let base_dir = temp_dir("jokers");
+    let src = base_dir.join("src");
+    folder(&src, &v);
+    let plugins = Plugins::load(DataDir::new(base_dir.join("data")), "2.2.4");
+    assert_eq!(
+        plugins.inspect_folder(&src, Lang::Fr).unwrap().refusal,
+        None
+    );
+    let view = plugins.install_folder(&src, Lang::Fr).unwrap();
+    assert_eq!(view.state, State::Ready);
+    assert!(view
+        .asks
+        .contains(&"commands:slirp4netns --configure --mtu=65520 {pid} tap0".to_string()));
+}
+
+#[test]
+fn a_plugin_that_asks_for_a_point_not_served_loads_disabled_with_the_reason_and_says_it_at_its_install(
+) {
+    let base_dir = temp_dir("unserved");
+    let data = DataDir::new(base_dir.join("data"));
+    let src = base_dir.join("src");
+    let mut v = base();
+    v["contributes"] =
+        json!({ "secrets": [{ "key": "password", "title": "Mot de passe", "scope": "project" }] });
+    folder(&src, &v);
+    let plugins = Plugins::load(data.clone(), "2.2.4");
+    // The install window says it before anything is installed.
+    let preview = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    let refusal = preview.refusal.clone().unwrap();
+    assert!(
+        refusal.contains("un secret propre à chaque projet"),
+        "{refusal}"
+    );
+    plugins.discard(&preview.token);
+    // Installed, it stays disabled, the reason said; never Ready.
+    let view = plugins.install_folder(&src, Lang::Fr).unwrap();
+    let State::Disabled { reason } = &view.state else {
+        panic!("{:?}", view.state)
+    };
+    assert_eq!(reason, &refusal);
+    let again = Plugins::load(data, "2.2.4");
+    assert!(matches!(
+        again.list(Lang::En)[0].state,
+        State::Disabled { .. }
+    ));
+
+    // Today's manifest beside it: Ready, as before.
+    let other = base_dir.join("other");
+    let mut today = base();
+    today["id"] = json!("dev.exemple.slack");
+    today["contributes"] = json!({ "secrets": [{ "key": "webhook", "title": "Webhook" }] });
+    folder(&other, &today);
+    assert_eq!(
+        plugins.install_folder(&other, Lang::Fr).unwrap().state,
+        State::Ready
+    );
+}
+
+#[test]
+fn a_setting_its_author_keeps_off_the_file_or_imported_never_comes_from_escouade_yml() {
+    let mut v = base();
+    v["contributes"] = json!({
+        "settings": [
+            { "key": "route", "type": "string", "title": "Route" },
+            { "key": "port", "type": "number", "title": "Port", "repo": true },
+            { "key": "server", "type": "string", "title": "Serveur", "repo": false },
+            { "key": "conf", "type": "string", "title": "Conf", "multiline": true, "import": [".conf"] }
+        ]
+    });
+    let m = read(&v);
+    let mine = json!({ "server": "vpn.exemple.dev" });
+    let file = json!({ "route": "10.0.0.0/8", "port": 1194, "server": "evil.exemple", "conf": "up /bin/sh" });
+    let got =
+        crate::plugins::project_settings(&m, mine.as_object().unwrap(), file.as_object().unwrap());
+    assert_eq!(
+        Value::Object(got),
+        json!({ "route": "10.0.0.0/8", "port": 1194, "server": "vpn.exemple.dev" })
+    );
+}
+
+#[test]
+fn the_secrets_of_a_profile_are_no_key_of_the_plugin_s_page() {
+    let mut v = base();
+    v["permissions"] = json!({ "secrets": ["profile:vpn", "token"] });
+    v["contributes"] = json!({
+        "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "name", "fields": [
+            { "key": "name", "type": "string", "title": "Nom" },
+            { "key": "password", "secret": true, "title": "Mot de passe" }
+        ] }],
+        "secrets": [{ "key": "token", "title": "Jeton" }]
+    });
+    assert_eq!(crate::plugins::secret_keys(&read(&v)), ["token"]);
+}
+
+#[test]
+fn the_grammar_of_the_jokers_holds_word_by_word() {
+    for ok in [
+        "isola ls --json",
+        "tool {int} {port} {name} {pid} {path:temp} {path:plugin}",
+        "nsenter -t {pid} *",
+        "tool -- {name}",
+    ] {
+        assert!(manifest::command_holds(ok), "{ok}");
+    }
+    for refused in [
+        "{int} x",
+        "tool --pid={int}",
+        "tool {float}",
+        "tool {path:project}",
+        "tool {path:agent}",
+        "tool a{b",
+        "tool * {int}",
+        "isola\u{feff}{int}",
+    ] {
+        assert!(!manifest::command_holds(refused), "{refused}");
+    }
+    assert!(manifest::has_joker("tool {pid}"));
+    assert!(!manifest::has_joker("tool {pid}x"));
+    // The messages of the new codes, as the store's library says them.
+    let r = manifest::check(
+        &json!({ "id": "dev.exemple.t", "name": "T", "version": "1.0.0", "escouade": { "api": "1", "min": "2.2" },
+            "limits": { "processes": 17 },
+            "contributes": { "settings": [{ "key": "a", "type": "string", "title": "A", "multiline": true, "lines": 2 }] } }),
+        Hand::Third,
+    );
+    let said: Vec<String> = r
+        .manifest
+        .unwrap_err()
+        .iter()
+        .map(|p| p.message(Lang::Fr))
+        .collect();
+    assert!(
+        said.contains(&"`limits.processes` doit être un nombre entier de 1 à 16 : les programmes à la fois, 4 sans le demander.".to_string()),
+        "{said:?}"
+    );
+    assert!(
+        said.contains(
+            &"`contributes.settings[0].lines` doit être un nombre entier de 3 à 20.".to_string()
+        ),
+        "{said:?}"
+    );
+}
+
+/// What `escouade-plugin validate` says of each refusal of the contract (ESC-531): the field, and why it is refused there,
+/// in the words of plugin-manifest.mjs (schemas/plugin-manifest.test.ts holds the same sentences).
+#[test]
+fn validate_says_the_field_and_why_for_the_fields_of_the_contract() {
+    let mut v = base();
+    v["permissions"] = json!({
+        "secrets": ["profile:wifi"],
+        "commands": ["openvpn --config {path:project}", "slirp4netns --pid={pid}", "{int}", "nsenter * -t {pid}", "a {float}"]
+    });
+    v["limits"] = json!({ "processes": 8 });
+    v["contributes"] = json!({
+        "groups": [{ "id": "g", "title": "G", "fields": ["nowhere"] }, { "id": "h", "title": "H", "fields": [] }],
+        "settings": [{ "key": "n", "type": "number", "title": "N", "multiline": true, "of": "vpn" }],
+        "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "password", "fields": [
+            { "key": "password", "secret": true, "type": "string", "title": "P" },
+            { "key": "server", "title": "S", "scope": "project" }
+        ] }]
+    });
+    let problems = manifest::check(&v, Hand::Third).manifest.unwrap_err();
+    let said = |lang| -> Vec<String> { problems.iter().map(|p| p.message(lang)).collect() };
+    let fr = said(Lang::Fr);
+    for line in [
+        "`permissions.commands[0]` `{path:project}` n'est pas un joker : un chemin n'est que `{path:temp}` ou `{path:plugin}`, jamais un fichier du projet ni d'un agent, que le dépôt choisirait.",
+        "`permissions.commands[1]` `--pid={pid}` colle un joker à autre chose : un joker est un mot entier (`--pid {pid}`, jamais `--pid={pid}`).",
+        "`permissions.commands[2]` commence par `{int}` : le premier mot est le nom d'un programme, trouvé sur le PATH, jamais un chemin, un `*` ni un joker.",
+        "`permissions.commands[3]` a un `*` avant son dernier mot : `*` ne vient qu'à la fin, pour les mots qui suivent.",
+        "`permissions.commands[4]` `{float}` n'est pas un joker (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`) : une accolade n'a pas sa place dans un autre mot.",
+        "`permissions.secrets[0]` nomme un genre que `contributes.profiles` ne déclare pas, ou sans champ secret : `profile:<genre>` demande les secrets des profils de ce genre.",
+        "`limits.reason` manque : au-delà de 4 programmes à la fois, une phrase dit pourquoi, que l'utilisateur lit à l'installation.",
+        "`contributes.groups[0].fields[0]` ne nomme aucun réglage ni secret du plugin (`contributes.settings`, `contributes.secrets`).",
+        "`contributes.groups[1].fields` est une liste vide : au moins un champ.",
+        "`contributes.settings[0].multiline` ne va que sur un réglage `string` ou un secret.",
+        "`contributes.settings[0].of` ne va que sur un réglage `\"type\": \"profile\"`, dont il dit le genre.",
+        "`contributes.profiles[0].nameField` doit nommer un champ `string` du profil, ni secret ni sur plusieurs lignes : le nom du profil dans les listes.",
+        "`contributes.profiles[0].fields[0].type` n'a pas sa place sur un champ secret d'un profil : un secret est un texte.",
+        "`contributes.profiles[0].fields[1].scope` n'a pas sa place sur un champ de profil : un profil vaut pour chaque projet qui le choisit.",
+        "`contributes.profiles[0].fields[1].type` manque : un champ de profil est d'un type (`string`, `number`, `boolean`, `select`), ou `\"secret\": true`.",
+    ] {
+        assert!(fr.contains(&line.to_string()), "{line}\nnot in:\n{}", fr.join("\n"));
+    }
+    let en = said(Lang::En);
+    assert!(
+        en.contains(&"`limits.reason` is missing: beyond 4 programs at once, a sentence says why, which the user reads at the installation.".to_string()),
+        "{}",
+        en.join("\n")
+    );
+    v["limits"] = json!({ "processes": 17, "reason": "R" });
+    let problems = manifest::check(&v, Hand::Third).manifest.unwrap_err();
+    assert!(problems.iter().any(|p| p.message(Lang::En)
+        == "`limits.processes` must be a whole number from 1 to 16: the programs at once, 4 without asking."));
+}
+
+/// A plugin that takes the contract of 2.2.5 with an older `escouade.min` is told so by `validate`, never refused (ESC-531);
+/// the version is the protocol's, said in one place (scripts/escouade-min.mjs).
+#[test]
+fn validate_warns_a_plugin_of_the_contract_whose_min_is_older() {
+    assert_eq!(
+        manifest::CONTRACT_MIN,
+        escouade_plugin_protocol::ESCOUADE_MIN
+    );
+    let mut v = base();
+    v["permissions"] = json!({ "commands": ["tunnel --port {port}"] });
+    v["limits"] = json!({ "processes": 2 });
+    v["contributes"] = json!({ "settings": [{ "key": "routes", "type": "string", "scope": "project", "title": "R" }] });
+    let said = read(&v).below_contract(Lang::En).expect("said");
+    assert_eq!(
+        said,
+        format!(
+            "`escouade.min` says 2.2.0, but this plugin takes settings of each project, jokers in `permissions.commands`, \
+             `limits.processes`, which Escouade serves since {0}: an older version would not serve them. `escouade.min` \
+             should say {0}.",
+            manifest::CONTRACT_MIN
+        )
+    );
+    assert!(read(&v)
+        .below_contract(Lang::Fr)
+        .unwrap()
+        .contains("des réglages propres à chaque projet"));
+    v["escouade"]["min"] = json!(manifest::CONTRACT_MIN);
+    assert_eq!(read(&v).below_contract(Lang::En), None);
+    // A plugin of today is told nothing.
+    assert_eq!(read(&base()).below_contract(Lang::En), None);
+}

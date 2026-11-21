@@ -27,7 +27,7 @@
   } from '../lib/prs';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { heldOf } from '../lib/outbox.svelte';
-  import { accountsOf } from '../lib/accounts';
+  import { accountsOf, usableFor } from '../lib/accounts';
   import { bgCount } from '../lib/bgtasks';
   import { splitEscouade } from '../lib/escouade';
   import { fDur, fInt, fNum, fTime, fTok } from '../lib/format';
@@ -206,7 +206,15 @@
     return caps.modes.find((m) => m.id === agent.mode)?.meaning ?? t('conv.header.sandboxDefault');
   });
   // A message refused for want of an account of its harness: said until one is there (choice 19).
-  const noAccount = $derived(conv.noAccount && !accountsOf(conv.noAccount.engine).some((a) => a.active) ? conv.noAccount : null);
+  // One whose project no account serves (each reserved elsewhere, ESC-556): until one serves it again.
+  const noAccount = $derived(
+    conv.noAccount &&
+      (conv.noAccount.project
+        ? !usableFor(conv.noAccount.project, conv.noAccount.engine).length
+        : !accountsOf(conv.noAccount.engine).some((a) => a.active))
+      ? conv.noAccount
+      : null,
+  );
   // « Ouvrir une PR » takes the place of the launch while the branch has commits without a pull request (choice 26).
   const prFirst = $derived(canOpenPr(agent) && !openPrOf(agent));
   // The editor shows the agent's own checkout: its worktree, else the project's.

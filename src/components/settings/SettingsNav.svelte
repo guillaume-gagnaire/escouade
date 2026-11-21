@@ -6,6 +6,8 @@
   import { pageShown } from '../../lib/settings-pages';
   import { settingsAlerts } from '../../lib/settings-alerts.svelte';
   import { searchSettings, type SearchHit } from '../../lib/settings-search';
+  import { projectPlugins } from '../../lib/plugin-profiles';
+  import { plugins } from '../../lib/plugins-view.svelte';
   import { app } from '../../lib/state.svelte';
   import { onServer } from '../../lib/connection.svelte';
   import { tip } from '../../lib/tip';
@@ -43,6 +45,11 @@
   );
   // A page of a feature switched off goes with it (F-1): Overseer, Voix, Kanban, Tickets.
   const PROJECT = $derived(SETTINGS_PAGES.filter((p) => p.scope === 'project' && pageShown(p.id, app.settings)));
+  /** A project's pages: « Plugins » only while a plugin installed and on there declares a setting of each project (ESC-530). */
+  const pagesOf = (id: string) => {
+    const p = app.projects.find((x) => x.id === id);
+    return PROJECT.filter((x) => x.id !== 'projectPlugins' || (!!p && projectPlugins(plugins.list, p).length > 0));
+  };
 
   const scope = $derived(pageInfo(settingsForm.page).scope);
   /** The project unfolded: the one chosen, while a page of a project is on screen. */
@@ -54,7 +61,7 @@
     ...APP.map((p) => ({ key: p.id, page: p.id })),
     ...app.projects.flatMap((p) => [
       { key: `project:${p.id}`, projectId: p.id },
-      ...(p.id === open ? PROJECT.map((x) => ({ key: `${p.id}:${x.id}`, page: x.id, projectId: p.id })) : []),
+      ...(p.id === open ? pagesOf(p.id).map((x) => ({ key: `${p.id}:${x.id}`, page: x.id, projectId: p.id })) : []),
     ]),
     { key: 'allProjects', page: 'allProjects' },
     { key: 'about', page: 'about' },
@@ -72,7 +79,10 @@
   /** A project of the bar opens on the same page as the one on screen, else on « Projet ». */
   function go(e: Entry) {
     if (e.projectId) settingsForm.projectId = e.projectId;
-    settingsForm.page = e.page ?? (scope === 'project' ? settingsForm.page : 'project');
+    const page = e.page ?? (scope === 'project' ? settingsForm.page : 'project');
+    // A project without the page on screen (« Plugins », ESC-530) opens on « Projet ».
+    settingsForm.page =
+      e.projectId && !pagesOf(e.projectId).some((x) => x.id === page) && pageInfo(page).scope === 'project' ? 'project' : page;
   }
 
   async function onKey(ev: KeyboardEvent) {
@@ -228,7 +238,7 @@
         >
         {#if p.id === open}
           <div class="subs" role="group" aria-label={d?.name.trim() || p.name}>
-            {#each PROJECT as x (x.id)}
+            {#each pagesOf(p.id) as x (x.id)}
               {@const sub = `${p.id}:${x.id}`}
               <button
                 class="s-i sub"

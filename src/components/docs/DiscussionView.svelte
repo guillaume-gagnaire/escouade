@@ -42,7 +42,7 @@
 </script>
 
 <div class="discussion" data-discussion={agent.id} data-kind={d.kind}>
-  <SpaceHead title={d.subject}>
+  <SpaceHead title={d.subject} projectId={project.id}>
     {#snippet line()}
       <span class="tag {d.kind}">{t(`docs.discussion.kinds.${d.kind}`)}</span>
       <span>{t(`docs.discussion.with.${d.kind}`)}</span>

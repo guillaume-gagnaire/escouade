@@ -22,7 +22,7 @@ escouade-plugin test my-plugin --escouade 2.2.0
 
 ## The conformance bench
 
-`escouade-plugin test <folder>` reads the manifest, starts the program of `run` the way Escouade starts it (in its folder, with its three variables, with everything it starts), and plays up to eleven scenarios. Each says what happened; a scenario that fails also says **what is missing**.
+`escouade-plugin test <folder>` reads the manifest, starts the program of `run` the way Escouade starts it (in its folder, with its three variables, with everything it starts), and plays up to fifteen scenarios. Each says what happened; a scenario that fails also says **what is missing**.
 
 | Scenario | What the bench does | What it expects |
 | --- | --- | --- |
@@ -37,6 +37,10 @@ escouade-plugin test my-plugin --escouade 2.2.0
 | Shutdown | Sends `shutdown`. | An answer within a second, then the end of the process. |
 | Ticket source | Only if `contributes.ticketSources` is declared: `account/me` and `tickets/containers`. | An answer within the delay, or an error the contract names: `-(32000 + HTTP status)` (`-32401`: token refused), `-32010` (a lasting refusal), `-32601` (a call it does not serve). |
 | Code host | Only if `contributes.forges` is declared: `account/me` and `forge/pullRequestsOfBranch`. | The same. |
+| Profiles | Only if `contributes.profiles` is declared: a profile of the bench by kind, chosen by the bench’s project, served by `settings/get`, `profiles/list`, `profiles/get` and `secrets/get` with `profile`, as the app does. | Profiles asked by the ids Escouade gives, of its kinds, with `profile:<kind>`; no secret of a profile written out. |
+| Multi-line secret | Only for a `multiline` secret, of the plugin or of a profile: it gives it on several lines. | None of its lines of more than 8 characters written on the standard error or in a `log`. |
+| Command jokers | Only if an entry of `permissions.commands` has a joker, and not offline: it runs for real the programs the plugin asks for, by the app’s rules. | Each program admitted by an entry, each joker by one word of its form. |
+| Program limit | Only if `limits.processes` is declared: it holds it as the app does. | Never more programs at once than the limit. |
 
 A scenario that does not concern the plugin is not played, and says so: no fact without `permissions.events`, no decision without `permissions.decide`, no source or host without `contributes.ticketSources` or `contributes.forges`, and nothing of a program for a declarative plugin, of which only the manifest is read.
 
@@ -72,6 +76,8 @@ The bench sends facts and decisions in the shape Escouade will give them: the pr
 ```
 
 A fact is a notification: it has no `id`, and the plugin does not answer it. The facts a plugin receives in Escouade, and their fields, come with the events, in an upcoming version; ignore the fields you do not know.
+
+After a fact, the bench waits for the plugin to settle (300 ms with nothing new, 3 s at most): what it does of a fact, its programs and its profiles included, is judged whole. A plugin that says `escouade.min` 2.2.5 is played with an `escouade-plugin` of that version, or with `--escouade 2.2.5`. The test plugin `tests/fixtures/plugins/sdk-contract` of Escouade’s repository takes the whole contract and passes the bench in WASM.
 
 ## The fake Escouade
 

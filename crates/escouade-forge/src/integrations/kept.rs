@@ -361,6 +361,38 @@ mod tests {
     }
 
     #[test]
+    fn a_long_secret_is_whole_in_the_file_and_moves_to_the_keychain_in_pieces_as_one() {
+        let d = DataDir::new(test_dir("kept-long"));
+        let memory = Arc::new(MemoryStore::default());
+        let keychain: Arc<dyn SecretStore> =
+            Arc::new(super::super::secrets::Chunked::new(memory.clone()));
+        let k = Kept::new(keychain, &d);
+        let config = "remote vpn.acme.dev 1194\n".repeat(250);
+        // In the file: one piece, as ESC-499 keeps it.
+        k.keep_in_file(NAME, &config).unwrap();
+        let file = std::fs::read_to_string(d.plugin_secrets_file()).unwrap();
+        assert!(!file.contains('#') && !file.contains("escouade-pieces"));
+        assert_eq!(k.get(NAME).unwrap(), Some(config.clone()));
+        // « Déplacer vers le trousseau »: in pieces there, read back whole, out of the file.
+        k.move_to_keychain(NAME).unwrap();
+        assert!(!k.in_file(NAME));
+        assert!(memory
+            .entry(NAME)
+            .unwrap()
+            .starts_with("escouade-pieces:v1:a:6:"));
+        assert_eq!(memory.all().len(), 7);
+        assert_eq!(k.get(NAME).unwrap(), Some(config.clone()));
+        // Back to the file: every piece leaves the keychain (one place for a secret).
+        k.keep_in_file(NAME, &config).unwrap();
+        assert!(memory.all().is_empty());
+        // Moved again, then forgotten (« Oublier »): nothing left anywhere.
+        k.move_to_keychain(NAME).unwrap();
+        k.delete(NAME).unwrap();
+        assert!(memory.all().is_empty());
+        assert_eq!(k.get(NAME).unwrap(), None);
+    }
+
+    #[test]
     fn only_a_name_the_file_holds_is_written_there() {
         let (keychain, k, _) = kept("kept-others");
         k.keep_in_file(NAME, "hunter2-secret").unwrap();

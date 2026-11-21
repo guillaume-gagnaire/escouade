@@ -31,8 +31,14 @@ export interface ManifestError {
     | 'variable'
     | 'interpreter'
     | 'pointer'
-    | 'session';
-  /** The type, or the values, the field takes, for `type` and `enum`. */
+    | 'session'
+    | 'misplaced'
+    | 'repo'
+    | 'bounds'
+    | 'extension'
+    | 'field'
+    | 'profile';
+  /** The type, or the values, the field takes, for `type` and `enum`; the whole numbers, `lo..hi`, for `bounds`. */
   expected?: string;
 }
 
@@ -42,7 +48,24 @@ export function writtenHost(url: string): string | null;
 export function hostCovered(host: string, network: string[]): boolean;
 export const FILE_ROOTS: string[];
 export const FILE_ACCESS: string[];
+/** Whether a line of `permissions.commands` holds: a program's name first, never a path nor a joker; a joker a whole word. */
 export function commandHolds(command: string): boolean;
+/** What breaks a line of permissions.commands that does not hold (`program:<word>`, `star`, `path:<word>`, `glued:<word>`, `brace:<word>`), for its message; empty when it holds. */
+export function commandFault(command: string): string;
+/** The words of `permissions.commands` that stand for one argument of a closed form (ESC-525). */
+export const JOKERS: readonly string[];
+/** Whether a word of a command is one of the jokers, whole. */
+export function isJoker(word: string): boolean;
+/** Whether a line of `permissions.commands` holds a joker. */
+export function hasJoker(command: string): boolean;
+/** Where a setting or a secret holds (`scope`): `app`, the default, or `project`. */
+export const SCOPES: readonly string[];
+/** The lines a field on several lines shows, at least and at most. */
+export const LINES: readonly [number, number];
+/** The programs at once a plugin may ask for (`limits.processes`), at least and at most. */
+export const PROCESSES: readonly [number, number];
+/** The programs at once a plugin has without asking. */
+export const PROCESSES_UNASKED: number;
 /** A name of variable: a letter or `_`, then letters, digits and `_`. */
 export function isVarName(name: unknown): boolean;
 /** Whether Escouade refuses the variable `name` to a plugin even declared (ESC-424); `firstParty`: of Escouade's own hand. */
@@ -86,3 +109,7 @@ export function validateText(text: string, options?: ValidateOptions): Validatio
 export function message(error: ManifestError, lang?: 'fr' | 'en'): string;
 /** What is said of a reserved point at `path`: « reserved, no effect in this version ». */
 export function reservedMessage(path: string, lang?: 'fr' | 'en'): string;
+/** The version of Escouade that serves the profiles, the settings of each project, the jokers and limits.processes. */
+export const CONTRACT_MIN: string;
+/** What a manifest takes of the contract served since CONTRACT_MIN when its escouade.min is older: a warning of validate, or null. */
+export function belowContract(manifest: unknown, lang?: 'fr' | 'en'): string | null;

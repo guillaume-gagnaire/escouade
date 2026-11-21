@@ -211,10 +211,21 @@ export default defineZone('accounts', {
     },
     machineToo: 'The machine’s account is still {harness}’s outside Escouade.',
     shared: {
-      one: 'Its agents may go to {names}, an account shared with other projects: {harness}’s sessions, memory, history and global settings are common there.',
-      other:
-        'Its agents may go to {names}, accounts shared with other projects: {harness}’s sessions, memory, history and global settings are common there.',
+      one: 'Its agents also go to {names}, an account shared with other projects.',
+      other: 'Its agents also go to {names}, accounts shared with other projects.',
     },
+    kept: 'Its sessions stay its own: the other projects’ agents are refused their folders. Still common: {common}.',
+    common: {
+      claude: 'Claude Code’s sign-in, settings, global memory (CLAUDE.md) and prompt history',
+      codex: 'Codex’s sign-in, configuration, global instructions (AGENTS.md), history and memories',
+      copilot: 'Copilot CLI’s sign-in and configuration',
+      opencode: 'OpenCode’s configuration and providers',
+      perAgent: 'the sign-in or key, and the quota; each {harness} agent already has a folder of its own (sessions, rules)',
+      other: '{harness}’s sign-in and global settings',
+    },
+    optional: 'To keep everything apart, reserve it an account: optional, one more layer of isolation.',
+    unreserve: 'Stop reserving it',
+    unreserveTitle: 'It will serve the other projects again.',
     add: 'Add a reserved account…',
     reserve: 'Reserve {name} to this project',
     reserveTitle: 'The other projects will no longer go to this account.',
@@ -222,10 +233,39 @@ export default defineZone('accounts', {
     sharedOnLimitDesc:
       'When its reserved accounts reach the usage limit, its agents may go on on a shared account (a switch of account, a handover to another harness). Off, they wait for the reset.',
     sharing: {
-      one: 'The private project {names} still goes to this account, shared with other projects.',
-      other: 'The private projects {names} still go to this account, shared with other projects.',
+      one: 'The private project {names} also goes to this account: its sessions stay its own, the account’s sign-in and settings are common.',
+      other:
+        'The private projects {names} also go to this account: their sessions stay their own, the account’s sign-in and settings are common.',
     },
     reserveTo: 'Reserve to “{name}”',
+  },
+
+  reserve: {
+    title: 'Reserve “{name}” to “{project}”?',
+    titleChange: 'Change the projects of “{name}”?',
+    onlyOne: {
+      one: 'It’s your only {harness} account: your project {names} will have none left, its agents and tickets will no longer start.',
+      other:
+        'It’s your only {harness} account: your {count} other projects ({names}) will have none left, their agents and tickets will no longer start.',
+    },
+    lastOne: {
+      one: '“{name}” is the last {harness} account of {names}: this project will have none left, its agents and tickets will no longer start.',
+      other:
+        '“{name}” is the last {harness} account of {names}: these {count} projects will have none left, their agents and tickets will no longer start.',
+    },
+    undo: 'To undo it: “Share again”, where these projects say they have no account left.',
+    instead: 'To isolate “{project}” without leaving anyone out, add it a reserved account.',
+    confirm: 'Reserve anyway',
+  },
+
+  away: {
+    text: {
+      one: '“{name}” is reserved to {owners}: {projects} has no active {harness} account left.',
+      other: '“{name}” is reserved to {owners}: {projects} have no active {harness} account left.',
+    },
+    owners: 'other projects',
+    shareAgain: 'Share again',
+    shareAgainTitle: 'The account will serve this project again.',
   },
 
   pause: {

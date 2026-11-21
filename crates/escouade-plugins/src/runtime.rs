@@ -549,22 +549,31 @@ impl Runtime {
             .and_then(|m| m.permissions.env)
     }
 
+    ///
+    /// A setting of each project (`"scope": "project"`, ESC-530) goes by its ranks (`profiles::settings_for`): this
+    /// machine's value for the project, the file's, the manifest's default; a `profile` setting gives the id of the
+    /// profile chosen, never one the file names, and only for a project where the plugin is on.
     pub fn settings_of(&self, id: &str, project: Option<&str>) -> Value {
         let Some(choices) = self.plugins.choices(id) else {
             return json!({});
         };
-        let from_file = project.and_then(|p| {
+        let here = project.and_then(|p| {
             let place = self.place.read().as_ref().and_then(Weak::upgrade)?;
             let (private, file) = place.project_plugin(p, id)?;
-            super::active_in(&choices, p, private).then_some(file)
+            Some((super::active_in(&choices, p, private), file))
         });
+        let (active, file) = match here {
+            Some((active, file)) => (active, Some(file)),
+            None => (false, None),
+        };
         let manifest = self.plugins.get(id, Lang::En).and_then(|v| v.manifest);
-        match (from_file, manifest) {
-            (Some(file), Some(m)) => {
-                Value::Object(super::project_settings(&m, &choices.settings, &file))
-            }
-            _ => Value::Object(choices.settings),
-        }
+        Value::Object(super::profiles::settings_for(
+            manifest.as_ref(),
+            &choices,
+            project,
+            active,
+            file.as_ref(),
+        ))
     }
 
     pub fn new(
@@ -803,7 +812,7 @@ impl Runtime {
             return Err(format!("{id} is no module"));
         }
         let (module, _) = self.modules.of(&folder, run, built.as_ref())?;
-        let limits = self.limits.wasm.asked(manifest.limits);
+        let limits = self.limits.wasm.asked(&manifest.limits);
         let files = super::wasm::files_of(&folder);
         let mut instance = super::wasm::Instance::start_with(&module, &files, limits, None)
             .map_err(|f| f.to_string())?;
@@ -1399,7 +1408,7 @@ impl Host {
             "escouade": { "version": rt.app_version },
             "plugin": { "id": self.id, "version": self.manifest.version },
             "lang": rt.lang(),
-            "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true },
+            "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true, "typedCommands": true, "profiles": true },
         });
         let answer = match self
             .call_on(&conn, "initialize", &raw(&hello), rt.limits.initialize)
@@ -1517,8 +1526,8 @@ impl Host {
             }));
         }
         let fetcher = super::wasm::Fetcher::new(&self.id, &self.manifest.permissions.network, &net)
-            .limited(self.manifest.limits);
-        let limits = rt.limits.wasm.asked(self.manifest.limits);
+            .limited(self.manifest.limits.clone());
+        let limits = rt.limits.wasm.asked(&self.manifest.limits);
         let (host, c) = (self.clone(), conn.clone());
         std::thread::Builder::new()
             .name(format!("plugin {}", self.id))
@@ -1577,6 +1586,7 @@ impl Host {
             env: self.manifest.permissions.env.clone(),
             first_hand: super::builtin::first_hand(&self.id),
             temp: rt.temps.join(&self.id),
+            plugin: self.folder.clone(),
             agents: self.agents.clone(),
             projects: Arc::new(move |project| {
                 me.upgrade()
@@ -1586,6 +1596,7 @@ impl Host {
             agent_env: rt.agent_env.read().clone(),
             back,
             told: told.clone(),
+            processes: self.manifest.limits.processes,
         });
         super::wasm::Capabilities::new(self.access(rt), procs, told)
     }
@@ -1655,10 +1666,41 @@ impl Host {
             .and_then(|p| serde_json::from_str(p.get()).ok())
             .unwrap_or(Value::Null);
         let answer: Result<Value, (i64, String)> = match method {
-            "secrets/get" => match params.get("key").and_then(Value::as_str) {
-                Some(key) => self.secret(key).map(|s| json!(s)),
-                None => Err((INVALID_PARAMS, "secrets/get takes a key".into())),
-            },
+            // A secret of its own (`key`), or of one of its profiles (`profile`, ESC-530).
+            "secrets/get" => {
+                match (
+                    params.get("key").and_then(Value::as_str),
+                    params.get("profile"),
+                ) {
+                    (None, _) => Err((INVALID_PARAMS, "secrets/get takes a key".into())),
+                    (Some(key), None | Some(Value::Null)) => {
+                        if self.profile_key_only(key) {
+                            self.journal.push(
+                                Kind::Refused,
+                                format!(
+                                    "asked for the secret {key:?} of a profile without its profile"
+                                ),
+                            );
+                            Err((
+                            INVALID_PARAMS,
+                            format!("{key:?} is a field of a profile: secrets/get takes its profile"),
+                        ))
+                        } else {
+                            self.secret(key).map(|s| json!(s))
+                        }
+                    }
+                    (Some(key), Some(Value::String(profile))) => {
+                        self.profile_secret(key, profile).map(|s| json!(s))
+                    }
+                    (Some(_), Some(_)) => Err((
+                        INVALID_PARAMS,
+                        "secrets/get takes a profile's id, or none".into(),
+                    )),
+                }
+            }
+            // Its profiles of a kind (ESC-530): their ids and names, or the simple fields of one.
+            "profiles/list" => self.profiles_list(&params),
+            "profiles/get" => self.profiles_get(&params),
             // The values of its settings, as the user set them (Réglages of its page), with those
             // of the project's .escouade.yml when it names a project (PLG-14).
             "settings/get" => match params.get("project") {
@@ -1702,10 +1744,151 @@ impl Host {
         conn.write(&line.to_string());
     }
 
+    /// Whether `key` is a secret field of one of its kinds of profile and no secret of its own besides: asked without its
+    /// profile, it is refused (`-32602`), so that a confusion never gives another secret (§2.4).
+    fn profile_key_only(&self, key: &str) -> bool {
+        let own = super::secret_keys(&self.manifest).iter().any(|k| k == key)
+            || self
+                .manifest
+                .permissions
+                .secrets
+                .iter()
+                .any(|p| !p.starts_with("profile:") && matches(p, key));
+        !own && super::profiles::kinds(&self.manifest)
+            .iter()
+            .any(|k| k.has_secret(key))
+    }
+
+    /// The kind named by a call's params: one it declares, else `-32602`.
+    fn kind_of(&self, params: &Value) -> Result<super::profiles::Kind, (i64, String)> {
+        let kind = params
+            .get("kind")
+            .and_then(Value::as_str)
+            .ok_or((INVALID_PARAMS, "takes a kind of profile".to_string()))?;
+        super::profiles::kind(&self.manifest, kind).ok_or_else(|| {
+            (
+                INVALID_PARAMS,
+                format!("{kind:?} is no kind of profile of this plugin (contributes.profiles)"),
+            )
+        })
+    }
+
+    /// `profiles/list { kind }`: its profiles of that kind, their ids and names, in the order they were made.
+    fn profiles_list(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let kind = self.kind_of(params)?;
+        let choices = self.choices();
+        let list: Vec<Value> = choices
+            .profiles
+            .get(&kind.id)
+            .into_iter()
+            .flatten()
+            .map(|p| json!({ "id": p.id, "name": kind.name_of(p) }))
+            .collect();
+        Ok(Value::Array(list))
+    }
+
+    /// `profiles/get { kind, profile }`: the simple fields of one of its profiles (never a secret), null when it has
+    /// none of that id.
+    fn profiles_get(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let kind = self.kind_of(params)?;
+        let Some(profile) = params.get("profile").and_then(Value::as_str) else {
+            return Err((INVALID_PARAMS, "profiles/get takes a profile's id".into()));
+        };
+        let choices = self.choices();
+        Ok(choices
+            .profiles
+            .get(&kind.id)
+            .and_then(|l| l.iter().find(|p| p.id == profile))
+            .map_or(Value::Null, |p| {
+                Value::Object(kind.simple_values(&p.values))
+            }))
+    }
+
+    /// The user's choices of this plugin, its profiles among them.
+    fn choices(&self) -> super::Choices {
+        self.rt
+            .upgrade()
+            .and_then(|rt| rt.plugins.choices(&self.id))
+            .unwrap_or_default()
+    }
+
+    /// The secret field `key` of its profile `profile` (ESC-530, §2.3): a profile the user made (its id drawn by
+    /// Escouade), of a kind it declares and holds by `permissions.secrets` (`profile:<kind>`, `-32001` else), under the
+    /// plugin's own name in the keychain. The journal says which profile, never the value.
+    fn profile_secret(&self, key: &str, profile: &str) -> Result<Option<String>, (i64, String)> {
+        if !super::profiles::is_id(profile) {
+            self.journal.push(
+                Kind::Refused,
+                format!("asked for its secret {key:?} of a profile that is none ({profile:?})"),
+            );
+            return Err((INVALID_PARAMS, format!("{profile:?} is no profile's id")));
+        }
+        let choices = self.choices();
+        let found = super::profiles::find(&choices, profile)
+            .and_then(|(k, p)| Some((super::profiles::kind(&self.manifest, k)?, p)));
+        let Some((kind, p)) = found else {
+            self.journal.push(
+                Kind::Message,
+                format!("asked for its secret {key:?} of profile {profile:?}: no such profile"),
+            );
+            return Err((INVALID_PARAMS, format!("no profile {profile:?}")));
+        };
+        let kind_id = kind.id.clone();
+        if !kind.has_secret(key) {
+            self.journal.push(
+                Kind::Refused,
+                format!("asked for the secret {key:?} of a profile {kind_id:?}, which has no such secret field"),
+            );
+            return Err((
+                INVALID_PARAMS,
+                format!("{key:?} is no secret field of the profiles {kind_id:?}"),
+            ));
+        }
+        let word = format!("profile:{kind_id}");
+        if !self.manifest.permissions.secrets.contains(&word) {
+            self.journal.push(
+                Kind::Refused,
+                format!("asked for its secret {key:?} of a profile {kind_id:?} without {word:?} in permissions.secrets"),
+            );
+            return Err((
+                NOT_YOURS,
+                format!("the secrets of the profiles {kind_id:?} are not this plugin's (permissions.secrets: {word})"),
+            ));
+        }
+        let name = kind.name_of(p);
+        let Some(rt) = self.rt.upgrade() else {
+            return Err((KEYCHAIN, "Escouade is closing".into()));
+        };
+        let at = super::profiles::secret_name(&self.id, &kind_id, profile, key);
+        match rt.secrets.get(&at) {
+            Ok(Some(s)) => {
+                self.journal.mask(&s);
+                self.journal.push(
+                    Kind::Message,
+                    format!("was given its secret {key:?} of profile {name:?}"),
+                );
+                Ok(Some(s))
+            }
+            Ok(None) => {
+                self.journal.push(
+                    Kind::Message,
+                    format!("asked for its secret {key:?} of profile {name:?}: none is kept"),
+                );
+                Ok(None)
+            }
+            Err(e) => {
+                log::warn!("plugin {}: the keychain: {e}", self.id);
+                Err((KEYCHAIN, "the keychain is out of reach".into()))
+            }
+        }
+    }
+
     /// Its secret `key`: only one of its own (`permissions.secrets`), under its own name.
     fn secret(&self, key: &str) -> Result<Option<String>, (i64, String)> {
+        // `#` is the pieces' (ESC-527): a key `token#a1` would read a piece of `token`.
         let own = !key.is_empty()
             && !key.chars().any(char::is_control)
+            && !key.contains('#')
             && self
                 .manifest
                 .permissions

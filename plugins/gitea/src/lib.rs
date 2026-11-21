@@ -9,6 +9,7 @@
 //! is told by the client itself, which asks the instance's version once: `Unsupported`, never a wrong answer.
 
 pub mod pulls;
+mod reach;
 
 use escouade_plugin_kit::forge::Forge;
 use escouade_plugin_kit::hosts::{Credentials, ForgeKind, Hosts};
@@ -49,7 +50,12 @@ impl ForgeKind for GiteaForge {
 
 /// What its module runs, on its first turn.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run("gitea", Hosts::new(vec![Box::new(GiteaForge)], vec![]))
+    escouade_plugin_kit::serve::run("gitea", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> Hosts {
+    Hosts::new(vec![Box::new(GiteaForge)], vec![])
 }
 
 escouade_plugin_kit::protocol::module!(run);

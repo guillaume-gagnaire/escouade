@@ -2,8 +2,8 @@
 title: "Process des agents"
 subject: "harness"
 sources: ["https://github.com/guillaume-gagnaire/escouade/issues/26","src-tauri/src/agentgroups.rs","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs"]
-tickets: ["ESC-417","ESC-431"]
-decisions: [147]
+tickets: ["ESC-417","ESC-431","ESC-544"]
+decisions: [147,"un-agent-dont-le-remote-control-est-allu"]
 compared: null
 ---
 
@@ -16,14 +16,16 @@ Ce qui borne ce que pèsent les process des agents sur la machine : leur arrêt 
 ### Arrêt des inactifs
 
 - Toutes les minutes, le process d'un agent inactif depuis « Arrêter les processus des agents inactifs après » (30 minutes par défaut, 0 : jamais) s'arrête. Sa session et sa conversation restent : la prochaine action sur l'agent la reprend.
-- Un agent relié à claude.ai par le remote control s'arrête de même ; sa session distante est gardée, et son prochain process la rattache (voir *Barre latérale*, « Remote control »).
+- Un agent relié à claude.ai par un réglage du remote control (« pour tous les agents », ou celui de son projet) s'arrête de même ; sa session distante est gardée, et son prochain process la rattache (voir *Barre latérale*, « Remote control »).
+- Jamais un agent dont le remote control a été allumé à la main (son menu, ESC-544) : il reste joignable depuis claude.ai, dans le plafond ci-dessous.
 - Jamais un agent actif (un tour en cours, une question qui attend), ni un agent qui tient un travail de fond : une commande, un moniteur, un sous-agent, un workflow, un job de sa session ou le réveil d'une boucle (voir *Avancée d'un plan*).
 
 ### Le plafond du remote control
 
-- Le remote control garde au plus « Process gardés au plus » process d'agents non actifs (Réglages › Agents › Remote control, 8 par défaut). Au-delà, les moins récemment actifs s'arrêtent d'abord, leur remote control et leur session distante gardés. Un démarrage pour le remote control qui le dépasserait n'a pas lieu ; ceux en cours comptent.
-- Au lancement de l'app (et à la réouverture d'un projet), les places sous le plafond vont aux agents dans l'ordre de leur dernière activité, la plus récente d'abord, toujours : chacun ne demande la sienne qu'une fois que le précédent dans cet ordre a eu sa réponse, quel que soit le temps qu'a pris pour chacun l'application des réglages du remote control. Un agent actif démarre hors plafond, comme ailleurs.
+- Le remote control garde au plus « Process gardés au plus » process d'agents non actifs (Réglages › Agents › Remote control, 8 par défaut), qu'il les tienne d'un réglage ou qu'ils aient été allumés à la main. Au-delà, les moins récemment actifs s'arrêtent d'abord, quelle que soit la source, leur remote control et leur session distante gardés. Un démarrage pour le remote control qui le dépasserait n'a pas lieu ; ceux en cours comptent.
+- Au lancement de l'app (et à la réouverture d'un projet), démarrent les agents allumés à la main, même terminés ou inactifs depuis longtemps, et ceux d'un réglage actifs ou actifs depuis moins que le délai d'arrêt des inactifs ; les autres attendent leur prochain message. Les places sous le plafond vont aux agents dans l'ordre de leur dernière activité, la plus récente d'abord, toujours : chacun ne demande la sienne qu'une fois que le précédent dans cet ordre a eu sa réponse, quel que soit le temps qu'a pris pour chacun l'application des réglages du remote control. Un agent actif démarre hors plafond, comme ailleurs.
 - Vérifié après chaque démarrage pour le remote control et avec l'arrêt des inactifs. Un agent actif n'est ni compté ni arrêté. Les interfaces de la vue Claude Code ne sont pas comptées.
+- La mémoire reste donc bornée quel que soit le nombre d'agents allumés à la main : au plus « Process gardés au plus » process non actifs.
 
 ### Les process restés d'un lancement tué (macOS, Linux)
 
@@ -45,9 +47,11 @@ Ce qui borne ce que pèsent les process des agents sur la machine : leur arrêt 
 - « Arrêter les processus des agents inactifs après » : Réglages › Agents › Avancé.
 - « Process gardés au plus » : Réglages › Agents › Remote control.
 - « Serveurs MCP des agents » : Réglages › Agents › Avancé.
+- Pour les tests de bout en bout seulement, deux variables d'environnement raccourcissent l'arrêt des inactifs : `ESCOUADE_IDLE_STOP_MS` (le délai, en ms, à la place du réglage) et `ESCOUADE_IDLE_CHECK_EVERY_MS` (le pas de la vérification, une minute sinon).
 
 ## Limites
 
 - Un groupe dont le meneur a changé de programme après la note (un lanceur qui se remplace par un autre programme) n'est pas reconnu, donc pas arrêté : la prudence passe avant le nettoyage.
 - Les process d'un agent sortis de son groupe (un programme qui se détache exprès) ne sont pas suivis.
 - « Seulement Escouade » ne vaut pas pour les harness autres que Claude Code.
+- Au-delà du plafond, même un agent allumé à la main s'arrête et n'est plus joignable jusqu'à son prochain process : sa carte le dit « en veille » (voir *Barre latérale*).

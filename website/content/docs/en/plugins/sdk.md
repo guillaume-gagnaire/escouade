@@ -68,10 +68,14 @@ void plugin.start();
 | `decidePermission(handler)` | Answers `permissions/decide`: `allow`, `deny` with a `message`, or `ask`, which leaves it to the user. Without a handler, the answer is `ask`. |
 | `secret(key)` | Asks Escouade for one of its secrets (`secrets/get`); `null` when none is kept. Another key rejects with the error `-32001`. |
 | `settings(project?)` | Asks for its settings (`settings/get`); with a project’s id, those its `.escouade.yml` gives it (`plugins.<id>`) go first. |
+| `secret(key, { profile })` | A secret field of a profile (`secrets/get` with `profile`), on several lines included. |
+| `profiles.list(kind)`, `profiles.get(kind, id)`, `profiles.of(project, setting)` | Its profiles (ids and names), the simple fields of one, the one a project chose or `null` ([credentials per project](plugins/project-credentials)). |
+| `require('profiles' \| 'typedCommands')` | Rejects with an `RpcError` `ERRORS.methodNotFound` when Escouade did not announce that capability at `initialize`, with the version that serves it (`ESCOUADE_MIN`). The calls of the profiles and `runTyped` do it themselves, before asking anything: an older Escouade would ignore `profile` and give another secret. |
 | `log.debug/info/warn/error(message)` | A line of its journal (`log`). |
 | `file(path)` | Reads a file of its folder as text (`files/read`), a subfolder included (`data/words.txt`), 256 KB at most, under Node as in WASM: never its manifest, a hidden file or a path that leaves it (`RpcError` `ERRORS.refused`); a missing file fails with `ERRORS.notFound`. |
 | `fs.read/text/write/stat/list/canon(file)` | The folders of `permissions.files`, in WASM ([the files](plugins/calls#the-files)). |
 | `runProgram(params, onOut?)` | Runs a line of `permissions.commands`, in WASM: `exited`, `write`, `close`, `kill` ([the programs](plugins/calls#the-programs-proc)). |
+| `runTyped(params, onOut?)` | Like `runProgram`, for an entry with jokers: its `pid` is always there, and an Escouade without `capabilities.typedCommands` is refused before the call. `runProgram` gives `pid` too when Escouade gives it. |
 | `openStream(p, url, init?)`, `openSocket(p, url, headers?)` | Imported apart: a response read as it comes and a WebSocket, in WASM ([the network](plugins/calls#the-network)). |
 | `handle(method, handler)` | Serves another method (a later extension point). Throw `new RpcError(code, message)` to answer an error. |
 | `onInitialize(handler)`, `onShutdown(handler)` | Runs at `initialize`, or before the answer to `shutdown` (800 ms at most: Escouade waits a second). |
@@ -133,6 +137,13 @@ test('a force push is refused, the rest left to the user', async () => {
 ```
 
 `fact(name, fields)` sends a fact and waits for its handlers; `decide(fields)` asks for a decision; `call` and `notify` send anything else. The fields you give are merged over those of the bench (the project “Banc”, the ticket `BEN-1`, a `npm test` command). The fake keeps what the plugin logged (`logs`), the secrets it asked for (`secretsAsked`) and its traces; `secrets` gives their values, and a key outside them is refused, as in Escouade.
+
+Given the manifest (`manifest`), the fake serves what the app serves since [2.2.5](plugins/versioning#the-contract-of-2-2-5), by its rules:
+
+- `profiles`: by kind, the user’s profiles (`id`, `fields`, `secrets`); `profiles/list`, `profiles/get` and the secrets of a profile, with the app’s refusals;
+- `projectValues` (this machine’s values by project, a chosen profile included), `projectSettings` (each project’s `.escouade.yml`) and `off` (the projects where the plugin is not on): `settings/get` of a project by its ranks;
+- `proc/spawn` on `permissions.commands`: each joker checked, `{pid}` among its living programs, `{path:temp}` among `temp` (and what the plugin writes there by `fs/write`), `{path:plugin}` among `files`, `limits.processes` held. It keeps `programs` (those running), `spawned` (all of them, with the words they would run) and `refusals`; `exit(proc, code)` ends one, `out(proc, data)` writes for it;
+- `capabilities: { profiles: false, typedCommands: false }` plays an older Escouade.
 
 ## The command
 

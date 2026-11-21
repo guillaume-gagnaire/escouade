@@ -118,7 +118,7 @@ fn said_of(fault: &Fault) -> String {
             seconds = d.as_secs_f32()
         ),
         Fault::Crashed(_) => tr!("il a planté", "it crashed"),
-        Fault::Flooded(max) => tr!(
+        Fault::Flooded(max, _) => tr!(
             "il a écrit plus de {mib} Mio en un tour",
             "it wrote more than {mib} MiB in one turn",
             mib = max >> 20

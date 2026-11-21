@@ -626,3 +626,85 @@ export function quotaRows(now: number): QuotaRow[] {
 export function backToAccounts(page: SettingsPage = 'accounts') {
   app.modal = { kind: 'settings', page, resume: true };
 }
+
+/** Whether an active account of `engine` in `list` serves the project, by its reservations alone (`serves`). */
+function servedIn(list: Account[], project: string, engine: EngineId): boolean {
+  return list.some((a) => a.active && engineOfAccount(a) === engine && serves(a, project));
+}
+
+/**
+ * ESC-556: the open projects (but those of `next`) that an active account of the account's harness serves now and that none
+ * would serve once it is reserved to `next`: their agents and tickets would no longer start. Asked first, wherever one reserves.
+ */
+export function strandedBy(a: Account, next: string[], accounts: Account[] = app.settings.accounts ?? []): Project[] {
+  const engine = engineOfAccount(a);
+  const after = accounts.map((x) => (x.id === a.id ? { ...x, projects: next } : x));
+  return app.projects.filter((p) => !next.includes(p.id) && servedIn(accounts, p.id, engine) && !servedIn(after, p.id, engine));
+}
+
+/** Whether the account is the only active one of its harness. */
+export function onlyActive(a: Account): boolean {
+  const engine = engineOfAccount(a);
+  return !(app.settings.accounts ?? []).some((x) => x.id !== a.id && x.active && engineOfAccount(x) === engine);
+}
+
+/**
+ * The active accounts of `engine` that do not serve the project for being reserved to other projects, in order: when none
+ * serves it, what « Partager à nouveau » gives back (ESC-556). An account switched off is not one.
+ */
+export function reservedAway(project: string, engine: EngineId): Account[] {
+  return (app.settings.accounts ?? []).filter((a) => a.active && engineOfAccount(a) === engine && !serves(a, project));
+}
+
+/** The open projects the account is reserved to. */
+export function reservedTo(a: Pick<Account, 'projects'>): Project[] {
+  const ids = a.projects ?? [];
+  return app.projects.filter((p) => ids.includes(p.id));
+}
+
+/**
+ * The reservation of `a` once it serves `projects` too (« Partager à nouveau »): none (« Tous les projets ») when it would then
+ * serve every open project, as it did before it was reserved.
+ */
+export function sharedAgain(a: Pick<Account, 'projects'>, projects: string[]): string[] {
+  const next = [...new Set([...(a.projects ?? []), ...projects])];
+  return app.projects.every((p) => next.includes(p.id)) ? [] : next;
+}
+
+/** « Partager à nouveau »: saved at once, as every change of an account; whether it was. */
+export async function shareAgain(a: Account, projects: string[]): Promise<boolean> {
+  const list = await app.run(api.accountUpdate({ ...a, projects: sharedAgain(a, projects) }));
+  if (list) app.settings.accounts = list;
+  return !!list;
+}
+
+/**
+ * « Ne plus le réserver » (ESC-556), from a private project's page: the account no longer kept to `project`, it serves every
+ * project again once it was reserved to it alone, else the others it was reserved to.
+ */
+export async function unreserve(a: Account, project: string): Promise<boolean> {
+  const list = await app.run(api.accountUpdate({ ...a, projects: (a.projects ?? []).filter((p) => p !== project) }));
+  if (list) app.settings.accounts = list;
+  return !!list;
+}
+
+/**
+ * Why the project has no account of `engine` when one is reserved elsewhere (ESC-556): that account and what to say of it,
+ * naming the projects that hold it; null while an active account serves the project, or when none is reserved away.
+ */
+export function awayOf(projectId: string, engine: EngineId): { account: Account; text: string } | null {
+  const project = app.projects.find((p) => p.id === projectId);
+  if (!project || usableFor(projectId, engine).length) return null;
+  const account = reservedAway(projectId, engine)[0];
+  if (!account) return null;
+  const owners = reservedTo(account);
+  const quoted = (list: { name: string }[]) => fList(list.map((p) => t('accounts.tab.quoted', { name: p.name })));
+  const text = t('accounts.away.text', {
+    count: 1,
+    name: accountName(account),
+    owners: owners.length ? quoted(owners) : t('accounts.away.owners'),
+    projects: quoted([project]),
+    harness: engineName(engine),
+  });
+  return { account, text };
+}

@@ -4,7 +4,7 @@
   import { t } from '../../lib/i18n';
   import { engineName } from '../../lib/engines';
   import { installedEngines } from '../../lib/installed';
-  import { accountName, accountsFor, dedicated, defaultEngine, isPrincipal, sharedBy } from '../../lib/accounts';
+  import { accountName, accountsFor, dedicated, defaultEngine, isPrincipal, sharedBy, strandedBy, unreserve } from '../../lib/accounts';
   import { api } from '../../lib/ipc';
   import { fList } from '../../lib/format';
   import { activeIn, markOf } from '../../lib/plugins';
@@ -17,6 +17,7 @@
   import type { Account, Project } from '../../lib/types';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
+  import ReserveConfirm from './ReserveConfirm.svelte';
   import Switch from './Switch.svelte';
 
   // Projets › <projet> › Confidentialité: what the project keeps to itself. Private or not (what the other projects'
@@ -40,11 +41,39 @@
   const sharedAccounts = $derived(sharedBy(asDrafted, privateEngine));
   const quotedNames = (list: Account[]) => fList(list.map((a) => t('accounts.tab.quoted', { name: accountName(a) })));
 
-  /** « Réserver <compte> à ce projet »: saved at once, as Réglages › Comptes et harness saves its accounts. */
-  async function reserveHere(a: Account) {
+  /**
+   * What stays common on a shared account (ESC-556), harness by harness: the fence keeps the private project's sessions from the
+   * other projects' agents; a harness with a folder per agent shares only its sign-in and its quota.
+   */
+  const COMMON: Partial<Record<string, 'claude' | 'codex' | 'copilot' | 'opencode' | 'perAgent'>> = {
+    claude: 'claude',
+    codex: 'codex',
+    copilot: 'copilot',
+    opencode: 'opencode',
+    cursor: 'perAgent',
+    vibe: 'perAgent',
+    agy: 'perAgent',
+    gemini: 'perAgent',
+  };
+  const common = $derived(t(`accounts.private.common.${COMMON[privateEngine] ?? 'other'}`, { harness: engineName(privateEngine) }));
+
+  /** A reservation asked first (ESC-556): the account, and the projects it would leave without an account of its harness. */
+  let asking = $state<{ account: Account; stranded: Project[] } | null>(null);
+
+  /**
+   * « Réserver <compte> à ce projet »: saved at once, as Réglages › Comptes et harness saves its accounts; asked first when it
+   * would leave other projects without an active account of its harness.
+   */
+  function reserveHere(a: Account) {
+    const stranded = strandedBy(a, [project.id]);
+    if (stranded.length) asking = { account: a, stranded };
+    else void reserve(a);
+  }
+  async function reserve(a: Account) {
     const list = await app.run(api.accountUpdate({ ...$state.snapshot(a), projects: [project.id] }));
     if (list) app.settings.accounts = list;
   }
+  const addReserved = () => (app.modal = { kind: 'account', engine: privateEngine, reserveFor: project.id });
 
   /** The setting for all agents, as drafted in this window (not as saved), is on: it covers this project's agents already. */
   const coveredByAll = $derived(!!settingsForm.settings.remoteControlAll);
@@ -95,38 +124,55 @@
       {/each}
     </ul>
     <p class="note">{t('settings.project.fenceNote')}</p>
-    <!-- Its accounts (ESC-141): reserved to it alone, or still shared, with what to do about it. -->
+    <!-- Its accounts (ESC-141): reserved to it alone, or shared, said as a fact (ESC-556): what its sessions keep there, what
+         stays common, and the reservation as one more layer of isolation, optional. -->
     <div class="sub-h" data-anchor="private-accounts"><b>{t('accounts.tab.list')}</b></div>
     <div class="private-accounts">
       {#if ownAccounts.length}
-        <p class="acct-note" role="status">
-          <Icon name="check-c" size={14} /><span class="grow"
+        <div class="acct-note" data-testid="private-own">
+          <Icon name="check-c" size={14} /><span class="grow" role="status"
             >{t('accounts.private.own', { count: ownAccounts.length, names: quotedNames(ownAccounts), harness })}
             {#if ownAccounts.some(isPrincipal)}{t('accounts.private.machineToo', { harness })}{/if}</span
           >
-        </p>
+          {#each ownAccounts as a (a.id)}
+            <button class="btn" use:tip={t('accounts.private.unreserveTitle')} onclick={() => unreserve($state.snapshot(a), project.id)}>
+              {ownAccounts.length > 1 ? `${t('accounts.private.unreserve')} · ${accountName(a)}` : t('accounts.private.unreserve')}
+            </button>
+          {/each}
+        </div>
       {/if}
       {#if sharedAccounts.length || !ownAccounts.length}
-        <div class="acct-note warn">
-          <Icon name="shield" size={14} />
+        <div class="acct-note" data-testid="private-shared">
+          <Icon name="info" size={14} />
           <span class="grow" role="status"
             >{#if sharedAccounts.length}{t('accounts.private.shared', {
                 count: sharedAccounts.length,
                 names: quotedNames(sharedAccounts),
-                harness,
-              })}{/if}</span
+              })}
+              {t('accounts.private.kept', { common })}
+              {t('accounts.private.optional')}{/if}</span
           >
           {#each sharedAccounts as a (a.id)}
             <button class="btn" use:tip={t('accounts.private.reserveTitle')} onclick={() => reserveHere(a)}>
               {t('accounts.private.reserve', { name: accountName(a) })}
             </button>
           {/each}
-          <button class="btn" onclick={() => (app.modal = { kind: 'account', engine: privateEngine, reserveFor: project.id })}>
+          <button class="btn" onclick={addReserved}>
             {t('accounts.private.add')}
           </button>
         </div>
       {/if}
     </div>
+    {#if asking}
+      <ReserveConfirm
+        account={asking.account}
+        stranded={asking.stranded}
+        target={live.name}
+        onConfirm={() => reserve(asking!.account)}
+        onAdd={addReserved}
+        onclose={() => (asking = null)}
+      />
+    {/if}
     <Row label={t('accounts.private.sharedOnLimit')} desc={t('accounts.private.sharedOnLimitDesc')}>
       <Switch label={t('accounts.private.sharedOnLimit')} bind:on={draft.sharedOnLimit} />
     </Row>
@@ -277,22 +323,16 @@
     margin-top: 2px;
     color: var(--muted);
   }
-  .acct-note.warn {
-    background: var(--wait-bg);
-    box-shadow: inset 0 0 0 1px var(--wait-line);
-  }
   .acct-note .btn {
     flex: none;
     height: 26px;
-  }
-  .acct-note.warn > :global(.icon) {
-    color: var(--wait);
   }
   .grow {
     flex: 1;
     min-width: 200px;
   }
-  .acct-note.warn .grow {
+  /* Its buttons under the text. */
+  .acct-note .grow {
     flex-basis: calc(100% - 30px);
   }
   /* A plugin per line, its mark, its name and why it is off, its switch (as on Réglages › Plugins). */

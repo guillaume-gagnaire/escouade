@@ -42,6 +42,34 @@ const plugin = (o: Parameters<typeof pluginFiles>[1] = {}) => pluginFiles(REPO, 
 const by = (results: CheckResult[], key: CheckKey) => results.find((r) => r.key === key)!;
 const failed = (results: CheckResult[]) => results.filter((r) => r.status === 'fail').map((r) => r.key);
 
+describe('the profiles of a plugin (ESC-525)', () => {
+  const profiles = (secrets: string[], fields: Record<string, unknown>[]) =>
+    runChecks(
+      snapshot(
+        plugin({
+          manifest: {
+            run: { wasm: true },
+            permissions: { secrets },
+            contributes: { profiles: [{ id: 'vpn', title: 'VPN', nameField: 'name', fields }] },
+          },
+        }),
+      ),
+    );
+  const name = { key: 'name', type: 'string', title: 'Nom' };
+  const password = { key: 'password', secret: true, title: 'Mot de passe' };
+
+  it('reads the secrets of a kind it declares with a secret field', () => {
+    expect(by(profiles(['profile:vpn'], [name, password]), 'permissions').problems).toEqual([]);
+  });
+
+  it('reads no other', () => {
+    expect(by(profiles(['profile:ssh'], [name, password]), 'permissions').status).toBe('fail');
+    expect(by(profiles(['profile:vpn'], [name]), 'permissions').status).toBe('fail');
+    expect(by(profiles(['profile:*'], [name, password]), 'permissions').status).toBe('fail');
+    expect(by(profiles(['profile:'], [name, password]), 'permissions').status).toBe('fail');
+  });
+});
+
 describe('the accounts of a plugin', () => {
   const accounts = (secrets: string[], kinds: string[]) =>
     runChecks(

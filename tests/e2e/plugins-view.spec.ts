@@ -209,3 +209,99 @@ test('a plugin that decides starts at its installation and when it is switched o
   await invoke('plugin_set_enabled', { id: ID, on: true });
   expect(await phase(ID)).toBe('idle');
 });
+
+// ESC-528: the jokers of a command, each a pill of words in the install window and on the tab Permissions, with the sentence
+// that says what a pill is, once; the plugin is loaded, no longer disabled as an app that does not serve them yet left it.
+test('the jokers of a command show as pills of words at the installation and on the tab Permissions', async ({ app }) => {
+  test.setTimeout(120_000);
+  const { page } = app;
+  await addProject(page, app.repo);
+  const src = path.join(app.root, 'tunnel');
+  const commands = [
+    'unshare -Urn openvpn --config {path:temp} --script-security 1',
+    'slirp4netns --configure --mtu=65520 {pid} tap0',
+    'nsenter --preserve-credentials -U -n -t {pid} ip addr',
+  ];
+  fakePlugin(src, { permissions: { commands, files: [{ root: 'temp', access: 'write' }] }, contributes: {} });
+  await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+  await pickAnswers(page, src);
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Installer Faux plugin ?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('[data-joker="{path:temp}"]')).toHaveText('un fichier de son dossier temporaire');
+  await expect(dialog.locator('[data-joker="{pid}"]')).toHaveText(['un programme qu’il a lancé', 'un programme qu’il a lancé']);
+  await expect(dialog.locator('[data-command]').first()).toHaveText(
+    'unshare -Urn openvpn --config un fichier de son dossier temporaire --script-security 1',
+  );
+  await expect(dialog.locator('[data-joker-guard]')).toHaveText(
+    'Chaque pastille est un seul mot, que l’hôte vérifie : jamais une option, jamais un chemin hors de ce qu’elle dit.',
+  );
+  // Nothing says it would stay disabled.
+  await expect(dialog).not.toContainText('ne sert pas encore');
+  await dialog.screenshot({ path: test.info().outputPath('install-jokers.png') });
+  await dialog.getByRole('button', { name: 'Installer quand même' }).click();
+  await expect(dialog).toBeHidden();
+  expect(installed(app.data).map((p) => p.id)).toEqual([ID]);
+
+  await page.getByRole('tab', { name: /Permissions/ }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Permissions' });
+  await expect(panel.locator('[data-joker]')).toHaveCount(3);
+  await expect(panel.locator('[data-joker-guard]')).toHaveCount(1);
+  await expect(panel.getByRole('switch', { name: `Lance cette commande sur ton ordinateur ${commands[1]} : permise` })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await panel.screenshot({ path: test.info().outputPath('permissions-jokers.png') });
+});
+
+// ESC-529: more programs at once than the 4 a plugin has without asking, said with its author's reason at the installation
+// and on the tab Permissions; an update that raises them asks again, one that lowers them asks nothing more.
+test('more programs at once are said at the installation with the reason, and a raise asks again', async ({ app }) => {
+  test.setTimeout(120_000);
+  const { page } = app;
+  await addProject(page, app.repo);
+  const src = path.join(app.root, 'tunnel');
+  const reason = { fr: 'Deux programmes par tunnel, un tunnel par projet.', en: 'Two programs a tunnel, a tunnel a project.' };
+  const at = (version: string, processes: number) =>
+    fakePlugin(src, { version, permissions: { commands: ['isola down'] }, limits: { processes, reason }, contributes: {} });
+  at('1.0.0', 8);
+  await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+  await pickAnswers(page, src);
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  let dialog = page.getByRole('dialog', { name: 'Installer Faux plugin ?' });
+  await expect(dialog).toBeVisible();
+  const line = dialog.locator('.asks li', { hasText: 'Jusqu’à 8 programmes à la fois' });
+  await expect(line).toContainText('4 sans le demander. L’auteur dit pourquoi : « Deux programmes par tunnel, un tunnel par projet ».');
+  await expect(dialog).not.toContainText('ne sert pas encore');
+  await dialog.screenshot({ path: test.info().outputPath('install-processes.png') });
+  await dialog.getByRole('button', { name: 'Installer quand même' }).click();
+  await expect(dialog).toBeHidden();
+  expect(installed(app.data).map((p) => p.id)).toEqual([ID]);
+
+  await page.getByRole('tab', { name: /Permissions/ }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Permissions' });
+  await expect(panel.getByRole('switch', { name: 'Jusqu’à 8 programmes à la fois : permise' })).toHaveAttribute('aria-checked', 'true');
+  await expect(panel).toContainText('L’auteur dit pourquoi');
+  await panel.screenshot({ path: test.info().outputPath('permissions-processes.png') });
+
+  // Raised: the consent is asked again, the line marked.
+  at('1.1.0', 12);
+  await page.getByRole('button', { name: 'Installés' }).first().click();
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  dialog = page.getByRole('dialog', { name: 'Mettre à jour Faux plugin ?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('ton accord est redemandé');
+  await expect(dialog.locator('.asks li', { hasText: 'Jusqu’à 12 programmes à la fois' }).locator('.new')).toHaveText('nouveau');
+  await dialog.getByRole('button', { name: 'Mettre à jour' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Lowered: nothing more is asked.
+  at('1.2.0', 6);
+  await page.getByRole('button', { name: 'Installés' }).first().click();
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  dialog = page.getByRole('dialog', { name: 'Mettre à jour Faux plugin ?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.asks li', { hasText: 'Jusqu’à 6 programmes à la fois' })).toBeVisible();
+  await expect(dialog).not.toContainText('ton accord est redemandé');
+  await expect(dialog.locator('.new')).toHaveCount(0);
+});

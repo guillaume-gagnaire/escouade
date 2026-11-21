@@ -244,11 +244,25 @@ export default {
     },
     /** After `own` when the machine's account is one of them. */
     machineToo: 'Le compte de la machine reste celui de {harness} hors d’Escouade.',
+    /** ESC-556 : un choix légitime, dit comme une information. */
     shared: {
-      one: 'Ses agents peuvent partir sur {names}, un compte partagé avec d’autres projets : sessions, mémoire, historique et réglages globaux de {harness} y sont communs.',
-      other:
-        'Ses agents peuvent partir sur {names}, des comptes partagés avec d’autres projets : sessions, mémoire, historique et réglages globaux de {harness} y sont communs.',
+      one: 'Ses agents partent aussi sur {names}, un compte partagé avec d’autres projets.',
+      other: 'Ses agents partent aussi sur {names}, des comptes partagés avec d’autres projets.',
     },
+    /** Ce que la clôture garde au projet privé sur un compte partagé, et ce qui reste commun (`common`). */
+    kept: 'Ses sessions restent à lui : les agents des autres projets se voient refuser leurs dossiers. Restent communs : {common}.',
+    common: {
+      claude: 'la connexion, les réglages, la mémoire globale (CLAUDE.md) et l’historique des prompts de Claude Code',
+      codex: 'la connexion, la configuration, les instructions globales (AGENTS.md), l’historique et les mémoires de Codex',
+      copilot: 'la connexion et la configuration de Copilot CLI',
+      opencode: 'la configuration et les fournisseurs d’OpenCode',
+      /** Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI : un dossier par agent. */
+      perAgent: 'la connexion ou la clé, et le quota ; chaque agent de {harness} a déjà son propre dossier (sessions, règles)',
+      other: 'la connexion et les réglages globaux de {harness}',
+    },
+    optional: 'Pour tout séparer, réserve-lui un compte : c’est facultatif, une isolation de plus.',
+    unreserve: 'Ne plus le réserver',
+    unreserveTitle: 'Il servira de nouveau les autres projets.',
     add: 'Ajouter un compte réservé…',
     reserve: 'Réserver {name} à ce projet',
     reserveTitle: 'Les autres projets ne partiront plus sur ce compte.',
@@ -257,10 +271,41 @@ export default {
       'À la limite d’usage de ses comptes réservés, ses agents peuvent continuer sur un compte partagé (changement de compte, passage à un autre harness). Éteint, ils attendent la remise à zéro.',
     /** Réglages › Comptes et harness, under an account a private project shares. */
     sharing: {
-      one: 'Le projet privé {names} part encore sur ce compte, partagé avec d’autres projets.',
-      other: 'Les projets privés {names} partent encore sur ce compte, partagé avec d’autres projets.',
+      one: 'Le projet privé {names} part aussi sur ce compte : ses sessions restent à lui, la connexion et les réglages du compte sont communs.',
+      other:
+        'Les projets privés {names} partent aussi sur ce compte : leurs sessions restent à eux, la connexion et les réglages du compte sont communs.',
     },
     reserveTo: 'Réserver à « {name} »',
+  },
+
+  /** ESC-556 : une réservation qui laisserait des projets ouverts sans compte actif de son harness, demandée d'abord. */
+  reserve: {
+    title: 'Réserver « {name} » à « {project} » ?',
+    titleChange: 'Changer les projets de « {name} » ?',
+    onlyOne: {
+      one: 'C’est ton seul compte {harness} : ton projet {names} n’en aura plus, ses agents et ses tickets ne démarreront plus.',
+      other:
+        'C’est ton seul compte {harness} : tes {count} autres projets ({names}) n’en auront plus, leurs agents et leurs tickets ne démarreront plus.',
+    },
+    lastOne: {
+      one: '« {name} » est le dernier compte {harness} de {names} : ce projet n’en aura plus, ses agents et ses tickets ne démarreront plus.',
+      other:
+        '« {name} » est le dernier compte {harness} de {names} : ces {count} projets n’en auront plus, leurs agents et leurs tickets ne démarreront plus.',
+    },
+    undo: 'Pour défaire : « Partager à nouveau », là où ces projets disent qu’ils n’ont plus de compte.',
+    instead: 'Pour isoler « {project} » sans priver personne, ajoute-lui un compte réservé.',
+    confirm: 'Réserver quand même',
+  },
+
+  /** ESC-556 : un projet sans compte parce qu'un compte est réservé ailleurs. `{owners}`, `{projects}` : entre guillemets. */
+  away: {
+    text: {
+      one: '« {name} » est réservé à {owners} : {projects} n’a plus de compte {harness} actif.',
+      other: '« {name} » est réservé à {owners} : {projects} n’ont plus de compte {harness} actif.',
+    },
+    owners: 'd’autres projets',
+    shareAgain: 'Partager à nouveau',
+    shareAgainTitle: 'Le compte servira de nouveau ce projet.',
   },
 
   // Under the autopilot's pause: the accounts that are past « Pause au-delà du quota ».

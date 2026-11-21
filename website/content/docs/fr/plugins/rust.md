@@ -143,10 +143,12 @@ et les branche, dans `run` :
 
 ```rust
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "linear",
-        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(LinearSource)]),
-    )
+    escouade_plugin_kit::serve::run("linear", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> escouade_plugin_kit::hosts::Hosts {
+    escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(LinearSource)])
 }
 
 escouade_plugin_kit::protocol::module!(run);
@@ -194,7 +196,7 @@ impl ForgeKind for GiteaForge {
 
 `account.url` est l’instance que l’utilisateur a saisie, d’où `{account}` dans `permissions.network`. Un jeton refusé, une limite atteinte et le budget d’appels sont traités par `Hosts`. Le banc joue `account/me` et `forge/pullRequestsOfBranch` dès que `contributes.forges` est déclaré.
 
-Depuis le kit 0.1.3, un hébergeur peut aussi donner une PR entière, pour la vue des PR d’Escouade 2.3 : `description` (son texte, son commit de tête et quand elle a changé), `commits`, `files` (les fichiers et leurs comptes ; les lignes, Escouade les lit par git) et `threads` (les fils sur les lignes, avec leurs réponses et leur état `open`, `resolved` ou `outdated`, puis les commentaires de la conversation, sans `path`). Ce que tu n’écris pas répond `Unsupported` : Escouade montre la PR sans cette partie.
+Depuis le kit 0.1.5, un hébergeur peut aussi donner une PR entière, pour la vue des PR d’Escouade 2.3 : `description` (son texte, son commit de tête et quand elle a changé), `commits`, `files` (les fichiers et leurs comptes ; les lignes, Escouade les lit par git) et `threads` (les fils sur les lignes, avec leurs réponses et leur état `open`, `resolved` ou `outdated`, puis les commentaires de la conversation, sans `path`). Ce que tu n’écris pas répond `Unsupported` : Escouade montre la PR sans cette partie.
 
 ## Écrire un harness
 
@@ -216,6 +218,22 @@ escouade_plugin_protocol::module!(run);
 ```
 
 Le contrat est dans `escouade_plugin_protocol::engine`. Le cœur lance le programme de l’agent et lit sa sortie ; le plugin dit comment le lancer, puis traduit ses lignes en éléments de conversation. `std::process::id` se remplace par `turn::instance_id`, et `std::fs` par `turn::read_file`, sous une racine de `permissions.files`. Un client ACP se branche par `escouade_acp::Agent`, dont `frames` lit les lignes de l’agent.
+
+## Les profils et les réglages d’un projet
+
+Le kit 0.1.4 (Escouade 2.2.5) donne à `Cx` ce que sert le [contrat de la 2.2.5](plugins/versioning#le-contrat-de-la-2-2-5) :
+
+| Aide | Ce qu’elle fait |
+| --- | --- |
+| `settings(Some(projet))` | Ses réglages, ceux d’un projet par leurs rangs ; sans projet, ceux de l’utilisateur. |
+| `profile_of(projet, réglage)` | Le profil qu’a choisi un projet par son réglage `profile` : son identifiant, ou `None`. |
+| `profiles(genre)`, `profile(genre, id)` | Ses profils (identifiants et noms), les champs simples de l’un. |
+| `secret_of(profil, clé)` | Un champ secret d’un profil, sur plusieurs lignes compris. |
+| `spawn(params)` | Lance un programme : `Spawned { proc, pid }`, `pid` quand Escouade le donne. |
+| `spawn_typed(params)` | Pour une entrée à jokers : `(proc, pid)`, le pid toujours là. |
+| `require(Capability::Profiles \| Capability::TypedCommands)`, `greeting()` | Ce qu’Escouade a annoncé à `initialize`, et le refus (`-32601`) qui dit la version qui le sert (`escouade_plugin_protocol::ESCOUADE_MIN`). |
+
+`profile_of`, `profiles`, `profile`, `secret_of` et `spawn_typed` vérifient la capacité avant de rien demander : une Escouade plus ancienne ignorerait `profile` et rendrait un autre secret. Chaque aide a son exemple dans la documentation du crate. Le cas complet : [des identifiants par projet](plugins/project-credentials).
 
 ## Ce que la compilation refuse
 

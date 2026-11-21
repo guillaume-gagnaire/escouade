@@ -204,7 +204,7 @@ impl Github {
     /// Sends a call once, after the wait the limit of `resource` asks for, whatever it answers.
     async fn transmit(&self, resource: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
         self.slow_down(resource).await;
-        let reply = redirect::reply(NAME, rb).await?;
+        let reply = crate::reach::reply(NAME, rb).await?;
         self.learn_limit(&reply.headers);
         Ok(reply)
     }

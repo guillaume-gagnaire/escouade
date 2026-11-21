@@ -702,6 +702,31 @@ describe('the assistant’s private project and Kanban (ESC-163)', () => {
     await waitFor(() => expect(app.modal).toBeNull());
     expect(be.called('account_update').map((c) => c.args.account.id)).toEqual(['work']);
   });
+  // ESC-556: ticking the only account of the other projects asks first; cancelled, it stays unticked.
+  it('asks before keeping to it the only account of the other projects', async () => {
+    resetApp({ projects: [project({ private: true }), webShop] });
+    app.settings.accounts = app.settings.accounts.filter((a) => a.id === 'principal');
+    app.modal = { kind: 'newProject', projectId: 'p1' };
+    const be = backend();
+    render(NewProjectModal);
+    await userEvent.click(screen.getByRole('button', { name: /Compte et commit/ }));
+    const list = screen.getByRole('list', { name: 'Comptes réservés à ce projet' });
+    const box = within(list).getByRole('checkbox', { name: 'Principal' });
+    await userEvent.click(box);
+    const ask = screen.getByRole('dialog', { name: 'Réserver « Principal » à « demo-api » ?' });
+    expect(within(ask).getByTestId('reserve-confirm')).toHaveTextContent(
+      'C’est ton seul compte Claude Code : ton projet « web-shop » n’en aura plus, ses agents et ses tickets ne démarreront plus.',
+    );
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    expect(box).not.toBeChecked();
+    await userEvent.click(box);
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver quand même' }));
+    expect(box).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    expect(be.called('account_update').map((c) => [c.args.account.id, c.args.account.projects])).toEqual([['principal', ['p1']]]);
+  });
 });
 
 describe('the assistant opened again on an existing project', () => {

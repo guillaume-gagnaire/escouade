@@ -2,6 +2,8 @@
 //! an issue's state on the Kanban is one of the team's workflow states. The account's secret is the API key
 //! (`secrets/get` of `account:linear`).
 
+mod reach;
+
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::{http_error_in, HttpError, Refused};
 use escouade_plugin_kit::forge::BoxFuture;
@@ -65,13 +67,7 @@ impl Linear {
             .json(&json!({ "operationName": operation, "query": query, "variables": variables }))
             .send()
             .await
-            .map_err(|e| {
-                let (name, e) = (S, anyhow::Error::from(e.without_url()));
-                anyhow!(tr!(
-                    "{name} injoignable : {e:#}",
-                    "{name} can’t be reached: {e:#}"
-                ))
-            })?;
+            .map_err(|e| reach::unreached(S, e))?;
         let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
         let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
@@ -403,10 +399,12 @@ impl SourceKind for LinearSource {
 
 /// What its module runs, on its first turn.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "linear",
-        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(LinearSource)]),
-    )
+    escouade_plugin_kit::serve::run("linear", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> escouade_plugin_kit::hosts::Hosts {
+    escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(LinearSource)])
 }
 
 escouade_plugin_kit::protocol::module!(run);

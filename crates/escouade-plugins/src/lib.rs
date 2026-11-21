@@ -49,6 +49,8 @@ pub mod isola;
 pub use escouade_plugin_cli::manifest;
 /// `proc/*`: the programs of a plugin in WASM.
 pub mod procs;
+/// A plugin's profiles and the settings of each project (ESC-530).
+pub mod profiles;
 #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
 pub mod runtime;
 // The store of the secrets (the app's keychain).
@@ -132,6 +134,9 @@ pub mod plugins_reactor_tests;
 #[cfg(any(test, feature = "testing"))]
 #[cfg_attr(not(test), allow(dead_code, unused_imports))]
 pub mod plugins_runtime_tests;
+// The jokers of `permissions.commands` and their hostile cases (ESC-528).
+#[cfg(test)]
+mod plugins_jokers_tests;
 #[cfg(test)]
 mod plugins_rust_build_tests;
 #[cfg(any(test, feature = "testing"))]
@@ -303,6 +308,18 @@ pub struct Choices {
     /// empty, none runs.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub commands_approved: String,
+    /// The values of its settings of each project (`"scope": "project"`, ESC-530), by the project's id then the key: this
+    /// machine's, ahead of the project's `.escouade.yml`. A `profile` setting holds a profile's id, or null for « Aucun
+    /// profil ».
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub project_settings: BTreeMap<String, Map<String, Value>>,
+    /// Its profiles (`contributes.profiles`), by kind, in the order they were made: their simple fields alone.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub profiles: BTreeMap<String, Vec<profiles::Profile>>,
+    /// The names in the keychain of the secrets Escouade kept for it (never their values): what its uninstall erases, the
+    /// keychain listing nothing by prefix (§2.3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub secret_names: Vec<String>,
 }
 
 impl Default for Choices {
@@ -313,6 +330,9 @@ impl Default for Choices {
             revoked: Vec::new(),
             settings: Map::new(),
             commands_approved: String::new(),
+            project_settings: BTreeMap::new(),
+            profiles: BTreeMap::new(),
+            secret_names: Vec::new(),
         }
     }
 }
@@ -355,6 +375,12 @@ pub fn project_settings(
         else {
             continue;
         };
+        // What its author keeps off the file (`repo: false`), and a value imported from a file, never come from it
+        // (ESC-525).
+        if decl.get("repo").and_then(Value::as_bool) == Some(false) || decl.get("import").is_some()
+        {
+            continue;
+        }
         let fits = match decl.get("type").and_then(Value::as_str) {
             Some("string") => value.is_string(),
             Some("number") => value.is_number(),
@@ -377,6 +403,16 @@ pub fn project_settings(
         }
     }
     out
+}
+
+/// Why this Escouade (`app`) loads a plugin of a manifest that holds disabled, in `lang`; None when it serves it: a
+/// `run.command` is no longer started (ESC-355), a point of the contract it reads but does not serve yet is never served
+/// by half (`Manifest::unserved`, ESC-525), a range of Escouade out of this one.
+pub fn load_refusal(m: &Manifest, app: &str, lang: Lang) -> Option<String> {
+    if m.run.as_ref().is_some_and(|r| r.in_wasm().is_none()) {
+        return Some(manifest::command_refused(lang));
+    }
+    m.unserved(lang).or_else(|| m.refusal(app, lang))
 }
 
 /// What a plugin may do, a word each, the strongest first (§3.4): `run` (it runs a program),
@@ -402,6 +438,9 @@ pub fn asks(m: &Manifest) -> Vec<String> {
         out.push("decide".to_string());
     }
     out.extend(p.commands.iter().map(|w| format!("commands:{w}")));
+    if let Some(n) = processes_asked(m) {
+        out.push(format!("{PROCESSES_WORD}{n}"));
+    }
     out.extend(p.env.iter().flatten().map(|v| format!("env:{v}")));
     out.extend(p.files.iter().map(|f| format!("files:{}", f.word())));
     for (kind, words) in [
@@ -414,8 +453,42 @@ pub fn asks(m: &Manifest) -> Vec<String> {
     out
 }
 
+/// The word of the programs at once a plugin asks for beyond the 4 it has without asking (`processes:<n>`, ESC-529).
+pub const PROCESSES_WORD: &str = "processes:";
+
+/// How many programs at once `m` asks for beyond the 4 it has without asking (`limits.processes`), as the host serves
+/// them (`procs::at_once`, never more than 16); None at 4 or less, or when it runs no command: nothing to say nor to
+/// consent to.
+pub fn processes_asked(m: &Manifest) -> Option<usize> {
+    if m.run.is_none() || m.permissions.commands.is_empty() {
+        return None;
+    }
+    let n = procs::at_once(m.limits.processes);
+    (n > procs::AT_ONCE).then_some(n)
+}
+
+/// What of `wanted` the user did not consent to in `before` (an update's `grown`): a word not there, but the programs at
+/// once only when they grow (beyond 4 or beyond what was granted): fewer asks nothing (ESC-529).
+pub fn grown(wanted: &[String], before: &[String]) -> Vec<String> {
+    let at_once = |words: &[String]| {
+        words
+            .iter()
+            .filter_map(|w| w.strip_prefix(PROCESSES_WORD)?.parse::<usize>().ok())
+            .max()
+            .unwrap_or(procs::AT_ONCE)
+    };
+    wanted
+        .iter()
+        .filter(|w| match w.strip_prefix(PROCESSES_WORD) {
+            Some(n) => n.parse::<usize>().map_or(true, |n| n > at_once(before)),
+            None => !before.contains(w),
+        })
+        .cloned()
+        .collect()
+}
+
 /// Whether the permission `word` can be taken back: all but the program itself (switched off
-/// with the plugin).
+/// with the plugin). The programs at once taken back, it has the 4 it has without asking.
 pub fn revocable(word: &str) -> bool {
     word != "run" && !word.starts_with("harness") && !word.starts_with("env:")
 }
@@ -439,11 +512,17 @@ pub fn granted(m: &Manifest, revoked: &[String]) -> Manifest {
     if revoked.iter().any(|w| w == "decide") {
         p.decide = false;
     }
+    if let Some(n) = processes_asked(&m) {
+        if revoked.contains(&format!("{PROCESSES_WORD}{n}")) {
+            m.limits.processes = None;
+        }
+    }
     m
 }
 
 /// The keys of a plugin's secrets: those it declares fields for (`contributes.secrets`) and those
-/// it may ask for by name (`permissions.secrets`, a pattern left out).
+/// it may ask for by name (`permissions.secrets`, a pattern left out). Never one with `#`: that is the pieces' of a long
+/// secret (ESC-527), and `contributes.secrets` takes none.
 pub fn secret_keys(m: &Manifest) -> Vec<String> {
     let mut keys: Vec<String> = m
         .contributes
@@ -452,9 +531,12 @@ pub fn secret_keys(m: &Manifest) -> Vec<String> {
         .into_iter()
         .flatten()
         .filter_map(|s| s.get("key").and_then(Value::as_str).map(str::to_string))
+        .filter(|k| !k.contains('#'))
         .collect();
     for k in &m.permissions.secrets {
-        if !k.ends_with('*') && !keys.contains(k) {
+        // The secrets of a profile (`profile:<kind>`) are its fields', kept by profile, never one key of the page.
+        if !k.ends_with('*') && !k.starts_with("profile:") && !k.contains('#') && !keys.contains(k)
+        {
             keys.push(k.clone());
         }
     }
@@ -1111,14 +1193,8 @@ impl Plugins {
                                 i.fingerprint
                             ),
                         }
-                    } else if m.run.as_ref().is_some_and(|r| r.in_wasm().is_none()) {
-                        // A command is no longer started, whatever the origin (ESC-355): its manifest reads, its sheet
-                        // says why.
-                        State::Disabled {
-                            reason: manifest::command_refused(lang),
-                        }
                     } else {
-                        match m.refusal(&self.app_version, lang) {
+                        match load_refusal(m, &self.app_version, lang) {
                             Some(reason) => State::Disabled { reason },
                             None => State::Ready,
                         }
@@ -1441,13 +1517,7 @@ impl Plugins {
         });
         let grown = previous
             .as_ref()
-            .map(|p| {
-                wanted
-                    .iter()
-                    .filter(|w| !p.asks.contains(w))
-                    .cloned()
-                    .collect()
-            })
+            .map(|p| grown(&wanted, &p.asks))
             .unwrap_or_default();
         let read_from = dir.clone().unwrap_or_else(|| self.folder_of(&installed));
         let preview = Preview {
@@ -1464,11 +1534,7 @@ impl Plugins {
             origin: installed.origin.clone(),
             fingerprint: installed.fingerprint.clone(),
             declarative: m.declarative(),
-            refusal: if m.run.as_ref().is_some_and(|r| r.in_wasm().is_none()) {
-                Some(manifest::command_refused(lang))
-            } else {
-                m.refusal(&self.app_version, lang)
-            },
+            refusal: load_refusal(&m, &self.app_version, lang),
             asks: wanted,
             previous,
             grown,

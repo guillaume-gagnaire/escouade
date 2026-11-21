@@ -81,12 +81,15 @@ pub struct Pending {
 pub enum Shared {
     /// Nothing to share: the docs were up to date.
     Nothing,
-    /// Shared: the files committed (0 when only others' work came in) and the message.
+    /// Shared: the files committed (0 when only others' work came in) and the message; `pulled`
+    /// when the others' work was merged in, and `received` the files of the docs it changed
+    /// (ESC-534: « 2 changements récupérés »).
     #[serde(rename_all = "camelCase")]
     Done {
         committed: u32,
         message: String,
         pulled: bool,
+        received: u32,
     },
     /// Stopped on a conflict, undone: the writer agent can resolve it.
     Conflict { conflict: Conflict },
@@ -318,28 +321,12 @@ pub async fn share(dir: &str, message: Option<&str>, with_code: bool) -> Result<
     let st = git::status(dir).await?;
     let target = target_of(dir, &st).await;
     let mut pulled = false;
+    let mut received = 0;
     if let Some(target) = &target {
-        let (_, behind) = divergence(dir, target).await;
-        if behind > 0 {
-            if let Err(e) = git::run_hooks(dir, &["merge", "--no-edit", target]).await {
-                let unmerged = git::unmerged(dir).await;
-                let _ = git::run(dir, &["merge", "--abort"]).await;
-                if unmerged.is_empty() {
-                    bail!(tr_in!(
-                        lang,
-                        "Ce que les autres ont partagé n’a pas pu être récupéré : des modifications du code, pas encore enregistrées, gênent. Enregistre-les ou mets-les de côté, puis recommence. ({e:#})",
-                        "What the others shared couldn’t be brought in: changes to the code, not saved yet, are in the way. Save them or set them aside, then try again. ({e:#})"
-                    ));
-                }
-                return Ok(Shared::Conflict {
-                    conflict: Conflict {
-                        files: unmerged,
-                        target: target.clone(),
-                        agent_id: None,
-                    },
-                });
-            }
-            pulled = true;
+        match merge_in(lang, dir, target).await? {
+            Merged::Up => {}
+            Merged::In(n) => (pulled, received) = (true, n),
+            Merged::Conflict(conflict) => return Ok(Shared::Conflict { conflict }),
         }
     }
     let to_push = match &target {
@@ -362,6 +349,114 @@ pub async fn share(dir: &str, message: Option<&str>, with_code: bool) -> Result<
             text
         },
         pulled,
+        received,
+    })
+}
+
+/// How the others' work was brought in.
+enum Merged {
+    /// Nothing came: HEAD already has the remote branch.
+    Up,
+    /// Merged (in fast-forward when HEAD had nothing of its own): the files of the docs it changed.
+    In(u32),
+    /// Two sides touched the same files: the merge was undone.
+    Conflict(Conflict),
+}
+
+/// Merges `target` into HEAD when HEAD is behind it: in fast-forward when it can, else a merge
+/// commit. A conflict is undone and returned; another failure (changes of the code in the way) is
+/// told in a simple sentence.
+async fn merge_in(lang: Lang, dir: &str, target: &str) -> Result<Merged> {
+    let (_, behind) = divergence(dir, target).await;
+    if behind == 0 {
+        return Ok(Merged::Up);
+    }
+    let before = git::text(dir, &["rev-parse", "HEAD"]).await?;
+    if let Err(e) = git::run_hooks(dir, &["merge", "--no-edit", target]).await {
+        let unmerged = git::unmerged(dir).await;
+        let _ = git::run(dir, &["merge", "--abort"]).await;
+        if unmerged.is_empty() {
+            bail!(tr_in!(
+                lang,
+                "Ce que les autres ont partagé n’a pas pu être récupéré : des modifications du code, pas encore enregistrées, gênent. Enregistre-les ou mets-les de côté, puis recommence. ({e:#})",
+                "What the others shared couldn’t be brought in: changes to the code, not saved yet, are in the way. Save them or set them aside, then try again. ({e:#})"
+            ));
+        }
+        return Ok(Merged::Conflict(Conflict {
+            files: unmerged,
+            target: target.to_string(),
+            agent_id: None,
+        }));
+    }
+    Ok(Merged::In(docs_changed_since(dir, before.trim()).await))
+}
+
+/// The files of the docs that changed between `from` and HEAD.
+async fn docs_changed_since(dir: &str, from: &str) -> u32 {
+    let range = format!("{from}..HEAD");
+    let mut args = vec![
+        "-c",
+        "core.quotepath=off",
+        "--literal-pathspecs",
+        "diff",
+        "--name-only",
+        "--no-renames",
+        &range,
+        "--",
+    ];
+    args.extend(FOLDERS);
+    git::text(dir, &args)
+        .await
+        .map(|out| out.lines().filter(|f| is_docs_path(f)).count() as u32)
+        .unwrap_or(0)
+}
+
+/// The synchronisation of the docs when none of them is left to share (ESC-534): the remote branch
+/// fetched, then what the others shared there merged in (in fast-forward when it can); nothing is
+/// committed nor pushed, the code is not published. `Nothing` when the docs were up to date, `Done`
+/// with `received` the files of the docs that came in, or the conflict, undone, as « Partager »
+/// gives it.
+pub async fn pull(dir: &str) -> Result<Shared> {
+    let lang = i18n::ui();
+    if let Some(op) = git::operation_in_progress(dir).await {
+        bail!(tr_in!(
+            lang,
+            "Un {op} des docs est déjà en cours : l’agent rédacteur n’a pas fini de résoudre le conflit. Attends qu’il ait terminé, ou annule.",
+            "A {op} of the docs is already under way: the writer agent hasn’t finished resolving the conflict. Wait for it to finish, or cancel."
+        ));
+    }
+    let st = git::status(dir).await?;
+    if st.branch.is_empty() || st.branch == "(detached)" {
+        bail!(tr_in!(
+            lang,
+            "Les docs ne sont sur aucune branche : il n’y a rien à récupérer ici.",
+            "The docs aren’t on any branch: there is nothing to bring in here."
+        ));
+    }
+    if git::remotes(dir).await.is_empty() {
+        bail!(tr_in!(
+            lang,
+            "Ce projet n’a pas de dépôt distant : il n’y a rien à récupérer des autres.",
+            "This project has no remote repository: there is nothing to bring in from the others."
+        ));
+    }
+    git::fetch(dir, false)
+        .await
+        .map_err(|e| plain(lang, &tr_in!(lang, "La récupération", "Fetching"), &e))?;
+    let st = git::status(dir).await?;
+    let Some(target) = target_of(dir, &st).await else {
+        // The branch is not published yet: nobody else wrote on it.
+        return Ok(Shared::Nothing);
+    };
+    Ok(match merge_in(lang, dir, &target).await? {
+        Merged::Up => Shared::Nothing,
+        Merged::In(received) => Shared::Done {
+            committed: 0,
+            message: String::new(),
+            pulled: true,
+            received,
+        },
+        Merged::Conflict(conflict) => Shared::Conflict { conflict },
     })
 }
 
@@ -497,6 +592,35 @@ impl Core {
             self.docs_set_conflict(project_id, None);
         }
         let out = share(&dir, message, with_code).await;
+        if let Ok(Shared::Conflict { conflict }) = &out {
+            self.docs_set_conflict(project_id, Some(conflict.clone()));
+        }
+        self.docs_changed(project_id).await;
+        out
+    }
+
+    /// The synchronisation of the docs with none of them left to share (ESC-534): what the others
+    /// pushed on the docs branch brought in, see `pull`. One at a time with « Partager »; a conflict
+    /// is kept for « L'agent résout » and « Annuler », as « Partager » keeps it.
+    pub async fn docs_pull(&self, project_id: &str) -> Result<Shared> {
+        let _one = SHARING.lock().await;
+        let waiting = self
+            .docs_shares
+            .lock()
+            .get(project_id)
+            .and_then(|m| m.conflict.clone());
+        if let Some(c) = waiting.filter(|c| c.agent_id.is_none()) {
+            bail!(tr!(
+                "Un conflit entre deux versions des docs attend ({n} pages) : demande à l’agent de le résoudre, ou annule.",
+                "A conflict between two versions of the docs is waiting ({n} pages): ask the agent to resolve it, or cancel.",
+                n = c.files.len()
+            ));
+        }
+        let dir = self.docs_dir(project_id).await?;
+        if git::operation_in_progress(&dir).await.is_none() {
+            self.docs_set_conflict(project_id, None);
+        }
+        let out = pull(&dir).await;
         if let Ok(Shared::Conflict { conflict }) = &out {
             self.docs_set_conflict(project_id, Some(conflict.clone()));
         }

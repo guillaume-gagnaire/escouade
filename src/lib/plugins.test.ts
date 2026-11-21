@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { askOf, categoriesOf, contributionsOf, sourceUrl } from './plugins';
+import { setLang } from './i18n';
+import { askOf, categoriesOf, contributionsOf, piecesOf, sourceUrl } from './plugins';
 import { addsOf } from './plugins-settings';
 
 // Where a store plugin comes from (ESC-313): its repository, or its folder at its tag when it is in one.
@@ -34,6 +35,51 @@ describe('the network a plugin asks for', () => {
     const shared = askOf('network:local:shared', inWasm, 'fr');
     expect(shared.text).toBe('Parle au serveur local du harness, lancé par Escouade');
     expect(shared.detail).toBe('');
+  });
+});
+
+// The jokers of a command (ESC-528): each a pill of words in place of the word the host checks, in both languages.
+describe('the jokers of a command', () => {
+  const inWasm = { run: { wasm: 'run.wasm' } } as never;
+
+  it('says each joker in words, the other words as written', () => {
+    setLang('fr');
+    const ask = askOf('commands:unshare -Urn openvpn --config {path:temp} --script-security 1', inWasm, 'fr');
+    expect(ask.detail).toBe('unshare -Urn openvpn --config {path:temp} --script-security 1');
+    expect(ask.pieces).toEqual([
+      { text: 'unshare' },
+      { text: '-Urn' },
+      { text: 'openvpn' },
+      { text: '--config' },
+      { text: 'un fichier de son dossier temporaire', joker: '{path:temp}' },
+      { text: '--script-security' },
+      { text: '1' },
+    ]);
+    const all = piecesOf('tool {int} {port} {name} {pid} {path:temp} {path:plugin}')!;
+    expect(all.slice(1).map((p) => p.text)).toEqual([
+      'un nombre',
+      'un port',
+      'un nom',
+      'un programme qu’il a lancé',
+      'un fichier de son dossier temporaire',
+      'un fichier de son dossier',
+    ]);
+    setLang('en');
+    expect(
+      piecesOf('tool {int} {port} {name} {pid} {path:temp} {path:plugin}')!
+        .slice(1)
+        .map((p) => p.text),
+    ).toEqual(['a number', 'a port', 'a name', 'a program it started', 'a file of its temporary folder', 'a file of its folder']);
+    setLang('fr');
+  });
+
+  it('leaves a command without a joker, or with a brace in a word, as written', () => {
+    expect(askOf('commands:isola ls --json', inWasm, 'fr').pieces).toBeUndefined();
+    expect(piecesOf('tool --pid={int}')).toBeNull();
+    expect(piecesOf('tool {float}')).toBeNull();
+    // Cut as the host cuts it: a non-breaking space is a space, U+FEFF is not.
+    expect(piecesOf('tool {int}')?.[1]).toEqual({ text: 'un nombre', joker: '{int}' });
+    expect(piecesOf('tool﻿{int}')).toBeNull();
   });
 });
 

@@ -38,6 +38,8 @@ export type SettingsPage =
   | 'launch'
   | 'board'
   | 'tickets'
+  /** Its plugins' settings of each project (ESC-530): in the bar only while a plugin on here declares one. */
+  | 'projectPlugins'
   | 'team'
   | 'privacy'
   // Under the projects: what a new project starts with, the closed ones (the app's settings).
@@ -86,6 +88,7 @@ export const SETTINGS_PAGES: PageInfo[] = [
   page('launch', 'project', 'play'),
   page('board', 'project', 'kanban'),
   page('tickets', 'project', 'import'),
+  page('projectPlugins', 'project', 'puzzle'),
   page('team', 'project', 'team'),
   page('privacy', 'project', 'lock'),
   page('allProjects', 'app', 'folder'),
@@ -347,6 +350,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('workflowSteps', 'board', 'workflowSettings.stepsTitle', { project: ['workflowFixes'] }),
 
   // Tickets importés › Sources liées, Correspondance des statuts.
+  row('pluginFields', 'projectPlugins', 'settings.project.pluginFields'),
   row('sources', 'tickets', 'integrations.modal.sources', { project: ['integrations'] }),
   row('mapping', 'tickets', 'integrations.mapping.title', { project: ['integrations'] }),
 

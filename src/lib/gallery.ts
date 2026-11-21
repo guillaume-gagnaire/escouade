@@ -30,6 +30,17 @@ export function galleryOf(img: HTMLImageElement): { images: ViewedImage[]; index
   return index < 0 ? { images: [viewed(img)], index: 0 } : { images: all.map(viewed), index };
 }
 
+/**
+ * The images of a field not sent yet (ESC-555), from the one at `at` of its list: those whose picture is read, in the field's
+ * order, by the `data:` URL their thumbnail already shows (nothing more is read). They have no source: nothing on the disk or
+ * in the conversation to open or to show in its folder yet.
+ */
+export function draftGallery(list: readonly { name: string; url?: string }[], at: number): { images: ViewedImage[]; index: number } {
+  const shown = list.filter((f) => f.url);
+  const index = Math.max(0, shown.indexOf(list[at]));
+  return { images: shown.map((f) => ({ name: f.name, url: f.url!, source: null })), index };
+}
+
 /** An image as the viewer shows it: its name, its `data:` URL, its source by the marks its opener left on it. */
 function viewed(img: HTMLImageElement): ViewedImage {
   const d = img.dataset;

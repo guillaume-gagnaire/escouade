@@ -299,11 +299,12 @@ describe('PrivacyPage: a private project’s accounts (ESC-141)', () => {
     });
     render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     await userEvent.click(screen.getByRole('switch', { name: PRIVATE }));
-    expect(
-      screen.getByText(
-        'Ses agents peuvent partir sur « Principal » et « Pro », des comptes partagés avec d’autres projets : sessions, mémoire, historique et réglages globaux de Claude Code y sont communs.',
-      ),
-    ).toBeVisible();
+    // Said as a fact (ESC-556): what its sessions keep on a shared account, what stays common, the reservation optional.
+    const row = screen.getByTestId('private-shared');
+    expect(row).toHaveTextContent(
+      'Ses agents partent aussi sur « Principal » et « Pro », des comptes partagés avec d’autres projets. Ses sessions restent à lui : les agents des autres projets se voient refuser leurs dossiers. Restent communs : la connexion, les réglages, la mémoire globale (CLAUDE.md) et l’historique des prompts de Claude Code. Pour tout séparer, réserve-lui un compte : c’est facultatif, une isolation de plus.',
+    );
+    expect(row).not.toHaveClass('warn');
     // Pro reserved to it alone, at once: what it shares is now Principal only, at the limit too unless allowed.
     await userEvent.click(screen.getByRole('button', { name: 'Réserver Pro à ce projet' }));
     expect(backend.called('account_update')[0].args.account).toMatchObject({ id: 'pro', projects: ['p1'] });
@@ -312,13 +313,13 @@ describe('PrivacyPage: a private project’s accounts (ESC-141)', () => {
         'Compte réservé à ce projet : « Pro ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet.',
       ),
     ).toBeVisible();
-    expect(screen.queryByText(/^Ses agents peuvent partir sur/)).toBeNull();
+    expect(screen.queryByTestId('private-shared')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ajouter un compte réservé…' })).toBeNull();
     // Allowed to go on on a shared account at the limit: Principal is shared again, and said so.
     const limit = screen.getByRole('switch', { name: LIMIT });
     expect(limit).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(limit);
-    expect(screen.getByText(/Ses agents peuvent partir sur « Principal », un compte partagé/)).toBeVisible();
+    expect(screen.getByTestId('private-shared')).toHaveTextContent(/^Ses agents partent aussi sur « Principal », un compte partagé/);
     await afterGesture();
     expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', private: true, sharedOnLimit: true });
   });
@@ -353,7 +354,70 @@ describe('PrivacyPage: a private project’s accounts (ESC-141)', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Private project' }));
     expect(screen.getByRole('switch', { name: 'Shared accounts at the limit' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add a reserved account…' })).toBeInTheDocument();
-    expect(screen.getByText(/Its agents may go to “Main” and “Pro”, accounts shared with other projects/)).toBeVisible();
+    expect(screen.getByTestId('private-shared')).toHaveTextContent(
+      /^Its agents also go to “Main” and “Pro”, accounts shared with other projects. Its sessions stay its own/,
+    );
+  });
+
+  // ESC-556: reserving the only account of the other projects asks first, says what follows, and offers the way that
+  // takes nothing from them.
+  it('asks before reserving the only account of the other projects, and changes nothing when cancelled', async () => {
+    app.settings.accounts = [principal];
+    const backend = fakeBackend({ account_update: ({ account }) => [account] });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('switch', { name: PRIVATE }));
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver Principal à ce projet' }));
+    const ask = screen.getByRole('dialog', { name: 'Réserver « Principal » à « demo-api » ?' });
+    expect(within(ask).getByTestId('reserve-confirm')).toHaveTextContent(
+      'C’est ton seul compte Claude Code : ton projet « site » n’en aura plus, ses agents et ses tickets ne démarreront plus.',
+    );
+    expect(within(ask).getByRole('button', { name: 'Ajouter un compte réservé…' })).toBeVisible();
+    await userEvent.click(within(ask).getByRole('button', { name: 'Annuler' }));
+    expect(screen.queryByRole('dialog', { name: /^Réserver « Principal »/ })).toBeNull();
+    expect(backend.called('account_update')).toHaveLength(0);
+    // Asked again and confirmed: reserved to it alone.
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver Principal à ce projet' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver quand même' }));
+    expect(backend.called('account_update')[0].args.account).toMatchObject({ id: 'principal', projects: ['p1'] });
+    expect(await screen.findByTestId('private-own')).toBeVisible();
+  });
+
+  it('names every project the reservation would leave without an account, private ones too', async () => {
+    resetApp({
+      projects: [project(), project({ id: 'p2', name: 'site', private: true }), project({ id: 'p3', name: 'outils' })],
+    });
+    app.settings.accounts = [principal];
+    app.modal = { kind: 'settings' };
+    fakeBackend();
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('switch', { name: PRIVATE }));
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver Principal à ce projet' }));
+    expect(screen.getByTestId('reserve-confirm')).toHaveTextContent(
+      'C’est ton seul compte Claude Code : tes 2 autres projets (« site » et « outils ») n’en auront plus, leurs agents et leurs tickets ne démarreront plus.',
+    );
+    // « Ajouter un compte réservé… » from there: the way that leaves no one without an account.
+    const ask = screen.getByRole('dialog', { name: /^Réserver « Principal »/ });
+    await userEvent.click(within(ask).getByRole('button', { name: 'Ajouter un compte réservé…' }));
+    expect(app.modal).toEqual({ kind: 'account', engine: 'claude', reserveFor: 'p1' });
+  });
+
+  it('asks nothing when the others keep an account', async () => {
+    const backend = fakeBackend({ account_update: ({ account }) => [principal, account] });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('switch', { name: PRIVATE }));
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver Pro à ce projet' }));
+    expect(screen.queryByTestId('reserve-confirm')).toBeNull();
+    expect(backend.called('account_update')).toHaveLength(1);
+  });
+
+  it('stops reserving an account of its own, which serves the other projects again', async () => {
+    app.projects[0].private = true;
+    app.settings.accounts = [{ ...principal, projects: ['p1'] }];
+    const backend = fakeBackend({ account_update: ({ account }) => [account] });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    await userEvent.click(within(screen.getByTestId('private-own')).getByRole('button', { name: 'Ne plus le réserver' }));
+    expect(backend.called('account_update')[0].args.account).toMatchObject({ id: 'principal', projects: [] });
+    expect(await screen.findByTestId('private-shared')).toHaveTextContent(/^Ses agents partent aussi sur « Principal »/);
   });
 });
 

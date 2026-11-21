@@ -91,10 +91,13 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
   await expect(page.getByText('Pas encore de spécification')).toBeVisible();
   const cand = page.locator('[data-candidate="docs/SPEC.md"]');
   await expect(cand).toBeVisible();
-  // The status bar: where the docs live, nothing to share.
-  const bar = page.locator('[data-docs-share]');
-  await expect(bar).toContainText('Docs sur la branche main');
-  await expect(bar).toContainText('rien à partager');
+  // The synchronisation in the head of the space (ESC-534): where the docs live, nothing to share, no badge on the tab;
+  // nothing of the docs in the status bar.
+  const bar = page.locator('[data-docs-sync]');
+  await expect(bar.locator('.branch')).toHaveText('main');
+  await expect(bar).toContainText('à jour');
+  await expect(page.getByTestId('docs-badge')).toHaveCount(0);
+  await expect(page.locator('footer.bar')).not.toContainText(/partager|Docs sur la branche/);
   await shoot(page, 'empty');
 
   // Its cut, by subject; nothing written before « Importer ».
@@ -128,7 +131,8 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
   await expect(map.locator('[data-subject-card]')).toHaveCount(4);
   await expect(spaces.getByRole('button', { name: /Spécification/ })).toContainText('1 écart');
   // Its pages, and the list of what was imported (ESC-278, .escouade/spec/.imports.json).
-  await expect(bar).toContainText('7 changements à partager');
+  await expect(bar).toContainText('7 à partager');
+  await expect(page.getByTestId('docs-badge')).toHaveText('7');
   // The tree, by subject, as a Confluence.
   const tree = page.getByRole('navigation', { name: 'Pages de la spécification' });
   const subjects = await tree.locator('[data-subject] > .subj .label').allTextContents();
@@ -162,11 +166,12 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
   await expect(editorLines(page)).toContainText('MAX_INSTALMENTS', { timeout: 60_000 });
   await tabs.getByRole('button', { name: 'Docs' }).click();
 
-  // « Partager »: the docs alone are committed and pushed, the code changed meanwhile left out.
+  // « Synchroniser »: the docs alone are committed and pushed, the code changed meanwhile left out.
   fs.writeFileSync(path.join(app.repo, 'src', 'payment.ts'), 'export const MAX_INSTALMENTS = 3;\n');
-  await expect(bar).toContainText('7 changements à partager');
-  await bar.getByRole('button', { name: 'Partager' }).click();
-  await expect(bar).toContainText('rien à partager', { timeout: 30_000 });
+  await expect(bar).toContainText('7 à partager');
+  await bar.getByRole('button', { name: 'Synchroniser' }).click();
+  await expect(bar).toContainText('à jour', { timeout: 30_000 });
+  await expect(page.getByTestId('docs-badge')).toHaveCount(0);
   const pushed = execFileSync('git', ['--git-dir', remote, 'show', '--name-only', '--format=%s', 'main'], { encoding: 'utf8' });
   expect(pushed).toContain('.escouade/spec/paiement/en-plusieurs-fois.md');
   expect(pushed).toContain('.escouade/spec/.imports.json');
@@ -182,7 +187,7 @@ test('the docs branch is set in the project’s settings: current, or fixed', as
   const { page } = app;
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('group', { name: 'Vue du projet' }).getByRole('button', { name: 'Docs' }).click();
-  await expect(page.locator('[data-docs-share]')).toContainText('Docs sur la branche main');
+  await expect(page.locator('[data-docs-sync] .branch')).toHaveText('main');
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await openSettingsPage(dialog, 'Git et worktrees');
@@ -193,7 +198,7 @@ test('the docs branch is set in the project’s settings: current, or fixed', as
   await dialog.getByRole('textbox', { name: 'Nom de la branche des docs' }).fill('docs');
   await closeSettings(dialog);
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator('[data-docs-share]')).toContainText('Docs sur la branche docs');
+  await expect(page.locator('[data-docs-sync] .branch')).toHaveText('docs');
   // The fixed branch, made by Escouade in a worktree of its own: the project's folder stays on main.
   await expect(page.getByText('Pas encore de spécification')).toBeVisible();
   await expect.poll(() => execFileSync('git', ['branch', '--list', 'docs'], { cwd: app.repo, encoding: 'utf8' })).toContain('docs');

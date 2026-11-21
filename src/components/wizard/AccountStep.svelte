@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { accountName, accountsOf, dedicated, defaultEngine, hasAccount, serves } from '../../lib/accounts';
+  import { accountName, accountsOf, dedicated, defaultEngine, hasAccount, serves, strandedBy } from '../../lib/accounts';
   import { choosesEngine, engineName, engineOptions } from '../../lib/engines';
   import { t } from '../../lib/i18n';
   import AccountModal from '../modals/AccountModal.svelte';
@@ -11,6 +11,8 @@
   import Switch from '../settings/Switch.svelte';
   import Icon from '../Icon.svelte';
   import Checks from './Checks.svelte';
+  import ReserveConfirm from '../settings/ReserveConfirm.svelte';
+  import type { Account, Project } from '../../lib/types';
 
   // « Compte et commit »: the harness and the account the project's agents go to, whether it is private and the accounts
   // reserved to it then, who writes the commits, Remote Control.
@@ -45,9 +47,31 @@
    */
   const reservable = $derived(accountsOf(engine).filter((a) => a.active && serves(a, form.project?.id)));
   const own = (id: string) => !!form.project && reservable.some((a) => a.id === id && dedicated(a, form.project!.id));
-  function reserve(id: string, on: boolean) {
+  function reserve(id: string, on: boolean, box?: HTMLInputElement) {
     const r = form.config.reserved.filter((x) => x !== id);
+    const a = reservable.find((x) => x.id === id);
+    // ESC-556: kept to this project alone, it leaves the open projects it is the last account of without one: asked first.
+    const stranded = on && a ? strandedBy(a, [form.project?.id ?? NEW]) : [];
+    if (stranded.length && a) {
+      asking = { account: a, stranded, box };
+      return;
+    }
     form.config.reserved = on ? [...r, id] : r;
+  }
+  /** The project not made yet, as a reservation names it until it is. */
+  const NEW = '<new project>';
+  let asking = $state<{ account: Account; stranded: Project[]; box?: HTMLInputElement } | null>(null);
+  /** « Ajouter un compte réservé… »: the accounts added meanwhile are ticked, reserved to the project once it is made. */
+  let before: string[] = [];
+  let addingReserved = $state(false);
+  function addReserved() {
+    before = (app.settings.accounts ?? []).map((a) => a.id);
+    addingReserved = true;
+  }
+  function addedReserved() {
+    addingReserved = false;
+    const made = accountsOf(engine).filter((a) => !before.includes(a.id) && a.active);
+    form.config.reserved = [...new Set([...form.config.reserved, ...made.map((a) => a.id)])];
   }
 </script>
 
@@ -60,6 +84,24 @@
   </div>
 {/if}
 {#if adding}<AccountModal {engine} onclose={() => (adding = false)} />{/if}
+{#if addingReserved}<AccountModal {engine} onclose={addedReserved} />{/if}
+{#if asking}
+  {@const a = asking.account}
+  <ReserveConfirm
+    account={a}
+    stranded={asking.stranded}
+    target={form.project?.name || form.path.split(/[\/]/).filter(Boolean).pop() || t('wizard.account.thisProject')}
+    onConfirm={() => {
+      form.config.reserved = [...form.config.reserved.filter((x) => x !== a.id), a.id];
+      asking = null;
+    }}
+    onAdd={addReserved}
+    onclose={() => {
+      if (asking?.box) asking.box.checked = false;
+      asking = null;
+    }}
+  />
+{/if}
 <div class="box">
   <!-- From two harnesses that can be used on (ESC-391): the one of its new agents and tickets (none chosen: Claude Code). -->
   {#if choosesEngine(form.config.engine ?? 'claude')}
@@ -102,7 +144,7 @@
                   type="checkbox"
                   checked={own(a.id) || form.config.reserved.includes(a.id)}
                   disabled={own(a.id)}
-                  onchange={(e) => reserve(a.id, e.currentTarget.checked)}
+                  onchange={(e) => reserve(a.id, e.currentTarget.checked, e.currentTarget)}
                 /><span class="tick-box" aria-hidden="true"><Icon name="check" size={12} /></span>
                 <span>{accountName(a)}</span>
                 {#if own(a.id)}<span class="tag">{t('wizard.account.reservedAlready')}</span>{/if}

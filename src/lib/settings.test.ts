@@ -597,6 +597,7 @@ describe('settingsForm', () => {
       'Launch',
       'Kanban',
       'Imported tickets',
+      'Plugins',
       'Team',
       'Privacy',
       'All projects',

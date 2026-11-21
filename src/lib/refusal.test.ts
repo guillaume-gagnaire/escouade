@@ -1,8 +1,8 @@
 import { screen } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { errorText, missingAccountOf } from './refusal';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { errorText, missingAccountOf, missingAccountProjectOf } from './refusal';
 import { app } from './state.svelte';
-import { fakeBackend, resetApp } from '../test/ipc';
+import { fakeBackend, project, resetApp } from '../test/ipc';
 
 // ESC-128: a refusal for want of an account of a harness comes marked (`commands::err`): the window says it with
 // « Ajouter un compte… » on that harness.
@@ -37,6 +37,23 @@ describe('the refusals of the backend', () => {
     toast.action?.onClick();
     expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
     expect(screen.queryByText(/no-account/)).not.toBeInTheDocument();
+  });
+
+  // ESC-556: a project no account serves, its account reserved to another: the toast offers « Partager à nouveau ».
+  it('reads the project a refusal is for, and offers to share its account again', async () => {
+    const away = 'no-account:claude@p1|Aucun compte Claude Code actif ne sert le projet « demo » : …';
+    expect(missingAccountOf(away)).toBe('claude');
+    expect(missingAccountProjectOf(away)).toBe('p1');
+    expect(missingAccountProjectOf(NO_CODEX)).toBeNull();
+    expect(errorText(away)).toBe('Aucun compte Claude Code actif ne sert le projet « demo » : …');
+    resetApp({ projects: [project({ id: 'p1', name: 'demo' }), project({ id: 'p2', name: 'client' })] });
+    app.settings.accounts = [{ id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true, projects: ['p2'] }];
+    const b = fakeBackend({ account_update: ({ account }) => [account] });
+    app.refused(away);
+    const [toast] = app.toasts;
+    expect(toast.action?.label).toBe('Partager à nouveau');
+    toast.action?.onClick();
+    await vi.waitFor(() => expect(b.called('account_update')[0]?.args.account).toMatchObject({ id: 'principal', projects: [] }));
   });
 
   it('says another refusal in a toast without a button, as before', async () => {

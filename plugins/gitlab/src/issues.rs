@@ -9,7 +9,6 @@ use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::TicketSource;
 use escouade_plugin_kit::http::encode;
-use escouade_plugin_kit::http::redirect;
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
@@ -72,7 +71,7 @@ impl Gitlab {
         body: Option<&Value>,
     ) -> Result<(Value, HeaderMap)> {
         let url = format!("{}{path}", self.base);
-        redirect::send_named(NAME, method, url, body, |method, url, own, body| {
+        crate::reach::send_named(NAME, method, url, body, |method, url, own, body| {
             let mut rb = self
                 .http
                 .request(method, url)

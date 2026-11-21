@@ -183,7 +183,7 @@ fn each_problem_says_its_field_and_why_in_both_languages() {
         [
             "`id` n'est pas un nom de domaine inversé en minuscules (`dev.exemple.slack`).",
             "`escouade.api` n'est pas une version majeure de l'API des plugins (`\"1\"`).",
-            "`contributes.settings[0].type` vaut l'un de : string, number, boolean, select.",
+            "`contributes.settings[0].type` vaut l'un de : string, number, boolean, select, profile.",
         ]
     );
     assert_eq!(
@@ -704,6 +704,84 @@ fn an_update_keeps_the_users_choices_and_says_what_it_asks_for_more() {
         again.get("dev.exemple.slack", Lang::Fr).unwrap().choices,
         view.choices
     );
+}
+
+/// `programmed`, which runs `isola down` and asks for `processes` programs at once (ESC-529).
+fn with_programs(version: &str, processes: Option<u64>) -> Value {
+    let mut v = programmed("dev.exemple.tunnel", version, &[]);
+    v["permissions"]["commands"] = json!(["isola down"]);
+    if let Some(n) = processes {
+        v["limits"] = json!({ "processes": n, "reason": { "fr": "Un tunnel par projet.", "en": "A tunnel a project." } });
+    }
+    v
+}
+
+#[test]
+fn more_programs_at_once_are_asked_beyond_4_and_an_update_that_raises_them_asks_again() {
+    let base = temp_dir("processes");
+    let src = base.join("src");
+    let plugins = Plugins::load(DataDir::new(base.join("data")), "2.2.0");
+    let asked = |version: &str, n: Option<u64>| {
+        plugin_folder(&src, &with_programs(version, n));
+        plugins.inspect_folder(&src, Lang::Fr).unwrap()
+    };
+    // At 4 or less, or without a word: nothing is said.
+    for n in [None, Some(1), Some(4)] {
+        let p = asked("1.0.0", n);
+        assert!(
+            !p.asks.iter().any(|w| w.starts_with("processes:")),
+            "{n:?}: {:?}",
+            p.asks
+        );
+    }
+    let p = asked("1.0.0", Some(8));
+    assert!(p.grown.is_empty());
+    // Right after its commands.
+    let at = p
+        .asks
+        .iter()
+        .position(|w| w == "commands:isola down")
+        .unwrap();
+    assert_eq!(p.asks[at + 1], "processes:8", "{:?}", p.asks);
+    plugins.install(&p.token, Lang::Fr).unwrap();
+    // Raised: asked again. Lowered, or back to 4: nothing.
+    let p = asked("1.1.0", Some(12));
+    assert_eq!(p.grown, ["processes:12"]);
+    let p = asked("1.1.0", Some(8));
+    assert!(p.grown.is_empty(), "{:?}", p.grown);
+    let p = asked("1.1.0", Some(6));
+    assert!(p.grown.is_empty(), "{:?}", p.grown);
+    let p = asked("1.1.0", None);
+    assert!(p.grown.is_empty(), "{:?}", p.grown);
+    plugins.install(&p.token, Lang::Fr).unwrap();
+    // From 4, any step beyond is asked.
+    let p = asked("1.2.0", Some(5));
+    assert_eq!(p.grown, ["processes:5"]);
+    // A plugin that runs no command asks nothing of it.
+    let mut v = with_programs("1.0.0", Some(8));
+    v["permissions"]["commands"] = json!([]);
+    let m = manifest::read(&v.to_string(), manifest::Hand::Third)
+        .manifest
+        .unwrap();
+    assert_eq!(crate::plugins::processes_asked(&m), None);
+}
+
+#[test]
+fn the_programs_at_once_taken_back_leave_the_4_it_has_without_asking() {
+    let m = manifest::read(
+        &with_programs("1.0.0", Some(16)).to_string(),
+        manifest::Hand::Third,
+    )
+    .manifest
+    .unwrap();
+    assert!(crate::plugins::revocable("processes:16"));
+    assert_eq!(crate::plugins::granted(&m, &[]).limits.processes, Some(16));
+    let g = crate::plugins::granted(&m, &["processes:16".into()]);
+    assert_eq!(g.limits.processes, None);
+    assert_eq!(crate::plugins::procs::at_once(g.limits.processes), 4);
+    // What was taken back at 8 does not take back the 16 of an update the user consented to.
+    let g = crate::plugins::granted(&m, &["processes:8".into()]);
+    assert_eq!(g.limits.processes, Some(16));
 }
 
 #[test]

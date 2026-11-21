@@ -1,9 +1,9 @@
 ---
 title: "Projets privés"
 subject: "Projets"
-sources: ["docs/SPEC.md"]
-tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425"]
-decisions: [154]
+sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)"]
+tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556"]
+decisions: [154,"un-compte-partage-protege-les-sessions-d"]
 compared: null
 ---
 
@@ -21,7 +21,7 @@ Un cadenas suit le nom du projet, sur son onglet et parmi les projets des régla
 
 À chaque démarrage d'un agent (son process, ou son interface en vue terminal), Escouade calcule les chemins que son harness doit lui refuser, en lecture comme en écriture, seulement s'il existe un projet privé :
 
-- pour un agent d'un projet qui n'est pas privé : le dossier de chaque projet privé, son dossier des worktrees et le dossier de chacun de ses agents, ses données dans le dossier d'Escouade (`attachments/<agent>`, `tickets/<ticket>`) et ses sessions de harness (`projects/<dossier>` de chaque dossier de configuration de Claude Code) ;
+- pour un agent d'un projet qui n'est pas privé : le dossier de chaque projet privé, son dossier des worktrees et le dossier de chacun de ses agents, ses données dans le dossier d'Escouade (`attachments/<agent>`, `tickets/<ticket>`) et ses sessions de harness (`projects/<dossier>` de chaque dossier de configuration de Claude Code, ceux de ses worktrees compris ; un nom de plus de 200 caractères, que Claude Code coupe puis suit de son empreinte, est reconnu à son début) ;
 - pour un agent d'un projet privé : tout cela pour chaque autre projet, plus les fichiers joints et les dossiers de sessions de Claude Code qui ne sont pas à son projet (lus sur le disque au démarrage) ;
 - pour les deux : le reste du dossier d'Escouade (`state.json`, qui tient tous les projets, conversations, journaux, jetons, comptes ; seuls `attachments` et `tickets` restent, par propriétaire), et ce que les harness gardent mêlé de tous les projets (`history.jsonl`, `file-history`, `todos`… de Claude Code et son `.claude.json` ; `sessions`, `history.jsonl` et bases de Codex ; `session-state` de Copilot CLI ; `storage` d'OpenCode), de chaque compte et du dossier par défaut ;
 - jamais le dossier de l'agent ni un dossier au-dessus (un projet dans le dossier d'un autre). Un chemin sous un autre de la liste (un worktree sous le dossier de son projet) n'y est pas répété.
@@ -32,6 +32,18 @@ Par harness (pour Cursor CLI, Mistral Vibe, Antigravity CLI et Gemini CLI : la l
 - **Codex** : deux profils de permissions déclarés à son processus (`-c`, `default_permissions`) : `escouade-fence-plan` (`:read-only`, chaque chemin `deny`) et `escouade-fence` (le premier, plus son dossier et le dossier temporaire en écriture) ; le fil et chaque tour nomment celui du mode. **Barrière** : son bac à sable refuse ces chemins à toutes ses commandes (« Access to the path … is denied » sous Windows), sauf en Bypass (`danger-full-access`), qui n'en a pas.
 - **OpenCode** : des règles de session ajoutées après celles du mode (la dernière qui correspond l'emporte) : `read`, `edit`, `list`, `external_directory` à `deny` pour chaque chemin et ce qui est dessous, sous Windows dans les deux écritures, et `bash` à `deny` pour une commande qui le nomme. **Garde-fou** : pas de bac à sable.
 - **Copilot CLI** : il demande une permission pour tout chemin hors du dossier de l'agent ; Escouade refuse d'office, sans carte, celle qui en nomme un (`path`, `fileName`, `possiblePaths`, le texte de la commande), avec la raison « Refusé par Escouade : ce chemin est celui d'un autre projet, et l'un des deux est privé. ». **Garde-fou** : rien n'est demandé en Bypass (`allow-all`), ni à Escouade en vue Copilot CLI ; une commande peut atteindre un chemin qu'elle ne nomme pas.
+
+### Sur un compte partagé (ESC-556)
+
+Un projet privé peut partager un compte avec d'autres projets : c'est un choix légitime, pas une faute. La clôture ci-dessus protège quand même ses sessions, compte par compte, sans rien lire des identifiants (seuls les noms des dossiers sont lus, jamais `.credentials.json`, `auth.json` ni une clé) :
+
+- **Claude Code** : ses sessions et sa mémoire de projet sont rangées par projet (`<CLAUDE_CONFIG_DIR>/projects/<chemin encodé>`, `memory/` dedans) : refusées aux agents des autres projets, sur chaque compte. `file-history`, `todos`, `shell-snapshots`, `session-env`, `paste-cache`, `plans`, `tasks` sont rangés par session, pas par projet : refusés entiers à tout agent clôturé. Restent communs : la connexion, les réglages (`settings.json`), la mémoire globale (`CLAUDE.md`), les skills, agents et commandes du compte, et l'historique des prompts (`history.jsonl`), refusé aux outils des agents mais tenu par Claude Code lui-même.
+- **Codex** : ses sessions sont rangées par date (`sessions/AAAA/MM/JJ`), pas par projet : refusées entières, avec `history.jsonl`, `memories` et ses bases. Restent communs : la connexion, `config.toml` et les instructions globales (`AGENTS.md`).
+- **Copilot CLI** : `session-state` par session, refusé entier. Restent communs : la connexion et la configuration.
+- **OpenCode** : un seul compte (celui de la machine) ; son `storage` est refusé entier. Restent communs : sa configuration et ses fournisseurs.
+- **Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI** : un dossier par agent (`<données>/agent-homes/<agent>`, dans le dossier d'Escouade, refusé) : rien de ses sessions n'est dans le dossier du compte. Restent communs : la connexion ou la clé, et le quota.
+
+Réserver un compte au projet privé sépare aussi ce qui reste commun : c'est une isolation de plus, facultative (voir *Comptes*, « Un compte réservé au projet privé »).
 
 ### Quand le réglage change
 
@@ -49,12 +61,13 @@ Changer « Projet privé » ne coupe rien sur le moment ; le serveur MCP le pren
 
 - Réglages › Projets, groupe « Confidentialité » : « Projet privé », éteint par défaut, enregistré avec le projet. Sous le réglage, « Ses fichiers » dit, harness par harness, « Garde-fou » ou « Barrière », avec ce qui n'est pas garanti. Un projet rouvert avec son historique garde son propre réglage.
 - Groupe « Nouveaux projets » (sous les réglages du projet, même sans projet ouvert) : « Nouveaux projets privés », éteint par défaut.
-- Pour que sessions, mémoire et historique du harness ne soient pas partagés non plus : un compte réservé (voir *Comptes*, « Un compte réservé au projet privé »).
+- La rangée « Comptes » dit, comme une information, ce que ses sessions gardent sur un compte partagé et ce qui reste commun ; un compte réservé sépare tout, en plus (voir *Comptes*, « Un compte réservé au projet privé »).
 
 ## Limites
 
 - Le cloisonnement des fichiers est un « garde-fou » ou une « barrière » selon le harness, jamais une vraie barrière pour tous : un compte système par projet n'est pas proposé, les harness, leurs comptes et les outils de l'utilisateur n'y suivraient pas.
 - Entre projets qui ne sont pas privés, rien n'est cloisonné.
+- Sur un compte partagé, ce que le harness tient lui-même pour tous les projets (l'historique des prompts que Claude Code rappelle, sa mémoire globale, ses réglages) reste commun : la clôture ne vaut que pour les outils des agents.
 
 ## Sous clôture, sur OpenCode (ESC-364)
 

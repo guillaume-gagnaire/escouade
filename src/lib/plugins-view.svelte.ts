@@ -102,6 +102,13 @@ class PluginsStore {
     this.openStorePlugin(id);
   }
 
+  /** « Page du plugin », from the page Plugins of a project (ESC-530): the window closed, the installed plugin's page shown. */
+  openFromSettings(id: string, tab: PluginTab = 'settings') {
+    app.modal = null;
+    app.openPlugins();
+    this.openPlugin(id, tab);
+  }
+
   get updates() {
     return this.list.filter((p) => p.update);
   }

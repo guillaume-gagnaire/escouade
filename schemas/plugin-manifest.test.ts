@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  belowContract,
+  CONTRACT_MIN,
   FIELDS,
   FILE_ACCESS,
   FILE_ROOTS,
@@ -71,7 +73,7 @@ describe('plugin-manifest', () => {
     expect(r.errors.map((e) => message(e, 'fr'))).toEqual([
       "`id` n'est pas un nom de domaine inversé en minuscules (`dev.exemple.slack`).",
       '`escouade.api` n\'est pas une version majeure de l\'API des plugins (`"1"`).',
-      "`contributes.settings[0].type` vaut l'un de : string, number, boolean, select.",
+      "`contributes.settings[0].type` vaut l'un de : string, number, boolean, select, profile.",
     ]);
     expect(message(r.errors[0], 'en')).toBe('`id` is no reversed domain name in lower case (`dev.exemple.slack`).');
     expect(message(validate({}).errors[0], 'fr')).toBe('`id` manque.');
@@ -97,6 +99,88 @@ describe('plugin-manifest', () => {
     );
     const svg = validate({ icon: 'logo.svg' }).errors.find((e) => e.path === 'icon')!;
     expect(message(svg, 'en')).toBe('`icon` is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).');
+  });
+
+  it('says the field of the contract and why it is refused there, as the core says it (ESC-531)', () => {
+    const r = validate({
+      id: 'dev.exemple.tunnel',
+      name: 'Tunnel',
+      version: '1.0.0',
+      escouade: { api: '1', min: '2.2.0' },
+      permissions: {
+        secrets: ['profile:wifi'],
+        commands: ['openvpn --config {path:project}', 'slirp4netns --pid={pid}', '{int}', 'nsenter * -t {pid}', 'a {float}'],
+      },
+      limits: { processes: 8 },
+      contributes: {
+        groups: [
+          { id: 'g', title: 'G', fields: ['nowhere'] },
+          { id: 'h', title: 'H', fields: [] },
+        ],
+        settings: [{ key: 'n', type: 'number', title: 'N', multiline: true, of: 'vpn' }],
+        profiles: [
+          {
+            id: 'vpn',
+            title: 'VPN',
+            nameField: 'password',
+            fields: [
+              { key: 'password', secret: true, type: 'string', title: 'P' },
+              { key: 'server', title: 'S', scope: 'project' },
+            ],
+          },
+        ],
+      },
+    });
+    const fr = r.errors.map((e) => message(e, 'fr'));
+    for (const line of [
+      "`permissions.commands[0]` `{path:project}` n'est pas un joker : un chemin n'est que `{path:temp}` ou `{path:plugin}`, jamais un fichier du projet ni d'un agent, que le dépôt choisirait.",
+      '`permissions.commands[1]` `--pid={pid}` colle un joker à autre chose : un joker est un mot entier (`--pid {pid}`, jamais `--pid={pid}`).',
+      "`permissions.commands[2]` commence par `{int}` : le premier mot est le nom d'un programme, trouvé sur le PATH, jamais un chemin, un `*` ni un joker.",
+      "`permissions.commands[3]` a un `*` avant son dernier mot : `*` ne vient qu'à la fin, pour les mots qui suivent.",
+      "`permissions.commands[4]` `{float}` n'est pas un joker (`{int}`, `{port}`, `{name}`, `{pid}`, `{path:temp}`, `{path:plugin}`) : une accolade n'a pas sa place dans un autre mot.",
+      '`permissions.secrets[0]` nomme un genre que `contributes.profiles` ne déclare pas, ou sans champ secret : `profile:<genre>` demande les secrets des profils de ce genre.',
+      "`limits.reason` manque : au-delà de 4 programmes à la fois, une phrase dit pourquoi, que l'utilisateur lit à l'installation.",
+      '`contributes.groups[0].fields[0]` ne nomme aucun réglage ni secret du plugin (`contributes.settings`, `contributes.secrets`).',
+      '`contributes.groups[1].fields` est une liste vide : au moins un champ.',
+      '`contributes.settings[0].multiline` ne va que sur un réglage `string` ou un secret.',
+      '`contributes.settings[0].of` ne va que sur un réglage `"type": "profile"`, dont il dit le genre.',
+      '`contributes.profiles[0].nameField` doit nommer un champ `string` du profil, ni secret ni sur plusieurs lignes : le nom du profil dans les listes.',
+      "`contributes.profiles[0].fields[0].type` n'a pas sa place sur un champ secret d'un profil : un secret est un texte.",
+      "`contributes.profiles[0].fields[1].scope` n'a pas sa place sur un champ de profil : un profil vaut pour chaque projet qui le choisit.",
+      '`contributes.profiles[0].fields[1].type` manque : un champ de profil est d\'un type (`string`, `number`, `boolean`, `select`), ou `"secret": true`.',
+    ])
+      expect(fr).toContain(line);
+    expect(r.errors.map((e) => message(e, 'en'))).toContain(
+      '`limits.reason` is missing: beyond 4 programs at once, a sentence says why, which the user reads at the installation.',
+    );
+    const over = validate({
+      id: 'dev.exemple.t',
+      name: 'T',
+      version: '1.0.0',
+      escouade: { api: '1', min: '2.2.0' },
+      limits: { processes: 17, reason: 'R' },
+    });
+    expect(over.errors.map((e) => message(e, 'en'))).toEqual([
+      '`limits.processes` must be a whole number from 1 to 16: the programs at once, 4 without asking.',
+    ]);
+  });
+
+  it('warns a plugin of the contract whose escouade.min is older, in the core’s words, never refusing it (ESC-531)', () => {
+    const m = {
+      id: 'dev.exemple.tunnel',
+      name: 'Tunnel',
+      version: '1.0.0',
+      escouade: { api: '1', min: '2.2.0' },
+      permissions: { commands: ['tunnel --port {port}'] },
+      limits: { processes: 2 },
+      contributes: { settings: [{ key: 'routes', type: 'string', scope: 'project', title: 'R' }] },
+    };
+    expect(validate(m).ok).toBe(true);
+    expect(belowContract(m, 'en')).toBe(
+      `\`escouade.min\` says 2.2.0, but this plugin takes settings of each project, jokers in \`permissions.commands\`, \`limits.processes\`, which Escouade serves since ${CONTRACT_MIN}: an older version would not serve them. \`escouade.min\` should say ${CONTRACT_MIN}.`,
+    );
+    expect(belowContract({ ...m, escouade: { api: '1', min: CONTRACT_MIN } })).toBeNull();
+    expect(belowContract({ ...m, permissions: {}, limits: {}, contributes: {} })).toBeNull();
   });
 });
 

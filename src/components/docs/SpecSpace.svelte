@@ -111,7 +111,7 @@
   let importing = $state<DocsCandidate | null>(null);
 </script>
 
-<SpaceHead title={t('docs.spaces.spec')}>
+<SpaceHead title={t('docs.spaces.spec')} projectId={project.id}>
   {#snippet line()}
     {#if summary && summary.pages}
       {@const s = summary}

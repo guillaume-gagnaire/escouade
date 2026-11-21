@@ -1,9 +1,9 @@
 ---
 title: "Livraison et mises à jour"
 subject: "Introduction"
-sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh"]
-tickets: ["ESC-374","ESC-380","ESC-533"]
-decisions: [114,"windows-l-installeur-d-une-mise-a-jour-a"]
+sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh","tests/e2e/fixture.ts","tests/e2e/update-guard.ts"]
+tickets: ["ESC-374","ESC-380","ESC-533","ESC-543"]
+decisions: [114,"windows-l-installeur-d-une-mise-a-jour-a","un-build-de-debug-ne-cherche-ne-telechar"]
 compared: null
 ---
 
@@ -126,3 +126,6 @@ Sur GitHub Actions :
 - Une fin de session Windows n'installe rien.
 - Les notes montrées par la modale « Escouade X est prête » sont en français, quelle que soit la langue de l'interface.
 - Sous Windows, c'est l'installeur de la nouvelle version qui tourne : l'attente de la sortie de l'app, la mise de côté des programmes en cours d'usage et la relance après un échec valent dès la mise à jour vers la version qui les porte, même lancée par une app plus ancienne.
+
+- Un build de debug (développement, tests de bout en bout, tests Rust) ne lit jamais le vrai serveur des mises à jour, seulement un serveur de test : celui de `ESCOUADE_UPDATE_ENDPOINT`, ou les adresses de sa configuration quand elles sont toutes sur cette machine (`localhost`, `127.x.x.x`, `::1`). Sans serveur de test, la recherche est coupée : rien de neuf, et « Rechercher une mise à jour » dit « les mises à jour sont coupées dans un build de debug ». Il ne télécharge et n'installe un installeur que venu d'un serveur sur cette machine, jamais une vraie version : celle-ci s'installerait dans le dossier de l'app installée sur le poste, qu'elle fermerait d'abord. Un installeur refusé laisse « Quitter » fermer l'app comme d'habitude. Un build de release ne change pas : il lit l'adresse de sa configuration et ignore `ESCOUADE_UPDATE_ENDPOINT`.
+- Les tests de bout en bout ne donnent un serveur de mises à jour que dans les tests des mises à jour, et un test échoue si son app a lu une autre adresse ou lancé une installation (lu dans son journal).

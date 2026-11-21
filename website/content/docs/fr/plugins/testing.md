@@ -22,7 +22,7 @@ escouade-plugin test mon-plugin --escouade 2.2.0
 
 ## Le banc de conformité
 
-`escouade-plugin test <dossier>` lit le manifeste, lance le programme de `run` comme Escouade le lance (dans son dossier, avec ses trois variables, avec tout ce qu’il démarre), et joue jusqu’à onze scénarios. Chacun dit ce qui s’est passé ; un scénario qui échoue dit aussi **ce qui manque**.
+`escouade-plugin test <dossier>` lit le manifeste, lance le programme de `run` comme Escouade le lance (dans son dossier, avec ses trois variables, avec tout ce qu’il démarre), et joue jusqu’à quinze scénarios. Chacun dit ce qui s’est passé ; un scénario qui échoue dit aussi **ce qui manque**.
 
 | Scénario | Ce que le banc fait | Ce qu’il attend |
 | --- | --- | --- |
@@ -37,6 +37,10 @@ escouade-plugin test mon-plugin --escouade 2.2.0
 | Fermeture | Envoie `shutdown`. | Une réponse en moins d’une seconde, puis la fin du process. |
 | Source de tickets | Seulement si `contributes.ticketSources` est déclaré : `account/me` et `tickets/containers`. | Une réponse dans le délai, ou une erreur que le contrat nomme : `-(32000 + statut HTTP)` (`-32401` : jeton refusé), `-32010` (un refus durable), `-32601` (un appel qu’il ne sert pas). |
 | Hébergeur | Seulement si `contributes.forges` est déclaré : `account/me` et `forge/pullRequestsOfBranch`. | La même. |
+| Profils | Seulement si `contributes.profiles` est déclaré : un profil du banc par genre, choisi par le projet du banc, servi par `settings/get`, `profiles/list`, `profiles/get` et `secrets/get` avec `profile`, comme l’app. | Des profils demandés par les identifiants qu’Escouade donne, de ses genres, avec `profile:<genre>` ; aucun secret d’un profil écrit. |
+| Secret de plusieurs lignes | Seulement pour un secret `multiline`, du plugin ou d’un profil : il le donne sur plusieurs lignes. | Aucune de ses lignes de plus de 8 caractères écrite sur la sortie d’erreur ou dans un `log`. |
+| Jokers des commandes | Seulement si une entrée de `permissions.commands` a un joker, et pas hors ligne : il lance pour de vrai les programmes que demande le plugin, par les règles de l’app. | Chaque programme admis par une entrée, chaque joker par un mot de sa forme. |
+| Limite de programmes | Seulement si `limits.processes` est déclaré : il la tient comme l’app. | Jamais plus de programmes à la fois que la limite. |
 
 Un scénario qui ne concerne pas le plugin n’est pas joué et le dit : pas de fait sans `permissions.events`, pas de décision sans `permissions.decide`, pas de source ni d’hébergeur sans `contributes.ticketSources` ou `contributes.forges`, et rien d’un programme pour un plugin déclaratif, dont seul le manifeste est lu.
 
@@ -72,6 +76,8 @@ Le banc envoie les faits et les décisions dans la forme que leur donnera Escoua
 ```
 
 Un fait est une notification : il n’a pas d’`id`, et le plugin n’y répond pas. Les faits qu’un plugin reçoit dans Escouade, et leurs champs, arrivent avec les événements, dans une prochaine version ; ignore les champs que tu ne connais pas.
+
+Après un fait, le banc attend que le plugin se taise (300 ms sans rien de nouveau, 3 s au plus) : ce qu’il fait d’un fait, ses programmes et ses profils compris, est jugé en entier. Un plugin qui dit `escouade.min` 2.2.5 se joue avec un `escouade-plugin` de cette version, ou avec `--escouade 2.2.5`. Le plugin de test `tests/fixtures/plugins/sdk-contract` du dépôt d’Escouade prend tout le contrat et passe le banc en WASM.
 
 ## Le faux Escouade
 

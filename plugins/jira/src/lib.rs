@@ -3,6 +3,7 @@
 //! e-mail are the account's fields, which Escouade tells.
 
 mod adf;
+mod reach;
 
 use adf::{adf_to_markdown, markdown_to_adf};
 use anyhow::Result;
@@ -10,8 +11,8 @@ use base64::Engine;
 use escouade_plugin_kit::errors::{HttpError, Refused};
 use escouade_plugin_kit::forge::BoxFuture;
 use escouade_plugin_kit::hosts::{Credentials, SourceKind, TicketSource};
+use escouade_plugin_kit::http::encode;
 use escouade_plugin_kit::http::reqwest;
-use escouade_plugin_kit::http::{self, encode};
 use escouade_plugin_kit::i18n::{self, Lang};
 use escouade_plugin_kit::protocol::tickets::{
     Container, ExternalIssue, ExternalRef, ExternalState, IssueFilter, IssuePage, Query,
@@ -176,7 +177,7 @@ impl Jira {
             }
             .into());
         }
-        http::call(S, rb).await
+        reach::call(S, rb).await
     }
 
     pub async fn me(&self) -> Result<(String, String)> {
@@ -453,10 +454,12 @@ impl SourceKind for JiraSource {
 
 /// What its module runs, on its first turn.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "jira",
-        escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(JiraSource)]),
-    )
+    escouade_plugin_kit::serve::run("jira", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> escouade_plugin_kit::hosts::Hosts {
+    escouade_plugin_kit::hosts::Hosts::new(vec![], vec![Box::new(JiraSource)])
 }
 
 escouade_plugin_kit::protocol::module!(run);

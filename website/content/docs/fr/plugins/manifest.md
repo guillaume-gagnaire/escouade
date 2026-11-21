@@ -72,7 +72,7 @@ La ligne `$schema` donne l’autocomplétion et la vérification dans VS Code et
 | `run` | non | Son programme. Sans lui, le plugin est déclaratif : rien ne s’exécute. |
 | `activation` | non | Ce qui le démarre, par exemple `event:ticket.column`. Sans activation, son programme ne tourne pas. |
 | `permissions` | non | Ce qu’il demande : `events`, `network`, `secrets`, `files`, `commands`, `env` (des listes) et `decide` (`true` ou `false`). Voir [les capacités de l’hôte](plugins/capabilities). |
-| `limits` | non | Ce qu’il demande de plus à l’hôte : `fetchSeconds`, `fetchBytes`, `fileBytes` ([les limites](plugins/capabilities#les-limites-limits)). |
+| `limits` | non | Ce qu’il demande de plus à l’hôte : `fetchSeconds`, `fetchBytes`, `fileBytes` ([les limites](plugins/capabilities#les-limites-limits)), et `processes`, les programmes à la fois, avec sa raison `reason`. |
 | `contributes` | non | Ses points d’extension : ce qu’il ajoute à Escouade. |
 | `store` | non | Ce que la place de marché montre de lui : `categories`, `keywords`, `screenshots`, `docs` (le dossier de sa documentation, une page par langue sous `docs/fr/` et `docs/en/` : [la documentation, par langue](plugins/publishing#la-documentation-par-langue)). |
 
@@ -124,6 +124,9 @@ Un chemin absolu ou qui remonte avec `..` est refusé : un plugin ne lance que c
 
 - `settings` : ses réglages, montrés sur sa page dans l’ordre du manifeste. Chacun a une clé (`key`), un type (`string`, `number`, `boolean` ou `select`) et un titre (`title`) ; il peut avoir une `description` (un texte, ou un texte par langue), montrée sous son titre, une valeur par défaut (`default`, de son type ; sans elle, vide, ou `false` pour un `boolean`) et, pour un `select`, ses choix (`options`), dans l’ordre : chacun une valeur (`"udp"`), ou `{ "value": "udp", "title": "UDP" }` pour montrer un titre à sa place ;
 - `secrets` : les secrets qu’il garde, chacun avec une clé et un titre ;
+- `groups` : des groupes de ses réglages et de ses secrets, mêlés, dans l’ordre où les montrer ([les groupes](#les-groupes)) ;
+- `profiles` : des profils, que l’utilisateur crée autant de fois qu’il veut et que chaque projet choisit ([les profils](#les-profils)) ;
+- sur un réglage ou un secret, `scope`, `repo`, `multiline`, `lines`, `import` et `description` ([les réglages d’un projet](#les-reglages-d-un-projet), [plusieurs lignes et un fichier](#plusieurs-lignes-et-un-fichier)) ; un réglage `"type": "profile"` choisit un profil ;
 - `accounts` : un genre de compte, partagé par ses autres points ;
 - `ticketSources`, `forges` et `harnesses` : une source du Kanban, un hébergeur de code, un harness ; chacun avec un `id`, et le compte qu’il utilise (`account`) parmi ceux de `accounts` ;
 - `launchEnvironments` : un environnement de lancement, qui prend en charge `up`, `ls`, `down` et `destroy` d’un worktree et ses services ; pour l’instant réservé aux plugins d’Escouade (isola) ;
@@ -160,9 +163,64 @@ Un genre qui porte l’`id` d’une intégration d’Escouade (`github`, `gitlab
 
 Le secret d’un compte est au trousseau sous `plugin:<id>:account:<compte>` : le compte est l’hôte de son instance (`gitlab.com`), ou l’`id` du genre pour un genre sans instances (`jira`). Le plugin le lit par `secrets/get` de `account:<compte>`, s’il a `account:*` dans `permissions.secrets` ; jamais le compte d’un autre plugin. Ce qu’il tient : le jeton, ou `{ "key": …, "token": … }` pour un genre à deux secrets (Trello).
 
+### Les groupes
+
+`contributes.groups` range la page du plugin. Chaque groupe a un `id`, un titre (`title`), une `description` facultative, `folded` (replié d’office, comme « Avancé ») et `fields` : les clés de ses réglages et de ses secrets, mêlées, dans l’ordre où les montrer. Les groupes viennent dans l’ordre de la liste ; un champ hors de tout groupe vient après, sous « Réglages » puis « Secrets ». Une clé qui n’existe pas, ou qui est dans deux groupes, est refusée à ce champ. Sans groupes, la page est la même qu’avant.
+
+```json
+"contributes": {
+  "groups": [
+    { "id": "connection", "title": { "fr": "Connexion", "en": "Connection" }, "fields": ["server", "token"] },
+    { "id": "advanced", "title": { "fr": "Avancé", "en": "Advanced" }, "folded": true, "fields": ["verbosity"] }
+  ],
+  "settings": [
+    { "key": "server", "type": "string", "title": "Server" },
+    { "key": "verbosity", "type": "select", "title": "Verbosity", "options": ["1", "3"], "default": "1" }
+  ],
+  "secrets": [{ "key": "token", "title": "Token", "description": "The token of your account." }]
+}
+```
+
+### Les réglages d’un projet
+
+`"scope": "project"`, sur un réglage simple (`string`, `number`, `boolean`, `select`) ou `profile`, le rend propre à chaque projet. Il n’est plus sur la page du plugin, mais dans Réglages › Projets › *projet* › Plugins, et `settings/get` de ce projet le rend par ses rangs : la valeur de cette machine pour le projet, puis celle de son `.escouade.yml` (`plugins.<id>.<clé>`), puis `default`. Un plugin n’a ni le fichier ni la valeur de cette machine d’un projet où il n’est pas actif : le défaut seul.
+
+- `"repo": false` écarte le fichier : la valeur ne vient jamais de `.escouade.yml`. `repo` n’est jamais `true` pour un secret, un profil ou une valeur importée d’un fichier.
+- **Un secret n’a pas de portée de projet** : un secret de `"scope": "project"` se lit, mais le plugin reste coupé, la raison dite. Les identifiants d’un projet vont dans un [profil](#les-profils).
+
+### Plusieurs lignes et un fichier
+
+- `multiline: true`, sur un réglage `string` ou un secret : une zone de texte à chasse fixe, ses lignes numérotées, `lines` lignes visibles (de 3 à 20, 6 d’office), 64 Kio au plus. C’est un drapeau, pas un type : une Escouade plus ancienne montre un champ d’une ligne.
+- `import`, une liste d’extensions (`[".ovpn", ".conf"]`) : « Importer un fichier… » lit le fichier une fois, en UTF-8, 64 Kio au plus, et remplit le champ. Le chemin n’est jamais gardé, et le plugin ne gagne aucun droit sur les fichiers.
+- `description`, sur un secret comme sur un réglage : une phrase sous son titre.
+- Gardé, un secret sur plusieurs lignes ne se relit pas : « Gardé · 84 lignes · 5,1 Ko », « Remplacer… », « Oublier ». Le journal du plugin en masque chaque ligne de plus de 8 caractères.
+
+```json
+"secrets": [{
+  "key": "ovpn",
+  "title": { "fr": "Configuration OpenVPN", "en": "OpenVPN configuration" },
+  "description": { "fr": "Le fichier .ovpn de ton fournisseur, certificats compris.", "en": "Your provider’s .ovpn file, certificates included." },
+  "multiline": true,
+  "lines": 8,
+  "import": [".ovpn", ".conf"]
+}]
+```
+
+### Les profils
+
+`contributes.profiles` déclare des **genres** de profil : un `id`, un titre, `nameField` (le champ `string` d’une ligne, non secret, qui donne son nom au profil) et `fields`. Un champ simple a une clé, un titre et un `type` parmi `string`, `number`, `boolean`, `select` (avec `description`, `default` et `options` comme un réglage) ; un champ secret dit `"secret": true`, sans type, et prend `multiline` et `import` comme un secret. L’utilisateur crée ses profils sur la page du plugin, autant qu’il veut, et Escouade tire leur identifiant.
+
+- Un réglage `"type": "profile"` dit son genre par `of`. De portée `project`, c’est le profil que prend chaque projet ; de portée `app`, le profil par défaut des projets qui n’en choisissent aucun. `settings/get` en rend l’identifiant, ou `null`.
+- `profile:<genre>` dans `permissions.secrets` demande les secrets des profils de ce genre ; un genre qu’il ne déclare pas, ou sans champ secret, est refusé à ce champ.
+- Un profil supprimé efface ses secrets, et les projets qui le prenaient n’en ont plus.
+- `.escouade.yml` ne choisit jamais un profil : il peut en proposer un par son nom, que l’utilisateur prend ou non.
+
+Le cas complet, du manifeste au programme : [des identifiants par projet](plugins/project-credentials).
+
 ## Ce qu’Escouade vérifie
 
-- **Un manifeste invalide ne charge rien.** Escouade dit pourquoi, champ par champ, avec le chemin du champ : « `escouade.min` manque. », « `contributes.settings[0].type` vaut l’un de : string, number, boolean, select. »
+- **Un manifeste invalide ne charge rien.** Escouade dit pourquoi, champ par champ, avec le chemin du champ : « `escouade.min` manque. », « `contributes.settings[0].type` vaut l’un de : string, number, boolean, select, profile. »
+- **Le champ fautif, et pourquoi.** `escouade-plugin validate` dit ce qui ne va pas à l’endroit où c’est : un mot d’une commande (« `--pid={pid}` colle un joker à autre chose : un joker est un mot entier »), un champ hors de sa place (« ne va que sur un réglage `string` ou un secret »), une limite sans sa raison. Il prévient aussi (⚠), sans refuser, un plugin qui prend des profils, un réglage de chaque projet, des jokers ou `limits.processes` avec un `escouade.min` plus ancien que 2.2.5 ([les versions](plugins/versioning#le-contrat-de-la-2-2-5)).
 - **Un champ inconnu est ignoré.** Un manifeste écrit pour un Escouade plus récent se charge quand même ; les champs ignorés sont listés.
 - Le même contrôle tourne sur la place de marché quand un auteur y soumet son plugin : les deux disent les mêmes erreurs ([publier sur le store](plugins/publishing)).
 

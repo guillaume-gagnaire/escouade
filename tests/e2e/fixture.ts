@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { freePort, waitForPortToClose } from './port';
 import { serverProgram, startBareServer, startServer, type BareServer, type Server } from './server';
 import { lookDiff } from './srgb';
+import { updateTrouble } from './update-guard';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXE = process.env.ESCOUADE_E2E_EXE ?? path.join(ROOT, 'src-tauri', 'target', 'debug', 'escouade.exe');
@@ -66,6 +67,8 @@ export interface App {
   second: (data: string) => Promise<Page>;
   /** When the launch the test is on was started (ms since the epoch, just before its process): the startup bench's origin (INT-0). */
   launchedAt: () => number;
+  /** Why the launch the test is on ended (`exit code 0 (0x0)` for an app that quit by itself), null while it runs. */
+  stopped: () => string | null;
   /** Attaches Playwright again to the running app's window (after its page's process crashed): gives it, also in `app.page`. */
   reconnect: () => Promise<Page>;
   /** A git repository with one commit, ready to be added as a project. */
@@ -616,6 +619,8 @@ export const test = base.extend<{
     const root = testRoot();
     const data = path.join(root, 'data');
     fs.mkdirSync(data);
+    // Every data folder the test's apps ran on (`restartAs`), whose logs the end of the test reads.
+    const datas = new Set([data]);
     // French unless a test asks otherwise, whatever the machine's language (CI runners are English): the tests read the
     // French interface.
     const given = (preStart.run(root) ?? {}) as Record<string, unknown>;
@@ -678,6 +683,11 @@ export const test = base.extend<{
       ESCOUADE_STORE_TEST_KEY: process.env.ESCOUADE_STORE_TEST_KEY,
       // Nor Open VSX (the editor's extensions, ESC-481): a closed port, unless a test starts the fake one and names it.
       ESCOUADE_TEST_OPEN_VSX: NO_STORE,
+      // Nor the real updates of Escouade (ESC-543): a debug build given no test server checks none (`updates::endpoints_of`),
+      // so that none is downloaded, and none installed at « Quitter » over the app of the machine. Only the tests of the
+      // updates give theirs (`appEnv: { ESCOUADE_UPDATE_ENDPOINT }`); an inherited one is not taken. The end of each test
+      // reads the log for it (`updateTrouble`).
+      ESCOUADE_UPDATE_ENDPOINT: undefined,
       // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
       ESCOUADE_CODEX: 'none',
       // Codex's Principal is a folder of the test's (its `config.toml`, « Les agents peuvent piloter Escouade »), never the user's ~/.codex.
@@ -880,6 +890,7 @@ export const test = base.extend<{
         ssh: sshed,
         launches,
         launchedAt: () => current().at,
+        stopped: () => current().stopped,
         restart: async () => {
           // The app saves what it shows a moment after a change: not killed in the middle of it.
           await new Promise((r) => setTimeout(r, SAVE_MS));
@@ -910,6 +921,7 @@ export const test = base.extend<{
         },
         restartAs: (dataDir: string) => {
           env.ESCOUADE_DATA_DIR = dataDir;
+          datas.add(dataDir);
           return app.restart();
         },
         second: async (dataDir: string) => {
@@ -989,6 +1001,12 @@ export const test = base.extend<{
       }
       await use(app);
       if (testInfo.status !== testInfo.expectedStatus) throw new Error(`the app after the failure\n${await state()}`);
+      // Never the real updates of Escouade (ESC-543): what an app of the test logged of them fails the test.
+      const troubles = [...datas].flatMap((d) => {
+        const file = path.join(d, 'app.log');
+        return fs.existsSync(file) ? updateTrouble(fs.readFileSync(file, 'utf8')) : [];
+      });
+      if (troubles.length) throw new Error(`an app of the test went for a real update of Escouade (ESC-543):\n${troubles.join('\n')}`);
     } finally {
       for (const other of others) {
         if (other.instance) await killApp(other.instance);

@@ -48,7 +48,14 @@ export type ManifestText = string | Record<string, string>;
 
 export interface ManifestSetting {
   key: string;
-  type: 'string' | 'number' | 'boolean' | 'select';
+  /** `profile`: a profile of the kind `of` (ESC-530). */
+  type: 'string' | 'number' | 'boolean' | 'select' | 'profile';
+  /** `project`: set by each project, in its settings, not on the plugin's page (ESC-530). */
+  scope?: 'app' | 'project';
+  /** `false`: never from `.escouade.yml`. */
+  repo?: boolean;
+  /** The kind of profile of a `profile` setting. */
+  of?: string;
   title?: ManifestText;
   description?: ManifestText;
   default?: unknown;
@@ -77,6 +84,8 @@ export interface Manifest {
     files?: { root: string; access: string }[];
     decide: boolean;
   };
+  /** What it asks for beyond the host's defaults; `processes` and `reason`: its programs at once (ESC-529). */
+  limits?: { processes?: number; reason?: ManifestText };
   contributes: Record<string, unknown>;
 }
 
@@ -87,6 +96,12 @@ export interface Choices {
   settings: Record<string, unknown>;
   /** The fingerprint of the commands on facts the user agreed to (PLG-5); absent: none. */
   commandsApproved?: string;
+  /** Its settings of each project set on this machine, by project then key (ESC-530); a profile's id, or null. */
+  projectSettings?: Record<string, Record<string, unknown>>;
+  /** Its profiles by kind (ESC-530): their ids and simple fields. */
+  profiles?: Record<string, { id: string; values: Record<string, unknown> }[]>;
+  /** The names of the secrets kept for it (never their values). */
+  secretNames?: string[];
 }
 
 export interface PluginUpdate {
@@ -238,6 +253,8 @@ export interface SecretState {
   key: string;
   kept: boolean;
   inFile: boolean;
+  /** A secret on several lines, kept: its lines and bytes, never its text (ESC-526). */
+  size?: { lines: number; bytes: number };
 }
 
 /** Why « Garder » kept nothing: its cause, said simply; `keychainRefused`: the keychain was the cause, the file is offered. */
@@ -273,7 +290,7 @@ export function textOf(text: ManifestText | undefined, lang: string): string {
 /** A permission in words: its icon, what it says, its detail (a host, an event…), and how strong it is. */
 export interface Ask {
   word: string;
-  icon: 'term' | 'shield' | 'bash' | 'spark' | 'globe' | 'lock' | 'folder';
+  icon: 'term' | 'shield' | 'bash' | 'spark' | 'globe' | 'lock' | 'folder' | 'overview';
   text: string;
   detail: string;
   strong: boolean;
@@ -282,6 +299,34 @@ export interface Ask {
   orange?: boolean;
   /** What it says under it: whether Escouade enforces it (a host of a plugin in WASM) or only shows it. */
   note?: string;
+  /** A command with jokers (ESC-528): its words, each joker said in words, in a pill. */
+  pieces?: CommandPiece[];
+}
+
+/** A word of a command as the window shows it: as written, or a joker (`joker`: `{pid}`…) said in words. */
+export interface CommandPiece {
+  text: string;
+  joker?: string;
+}
+
+/** The jokers of `permissions.commands` (§5.3 of the contract's study), by what the window says of each. */
+const JOKERS = {
+  '{int}': 'plugins.ask.jokers.int',
+  '{port}': 'plugins.ask.jokers.port',
+  '{name}': 'plugins.ask.jokers.name',
+  '{pid}': 'plugins.ask.jokers.pid',
+  '{path:temp}': 'plugins.ask.jokers.temp',
+  '{path:plugin}': 'plugins.ask.jokers.plugin',
+} as const;
+
+/** The white space a command is cut on, as Rust's `split_whitespace` (never `\s`, which differs on U+FEFF and U+0085). */
+const SPACE = /[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/;
+
+/** The words of `command`, each joker said in words; null when it has none (the command shows as written). */
+export function piecesOf(command: string): CommandPiece[] | null {
+  const words = command.split(SPACE).filter(Boolean);
+  if (!words.some((w) => w in JOKERS)) return null;
+  return words.map((w) => (w in JOKERS ? { text: t(JOKERS[w as keyof typeof JOKERS]), joker: w } : { text: w }));
 }
 
 /** The title of a secret's field, or its key. */
@@ -365,11 +410,29 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
         icon: 'bash',
         text: t('plugins.ask.commands'),
         detail: what,
+        pieces: piecesOf(what) ?? undefined,
         strong: true,
         red: true,
         // A program of a plugin in WASM goes through Escouade (`proc/spawn`); a process runs what it likes.
         note: t(m?.run?.js || m?.run?.wasm ? 'plugins.perms.commandsApplied' : 'plugins.perms.commandsNote'),
       };
+    case 'processes': {
+      // More programs at once than the 4 it has without asking (`limits.processes`, ESC-529): the core says it only
+      // beyond 4, with the author's reason.
+      // Its last full stop goes: the sentence that quotes it ends with its own.
+      const reason = textOf(m?.limits?.reason, lang)
+        .trim()
+        .replace(/[.。]+$/, '');
+      return {
+        word,
+        icon: 'overview',
+        text: t('plugins.ask.processes', { count: Number(what) }),
+        detail: '',
+        strong: true,
+        red: false,
+        note: reason ? t('plugins.ask.processesWhy', { reason }) : t('plugins.ask.processesUnasked'),
+      };
+    }
     case 'env':
       // A variable it sets on what it runs (ESC-424): any other is refused, and the families that would change the program too.
       return {

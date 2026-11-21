@@ -9,13 +9,13 @@ What a plugin asks for in its manifest, what each request opens to it, and what 
 | `run.js`, `run.wasm` | A program in JS, TypeScript or Rust, inside the app, in WASM. | All of it: 64 MB of memory, delays, and nothing beyond what it declares here: no network, no file, no program. |
 | `run.command` | A native program: Escouade no longer starts it, whatever the plugin’s origin, and the store refuses it. | Nothing: the plugin does not start, and its page says why. |
 | `permissions.decide` | Allowing or denying what your agents ask for, before you. | An answer within 500 ms, else the request comes to you; a denial wins; each decision is in the journal. Never given by a project. |
-| `permissions.commands` | The programs of your computer it can run, line by line. | Nothing else runs, without a shell, and each run goes to the journal. But the program it runs has your rights. |
+| `permissions.commands` | The programs of your computer it can run, line by line; a word that varies is a joker, shown as a pill (“a port”, “a file of its temporary folder”). | Nothing else runs, without a shell, each joker one word of its form, and each run goes to the journal. But the program it runs has your rights. |
 | `permissions.env` | The environment variables it sets on what it runs. | No other; and never, even declared, those that would change the program run (`GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…). |
 | `permissions.files` | The folders it reads or writes: its own, a folder of its own, your agents’. | A closed list of roots, resolved by Escouade, links followed, never a private project. Each write goes to the journal. |
-| `limits` | More time or bytes for a call. | Capped by Escouade: 120 s, 32 MB, 4 MB for a file. |
+| `limits` | More time or bytes for a call; beyond 4 programs at once, “Up to 8 programs at once” and the author’s reason. | Capped by Escouade: 120 s, 32 MB, 4 MB for a file, 16 programs. A raise asks for your consent again. |
 | `permissions.events` | The facts it receives: a ticket that changes columns, an agent waiting… | A fact outside the list is never sent to it. |
 | `permissions.network` | The hosts it connects to, the instances you give it (`{account}`), a harness’s local server (`local:shared`). | Enforced for a program in WASM and for webhooks: nothing else goes out. |
-| `permissions.secrets` | The secrets it keeps in the system’s keychain, under a name of its own. | It gets only those of its list, never another plugin’s, an account’s or a harness’s; they are masked in its journal. |
+| `permissions.secrets` | The secrets it keeps in the system’s keychain, under a name of its own; `profile:<kind>`, those of the profiles you create on its page. | It gets only those of its list, never another plugin’s, an account’s or a harness’s; they are masked in its journal, line by line on several lines. |
 
 For each capability, what it allows, what Escouade refuses and what the window says: [the host’s capabilities](plugins/capabilities).
 

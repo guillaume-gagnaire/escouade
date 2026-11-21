@@ -5,7 +5,8 @@
 //!
 //! - **Its module.** The bundle is compiled by `escouade_plugin_cli::wasm` (ESC-328: the pinned Javy, escouade-js and
 //!   the prelude, the same in the store's image), deterministically. Then Cranelift precompiles it for this machine. Both are kept in the app's cache ([`Modules`]): the module by the
-//!   SHA-256 of what made it, the precompiled one by the app's version too, made again after an update.
+//!   SHA-256 of what made it, the precompiled one by the app's version too, made again after an update; one made by
+//!   another version of wasmtime is refused ([`module_version`]) and made again.
 //! - **A Rust module** is a reactor compiled to `wasm32-wasip1` (`crate-type = ["cdylib"]`): no `_start`, and
 //!   `escouade-turn` (rustc exports no `_initialize` from a cdylib unless told to: it is called when it is there). It is `plugin.wasm` beside the manifest: what the store published, or what the author built.
 //!   Precompiled and kept as a bundle's, under the SHA-256 of the module itself. It gets no first line.
@@ -106,7 +107,7 @@ pub struct Limits {
 impl Limits {
     /// These, with what a manifest asks: more memory and longer turns, up to the host's ceilings, never less. A turn that
     /// holds a decision keeps its time: the agent waits for it.
-    pub fn asked(self, manifest: super::manifest::Limits) -> Self {
+    pub fn asked(self, manifest: &super::manifest::Limits) -> Self {
         let memory = manifest
             .memory_bytes
             .map_or(self.memory, |n| self.memory.max(n.min(MEMORY_MAX) as usize));
@@ -133,12 +134,24 @@ impl Default for Limits {
 
 // ---- The module ------------------------------------------------------------------------------------------------
 
+/// The exact version of wasmtime the app is built with: its pin, read by build.rs.
+pub const WASMTIME_VERSION: &str = env!("ESCOUADE_WASMTIME_VERSION");
+
+/// What a precompiled module carries of the wasmtime that made it, and what [`engine`] requires to load one: its exact
+/// version. wasmtime's own key is its major version alone, and a module of the version before a correction (50.0.1
+/// under 50.0.2, ESC-542) must be made again, whatever the app's version says.
+pub fn module_version() -> String {
+    format!("wasmtime {WASMTIME_VERSION}")
+}
+
 /// The engine of every plugin: Cranelift, the epoch ticked by a thread of its own; one for the app.
 pub fn engine() -> &'static Engine {
     static ENGINE: OnceLock<Engine> = OnceLock::new();
     ENGINE.get_or_init(|| {
         let mut c = Config::new();
         c.epoch_interruption(true);
+        c.module_version(wasmtime::ModuleVersionStrategy::Custom(module_version()))
+            .expect("the key of the precompiled modules");
         let e = Engine::new(&c).expect("wasmtime's engine");
         let ticker = e.clone();
         std::thread::Builder::new()
@@ -419,7 +432,7 @@ fn precompiled(path: &Path) -> Option<Module> {
     // Read whole, not mapped: under Windows a mapped file could be neither replaced nor taken out of the cache.
     let pre = std::fs::read(path).ok()?;
     // SAFETY: a file this app wrote itself (`Module::serialize`) into its own cache, never one received;
-    // wasmtime checks it was made by this same version and configuration.
+    // wasmtime checks it was made by this same version ([`module_version`]) and configuration.
     match unsafe { Module::deserialize(engine(), &pre) } {
         Ok(m) => Some(m),
         Err(e) => {
@@ -445,18 +458,20 @@ pub fn reactor(bytes: &[u8]) -> Result<Module, String> {
 
 #[derive(Clone, Default)]
 struct Inbox(Arc<Mutex<VecDeque<u8>>>);
-/// What the module writes on a stream until the host takes it, `.1` bytes at most (its memory): past them the write is a
-/// trap that stops the turn, and `.2` says why (SEC-11 of the 2.2.0 audit).
+/// What the module writes on one of its two streams until the host takes it, `.1` bytes at most (its memory): past
+/// them the write is a trap that stops the turn, and `.2` says why (SEC-11 of the 2.2.0 audit, ESC-542); `.3` names
+/// the stream for the journal.
 #[derive(Clone)]
 struct Outbox(
     Arc<Mutex<Vec<u8>>>,
     usize,
     Arc<std::sync::atomic::AtomicBool>,
+    &'static str,
 );
 
 impl Outbox {
-    fn within(max: usize) -> Self {
-        Self(Arc::default(), max, Arc::default())
+    fn within(max: usize, stream: &'static str) -> Self {
+        Self(Arc::default(), max, Arc::default(), stream)
     }
 
     /// Whether a write went past its ceiling.
@@ -506,9 +521,13 @@ impl InputStream for Inbox {
 }
 #[wasmtime_wasi::async_trait]
 impl OutputStream for Outbox {
+    /// Past its ceiling in one turn (the module's memory), the instance is stopped: what waits is held in the app's
+    /// memory (SEC-11, ESC-542).
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
         let mut kept = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if kept.len().saturating_add(bytes.len()) > self.1 {
+            // The instance is done: what it wrote goes now, not with it.
+            *kept = Vec::new();
             self.2.store(true, std::sync::atomic::Ordering::Release);
             return Err(wasmtime_wasi::p2::StreamError::trap(
                 "a turn wrote past its ceiling",
@@ -668,8 +687,9 @@ pub enum Fault {
     Timeout(Duration),
     /// A trap, a memory refused, an exception QuickJS did not catch.
     Crashed(String),
-    /// A turn that wrote more than its ceiling (its memory, in bytes) on its output or its error output, stopped there.
-    Flooded(usize),
+    /// A turn that wrote more than its ceiling (its memory, in bytes) on its output or its error output (named),
+    /// stopped there.
+    Flooded(usize, &'static str),
 }
 
 impl std::fmt::Display for Fault {
@@ -681,9 +701,9 @@ impl std::fmt::Display for Fault {
                 d.as_millis()
             ),
             Fault::Crashed(why) => write!(f, "its instance crashed: {why}"),
-            Fault::Flooded(max) => write!(
+            Fault::Flooded(max, stream) => write!(
                 f,
-                "a turn wrote more than {} MiB: Escouade stopped its instance",
+                "a turn wrote more than {} MiB on its {stream}: Escouade stopped its instance",
                 max >> 20
             ),
         }
@@ -718,10 +738,10 @@ impl Instance {
         .map_err(crashed)?;
         w(linker.func_wrap("escouade", "call", escouade_call)).map_err(crashed)?;
         let inbox = Inbox::default();
-        // What a turn writes is held until its end: no more than the memory the module is given (SEC-11), which
-        // no answer of a plugin, made in that memory, goes past.
-        let outbox = Outbox::within(limits.memory);
-        let errbox = Outbox::within(limits.memory);
+        // What a turn writes is held until its end: no more than the memory the module is given (SEC-11, ESC-542),
+        // which no answer of a plugin, made in that memory, goes past.
+        let outbox = Outbox::within(limits.memory, "standard output");
+        let errbox = Outbox::within(limits.memory, "standard error");
         // No folder, no network, no environment, no argument: only the three streams.
         let wasi = WasiCtxBuilder::new()
             .stdin(inbox.clone())
@@ -815,9 +835,14 @@ impl Instance {
             {
                 Ok(())
             }
-            Err(_) if self.outbox.over() || self.errbox.over() => {
-                Err(Fault::Flooded(self.limits.memory))
-            }
+            Err(_) if self.outbox.over() || self.errbox.over() => Err(Fault::Flooded(
+                self.limits.memory,
+                if self.outbox.over() {
+                    self.outbox.3
+                } else {
+                    self.errbox.3
+                },
+            )),
             Err(e) => Err(match e.downcast_ref::<wasmtime::Trap>() {
                 Some(wasmtime::Trap::Interrupt) => Fault::Timeout(within),
                 _ => {

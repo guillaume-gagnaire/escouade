@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-jira"
-version = "2.2.4"
+version = "2.2.5"
 description = "Le plugin Jira d'Escouade : les tickets d'un projet Jira Cloud dans le Kanban, ses statuts comme colonnes"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
@@ -18,4 +18,4 @@ anyhow = "1"
 base64 = "0.22"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt"] }
+tokio = { version = "1", features = ["macros", "rt", "io-util"] }

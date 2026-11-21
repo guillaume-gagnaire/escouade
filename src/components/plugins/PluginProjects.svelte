@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
+  import { projectFields } from '../../lib/plugin-profiles';
   import { activeIn, type PluginView } from '../../lib/plugins';
   import { plugins } from '../../lib/plugins-view.svelte';
   import { app } from '../../lib/state.svelte';
@@ -9,6 +10,8 @@
   // elsewhere, unless the project is private — a private project is off by default, and says that nothing reaches it,
   // or, switched on, what Escouade cannot keep a program from doing.
   let { plugin }: { plugin: PluginView } = $props();
+  // A plugin with settings of each project (ESC-530) links each project where it is on to its page Plugins.
+  const ofProjects = $derived(projectFields(plugin.manifest).length > 0);
 </script>
 
 <section class="projects">
@@ -26,6 +29,12 @@
             · {plugin.choices.projects[project.id] ? t('plugins.projects.privateOn') : t('plugins.projects.private')}</span
           >{/if}</span
       >
+      {#if ofProjects && on}<button
+          class="link"
+          type="button"
+          onclick={() => (app.modal = { kind: 'settings', page: 'projectPlugins', projectId: project.id })}
+          >{t('plugins.projectPage.projectLink')}</button
+        >{:else if ofProjects}<span></span>{/if}
       <button
         class="switch"
         class:on
@@ -58,6 +67,7 @@
   .prj {
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr) auto;
+    grid-auto-flow: column;
     gap: 10px;
     align-items: center;
     padding: 8px 0;
@@ -70,6 +80,18 @@
   .why {
     color: var(--muted);
     font-size: 11.5px;
+  }
+  .link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--p-ink);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .link:hover {
+    text-decoration: underline;
   }
   .switch:disabled {
     opacity: 0.4;

@@ -1350,6 +1350,30 @@ describe('Conversation of an agent whose harness has no account (choice 19)', ()
     app.settings.accounts = [...(app.settings.accounts ?? []), { ...app.settings.accounts![0], id: 'cx', engine: 'codex', active: true }];
     await waitFor(() => expect(screen.queryByRole('group', { name: /Aucun compte Codex/ })).not.toBeInTheDocument());
   });
+  // ESC-556: its project has no account because the only one is reserved to another project: that one named, with the
+  // project that holds it, and « Partager à nouveau ».
+  it('names the account reserved elsewhere and shares it again', async () => {
+    const a = agent({ id: `nr${Math.random()}`, status: 'idle' });
+    const principal = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true, projects: ['p2'] };
+    resetApp({ projects: [project(), project({ id: 'p2', name: 'client', private: true })], agents: [a] });
+    app.settings.accounts = [principal];
+    const b = fakeBackend({
+      get_conversation: () => [],
+      send_message: () => {
+        throw 'no-account:claude@p1|Aucun compte Claude Code actif ne sert le projet « demo-api » : coche-le sous « Réservé aux projets ».';
+      },
+      account_update: ({ account }) => [account],
+    });
+    render(Conversation, { agent: a, project: project() });
+    await userEvent.type(screen.getByRole('textbox'), 'Bonjour{Enter}');
+    const card = await screen.findByTestId('no-account');
+    expect(within(card).getByTestId('reserved-away')).toHaveTextContent(
+      '« Principal » est réservé à « client » : « demo-api » n’a plus de compte Claude Code actif.',
+    );
+    await userEvent.click(within(card).getByRole('button', { name: 'Partager à nouveau' }));
+    expect(b.called('account_update')[0].args.account).toMatchObject({ id: 'principal', projects: [] });
+    await waitFor(() => expect(screen.queryByTestId('no-account')).not.toBeInTheDocument());
+  });
 });
 
 describe('Conversation header', () => {

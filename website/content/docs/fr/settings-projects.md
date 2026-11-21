@@ -46,7 +46,7 @@ Quand « Remote control pour tous les agents » est allumé dans la page [« 
 |---|---|---|
 | « Projet privé » | Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout. Un cadenas le marque, sur sa tuile, à côté de son nom dans la barre de titre et dans la rangée « Projet ». | Désactivé, ou « Nouveaux projets privés » pour un projet ajouté |
 
-| « Comptes » (projet privé) | Les comptes de son harness par défaut où ses agents peuvent partir : réservés à lui seul, ou partagés avec d’autres projets (sessions, mémoire, historique en commun). « Ajouter un compte réservé… » et « Réserver Pro à ce projet » y remédient. | — |
+| « Comptes » (projet privé) | Les comptes de son harness par défaut où ses agents partent : réservés à lui seul (« Ne plus le réserver »), ou partagés avec d’autres projets, ses sessions restant à lui (ce qui reste commun est dit). « Ajouter un compte réservé… » et « Réserver Pro à ce projet » séparent tout, en plus ; une réservation qui priverait d’autres projets de compte demande d’abord. | — |
 | « Comptes partagés à la limite » (projet privé) | À la limite d’usage de ses comptes réservés, ses agents peuvent continuer sur un compte partagé (changement de compte, passage à un autre harness). Éteint, ils attendent la remise à zéro. | Désactivé |
 
 Voir [les projets privés](mcp#les-projets-prives) et [un compte pour un projet privé](accounts#un-compte-pour-un-projet-prive).

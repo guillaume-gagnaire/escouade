@@ -3,6 +3,7 @@ import { createPlugin } from '@escouade-dev/plugin';
 import { keep, notes, words } from './files.ts';
 import { follow, issue } from './net.ts';
 import { input, status, stop, version } from './procs.ts';
+import { credentials, profileOf, routes, tunnel } from './profiles.ts';
 import { channel, journal, token } from './settings.ts';
 import { live } from './socket.ts';
 import { later, patient } from './timers.ts';
@@ -24,5 +25,9 @@ plugin.handle('example/input', (_, p) => input(p));
 plugin.handle('example/kill', (_, p) => stop(p));
 plugin.handle('example/settings', (project, p) => channel(p, project as string));
 plugin.handle('example/secret', (_, p) => token(p));
+plugin.handle('example/profile', (project, p) => profileOf(p, project as string));
+plugin.handle('example/credentials', (profile, p) => credentials(p, profile as string));
+plugin.handle('example/routes', (project, p) => routes(p, project as string));
+plugin.handle('example/tunnel', async (ovpn, p) => (await tunnel(p, ovpn as string)).map((program) => program.pid));
 
 void plugin.start();

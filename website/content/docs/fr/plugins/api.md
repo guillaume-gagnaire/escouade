@@ -33,10 +33,10 @@ Le premier message d’Escouade est `initialize`. Il donne la version du protoco
   "method": "initialize",
   "params": {
     "protocolVersion": 1,
-    "escouade": { "version": "2.1.1" },
+    "escouade": { "version": "2.2.5" },
     "plugin": { "id": "dev.escouade.slack", "version": "1.1.0" },
     "lang": "fr",
-    "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true }
+    "capabilities": { "batch": true, "secrets": true, "settings": true, "log": true, "attach": true, "typedCommands": true, "profiles": true }
   }
 }
 ```
@@ -48,6 +48,7 @@ Le plugin répond la version qu’il parle et ses propres capacités :
 ```
 
 - `lang` est la langue de l’interface (`fr`, `en`), pour ce que le plugin écrit à l’utilisateur.
+- `capabilities` dit ce qu’Escouade sert. Depuis la 2.2.5 : `typedCommands`, les jokers de `permissions.commands`, et `profiles`, les profils et les réglages de chaque projet. Un plugin qui s’en sert dit `escouade.min` ; le SDK et le kit vérifient la capacité avant l’appel ([les versions](plugins/versioning#le-contrat-de-la-2-2-5)).
 - Une autre version, ou une réponse sans version, arrête le plugin, avec la raison : « it speaks version 2 of the protocol; this Escouade speaks version 1 ».
 - Sans réponse en 10 secondes, le plugin est arrêté aussi.
 - Rien d’autre ne lui est envoyé avant sa réponse : ce qui arrive entre-temps attend dans une file.
@@ -88,6 +89,8 @@ Sur un poste sans trousseau (Linux, WSL), l’utilisateur peut choisir de les ga
 - **Seulement les siens.** La clé doit être l’une de ses `permissions.secrets` ; un motif finissant par `*` en prend plusieurs (`account:*`). Tout autre clé est refusée par `-32001` et notée au journal, même celle d’un autre plugin écrite en entier : `plugin:dev.autre:token` n’est pas une clé de ses permissions.
 - Un plugin n’obtient jamais le secret d’un compte, d’un harness ou d’une intégration d’Escouade.
 - Un secret donné au plugin est masqué (`••••`) partout dans son journal, sa sortie d’erreur comprise.
+- **D’un profil** : `secrets/get { key, profile }` rend un champ secret d’un profil, avec `profile:<genre>` dans `permissions.secrets`. Son nom au trousseau est `plugin:<id>:profile:<genre>:<profil>:<clé>`, `<profil>` tiré par Escouade. Un champ de profil demandé sans son profil est refusé (`-32602`), jamais un autre secret donné ([des identifiants par projet](plugins/project-credentials)).
+- **Sur plusieurs lignes** : un secret long (une configuration avec ses certificats, 64 Kio au plus) vient en entier ; le journal en masque chaque ligne de plus de 8 caractères.
 
 ## Les plantages et les relances
 

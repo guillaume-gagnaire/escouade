@@ -9,13 +9,13 @@ Ce qu’un plugin demande dans son manifeste, ce que chaque demande lui ouvre, e
 | `run.js`, `run.wasm` | Un programme en JS, en TypeScript ou en Rust, dans l’app, en WASM. | Tout : 64 Mo de mémoire, des délais, et rien hors de ce qu’il déclare ici : ni réseau, ni fichier, ni programme. |
 | `run.command` | Un programme natif : Escouade ne le lance plus, quelle que soit l’origine du plugin, et le store le refuse. | Rien : le plugin ne démarre pas, et sa page dit pourquoi. |
 | `permissions.decide` | Autoriser ou refuser ce que tes agents demandent, avant toi. | Une réponse en 500 ms, sinon la demande vient à toi ; un refus l’emporte ; chaque décision est au journal. Jamais donnée par un projet. |
-| `permissions.commands` | Les programmes de ton ordinateur qu’il peut lancer, ligne par ligne. | Rien d’autre ne se lance, sans shell, et le lancement va au journal. Mais le programme lancé a tes droits. |
+| `permissions.commands` | Les programmes de ton ordinateur qu’il peut lancer, ligne par ligne ; un mot qui varie est un joker, montré en pastille (« un port », « un fichier de son dossier temporaire »). | Rien d’autre ne se lance, sans shell, chaque joker un seul mot de sa forme, et le lancement va au journal. Mais le programme lancé a tes droits. |
 | `permissions.env` | Les variables d’environnement qu’il pose sur ce qu’il lance. | Aucune autre ; et jamais, même déclarées, celles qui changeraient le programme lancé (`GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…). |
 | `permissions.files` | Les dossiers qu’il lit ou écrit : le sien, un dossier à lui, ceux de tes agents. | Une liste fermée de racines, résolues par Escouade, liens suivis, jamais un projet privé. Chaque écriture va au journal. |
-| `limits` | Plus de temps ou d’octets pour un appel. | Plafonnées par Escouade : 120 s, 32 Mo, 4 Mo pour un fichier. |
+| `limits` | Plus de temps ou d’octets pour un appel ; au-delà de 4 programmes à la fois, « Jusqu’à 8 programmes à la fois » et la raison de l’auteur. | Plafonnées par Escouade : 120 s, 32 Mo, 4 Mo pour un fichier, 16 programmes. Une hausse redemande ton accord. |
 | `permissions.events` | Les faits qu’il reçoit : un ticket qui change de colonne, un agent qui attend… | Un fait hors de la liste ne lui est jamais envoyé. |
 | `permissions.network` | Les hôtes où il se connecte, les instances que tu lui donnes (`{account}`), le serveur local d’un harness (`local:shared`). | Appliquée à un programme en WASM et aux webhooks : rien d’autre ne part. |
-| `permissions.secrets` | Les secrets qu’il garde au trousseau du système, sous un nom à lui. | Il ne reçoit que ceux de sa liste, jamais ceux d’un autre plugin, d’un compte ou d’un harness ; ils sont masqués dans son journal. |
+| `permissions.secrets` | Les secrets qu’il garde au trousseau du système, sous un nom à lui ; `profile:<genre>`, ceux des profils que tu crées sur sa page. | Il ne reçoit que ceux de sa liste, jamais ceux d’un autre plugin, d’un compte ou d’un harness ; ils sont masqués dans son journal, ligne par ligne sur plusieurs lignes. |
 
 Pour chaque capacité, ce qu’elle permet, ce qu’Escouade refuse et ce que dit la fenêtre : [les capacités de l’hôte](plugins/capabilities).
 

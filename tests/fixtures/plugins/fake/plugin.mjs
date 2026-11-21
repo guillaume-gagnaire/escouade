@@ -20,9 +20,12 @@
 //   stderr  → <lines> written on its journal, then { ok }
 //   secret / steal → asks Escouade `secrets/get` for <key>, and gives back what came: { result } or { error }
 //   settings → asks Escouade `settings/get` (of <project>, if given), and gives back what came: { result }
+//   request → asks Escouade <method> with <params> (a profile's secret, profiles/list…), and gives back what came:
+//             { result } or { error }
 //   log     → a `log` notification of <message>, then { ok }
 // It also serves a ticket source and a code host (INT-5, ESC-211): `account/me`, `tickets/*` and `forge/*`, on a
-// few fixed records. `--untyped` answers every one with an error that is not typed; `--token-from <key>` makes every one
+// few fixed records. `--untyped` answers every one with an error that is not typed; `--fetch` asks `net/fetch` for
+// https://fake.test/me first and answers the host's refusal as it came, untyped (ESC-536); `--token-from <key>` makes every one
 // ask Escouade `secrets/get` for that key first and answer 401 (-32401) unless it is `good`; a container named `gone`
 // answers 404, `refused` a lasting refusal, `crash` fails the instance, `slow` is never answered. `forge/*` answer
 // { value, rateLimit }; `forge/merge` is not served (-32601). `--ticket-budget` makes `tickets/*` answer
@@ -130,6 +133,17 @@ function handle(msg) {
         }
         return null;
       }
+      // `--fact-profile <setting>` (ESC-530): the profile the fact's project chose (settings/get of its project), then the
+      // secret of that profile.
+      if (option('--fact-profile')) {
+        const project = params.project?.id;
+        ask('settings/get', project ? { project } : {}).then((got) => {
+          const profile = got.result?.[option('--fact-profile')] ?? null;
+          send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: `fact ${params.name}: profile ${profile}` } });
+          if (profile) ask('secrets/get', { key: option('--fact-secret') ?? 'token', profile });
+        });
+        return null;
+      }
       ask('secrets/get', { key: option('--fact-secret') ?? 'token' }).then((answer) => {
         if (flag('--leak')) trace(`fake-plugin: the secret is ${answer.result}`);
         send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: `fact ${params.name}` } });
@@ -165,6 +179,11 @@ const calls = [];
 function serve(id, method, p) {
   calls.push({ method, params: p });
   if (flag('--untyped')) return fail(id, -32000, 'boom');
+  if (flag('--fetch')) {
+    return ask('net/fetch', { url: 'https://fake.test/me', method: 'GET', headers: {} }).then((answer) =>
+      answer.error ? fail(id, -32000, answer.error.message) : records(id, method, p, p.container ?? p.repo?.name),
+    );
+  }
   const name = p.container ?? p.repo?.name ?? p.reader;
   if (name === 'crash') crash('crashing on a ticket call');
   const tokenKey = option('--token-from');
@@ -279,6 +298,10 @@ function behave(id, p) {
       );
     case 'settings':
       return ask('settings/get', p.project ? { project: p.project } : {}).then((answer) => ok(id, { result: answer.result ?? null }));
+    case 'request':
+      return ask(p.method, p.params ?? {}).then((answer) =>
+        ok(id, answer.error ? { error: answer.error } : { result: answer.result ?? null }),
+      );
     case 'log':
       send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: p.message } });
       return ok(id, { ok: true });

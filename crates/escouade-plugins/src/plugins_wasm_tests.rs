@@ -418,6 +418,7 @@ __esc.listen((line) => {
   if (m.method === "spin") for (;;) {}
   if (m.method === "grow") { const a = []; for (;;) a.push(new Array(100000).fill(1)); }
   if (m.method === "boom") throw new Error("boom");
+  if (m.method === "flood-out" || m.method === "flood-err") { const b = new Uint8Array(1 << 20).fill(32); const fd = m.method === "flood-out" ? 1 : 2; for (;;) Javy.IO.writeSync(fd, b); }
   if (m.method === "read") {
     const r = m.params.paths.map((p) => { try { return JSON.parse(readFileSync(new URL(p, import.meta.url), "utf8")).deny ? "rules" : "other"; } catch (e) { return e.code; } });
     out({ jsonrpc: "2.0", id: m.id, result: r });
@@ -533,6 +534,53 @@ async fn a_loop_without_end_a_memory_that_grows_and_a_crash_are_caught_and_the_i
     // « Relancer » starts it again.
     w.rt.restart(&w.id).unwrap();
     assert_eq!(w.rt.call(&w.id, "ping", json!({})).await.unwrap(), 2);
+    w.rt.shutdown();
+}
+
+/// What a plugin writes on its standard output or error waits in the app's memory until the end of its turn (ESC-542,
+/// beside RUSTSEC-2026-0566): bounded, so that a loop of writes does not take the machine's memory for a whole turn. Past
+/// its memory (64 MiB by default, SEC-11 of the 2.2.0 audit) the instance is stopped at once, its journal says why, and it
+/// starts again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_that_floods_its_standard_output_or_error_is_stopped_at_the_bound_not_at_the_end_of_its_turn(
+) {
+    if !ready() {
+        return;
+    }
+    let mut limits = Limits::default();
+    limits.wasm.turn = Duration::from_secs(10);
+    let w = probe("flood", &[], limits);
+    assert_eq!(w.rt.call(&w.id, "ping", json!({})).await.unwrap(), 2);
+    for (method, stream, again) in [
+        ("flood-out", "standard output", 1),
+        ("flood-err", "standard error", 2),
+    ] {
+        let t = Instant::now();
+        let r = w.rt.call(&w.id, method, json!({})).await;
+        assert!(matches!(r, Err(CallError::Crashed)), "{stream}: {r:?}");
+        assert!(
+            t.elapsed() < Duration::from_secs(8),
+            "{stream}: {:?}",
+            t.elapsed()
+        );
+        until("its crash said", || {
+            journal_has(
+                &w,
+                Kind::Crash,
+                &format!("a turn wrote more than 64 MiB on its {stream}"),
+            )
+        })
+        .await;
+        until("restarted", || {
+            journal_has(
+                &w,
+                Kind::Start,
+                &format!("starting again ({again} of 3 within 5 minutes)"),
+            )
+        })
+        .await;
+        assert_eq!(w.rt.call(&w.id, "ping", json!({})).await.unwrap(), 2);
+    }
     w.rt.shutdown();
 }
 

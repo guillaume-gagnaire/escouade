@@ -14,6 +14,8 @@ pub mod html;
 mod joined;
 pub mod pulls;
 
+mod reach;
+
 #[cfg(test)]
 #[path = "../../fake_service.rs"]
 mod fake;
@@ -108,10 +110,12 @@ impl SourceKind for AzureBoards {
 
 /// What its module runs, on its first turn.
 pub fn run() -> i32 {
-    escouade_plugin_kit::serve::run(
-        "azure-devops",
-        Hosts::new(vec![Box::new(AzureForge)], vec![Box::new(AzureBoards)]),
-    )
+    escouade_plugin_kit::serve::run("azure-devops", hosts())
+}
+
+/// Its code hosts and sources, as the kit serves them.
+fn hosts() -> Hosts {
+    Hosts::new(vec![Box::new(AzureForge)], vec![Box::new(AzureBoards)])
 }
 
 escouade_plugin_kit::protocol::module!(run);

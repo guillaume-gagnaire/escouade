@@ -12,6 +12,7 @@
   import { SIDE_MIN, sideWidth } from '../lib/side-width.svelte';
   import Splitter from './Splitter.svelte';
   import DocsSidebar from './docs/DocsSidebar.svelte';
+  import { readDocsPending } from '../lib/docs-share';
   import { t } from '../lib/i18n';
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
@@ -38,7 +39,17 @@
   import { answerOf, draftIfAny, draftOf, dropDraft } from '../lib/question-answers.svelte';
   import { revealHidden } from '../lib/recipe';
   import { toolLabel } from '../lib/tools';
-  import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
+  import {
+    canSwitchView,
+    copyRemoteLink,
+    inHarnessView,
+    integrateBase,
+    openRemote,
+    remoteAsleep,
+    switchView,
+    toggleRemote,
+    wakeRemote,
+  } from '../lib/agent-actions';
   import { can, canFork, engineName, offered, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
   import { canFixChecks, canFixReviews, cardPrs, fixPr, prIcon, prKey, prMenuItem, prTip, prTone, prWord, stateWord } from '../lib/prs';
@@ -169,6 +180,21 @@
   const prsTab = $derived(hasTab(app.codeHosts[project.id], 'pullRequests'));
   /** The project's pull requests come since its PR tab was last opened (ESC-403). */
   const prsNew = $derived(app.prsNew(project.id));
+  /**
+   * What the badge of the Docs tab tells (ESC-534, in place of the status bar): the changes of the docs left to share, or
+   * the conflict a synchronisation stopped on (the writer agent resolving it too). Read when the project shows, kept true by
+   * the core's events wherever the window is.
+   */
+  const docsShared = $derived(app.docsShare[project.id]);
+  const docsConflict = $derived(docsShared?.conflict ?? null);
+  const docsPending = $derived(docsShared?.pending ?? 0);
+  const docsBadge = $derived(
+    docsConflict ? t('docs.share.badgeConflict') : docsPending ? t('docs.share.badge', { count: docsPending }) : '',
+  );
+  $effect(() => {
+    const id = project.id;
+    untrack(() => void readDocsPending(id));
+  });
   // Its code host read when the project shows, and again when the window comes back (its remote may have changed).
   $effect(() => {
     const id = project.id;
@@ -687,12 +713,22 @@
 
   function remoteItems(a: Agent): MenuItem[] {
     if (a.archived || !can(a, 'remoteControl')) return [];
-    const items: MenuItem[] = [
-      { label: '', separator: true },
+    const items: MenuItem[] = [{ label: '', separator: true }];
+    // In the Escouade view, what its link is now (ESC-544): with a process, linked; with none, asleep until its next
+    // message, which « Réveiller » brings forward.
+    if (a.remoteControl && !a.terminal) {
+      if (remoteAsleep(a))
+        items.push(
+          { label: t('nav.sidebar.menu.remoteAsleep'), heading: true },
+          { label: t('nav.sidebar.menu.remoteWake'), onClick: () => wakeRemote(a) },
+        );
+      else items.push({ label: t('nav.sidebar.menu.remoteLinked'), heading: true });
+    }
+    items.push(
       a.remoteControl
         ? { label: t('nav.sidebar.menu.remoteOff'), onClick: () => toggleRemote(a) }
         : { label: t('nav.sidebar.menu.remoteOn'), hint: t('nav.sidebar.menu.remoteOnHint'), onClick: () => toggleRemote(a) },
-    ];
+    );
     // In Claude Code's own interface, the session is the interface's: its link is offered once the interface says it is up.
     if (a.remoteControl && a.remoteUrl && (!a.terminal || a.remoteState === 'connected')) {
       items.push(
@@ -703,13 +739,15 @@
     return items;
   }
 
-  type RemoteState = 'connected' | 'connecting' | 'waiting' | 'noInterface' | 'nextLaunch' | 'unavailable' | 'stillOn';
+  type RemoteState = 'connected' | 'connecting' | 'waiting' | 'asleep' | 'noInterface' | 'nextLaunch' | 'unavailable' | 'stillOn';
 
   /** The state of the remote control icon of an agent's card, null for none: what its link is, or what keeps it. */
   function remoteStateOf(a: Agent): RemoteState | null {
     if (!can(a, 'remoteControl')) return null;
     if (!a.terminal) {
       if (!a.remoteControl) return null;
+      // No process: claude.ai sees it disconnected until its next one (ESC-544).
+      if (remoteAsleep(a)) return 'asleep';
       return a.remoteState === 'connected' ? 'connected' : a.remoteState === 'ready' ? 'connecting' : 'waiting';
     }
     // In Claude Code's view the link is the interface's, which Escouade does not drive: what it reports is the state.
@@ -998,7 +1036,30 @@
       >
     {/if}
     {#if app.feature('docs')}
-      <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}>{t('docs.tab')}</button>
+      <!-- Its badge (ESC-534): the changes of the docs to share, a conflict marked apart; none when the docs are up to date. -->
+      <button
+        class:on={app.docsOn}
+        aria-pressed={app.docsOn}
+        aria-label={docsConflict
+          ? t('docs.share.tabConflict')
+          : docsPending
+            ? t('docs.share.tabPending', { count: docsPending })
+            : undefined}
+        onclick={() => app.openDocs(project.id)}
+        >{t('docs.tab')}{#if docsConflict}<span
+            class="badge conflict"
+            data-testid="docs-badge"
+            data-state="conflict"
+            aria-hidden="true"
+            use:tip={{ text: docsBadge, aria: false }}>!</span
+          >{:else if docsPending}<span
+            class="badge"
+            data-testid="docs-badge"
+            data-state="pending"
+            aria-hidden="true"
+            use:tip={{ text: docsBadge, aria: false }}>{docsPending}</span
+          >{/if}</button
+      >
     {/if}
   </div>
 
@@ -1126,7 +1187,13 @@
               </span>
             {/if}
             {#if remote}
-              <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
+              <span
+                class="rc"
+                class:on={remote === 'connected'}
+                class:warn={remote === 'stillOn'}
+                class:asleep={remote === 'asleep'}
+                use:tip={remoteTitle(a, remote)}
+              >
                 <Icon name="remote" size={13} />{#if remote === 'stillOn'}<span class="bar" aria-hidden="true"></span>{/if}
               </span>
             {/if}
@@ -1837,6 +1904,12 @@
     height: 16px;
     font-size: 10px;
   }
+  /* A conflict of the docs (ESC-534): the same badge, red, louder than what is only waiting. */
+  .seg .badge.conflict {
+    background: var(--del);
+    color: var(--on-wait);
+    font-weight: 750;
+  }
   .badge {
     min-width: 17px;
     height: 17px;
@@ -2068,6 +2141,10 @@
   /* Off for Escouade, still linked in the interface left open: barred, in the colour of the other warnings. */
   .rc.warn {
     color: var(--wait);
+  }
+  /* Asleep (no process, ESC-544): the session is kept, not reachable until its next process. */
+  .rc.asleep {
+    opacity: 0.55;
   }
   .rc .bar {
     position: absolute;

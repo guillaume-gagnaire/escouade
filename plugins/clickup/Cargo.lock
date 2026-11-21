@@ -143,11 +143,12 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-clickup"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

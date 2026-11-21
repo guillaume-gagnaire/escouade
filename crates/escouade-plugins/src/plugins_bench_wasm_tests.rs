@@ -294,10 +294,11 @@ fn built(dir: &Path) -> PathBuf {
     at
 }
 
-/// The review plays a plugin offline (ESC-353): a source whose service is out of reach answers by the host's refusal, which
-/// it does not type. That cannot be judged here, and is no failure: every first-hand source and host would fall on it.
+/// The review plays a plugin offline (ESC-353): its service is out of reach. A first-hand source says it typed, as the
+/// HTTP error 503 (-32503, ESC-536), which the bench judges; one that answers the host's refusal untyped is not judged
+/// (`plugins_bench_tests::offline_a_service_out_of_reach_answered_untyped_is_not_judged`).
 #[tokio::test(flavor = "multi_thread")]
-async fn offline_a_service_out_of_reach_is_not_judged_and_fails_nothing() {
+async fn offline_a_first_hand_source_out_of_reach_says_it_typed() {
     let dir = root().join("plugins/trello");
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
@@ -321,12 +322,12 @@ async fn offline_a_service_out_of_reach_is_not_judged_and_fails_nothing() {
     .await;
     assert_eq!(
         r.outcome(Scenario::Tickets).verdict,
-        Verdict::Skip,
+        Verdict::Pass,
         "{}",
         r.render(Lang::Fr)
     );
     assert!(
-        said(&r, Scenario::Tickets).contains("account/me"),
+        said(&r, Scenario::Tickets).contains("account/me: -32503"),
         "{}",
         r.render(Lang::Fr)
     );
@@ -455,4 +456,153 @@ async fn offline_the_bench_refuses_every_fetch_even_to_the_hosts_of_permissions_
         r.render(Lang::En)
     );
     assert!(!seen.contains("fetched"), "{seen}");
+}
+
+/// A copy of tests/fixtures/plugins/sdk-contract (its manifest changed by `change`), the plugin of the contract of 2.2.5.
+fn contract_plugin(change: impl FnOnce(&mut Value)) -> PathBuf {
+    let src = root().join("tests/fixtures/plugins/sdk-contract");
+    let to = std::env::temp_dir()
+        .join(format!(
+            "plugin-bench-contract-{}",
+            uuid::Uuid::new_v4().simple()
+        ))
+        .join("sdk-contract");
+    std::fs::create_dir_all(to.join("dist")).unwrap();
+    for f in ["dist/plugin.mjs", "rules.txt"] {
+        std::fs::copy(src.join(f), to.join(f)).unwrap();
+    }
+    let mut m: Value =
+        serde_json::from_str(&std::fs::read_to_string(src.join("escouade-plugin.json")).unwrap())
+            .unwrap();
+    change(&mut m);
+    std::fs::write(
+        to.join("escouade-plugin.json"),
+        serde_json::to_string_pretty(&m).unwrap(),
+    )
+    .unwrap();
+    to
+}
+
+/// The bench as an author plays it, as the version that serves the contract (`ESCOUADE_MIN`, which the plugin says).
+fn contract_options() -> Options {
+    Options {
+        hand: Hand::Third,
+        app_version: escouade_plugin_protocol::ESCOUADE_MIN.to_string(),
+        ..options(Lang::En)
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_plugin_of_the_contract_passes_its_profiles_lines_jokers_and_limit_in_wasm() {
+    if !ready() {
+        return;
+    }
+    let r = run(&contract_plugin(|_| {}), &contract_options()).await;
+    assert!(r.passed(), "{}", r.render(Lang::En));
+    for s in [
+        Scenario::Profiles,
+        Scenario::Multiline,
+        Scenario::Commands,
+        Scenario::Limit,
+    ] {
+        assert_eq!(
+            r.outcome(s).verdict,
+            Verdict::Pass,
+            "{}",
+            r.render(Lang::En)
+        );
+    }
+    let profiles = said(&r, Scenario::Profiles);
+    for asked in [
+        "the settings of a project",
+        "the profiles vpn",
+        "the fields of a profile vpn",
+        "ovpn of a profile vpn",
+        "password of a profile vpn",
+    ] {
+        assert!(profiles.contains(asked), "{profiles}");
+    }
+    let lines = said(&r, Scenario::Multiline);
+    assert!(lines.contains("notes") && lines.contains("ovpn"), "{lines}");
+    let commands = said(&r, Scenario::Commands);
+    assert!(commands.contains("git cat-file --batch"), "{commands}");
+    assert!(
+        commands.contains("git column --mode=plain --padding 2"),
+        "{commands}"
+    );
+    // A path is the host's: the real one under its temporary folder, never the word the plugin gave.
+    assert!(!commands.contains("hash-object tunnel.ovpn"), "{commands}");
+    assert!(commands.contains("tunnel.ovpn"), "{commands}");
+    assert!(
+        said(&r, Scenario::Limit).contains("5 at once declared"),
+        "{}",
+        r.render(Lang::En)
+    );
+    // What it logged says no secret.
+    let logged: Vec<String> = r
+        .seen
+        .iter()
+        .filter_map(|s| match s {
+            crate::bench::fake::Seen::Log { message, .. } => Some(message.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        logged.iter().any(|l| l.contains("lines of configuration")),
+        "{logged:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_bench_says_a_profile_not_its_own_a_command_not_declared_and_a_limit_passed() {
+    if !ready() {
+        return;
+    }
+    // Without profile:vpn, the secrets of its profiles are not its own.
+    let r = run(
+        &contract_plugin(|m| m["permissions"]["secrets"] = serde_json::json!(["notes"])),
+        &contract_options(),
+    )
+    .await;
+    let o = r.outcome(Scenario::Profiles);
+    assert_eq!(o.verdict, Verdict::Fail, "{}", r.render(Lang::En));
+    assert!(
+        o.said.contains("permissions.secrets: profile:vpn"),
+        "{}",
+        o.said
+    );
+    // Its first program no longer declared: refused, and said.
+    let r = run(
+        &contract_plugin(|m| {
+            m["permissions"]["commands"]
+                .as_array_mut()
+                .unwrap()
+                .remove(0);
+        }),
+        &contract_options(),
+    )
+    .await;
+    let o = r.outcome(Scenario::Commands);
+    assert_eq!(o.verdict, Verdict::Fail, "{}", r.render(Lang::En));
+    assert!(
+        o.said
+            .contains("git cat-file --batch is not in permissions.commands"),
+        "{}",
+        o.said
+    );
+    // Two at once declared, where it runs five.
+    let r = run(
+        &contract_plugin(|m| m["limits"] = serde_json::json!({ "processes": 2 })),
+        &contract_options(),
+    )
+    .await;
+    let o = r.outcome(Scenario::Limit);
+    assert_eq!(o.verdict, Verdict::Fail, "{}", r.render(Lang::En));
+    assert!(o.said.contains("2 programs at once at most"), "{}", o.said);
+    assert_eq!(
+        r.outcome(Scenario::Commands).verdict,
+        Verdict::Pass,
+        "{}",
+        r.render(Lang::En)
+    );
 }

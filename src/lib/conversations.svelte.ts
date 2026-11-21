@@ -32,7 +32,8 @@ export class Conversation {
   /** Messages sent while the worktree is being prepared: the backend records them once it is over, they show until then. */
   waiting = $state<UserItem[]>([]);
   /** A message refused for want of an account of the agent's harness (ESC-128): said in a card until one is added (choice 19). */
-  noAccount = $state<{ engine: EngineId; text: string } | null>(null);
+  /** `project`: the harness has accounts, none serving that project (ESC-556). */
+  noAccount = $state<{ engine: EngineId; text: string; project?: string | null } | null>(null);
   /** Not reactive: only read when the view opens. Goes with the conversation, which goes with its agent. */
   place: ReadingPlace | null = null;
   /**

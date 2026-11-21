@@ -2,8 +2,8 @@
 title: "Conversation"
 subject: "Conversation"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-398","ESC-400","ESC-416","ESC-538"]
-decisions: [136]
+tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-398","ESC-400","ESC-416","ESC-538","ESC-555"]
+decisions: [136,"une-image-jointe-s-agrandit-avant-l-envo"]
 compared: "2026-10-30T05:32:58+01:00"
 gaps: [{"text":"La spec dit que l'en-tête se replie sous 1000 px (Tokens et Fichiers s'effacent, la vue cachée perd son mot) et sous 760 px (Durée aussi, boutons réduits à l'icône), puis sous 580 px pour les chiffres. Le code utilise d'autres seuils échelonnés. À 1100 px, Durée et le mot de la vue cachée disparaissent. À 960 px, c'est Fichiers. À 880 px, c'est Tokens. À 800 px, les boutons passent à l'icône. À 680 px, le sélecteur de disposition disparaît. À 440 px, les vues en segments disparaissent. Seul le seuil de 580 px pour les chiffres correspond.","code":["src/components/Conversation.svelte"]}]
 order: 13
@@ -176,3 +176,12 @@ Quand la fenêtre est sur un serveur, les fichiers qu'un agent envoie (`SendUser
 - Un programme ou un script (par ses octets ou par son nom) ne s'ouvre jamais : « un script ne s'ouvre pas d'Escouade : il se télécharge seulement », et son seul bouton, « Télécharger sur ce poste », fait la copie et la montre dans son dossier.
 - « Voir sur le serveur » montre le fichier dans le panneau Fichiers.
 - La visionneuse d'images fait de même pour ses images.
+
+### Agrandir une image jointe avant l'envoi (ESC-555)
+
+- Dans le champ de saisie, la vignette d'une image jointe (collée, glissée ou choisie) et son nom forment un bouton, « Agrandir <nom> » (« Enlarge <name> »), dit aussi en infobulle, le curseur en loupe. Un clic, ou Entrée ou Espace une fois la vignette focalisée, ouvre la visionneuse d'images de la conversation (la même : voir *Visionneuse d'images*) sur cette image, les autres images jointes du message en précédente et suivante, dans l'ordre du champ ; les fichiers sans aperçu n'en sont pas.
+- Le « × » de la puce retire l'image, sans ouvrir la visionneuse.
+- Échap, × ou un clic à côté ferme la visionneuse et rend le focus à la vignette ; le texte du message en cours ne bouge pas.
+- La visionneuse montre ce que le champ tient déjà (l'image du message, son nom) : rien de plus n'est lu sur le disque. Une image pas encore envoyée n'est nulle part à ouvrir : « Ouvrir » et « Afficher dans le dossier » n'y sont pas ; « Copier l'image » et « Enregistrer sous… » restent.
+- Pareil dans le formulaire d'un ticket, pour ses images (le nom accessible y porte le rang, « Agrandir image.png (2/3) ») ; une image du ticket pas encore lue (un carré gris) n'ouvre rien. Échap ferme alors la visionneuse seule, pas le formulaire.
+- Limites : la réponse d'une demande de la boîte « À toi » joint ses fichiers en puces sans vignette, et le champ « Écrire à <agent> » de la vue d'un sous-agent n'a que du texte : rien à agrandir là.

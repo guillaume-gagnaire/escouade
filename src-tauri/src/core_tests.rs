@@ -5078,9 +5078,10 @@ async fn a_new_project_no_account_would_serve_is_made_without_its_first_agent_an
         .filter(|e| e["type"] == "toast")
         .map(|e| e["text"].as_str().unwrap().to_string())
         .collect();
+    // Marked with the project (ESC-556): the window offers « Partager à nouveau » on the account reserved elsewhere.
     assert_eq!(
         toasts,
-        ["Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes et harness."]
+        [format!("no-account:claude@{}|Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes et harness.", q.id)]
     );
 }
 
@@ -5567,7 +5568,8 @@ async fn a_remote_agent_gets_its_remote_session_back_after_a_restart() {
 }
 
 /// ESC-417 (issue #26): a process kept for good by each linked agent filled the memory. Idle, a
-/// linked agent stops as the others do; its next process takes the same remote session back.
+/// linked agent stops as the others do; its next process takes the same remote session back. One
+/// turned on by hand does not (ESC-544, `remote_tests`): this one holds it from the setting.
 #[tokio::test]
 async fn a_linked_agent_idle_is_stopped_and_its_next_process_takes_its_remote_session_back() {
     let h = harness("remote-idle");
@@ -5575,6 +5577,8 @@ async fn a_linked_agent_idle_is_stopped_and_its_next_process_takes_its_remote_se
     let remote = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     let local = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.core.set_remote_control(&remote, true).await.unwrap();
+    h.core.settings.write().remote_control_all = true;
+    h.core.agent(&remote).unwrap().lock().meta.remote_source = Some(RemoteSource::Global);
     let session = h.agent(&remote).remote_session.unwrap();
     h.core.ensure_process(&local).await.unwrap();
     for id in [&remote, &local] {
@@ -9342,6 +9346,34 @@ async fn without_an_account_of_its_harness_nothing_starts_and_the_window_is_told
             .downcast_ref::<crate::accounts::NoAccount>()
             .map(|n| n.engine),
         Some(EngineId::CODEX)
+    );
+}
+
+/// ESC-556: its only account reserved to another project, a project is refused with its id, so that
+/// the window names the account reserved elsewhere and offers « Partager à nouveau ».
+#[tokio::test]
+async fn a_project_whose_account_is_reserved_elsewhere_is_refused_with_its_id() {
+    let h = harness("esc556-reserved-away");
+    let (p, _) = h.project(false).await;
+    let mut s = h.core.settings.read().clone();
+    s.accounts
+        .iter_mut()
+        .find(|a| a.id == "principal")
+        .unwrap()
+        .projects = vec!["client".into()];
+    h.core.save_settings(s).unwrap();
+    let refused = h.core.create_agent(&p.id, None).await.unwrap_err();
+    let no = refused
+        .downcast_ref::<crate::accounts::NoAccount>()
+        .expect("for want of an account serving it");
+    assert_eq!(no.project.as_deref(), Some(p.id.as_str()));
+    let told = crate::accounts::marked(&refused, refused.to_string());
+    assert!(
+        told.starts_with(&format!(
+            "no-account:claude@{}|Aucun compte Claude Code actif ne sert le projet",
+            p.id
+        )),
+        "{told}"
     );
 }
 

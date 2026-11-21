@@ -455,7 +455,7 @@
     stop();
     if (onclose) onclose();
     else if (forAgent) app.modal = null;
-    else if (reserveFor) app.modal = { kind: 'settings', page: 'privacy', projectId: reserveFor, resume: true };
+    else if (reserveFor && !back) app.modal = { kind: 'settings', page: 'privacy', projectId: reserveFor, resume: true };
     else backToAccounts(back);
   }
 

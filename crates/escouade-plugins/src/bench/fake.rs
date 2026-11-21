@@ -10,10 +10,18 @@
 //! As in the app, its instance ends once it answered `shutdown`, and a fault (its time, its memory, an exception) ends
 //! it as a crash ends a process. Its `fs/*` and `proc/*` are the app's (ESC-333), on the manifest as it is, around one agent
 //! of the bench, `BENCH_AGENT`, in a scratch folder that goes with the session; offline, it runs no program.
+//!
+//! It serves the contract of 2.2.5 as the app does (ESC-531): `settings/get` by the ranks of `profiles::settings_for`,
+//! one profile of the bench by kind of `contributes.profiles` (`bench_profiles`), chosen by the bench's project,
+//! `profiles/list`, `profiles/get` and the secret fields of a profile; a secret on several lines is given on several
+//! lines (`multiline_secret`). What it refuses is seen (`Seen::Refused`), the programs' refusals among them.
 
+use crate::journal::Kind;
 use crate::manifest::Manifest;
-use crate::runtime::{matches, notification_line, request_line, METHOD_NOT_FOUND, NOT_YOURS};
-use crate::{files, procs, wasm};
+use crate::runtime::{
+    matches, notification_line, request_line, INVALID_PARAMS, METHOD_NOT_FOUND, NOT_YOURS,
+};
+use crate::{files, procs, profiles, wasm, Choices};
 use parking_lot::Mutex;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -26,6 +34,130 @@ use tokio::sync::{mpsc, oneshot, Notify};
 
 /// The key of the bench's agent, for `fs/*` and `proc/*`.
 pub const BENCH_AGENT: &str = "bench";
+/// The id of the bench's project, that of its facts and decisions (`bench::subjects`): its profiles are chosen there.
+pub const BENCH_PROJECT: &str = "bench-project";
+
+/// A secret on several lines as the bench gives it, for the key `key`: a configuration whose lines each say `made`'s
+/// nonce in their own way, so that a line written out alone is found (`bench::Scenario::Multiline`).
+pub fn multiline_secret(made: &str, key: &str) -> String {
+    let nonce = made.rsplit('-').next().unwrap_or(made);
+    format!(
+        "# {made}-{key}\nremote {key}.{nonce}.bench.example 1194\n<ca>\nMIIB{nonce}{key}certificate\n</ca>\n"
+    )
+}
+
+/// The lines of a secret on several lines that would tell it, written out: those of more than 8 characters.
+pub fn telling_lines(value: &str) -> Vec<&str> {
+    value
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.chars().count() > 8)
+        .collect()
+}
+
+/// Whether a field (a secret of `contributes.secrets`, a field of a profile) is on several lines.
+fn multiline(field: &serde_json::Map<String, Value>) -> bool {
+    field.get("multiline").and_then(Value::as_bool) == Some(true)
+}
+
+/// The profiles of the bench for `manifest`: one by kind, its simple fields from their `default` or made of their type,
+/// chosen by every `profile` setting in the bench's project; and the values of their secret fields (`made`'s, on several
+/// lines for a `multiline` one; none without `made`), by profile then key.
+pub fn bench_profiles(
+    manifest: &Manifest,
+    made: Option<&str>,
+) -> (Choices, HashMap<(String, String), String>) {
+    let mut choices = Choices::default();
+    let mut secrets = HashMap::new();
+    for kind in profiles::kinds(manifest) {
+        let id = profiles::new_id();
+        let mut values = serde_json::Map::new();
+        for f in &kind.fields {
+            let Some(key) = f.get("key").and_then(Value::as_str) else {
+                continue;
+            };
+            if f.get("secret").and_then(Value::as_bool) == Some(true) {
+                if let Some(made) = made {
+                    let value = if multiline(f) {
+                        multiline_secret(made, key)
+                    } else {
+                        format!("{made}-{key}")
+                    };
+                    secrets.insert((id.clone(), key.to_string()), value);
+                }
+                continue;
+            }
+            let value = match f.get("default") {
+                Some(d) if profiles::fits(f, d) => d.clone(),
+                _ => match f.get("type").and_then(Value::as_str) {
+                    Some("number") => json!(1),
+                    Some("boolean") => json!(true),
+                    Some("select") => f
+                        .get("options")
+                        .and_then(Value::as_array)
+                        .and_then(|o| o.first())
+                        .and_then(|o| o.as_str().or_else(|| o.get("value")?.as_str()))
+                        .map_or(Value::Null, |o| json!(o)),
+                    _ if key == kind.name_field => json!("Banc"),
+                    _ => json!(format!("bench-{key}")),
+                },
+            };
+            if !value.is_null() {
+                values.insert(key.to_string(), value);
+            }
+        }
+        for d in profiles::declared(manifest) {
+            let of_kind = d.get("type").and_then(Value::as_str) == Some("profile")
+                && d.get("of").and_then(Value::as_str) == Some(kind.id.as_str());
+            if let (true, Some(key)) = (of_kind, d.get("key").and_then(Value::as_str)) {
+                let place = if profiles::of_project(&d) {
+                    choices
+                        .project_settings
+                        .entry(BENCH_PROJECT.to_string())
+                        .or_default()
+                } else {
+                    &mut choices.settings
+                };
+                place.insert(key.to_string(), json!(id));
+            }
+        }
+        choices
+            .profiles
+            .entry(kind.id.clone())
+            .or_default()
+            .push(profiles::Profile { id, values });
+    }
+    (choices, secrets)
+}
+
+/// The values the bench keeps for the plugin's own secrets: `made`'s for each key of `permissions.secrets`, on several
+/// lines for a `multiline` one of `contributes.secrets`.
+pub fn bench_secrets(manifest: &Manifest, made: &str) -> HashMap<String, String> {
+    let lines: Vec<String> = manifest
+        .contributes
+        .get("secrets")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter(|s| multiline(s))
+        .filter_map(|s| s.get("key").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    manifest
+        .permissions
+        .secrets
+        .iter()
+        .filter(|k| !k.ends_with('*') && !k.starts_with("profile:"))
+        .map(|k| {
+            let value = if lines.contains(k) {
+                multiline_secret(made, k)
+            } else {
+                format!("{made}-{k}")
+            };
+            (k.clone(), value)
+        })
+        .collect()
+}
 
 /// What a plugin in WASM reaches in the bench: the app's rules, around a scratch folder and its one agent. `back` is the
 /// way to its channel; offline, the manifest's commands are not given.
@@ -51,7 +183,17 @@ fn capabilities(
             project: "bench".into(),
         },
     );
-    let told: procs::Told = Arc::new(move |_, line| shared.tell(line.to_string()));
+    // What the host refuses is seen as such: the bench judges the programs on it.
+    let told: procs::Told = Arc::new(move |kind, line| {
+        if matches!(kind, Kind::Refused) {
+            let (method, message) = line.split_once(": ").unwrap_or(("", line));
+            shared.see(Seen::Refused {
+                method: method.to_string(),
+                message: message.to_string(),
+            });
+        }
+        shared.tell(line.to_string())
+    });
     let project = scratch.join("project");
     let procs = procs::Procs::new(procs::ProcsOf {
         commands: if offline {
@@ -62,11 +204,13 @@ fn capabilities(
         env: manifest.permissions.env.clone(),
         first_hand: crate::builtin::first_hand(&manifest.id),
         temp: scratch.join("temp"),
+        plugin: folder.to_path_buf(),
         agents: agents.clone(),
         projects: Arc::new(move |_| Ok(project.clone())),
         agent_env: Vec::new(),
         back,
         told: told.clone(),
+        processes: manifest.limits.processes,
     });
     let access = files::Access::new(manifest, folder, scratch.join("temp"), agents);
     wasm::Capabilities::new(access, procs, told)
@@ -105,6 +249,10 @@ pub enum Reply {
 pub enum Seen {
     /// It asked for its secret `key`; `own` when the key is one of its `permissions.secrets`.
     Secret { key: String, own: bool },
+    /// It asked for its profiles (`profiles/list`, `profiles/get`, a secret of a profile, `settings/get`): what, in words.
+    Profile { method: String, said: String },
+    /// Escouade refused one of its calls (a profile's secret, a program): the method and the refusal.
+    Refused { method: String, message: String },
     /// A `log` notification.
     Log { level: String, message: String },
     /// A line of its standard error.
@@ -139,6 +287,12 @@ struct Shared {
     patterns: Vec<String>,
     /// Its folder, for `files/read`.
     folder: std::path::PathBuf,
+    /// Its manifest: its kinds of profile, its settings.
+    manifest: Manifest,
+    /// The bench's choices of it: its profiles, chosen in the bench's project (`bench_profiles`).
+    choices: Choices,
+    /// The secret fields of its profiles, by profile then key.
+    profile_secrets: HashMap<(String, String), String>,
     /// Its exit code, once it ended (`Some(None)`: no code, killed).
     ended: Mutex<Option<Option<i32>>>,
     end: Notify,
@@ -158,6 +312,7 @@ impl Shared {
         made: Option<String>,
         wasm: bool,
     ) -> Arc<Self> {
+        let (choices, profile_secrets) = bench_profiles(manifest, made.as_deref());
         Arc::new(Shared {
             tx: Mutex::new(Some(tx)),
             pending: Mutex::new(HashMap::new()),
@@ -168,6 +323,9 @@ impl Shared {
             made,
             patterns: manifest.permissions.secrets.clone(),
             folder: folder.to_path_buf(),
+            manifest: manifest.clone(),
+            choices,
+            profile_secrets,
             ended: Mutex::new(None),
             end: Notify::new(),
             watch: Mutex::new(None),
@@ -260,7 +418,7 @@ impl Session {
                 ..wasm::Net::default()
             },
         )
-        .limited(manifest.limits);
+        .limited(manifest.limits.clone());
         let scratch =
             std::env::temp_dir().join(format!("escouade-bench-{}", uuid::Uuid::new_v4().simple()));
         let reached = capabilities(
@@ -316,7 +474,7 @@ impl Session {
             "escouade": { "version": app_version },
             "plugin": { "id": manifest.id, "version": manifest.version },
             "lang": "fr",
-            "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true },
+            "capabilities": { "batch": true, "secrets": true, "log": true, "attach": true, "typedCommands": true, "profiles": true },
         })
     }
 
@@ -509,9 +667,161 @@ fn message(shared: &Shared, msg: Value) {
     }
 }
 
-/// A request of the plugin, served as the app serves it.
+/// A request of the plugin, served as the app serves it; what it refuses, seen.
 fn request(shared: &Shared, method: &str, params: &Value) -> Result<Value, (i64, String)> {
+    let answer = served(shared, method, params);
+    if let Err((code, message)) = &answer {
+        if *code != METHOD_NOT_FOUND {
+            shared.see(Seen::Refused {
+                method: method.to_string(),
+                message: message.clone(),
+            });
+        }
+    }
+    answer
+}
+
+/// The kind of profile a call names: one the manifest declares, else `-32602` (`runtime`'s `kind_of`).
+fn kind_of(shared: &Shared, params: &Value) -> Result<profiles::Kind, (i64, String)> {
+    let kind = params
+        .get("kind")
+        .and_then(Value::as_str)
+        .ok_or((INVALID_PARAMS, "takes a kind of profile".to_string()))?;
+    profiles::kind(&shared.manifest, kind).ok_or_else(|| {
+        (
+            INVALID_PARAMS,
+            format!("{kind:?} is no kind of profile of this plugin (contributes.profiles)"),
+        )
+    })
+}
+
+/// The secret field `key` of the profile `profile`, by the rules of `runtime`'s `profile_secret`.
+fn profile_secret(shared: &Shared, key: &str, profile: &str) -> Result<Value, (i64, String)> {
+    if !profiles::is_id(profile) {
+        return Err((INVALID_PARAMS, format!("{profile:?} is no profile's id")));
+    }
+    let kind = profiles::find(&shared.choices, profile)
+        .and_then(|(k, _)| profiles::kind(&shared.manifest, k))
+        .ok_or_else(|| (INVALID_PARAMS, format!("no profile {profile:?}")))?;
+    if !kind.has_secret(key) {
+        return Err((
+            INVALID_PARAMS,
+            format!("{key:?} is no secret field of the profiles {:?}", kind.id),
+        ));
+    }
+    let word = format!("profile:{}", kind.id);
+    if !shared.manifest.permissions.secrets.contains(&word) {
+        return Err((
+            NOT_YOURS,
+            format!(
+                "the secrets of the profiles {:?} are not this plugin's (permissions.secrets: {word})",
+                kind.id
+            ),
+        ));
+    }
+    shared.see(Seen::Profile {
+        method: "secrets/get".into(),
+        said: format!("{key} of a profile {}", kind.id),
+    });
+    Ok(shared
+        .profile_secrets
+        .get(&(profile.to_string(), key.to_string()))
+        .map_or(Value::Null, |v| json!(v)))
+}
+
+fn served(shared: &Shared, method: &str, params: &Value) -> Result<Value, (i64, String)> {
     match method {
+        "secrets/get" if params.get("profile").is_some_and(|p| !p.is_null()) => {
+            let key = params.get("key").and_then(Value::as_str).unwrap_or("");
+            match params.get("profile") {
+                Some(Value::String(profile)) => profile_secret(shared, key, profile),
+                _ => Err((
+                    INVALID_PARAMS,
+                    "secrets/get takes a profile's id, or none".into(),
+                )),
+            }
+        }
+        "secrets/get"
+            if {
+                let key = params.get("key").and_then(Value::as_str).unwrap_or("");
+                let own = crate::secret_keys(&shared.manifest)
+                    .iter()
+                    .any(|k| k == key)
+                    || shared
+                        .patterns
+                        .iter()
+                        .any(|p| !p.starts_with("profile:") && matches(p, key));
+                !own && profiles::kinds(&shared.manifest)
+                    .iter()
+                    .any(|k| k.has_secret(key))
+            } =>
+        {
+            let key = params.get("key").and_then(Value::as_str).unwrap_or("");
+            Err((
+                INVALID_PARAMS,
+                format!("{key:?} is a field of a profile: secrets/get takes its profile"),
+            ))
+        }
+        "settings/get" => {
+            let project = match params.get("project") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(p)) => Some(p.as_str()),
+                Some(_) => {
+                    return Err((
+                        INVALID_PARAMS,
+                        "settings/get takes a project's id, or none".into(),
+                    ))
+                }
+            };
+            if project.is_some() && !shared.choices.profiles.is_empty() {
+                shared.see(Seen::Profile {
+                    method: method.to_string(),
+                    said: "the settings of a project".into(),
+                });
+            }
+            Ok(Value::Object(profiles::settings_for(
+                Some(&shared.manifest),
+                &shared.choices,
+                project,
+                project == Some(BENCH_PROJECT),
+                None,
+            )))
+        }
+        "profiles/list" => {
+            let kind = kind_of(shared, params)?;
+            shared.see(Seen::Profile {
+                method: method.to_string(),
+                said: format!("the profiles {}", kind.id),
+            });
+            Ok(Value::Array(
+                shared
+                    .choices
+                    .profiles
+                    .get(&kind.id)
+                    .into_iter()
+                    .flatten()
+                    .map(|p| json!({ "id": p.id, "name": kind.name_of(p) }))
+                    .collect(),
+            ))
+        }
+        "profiles/get" => {
+            let kind = kind_of(shared, params)?;
+            let Some(profile) = params.get("profile").and_then(Value::as_str) else {
+                return Err((INVALID_PARAMS, "profiles/get takes a profile's id".into()));
+            };
+            shared.see(Seen::Profile {
+                method: method.to_string(),
+                said: format!("the fields of a profile {}", kind.id),
+            });
+            Ok(shared
+                .choices
+                .profiles
+                .get(&kind.id)
+                .and_then(|l| l.iter().find(|p| p.id == profile))
+                .map_or(Value::Null, |p| {
+                    Value::Object(kind.simple_values(&p.values))
+                }))
+        }
         "secrets/get" => {
             let key = params.get("key").and_then(Value::as_str).unwrap_or("");
             let own = !key.is_empty()

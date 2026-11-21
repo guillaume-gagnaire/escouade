@@ -44,6 +44,21 @@ describe('StatusBar', () => {
     expect(title.split('\n').slice(1)).toEqual(['tests-e2e : 1 Go · 10 %', 'refacto-auth : 512 Mo · 2 %']);
   });
 
+  it('says nothing of the docs any more, on the Docs tab or elsewhere, with changes or a conflict (ESC-534)', () => {
+    fakeBackend();
+    app.openDocs('p1');
+    app.docsShare.p1 = { pending: 3, conflict: null };
+    const { unmount } = render(StatusBar);
+    expect(document.querySelector('[data-docs-share]')).toBeNull();
+    expect(screen.queryByText(/partager|Docs sur la branche/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Partager' })).toBeNull();
+    unmount();
+    app.closeDocs('p1');
+    app.docsShare.p1 = { pending: 1, conflict: { files: ['.escouade/spec/a/b.md'], target: 'origin/main', agentId: null } };
+    render(StatusBar);
+    expect(screen.queryByText(/Deux personnes|L’agent résout/)).toBeNull();
+  });
+
   it('says nothing about processes when none runs', () => {
     fakeBackend();
     render(StatusBar);

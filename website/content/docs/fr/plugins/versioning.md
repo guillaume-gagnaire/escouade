@@ -16,6 +16,20 @@ Comment un plugin dit pour quelle Escouade il est écrit, ce qui se passe quand 
 
 Hors de cette plage, ou d’une autre API, le plugin reste installé mais désactivé, et Escouade dit pourquoi : « Ce plugin demande Escouade 2.3.0 ou plus récent ; tu as la 2.1.0. Mets Escouade à jour. »
 
+## Le contrat de la 2.2.5
+
+Escouade 2.2.5 sert les profils et les réglages de chaque projet, les jokers de `permissions.commands` et `limits.processes` ([des identifiants par projet](plugins/project-credentials)). Un plugin qui s’en sert dit `"min": "2.2.5"` : une version plus ancienne le garde installé mais désactivé, la raison dite, plutôt que de le servir à moitié. Sans cela, une Escouade 2.2.4 :
+
+- refuse le manifeste d’un plugin qui déclare un réglage `"type": "profile"` ;
+- lit un réglage de `"scope": "project"` comme un réglage de l’app ;
+- ignore le `profile` de `secrets/get` : il rend le secret du plugin de cette clé s’il en a un, sinon il le refuse ;
+- compare un joker comme un mot littéral : l’entrée ne correspond à rien ;
+- ignore `limits.processes`, et garde 4 programmes à la fois.
+
+`initialize` annonce `capabilities.profiles` et `capabilities.typedCommands`. Le SDK (`p.require`) et le kit (`Cx::require`) les vérifient avant chaque appel qui en dépend, et refusent (`-32601`) en disant la version qui les sert, sans rien demander à Escouade. Cette version est `ESCOUADE_MIN` dans le SDK, `escouade_plugin_protocol::ESCOUADE_MIN` dans le crate du protocole. `escouade-plugin validate` prévient (⚠), sans refuser, un manifeste qui en prend un avec un `escouade.min` plus ancien.
+
+Un secret de `"scope": "project"` se lit mais n’est pas servi : le plugin reste coupé, la raison dite. Les identifiants d’un projet vont dans un profil.
+
 ## Ce qui ne casse pas
 
 - **Un champ inconnu du manifeste est ignoré** : un manifeste écrit pour une Escouade plus récente se charge quand même, et les champs ignorés sont listés.

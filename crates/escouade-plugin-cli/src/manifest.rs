@@ -94,8 +94,34 @@ pub const ICON_MIN: u32 = 256;
 /// The weight an icon has at most, in bytes.
 pub const ICON_BYTES: u64 = 1024 * 1024;
 
-/// The values `contributes.settings[].type` takes.
-const SETTING_TYPES: [&str; 4] = ["string", "number", "boolean", "select"];
+/// The values `contributes.settings[].type` takes: `profile` names a kind of `contributes.profiles` (`of`, ESC-525).
+const SETTING_TYPES: [&str; 5] = ["string", "number", "boolean", "select", "profile"];
+/// The values a field of a profile takes as its `type` (a secret field has none: `secret: true`).
+const FIELD_TYPES: [&str; 4] = ["string", "number", "boolean", "select"];
+/// Where a setting or a secret holds (`scope`, docs/PLUGINS-CONTRACT-STUDY.md §2): for every project (`app`, the
+/// default) or for each one (`project`).
+pub const SCOPES: [&str; 2] = ["app", "project"];
+/// How many lines a field on several lines shows (`lines`): 6 without it.
+pub const LINES: std::ops::RangeInclusive<u64> = 3..=20;
+/// How many programs a plugin may run at once (`limits.processes`): 4 without it, 16 at most (§5.6).
+pub const PROCESSES: std::ops::RangeInclusive<u64> = 1..=16;
+/// The programs at once a plugin has without asking: beyond, `limits.reason` is needed, the install says it and an
+/// update that raises it asks again (ESC-529).
+pub const PROCESSES_UNASKED: u64 = 4;
+
+/// The version of Escouade that serves the profiles, the settings of each project, the jokers and `limits.processes`:
+/// `escouade_plugin_protocol::ESCOUADE_MIN` (a test holds them equal; `node scripts/escouade-min.mjs` writes both).
+pub const CONTRACT_MIN: &str = "2.2.5";
+/// The words of `permissions.commands` that stand for one argument of a closed form (§5.3): each a whole word, never the
+/// first. The host checks and replaces them when the program is run.
+pub const JOKERS: [&str; 6] = [
+    "{int}",
+    "{port}",
+    "{name}",
+    "{pid}",
+    "{path:temp}",
+    "{path:plugin}",
+];
 /// The extension points whose items carry an `id`, unique in the list.
 const POINTS_WITH_ID: [&str; 6] = [
     "accounts",
@@ -196,6 +222,22 @@ pub enum Code {
     Pointer,
     /// The arguments of `acp.resume` that do not name the session to resume (`{session}`, ESC-491).
     Session,
+    /// A field that does not go where it is (ESC-525): `multiline` or `import` out of a `string` setting or a secret,
+    /// `lines` without `multiline`, `of` out of a `profile` setting, a `type` or a `scope` on a field of a profile
+    /// that does not take one.
+    Misplaced,
+    /// `repo: true` on what never comes from .escouade.yml: a secret, a profile, a value imported from a file.
+    Repo,
+    /// A whole number out of `Problem::expected` (`3..20`).
+    Bounds,
+    /// An item of `import` that is no extension of a file (`.ovpn`).
+    Extension,
+    /// A key that names no field fit for it: in `groups[].fields`, a setting or a secret the plugin declares; in
+    /// `nameField`, a `string` field of the profile, neither secret nor on several lines.
+    Field,
+    /// A kind of profile `contributes.profiles` does not declare (`of`), or does without a secret field
+    /// (`permissions.secrets`: `profile:<kind>`).
+    Profile,
 }
 
 /// A field that is wrong, by its path (`contributes.settings[0].key`; empty for the whole file).
@@ -218,13 +260,32 @@ impl Problem {
             format!("`{}`", self.path)
         };
         let expected = self.expected.as_deref().unwrap_or("");
+        // The last part of its path (`multiline` of `contributes.settings[0].multiline`): what is said of a field of the
+        // contract depends on which one it is (ESC-531).
+        let last = self.path.rsplit('.').next().unwrap_or("");
+        let in_profile = self.path.contains("profiles[") && self.path.contains(".fields[");
         let what = match self.code {
+            Code::Required if self.path == "limits.reason" => tr_in!(
+                lang,
+                "manque : au-delà de 4 programmes à la fois, une phrase dit pourquoi, que l'utilisateur lit à l'installation.",
+                "is missing: beyond 4 programs at once, a sentence says why, which the user reads at the installation."
+            ),
+            Code::Required if in_profile && last == "type" => tr_in!(
+                lang,
+                "manque : un champ de profil est d'un type (`string`, `number`, `boolean`, `select`), ou `\"secret\": true`.",
+                "is missing: a field of a profile is of a type (`string`, `number`, `boolean`, `select`), or `\"secret\": true`."
+            ),
             Code::Required => tr_in!(lang, "manque.", "is missing."),
             Code::Type => tr_in!(
                 lang,
                 "devrait être {}.",
                 "should be {}.",
                 type_name(lang, expected)
+            ),
+            Code::Empty if last == "fields" => tr_in!(
+                lang,
+                "est une liste vide : au moins un champ.",
+                "is an empty list: one field at least."
             ),
             Code::Empty => tr_in!(
                 lang,
@@ -294,10 +355,47 @@ impl Problem {
                 "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
                 "goes to a host `permissions.network` does not declare: the user would not see it."
             ),
+            Code::Command if expected.starts_with("program:") => {
+                let w = &expected["program:".len()..];
+                tr_in!(
+                    lang,
+                    "commence par `{w}` : le premier mot est le nom d'un programme, trouvé sur le PATH, jamais un chemin, un `*` ni un joker.",
+                    "starts with `{w}`: the first word is a program's name, found on the PATH, never a path, a `*` nor a joker."
+                )
+            }
+            Code::Command if expected == "star" => tr_in!(
+                lang,
+                "a un `*` avant son dernier mot : `*` ne vient qu'à la fin, pour les mots qui suivent.",
+                "has a `*` before its last word: `*` only comes at the end, for the words that follow."
+            ),
+            Code::Command if expected.starts_with("path:") => {
+                let w = &expected["path:".len()..];
+                tr_in!(
+                    lang,
+                    "`{w}` n'est pas un joker : un chemin n'est que `{{path:temp}}` ou `{{path:plugin}}`, jamais un fichier du projet ni d'un agent, que le dépôt choisirait.",
+                    "`{w}` is no joker: a path is only `{{path:temp}}` or `{{path:plugin}}`, never a file of the project nor of an agent, which the repository would choose."
+                )
+            }
+            Code::Command if expected.starts_with("glued:") => {
+                let w = &expected["glued:".len()..];
+                tr_in!(
+                    lang,
+                    "`{w}` colle un joker à autre chose : un joker est un mot entier (`--pid {{pid}}`, jamais `--pid={{pid}}`).",
+                    "`{w}` glues a joker to something else: a joker is a whole word (`--pid {{pid}}`, never `--pid={{pid}}`)."
+                )
+            }
+            Code::Command if expected.starts_with("brace:") => {
+                let w = &expected["brace:".len()..];
+                tr_in!(
+                    lang,
+                    "`{w}` n'est pas un joker (`{{int}}`, `{{port}}`, `{{name}}`, `{{pid}}`, `{{path:temp}}`, `{{path:plugin}}`) : une accolade n'a pas sa place dans un autre mot.",
+                    "`{w}` is no joker (`{{int}}`, `{{port}}`, `{{name}}`, `{{pid}}`, `{{path:temp}}`, `{{path:plugin}}`): a brace has no place in another word."
+                )
+            }
             Code::Command => tr_in!(
                 lang,
-                "doit commencer par le nom d'un programme, jamais un chemin, et `*` n'y vient qu'en dernier mot.",
-                "must start with a program's name, never a path, and `*` comes only as its last word."
+                "doit commencer par le nom d'un programme, jamais un chemin ni un joker ; un joker (`{{int}}`, `{{port}}`, `{{name}}`, `{{pid}}`, `{{path:temp}}`, `{{path:plugin}}`) est un mot entier, aucune autre accolade, et `*` n'y vient qu'en dernier mot.",
+                "must start with a program's name, never a path nor a joker; a joker (`{{int}}`, `{{port}}`, `{{name}}`, `{{pid}}`, `{{path:temp}}`, `{{path:plugin}}`) is a whole word, no other brace, and `*` comes only as its last word."
             ),
             Code::Variable => tr_in!(
                 lang,
@@ -318,6 +416,93 @@ impl Problem {
                 lang,
                 "ne nomme pas la session à reprendre : un argument doit contenir `{{session}}`.",
                 "does not name the session to resume: an argument must hold `{{session}}`."
+            ),
+            Code::Misplaced if last == "multiline" => tr_in!(
+                lang,
+                "ne va que sur un réglage `string` ou un secret.",
+                "only goes on a `string` setting or a secret."
+            ),
+            Code::Misplaced if last == "import" => tr_in!(
+                lang,
+                "ne va que sur un réglage `string` ou un secret : il remplit le champ d'un fichier lu une fois.",
+                "only goes on a `string` setting or a secret: it fills the field from a file read once."
+            ),
+            Code::Misplaced if last == "lines" => tr_in!(
+                lang,
+                "ne va qu'avec `multiline: true` : les lignes que montre la zone de texte.",
+                "only goes with `multiline: true`: the lines the text area shows."
+            ),
+            Code::Misplaced if last == "of" && !in_profile => tr_in!(
+                lang,
+                "ne va que sur un réglage `\"type\": \"profile\"`, dont il dit le genre.",
+                "only goes on a `\"type\": \"profile\"` setting, whose kind it says."
+            ),
+            Code::Misplaced if last == "scope" || last == "of" => tr_in!(
+                lang,
+                "n'a pas sa place sur un champ de profil : un profil vaut pour chaque projet qui le choisit.",
+                "has no place on a field of a profile: a profile holds for each project that chooses it."
+            ),
+            Code::Misplaced if last == "type" => tr_in!(
+                lang,
+                "n'a pas sa place sur un champ secret d'un profil : un secret est un texte.",
+                "has no place on a secret field of a profile: a secret is a text."
+            ),
+            Code::Misplaced => tr_in!(
+                lang,
+                "n'a pas sa place ici : `multiline` et `import` vont sur un réglage `string` ou un secret, `lines` avec `multiline: true`, `of` sur un réglage `profile` ; un champ de profil n'a pas de `scope`, ni de `type` s'il est secret.",
+                "does not belong here: `multiline` and `import` go on a `string` setting or a secret, `lines` with `multiline: true`, `of` on a `profile` setting; a field of a profile has no `scope`, nor a `type` when it is secret."
+            ),
+            Code::Repo => tr_in!(
+                lang,
+                "ne peut pas être vrai : un secret, un profil ou une valeur importée d'un fichier ne vient jamais de .escouade.yml.",
+                "cannot be true: a secret, a profile or a value imported from a file never comes from .escouade.yml."
+            ),
+            Code::Bounds => {
+                let (lo, hi) = expected.split_once("..").unwrap_or((expected, expected));
+                let mut said = tr_in!(
+                    lang,
+                    "doit être un nombre entier de {lo} à {hi}.",
+                    "must be a whole number from {lo} to {hi}."
+                );
+                if self.path == "limits.processes" {
+                    said.pop();
+                    said.push_str(&tr_in!(
+                        lang,
+                        " : les programmes à la fois, 4 sans le demander.",
+                        ": the programs at once, 4 without asking."
+                    ));
+                }
+                said
+            }
+            Code::Extension => tr_in!(
+                lang,
+                "n'est pas une extension de fichier (`.ovpn`, `.conf`).",
+                "is no extension of a file (`.ovpn`, `.conf`)."
+            ),
+            Code::Field if last == "nameField" => tr_in!(
+                lang,
+                "doit nommer un champ `string` du profil, ni secret ni sur plusieurs lignes : le nom du profil dans les listes.",
+                "must name a `string` field of the profile, neither secret nor on several lines: the profile's name in the lists."
+            ),
+            Code::Field if self.path.starts_with("contributes.groups") => tr_in!(
+                lang,
+                "ne nomme aucun réglage ni secret du plugin (`contributes.settings`, `contributes.secrets`).",
+                "names no setting nor secret of the plugin (`contributes.settings`, `contributes.secrets`)."
+            ),
+            Code::Field => tr_in!(
+                lang,
+                "ne nomme pas un champ qui convient : dans un groupe, un réglage ou un secret du plugin ; en `nameField`, un champ `string` du profil, ni secret ni sur plusieurs lignes.",
+                "names no field fit for it: in a group, a setting or a secret of the plugin; as `nameField`, a `string` field of the profile, neither secret nor on several lines."
+            ),
+            Code::Profile if self.path.starts_with("permissions.secrets") => tr_in!(
+                lang,
+                "nomme un genre que `contributes.profiles` ne déclare pas, ou sans champ secret : `profile:<genre>` demande les secrets des profils de ce genre.",
+                "names a kind `contributes.profiles` does not declare, or one without a secret field: `profile:<kind>` asks for the secrets of the profiles of that kind."
+            ),
+            Code::Profile => tr_in!(
+                lang,
+                "ne nomme aucun genre de `contributes.profiles`.",
+                "names no kind of `contributes.profiles`."
             ),
             Code::ReadOnly => tr_in!(
                 lang,
@@ -603,7 +788,7 @@ pub fn interpreter(program: &str) -> bool {
 }
 
 /// What it asks for beyond the host's defaults (`limits`): the host holds them to its own ceilings.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Limits {
     /// How long a call of `net/fetch` may take, in seconds.
@@ -621,6 +806,12 @@ pub struct Limits {
     /// How long a turn of its instance may take, in seconds: for what takes time to read whole.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub turn_seconds: Option<u64>,
+    /// How many programs it may run at once (`PROCESSES`, §5.6): 4 without it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub processes: Option<u64>,
+    /// Why it asks for them, said at its install and judged at its review: needed beyond 4.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<Text>,
 }
 
 impl Limits {
@@ -670,6 +861,94 @@ impl Manifest {
     /// out of its range (as a harness's `oldest_reason`). None when it loads.
     pub fn refusal(&self, app: &str, lang: Lang) -> Option<String> {
         self.escouade.refusal(app, lang)
+    }
+
+    /// What it takes of the contract that Escouade serves since [`CONTRACT_MIN`], when its `escouade.min` is older (ESC-531),
+    /// in `lang`: `validate` says it, never refuses it. An older Escouade would not serve it: it refuses a `profile`
+    /// setting, ignores the scope of a setting, refuses an entry with jokers and keeps 4 programs at once.
+    pub fn below_contract(&self, lang: Lang) -> Option<String> {
+        if version(&self.escouade.min) >= version(CONTRACT_MIN) {
+            return None;
+        }
+        let listed = |key: &str| {
+            self.contributes
+                .get(key)
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        };
+        let settings = listed("settings");
+        let mut points = Vec::new();
+        if !listed("profiles").is_empty()
+            || settings
+                .iter()
+                .any(|s| s.get("type").and_then(Value::as_str) == Some("profile"))
+        {
+            points.push(tr_in!(lang, "des profils", "profiles"));
+        }
+        if settings
+            .iter()
+            .any(|s| s.get("scope").and_then(Value::as_str) == Some("project"))
+        {
+            points.push(tr_in!(
+                lang,
+                "des réglages propres à chaque projet",
+                "settings of each project"
+            ));
+        }
+        if self.permissions.commands.iter().any(|c| has_joker(c)) {
+            points.push(tr_in!(
+                lang,
+                "des jokers dans `permissions.commands`",
+                "jokers in `permissions.commands`"
+            ));
+        }
+        if self.limits.processes.is_some() {
+            points.push("`limits.processes`".to_string());
+        }
+        if points.is_empty() {
+            return None;
+        }
+        let (min, points) = (&self.escouade.min, points.join(", "));
+        Some(tr_in!(
+            lang,
+            "`escouade.min` dit {min}, mais ce plugin prend {points}, qu'Escouade sert depuis {CONTRACT_MIN} : une version plus ancienne ne les servirait pas. `escouade.min` devrait dire {CONTRACT_MIN}.",
+            "`escouade.min` says {min}, but this plugin takes {points}, which Escouade serves since {CONTRACT_MIN}: an older version would not serve them. `escouade.min` should say {CONTRACT_MIN}."
+        ))
+    }
+
+    /// What it declares of the contract (docs/PLUGINS-CONTRACT-STUDY.md) that this Escouade reads but does not serve
+    /// yet, in `lang`: a secret of each project (direction A of the study, not chosen). The jokers of a command are served
+    /// since ESC-528, the programs at once of `limits.processes` since ESC-529, the profiles since ESC-530. Such a plugin is
+    /// loaded disabled with this reason, never served by half (ESC-525). None when all it asks is served.
+    pub fn unserved(&self, lang: Lang) -> Option<String> {
+        let mut points = Vec::new();
+        let listed = |key: &str| {
+            self.contributes
+                .get(key)
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        };
+        if listed("secrets")
+            .iter()
+            .any(|s| s.get("scope").and_then(Value::as_str) == Some("project"))
+        {
+            points.push(tr_in!(
+                lang,
+                "un secret propre à chaque projet (`\"scope\": \"project\"`)",
+                "a secret of each project (`\"scope\": \"project\"`)"
+            ));
+        }
+        if points.is_empty() {
+            return None;
+        }
+        let points = points.join(", ");
+        Some(tr_in!(
+            lang,
+            "Ce plugin demande ce que cette version d'Escouade ne sert pas encore : {points}. Il reste coupé plutôt que servi à moitié ; une version plus récente d'Escouade le servira.",
+            "This plugin asks for what this version of Escouade does not serve yet: {points}. It stays disabled rather than served by half; a newer version of Escouade will serve it."
+        ))
     }
 }
 
@@ -791,6 +1070,8 @@ struct Checker {
     ignored: Vec<String>,
     reserved: Vec<String>,
     hand: Hand,
+    /// The kinds of `contributes.profiles` that hold, and whether each has a secret field.
+    kinds: Vec<(String, bool)>,
 }
 
 fn join(path: &str, key: &str) -> String {
@@ -831,8 +1112,9 @@ pub fn written_host(url: &str) -> Option<String> {
     (!host.is_empty()).then(|| host.trim_end_matches('.').to_ascii_lowercase())
 }
 
-/// Whether a line of `permissions.commands` holds: its first word is a program's name, never a path, and a `*` comes
-/// only as its last word.
+/// Whether a line of `permissions.commands` holds (§5.3 of docs/PLUGINS-CONTRACT-STUDY.md): its first word is a program's
+/// name, never a path nor a joker; a later word is a joker (`JOKERS`) whole, or a literal word without a brace; a `*`
+/// comes only as its last word. Words are split as the host splits them (`procs`, on white space).
 pub fn command_holds(command: &str) -> bool {
     let words: Vec<&str> = command.split_whitespace().collect();
     let Some((first, rest)) = words.split_first() else {
@@ -840,9 +1122,52 @@ pub fn command_holds(command: &str) -> bool {
     };
     let args = rest.len().saturating_sub(1);
     !first.is_empty()
-        && !first.contains(['/', '\\', ':', '*', '~'])
+        && !first.contains(['/', '\\', ':', '*', '~', '{', '}'])
         && !first.starts_with('.')
         && !rest[..args].contains(&"*")
+        && rest.iter().all(|w| is_joker(w) || !w.contains(['{', '}']))
+}
+
+/// What breaks a line of `permissions.commands` that does not hold, for its message (ESC-531): `program:<word>` (its first
+/// word is no program's name), `star` (a `*` before its last word), `path:<word>` (a path no joker names: of the
+/// project, of an agent), `glued:<word>` (a joker inside a word), `brace:<word>` (another brace); empty when it holds.
+pub fn command_fault(command: &str) -> String {
+    let words: Vec<&str> = command.split_whitespace().collect();
+    let Some((first, rest)) = words.split_first() else {
+        return "program:".into();
+    };
+    if first.contains(['/', '\\', ':', '*', '~', '{', '}']) || first.starts_with('.') {
+        return format!("program:{first}");
+    }
+    let args = rest.len().saturating_sub(1);
+    if rest[..args].contains(&"*") {
+        return "star".into();
+    }
+    match rest.iter().find(|w| !is_joker(w) && w.contains(['{', '}'])) {
+        Some(w) if JOKERS.iter().any(|j| w.contains(j)) => format!("glued:{w}"),
+        Some(w) if w.starts_with("{path:") => format!("path:{w}"),
+        Some(w) => format!("brace:{w}"),
+        None => String::new(),
+    }
+}
+
+/// Whether a word of a command is one of the jokers (`JOKERS`), whole.
+pub fn is_joker(word: &str) -> bool {
+    JOKERS.contains(&word)
+}
+
+/// Whether a line of `permissions.commands` holds a joker.
+pub fn has_joker(command: &str) -> bool {
+    command.split_whitespace().any(is_joker)
+}
+
+/// `.ovpn`, `.tar.gz`: an extension of a file that `import` filters on.
+fn is_extension(s: &str) -> bool {
+    s.len() <= 32
+        && s.strip_prefix('.').is_some_and(|rest| {
+            rest.split('.')
+                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_alphanumeric()))
+        })
 }
 
 /// Whether `permissions.network` covers `host`, without regard to case: a host written alone
@@ -1177,6 +1502,7 @@ impl Checker {
             .get("contributes")
             .map(|v| self.contributes(v, &permissions.network))
             .unwrap_or_default();
+        self.profile_secrets(o);
         if let Some(v) = o.get("store") {
             self.store(v);
         }
@@ -1213,6 +1539,8 @@ impl Checker {
                 "fileBytes",
                 "memoryBytes",
                 "turnSeconds",
+                "processes",
+                "reason",
             ],
         );
         for (key, field) in [
@@ -1229,7 +1557,139 @@ impl Checker {
                 }
             }
         }
+        // The programs at once (§5.6): 16 at most, and why beyond the 4 it has without asking.
+        if let Some(v) = o.get("processes") {
+            l.processes = self.bounded(v, "limits.processes", PROCESSES);
+        }
+        if let Some(v) = o.get("reason") {
+            l.reason = self.text(v, "limits.reason");
+        }
+        if l.processes.is_some_and(|n| n > PROCESSES_UNASKED) && !o.contains_key("reason") {
+            self.problem("limits.reason", Code::Required);
+        }
         l
+    }
+
+    /// A whole number of `range`, else `Code::Bounds`; `8.0` is 8, as the store's library reads it.
+    fn bounded(
+        &mut self,
+        v: &Value,
+        path: &str,
+        range: std::ops::RangeInclusive<u64>,
+    ) -> Option<u64> {
+        let whole = v.as_u64().or_else(|| {
+            v.as_f64()
+                .filter(|f| f.fract() == 0.0 && *f >= 0.0 && *f <= *range.end() as f64)
+                .map(|f| f as u64)
+        });
+        let n = whole.filter(|n| range.contains(n));
+        if n.is_none() {
+            self.problems.push(Problem {
+                path: path.to_string(),
+                code: Code::Bounds,
+                expected: Some(format!("{}..{}", range.start(), range.end())),
+            });
+        }
+        n
+    }
+
+    /// A boolean field of `item`, when it has it.
+    fn flag(&mut self, item: &Map<String, Value>, at: &str, key: &str) -> Option<bool> {
+        let v = item.get(key)?;
+        let b = v.as_bool();
+        if b.is_none() {
+            self.wrong_type(&join(at, key), "boolean");
+        }
+        b
+    }
+
+    /// What a field (a setting, a secret, a field of a profile) says of itself beyond its key and title (ESC-525):
+    /// `description`, `multiline` and `lines` (`text_like`: a `string` or a secret), `import`, and `repo` (`never_repo`:
+    /// a secret, a profile, a value imported from a file never comes from .escouade.yml).
+    fn field_extras(
+        &mut self,
+        at: &str,
+        item: &Map<String, Value>,
+        text_like: bool,
+        never_repo: bool,
+    ) {
+        if let Some(d) = item.get("description") {
+            self.text(d, &join(at, "description"));
+        }
+        let multiline = self.flag(item, at, "multiline");
+        if multiline == Some(true) && !text_like {
+            self.problem(&join(at, "multiline"), Code::Misplaced);
+        }
+        if let Some(v) = item.get("lines") {
+            if multiline == Some(true) {
+                self.bounded(v, &join(at, "lines"), LINES);
+            } else {
+                self.problem(&join(at, "lines"), Code::Misplaced);
+            }
+        }
+        if let Some(v) = item.get("import") {
+            let p = join(at, "import");
+            if text_like {
+                match v.as_array() {
+                    None => self.wrong_type(&p, "array"),
+                    Some(list) => {
+                        for (i, e) in list.iter().enumerate() {
+                            let pe = format!("{p}[{i}]");
+                            if let Some(e) = self.filled(e, &pe) {
+                                if !is_extension(e) {
+                                    self.problem(&pe, Code::Extension);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                self.problem(&p, Code::Misplaced);
+            }
+        }
+        if self.flag(item, at, "repo") == Some(true) && (never_repo || item.contains_key("import"))
+        {
+            self.problem(&join(at, "repo"), Code::Repo);
+        }
+    }
+
+    /// `scope`: one of `SCOPES`.
+    fn scope(&mut self, at: &str, item: &Map<String, Value>) {
+        let Some(v) = item.get("scope") else { return };
+        let p = join(at, "scope");
+        if let Some(s) = self.string(v, &p) {
+            if !SCOPES.contains(&s) {
+                self.problems.push(Problem {
+                    path: p,
+                    code: Code::Enum,
+                    expected: Some(SCOPES.join(", ")),
+                });
+            }
+        }
+    }
+
+    /// `type` of `item`, required, one of `among`.
+    fn typed<'a>(
+        &mut self,
+        at: &str,
+        item: &'a Map<String, Value>,
+        among: &[&str],
+    ) -> Option<&'a str> {
+        let p = join(at, "type");
+        let Some(t) = item.get("type") else {
+            self.problem(&p, Code::Required);
+            return None;
+        };
+        let t = self.string(t, &p)?;
+        if !among.contains(&t) {
+            self.problems.push(Problem {
+                path: p,
+                code: Code::Enum,
+                expected: Some(among.join(", ")),
+            });
+            return None;
+        }
+        Some(t)
     }
 
     /// A file of the folder: no address, no drive, no `..`; a PNG, never an SVG (it may carry a
@@ -1427,7 +1887,11 @@ impl Checker {
         }
         for (i, command) in p.commands.clone().iter().enumerate() {
             if !command_holds(command) {
-                self.problem(&format!("permissions.commands[{i}]"), Code::Command);
+                self.problems.push(Problem {
+                    path: format!("permissions.commands[{i}]"),
+                    code: Code::Command,
+                    expected: Some(command_fault(command)),
+                });
             }
         }
         if let Some(v) = o.get("env") {
@@ -1699,12 +2163,138 @@ impl Checker {
         }
     }
 
+    /// `contributes.groups` (§4.1): an id, a title, a description, `folded`, and `fields`, the keys of its settings and
+    /// secrets in the order they are shown; a key in one group at most, and one the plugin declares.
+    fn groups(&mut self, v: &Value, declared: &[String]) {
+        let items = self.items(v, "contributes.groups");
+        self.keys(&items, "id");
+        self.titled(&items, "title", true);
+        let mut taken: Vec<String> = Vec::new();
+        for (at, item) in &items {
+            if let Some(d) = item.get("description") {
+                self.text(d, &join(at, "description"));
+            }
+            self.flag(item, at, "folded");
+            let p = join(at, "fields");
+            match item.get("fields") {
+                None => self.problem(&p, Code::Required),
+                Some(Value::Array(list)) if list.is_empty() => self.problem(&p, Code::Empty),
+                Some(Value::Array(list)) => {
+                    for (i, k) in list.iter().enumerate() {
+                        let pk = format!("{p}[{i}]");
+                        let Some(k) = self.string(k, &pk) else {
+                            continue;
+                        };
+                        if !declared.iter().any(|d| d == k) {
+                            self.problem(&pk, Code::Field);
+                        } else if taken.iter().any(|t| t == k) {
+                            self.problem(&pk, Code::Duplicate);
+                        } else {
+                            taken.push(k.to_string());
+                        }
+                    }
+                }
+                Some(_) => self.wrong_type(&p, "array"),
+            }
+        }
+    }
+
+    /// `contributes.profiles` (§2.2): kinds of profile, each an id, a title, its fields (a setting's, or `secret: true`)
+    /// and `nameField`, the `string` field that names a profile. Gives the good ids, and whether each has a secret field.
+    fn profiles(&mut self, v: &Value) -> Vec<(String, bool)> {
+        let items = self.items(v, "contributes.profiles");
+        let ids = self.keys(&items, "id");
+        self.titled(&items, "title", true);
+        let mut kinds = Vec::new();
+        for (at, item) in &items {
+            let p = join(at, "fields");
+            let fields = match item.get("fields") {
+                None => {
+                    self.problem(&p, Code::Required);
+                    Vec::new()
+                }
+                Some(Value::Array(list)) if list.is_empty() => {
+                    self.problem(&p, Code::Empty);
+                    Vec::new()
+                }
+                Some(f) => self.items(f, &p),
+            };
+            self.keys(&fields, "key");
+            self.titled(&fields, "title", true);
+            let mut secret = false;
+            // The keys a profile can be named by: a `string` field, neither secret nor on several lines.
+            let mut names: Vec<&str> = Vec::new();
+            for (fat, field) in &fields {
+                let is_secret = self.flag(field, fat, "secret") == Some(true);
+                if field.contains_key("scope") {
+                    self.problem(&join(fat, "scope"), Code::Misplaced);
+                }
+                let kind = if is_secret {
+                    secret = true;
+                    if field.contains_key("type") {
+                        self.problem(&join(fat, "type"), Code::Misplaced);
+                    }
+                    None
+                } else {
+                    self.typed(fat, field, &FIELD_TYPES)
+                };
+                if field.contains_key("of") {
+                    self.problem(&join(fat, "of"), Code::Misplaced);
+                }
+                self.field_extras(fat, field, is_secret || kind == Some("string"), true);
+                let one_line = field.get("multiline").and_then(Value::as_bool) != Some(true);
+                if kind == Some("string") && one_line {
+                    if let Some(k) = field.get("key").and_then(Value::as_str) {
+                        names.push(k);
+                    }
+                }
+            }
+            let pn = join(at, "nameField");
+            match item.get("nameField") {
+                None => self.problem(&pn, Code::Required),
+                Some(n) => {
+                    if let Some(n) = self.string(n, &pn) {
+                        if !names.contains(&n) {
+                            self.problem(&pn, Code::Field);
+                        }
+                    }
+                }
+            }
+            if let Some(id) = item.get("id").and_then(Value::as_str) {
+                if ids.iter().any(|i| i == id) && !kinds.iter().any(|(k, _)| k == id) {
+                    kinds.push((id.to_string(), secret));
+                }
+            }
+        }
+        kinds
+    }
+
+    /// `permissions.secrets` that name a profile's (`profile:<kind>`): a kind of `contributes.profiles` with a secret
+    /// field, as the store's check n° 9 holds `account:<kind>` (§2.4).
+    fn profile_secrets(&mut self, o: &Map<String, Value>) {
+        let Some(list) = o
+            .get("permissions")
+            .and_then(|p| p.get("secrets"))
+            .and_then(Value::as_array)
+        else {
+            return;
+        };
+        for (i, s) in list.iter().enumerate() {
+            let Some(kind) = s.as_str().and_then(|s| s.strip_prefix("profile:")) else {
+                continue;
+            };
+            if !self.kinds.iter().any(|(k, secret)| k == kind && *secret) {
+                self.problem(&format!("permissions.secrets[{i}]"), Code::Profile);
+            }
+        }
+    }
+
     fn contributes(&mut self, v: &Value, network: &[String]) -> Map<String, Value> {
         let mut kept = Map::new();
         let Some(o) = self.object(v, "contributes") else {
             return kept;
         };
-        let mut known: Vec<&str> = vec!["settings", "secrets", "escouadeYml"];
+        let mut known: Vec<&str> = vec!["settings", "secrets", "groups", "profiles", "escouadeYml"];
         known.extend(POINTS_WITH_ID);
         known.extend(OPEN_POINTS);
         self.ignore_others(o, "contributes", &known);
@@ -1714,33 +2304,49 @@ impl Checker {
                 self.reserved.push(path(point));
             }
         }
+        // The kinds of profile first (§2.2): a setting of type `profile` names one.
+        let mut kinds = Vec::new();
+        if let Some(v) = o.get("profiles") {
+            kinds = self.profiles(v);
+        }
+        let mut fields: Vec<String> = Vec::new();
         if let Some(v) = o.get("settings") {
             let items = self.items(v, &path("settings"));
-            self.keys(&items, "key");
+            fields.extend(self.keys(&items, "key"));
             for (at, item) in &items {
-                let p = join(at, "type");
-                match item.get("type") {
-                    None => self.problem(&p, Code::Required),
-                    Some(t) => {
-                        if let Some(t) = self.string(t, &p) {
-                            if !SETTING_TYPES.contains(&t) {
-                                self.problems.push(Problem {
-                                    path: p,
-                                    code: Code::Enum,
-                                    expected: Some(SETTING_TYPES.join(", ")),
-                                });
+                let kind = self.typed(at, item, &SETTING_TYPES);
+                let profile = kind == Some("profile");
+                match item.get("of") {
+                    Some(of) if profile => {
+                        let p = join(at, "of");
+                        if let Some(of) = self.string(of, &p) {
+                            if !kinds.iter().any(|(k, _)| k == of) {
+                                self.problem(&p, Code::Profile);
                             }
                         }
                     }
+                    None if profile => self.problem(&join(at, "of"), Code::Required),
+                    Some(_) => self.problem(&join(at, "of"), Code::Misplaced),
+                    None => {}
                 }
+                self.scope(at, item);
+                self.field_extras(at, item, kind == Some("string"), profile);
             }
             self.titled(&items, "title", true);
         }
         if let Some(v) = o.get("secrets") {
             let items = self.items(v, &path("secrets"));
-            self.keys(&items, "key");
+            fields.extend(self.keys(&items, "key"));
             self.titled(&items, "title", true);
+            for (at, item) in &items {
+                self.scope(at, item);
+                self.field_extras(at, item, true, true);
+            }
         }
+        if let Some(v) = o.get("groups") {
+            self.groups(v, &fields);
+        }
+        self.kinds = kinds;
         let mut accounts = Vec::new();
         for point in POINTS_WITH_ID {
             let Some(v) = o.get(point) else { continue };
@@ -1901,8 +2507,118 @@ pub fn schema() -> Value {
     // Apart: the macro of the whole schema would reach its limit of recursion.
     let commands = json!({
         "type": "array",
-        "description": "The programs it may run (`proc/spawn`): a program's name, never a path, then its arguments, word for word. A last word `*` lets any more follow.",
+        "description": "The programs it may run (`proc/spawn`): a program's name, never a path nor a joker, then its arguments, word for word. A joker stands for one word of a closed form, written whole, never an option: `{int}`, `{port}`, `{name}`, `{pid}` (a program it runs), `{path:temp}`, `{path:plugin}` (a file of that folder, given as its real path); no other brace (Escouade 2.2.5 and later: an older one matches nothing). A last word `*` lets any more follow.",
         "items": { "type": "string", "minLength": 1 },
+    });
+    // What a field says of itself beyond its key and title (ESC-525).
+    let scope = json!({
+        "enum": SCOPES,
+        "description": "Where it holds: for every project (`app`, the default), or for each one, set in the project's settings by its ranks: this machine's value, then the project's .escouade.yml, then `default` (`project`, Escouade 2.2.5 and later).",
+    });
+    // A secret of each project is read but not served: the plugin is loaded disabled (`Manifest::unserved`).
+    let secret_scope = json!({
+        "enum": SCOPES,
+        "description": "`app`, the default. `project` is read but not served: the plugin stays disabled, the reason said. A secret of each project goes in a profile (`contributes.profiles`).",
+    });
+    let multiline = json!({
+        "type": "boolean",
+        "description": "Typed on several lines (a `string` setting or a secret), 64 KiB at most.",
+    });
+    let lines = json!({
+        "type": "integer",
+        "minimum": LINES.start(),
+        "maximum": LINES.end(),
+        "description": "How many lines it shows, with `multiline`: 6 without it.",
+    });
+    let import = json!({
+        "type": "array",
+        "description": "The extensions of the files « Import a file… » offers (`.ovpn`): their text fills the field once; the path is never kept. Never from .escouade.yml.",
+        "items": { "type": "string", "pattern": "^(\\.[A-Za-z0-9]+)+$", "maxLength": 32 },
+    });
+    let description = json!({
+        "description": "What it is for, under its title: one text, or a text by language.",
+        "oneOf": text["oneOf"].clone(),
+    });
+    let setting = json!({
+        "type": "object",
+        "required": ["key", "type", "title"],
+        "properties": {
+            "key": key,
+            "type": { "enum": SETTING_TYPES, "description": "`profile`: one profile of the kind `of` names, chosen by the user." },
+            "title": text,
+            "description": {
+                "description": "Shown under its title: one text, or a text by language (`en` first, then `fr`).",
+            },
+            "default": {
+                "description": "Its value until the user sets one, of its type (for a `select`, one of its options); without it, empty, or false for a `boolean`.",
+            },
+            "options": {
+                "description": "The choices of a `select`, in this order: each a value, or `{ \"value\": …, \"title\": … }` to show a title in its stead (one text, or a text by language).",
+            },
+            "of": { "type": "string", "description": "With `type: \"profile\"`: the id of a kind of `contributes.profiles`." },
+            "scope": scope,
+            "repo": {
+                "type": "boolean",
+                "description": "`false`: its value never comes from .escouade.yml. Never `true` for a profile or an imported value.",
+            },
+            "multiline": multiline,
+            "lines": lines,
+            "import": import,
+        },
+    });
+    let secret = json!({
+        "type": "object",
+        "required": ["key", "title"],
+        "properties": {
+            "key": key,
+            "title": text,
+            "description": description,
+            "scope": secret_scope,
+            "repo": { "const": false, "description": "A secret never comes from .escouade.yml." },
+            "multiline": multiline,
+            "lines": lines,
+            "import": import,
+        },
+    });
+    let group = json!({
+        "type": "object",
+        "required": ["id", "title", "fields"],
+        "properties": {
+            "id": key,
+            "title": text,
+            "description": description,
+            "folded": { "type": "boolean", "description": "Folded at first, as « Advanced »." },
+            "fields": {
+                "type": "array",
+                "minItems": 1,
+                "description": "The keys of its settings and secrets, mixed, in the order they are shown; a key in one group at most.",
+                "items": { "type": "string" },
+            },
+        },
+    });
+    let profile_field = json!({
+        "type": "object",
+        "required": ["key", "title"],
+        "properties": {
+            "key": key,
+            "title": text,
+            "description": description,
+            "type": { "enum": FIELD_TYPES, "description": "Needed unless it is `secret`." },
+            "secret": { "type": "boolean", "description": "Kept in the keychain, never shown again; it has no `type`." },
+            "multiline": multiline,
+            "lines": lines,
+            "import": import,
+        },
+    });
+    let profile = json!({
+        "type": "object",
+        "required": ["id", "title", "nameField", "fields"],
+        "properties": {
+            "id": key,
+            "title": text,
+            "nameField": { "type": "string", "description": "The key of the `string` field that names a profile (neither secret nor on several lines)." },
+            "fields": { "type": "array", "minItems": 1, "items": profile_field },
+        },
     });
     let files = json!({
         "type": "array",
@@ -1939,33 +2655,19 @@ pub fn schema() -> Value {
         "properties": {
             "settings": {
                 "type": "array",
-                "description": "Its settings, shown on its page in the order of this list, under « Settings ».",
-                "items": {
-                    "type": "object",
-                    "required": ["key", "type", "title"],
-                    "properties": {
-                        "key": key,
-                        "type": { "enum": SETTING_TYPES },
-                        "title": text,
-                        "description": {
-                            "description": "Shown under its title: one text, or a text by language (`en` first, then `fr`).",
-                        },
-                        "default": {
-                            "description": "Its value until the user sets one, of its type (for a `select`, one of its options); without it, empty, or false for a `boolean`.",
-                        },
-                        "options": {
-                            "description": "The choices of a `select`, in this order: each a value, or `{ \"value\": …, \"title\": … }` to show a title in its stead (one text, or a text by language).",
-                        },
-                    },
-                },
+                "description": "Its settings, shown on its page in the order of this list, under « Settings » (or in their groups).",
+                "items": setting,
             },
-            "secrets": {
+            "secrets": { "type": "array", "items": secret },
+            "groups": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["key", "title"],
-                    "properties": { "key": key, "title": text },
-                },
+                "description": "Groups of its settings and secrets, in order, on its page.",
+                "items": group,
+            },
+            "profiles": {
+                "type": "array",
+                "description": "Kinds of profile: sets of fields the user makes as many times as wanted, and that each project chooses (a setting of `type: \"profile\"`). Their secrets are asked as `profile:<id>` in `permissions.secrets`.",
+                "items": profile,
             },
             "accounts": with_id("A kind of account its points share.", false),
             "ticketSources": with_id("Sources of the Kanban.", true),
@@ -2006,6 +2708,19 @@ pub fn schema() -> Value {
                 "minimum": 1,
                 "maximum": 10,
                 "description": "How long a turn of its instance may take: 2 s without it.",
+            },
+            "processes": {
+                "type": "integer",
+                "minimum": PROCESSES.start(),
+                "maximum": PROCESSES.end(),
+                "description": "How many programs it may run at once (`proc/spawn`), for the plugin, all projects together: 4 without it, 16 at most. Beyond 4, said at its install and with `reason`; an update that raises it asks again (Escouade 2.2.5 and later: an older one keeps 4).",
+            },
+            "reason": {
+                "description": "Why it asks for more programs at once, in a sentence: needed with `processes` beyond 4.",
+                "oneOf": [
+                    { "type": "string", "minLength": 1 },
+                    { "type": "object", "additionalProperties": { "type": "string" } },
+                ],
             },
         },
     });

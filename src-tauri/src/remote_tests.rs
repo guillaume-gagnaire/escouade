@@ -84,6 +84,179 @@ fn only_an_active_agent_or_one_active_lately_wants_its_process() {
     assert!(!remote_wants_process(&meta(AgentStatus::Error, 0), now, 30));
     // No delay (« Jamais »): an idle one does, the cap bounds them.
     assert!(remote_wants_process(&meta(AgentStatus::Idle, 6000), now, 0));
+    // Turned on by hand (ESC-544): always, done or idle for long; from a setting: the rule above.
+    let held = |status: AgentStatus, source: RemoteSource| AgentMeta {
+        remote_control: true,
+        remote_source: Some(source),
+        ..meta(status, 600)
+    };
+    for status in [AgentStatus::Idle, AgentStatus::Done, AgentStatus::Error] {
+        assert!(remote_wants_process(
+            &held(status, RemoteSource::Hand),
+            now,
+            30
+        ));
+        for source in [RemoteSource::Global, RemoteSource::Project] {
+            assert!(!remote_wants_process(&held(status, source), now, 30));
+        }
+    }
+    // Archived: no Remote Control at all.
+    let archived = AgentMeta {
+        archived: true,
+        ..held(AgentStatus::Idle, RemoteSource::Hand)
+    };
+    assert!(!remote_wants_process(&archived, now, 30));
+}
+
+impl Harness {
+    /// The agent as the last run left it, its Remote Control turned on by hand (ESC-544).
+    fn left_linked_by_hand(&self, id: &str, status: AgentStatus, ago: i64) {
+        self.left_linked(id, status, ago);
+        self.core.agent(id).unwrap().lock().meta.remote_source = Some(RemoteSource::Hand);
+    }
+
+    /// The last activity of the agent `ago` ms ago, as if it had done nothing since.
+    fn idle_for(&self, id: &str, ago: i64) {
+        self.core.agent(id).unwrap().lock().meta.last_activity = now_ms() - ago;
+    }
+}
+
+/// ESC-544, criterion 1: an agent whose Remote Control was turned on by hand is never stopped for
+/// being idle, while one the setting « pour tous les agents » covers keeps the rule of the idle
+/// ones; its remote session stays for its next process.
+#[tokio::test]
+async fn an_agent_turned_on_by_hand_is_never_stopped_for_being_idle() {
+    let h = harness("esc544-idle");
+    let (p, _) = h.project(false).await;
+    let by_hand = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let global = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.set_remote_control(&by_hand, true).await.unwrap();
+    h.core.settings.write().remote_control_all = true;
+    for t in h.core.apply_remote_to(None) {
+        t.await.unwrap();
+    }
+    h.core.ensure_process(&global).await.unwrap();
+    h.wait("both linked", |h| h.linked(&by_hand) && h.linked(&global))
+        .await;
+    assert_eq!(h.agent(&by_hand).remote_source, Some(RemoteSource::Hand));
+    assert_eq!(h.agent(&global).remote_source, Some(RemoteSource::Global));
+    // Idle for longer than « Arrêter les agents inactifs après » (1 minute in the tests), done
+    // even.
+    for id in [&by_hand, &global] {
+        h.idle_for(id, 10 * 60_000);
+    }
+    h.core.agent(&by_hand).unwrap().lock().meta.status = AgentStatus::Done;
+    let session = h.agent(&global).remote_session;
+    h.core.stop_idle_processes();
+    assert!(h.alive(&by_hand) && h.linked(&by_hand), "kept reachable");
+    assert!(!h.alive(&global), "the setting's agent stops");
+    let m = h.agent(&global);
+    assert!(m.remote_control);
+    assert_eq!(m.remote_session, session);
+}
+
+/// ESC-544, criterion 1: the cap of « Process gardés au plus » holds for the agents turned on by
+/// hand as for the others: over it, the least recently active stop, whatever their source; the
+/// memory stays bounded (issue #26).
+#[tokio::test]
+async fn the_cap_holds_for_the_agents_turned_on_by_hand_too() {
+    let h = harness("esc544-cap");
+    let (p, _) = h.project(false).await;
+    let mut ids = Vec::new();
+    for _ in 0..3 {
+        let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+        h.core.set_remote_control(&id, true).await.unwrap();
+        ids.push(id);
+    }
+    h.wait("the three linked", |h| ids.iter().all(|id| h.linked(id)))
+        .await;
+    let [oldest, middle, newest] = ids.clone().try_into().unwrap();
+    for (id, ago) in [(&oldest, 30_000), (&middle, 20_000), (&newest, 10_000)] {
+        h.idle_for(id, ago);
+    }
+    h.core.settings.write().remote_keep_max = 2;
+    h.core.stop_idle_processes();
+    assert!(!h.alive(&oldest), "over the cap, the least recently active");
+    assert!(h.alive(&middle) && h.alive(&newest));
+    assert!(h.agent(&oldest).remote_control);
+    // A setting's agent counts in the same cap: the least recently active goes, by hand or not.
+    let global = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.settings.write().remote_control_all = true;
+    for t in h.core.apply_remote_to(None) {
+        t.await.unwrap();
+    }
+    h.core.ensure_process(&global).await.unwrap();
+    h.wait("linked", |h| h.linked(&global)).await;
+    h.idle_for(&global, 5_000);
+    h.idle_for(&middle, 50_000);
+    h.core.stop_idle_processes();
+    assert!(!h.alive(&middle), "by hand, the least recently active");
+    assert!(h.alive(&newest) && h.alive(&global));
+}
+
+/// ESC-544, criterion 3: at the app's launch, the agents turned on by hand start and take their
+/// remote session back, done or idle for long, within the cap, the most recently active first;
+/// those of the setting, done or idle for long, wait for their next message (decision 0147).
+#[tokio::test]
+async fn the_app_starting_starts_the_agents_turned_on_by_hand_within_the_cap() {
+    let h = harness("esc544-startup");
+    let (p, r) = h.project(false).await;
+    h.core.settings.write().remote_keep_max = 2;
+    let mut ids = Vec::new();
+    for _ in 0..5 {
+        let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+        h.cold(&id).await;
+        ids.push(id);
+    }
+    let [hand_done, hand_idle, hand_old, global_done, global_idle] = ids.try_into().unwrap();
+    h.left_linked_by_hand(&hand_done, AgentStatus::Done, 3 * 3_600_000);
+    h.left_linked_by_hand(&hand_idle, AgentStatus::Idle, 3 * 60_000);
+    // Over the cap of two: the least recently active of those turned on by hand.
+    h.left_linked_by_hand(&hand_old, AgentStatus::Idle, 5 * 3_600_000);
+    h.left_linked(&global_done, AgentStatus::Done, 10_000);
+    h.left_linked(&global_idle, AgentStatus::Idle, 3 * 60_000);
+    h.core.agent(&hand_done).unwrap().lock().meta.remote_session = Some("cse_hand".into());
+
+    h.app_starts().await;
+    assert!(h.alive(&hand_done) && h.linked(&hand_done));
+    assert!(h.alive(&hand_idle) && h.linked(&hand_idle));
+    assert!(!h.alive(&hand_old), "over the cap");
+    assert!(!h.alive(&global_done) && !h.alive(&global_idle));
+    assert!(h
+        .remote_requests(&r)
+        .iter()
+        .any(|req| req["reattach_session_id"] == "cse_hand"));
+    for id in [&hand_old, &global_done, &global_idle] {
+        assert!(h.agent(id).remote_control, "{id} keeps its remote control");
+    }
+}
+
+/// ESC-544, criterion 2: « Réveiller » starts the process of an agent that holds Remote Control
+/// with none, and takes its remote session back; refused for one whose Remote Control is off.
+#[tokio::test]
+async fn waking_an_agent_asleep_starts_it_and_takes_its_session_back() {
+    let h = harness("esc544-wake");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let off = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.cold(&id).await;
+    h.cold(&off).await;
+    h.core.settings.write().remote_control_all = true;
+    h.core.set_remote_control(&off, false).await.unwrap();
+    h.left_linked(&id, AgentStatus::Done, 3 * 3_600_000);
+    h.core.agent(&id).unwrap().lock().meta.remote_session = Some("cse_asleep".into());
+    assert!(!h.core.agent(&id).unwrap().lock().view().alive);
+
+    h.core.wake_remote(&id).await.unwrap();
+    assert!(h.alive(&id) && h.linked(&id));
+    assert!(h.core.agent(&id).unwrap().lock().view().alive);
+    let req = h.remote_requests(&r).pop().unwrap();
+    assert_eq!(req["reattach_session_id"], "cse_asleep");
+    // The source stays the setting's: waking is not turning on by hand.
+    assert_eq!(h.agent(&id).remote_source, Some(RemoteSource::Global));
+
+    assert!(h.core.wake_remote(&off).await.is_err());
+    assert!(!h.alive(&off));
 }
 
 #[test]

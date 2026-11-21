@@ -267,9 +267,15 @@ jobs:
           cargo doc --no-deps --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
           cargo doc --no-deps --locked --target wasm32-wasip1 -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
 
+      # The dry run verifies each crate against the others packaged in a registry of its own, unpacked under
+      # ~/.cargo/registry/{src,cache}/-<hash>. The Rust cache restores them, and cargo does not unpack a version again:
+      # a crate changed under the same unpublished version (0.1.4 of the protocol, 2026-11-20) would be verified against
+      # its old copy. They go before each run.
       - name: The crates of crates.io can be published (a dry run)
         working-directory: src-tauri
-        run: cargo publish --dry-run --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
+        run: |
+          rm -rf -- "$HOME"/.cargo/registry/src/-* "$HOME"/.cargo/registry/cache/-*
+          cargo publish --dry-run --locked -p escouade-plugin-protocol -p escouade-plugin-kit -p escouade-acp -p escouade-voice
 
   windows-lint:
     name: Windows (Rust format and Clippy)

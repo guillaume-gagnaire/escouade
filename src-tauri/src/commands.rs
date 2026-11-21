@@ -631,30 +631,7 @@ pub fn plugin_discard(core: CoreState, token: String) {
 /// removed; `keep`: its settings and its secrets kept for a later install.
 #[tauri::command(async)]
 pub fn plugin_remove(core: CoreState, id: String, keep: Option<bool>) -> Result<bool, String> {
-    let keep = keep.unwrap_or(false);
-    let keys = core
-        .plugins
-        .get(&id, crate::i18n::ui())
-        .map(|v| v.secret_keys)
-        .unwrap_or_default();
-    core.plugin_runtime.forget(&id);
-    let gone = core.plugins.remove(&id, keep).map_err(|e| e.to_string())?;
-    if gone && !keep {
-        for k in keys {
-            if let Err(e) = core
-                .secrets
-                .delete(&crate::plugins::runtime::secret_name(&id, &k))
-            {
-                log::warn!("plugin {id}: its secret {k} stays in the keychain: {e}");
-            }
-        }
-        let log = core.plugin_runtime.journal_file(&id);
-        let _ = std::fs::remove_file(&log);
-        let mut old = log.into_os_string();
-        old.push(".1");
-        let _ = std::fs::remove_file(old);
-    }
-    Ok(gone)
+    core.plugin_uninstall(&id, keep.unwrap_or(false))
 }
 
 /// A plugin installed: `None` when it is not.
@@ -789,7 +766,8 @@ pub fn plugin_secrets(
     id: String,
 ) -> Result<Vec<crate::plugin_secrets::SecretState>, String> {
     let view = plugin_view(&core, &id)?;
-    Ok(core.plugin_secret_states(&id, view.secret_keys))
+    let multiline = crate::plugin_secrets::multiline_secrets(view.manifest.as_ref());
+    Ok(core.plugin_secret_states(&id, view.secret_keys, &multiline))
 }
 
 /// Keeps a plugin's secret in the keychain, under its own name, read back to check; empty forgets it. `inFile`: the
@@ -814,6 +792,89 @@ pub fn plugin_set_secret(
         });
     }
     core.plugin_secret_set(&id, &key, &value, in_file.unwrap_or(false))
+}
+
+/// The secrets of each profile of a plugin (ESC-530): kept or not, and where; never their values.
+#[tauri::command(async)]
+pub fn plugin_profile_secrets(
+    core: CoreState,
+    id: String,
+) -> Result<Vec<crate::plugin_profiles::ProfileSecrets>, String> {
+    core.plugin_profile_secrets(&id)
+}
+
+/// « Enregistrer » of a profile's window (ESC-530): its simple fields; a new one (`profile` none) is given its id here.
+/// The plugin's view, and the profile's id.
+#[tauri::command(async)]
+pub fn plugin_profile_save(
+    core: CoreState,
+    id: String,
+    kind: String,
+    profile: Option<String>,
+    values: serde_json::Map<String, serde_json::Value>,
+) -> Result<(crate::plugins::PluginView, String), String> {
+    let pid = core.plugin_profile_save(&id, &kind, profile.as_deref(), &values)?;
+    Ok((plugin_view(&core, &id)?, pid))
+}
+
+/// « Garder » (empty: « Oublier ») of a secret field of a profile (ESC-530), under its own name in the keychain.
+#[tauri::command(async)]
+pub fn plugin_profile_secret(
+    core: CoreState,
+    id: String,
+    kind: String,
+    profile: String,
+    key: String,
+    value: String,
+    in_file: Option<bool>,
+) -> Result<(), crate::plugin_secrets::SecretRefused> {
+    core.plugin_profile_secret(&id, &kind, &profile, &key, &value, in_file.unwrap_or(false))
+}
+
+/// « Supprimer le profil » (ESC-530): its secrets erased, the projects that took it with none. The plugin's view, and
+/// those projects.
+#[tauri::command(async)]
+pub fn plugin_profile_delete(
+    core: CoreState,
+    id: String,
+    kind: String,
+    profile: String,
+) -> Result<(crate::plugins::PluginView, crate::plugin_profiles::Deleted), String> {
+    let gone = core.plugin_profile_delete(&id, &kind, &profile)?;
+    Ok((plugin_view(&core, &id)?, gone))
+}
+
+/// A setting of each project of a plugin set on this machine (ESC-530); `value` absent: forgotten (« Reprendre la valeur
+/// du fichier »).
+#[tauri::command(async)]
+pub fn plugin_project_set(
+    core: CoreState,
+    id: String,
+    project: String,
+    key: String,
+    value: Option<serde_json::Value>,
+    clear: Option<bool>,
+) -> Result<crate::plugins::PluginView, String> {
+    let value = if clear.unwrap_or(false) {
+        None
+    } else {
+        Some(value.unwrap_or(serde_json::Value::Null))
+    };
+    core.plugin_project_set(&id, &project, &key, value)?;
+    plugin_view(&core, &id)
+}
+
+/// « Écrire dans .escouade.yml » of a setting of each project of a plugin (ESC-530): written into the project's file,
+/// key by key, its comments kept; forgotten on this machine.
+#[tauri::command(async)]
+pub fn plugin_project_write(
+    core: CoreState,
+    id: String,
+    project: String,
+    key: String,
+) -> Result<(crate::plugins::PluginView, Project), String> {
+    let p = core.plugin_project_write(&id, &project, &key)?;
+    Ok((plugin_view(&core, &id)?, p))
 }
 
 /// « Déplacer vers le trousseau »: a plugin's secret kept in the file goes to the keychain, now that there is one.
@@ -3413,6 +3474,13 @@ pub async fn set_remote_control(core: CoreState<'_>, id: String, enabled: bool) 
     Ok(at_next_start)
 }
 
+/// « Réveiller » (ESC-544): the agent holds Remote Control with no process; it starts, and takes
+/// its remote session back.
+#[tauri::command]
+pub async fn wake_remote(core: CoreState<'_>, id: String) -> Res<()> {
+    core.wake_remote(&id).await.map_err(err)
+}
+
 // ---------- board ----------
 
 #[tauri::command]
@@ -5022,6 +5090,14 @@ pub async fn docs_share(
     core.docs_share(&id, message.as_deref(), with_code.unwrap_or(false))
         .await
         .map_err(err)
+}
+
+/// The synchronisation with none of the docs left to share (ESC-534): fetches and brings in what
+/// the others pushed on the docs branch, without committing nor pushing. Stops on a conflict as
+/// `docs_share` does.
+#[tauri::command]
+pub async fn docs_pull(core: CoreState<'_>, id: String) -> Res<crate::docsshare::Shared> {
+    core.docs_pull(&id).await.map_err(err)
 }
 
 /// « L'agent résout » a conflict of the docs.

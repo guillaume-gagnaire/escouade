@@ -16,6 +16,20 @@ How a plugin says which Escouade it is written for, what happens when either one
 
 Outside that range, or for another API, the plugin stays installed but disabled, and Escouade says why: “This plugin needs Escouade 2.3.0 or newer; you have 2.1.0. Update Escouade.”
 
+## The contract of 2.2.5
+
+Escouade 2.2.5 serves the profiles and the settings of each project, the jokers of `permissions.commands` and `limits.processes` ([credentials per project](plugins/project-credentials)). A plugin that uses them says `"min": "2.2.5"`: an older version keeps it installed but disabled, the reason said, rather than serve it by half. Without it, an Escouade 2.2.4:
+
+- refuses the manifest of a plugin that declares a `"type": "profile"` setting;
+- reads a setting of `"scope": "project"` as a setting of the app;
+- ignores the `profile` of `secrets/get`: it gives the plugin’s secret of that key when it has one, else refuses it;
+- compares a joker as a literal word: the entry matches nothing;
+- ignores `limits.processes`, and keeps 4 programs at once.
+
+`initialize` announces `capabilities.profiles` and `capabilities.typedCommands`. The SDK (`p.require`) and the kit (`Cx::require`) check them before each call that depends on them, and refuse (`-32601`) saying the version that serves them, without asking Escouade anything. That version is `ESCOUADE_MIN` in the SDK, `escouade_plugin_protocol::ESCOUADE_MIN` in the protocol’s crate. `escouade-plugin validate` warns (⚠), without refusing, a manifest that takes one of them with an older `escouade.min`.
+
+A secret of `"scope": "project"` is read but not served: the plugin stays disabled, the reason said. A project’s credentials go in a profile.
+
 ## What does not break
 
 - **An unknown field of the manifest is ignored**: a manifest written for a newer Escouade still loads, and the ignored fields are listed.

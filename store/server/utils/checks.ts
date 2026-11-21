@@ -919,6 +919,14 @@ function checkPermissions(m: Manifest | null): CheckResult {
   // The secret of an account it declares (`account:<id>`, or all of them, `account:*`): the app keeps it apart by plugin.
   const ofAccount = (key: string) =>
     key.startsWith('account:') && accounts.length > 0 && (key === 'account:*' || accounts.includes(key.slice('account:'.length)));
+  // The secrets of a kind of profile it declares that has a secret field (`profile:<id>`, ESC-525): kept by profile.
+  const kinds = Array.isArray(c.profiles)
+    ? c.profiles
+        .map((x) => x as Record<string, unknown>)
+        .filter((x) => Array.isArray(x?.fields) && (x.fields as Record<string, unknown>[]).some((f) => f?.secret === true))
+        .map((x) => x.id)
+    : [];
+  const ofProfile = (key: string) => key.startsWith('profile:') && kinds.includes(key.slice('profile:'.length));
   const problems: Problem[] = [];
   const unused = (key: string, what: Text) =>
     list(p[key]).forEach((_, i) =>
@@ -960,16 +968,16 @@ function checkPermissions(m: Manifest | null): CheckResult {
       });
   });
   list(p.secrets).forEach((key, i) => {
-    if (!declared.includes(key) && !ofAccount(key))
+    if (!declared.includes(key) && !ofAccount(key) && !ofProfile(key))
       problems.push({
         path: `permissions.secrets[${i}]`,
         why: t(
-          `${code(key)} n’est pas un secret de ${code('contributes.secrets')}, ni le compte d’un genre de ${code('contributes.accounts')}.`,
-          `${code(key)} is no secret of ${code('contributes.secrets')}, nor the account of a kind of ${code('contributes.accounts')}.`,
+          `${code(key)} n’est pas un secret de ${code('contributes.secrets')}, ni le compte d’un genre de ${code('contributes.accounts')}, ni les secrets d’un genre de ${code('contributes.profiles')}.`,
+          `${code(key)} is no secret of ${code('contributes.secrets')}, nor the account of a kind of ${code('contributes.accounts')}, nor the secrets of a kind of ${code('contributes.profiles')}.`,
         ),
         fix: t(
-          'Déclare le champ du secret dans contributes.secrets, ou retire la permission.',
-          'Declare the secret’s field in contributes.secrets, or remove the permission.',
+          'Déclare le champ du secret dans contributes.secrets (ou un champ secret du profil), ou retire la permission.',
+          'Declare the secret’s field in contributes.secrets (or a secret field of the profile), or remove the permission.',
         ),
       });
   });

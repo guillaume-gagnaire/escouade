@@ -188,13 +188,30 @@ fn mixed_db(kind: HomeKind, name: &str) -> bool {
 }
 
 /// The name Claude Code gives the folder of a folder's sessions (`projects/<name>`): every
-/// character but a letter or a digit a `-`.
+/// character but a letter or a digit a `-`. Past `CLAUDE_NAME_MAX` characters, Claude Code keeps
+/// the first ones and adds `-<hash>` (read in its binary, 2.1.3xx): `claude_project_names` has it.
 pub fn claude_project_name(folder: &Path) -> String {
     folder
         .to_string_lossy()
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect()
+}
+
+/// The length past which Claude Code cuts the name of a folder of sessions, then adds `-<hash of
+/// the path>` (base 36): `S(e)` of its `projects/`, `C = 200`.
+pub const CLAUDE_NAME_MAX: usize = 200;
+
+/// Whether `name`, a folder of Claude Code's `projects`, is that of the folder `full`
+/// (`claude_project_name`) or of a folder under it (a worktree, `<full>--claude-worktrees-<x>`),
+/// a long one cut as Claude Code cuts it.
+fn claude_name_of(name: &str, full: &str) -> bool {
+    if full.len() > CLAUDE_NAME_MAX {
+        // Cut, then its hash: whatever is under it is cut the same way.
+        return name.starts_with(&format!("{}-", &full[..CLAUDE_NAME_MAX]));
+    }
+    // A folder under it whose name is cut still starts with `<full>-` (its hash after the cut).
+    name == full || name.starts_with(&format!("{full}-"))
 }
 
 /// The names of what is in `dir` (nothing when it cannot be read).
@@ -256,11 +273,7 @@ pub fn compute(g: &Ground) -> Fence {
     let own_names: Vec<String> = own
         .map(|o| o.folders.iter().map(|f| claude_project_name(f)).collect())
         .unwrap_or_default();
-    let of_own = |name: &str| {
-        own_names
-            .iter()
-            .any(|o| name == o || name.starts_with(&format!("{o}-")))
-    };
+    let of_own = |name: &str| own_names.iter().any(|o| claude_name_of(name, o));
     for home in &g.homes {
         for name in mixed(home.kind) {
             paths.push(home.dir.join(name));
@@ -278,10 +291,12 @@ pub fn compute(g: &Ground) -> Fence {
         for side in &walled {
             for folder in &side.folders {
                 let name = claude_project_name(folder);
-                paths.push(sessions.join(&name));
-                // Its worktrees under it: `<name>--claude-worktrees-<agent>`.
-                let prefix = format!("{name}-");
-                for n in on_disk.iter().filter(|n| n.starts_with(&prefix)) {
+                // Refused before it is made, unless Claude Code would cut it (its hash is not ours).
+                if name.len() <= CLAUDE_NAME_MAX {
+                    paths.push(sessions.join(&name));
+                }
+                // Its worktrees under it (`<name>--claude-worktrees-<agent>`), and a long name cut.
+                for n in on_disk.iter().filter(|n| claude_name_of(n, &name)) {
                     if !of_own(n) {
                         paths.push(sessions.join(n));
                     }
@@ -418,6 +433,71 @@ mod tests {
         assert!(!has(&f, &claude.join("projects/x-elsewhere")));
         assert!(!has(&f, &root.join("home/.codex/config.toml")));
         assert!(!has(&f, &claude.join("settings.json")));
+    }
+
+    /// ESC-556: an account shared with a private project (its folder the two projects' sessions'):
+    /// the other project's agents are refused the private one's sessions there, its memory and its
+    /// worktrees' included; what Claude Code keeps of every project mixed is refused whole; what
+    /// stays common is its settings, its memory of every project and its sign-in, never read here.
+    #[test]
+    fn on_an_account_shared_with_a_private_project_its_sessions_are_refused_to_the_others() {
+        let root = test_dir("fence-shared-account");
+        let mut g = ground(&root, "a", &["b"]);
+        // A folder of its own (one of Escouade's, `<données>/claude/<nom>`, is refused whole).
+        let pro = root.join("accounts/pro");
+        for d in [
+            "projects/x-a",
+            "projects/x-b/memory",
+            "projects/x-b--claude-worktrees-3",
+            "file-history/s1",
+            "todos",
+        ] {
+            std::fs::create_dir_all(pro.join(d)).unwrap();
+        }
+        g.homes.push(Home {
+            kind: HomeKind::Claude,
+            dir: pro.clone(),
+        });
+        let f = compute(&g);
+        assert!(has(&f, &pro.join("projects/x-b/s.jsonl")));
+        assert!(has(&f, &pro.join("projects/x-b/memory/MEMORY.md")));
+        assert!(has(
+            &f,
+            &pro.join("projects/x-b--claude-worktrees-3/s.jsonl")
+        ));
+        assert!(has(&f, &pro.join("history.jsonl")));
+        assert!(has(&f, &pro.join("file-history/s1")));
+        assert!(has(&f, &pro.join("todos")));
+        assert!(!has(&f, &pro.join("projects/x-a/s.jsonl")));
+        let claude = root.join("home/.claude");
+        for common in ["settings.json", "CLAUDE.md", "skills/x/SKILL.md"] {
+            assert!(!has(&f, &claude.join(common)), "{common}");
+        }
+    }
+
+    /// A folder whose name Claude Code cuts (past 200 characters, then `-<hash>`): its sessions are
+    /// found by the start of their name, its own project's kept.
+    #[test]
+    fn a_long_folder_is_refused_as_claude_code_cuts_its_name() {
+        let root = test_dir("fence-long");
+        let mut g = ground(&root, "a", &["b"]);
+        let long = |p: &str| PathBuf::from(format!("y/{p}/{}", "n".repeat(220)));
+        g.projects[0].folders.push(long("a"));
+        g.projects[1].folders.push(long("b"));
+        let cut = |p: &str| {
+            let n = claude_project_name(&long(p));
+            format!("{}-1k2j3h", &n[..CLAUDE_NAME_MAX])
+        };
+        let claude = root.join("home/.claude");
+        for p in ["a", "b"] {
+            std::fs::create_dir_all(claude.join("projects").join(cut(p))).unwrap();
+        }
+        let f = compute(&g);
+        assert!(has(&f, &claude.join("projects").join(cut("b"))));
+        assert!(!has(&f, &claude.join("projects").join(cut("a"))));
+        // Never its full name, which Claude Code does not make.
+        let full = claude_project_name(&long("b"));
+        assert!(!f.paths().iter().any(|p| p.ends_with(&full)));
     }
 
     #[test]

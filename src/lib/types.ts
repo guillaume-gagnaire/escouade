@@ -4089,7 +4089,7 @@ export interface DocsPending {
 /** How a « Partager » ended. */
 export type DocsShared =
   | { kind: 'nothing' }
-  | { kind: 'done'; committed: number; message: string; pulled: boolean }
+  | { kind: 'done'; committed: number; message: string; pulled: boolean; received: number }
   | { kind: 'conflict'; conflict: DocsConflict };
 
 /** Why a cache went cold before its time (ESC-398). */
