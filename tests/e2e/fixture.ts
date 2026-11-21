@@ -163,6 +163,29 @@ function startApp(env: NodeJS.ProcessEnv, stderr: string, args: string[] = []): 
   return instance;
 }
 
+/**
+ * The keychain's entries of the sandboxed runs (ESC-584), through the debug build (`--sandbox-keychain …`, which touches only
+ * names ending with `.escouade.sandbox` that carry a run's tag): `sweep` takes back what dead runs left (their data folder
+ * gone, or older than a day), `clean <dir>…` what the runs on these folders wrote, `list <dir>…` names them. Windows only.
+ */
+export function sandboxKeychain(...args: string[]): string {
+  if (process.platform !== 'win32') return '';
+  return execFileSync(EXE, ['--sandbox-keychain', ...args], {
+    encoding: 'utf8',
+    timeout: 30_000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
+/** `sandboxKeychain`, a failure only warned of: the keychain's trouble never fails a test that passed. */
+function tidyKeychain(...args: string[]) {
+  try {
+    sandboxKeychain(...args);
+  } catch (e) {
+    console.warn(`the sandbox's keychain entries (${args[0]}): ${(e as Error).message}`);
+  }
+}
+
 /** Ends the app and its whole process tree (the fake CLIs, the WebView2); the port it listened on may still answer a moment. */
 async function killApp(instance: Instance) {
   await instance.browser?.close().catch(() => {});
@@ -394,6 +417,8 @@ export const test = base.extend<{
     if (!(await waitForPortToClose(port))) {
       throw new Error(`something still listens on port ${port} after 30 s: the app of the test before is not gone`);
     }
+    // What runs that died left in the keychain (ESC-584): never an entry of a run still on, here or in another worktree.
+    tidyKeychain('sweep');
     const root = testRoot();
     const data = path.join(root, 'data');
     fs.mkdirSync(data);
@@ -604,6 +629,8 @@ export const test = base.extend<{
       // The next test must not find this instance still answering on the port (it waits for that too, before it
       // starts; a test that passed does not fail for it).
       if (!(await waitForPortToClose(port))) console.warn(`port ${port} is still taken 30 s after the app was killed`);
+      // What the test's apps wrote in the keychain goes, whatever the outcome (ESC-584): they are all stopped now.
+      tidyKeychain('clean', ...datas);
       // Windows releases the handles of killed processes (a terminal's shell sits in the repo)
       // with a delay: a temporary folder left behind must not fail the test.
       try {
