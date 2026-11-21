@@ -1,9 +1,9 @@
 ---
-number: null
+number: 239
 id: "sur-la-2-2-ce-qui-tourne-en-bypass-s-arr"
 title: "Sur la 2.2, ce qui tourne en Bypass s'arrête quand « Autoriser le mode Bypass » s'éteint"
 date: "2026-11-17"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-521"
 pages: ["harness/comptes"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/comptes","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

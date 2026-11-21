@@ -1,9 +1,9 @@
 ---
-number: null
+number: 254
 id: "un-agent-dont-le-remote-control-est-allu"
 title: "Un agent dont le remote control est allumé à la main reste joignable ; « en veille » dit quand un agent relié n'a pas de process"
 date: "2026-11-19"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-544"
 pages: ["harness/process-des-agents","fenetre/barre-laterale"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: [147]
 superseded_by: null
 changes: [{"page":"harness/process-des-agents","added":8,"removed":4},{"page":"fenetre/barre-laterale","added":7,"removed":5}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

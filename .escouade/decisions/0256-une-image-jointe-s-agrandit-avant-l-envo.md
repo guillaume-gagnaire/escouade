@@ -1,9 +1,9 @@
 ---
-number: null
+number: 256
 id: "une-image-jointe-s-agrandit-avant-l-envo"
 title: "Une image jointe s'agrandit avant l'envoi, dans la visionneuse de la conversation"
 date: "2026-11-20"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-555"
 pages: ["conversation/conversation"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"conversation/conversation","added":8,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

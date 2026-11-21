@@ -1,9 +1,9 @@
 ---
-number: null
+number: 255
 id: "les-profils-d-un-plugin-et-ses-reglages"
 title: "Les profils d'un plugin et ses réglages d'un projet sont servis ; la page Plugins d'un projet écrit plugins.<id>.<clé> clé par clé"
 date: "2026-11-19"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-530"
 pages: ["plugins/profils-et-reglages-d-un-projet","plugins/contrat-du-manifeste","projets/escouade-yml","fenetre/reglages"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/profils-et-reglages-d-un-projet","added":62,"removed":0},{"page":"plugins/contrat-du-manifeste","added":11,"removed":10},{"page":"projets/escouade-yml","added":10,"removed":6},{"page":"fenetre/reglages","added":14,"removed":5}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "Raccourcis"
 subject: "Fenêtre"
 sources: ["docs/INBOX.md (§ 8.2, § 8.3, choix I4)","design/inbox-2-3/README.md (direction B)"]
 tickets: ["ESC-392","ESC-432","ESC-510"]
-decisions: [128,158,"l-ecran-de-la-boite-a-toi-une-vue-de-tou"]
+decisions: [128,158,240]
 compared: null
 ---
 

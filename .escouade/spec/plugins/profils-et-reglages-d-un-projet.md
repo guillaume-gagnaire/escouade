@@ -3,7 +3,7 @@ title: "Les profils d'un plugin et ses réglages d'un projet"
 subject: "plugins"
 sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.1 à §1.3, §2, §3, §6 à §8 et §10 (choix n° 1 à 4 tranchés le 2026-11-17)","design/plugins-contract-2-3/captures (release/2.3) : b-plugin, b-profil, b-projet","issues GitHub #38 et #39 (un auteur de plugin tiers)","crates/escouade-plugins/src/profiles.rs","crates/escouade-plugins/src/runtime.rs","src-tauri/src/plugin_profiles.rs","src-tauri/src/plugin_secrets.rs","src-tauri/src/projectfile.rs","src/lib/plugin-profiles.ts","src/components/plugins/PluginProfiles.svelte","src/components/plugins/ProfileModal.svelte","src/components/settings/ProjectPluginsPage.svelte","schemas/plugin-protocol-1.json","crates/escouade-plugin-kit/src/serve.rs","sdk/plugin/src/index.ts","sdk/plugin/src/testing.ts","crates/escouade-plugins/src/bench/fake.rs","website/content/docs/fr/plugins/project-credentials.md"]
 tickets: ["ESC-530","ESC-531"]
-decisions: ["les-profils-d-un-plugin-et-ses-reglages"]
+decisions: [255]
 compared: null
 ---
 

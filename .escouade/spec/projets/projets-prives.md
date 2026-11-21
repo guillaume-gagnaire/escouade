@@ -3,7 +3,7 @@ title: "Projets privés"
 subject: "Projets"
 sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)"]
 tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556"]
-decisions: [154,"un-compte-partage-protege-les-sessions-d"]
+decisions: [154,257]
 compared: null
 ---
 

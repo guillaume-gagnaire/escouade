@@ -3,7 +3,7 @@ title: "Le contrat du manifeste : réglages, secrets, profils, jokers et limite"
 subject: "plugins"
 sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/lib.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts","docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §2 à §6 et §10","src/components/plugins/PluginSettings.svelte","src/lib/plugin-fields.ts","src-tauri/src/plugin_secrets.rs","design/plugins-contract-2-3/captures (release/2.3) : a-plugin, a-projet, b-profil","crates/escouade-plugins/src/profiles.rs"]
 tickets: ["ESC-525","ESC-528","ESC-529","ESC-526","ESC-530","ESC-531"]
-decisions: ["le-contrat-du-manifeste-est-lu-avant-d-e","les-jokers-de-permissions-commands-sont","la-limite-de-programmes-d-un-plugin-est","la-page-d-un-plugin-sert-ses-groupes-ses","les-profils-d-un-plugin-et-ses-reglages"]
+decisions: [246,248,253,249,255]
 compared: null
 ---
 

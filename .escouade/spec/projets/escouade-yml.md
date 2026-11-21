@@ -3,7 +3,7 @@ title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
 tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-530"]
-decisions: ["les-profils-d-un-plugin-et-ses-reglages"]
+decisions: [255]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 

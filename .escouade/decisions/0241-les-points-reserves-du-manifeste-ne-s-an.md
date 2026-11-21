@@ -1,9 +1,9 @@
 ---
-number: null
+number: 241
 id: "les-points-reserves-du-manifeste-ne-s-an"
 title: "Les points réservés du manifeste ne s'annoncent plus, validate les dit sans refuser"
 date: "2026-11-18"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-524"
 pages: ["plugins/vue-d-ensemble"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/vue-d-ensemble","added":7,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

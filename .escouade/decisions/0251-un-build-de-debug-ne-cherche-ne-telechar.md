@@ -1,9 +1,9 @@
 ---
-number: null
+number: 251
 id: "un-build-de-debug-ne-cherche-ne-telechar"
 title: "Un build de debug ne cherche, ne télécharge ni n'installe jamais une vraie version d'Escouade"
 date: "2026-11-19"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-543"
 pages: ["introduction/livraison"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"introduction/livraison","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

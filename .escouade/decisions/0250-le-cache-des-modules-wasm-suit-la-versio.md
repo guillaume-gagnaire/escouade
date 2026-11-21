@@ -1,9 +1,9 @@
 ---
-number: null
+number: 250
 id: "le-cache-des-modules-wasm-suit-la-versio"
 title: "Le cache des modules WASM suit la version exacte de wasmtime, et la sortie d'un plugin est bornée par tour"
 date: "2026-11-19"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-542"
 pages: ["plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/programmes-js-ts-en-wasm","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
