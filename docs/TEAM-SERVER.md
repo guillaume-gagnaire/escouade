@@ -703,7 +703,7 @@ Coût du store privé : environ 7 j (TS-14).
 
 ## 12. Les pistes : l'audit vers un SIEM, l'Overseer d'équipe
 
-Seulement des pistes, à étudier plus tard.
+Seulement des pistes, à étudier plus tard. **Étudiées (ESC-580)** : `docs/TEAM-AUDIT.md` (TS-21, choix A1 à A8, tickets AU-1 à AU-6) et `docs/TEAM-OVERSEER.md` (TS-22, choix O1 à O8, tickets OE-1 à OE-6), à trancher par l'utilisateur.
 
 - **Le journal d'audit vers un SIEM.**
   - Les événements :
@@ -874,8 +874,8 @@ Le socle s'appuie sur la fondation du mode serveur (`docs/REMOTE.md`) pour le tr
 | TS-19 | Les pages du site : installer le serveur d'équipe, le guide du RSSI (ce que voit le serveur, les stratégies, le piège du hook), la FAQ « Où vont mes données ? » | TS-13 | 3 j |
 | TS-20 | L'audit externe de la cryptographie et du journal, avant de dire le serveur stable (à confier par l'utilisateur à des auditeurs, pas un ticket d'agent) | TS-3, TS-13 | — |
 | **Pistes** | | | |
-| TS-21 | Étude : l'audit vers un SIEM (événements, formats, sources) | TS-13 | 2 j |
-| TS-22 | Étude : l'Overseer d'équipe, avec `docs/OVERSEER.md` | TS-6, Overseer | 2 j |
+| TS-21 | Étude : l'audit vers un SIEM (événements, formats, sources). **Faite (ESC-580)** : `docs/TEAM-AUDIT.md`, page de spec « L'audit vers un SIEM » ; choix A1 à A8 à trancher, tickets AU-1 à AU-6 (environ 14 h d'agent) | TS-13 | 2 j |
+| TS-22 | Étude : l'Overseer d'équipe, avec `docs/OVERSEER.md`. **Faite (ESC-580)** : `docs/TEAM-OVERSEER.md`, page de spec « L'Overseer d'équipe » ; choix O1 à O8 à trancher, tickets OE-1 à OE-6 (environ 13 h d'agent) | TS-6, Overseer | 2 j |
 
 **En tout** : environ 110 jours d'agent, soit environ 22 semaines, sans l'audit externe. C'est plus que le redesign de la 2.0.
 
