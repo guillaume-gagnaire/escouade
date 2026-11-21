@@ -5,6 +5,7 @@ import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { FolderInfo, Project, SetupInfo } from '../../lib/types';
 import { agent, BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, project, resetApp, usableEngines } from '../../test/ipc';
+import { fill } from '../../test/fill';
 import NewProjectModal from './NewProjectModal.svelte';
 
 // The assistant of « Nouveau projet »: its steps, the copy of another project, the checks, and what « Créer » saves.
@@ -60,7 +61,8 @@ const webShop = project({
 const made = project({ id: 'new', name: 'atlas', path: 'C:\\code\\atlas', board: board({ prefix: 'ATL' }) });
 
 async function typePath(path = 'C:\\code\\atlas') {
-  await userEvent.type(screen.getByPlaceholderText(/^C:/), path);
+  // At once: typed key by key, the folders of a test that tries three of them outlast 5 s on a loaded machine (ESC-522).
+  await fill(screen.getByPlaceholderText(/^C:/), path);
 }
 
 const next = () => userEvent.click(screen.getByRole('button', { name: 'Suivant' }));

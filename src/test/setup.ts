@@ -1,8 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { clearMocks } from '@tauri-apps/api/mocks';
-import { cleanup } from '@testing-library/svelte';
+import { cleanup, configure } from '@testing-library/svelte';
 import { afterEach, beforeEach } from 'vitest';
 import { setLang } from '../lib/i18n';
+
+// How long `findBy…` and `waitFor` look for the state they wait for, as the 15 s of a test (vitest.config.ts): a guard,
+// not a wait, they answer as soon as it is there. Testing Library's 1 s ran out on a loaded machine before the editor of
+// the split view drew its file (App.test.ts, ESC-522).
+configure({ asyncUtilTimeout: 5_000 });
 
 // The tests are written in French: each starts in French, whatever language the one before it switched to.
 beforeEach(() => setLang('fr'));

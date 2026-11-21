@@ -146,6 +146,7 @@ export default defineZone('nav', {
       heading: 'What would be lost',
       reading: 'Reading the worktree…',
       unknown: 'Worktree state unknown: git did not answer in time.',
+      late: 'Worktree state unknown for now: git has not answered yet.',
       dirty: { one: '{count} changed file not committed: {names}', other: '{count} changed files not committed: {names}' },
       more: ', and {count} more',
       unmerged: { one: '{count} commit not merged into {base} yet', other: '{count} commits not merged into {base} yet' },

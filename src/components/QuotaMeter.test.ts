@@ -244,7 +244,10 @@ describe('QuotaMeter in English', () => {
     const date = end.toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' });
     expect(spaces(meter.getAttribute('aria-valuetext'))).toBe(`42% · resets on ${date} at ${time} · projected at the reset: 118%`);
     await userEvent.hover(meter);
-    expect(spaces(screen.getByRole('tooltip').textContent)).toBe(`42% · resets on ${date} at ${time} · projected at the reset: 118%`);
+    // Awaited: it shows at once only while the tooltip of a test before has just gone (`WARM_FOR`, lib/tip.ts).
+    expect(spaces((await screen.findByRole('tooltip')).textContent)).toBe(
+      `42% · resets on ${date} at ${time} · projected at the reset: 118%`,
+    );
   });
 
   it('writes the 5-hour window as « 5h », its reset in the panel, and the tooltip’s example the way the design has it', () => {

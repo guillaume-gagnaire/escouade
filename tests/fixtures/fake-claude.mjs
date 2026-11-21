@@ -2436,10 +2436,16 @@ function startSession() {
       uuid: `bgend-${t.id}`,
     });
     bgLevel();
-    // Claude Code opens a turn of its own about it.
-    out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
-    streamText('La tâche de fond est finie.');
-    result();
+    // Claude Code opens a turn of its own about it: <dir>/fake-own-turn-ms holds how long it takes to (0 by default;
+    // a loaded machine, an API slow to answer, ESC-522).
+    const ownTurn = () => {
+      out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+      streamText('La tâche de fond est finie.');
+      result();
+    };
+    const late = numberOf('fake-own-turn-ms');
+    if (late) setTimeout(ownTurn, late);
+    else ownTurn();
   }
 
   // `stop_task` on a command or a monitor running in the background, as Claude Code 2.1.301 answers it (measured): the

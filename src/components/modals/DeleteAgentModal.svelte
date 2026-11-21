@@ -12,7 +12,7 @@
   /**
    * « Supprimer l'agent » (ESC-511): asked by the user, or by the agent that made it (`delete_agent`, under its name). It
    * says what would be lost: its uncommitted files and its commits not merged (read by git as it opens, « inconnu » if git
-   * is late), a turn under way or a request waiting, its ticket. The worktree's box is unticked while there is work in
+   * is late, its answer taken when it comes), a turn under way or a request waiting, its ticket. The worktree's box is unticked while there is work in
    * progress, ticked otherwise (as the asking agent wants it, then). The focus is the dialog's: Entrée confirms nothing.
    */
   let { agentId }: { agentId: string } = $props();
@@ -26,25 +26,37 @@
   const request = a?.status === 'waiting' || !!a?.requests?.length;
 
   let loss = $state<DeleteLoss | null>(null);
+  /**
+   * Git has not answered within LATE_MS: the state is said unknown for now and the box can be ticked, unticked; git's
+   * answer, when it comes, takes its place (ESC-522: on a loaded machine git took more than the 3 s the core gave it, and
+   * its answer was dropped for good).
+   */
+  let late = $state(false);
   let checked = $state(false);
   /** Changed by the user: what git says later does not change it back. */
   let touched = false;
   let busy = $state(false);
 
+  /** How long the dialog says « Lecture du worktree… » before it says the state unknown, for now. */
+  const LATE_MS = 3000;
+
   // Gone in the meantime: nothing to ask.
   if (!a) queueMicrotask(close);
   else if (a.worktree) {
+    const timer = setTimeout(() => (late = true), LATE_MS);
+    $effect(() => () => clearTimeout(timer));
     api
       .deleteLoss(a.id)
       .catch(() => ({ known: false, dirty: 0, names: [], unmerged: 0, base: '' }) satisfies DeleteLoss)
       .then((l) => {
+        clearTimeout(timer);
         loss = l;
         // Ticked only when nothing would be lost; unknown counts as something.
         if (!touched) checked = l.known && !l.dirty && !l.unmerged && (ask?.worktree ?? true);
       });
   }
 
-  const work = $derived(!!loss && (!loss.known || loss.dirty > 0 || loss.unmerged > 0));
+  const work = $derived(loss ? !loss.known || loss.dirty > 0 || loss.unmerged > 0 : late);
 
   function close() {
     app.modal = null;
@@ -81,8 +93,10 @@
       <h3>{t('nav.sidebar.deleteLoss.heading')}</h3>
       <ul>
         {#if a.worktree}
-          {#if !loss}
+          {#if !loss && !late}
             <li class="soft" data-loss="reading">{t('nav.sidebar.deleteLoss.reading')}</li>
+          {:else if !loss}
+            <li class="warn" data-loss="late">{t('nav.sidebar.deleteLoss.late')}</li>
           {:else if !loss.known}
             <li class="warn" data-loss="unknown">{t('nav.sidebar.deleteLoss.unknown')}</li>
           {:else}
@@ -108,7 +122,7 @@
     </section>
     {#if a.worktree}
       <label class="opt">
-        <input type="checkbox" bind:checked disabled={!loss} onchange={() => (touched = true)} data-delete-worktree />
+        <input type="checkbox" bind:checked disabled={!loss && !late} onchange={() => (touched = true)} data-delete-worktree />
         {a.worktree.existing
           ? t('branches.agent.deleteWorktree', { branch: a.worktree.branch })
           : t('nav.sidebar.deleteWorktree', { branch: a.worktree.branch })}

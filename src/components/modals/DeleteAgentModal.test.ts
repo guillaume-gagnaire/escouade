@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../../lib/editor/buffers.svelte';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
@@ -27,6 +27,8 @@ const asked = { deleteAsk: { by: 'a1', at: 1, worktree: null } };
 
 describe('DeleteAgentModal', () => {
   beforeEach(() => setLang('fr'));
+  // A test cut short by its guard leaves no clock of its own to the next ones.
+  afterEach(() => vi.useRealTimers());
 
   it('says what an agent asked to be deleted would lose, and unticks its worktree', async () => {
     const backend = open(asked, { known: true, dirty: 2, names: ['a.txt', 'b.txt'], unmerged: 3, base: 'main' });
@@ -62,6 +64,46 @@ describe('DeleteAgentModal', () => {
   it('names five files and counts the rest', async () => {
     open({}, { known: true, dirty: 7, names: ['1', '2', '3', '4', '5'], unmerged: 0, base: 'main' });
     expect(await screen.findByText('7 fichiers modifiés non commités : 1, 2, 3, 4, 5, et 2 autres')).toBeInTheDocument();
+  });
+
+  it('says the state unknown for now while git is late, then what git says when it answers (ESC-522)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    try {
+      let answer!: (l: DeleteLoss) => void;
+      open({}, new Promise((r) => (answer = r)));
+      expect(screen.getByText('Lecture du worktree…')).toBeInTheDocument();
+      expect(box()).toBeDisabled();
+      vi.advanceTimersByTime(3000);
+      // Late: unknown for now, the box free and unticked (its work kept).
+      expect(await screen.findByText('État du worktree inconnu pour l’instant : git n’a pas encore répondu.')).toBeInTheDocument();
+      expect(box()).not.toBeDisabled();
+      expect(box()).not.toBeChecked();
+      expect(screen.getByText('La case du worktree est décochée : son travail en cours resterait.')).toBeInTheDocument();
+      // Git answers later: what it says replaces the unknown.
+      answer({ known: true, dirty: 1, names: ['prepare.txt'], unmerged: 0, base: 'main' });
+      expect(await screen.findByText('1 fichier modifié non commité : prepare.txt')).toBeInTheDocument();
+      expect(screen.queryByText('État du worktree inconnu pour l’instant : git n’a pas encore répondu.')).toBeNull();
+      expect(box()).not.toBeChecked();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the box as the user set it while git was late', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    try {
+      let answer!: (l: DeleteLoss) => void;
+      open({}, new Promise((r) => (answer = r)));
+      vi.advanceTimersByTime(3000);
+      await waitFor(() => expect(box()).not.toBeDisabled());
+      await fireEvent.click(box());
+      expect(box()).toBeChecked();
+      answer({ known: true, dirty: 2, names: ['a', 'b'], unmerged: 0, base: 'main' });
+      expect(await screen.findByText('2 fichiers modifiés non commités : a, b')).toBeInTheDocument();
+      expect(box()).toBeChecked();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('says the state of the worktree unknown when git is late, and unticks it', async () => {

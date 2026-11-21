@@ -8,6 +8,7 @@ import type { Listed } from '../../lib/team-projects';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
 import { ALICE, listedProject, ME, repo, teamProjects } from '../../test/team-projects';
 import TeamProjects from './TeamProjects.svelte';
+import { fill } from '../../test/fill';
 
 // « Projets de l'équipe » (TS-8): the projects of the list already here (attached by the member's gesture, their own
 // name kept and said), the others with « Cloner », which opens the wizard with the project; the administrator's form.
@@ -109,12 +110,12 @@ describe('« Projets de l’équipe » (TS-8)', () => {
     expect(await screen.findByText('La liste de l’équipe ne compte encore aucun projet : ajoute le premier.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Ajouter un projet' }));
     const form = screen.getByRole('region', { name: 'Ajouter un projet à la liste' });
-    await userEvent.type(within(form).getByRole('textbox', { name: 'Nom' }), 'Plateforme');
-    await userEvent.type(within(form).getByRole('textbox', { name: 'Adresse du dépôt 1' }), 'git@github.com:acme/front.git');
+    await fill(within(form).getByRole('textbox', { name: 'Nom' }), 'Plateforme');
+    await fill(within(form).getByRole('textbox', { name: 'Adresse du dépôt 1' }), 'git@github.com:acme/front.git');
     await userEvent.click(within(form).getByRole('button', { name: 'Ajouter un dépôt' }));
-    await userEvent.type(within(form).getByRole('textbox', { name: 'Adresse du dépôt 2' }), 'https://gitlab.com/acme/infra');
-    await userEvent.type(within(form).getByRole('textbox', { name: 'Dossier du dépôt 2' }), 'infra');
-    await userEvent.type(within(form).getByRole('textbox', { name: 'Branche par défaut' }), 'develop');
+    await fill(within(form).getByRole('textbox', { name: 'Adresse du dépôt 2' }), 'https://gitlab.com/acme/infra');
+    await fill(within(form).getByRole('textbox', { name: 'Dossier du dépôt 2' }), 'infra');
+    await fill(within(form).getByRole('textbox', { name: 'Branche par défaut' }), 'develop');
     await userEvent.click(within(form).getByRole('radio', { name: 'Certains membres' }));
     await userEvent.click(within(form).getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(be.called('team_project_put')).toHaveLength(1));

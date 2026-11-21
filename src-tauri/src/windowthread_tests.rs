@@ -234,7 +234,16 @@ fn a_slow_command_neither_holds_the_window_thread_nor_the_other_commands() {
         ("fast_command".to_string(), "fast".to_string()),
         "the quick command waited for the slow one"
     );
-    assert!(lanes.running.told().starts_with("slow_command "));
+    // The quick one may answer before the lane's thread has taken the slow one: it is waited for, held by its gate.
+    let deadline = std::time::Instant::now() + within;
+    while !lanes.running.told().starts_with("slow_command ") {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the slow command never told as running: {:?}",
+            lanes.running.told()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
     *GATE.0.lock() = true;
     GATE.1.notify_all();
     assert_eq!(

@@ -51,6 +51,8 @@ export interface Call {
 const ANSWERS: Record<string, unknown> = {
   closed_projects: [],
   memory_list: [],
+  // The memories a ticket of a team's project left (TS-10), which its card reads.
+  team_memory_of_ticket: [],
   claude_memory_offer: [],
   target_cis: {},
   overview_prs: [],

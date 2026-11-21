@@ -222,6 +222,9 @@ describe('handleShortcut', () => {
     await app.openEditor({ source: 'project', path: 'a.ts' });
     const b = await buffers.open('p1', 'project', 'a.ts');
     buffers.edit(b.key, 'b');
+    // Ctrl+S loads the editor's actions at its first use: loaded here, what is tested is the save, not how long a
+    // loaded machine takes to transform that module (more than 5 s in a full run, ESC-522).
+    await import('./editor/actions');
     expect(handleShortcut(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }), false)).toBe(true);
     await expect.poll(() => be.called('fs_write').length).toBe(1);
   });

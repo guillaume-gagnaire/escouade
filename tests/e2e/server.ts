@@ -6,6 +6,27 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
+import { endTree } from './proctree';
+
+/**
+ * Ends an `escouade-server` of the test and all it started (its agents' fake CLIs, their terminals, orphans included), by
+ * their pids and never by a program's name, and waits until they are gone (ESC-522): what `taskkill /T` alone missed or
+ * left dying could hold a port or a folder of the next test.
+ */
+async function endServer(child: ChildProcess, at: number, exitedAt: () => number | null) {
+  const pid = child.pid;
+  if (!pid) return;
+  const { left, said } = await endTree(
+    () => ({ pid, at, exitedAt: exitedAt() }),
+    () => false,
+    120_000,
+  );
+  if (left.length) {
+    console.warn(
+      `processes of escouade-server still there 120 s after it was ended: ${left.map((p) => p.pid).join(', ')}; taskkill: ${said}`,
+    );
+  }
+}
 
 export interface Server {
   /** Its data folder. */
@@ -102,19 +123,18 @@ export async function startBareServer(program: string, data: string, env: NodeJS
   // Its own log (ESC-539: two servers of one test each read their own « ready » line).
   const out = path.join(data, '..', `${path.basename(data)}-stdout.log`);
   const fd = fs.openSync(out, 'a');
+  const at = Date.now();
   const child: ChildProcess = spawn(program, ['run', '--data-dir', data, '--port', String(port)], { env, stdio: ['ignore', fd, fd] });
   fs.closeSync(fd);
   let exited: string | null = null;
-  child.on('exit', (code) => (exited = `exit code ${code}`));
+  let exitedAt: number | null = null;
+  child.on('exit', (code) => {
+    exited = `exit code ${code}`;
+    exitedAt = Date.now();
+  });
   const log = () => (fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '');
   const stop = async () => {
-    if (child.pid && exited === null) {
-      try {
-        execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-      } catch {
-        // gone already
-      }
-    }
+    await endServer(child, at, () => exitedAt);
   };
   for (const deadline = Date.now() + 90_000; Date.now() < deadline;) {
     const ready = /ready: remote API on ws:\/\/127\.0\.0\.1:(\d+)\//.exec(log());
@@ -139,22 +159,21 @@ export async function startServer(
   if (!fs.existsSync(program)) throw new Error(`build the server first: cargo build --bin escouade-server (missing ${program})`);
   const out = path.join(data, '..', 'server-stdout.log');
   const fd = fs.openSync(out, 'a');
+  const at = Date.now();
   const child: ChildProcess = spawn(program, ['run', '--data-dir', data, '--port', String(ports.server)], {
     env,
     stdio: ['ignore', fd, fd],
   });
   fs.closeSync(fd);
   let exited: string | null = null;
-  child.on('exit', (code) => (exited = `exit code ${code}`));
+  let exitedAt: number | null = null;
+  child.on('exit', (code) => {
+    exited = `exit code ${code}`;
+    exitedAt = Date.now();
+  });
   const log = () => (fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '');
   const kill = async () => {
-    if (child.pid && exited === null) {
-      try {
-        execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-      } catch {
-        // gone already
-      }
-    }
+    await endServer(child, at, () => exitedAt);
   };
   let tunnel: { port: number; close: () => void } | null = null;
   try {

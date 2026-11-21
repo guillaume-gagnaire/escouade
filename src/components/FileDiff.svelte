@@ -2,6 +2,7 @@
   import { fileLines, parseUnifiedDiff, type DiffFile } from '../lib/diff';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
+  import { newestReads } from '../lib/reads';
   import { app } from '../lib/state.svelte';
   import DiffView from './DiffView.svelte';
   import { tip } from '../lib/tip';
@@ -14,7 +15,10 @@
   let error = $state<string | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let first = true;
-  let seq = 0;
+  // Answers in any order: the newest one come is shown, a newer read still on its way (ESC-522).
+  const reads = newestReads();
+  /** Whether a read of `pid`, `aid`, `p` is still of the file shown. */
+  const stillShown = (pid: string, aid: string | null, p: string) => pid === projectId && aid === agentId && p === path;
 
   $effect(() => {
     void app.gitTick;
@@ -27,14 +31,14 @@
   });
 
   async function load(pid: string, aid: string | null, p: string) {
-    const mine = ++seq;
+    const mine = reads.ask();
     try {
       const d = await api.gitDiff(pid, aid, [p]);
-      if (mine !== seq) return; // superseded by a newer request
+      if (!stillShown(pid, aid, p) || !reads.take(mine)) return;
       file = parseUnifiedDiff(d)[0] ?? null;
       error = null;
     } catch (e) {
-      if (mine !== seq) return;
+      if (!stillShown(pid, aid, p) || !reads.take(mine)) return;
       error = String(e);
     }
     loaded = true;

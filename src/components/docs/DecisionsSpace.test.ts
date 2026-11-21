@@ -7,6 +7,7 @@ import { app } from '../../lib/state.svelte';
 import { fakeBackend, resetApp } from '../../test/ipc';
 import type { DocsDecision, DocsTree } from '../../lib/types';
 import DecisionsSpace from './DecisionsSpace.svelte';
+import { fill } from '../../test/fill';
 
 const TREE: DocsTree = {
   branch: '',
@@ -199,8 +200,8 @@ describe('the register of the decisions', () => {
     render(DecisionsSpace, { project: app.projects[0] });
     await userEvent.click(screen.getByRole('button', { name: 'Proposer une décision' }));
     const form = screen.getByRole('dialog', { name: 'Proposer une décision' });
-    await userEvent.type(within(form).getByRole('textbox', { name: 'Titre' }), 'Tarif famille');
-    await userEvent.type(within(form).getByRole('textbox', { name: 'Décision' }), '−20 % dès le troisième membre.');
+    await fill(within(form).getByRole('textbox', { name: 'Titre' }), 'Tarif famille');
+    await fill(within(form).getByRole('textbox', { name: 'Décision' }), '−20 % dès le troisième membre.');
     await userEvent.click(within(form).getByRole('button', { name: 'Proposer' }));
     await waitFor(() => expect(b.called('docs_decision_propose')).toHaveLength(1));
     expect(b.called('docs_decision_propose')[0].args).toMatchObject({
@@ -215,7 +216,7 @@ describe('the register of the decisions', () => {
     await userEvent.click(screen.getByRole('button', { name: 'La remplacer' }));
     const again = screen.getByRole('dialog', { name: 'Remplacer la décision 004' });
     expect(within(again).getByRole('combobox', { name: 'Remplace' })).toHaveValue('4');
-    await userEvent.type(within(again).getByRole('textbox', { name: 'Titre' }), 'Paiement par Mollie');
+    await fill(within(again).getByRole('textbox', { name: 'Titre' }), 'Paiement par Mollie');
     await userEvent.click(within(again).getByRole('button', { name: 'Proposer' }));
     await waitFor(() => expect(b.called('docs_decision_replace')).toHaveLength(1));
     expect(b.called('docs_decision_replace')[0].args).toMatchObject({ id: 'p1', number: 4, decision: { title: 'Paiement par Mollie' } });

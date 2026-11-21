@@ -44,6 +44,26 @@ describe('FilesPanel', () => {
     expect(screen.getByText('tests-e2e')).toBeInTheDocument();
   });
 
+  it('shows a list come while the repository changed again, and never an older one over a newer (ESC-522)', async () => {
+    // Git slower than the repository's changes: each read is still on its way when the next is asked.
+    const answers: ((l: FileChange[]) => void)[] = [];
+    fakeBackend({ git_files: () => new Promise<FileChange[]>((r) => answers.push(r)) });
+    render(FilesPanel, { project: project(), agent: app.agents.a1 });
+    await waitFor(() => expect(answers).toHaveLength(1));
+    app.gitTick++;
+    await waitFor(() => expect(answers).toHaveLength(2));
+    answers[0]([change('src/auth.ts', 'a1'), change('notes.md', 'a1')]);
+    expect(await screen.findByText('notes.md')).toBeInTheDocument();
+    // The file deleted: the newer read says so, the older one coming after it does not bring the file back.
+    app.gitTick++;
+    await waitFor(() => expect(answers).toHaveLength(3));
+    answers[2]([change('src/auth.ts', 'a1')]);
+    await waitFor(() => expect(screen.queryByText('notes.md')).toBeNull());
+    answers[1]([change('src/auth.ts', 'a1'), change('notes.md', 'a1')]);
+    await settle();
+    expect(screen.queryByText('notes.md')).toBeNull();
+  });
+
   it('does not refetch when the agent object is merely updated', async () => {
     const backend = fakeBackend({ git_files: () => [change('src/auth.ts', 'a1')] });
     const { rerender } = render(FilesPanel, { project: project(), agent: app.agents.a1 });

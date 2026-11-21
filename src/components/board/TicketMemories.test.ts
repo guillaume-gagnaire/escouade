@@ -49,6 +49,18 @@ describe('the memories a ticket left (TS-10)', () => {
     expect(b.calls.filter((c) => c.cmd === 'team_memory_decide').map((c) => c.args.keep)).toEqual([true, true]);
   });
 
+  it('shows nothing when no list comes back, or when the command fails, and draws the card all the same', async () => {
+    for (const answer of [() => null, () => Promise.reject('la commande a échoué')]) {
+      const b = fakeBackend({ team_memory_of_ticket: answer });
+      const { unmount } = render(TicketMemories, { project: team(), ticket: ticket({ key: 'DEM-41', column: 'review' }) });
+      await waitFor(() => expect(b.called('team_memory_of_ticket')).toHaveLength(1));
+      // Its answer read, then the card drawn once more: no memory, no error.
+      await new Promise((r) => setTimeout(r, 0));
+      expect(screen.queryByTestId('ticket-memories')).toBeNull();
+      unmount();
+    }
+  });
+
   it('sets one aside, and shows nothing for a project of no team', async () => {
     let left = [entry({ id: 'aa'.repeat(16), name: 'un', standing: 'proposed' })];
     const b = fakeBackend({

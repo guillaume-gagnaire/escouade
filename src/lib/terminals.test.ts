@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import type { ILinkHandler } from '@xterm/xterm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBackend, resetApp } from '../test/ipc';
@@ -139,7 +139,19 @@ import {
   setLogLive,
   setTerminalFontSize,
   ANSI_TOKENS,
+  settleGlide,
+  resolveColor,
 } from './terminals';
+
+// A theme's glide started by a test ends with it: its timer, 750 ms later, would read the colours in the next test,
+// its canvas no longer drawn (ESC-522: an error out of any test, under load). Its components taken down first (the
+// setup's cleanup comes after this hook, and changes the root's style: one more glide), their change seen (the observer
+// answers in a microtask), then the glide cut short.
+afterEach(async () => {
+  cleanup();
+  await Promise.resolve();
+  settleGlide();
+});
 
 beforeEach(() => {
   terms.length = 0;
@@ -330,12 +342,13 @@ describe('pasting in Claude Code’s interface', () => {
 
   it('keeps the order of the pastes: text pasted while an image is being kept comes after it', async () => {
     let keep: (path: string) => void = () => {};
-    fakeBackend({ agent_terminal: () => info, paste_image: () => new Promise((r) => (keep = r)) });
+    const backend = fakeBackend({ agent_terminal: () => info, paste_image: () => new Promise((r) => (keep = r)) });
     const field = await terminalField();
     expect(field.paste(clipboard({ files: [capture()] }))).toBe(true);
     expect(field.paste(clipboard({ text: ' décris-la' }))).toBe(true);
     expect(field.xterm()).toBe(0);
-    await new Promise((r) => setTimeout(r, 20));
+    // The image on its way to be kept (read first: a loaded machine takes its time, ESC-522), the text held behind it.
+    await waitFor(() => expect(backend.called('paste_image')).toHaveLength(1));
     expect(pasted).toEqual([]);
     keep(PATH);
     await waitFor(() => expect(pasted).toEqual([PATH, ' décris-la']));
@@ -472,11 +485,12 @@ describe('pasting in Claude Code’s interface', () => {
 
     it('keeps the order of the pastes: text pasted while it is copied comes after its path', async () => {
       let open: (handle: string) => void = () => {};
-      fakeBackend(copying({ attach_open: () => new Promise((r) => (open = r)) }));
+      const backend = fakeBackend(copying({ attach_open: () => new Promise((r) => (open = r)) }));
       const field = await terminalField();
       expect(field.paste(clipboard({ files: [doc()] }))).toBe(true);
       expect(field.paste(clipboard({ text: ' résume-le' }))).toBe(true);
-      await new Promise((r) => setTimeout(r, 20));
+      // The file on its way to be copied (ESC-522: not after a time a loaded machine outlasts), the text held behind it.
+      await waitFor(() => expect(backend.called('attach_open')).toHaveLength(1));
       expect(pasted).toEqual([]);
       open('h:devis.pdf');
       await waitFor(() => expect(pasted).toEqual([copyPath('devis.pdf'), ' résume-le']));
@@ -2010,5 +2024,12 @@ describe('the theme of the terminals', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(x.term.options.minimumContrastRatio).toBe(1);
     disposeLog('theme-hot');
+  });
+});
+
+describe('a colour read where no canvas draws (ESC-522)', () => {
+  it('keeps its CSS form rather than throw', () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    expect(resolveColor('rgb(1, 2, 3)')).toBe('rgb(1, 2, 3)');
   });
 });

@@ -1112,7 +1112,16 @@ async fn an_opencode_turn_costs_its_steps_and_the_days_budget_pauses_its_tickets
         h.core.agent(&id).unwrap().lock().view().context_window,
         200_000
     );
-    // The day's cost, of its account and in all.
+    // The day's cost, of its account and in all: recorded just after the window is told the turn (`apply`), so waited
+    // for, not read at once (ESC-522: read too early on a loaded machine).
+    h.wait("the day's cost recorded", |h| {
+        h.core
+            .usage
+            .lock()
+            .account("oc-paid")
+            .is_some_and(|a| (a.today_cost - cost).abs() < 1e-12)
+    })
+    .await;
     let usage = h.core.usage.lock().clone();
     let of = usage.account("oc-paid").unwrap();
     assert!((of.today_cost - cost).abs() < 1e-12);

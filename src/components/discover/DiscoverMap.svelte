@@ -354,7 +354,7 @@
     cursor: pointer;
   }
   .stop:focus-visible {
-    outline: 2px solid var(--teal);
+    outline: 2px solid var(--teal-ink);
     outline-offset: 2px;
   }
   .o {

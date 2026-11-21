@@ -12,6 +12,7 @@ import { app } from '../lib/state.svelte';
 import type { AttachedFile } from '../lib/types';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../test/ipc';
 import { takeViewCommand } from '../lib/interactive';
+import { fill } from '../test/fill';
 import Composer from './Composer.svelte';
 
 // Where a file lies on the disk is the system's to say: no file has a known path unless a test gives one.
@@ -1497,13 +1498,15 @@ describe('Composer: the interactive commands of its harness (ESC-401)', () => {
 
   it('/model alone opens the model menu; /model opus and /compact go to the agent as before', async () => {
     const { backend, textarea } = setup({ model: 'sonnet' });
-    await userEvent.type(textarea, '/model{Enter}');
+    // Each command at once, the keys after it pressed: typed key by key, the three outlast 5 s on a loaded machine (ESC-522).
+    await fill(textarea, '/model');
+    await userEvent.keyboard('{Enter}');
     expect(await screen.findByRole('menuitemradio', { name: /Sonnet/ })).toBeInTheDocument();
     expect(backend.called('send_message')).toEqual([]);
     await userEvent.keyboard('{Escape}');
-    await userEvent.type(textarea, '/model opus');
+    await fill(textarea, '/model opus');
     await userEvent.keyboard('{Escape}{Enter}');
-    await userEvent.type(textarea, '/compact');
+    await fill(textarea, '/compact');
     await userEvent.keyboard('{Escape}{Enter}');
     await waitFor(() => expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['/model opus', '/compact']));
   });

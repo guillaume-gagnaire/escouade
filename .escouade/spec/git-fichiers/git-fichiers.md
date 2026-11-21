@@ -2,8 +2,8 @@
 title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
-tickets: ["ESC-204","ESC-160","ESC-305","ESC-315"]
-decisions: []
+tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-522"]
+decisions: [277]
 compared: "2026-10-31T16:24:52+01:00"
 order: 22
 ---
@@ -137,3 +137,8 @@ Réglages › Projets, groupe « Git ». Un dossier ou un préfixe refusé l'est
 - Le pull se fait en avance rapide seulement : des branches divergées se rebasent ou se mergent à la main.
 - Rien à synchroniser en HEAD détachée ni sans dépôt distant.
 - La fenêtre « Commit » dit « Haiku rédige le message… » quel que soit le harness des textes rédigés ; la fenêtre d'une pull request (« Rédaction du titre et de la description… ») et le commit d'un projet à plusieurs dépôts (« Message en cours de rédaction… ») ne nomment pas de modèle.
+
+### Relectures pendant que le dépôt change (ESC-522)
+
+- « Non commités », « Historique » et le diff d'un fichier se relisent à chaque changement du dépôt. Une réponse de git s'affiche dès qu'elle est plus récente que celle qui est à l'écran, même si une relecture plus récente est encore en route ; une réponse plus ancienne n'en remplace jamais une plus récente, ni ne s'affiche pour un autre projet, agent, dépôt ou fichier que celui qui est montré.
+- Origine : chaque réponse était jetée dès qu'une relecture plus récente était partie. Sur un poste chargé, où le dépôt change plus vite que git ne répond (un agent qui démarre, une compilation), l'historique restait sur « Chargement… » et la liste des fichiers gardait un fichier supprimé.

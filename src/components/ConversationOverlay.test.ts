@@ -207,26 +207,38 @@ describe('the voice conversation over the whole window', () => {
       conversation.flashMs = 40;
       render(ConversationOverlay);
       await ask();
-      await heard('La deuxième');
-      await tick();
-      expect(choice('SQLite').classList.contains('lit')).toBe(true);
-      expect(choice('PostgreSQL').classList.contains('lit')).toBe(false);
-      await later(60);
-      expect(asking()?.dataset.conversationAsk).toBe('1');
-      expect(screen.getByRole('region').textContent).toContain('Plusieurs réponses possibles');
+      // The clock in the test's hand: a loaded machine outlasts the 40 ms of the light between two lines of the test.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        ev({ kind: 'convSpoken', reading, error: null });
+        ev({ kind: 'convHeard', text: 'La deuxième', error: null });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(choice('SQLite').classList.contains('lit')).toBe(true);
+        expect(choice('PostgreSQL').classList.contains('lit')).toBe(false);
+        await vi.advanceTimersByTimeAsync(39);
+        expect(choice('SQLite').classList.contains('lit')).toBe(true);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(asking()?.dataset.conversationAsk).toBe('1');
+        expect(screen.getByRole('region').textContent).toContain('Plusieurs réponses possibles');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('says on screen too an answer not understood, and shows a free answer understood', async () => {
-      conversation.flashMs = 40;
+      conversation.flashMs = 0;
       render(ConversationOverlay);
       await ask();
       await heard('SQLite ou PostgreSQL');
       await tick();
       expect(screen.getByRole('alert').textContent).toBe('Je n’ai pas compris : redis ta réponse, ou choisis ci-dessous.');
+      // Each answer once the question it answers is asked, not after a delay that a loaded machine outlasts.
       await heard('SQLite');
-      await later(60);
+      await waitFor(() => expect(asking()?.dataset.conversationAsk).toBe('1'));
       await heard('Toutes');
-      await later(60);
+      await waitFor(() => expect(asking()?.dataset.conversationAsk).toBe('2'));
+      // The last one lit until it is read: a flash shorter than the wait would put it away first and send the request.
+      conversation.flashMs = 60_000;
       await heard('Escouade-front');
       await tick();
       expect(document.querySelector('[data-understood]')?.textContent).toBe('Ta réponse : Escouade-front');

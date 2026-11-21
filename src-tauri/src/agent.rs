@@ -147,6 +147,9 @@ pub struct AgentRt {
     pub gen: u64,
     pub conv: Conv,
     pub active_since: Option<i64>,
+    /// When its last turn ended (None before its first): a background task that ended after it has a turn of
+    /// Claude Code's own coming on it (`owes_own_turn`).
+    pub turn_ended_at: Option<i64>,
     pub context_tokens: u64,
     pub context_window: u64,
     /// Model of the conversation's latest message (it may be switched mid-process).
@@ -493,6 +496,7 @@ impl AgentRt {
             proc: None,
             gen: 0,
             active_since: None,
+            turn_ended_at: None,
             context_tokens: 0,
             context_window: 0,
             main_model: String::new(),
@@ -953,6 +957,23 @@ impl AgentRt {
         fx.agent_changed = true;
     }
 
+    /// A background task (a command, a monitor) ended after its last turn did, less than `OWN_TURN_WITHIN_MS` ago:
+    /// Claude Code tells it with a notification, then starts a turn of its own on it. Until then the agent is idle and
+    /// runs nothing, but its process is still needed: whoever stopped it (a move to another account) would lose that
+    /// turn (ESC-522). Past that time, no turn came: nothing is held any more.
+    pub fn owes_own_turn(&self, now: i64) -> bool {
+        const OWN_TURN_WITHIN_MS: i64 = 60_000;
+        let Some(ended) = self.turn_ended_at else {
+            return false;
+        };
+        self.meta.plan.as_ref().is_some_and(|p| {
+            p.bg_tasks
+                .iter()
+                .filter_map(|t| t.ended_at)
+                .any(|at| at >= ended && now - at < OWN_TURN_WITHIN_MS)
+        })
+    }
+
     pub fn set_status(&mut self, status: AgentStatus, fx: &mut Effects) {
         if self.meta.status == status {
             return;
@@ -963,6 +984,7 @@ impl AgentRt {
             if let Some(since) = self.active_since.take() {
                 self.meta.active_ms += (now - since).max(0) as u64;
             }
+            self.turn_ended_at = Some(now);
         } else if !was && is {
             self.active_since = Some(now);
             // A turn begins: where it would be cut from, should a safeguard refuse it.

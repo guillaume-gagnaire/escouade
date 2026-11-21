@@ -10,6 +10,7 @@ import type { ClaudeUpdateStatus, EngineInfo, RunCommand } from '../../lib/types
 import { BARE_ENGINE, board, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from './SettingsModal.svelte';
 import { afterGesture } from '../../test/settings';
+import { fill } from '../../test/fill';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 
@@ -1703,7 +1704,8 @@ describe('SettingsModal in English', () => {
     expect(await screen.findByText('Found: C:\\Users\\me\\.local\\bin\\claude.exe')).toBeInTheDocument();
     expect(field).toHaveAccessibleDescription('Found: C:\\Users\\me\\.local\\bin\\claude.exe');
     // The form of the issue: Claude Code installed in WSL, its network in NAT.
-    await userEvent.type(field, '~/.local/bin/claude');
+    // Each path at once: typed key by key, each key draws the whole window again (ESC-522).
+    await fill(field, '~/.local/bin/claude');
     expect(await screen.findByText('Found in WSL (Ubuntu-24.04): /home/me/.local/bin/claude')).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -1712,8 +1714,7 @@ describe('SettingsModal in English', () => {
     ).toBeInTheDocument();
     // Asked with the distribution of the settings.
     expect(called('claude_locate').at(-1)!.args).toEqual({ path: '~/.local/bin/claude', wslDistro: '' });
-    await userEvent.clear(field);
-    await userEvent.type(field, '/nowhere/claude');
+    await fill(field, '/nowhere/claude');
     expect(
       await screen.findByText(
         'Not found. Give the path to claude.exe, or to Claude Code installed in WSL: ~/.local/bin/claude, /home/<user>/…, or \\\\wsl.localhost\\<distribution>\\….',

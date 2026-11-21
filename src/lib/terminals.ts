@@ -75,7 +75,10 @@ export function resolveColor(css: string): string {
   probe.remove();
   const c = document.createElement('canvas');
   c.width = c.height = 1;
-  const ctx = c.getContext('2d', { willReadFrequently: true })!;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  // No canvas to draw on (a browser may give none: no memory left, a canvas refused): the colour in its CSS form, which
+  // xterm.js reads too, rather than a theme that throws (ESC-522: a theme's glide that came late in the tests).
+  if (!ctx) return computed;
   ctx.fillStyle = computed;
   ctx.fillRect(0, 0, 1, 1);
   const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
@@ -146,16 +149,30 @@ export function retheme() {
 const GLIDE_MS = 750;
 let watched = false;
 let glide: ReturnType<typeof setTimeout> | undefined;
+let watcher: MutationObserver | null = null;
+
+/**
+ * The tests: the glide under way, if any, cut short, and the theme no longer watched until a terminal opens again. Its
+ * timer would fire in a test after, or once the tests are over, whose canvas is not drawn (ESC-522).
+ */
+export function settleGlide() {
+  clearTimeout(glide);
+  glide = undefined;
+  watcher?.disconnect();
+  watcher = null;
+  watched = false;
+}
 
 /** Follows the theme of the window (`data-theme`), a plugin's colours (`data-plugin-theme`) and its tint (`--p`, in the root's style), once. */
 function watchTheme() {
   if (watched || typeof MutationObserver === 'undefined') return;
   watched = true;
-  new MutationObserver((changes) => {
+  watcher = new MutationObserver((changes) => {
     if (changes.some((c) => c.attributeName === 'data-theme' || c.attributeName === 'data-plugin-theme')) retheme();
     clearTimeout(glide);
     glide = setTimeout(retheme, GLIDE_MS);
-  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-plugin-theme', 'style'] });
+  });
+  watcher.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-plugin-theme', 'style'] });
 }
 
 const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End']);

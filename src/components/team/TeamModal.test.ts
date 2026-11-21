@@ -5,6 +5,7 @@ import { app } from '../../lib/state.svelte';
 import { teams, type TeamView } from '../../lib/teams.svelte';
 import { fakeBackend, resetApp } from '../../test/ipc';
 import TeamModal from './TeamModal.svelte';
+import { fill } from '../../test/fill';
 
 const SIX = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
 const WORDS = Array.from({ length: 24 }, (_, i) => `mot${i + 1}`);
@@ -97,9 +98,9 @@ describe('the screens of the team server (TS-3)', () => {
     render(TeamModal, { props: { step: 'create' } });
     const create = screen.getByRole('button', { name: 'Créer l’équipe' });
     expect(create).toBeDisabled();
-    await userEvent.type(screen.getByLabelText(/Adresse du serveur/), 'team.acme.fr');
-    await userEvent.type(screen.getByLabelText(/Jeton de création/), 'le-jeton');
-    await userEvent.type(screen.getByLabelText(/Nom de l’équipe/), 'ACME');
+    await fill(screen.getByLabelText(/Adresse du serveur/), 'team.acme.fr');
+    await fill(screen.getByLabelText(/Jeton de création/), 'le-jeton');
+    await fill(screen.getByLabelText(/Nom de l’équipe/), 'ACME');
     await userEvent.click(create);
     expect(backend.called('team_create')[0].args).toEqual({
       server: 'team.acme.fr',
@@ -120,13 +121,13 @@ describe('the screens of the team server (TS-3)', () => {
     const inputs = screen.getAllByLabelText(/Mot n° \d+/);
     expect(inputs).toHaveLength(3);
     const asked = inputs.map((i) => Number(i.closest('label')!.textContent!.match(/\d+/)![0]) - 1);
-    await userEvent.type(inputs[0], 'faux');
-    await userEvent.type(inputs[1], WORDS[asked[1]]);
-    await userEvent.type(inputs[2], WORDS[asked[2]]);
+    await fill(inputs[0], 'faux');
+    await fill(inputs[1], WORDS[asked[1]]);
+    await fill(inputs[2], WORDS[asked[2]]);
     await userEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
     expect(await screen.findByText('Ce ne sont pas les bons mots : regarde ta copie.')).toBeInTheDocument();
-    await userEvent.clear(inputs[0]);
-    await userEvent.type(inputs[0], WORDS[asked[0]]);
+    // Put in place of the wrong one.
+    await fill(inputs[0], WORDS[asked[0]]);
     backend.calls.length = 0;
     await userEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
     expect(backend.called('team_confirm_words')[0].args).toEqual({

@@ -2,8 +2,8 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-usage/real-2.1.314.json","tests/fixtures/quota-pace.json","design/settings-2-2/PROPOSITION.md","docs/PROTOCOL.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-497","ESC-511","ESC-521","ESC-538","ESC-556"]
-decisions: [20,24,123,154,160,213,161,198,197,211,239,257]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-497","ESC-511","ESC-522","ESC-538","ESC-521","ESC-556"]
+decisions: [20,24,123,154,160,213,161,198,197,211,239,257,262]
 compared: "2026-10-31T17:26:28+01:00"
 ---
 
@@ -285,6 +285,10 @@ Le mode jugé est celui où le harness de l'agent tourne vraiment, pas seulement
 - **Les stratégies imposées jugent ce même mode** (ESC-497) : `permissions.allowBypass`, `permissions.modes` et `permissions.defaultMode`, du poste comme d'une équipe, jugent le mode où le harness tourne, sur chacun de ces chemins. Le détail est dans « Réglages imposés », « Le mode jugé est celui où tourne le harness ».
 
 - **« Autoriser le mode Bypass » éteint pendant qu'un agent tourne en Bypass** (ESC-497) : son process, ou son interface, ne reste pas en vie. Au repos, il s'arrête aussitôt ; en plein tour, il finit son tour puis s'arrête. La conversation le dit avec la raison du refus, et son mode ne change pas. Son message, « Relancer », sa vue, la reprise programmée et le démarrage d'avance sont refusés de même tant que le réglage est éteint.
+
+### Une tâche de fond qui vient de finir (ESC-522)
+
+Pour « Changer de compte à », un agent n'est pas libre non plus quand une tâche de fond de son process (commande, surveillance) a fini **après la fin de son dernier tour**, il y a moins d'une minute : Claude Code va ouvrir de lui-même un tour sur elle (sa notification). Entre la fin de la tâche et ce tour, l'agent est au repos et rien ne tourne, mais l'arrêter pour le passer sur un autre compte perdrait ce tour. Il passe donc à la fin de ce tour-là. Passée la minute sans tour, rien n'est plus retenu.
 
 ## Sur un serveur (ESC-538)
 

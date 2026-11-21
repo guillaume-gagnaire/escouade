@@ -2,7 +2,7 @@
 title: "À découvrir"
 subject: "fenetre"
 sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-decouverte.png","design/onboarding-2-3/captures/c-decouverte-clair-1024.png"]
-tickets: ["ESC-503","ESC-505","ESC-506","ESC-512","ESC-550","ESC-507","ESC-558"]
+tickets: ["ESC-503","ESC-505","ESC-506","ESC-512","ESC-522","ESC-550","ESC-507","ESC-558"]
 decisions: [200,215,223,276]
 compared: null
 ---
@@ -95,6 +95,11 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 - Les événements de statistiques de la découverte (`discover_done`, `discover_dismissed`, `discover_hidden`) viennent avec ON-4 (ESC-507), avec la page de confidentialité du site.
 - Escouade à distance n'est pas une découverte tant que le mode serveur n'a pas son réglage.
 - L'absence de sortie son n'est pas lue : seule l'absence de micro retire la voix.
+
+### Les bulles et les fenêtres (ESC-522)
+
+- Une bulle au bon moment ne s'affiche jamais par-dessus une fenêtre ouverte (un formulaire de ticket, les réglages, une confirmation) : le contrôle qu'elle montrerait est dessous, et Échap est à la fenêtre (il y demande d'abandonner ce qui a été tapé). Un moment qui arrive pendant qu'une fenêtre est ouverte attend qu'elle se ferme, six secondes au plus comme pour la frappe, sinon il passe.
+- Une bulle au bon moment déjà à l'écran se ferme quand une fenêtre s'ouvre. Celle que pose « Essayer » reste : le contrôle qu'elle montre peut être dans cette fenêtre (une page des réglages).
 
 ## Une fonctionnalité coupée (ESC-550)
 

@@ -176,6 +176,7 @@ export default {
       heading: 'Ce qui serait perdu',
       reading: 'Lecture du worktree…',
       unknown: 'État du worktree inconnu : git n’a pas répondu à temps.',
+      late: 'État du worktree inconnu pour l’instant : git n’a pas encore répondu.',
       dirty: { one: '{count} fichier modifié non commité : {names}', other: '{count} fichiers modifiés non commités : {names}' },
       more: ', et {count} autres',
       unmerged: { one: '{count} commit pas encore fusionné dans {base}', other: '{count} commits pas encore fusionnés dans {base}' },

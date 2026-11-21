@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { app } from '../../lib/state.svelte';
 import type { ScheduledTask } from '../../lib/types';
 import { fakeBackend, resetApp } from '../../test/ipc';
+import { fill } from '../../test/fill';
 import TicketForm from './TicketForm.svelte';
 
 const MON = new Date(2026, 10, 2, 7, 0).getTime();
@@ -68,8 +69,9 @@ describe('TicketForm in « Programmer »', () => {
     const b = backend();
     show();
     const dialog = screen.getByRole('dialog');
-    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Titre du ticket' }), 'Revue des dépendances');
-    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Consigne' }), 'Mets à jour les dépendances.');
+    // At once: typed key by key, the two fields of the big form outlast 5 s on a loaded machine (ESC-522).
+    await fill(within(dialog).getByRole('textbox', { name: 'Titre du ticket' }), 'Revue des dépendances');
+    await fill(within(dialog).getByRole('textbox', { name: 'Consigne' }), 'Mets à jour les dépendances.');
     await userEvent.click(within(dialog).getByRole('button', { name: 'jeudi' }));
     await userEvent.click(within(dialog).getByRole('checkbox'));
     await waitFor(() => expect(submit()).toBeEnabled());

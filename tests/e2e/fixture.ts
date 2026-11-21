@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freePort, waitForPortToClose } from './port';
+import { endTree, listenersOn } from './proctree';
 import { serverProgram, startBareServer, startServer, type BareServer, type Server } from './server';
 import { lookDiff } from './srgb';
 import { updateTrouble } from './update-guard';
@@ -181,6 +182,8 @@ interface Instance {
   /** When it was started (ms since the epoch). */
   at: number;
   stopped: string | null;
+  /** When it ended, as Node saw it (null while it runs): its pid may be another process's after. */
+  exitedAt: number | null;
   browser: Browser | null;
 }
 
@@ -207,24 +210,40 @@ function startApp(env: NodeJS.ProcessEnv, stderr: string, args: string[] = [], p
   const at = Date.now();
   const child = spawn(program, args, { env, stdio: ['ignore', 'ignore', errFd] });
   fs.closeSync(errFd);
-  const instance: Instance = { child, at, stopped: null, browser: null };
+  const instance: Instance = { child, at, stopped: null, exitedAt: null, browser: null };
   child.on('exit', (code, signal) => {
+    instance.exitedAt = Date.now();
     instance.stopped = signal ? `killed by ${signal}` : `exit code ${code} (0x${((code ?? 0) >>> 0).toString(16)})`;
   });
   child.on('error', (e) => (instance.stopped = `could not start: ${e.message}`));
   return instance;
 }
 
-/** Ends the app and its whole process tree (the fake CLIs, the WebView2); the port it listened on may still answer a moment. */
-async function killApp(instance: Instance) {
+/**
+ * Ends the app and its whole process tree (the fake CLIs, the terminals, the WebView2), and waits until none of them is left:
+ * the next test must find nothing of this one (its DevTools port above all, ESC-522). By their pids, read from the list of
+ * the machine's processes: the app while it runs, what it started and theirs, orphans included, and the WebView2 processes
+ * on its own folder `webview` (`<webview>\EBWebView` in their command line: one whose app is gone; `webview` is no prefix
+ * of the second app's `webview-2` there). Never by a program's name: `escouade.exe` is also the user's own app.
+ * (`taskkill /T` alone returned before the tree was gone, and missed the orphans.)
+ */
+async function killApp(instance: Instance, webview: string) {
   await instance.browser?.close().catch(() => {});
   instance.browser = null;
-  if (instance.child.pid) {
-    try {
-      execFileSync('taskkill', ['/PID', String(instance.child.pid), '/T', '/F'], { stdio: 'ignore' });
-    } catch {
-      // already gone
-    }
+  const pid = instance.child.pid;
+  if (!pid) return;
+  const folder = path.join(webview, 'EBWebView').toLowerCase();
+  const { left, said } = await endTree(
+    () => ({ pid, at: instance.at, exitedAt: instance.exitedAt }),
+    (p) => p.cmd.toLowerCase().includes(folder),
+    // A WebView2 killed on a loaded machine may take more than 30 s to be gone (ESC-522): the next app does not start
+    // meanwhile, its DevTools port would not open.
+    120_000,
+  );
+  if (left.length) {
+    console.warn(
+      `processes of the app still there 120 s after it was ended:\n${left.map((p) => `  ${p.pid} ${p.cmd.slice(0, 160)}`).join('\n')}\n  taskkill: ${said}`,
+    );
   }
 }
 
@@ -601,436 +620,446 @@ export const test = base.extend<{
   // may put there (a second Claude account's folder and sign-in), and the settings to start with, merged into settings.json.
   // (An object: Playwright reads a function given as an option for a fixture.)
   preStart: [{ run: () => ({}) }, { option: true }],
-  app: async ({ appEnv, appArgs, language, preStart, server, sshServer }, use, testInfo) => {
-    if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
-    // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
-    // opens a fixed port through the machine policy instead (tests run one at a time), by the program's name
-    // (`second()` runs a copy under another name for that, ESC-496; ESCOUADE_E2E_POLICY_LIKE=1 does the same here).
-    // Outside CI, a port drawn at random, free with the next one (`second()`'s): another worktree's e2e may run an app on
-    // the one drawn, which would never close; another is drawn then (ESC-496).
-    const port = FIXED_PORT
-      ? FIXED_PORT
-      : await freePort(() => 9400 + (testInfo.workerIndex * 50 + Math.floor(Math.random() * 50)), { span: 2 });
-    // The instance of the test before may still be dying, and answering on the fixed port of CI: connect() would attach to
-    // it. Wait for it to be gone.
-    if (FIXED_PORT && !(await waitForPortToClose(port))) {
-      throw new Error(`something still listens on port ${port} after 30 s: the app of the test before is not gone`);
-    }
-    const root = testRoot();
-    const data = path.join(root, 'data');
-    fs.mkdirSync(data);
-    // Every data folder the test's apps ran on (`restartAs`), whose logs the end of the test reads.
-    const datas = new Set([data]);
-    // French unless a test asks otherwise, whatever the machine's language (CI runners are English): the tests read the
-    // French interface.
-    const given = (preStart.run(root) ?? {}) as Record<string, unknown>;
-    fs.writeFileSync(
-      path.join(data, 'settings.json'),
-      JSON.stringify({
-        claudePath: FAKE,
-        sound: false,
-        osNotifications: false,
-        idleStopMinutes: 0,
-        language,
-        // The question of the first start answered (a sandbox never sends anything anyway).
-        telemetry: false,
-        // And the other question of the first start, the user's name for the shared tickets (ESC-190): put off.
-        nameAsked: true,
-        // Settings of this version: no update to bring them through (ESC-128), unless a test says otherwise.
-        accountsVersion: 1,
-        // No automatic restart for an update of Escouade: the hidden window of the tests reads as nobody there, and a
-        // version published during a run would restart the app under test (a message typed then stays in its field).
-        autoUpdate: false,
-        // A message sent during a turn goes at once, as the tests expect.
-        midTurnDelaySecs: 0,
-        ...given,
-        accounts: accountsFor(given, appEnv),
-      }),
-    );
-    // A repository `run` made already (the site's screenshots make their own) is kept.
-    const repo = fs.existsSync(path.join(root, 'demo-api', '.git')) ? path.join(root, 'demo-api') : makeRepo(root);
-    const log = path.join(root, 'fake-claude.jsonl');
-    const stderr = path.join(root, 'app-stderr.log');
-    // The same for every start of the test, `restart()`'s included: the data folder is what the app finds again.
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      ESCOUADE_DATA_DIR: data,
-      FAKE_CLAUDE_LOG: log,
-      // Sent "from claude.ai" to an agent once its Remote Control is on.
-      FAKE_CLAUDE_REMOTE_MESSAGE: 'Message depuis le téléphone',
-      ...webviewEnv(EXE, port, path.join(root, 'webview'), port),
-      ESCOUADE_HIDDEN_WINDOW: SHOW ? undefined : '1',
-      // The window itself at that size, not only its page: the app holds its zoom to the window's size (ESC-440).
-      ESCOUADE_WINDOW_SIZE: VIEWPORT ? `${VIEWPORT[1]}x${VIEWPORT[2]}` : undefined,
-      // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
-      // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
-      CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
-      // The fake `claude mcp …` keeps its servers in a folder of the test's, never in the user's home.
-      FAKE_CLAUDE_HOME: path.join(root, 'home'),
-      CLAUDE_SECURESTORAGE_CONFIG_DIR: undefined,
-      // Set for every agent of Escouade (« Les agents tiennent une liste de tâches »), so inherited when one runs
-      // the tests: the app never forces it off, and the fake CLI would see it whatever the setting (ESC-111).
-      CLAUDE_CODE_ENABLE_TODO_TOOLS: undefined,
-      // The same for what turns Claude Code's own update off (`DISABLE_AUTOUPDATER`, given to every claude Escouade
-      // launches since ESC-133): inherited, the app would take it for the user's choice and never run `claude update`.
-      // A test that wants it sets it in `appEnv`.
-      DISABLE_AUTOUPDATER: undefined,
-      DISABLE_UPDATES: undefined,
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: undefined,
-      // Nor store.escouade.dev (STORE-9): a closed port, unless a test starts the fake store and names it.
-      ESCOUADE_STORE_URL: process.env.ESCOUADE_STORE_URL ?? NO_STORE,
-      ESCOUADE_STORE_MIRROR_URL: process.env.ESCOUADE_STORE_MIRROR_URL ?? NO_STORE,
-      ESCOUADE_STORE_TEST_KEY: process.env.ESCOUADE_STORE_TEST_KEY,
-      // Nor Open VSX (the editor's extensions, ESC-481): a closed port, unless a test starts the fake one and names it.
-      ESCOUADE_TEST_OPEN_VSX: NO_STORE,
-      // Nor the user's box nor a STUN server (the phone's tunnel, ESC-567): nothing is looked at, nothing opened, unless
-      // a test names its fake box (`fake;natpmp=…;stun=…`).
-      ESCOUADE_PHONE_NET: 'off',
-      // Nor the real updates of Escouade (ESC-543): a debug build given no test server checks none (`updates::endpoints_of`),
-      // so that none is downloaded, and none installed at « Quitter » over the app of the machine. Only the tests of the
-      // updates give theirs (`appEnv: { ESCOUADE_UPDATE_ENDPOINT }`); an inherited one is not taken. The end of each test
-      // reads the log for it (`updateTrouble`).
-      ESCOUADE_UPDATE_ENDPOINT: undefined,
-      // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
-      ESCOUADE_CODEX: 'none',
-      // Codex's Principal is a folder of the test's (its `config.toml`, « Les agents peuvent piloter Escouade »), never the user's ~/.codex.
-      CODEX_HOME: path.join(root, 'codex'),
-      FAKE_CODEX_LOG: path.join(root, 'fake-codex.jsonl'),
-      // The same for OpenCode (`appEnv: { ESCOUADE_OPENCODE: FAKE_OPENCODE }`); its sessions kept in the test's folder.
-      ESCOUADE_OPENCODE: 'none',
-      FAKE_OPENCODE_LOG: path.join(root, 'fake-opencode.jsonl'),
-      FAKE_OPENCODE_HOME: path.join(root, 'fake-opencode'),
-      // OpenCode's global config (`opencode.json`, where the switch declares the server): a folder of the test's,
-      // never the user's ~/.config/opencode, even when the switch takes the entry out of a harness not installed.
-      XDG_CONFIG_HOME: path.join(root, 'xdg'),
-      // The same for Copilot CLI (`appEnv: { ESCOUADE_COPILOT: FAKE_COPILOT }`): never the machine's, its Principal
-      // (`COPILOT_HOME`) a folder of the test's, never the user's ~/.copilot.
-      ESCOUADE_COPILOT: 'none',
-      COPILOT_HOME: path.join(root, 'copilot'),
-      FAKE_COPILOT_LOG: path.join(root, 'fake-copilot.jsonl'),
-      // The same for Cursor CLI (`appEnv: { ESCOUADE_CURSOR: FAKE_CURSOR }`): never the machine's, nor its sign-in
-      // (`%APPDATA%\Cursor\auth.json`): a file of the test's stands for it.
-      ESCOUADE_CURSOR: 'none',
-      ESCOUADE_CURSOR_AUTH: cursorAuth(root),
-      FAKE_CURSOR_LOG: path.join(root, 'fake-cursor.jsonl'),
-      // Its folder of the workspaces (`~/.cursor/projects`: transcripts and trust of its interface, « Vue Cursor CLI »), a
-      // folder of the test's, never the user's.
-      ESCOUADE_CURSOR_PROJECTS: path.join(root, 'cursor-projects'),
-      // The same for Mistral Vibe (`appEnv: { ESCOUADE_VIBE: FAKE_VIBE }`): never the machine's; each agent has its own
-      // VIBE_HOME in the app's data, never the user's ~/.vibe.
-      ESCOUADE_VIBE: 'none',
-      FAKE_VIBE_LOG: path.join(root, 'fake-vibe.jsonl'),
-      // The same for Antigravity CLI (`appEnv: { ESCOUADE_AGY: FAKE_AGY }`): each agent has its own home in the app's data,
-      // never the user's ~/.gemini.
-      ESCOUADE_AGY: 'none',
-      FAKE_AGY_LOG: path.join(root, 'fake-agy.jsonl'),
-      // Its Google sign-in (the keychain's entry `gemini:antigravity`, ESC-271): a file of the test's stands for it, there
-      // unless the test says `agySignedOut`; the fake `agy` writes it when it is signed in in its terminal.
-      ESCOUADE_AGY_SIGNED_IN: agySignIn(root, !!given.agySignedOut),
-      // The same for Gemini CLI (`appEnv: { ESCOUADE_GEMINI: FAKE_GEMINI }`): each agent has its own GEMINI_CLI_HOME in the
-      // app's data, never the user's ~/.gemini.
-      ESCOUADE_GEMINI: 'none',
-      FAKE_GEMINI_LOG: path.join(root, 'fake-gemini.jsonl'),
-      ...(REMOTE ? { ESCOUADE_REMOTE_API: String(REMOTE_PORT), ESCOUADE_REMOTE_API_TOKEN: randomBytes(16).toString('hex') } : {}),
-      ...appEnv,
-    };
-    // The window on an `escouade-server` of the test's (ESC-514): started on a data folder of its own with the same settings,
-    // a device paired, a local forward to it; the app's own core serves nothing. Its ports: the worktree's
-    // (`ESCOUADE_PORT_BASE` + 2 and + 3) when given, else free ones.
-    let served: Server | null = null;
-    if (server) {
-      const serverData = path.join(root, 'server-data');
-      fs.mkdirSync(serverData);
-      fs.copyFileSync(path.join(data, 'settings.json'), path.join(serverData, 'settings.json'));
-      const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
-      served = await startServer(
-        serverProgram(EXE),
-        serverData,
-        { ...env, ESCOUADE_DATA_DIR: serverData },
-        {
-          server: base ? base + 2 : 0,
-          forward: base ? base + 3 : 0,
-        },
-      );
-      delete env.ESCOUADE_REMOTE_API;
-      env.ESCOUADE_REMOTE_URL = served.url;
-      env.ESCOUADE_REMOTE_API_TOKEN = served.token;
-    }
-    // An `escouade-server` reached through the fake `ssh` (ESC-537): on the worktree's base + 2 when given. The app is
-    // given the fake and a ~/.ssh/config of the test's; never a real SSH.
-    let sshed: App['ssh'] = null;
-    if (sshServer) {
-      const serverData = path.join(root, 'server-data');
-      fs.mkdirSync(serverData);
-      fs.copyFileSync(path.join(data, 'settings.json'), path.join(serverData, 'settings.json'));
-      const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
-      const dir = path.join(root, 'fake-ssh');
-      fs.mkdirSync(dir);
-      // The ports a program of the server takes later (the fake `codex login`'s), mapped by the fake `ssh` (ESC-538).
-      const portsFile = path.join(dir, 'ports');
-      const serverEnv = { ...env, ESCOUADE_DATA_DIR: serverData, ESCOUADE_BROWSE_HOME: root, FAKE_SSH_PORTS_FILE: portsFile };
-      const program = serverProgram(EXE);
-      const bare = await startBareServer(program, serverData, serverEnv, base ? base + 2 : 0);
-      const config = path.join(root, 'ssh-home', '.ssh', 'config');
-      fs.mkdirSync(path.dirname(config), { recursive: true });
+  // Its own time, apart from the test's: starting an app on a loaded machine, and waiting until the one of the test
+  // before is gone (its WebView2 may take more than 30 s, ESC-522), is not the test's work.
+  app: [
+    async ({ appEnv, appArgs, language, preStart, server, sshServer }, use, testInfo) => {
+      if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
+      // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
+      // opens a fixed port through the machine policy instead (tests run one at a time), by the program's name
+      // (`second()` runs a copy under another name for that, ESC-496; ESCOUADE_E2E_POLICY_LIKE=1 does the same here).
+      // Outside CI, a port drawn at random, free with the next one (`second()`'s): another worktree's e2e may run an app on
+      // the one drawn, which would never close; another is drawn then (ESC-496).
+      const port = FIXED_PORT
+        ? FIXED_PORT
+        : await freePort(() => 9400 + (testInfo.workerIndex * 50 + Math.floor(Math.random() * 50)), { span: 2 });
+      // The instance of the test before may still be dying, and answering on the fixed port of CI: connect() would attach to
+      // it. Wait for it to be gone.
+      if (FIXED_PORT && !(await waitForPortToClose(port))) {
+        throw new Error(
+          `something still listens on port ${port} after 30 s: the app of the test before is not gone (${await listenersOn(port)})`,
+        );
+      }
+      const root = testRoot();
+      const data = path.join(root, 'data');
+      fs.mkdirSync(data);
+      // Every data folder the test's apps ran on (`restartAs`), whose logs the end of the test reads.
+      const datas = new Set([data]);
+      // French unless a test asks otherwise, whatever the machine's language (CI runners are English): the tests read the
+      // French interface.
+      const given = (preStart.run(root) ?? {}) as Record<string, unknown>;
       fs.writeFileSync(
-        config,
-        'Host travail\n  HostName escouade.test.internal\n  User escouade\n\nHost labo-inconnu\n  HostName labo.test.internal\n  User gpu\n  ProxyJump travail\n\n' +
-          (Number(sshServer) >= 2 ? 'Host perso\n  HostName vps.test.example\n  User escouade\n\n' : '') +
-          'Host *\n  ServerAliveInterval 30\n',
+        path.join(data, 'settings.json'),
+        JSON.stringify({
+          claudePath: FAKE,
+          sound: false,
+          osNotifications: false,
+          idleStopMinutes: 0,
+          language,
+          // The question of the first start answered (a sandbox never sends anything anyway).
+          telemetry: false,
+          // And the other question of the first start, the user's name for the shared tickets (ESC-190): put off.
+          nameAsked: true,
+          // Settings of this version: no update to bring them through (ESC-128), unless a test says otherwise.
+          accountsVersion: 1,
+          // No automatic restart for an update of Escouade: the hidden window of the tests reads as nobody there, and a
+          // version published during a run would restart the app under test (a message typed then stays in its field).
+          autoUpdate: false,
+          // A message sent during a turn goes at once, as the tests expect.
+          midTurnDelaySecs: 0,
+          ...given,
+          accounts: accountsFor(given, appEnv),
+        }),
       );
-      env.ESCOUADE_SSH = process.execPath;
-      env.ESCOUADE_SSH_PREFIX = path.join(ROOT, 'tests', 'fixtures', 'fake-ssh.mjs');
-      env.ESCOUADE_SSH_CONFIG = config;
-      env.FAKE_SSH_DIR = dir;
-      env.FAKE_SSH_PORTS = `46480=${bare.port}`;
-      // A second server (ESC-539): base + 3, its port on the server 46481.
-      let second: { server: BareServer; env: NodeJS.ProcessEnv } | null = null;
-      if (Number(sshServer) >= 2) {
-        const data2 = path.join(root, 'server-data-2');
-        fs.mkdirSync(data2);
-        fs.copyFileSync(path.join(data, 'settings.json'), path.join(data2, 'settings.json'));
-        const env2 = { ...env, ESCOUADE_DATA_DIR: data2 };
-        const bare2 = await startBareServer(program, data2, env2, base ? base + 3 : 0);
-        env.FAKE_SSH_PORTS += `,46481=${bare2.port}`;
-        second = { server: bare2, env: env2 };
+      // A repository `run` made already (the site's screenshots make their own) is kept.
+      const repo = fs.existsSync(path.join(root, 'demo-api', '.git')) ? path.join(root, 'demo-api') : makeRepo(root);
+      const log = path.join(root, 'fake-claude.jsonl');
+      const stderr = path.join(root, 'app-stderr.log');
+      // The same for every start of the test, `restart()`'s included: the data folder is what the app finds again.
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        ESCOUADE_DATA_DIR: data,
+        FAKE_CLAUDE_LOG: log,
+        // Sent "from claude.ai" to an agent once its Remote Control is on.
+        FAKE_CLAUDE_REMOTE_MESSAGE: 'Message depuis le téléphone',
+        ...webviewEnv(EXE, port, path.join(root, 'webview'), port),
+        ESCOUADE_HIDDEN_WINDOW: SHOW ? undefined : '1',
+        // The window itself at that size, not only its page: the app holds its zoom to the window's size (ESC-440).
+        ESCOUADE_WINDOW_SIZE: VIEWPORT ? `${VIEWPORT[1]}x${VIEWPORT[2]}` : undefined,
+        // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
+        // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
+        CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
+        // The fake `claude mcp …` keeps its servers in a folder of the test's, never in the user's home.
+        FAKE_CLAUDE_HOME: path.join(root, 'home'),
+        CLAUDE_SECURESTORAGE_CONFIG_DIR: undefined,
+        // Set for every agent of Escouade (« Les agents tiennent une liste de tâches »), so inherited when one runs
+        // the tests: the app never forces it off, and the fake CLI would see it whatever the setting (ESC-111).
+        CLAUDE_CODE_ENABLE_TODO_TOOLS: undefined,
+        // The same for what turns Claude Code's own update off (`DISABLE_AUTOUPDATER`, given to every claude Escouade
+        // launches since ESC-133): inherited, the app would take it for the user's choice and never run `claude update`.
+        // A test that wants it sets it in `appEnv`.
+        DISABLE_AUTOUPDATER: undefined,
+        DISABLE_UPDATES: undefined,
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: undefined,
+        // Nor store.escouade.dev (STORE-9): a closed port, unless a test starts the fake store and names it.
+        ESCOUADE_STORE_URL: process.env.ESCOUADE_STORE_URL ?? NO_STORE,
+        ESCOUADE_STORE_MIRROR_URL: process.env.ESCOUADE_STORE_MIRROR_URL ?? NO_STORE,
+        ESCOUADE_STORE_TEST_KEY: process.env.ESCOUADE_STORE_TEST_KEY,
+        // Nor Open VSX (the editor's extensions, ESC-481): a closed port, unless a test starts the fake one and names it.
+        ESCOUADE_TEST_OPEN_VSX: NO_STORE,
+        // Nor the user's box nor a STUN server (the phone's tunnel, ESC-567): nothing is looked at, nothing opened, unless
+        // a test names its fake box (`fake;natpmp=…;stun=…`).
+        ESCOUADE_PHONE_NET: 'off',
+        // Nor the real updates of Escouade (ESC-543): a debug build given no test server checks none (`updates::endpoints_of`),
+        // so that none is downloaded, and none installed at « Quitter » over the app of the machine. Only the tests of the
+        // updates give theirs (`appEnv: { ESCOUADE_UPDATE_ENDPOINT }`); an inherited one is not taken. The end of each test
+        // reads the log for it (`updateTrouble`).
+        ESCOUADE_UPDATE_ENDPOINT: undefined,
+        // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
+        ESCOUADE_CODEX: 'none',
+        // Codex's Principal is a folder of the test's (its `config.toml`, « Les agents peuvent piloter Escouade »), never the user's ~/.codex.
+        CODEX_HOME: path.join(root, 'codex'),
+        FAKE_CODEX_LOG: path.join(root, 'fake-codex.jsonl'),
+        // The same for OpenCode (`appEnv: { ESCOUADE_OPENCODE: FAKE_OPENCODE }`); its sessions kept in the test's folder.
+        ESCOUADE_OPENCODE: 'none',
+        FAKE_OPENCODE_LOG: path.join(root, 'fake-opencode.jsonl'),
+        FAKE_OPENCODE_HOME: path.join(root, 'fake-opencode'),
+        // OpenCode's global config (`opencode.json`, where the switch declares the server): a folder of the test's,
+        // never the user's ~/.config/opencode, even when the switch takes the entry out of a harness not installed.
+        XDG_CONFIG_HOME: path.join(root, 'xdg'),
+        // The same for Copilot CLI (`appEnv: { ESCOUADE_COPILOT: FAKE_COPILOT }`): never the machine's, its Principal
+        // (`COPILOT_HOME`) a folder of the test's, never the user's ~/.copilot.
+        ESCOUADE_COPILOT: 'none',
+        COPILOT_HOME: path.join(root, 'copilot'),
+        FAKE_COPILOT_LOG: path.join(root, 'fake-copilot.jsonl'),
+        // The same for Cursor CLI (`appEnv: { ESCOUADE_CURSOR: FAKE_CURSOR }`): never the machine's, nor its sign-in
+        // (`%APPDATA%\Cursor\auth.json`): a file of the test's stands for it.
+        ESCOUADE_CURSOR: 'none',
+        ESCOUADE_CURSOR_AUTH: cursorAuth(root),
+        FAKE_CURSOR_LOG: path.join(root, 'fake-cursor.jsonl'),
+        // Its folder of the workspaces (`~/.cursor/projects`: transcripts and trust of its interface, « Vue Cursor CLI »), a
+        // folder of the test's, never the user's.
+        ESCOUADE_CURSOR_PROJECTS: path.join(root, 'cursor-projects'),
+        // The same for Mistral Vibe (`appEnv: { ESCOUADE_VIBE: FAKE_VIBE }`): never the machine's; each agent has its own
+        // VIBE_HOME in the app's data, never the user's ~/.vibe.
+        ESCOUADE_VIBE: 'none',
+        FAKE_VIBE_LOG: path.join(root, 'fake-vibe.jsonl'),
+        // The same for Antigravity CLI (`appEnv: { ESCOUADE_AGY: FAKE_AGY }`): each agent has its own home in the app's data,
+        // never the user's ~/.gemini.
+        ESCOUADE_AGY: 'none',
+        FAKE_AGY_LOG: path.join(root, 'fake-agy.jsonl'),
+        // Its Google sign-in (the keychain's entry `gemini:antigravity`, ESC-271): a file of the test's stands for it, there
+        // unless the test says `agySignedOut`; the fake `agy` writes it when it is signed in in its terminal.
+        ESCOUADE_AGY_SIGNED_IN: agySignIn(root, !!given.agySignedOut),
+        // The same for Gemini CLI (`appEnv: { ESCOUADE_GEMINI: FAKE_GEMINI }`): each agent has its own GEMINI_CLI_HOME in the
+        // app's data, never the user's ~/.gemini.
+        ESCOUADE_GEMINI: 'none',
+        FAKE_GEMINI_LOG: path.join(root, 'fake-gemini.jsonl'),
+        ...(REMOTE ? { ESCOUADE_REMOTE_API: String(REMOTE_PORT), ESCOUADE_REMOTE_API_TOKEN: randomBytes(16).toString('hex') } : {}),
+        ...appEnv,
+      };
+      // The window on an `escouade-server` of the test's (ESC-514): started on a data folder of its own with the same settings,
+      // a device paired, a local forward to it; the app's own core serves nothing. Its ports: the worktree's
+      // (`ESCOUADE_PORT_BASE` + 2 and + 3) when given, else free ones.
+      let served: Server | null = null;
+      if (server) {
+        const serverData = path.join(root, 'server-data');
+        fs.mkdirSync(serverData);
+        fs.copyFileSync(path.join(data, 'settings.json'), path.join(serverData, 'settings.json'));
+        const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
+        served = await startServer(
+          serverProgram(EXE),
+          serverData,
+          { ...env, ESCOUADE_DATA_DIR: serverData },
+          {
+            server: base ? base + 2 : 0,
+            forward: base ? base + 3 : 0,
+          },
+        );
+        delete env.ESCOUADE_REMOTE_API;
+        env.ESCOUADE_REMOTE_URL = served.url;
+        env.ESCOUADE_REMOTE_API_TOKEN = served.token;
       }
-      env.FAKE_SSH_SERVER = program;
-      env.FAKE_SSH_DATA = serverData;
-      env.FAKE_SSH_PORTS_FILE = portsFile;
-      env.ESCOUADE_DOWNLOADS_DIR = path.join(root, 'downloads');
-      env.ESCOUADE_OPEN_LOG = path.join(root, 'opened.log');
-      env.ESCOUADE_ALERT_LOG = path.join(root, 'alerts.log');
-      sshed = { server: bare, program, dir, env: serverEnv, second };
-    }
-    // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
-    let instance: Instance | null = null;
-    const current = () => instance as Instance;
-    // The first app's WebView2 folder, which its browser holds until its last process is gone.
-    const webviewFolder = path.join(root, 'webview');
-    /** The second app of a test of two live clients, and its port. */
-    const others: { instance: Instance; port: number; data: string }[] = [];
-    // The ports of the test's apps, for the diagnostics.
-    const ports = () => [port, ...others.map((o) => o.port)];
-    // Attaches Playwright to the WebView2 of a launch: the first app's (on `port`), or a second one's (`on`).
-    const attach = async (launch: Instance, on = { port, data: env.ESCOUADE_DATA_DIR ?? data, stderr }): Promise<Page> => {
-      try {
-        const { browser, page } = await connect(on.port, () => launch.stopped);
-        if (VIEWPORT) await page.setViewportSize({ width: Number(VIEWPORT[1]), height: Number(VIEWPORT[2]) });
-        launch.browser = browser;
-        // On the app's page, loaded: a route set on the blank page it starts with is lost when it loads.
-        if (SLOW_IPC.size) await slowIpc(await appReady(page));
-        return page;
-      } catch (e) {
-        throw new Error(`${(e as Error).message}\n${await launchLogs(on.data, on.stderr)}`);
+      // An `escouade-server` reached through the fake `ssh` (ESC-537): on the worktree's base + 2 when given. The app is
+      // given the fake and a ~/.ssh/config of the test's; never a real SSH.
+      let sshed: App['ssh'] = null;
+      if (sshServer) {
+        const serverData = path.join(root, 'server-data');
+        fs.mkdirSync(serverData);
+        fs.copyFileSync(path.join(data, 'settings.json'), path.join(serverData, 'settings.json'));
+        const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
+        const dir = path.join(root, 'fake-ssh');
+        fs.mkdirSync(dir);
+        // The ports a program of the server takes later (the fake `codex login`'s), mapped by the fake `ssh` (ESC-538).
+        const portsFile = path.join(dir, 'ports');
+        const serverEnv = { ...env, ESCOUADE_DATA_DIR: serverData, ESCOUADE_BROWSE_HOME: root, FAKE_SSH_PORTS_FILE: portsFile };
+        const program = serverProgram(EXE);
+        const bare = await startBareServer(program, serverData, serverEnv, base ? base + 2 : 0);
+        const config = path.join(root, 'ssh-home', '.ssh', 'config');
+        fs.mkdirSync(path.dirname(config), { recursive: true });
+        fs.writeFileSync(
+          config,
+          'Host travail\n  HostName escouade.test.internal\n  User escouade\n\nHost labo-inconnu\n  HostName labo.test.internal\n  User gpu\n  ProxyJump travail\n\n' +
+            (Number(sshServer) >= 2 ? 'Host perso\n  HostName vps.test.example\n  User escouade\n\n' : '') +
+            'Host *\n  ServerAliveInterval 30\n',
+        );
+        env.ESCOUADE_SSH = process.execPath;
+        env.ESCOUADE_SSH_PREFIX = path.join(ROOT, 'tests', 'fixtures', 'fake-ssh.mjs');
+        env.ESCOUADE_SSH_CONFIG = config;
+        env.FAKE_SSH_DIR = dir;
+        env.FAKE_SSH_PORTS = `46480=${bare.port}`;
+        // A second server (ESC-539): base + 3, its port on the server 46481.
+        let second: { server: BareServer; env: NodeJS.ProcessEnv } | null = null;
+        if (Number(sshServer) >= 2) {
+          const data2 = path.join(root, 'server-data-2');
+          fs.mkdirSync(data2);
+          fs.copyFileSync(path.join(data, 'settings.json'), path.join(data2, 'settings.json'));
+          const env2 = { ...env, ESCOUADE_DATA_DIR: data2 };
+          const bare2 = await startBareServer(program, data2, env2, base ? base + 3 : 0);
+          env.FAKE_SSH_PORTS += `,46481=${bare2.port}`;
+          second = { server: bare2, env: env2 };
+        }
+        env.FAKE_SSH_SERVER = program;
+        env.FAKE_SSH_DATA = serverData;
+        env.FAKE_SSH_PORTS_FILE = portsFile;
+        env.ESCOUADE_DOWNLOADS_DIR = path.join(root, 'downloads');
+        env.ESCOUADE_OPEN_LOG = path.join(root, 'opened.log');
+        env.ESCOUADE_ALERT_LOG = path.join(root, 'alerts.log');
+        sshed = { server: bare, program, dir, env: serverEnv, second };
       }
-    };
-    const mainOn = () => ({ port, data: env.ESCOUADE_DATA_DIR ?? data, stderr });
-    /**
-     * Starts a launch (`start`, given to `set`) and attaches to it. A launch that stops as it starts because its WebView2
-     * folder is still held (0x800700AA, « resource in use »: the browser of the instance killed just before, not quite gone)
-     * is started once more, after that browser is gone, and the test says so; any other stop is the test's failure.
-     */
-    const startAttached = async (
-      start: () => Instance,
-      set: (launch: Instance) => void,
-      on: { port: number; data: string; stderr: string },
-      folder: string,
-    ): Promise<Page> => {
-      const marks = [on.stderr, path.join(on.data, 'app.log')].map((file) => ({ file, from: sizeOf(file) }));
-      let launch = start();
-      set(launch);
-      try {
-        return await attach(launch, on);
-      } catch (e) {
-        if (!launch.stopped || !marks.some((m) => since(m.file, m.from).includes(FOLDER_IN_USE))) throw e;
-        const note = `the app stopped as it started, its WebView2 folder still in use (${FOLDER_IN_USE}, ${launch.stopped}): started once more`;
-        console.warn(`${testInfo.title}: ${note}`);
-        testInfo.annotations.push({ type: 'webview-in-use', description: note });
-        await killApp(launch);
-        const left = await waitForWebviewGone(folder);
-        if (left) console.warn(`${testInfo.title}: ${left} WebView2 process(es) still on ${folder}`);
-        launch = start();
+      // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
+      let instance: Instance | null = null;
+      const current = () => instance as Instance;
+      // The first app's WebView2 folder, which its browser holds until its last process is gone.
+      const webviewFolder = path.join(root, 'webview');
+      /** The second app of a test of two live clients, and its port. */
+      const others: { instance: Instance; port: number; data: string }[] = [];
+      // The ports of the test's apps, for the diagnostics.
+      const ports = () => [port, ...others.map((o) => o.port)];
+      // Attaches Playwright to the WebView2 of a launch: the first app's (on `port`), or a second one's (`on`).
+      const attach = async (launch: Instance, on = { port, data: env.ESCOUADE_DATA_DIR ?? data, stderr }): Promise<Page> => {
+        try {
+          const { browser, page } = await connect(on.port, () => launch.stopped);
+          if (VIEWPORT) await page.setViewportSize({ width: Number(VIEWPORT[1]), height: Number(VIEWPORT[2]) });
+          launch.browser = browser;
+          // On the app's page, loaded: a route set on the blank page it starts with is lost when it loads.
+          if (SLOW_IPC.size) await slowIpc(await appReady(page));
+          return page;
+        } catch (e) {
+          throw new Error(`${(e as Error).message}\n${await launchLogs(on.data, on.stderr)}`);
+        }
+      };
+      const mainOn = () => ({ port, data: env.ESCOUADE_DATA_DIR ?? data, stderr });
+      /**
+       * Starts a launch (`start`, given to `set`) and attaches to it. A launch that stops as it starts because its WebView2
+       * folder is still held (0x800700AA, « resource in use »: the browser of the instance killed just before, not quite gone)
+       * is started once more, after that browser is gone, and the test says so; any other stop is the test's failure.
+       */
+      const startAttached = async (
+        start: () => Instance,
+        set: (launch: Instance) => void,
+        on: { port: number; data: string; stderr: string },
+        folder: string,
+      ): Promise<Page> => {
+        const marks = [on.stderr, path.join(on.data, 'app.log')].map((file) => ({ file, from: sizeOf(file) }));
+        let launch = start();
         set(launch);
-        return attach(launch, on);
-      }
-    };
-    const launchLogs = async (dataDir: string, errFile: string) => {
-      const appLog = tail(path.join(dataDir, 'app.log'));
-      const errLog = tail(errFile);
-      return (
-        `--- app.log ---\n${appLog}\n` +
-        (errLog === appLog ? '' : `--- stderr ---\n${errLog}\n`) +
-        `--- WebView2 ---\n${await webviewDiagnostics(root, ports())}`
-      );
-    };
-    try {
-      const page = await startAttached(
-        () => startApp(env, stderr, appArgs),
-        (launch) => (instance = launch),
-        mainOn(),
-        webviewFolder,
-      );
-      const launches = () =>
-        fs.existsSync(log)
-          ? fs
-              .readFileSync(log, 'utf8')
-              .trim()
-              .split('\n')
-              .filter(Boolean)
-              .map((l) => JSON.parse(l))
-          : [];
-      const app: App = {
-        page,
-        repo,
-        data,
-        root,
-        claudeJson: path.join(root, 'claude', '.claude.json'),
-        codexToml: path.join(root, 'codex', 'config.toml'),
-        opencodeJson: path.join(root, 'xdg', 'opencode', 'opencode.json'),
-        copilotJson: path.join(root, 'copilot', 'mcp-config.json'),
-        server: served,
-        ssh: sshed,
-        launches,
-        launchedAt: () => current().at,
-        stopped: () => current().stopped,
-        restart: async () => {
-          // The app saves what it shows a moment after a change: not killed in the middle of it.
-          await new Promise((r) => setTimeout(r, SAVE_MS));
-          await killApp(current());
-          if (!(await waitForPortToClose(port))) {
-            throw new Error(`something still listens on port ${port} 30 s after the app was killed: it cannot be started again`);
-          }
-          // Nor its WebView2 browser, which holds the folder a while after the port is closed: the next start would stop
-          // there (0x800700AA, « resource in use »).
-          const left = await waitForWebviewGone(webviewFolder);
-          if (left) console.warn(`${testInfo.title}: ${left} WebView2 process(es) still on ${webviewFolder} after the restart's wait`);
-          app.page = await appReady(
-            await startAttached(
-              () => startApp(env, stderr),
-              (launch) => (instance = launch),
-              mainOn(),
-              webviewFolder,
-            ),
-          );
-          return app.page;
-        },
-        reconnect: async () => {
-          await current()
-            .browser?.close()
-            .catch(() => {});
-          app.page = await appReady(await attach(current()));
-          return app.page;
-        },
-        restartAs: (dataDir: string) => {
-          env.ESCOUADE_DATA_DIR = dataDir;
-          datas.add(dataDir);
-          return app.restart();
-        },
-        second: async (dataDir: string) => {
-          // The next port (checked free with the first one's, outside CI), or the one given; with POLICY_LIKE, always the
-          // next one, as ci.yml's policy.
-          let port2 = process.env.ESCOUADE_E2E_SECOND_CDP_PORT ? Number(process.env.ESCOUADE_E2E_SECOND_CDP_PORT) : port + 1;
-          if (!FIXED_PORT && !POLICY_LIKE && !process.env.ESCOUADE_E2E_SECOND_CDP_PORT) {
-            let next = port2;
-            port2 = await freePort(() => next++);
-          } else if (!(await waitForPortToClose(port2))) throw new Error(`something still listens on port ${port2}: no second app`);
-          // Its own program (the policy's line of an elevated runner is by name), WebView2 folder and port: nothing shared
-          // with the first app but what the test gives both (a team's server), not even a local storage (ESC-496).
-          const program = secondProgram();
-          const env2: NodeJS.ProcessEnv = {
-            ...env,
-            ESCOUADE_DATA_DIR: dataDir,
-            ...webviewEnv(program, port2, path.join(root, 'webview-2'), port),
-            // Its own port of the remote API, next to the first app's.
-            ...(REMOTE ? { ESCOUADE_REMOTE_API: String(REMOTE_PORT ? REMOTE_PORT + 1 : 0) } : {}),
-          };
-          const errFile = path.join(root, 'app-2-stderr.log');
-          const other = { instance: null as unknown as Instance, port: port2, data: dataDir };
-          others.push(other);
-          const p = await appReady(
-            await startAttached(
-              () => startApp(env2, errFile, [], program),
-              (launch) => (other.instance = launch),
-              { port: port2, data: dataDir, stderr: errFile },
-              path.join(root, 'webview-2'),
-            ),
-          );
-          // The page attached is the second app's, not the first one's seen through another port: the app says its data folder.
-          const shown = await p.evaluate(() =>
-            (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string): Promise<string> } }).__TAURI_INTERNALS__.invoke('data_dir'),
-          );
-          if (path.resolve(shown).toLowerCase() !== path.resolve(dataDir).toLowerCase()) {
-            throw new Error(
-              `the page on port ${port2} is not the second app's: its data folder is ${shown}, not ${dataDir}\n` +
-                (await launchLogs(dataDir, errFile)),
-            );
-          }
-          await expect(p.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible({ timeout: 45_000 });
-          return p;
-        },
+        try {
+          return await attach(launch, on);
+        } catch (e) {
+          if (!launch.stopped || !marks.some((m) => since(m.file, m.from).includes(FOLDER_IN_USE))) throw e;
+          const note = `the app stopped as it started, its WebView2 folder still in use (${FOLDER_IN_USE}, ${launch.stopped}): started once more`;
+          console.warn(`${testInfo.title}: ${note}`);
+          testInfo.annotations.push({ type: 'webview-in-use', description: note });
+          await killApp(launch, folder);
+          const left = await waitForWebviewGone(folder);
+          if (left) console.warn(`${testInfo.title}: ${left} WebView2 process(es) still on ${folder}`);
+          launch = start();
+          set(launch);
+          return attach(launch, on);
+        }
       };
-      // What the app showed and logged, for a failure on CI (annotations are all we get there).
-      const state = async () => {
-        const shown = await Promise.race([
-          app.page
-            .evaluate(() =>
-              JSON.stringify({ ready: document.readyState, url: location.href, text: document.body?.innerText.slice(0, 300) }),
-            )
-            .catch((e) => `page unreachable: ${(e as Error).message.split('\n')[0]}`),
-          new Promise<string>((r) => setTimeout(() => r('page not answering'), 5000)),
-        ]);
-        const second = others.map(
-          (o) => `\n--- second app (${o.instance.stopped ?? 'running'}, port ${o.port}) ---\n${tail(path.join(o.data, 'app.log'), 25)}`,
-        );
+      const launchLogs = async (dataDir: string, errFile: string) => {
+        const appLog = tail(path.join(dataDir, 'app.log'));
+        const errLog = tail(errFile);
         return (
-          `--- page ---\n${shown}\n--- app (${current().stopped ?? 'running'}) ---\n` +
-          `${tail(path.join(env.ESCOUADE_DATA_DIR ?? data, 'app.log'), 25)}${second.join('')}`
+          `--- app.log ---\n${appLog}\n` +
+          (errLog === appLog ? '' : `--- stderr ---\n${errLog}\n`) +
+          `--- WebView2 ---\n${await webviewDiagnostics(root, ports())}`
         );
       };
       try {
-        // A runner's window thread stops for 7 to 10 s at times while the app starts (« window thread: paused 9725 ms » in
-        // its log), its page still blank: longer than the 15 s of an expect, which failed a test there before it began
-        // (shell.spec.ts, tall-fields.spec.ts on the CI of 2026-11-08, ESC-393).
-        // Or the first launch (ESC-504), which takes the rail's place on a new installation.
-        await expect(
-          page
-            .getByRole('button', { name: LABELS[language].addProject })
-            .first()
-            .or(page.getByRole('region', { name: LABELS[language].firstLaunch })),
-        ).toBeVisible({ timeout: 45_000 });
-      } catch (e) {
-        throw new Error(`${(e as Error).message.split('\n')[0]}\n${await state()}`);
+        const page = await startAttached(
+          () => startApp(env, stderr, appArgs),
+          (launch) => (instance = launch),
+          mainOn(),
+          webviewFolder,
+        );
+        const launches = () =>
+          fs.existsSync(log)
+            ? fs
+                .readFileSync(log, 'utf8')
+                .trim()
+                .split('\n')
+                .filter(Boolean)
+                .map((l) => JSON.parse(l))
+            : [];
+        const app: App = {
+          page,
+          repo,
+          data,
+          root,
+          claudeJson: path.join(root, 'claude', '.claude.json'),
+          codexToml: path.join(root, 'codex', 'config.toml'),
+          opencodeJson: path.join(root, 'xdg', 'opencode', 'opencode.json'),
+          copilotJson: path.join(root, 'copilot', 'mcp-config.json'),
+          server: served,
+          ssh: sshed,
+          launches,
+          launchedAt: () => current().at,
+          stopped: () => current().stopped,
+          restart: async () => {
+            // The app saves what it shows a moment after a change: not killed in the middle of it.
+            await new Promise((r) => setTimeout(r, SAVE_MS));
+            await killApp(current(), webviewFolder);
+            if (!(await waitForPortToClose(port))) {
+              throw new Error(
+                `something still listens on port ${port} 30 s after the app was killed: it cannot be started again (${await listenersOn(port)})`,
+              );
+            }
+            // Nor its WebView2 browser, which holds the folder a while after the port is closed: the next start would stop
+            // there (0x800700AA, « resource in use »).
+            const left = await waitForWebviewGone(webviewFolder);
+            if (left) console.warn(`${testInfo.title}: ${left} WebView2 process(es) still on ${webviewFolder} after the restart's wait`);
+            app.page = await appReady(
+              await startAttached(
+                () => startApp(env, stderr),
+                (launch) => (instance = launch),
+                mainOn(),
+                webviewFolder,
+              ),
+            );
+            return app.page;
+          },
+          reconnect: async () => {
+            await current()
+              .browser?.close()
+              .catch(() => {});
+            app.page = await appReady(await attach(current()));
+            return app.page;
+          },
+          restartAs: (dataDir: string) => {
+            env.ESCOUADE_DATA_DIR = dataDir;
+            datas.add(dataDir);
+            return app.restart();
+          },
+          second: async (dataDir: string) => {
+            // The next port (checked free with the first one's, outside CI), or the one given; with POLICY_LIKE, always the
+            // next one, as ci.yml's policy.
+            let port2 = process.env.ESCOUADE_E2E_SECOND_CDP_PORT ? Number(process.env.ESCOUADE_E2E_SECOND_CDP_PORT) : port + 1;
+            if (!FIXED_PORT && !POLICY_LIKE && !process.env.ESCOUADE_E2E_SECOND_CDP_PORT) {
+              let next = port2;
+              port2 = await freePort(() => next++);
+            } else if (!(await waitForPortToClose(port2))) throw new Error(`something still listens on port ${port2}: no second app`);
+            // Its own program (the policy's line of an elevated runner is by name), WebView2 folder and port: nothing shared
+            // with the first app but what the test gives both (a team's server), not even a local storage (ESC-496).
+            const program = secondProgram();
+            const env2: NodeJS.ProcessEnv = {
+              ...env,
+              ESCOUADE_DATA_DIR: dataDir,
+              ...webviewEnv(program, port2, path.join(root, 'webview-2'), port),
+              // Its own port of the remote API, next to the first app's.
+              ...(REMOTE ? { ESCOUADE_REMOTE_API: String(REMOTE_PORT ? REMOTE_PORT + 1 : 0) } : {}),
+            };
+            const errFile = path.join(root, 'app-2-stderr.log');
+            const other = { instance: null as unknown as Instance, port: port2, data: dataDir };
+            others.push(other);
+            const p = await appReady(
+              await startAttached(
+                () => startApp(env2, errFile, [], program),
+                (launch) => (other.instance = launch),
+                { port: port2, data: dataDir, stderr: errFile },
+                path.join(root, 'webview-2'),
+              ),
+            );
+            // The page attached is the second app's, not the first one's seen through another port: the app says its data folder.
+            const shown = await p.evaluate(() =>
+              (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string): Promise<string> } }).__TAURI_INTERNALS__.invoke('data_dir'),
+            );
+            if (path.resolve(shown).toLowerCase() !== path.resolve(dataDir).toLowerCase()) {
+              throw new Error(
+                `the page on port ${port2} is not the second app's: its data folder is ${shown}, not ${dataDir}\n` +
+                  (await launchLogs(dataDir, errFile)),
+              );
+            }
+            await expect(p.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible({ timeout: 45_000 });
+            return p;
+          },
+        };
+        // What the app showed and logged, for a failure on CI (annotations are all we get there).
+        const state = async () => {
+          const shown = await Promise.race([
+            app.page
+              .evaluate(() =>
+                JSON.stringify({ ready: document.readyState, url: location.href, text: document.body?.innerText.slice(0, 300) }),
+              )
+              .catch((e) => `page unreachable: ${(e as Error).message.split('\n')[0]}`),
+            new Promise<string>((r) => setTimeout(() => r('page not answering'), 5000)),
+          ]);
+          const second = others.map(
+            (o) => `\n--- second app (${o.instance.stopped ?? 'running'}, port ${o.port}) ---\n${tail(path.join(o.data, 'app.log'), 25)}`,
+          );
+          return (
+            `--- page ---\n${shown}\n--- app (${current().stopped ?? 'running'}) ---\n` +
+            `${tail(path.join(env.ESCOUADE_DATA_DIR ?? data, 'app.log'), 25)}${second.join('')}`
+          );
+        };
+        try {
+          // A runner's window thread stops for 7 to 10 s at times while the app starts (« window thread: paused 9725 ms » in
+          // its log), its page still blank: longer than the 15 s of an expect, which failed a test there before it began
+          // (shell.spec.ts, tall-fields.spec.ts on the CI of 2026-11-08, ESC-393).
+          // Or the first launch (ESC-504), which takes the rail's place on a new installation.
+          await expect(
+            page
+              .getByRole('button', { name: LABELS[language].addProject })
+              .first()
+              .or(page.getByRole('region', { name: LABELS[language].firstLaunch })),
+          ).toBeVisible({ timeout: 45_000 });
+        } catch (e) {
+          throw new Error(`${(e as Error).message.split('\n')[0]}\n${await state()}`);
+        }
+        await use(app);
+        if (testInfo.status !== testInfo.expectedStatus) throw new Error(`the app after the failure\n${await state()}`);
+        // Never the real updates of Escouade (ESC-543): what an app of the test logged of them fails the test.
+        const troubles = [...datas].flatMap((d) => {
+          const file = path.join(d, 'app.log');
+          return fs.existsSync(file) ? updateTrouble(fs.readFileSync(file, 'utf8')) : [];
+        });
+        if (troubles.length) throw new Error(`an app of the test went for a real update of Escouade (ESC-543):\n${troubles.join('\n')}`);
+      } finally {
+        for (const other of others) {
+          if (other.instance) await killApp(other.instance, path.join(root, 'webview-2'));
+          await waitForPortToClose(other.port);
+        }
+        if (instance) await killApp(instance, webviewFolder);
+        await served?.stop();
+        await sshed?.server.stop();
+        await sshed?.second?.server.stop();
+        // The next test must not find this instance still answering on the port (it waits for that too, before it
+        // starts; a test that passed does not fail for it).
+        if (!(await waitForPortToClose(port)))
+          console.warn(`port ${port} is still taken 30 s after the app was killed: ${await listenersOn(port)}`);
+        // Windows releases the handles of killed processes (a terminal's shell sits in the repo)
+        // with a delay: a temporary folder left behind must not fail the test.
+        try {
+          if (!FIXED_ROOT) fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+        } catch (e) {
+          console.warn(`could not remove ${root}: ${(e as Error).message}`);
+        }
       }
-      await use(app);
-      if (testInfo.status !== testInfo.expectedStatus) throw new Error(`the app after the failure\n${await state()}`);
-      // Never the real updates of Escouade (ESC-543): what an app of the test logged of them fails the test.
-      const troubles = [...datas].flatMap((d) => {
-        const file = path.join(d, 'app.log');
-        return fs.existsSync(file) ? updateTrouble(fs.readFileSync(file, 'utf8')) : [];
-      });
-      if (troubles.length) throw new Error(`an app of the test went for a real update of Escouade (ESC-543):\n${troubles.join('\n')}`);
-    } finally {
-      for (const other of others) {
-        if (other.instance) await killApp(other.instance);
-        await waitForPortToClose(other.port);
-      }
-      if (instance) await killApp(instance);
-      await served?.stop();
-      await sshed?.server.stop();
-      await sshed?.second?.server.stop();
-      // The next test must not find this instance still answering on the port (it waits for that too, before it
-      // starts; a test that passed does not fail for it).
-      if (!(await waitForPortToClose(port))) console.warn(`port ${port} is still taken 30 s after the app was killed`);
-      // Windows releases the handles of killed processes (a terminal's shell sits in the repo)
-      // with a delay: a temporary folder left behind must not fail the test.
-      try {
-        if (!FIXED_ROOT) fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
-      } catch (e) {
-        console.warn(`could not remove ${root}: ${(e as Error).message}`);
-      }
-    }
-  },
+    },
+    { timeout: 300_000 },
+  ],
 });
 
 /**
@@ -1051,7 +1080,15 @@ export async function windowScale(page: Page): Promise<number> {
 
 export async function openNewProject(page: Page, lang: Language = 'fr') {
   const words = LABELS[lang];
-  await page.getByRole('button', { name: words.addProject }).first().click();
+  // With no project yet, the panel's own button, the way of a first start: it opens the window at once. The rail's « + »,
+  // first in the page, asks the core for the closed projects before it opens anything, and that answer came after the
+  // 15 s below as a loaded machine started the app (ESC-522). Which one is known once the work area says it: empty until the
+  // app is ready (App.svelte, `!app.ready`), then the panel without a harness until the harness' plugin is loaded
+  // (`enginesFound` empty, filled by `refreshEngines`), and only then its button; or the work area of a project.
+  const panel = page.locator('.work').getByRole('button', { name: words.addProject });
+  const project = page.locator('.work:not(:empty):not(:has(.welcome))');
+  await expect(panel.or(project).first()).toBeVisible({ timeout: 60_000 });
+  await ((await panel.count()) ? panel.first() : page.getByRole('button', { name: words.addProject }).first()).click();
   const item = page.getByRole('menuitem', { name: words.addProject });
   const dialog = page.getByRole('dialog');
   await expect(item.or(dialog).first()).toBeVisible();

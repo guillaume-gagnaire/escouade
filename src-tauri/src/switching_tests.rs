@@ -242,8 +242,11 @@ async fn an_agent_with_a_task_in_the_background_moves_at_the_first_turn_without_
         .send_message(&id, "commande de fond 2s".into(), vec![])
         .await
         .unwrap();
-    h.wait("on Équipe", |h| h.agent(&id).account == "equipe")
-        .await;
+    // Its account changes before the notice that says it is written: the notice is waited for, not read at once.
+    h.wait("on Équipe, and told", |h| {
+        h.agent(&id).account == "equipe" && h.items(&id).iter().any(|i| i["kind"] == "notice")
+    })
+    .await;
     let items = h.items(&id);
     let done = items
         .iter()
@@ -252,6 +255,49 @@ async fn an_agent_with_a_task_in_the_background_moves_at_the_first_turn_without_
     let notice = items.iter().position(|i| i["kind"] == "notice").unwrap();
     assert!(done < notice, "{items:?}");
     assert_eq!(turns(&h, &id), 2);
+}
+
+#[tokio::test]
+async fn an_agent_whose_background_task_just_ended_waits_for_the_turn_claude_code_starts_on_it() {
+    // ESC-522: between the end of the task and the turn Claude Code starts by itself on it, the agent is idle and runs
+    // nothing; a reading of the quota that came then moved it, and its process gone, that turn was lost. Claude Code
+    // takes 3 s to start it here, as on a loaded machine.
+    let h = harness("switch-at-own-turn");
+    let (p, _) = h.project(true).await;
+    let (pro, _) = pro_and_team(&h);
+    uses(&pro, "fake-pct", 96);
+    uses(&pro, "fake-own-turn-ms", 3000);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core
+        .send_message(&id, "commande de fond 1s".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the task over, its turn not begun", |h| {
+        let tasks = h.bg_tasks(&id);
+        !tasks.is_empty()
+            && tasks
+                .iter()
+                .all(|t| t.status != crate::plan::RunStatus::Running)
+            && !h.agent(&id).status.is_active()
+    })
+    .await;
+    assert!(
+        !h.core.switch_if_over(&id).await,
+        "moved before the turn Claude Code owes on its task"
+    );
+    assert_eq!(h.agent(&id).account, "pro");
+    // Its account changes before the notice that says it is written: the notice is waited for, not read at once.
+    h.wait("on Équipe, and told", |h| {
+        h.agent(&id).account == "equipe" && h.items(&id).iter().any(|i| i["kind"] == "notice")
+    })
+    .await;
+    let items = h.items(&id);
+    let done = items
+        .iter()
+        .position(|i| i.to_string().contains("La tâche de fond est finie"))
+        .expect("the turn after the command");
+    let notice = items.iter().position(|i| i["kind"] == "notice").unwrap();
+    assert!(done < notice, "{items:?}");
 }
 
 #[tokio::test]

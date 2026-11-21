@@ -3,6 +3,7 @@
   import { basename, dirname, fInt } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
+  import { newestReads } from '../lib/reads';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { app } from '../lib/state.svelte';
   import type { Agent, FileChange, Project } from '../lib/types';
@@ -33,7 +34,10 @@
   });
   let error = $state<string | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let seq = 0;
+  // Answers in any order: the newest one come is shown, a newer read still on its way (ESC-522).
+  const reads = newestReads();
+  /** Whether a read for `pid`, `aid` and its scope is still of the list shown. */
+  const stillShown = (pid: string, aid: string | null, agentScope: boolean) => listKey(pid, aid, agentScope) === wanted;
 
   const scope = $derived(app.filesScope);
   // The agent object changes on every backend update: refetch on id / scope / git changes only.
@@ -57,7 +61,7 @@
   });
 
   async function load(pid: string, aid: string | null, agentScope: boolean) {
-    const mine = ++seq;
+    const mine = reads.ask();
     if (agentScope && !aid) {
       setFiles([], listKey(pid, aid, agentScope));
       return;
@@ -65,11 +69,11 @@
     // No loading flag: a re-read keeps what is shown until its answer, so nothing blinks.
     try {
       const result = await api.gitFiles(pid, aid);
-      if (mine !== seq) return; // superseded by a newer request
+      if (!stillShown(pid, aid, agentScope) || !reads.take(mine)) return;
       setFiles(result, listKey(pid, aid, agentScope));
       error = null;
     } catch (e) {
-      if (mine !== seq) return;
+      if (!stillShown(pid, aid, agentScope) || !reads.take(mine)) return;
       error = String(e);
       setFiles([], listKey(pid, aid, agentScope));
     }

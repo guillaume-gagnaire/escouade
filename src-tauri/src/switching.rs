@@ -153,7 +153,8 @@ impl Core {
     /// The agent goes on on another account of its harness when its own makes it leave at « Changer
     /// de compte à » (a short window at the threshold, a long one at the threshold whose pace is not
     /// good: `pace::judge`) and it is free: its turn over, no question or permission waiting for the user,
-    /// nothing running in the background in its process, no reset of a usage limit waited for (the
+    /// nothing running in the background in its process nor a turn of Claude Code's own due on a task that just ended,
+    /// no reset of a usage limit waited for (the
     /// move at the limit is `switch_on_limit`'s). The account it goes to is under the threshold
     /// itself (`other_account`, `board::pick_threshold`: one an agent would not leave), so that it
     /// never goes back and forth: it leaves that one only once that one passes it too, and the first
@@ -189,7 +190,9 @@ impl Core {
                     .meta
                     .plan
                     .as_ref()
-                    .is_some_and(|p| p.holds_process(crate::model::now_ms()));
+                    .is_some_and(|p| p.holds_process(crate::model::now_ms()))
+                // Nor a task just ended whose turn Claude Code is about to start (ESC-522).
+                && !rt.owes_own_turn(crate::model::now_ms());
             if !free {
                 return false;
             }

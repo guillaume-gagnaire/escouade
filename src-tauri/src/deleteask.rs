@@ -18,8 +18,10 @@ use std::time::Duration;
 /// refused until the user answers some.
 pub(crate) const MAX_ASKS: usize = 5;
 
-/// How long git is given to say what a deletion would lose before the window says it is unknown.
-pub(crate) const LOSS_TIMEOUT: Duration = Duration::from_secs(3);
+/// How long git is given to say what a deletion would lose before the read gives up (a git that hangs): the window says
+/// the state unknown for now after a few seconds and takes this answer when it comes (ESC-522: a loaded machine's git took
+/// more than the 3 s it was once given, and its answer was dropped).
+pub(crate) const LOSS_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The first names of its uncommitted files the window shows.
 pub(crate) const LOSS_NAMES: usize = 5;

@@ -1199,7 +1199,12 @@ async fn the_ports_of_a_closed_projects_agents_are_not_given_away_meanwhile() {
     assert_ne!(taken, held);
     h.core.unreserve_ports(Some(taken));
     h.core.erase_closed_project(&p.id).unwrap();
-    assert_eq!(h.core.reserve_ports(), Some(held));
+    // The index holds it no more. Whether `reserve_ports` gives it is also the machine's: another program (another
+    // worktree's tests, on these same ports) may listen on it by now, and the next block comes then (ESC-522).
+    assert!(!h.core.closed_ports().contains(&held));
+    if (held..held + crate::board::PORT_BLOCK).all(crate::testlaunch::port_free) {
+        assert_eq!(h.core.reserve_ports(), Some(held));
+    }
 }
 
 #[tokio::test]

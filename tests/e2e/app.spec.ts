@@ -171,9 +171,11 @@ test('the status bar counts the running agent processes, with their memory and C
   // The first agent's process starts with the project.
   const procs = page.locator('footer .it', { hasText: /agents? ·/ });
   await expect(procs).toHaveText(/^1 agent · \d+ Mo · \d+ % CPU$/);
-  // Measured: the fake CLI is cmd.exe running node.
-  const memory = Number((await procs.textContent())!.match(/(\d+) Mo/)![1]);
-  expect(memory).toBeGreaterThan(10);
+  // Measured: the fake CLI is cmd.exe running node. The first reading may come while node is still starting (cmd.exe and
+  // a node just launched, 10 Mo on a loaded machine): the one of the process up is waited for, as the bar reads it again
+  // (ESC-522).
+  const memory = async () => Number((await procs.textContent())!.match(/(\d+) Mo/)![1]);
+  await expect.poll(memory, { timeout: 30_000 }).toBeGreaterThan(10);
   await expect(procs).toHaveAttribute('data-tip', /: \d+ Mo · \d+ %/);
 });
 
@@ -551,19 +553,34 @@ test('a keystroke whose echo comes late is noted in the log, with where the time
   await page.getByRole('button', { name: 'Nouveau terminal' }).click();
   await page.getByRole('menuitem', { name: /PowerShell/ }).click();
   await expect(page.locator('.xterm')).toBeVisible();
-  await page.waitForTimeout(2500); // PowerShell start-up
   await page.locator('.xterm').click();
+  // PowerShell ready: a first command has run (no time guessed for its start-up, ESC-522).
+  await page.keyboard.type('Set-Content e2e-ready.txt ok');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => fs.existsSync(path.join(app.repo, 'e2e-ready.txt')), { timeout: 30_000 }).toBe(true);
   // A program that answers each key 800 ms late: the time is the program's, the log must say so.
   await page.keyboard.type('while ($true) { $k = [Console]::ReadKey($true); Start-Sleep -Milliseconds 800; [Console]::Write($k.KeyChar) }');
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(1500);
   const log = () => fs.readFileSync(path.join(app.data, 'app.log'), 'utf8');
   const slow =
     /echo of a 1-byte write shown after (\d+) ms: written (\d+) ms after the backend got it, first output (\d+) ms after, the echo (\d+) ms after/g;
   const slowEchoes = () => [...log().matchAll(slow)];
-  // A key of the command slow to show (a loaded machine, or the window on the remote API, ESC-495) took the terminal's
-  // one report in 10 s, whether the backend still knew its write or not: wait for the next.
-  if (/echo of a \d+-byte write shown after/.test(log())) await page.waitForTimeout(10_500);
+  // The terminal reports one slow echo in 10 s. A key of the command slow to show (a loaded machine, or the window on the
+  // remote API, ESC-495) may have taken it: the key goes once 10 s have passed since the last report, as its log line
+  // dates it (to the second), however late it came.
+  const lastReport = () =>
+    [...log().matchAll(/^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)[^\n]*echo of a \d+-byte write shown after/gm)]
+      .map((m) => new Date(`${m[1]}T${m[2]}`).getTime())
+      .at(-1);
+  await expect
+    .poll(
+      () => {
+        const at = lastReport();
+        return at === undefined || Date.now() - at > 11_000;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
   const before = slowEchoes().length;
   await page.keyboard.press('x');
   await expect.poll(() => slowEchoes().length, { timeout: 15_000 }).toBeGreaterThan(before);

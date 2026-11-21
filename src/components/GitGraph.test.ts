@@ -88,6 +88,27 @@ describe('GitGraph', () => {
     expect(backend.called('git_log').length).toBe(2);
   });
 
+  it('shows a history come while the repository changed again, and never an older one over a newer (ESC-522)', async () => {
+    // Git slower than the repository's changes (a loaded machine): each read is still on its way when the next is asked.
+    const answers: ((l: GitLog) => void)[] = [];
+    fakeBackend({ git_log: () => new Promise<GitLog>((r) => answers.push(r)) });
+    render(GitGraph, { project: project(), agent: app.agents.a2 });
+    await waitFor(() => expect(answers).toHaveLength(1));
+    app.gitTick++;
+    await waitFor(() => expect(answers).toHaveLength(2));
+    // The first answer comes while the second read is on its way: shown, not « Chargement… » until the repository rests.
+    answers[0](LOG);
+    expect(await screen.findByText('nouvelle page')).toBeInTheDocument();
+    // A third read, answered before the second: the second, older, comes after it and is not shown.
+    app.gitTick++;
+    await waitFor(() => expect(answers).toHaveLength(3));
+    answers[2]({ ...LOG, commits: [c('eeee5555', 'encore un commit', ['aaaa1111'], ['main']), ...LOG.commits] });
+    expect(await screen.findByText('encore un commit')).toBeInTheDocument();
+    answers[1](LOG);
+    await settle();
+    expect(screen.getByText('encore un commit')).toBeInTheDocument();
+  });
+
   it('says why the history cannot be shown', async () => {
     fakeBackend({
       git_log: () => {

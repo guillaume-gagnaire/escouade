@@ -20,7 +20,14 @@ export default defineConfig({
     // A temporary folder of its own, removed at the end (scripts/test-tmp.ts).
     globalSetup: ['./scripts/vitest-global-tmp.ts'],
     restoreMocks: true,
-    // A loaded CI runner can outlast the default 5 s on a test that is right.
-    testTimeout: process.env.CI ? 15_000 : 5_000,
+    // A loaded machine outlasts the default 5 s on a test that is right: a CI runner, as well as a workstation that
+    // compiles beside it (ESC-522: tests of 2 to 3 s alone fell there one or two by full run, never the same). The same
+    // 15 s on both, so that the workstation raises no false alarm the CI would not; a test that hangs still falls. It waits
+    // for nothing: a test waits for the state it wants (`findBy`, `waitFor`), never for a time.
+    testTimeout: 15_000,
+    // The guard of `expect.poll`, the same as Testing Library's (`asyncUtilTimeout`, src/test/setup.ts): 1 s by default, which
+    // a module loaded at its first use outlasts in a full run on a loaded machine (Ctrl+S imports the editor's actions,
+    // ESC-522). It waits for nothing: the poll gives back as soon as the state is there.
+    expect: { poll: { timeout: 5_000 } },
   },
 });

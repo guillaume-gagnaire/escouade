@@ -6,6 +6,7 @@
   import { t } from '../lib/i18n';
   import { agentCommits, branchCommits, layout, mainLane, trunkTip, type Segment } from '../lib/graph';
   import { api } from '../lib/ipc';
+  import { newestReads } from '../lib/reads';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { app } from '../lib/state.svelte';
   import type { Agent, BranchInfo, Commit, GitLog, Project } from '../lib/types';
@@ -35,7 +36,10 @@
   let timer: ReturnType<typeof setTimeout> | undefined;
   let first = true;
   let scrolled = false;
-  let seq = 0;
+  // Answers in any order: the newest one come is shown, a newer read still on its way (ESC-522).
+  const reads = newestReads();
+  /** Whether a read of `pid`, `aid`, `r` is still of what is shown (another project, agent or repository: not shown). */
+  const stillShown = (pid: string, aid: string | null, r: string | null) => pid === projectId && aid === agentId && r === repo;
 
   const projectId = $derived(project.id);
   const agentId = $derived(agent?.id ?? null);
@@ -78,11 +82,11 @@
   });
 
   async function load(pid: string, aid: string | null, r: string | null) {
-    const mine = ++seq;
+    const mine = reads.ask();
     try {
       // The history is what the graph is for: the branches only serve the menu, and fail without taking it down.
       const [result, all] = await Promise.all([api.gitLog(pid, aid, r), api.branchList(pid, r).catch(() => null)]);
-      if (mine !== seq) return; // superseded by a newer request
+      if (!stillShown(pid, aid, r) || !reads.take(mine)) return;
       log = result;
       // A read that fails for a moment leaves the last list in place (the menu keeps its entries); one read for another project is no use.
       if (all) {
@@ -94,7 +98,7 @@
       }
       error = null;
     } catch (e) {
-      if (mine !== seq) return;
+      if (!stillShown(pid, aid, r) || !reads.take(mine)) return;
       error = String(e);
     }
   }

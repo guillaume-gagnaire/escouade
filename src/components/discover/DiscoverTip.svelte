@@ -135,8 +135,8 @@
     z-index: 90;
     border-radius: 8px;
     box-shadow:
-      0 0 0 2px var(--teal),
-      0 0 0 6px color-mix(in oklch, var(--teal) 22%, transparent);
+      0 0 0 2px var(--teal-ink),
+      0 0 0 6px color-mix(in oklch, var(--teal-ink) 22%, transparent);
     pointer-events: none;
   }
   /* It never stands in the way: presses go through it, but on its buttons. */

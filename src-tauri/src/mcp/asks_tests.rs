@@ -252,7 +252,14 @@ async fn no_tool_answers_for_the_user_but_by_the_delegation_the_user_gave() {
     assert_eq!(done["state"], "answered");
     let a = h.core.ask("a-1").unwrap();
     assert_eq!(a.answer.as_ref().unwrap().by_name.as_deref(), Some("chef"));
-    // Its author reads it: marked read.
+    // Its author reads it once the answer went to it (`ask_mark_read`: an answer still to send is not read yet; on a
+    // loaded machine it was not gone when the test read it, ESC-522): marked read.
+    h.wait("the answer gone to its author", |h| {
+        h.core
+            .ask("a-1")
+            .is_ok_and(|a| a.answer.is_some_and(|x| x.send_at.is_none()))
+    })
+    .await;
     let got = read(&c, "get_ask", json!({ "ask": "a-1" })).await;
     assert_eq!(got["answer"]["by"], "chef");
     assert_eq!(got["answer"]["via"], "delegated");
