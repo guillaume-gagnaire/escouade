@@ -3,7 +3,7 @@ title: "La boîte « À toi »"
 subject: "harness"
 sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 5.1 pour ESC-557 ; § 18)","design/inbox-2-3/README.md (direction B, captures b-)","Demande de l'utilisateur du 2026-11-20 (ESC-557) : « quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans \"à toi\", afin d'être toujours à jour »"]
 tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-557"]
-decisions: [210,240,242,"le-chef-d-escouade-prend-en-charge-et-co"]
+decisions: [210,240,242,258]
 compared: null
 ---
 

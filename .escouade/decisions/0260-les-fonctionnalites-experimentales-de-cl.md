@@ -1,9 +1,9 @@
 ---
-number: null
+number: 260
 id: "les-fonctionnalites-experimentales-de-cl"
 title: "Les fonctionnalités expérimentales de Claude Code passent à la vue terminal seule, et un agent en Code Mode reste dans son terminal"
 date: "2026-11-20"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-553"
 pages: ["harness/claude-code","plugins/claude-code-en-plugin"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/claude-code","added":32,"removed":0},{"page":"plugins/claude-code-en-plugin","added":7,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T20:25:59+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

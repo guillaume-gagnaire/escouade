@@ -3,7 +3,7 @@ title: "Pilotage de Claude Code"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-artifacts","https://code.claude.com/docs/en/code-mode (lue le 2026-11-20)","https://code.claude.com/docs/en/agent-teams (lue le 2026-11-20)","Essais réels d'ESC-553 sur Claude Code 2.1.329 (bilan du ticket)"]
 tickets: ["ESC-106","ESC-133","ESC-400","ESC-553"]
-decisions: [136,"les-fonctionnalites-experimentales-de-cl"]
+decisions: [136,260]
 compared: null
 ---
 

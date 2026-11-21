@@ -1,9 +1,9 @@
 ---
-number: null
+number: 258
 id: "le-chef-d-escouade-prend-en-charge-et-co"
 title: "Le chef d'escouade prend en charge et coche comme réglé ce qu'il traite dans la boîte « À toi »"
 date: "2026-11-20"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-557"
 pages: ["harness/boite-a-toi","harness/serveur-mcp"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/boite-a-toi","added":23,"removed":0},{"page":"harness/serveur-mcp","added":8,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T20:25:46+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
