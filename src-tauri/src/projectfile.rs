@@ -2101,6 +2101,10 @@ impl Core {
         if before.workflows_enabled != after.workflows_enabled {
             self.workflow_fixes_changed(&after.id);
         }
+        // Made private by the file: what runs of its agents on a harness not turned on there stops, said (ESC-582).
+        if after.private && !before.private {
+            self.settle_harnesses_in(&after.id);
+        }
         Some(after)
     }
 

@@ -1482,20 +1482,27 @@ impl crate::core::Core {
         let of = |team: &Option<String>| -> &Locks {
             team.as_ref().and_then(|t| teams.get(t)).unwrap_or(&base)
         };
-        let projects: Vec<Project> = {
+        let projects: Vec<(Project, bool)> = {
             let mut projects = self.projects.write();
             projects
                 .iter_mut()
                 .filter_map(|p| {
                     let locks = of(&p.team);
-                    (!locks.clamp_project(p).is_empty()).then(|| p.clone())
+                    let changed = locks.clamp_project(p);
+                    (!changed.is_empty()).then(|| (p.clone(), changed.contains(&FORCE_PRIVATE)))
                 })
                 .collect()
         };
-        for project in projects {
+        for (project, made_private) in projects {
             log::info!("policies: project {} brought within them", project.id);
+            let id = project.id.clone();
             self.hub.emit(crate::model::UiEvent::Project { project });
             self.request_save();
+            // Made private by the policies: what runs of its agents on a harness not turned on there stops, said
+            // (ESC-582).
+            if made_private {
+                self.settle_harnesses_in(&id);
+            }
         }
     }
 

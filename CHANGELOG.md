@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Projets privés : un agent qui tourne quand son projet devient privé s’arrête si son harness n’y est pas encore activé, aussitôt au repos ou à la fin de son tour au travail, et sa conversation dit pourquoi. Avant, son process pouvait continuer sur ce harness sans ton accord.
 - Une image jointe au message, ou au formulaire d’un ticket, s’agrandit d’un clic sur sa vignette, avant l’envoi : elle s’ouvre dans la visionneuse de la conversation, avec les autres images du message.
 - Projets privés : réserver un compte qui laisserait tes autres projets sans compte demande d’abord, en disant lesquels, et propose d’ajouter un compte réservé à la place ; « Partager à nouveau » le leur rend en un clic. Un compte partagé n’est plus présenté comme une alerte : les sessions du projet privé y restent refusées aux agents des autres projets, et ce qui reste commun est dit.
 - Serveur d’équipe : passe l’agent d’un ticket à un collègue ou à la machine de l’équipe en mode serveur, depuis sa carte. Sa branche est poussée à ton geste, son travail en cours et sa conversation partent chiffrés ; chez qui le prend, l’agent repart sur son harness et son compte, avec un dossier de passation.

@@ -1,9 +1,9 @@
 ---
 title: "Projets privés"
 subject: "Projets"
-sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)"]
-tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556"]
-decisions: [154,257]
+sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)","src-tauri/src/harness_scope.rs (settle_harnesses_in)","src-tauri/src/modes.rs (run_refusal)","CI de release/2.3, run 44893172996 (macOS)"]
+tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556","ESC-582"]
+decisions: [154,257,259]
 compared: null
 ---
 
@@ -47,7 +47,16 @@ Réserver un compte au projet privé sépare aussi ce qui reste commun : c'est u
 
 ### Quand le réglage change
 
-Changer « Projet privé » ne coupe rien sur le moment ; le serveur MCP le prend dès l'appel suivant. Un agent dont le process a démarré sur une autre confidentialité (son projet privé ou non, et la liste des projets privés) le relance avant son tour suivant, entre deux tours seulement (ni tour en cours, ni préparation, ni tâche de fond, ni remote control ; session gardée, `--resume`). Une interface de vue terminal garde les siennes jusqu'à son prochain lancement. Un chemin créé depuis (un agent, un ticket, un fichier joint ou une session d'un autre projet) ne relance rien : il attend le prochain démarrage de l'agent.
+Changer « Projet privé » ne coupe aucun tour sur le moment ; le serveur MCP le prend dès l'appel suivant. Un agent dont le process a démarré sur une autre confidentialité (son projet privé ou non, et la liste des projets privés) le relance avant son tour suivant, entre deux tours seulement (ni tour en cours, ni préparation, ni tâche de fond, ni remote control ; session gardée, `--resume`). Une interface de vue terminal garde les siennes jusqu'à son prochain lancement. Un chemin créé depuis (un agent, un ticket, un fichier joint ou une session d'un autre projet) ne relance rien : il attend le prochain démarrage de l'agent.
+
+### Un harness pas encore activé quand le projet devient privé (ESC-582)
+
+Dans un projet privé, chaque harness est coupé d'office tant que l'utilisateur ne l'y active pas (voir *Les plugins : vue d'ensemble*, le bouton projet par projet). Un agent qui tourne déjà quand son projet devient privé, par la fenêtre, par `.escouade.yml` ou par une stratégie qui l'impose, est traité comme s'il démarrait :
+
+- **Au repos**, son process (et son interface de vue terminal ou de remote control) s'arrête aussitôt. Sa conversation le dit : « Claude Code n’est pas activé pour ce projet privé : son plugin n’en reçoit rien tant que tu ne l’y actives pas (« Activer »). L’agent s’arrête. »
+- **Au travail**, son tour n'est pas coupé : il le finit (l'utilisateur a rendu le projet privé, il n'a pas coupé le harness). Puis le process s'arrête, et la conversation dit la même raison, suivie de « L’agent s’arrête à la fin de son tour. ».
+- **Un process qui tourne est jugé comme un démarrage** : avant de lui donner un message, Escouade vérifie que son harness est allumé pour son projet, comme au lancement d'un process. C'est vrai aussi pour un process lancé pendant le passage en privé (un démarrage anticipé jugé juste avant, son process vivant juste après) : refusé, il s'arrête et c'est dit.
+- Ensuite, l'agent ne redémarre pas et ne reçoit rien tant que l'utilisateur n'a pas cliqué « Activer » (*Les plugins : vue d'ensemble*, un agent existant). Un harness déjà allumé pour ce projet ne s'arrête pas : seule la clôture relance son process, entre deux tours.
 
 ### Ce qu'Escouade fait passer d'un projet à l'autre
 

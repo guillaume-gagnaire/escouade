@@ -2,8 +2,8 @@
 title: "Les plugins : vue d'ensemble"
 subject: "plugins"
 sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs","docs/PLUGINS-CONTRACT-STUDY.md §1.4, §3.3 (release/2.3)","website/content/docs/fr/plugins/manifest.md","docs/PLUGINS-CONTRACT-STUDY.md §4.4, §7 (release/2.3, ESC-501)","crates/escouade-plugins/src/secrets.rs"]
-tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-520","ESC-524","ESC-525","ESC-527"]
-decisions: [142,204,247]
+tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-520","ESC-524","ESC-525","ESC-527","ESC-582"]
+decisions: [142,204,247,259]
 compared: null
 ---
 
@@ -61,7 +61,7 @@ Le choix d'un plugin pour un projet (`plugins::active_in`) vaut pour ses faits, 
 - **Coupé pour un projet**, le harness n'y est plus proposé : nouvel agent, ticket, réglages du projet, nouvelle discussion. Le harness déjà choisi reste affiché, avec « (coupé pour ce projet) ». Le cœur refuse d'y créer un agent sur lui, de démarrer, de reprendre ou d'envoyer un message à un de ses agents, et d'y ouvrir sa vue terminal ; la relève ne va pas vers lui. Le rédacteur des textes d'un projet le choisit parmi les harness allumés pour lui.
 - **Couper un harness pour un projet** arrête ses agents de ce projet (tour interrompu, process et vue terminal fermés), comme le couper pour l'app arrête tous les siens ; le ticket d'un de ces agents est bloqué, avec la raison.
 - **Dans un projet privé**, coupé d'office, le harness reste proposé : le premier agent sur lui demande une fois « Activer <harness> pour ce projet privé ? ». La fenêtre dit ce que le plugin recevra et liste ses permissions comme la fenêtre d'installation. « Activer » allume le plugin pour ce projet seulement, puis l'agent part ; « Annuler » ne fait rien partir.
-- **Un agent existant** dont le harness est coupé pour son projet (ou pas encore activé dans un projet privé) ne démarre pas et ne reçoit rien. Sa conversation le dit sur une carte, avec « Activer » : le même accord.
+- **Un agent existant** dont le harness est coupé pour son projet (ou pas encore activé dans un projet privé) ne démarre pas et ne reçoit rien. Sa conversation le dit sur une carte, avec « Activer » : le même accord. Son process qui tourne encore (le projet devenu privé depuis) est jugé comme un démarrage : au repos il s'arrête aussitôt, au travail à la fin de son tour, et sa conversation dit pourquoi (ESC-582, voir *Projets privés*).
 - **Le Kanban, le pilote auto et les outils MCP** ne posent pas la question à la place de l'utilisateur. Un ticket dont le harness est coupé pour son projet est bloqué avant que rien ne soit créé (ni branche, ni agent), avec la raison ; sa carte porte « Activer », qui allume le plugin puis reprend le ticket. `create_agent` et `start_ticket` refusent, avec la raison. Aucun outil MCP n'allume un plugin pour un projet : c'est le geste de l'utilisateur.
 - **À la mise à jour** qui applique cette règle, une fois : un projet privé qui a déjà des agents non archivés sur un harness a ce plugin allumé pour lui, là où l'utilisateur n'avait rien choisi. Les autres restent coupés d'office, et un choix fait ensuite n'est plus touché.
 

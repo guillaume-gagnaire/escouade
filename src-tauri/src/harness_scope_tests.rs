@@ -10,6 +10,7 @@ use crate::model::*;
 use crate::paths::{test_dir, DataDir};
 use crate::tickets_tests::draft;
 use serde_json::json;
+use std::sync::Arc;
 use tauri::test::mock_app;
 
 const CLAUDE_PLUGIN: &str = crate::plugins::builtin::CLAUDE;
@@ -31,6 +32,25 @@ pub(crate) fn turn_on_every_harness(h: &Harness, project: &str) {
         // A harness that goes through no plugin (a test's own) has nothing to turn on.
         let _ = h.core.enable_harness_in(project, e.id());
     }
+}
+
+/// What says Claude Code is not turned on for a private project (`harness_refusal`).
+const NOT_ON: &str = "n’est pas activé pour ce projet privé";
+
+/// The notices of the agent's conversation.
+fn notices(h: &Harness, id: &str) -> Vec<String> {
+    h.items(id)
+        .into_iter()
+        .filter(|i| i["kind"] == "notice")
+        .filter_map(|i| i["text"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// The project made private as the user does it (its setting « Projet privé », `update_project`).
+fn set_private_by_hand(h: &Harness, p: &Project) {
+    let mut p = h.core.project(&p.id).unwrap();
+    p.private = true;
+    h.core.update_project(p).unwrap();
 }
 
 fn switch_of(h: &Harness, project: &str) -> Option<bool> {
@@ -147,26 +167,127 @@ async fn a_private_project_asks_once_then_its_agent_starts() {
 }
 
 /// An agent already in a private project whose harness was never turned on for it (the project made private since):
-/// it does not start, nor resume, nor take a message, until « Activer ».
+/// it does not start, nor resume, nor take a message, until « Activer ». Its warm-up was judged before the project
+/// became private and its process started after, on the private fence (the race the Mac of the CI won, ESC-582,
+/// played every time): that process is judged as a start, refused, stopped, said.
 #[tokio::test]
 async fn an_agent_of_a_private_project_waits_for_its_harness_to_be_turned_on() {
     let h = harness("esc404-existing");
     let (p, _) = h.project(false).await;
+    let (reached, go) = (
+        Arc::new(tokio::sync::Notify::new()),
+        Arc::new(tokio::sync::Notify::new()),
+    );
+    *h.core.start_hold.lock() = Some((reached.clone(), go.clone()));
     let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    // Its warm-up judged its harness (on: the project is not private yet), then waits; the project becomes private.
+    reached.notified().await;
     make_private(&h, &p);
+    go.notify_one();
+    h.wait("its process started ahead, on the private fence", |h| {
+        h.alive(&a.id)
+    })
+    .await;
     assert!(h
         .core
         .send_message(&a.id, "Bonjour".into(), Vec::new())
         .await
         .is_err());
-    assert!(h.core.ensure_process(&a.id).await.is_err());
+    // The process that runs is judged as a start: refused, it stops, said (ESC-582).
+    let why = match h.core.ensure_process(&a.id).await {
+        Ok(_) => panic!("its process that runs was given back"),
+        Err(e) => e.to_string(),
+    };
+    assert!(why.contains(NOT_ON), "{why}");
     assert!(!h.alive(&a.id));
+    assert!(
+        notices(&h, &a.id)
+            .iter()
+            .any(|n| n.contains(NOT_ON) && n.ends_with("L’agent s’arrête.")),
+        "{:?}",
+        notices(&h, &a.id)
+    );
     h.core.enable_harness_in(&p.id, EngineId::CLAUDE).unwrap();
     h.core
         .send_message(&a.id, "Bonjour".into(), Vec::new())
         .await
         .unwrap();
     h.wait("its process", |h| h.alive(&a.id)).await;
+}
+
+/// A project made private by the user while an agent's process runs at rest (its warm-up): the process stops at once,
+/// its harness not turned on there, and its conversation says why (ESC-582). Another project's agent goes on.
+#[tokio::test]
+async fn a_project_made_private_stops_at_once_the_process_of_an_agent_at_rest() {
+    let h = harness("esc582-at-rest");
+    let (p, _) = h.project(false).await;
+    let q = h.second_project().await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let other = h.core.create_agent(&q.id, None).await.unwrap().meta;
+    h.wait("their processes started ahead", |h| {
+        h.alive(&a.id) && h.alive(&other.id)
+    })
+    .await;
+    set_private_by_hand(&h, &p);
+    assert!(!h.alive(&a.id), "stopped at once");
+    assert!(
+        notices(&h, &a.id)
+            .iter()
+            .any(|n| n.contains(NOT_ON) && n.ends_with("L’agent s’arrête.")),
+        "{:?}",
+        notices(&h, &a.id)
+    );
+    assert!(h.alive(&other.id), "the other project's agent goes on");
+    // Nothing starts it again until « Activer ».
+    assert!(h.core.ensure_process(&a.id).await.is_err());
+    assert!(!h.alive(&a.id));
+}
+
+/// A project made private while an agent is at work (a question waits for the user's answer): its turn is not cut; it
+/// ends, then the process stops, said (ESC-582, as « Un agent dans un mode devenu interdit finit son tour »).
+#[tokio::test]
+async fn a_project_made_private_lets_an_agent_at_work_end_its_turn_then_stops_it() {
+    let h = harness("esc582-at-work");
+    let (p, _) = h.project(false).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.core
+        .send_message(&a.id, "question".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("its question", |h| {
+        h.agent(&a.id).status == AgentStatus::Waiting
+    })
+    .await;
+    set_private_by_hand(&h, &p);
+    assert!(h.alive(&a.id), "not cut during its turn");
+    assert_eq!(h.agent(&a.id).status, AgentStatus::Waiting);
+    h.core
+        .answer_question(
+            &a.id,
+            "req_question",
+            json!({"Quelle base de données ?": "SQLite"}),
+        )
+        .unwrap();
+    h.wait("the end of its turn, then of its process", |h| {
+        !h.agent(&a.id).status.is_active() && !h.alive(&a.id)
+    })
+    .await;
+    assert!(
+        h.items(&a.id).iter().any(
+            |i| i["kind"] == "text" && i["text"].as_str().is_some_and(|t| t.contains("SQLite"))
+        ),
+        "its turn ended: {:?}",
+        h.items(&a.id)
+    );
+    assert!(
+        notices(&h, &a.id)
+            .iter()
+            .any(|n| n.contains(NOT_ON) && n.ends_with("L’agent s’arrête à la fin de son tour.")),
+        "{:?}",
+        notices(&h, &a.id)
+    );
+    assert!(h.core.ensure_process(&a.id).await.is_err());
+    assert!(!h.alive(&a.id));
 }
 
 /// The autopilot does not ask in the user's place: a ticket of a private project whose harness is not on stays blocked,
@@ -270,7 +391,7 @@ fn state_before(dir: &std::path::Path) -> serde_json::Value {
     })
 }
 
-fn load(data: &DataDir) -> std::sync::Arc<Core> {
+fn load(data: &DataDir) -> Arc<Core> {
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), data.clone());
     // The mock app lives as long as the test (its handle is the core's).

@@ -1289,6 +1289,11 @@ pub struct Core {
     /// The languages the native menus were written again in (tests only: they have none).
     #[cfg(test)]
     pub(crate) relabels: Mutex<Vec<i18n::Lang>>,
+    /// The next start held once its harness is judged for its project, before its fence is read (tests only, ESC-582):
+    /// `reached` told when it gets there, it then waits for `go`. What a start that awaits its harness's version
+    /// leaves open, played every time.
+    #[cfg(test)]
+    pub(crate) start_hold: Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
     /// Syncs of external tickets queued and not over yet (tests only).
     #[cfg(test)]
     pub(crate) syncs_queued: AtomicUsize,
@@ -2415,6 +2420,8 @@ impl Core {
             alerts: Mutex::default(),
             #[cfg(test)]
             relabels: Mutex::default(),
+            #[cfg(test)]
+            start_hold: Mutex::default(),
             #[cfg(test)]
             syncs_queued: AtomicUsize::new(0),
             #[cfg(test)]
@@ -4037,9 +4044,11 @@ impl Core {
         let live = h.lock().proc.clone();
         if let Some(p) = live {
             if p.is_alive() {
-                // Its harness or the mode it runs in no longer allowed by the policies or by « Autoriser le mode
-                // Bypass » (a change not settled yet, or one that came during its turn): its process is given no
-                // message; at rest, it stops at once, said; at work, at the end of its turn (ESC-497).
+                // A process that runs is judged as a start (ESC-582): its harness not on for its project (the project
+                // made private since it started, ESC-404), or its harness or the mode it runs in no longer allowed by
+                // the policies or by « Autoriser le mode Bypass » (a change not settled yet, or one that came during
+                // its turn): its process is given no message; at rest, it stops at once, said; at work, at the end of
+                // its turn (ESC-497).
                 if let Some(why) = self.run_refusal(id) {
                     self.stop_out_of_rule(id, &crate::modes::stopped(i18n::ui(), &why));
                     bail!(why);
@@ -4063,6 +4072,14 @@ impl Core {
         // Its harness's plugin off for its project (ESC-404): the plugin would get all it does.
         let project_id = h.lock().meta.project_id.clone();
         self.check_harness_in(engine, &project_id)?;
+        #[cfg(test)]
+        {
+            let hold = self.start_hold.lock().take();
+            if let Some((reached, go)) = hold {
+                reached.notify_one();
+                go.notified().await;
+            }
+        }
         // A harness the policies do not allow (TS-11), and the mode its harness runs it in, judged: a mode it does not
         // have is never taken for true, the policies of the device and of its team judge that one (TS-11, ESC-497), and
         // the mode of no question goes only with « Autoriser le mode Bypass » (SEC-09, ESC-489). Refused, what still
@@ -9687,6 +9704,10 @@ impl Core {
         // The account its tickets go to may have changed, and so what holds them back.
         if account_changed {
             self.schedule();
+        }
+        // Made private: what runs of its agents on a harness not turned on there stops, said (ESC-582).
+        if updated.private && !before.private {
+            self.settle_harnesses_in(&updated.id);
         }
         // Its agents get Remote Control or lose it, on tasks of their own.
         if remote_changed {

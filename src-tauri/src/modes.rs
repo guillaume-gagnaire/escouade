@@ -307,11 +307,20 @@ pub fn stopped(lang: Lang, why: &str) -> String {
 }
 
 impl Core {
-    /// Why the agent `id`, as it runs now, may not run on (`refusal_of`): what the hot changes of the policies and of
-    /// « Autoriser le mode Bypass » look at, and what a start does not take a live process over with.
+    /// Why the agent `id`, as it runs now, may not run on (its harness not on for its project, `refusal_of`): what the
+    /// hot changes of the policies, of « Autoriser le mode Bypass » and of « Projet privé » look at, what the end of a
+    /// turn judges again, and what a start does not take a live process over with.
     pub(crate) fn run_refusal(&self, id: &str) -> Option<String> {
         let h = self.agent(id).ok()?;
-        let project_id = h.lock().meta.project_id.clone();
+        let (engine, project_id) = {
+            let rt = h.lock();
+            (rt.meta.engine, rt.meta.project_id.clone())
+        };
+        // Its harness not on for its project (ESC-404): cut there, or not turned on yet in a private project, the
+        // project made private since its process started (ESC-582). Read apart, never under the agent's lock.
+        if let Some(why) = self.harness_refusal(engine, &project_id) {
+            return Some(why);
+        }
         // Taken apart: never under the agent's lock.
         let locks = self.locks_for(&project_id);
         let bypass = self.bypass_allowed();

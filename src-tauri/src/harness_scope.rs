@@ -165,6 +165,29 @@ impl Core {
         Ok(())
     }
 
+    /// The project `project_id` made private (ESC-582): what runs of each of its agents whose harness is not on there
+    /// (its process, its interface) stops as a start would be refused, said in its conversation; at rest at once, at
+    /// work at the end of its turn (`settle_locked_mode`, through `run_refusal`), as ESC-497 settles a mode no longer
+    /// allowed. Its turn is not cut: the user did not cut the harness, only made the project private.
+    pub(crate) fn settle_harnesses_in(self: &Arc<Self>, project_id: &str) {
+        let running: Vec<(String, EngineId)> = self
+            .project_agents(project_id)
+            .iter()
+            .filter_map(|h| {
+                let rt = h.lock();
+                (!rt.meta.archived
+                    && !rt.meta.status.is_active()
+                    && (rt.proc.is_some() || rt.tui.is_some()))
+                .then(|| (rt.meta.id.clone(), rt.meta.engine))
+            })
+            .collect();
+        for (id, engine) in running {
+            if let Some(why) = self.harness_refusal(engine, project_id) {
+                self.stop_out_of_rule(&id, &crate::modes::stopped(crate::i18n::ui(), &why));
+            }
+        }
+    }
+
     /// The agents of the project on a harness of `plugin` stop: their turn interrupted, their process and their
     /// interface closed; a ticket's is blocked, with why.
     pub(crate) async fn stop_harness_agents(self: &Arc<Self>, plugin: &str, project_id: &str) {
