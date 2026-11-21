@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- A feature you turned off that would help you is suggested at the right moment, in a small window at the bottom right: what Escouade noticed, what it would do, and “Turn on”, “Not now” or “Don’t suggest again”. One at a time, one a day at most, never while you type; nothing Escouade notices leaves your machine.
 - “Your turn” box: a request still due no longer disappears when its agent’s ticket is approved, or the agent is archived or deleted. It goes to the project’s squad lead, who gets your answer; with no lead, it stays until there is one, and the box quietly says it changed hands.
 - Settings › Phone: turn on the access from your phone. Escouade carries its own WireGuard tunnel, with no VPN nor administrator rights, and opens a single UDP port: in the box by UPnP or NAT-PMP when it allows it, else it tells you what to do there, and it spots a CGNAT, your public address when it changes, and Tailscale when it is there. The mobile app will pair with it; a managed device can forbid it.
 - Team server: the team’s file can recommend or impose a plugin’s simple setting on its projects (never a secret nor a profile). In the project’s Plugins page, an imposed setting is greyed with “Imposed by the team …”, a recommended one says where it comes from, and what the plugin refuses is said with why.

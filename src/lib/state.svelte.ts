@@ -42,6 +42,7 @@ import { keptViewed } from './prfiles';
 import { workflows } from './workflows.svelte';
 import { takeView as takeOnboarding } from './onboarding.svelte';
 import { hear as discoverHears, seen as discoverSeen } from './discover.svelte';
+import { hear as offersHear } from './offers.svelte';
 import { inboxViews } from './inbox/views.svelte';
 import {
   activeItem,
@@ -407,6 +408,11 @@ class AppState {
   #imposed: ((s: Settings) => void)[] = [];
   onImposed(f: (s: Settings) => void): void {
     this.#imposed.push(f);
+  }
+  /** Settings the core changed by itself (a policy, « Activer » of a proposal at the right moment): taken, and by an open form. */
+  takeSettings(s: Settings): void {
+    this.settings = withPosteVoice(s);
+    for (const f of this.#imposed) f(s);
   }
   usage = $state<Usage>({ todayCost: 0, accounts: [], current: {} });
   resources = $state<Resources>({ instances: 0, memory: 0, cpu: 0, agents: [] });
@@ -1016,6 +1022,8 @@ class AppState {
   private onEvent(e: UiEvent) {
     // The discovery of the features (ESC-506) read again when the real state may have done one.
     discoverHears(e.type);
+    // A proposal of a feature switched off may be due (F-3, ESC-558).
+    offersHear(e.type);
     // What Escouade puts in the box « À toi » follows its sources (ESC-513); the MCP server off, there is no box.
     if (this.settings.mcpEnabled) inboxViews.take(e);
     switch (e.type) {
@@ -1111,10 +1119,7 @@ class AppState {
       case 'locks':
         setLocks(e.locks, e.teams);
         // A policy changed while the app runs brought the settings within it (TS-12): taken, and by an open form.
-        if (e.settings) {
-          this.settings = withPosteVoice(e.settings);
-          for (const f of this.#imposed) f(e.settings);
-        }
+        if (e.settings) this.takeSettings(e.settings);
         break;
       case 'mcpStatus':
       case 'mcpDeclared':
@@ -1128,6 +1133,7 @@ class AppState {
         void teams.load();
         break;
       case 'discoverChanged':
+      case 'featureOffer':
         break;
       case 'voice':
         dictation.take(e.voice);

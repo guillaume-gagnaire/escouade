@@ -1881,6 +1881,11 @@ impl ServerHandler for Tools {
                     "",
                     Outcome::Refused(why.clone()),
                 );
+                // Tickets made through the MCP server, the Kanban off: what a proposal at the right moment notices
+                // (F-3, ESC-558).
+                if tool == "create_ticket" {
+                    c.core.offer_note(crate::offers::Signal::McpTickets);
+                }
                 return Ok(CallToolResult::error(vec![ContentBlock::text(why)]).into());
             }
         }

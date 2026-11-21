@@ -3075,6 +3075,7 @@ export type UiEvent =
   | { type: 'teams' }
   /** A discovery of the features done by a fact of the core (ESC-506): read it again. */
   | { type: 'discoverChanged' }
+  | { type: 'featureOffer' }
   /** What a project's docs have to share (the changes not shared yet), and the conflict a « Partager » stopped on. */
   | { type: 'docsShare'; projectId: string; pending: number; conflict: DocsConflict | null }
   | { type: 'teamDocs'; projectId: string }
@@ -4522,3 +4523,30 @@ export interface FeatureUse {
   /** On how many projects; 0 when not by project. */
   projects: number;
 }
+
+/** What Escouade noticed of a feature switched off (F-3, ESC-558, `offers::Signal`). */
+export type OfferSignal =
+  'mcpTickets' | 'longPrompts' | 'specEdits' | 'documents' | 'usageLimit' | 'agentFiles' | 'sameMessage' | 'waitingProjects';
+
+/** A proposal of a feature switched off, at the right moment (`offers::Offer`). */
+export interface Offer {
+  feature: Feature;
+  signal: OfferSignal;
+  /** How much was noticed: tickets, agents, days, documents, projects… */
+  count: number;
+  /** The project it was noticed in, when it is one's. */
+  project?: string;
+}
+
+/** The proposals as the core tells them (`offers::OfferView`). */
+export interface OfferView {
+  /** The one to show now, if any. */
+  offer: Offer | null;
+  /** « Ne plus proposer »: Réglages › Fonctionnalités › « Propositions écartées ». */
+  never: Feature[];
+  /** The settings as « Activer » left them. */
+  settings?: Settings;
+}
+
+/** A gesture on a proposal (`offers::OfferAct`). */
+export type OfferAct = { kind: 'shown' | 'enable' | 'later' | 'never' | 'restore'; feature: Feature };

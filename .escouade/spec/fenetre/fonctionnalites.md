@@ -1,9 +1,9 @@
 ---
 title: "Fonctionnalités"
 subject: "fenetre"
-sources: ["docs/FEATURES.md § 1 (conception du 2026-10-28, choix du chef)","design/features/reglages-fonctionnalites.png","design/features/assistant.png","docs/ONBOARDING.md § 7 (les découvertes)","crates/escouade-model/src/features.rs (le registre)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur)","src/lib/features.ts (dans la fenêtre)"]
-tickets: ["ESC-550"]
-decisions: [226]
+sources: ["docs/FEATURES.md § 1 et § 2 (conception du 2026-10-28, choix du chef)","design/features/reglages-fonctionnalites.png","design/features/assistant.png","design/features/captures/proposition-fonctionnalite-clair-1440.png","docs/ONBOARDING.md § 7 (les découvertes)","crates/escouade-model/src/features.rs (le registre)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur)","src-tauri/src/offers.rs (les propositions, leurs signaux et leurs seuils)","src/lib/features.ts (dans la fenêtre)","src/lib/offers.svelte.ts (les propositions dans la fenêtre)"]
+tickets: ["ESC-550","ESC-558"]
+decisions: [226,276]
 compared: null
 ---
 
@@ -11,7 +11,7 @@ compared: null
 
 ## Ce que c'est
 
-Escouade a grandi : Kanban, Docs, éditeur, coût, statistiques, workflows, tâches programmées, Overseer, voix. Tout le monde ne veut pas tout. Chaque **fonctionnalité entière** s'allume ou se coupe d'un interrupteur, comme un feature flag. Une fonctionnalité coupée **disparaît vraiment** : ses vues, ses boutons, ses menus, ses raccourcis, sa place dans la palette, ses outils MCP, ses découvertes. **Ce qu'elle faisait en fond s'arrête.** **Ses données restent** et reviennent telles quelles quand on la rallume.
+Escouade a grandi : Kanban, Docs, éditeur, coût, statistiques, workflows, tâches programmées, Overseer, voix. Tout le monde ne veut pas tout. Chaque **fonctionnalité entière** s'allume ou se coupe d'un interrupteur, comme un feature flag. Une fonctionnalité coupée **disparaît vraiment** : ses vues, ses boutons, ses menus, ses raccourcis, sa place dans la palette, ses outils MCP, ses découvertes. **Ce qu'elle faisait en fond s'arrête.** **Ses données restent** et reviennent telles quelles quand on la rallume. Quand une fonctionnalité coupée servirait, Escouade la **propose au bon moment**, une à la fois (ci-dessous).
 
 **L'essentiel ne se coupe pas** : les agents et leur conversation, le panneau Git, les terminaux et les lancements. Il n'a pas d'interrupteur.
 
@@ -49,12 +49,63 @@ Une page d'Escouade de la direction A, juste après Général : « Fonctionnalit
 - **Une fonctionnalité imposée** est grisée, avec le cadenas et qui l'impose (« Imposé par la stratégie de ce poste », « Imposé par l’équipe Acme »).
 - **Ce que l'installation utilisait** au moment de la mise à jour est dit sur la ligne : « Utilisée sur 2 projets », « Utilisée ».
 - En pied : « Une fonctionnalité coupée disparaît vraiment, ce qu’elle faisait en fond s’arrête ; ses données restent et reviennent quand tu la rallumes. »
+- **« Propositions écartées »** (ESC-558), après le pied : « Ce que tu as choisi de ne plus te voir proposer quand ça servirait. » Une ligne par fonctionnalité écartée par « Ne plus proposer », son icône et son nom, avec « Reproposer » (« Reproposer « Kanban » » pour un lecteur d'écran), qui la rend aux propositions. Sans aucune : « Aucune : Escouade peut te proposer une fonctionnalité coupée au moment où elle servirait, une à la fois, au plus une par jour. »
 - **Les pages d'une fonctionnalité coupée** quittent la barre et la recherche des réglages : Overseer, Voix, et pour un projet Kanban et Tickets importés. Les rangées d'une autre page qu'elle emporte en quittent la recherche aussi.
 - « Revoir la présentation » vient avec l'assistant (F-2) : la page ne l'a pas encore.
 
+## Proposer une fonctionnalité coupée au bon moment (ESC-558)
+
+Quand Escouade voit qu'une fonctionnalité coupée servirait, il la propose dans une **petite fenêtre en bas à droite**, au-dessus de la barre d'état, dans la langue des bulles d'« À découvrir » (capture `design/features/captures/proposition-fonctionnalite-clair-1440.png`) :
+
+- en tête, l'icône de la fonctionnalité, « Fonctionnalité coupée » et son nom ;
+- **« Ce qu’Escouade a remarqué »** : une phrase, avec le chiffre, par exemple « 2 tickets demandés au serveur MCP cette semaine ont été refusés : le Kanban est coupé. » ;
+- **« Ce qu’elle ferait »** : une phrase, par exemple « Le Kanban en ferait des tickets : chacun son agent, son worktree et ses critères, lancés par le pilote auto. » ;
+- « Ce qu’Escouade remarque reste sur ta machine. » ;
+- **« Activer »**, **« Pas maintenant »**, **« Ne plus proposer »** (son infobulle : « Tu pourras la reproposer dans Réglages › Fonctionnalités. »).
+
+C'est un dialogue non modal : il ne prend pas le focus, il est annoncé poliment au lecteur d'écran, et Échap, le focus dedans, vaut « Pas maintenant ». Il reste dans son coin jusqu'à sa réponse ; il ne gêne rien (la frappe continue dans le champ où elle est). Les textes sont en français et en anglais (« Turn on », « Not now », « Don’t suggest again »).
+
+### Les signaux et leurs seuils
+
+| Fonctionnalité coupée | Ce qu'Escouade remarque | Seuil (au seuil : proposée ; juste en dessous : non) |
+| --- | --- | --- |
+| **Kanban** | Des appels de `create_ticket` au serveur MCP, refusés parce que le Kanban est coupé. | **2 en 7 jours** (1 : non). |
+| **Kanban** | Des agents de l'utilisateur (ni d'un ticket, ni d'une discussion des Docs, ni créés par un autre agent) lancés à la main sur un premier message long. | **3 agents en 7 jours**, chacun sur un premier message de **300 caractères ou plus** (2 agents, ou 299 caractères : non). |
+| **Espace Docs** | `SPEC.md` (toute casse, à la racine) ou `docs/` changés par les commits d'un projet. | **3 jours différents sur les 14 derniers**, dans un même projet (2 jours : non ; plusieurs commits d'un jour comptent pour un). |
+| **Espace Docs** | Des documents glissés dans les conversations : pdf, doc, docx, odt, rtf, md, markdown, txt, ppt, pptx, odp, xls, xlsx, ods, csv (une image ne compte pas). | **3 en 14 jours** (2 : non). |
+| **Coût** | Une limite d'usage atteinte par un agent. | **1 en 7 jours** (aucune, ou la dernière il y a plus de 7 jours : non). |
+| **Workflows** | Les skills (un dossier avec son `SKILL.md`), commandes et agents (un `.md`) d'un projet, sous `.claude/` et `.agents/`. Ses réglages et le reste ne comptent pas. | **2 dans un même projet** (1 : non). |
+| **Tâches programmées** | La même consigne envoyée à la main : les mêmes mots, 20 caractères ou plus, la casse et les espaces ignorés. | **3 jours de suite**, la première de chaque jour toutes dans **une heure** de la journée (60 minutes d'écart au plus) (2 jours, un jour manqué entre, ou 61 minutes : non). |
+| **Overseer** | Des agents qui attendent une réponse (une permission, une question) sur plusieurs projets à la fois. | **3 projets à la fois**, vus dans les **7 derniers jours** (2 projets : non). |
+
+- Un signal n'est relevé que pendant que sa fonctionnalité est coupée. L'Éditeur, les Statistiques et la Voix n'ont pas de signal : ils ne sont jamais proposés.
+- « À la main » : un message envoyé par la fenêtre ou par un client de l'API distante. Un message écrit par l'app (« continue » après la limite, une passation), par un agent ou par un client MCP ne compte pas.
+- Les Tâches programmées ne sont proposées que le Kanban allumé : leurs passages sont des tickets. Kanban coupé, c'est le Kanban qui vient d'abord. « Activer » d'une tâche programmée rallume aussi le Kanban.
+- Plusieurs signaux à la fois : la première fonctionnalité dans l'ordre du registre, et dans une fonctionnalité l'ordre du tableau.
+- Ce qui est noté est gardé deux semaines au plus. Les commits d'un projet sont relus une fois par heure ; ses fichiers de `.claude/` et `.agents/` à chaque demande.
+
+### Le rythme
+
+- **Une seule proposition à la fois** : tant qu'une est à l'écran, aucune autre n'est demandée.
+- **Au plus une par jour** : aucune dans les 24 heures qui suivent celle montrée, quelle que soit sa réponse.
+- **Jamais pendant un tour visible** (un agent à l'écran au travail), **ni pendant qu'un agent attend une permission**, **ni pendant qu'on écrit** (une touche dans la seconde et demie, comme les bulles), ni par-dessus une fenêtre, le premier lancement ou une bulle. Le signal reste noté : la proposition vient au premier moment calme. La fenêtre redemande à chaque fois que le cœur a noté quelque chose, et chaque minute.
+- **« Pas maintenant »** : la même ne revient pas avant une semaine (une autre peut venir le lendemain).
+- **« Ne plus proposer »** : définitif, jusqu'à « Reproposer » dans Réglages › Fonctionnalités › « Propositions écartées ». Il tient après un redémarrage.
+- **« Activer »** allume la fonctionnalité comme son interrupteur : ses vues, ses outils MCP et ce qu'elle fait en fond reviennent aussitôt.
+- **Avec les bulles au bon moment** (*À découvrir*) : **une seule chose au bon moment par session**, une bulle ou une proposition. **La bulle passe d'abord** : elle naît d'un geste fait à l'instant et se perdrait sinon, alors qu'une proposition naît d'un signal gardé et peut attendre la session suivante. Une bulle à l'écran ou déjà montrée dans la session : aucune proposition. Une proposition montrée : plus aucune bulle dans la session.
+
+### Ce qui reste sur la machine
+
+- Ce qu'Escouade remarque est gardé dans `state.json`, par installation, avec le premier lancement et la découverte : des instants, et d'une consigne son empreinte seule, jamais son texte. Les commits et les fichiers d'un projet sont lus sur place. Rien n'est envoyé, rien n'est compté dans les statistiques d'usage, accord ou non.
+- **Une fonctionnalité imposée** (allumée ou coupée) par la stratégie du poste ou par une équipe, ou celle dont elle dépend (le Kanban pour les Tâches programmées), n'est jamais proposée. « Activer » demandé par un client pour elle est refusé par le cœur, avec la raison du verrou.
+
+### À distance
+
+La proposition vient du cœur : un client de l'API distante ou une fenêtre sur un serveur montre celles de son cœur, avec ses règles. Le cœur ne propose rien pendant le tour d'un agent que ce client montre. Une réponse donnée sur un client vaut pour tous. Trois commandes de la liste unique (`src-tauri/src/remoteapi/list.rs`, `docs/REMOTE.md`) : `feature_offer` (celle à montrer, `visible` : les agents à l'écran du client), `feature_offer_act` (montrée, « Activer », « Pas maintenant », « Ne plus proposer », « Reproposer ») et `feature_offers` (les écartées).
+
 ## Imposer une fonctionnalité
 
-Chaque fonctionnalité a sa stratégie dans la liste unique (`features.kanban` … `features.voice`, catégorie « Fonctionnalités »). C'est un booléen de sorte **valeur** : `true` l'impose allumée, `false` l'impose coupée. Le poste géré et l'équipe peuvent l'imposer (voir *Réglages imposés*). Le cœur ramène l'interrupteur à la valeur imposée et refuse de le changer. Ce qu'elle emporte suit, comme si l'utilisateur l'avait coupée. La raison des refus nomme qui l'impose. Une stratégie retirée laisse l'interrupteur où elle l'avait mis.
+Chaque fonctionnalité a sa stratégie dans la liste unique (`features.kanban` … `features.voice`, catégorie « Fonctionnalités »). C'est un booléen de sorte **valeur** : `true` l'impose allumée, `false` l'impose coupée. Le poste géré et l'équipe peuvent l'imposer (voir *Réglages imposés*). Le cœur ramène l'interrupteur à la valeur imposée et refuse de le changer. Ce qu'elle emporte suit, comme si l'utilisateur l'avait coupée. La raison des refus nomme qui l'impose. Une stratégie retirée laisse l'interrupteur où elle l'avait mis. Une fonctionnalité imposée n'est jamais proposée.
 
 ## Après une mise à jour, et pour une installation neuve
 
@@ -74,7 +125,7 @@ Chaque fonctionnalité a sa stratégie dans la liste unique (`features.kanban` �
 
 ## À distance
 
-L'état des fonctionnalités vient du cœur : un client de l'API distante ou une fenêtre sur un serveur (voir *Le mode serveur*) montre celles du cœur où il est, avec leurs refus. Les interrupteurs passent par `save_settings`, déjà de la liste unique des commandes (`src-tauri/src/remoteapi/list.rs`) ; aucune commande n'est ajoutée.
+L'état des fonctionnalités vient du cœur : un client de l'API distante ou une fenêtre sur un serveur (voir *Le mode serveur*) montre celles du cœur où il est, avec leurs refus. Les interrupteurs passent par `save_settings`, déjà de la liste unique des commandes (`src-tauri/src/remoteapi/list.rs`) ; les propositions par leurs trois commandes (ci-dessus).
 
 ## Limites
 
@@ -82,4 +133,5 @@ L'état des fonctionnalités vient du cœur : un client de l'API distante ou une
 - Un client MCP qui a gardé la liste d'avant voit encore les outils d'une fonctionnalité coupée : leur appel est refusé avec la raison.
 - Le Coût coupé ne retire pas les multiplicateurs de prix des modèles (Copilot « ×3 ») du menu des modèles : ils servent à choisir un modèle.
 - Les découvertes des fonctionnalités coupées partent de la carte ; une découverte faite reste faite et revient cochée.
-- « Revoir la présentation », l'assistant (F-2) et les propositions au bon moment (F-3) viennent après.
+- « Revoir la présentation » et l'assistant (F-2) viennent après.
+- Les propositions : les jours et les heures de « la même consigne » sont ceux du fuseau du cœur ; une proposition montrée sur deux clients à la fois y reste jusqu'à sa réponse sur chacun (la réponse de l'un vaut pour le cœur, pas pour l'écran de l'autre). L'Overseer n'est remarqué que lorsque la fenêtre redemande (chaque minute) : des agents en attente sur trois projets moins d'une minute peuvent passer inaperçus.

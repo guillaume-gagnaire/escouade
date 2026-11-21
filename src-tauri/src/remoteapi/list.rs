@@ -454,6 +454,10 @@ escouade_command::commands! {
         // The discovery of the features (ESC-506).
         commands::discover_view,
         commands::discover_act,
+        // The proposals of a feature switched off at the right moment (F-3, ESC-558).
+        commands::feature_offer,
+        commands::feature_offer_act,
+        commands::feature_offers,
         commands::mcp_declare_status,
         commands::mcp_manual_command,
         // What changes machines on a server (ESC-538): the server's side, served as it is.

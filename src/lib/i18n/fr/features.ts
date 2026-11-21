@@ -60,4 +60,69 @@ export default {
     needs: 'Part avec « {need} » : rallume-le d’abord.',
     foot: 'Une fonctionnalité coupée disparaît vraiment, ce qu’elle faisait en fond s’arrête ; ses données restent et reviennent quand tu la rallumes.',
   },
+  /** A proposal at the right moment (F-3, ESC-558): the small window at the bottom right. */
+  offer: {
+    label: 'Proposition : {name}',
+    kicker: 'Fonctionnalité coupée',
+    noticed: 'Ce qu’Escouade a remarqué',
+    would: 'Ce qu’elle ferait',
+    private: 'Ce qu’Escouade remarque reste sur ta machine.',
+    enable: 'Activer',
+    later: 'Pas maintenant',
+    never: 'Ne plus proposer',
+    neverHint: 'Tu pourras la reproposer dans Réglages › Fonctionnalités.',
+    signals: {
+      mcpTickets: {
+        one: '{count} ticket demandé au serveur MCP cette semaine a été refusé : le Kanban est coupé.',
+        other: '{count} tickets demandés au serveur MCP cette semaine ont été refusés : le Kanban est coupé.',
+      },
+      longPrompts: {
+        one: 'Tu as lancé {count} agent à la main cette semaine, sur une longue consigne.',
+        other: 'Tu as lancé {count} agents à la main cette semaine, chacun sur une longue consigne.',
+      },
+      specEdits: {
+        one: 'La spec de « {project} » (SPEC.md, docs/) a changé {count} jour ces deux dernières semaines.',
+        other: 'La spec de « {project} » (SPEC.md, docs/) a changé sur {count} jours ces deux dernières semaines.',
+      },
+      documents: {
+        one: 'Tu as glissé {count} document dans une conversation ces deux dernières semaines.',
+        other: 'Tu as glissé {count} documents dans les conversations ces deux dernières semaines.',
+      },
+      usageLimit: {
+        one: 'Un agent a atteint sa limite d’usage cette semaine.',
+        other: 'Des agents ont atteint leur limite d’usage {count} fois cette semaine.',
+      },
+      agentFiles: {
+        one: '« {project} » a {count} skill, commande ou agent (.claude/, .agents/).',
+        other: '« {project} » a {count} skills, commandes ou agents (.claude/, .agents/).',
+      },
+      sameMessage: {
+        one: 'Tu envoies la même consigne à la main, vers la même heure.',
+        other: 'Tu envoies la même consigne à la main vers la même heure, {count} jours de suite.',
+      },
+      waitingProjects: {
+        one: 'Des agents attendaient une réponse sur {count} projet.',
+        other: 'Des agents attendaient ta réponse sur {count} projets à la fois.',
+      },
+    },
+    does: {
+      kanban: 'Le Kanban en ferait des tickets : chacun son agent, son worktree et ses critères, lancés par le pilote auto.',
+      editor: 'L’éditeur ouvrirait les fichiers du projet à côté des agents.',
+      docs: 'L’Espace Docs tiendrait la spec, les décisions et les documents du projet, que les agents lisent et citent.',
+      cost: 'Le Coût montrerait ce que coûtent les tours, les agents et les tickets, et la température du cache, pour voir venir la limite.',
+      stats: 'Les Statistiques montreraient l’activité et les dépenses dans le temps.',
+      workflows: 'Les Workflows liraient ces enchaînements et montreraient l’étape où en est chaque agent.',
+      scheduled: 'Une tâche programmée l’enverrait à ta place, à heure fixe, en ticket.',
+      overseer: 'L’Overseer suivrait tous les projets à la fois et te dirait qui t’attend.',
+      voice: 'La voix te laisserait dicter tes messages et parler aux agents.',
+    },
+  },
+  /** « Ne plus proposer », given back (F-3): Réglages › Fonctionnalités. */
+  declined: {
+    title: 'Propositions écartées',
+    desc: 'Ce que tu as choisi de ne plus te voir proposer quand ça servirait.',
+    none: 'Aucune : Escouade peut te proposer une fonctionnalité coupée au moment où elle servirait, une à la fois, au plus une par jour.',
+    restore: 'Reproposer',
+    restoreLabel: 'Reproposer « {name} »',
+  },
 } as const satisfies Tree;

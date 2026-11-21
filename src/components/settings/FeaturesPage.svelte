@@ -6,8 +6,15 @@
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import type { Feature, Features } from '../../lib/types';
+  import { loadNever, offers, restore } from '../../lib/offers.svelte';
   import Icon from '../Icon.svelte';
+  import Group from './Group.svelte';
   import Switch from './Switch.svelte';
+
+  // « Propositions écartées » (F-3): read as the page opens.
+  $effect(() => {
+    void loadNever();
+  });
 
   // Réglages › Fonctionnalités (F-1, ESC-550, maquette design/features/reglages-fonctionnalites.png, direction A): the
   // essential first, never switched off; then each feature with what it does, what it takes with it when it is off (its
@@ -74,6 +81,27 @@
   {/each}
 </div>
 <p class="foot">{t('features.page.foot')}</p>
+
+<!-- « Ne plus proposer » of a proposal at the right moment (F-3, ESC-558), given back here. -->
+<Group title={t('features.declined.title')} note={t('features.declined.desc')} data-testid="declined-offers">
+  {#if offers.never.length}
+    <div class="declined" role="list">
+      {#each offers.never as f (f)}
+        <div class="feat" role="listitem" data-declined={f}>
+          <span class="ic" aria-hidden="true"><Icon name={FEATURE_ICONS[f]} /></span>
+          <div class="lab"><b class="l">{t(`features.${f}.name`)}</b></div>
+          <button
+            class="btn small ghost"
+            aria-label={t('features.declined.restoreLabel', { name: t(`features.${f}.name`) })}
+            onclick={() => void restore(f)}>{t('features.declined.restore')}</button
+          >
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <p class="none">{t('features.declined.none')}</p>
+  {/if}
+</Group>
 
 <style>
   /* The rows of the maquette (design/features/reglages-fonctionnalites.png): a square for the icon, the name and what
@@ -155,6 +183,14 @@
   .foot {
     margin: 14px 0 0;
     color: var(--dim);
+    font-size: 12px;
+  }
+  .declined .feat {
+    padding: 10px 0;
+  }
+  .none {
+    margin: 0;
+    color: var(--muted);
     font-size: 12px;
   }
   .vh {

@@ -2987,6 +2987,8 @@ pub struct Onboarding {
     pub first_reply_demo: bool,
     /// The funnel of this run told (sent with the consent, or dropped with a no): never twice.
     pub told: bool,
+    /// The proposals of a feature switched off, at the right moment (F-3, ESC-558): what was noticed and answered.
+    pub offers: crate::features::FeatureOffers,
 }
 
 /// What Escouade found of the harnesses when the journey began (ESC-507).

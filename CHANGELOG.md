@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Une fonctionnalité coupée qui te servirait t’est proposée au bon moment, dans une petite fenêtre en bas à droite : ce qu’Escouade a remarqué, ce qu’elle ferait, et « Activer », « Pas maintenant » ou « Ne plus proposer ». Une à la fois, au plus une par jour, jamais pendant que tu écris ; rien de ce qu’Escouade remarque ne quitte ta machine.
 - Boîte « À toi » : une demande encore due ne disparaît plus quand le ticket de son agent est validé, ou que l’agent est archivé ou supprimé. Elle passe au chef d’escouade du projet, qui reçoit ta réponse ; sans chef, elle reste là jusqu’à ce qu’il y en ait un, et la boîte dit discrètement qu’elle a changé de main.
 - Réglages › Téléphone : allume l’accès depuis ton téléphone. Escouade embarque son propre tunnel WireGuard, sans VPN ni droit d’administrateur, et n’ouvre qu’un port UDP : dans la box par UPnP ou NAT-PMP quand elle le permet, sinon il te dit quoi y faire, et il repère un CGNAT, ton adresse publique quand elle change, et Tailscale quand il est là. L’app mobile s’y appairera ; un poste géré peut l’interdire.
 - Serveur d’équipe : le fichier de l’équipe peut recommander ou imposer un réglage simple d’un plugin sur ses projets (jamais un secret ni un profil). Dans la page Plugins du projet, un réglage imposé est grisé avec « Imposé par l’équipe … », un réglage recommandé dit d’où il vient, et ce que le plugin refuse est dit avec la raison.

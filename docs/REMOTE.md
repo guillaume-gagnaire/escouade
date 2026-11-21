@@ -317,6 +317,9 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `engines_off_now`
 - `erase_closed_project`
 - `favorite_model_set`
+- `feature_offer` : la proposition d’une fonctionnalité coupée à montrer maintenant (F-3, ESC-558), celle du cœur ; jamais pendant le tour d’un agent que le client montre (`visible`)
+- `feature_offer_act`
+- `feature_offers`
 - `file_suggestions`
 - `forge_check`
 - `forge_connect`

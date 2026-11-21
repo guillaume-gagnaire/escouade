@@ -37,8 +37,23 @@ export const discover = $state<{
 
 /** The microphones this window found: undefined until read, null when it cannot tell (a client of the remote API). */
 let microphones: number | null | undefined;
-/** A bubble at the right moment was shown in this session: no other one before the next start. */
+/**
+ * Something at the right moment was shown in this session, a bubble or a proposal of a feature switched off (F-3,
+ * ESC-558): no other one before the next start. One thing at the right moment per session; the bubble goes first, as
+ * it is born of a gesture made now and is lost otherwise, while a proposal comes of a signal kept and waits for the
+ * next session (`offers.svelte.ts`).
+ */
 let offeredThisSession = false;
+
+/** The moment of this session is taken (a bubble, or a proposal). */
+export function momentTaken(): boolean {
+  return offeredThisSession;
+}
+
+/** This session's moment taken by a proposal of a feature (`offers.svelte.ts`). */
+export function takeMoment() {
+  offeredThisSession = true;
+}
 /** When a key was last pressed: a bubble never comes while the user types. */
 let lastKey = 0;
 /** How long a hover rests on a control before its bubble comes. */

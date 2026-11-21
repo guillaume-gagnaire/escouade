@@ -143,3 +143,69 @@ test('the Kanban and the Docs space turned off take their tab and their MCP tool
   expect(back.error).toBe(false);
   expect(back.text).toContain('Elle reste.');
 });
+
+// The proposals at the right moment (F-3, ESC-558): the Kanban off, two tickets asked of the MCP server are refused;
+// Escouade noticed it, and the small window at the bottom right proposes the Kanban; « Activer » gives it back. With
+// ESCOUADE_E2E_SHOTS, the window is shot in both themes at the window's size.
+test('the Kanban off, tickets asked of the MCP server bring its proposal, and « Activer » gives it back', async ({ app }) => {
+  test.setTimeout(180_000);
+  const { page } = app;
+  await addProject(page, app.repo, { firstAgent: false });
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await openSettingsPage(dialog, 'Agents');
+  await dialog.getByRole('switch', { name: MCP_SWITCH }).click();
+  await expect
+    .poll(() => fs.existsSync(app.claudeJson) && !!JSON.parse(fs.readFileSync(app.claudeJson, 'utf8')).mcpServers?.escouade)
+    .toBe(true);
+  const server = declared(app);
+  await rpc(server, 1, 'initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'e2e', version: '1.0.0' } });
+  await rpc(server, null, 'notifications/initialized', {});
+  await openSettingsPage(dialog, 'Fonctionnalités');
+  // Nothing set apart yet.
+  await expect(dialog.getByTestId('declined-offers')).toContainText('Aucune');
+  const kanban = dialog.getByRole('switch', { name: 'Kanban', exact: true });
+  await kanban.click();
+  await expect(kanban).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(async () => (await tools(server)).includes('create_ticket')).toBe(false);
+  await closeSettings(dialog);
+  const tabs = page.getByRole('group', { name: 'Vue du projet' });
+  await expect(tabs.getByRole('button')).toHaveText([/^Agents/, 'Docs']);
+
+  // One ticket refused: under the threshold, nothing is proposed.
+  const offer = page.getByTestId('feature-offer');
+  const first = await call(server, 'create_ticket', { project: 'demo-api', title: 'Un ticket' });
+  expect(first.error).toBe(true);
+  await page.waitForTimeout(1_500);
+  await expect(offer).toHaveCount(0);
+  // Two: the proposal comes, at the bottom right, with what was noticed and what the Kanban would do.
+  expect((await call(server, 'create_ticket', { project: 'demo-api', title: 'Un autre' })).error).toBe(true);
+  await expect(offer).toBeVisible({ timeout: 15_000 });
+  await expect(offer).toHaveAttribute('data-feature', 'kanban');
+  await expect(offer).toContainText('2 tickets demandés au serveur MCP cette semaine ont été refusés');
+  await expect(offer).toContainText('Le Kanban en ferait des tickets');
+  const box = (await offer.boundingBox())!;
+  const size = page.viewportSize() ?? (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
+  expect(box.x + box.width).toBeGreaterThan(size.width - 40);
+  expect(box.y + box.height).toBeGreaterThan(size.height - 80);
+  if (SHOTS) {
+    fs.mkdirSync(SHOTS, { recursive: true });
+    const width = await page.evaluate(() => window.innerWidth);
+    await page.mouse.move(0, 0);
+    for (const t of ['light', 'dark'] as const) {
+      await theme(page, t);
+      await expect(offer).toBeVisible();
+      await page.screenshot({ path: path.join(SHOTS, `proposition-fonctionnalite-${t === 'light' ? 'clair' : 'sombre'}-${width}.png`) });
+    }
+    await theme(page, 'dark');
+  }
+
+  // « Activer »: the window goes, the Kanban is back, with its tools.
+  await offer.getByRole('button', { name: 'Activer' }).click();
+  await expect(offer).toHaveCount(0);
+  await expect(tabs.getByRole('button')).toHaveText([/^Agents/, /^Kanban/, 'Docs']);
+  await expect.poll(async () => (await tools(server)).includes('create_ticket')).toBe(true);
+  expect((await call(server, 'create_ticket', { project: 'demo-api', title: 'Enfin' })).error).toBe(false);
+  await tabs.getByRole('button', { name: /^Kanban/ }).click();
+  await expect(page.getByText('Enfin')).toBeVisible();
+});

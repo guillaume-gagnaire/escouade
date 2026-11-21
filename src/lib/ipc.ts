@@ -14,6 +14,8 @@ import type {
   FolderCheck,
   DiscoverAct,
   DiscoverView,
+  OfferAct,
+  OfferView,
   Hookup,
   HookupOffer,
   OnboardingAct,
@@ -245,6 +247,12 @@ export const api = {
   discoverView: (microphones: number | null) => invoke<DiscoverView>('discover_view', { microphones }),
   /** Seen, « Écarter », « Remettre », « Tout masquer », a bubble shown, the band closed; the discovery as it then is. */
   discoverAct: (act: DiscoverAct, microphones: number | null) => invoke<DiscoverView>('discover_act', { act, microphones }),
+  /** The proposal of a feature switched off to show now (F-3, ESC-558); `visible`: the agents on screen (never during their turn). */
+  featureOffer: (visible: string[]) => invoke<OfferView>('feature_offer', { visible }),
+  /** Shown, « Activer », « Pas maintenant », « Ne plus proposer », « Reproposer ». */
+  featureOfferAct: (act: OfferAct) => invoke<OfferView>('feature_offer_act', { act }),
+  /** The proposals set apart for good, without asking for one (Réglages › Fonctionnalités). */
+  featureOffers: () => invoke<OfferView>('feature_offers'),
   /** The dictation (Réglages › Voix): the microphones and the models. */
   voiceInfo: () => invoke<VoiceInfo>('voice_info'),
   /** Starts listening with the settings' microphone and model, or says the model is to be downloaded first. */

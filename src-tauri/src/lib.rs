@@ -177,6 +177,7 @@ mod myreview_tests;
 #[cfg(feature = "desktop")]
 mod navigation;
 mod notify;
+mod offers;
 mod onboarding;
 #[cfg(test)]
 mod opencode_tests;

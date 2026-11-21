@@ -62,6 +62,8 @@
   import DiscoverTip from './components/discover/DiscoverTip.svelte';
   import NewBand from './components/discover/NewBand.svelte';
   import { keyPressed, load as loadDiscover } from './lib/discover.svelte';
+  import FeatureOffer from './components/FeatureOffer.svelte';
+  import { start as startOffers, stop as stopOffers } from './lib/offers.svelte';
   import TeamNameModal from './components/modals/TeamNameModal.svelte';
   import TeamModal from './components/team/TeamModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
@@ -174,6 +176,14 @@
   // on « Aide », its band, its bubbles).
   $effect(() => {
     if (app.ready && !onboarding.shown) untrack(() => void loadDiscover());
+  });
+
+  // The proposals of a feature switched off at the right moment (F-3, ESC-558): asked now and then once the app is
+  // ready, and whenever the core noticed something (`offers.svelte.ts`).
+  $effect(() => {
+    if (!app.ready) return;
+    untrack(() => startOffers());
+    return () => stopOffers();
   });
 
   // The one clock of the caches' degrees (ESC-398): it ticks while one of them is warm, and stops with the last.
@@ -446,6 +456,8 @@
 
 <!-- A bubble of the discovery (ESC-506), on the real control. -->
 <DiscoverTip />
+<!-- A proposal of a feature switched off (F-3, ESC-558), at the bottom right. -->
+<FeatureOffer />
 
 {#if app.modal?.kind === 'newProject'}
   <NewProjectModal />

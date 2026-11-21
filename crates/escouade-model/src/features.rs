@@ -7,6 +7,7 @@
 //! the launches.
 
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// A feature that may be switched off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -206,6 +207,49 @@ pub fn settle(used: &[FeatureUse], fresh: bool) -> Features {
         f.set(u.feature, true);
     }
     f
+}
+
+/// What the proposals at the right moment (F-3, ESC-558, `docs/FEATURES.md` § 2) keep, by installation, in `state.json`
+/// beside the discovery: what Escouade noticed of a feature switched off (the moments of each signal, kept two weeks;
+/// never a text, a message is kept as its fingerprint alone) and what the user answered. Nothing of it leaves the
+/// machine.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FeatureOffers {
+    /// Kanban off: when an agent of the user's started on a long first message (ms).
+    pub long_prompts: Vec<i64>,
+    /// Kanban off: when a call of `create_ticket` came to the MCP server, refused.
+    pub mcp_tickets: Vec<i64>,
+    /// Espace Docs off: when a document was dropped in a conversation.
+    pub documents: Vec<i64>,
+    /// Coût off: when an agent met a usage limit.
+    pub limits: Vec<i64>,
+    /// Overseer off: when agents waited for an answer on several projects at once, and on how many.
+    pub waiting: Vec<WaitingSeen>,
+    /// Tâches programmées off: the messages sent by hand, by their fingerprint, and when.
+    pub messages: Vec<MessageSeen>,
+    /// « Pas maintenant », feature by feature, and when: not the same one again for a week.
+    pub later: BTreeMap<Feature, i64>,
+    /// « Ne plus proposer »: never again, until Réglages › Fonctionnalités › « Propositions écartées » gives it back.
+    pub never: BTreeSet<Feature>,
+    /// When the last proposal was shown (ms): one a day at most.
+    pub last_shown: Option<i64>,
+}
+
+/// Agents waiting for an answer on `projects` projects at once, seen at `at` (ms).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitingSeen {
+    pub at: i64,
+    pub projects: u32,
+}
+
+/// A message sent by hand: its fingerprint (a hash of its words, never the text) and when (ms).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageSeen {
+    pub hash: String,
+    pub at: i64,
 }
 
 #[cfg(test)]

@@ -3477,6 +3477,8 @@ impl Core {
         let limited = fx.limited.is_some();
         if let Some(resets_at) = fx.limited {
             self.plan_resume(id, resets_at);
+            // A usage limit met, the Coût switched off: what a proposal at the right moment notices (F-3).
+            self.offer_note(crate::offers::Signal::UsageLimit);
         }
         if !fx.ops.is_empty() {
             self.emit_conv(id, fx.ops);

@@ -1756,8 +1756,12 @@ pub async fn send_message(
     attachments: Vec<Attachment>,
     files: Option<Vec<AttachedFile>>,
 ) -> Res<()> {
+    let files = files.unwrap_or_default();
+    // Sent by hand: what the proposals at the right moment notice of it, for the features that are off (F-3).
+    let names: Vec<String> = files.iter().map(|f| f.name.clone()).collect();
+    core.offer_note_message(&id, &text, &names);
     let r = core
-        .send_message_files(&id, text, attachments, files.unwrap_or_default())
+        .send_message_files(&id, text, attachments, files)
         .await
         .map_err(err);
     counted(&core, Event::MessageSent, r)
@@ -4313,6 +4317,31 @@ pub fn discover_act(
     microphones: Option<usize>,
 ) -> crate::discover::DiscoverView {
     core.discover_act(act, microphones)
+}
+
+/// The proposal of a feature switched off to show now, if any (F-3, ESC-558), for a client whose screen shows the agents
+/// `visible` (never during their turn); the proposals set apart for good. A client of the remote API shows its core's.
+#[tauri::command]
+pub async fn feature_offer(
+    core: CoreState<'_>,
+    visible: Option<Vec<String>>,
+) -> Res<crate::offers::OfferView> {
+    Ok(core.feature_offer(&visible.unwrap_or_default()).await)
+}
+
+/// A gesture on a proposal: shown, « Activer », « Pas maintenant », « Ne plus proposer », « Reproposer ».
+#[tauri::command(async)]
+pub fn feature_offer_act(
+    core: CoreState,
+    act: crate::offers::OfferAct,
+) -> Res<crate::offers::OfferView> {
+    core.feature_offer_act(act).map_err(err)
+}
+
+/// The proposals as they are, without one to show: those set apart for good (Réglages › Fonctionnalités).
+#[tauri::command(async)]
+pub fn feature_offers(core: CoreState) -> crate::offers::OfferView {
+    core.feature_offers()
 }
 
 /// The answer to « Statistiques d’usage », at the first start.

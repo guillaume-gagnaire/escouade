@@ -2,8 +2,8 @@
 title: "À découvrir"
 subject: "fenetre"
 sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-decouverte.png","design/onboarding-2-3/captures/c-decouverte-clair-1024.png"]
-tickets: ["ESC-503","ESC-505","ESC-506","ESC-512","ESC-550","ESC-507"]
-decisions: [200,215,223]
+tickets: ["ESC-503","ESC-505","ESC-506","ESC-512","ESC-550","ESC-507","ESC-558"]
+decisions: [200,215,223,276]
 compared: null
 ---
 
@@ -99,6 +99,10 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 ## Une fonctionnalité coupée (ESC-550)
 
 Les découvertes d'une fonctionnalité coupée (voir *Fonctionnalités*) quittent la carte, ses bulles et son compte : celles du Kanban (Écrire un ticket, Le pilote auto, Valider un ticket, Les sources de tickets), de l'Espace Docs (La spec et les décisions), de l'Éditeur (L'éditeur) et de la Voix (Dicter un message, Parler à un agent). Elles ne sont ni absentes ni écartées : elles ne sont pas là. Rallumée, la fonctionnalité les ramène ; une découverte faite revient cochée.
+
+## Avec les propositions des fonctionnalités coupées (ESC-558)
+
+Les propositions d'une fonctionnalité coupée au bon moment (voir *Fonctionnalités*) et les bulles au bon moment se partagent la session : **une seule chose au bon moment par session**, une bulle ou une proposition. **La bulle passe d'abord** : elle naît d'un geste fait à l'instant (le micro survolé, le premier ticket, une PR ouverte) et se perdrait sinon ; la proposition naît d'un signal gardé et peut attendre la session suivante. Une bulle à l'écran, ou déjà montrée dans la session : aucune proposition jusqu'au prochain démarrage. Une proposition montrée : plus aucune bulle au bon moment dans la session. La bulle posée par « Essayer » sur le vrai contrôle n'en est pas une : elle vient toujours.
 
 ## Ce que comptent les statistiques (ESC-507)
 

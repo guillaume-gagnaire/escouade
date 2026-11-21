@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537","ESC-550","ESC-530","ESC-567"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537","ESC-550","ESC-530","ESC-558","ESC-567"]
 decisions: [118,119,120,121,123,124,126,145,147,181,255]
 compared: null
 ---
@@ -218,6 +218,8 @@ Une page d'Escouade de plus, juste après Général : **« Fonctionnalités »**
 
 - Le registre a une rangée par fonctionnalité (`featureKanban`, `featureEditor`, `featureDocs`, `featureCost`, `featureStats`, `featureWorkflows`, `featureScheduled`, `featureOverseer`, `featureVoice`), qui règle la clé `features` des réglages ; `featuresUsed`, le relevé fait à la mise à jour, est au cœur seul.
 - **Une fonctionnalité coupée emporte ses pages et ses rangées** : la barre et la recherche n'ont plus Overseer (Overseer coupé), Voix (Voix coupée), ni pour un projet Kanban et Tickets importés (Kanban coupé). Dans les autres pages, ses rangées partent : « Taille du texte de l'éditeur », « Serveurs de langage » et « Extensions permises de l'éditeur » (Éditeur), « Économies du cache dans la barre d'état » (Coût), « Branche des docs » (Espace Docs), le groupe « Workflow » (Workflows).
+
+- **« Propositions écartées »** (ESC-558), en bas de la page Fonctionnalités : les fonctionnalités dont une proposition au bon moment a reçu « Ne plus proposer », chacune avec « Reproposer » (voir *Fonctionnalités*). Ce n'est pas une clé des réglages : c'est gardé dans `state.json`, avec la découverte, et le cœur le donne (`feature_offers`).
 
 ## Téléphone (ESC-567)
 

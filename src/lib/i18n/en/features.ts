@@ -58,4 +58,67 @@ export default defineZone('features', {
     needs: 'Goes with “{need}”: turn it on first.',
     foot: 'A feature turned off really disappears, and what it did in the background stops; its data are kept and come back when you turn it on again.',
   },
+  offer: {
+    label: 'Suggestion: {name}',
+    kicker: 'Feature turned off',
+    noticed: 'What Escouade noticed',
+    would: 'What it would do',
+    private: 'What Escouade notices stays on your machine.',
+    enable: 'Turn on',
+    later: 'Not now',
+    never: 'Don’t suggest again',
+    neverHint: 'You can bring it back in Settings › Features.',
+    signals: {
+      mcpTickets: {
+        one: '{count} ticket asked of the MCP server this week was refused: the Kanban is off.',
+        other: '{count} tickets asked of the MCP server this week were refused: the Kanban is off.',
+      },
+      longPrompts: {
+        one: 'You started {count} agent by hand this week, on a long instruction.',
+        other: 'You started {count} agents by hand this week, each on a long instruction.',
+      },
+      specEdits: {
+        one: 'The spec of “{project}” (SPEC.md, docs/) changed on {count} day in the last two weeks.',
+        other: 'The spec of “{project}” (SPEC.md, docs/) changed on {count} days in the last two weeks.',
+      },
+      documents: {
+        one: 'You dropped {count} document into a conversation in the last two weeks.',
+        other: 'You dropped {count} documents into the conversations in the last two weeks.',
+      },
+      usageLimit: {
+        one: 'An agent hit its usage limit this week.',
+        other: 'Agents hit their usage limit {count} times this week.',
+      },
+      agentFiles: {
+        one: '“{project}” has {count} skill, command or agent (.claude/, .agents/).',
+        other: '“{project}” has {count} skills, commands or agents (.claude/, .agents/).',
+      },
+      sameMessage: {
+        one: 'You send the same instruction by hand, at about the same time.',
+        other: 'You send the same instruction by hand at about the same time, {count} days in a row.',
+      },
+      waitingProjects: {
+        one: 'Agents were waiting for an answer on {count} project.',
+        other: 'Agents were waiting for your answer on {count} projects at once.',
+      },
+    },
+    does: {
+      kanban: 'The Kanban would make them tickets: each with its agent, worktree and criteria, started by the autopilot.',
+      editor: 'The editor would open the project’s files next to the agents.',
+      docs: 'The Docs space would hold the project’s spec, decisions and documents, which the agents read and cite.',
+      cost: 'Cost would show what turns, agents and tickets cost, and the cache temperature, so you see the limit coming.',
+      stats: 'Statistics would show the activity and spending over time.',
+      workflows: 'Workflows would read these chains and show the step each agent is at.',
+      scheduled: 'A scheduled task would send it for you, at a set time, as a ticket.',
+      overseer: 'The Overseer would watch every project at once and tell you who is waiting for you.',
+      voice: 'Voice would let you dictate your messages and talk to the agents.',
+    },
+  },
+  declined: {
+    title: 'Dismissed suggestions',
+    desc: 'What you chose never to be suggested again when it would help.',
+    none: 'None: Escouade may suggest a feature turned off when it would help, one at a time, one a day at most.',
+    restore: 'Suggest again',
+    restoreLabel: 'Suggest “{name}” again',
+  },
 });

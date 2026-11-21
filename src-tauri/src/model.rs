@@ -383,6 +383,9 @@ pub enum UiEvent {
     Teams {},
     /// A discovery of the features done by a fact of the core (ESC-506): the window reads it again (`discover_view`).
     DiscoverChanged {},
+    /// Something noticed or answered of the proposals at the right moment (F-3, ESC-558): the window asks again
+    /// (`feature_offer`).
+    FeatureOffer {},
     /// The download of the vectors' model (ESC-254): bytes so far, of `total`.
     VectorsDownload {
         done: u64,
