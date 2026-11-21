@@ -41,6 +41,17 @@ fn invalid(e: impl std::fmt::Display) -> Refusal {
     }
 }
 
+/// What every harness plugin of the first hand answers for an agent it does not know (ESC-562).
+fn not_attached(key: &str) -> Refusal {
+    Refusal {
+        code: -32602,
+        message: format!("no agent {key}: it was not attached"),
+    }
+}
+
+/// The file whose presence in the agent's folder makes it refuse the agent (ESC-562).
+const REFUSE: &str = "minimal-refuse-attach";
+
 fn read<T: DeserializeOwned>(params: Value) -> Result<T, Refusal> {
     serde_json::from_value(params).map_err(invalid)
 }
@@ -100,9 +111,24 @@ impl Plugin {
                 "escouade": escouade_plugin_protocol::greeting().map(|g| g.version.clone()).unwrap_or_default()
             })),
             method::LAUNCH => give(launch(read(params)?)?),
+            // The scenario « oubli » (ESC-562): it forgets every agent, as a plugin that started anew without them.
+            "minimal/forget" => {
+                self.agents.clear();
+                Ok(json!({}))
+            }
             method::ATTACH => {
                 let a: Attach = read(params)?;
-                self.agents.entry(a.agent).or_default().cwd = a.cwd;
+                // The scenario « refus » (ESC-562): an agent whose folder holds that file is refused.
+                let refuse = format!("{}/{REFUSE}", a.cwd.trim_end_matches(['/', '\\']));
+                if exists(&a.agent, &refuse) {
+                    return Err(Refusal {
+                        code: -32010,
+                        message: "Minimal refuses this agent, as its scenario asks".into(),
+                    });
+                }
+                let agent = self.agents.entry(a.agent.clone()).or_default();
+                agent.cwd = a.cwd;
+                agent.key = a.agent;
                 Ok(json!({}))
             }
             method::DETACH => {
@@ -112,8 +138,10 @@ impl Plugin {
             }
             method::FRAMES => {
                 let f: Frames = read(params)?;
-                let agent = self.agents.entry(f.agent.clone()).or_default();
-                agent.key = f.agent;
+                let agent = self
+                    .agents
+                    .get_mut(&f.agent)
+                    .ok_or_else(|| not_attached(&f.agent))?;
                 let mut items = Vec::new();
                 for line in &f.frames {
                     // A line that is no JSON is left aside, as the core leaves it today.
@@ -125,6 +153,9 @@ impl Plugin {
             }
             method::SEND_MESSAGE => {
                 let s: SendMessage = read(params)?;
+                if !self.agents.contains_key(&s.agent) {
+                    return Err(not_attached(&s.agent));
+                }
                 writes(vec![json!({ "say": s.text })])
             }
             method::INTERRUPT => writes(vec![json!({ "interrupt": true })]),

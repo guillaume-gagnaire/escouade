@@ -333,6 +333,159 @@ async fn a_plugin_stopped_after_its_crashes_stops_its_agents_and_says_why() {
     rt.shutdown();
 }
 
+/// The texts of a conversation, in order.
+fn texts_of(items: &[Value]) -> Vec<String> {
+    items
+        .iter()
+        .filter(|i| i["kind"] == "text")
+        .filter_map(|i| i["text"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// The notices of a conversation that say `what`.
+fn notices_saying(items: &[Value], what: &str) -> Vec<String> {
+    items
+        .iter()
+        .filter(|i| i["kind"] == "notice")
+        .filter_map(|i| i["text"].as_str())
+        .filter(|t| t.contains(what))
+        .map(str::to_string)
+        .collect()
+}
+
+/// What the core says when a plugin forgot an agent and did not take it back (`harness::forgot_line`).
+const FORGOT: &str = "a oublié cet agent";
+/// What it said for each batch before ESC-562.
+const UNTRANSLATED: &str = "n’a pas traduit";
+
+/// The plugin forgets its agent in the middle of a turn, as one started anew without it does (ESC-562): each batch it
+/// refuses (« no agent …: it was not attached ») gives it the agent again, then the batch once more; none is lost, and
+/// nothing is said.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_that_forgets_its_agent_mid_turn_is_given_it_again_and_no_batch_is_lost() {
+    let (rt, engine) = minimal("forget-mid-turn", 3);
+    let dir = bench_dir("esc562-forget-mid-turn");
+    let mut a = Agent::spawn_with(engine, &dir, |_| {});
+    a.proc().initialize().await.unwrap();
+    a.send("rythme 400");
+    a.until("its first lines", |a| texts_of(&a.items()).len() >= 20)
+        .await;
+    rt.call(ID, "minimal/forget", json!({})).await.unwrap();
+    a.until("the end of the turn", |a| !a.ends.is_empty()).await;
+    let items = a.items();
+    assert!(matches!(&a.ends[0], TurnEnd::Finished(_)), "{:?}", a.ends);
+    assert_eq!(texts_of(&items).len(), 400, "every line, once");
+    assert!(
+        notices_saying(&items, UNTRANSLATED).is_empty(),
+        "{items:#?}"
+    );
+    assert!(notices_saying(&items, FORGOT).is_empty(), "{items:#?}");
+    assert_eq!(rt.status(ID).restarts, 0);
+    assert!(a.proc().is_alive());
+    a.stop().await;
+    rt.shutdown();
+}
+
+/// A message to an agent its plugin forgot since its last turn (ESC-562): the call that writes it is refused, the agent
+/// given again, the call made once more, and the turn goes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_to_an_agent_its_plugin_forgot_gives_it_again_and_goes() {
+    let (rt, engine) = minimal("forget-send", 3);
+    let dir = bench_dir("esc562-forget-send");
+    let mut a = Agent::spawn_with(engine, &dir, |_| {});
+    a.proc().initialize().await.unwrap();
+    a.send("bonjour");
+    a.until("the first turn", |a| a.ends.len() == 1).await;
+    rt.call(ID, "minimal/forget", json!({})).await.unwrap();
+    a.send("encore");
+    a.until("the second turn", |a| a.ends.len() == 2).await;
+    assert!(
+        matches!(&a.ends[1], TurnEnd::Finished(t) if t.contains("tu as dit : encore")),
+        "{:?}",
+        a.ends
+    );
+    assert!(notices_saying(&a.items(), FORGOT).is_empty());
+    a.stop().await;
+    rt.shutdown();
+}
+
+/// The plugin forgets its agent in the middle of a turn and refuses it when it is given again (ESC-562): one line says
+/// why and what to do, never one a batch; its harness stops, its session kept, and the next start goes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_that_forgets_its_agent_and_refuses_it_again_says_so_once_and_the_harness_stops() {
+    let (rt, engine) = minimal("forget-refused", 3);
+    let dir = bench_dir("esc562-forget-refused");
+    let mut a = Agent::spawn_with(engine, &dir, |_| {});
+    a.proc().initialize().await.unwrap();
+    a.send("rythme 400");
+    a.until("its first lines", |a| texts_of(&a.items()).len() >= 20)
+        .await;
+    let refuse = dir.join("minimal-refuse-attach");
+    std::fs::write(&refuse, "").unwrap();
+    rt.call(ID, "minimal/forget", json!({})).await.unwrap();
+    a.until("the end of its process", |a| a.exit.is_some())
+        .await;
+    let items = a.items();
+    let said = notices_saying(&items, FORGOT);
+    assert_eq!(said.len(), 1, "once: {items:#?}");
+    assert!(said[0].contains("Minimal refuses this agent"), "{said:?}");
+    assert!(said[0].contains("Envoie-lui un message"), "{said:?}");
+    assert!(said[0].contains("Réglages › Plugins"), "{said:?}");
+    assert!(
+        notices_saying(&items, UNTRANSLATED).is_empty(),
+        "{items:#?}"
+    );
+    assert_eq!(
+        a.exit.as_deref(),
+        Some(said[0].as_str()),
+        "its end says the same"
+    );
+    assert!(!a.proc().is_alive());
+    // The next start: a new process, given to the plugin anew.
+    std::fs::remove_file(&refuse).unwrap();
+    let mut b = Agent::spawn_with(engine, &dir, |_| {});
+    b.proc().initialize().await.unwrap();
+    b.send("bonjour");
+    b.until("its turn", |b| b.ends.len() == 1).await;
+    assert!(matches!(&b.ends[0], TurnEnd::Finished(_)), "{:?}", b.ends);
+    b.stop().await;
+    rt.shutdown();
+}
+
+/// The plugin crashes and refuses the agent when its next instance is given it again (ESC-562): the agent is told, in
+/// its conversation and once, not only the plugin's journal.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_attach_refused_at_the_restart_of_its_plugin_is_said_on_the_agent() {
+    let (rt, engine) = minimal("refused-restart", 3);
+    let dir = bench_dir("esc562-refused-restart");
+    let mut a = Agent::spawn_with(engine, &dir, |_| {});
+    a.proc().initialize().await.unwrap();
+    a.send("bonjour");
+    a.until("the first turn", |a| a.ends.len() == 1).await;
+    let refuse = dir.join("minimal-refuse-attach");
+    std::fs::write(&refuse, "").unwrap();
+    rt.crash_instance(ID);
+    a.until("the end of its process", |a| a.exit.is_some())
+        .await;
+    let items = a.items();
+    let said = notices_saying(&items, FORGOT);
+    assert_eq!(said.len(), 1, "once: {items:#?}");
+    assert!(said[0].contains("Minimal refuses this agent"), "{said:?}");
+    assert!(
+        rt.journal(ID)
+            .iter()
+            .any(|e| e.text.contains("given again")),
+        "and its journal"
+    );
+    std::fs::remove_file(&refuse).unwrap();
+    let mut b = Agent::spawn_with(engine, &dir, |_| {});
+    b.proc().initialize().await.unwrap();
+    b.send("bonjour");
+    b.until("its turn", |b| b.ends.len() == 1).await;
+    b.stop().await;
+    rt.shutdown();
+}
+
 /// A launch of a private project's agent, given Escouade's server, in a discussion (read-only): the plugin spells the
 /// fence and read-only, the token in a variable, and the core lets it start.
 #[tokio::test(flavor = "multi_thread")]

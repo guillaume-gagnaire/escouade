@@ -6,6 +6,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Un agent dont le plugin a redémarré sans lui (plugin mis à jour, langue changée) reprend son tour sans rien perdre, au lieu de remplir sa conversation d’avertissements. Si le plugin refuse de le reprendre, une seule ligne le dit, avec quoi faire, et un message le relance.
+
 - Claude Code : le plugin a un réglage « Fonctionnalités expérimentales », pour tous les projets puis par projet, qui allume le Code Mode, les Agent Teams ou d’autres drapeaux `CLAUDE_CODE_EXPERIMENTAL_*` dans la vue terminal. Un agent passé en Code Mode le dit et reste dans son terminal, seul endroit où Claude Code le reprend.
 - Une image jointe au message, ou au formulaire d’un ticket, s’agrandit d’un clic sur sa vignette, avant l’envoi : elle s’ouvre dans la visionneuse de la conversation, avec les autres images du message.
 - Projets privés : réserver un compte qui laisserait tes autres projets sans compte demande d’abord, en disant lesquels, et propose d’ajouter un compte réservé à la place ; « Partager à nouveau » le leur rend en un clic. Un compte partagé n’est plus présenté comme une alerte : les sessions du projet privé y restent refusées aux agents des autres projets, et ce qui reste commun est dit.

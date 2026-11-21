@@ -6,6 +6,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- An agent whose plugin started again without it (the plugin updated, the language changed) goes on with its turn and loses nothing, instead of filling its conversation with warnings. If the plugin refuses to take it back, a single line says so, with what to do, and a message starts it again.
+
 - Claude Code: the plugin has an “Experimental features” setting, for every project then by project, that turns on Code Mode, Agent Teams or other `CLAUDE_CODE_EXPERIMENTAL_*` flags in the terminal view. An agent in Code Mode says so and stays in its terminal, the only place Claude Code resumes it.
 - An image attached to a message, or to a ticket’s form, now opens full size with a click on its thumbnail before it is sent: it shows in the conversation’s viewer, with the message’s other images.
 - Private projects: reserving an account that would leave your other projects without one asks first, naming them, and offers to add a reserved account instead; “Share again” gives it back to them in one click. A shared account is no longer shown as a warning: the private project’s sessions stay refused there to the other projects’ agents, and what stays common is said.

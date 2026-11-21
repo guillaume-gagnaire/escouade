@@ -1,9 +1,9 @@
 ---
 title: "Le contrat des harness en process"
 subject: "plugins"
-sources: ["docs/PLUGINS-DESIGN.md §4.5 et §4.6","docs/PLUGINS-DESIGN.md §8.29 (ESC-352)","docs/PLUGINS-DESIGN.md §8.34 (ESC-359)","docs/PLUGINS.md §2.2 et §8","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","crates/escouade-acp/src/terminal.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs","src-tauri/src/tui.rs","Revue de dev.escouade.copilot-cli@2.2.5 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.7 (~/.escouade-review)","Essai de cmd sous Windows 11, ESC-430 (2026-11-12)"]
-tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362","ESC-359","ESC-430","ESC-433"]
-decisions: [34,68,101,146]
+sources: ["docs/PLUGINS-DESIGN.md §4.5 et §4.6","docs/PLUGINS-DESIGN.md §8.29 (ESC-352)","docs/PLUGINS-DESIGN.md §8.34 (ESC-359)","docs/PLUGINS.md §2.2 et §8","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","crates/escouade-acp/src/terminal.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs","src-tauri/src/tui.rs","crates/escouade-plugins/src/runtime.rs","Revue de dev.escouade.copilot-cli@2.2.5 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.7 (~/.escouade-review)","Essai de cmd sous Windows 11, ESC-430 (2026-11-12)","Capture de l'utilisateur, conversation d'un agent Claude Code (ESC-562, 2026-11-20)"]
+tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362","ESC-359","ESC-430","ESC-433","ESC-562"]
+decisions: [34,68,101,146,"un-agent-oublie-par-son-plugin-est-ratta"]
 compared: null
 ---
 
@@ -136,3 +136,12 @@ Trouvé à la relecture de Copilot CLI 2.2.5 et d'Antigravity CLI 2.2.7 ; le cœ
 
 - **Un dossier entier en tête du `PATH`** (ESC-433). Le dossier d'`escouade-hook` ne va en tête du `PATH` d'une interface que s'il est entier : un lecteur et sa racine (`C:\`, jamais `C:`, le dossier courant de ce lecteur) ou un partage (`\\hôte\partage`), sans `;` ni `"`, qui le couperaient ou en feraient un autre. Sinon le `PATH` reste tel quel : un dossier qui n'est pas entier remettrait un dossier courant devant (escouade-acp 0.1.6 `path_first`, pour Gemini CLI et Mistral Vibe ; Antigravity CLI a le même garde).
 - **Le jeton des hooks reste dans l'environnement** (ESC-433). Les commandes d'une interface héritent d'`ESCOUADE_HOOK_TOKEN`, que le cœur pose : Copilot CLI retire à ses hooks aussi une variable de `--secret-env-vars` (essayé sur 1.0.98), et sans sandbox, tout ce qu'`escouade-hook` lit, une commande de l'agent peut le lire. Ce jeton ne sert qu'à dire l'état de cet agent.
+
+## Un plugin qui a oublié un agent (ESC-562)
+
+Un plugin oublie un agent qui vit quand son instance repart sans lui : plugin mis à jour ou réinstallé, permission retirée ou redonnée, langue changée. Avant, l'agent n'était rattaché que s'il trouvait le plugin au repos. Si un autre appelant le redémarrait d'abord (un autre agent du même plugin, la lecture d'un quota, une vue), l'agent restait « not attached » jusqu'au bout, avec un avertissement par lot dans sa conversation.
+
+- **L'instance suivante connaît les agents.** Un plugin oublié garde pour son instance suivante les agents qui lui étaient attachés et leurs dossiers. Elle les reçoit avant toute autre chose, quel que soit celui qui la démarre. Un agent qui finit entre-temps en est retiré.
+- **Une réponse « non attaché » se répare seule.** Un plugin peut répondre `-32602` et `no agent <clé>: it was not attached`, comme le font tous les plugins de harness de première main. Le cœur lui redonne alors l'agent, puis refait le même appel une fois. Cela vaut pour un lot du harness (`agent/frames`), un message, une interruption, un changement de modèle, d'effort ou de mode, une réponse à une carte, le quota, un titre et une commande. Aucun lot n'est perdu et rien n'est dit. Le protocole ne change pas : les plugins publiés en profitent tels quels.
+- **Un rattachement refusé se dit une fois.** Le plugin peut refuser l'agent qu'on lui redonne, ou ne pas répondre. La conversation le dit alors en une seule ligne : « Le plugin de <harness> a oublié cet agent et ne l'a pas repris (<raison>) : l'agent s'arrête, sa session est gardée. Envoie-lui un message pour le relancer ; si ça recommence, relance le plugin dans Réglages › Plugins. ». Le harness s'arrête et le tour finit en erreur sur cette ligne, sans la redire. Le message suivant relance l'agent, qui est donné au plugin à neuf.
+- **Un attach refusé au redémarrage d'un plugin**, après un plantage, se dit de même sur l'agent concerné, après un nouvel essai. Il ne reste plus seulement dans le journal du plugin.

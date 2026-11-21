@@ -113,6 +113,8 @@ mod folders;
 #[cfg(test)]
 mod folders_tests;
 mod forge;
+#[cfg(test)]
+mod forgotten_tests;
 mod fsedit;
 #[cfg(test)]
 mod gemini_tui_tests;

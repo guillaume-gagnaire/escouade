@@ -364,6 +364,11 @@ pub struct Runtime {
     /// Who listens to the notifications a plugin sends beyond `log` (`on_notification`): the voice services' text and
     /// sound while they work (INT-13).
     listeners: Mutex<HashMap<String, Listener>>,
+    /// Who hears of an agent its plugin refused when it was given again after a restart (`on_attach_refused`).
+    attach_refused: parking_lot::RwLock<Option<AttachRefused>>,
+    /// What a plugin forgotten (`forget`) had attached, and the places of its agents: its next host is given them
+    /// (ESC-562).
+    kept: Mutex<HashMap<String, Kept>>,
     /// The modules of the `run.js` plugins, in the app's cache (ESC-320).
     modules: Arc<super::wasm::Modules>,
     /// What the tests change of `net/fetch`'s network.
@@ -434,11 +439,27 @@ impl Drop for Trial {
 /// What listens to a plugin's notifications.
 type Listener = Arc<dyn Fn(&str, Value) + Send + Sync>;
 
+/// Who hears of an attach refused when it was given again: the plugin, the key, why.
+type AttachRefused = Arc<dyn Fn(&str, &str, &CallError) + Send + Sync>;
+
+/// What a forgotten host held of its agents, for the next one.
+struct Kept {
+    attached: BTreeMap<String, (String, Box<RawValue>)>,
+    agents: super::files::Agents,
+}
+
 impl Runtime {
     /// Listens to the notifications of the plugin `id` (but `log`), in place of the one before. The listener runs on
     /// the thread that reads the plugin's output, in the order the plugin wrote: it must not wait.
     pub fn on_notification(&self, id: &str, f: impl Fn(&str, Value) + Send + Sync + 'static) {
         self.listeners.lock().insert(id.to_string(), Arc::new(f));
+    }
+
+    /// Hears of every attach a plugin refused when it was given again, after a restart of its instance (its answer an
+    /// error, none in time, or none it could read), in place of the one before: the plugin, the agent's key and why
+    /// (ESC-562). It runs on the start of the instance: it must not wait.
+    pub fn on_attach_refused(&self, f: impl Fn(&str, &str, &CallError) + Send + Sync + 'static) {
+        *self.attach_refused.write() = Some(Arc::new(f));
     }
 
     /// What the account `key` (`accounts::budget_key`) has left of its calls, as last said.
@@ -594,6 +615,8 @@ impl Runtime {
             journals: Mutex::new(HashMap::new()),
             budgets: Mutex::new(HashMap::new()),
             listeners: Mutex::new(HashMap::new()),
+            attach_refused: parking_lot::RwLock::new(None),
+            kept: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
             place: parking_lot::RwLock::new(None),
             modules: Arc::new(super::wasm::Modules::new(data, app_version)),
@@ -706,6 +729,12 @@ impl Runtime {
             return Ok(h.clone());
         }
         let (folder, manifest, built) = self.runnable(id)?;
+        // A plugin forgotten while its agents live: its next instance knows them, whoever starts it (ESC-562).
+        let kept = self.kept.lock().remove(id);
+        let (attached, agents) = match kept {
+            Some(k) => (k.attached, k.agents),
+            None => (BTreeMap::new(), Arc::default()),
+        };
         let host = Arc::new(Host {
             id: id.to_string(),
             folder,
@@ -718,20 +747,34 @@ impl Runtime {
                 generation: 0,
                 restarts: VecDeque::new(),
                 queue: VecDeque::new(),
-                attached: BTreeMap::new(),
+                attached,
                 capabilities: Value::Null,
             }),
             pending: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             journal: self.journal_of(id),
-            agents: Arc::default(),
+            agents,
         });
-        Ok(self
+        let made = self
             .hosts
             .lock()
             .entry(id.to_string())
-            .or_insert(host)
-            .clone())
+            .or_insert(host.clone())
+            .clone();
+        // Another caller made it meanwhile: what this one took of the forgotten host goes to it.
+        if !Arc::ptr_eq(&made, &host) {
+            let attached = std::mem::take(&mut host.inner.lock().attached);
+            let mut inner = made.inner.lock();
+            for (key, a) in attached {
+                inner.attached.entry(key).or_insert(a);
+            }
+            let places = std::mem::take(&mut *host.agents.lock());
+            let mut agents = made.agents.lock();
+            for (key, p) in places {
+                agents.entry(key).or_insert(p);
+            }
+        }
+        Ok(made)
     }
 
     /// Why the plugin `id` cannot run now (switched off, not installed, not loaded, the app quitting), if it cannot;
@@ -901,6 +944,18 @@ impl Runtime {
             }
             return;
         };
+        // Its agents live on: the next host is given them, before anything else, whoever starts it (ESC-562). Their
+        // core takes them back once they end (`detach`).
+        let attached = std::mem::take(&mut h.inner.lock().attached);
+        if !attached.is_empty() {
+            self.kept.lock().insert(
+                id.to_string(),
+                Kept {
+                    attached,
+                    agents: h.agents.clone(),
+                },
+            );
+        }
         let idle = {
             let inner = h.inner.lock();
             inner.conn.is_none() && matches!(inner.phase, Phase::Idle | Phase::Stopped(_))
@@ -1087,6 +1142,10 @@ impl Runtime {
         if let Some(h) = self.hosts.lock().get(id) {
             h.inner.lock().attached.remove(key);
             h.agents.lock().remove(key);
+        }
+        if let Some(k) = self.kept.lock().get_mut(id) {
+            k.attached.remove(key);
+            k.agents.lock().remove(key);
         }
     }
 
@@ -1449,15 +1508,31 @@ impl Host {
             Kind::Ready,
             format!("initialized: protocol {PROTOCOL}, capabilities {capabilities}"),
         );
-        let attached: Vec<(String, Box<RawValue>)> =
-            self.inner.lock().attached.values().cloned().collect();
-        for (method, params) in attached {
+        let attached: Vec<(String, (String, Box<RawValue>))> = self
+            .inner
+            .lock()
+            .attached
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        for (key, (method, params)) in attached {
             if let Err(e) = self
                 .call_on(&conn, &method, &params, timeout_of(&method))
                 .await
             {
                 self.journal
                     .push(Kind::Refused, format!("{method} given again: {e}"));
+                // Refused, or no answer it could use: its agent is told (ESC-562). An end of the instance meanwhile
+                // gives it again at the next start.
+                if matches!(
+                    e,
+                    CallError::Remote { .. } | CallError::Timeout | CallError::Invalid(_)
+                ) {
+                    let heard = rt.attach_refused.read().clone();
+                    if let Some(f) = heard {
+                        f(&self.id, &key, &e);
+                    }
+                }
             }
         }
         let mut inner = self.inner.lock();

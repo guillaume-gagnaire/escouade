@@ -5,7 +5,8 @@
 // `initialize` answers protocol version 1, the one of `--protocol <n>`, or the one it is offered with
 // `--protocol echo`; `--ignore-initialize` never answers it, `--ignore-shutdown` never answers
 // `shutdown` (else it answers, and nothing more is handed to it).
-// `echo` gives its params back, `frames` counts the frames it was given, `attach` keeps its `key`,
+// `echo` gives its params back, `frames` counts the frames it was given, `attach` keeps its `key` (one that starts with
+// `refused` is refused, each time: ESC-562),
 // `test/state` says what it holds; a decision (`permissions/decide`) is answered `ask`, or as
 // `--decide allow|deny|ask|silent|crash` says (a refusal with `--decide-message <m>`; `silent` never answers, as
 // `--silent-decisions` does, so that its default applies; `crash` fails the instance), each request kept for
@@ -111,6 +112,7 @@ function handle(msg) {
     case 'frames':
       return ok(id, { count: (params.frames ?? []).length });
     case 'attach':
+      if (String(params.key).startsWith('refused')) return fail(id, -32010, `${params.key} is refused`);
       attached.push(params.key);
       return ok(id, { attached: attached.length });
     case 'test/state':

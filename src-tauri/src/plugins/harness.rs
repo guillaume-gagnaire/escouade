@@ -91,6 +91,43 @@ const SESSION_WITHIN: Duration = Duration::from_secs(180);
 /// How many times a call is given again to a plugin that crashed before it answered.
 const RETRIES: usize = 8;
 
+/// What every harness plugin of the first hand answers for an agent it does not know: `-32602` and
+/// `no agent <key>: it was not attached` (ESC-562). The core gives it the agent again, then the same call.
+const NOT_ATTACHED: &str = "it was not attached";
+
+/// The plugin answered that it does not know the agent (`NOT_ATTACHED`).
+fn forgotten(e: &CallError) -> bool {
+    matches!(e, CallError::Remote { code: -32602, message } if message.contains(NOT_ATTACHED))
+}
+
+/// Why a call of an agent did not go through.
+enum Lost {
+    /// Its plugin is stopped (or switched off, uninstalled, the app quitting).
+    Stopped(CallError),
+    /// Its plugin forgot it and did not take it back (ESC-562).
+    Forgot(CallError),
+    /// Another error of the call.
+    Failed(CallError),
+}
+
+impl Lost {
+    /// What a rejoin that failed means.
+    fn of_rejoin(e: CallError) -> Self {
+        match e {
+            CallError::Stopped(_) | CallError::Unavailable(_) => Lost::Stopped(e),
+            e => Lost::Forgot(e),
+        }
+    }
+}
+
+/// What the agent's conversation says once when its plugin forgot it and did not take it back (ESC-562).
+fn forgot_line(name: &str, e: &CallError) -> String {
+    tr!(
+        "Le plugin de {name} a oublié cet agent et ne l’a pas repris ({e}) : l’agent s’arrête, sa session est gardée. Envoie-lui un message pour le relancer ; si ça recommence, relance le plugin dans Réglages › Plugins.",
+        "The plugin of {name} forgot this agent and did not take it back ({e}): the agent stops, its session kept. Send it a message to start it again; if it happens again, start the plugin again in Settings › Plugins."
+    )
+}
+
 // What a manifest declares of its harnesses, in `escouade-plugins`.
 pub use escouade_plugins::described::harnesses_of;
 
@@ -1554,6 +1591,7 @@ impl Engine for ProcessEngine {
             paused: AtomicBool::new(false),
             opened: watch::channel(None).0,
             refused: Mutex::new(None),
+            forgot: AtomicBool::new(false),
             compacting: Mutex::new(None),
             reading: Mutex::new(None),
             me: std::sync::OnceLock::new(),
@@ -1672,8 +1710,10 @@ pub struct ProcessEngineProcess {
     paused: AtomicBool,
     /// What `Item::Ready` said (the models of the account), or why it will not come.
     opened: watch::Sender<Option<std::result::Result<Value, String>>>,
-    /// Why its plugin stopped its harness (`Item::Stop`).
+    /// Why its plugin stopped its harness (`Item::Stop`), or why the core did (its plugin forgot it, ESC-562).
     refused: Mutex<Option<String>>,
+    /// Its plugin forgot it and did not take it back: said once (ESC-562).
+    forgot: AtomicBool,
     /// Who waits for the end of a compaction (`Item::Compacted`), and for the quota it asked (`Item::Usage`).
     compacting: Mutex<Option<oneshot::Sender<Result<bool>>>>,
     reading: Mutex<Option<oneshot::Sender<Value>>>,
@@ -1822,6 +1862,33 @@ fn told(params: &Value) {
     if let Some(on_frame) = on_frame {
         p.deliver(items.clone(), &on_frame);
     }
+}
+
+/// Its plugin refused the agent `key` when it was given it again, after a restart (ESC-562): the agent tries once more,
+/// and says why it stops if that fails too.
+fn refused_again(key: &str, why: &CallError) {
+    let p = TOLD
+        .lock()
+        .iter()
+        .find(|(k, _)| k == key)
+        .and_then(|(_, p)| p.upgrade());
+    let (Some(p), Ok(rt)) = (p, tokio::runtime::Handle::try_current()) else {
+        return;
+    };
+    let why = why.clone();
+    rt.spawn(async move {
+        match p.rejoin().await {
+            Ok(()) => log::info!(
+                "{}: refused when given again ({why}), taken at the next try",
+                p.key
+            ),
+            // Its plugin stopped: its stop says why.
+            Err(CallError::Stopped(_) | CallError::Unavailable(_)) => {}
+            Err(e) => {
+                p.lost(&e);
+            }
+        }
+    });
 }
 
 /// Where its conversation starts from, in the contract's words.
@@ -1999,9 +2066,86 @@ impl ProcessEngineProcess {
         }
     }
 
-    /// Calls `method`, given again after a crash; writes its `writes` to the harness.
+    /// Gives the agent again to a plugin that forgot it (ESC-562), once it is up: Err when it does not take it, why.
+    async fn rejoin(&self) -> std::result::Result<(), CallError> {
+        log::info!("{}: its plugin does not know it: given again", self.key);
+        for _ in 0..RETRIES {
+            match self
+                .rt
+                .attach(
+                    &self.plugin,
+                    &self.key,
+                    method::ATTACH,
+                    self.attach_params(),
+                )
+                .await
+            {
+                Ok(_) => return Ok(()),
+                Err(CallError::Crashed | CallError::Dropped) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Err(CallError::Crashed)
+    }
+
+    /// Its plugin forgot it and did not take it back (ESC-562): said once in its conversation, with why and what to do,
+    /// and its harness stopped, its session kept; the next message starts it anew, given to its plugin again. The line.
+    fn lost(&self, e: &CallError) -> String {
+        let line = forgot_line(self.name, e);
+        if !self.forgot.swap(true, Ordering::AcqRel) {
+            log::warn!(
+                "{}: its plugin forgot it and did not take it back: {e}",
+                self.key
+            );
+            let told = self.told.lock().clone();
+            if let Some(on_frame) = told {
+                on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": line }] }));
+            }
+            // What its end says: the line already said, not twice (`AgentRt::on_exit`).
+            *self.refused.lock() = Some(line.clone());
+            self.kill();
+        }
+        line
+    }
+
+    /// The error a caller sees of a call that did not go through.
+    fn told_lost(&self, l: Lost) -> anyhow::Error {
+        match l {
+            Lost::Forgot(e) => anyhow!(self.lost(&e)),
+            Lost::Stopped(e) | Lost::Failed(e) => down(self.name, e),
+        }
+    }
+
+    /// Calls `method` within `within`; a plugin that forgot the agent is given it again, then the call once more.
+    async fn call_again(
+        &self,
+        method: &str,
+        params: Value,
+        within: Duration,
+    ) -> std::result::Result<Value, Lost> {
+        let mut rejoined = false;
+        loop {
+            match self
+                .rt
+                .call_within(&self.plugin, method, params.clone(), within)
+                .await
+            {
+                Ok(v) => return Ok(v),
+                Err(e) if forgotten(&e) && !rejoined => {
+                    rejoined = true;
+                    self.rejoin().await.map_err(Lost::of_rejoin)?;
+                }
+                Err(e) if forgotten(&e) => return Err(Lost::Forgot(e)),
+                Err(e) => return Err(Lost::Failed(e)),
+            }
+        }
+    }
+
+    /// Calls `method`, given again after a crash, and once more to a plugin that forgot the agent once it is given it
+    /// again (ESC-562); writes its `writes` to the harness.
     async fn call_writing(&self, method: &str, params: Value) -> Result<Called> {
         self.known().await.map_err(|e| down(self.name, e))?;
+        let mut rejoined = false;
         for _ in 0..RETRIES {
             match self.rt.call(&self.plugin, method, params.clone()).await {
                 Ok(v) => {
@@ -2016,6 +2160,13 @@ impl ProcessEngineProcess {
                 Err(CallError::Crashed | CallError::Dropped) => {
                     self.reattach().await.map_err(|e| down(self.name, e))?;
                 }
+                Err(e) if forgotten(&e) && !rejoined => {
+                    rejoined = true;
+                    if let Err(e) = self.rejoin().await {
+                        return Err(self.told_lost(Lost::of_rejoin(e)));
+                    }
+                }
+                Err(e) if forgotten(&e) => return Err(self.told_lost(Lost::Forgot(e))),
                 Err(e) => return Err(down(self.name, e)),
             }
         }
@@ -2271,6 +2422,8 @@ impl ProcessEngineProcess {
                 told(&params);
             }
         });
+        self.rt
+            .on_attach_refused(|_, key, why| refused_again(key, why));
     }
 
     /// Its launch failed: why.
@@ -2432,7 +2585,7 @@ impl ProcessEngineProcess {
                     if let Some(why) = off(&self) {
                         break (None, why);
                     }
-                    break (Some(0), String::new());
+                    break (Some(0), self.refused.lock().take().unwrap_or_default());
                 }
                 _ = watch.tick() => {
                     let status = self.rt.status(&self.plugin);
@@ -2827,35 +2980,41 @@ impl ProcessEngineProcess {
             if stopped.is_some() {
                 continue;
             }
-            if let Err(e) = self.translate_batch(batch, on_frame).await {
-                let why = stop_told(self.name, &e);
-                if let Some(why) = &why {
-                    on_frame(
-                        json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }),
-                    );
+            match self.translate_batch(batch, on_frame).await {
+                Ok(()) => {}
+                // Said once, its harness stopped (`lost`).
+                Err(Lost::Forgot(e)) => stopped = Some(self.lost(&e)),
+                Err(Lost::Stopped(e) | Lost::Failed(e)) => {
+                    let why = stop_told(self.name, &e);
+                    if let Some(why) = &why {
+                        on_frame(
+                            json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }),
+                        );
+                    }
+                    self.kill();
+                    stopped = Some(why.unwrap_or_default());
                 }
-                self.kill();
-                stopped = Some(why.unwrap_or_default());
             }
         }
         stopped
     }
 
-    /// One batch, given to the plugin until it answers (again after a crash); its items applied. Err: why the plugin
-    /// is stopped.
+    /// One batch, given to the plugin until it answers (again after a crash, and once more to a plugin that forgot the
+    /// agent once it is given it again, ESC-562); its items applied. Err: why the agent stops.
     async fn translate_batch(
         &self,
         batch: Vec<String>,
         on_frame: &OnFrame,
-    ) -> std::result::Result<(), CallError> {
+    ) -> std::result::Result<(), Lost> {
         let params = serde_json::value::to_raw_value(&proto::Frames {
             agent: self.key.clone(),
             frames: batch,
         })
-        .map_err(|e| CallError::Unavailable(e.to_string()))?;
+        .map_err(|e| Lost::Failed(CallError::Invalid(e.to_string())))?;
         let name = self.name;
         let mut told = false;
-        self.known().await?;
+        let mut rejoined = false;
+        self.known().await.map_err(Lost::Stopped)?;
         for _ in 0..RETRIES {
             match self
                 .rt
@@ -2881,9 +3040,15 @@ impl ProcessEngineProcess {
                             json!({ "items": [{ "op": "notice", "level": "warning", "text": text }] }),
                         );
                     }
-                    self.reattach().await?;
+                    self.reattach().await.map_err(Lost::Stopped)?;
                 }
-                Err(e @ CallError::Stopped(_)) => return Err(e),
+                Err(e @ CallError::Stopped(_)) => return Err(Lost::Stopped(e)),
+                // It does not know the agent any more: given it again, then the same batch once more.
+                Err(e) if forgotten(&e) && !rejoined => {
+                    rejoined = true;
+                    self.rejoin().await.map_err(Lost::of_rejoin)?;
+                }
+                Err(e) if forgotten(&e) => return Err(Lost::Forgot(e)),
                 Err(e) => {
                     let n = params.get().len();
                     log::warn!("{}: a batch of {n} bytes left untranslated: {e}", self.key);
@@ -2898,7 +3063,7 @@ impl ProcessEngineProcess {
                 }
             }
         }
-        Err(CallError::Crashed)
+        Err(Lost::Stopped(CallError::Crashed))
     }
 
     /// The items of a batch: its writes to the harness, what the plugin is to be told again after a restart, the rest
@@ -3399,14 +3564,13 @@ impl EngineProcess for ProcessEngineProcess {
             *self.reading.lock() = Some(tx);
             self.known().await.map_err(|e| down(self.name, e))?;
             let v = self
-                .rt
-                .call(
-                    &self.plugin,
+                .call_again(
                     method::READ_USAGE,
                     json!({ "agent": self.key }),
+                    super::runtime::timeout_of(method::READ_USAGE),
                 )
                 .await
-                .map_err(|e| down(self.name, e))?;
+                .map_err(|l| self.told_lost(l))?;
             // To be asked of the harness (`UsageAsked`): what it says comes back with its frames.
             if let Ok(asked) = serde_json::from_value::<proto::UsageAsked>(v.clone()) {
                 if !asked.writes.is_empty() {
@@ -3433,13 +3597,7 @@ impl EngineProcess for ProcessEngineProcess {
             };
             self.known().await.map_err(|e| down(self.name, e))?;
             match self
-                .rt
-                .call_within(
-                    &self.plugin,
-                    method::RENAME,
-                    serde_json::to_value(v)?,
-                    REQUEST_WITHIN,
-                )
+                .call_again(method::RENAME, serde_json::to_value(v)?, REQUEST_WITHIN)
                 .await
             {
                 // A harness told through its input (`Writes`), or by the plugin itself (none).
@@ -3447,10 +3605,12 @@ impl EngineProcess for ProcessEngineProcess {
                     Called::Asked(rx) => answer_of(rx, RENAME_WITHIN).await.map(drop),
                     Called::Over(_) => Ok(()),
                 },
-                Err(CallError::Remote { code, .. }) if code == super::runtime::METHOD_NOT_FOUND => {
+                Err(Lost::Failed(CallError::Remote { code, .. }))
+                    if code == super::runtime::METHOD_NOT_FOUND =>
+                {
                     Ok(())
                 }
-                Err(e) => Err(down(self.name, e)),
+                Err(l) => Err(self.told_lost(l)),
             }
         })
     }
@@ -3552,15 +3712,13 @@ impl EngineProcess for ProcessEngineProcess {
             };
             self.known().await.map_err(|e| down(self.name, e))?;
             let v = self
-                .rt
-                .call_within(
-                    &self.plugin,
+                .call_again(
                     method::CONTROL,
                     serde_json::to_value(c)?,
                     timeout + Duration::from_secs(1),
                 )
                 .await
-                .map_err(|e| down(self.name, e))?;
+                .map_err(|l| self.told_lost(l))?;
             match self.asking(v) {
                 Called::Asked(rx) => answer_of(rx, timeout).await,
                 Called::Over(v) => Ok(v),
