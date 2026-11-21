@@ -707,7 +707,10 @@ export const settingsNav = (where: Page | Locator) => where.getByRole('dialog', 
 /** An entry of the bar of the settings: a page by its name (« À propos », « Comptes et harness »), or a project. */
 export function settingsEntry(where: Page | Locator, name: string | RegExp) {
   const nav = 'goto' in where ? settingsNav(where) : where.getByRole('navigation');
-  return nav.getByRole('button', typeof name === 'string' ? { name, exact: true } : { name });
+  const entry = nav.getByRole('button', typeof name === 'string' ? { name, exact: true } : { name });
+  // A project's page can bear the name of a page for all (« Plugins » of a project, once a plugin has settings by
+  // project, ESC-553): a name that is not a project's page is the page for all, never a project's (`.sub`).
+  return typeof name === 'string' && PROJECT_PAGES.has(name) ? entry : entry.and(nav.locator('button:not(.sub)'));
 }
 
 /**
