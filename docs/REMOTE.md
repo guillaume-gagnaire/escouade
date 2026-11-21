@@ -1049,6 +1049,7 @@ C'est déjà le principe du mode serveur plus haut : les agents, leurs harness e
 - **Les ressources** : la mémoire d'un agent et de son harness au repos et en tour, pour dimensionner un VPS (par exemple combien d'agents tiennent sur 4 Go). Le disque des worktrees.
 - **La connexion des harness sur le serveur**, sans navigateur sur place : un code d'appareil, ou une adresse ouverte sur le poste. C'est déjà dans les tâches du mode serveur.
 - **Avec le serveur d'équipe** (`docs/TODO-2.3.md`) : une machine en mode serveur est un appareil de l'équipe comme un autre. Elle détient les clés de l'équipe pour lire le Kanban, la spec et la mémoire de ses projets, et l'équipe peut la retirer comme on retire un membre.
+- **Un réseau privé** (ESC-551, 2026-11-20) : des agents du serveur qui joignent un git, un registre ou une API derrière le VPN d'une entreprise ; l'étude est [`PRIVATE-NETWORK.md`](PRIVATE-NETWORK.md) (le serveur dans l'entreprise, ou `escouade-connector` et une sortie bornée à une liste d'hôtes), ses choix R1 à R12 restent à trancher.
 - **L'isolement** : les agents d'un serveur partagé par plusieurs personnes tournent avec les droits du compte du service. Un utilisateur système par membre, ou un conteneur par projet, est à étudier avant d'ouvrir un serveur à plusieurs.
 
 ### L'app mobile
