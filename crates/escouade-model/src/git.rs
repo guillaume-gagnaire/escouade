@@ -177,9 +177,24 @@ pub async fn run_net_english(cwd: &str, args: &[&str], background: bool) -> Resu
 }
 
 pub async fn run_net_command(
+    cmd: tokio::process::Command,
+    args: &[&str],
+    background: bool,
+) -> Result<Vec<u8>> {
+    let limit = if background {
+        NET_TIMEOUT_BACKGROUND
+    } else {
+        NET_TIMEOUT
+    };
+    run_net_command_within(cmd, args, background, limit).await
+}
+
+/// `run_net_command` within `limit` (the background fetch's own, ESC-561).
+pub async fn run_net_command_within(
     mut cmd: tokio::process::Command,
     args: &[&str],
     background: bool,
+    limit: Duration,
 ) -> Result<Vec<u8>> {
     cmd.kill_on_drop(true);
     if background {
@@ -191,11 +206,6 @@ pub async fn run_net_command(
         crate::job::Job::for_child(&child)
     } else {
         None
-    };
-    let limit = if background {
-        NET_TIMEOUT_BACKGROUND
-    } else {
-        NET_TIMEOUT
     };
     match tokio::time::timeout(limit, crate::proc::wait_output(child)).await {
         Ok(out) => checked(out?, args),

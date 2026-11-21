@@ -2,7 +2,7 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-530"]
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-530","ESC-561"]
 decisions: [255]
 compared: "2026-10-31T10:05:41+01:00"
 ---
@@ -125,3 +125,16 @@ Chaque cas est tranché :
 - Les commandes écrites sont celles du projet : approuvées d'office.
 - « Écrire dans .escouade.yml » d'un mode `bypassPermissions` gardé sur la machine n'écrit rien et le garde.
 - Un fichier illisible ou d'une version plus récente n'est pas réécrit : « modifie-le à la main ».
+
+### Le fetch automatique d'un projet (ESC-561)
+
+Trois clés de plus dans le groupe `git`, après `git.conventional_commits` (voir *Fetch automatique*) :
+
+| Clé | Valeurs |
+|---|---|
+| `git.auto_fetch` | `default` (le réglage général de chaque machine ; si absente), `always`, `never` |
+| `git.fetch_every` | minutes entre deux fetch de fond, de `1` à `1440` ; `0` (si absente) : celles du réglage général |
+| `git.fetch_timeout` | secondes qu'un fetch de fond peut prendre, de `30` à `1800` ; `0` (si absente) : celles du réglage général |
+
+- Un nombre entier, écrit nu ou entre guillemets. Hors de ses bornes, il est ramené à la plus proche et le fichier le dit (« git.fetch_every : 5000 est hors des bornes (1 à 1440), ramené à 1440 ») ; ce qui n'est pas un nombre entier est refusé et laissé de côté, comme toute valeur invalide.
+- Le schéma (`schemas/escouade.schema.json`) les dit : un entier entre les bornes, ou `0`.

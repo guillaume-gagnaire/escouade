@@ -43,6 +43,9 @@ git:
   agent_branch_prefix: agent/
   ticket_branch_prefix: tickets/
   commit_mode: direct
+  auto_fetch: always
+  fetch_every: 30
+  fetch_timeout: 900
   conventional_commits: false
 board:
   on_approve: pr
@@ -106,6 +109,9 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("git.ticket_branch_prefix"), json!("tickets/"));
     assert_eq!(v("git.commit_mode"), json!("direct"));
     assert_eq!(v("git.conventional_commits"), json!(false));
+    assert_eq!(v("git.auto_fetch"), json!("always"));
+    assert_eq!(v("git.fetch_every"), json!(30));
+    assert_eq!(v("git.fetch_timeout"), json!(900));
     assert_eq!(v("board.on_approve"), json!("pr"));
     assert_eq!(v("board.target_branch"), json!("develop"));
     assert_eq!(v("board.merge_strategy"), json!("rebase"));

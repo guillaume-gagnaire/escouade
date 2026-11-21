@@ -808,8 +808,36 @@ const NAMING_LIMIT: Duration = Duration::from_secs(15);
 /// `git` commands in the folder.
 const GIT_IDLE: Duration = Duration::from_secs(10);
 
-/// How often every repository with a remote is fetched in the background.
-const FETCH_EVERY: Duration = Duration::from_secs(5 * 60);
+/// How often the background fetch looks at which repository is due (ESC-561): its settings are
+/// read again at each look, so that a change holds without a restart.
+const FETCH_LOOK: Duration = Duration::from_secs(15);
+
+/// A minute of the background fetch's interval: one second for the end-to-end tests of a debug
+/// build that ask it (`ESCOUADE_E2E_FETCH_MINUTE_MS`), so that they need not wait minutes.
+fn fetch_minute() -> Duration {
+    #[cfg(debug_assertions)]
+    if let Some(ms) = std::env::var("ESCOUADE_E2E_FETCH_MINUTE_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+    {
+        return Duration::from_millis(ms.max(1));
+    }
+    Duration::from_secs(60)
+}
+
+/// The background fetch of a repository (ESC-561).
+#[derive(Debug, Default, Clone)]
+pub(crate) struct RootFetch {
+    /// When it last began.
+    pub last_try: Option<std::time::Instant>,
+    /// Its last failure, since its last success.
+    pub failure: Option<crate::model::FetchFailure>,
+    /// It asked for credentials: no other background fetch until a fetch, a pull or a push of the
+    /// user's goes through.
+    pub waits_user: bool,
+    /// It went through Windows' ssh (`git::fetch_background`).
+    pub windows_ssh: bool,
+}
 
 /// How many processes and interfaces a Remote Control setting (or the app's start) starts at once:
 /// a setting turned on for every agent would otherwise start them all together.
@@ -1014,6 +1042,9 @@ pub struct Core<R: Runtime = Wry> {
     /// The download of the vectors' model under way (ESC-254), by its flag to call it off.
     pub(crate) vectors_download: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
+    /// The background fetch of each repository (by its root, ESC-561): when it last ran, and its
+    /// last failure since its last success.
+    pub(crate) fetches: Mutex<HashMap<String, RootFetch>>,
     pub pty: PtyManager,
     spawn_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Held while an interface of the agent quits, which what starts a process or an interface of
@@ -1777,6 +1808,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         claude_memory_asked: false,
         workflow_fixes: Vec::new(),
         workflows_auto_read: true,
+        git_fetch: Default::default(),
         workflows_enabled: true,
         workflows_in_repo: true,
         agent_folders: Vec::new(),
@@ -2212,6 +2244,7 @@ impl<R: Runtime> Core<R> {
             vectors_download: Mutex::default(),
             git,
             git_cache: RwLock::default(),
+            fetches: Mutex::default(),
             pty: PtyManager::default(),
             spawn_locks: Mutex::default(),
             quit_locks: Mutex::default(),
@@ -2689,7 +2722,7 @@ impl<R: Runtime> Core<R> {
             tokio::time::sleep(Duration::from_secs(15)).await;
             loop {
                 c.fetch_all().await;
-                tokio::time::sleep(FETCH_EVERY).await;
+                tokio::time::sleep(FETCH_LOOK.min(fetch_minute())).await;
             }
         });
         let c = self.clone();
@@ -2862,6 +2895,8 @@ impl<R: Runtime> Core<R> {
         s.normalize_attachments();
         s.normalize_mid_turn_delay();
         s.normalize_display();
+        // ESC-561: within its bounds (the window says it brought a value back to its bound).
+        s.git_fetch = s.git_fetch.clamped();
         accounts::normalize(&mut s);
         accounts::check(&s)?;
         accounts::keep_remote_refusals(&self.settings.read().accounts, &mut s.accounts);
@@ -9319,6 +9354,7 @@ impl<R: Runtime> Core<R> {
         cur.worktree_per_agent = p.worktree_per_agent;
         cur.worktree_at_first_message = p.worktree_at_first_message;
         cur.worktree_base = p.worktree_base;
+        cur.git_fetch = p.git_fetch.clamped();
         cur.run_commands = p.run_commands;
         cur.worktree_copy = p.worktree_copy;
         cur.worktree_setup = p.worktree_setup;
@@ -9827,6 +9863,7 @@ impl<R: Runtime> Core<R> {
                     last_fetch: git::last_fetch(&root),
                     ..Default::default()
                 };
+                (info.fetch_failure, info.fetch_ssh_note) = self.fetch_view(&root);
                 let tally = |c: char, info: &mut GitInfo| match c {
                     'A' => info.added += 1,
                     'D' => info.deleted += 1,
@@ -10636,32 +10673,140 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// Fetches every project's repository that has a remote, one at a time and without ever
-    /// asking for credentials, so that the commits to pull show up.
-    pub(crate) async fn fetch_all(self: &Arc<Self>) {
-        let ids: Vec<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
-        let mut roots: Vec<String> = Vec::new();
-        for id in ids {
+    /// What the background fetch does with each repository (ESC-561), by its root: the plans of
+    /// the projects in it merged (`FetchPlan::merge`), None when none wants it fetched. The
+    /// settings are read here, at each look: a change holds without a restart.
+    pub(crate) async fn fetch_plans(&self) -> Vec<(String, Option<crate::model::FetchPlan>)> {
+        let general = self.settings.read().git_fetch.clone();
+        let projects: Vec<(String, crate::model::FetchPlan)> = self
+            .projects
+            .read()
+            .iter()
+            .map(|p| (p.id.clone(), p.git_fetch.plan(&general)))
+            .collect();
+        let mut roots: Vec<(String, Vec<crate::model::FetchPlan>)> = Vec::new();
+        for (id, plan) in projects {
             for root in self.project_roots_of(&id).await {
-                if !roots.contains(&root) {
-                    roots.push(root);
+                match roots.iter_mut().find(|(r, _)| *r == root) {
+                    Some((_, plans)) => plans.push(plan),
+                    None => roots.push((root, vec![plan])),
                 }
             }
         }
-        for root in roots {
-            if git::remotes(&root).await.is_empty() {
-                continue;
-            }
-            let lock = self.sync_lock(&root);
-            // The user's own fetch, pull or push is running: no need for another one.
-            let Ok(_guard) = lock.try_lock() else {
+        roots
+            .into_iter()
+            .map(|(root, plans)| (root, crate::model::FetchPlan::merge(plans)))
+            .collect()
+    }
+
+    /// Fetches each project's repository with a remote that is due (its interval past since its
+    /// last fetch, or never fetched), one at a time and without ever asking for credentials, so
+    /// that the commits to pull show up. A repository whose projects all say no is never
+    /// fetched; one that asked for credentials waits for a fetch of the user's.
+    pub(crate) async fn fetch_all(self: &Arc<Self>) {
+        for (root, plan) in self.fetch_plans().await {
+            let Some(plan) = plan else {
                 continue;
             };
-            match git::fetch(&root, true).await {
-                Ok(()) => self.refresh_repo(&root).await,
-                Err(e) => log::info!("background fetch of {root} failed: {e:#}"),
+            let every = fetch_minute() * plan.every_min;
+            let due =
+                self.fetches.lock().get(&root).is_none_or(|f| {
+                    !f.waits_user && f.last_try.is_none_or(|t| t.elapsed() >= every)
+                });
+            if !due || git::remotes(&root).await.is_empty() {
+                continue;
+            }
+            self.fetch_root(&root, plan.timeout_secs).await;
+        }
+    }
+
+    /// Whether a project of the repository at `root` still wants it fetched in the background, by
+    /// the settings as they are now (without its git roots read again: those of the last look).
+    fn fetch_wanted(&self, root: &str) -> bool {
+        let general = self.settings.read().git_fetch.clone();
+        let ids: Vec<String> = self
+            .projects
+            .read()
+            .iter()
+            .filter(|p| p.git_fetch.plan(&general).on)
+            .map(|p| p.id.clone())
+            .collect();
+        let toplevels = self.toplevels.lock();
+        let projects = self.projects.read();
+        projects.iter().filter(|p| ids.contains(&p.id)).any(|p| {
+            p.checkouts().iter().any(|c| {
+                toplevels
+                    .get(&c.dir)
+                    .or_else(|| toplevels.get(&p.path))
+                    .is_some_and(|t| t.as_deref() == Some(root))
+            })
+        })
+    }
+
+    /// One background fetch of the repository at `root`, within `timeout_secs`, its outcome kept
+    /// for the Git panel.
+    pub(crate) async fn fetch_root(self: &Arc<Self>, root: &str, timeout_secs: u32) {
+        let lock = self.sync_lock(root);
+        // The user's own fetch, pull or push is running: no need for another one.
+        let Ok(_guard) = lock.try_lock() else {
+            return;
+        };
+        self.fetches
+            .lock()
+            .entry(root.to_string())
+            .or_default()
+            .last_try = Some(std::time::Instant::now());
+        let limit = Duration::from_secs(u64::from(timeout_secs));
+        // Asked again at the last moment: a setting turned off while it got ready runs nothing.
+        let core = self.clone();
+        let at = root.to_string();
+        let still = move || core.fetch_wanted(&at);
+        let run = git::fetch_background(root, limit, still).await;
+        if run.skipped {
+            return;
+        }
+        {
+            let mut fetches = self.fetches.lock();
+            let f = fetches.entry(root.to_string()).or_default();
+            f.windows_ssh = run.windows_ssh;
+            match &run.result {
+                Ok(()) => {
+                    f.failure = None;
+                    f.waits_user = false;
+                }
+                Err(e) => {
+                    let message = format!("{e:#}");
+                    let kind = git::fetch_failure_kind(&message, run.timed_out);
+                    log::info!("background fetch of {root} failed ({kind:?}): {message}");
+                    f.waits_user = kind == crate::model::FetchFailureKind::Credentials;
+                    f.failure = Some(crate::model::FetchFailure {
+                        kind,
+                        message,
+                        at: crate::model::now_ms(),
+                        timeout_secs,
+                    });
+                }
             }
         }
+        self.refresh_repo(root).await;
+    }
+
+    /// A fetch, a pull or a push of the user's reached the remote of `root`: the background fetch
+    /// forgets its failure, and one that waited for credentials goes on (ESC-561).
+    pub(crate) fn fetch_by_user(&self, root: &str) {
+        if let Some(f) = self.fetches.lock().get_mut(root) {
+            f.failure = None;
+            f.waits_user = false;
+        }
+    }
+
+    /// The background fetch's state of `root`, for its `GitInfo`.
+    pub(crate) fn fetch_view(&self, root: &str) -> (Option<crate::model::FetchFailure>, bool) {
+        self.fetches
+            .lock()
+            .get(root)
+            .map(|f| (f.failure.clone(), f.windows_ssh))
+            .unwrap_or_default()
     }
 
     /// Fetch, pull or push of the project's main checkout, asked by the user (so credentials
@@ -10693,6 +10838,9 @@ impl<R: Runtime> Core<R> {
                 SyncOp::Push => git::push(&root).await,
             }
         };
+        if out.is_ok() {
+            self.fetch_by_user(&root);
+        }
         // Even after a failure: a pull that could not fast-forward has fetched.
         self.refresh_repo(&root).await;
         out

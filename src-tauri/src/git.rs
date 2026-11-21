@@ -2713,6 +2713,207 @@ pub async fn fetch(repo: &str, background: bool) -> Result<()> {
     run_net(repo, &args, background).await.map(|_| ())
 }
 
+/// How a background fetch ended (ESC-561).
+#[derive(Debug)]
+pub struct BackgroundFetch {
+    pub result: Result<()>,
+    /// Not run: `still` said no, at the last moment (a setting turned off meanwhile).
+    pub skipped: bool,
+    /// It still ran past its time limit.
+    pub timed_out: bool,
+    /// It went through Windows' ssh, this Git for Windows' own stalling (`ssh_stalls`).
+    pub windows_ssh: bool,
+}
+
+/// The background fetch of `repo` (ESC-561): as `fetch(repo, true)`, within `limit`, with the
+/// user's configuration of git as it is (their proxy, their certificates, their `insteadOf`, their
+/// ssh): nothing is added to it. Only when their Git for Windows is the one whose ssh stalls on a
+/// big fetch (`ssh_stalls`), the remote talks ssh and they chose no ssh of their own, does the
+/// fetch go through Windows' (`windows_ssh_command`), for this process alone. `still` is asked
+/// just before git starts: a setting turned off while it got ready runs nothing.
+pub async fn fetch_background(
+    repo: &str,
+    limit: Duration,
+    still: impl FnOnce() -> bool,
+) -> BackgroundFetch {
+    let (st, remotes) = tokio::join!(status(repo), remotes(repo));
+    if remotes.is_empty() {
+        return BackgroundFetch {
+            result: Err(anyhow::anyhow!(no_remote(crate::i18n::ui()))),
+            skipped: false,
+            timed_out: false,
+            windows_ssh: false,
+        };
+    }
+    let upstream = st.ok().and_then(|s| s.upstream);
+    let target = sync_remote(&remotes, upstream.as_deref()).unwrap_or("--all");
+    let args = [
+        "fetch",
+        "--quiet",
+        "--prune",
+        "--no-auto-maintenance",
+        target,
+    ];
+    let mut cmd = command(repo, &args);
+    let ssh = background_ssh(repo, target, &remotes).await;
+    if let Some(ssh) = &ssh {
+        cmd.env("GIT_SSH_COMMAND", ssh);
+    }
+    if !still() {
+        return BackgroundFetch {
+            result: Ok(()),
+            skipped: true,
+            timed_out: false,
+            windows_ssh: false,
+        };
+    }
+    let start = Instant::now();
+    let result = run_net_command_within(cmd, &args, true, limit)
+        .await
+        .map(|_| ());
+    BackgroundFetch {
+        timed_out: result.is_err() && start.elapsed() >= limit,
+        result,
+        skipped: false,
+        windows_ssh: ssh.is_some(),
+    }
+}
+
+/// The Git for Windows builds whose ssh stalls on a big fetch: OpenSSH 9.9p1 of 2.47.0(1) waits
+/// forever after a few KB, the server ending it after 10 min (git-for-windows/git#5199, fixed in
+/// 2.47.0(2)). Measured on this repository eight days behind: no byte in 150 s with its ssh, 5 to
+/// 10 s with Windows' (`OpenSSH_for_Windows_9.5p2`).
+const STALLING_SSH: &[&str] = &["git version 2.47.0.windows.1"];
+
+/// `git --version` says a Git for Windows whose ssh stalls.
+pub fn ssh_stalls(version: &str) -> bool {
+    STALLING_SSH.contains(&version.trim())
+}
+
+/// A remote's address that git reaches by ssh: `ssh://…`, `git+ssh://…`, or the short form
+/// `[user@]host:path` (not a Windows drive, `C:\…`, nor a local path).
+pub fn is_ssh_url(url: &str) -> bool {
+    let url = url.trim();
+    if url.starts_with("ssh://") || url.starts_with("git+ssh://") || url.starts_with("ssh+git://") {
+        return true;
+    }
+    if url.contains("://") || url.starts_with('/') || url.starts_with('.') {
+        return false;
+    }
+    match url.split_once(':') {
+        // `C:\x` or `C:/x`: a drive.
+        Some((host, _)) => host.len() > 1 && !host.contains('/') && !host.contains('\\'),
+        None => false,
+    }
+}
+
+/// What `GIT_SSH_COMMAND` the background fetch takes, if any: Windows' ssh, never asking
+/// anything (`BatchMode`), when `ssh_stalls(version)`, a remote it fetches talks ssh, the user
+/// set no ssh of their own (`GIT_SSH`, `GIT_SSH_COMMAND`, `core.sshCommand`) and Windows has its
+/// ssh (`windows_ssh`).
+pub fn windows_ssh_command(
+    version: &str,
+    own_ssh: bool,
+    urls: &[String],
+    windows_ssh: Option<&Path>,
+) -> Option<String> {
+    if !ssh_stalls(version) || own_ssh || !urls.iter().any(|u| is_ssh_url(u)) {
+        return None;
+    }
+    let ssh = windows_ssh?.to_string_lossy().replace('\\', "/");
+    Some(format!("\"{ssh}\" -o BatchMode=yes"))
+}
+
+/// Windows' own ssh (`%SystemRoot%\System32\OpenSSH\ssh.exe`), when it is there.
+fn windows_ssh() -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let root = std::env::var_os("SystemRoot")?;
+    let ssh = Path::new(&root)
+        .join("System32")
+        .join("OpenSSH")
+        .join("ssh.exe");
+    ssh.is_file().then_some(ssh)
+}
+
+/// `windows_ssh_command` for the remote `target` of `repo` (`--all`: each one).
+async fn background_ssh(repo: &str, target: &str, remotes: &[String]) -> Option<String> {
+    let windows = windows_ssh()?;
+    let version = text(repo, &["--version"]).await.unwrap_or_default();
+    if !ssh_stalls(&version) {
+        return None;
+    }
+    let own = ["GIT_SSH", "GIT_SSH_COMMAND"]
+        .iter()
+        .any(|v| std::env::var_os(v).is_some_and(|s| !s.is_empty()))
+        || !text(repo, &["config", "--get", "core.sshCommand"])
+            .await
+            .unwrap_or_default()
+            .is_empty();
+    let names: Vec<&str> = if target == "--all" {
+        remotes.iter().map(String::as_str).collect()
+    } else {
+        vec![target]
+    };
+    let mut urls = Vec::new();
+    for name in names {
+        if let Ok(url) = text(repo, &["remote", "get-url", name]).await {
+            urls.push(url);
+        }
+    }
+    windows_ssh_command(&version, own, &urls, Some(&windows))
+}
+
+/// What a background fetch's failure is (ESC-561), from git's words and whether it ran out of
+/// time.
+pub fn fetch_failure_kind(message: &str, timed_out: bool) -> crate::model::FetchFailureKind {
+    use crate::model::FetchFailureKind as K;
+    if timed_out {
+        return K::Timeout;
+    }
+    let m = message.to_lowercase();
+    const CREDENTIALS: &[&str] = &[
+        "permission denied (publickey",
+        "cannot prompt because user interactivity has been disabled",
+        "terminal prompts disabled",
+        "could not read username",
+        "could not read password",
+        "authentication failed",
+        "invalid username or password",
+        "host key verification failed",
+        "enter passphrase",
+        "askpass",
+        "permission denied, please try again",
+    ];
+    const NETWORK: &[&str] = &[
+        "could not resolve host",
+        "could not resolve hostname",
+        "connection timed out",
+        "operation timed out",
+        "failed to connect",
+        "could not connect",
+        "connection refused",
+        "network is unreachable",
+        "no route to host",
+        "connection reset",
+        "connection closed by remote host",
+        "unexpected disconnect",
+        "early eof",
+        "unable to access",
+        "proxy",
+        "ssl",
+        "tls",
+    ];
+    if CREDENTIALS.iter().any(|c| m.contains(c)) {
+        K::Credentials
+    } else if NETWORK.iter().any(|n| m.contains(n)) {
+        K::Network
+    } else {
+        K::Other
+    }
+}
+
 /// Fetches `refspec` from `from` (a remote's name, or an address), as the user would: their
 /// credentials may be asked (« Lancer un agent sur cette PR », ESC-65).
 pub async fn fetch_ref(repo: &str, from: &str, refspec: &str) -> Result<()> {

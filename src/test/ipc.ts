@@ -129,6 +129,7 @@ export const SETTINGS: Settings = {
   telemetry: false,
   // The first start's question of the name for the shared tickets (ESC-190): asked already.
   nameAsked: true,
+  gitFetch: { auto: true, everyMin: 5, timeoutSecs: 300 },
   integrations: {
     syncStates: true,
     loopComments: false,

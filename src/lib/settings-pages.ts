@@ -268,6 +268,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('ticketPrefix', 'git', 'settings.project.ticketPrefix', { project: ['ticketBranchPrefix'] }),
   row('copy', 'git', 'settings.project.copy', { project: ['copy'] }),
   row('commit', 'git', 'settings.project.commit', { project: ['commitMode'] }),
+  row('autoFetchProject', 'git', 'fetch.settings.project', { project: ['gitFetch'] }),
   row('docsBranch', 'git', 'docs.branch.label', { project: ['docsBranch'] }),
   row('worktreeSetup', 'git', 'settings.project.setupTitle', { project: ['worktreeSetup'] }),
   row('worktreeTeardown', 'git', 'settings.project.teardownTitle', { project: ['worktreeTeardown'] }),
@@ -323,6 +324,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
 
   // Tous les projets › Nouveaux projets, Projets fermés.
   row('privateProjects', 'allProjects', 'settings.newProjects.private', s('privateProjects')),
+  row('autoFetch', 'allProjects', 'fetch.settings.auto', s('gitFetch')),
   row('closedProjects', 'allProjects', 'settings.closed.title'),
 ];
 

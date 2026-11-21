@@ -102,6 +102,8 @@ mod facts_tests;
 mod fence;
 #[cfg(test)]
 mod fence_tests;
+#[cfg(test)]
+mod fetch_tests;
 mod fileorigin;
 #[cfg(test)]
 mod fileorigin_tests;

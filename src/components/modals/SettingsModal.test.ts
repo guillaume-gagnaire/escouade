@@ -1330,7 +1330,7 @@ describe('SettingsModal', () => {
       size: 5 * 1024,
     };
 
-    it('lists them in « Tous les projets », after what a new project starts with', async () => {
+    it('lists them in « Tous les projets », after what a new project starts with and the automatic fetch (ESC-561)', async () => {
       const backend = fakeBackend({ closed_projects: () => [OLD] });
       render(SettingsModal, { page: 'allProjects', projectId: 'p2' });
       await screen.findByRole('heading', { name: 'Projets fermés' });
@@ -1339,7 +1339,7 @@ describe('SettingsModal', () => {
       const headings = within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent);
-      expect(headings.slice(-2)).toEqual(['Nouveaux projets', 'Projets fermés']);
+      expect(headings.slice(-3)).toEqual(['Nouveaux projets', 'Git', 'Projets fermés']);
       // A page of a project does not carry them.
       await userEvent.click(tab('site'));
       expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();

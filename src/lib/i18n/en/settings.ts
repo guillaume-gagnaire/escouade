@@ -29,7 +29,7 @@ export default defineZone('settings', {
     },
     team: { label: 'Team', desc: 'The shared Kanban, the shared settings (.escouade.yml) and the shared memory' },
     privacy: { label: 'Privacy', desc: 'What this project keeps to itself: its files, its accounts, its plugins' },
-    allProjects: { label: 'All projects', desc: 'What a new project starts with, and the closed projects' },
+    allProjects: { label: 'All projects', desc: 'What a new project starts with, the automatic fetch and the closed projects' },
   },
 
   nav: {

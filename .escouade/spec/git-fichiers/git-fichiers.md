@@ -2,8 +2,8 @@
 title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
-tickets: ["ESC-204","ESC-160","ESC-305","ESC-315"]
-decisions: []
+tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-561"]
+decisions: ["le-fetch-automatique-se-regle-se-voit-et"]
 compared: "2026-10-31T16:24:52+01:00"
 order: 22
 ---
@@ -113,14 +113,15 @@ La branche est celle de l'utilisateur : supprimer l'agent avec « Supprimer auss
 ### Synchroniser avec le dépôt distant
 
 - Le dossier du projet compte ses commits à tirer et à pousser par rapport à sa branche suivie ; la barre d'état les montre (voir *Barre de statut*).
-- Un fetch tourne en arrière-plan peu après le démarrage, puis toutes les 5 min, un dépôt à la fois, sans jamais demander d'identifiants (ni fenêtre de Git Credential Manager). Ses échecs sont seulement journalisés.
-- Depuis le sélecteur de branche (voir *Branches*) : « Récupérer » (pull, en avance rapide seulement ; des branches divergées donnent un message clair), « Pousser » (une branche sans branche suivie, ou dont la distante a été supprimée, est publiée sur `origin`, ou sur l'unique dépôt distant) et « Fetch » à la demande.
+- Un fetch tourne en arrière-plan, un dépôt à la fois, sans jamais demander d'identifiants (ni fenêtre de Git Credential Manager) : allumé ou non, son intervalle (5 min par défaut) et son délai d'attente (5 min par défaut) se règlent pour tous les projets et pour chacun. Le sélecteur de branche dit quand le dépôt a été récupéré et, sans alerter, pourquoi le dernier fetch de fond a échoué. Voir *Fetch automatique*.
+- Depuis le sélecteur de branche (voir *Branches*) : « Récupérer » (pull, en avance rapide seulement ; des branches divergées donnent un message clair), « Pousser » (une branche sans branche suivie, ou dont la distante a été supprimée, est publiée sur `origin`, ou sur l'unique dépôt distant) et « Fetch » à la demande. Un geste réussi relance le fetch de fond d'un dépôt qui attendait des identifiants.
 
 ## Réglages
 
 Réglages › Projets, groupe « Git ». Un dossier ou un préfixe refusé l'est à la frappe comme à l'enregistrement.
 
 - **« Commit »** : « Rédigé par l'agent » (défaut) ou « Direct, avec un message proposé ».
+- **« Récupérer automatiquement (git fetch) »** (après « Commit ») : « Comme le réglage général » (défaut), « Toujours » ou « Jamais », avec un intervalle et un délai d'attente propres au projet ; le réglage général est dans Réglages › Tous les projets (voir *Fetch automatique*).
 - **Un worktree par agent**, et **« Créer le worktree au premier message »**.
 - **« Branche de départ des nouveaux worktrees »** (sous « Créer le worktree au premier message » ; aussi à l'étape « Worktrees » de l'assistant « Nouveau projet », avec un worktree par agent ; partagée par l'équipe dans `.escouade.yml`, voir *.escouade.yml*) : trois segments, « Branche actuelle du dossier » (défaut : la HEAD du dossier au moment de la création), « Branche cible du Kanban » et « Une branche… ». Ce dernier ouvre le sélecteur de branche en mode « Branche de départ » : toutes les branches, locales et distantes, la branche du dossier et la cible comprises, celle choisie cochée ; dans l'assistant, pour un dossier pas encore ajouté, ses branches locales. Le segment montre ensuite « ⎇ <branche> ▾ », et le texte dessous dit ce que fait le choix. Un projet enregistré avec l'ancien interrupteur « Les agents partent de la branche cible » (onglet « Kanban ») allumé passe à « Branche cible du Kanban » à son chargement, ou à sa réouverture s'il était fermé ; l'interrupteur n'est plus écrit.
 - **« Dossier des worktrees »** : vide par défaut, soit `.claude/worktrees`, comme `claude --worktree`. Il prend un chemin relatif au dossier du projet (`../app-worktrees`, un dossier voisin du dépôt ; `.worktrees`), au dossier personnel (`~/worktrees/app`) ou complet. `.` et `..` sont résolus tels qu'écrits ; des guillemets autour (« Copier en tant que chemin ») sont retirés. Sous le champ : « Le prochain : <chemin>\<nom> ». Refusés : le dossier du projet lui-même (« C’est le dossier du projet lui-même. »), un dossier qui le contient (`..`, `../..` : « Ce dossier contient celui du projet : choisis-en un à côté (../app-worktrees) ou dedans (.worktrees). »), un dossier dans un `.git` (« Ce dossier est dans un dossier .git. ») et, sous Windows, un chemin ni relatif ni complet (`D:wt`, `\wt` : « Écris un chemin relatif au dossier du projet, ou un chemin complet (C:\…). »).

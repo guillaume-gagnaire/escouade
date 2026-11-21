@@ -5,6 +5,7 @@ import bgtasks from './bgtasks';
 import board from './board';
 import boardSettings from './boardSettings';
 import branches from './branches';
+import fetchZone from './fetch';
 import common from './common';
 import composer from './composer';
 import conv from './conv';
@@ -66,6 +67,7 @@ export const fr = {
   inboxViews,
   vectors,
   branches,
+  fetch: fetchZone,
   plan,
   prs,
   envs,

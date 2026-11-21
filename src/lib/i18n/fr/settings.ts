@@ -33,7 +33,7 @@ export default {
     },
     team: { label: 'Équipe', desc: 'Le Kanban partagé, les réglages partagés (.escouade.yml) et la mémoire partagée' },
     privacy: { label: 'Confidentialité', desc: 'Ce que ce projet garde pour lui : ses fichiers, ses comptes, ses plugins' },
-    allProjects: { label: 'Tous les projets', desc: 'Ce que reçoit un nouveau projet, et les projets fermés' },
+    allProjects: { label: 'Tous les projets', desc: 'Ce que reçoit un nouveau projet, le fetch automatique et les projets fermés' },
   },
 
   // The bar of the window: the search (R8), Escouade's pages, the projects with the one chosen unfolded on its pages.

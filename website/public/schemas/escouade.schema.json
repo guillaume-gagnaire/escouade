@@ -82,6 +82,11 @@
           "description": "A new agent's branch is <prefix><name>.",
           "type": "string"
         },
+        "auto_fetch": {
+          "description": "« Récupérer automatiquement (git fetch) » for the project: default (as each machine's general setting, when absent), always or never.",
+          "enum": ["default", "always", "never"],
+          "type": "string"
+        },
         "commit_mode": {
           "description": "Who writes the commits asked from the files panel: the agent, or the app with a proposed message.",
           "enum": ["agent", "direct"],
@@ -90,6 +95,32 @@
         "conventional_commits": {
           "description": "Commit messages in the Conventional Commits form.",
           "type": "boolean"
+        },
+        "fetch_every": {
+          "description": "Minutes between two background fetches of the project, 1 to 1440 (0 or absent: each machine's general setting).",
+          "oneOf": [
+            {
+              "maximum": 1440,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "const": 0
+            }
+          ]
+        },
+        "fetch_timeout": {
+          "description": "Seconds a background fetch of the project may take before it is stopped, 30 to 1800 (0 or absent: each machine's general setting).",
+          "oneOf": [
+            {
+              "maximum": 1800,
+              "minimum": 30,
+              "type": "integer"
+            },
+            {
+              "const": 0
+            }
+          ]
         },
         "ticket_branch_prefix": {
           "description": "A ticket's branch is <prefix><key>.",

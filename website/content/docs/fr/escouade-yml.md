@@ -166,11 +166,17 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 | `git.ticket_branch_prefix` | Préfixe de branche | Un début de nom de branche | `ticket/` | `ticket_branch_prefix: tickets/` |
 | `git.commit_mode` | Valeur parmi une liste | `agent`, `direct` | `agent` | `commit_mode: direct` |
 | `git.conventional_commits` | Booléen | `true`, `false` | `true` | `conventional_commits: false` |
+| `git.auto_fetch` | Valeur parmi une liste | `default`, `always`, `never` | `default` | `auto_fetch: always` |
+| `git.fetch_every` | Nombre entier | `0`, ou de `1` à `1440` | `0` | `fetch_every: 30` |
+| `git.fetch_timeout` | Nombre entier | `0`, ou de `30` à `1800` | `0` | `fetch_timeout: 900` |
 
 - `agent_branch_prefix` : la branche d’un nouvel agent s’appelle `<préfixe><nom>`. Vide (`''`), c’est son nom seul.
 - `ticket_branch_prefix` : la branche d’un ticket s’appelle `<préfixe><clé>` (`ticket/DEM-12`).
 - `commit_mode` : « Commit », qui écrit les commits demandés depuis le panneau des fichiers : `agent` (« Rédigé par l’agent ») ou `direct` (« Direct, avec un message proposé »).
-- `conventional_commits` : « Message de commit généré », les messages au format Conventional Commits.
+- `conventional_commits` : « Message de commit généré », les messages au format Conventional Commits.
+- `auto_fetch` : « Récupérer automatiquement (git fetch) » du projet : `default` (« Comme le réglage général » de chaque machine), `always` ou `never`.
+- `fetch_every` : les minutes entre deux fetch de fond du projet ; `0`, celles du réglage général de chaque machine.
+- `fetch_timeout` : les secondes qu’un fetch de fond du projet peut prendre ; `0`, celles du réglage général. Une valeur hors des bornes est ramenée à la borne, et le fichier le dit.
 
 ### board
 

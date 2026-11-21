@@ -28,7 +28,10 @@ use yaml_edit::{
     CoreScalarType, Document, Mapping, ScalarStyle, ScalarType, ScalarValue, Sequence, YamlNode,
 };
 
-use crate::model::{CommitMode, EngineId, Project, RunCommand, WorktreeBase, WorktreeStep};
+use crate::model::{
+    CommitMode, EngineId, FetchMode, Project, RunCommand, WorktreeBase, WorktreeStep,
+    FETCH_EVERY_MAX, FETCH_EVERY_MIN, FETCH_TIMEOUT_MAX, FETCH_TIMEOUT_MIN,
+};
 
 pub const FILE: &str = ".escouade.yml";
 /// The version this app writes, and reads without migrating.
@@ -54,6 +57,9 @@ pub enum Kind {
     Prefix,
     /// Plugins' ids in the store (`dev.exemple.slack`; a single one stands for a list of one).
     PluginIds,
+    /// A whole number, 0 (the general setting's) or from `.1` to `.2`: one out of them is brought
+    /// back to its bound, and the file is told so (ESC-561).
+    Range(u32, u32),
 }
 
 /// A setting of the file.
@@ -207,6 +213,21 @@ pub const KEYS: &[Key] = &[
         "git.commit_mode",
         Kind::Enum(&["agent", "direct"]),
         "Who writes the commits asked from the files panel: the agent, or the app with a proposed message.",
+    ),
+    key(
+        "git.auto_fetch",
+        Kind::Enum(&["default", "always", "never"]),
+        "« Récupérer automatiquement (git fetch) » for the project: default (as each machine's general setting, when absent), always or never.",
+    ),
+    key(
+        "git.fetch_every",
+        Kind::Range(FETCH_EVERY_MIN, FETCH_EVERY_MAX),
+        "Minutes between two background fetches of the project, 1 to 1440 (0 or absent: each machine's general setting).",
+    ),
+    key(
+        "git.fetch_timeout",
+        Kind::Range(FETCH_TIMEOUT_MIN, FETCH_TIMEOUT_MAX),
+        "Seconds a background fetch of the project may take before it is stopped, 30 to 1800 (0 or absent: each machine's general setting).",
     ),
     key(
         "git.conventional_commits",
@@ -871,6 +892,33 @@ fn value_of(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, 
             Ok(json!(ids))
         }
         Kind::Dir => rel_dir(node).map(Value::String),
+        Kind::Range(min, max) => {
+            let n = text_of(node)?.parse::<u64>().map_err(|_| {
+                (
+                    node.line,
+                    tr!(
+                        "un nombre entier est attendu, de {min} à {max} (0 : le réglage général)",
+                        "a whole number is expected, {min} to {max} (0: the general setting)"
+                    ),
+                )
+            })?;
+            let kept = if n == 0 {
+                0
+            } else {
+                n.clamp(u64::from(min), u64::from(max)) as u32
+            };
+            if u64::from(kept) != n {
+                let path = k.path;
+                warnings.push(warn(
+                    Some(node.line),
+                    tr!(
+                        "{path} : {n} est hors des bornes ({min} à {max}), ramené à {kept}",
+                        "{path}: {n} is out of its bounds ({min} to {max}), brought back to {kept}"
+                    ),
+                ));
+            }
+            Ok(json!(kept))
+        }
         Kind::Prefix => {
             let p = text_of(node)?;
             match crate::git::branch_prefix_problem(&p) {
@@ -928,6 +976,9 @@ pub fn get(p: &Project, key: &str) -> Value {
             CommitMode::Agent => "agent",
             CommitMode::Direct => "direct",
         }),
+        "git.auto_fetch" => json!(p.git_fetch.mode.as_str()),
+        "git.fetch_every" => json!(p.git_fetch.every_min),
+        "git.fetch_timeout" => json!(p.git_fetch.timeout_secs),
         "git.conventional_commits" => json!(b.conventional),
         "board.on_approve" => json!(b.action),
         "board.target_branch" => json!(b.target),
@@ -1021,6 +1072,9 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
                 CommitMode::Agent
             }
         }
+        "git.auto_fetch" => p.git_fetch.mode = FetchMode::from_text(&str_of(v)),
+        "git.fetch_every" => p.git_fetch.every_min = v.as_u64().unwrap_or_default() as u32,
+        "git.fetch_timeout" => p.git_fetch.timeout_secs = v.as_u64().unwrap_or_default() as u32,
         "git.conventional_commits" => b.conventional = flag,
         "board.on_approve" => b.action = str_of(v),
         "board.target_branch" => b.target = str_of(v),
@@ -1246,6 +1300,8 @@ fn put_list(m: &Mapping, name: &str, list: Sequence) {
 fn set_value(m: &Mapping, name: &str, k: &Key, v: &Value) {
     match k.kind {
         Kind::Bool => m.set(name, v.as_bool().unwrap_or_default()),
+        // A number written bare, as YAML reads it back (ESC-561).
+        Kind::Range(..) => m.set(name, v.as_i64().unwrap_or_default()),
         Kind::List | Kind::PluginIds => {
             let s = Sequence::new();
             for item in v.as_array().into_iter().flatten() {
@@ -1423,6 +1479,12 @@ fn schema_of(k: &Key) -> Value {
         Kind::Bool => json!({ "type": "boolean" }),
         Kind::Text | Kind::Dir | Kind::Prefix => json!({ "type": "string" }),
         Kind::Enum(values) => json!({ "type": "string", "enum": values }),
+        Kind::Range(min, max) => json!({
+            "oneOf": [
+                { "type": "integer", "minimum": min, "maximum": max },
+                { "const": 0 },
+            ],
+        }),
         // A single value is a list of one: the schema says both forms.
         Kind::List => json!({
             "oneOf": [{ "type": "array", "items": { "type": "string" } }, { "type": "string" }],

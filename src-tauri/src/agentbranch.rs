@@ -309,7 +309,8 @@ impl<R: Runtime> Core<R> {
         };
         // Its refs are the repository's: one fetch, pull or switch of it at a time.
         let project = self.project(&meta.project_id)?;
-        let lock = self.sync_lock(&self.repo_root(&project, None).await?);
+        let repo_root = self.repo_root(&project, None).await?;
+        let lock = self.sync_lock(&repo_root);
         let out = {
             let _guard = lock.lock().await;
             match op {
@@ -321,6 +322,10 @@ impl<R: Runtime> Core<R> {
                 SyncOp::Push => git::push(&root).await,
             }
         };
+        // The same repository, the same remote: its background fetch may go on (ESC-561).
+        if out.is_ok() {
+            self.fetch_by_user(&repo_root);
+        }
         // Even after a failure: a pull that could not fast-forward has fetched.
         self.git.refresh(&meta.project_id);
         out
