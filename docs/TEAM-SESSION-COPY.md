@@ -107,6 +107,8 @@ Ce qui resterait à suivre pour Codex : sa base d'état (la liste des sessions p
 
 ## 4. La recommandation pour C16-B
 
+**Tranché par l'utilisateur le 2026-11-21** (demande a-23, « C16 : a ») : la recommandation ci-dessous. Le ticket est écrit : TS-17b = ESC-607 ; l'essai à deux comptes est dans sa boîte « À toi » (a-24).
+
 **Le faire pour Claude Code, avec la passation d'ESC-88 en repli ; s'en tenir à C16-A pour Codex et les autres harness.**
 
 Pourquoi : la reprise d'une copie réécrite a marché du premier coup, sans rien de A, avec le contexte, les outils et le `cwd` justes. Le format se réécrit sans rien deviner (des chaînes JSON), et l'agent qui reprend garde tout son contexte, au lieu d'un résumé. Ce qui reste incertain (une autre version, un autre compte) se garde par des contrôles et un repli, plutôt qu'en renonçant.

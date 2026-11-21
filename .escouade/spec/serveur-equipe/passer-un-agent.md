@@ -1,15 +1,15 @@
 ---
 title: "Passer un agent à un collègue"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md §4.2, §11, §13, §15.2 (C16), §16 (TS-17)","crates/escouade-team/src/handoff.rs","crates/escouade-team-server/src/db/mod.rs","src-tauri/src/teamhandoff.rs","src-tauri/src/handover.rs"]
-tickets: ["ESC-548"]
-decisions: []
+sources: ["docs/TEAM-SERVER.md §4.2, §11, §13, §15.2 (C16), §16 (TS-17)","docs/TEAM-SESSION-COPY.md (ESC-581, TS-0c : l'essai de reprise d'une session copiée, la recommandation)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : « C16 : a »","crates/escouade-team/src/handoff.rs","crates/escouade-team-server/src/db/mod.rs","src-tauri/src/teamhandoff.rs","src-tauri/src/handover.rs"]
+tickets: ["ESC-548","ESC-581","ESC-588","ESC-607"]
+decisions: [274]
 compared: null
 ---
 
 # Passer un agent à un collègue
 
-L'agent d'un ticket de l'équipe se passe à un collègue, ou à une machine de l'équipe en mode serveur, avec son ticket, sa branche, son travail en cours et sa conversation (TS-17, §11 de `docs/TEAM-SERVER.md`). Choix C16-A : chez qui le prend, une **nouvelle session** sur son harness et son compte, dont le premier message est le dossier de passation d'ESC-88 ; la reprise native d'une session copiée (C16-B) viendra plus tard, pour Claude Code seulement, si l'essai TS-0c la montre fiable.
+L'agent d'un ticket de l'équipe se passe à un collègue, ou à une machine de l'équipe en mode serveur, avec son ticket, sa branche, son travail en cours et sa conversation (TS-17, §11 de `docs/TEAM-SERVER.md`). Choix C16-A : chez qui le prend, une **nouvelle session** sur son harness et son compte, dont le premier message est le dossier de passation d'ESC-88 ; la reprise native d'une session copiée (C16-B) est décidée pour Claude Code seulement, avec la passation en repli, et pas encore construite (TS-17b, ESC-607 ; voir « La reprise native de la session »).
 
 ## Le geste
 
@@ -62,3 +62,14 @@ Dits avec leur raison, rien n'est passé ni perdu :
 ## Ce que voit le serveur
 
 La prise (son id opaque, l'appareil qui la tient, celui qui l'a passée tant qu'elle n'est pas prise, le jeton, les heures), un fichier chiffré d'une taille, une opération chiffrée de plus au journal du projet. Jamais le ticket, la branche, le code, la conversation ni les noms.
+
+## La reprise native de la session (C16-B pour Claude Code, décidée, pas encore construite)
+
+Décidée par l'utilisateur le 2026-11-21, d'après l'essai d'ESC-581 (`docs/TEAM-SESSION-COPY.md`) ; construite par TS-17b (ESC-607). D'ici là, tout passage se fait en passation (ci-dessus).
+
+- **Seulement Claude Code, des deux côtés** : l'agent passé tourne sur Claude Code, entre deux tours, et le collègue le prend avec Claude Code. Les autres harness gardent la passation.
+- **Ce qui passe en plus** : la session de l'agent, le chemin de son worktree et la version de `claude`, dans le même dépôt chiffré que la conversation, effacés du serveur une fois repris ou le passage annulé.
+- **Les contrôles, chez qui reprend** : sa version de `claude` égale ou plus récente ; la session réécrite par chaîne JSON, du worktree de qui passe la main vers le sien, sous ses deux séparateurs ; plus aucune occurrence de l'ancien worktree. Elle est déposée dans le dossier du compte choisi, puis l'agent est lancé par `--resume <id> --fork-session` (un nouvel identifiant : jamais deux histoires sous le même).
+- **Le repli** : à tout échec (version, chemin restant, session non trouvée, erreur au premier tour), la passation d'ESC-88, comme aujourd'hui.
+- **Ce que dit l'écran** : « Reprise de la session » ou « Passation » au séparateur de la conversation ; chez qui passe la main, la fenêtre dit que la session part avec l'agent, chiffrée.
+- **Reste à essayer par l'utilisateur** : la reprise d'un compte ou d'une organisation à l'autre (demande « À toi » a-24).

@@ -701,9 +701,11 @@ Coût du store privé : environ 7 j (TS-14).
 
 **Recommandation : A d'abord.** B pour Claude Code seulement, si l'essai montre que la reprise d'une session copiée est fiable.
 
+**Tranché le 2026-11-21** (§15.3), après l'essai TS-0c (ESC-581, `docs/TEAM-SESSION-COPY.md`) : **C16-B pour Claude Code**, la reprise native de la session copiée, gardée par des contrôles (la version de `claude`, la réécriture par chaîne JSON et sa vérification, le dépôt dans le dossier du compte choisi, `--resume <id> --fork-session`), avec la passation d'ESC-88 en repli à tout échec ; **C16-A pour les autres harness**. Construit par TS-17b (ESC-607).
+
 ## 12. Les pistes : l'audit vers un SIEM, l'Overseer d'équipe
 
-Seulement des pistes, à étudier plus tard. **Étudiées (ESC-580)** : `docs/TEAM-AUDIT.md` (TS-21, choix A1 à A8, tickets AU-1 à AU-6) et `docs/TEAM-OVERSEER.md` (TS-22, choix O1 à O8, tickets OE-1 à OE-6), à trancher par l'utilisateur.
+Seulement des pistes, à étudier plus tard. **Étudiées (ESC-580)** : `docs/TEAM-AUDIT.md` (TS-21, choix A1 à A8, tickets AU-1 à AU-6) et `docs/TEAM-OVERSEER.md` (TS-22, choix O1 à O8, tickets OE-1 à OE-6). **Tranchées par l'utilisateur le 2026-11-21** : toutes les recommandations (§15.3) ; tickets AU-1 à AU-6 (ESC-608, 609, 610, 612, 614, 617) et OE-1 à OE-6 (ESC-606, 611, 613, 615, 616, 618), écrits par ESC-588.
 
 - **Le journal d'audit vers un SIEM.**
   - Les événements :
@@ -834,6 +836,14 @@ Le tableau garde les options, pour mémoire :
 | C16 | La reprise native d'une session passée | A passation seule · B native si possible | A, puis B pour Claude Code |
 | C17 | Ce qui entre dans la 2.3 (§16) | A tout · B le cœur du serveur, le reste après · C les stratégies du poste seules | B, avec les stratégies du poste lancées tôt |
 
+### 15.3 Les choix tranchés par l'utilisateur le 2026-11-21
+
+Réponse de l'utilisateur (demande a-23) : « Je prends toutes les recommandations : A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A ; O1 à O8 en A ; C16 : a. » Reprise par ESC-588, en décisions proposées, acceptées à sa validation.
+
+- **L'audit vers un SIEM (TS-21)** : les choix A1 à A8 de `docs/TEAM-AUDIT.md` §7, tous à la recommandation (trois sources, un rôle de service qui déchiffre, des événements qui nomment qui et où mais jamais quoi, JSON lines et syslog sur TLS, la signature, la chaîne, l'ancre et la tête publiée, l'équipe responsable du traitement, la durée du SIEM, une commande par son programme et son empreinte). Tickets AU-1 à AU-6 : ESC-608, ESC-609, ESC-610, ESC-612, ESC-614, ESC-617.
+- **L'Overseer d'équipe (TS-22)** : les choix O1 à O8 de `docs/TEAM-OVERSEER.md` §10, tous en A (une machine de l'équipe en mode serveur sous le rôle de service, il lance ce qu'on confie à la machine et propose aux membres, un fil commun signé, les consignes aux administrateurs, un bail d'équipe, les bornes du pilote auto et le coupe-circuit). Tickets OE-1 à OE-6 : ESC-606, ESC-611, ESC-613, ESC-615, ESC-616, ESC-618.
+- **C16, la reprise native d'une session passée** : l'option « a » de `docs/TEAM-SESSION-COPY.md` §4, soit **C16-B pour Claude Code** (la reprise native de la session copiée, gardée par des contrôles, la passation d'ESC-88 en repli à tout échec) et **C16-A pour les autres harness**. Ticket TS-17b : ESC-607. L'essai à deux comptes ou deux organisations attend l'utilisateur (demande a-24).
+
 ## 16. L'ordre proposé et le découpage en tickets
 
 L'ordre suit les dépendances. Les essais lèvent d'abord les inconnues, puis le socle (sans lui, rien ne marche), puis ce qui rend le serveur utile tout de suite : le Kanban en direct. Les stratégies du poste ne dépendent de rien : elles peuvent partir en parallèle dès le début, et servent même sans serveur.
@@ -868,14 +878,14 @@ Le socle s'appuie sur la fondation du mode serveur (`docs/REMOTE.md`) pour le tr
 | **Retenus** | | | |
 | TS-15 | Le coupe-circuit : entrée signée, application dans la seconde, bande, levée, « sans contact depuis N heures » | TS-2, TS-11 | 3 j |
 | TS-16 | Le tableau des coûts et des quotas : totaux horaires chiffrés pour les administrateurs, tableau, budgets et alertes, pilote auto arrêté au-delà, ce que voit chaque membre de lui. **Fait (ESC-547)** : la clé des administrateurs (une paire HPKE à part, enveloppée pour leurs appareils, tournée dès qu'un appareil enveloppé n'est plus le leur) dans `crates/escouade-team-crypto/src/costkey.rs`, les deux flux (la clé, les totaux), la file hors ligne et le résumé du mois dans `crates/escouade-team/src/costs.rs` (son `README.md`, « Les coûts de l'équipe »), le cœur dans `src-tauri/src/teamcosts.rs` (les totaux depuis les Stats, le grain C15 dit avant le premier envoi à son nom, les budgets `costs.*` du fichier d'équipe pesés avant un lancement, le pilote auto arrêté au-delà, l'alerte dans la boîte « À toi » de l'administrateur), l'écran « Coûts » de la fenêtre des équipes (`src/components/team/TeamCosts.svelte`) ; page de spec « Les coûts et les quotas de l'équipe » | TS-5 | 5 j |
-| TS-17 | Passer un agent à un collègue : prise transférée, push au geste, travail non commité, conversation chiffrée, passation d'ESC-88 chez le collègue ; vers une machine en mode serveur. **Fait (ESC-548), en C16-A** : la prise passée par le serveur (`hand`, `withdraw`, colonne `handed_by`, bail de 14 jours), l'offre au journal du projet et le dépôt chiffré dans `crates/escouade-team/src/handoff.rs` (son `README.md`, « Passer un agent »), le cœur dans `src-tauri/src/teamhandoff.rs`, la fenêtre `src/components/board/TeamHandoffModal.svelte` et la carte, la boîte « À toi » (source `handoff`) ; une machine en mode serveur le dit dans le projet et prend seule ce qu'on lui passe. **Reste** : la reprise native d'une session copiée (C16-B), pour Claude Code seulement, après l'essai TS-0c ; le refus d'un passage par qui le reçoit ; un projet de plusieurs dépôts | TS-6, TS-0c | 5 j |
+| TS-17 | Passer un agent à un collègue : prise transférée, push au geste, travail non commité, conversation chiffrée, passation d'ESC-88 chez le collègue ; vers une machine en mode serveur. **Fait (ESC-548), en C16-A** : la prise passée par le serveur (`hand`, `withdraw`, colonne `handed_by`, bail de 14 jours), l'offre au journal du projet et le dépôt chiffré dans `crates/escouade-team/src/handoff.rs` (son `README.md`, « Passer un agent »), le cœur dans `src-tauri/src/teamhandoff.rs`, la fenêtre `src/components/board/TeamHandoffModal.svelte` et la carte, la boîte « À toi » (source `handoff`) ; une machine en mode serveur le dit dans le projet et prend seule ce qu'on lui passe. **Reste** : la reprise native d'une session copiée (C16-B), pour Claude Code seulement, tranchée le 2026-11-21 (§15.3) et écrite en TS-17b (ESC-607) ; le refus d'un passage par qui le reçoit ; un projet de plusieurs dépôts | TS-6, TS-0c | 5 j |
 | **Qualité et docs** | | | |
 | TS-18 | L'e2e serveur et deux clients en CI ; le fuzzing du journal et des opérations. **Fait (ESC-519)** : la part « team server » des e2e et `tests/e2e/team-journey.spec.ts`, PostgreSQL exigé dans `linux-rust`, `fuzz/` à la racine (13 cibles, des propriétés, des graines dont les vecteurs de la crypto), une passe courte dans la CI et une longue par `fuzz.yml`, un test par borne du serveur (`tests/bounds.rs`), des tests de propriété (horloge hybride, fusion à trois voies, bornes croisées) ; le §14 dit ce que la CI tient et comment lancer le fuzzing chez soi | TS-6 | 4 j |
 | TS-19 | Les pages du site : installer le serveur d'équipe, le guide du RSSI (ce que voit le serveur, les stratégies, le piège du hook), la FAQ « Où vont mes données ? » | TS-13 | 3 j |
 | TS-20 | L'audit externe de la cryptographie et du journal, avant de dire le serveur stable (à confier par l'utilisateur à des auditeurs, pas un ticket d'agent) | TS-3, TS-13 | — |
 | **Pistes** | | | |
-| TS-21 | Étude : l'audit vers un SIEM (événements, formats, sources). **Faite (ESC-580)** : `docs/TEAM-AUDIT.md`, page de spec « L'audit vers un SIEM » ; choix A1 à A8 à trancher, tickets AU-1 à AU-6 (environ 14 h d'agent) | TS-13 | 2 j |
-| TS-22 | Étude : l'Overseer d'équipe, avec `docs/OVERSEER.md`. **Faite (ESC-580)** : `docs/TEAM-OVERSEER.md`, page de spec « L'Overseer d'équipe » ; choix O1 à O8 à trancher, tickets OE-1 à OE-6 (environ 13 h d'agent) | TS-6, Overseer | 2 j |
+| TS-21 | Étude : l'audit vers un SIEM (événements, formats, sources). **Faite (ESC-580)** : `docs/TEAM-AUDIT.md`, page de spec « L'audit vers un SIEM » ; choix A1 à A8 tranchés le 2026-11-21 (§15.3), tickets AU-1 à AU-6 écrits (ESC-608, 609, 610, 612, 614, 617 ; environ 14 h d'agent) | TS-13 | 2 j |
+| TS-22 | Étude : l'Overseer d'équipe, avec `docs/OVERSEER.md`. **Faite (ESC-580)** : `docs/TEAM-OVERSEER.md`, page de spec « L'Overseer d'équipe » ; choix O1 à O8 tranchés le 2026-11-21 (§15.3), tickets OE-1 à OE-6 écrits (ESC-606, 611, 613, 615, 616, 618 ; environ 13 h d'agent) | TS-6, Overseer | 2 j |
 
 **En tout** : environ 110 jours d'agent, soit environ 22 semaines, sans l'audit externe. C'est plus que le redesign de la 2.0.
 

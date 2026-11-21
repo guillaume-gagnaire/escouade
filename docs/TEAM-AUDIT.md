@@ -326,6 +326,8 @@ AU-6 livre, sur le site, une fiche de registre à recopier, sur le modèle de `d
 
 ## 7. Les choix à trancher
 
+**Tranchés par l'utilisateur le 2026-11-21** (demande a-23) : toutes les recommandations, A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A. Décisions proposées par ESC-588 ; `docs/TEAM-SERVER.md` §15.3.
+
 | N° | Question | Options | Recommandation |
 | --- | --- | --- | --- |
 | A1 | Les sources | A le serveur seul · B le serveur et une machine qui déchiffre · C B et les faits des postes scellés | C, en vagues |
@@ -342,6 +344,8 @@ AU-6 livre, sur le site, une fiche de registre à recopier, sur le modèle de `d
 **A8, en détail.** Le masquage par motifs (B) laisse passer un secret qu'il ne connaît pas, et une commande en dit long sur le travail. Le programme (`git`, `gh`, `npm`, `curl`) et l'empreinte suffisent à repérer une commande inhabituelle, et l'empreinte se compare à celle qu'approuve `.escouade.yml`. Coût : nul de plus.
 
 ## 8. Le découpage en tickets
+
+**Écrits par ESC-588** : AU-1 = ESC-608, AU-2 = ESC-609, AU-3 = ESC-610, AU-4 = ESC-612 (après ESC-546 et ESC-579, dont il émet les faits côté poste), AU-5 = ESC-614 (après OE-1 = ESC-606, qui fait le rôle de service, et ESC-546, ESC-579), AU-6 = ESC-617.
 
 L'ordre suit les sources : le modèle, puis le serveur seul (utile tout de suite), puis la clé d'audit et les faits des postes, puis la machine qui nomme, puis les guides et les essais.
 

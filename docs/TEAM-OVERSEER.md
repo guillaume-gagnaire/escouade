@@ -243,6 +243,8 @@ Le coupe-circuit (TS-15, pas encore construit) est une entrée signée par un ad
 
 ## 10. Les choix à trancher
 
+**Tranchés par l'utilisateur le 2026-11-21** (demande a-23) : O1 à O8 en A, toutes les recommandations. Décisions proposées par ESC-588 ; `docs/TEAM-SERVER.md` §15.3.
+
 | N° | Question | Options | Recommandation |
 | --- | --- | --- | --- |
 | O1 | Où il tourne | A une machine de l'équipe en mode serveur · B le poste d'un administrateur · C pas d'Overseer d'équipe | A |
@@ -255,6 +257,8 @@ Le coupe-circuit (TS-15, pas encore construit) est une entrée signée par un ad
 | O8 | Le coupe-circuit | A il l'arrête avec ses agents, une portée « Overseer d'équipe », muet hors ligne · B celui d'aujourd'hui seulement | A |
 
 ## 11. Le découpage en tickets
+
+**Écrits par ESC-588** : OE-1 = ESC-606, OE-2 = ESC-611, OE-3 = ESC-613, OE-4 = ESC-615, OE-5 = ESC-616 (après ESC-546, le coupe-circuit, écrit sans la portée « Overseer d'équipe » : OE-5 l'ajoute), OE-6 = ESC-618.
 
 L'ordre : le rôle et le bail (sans eux, deux machines ou un administrateur exposé), puis l'Overseer sur la machine, puis le fil depuis les postes, puis les bornes, puis la cohabitation avec les Overseers personnels.
 
