@@ -146,6 +146,19 @@
         </div>
       </div>
     {/if}
+  {:else if inbox.hidden}
+    <!-- The filter hides all that waits (ESC-578): said, with how to see it again; never « Rien ne t'attend ». -->
+    <div class="empty" data-testid="inbox-filter-empty">
+      <div class="in">
+        <h2>{t('inbox.filter.emptyTitle')}</h2>
+        <p class="lead">{t('inbox.filter.emptyLead', { count: inbox.hidden })}</p>
+        <div>
+          <button class="btn" onclick={() => inbox.setFilter([])} data-testid="inbox-filter-empty-clear"
+            ><Icon name="close" size={13} />{t('inbox.filter.clearAria')}</button
+          >
+        </div>
+      </div>
+    </div>
   {:else}
     <div class="empty" data-testid="inbox-empty">
       <div class="in">

@@ -371,6 +371,29 @@ Les maquettes : [`design/inbox-2-3/`](../design/inbox-2-3/README.md). Les textes
 | Ligne   | titre ; projet, auteur, ticket ; « 6 images » ; depuis (« 40 min ») ; « aujourd'hui » ; « jusqu'à demain 9:00 » ; « revenue de Plus tard »                                                                                  | —                                                                                                                                                                                          |
 | Répondu | « C · Une seule page · toi · 10:42 · lue par design-form » ; « chef-atlas, délégué » ; « périmée » ; « retirée par design-tableau »                                                                                         | “C · One page · you · 10:42 · read by design-form”; “chef-atlas, delegated”; “expired”; “withdrawn by design-tableau”                                                                      |
 
+#### Le filtre par type (ESC-578)
+
+Sous le compteur des traitées, en haut de la liste : « Tout », puis un bouton par type qui attend, avec son nombre (« Autorisations 3 », « Feux verts 1 »), dans un ordre fixe. Un type sans rien qui attende n'apparaît pas, sauf s'il est choisi (il reste à 0 pour qu'on puisse l'ôter). Le filtre ne s'offre pas quand un seul type attend et que rien n'est choisi.
+
+| Type | Ce qu'il réunit | Pourquoi |
+| --- | --- | --- |
+| « Autorisations » / “Permissions” | l'autorisation d'un agent arrêté ; la suppression qu'un agent demande | un oui ou non sur ce que l'agent ferait |
+| « Questions » / “Questions” | la question d'un agent arrêté ; une demande `answer` ; un `confirm` sans `gate` | ce que l'agent demande, quelle que soit la forme de la réponse |
+| « Plans » / “Plans” | un plan à approuver | — |
+| « Choix » / “Choices” | une demande `choice` | — |
+| « Feux verts » / “Go-aheads” | un `confirm` avec `gate` | à part : toi seul y réponds (publier, signer, dépenser) |
+| « Tâches » / “Tasks” | une demande `task` | — |
+| « Tickets » / “Tickets” | un ticket à valider ; un ticket bloqué | les deux se règlent sur le ticket, au Kanban |
+| « Décisions » / “Decisions” | une décision proposée | — |
+| « Relectures » / “Reviews” | une relecture de PR | — |
+| « Docs » / “Docs” | les docs à partager | — |
+
+- **Plusieurs à la fois** ; « Tout » (ou « Effacer », ou « Tout montrer ») ôte le filtre d'un geste. Le choix se garde sur ce poste (`localStorage`, `escouade.inbox.filter`), d'une ouverture à l'autre et d'un lancement à l'autre ; le téléphone garde le sien.
+- **Ce qu'il change** : les groupes et leur ordre restent, seules les lignes des types choisis y restent (« Plus tard », « Le chef s'en occupe » et « Répondu récemment » compris) ; J, K et « 2 sur 5 » parcourent les lignes montrées. Le compte de la tuile, celui de l'en-tête et « il en reste 9 » disent toujours tout ce qui attend. La demande ouverte, cachée par le filtre, laisse la place à la première montrée.
+- **Ce qu'il cache** se dit d'une ligne discrète sous lui, « 2 autres demandes masquées par le filtre · Tout montrer » (“2 more requests hidden by the filter · Show all”), lue par un lecteur d'écran quand une demande d'un type caché arrive (`role="status"`). Le filtre cache tout ce qui attend : « Rien de ce type ne t'attend » ; « 3 autres demandes attendent, masquées par le filtre. » ; « Effacer le filtre » — jamais « Rien ne t'attend ».
+- **Clavier et lecteur d'écran** : une barre d'outils « Filtrer par type » ; chaque bouton dit son état (`aria-pressed`) ; Tab y entre, ←, →, Début et Fin vont d'un bouton à l'autre, Espace ou Entrée choisit.
+- **Partagé** : les types, leurs regroupements, les nombres, ce qui est gardé et caché vivent dans `src/lib/inbox/filter.ts`, sans état de la fenêtre, pour l'app mobile (MO-5, ESC-571). Rien ne passe par le cœur : l'API distante n'a rien de neuf à servir.
+
 ### 10.3 Une demande
 
 | Élément                    | FR                                                                                                                                                                                                                                                     | EN                                                                                                                                                                                                                    |

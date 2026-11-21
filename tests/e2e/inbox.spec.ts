@@ -226,6 +226,92 @@ test('a go-ahead, a task, an answer, and a request put off that comes back at it
     .toBe('read');
 });
 
+test('the filter by type: several types chosen, the groups kept, the count unchanged, what it hides said, kept, cleared', async ({
+  app,
+}) => {
+  test.setTimeout(240_000);
+  const { page } = app;
+  // An agent stopped on a permission, another that leaves a go-ahead, a task and a question.
+  await withAgent(page, app.repo);
+  await send(page, 'permission');
+  await expect(page.getByTestId('permission-pending')).toContainText('rm -rf build');
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
+  await send(page, '[demande-oui]');
+  await expect(page.getByText(/Demande a-1 déposée/)).toBeVisible({ timeout: 30_000 });
+  await send(page, '[demande-tache]');
+  await expect(page.getByText(/Demande a-2 déposée/)).toBeVisible({ timeout: 30_000 });
+  await send(page, '[demande-texte]');
+  await expect(page.getByText(/Demande a-3 déposée/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('inbox-count')).toHaveText('4');
+
+  await tile(page).click();
+  const queue = page.getByTestId('inbox-queue');
+  const filter = queue.getByTestId('inbox-filter');
+  const chips = filter.getByRole('button');
+  const rows = queue.locator('[data-testid="inbox-row"], [data-testid="ivw-row"], [data-testid="inbox-stopped"]');
+  const hidden = queue.getByTestId('inbox-filter-hidden');
+  const headings = async () =>
+    (await queue.getByRole('heading', { level: 2 }).allTextContents()).map((h) => h.replace(/\s*\d+\s*$/, '').trim());
+  await expect(chips).toHaveText(['Tout', 'Autorisations 1', 'Questions 1', 'Feux verts 1', 'Tâches 1']);
+  await expect(filter.getByRole('button', { name: 'Tout' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(rows).toHaveCount(4);
+  const before = await headings();
+
+  // Two types at once, from the keyboard: the groups and their order stay, only their rows show.
+  await filter.getByRole('button', { name: 'Tout' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(filter.getByRole('button', { name: /^Feux verts/ })).toBeFocused();
+  await page.keyboard.press('Space');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(filter.getByRole('button', { name: /^Feux verts/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(filter.getByRole('button', { name: /^Tâches/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(filter.getByRole('button', { name: 'Tout' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText('Publier atlas-web 1.4.0 en production ?');
+  // « Tes agents se sont arrêtés » goes with its only row; « Aujourd'hui » stays where it was.
+  expect(await headings()).toEqual(before.filter((h) => h !== 'Tes agents se sont arrêtés'));
+  await expect(page.getByTestId('inbox-nth')).toHaveText('1 sur 2');
+  // The tile still says all that waits; the line says what the filter hides.
+  await expect(page.getByTestId('inbox-count')).toHaveText('4');
+  await expect(hidden).toHaveText(/2 autres demandes masquées par le filtre/);
+  await expect(queue.getByTestId('inbox-filter-clear')).toBeVisible();
+  // Whole in the window, at either size.
+  const outside = await page.evaluate(
+    () =>
+      [...document.querySelectorAll('[data-testid="inbox-queue"] *')]
+        .map((e) => e.getBoundingClientRect())
+        .filter((r) => r.width && (r.right > innerWidth + 1 || r.left < -1)).length,
+  );
+  expect(outside).toBe(0);
+  const filterBox = await filter.boundingBox();
+  const queueBox = await queue.boundingBox();
+  expect(filterBox!.x + filterBox!.width).toBeLessThanOrEqual(queueBox!.x + queueBox!.width + 1);
+  await shoot(page, 'inbox-filtre');
+
+  // A request of a type hidden arrives: not in the list, said by the line; the tile counts it.
+  await page.keyboard.press('Escape');
+  await send(page, '[demande-texte]');
+  await expect(page.getByText(/Demande a-4 déposée/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('inbox-count')).toHaveText('5');
+  // The choice kept from one opening to the next.
+  await tile(page).click();
+  await expect(filter.getByRole('button', { name: /^Feux verts/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(rows).toHaveCount(2);
+  await expect(hidden).toHaveText(/3 autres demandes masquées par le filtre/);
+  await expect(chips).toHaveText(['Tout', 'Autorisations 1', 'Questions 2', 'Feux verts 1', 'Tâches 1', 'Effacer']);
+
+  // Cleared in one gesture: everything again.
+  await queue.getByTestId('inbox-filter-clear').click();
+  await expect(rows).toHaveCount(5);
+  await expect(hidden).toBeEmpty();
+  await expect(filter.getByRole('button', { name: 'Tout' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(queue.getByTestId('inbox-filter-clear')).toHaveCount(0);
+  expect(await headings()).toEqual(before);
+});
+
 test('the MCP server off, nothing of the box shows; on again, it comes back with its requests, without a restart', async ({ app }) => {
   test.setTimeout(120_000);
   const { page } = app;

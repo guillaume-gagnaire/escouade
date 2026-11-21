@@ -10,6 +10,20 @@ import { intlLocale, t } from '../i18n';
 import { api } from '../ipc';
 import { app, asksUser } from '../state.svelte';
 import type { Agent, AskFile, WindowAsk } from '../types';
+import {
+  hiddenCount,
+  keep,
+  shows,
+  typeOf,
+  keepAsks,
+  keepViews,
+  readFilter,
+  stoppedWhat,
+  toggle,
+  typeCounts,
+  writeFilter,
+  type InboxType,
+} from './filter';
 import { waitsForUser, type InboxItem } from './views';
 import { inboxViews } from './views.svelte';
 
@@ -145,13 +159,35 @@ function leadsAgents(views: InboxItem[]): Set<string> {
 export const stoppedAgents = (agents: Record<string, Agent>, projectId?: string | null) =>
   Object.values(agents).filter((a) => !a.archived && asksUser(a) && (!projectId || a.projectId === projectId));
 
-/** What a blocking request waits for, for its row. */
-export function stoppedWhat(a: Agent): 'permission' | 'question' | 'plan' | 'delete' {
-  const r = a.requests?.[0];
-  if (!r) return a.deleteAsk ? 'delete' : 'permission';
-  if (r.kind === 'question') return 'question';
-  return r.tool === 'ExitPlanMode' ? 'plan' : 'permission';
+/** What a blocking request waits for, for its row (in `filter.ts`, which types the rows). */
+export { stoppedWhat };
+
+/**
+ * The groups under a filter by type (ESC-578): the same groups in the same order, only the rows of the types chosen
+ * left in each; none chosen, the groups as they are.
+ */
+export function filtered(g: QueueGroups, chosen: readonly InboxType[]): QueueGroups {
+  if (!chosen.length) return g;
+  return {
+    stopped: keep(g.stopped, chosen),
+    today: keep(g.today, chosen),
+    earlier: keep(g.earlier, chosen),
+    later: keepAsks(g.later, chosen),
+    laterViews: keepViews(g.laterViews, chosen),
+    claimed: keepViews(g.claimed, chosen),
+    recent: keepAsks(g.recent, chosen),
+    settled: keepViews(g.settled, chosen),
+  };
 }
+
+/** The window's own store, when it has one (the tests and the phone may have none). */
+const local = (): Storage | null => {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+};
 
 /** What a stopped agent's row says it waits for: its question, or the tool and what it acts on. */
 export function stoppedTitle(a: Agent): string {
@@ -222,7 +258,19 @@ class Inbox {
   /** What Escouade puts in the box of its own (ESC-513), every project, then in the scope. */
   views = $derived(this.enabled ? inboxViews.data.views : []);
   scopedViews = $derived(this.scope === 'project' ? this.views.filter((v) => v.projectId === app.ui.activeProject) : this.views);
-  groups = $derived(groups(this.scoped, this.stopped, Date.now(), this.scopedViews));
+  /** The groups in the scope, whatever the filter. */
+  allGroups = $derived(groups(this.scoped, this.stopped, Date.now(), this.scopedViews));
+  /** The rows that wait in the scope, whatever the filter: the meter and « il en reste 9 ». */
+  allRows = $derived(actionable(this.allGroups));
+  /** The types chosen in the filter (ESC-578), kept on this machine; none: « Tout ». */
+  filter = $state<InboxType[]>(readFilter(local()));
+  /** The types offered, each with what waits of it in the scope. */
+  types = $derived(typeCounts(this.allRows, this.filter));
+  /** What waits and the filter hides. */
+  hidden = $derived(hiddenCount(this.allRows, this.filter));
+  /** The groups the queue shows, under the filter. */
+  groups = $derived(filtered(this.allGroups, this.filter));
+  /** The rows one goes through (J, K, « 3 sur 9 »): those the filter shows. */
   rows = $derived(actionable(this.groups));
   /** The rail's count: every project, whatever the scope. */
   count = $derived(inboxCount(this.asks, stoppedAgents(app.agents), this.views));
@@ -246,6 +294,19 @@ class Inbox {
     const ask = this.asks.find((a) => a.id === key);
     return ask ? { kind: 'ask', ask } : null;
   });
+
+  /** Chooses the types to show (none: « Tout »), keeps the choice, and opens a row shown if the one open is hidden. */
+  setFilter(chosen: InboxType[]) {
+    this.filter = chosen;
+    writeFilter(local(), chosen);
+    const cur = this.current;
+    if (cur && !shows(chosen, typeOf(cur))) this.select(null, false);
+  }
+
+  /** A type put in the filter, or taken out. */
+  toggleType(type: InboxType) {
+    this.setFilter(toggle(this.filter, type));
+  }
 
   /** Reads the box again: what the core holds now. */
   async load() {
@@ -292,6 +353,7 @@ class Inbox {
     this.clear();
     this.loaded = false;
     this.scope = 'all';
+    this.filter = [];
     this.announce = null;
     this.known.clear();
   }

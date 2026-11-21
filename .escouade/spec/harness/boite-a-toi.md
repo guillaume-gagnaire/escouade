@@ -1,9 +1,9 @@
 ---
 title: "La boîte « À toi »"
 subject: "harness"
-sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 5.1 pour ESC-557 ; § 18)","design/inbox-2-3/README.md (direction B, captures b-)","Demande de l'utilisateur du 2026-11-20 (ESC-557) : « quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans \"à toi\", afin d'être toujours à jour »"]
-tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-557"]
-decisions: [210,240,242,258]
+sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 5.1 pour ESC-557 ; § 10.2 pour le filtre d'ESC-578 ; § 18)","design/inbox-2-3/README.md (direction B, captures b-)","Demande de l'utilisateur du 2026-11-20 (ESC-557) : « quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans \"à toi\", afin d'être toujours à jour »","Demande de l'utilisateur du 2026-11-21 (ESC-578) : « Dans le \"À toi\", ajoute le fait de pouvoir filtrer par type de demande. »"]
+tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-557","ESC-578"]
+decisions: [210,240,242,258,"la-boite-a-toi-se-filtre-par-type-de-dem"]
 compared: null
 ---
 
@@ -199,3 +199,29 @@ Les instructions du serveur MCP ajoutent : retirer une demande avec une note qui
 ### Les commandes de la fenêtre
 
 `inbox_views` rend la marque de chaque vue (`mark` : `kind` `claimed` ou `settled`, `note`, `byName`, `at`) et ne compte pas les vues marquées dans `total` ; `inbox_view_reopen` remet une vue marquée dans la boîte. Sur la 2.2, l'API distante n'existe pas encore : au reversement dans la 2.3, `inbox_view_reopen` y est servie avec les autres commandes de la boîte (`docs/INBOX.md` § 18).
+
+## Le filtre par type (ESC-578)
+
+Demandé le 2026-11-21 : « Dans le "À toi", ajoute le fait de pouvoir filtrer par type de demande. »
+
+### Ce qu'il offre
+
+- En haut de la file, sous « 3 traitées aujourd'hui · il en reste 9 » : un groupe « Filtrer par type » (“Filter by type”), « Tout » (“All”), puis un bouton par type qui attend dans la portée, avec son nombre (« Autorisations 3 », « Feux verts 1 »), dans un ordre fixe : Autorisations, Questions, Plans, Choix, Feux verts, Tâches, Tickets, Décisions, Relectures, Docs (“Permissions”, “Questions”, “Plans”, “Choices”, “Go-aheads”, “Tasks”, “Tickets”, “Decisions”, “Reviews”, “Docs”). Les boutons passent à la ligne dans la largeur de la file (300 px, 236 sous 1100 px).
+- Un type sans rien qui attende n'apparaît pas, sauf s'il est choisi : il reste à 0 pour qu'on puisse l'ôter. Le filtre ne s'offre pas quand un seul type attend et que rien n'est choisi.
+- **Les regroupements** : « Autorisations » réunit l'autorisation d'un agent arrêté et la suppression qu'un agent demande (un oui ou non sur ce que l'agent ferait) ; « Questions », la question d'un agent arrêté, une demande `answer` et un `confirm` sans `gate` (ce que l'agent demande, quelle que soit la forme de la réponse) ; « Tickets », un ticket à valider et un ticket bloqué (les deux se règlent sur le ticket). « Feux verts » (`confirm` avec `gate`) reste à part : toi seul y réponds.
+- **Plusieurs à la fois** : chaque bouton s'allume ou s'éteint ; « Tout », « Effacer » (au bout des boutons, filtre actif) ou « Tout montrer » ôtent le filtre d'un geste.
+- **Gardé sur ce poste**, d'une ouverture à l'autre et d'un lancement à l'autre (le stockage local de la fenêtre) ; le téléphone garde le sien.
+
+### Ce qu'il change
+
+- Les groupes et leur ordre restent ; seules les lignes des types choisis y restent, « Plus tard », « Le chef s'en occupe » et « Répondu récemment » compris ; un groupe vidé par le filtre se tait. `J`, `K` et « 2 sur 5 » parcourent les lignes montrées. La demande ouverte, cachée par le filtre, laisse la place à la première montrée.
+- **Les comptes ne changent pas** : la tuile « À toi », le titre de la file, la jauge et « il en reste 9 » disent toujours tout ce qui attend.
+- **Ce qu'il cache se dit discrètement**, sous lui : « 2 autres demandes masquées par le filtre · Tout montrer » (“2 more requests hidden by the filter · Show all”) ; une demande d'un type caché qui arrive y ajoute un, et un lecteur d'écran l'entend (région `status`). Quand le filtre cache tout ce qui attend, le panneau dit « Rien de ce type ne t'attend » ; « 3 autres demandes attendent, masquées par le filtre. » ; « Effacer le filtre » — jamais « Rien ne t'attend ».
+
+### Clavier et lecteur d'écran
+
+- Chaque bouton dit son état (`aria-pressed`), le groupe son nom ; `Tab` y entre, `←`, `→`, `Début`, `Fin` vont d'un bouton à l'autre, `Espace` ou `Entrée` choisit. Aux deux tailles de fenêtre (1440 × 900, 1024 × 728), rien ne déborde.
+
+### Partagé avec l'app mobile
+
+- Les types, leurs regroupements, les nombres, ce qui est gardé et caché vivent dans un module de la fenêtre sans son état (`src/lib/inbox/filter.ts`), que l'app mobile reprend (MO-5, ESC-571). Le filtre ne passe pas par le cœur : rien de neuf à servir par l'API distante.

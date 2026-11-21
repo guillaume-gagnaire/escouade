@@ -40,6 +40,32 @@ export default {
     thumbs: 'Les rendus de ses options',
     newOne: 'Nouvelle demande de {author} : {title}',
   },
+  // The filter by type, under the meter (ESC-578): « Tout », then each type that waits and its number.
+  filter: {
+    label: 'Filtrer par type',
+    all: 'Tout',
+    clear: 'Effacer',
+    clearAria: 'Effacer le filtre',
+    types: {
+      permission: 'Autorisations',
+      question: 'Questions',
+      plan: 'Plans',
+      choice: 'Choix',
+      gate: 'Feux verts',
+      task: 'Tâches',
+      tickets: 'Tickets',
+      decision: 'Décisions',
+      review: 'Relectures',
+      docs: 'Docs',
+    },
+    hidden: { one: '{count} autre demande masquée par le filtre', other: '{count} autres demandes masquées par le filtre' },
+    showAll: 'Tout montrer',
+    emptyTitle: 'Rien de ce type ne t’attend',
+    emptyLead: {
+      one: '{count} autre demande attend, masquée par le filtre.',
+      other: '{count} autres demandes attendent, masquées par le filtre.',
+    },
+  },
   kind: {
     choice: 'Choix',
     confirm: 'Oui ou non',
