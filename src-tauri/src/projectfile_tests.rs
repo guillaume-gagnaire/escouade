@@ -43,6 +43,9 @@ git:
   agent_branch_prefix: agent/
   ticket_branch_prefix: tickets/
   commit_mode: direct
+  auto_fetch: always
+  fetch_every: 30
+  fetch_timeout: 900
   conventional_commits: false
 board:
   on_approve: pr
@@ -106,6 +109,9 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("git.ticket_branch_prefix"), json!("tickets/"));
     assert_eq!(v("git.commit_mode"), json!("direct"));
     assert_eq!(v("git.conventional_commits"), json!(false));
+    assert_eq!(v("git.auto_fetch"), json!("always"));
+    assert_eq!(v("git.fetch_every"), json!(30));
+    assert_eq!(v("git.fetch_timeout"), json!(900));
     assert_eq!(v("board.on_approve"), json!("pr"));
     assert_eq!(v("board.target_branch"), json!("develop"));
     assert_eq!(v("board.merge_strategy"), json!("rebase"));
@@ -606,6 +612,7 @@ fn commands_the_project_has_already_need_no_trust() {
         command: "npm run dev".into(),
         shell: "pwsh".into(),
         cwd: "web".into(),
+        ..Default::default()
     }];
     let r = read("version: 1\nlaunch:\n  - name: web\n    command: npm run dev\n    shell: pwsh\n    cwd: web\n");
     pf::apply(&mut p, &r);
@@ -617,6 +624,72 @@ fn commands_the_project_has_already_need_no_trust() {
     pf::apply(&mut p, &r);
     assert!(p.shared.file.as_ref().unwrap().pending.is_some());
     assert_eq!(p.run_commands[0].shell, "pwsh");
+}
+
+/// ESC-560: a proposed launch command carries the address it opens and where, applied with the
+/// command once trusted, written back the same; an address that is not http(s) is told and the
+/// command left out.
+#[test]
+fn a_launch_command_proposes_its_address_and_where_it_opens() {
+    let text = "version: 1\nlaunch:\n  - name: web\n    command: npm run dev\n    url: http://localhost:${ESCOUADE_PORT_BASE:-5173}/\n    open_in: browser\n  - name: api\n    command: cargo run\n    url: http://localhost:8080\n";
+    let r = read(text);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let mut p = project();
+    pf::apply(&mut p, &r);
+    // Not applied before the user trusts it, as the rest of the commands.
+    assert!(p.run_commands.is_empty());
+    let hash = p
+        .shared
+        .file
+        .as_ref()
+        .unwrap()
+        .pending
+        .as_ref()
+        .unwrap()
+        .hash
+        .clone();
+    p.shared.trusted = hash;
+    pf::apply(&mut p, &r);
+    assert_eq!(p.run_commands.len(), 2);
+    assert_eq!(
+        p.run_commands[0].url,
+        "http://localhost:${ESCOUADE_PORT_BASE:-5173}/"
+    );
+    assert_eq!(p.run_commands[0].open_in, crate::model::RunOpen::Browser);
+    assert_eq!(p.run_commands[1].url, "http://localhost:8080");
+    assert_eq!(p.run_commands[1].open_in, crate::model::RunOpen::Page);
+    // Written back: the address and the browser, nothing for the page (the default).
+    let out = pf::write(None, &pf::export_values(&p)).unwrap();
+    assert!(
+        out.contains("url: http://localhost:${ESCOUADE_PORT_BASE:-5173}/"),
+        "{out}"
+    );
+    assert_eq!(out.matches("open_in").count(), 1, "{out}");
+    let again = read(&out);
+    assert_eq!(again.values["launch"], r.values["launch"]);
+
+    // Another scheme, or a variable other than the ports: told on its line, the command left out.
+    for bad in [
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "http://${HOME}/",
+    ] {
+        let r = read(&format!(
+            "version: 1\nlaunch:\n  - name: web\n    command: npm run dev\n    url: \"{bad}\"\n"
+        ));
+        assert_eq!(r.values["launch"], json!([]), "{bad}");
+        assert_eq!(r.warnings.len(), 1, "{bad}");
+        assert_eq!(r.warnings[0].line, Some(5), "{bad}");
+    }
+    let r =
+        read("version: 1\nlaunch:\n  - name: web\n    command: npm run dev\n    open_in: tab\n");
+    assert_eq!(r.values["launch"], json!([]));
+    assert!(r.warnings[0].text.contains("browser"), "{:?}", r.warnings);
+    // The schema says both.
+    let s = pf::schema();
+    let item = &s["properties"]["launch"]["oneOf"][0]["items"]["properties"];
+    assert_eq!(item["open_in"]["enum"], json!(["page", "browser"]));
+    assert_eq!(item["url"]["type"], "string");
 }
 
 #[test]
@@ -1380,6 +1453,7 @@ async fn exported_the_project_s_settings_make_its_file_its_commands_trusted() {
                 command: "npm run dev".into(),
                 shell: String::new(),
                 cwd: String::new(),
+                ..Default::default()
             }],
             ..h.core.project(&p.id).unwrap()
         })

@@ -404,6 +404,14 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             info.added += rg.added;
             info.deleted += rg.deleted;
             info.last_fetch = info.last_fetch.max(crate::git::last_fetch(&c.dir));
+            // The background fetch's (ESC-561): the first failure of its repositories.
+            if let Some(root) = self.toplevel(&c.dir).await {
+                let (failure, note) = self.fetch_view(&root);
+                if info.fetch_failure.is_none() {
+                    info.fetch_failure = failure;
+                }
+                info.fetch_ssh_note |= note;
+            }
             info.repos.push(rg);
         }
         let mut branches = info.repos.iter().filter(|r| !r.gone).map(|r| &r.branch);

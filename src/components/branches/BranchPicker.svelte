@@ -6,6 +6,7 @@
   import { missingAccountOf } from '../../lib/refusal';
   import { trapFocus } from '../../lib/focus';
   import { gitSync, repoSyncInfo, syncInfo, type SyncOp } from '../../lib/git-sync.svelte';
+  import FetchLine from './FetchLine.svelte';
   import { pointerMoves } from '../../lib/hover';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -670,6 +671,7 @@
             >{t('branches.sync.fetch')} <span class="hint">{t('branches.sync.now')}</span></button
           >
         </div>
+        <FetchLine {projectId} lastFetch={sync.lastFetch} failure={sync.fetchFailure} sshNote={sync.fetchSshNote} onsettings={onclose} />
       {/if}
     </div>
   {/if}

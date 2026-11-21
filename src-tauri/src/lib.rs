@@ -102,6 +102,8 @@ mod facts_tests;
 mod fence;
 #[cfg(test)]
 mod fence_tests;
+#[cfg(test)]
+mod fetch_tests;
 mod fileorigin;
 #[cfg(test)]
 mod fileorigin_tests;
@@ -481,6 +483,15 @@ pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
 }
 
 pub fn run() {
+    // A debug build told `--sandbox-keychain …` takes back the keychain's entries of sandboxed runs, then stops: the
+    // end-to-end fixture's, at its start and its end (ESC-584). Before anything, which would touch the user's folders.
+    #[cfg(debug_assertions)]
+    if let Some((out, code)) = escouade_forge::integrations::sandbox_keychain::command(
+        &std::env::args().skip(1).collect::<Vec<_>>(),
+    ) {
+        println!("{out}");
+        std::process::exit(code);
+    }
     // Before GTK starts: the window's app_id and WM_CLASS, which find its icon (ESC-239).
     #[cfg(target_os = "linux")]
     desktop::name_the_program();

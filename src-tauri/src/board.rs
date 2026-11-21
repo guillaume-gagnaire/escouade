@@ -3361,6 +3361,7 @@ mod tests {
                 command: "npm run dev".into(),
                 shell: "pwsh".into(),
                 cwd: "web".into(),
+                ..Default::default()
             },
             RunCommand {
                 id: "c2".into(),
@@ -3368,6 +3369,7 @@ mod tests {
                 command: "cargo run".into(),
                 shell: "pwsh".into(),
                 cwd: String::new(),
+                ..Default::default()
             },
         ];
         let en = prepare_message(Lang::En, 4120, &commands);

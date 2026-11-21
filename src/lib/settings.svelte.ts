@@ -12,6 +12,7 @@ import type {
   BoardSettings,
   CommitMode,
   PagesOpen,
+  ProjectFetch,
   EngineId,
   Project,
   ProjectIntegrations,
@@ -22,7 +23,9 @@ import type {
   WorktreeStep,
   WorktreeSuggestion,
 } from './types';
+import { runUrlProblem } from './run-url';
 import { branchPrefixProblem, worktreesRootProblem } from './worktrees';
+import { DEFAULT_FETCH } from './fetch';
 import { rowsOf, SETTINGS_PAGES, type RowInfo, type SettingsPage } from './settings-pages';
 
 export * from './settings-pages';
@@ -71,6 +74,7 @@ type ProjectFields = Pick<
   | 'userName'
   | 'shareNew'
   | 'docsBranch'
+  | 'gitFetch'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -79,6 +83,8 @@ export type StepKind = 'setup' | 'teardown';
 export interface ProjectDraft {
   /** « Branche des docs » (ESC-258): empty for the current branch. */
   docsBranch: string;
+  /** « Récupérer automatiquement » of the project (ESC-561). */
+  gitFetch: ProjectFetch;
   name: string;
   color: string;
   /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. */
@@ -171,6 +177,7 @@ function draftOf(p: Project): ProjectDraft {
     userName,
     shareNew,
     docsBranch,
+    gitFetch,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -219,6 +226,8 @@ function draftOf(p: Project): ProjectDraft {
     shareNew: !!shareNew,
     // Absent from a project of the window's tests made before ESC-256.
     docsBranch: docsBranch ?? '',
+    // Absent from a project saved before ESC-561: as the general setting.
+    gitFetch: gitFetch ?? { mode: 'default', everyMin: 0, timeoutSecs: 0 },
     board,
     integrations,
   };
@@ -290,6 +299,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     userName: d.userName.trim(),
     shareNew: d.shareNew,
     docsBranch: d.docsBranch.trim(),
+    gitFetch: { ...d.gitFetch },
   };
 }
 
@@ -392,10 +402,12 @@ class SettingsForm {
   projectProblems(id: string) {
     const d = this.projects[id];
     const p = app.projects.find((x) => x.id === id);
-    if (!d || !p) return { name: false, commands: false, dir: null, agentPrefix: false, ticketPrefix: false };
+    if (!d || !p) return { name: false, commands: false, urls: false, dir: null, agentPrefix: false, ticketPrefix: false };
     return {
       name: !d.name.trim(),
       commands: d.runCommands.some((c) => !c.name.trim() || !c.command.trim()),
+      /** An address to open that is not http(s) (ESC-560), said on its own field. */
+      urls: d.runCommands.some((c) => !!runUrlProblem(c.url ?? '')),
       ...worktreesProblems(p.path, d),
     };
   }
@@ -405,7 +417,7 @@ class SettingsForm {
     const p = this.projectProblems(id);
     const out: (keyof ProjectFields)[] = [];
     if (p.name) out.push('name');
-    if (p.commands) out.push('runCommands');
+    if (p.commands || p.urls) out.push('runCommands');
     if (p.dir) out.push('worktreeDir');
     if (p.agentPrefix) out.push('agentBranchPrefix');
     if (p.ticketPrefix) out.push('ticketBranchPrefix');
@@ -463,6 +475,8 @@ class SettingsForm {
 
   #read() {
     const settings = $state.snapshot(app.settings);
+    // Absent from settings of the window's tests made before ESC-561: as the backend's default.
+    settings.gitFetch ??= { ...DEFAULT_FETCH };
     const projects = Object.fromEntries(app.projects.map((p) => [p.id, draftOf(p)]));
     this.#base = { settings, projects };
     this.settings = structuredClone(settings);
@@ -532,7 +546,15 @@ class SettingsForm {
 
   /** A launch command for the project on screen in the modal, run by the first shell found. */
   addCommand() {
-    this.project?.runCommands.push({ id: crypto.randomUUID(), name: '', command: '', shell: app.shells[0]?.id ?? 'pwsh', cwd: '' });
+    this.project?.runCommands.push({
+      id: crypto.randomUUID(),
+      name: '',
+      command: '',
+      shell: app.shells[0]?.id ?? 'pwsh',
+      cwd: '',
+      url: '',
+      openIn: 'page',
+    });
   }
 
   /** A worktree step for the project on screen in the modal, run by the first shell found. */

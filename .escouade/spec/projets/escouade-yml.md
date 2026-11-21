@@ -2,8 +2,8 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-530"]
-decisions: [255]
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-530","ESC-560","ESC-561"]
+decisions: [255,"une-commande-de-lancement-ouvre-son-adre"]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 
@@ -125,3 +125,30 @@ Chaque cas est tranché :
 - Les commandes écrites sont celles du projet : approuvées d'office.
 - « Écrire dans .escouade.yml » d'un mode `bypassPermissions` gardé sur la machine n'écrit rien et le garde.
 - Un fichier illisible ou d'une version plus récente n'est pas réécrit : « modifie-le à la main ».
+
+### L'adresse d'une commande de lancement (ESC-560)
+
+- Une commande de `launch` a aussi `url` et `open_in`, facultatives : l'adresse ouverte quand l'app lancée répond, et où (`page`, la page d'un lancement, par défaut ; `browser`, le navigateur du système). Les clés de la table ci-dessus deviennent `name`, `command`, `shell`, `cwd`, `url`, `open_in`.
+- `url` est une adresse `http://` ou `https://` ; elle peut nommer `${ESCOUADE_PORT_BASE}` et `${ESCOUADE_PORT_END}`, avec une valeur pour le projet après `:-`. Une autre adresse, une autre variable, ou un `open_in` autre que `page` et `browser` est dit avec sa ligne et la commande est ignorée.
+- Elles comptent dans l'empreinte des commandes : une adresse changée redemande l'accord, et elle n'est appliquée qu'avec sa commande, au geste de l'utilisateur. L'export écrit `url` quand il y en a une et `open_in: browser` seulement (`page` est le défaut). Le schéma les décrit.
+
+```yaml
+launch:
+  - name: web
+    command: npm run dev -- --port ${ESCOUADE_PORT_BASE:-5173}
+    cwd: web
+    url: http://localhost:${ESCOUADE_PORT_BASE:-5173}/
+```
+
+### Le fetch automatique d'un projet (ESC-561)
+
+Trois clés de plus dans le groupe `git`, après `git.conventional_commits` (voir *Fetch automatique*) :
+
+| Clé | Valeurs |
+|---|---|
+| `git.auto_fetch` | `default` (le réglage général de chaque machine ; si absente), `always`, `never` |
+| `git.fetch_every` | minutes entre deux fetch de fond, de `1` à `1440` ; `0` (si absente) : celles du réglage général |
+| `git.fetch_timeout` | secondes qu'un fetch de fond peut prendre, de `30` à `1800` ; `0` (si absente) : celles du réglage général |
+
+- Un nombre entier, écrit nu ou entre guillemets. Hors de ses bornes, il est ramené à la plus proche et le fichier le dit (« git.fetch_every : 5000 est hors des bornes (1 à 1440), ramené à 1440 ») ; ce qui n'est pas un nombre entier est refusé et laissé de côté, comme toute valeur invalide.
+- Le schéma (`schemas/escouade.schema.json`) les dit : un entier entre les bornes, ou `0`.

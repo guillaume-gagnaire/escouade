@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-499","ESC-530"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-499","ESC-530","ESC-561"]
 decisions: [118,119,120,121,123,124,126,145,147,255]
 compared: null
 ---
@@ -193,3 +193,10 @@ Sur la page Plugins, entre « Proposés par Escouade » et « Sécurité », seu
 - **La note** dit où est le fichier et ce qu'il est. Sans trousseau : « Ce poste n’a pas de trousseau système : tu as choisi de garder les secrets des plugins dans <chemin>, en clair, lisible de ton seul compte. Jamais copié dans les sauvegardes de l’état. ». Avec un trousseau arrivé depuis, elle renvoie à « Déplacer vers le trousseau » sur la page de chaque plugin.
 - **La liste** donne un secret par ligne, sa clé et le nom de son plugin (« token, de Faux plugin »), jamais sa valeur. Si le fichier est vide : « Aucun secret dedans pour l’instant. ».
 - **« Retirer le fichier »**, à droite du titre, demande une confirmation sur place : « Retirer le fichier ? Ses secrets sont effacés : il faudra les saisir à nouveau. », avec « Annuler » et « Retirer et effacer ». Retiré, le fichier disparaît avec ses secrets, le groupe aussi, et le choix est à refaire au champ.
+
+### Tous les projets › Git : le fetch automatique (ESC-561)
+
+- La page Tous les projets a, entre « Nouveaux projets » et « Projets fermés », un groupe « Git » : « Récupérer automatiquement (git fetch) » (allumé par défaut), « Intervalle » (de 1 min à 24 h, 5 min par défaut) et « Délai d'attente » (de 30 s à 30 min, 5 min par défaut). Sa description dans la barre : « Ce que reçoit un nouveau projet, le fetch automatique et les projets fermés ».
+- La page Git et worktrees d'un projet a, après « Commit », « Récupérer automatiquement (git fetch) » (« Comme le réglage général », « Toujours », « Jamais »), avec un intervalle et un délai propres au projet, et « Réglage général… », qui ouvre Tous les projets sans fermer la fenêtre.
+- **Un nombre borné** se tape librement ou se prend parmi des valeurs proposées, en pastilles à côté du champ (celle qui vaut la valeur est enfoncée). Tapé hors de ses bornes, il est ramené à la plus proche quand le champ est quitté ou validé (Entrée), et la fenêtre le dit sous le champ, sans alerte (« 5000 est hors des bornes (1 min à 24 h) : ramené à 24 h. »). Vidé, ou qui n'est pas un nombre, il reprend sa valeur ; dans le champ d'un projet, vide veut dire « celui du réglage général », montré dans le champ.
+- Le détail : voir *Fetch automatique*.

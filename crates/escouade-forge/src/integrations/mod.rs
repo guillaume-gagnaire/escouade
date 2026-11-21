@@ -11,6 +11,7 @@ mod github_tests;
 mod gitlab_tests;
 pub mod jira;
 pub mod kept;
+pub mod sandbox_keychain;
 pub mod secrets;
 pub mod source;
 pub mod text;

@@ -70,6 +70,8 @@ export interface Settings {
   telemetry: boolean | null;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
   integrations: IntegrationSettings;
+  /** « Récupérer automatiquement (git fetch) » (ESC-561): for every project, each one may say its own (`Project.gitFetch`). */
+  gitFetch: GitFetchSettings;
   /** « Langue de l’interface »: the system's (French when it is, English otherwise), or a language of its own. */
   language: 'system' | Lang;
   /** « Langue des textes rédigés par Claude »: the interface's, or a language of its own. */
@@ -812,6 +814,33 @@ export interface AgentFolder {
   folded?: boolean;
 }
 
+/** « Récupérer automatiquement (git fetch) » for every project (ESC-561). */
+export interface GitFetchSettings {
+  auto: boolean;
+  /** Minutes between two fetches, 1 to 1440. */
+  everyMin: number;
+  /** Seconds a background fetch may take, 30 to 1800. */
+  timeoutSecs: number;
+}
+
+/** A project's: as the general setting, always or never; its own interval and time limit (0: the general one's). */
+export interface ProjectFetch {
+  mode: 'default' | 'always' | 'never';
+  everyMin: number;
+  timeoutSecs: number;
+}
+
+/** Why a background fetch failed (ESC-561). */
+export interface FetchFailure {
+  kind: 'credentials' | 'timeout' | 'network' | 'other';
+  /** git's words. */
+  message: string;
+  /** ms epoch. */
+  at: number;
+  /** The time limit it ran within, in seconds. */
+  timeoutSecs: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -851,6 +880,8 @@ export interface Project {
   worktreeTeardown: WorktreeStep[];
   /** The external ticket systems its tickets come from, and what moving them does there. */
   integrations: ProjectIntegrations;
+  /** « Récupérer automatiquement » of this project (ESC-561); absent from a project saved before it. */
+  gitFetch?: ProjectFetch;
   /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   commitMode: CommitMode;
   /** « Ouvrir les pages des lancements » (ESC-311): where a launch's page opens once it answers. Kept on this machine. */
@@ -1002,6 +1033,8 @@ export interface PageView {
   detached: boolean;
   /** The width it is shown at: the whole room, a tablet's, a phone's. */
   mode?: 'full' | 'tablet' | 'mobile';
+  /** The page of a launch command run in its project (ESC-560): no agent's view to go back to. */
+  agentless?: boolean;
 }
 
 /** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
@@ -1033,7 +1066,16 @@ export interface RunCommand {
   shell: string;
   /** Folder relative to the project's, empty for the project itself. */
   cwd: string;
+  /**
+   * « Ouvrir à son lancement » (ESC-560): an http(s) address opened once it answers, empty for none. It may name the
+   * ports of a worktree, `${ESCOUADE_PORT_BASE:-3000}` (`run-url.ts`).
+   */
+  url?: string;
+  /** Where `url` opens: the page of a launch, or the system's browser (the page when absent). */
+  openIn?: RunOpen;
 }
+
+export type RunOpen = 'page' | 'browser';
 
 /** The launch commands Claude suggests for a project, and how many it gave that were refused (not one plain line, or too long). */
 export interface RunSuggestion {
@@ -2085,6 +2127,10 @@ export interface GitInfo {
   hasRemote: boolean;
   /** When the repository was last fetched (ms epoch). */
   lastFetch: number | null;
+  /** Why its last background fetch failed, since its last success (ESC-561). */
+  fetchFailure?: FetchFailure | null;
+  /** The background fetch goes through Windows' ssh, the one of this Git for Windows stalling on a big fetch: update Git. */
+  fetchSshNote?: boolean;
   modified: number;
   added: number;
   deleted: number;

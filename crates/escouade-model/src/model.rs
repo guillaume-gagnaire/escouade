@@ -81,6 +81,10 @@ pub struct Settings {
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
+    /// « Récupérer automatiquement (git fetch) » (ESC-561): the background fetch of every project
+    /// with a remote, its interval and its time limit; each project may say its own
+    /// (`Project::git_fetch`).
+    pub git_fetch: GitFetchSettings,
     /// "Langue de l'interface": "system" (French when the system is, English otherwise), "fr" or
     /// "en" (`i18n::resolve`).
     pub language: String,
@@ -599,6 +603,194 @@ impl Default for IntegrationSettings {
     }
 }
 
+/// The bounds of the background fetch's interval, in minutes (1 min to 24 h), and of its time
+/// limit, in seconds (30 s to 30 min) (ESC-561).
+pub const FETCH_EVERY_MIN: u32 = 1;
+pub const FETCH_EVERY_MAX: u32 = 24 * 60;
+pub const FETCH_TIMEOUT_MIN: u32 = 30;
+pub const FETCH_TIMEOUT_MAX: u32 = 30 * 60;
+/// The interval of before ESC-561, still the default.
+pub const DEFAULT_FETCH_EVERY: u32 = 5;
+/// The time limit of a background fetch, in seconds: 5 min. This repository eight days behind
+/// (9 700 objects, 120 MB) is fetched in 5 to 10 s when its transport does not stall; 5 min
+/// leaves a slow or far link (0.5 MB/s) the time to bring as much, where the 60 s of before
+/// killed it and began it again from nothing at each interval. A gesture keeps its 3 min.
+pub const DEFAULT_FETCH_TIMEOUT: u32 = 5 * 60;
+
+/// « Récupérer automatiquement (git fetch) » for every project (ESC-561).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GitFetchSettings {
+    /// On by default, as the background fetch always was.
+    pub auto: bool,
+    /// Minutes between two fetches of a repository (`FETCH_EVERY_MIN` to `FETCH_EVERY_MAX`).
+    pub every_min: u32,
+    /// Seconds a background fetch may take before it is stopped (`FETCH_TIMEOUT_MIN` to
+    /// `FETCH_TIMEOUT_MAX`).
+    pub timeout_secs: u32,
+}
+
+impl Default for GitFetchSettings {
+    fn default() -> Self {
+        Self {
+            auto: true,
+            every_min: DEFAULT_FETCH_EVERY,
+            timeout_secs: DEFAULT_FETCH_TIMEOUT,
+        }
+    }
+}
+
+impl GitFetchSettings {
+    /// Its values brought within their bounds.
+    pub fn clamped(&self) -> Self {
+        Self {
+            auto: self.auto,
+            every_min: fetch_every_clamped(self.every_min),
+            timeout_secs: fetch_timeout_clamped(self.timeout_secs),
+        }
+    }
+}
+
+/// An interval brought within its bounds (0 included: the lowest).
+pub fn fetch_every_clamped(min: u32) -> u32 {
+    min.clamp(FETCH_EVERY_MIN, FETCH_EVERY_MAX)
+}
+
+/// A time limit brought within its bounds.
+pub fn fetch_timeout_clamped(secs: u32) -> u32 {
+    secs.clamp(FETCH_TIMEOUT_MIN, FETCH_TIMEOUT_MAX)
+}
+
+/// A project's « Récupérer automatiquement » (ESC-561).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum FetchMode {
+    /// « Comme le réglage général ».
+    #[default]
+    Default,
+    /// « Toujours », even with the general setting off.
+    Always,
+    /// « Jamais ».
+    Never,
+}
+
+impl FetchMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FetchMode::Default => "default",
+            FetchMode::Always => "always",
+            FetchMode::Never => "never",
+        }
+    }
+
+    pub fn from_text(s: &str) -> Self {
+        match s {
+            "always" => FetchMode::Always,
+            "never" => FetchMode::Never,
+            _ => FetchMode::Default,
+        }
+    }
+}
+
+/// A project's own fetch: on or not, and an interval and a time limit of its own (0: the general
+/// one's), for a heavy repository or one behind a VPN.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ProjectFetch {
+    pub mode: FetchMode,
+    pub every_min: u32,
+    pub timeout_secs: u32,
+}
+
+/// What the background fetch does with a repository, from the general setting and its project's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FetchPlan {
+    pub on: bool,
+    pub every_min: u32,
+    pub timeout_secs: u32,
+}
+
+impl ProjectFetch {
+    /// Its own values brought within their bounds (0 stays 0: the general one's).
+    pub fn clamped(&self) -> Self {
+        Self {
+            mode: self.mode,
+            every_min: if self.every_min == 0 {
+                0
+            } else {
+                fetch_every_clamped(self.every_min)
+            },
+            timeout_secs: if self.timeout_secs == 0 {
+                0
+            } else {
+                fetch_timeout_clamped(self.timeout_secs)
+            },
+        }
+    }
+
+    /// The project's own over the general setting, each value within its bounds.
+    pub fn plan(&self, general: &GitFetchSettings) -> FetchPlan {
+        let on = match self.mode {
+            FetchMode::Default => general.auto,
+            FetchMode::Always => true,
+            FetchMode::Never => false,
+        };
+        let every = if self.every_min == 0 {
+            general.every_min
+        } else {
+            self.every_min
+        };
+        let timeout = if self.timeout_secs == 0 {
+            general.timeout_secs
+        } else {
+            self.timeout_secs
+        };
+        FetchPlan {
+            on,
+            every_min: fetch_every_clamped(every),
+            timeout_secs: fetch_timeout_clamped(timeout),
+        }
+    }
+}
+
+impl FetchPlan {
+    /// The plan of a repository several projects share: fetched when one of them wants it, as
+    /// often as the most eager, given as long as the most patient. None: none wants it.
+    pub fn merge(plans: impl IntoIterator<Item = FetchPlan>) -> Option<FetchPlan> {
+        plans.into_iter().filter(|p| p.on).reduce(|a, b| FetchPlan {
+            on: true,
+            every_min: a.every_min.min(b.every_min),
+            timeout_secs: a.timeout_secs.max(b.timeout_secs),
+        })
+    }
+}
+
+/// Why the last background fetch of a repository failed (ESC-561), told in the Git panel.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FetchFailureKind {
+    /// It asks for credentials (a password, a key's passphrase, a key not loaded): never asked in
+    /// the background, it waits for a fetch of the user's.
+    Credentials,
+    /// Still not done within its time limit.
+    Timeout,
+    /// The network or the remote cannot be reached.
+    Network,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FetchFailure {
+    pub kind: FetchFailureKind,
+    /// git's words, for the tooltip.
+    pub message: String,
+    /// When, ms since epoch.
+    pub at: i64,
+    /// The time limit it ran within, in seconds.
+    pub timeout_secs: u32,
+}
+
 /// The steps of « Délai avant l'envoi pendant un tour », in seconds (0: off).
 pub const MID_TURN_DELAYS: [u32; 5] = [0, 5, 10, 20, 30];
 const DEFAULT_MID_TURN_DELAY: u32 = 5;
@@ -746,6 +938,7 @@ impl Default for Settings {
             auto_update: true,
             beta_updates: false,
             integrations: IntegrationSettings::default(),
+            git_fetch: GitFetchSettings::default(),
             language: "system".into(),
             claude_language: "ui".into(),
             writer_engine: None,
@@ -940,6 +1133,11 @@ pub struct Project {
     /// (`workflows.enabled`).
     #[serde(default = "crate::model::yes")]
     pub workflows_enabled: bool,
+    /// « Récupérer automatiquement » of this project (ESC-561): as the general setting, always or
+    /// never, with an interval and a time limit of its own. In its `.escouade.yml` when shared
+    /// (`git.auto_fetch`, `git.fetch_every`, `git.fetch_timeout`).
+    #[serde(default)]
+    pub git_fetch: ProjectFetch,
     /// Its agent folders (`folders`): groups of agents in the sidebar, with a principal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agent_folders: Vec<AgentFolder>,
@@ -1316,6 +1514,24 @@ pub struct RunCommand {
     pub shell: String,
     /// Folder relative to the project's, empty for the project itself.
     pub cwd: String,
+    /// « Ouvrir à son lancement » (ESC-560): an http or https address opened once it answers,
+    /// empty for none. It may name the ports a worktree gives its launches, as a shell does:
+    /// `${ESCOUADE_PORT_BASE}`, `${ESCOUADE_PORT_END}`, with a value for the project after `:-`.
+    pub url: String,
+    /// Where `url` opens: the page of a launch inside Escouade, or the system's browser.
+    pub open_in: RunOpen,
+}
+
+/// Where the address of a launch command opens (ESC-560).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RunOpen {
+    /// The page of a launch, as « ▶ Tester » opens it (where the project's « Ouvrir les pages
+    /// des lancements » says).
+    #[default]
+    Page,
+    /// The system's browser.
+    Browser,
 }
 
 /// A command run in a worktree once it is made (its setup) or before it is removed (its
@@ -2615,6 +2831,12 @@ pub struct GitInfo {
     pub has_remote: bool,
     /// When the repository was last fetched, ms since epoch.
     pub last_fetch: Option<i64>,
+    /// Why its last background fetch failed, since its last success (ESC-561); None when it
+    /// went well, or never ran.
+    pub fetch_failure: Option<FetchFailure>,
+    /// The background fetch goes through Windows' ssh, the one of this Git for Windows stalling
+    /// on a big fetch (`git::ssh_stalls`): the panel says to update Git.
+    pub fetch_ssh_note: bool,
     pub modified: u32,
     pub added: u32,
     pub deleted: u32,
@@ -4458,10 +4680,11 @@ mod run_command_tests {
             "runCommands": [{ "id": "c1", "name": "Front", "command": "npm run dev", "shell": "pwsh", "cwd": "web" }] });
         let p: Project = serde_json::from_value(with.clone()).unwrap();
         assert_eq!(p.run_commands[0].cwd, "web");
-        assert_eq!(
-            serde_json::to_value(&p).unwrap()["runCommands"],
-            with["runCommands"]
-        );
+        // Saved again with no address to open, in a page (ESC-560).
+        let mut again = with["runCommands"].clone();
+        again[0]["url"] = json!("");
+        again[0]["openIn"] = json!("page");
+        assert_eq!(serde_json::to_value(&p).unwrap()["runCommands"], again);
     }
 
     // ----- INT-3: an open harness id, kept as it was -----

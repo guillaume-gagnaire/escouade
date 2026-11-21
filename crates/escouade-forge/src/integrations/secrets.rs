@@ -59,6 +59,9 @@ impl Secrets {
 #[cfg_attr(feature = "testing", allow(dead_code))]
 struct Keychain {
     service: String,
+    /// A sandboxed run's, on Windows: its entries under names of its own, taken back at its end (ESC-584).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    run: Option<super::sandbox_keychain::Run>,
 }
 
 #[cfg(any(windows, target_os = "macos"))]
@@ -68,8 +71,15 @@ impl Keychain {
     /// back to without it, which would lose the secrets at the next start.
     fn entry(&self, name: &str) -> keyring::Result<keyring::Entry> {
         #[cfg(windows)]
-        let credential =
-            keyring::windows::WinCredential::new_with_target(None, &self.service, name)?;
+        let credential = match &self.run {
+            Some(run) => keyring::windows::WinCredential {
+                username: name.to_string(),
+                target_name: run.target(&self.service, name),
+                target_alias: String::new(),
+                comment: run.comment(),
+            },
+            None => keyring::windows::WinCredential::new_with_target(None, &self.service, name)?,
+        };
         #[cfg(target_os = "macos")]
         let credential = keyring::macos::MacCredential::new_with_target(None, &self.service, name)?;
         Ok(keyring::Entry::new_with_credential(Box::new(credential)))
@@ -96,6 +106,16 @@ impl SecretStore for Keychain {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(e.into()),
         }
+    }
+}
+
+/// The keychain of a sandboxed run on the data folder `dir` (the tests of the real keychain, ESC-584): its entries under
+/// names of their own, which `sandbox_keychain::clean` takes back.
+#[cfg(all(test, windows))]
+pub(crate) fn sandbox_store_of(dir: &std::path::Path) -> impl SecretStore {
+    Keychain {
+        service: keychain_service(true),
+        run: Some(super::sandbox_keychain::Run::of(dir)),
     }
 }
 
@@ -139,8 +159,10 @@ pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     if sandbox_without_keychain() {
         return Arc::new(Chunked::new(Arc::new(Absent)));
     }
+    let sandbox = paths::sandbox_dir();
     Arc::new(Chunked::new(Arc::new(Keychain {
-        service: keychain_service(paths::sandbox_dir().is_some()),
+        service: keychain_service(sandbox.is_some()),
+        run: sandbox.map(|d| super::sandbox_keychain::Run::of(&d)),
     })))
 }
 
@@ -1041,12 +1063,13 @@ mod tests {
 }
 
 /// The trial on the real keychain (ESC-527), never run by itself: `cargo test -p escouade-forge --lib real_keychain --
-/// --ignored`. It works under a service of its own, apart from the app's (and a sandbox's), reads and writes no other
-/// entry, and leaves none.
+/// --ignored`. It works as a sandboxed run of its own on Windows (under a service of its own on macOS), reads and writes
+/// no other entry, and leaves none; a trial cut short leaves entries the next sweep takes back (ESC-584).
 #[cfg(all(test, any(windows, target_os = "macos")))]
 mod real_keychain {
     use super::*;
 
+    #[cfg(target_os = "macos")]
     const SERVICE: &str = "dev.gagnaire.escouade.trial-esc527";
     const NAME: &str = "plugin:dev.test.trial:config";
 
@@ -1073,8 +1096,17 @@ mod real_keychain {
     #[test]
     #[ignore = "the real keychain of this machine: run by hand"]
     fn the_real_keychain_keeps_a_long_secret_in_pieces() {
+        #[cfg(windows)]
+        let raw = Arc::new(Keychain {
+            service: keychain_service(true),
+            run: Some(super::super::sandbox_keychain::Run::of(
+                &crate::paths::test_dir("real-keychain-trial"),
+            )),
+        });
+        #[cfg(target_os = "macos")]
         let raw = Arc::new(Keychain {
             service: SERVICE.to_string(),
+            run: None,
         });
         let clean = Clean(raw.clone());
         for n in names() {

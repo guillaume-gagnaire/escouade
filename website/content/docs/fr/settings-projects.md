@@ -128,7 +128,17 @@ Le champ est une zone de texte, un motif par ligne : `.env*` copie les `.env` de
 Ce choix concerne les boutons « Commit… » et « Commit tout… » du panneau des fichiers, décrits dans [Git](git).
 
 - « Rédigé par l’agent » : l’agent est invité à commiter ses modifications.
-- « Direct, avec un message proposé » : Escouade propose un message, tu le relis et tu commites toi-même.
+- « Direct, avec un message proposé » : Escouade propose un message, tu le relis et tu commites toi-même.
+
+### Récupérer automatiquement (git fetch)
+
+Le fetch de fond de ce projet (voir [Branches](branches)), pour un dépôt lourd ou derrière un VPN :
+
+- « Comme le réglage général » (par défaut) suit [Tous les projets](#tous-les-projets) ; le réglage général est rappelé dessous, avec « Réglage général… » pour l’ouvrir.
+- « Toujours » le récupère même quand le réglage général est coupé ; « Jamais » ne le récupère jamais en fond (« Fetch » reste à la main).
+- « Intervalle propre au projet » et « Délai d’attente propre au projet » : vides, ceux du réglage général ; mêmes bornes et mêmes valeurs proposées que lui.
+
+Ces trois réglages se partagent dans [.escouade.yml](escouade-yml) (`git.auto_fetch`, `git.fetch_every`, `git.fetch_timeout`). Un dépôt de plusieurs projets est récupéré dès que l’un d’eux le veut, au plus court de leurs intervalles et au plus long de leurs délais.
 
 ## Worktrees
 
@@ -204,6 +214,9 @@ Fermer est refusé tant que la validation d’un ticket du projet tourne : « L
 
 | Réglage | Effet | Défaut |
 | --- | --- | --- |
+| « Récupérer automatiquement (git fetch) » | En arrière-plan, Escouade récupère chaque dépôt qui a un dépôt distant, un à la fois, sans jamais demander d’identifiants : les commits à tirer se voient d’eux-mêmes. Chaque projet peut dire le sien. | Activé |
+| « Intervalle » | Entre deux fetch d’un même dépôt. Une valeur libre en minutes, de 1 min à 24 h, ou une valeur proposée (2, 5, 15, 30 min, 1 h). Hors des bornes, elle est ramenée à la borne, et la fenêtre le dit. | 5 min |
+| « Délai d’attente » | Au-delà, le fetch de fond est abandonné, et repris à l’intervalle suivant. En secondes, de 30 s à 30 min. Un « Fetch » à la main garde ses 3 min. | 5 min |
 | « Recherche par le sens » | Télécharge le modèle des vecteurs, un seul pour tous les projets de cette machine : la [mémoire partagée](shared-memory) et les [docs](docs-space) se cherchent alors par le sens en plus des mots. La progression s’affiche, **Annuler** garde ce qui est venu (**Reprendre** continue), **Effacer** le retire. Rien ne sort de la machine. | Pas téléchargé |
 
 ## Nouveaux projets

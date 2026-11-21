@@ -847,8 +847,9 @@ export const api = {
   /** One HTTP request without proxy (2 s): true for any answer. */
   httpReady: (url: string, agentId?: string) => invoke<boolean>('http_ready', { url, agentId }),
   // The launches' pages (ESC-311).
-  devpageOpen: (agentId: string, title: string, url: string, detached: boolean, bounds: PageBounds | null) =>
-    invoke<PageView>('devpage_open', { agentId, title, url, detached, bounds }),
+  /** `projectId`: the page of a launch command run in its project, keyed `run:<project>:<command>` (ESC-560). */
+  devpageOpen: (agentId: string, title: string, url: string, detached: boolean, bounds: PageBounds | null, projectId?: string) =>
+    invoke<PageView>('devpage_open', { agentId, title, url, detached, bounds, ...(projectId ? { projectId } : {}) }),
   devpagePlace: (agentId: string, bounds: PageBounds | null) => invoke<void>('devpage_place', { agentId, bounds }),
   devpageGo: (agentId: string, action: 'back' | 'forward' | 'reload' | 'to', to?: string) =>
     invoke<void>('devpage_go', { agentId, action, to: to ?? null }),

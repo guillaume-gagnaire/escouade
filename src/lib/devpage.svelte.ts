@@ -73,13 +73,13 @@ export function hostOf(url: string): string {
  * agent's view, the agent is shown when the user was looking at it or at its test (the modal of « ▶ Tester »), as the
  * system's browser came to the front before; elsewhere its view « Page » waits for them.
  */
-export async function openLaunchPage(agent: Agent, address: string): Promise<PagesOpen> {
+export async function openLaunchPage(agent: Agent, address: string, named?: string): Promise<PagesOpen> {
   const where = pagesOpenOf(app.projects.find((p) => p.id === agent.projectId));
   if (where === 'system') {
     await openUrl(address);
     return where;
   }
-  const title = pageTitle(agent, address);
+  const title = named ?? pageTitle(agent, address);
   const view = await api.devpageOpen(agent.id, title, address, where === 'window', null);
   devpages.pages[agent.id] = { url: view.url, title, phase: 'loading', detached: view.detached };
   // Its width, as it was chosen at its last launch (the « Pages » window lays it out by it).
@@ -94,6 +94,24 @@ export async function openLaunchPage(agent: Agent, address: string): Promise<Pag
     if (testing || looking) app.selectAgent(agent.id);
   }
   return view.detached ? 'window' : 'agent';
+}
+
+/** The key of the page of launch command `commandId` run in project `projectId` (ESC-560): it has no agent. */
+export const projectPageKey = (projectId: string, commandId: string) => `run:${projectId}:${commandId}`;
+
+/**
+ * A launch command run in its project answers at `address` (ESC-560): its page opens in a tab of the project's « Pages »
+ * window, one per command (loaded again rather than doubled), or in the system's browser when the project says so.
+ */
+export async function openProjectPage(project: Project, commandId: string, title: string, address: string): Promise<PagesOpen> {
+  if (pagesOpenOf(project) === 'system') {
+    await openUrl(address);
+    return 'system';
+  }
+  const key = projectPageKey(project.id, commandId);
+  const view = await api.devpageOpen(key, title, address, true, null, project.id);
+  devpages.pages[key] = { url: view.url, title, phase: 'loading', detached: true };
+  return 'window';
 }
 
 /** The width the page of `agentId` is shown at. */

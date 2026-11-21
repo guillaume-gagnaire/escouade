@@ -75,6 +75,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   remoteKeepMax: true,
   agentsMcp: true,
   privateProjects: true,
+  gitFetch: true,
   theme: true,
   pluginTheme: true,
   pluginsVerifiedOnly: true,
@@ -94,6 +95,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
 
 const PROJECT_KEYS: Record<Exclude<keyof ProjectDraft, 'board'>, true> = {
   docsBranch: true,
+  gitFetch: true,
   chef: true,
   name: true,
   color: true,

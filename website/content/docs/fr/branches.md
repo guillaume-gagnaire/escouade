@@ -16,7 +16,7 @@ Dans la barre d’état, en bas de la fenêtre, le bouton de branche montre la b
 
 Les indications de synchronisation n’apparaissent que si le dépôt a un dépôt distant. L’info-bulle les écrit en entier (« Suit origin/main : 5 à tirer, 2 à pousser ») et ajoute le moment du dernier fetch (« Dernier fetch : il y a 3 min »).
 
-Escouade fait elle-même un fetch de chaque projet qui a un dépôt distant toutes les 5 minutes, sans jamais demander d’identifiants, pour que les chiffres restent à jour.
+Escouade fait elle-même un fetch de chaque projet qui a un dépôt distant toutes les 5 minutes, sans jamais demander d’identifiants, pour que les chiffres restent à jour. Ce fetch automatique se coupe, et son intervalle et son délai d’attente se règlent, pour tous les projets ou pour un seul : voir [les réglages d’un projet](settings-projects#recuperer-automatiquement-git-fetch).
 
 ## Le sélecteur de branches
 
@@ -46,7 +46,18 @@ Ces boutons n’apparaissent que si le dépôt a un dépôt distant. Ils portent
 | « Récupérer » | Fait un fetch puis intègre les nouveaux commits de la branche distante, en avance rapide seulement. Il est grisé quand la branche ne suit rien ou n’a aucun retard. Si les deux branches ont divergé, il refuse (« … ont divergé : pull impossible en avance rapide ») : fais le rebase ou le merge toi-même, ou demande-le à un agent. Il refuse aussi si des modifications non commitées seraient écrasées. |
 | « Pousser » | Pousse la branche. Il est grisé quand elle n’a aucune avance. Si le dépôt distant a des commits que tu n’as pas, il refuse et te dit de les récupérer d’abord. |
 | « Publier » | Remplace « Pousser » quand la branche n’a pas de branche distante, ou que la sienne a été supprimée. Il la publie sur le dépôt distant que la branche suivait, sinon sur `origin`, sinon sur l’unique dépôt distant, et la fait suivre la branche publiée. Avec plusieurs dépôts distants dont aucun n’est `origin`, il refuse : publie à la main. |
-| « Fetch » (« maintenant ») | Récupère le dépôt distant sans rien intégrer, et dit ce qu’il y a à tirer (« Fetch terminé : 3 commits à tirer »). |
+| « Fetch » (« maintenant ») | Récupère le dépôt distant sans rien intégrer, et dit ce qu’il y a à tirer (« Fetch terminé : 3 commits à tirer »). |
+
+Sous ces boutons, une ligne dit quand le dépôt a été récupéré pour la dernière fois (« Récupéré il y a 3 min », l’heure exacte au survol). Si le dernier fetch automatique a échoué, elle le dit aussi, discrètement, avec sa raison et ce qu’il faut faire :
+
+| Ce qu’elle dit | Ce qu’il faut faire |
+|---|---|
+| « il demande des identifiants » | Fais « Fetch » une fois : git te les demande. Le fetch automatique ne réessaie pas en boucle : il attend ce fetch réussi, puis reprend. |
+| « pas fini en 5 min » | Le dépôt est lourd ou le réseau lent : allonge le délai d’attente (« Régler » ouvre le bon réglage). |
+| « le réseau ou le dépôt distant est injoignable » | Vérifie ta connexion, ton VPN ou ton proxy. Il réessaie à l’intervalle suivant. |
+| « git a refusé » | La raison de git est au survol. |
+
+Sous Windows, Git for Windows 2.47.0(1) a un ssh qui cale sur les gros fetch. Avec lui, et seulement si tu n’as pas choisi ton propre ssh (`core.sshCommand`, `GIT_SSH` ou `GIT_SSH_COMMAND`), le fetch automatique passe par le ssh de Windows. La ligne te dit alors de mettre Git à jour (2.47.0(2) ou plus). Pour le reste, il passe par ta configuration de git telle qu’elle est (proxy, certificats, `insteadOf`) : Escouade n’y ajoute rien.
 
 ## Changer de branche
 

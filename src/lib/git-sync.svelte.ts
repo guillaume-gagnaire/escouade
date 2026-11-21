@@ -3,7 +3,7 @@
 
 import { api } from './ipc';
 import { app } from './state.svelte';
-import type { GitInfo } from './types';
+import type { FetchFailure, GitInfo } from './types';
 
 export type SyncOp = 'pull' | 'push' | 'fetch';
 
@@ -23,6 +23,9 @@ export interface SyncInfo {
   ahead: number;
   behind: number;
   lastFetch: number | null;
+  /** Why its last background fetch failed (ESC-561), and whether it goes through Windows' ssh. */
+  fetchFailure: FetchFailure | null;
+  fetchSshNote: boolean;
 }
 
 /** `syncInfo` of the repository `repo` of a project of several (ESC-169); of the project itself when null. */
@@ -38,6 +41,8 @@ export function repoSyncInfo(g: GitInfo | undefined, repo: string | null): SyncI
     ahead: r.ahead,
     behind: r.behind,
     lastFetch: g?.lastFetch ?? null,
+    fetchFailure: g?.fetchFailure ?? null,
+    fetchSshNote: !!g?.fetchSshNote,
   };
 }
 
@@ -51,6 +56,8 @@ export function syncInfo(g: GitInfo | undefined): SyncInfo | null {
     ahead: g.ahead,
     behind: g.behind,
     lastFetch: g.lastFetch,
+    fetchFailure: g.fetchFailure ?? null,
+    fetchSshNote: !!g.fetchSshNote,
   };
 }
 

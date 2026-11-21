@@ -100,6 +100,27 @@ export default {
     exited: "{name} s'est arrêté",
     notRunning: '{name} ne tourne pas',
   },
+  /** The address a launch command opens once it answers (ESC-560), as its log says it. */
+  open: {
+    waiting: 'Escouade ouvrira {url} dès que l’adresse répondra.',
+    opened: {
+      page: 'Ouverte dans la page de l’agent : {url}',
+      window: 'Ouverte dans la fenêtre « Pages » du projet : {url}',
+      browser: 'Ouverte dans le navigateur : {url}',
+    },
+    ended: '« {name} » s’est arrêtée avant que {url} réponde : rien ne s’ouvre.',
+    late: 'Pas de réponse de {url} après {minutes} min : rien ne s’ouvre.',
+    cannot: 'L’adresse ne s’ouvre pas : {why}',
+  },
+  /** What is wrong with the address of a launch command, as it is typed. `{example}`: the variable with a value. */
+  url: {
+    scheme: 'Seule une adresse http:// ou https:// s’ouvre.',
+    notAnAddress: 'Ce n’est pas une adresse (http://localhost:3000, par exemple).',
+    noHost: 'Il manque l’hôte (http://localhost:3000, par exemple).',
+    unclosed: 'Une variable de l’adresse n’est pas fermée.',
+    unknownVar: '« {name} » n’est pas une variable de l’adresse : seulement {list}.',
+    noValue: 'L’adresse nomme {name}, qu’un lancement dans le projet n’a pas : donne-lui une valeur pour le projet ({example}).',
+  },
   /** The window of « ▶ Tester ». */
   testLaunch: {
     title: 'Tester {name}',

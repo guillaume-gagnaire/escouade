@@ -59,6 +59,22 @@ Le log d’une commande occupe la zone principale quand tu cliques sa ligne. L�
 
 Les lancements de test des agents (le bouton « ▶ Tester », voir [les tests](testing)) apparaissent dans la même section, sous le nom de l’agent, une fois lancés. Ils se suivent de la même façon.
 
+## Ouvrir une adresse au lancement
+
+Une commande peut ouvrir l’app qu’elle lance, toute seule, dès qu’elle répond : plus besoin de guetter le log pour cliquer l’adresse.
+
+1. Dans Réglages › Projets › Lancement, coche « Ouvrir à son lancement » sous la commande.
+2. Tape « Adresse à ouvrir », par exemple `http://localhost:5173/`. Seule une adresse `http://` ou `https://` est acceptée : une autre est signalée sous le champ (« Seule une adresse http:// ou https:// s’ouvre. ») et rien n’est enregistré tant qu’elle y est.
+3. Choisis « Où l’ouvrir » : « Page de lancement » (par défaut) ou « Navigateur ».
+
+À chaque lancement, Escouade demande l’adresse toutes les demi-secondes, comme « ▶ Tester », jusqu’à ce qu’elle réponde (une page d’erreur compte : le serveur est là), 3 minutes au plus. Le log de la commande le dit : « Escouade ouvrira http://localhost:5173/ dès que l’adresse répondra. », puis où elle s’est ouverte.
+
+- **Page de lancement** : une [page de lancement](browser) d’Escouade. Lancée dans le worktree d’un agent, c’est la page de cet agent ; lancée dans le projet, un onglet de la fenêtre « Pages » du projet, un par commande. Relancer recharge la même page, sans en ouvrir une autre. Si le projet ouvre ses pages « Dans le navigateur du système », c’est le navigateur.
+- **Navigateur** : le navigateur du système.
+- Si la commande s’arrête d’elle-même (plantée, ou finie) avant que l’adresse réponde, rien ne s’ouvre et le log le dit : « « Front » s’est arrêtée avant que http://localhost:5173/ réponde : rien ne s’ouvre. » Après 3 minutes sans réponse, rien ne s’ouvre non plus. Stoppée par toi, rien n’est dit.
+
+Dans le worktree d’un agent, la commande reçoit ses ports (voir plus bas) : l’adresse peut les suivre en les nommant comme un shell, `${ESCOUADE_PORT_BASE}` et `${ESCOUADE_PORT_END}`, avec la valeur à prendre dans le projet après `:-`. Avec `http://localhost:${ESCOUADE_PORT_BASE:-5173}/` et `npm run dev -- --port ${ESCOUADE_PORT_BASE:-5173}` sous bash, la commande ouvre `localhost:5173` dans le projet et `localhost:4120` dans le worktree d’un agent dont les ports commencent à 4120. Aucune autre variable n’est permise dans une adresse.
+
 ## Dans le worktree d’un agent
 
 Une commande se lance aussi dans le worktree d’un agent, pour voir son travail tourner sans le fusionner.

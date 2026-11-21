@@ -26,6 +26,9 @@ git:
   agent_branch_prefix: agent/
   ticket_branch_prefix: tickets/
   commit_mode: direct
+  auto_fetch: always
+  fetch_every: 30
+  fetch_timeout: 900
   conventional_commits: false
 board:
   on_approve: pr

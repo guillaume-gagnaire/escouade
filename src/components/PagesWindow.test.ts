@@ -32,4 +32,14 @@ describe('the « Pages » window', () => {
     expect(b.called('devpage_go').map((c) => [c.args.agentId, c.args.action])).toEqual([['a7', 'reload']]);
     expect(b.called('devpage_detach').map((c) => c.args)).toEqual([{ agentId: 'a7', detached: false }]);
   });
+
+  it('has a tab for a launch command run in the project, with no agent to put it back in (ESC-560)', async () => {
+    const run = { agentId: 'run:p1:c1', projectId: 'p1', title: 'Front', url: 'http://localhost:5173/', detached: true, agentless: true };
+    fakeBackend({ devpage_list: () => ({ pages: [PAGE, run], shown: 'run:p1:c1' }) });
+    render(PagesWindow, { projectId: 'p1' });
+    expect(await screen.findByRole('tab', { name: 'Front' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('textbox', { name: 'Adresse de la page' })).toHaveProperty('value', run.url);
+    expect(screen.queryByRole('button', { name: 'Remettre dans l’agent' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ouvrir dans le navigateur du système' })).toBeInTheDocument();
+  });
 });
