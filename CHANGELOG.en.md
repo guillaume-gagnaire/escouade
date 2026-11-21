@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - “Your turn” box: a filter by type at the top of the list (permissions, questions, go-aheads, tickets, decisions…), each with its number; choose several at once, your choice is kept, and “Clear” brings everything back. What it hides is said in a quiet line, and the tile’s count still says all that waits for you.
+- Going back from the 2.3 beta to 2.2 keeps your data: a state where a review remark was published on its own reads whole, instead of being set aside at start with the app starting empty.
 - Git: the automatic fetch can be set, for every project or for one: on or not, its interval and its time limit. The Git panel says when the repository was fetched and, without alerting, why the last automatic fetch failed; it now goes through on a big repository, also with the stalling ssh of Git for Windows 2.47.0.
 - An agent whose plugin started again without it (the plugin updated, the language changed) goes on with its turn and loses nothing, instead of filling its conversation with warnings. If the plugin refuses to take it back, a single line says so, with what to do, and a message starts it again.
 - Claude Code: the plugin has an “Experimental features” setting, for every project then by project, that turns on Code Mode, Agent Teams or other `CLAUDE_CODE_EXPERIMENTAL_*` flags in the terminal view. An agent in Code Mode says so and stays in its terminal, the only place Claude Code resumes it.

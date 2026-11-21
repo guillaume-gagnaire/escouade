@@ -311,3 +311,34 @@ fn a_state_saved_after_a_recovery_pushes_out_no_copy() {
     }
     assert!(left.iter().all(|t| now - *t <= Duration::days(30)));
 }
+
+/// ESC-586: a state the 2.3 wrote, with a remark of a review published on its own (`published`, a value this version
+/// does not know), reads whole: it is not set aside at the start, and the remark is not published again.
+#[test]
+fn a_state_of_the_2_3_with_a_remark_published_alone_reads_whole() {
+    let v = serde_json::json!({
+        "projects": [{ "id": "p1", "name": "P1", "path": "/tmp", "color": "#888" }],
+        "tickets": [],
+        "prReviews": [{
+            "projectId": "p1", "number": 12, "phase": "ready",
+            "notes": [
+                { "id": 1, "path": "a.rs", "line": 3, "body": "x", "choice": "published", "severity": "bug" },
+                { "id": 2, "path": "b.rs", "line": 4, "body": "y", "choice": "kept" },
+                { "id": 3, "path": "c.rs", "line": 5, "body": "z", "choice": "someday" }
+            ]
+        }]
+    });
+    let bytes = serde_json::to_vec(&v).unwrap();
+    assert!(reads("state.json", &bytes));
+    let state: crate::model::PersistedState = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(state.projects.len(), 1);
+    let choices: Vec<_> = state.pr_reviews[0].notes.iter().map(|n| n.choice).collect();
+    use crate::prreview::NoteChoice;
+    assert_eq!(
+        choices,
+        [NoteChoice::Dropped, NoteChoice::Kept, NoteChoice::Open]
+    );
+    // Written back as this version writes it.
+    let back = serde_json::to_value(&state.pr_reviews[0].notes[0]).unwrap();
+    assert_eq!(back["choice"], "dropped");
+}

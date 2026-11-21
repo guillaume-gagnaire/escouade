@@ -3,13 +3,28 @@
 use serde::{Deserialize, Serialize};
 
 /// What the user decided of a comment. `Open` holds the publication back: each one is decided.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+///
+/// Read leniently (ESC-586): the 2.3 writes `published` for a remark published on its own on the host, and a value
+/// this version does not know would make the whole state unreadable, set aside at the start, the app starting empty.
+/// `published` reads as `Dropped` (it is on the host already: never published twice), any other unknown value as
+/// `Open` (it waits for the user).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NoteChoice {
     #[default]
     Open,
     Kept,
     Dropped,
+}
+
+impl<'de> Deserialize<'de> for NoteChoice {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(d)?.as_str() {
+            "kept" => Self::Kept,
+            "dropped" | "published" => Self::Dropped,
+            _ => Self::Open,
+        })
+    }
 }
 
 /// A line of a file's diff: `+`, `-`, ` `, or `@` between two hunks. `line`: its number in the new
