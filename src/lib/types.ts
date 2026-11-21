@@ -1076,6 +1076,16 @@ export interface ProjectShared {
   team?: TeamHint | null;
   /** « Ne plus proposer pour ce projet »: the fingerprint of the team the band named. */
   teamDismissed?: string | null;
+  /** What the project's team sets on its plugins (TS-13, ESC-532): the keys `plugins.<id>.<key>` of its file, by part. */
+  teamPlugins?: TeamPlugins | null;
+}
+
+/** The keys `plugins.<id>.<key>` a team's file sets on its projects: `defaults` recommends (rank 2), `enforced` imposes
+ *  (rank 5). Judged against each plugin's manifest where they are read (`teamRefusal`). */
+export interface TeamPlugins {
+  team: string;
+  defaults: Record<string, unknown>;
+  enforced: Record<string, unknown>;
 }
 
 /** The key `team` of a repository's `.escouade.yml` (TS-7): from the repository, so never trusted. */

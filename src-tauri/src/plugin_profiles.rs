@@ -47,6 +47,28 @@ fn refused(message: String) -> SecretRefused {
     }
 }
 
+/// Why a setting of each project cannot be set on this machine: its team imposes it (`enforced`, rank 5, ESC-532), with a
+/// value the plugin takes. None: it may be.
+pub fn team_lock(
+    project: &crate::model::Project,
+    m: &Manifest,
+    id: &str,
+    key: &str,
+) -> Option<String> {
+    let team = project.shared.team_plugins.as_ref()?;
+    crate::team_settings::plugin_values(team, id)
+        .enforced
+        .get(key)
+        .is_some_and(|v| profiles::team_refusal(m, key, v).is_none())
+        .then(|| {
+            let name = &team.team;
+            tr!(
+                "Ce réglage est imposé par l’équipe {name} ({key}) : il ne se change pas sur ce poste.",
+                "This setting is imposed by the team {name} ({key}): it cannot be changed on this device."
+            )
+        })
+}
+
 impl Core {
     fn plugin_manifest(&self, id: &str) -> Result<Manifest, String> {
         self.plugins
@@ -277,7 +299,12 @@ impl Core {
         value: Option<Value>,
     ) -> Result<(), String> {
         let decl = self.project_setting(id, key)?;
-        self.project(project).map_err(|e| e.to_string())?;
+        let p = self.project(project).map_err(|e| e.to_string())?;
+        if value.is_some() {
+            if let Some(why) = team_lock(&p, &self.plugin_manifest(id)?, id, key) {
+                return Err(why);
+            }
+        }
         let value = match value {
             None => None,
             Some(v) if decl.get("type").and_then(Value::as_str) == Some("profile") => {
@@ -330,6 +357,13 @@ impl Core {
         key: &str,
     ) -> Result<crate::model::Project, String> {
         let decl = self.project_setting(id, key)?;
+        if let Some(why) = self
+            .project(project)
+            .ok()
+            .and_then(|p| team_lock(&p, &self.plugin_manifest(id).ok()?, id, key))
+        {
+            return Err(why);
+        }
         if !profiles::from_repo(&decl) {
             return Err(tr!(
                 "Ce réglage reste sur cette machine : il ne s'écrit pas dans .escouade.yml.",

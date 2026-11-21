@@ -384,6 +384,19 @@ export default {
     take: 'Prendre « {name} »',
     defaultNote: 'Valeur par défaut du plugin.',
     projectLink: 'Réglages du projet',
+    /** The project's team (TS-13, ESC-532): a setting it recommends, and a key of its file the plugin refuses. */
+    teamRecommended: 'Recommandé par l’équipe {team}',
+    teamUse: 'Reprendre la valeur de l’équipe {team}',
+    teamRefused: 'L’équipe {team} règle {key} : refusé, {why}. Ce réglage ne s’applique pas.',
+    teamWhy: {
+      unknown: 'le plugin ne déclare pas ce réglage',
+      secret: 'c’est un secret : il reste dans le trousseau de chaque poste',
+      profile: 'c’est un profil : chaque poste fait les siens, chaque projet en choisit un',
+      imported: 'sa valeur s’importe d’un fichier : elle reste sur chaque poste',
+      keptOff: 'son auteur le garde hors des fichiers partagés',
+      appScope: 'c’est un réglage de l’app, pas d’un projet',
+      type: 'la valeur n’est pas du type du réglage',
+    },
   },
 
   journal: {

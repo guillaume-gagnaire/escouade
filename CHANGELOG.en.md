@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: the team’s file can recommend or impose a plugin’s simple setting on its projects (never a secret nor a profile). In the project’s Plugins page, an imposed setting is greyed with “Imposed by the team …”, a recommended one says where it comes from, and what the plugin refuses is said with why.
 - Private projects: an agent that runs when its project becomes private now stops if its harness isn’t turned on there yet, at once when at rest or at the end of its turn when at work, and its conversation says why. Before, its process could go on with that harness without your consent.
 - An image attached to a message, or to a ticket’s form, now opens full size with a click on its thumbnail before it is sent: it shows in the conversation’s viewer, with the message’s other images.
 - Private projects: reserving an account that would leave your other projects without one asks first, naming them, and offers to add a reserved account instead; “Share again” gives it back to them in one click. A shared account is no longer shown as a warning: the private project’s sessions stay refused there to the other projects’ agents, and what stays common is said.

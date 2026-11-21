@@ -572,3 +572,183 @@ async fn a_setting_of_each_project_is_written_into_escouade_yml_key_by_key_and_c
         .plugin_project_set(ID, &s.atlas, "autoStart", Some(json!(true)))
         .is_err());
 }
+
+// ── What the project's team sets (TS-13, ESC-532) ──────────────────────────────────────────────────────────────────
+
+fn team(defaults: Value, enforced: Value) -> profiles::TeamValues {
+    profiles::TeamValues {
+        team: "Acme".into(),
+        defaults: map(defaults),
+        enforced: map(enforced),
+    }
+}
+
+#[test]
+fn a_team_recommends_under_the_file_and_this_machine_and_imposes_over_them() {
+    let m = read(&tunnel(json!(null)));
+    let mut c = Choices::default();
+    let with = |c: &Choices, file: Option<&Map<String, Value>>, t: &profiles::TeamValues| {
+        profiles::settings_with_team(Some(&m), c, Some("p1"), true, file, Some(t))
+    };
+    // Rank 2: the team's recommendation, over the manifest's default.
+    let rec = team(json!({ "routes": "10.1.0.0/16" }), json!({}));
+    assert_eq!(with(&c, None, &rec)["routes"], json!("10.1.0.0/16"));
+    // Rank 3: the repository's file, ahead of it.
+    let file = map(json!({ "routes": "10.20.0.0/16" }));
+    assert_eq!(with(&c, Some(&file), &rec)["routes"], json!("10.20.0.0/16"));
+    // Rank 4: this machine's value, ahead of both.
+    c.project_settings
+        .insert("p1".into(), map(json!({ "routes": "10.0.0.0/8" })));
+    assert_eq!(with(&c, Some(&file), &rec)["routes"], json!("10.0.0.0/8"));
+    // Rank 5: what the team imposes, over all of them.
+    let imp = team(
+        json!({ "routes": "10.1.0.0/16" }),
+        json!({ "routes": "172.16.0.0/12" }),
+    );
+    assert_eq!(
+        with(&c, Some(&file), &imp)["routes"],
+        json!("172.16.0.0/12")
+    );
+    // Where the plugin is not on, nothing of the team: the default alone.
+    let off = profiles::settings_with_team(Some(&m), &c, Some("p1"), false, None, Some(&imp));
+    assert_eq!(off["routes"], json!("0.0.0.0/0"));
+    // Without a team: the ranks of ESC-530, as before.
+    assert_eq!(
+        settings_for(Some(&m), &c, Some("p1"), true, Some(&file))["routes"],
+        json!("10.0.0.0/8")
+    );
+}
+
+#[test]
+fn a_team_never_sets_a_secret_a_profile_a_value_kept_off_the_files_nor_a_wrong_type() {
+    use profiles::TeamRefusal as R;
+    let m = read(&tunnel(json!(null)));
+    let mut c = Choices::default();
+    let a = profiles::Profile {
+        id: profiles::new_id(),
+        values: map(json!({ "name": "Client A" })),
+    };
+    c.profiles.insert("vpn".into(), vec![a.clone()]);
+    let imposed = team(
+        json!({}),
+        json!({
+            "token": "t0ken", "profile": a.id, "port": 4444, "autoStart": false,
+            "nope": 1, "routes": 12
+        }),
+    );
+    let got = profiles::settings_with_team(Some(&m), &c, Some("p1"), true, None, Some(&imposed));
+    assert!(got.get("token").is_none(), "a secret never");
+    assert_eq!(got["profile"], Value::Null, "a profile never");
+    assert!(got.get("port").is_none(), "repo: false never");
+    assert!(got.get("autoStart").is_none(), "a setting of the app never");
+    assert!(got.get("nope").is_none(), "a key it does not declare never");
+    assert_eq!(got["routes"], json!("0.0.0.0/0"), "a wrong type never");
+    // Each with its reason.
+    let why = |k: &str, v: Value| profiles::team_refusal(&m, k, &v);
+    assert_eq!(why("token", json!("x")), Some(R::Secret));
+    assert_eq!(
+        why("password", json!("x")),
+        Some(R::Unknown),
+        "a profile's secret field is no setting"
+    );
+    assert_eq!(why("profile", json!(a.id)), Some(R::Profile));
+    assert_eq!(why("port", json!(1)), Some(R::KeptOff));
+    assert_eq!(why("autoStart", json!(true)), Some(R::AppScope));
+    assert_eq!(why("nope", json!(1)), Some(R::Unknown));
+    assert_eq!(why("routes", json!(12)), Some(R::Type("string".into())));
+    assert_eq!(why("routes", json!("10.0.0.0/8")), None);
+    for r in [
+        R::Secret,
+        R::Profile,
+        R::KeptOff,
+        R::AppScope,
+        R::Unknown,
+        R::Imported,
+        R::Type("number".into()),
+    ] {
+        assert!(!r.text().is_empty());
+    }
+    // A value imported from a file, and a select out of its options; one on several lines may be set.
+    let mut v = tunnel(json!(null));
+    let settings = v["contributes"]["settings"].as_array_mut().unwrap();
+    settings.push(json!({ "key": "conf", "type": "string", "scope": "project", "title": "Conf", "multiline": true, "import": [".conf"] }));
+    settings.push(json!({ "key": "level", "type": "select", "scope": "project", "title": "Niveau", "options": ["low", "high"] }));
+    settings.push(json!({ "key": "notes", "type": "string", "scope": "project", "title": "Notes", "multiline": true }));
+    let m = read(&v);
+    assert_eq!(
+        profiles::team_refusal(&m, "conf", &json!("x")),
+        Some(R::Imported)
+    );
+    assert_eq!(
+        profiles::team_refusal(&m, "level", &json!("max")),
+        Some(R::Type("select".into()))
+    );
+    assert_eq!(profiles::team_refusal(&m, "level", &json!("high")), None);
+    assert_eq!(
+        profiles::team_refusal(&m, "notes", &json!("a\nb")),
+        None,
+        "on several lines too"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_team_s_imposed_setting_is_read_by_the_plugin_and_nothing_goes_ahead_of_it() {
+    let s = setup("profiles-team").await;
+    let h = &s.h;
+    let atlas = h.core.project(&s.atlas).unwrap();
+    std::fs::write(
+        std::path::Path::new(&atlas.path).join(".escouade.yml"),
+        format!("version: 1\nplugins:\n  {ID}:\n    routes: 10.20.0.0/16\n"),
+    )
+    .unwrap();
+    h.core
+        .plugin_project_set(ID, &s.atlas, "routes", Some(json!("10.0.0.0/8")))
+        .unwrap();
+    let effective = escouade_team::settings::Effective {
+        enforced: [(format!("plugins.{ID}.routes"), json!("172.16.0.0/12"))]
+            .into_iter()
+            .collect(),
+        defaults: [(format!("plugins.{ID}.port"), json!(4444))]
+            .into_iter()
+            .collect(),
+        ..Default::default()
+    };
+    let view = escouade_team::settings::View {
+        applied: Some(1),
+        effective,
+        ..Default::default()
+    };
+    h.core.apply_team_settings("acme", "Acme", Some(&view));
+    h.core
+        .set_project_team(&s.atlas, Some("acme".into()))
+        .unwrap();
+    // The plugin reads the imposed value in the team's project; the other project keeps its own ranks.
+    let got = ask(h, "settings/get", json!({ "project": s.atlas })).await;
+    assert_eq!(got["result"]["routes"], json!("172.16.0.0/12"));
+    assert!(
+        got["result"].get("port").is_none(),
+        "repo: false: the team's port is not taken"
+    );
+    let got = ask(h, "settings/get", json!({ "project": s.portail })).await;
+    assert_eq!(got["result"]["routes"], json!("0.0.0.0/0"));
+    // Nothing goes ahead of it: neither this machine's value, nor « Écrire dans .escouade.yml ».
+    let why = h
+        .core
+        .plugin_project_set(ID, &s.atlas, "routes", Some(json!("10.9.0.0/16")))
+        .unwrap_err();
+    assert!(why.contains("Acme"), "{why}");
+    let why = h
+        .core
+        .plugin_project_write(ID, &s.atlas, "routes")
+        .unwrap_err();
+    assert!(why.contains("Acme"), "{why}");
+    // Forgetting this machine's value stays possible; the journal says no value.
+    h.core
+        .plugin_project_set(ID, &s.atlas, "routes", None)
+        .unwrap();
+    assert!(!journal(h).contains("172.16.0.0/12"));
+    // The device leaves the team: the file's value is the project's again.
+    h.core.apply_team_settings("acme", "Acme", None);
+    let got = ask(h, "settings/get", json!({ "project": s.atlas })).await;
+    assert_eq!(got["result"]["routes"], json!("10.20.0.0/16"));
+}

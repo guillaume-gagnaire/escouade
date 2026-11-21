@@ -8,7 +8,8 @@
     rows,
     label,
     onchange,
-  }: { value?: string; rows: number; label: string; onchange?: (value: string) => void } = $props();
+    disabled = false,
+  }: { value?: string; rows: number; label: string; onchange?: (value: string) => void; disabled?: boolean } = $props();
 
   let top = $state(0);
   const count = $derived(Math.max(rows, lineCount(value ?? '')));
@@ -26,6 +27,7 @@
     autocomplete="off"
     wrap="off"
     {rows}
+    {disabled}
     bind:value
     onscroll={(e) => (top = e.currentTarget.scrollTop)}
     onchange={(e) => onchange?.(e.currentTarget.value)}></textarea>

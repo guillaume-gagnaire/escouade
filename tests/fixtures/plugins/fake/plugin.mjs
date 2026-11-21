@@ -133,6 +133,17 @@ function handle(msg) {
         }
         return null;
       }
+      // `--fact-setting <setting>` (ESC-532): the value of a simple setting in the fact's project (settings/get of its
+      // project), said in its journal: what its team imposes there, when it does.
+      if (option('--fact-setting')) {
+        const project = params.project?.id;
+        const key = option('--fact-setting');
+        ask('settings/get', project ? { project } : {}).then((got) => {
+          const value = JSON.stringify(got.result?.[key] ?? null);
+          send({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: `fact ${params.name}: setting ${key} = ${value}` } });
+        });
+        return null;
+      }
       // `--fact-profile <setting>` (ESC-530): the profile the fact's project chose (settings/get of its project), then the
       // secret of that profile.
       if (option('--fact-profile')) {

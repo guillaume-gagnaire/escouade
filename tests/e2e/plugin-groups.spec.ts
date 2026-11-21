@@ -154,11 +154,13 @@ function kept(text: string, locale: 'fr-FR' | 'en-US') {
   return locale === 'fr-FR' ? `Gardé · ${lines} lignes · ${kb} Ko` : `Kept · ${lines} lines · ${kb} KB`;
 }
 
-/** Every file under `dir`. */
+/** Every file under `dir`, but the lock the running app holds on its data folder (`instance.lock`, ESC-451: empty, and
+ *  locked on Windows). */
 const walk = (dir: string): string[] =>
   fs.existsSync(dir)
     ? fs
         .readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.name !== 'instance.lock')
         .flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]))
     : [];
 

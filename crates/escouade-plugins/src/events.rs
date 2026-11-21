@@ -47,6 +47,11 @@ pub trait Place: Send + Sync {
     /// Whether the project `id` is private, and the settings its `.escouade.yml` gives the plugin
     /// `plugin` (`plugins.<plugin>`, PLG-14; empty when none); None for a project that is not.
     fn project_plugin(&self, id: &str, plugin: &str) -> Option<(bool, Map<String, Value>)>;
+    /// What the team of the project `id` recommends and imposes on the plugin `plugin` (`plugins.<plugin>.<key>` of
+    /// its team's file, TS-13, ESC-532); None for a project of no team, or whose team sets nothing on it.
+    fn project_team(&self, _id: &str, _plugin: &str) -> Option<crate::profiles::TeamValues> {
+        None
+    }
 }
 
 /// A webhook of a plugin (`contributes.webhooks[]`).

@@ -16,7 +16,9 @@
     proposedName,
     proposedProfile,
     summaryOf,
+    teamRefusals,
   } from '../../lib/plugin-profiles';
+  import { lockLine } from '../../lib/locks.svelte';
   import { textOf, type PluginView } from '../../lib/plugins';
   import { plugins } from '../../lib/plugins-view.svelte';
   import { app } from '../../lib/state.svelte';
@@ -32,6 +34,9 @@
   // other settings of a project: « Défini par .escouade.yml », or this machine's ahead of the file, with « Écrire dans
   // .escouade.yml » (that key alone, comments kept) and « Reprendre la valeur du fichier ». A profile is chosen here, kept
   // on this machine, never in the file: a file that names one only proposes it, in a band, and the user chooses.
+  // The project's team (TS-13, ESC-532): a simple setting it imposes is greyed, with the padlock and « Imposé par l'équipe
+  // Acme », and nothing goes ahead of it (neither this machine's value nor « Écrire dans .escouade.yml »); one it
+  // recommends says so, under the file and this machine. A key of its file the plugin refuses is said, with why.
   let { project }: { project: Project } = $props();
 
   const lang = $derived(locale.ui);
@@ -139,6 +144,15 @@
         >{t('plugins.projectPage.pluginPage')}</button
       >
     </div>
+    {#each teamRefusals(p, project) as r (`${r.part}:${r.key}`)}
+      <p class="refused" role="note">
+        <Icon name="warn" size={12} />{t('plugins.projectPage.teamRefused', {
+          team: project.shared?.teamPlugins?.team ?? '',
+          key: r.key,
+          why: t(`plugins.projectPage.teamWhy.${r.why}`),
+        })}
+      </p>
+    {/each}
     {#each projectFields(p.manifest) as f (f.key)}
       {@const title = titleOf(f)}
       {#if f.type === 'profile'}
@@ -179,14 +193,23 @@
       {:else}
         {@const v = projectValue(p, project, f)}
         {@const repo = fromRepo(f)}
-        <div class="row" class:top={f.multiline} role="group" aria-label={title}>
+        {@const locked = v.source === 'enforced'}
+        <div class="row" class:top={f.multiline} class:locked role="group" aria-label={title}>
           <div class="lab">
             <b>{title}</b>
             {#if f.description}<span>{textOf(f.description, lang)}</span>{/if}
-            {#if !repo}
+            {#if locked}
+              <span class="mark" data-shared="team" data-testid="plugin-team-lock"
+                ><Icon name="lock" size={12} />{lockLine({ kind: 'team', team: v.team ?? '' })}</span
+              >
+            {:else if !repo}
               <span class="mark" data-shared="machine"><Icon name="lock" size={12} />{t('plugins.projectPage.machine')}</span>
             {:else if v.source === 'file'}
               <span class="mark" data-shared="file"><Icon name="file" size={12} />{t('settings.shared.fromFile')}</span>
+            {:else if v.source === 'recommended'}
+              <span class="mark" data-shared="recommended" data-testid="plugin-team-recommended"
+                ><Icon name="team" size={12} />{t('plugins.projectPage.teamRecommended', { team: v.team ?? '' })}</span
+              >
             {:else if v.source === 'local'}
               <span class="shared">
                 {#if v.file !== undefined}<span class="mark" data-shared="local"
@@ -196,6 +219,8 @@
                   <button class="link" type="button" onclick={() => write(p, f)}>{t('settings.shared.writeKey')}</button>
                   {#if v.file !== undefined}<button class="link" type="button" onclick={() => set(p, f, null, true)}
                       >{t('settings.shared.useFile')}</button
+                    >{:else if v.recommended !== undefined}<button class="link" type="button" onclick={() => set(p, f, null, true)}
+                      >{t('plugins.projectPage.teamUse', { team: v.team ?? '' })}</button
                     >{/if}
                 </span>
               </span>
@@ -208,10 +233,17 @@
               role="switch"
               aria-checked={!!v.value}
               aria-label={title}
+              disabled={locked}
               onclick={() => set(p, f, !v.value)}
             ></button>
           {:else if f.type === 'select'}
-            <select class="field" aria-label={title} value={String(v.value ?? '')} onchange={(e) => set(p, f, e.currentTarget.value)}>
+            <select
+              class="field"
+              aria-label={title}
+              disabled={locked}
+              value={String(v.value ?? '')}
+              onchange={(e) => set(p, f, e.currentTarget.value)}
+            >
               {#each f.options ?? [] as o (typeof o === 'string' ? o : o.value)}
                 {@const val = typeof o === 'string' ? o : o.value}
                 <option value={val}>{typeof o === 'string' ? o : textOf(o.title, lang) || o.value}</option>
@@ -219,13 +251,20 @@
             </select>
           {:else if f.multiline && f.type === 'string'}
             <div class="wide">
-              <LinedText label={title} rows={visibleLines(f.lines)} value={String(v.value ?? '')} onchange={(x) => setText(p, f, x)} />
+              <LinedText
+                label={title}
+                rows={visibleLines(f.lines)}
+                value={String(v.value ?? '')}
+                disabled={locked}
+                onchange={(x) => setText(p, f, x)}
+              />
             </div>
           {:else}
             <input
               class="field"
               aria-label={title}
               type={f.type === 'number' ? 'number' : 'text'}
+              disabled={locked}
               value={String(v.value ?? '')}
               onchange={(e) => {
                 const x = e.currentTarget.value;
@@ -378,6 +417,20 @@
   }
   .mark[data-shared='file'] :global(.icon) {
     color: currentColor;
+  }
+  .row.locked .field,
+  .row.locked .switch,
+  .row.locked .wide {
+    opacity: 0.55;
+  }
+  .refused {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    margin: 8px 0 0;
+    color: var(--warn-ink);
+    font-size: 11.5px;
+    line-height: 1.45;
   }
   .shared {
     display: flex;

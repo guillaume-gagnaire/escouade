@@ -384,6 +384,19 @@ export default defineZone('plugins', {
     take: 'Take “{name}”',
     defaultNote: 'The plugin’s default value.',
     projectLink: 'Project settings',
+    /** The project's team (TS-13, ESC-532): a setting it recommends, and a key of its file the plugin refuses. */
+    teamRecommended: 'Recommended by the team {team}',
+    teamUse: 'Take the team {team}’s value again',
+    teamRefused: 'The team {team} sets {key}: refused, {why}. This setting does not apply.',
+    teamWhy: {
+      unknown: 'the plugin declares no such setting',
+      secret: 'it is a secret: it stays in each device’s keychain',
+      profile: 'it is a profile: each device makes its own, each project chooses one',
+      imported: 'its value is imported from a file: it stays on each device',
+      keptOff: 'its author keeps it off the shared files',
+      appScope: 'it is a setting of the app, not of a project',
+      type: 'the value is not of the setting’s type',
+    },
   },
 
   journal: {

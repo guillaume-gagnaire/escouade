@@ -131,8 +131,9 @@ export function fits(f: FieldSetting, v: unknown): boolean {
   return false;
 }
 
-/** Where a value of a setting of each project comes from: this machine (ahead of the file), the file, or its default. */
-export type Source = 'local' | 'file' | 'default';
+/** Where a value of a setting of each project comes from: imposed by the team (rank 5), this machine (4, ahead of the
+ *  file), the file (3), recommended by the team (2), or its default (1). */
+export type Source = 'enforced' | 'local' | 'file' | 'recommended' | 'default';
 
 /** A setting of each project, as the page of a project shows it: its value, where it comes from, what the file says. */
 export interface ProjectValue {
@@ -140,15 +141,77 @@ export interface ProjectValue {
   source: Source;
   /** The file's value, when the file gives one that may hold (a simple setting, not `repo: false`). */
   file?: unknown;
+  /** What the team recommends, when it does with a value that holds. */
+  recommended?: unknown;
+  /** The team's name, when it imposes or recommends the value. */
+  team?: string;
 }
 
-/** The value of a simple setting of each project in `project`, by its ranks: this machine's, the file's, the default. */
+/** Why a team's key of a plugin is refused (`profiles::team_refusal`). */
+export type TeamRefusal = 'unknown' | 'secret' | 'profile' | 'imported' | 'keptOff' | 'appScope' | 'type';
+
+/** Whether the project's team may set the setting `key` of the plugin to `value` (TS-13, ESC-532): a simple setting of each
+ *  project, a value of its type; never a secret, a profile, a value imported, what is kept off the files. Null: it may. */
+export function teamRefusal(p: PluginView, key: string, value: unknown): TeamRefusal | null {
+  const c = p.manifest?.contributes;
+  const secrets = Array.isArray(c?.secrets) ? (c.secrets as { key?: string }[]).map((s) => s?.key) : [];
+  if (secrets.includes(key) || (p.manifest?.permissions?.secrets ?? []).includes(key)) return 'secret';
+  const s = Array.isArray(c?.settings) ? (c.settings as FieldSetting[]) : [];
+  const f = s.find((x) => x?.key === key);
+  if (!f) return 'unknown';
+  if (f.type === 'profile') return 'profile';
+  if (f.import) return 'imported';
+  if (f.repo === false) return 'keptOff';
+  if (f.scope !== 'project') return 'appScope';
+  if (!fits(f, value)) return 'type';
+  return null;
+}
+
+/** What the project's team sets on the plugin `id`, by setting key; null when it sets nothing on it. */
+export function teamValues(
+  project: Project | undefined | null,
+  id: string,
+): { team: string; defaults: Record<string, unknown>; enforced: Record<string, unknown> } | null {
+  const t = project?.shared?.teamPlugins;
+  if (!t) return null;
+  const prefix = `plugins.${id}.`;
+  const pick = (m: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(m ?? {}).flatMap(([k, v]) => (k.startsWith(prefix) && k.length > prefix.length ? [[k.slice(prefix.length), v]] : [])),
+    );
+  const defaults = pick(t.defaults);
+  const enforced = pick(t.enforced);
+  return Object.keys(defaults).length || Object.keys(enforced).length ? { team: t.team, defaults, enforced } : null;
+}
+
+/** The keys the project's team sets on the plugin that will not apply, with why. */
+export function teamRefusals(p: PluginView, project: Project): { key: string; part: 'defaults' | 'enforced'; why: TeamRefusal }[] {
+  const t = teamValues(project, p.id);
+  if (!t) return [];
+  return (['enforced', 'defaults'] as const).flatMap((part) =>
+    Object.entries(t[part]).flatMap(([key, v]) => {
+      const why = teamRefusal(p, key, v);
+      return why ? [{ key, part, why }] : [];
+    }),
+  );
+}
+
+/** The value of a simple setting of each project in `project`, by its ranks: imposed by the team, this machine's, the
+ *  file's, recommended by the team, the default. */
 export function projectValue(p: PluginView, project: Project, f: FieldSetting): ProjectValue {
   const local = p.choices.projectSettings?.[project.id] ?? {};
   const file = fileValues(project, p.id);
+  const team = teamValues(project, p.id);
+  const byTeam = (part: 'defaults' | 'enforced') =>
+    team && f.key in team[part] && teamRefusal(p, f.key, team[part][f.key]) === null ? team[part][f.key] : undefined;
+  const enforced = byTeam('enforced');
+  const recommended = byTeam('defaults');
   const fromFile = fromRepo(f) && f.key in file && fits(f, file[f.key]) ? file[f.key] : undefined;
-  if (f.key in local && fits(f, local[f.key])) return { value: local[f.key], source: 'local', file: fromFile };
-  if (fromFile !== undefined) return { value: fromFile, source: 'file', file: fromFile };
+  const extra = { ...(recommended !== undefined ? { recommended } : {}), ...(team ? { team: team.team } : {}) };
+  if (enforced !== undefined) return { value: enforced, source: 'enforced', file: fromFile, ...extra };
+  if (f.key in local && fits(f, local[f.key])) return { value: local[f.key], source: 'local', file: fromFile, ...extra };
+  if (fromFile !== undefined) return { value: fromFile, source: 'file', file: fromFile, ...extra };
+  if (recommended !== undefined) return { value: recommended, source: 'recommended', ...extra };
   return { value: f.default ?? (f.type === 'boolean' ? false : ''), source: 'default' };
 }
 

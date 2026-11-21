@@ -12,8 +12,11 @@
 //!   `default` (`settings_for`). A `profile` setting holds the id of the profile chosen, or null: a `.escouade.yml` never
 //!   chooses one, it may only propose one by its name (`proposed`), which the window says and the user takes or not.
 //!
-//! The ranks of a setting on `main`: 1 the manifest's default, 3 the project's `.escouade.yml`, 4 this machine's value. The
-//! team's ranks (2 recommended, 5 enforced) and the managed device's (6) come with the team server of the 2.3.
+//! The ranks of a setting of each project: 1 the manifest's default, 2 what the project's team recommends (its file's
+//! `defaults`, TS-13, ESC-532), 3 the project's `.escouade.yml`, 4 this machine's value, 5 what the team imposes (its
+//! `enforced`). The managed device (6) locks no setting of a plugin. A team sets a **simple** setting of each project
+//! alone (`team_refusal`): never a secret, a profile, a value imported from a file nor what its author keeps off the
+//! shared files (`"repo": false`).
 
 use crate::manifest::Manifest;
 use crate::Choices;
@@ -249,6 +252,113 @@ pub fn settings_for(
     active: bool,
     file: Option<&Map<String, Value>>,
 ) -> Map<String, Value> {
+    settings_with_team(m, choices, project, active, file, None)
+}
+
+/// What the team of a project sets on a plugin (TS-13, ESC-532): the keys `plugins.<id>.<key>` of its file, by setting
+/// key; `defaults` recommends (rank 2), `enforced` imposes (rank 5). Judged against the manifest (`team_refusal`) where
+/// it is read: a key refused is said and ignored.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TeamValues {
+    /// The team's name, as the lock says it (« Imposé par l'équipe Acme »).
+    pub team: String,
+    pub defaults: Map<String, Value>,
+    pub enforced: Map<String, Value>,
+}
+
+/// Why a team's key of a plugin is refused (`team_refusal`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TeamRefusal {
+    /// The plugin declares no setting of this key.
+    Unknown,
+    /// A secret: in each device's keychain, never in a shared file.
+    Secret,
+    /// A profile: each device makes its own and each project chooses one.
+    Profile,
+    /// A value imported from a file (`import`): it stays on each device.
+    Imported,
+    /// What its author keeps off the shared files (`"repo": false`).
+    KeptOff,
+    /// A setting of the app (`"scope": "app"`), not of each project.
+    AppScope,
+    /// A value that is not of its type (`string`, `number`, `boolean`, a `select` among its options).
+    Type(String),
+}
+
+impl TeamRefusal {
+    /// The reason, said in the interface's language.
+    pub fn text(&self) -> String {
+        match self {
+            Self::Unknown => tr!(
+                "le plugin ne déclare pas ce réglage",
+                "the plugin declares no such setting"
+            ),
+            Self::Secret => tr!(
+                "c’est un secret : il reste dans le trousseau de chaque poste, jamais dans un fichier partagé",
+                "it is a secret: it stays in each device’s keychain, never in a shared file"
+            ),
+            Self::Profile => tr!(
+                "c’est un profil : chaque poste fait les siens, chaque projet en choisit un",
+                "it is a profile: each device makes its own, each project chooses one"
+            ),
+            Self::Imported => tr!(
+                "sa valeur s’importe d’un fichier : elle reste sur chaque poste",
+                "its value is imported from a file: it stays on each device"
+            ),
+            Self::KeptOff => tr!(
+                "son auteur le garde hors des fichiers partagés (repo: false)",
+                "its author keeps it off the shared files (repo: false)"
+            ),
+            Self::AppScope => tr!(
+                "c’est un réglage de l’app, pas d’un projet",
+                "it is a setting of the app, not of a project"
+            ),
+            Self::Type(t) => tr!(
+                "la valeur n’est pas du type du réglage ({t})",
+                "the value is not of the setting’s type ({t})"
+            ),
+        }
+    }
+}
+
+/// Whether a team may set the key `key` of a plugin to `value` (TS-13, ESC-532, choice n° 10): a simple setting of each
+/// project (`string`, `number`, `boolean`, `select`, on several lines too), a value of its type. None: it may.
+pub fn team_refusal(m: &Manifest, key: &str, value: &Value) -> Option<TeamRefusal> {
+    if super::secret_keys(m).iter().any(|k| k == key) {
+        return Some(TeamRefusal::Secret);
+    }
+    let Some(d) = setting(m, key) else {
+        return Some(TeamRefusal::Unknown);
+    };
+    let ty = d.get("type").and_then(Value::as_str).unwrap_or_default();
+    if ty == "profile" {
+        return Some(TeamRefusal::Profile);
+    }
+    if d.get("import").is_some() {
+        return Some(TeamRefusal::Imported);
+    }
+    if d.get("repo").and_then(Value::as_bool) == Some(false) {
+        return Some(TeamRefusal::KeptOff);
+    }
+    if !of_project(&d) {
+        return Some(TeamRefusal::AppScope);
+    }
+    if !fits(&d, value) {
+        return Some(TeamRefusal::Type(ty.to_string()));
+    }
+    None
+}
+
+/// `settings_for`, with what the project's team sets on the plugin (`team`, ranks 2 and 5).
+pub fn settings_with_team(
+    m: Option<&Manifest>,
+    choices: &Choices,
+    project: Option<&str>,
+    active: bool,
+    file: Option<&Map<String, Value>>,
+    team: Option<&TeamValues>,
+) -> Map<String, Value> {
     let Some(m) = m else {
         return choices.settings.clone();
     };
@@ -280,6 +390,11 @@ pub fn settings_for(
             continue;
         }
         let mine = local.and_then(|l| l.get(key));
+        let by_team = |part: fn(&TeamValues) -> &Map<String, Value>| {
+            here.and(team)
+                .and_then(|t| part(t).get(key))
+                .filter(|v| team_refusal(m, key, v).is_none())
+        };
         if profile {
             let v = match (here, mine) {
                 (None, _) => Value::Null,
@@ -287,10 +402,14 @@ pub fn settings_for(
                 (Some(_), None) => default_profile(m, choices, kind),
             };
             out.insert(key.to_string(), v);
+        } else if let Some(v) = by_team(|t| &t.enforced) {
+            out.insert(key.to_string(), v.clone());
         } else if let Some(v) = mine.filter(|v| fits(d, v)) {
             out.insert(key.to_string(), v.clone());
         } else if !out.contains_key(key) {
-            if let Some(v) = d.get("default").filter(|v| fits(d, v)) {
+            if let Some(v) =
+                by_team(|t| &t.defaults).or_else(|| d.get("default").filter(|v| fits(d, v)))
+            {
                 out.insert(key.to_string(), v.clone());
             }
         }

@@ -62,6 +62,23 @@ pub struct ProjectShared {
     /// that names another team shows the band again.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_dismissed: Option<String>,
+    /// What the project's team sets on its plugins (TS-13, ESC-532): the keys `plugins.<id>.<key>` of its file, as the
+    /// page Plugins of the project marks them. Never saved: read again with the file.
+    #[serde(skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub team_plugins: Option<TeamPlugins>,
+}
+
+/// The keys `plugins.<id>.<key>` a team's file sets on its projects (TS-13, ESC-532), by their whole key: `defaults`
+/// recommends (rank 2, under the repository's file and this machine), `enforced` imposes (rank 5, over them). Judged
+/// against each plugin's manifest where they are read: a secret, a profile, a value imported, what is kept off the files
+/// (`repo: false`), a key unknown or of a wrong type is said and ignored.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TeamPlugins {
+    /// The team's name, as the lock says it.
+    pub team: String,
+    pub defaults: BTreeMap<String, Value>,
+    pub enforced: BTreeMap<String, Value>,
 }
 
 /// The key `team` of a repository's `.escouade.yml` (TS-7): where the project's team is, nothing secret. It comes from

@@ -1801,6 +1801,26 @@ fn read_into(
     applied
 }
 
+/// What the team `name` sets on the plugins of its project (`plugins.<id>.<key>`, ESC-532): what the page Plugins of the
+/// project marks, and what `settings/get` ranks. None when it sets nothing on them.
+fn team_plugins(
+    name: &str,
+    layers: &crate::team_settings::Layers,
+) -> Option<escouade_model::projectfile::TeamPlugins> {
+    let pick = |m: &BTreeMap<String, Value>| -> BTreeMap<String, Value> {
+        m.iter()
+            .filter(|(k, _)| crate::team_settings::plugin_key(k).is_some())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    };
+    let t = escouade_model::projectfile::TeamPlugins {
+        team: name.to_owned(),
+        defaults: pick(&layers.defaults),
+        enforced: pick(&layers.enforced),
+    };
+    (!t.defaults.is_empty() || !t.enforced.is_empty()).then_some(t)
+}
+
 /// What a team sets on its project: rank 2 where the repository's file and the device set nothing, rank 5 over all.
 fn apply_team(
     p: &mut Project,
@@ -2005,7 +2025,8 @@ impl Core {
         let text = file_text(&path);
         // Taken before the projects, never under their lock.
         let locks = self.locks_for(project_id);
-        let team = self.team_layers_for(project_id).map(|(_, l)| l);
+        let named = self.team_layers_for(project_id);
+        let team = named.as_ref().map(|(_, l)| l.clone());
         let (before, after, applied) = {
             let mut projects = self.projects.write();
             let p = projects.iter_mut().find(|p| p.id == project_id)?;
@@ -2015,6 +2036,7 @@ impl Core {
             }
             let before = p.clone();
             let applied = read_into(p, text.as_deref(), &locks, team.as_ref());
+            p.shared.team_plugins = named.as_ref().and_then(|(n, l)| team_plugins(n, l));
             (before, p.clone(), applied)
         };
         let file = after.shared.file.as_ref();

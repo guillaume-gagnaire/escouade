@@ -214,3 +214,179 @@ async fn the_team_applies_to_its_projects_alone_crossed_with_the_managed_device(
     assert!(h.core.locks.read().value(TELEMETRY).is_none());
     assert!(h.core.team_locks.read().is_empty());
 }
+
+// ── A plugin's setting (ESC-532) ───────────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn a_plugin_s_setting_is_a_value_read_nested_or_dotted_and_written_back() {
+    assert_eq!(
+        CORE_KEYS.sort("plugins.dev.acme.vpn.routes"),
+        Some(Sort::Value)
+    );
+    assert_eq!(CORE_KEYS.sort("plugins.recommended"), Some(Sort::Value));
+    assert_eq!(CORE_KEYS.sort("plugins.install"), Some(Sort::Executable));
+    assert_eq!(
+        CORE_KEYS.sort("plugins.dev.acme"),
+        None,
+        "an id alone is no setting"
+    );
+    assert_eq!(CORE_KEYS.sort("plugins..x.y"), None);
+    assert_eq!(
+        setting_of("plugins.dev.acme.vpn.routes", "dev.acme.vpn"),
+        Some("routes")
+    );
+    assert_eq!(
+        setting_of("plugins.dev.acme.vpn.routes", "dev.acme.vp"),
+        None
+    );
+    let text = r#"
+version: 1
+defaults:
+  plugins:
+    dev.acme.vpn:
+      routes: 10.1.0.0/16
+enforced:
+  plugins.dev.acme.vpn.level: high
+  plugins:
+    dev.acme.vpn:
+      verbose: true
+"#;
+    let (file, warnings) = parse(text).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(
+        file.defaults.get("plugins.dev.acme.vpn.routes"),
+        Some(&json!("10.1.0.0/16"))
+    );
+    assert_eq!(
+        file.enforced.get("plugins.dev.acme.vpn.level"),
+        Some(&json!("high"))
+    );
+    assert_eq!(
+        file.enforced.get("plugins.dev.acme.vpn.verbose"),
+        Some(&json!(true))
+    );
+    let (again, _) = parse(&to_yaml(&file)).unwrap();
+    assert_eq!(again, file);
+    // Nothing of what never enters: a value, signed as the others.
+    assert!(escouade_team::settings::never(&file, &CORE_KEYS).is_none());
+}
+
+fn vpn() -> crate::plugins::manifest::Manifest {
+    let v = json!({
+        "id": "dev.acme.vpn", "name": "VPN", "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.2.0" },
+        "permissions": { "secrets": ["profile:vpn", "token"] },
+        "contributes": {
+            "profiles": [{ "id": "vpn", "title": "VPN", "nameField": "name", "fields": [{ "key": "name", "type": "string", "title": "Nom" }, { "key": "password", "secret": true, "title": "Mot de passe" }] }],
+            "secrets": [{ "key": "token", "title": "Jeton" }],
+            "settings": [
+                { "key": "routes", "type": "string", "scope": "project", "title": "Routes" },
+                { "key": "level", "type": "select", "scope": "project", "title": "Niveau", "options": ["low", "high"] },
+                { "key": "port", "type": "number", "scope": "project", "title": "Port", "repo": false },
+                { "key": "conf", "type": "string", "scope": "project", "title": "Conf", "multiline": true, "import": [".conf"] },
+                { "key": "profile", "type": "profile", "of": "vpn", "scope": "project", "title": "Profil" },
+                { "key": "autoStart", "type": "boolean", "title": "Au lancement" }
+            ]
+        }
+    });
+    let r = crate::plugins::manifest::check(&v, crate::plugins::manifest::Hand::Third);
+    r.manifest.unwrap_or_else(|p| panic!("{p:?}"))
+}
+
+#[test]
+fn a_plugin_s_key_the_plugin_refuses_is_said_with_why_as_the_other_keys_refused() {
+    let file = TeamFile {
+        defaults: map(&[
+            ("plugins.dev.acme.vpn.routes", json!("10.1.0.0/16")),
+            ("plugins.dev.other.thing.x", json!(1)),
+        ]),
+        enforced: map(&[
+            ("plugins.dev.acme.vpn.token", json!("t")),
+            ("plugins.dev.acme.vpn.profile", json!("Client A")),
+            ("plugins.dev.acme.vpn.port", json!(1)),
+            ("plugins.dev.acme.vpn.conf", json!("x")),
+            ("plugins.dev.acme.vpn.autoStart", json!(true)),
+            ("plugins.dev.acme.vpn.nope", json!(1)),
+            ("plugins.dev.acme.vpn.level", json!("max")),
+        ]),
+        ..Default::default()
+    };
+    let ids = vec!["dev.acme.vpn".to_owned()];
+    // The tests write in French (`escouade_base::i18n`, never set in them).
+    let said = plugin_warnings(&file, &ids, |id| (id == "dev.acme.vpn").then(vpn));
+    let all = said.join("\n");
+    assert_eq!(said.len(), 8, "{all}");
+    assert!(!all.contains("plugins.dev.acme.vpn.routes"), "{all}");
+    for (key, why) in [
+        ("token", "secret"),
+        ("profile", "profil"),
+        ("port", "repo: false"),
+        ("conf", "importe"),
+        ("autoStart", "réglage de l’app"),
+        ("nope", "ne déclare pas"),
+        ("level", "type du réglage (select)"),
+    ] {
+        assert!(
+            said.iter().any(
+                |w| w.contains(&format!("enforced.plugins.dev.acme.vpn.{key} refusé"))
+                    && w.contains(why)
+            ),
+            "{key}: {all}"
+        );
+    }
+    assert!(
+        said.iter()
+            .any(|w| w.contains("plugins.dev.other.thing.x") && w.contains("pas installé")),
+        "{all}"
+    );
+}
+
+#[tokio::test]
+async fn a_team_s_plugin_setting_reaches_its_projects_alone() {
+    let h = harness("team-settings-plugins");
+    let (a, _) = h.project(false).await;
+    let b = h.second_project().await;
+    let effective = Effective {
+        enforced: map(&[("plugins.dev.acme.vpn.level", json!("high"))]),
+        defaults: map(&[
+            ("plugins.dev.acme.vpn.routes", json!("10.1.0.0/16")),
+            ("board.merge_strategy", json!("rebase")),
+        ]),
+        ..Default::default()
+    };
+    h.core
+        .apply_team_settings("acme", "Acme", Some(&view(effective)));
+    h.core.set_project_team(&a.id, Some("acme".into())).unwrap();
+    let pa = h.core.project(&a.id).unwrap();
+    let t = pa
+        .shared
+        .team_plugins
+        .clone()
+        .expect("the team's keys of its plugins");
+    assert_eq!(t.team, "Acme");
+    assert_eq!(
+        t.enforced.get("plugins.dev.acme.vpn.level"),
+        Some(&json!("high"))
+    );
+    assert_eq!(
+        t.defaults.get("plugins.dev.acme.vpn.routes"),
+        Some(&json!("10.1.0.0/16"))
+    );
+    assert!(!t.defaults.contains_key("board.merge_strategy"));
+    // A project's key of the team still applies as before.
+    assert_eq!(
+        crate::projectfile::get(&pa, "board.merge_strategy"),
+        json!("rebase")
+    );
+    // What the plugin is given, by setting.
+    let v = plugin_values(&t, "dev.acme.vpn");
+    assert_eq!(v.team, "Acme");
+    assert_eq!(v.enforced.get("level"), Some(&json!("high")));
+    assert_eq!(v.defaults.get("routes"), Some(&json!("10.1.0.0/16")));
+    assert!(plugin_values(&t, "dev.other.x").enforced.is_empty());
+    // The other project, of no team: nothing.
+    assert!(h.core.project(&b.id).unwrap().shared.team_plugins.is_none());
+    // The device leaves the team: nothing of it holds any more.
+    h.core.apply_team_settings("acme", "Acme", None);
+    assert!(h.core.project(&a.id).unwrap().shared.team_plugins.is_none());
+}

@@ -11798,6 +11798,13 @@ impl crate::plugins::events::Place for Core {
             .unwrap_or_default();
         Some((p.private, settings))
     }
+
+    fn project_team(&self, id: &str, plugin: &str) -> Option<crate::plugins::profiles::TeamValues> {
+        let p = self.project(id).ok()?;
+        let team = p.shared.team_plugins.as_ref()?;
+        let values = crate::team_settings::plugin_values(team, plugin);
+        (!values.defaults.is_empty() || !values.enforced.is_empty()).then_some(values)
+    }
 }
 
 /// The names of what a fact is about, and whether its project is private (`facts`). Takes the

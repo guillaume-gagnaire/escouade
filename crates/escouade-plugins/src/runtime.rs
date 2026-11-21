@@ -550,8 +550,8 @@ impl Runtime {
     }
 
     ///
-    /// A setting of each project (`"scope": "project"`, ESC-530) goes by its ranks (`profiles::settings_for`): this
-    /// machine's value for the project, the file's, the manifest's default; a `profile` setting gives the id of the
+    /// A setting of each project (`"scope": "project"`, ESC-530) goes by its ranks (`profiles::settings_with_team`): what
+    /// its team imposes, this machine's value for the project, the file's, what its team recommends, the manifest's default; a `profile` setting gives the id of the
     /// profile chosen, never one the file names, and only for a project where the plugin is on.
     pub fn settings_of(&self, id: &str, project: Option<&str>) -> Value {
         let Some(choices) = self.plugins.choices(id) else {
@@ -560,19 +560,21 @@ impl Runtime {
         let here = project.and_then(|p| {
             let place = self.place.read().as_ref().and_then(Weak::upgrade)?;
             let (private, file) = place.project_plugin(p, id)?;
-            Some((super::active_in(&choices, p, private), file))
+            let team = place.project_team(p, id);
+            Some((super::active_in(&choices, p, private), file, team))
         });
-        let (active, file) = match here {
-            Some((active, file)) => (active, Some(file)),
-            None => (false, None),
+        let (active, file, team) = match here {
+            Some((active, file, team)) => (active, Some(file), team),
+            None => (false, None, None),
         };
         let manifest = self.plugins.get(id, Lang::En).and_then(|v| v.manifest);
-        Value::Object(super::profiles::settings_for(
+        Value::Object(super::profiles::settings_with_team(
             manifest.as_ref(),
             &choices,
             project,
             active,
             file.as_ref(),
+            team.as_ref(),
         ))
     }
 

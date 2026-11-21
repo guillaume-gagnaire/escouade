@@ -5,7 +5,8 @@
 //!
 //! - **the sort of each key** ([`CoreKeys`]): the single list of the policies (`escouade_policy::list`, each key with its
 //!   sort), then the keys of the repository's `.escouade.yml` (`projectfile::KEYS`: a command is executable, the rest a
-//!   value), and the plugins to install (executable);
+//!   value), the plugins to install (executable), and a plugin's setting (`plugins.<id>.<key>`, a value, ESC-532:
+//!   judged against the plugin's manifest where it is read, [`plugin_warnings`]);
 //! - **the file as YAML** ([`parse`], [`to_yaml`]): what the administrator writes and reads in the window, its parts
 //!   flattened into the list's keys (`permissions.modes`, or `permissions:` then `modes:`);
 //! - **where it applies** ([`Layers`], `Core::apply_team_settings`): the policies' keys go to the locks (rank 5 for
@@ -52,12 +53,106 @@ impl Classify for CoreKeys {
         if key == projectfile::RECOMMENDED {
             return Some(Sort::Value);
         }
+        // A plugin's setting (ESC-532): a value, recommended or imposed; the plugin's manifest judges it where it is read.
+        if plugin_key(key).is_some() {
+            return Some(Sort::Value);
+        }
         let k = projectfile::key_of(key)?;
         Some(if k.command {
             Sort::Executable
         } else {
             Sort::Value
         })
+    }
+}
+
+/// A key of a plugin's setting (`plugins.<id>.<key>`, ESC-532): what follows `plugins.`, of three words at least (an id
+/// of two words, a key), none of them empty. Not `plugins.recommended` nor `plugins.install`.
+pub fn plugin_key(key: &str) -> Option<&str> {
+    let rest = key.strip_prefix("plugins.")?;
+    let words: Vec<&str> = rest.split('.').collect();
+    let ok = words.len() >= 3
+        && words.iter().all(|w| {
+            !w.is_empty()
+                && w.bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        });
+    ok.then_some(rest)
+}
+
+/// The setting key of the plugin `id` that `key` names (`plugins.<id>.<setting>`), if it names one of it.
+pub fn setting_of<'a>(key: &'a str, id: &str) -> Option<&'a str> {
+    key.strip_prefix("plugins.")?
+        .strip_prefix(id)?
+        .strip_prefix('.')
+        .filter(|k| !k.is_empty())
+}
+
+/// What a team's file sets on plugins that will not apply, judged against the manifests of this device's plugins
+/// (`manifest_of`, None: not installed here), as its other keys refused are said: a secret, a profile, a value imported,
+/// what its author keeps off the files, a key it does not declare or of a wrong type; a plugin not installed here is
+/// said too (the key is kept, without effect where it is not installed).
+pub fn plugin_warnings(
+    file: &TeamFile,
+    ids: &[String],
+    manifest_of: impl Fn(&str) -> Option<crate::plugins::manifest::Manifest>,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    for (part, map) in [
+        ("defaults", &file.defaults),
+        ("enforced", &file.enforced),
+        ("proposed", &file.proposed),
+    ] {
+        for (key, value) in map {
+            if plugin_key(key).is_none() {
+                continue;
+            }
+            // The longest id installed it names: `dev.acme.ci` before `dev.acme`.
+            let id = ids
+                .iter()
+                .filter(|id| setting_of(key, id).is_some())
+                .max_by_key(|id| id.len());
+            let Some(id) = id else {
+                out.push(tr!(
+                    "{part}.{key} : ce plugin n’est pas installé sur ce poste ; la clé est gardée, sans effet là où il ne l’est pas.",
+                    "{part}.{key}: this plugin is not installed on this device; the key is kept, without effect where it is not."
+                ));
+                continue;
+            };
+            let Some(m) = manifest_of(id) else { continue };
+            let setting = setting_of(key, id).unwrap_or_default();
+            if part == "proposed" {
+                out.push(tr!(
+                    "{part}.{key} : un réglage de plugin se recommande (defaults) ou s’impose (enforced) ; il ne s’appliquera pas.",
+                    "{part}.{key}: a plugin's setting is recommended (defaults) or imposed (enforced); it will not apply."
+                ));
+            } else if let Some(why) = crate::plugins::profiles::team_refusal(&m, setting, value) {
+                let why = why.text();
+                out.push(tr!(
+                    "{part}.{key} refusé : {why}. Il ne s’appliquera pas.",
+                    "{part}.{key} refused: {why}. It will not apply."
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// What the team's file sets on the plugin `id` (its keys `plugins.<id>.<key>`), by setting key: what
+/// `settings/get` ranks (`profiles::settings_with_team`).
+pub fn plugin_values(
+    team: &escouade_model::projectfile::TeamPlugins,
+    id: &str,
+) -> crate::plugins::profiles::TeamValues {
+    let pick = |m: &BTreeMap<String, Value>| -> Map<String, Value> {
+        m.iter()
+            .filter_map(|(k, v)| Some((setting_of(k, id)?.to_owned(), v.clone())))
+            .collect()
+    };
+    crate::plugins::profiles::TeamValues {
+        team: team.team.clone(),
+        defaults: pick(&team.defaults),
+        enforced: pick(&team.enforced),
     }
 }
 
@@ -116,7 +211,9 @@ fn flatten(
         } else {
             format!("{prefix}.{k}")
         };
-        if CORE_KEYS.sort(&path).is_some() {
+        // A plugin's setting is a value, never a mapping: `plugins: { dev.acme.ci: { level: 2 } }` is walked into.
+        let plugin_map = plugin_key(&path).is_some() && matches!(v.v, N::Map(_));
+        if CORE_KEYS.sort(&path).is_some() && !plugin_map {
             out.insert(path, json_of(v));
         } else if matches!(v.v, N::Map(_)) {
             flatten(v, &path, out, warnings);
@@ -347,6 +444,21 @@ impl crate::core::Core {
         for p in projects {
             self.read_shared(&p, false);
         }
+    }
+
+    /// What a team's file sets on plugins that will not apply, judged against this device's plugins (`plugin_warnings`).
+    pub(crate) fn team_plugin_warnings(&self, file: &TeamFile) -> Vec<String> {
+        let ids: Vec<String> = self
+            .plugins
+            .list(crate::i18n::Lang::En)
+            .into_iter()
+            .map(|p| p.id)
+            .collect();
+        plugin_warnings(file, &ids, |id| {
+            self.plugins
+                .get(id, crate::i18n::Lang::En)
+                .and_then(|v| v.manifest)
+        })
     }
 
     /// What the team of a project sets on it (its keys of a project's file); none for a project of no team.

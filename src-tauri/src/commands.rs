@@ -5665,11 +5665,17 @@ pub async fn team_settings(
 /// A version written in the window, read before it is signed: its file, what refuses it, the signatures it needs.
 #[tauri::command]
 pub fn team_settings_check(
+    core: CoreState<'_>,
     teams: TeamsState<'_>,
     team: String,
     yaml: String,
 ) -> crate::teams::SettingsDraft {
-    teams.settings_check(&team, &yaml)
+    let mut draft = teams.settings_check(&team, &yaml);
+    // A plugin's setting (ESC-532), judged against the manifests of this device's plugins.
+    if let Some(file) = &draft.file {
+        draft.warnings.extend(core.team_plugin_warnings(file));
+    }
+    draft
 }
 
 /// An administrator signs a version, chained to the one in force.

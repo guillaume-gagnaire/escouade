@@ -2,7 +2,7 @@
 title: "Le .escouade.yml d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.5, §6.6, §15.2 (C12-B), §16 (TS-13)","crates/escouade-team/src/settings.rs","src-tauri/src/team_settings.rs, src-tauri/src/teams_settings.rs"]
-tickets: ["ESC-471","ESC-480","ESC-493","ESC-547"]
+tickets: ["ESC-471","ESC-480","ESC-493","ESC-547","ESC-532"]
 decisions: [183,186,194,225]
 compared: null
 ---
@@ -112,3 +112,21 @@ Trois clés de l'équipe seule (le poste géré n'en a pas), lues par l'app et n
 - `costs.stopAutopilot` (restreindre) : au-delà d'un budget, le pilote auto s'arrête.
 
 Imposées (`enforced`) ou recommandées (`defaults`), elles valent pareil : la version imposée passe devant.
+
+## Un réglage de plugin (ESC-532)
+
+Choix n° 10 de l'étude du contrat des plugins (ESC-501), tranché le 2026-11-17 : **une valeur simple seulement, jamais un secret ni un profil**.
+
+```yaml
+defaults:
+  plugins:
+    dev.acme.vpn:
+      mtu: 1400                         # rang 2 : recommandé
+enforced:
+  plugins.dev.acme.vpn.routes: 172.16.0.0/12   # rang 5 : imposé
+```
+
+- `plugins.<id>.<clé>` (un id de deux mots au moins, puis la clé) a la sorte **valeur** : signée d'une seule signature, sans accord du poste, et ne vaut que pour **les projets de l'équipe**. `defaults` la recommande (rang 2, sous le `.escouade.yml` du dépôt et la valeur de cette machine), `enforced` l'impose (rang 5, par-dessus). Dans `proposed`, elle ne s'applique pas.
+- Elle est **jugée contre le manifeste du plugin installé**, là où elle est lue : seulement un réglage simple de portée `project` (`string`, `number`, `boolean`, `select`, sur plusieurs lignes compris) d'une valeur de son type. Un secret, un profil, une valeur importée d'un fichier, un réglage que son auteur garde hors des fichiers (`"repo": false`), un réglage de l'app, une clé que le plugin ne déclare pas ou une valeur d'un autre type sont **refusés avec leur raison** : à « Relire le changement », dans ce qui ne s'appliquera pas (« enforced.plugins.dev.acme.vpn.port refusé : son auteur le garde hors des fichiers partagés (repo: false). Il ne s'appliquera pas. ») ; chez le membre, dans la page Plugins du projet.
+- Un plugin qui n'est pas installé sur le poste, ou pas actif dans le projet : la clé est gardée et dite, sans effet ; jamais une offre d'installation.
+- Dans la page Plugins d'un projet de l'équipe, un réglage imposé est grisé, avec le cadenas et « Imposé par l'équipe Acme » ; un réglage recommandé dit « Recommandé par l'équipe Acme ». Rien ne passe devant une valeur imposée, et `settings/get { project }` la rend au plugin (page *Les profils d'un plugin et ses réglages d'un projet*).

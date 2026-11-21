@@ -2,7 +2,17 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
-import { projectFields, projectPlugins, projectValue, summaryOf, usedBy, kindsOf, proposedProfile } from '../../lib/plugin-profiles';
+import {
+  kindsOf,
+  projectFields,
+  projectPlugins,
+  projectValue,
+  proposedProfile,
+  summaryOf,
+  teamRefusal,
+  teamRefusals,
+  usedBy,
+} from '../../lib/plugin-profiles';
 import type { PluginView } from '../../lib/plugins';
 import { plugins } from '../../lib/plugins-view.svelte';
 import { app } from '../../lib/state.svelte';
@@ -287,5 +297,108 @@ describe('the tab Projets of the plugin', () => {
     expect(links).toHaveLength(1);
     await userEvent.click(links[0]);
     expect(app.modal).toEqual({ kind: 'settings', page: 'projectPlugins', projectId: 'atlas' });
+  });
+});
+
+// What the project's team sets on its plugins (TS-13, ESC-532): imposed (rank 5), greyed with the padlock and who imposes
+// it; recommended (rank 2), with where it comes from; refused by the plugin, said with why.
+function teamAtlas(file: Record<string, unknown>, defaults: Record<string, unknown>, enforced: Record<string, unknown>): Project {
+  const p = atlas(file);
+  const prefix = (m: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(m).map(([k, v]) => [`plugins.dev.exemple.tunnel.${k}`, v]));
+  return {
+    ...p,
+    team: 'acme',
+    shared: { ...p.shared!, teamPlugins: { team: 'ACME', defaults: prefix(defaults), enforced: prefix(enforced) } },
+  };
+}
+
+describe('what the project’s team sets on a plugin', () => {
+  it('ranks it: imposed over this machine, recommended under the file; a key the plugin refuses never', () => {
+    const routes = projectFields(tunnel().manifest).find((f) => f.key === 'routes')!;
+    const local = tunnel({ projectSettings: { atlas: { routes: '10.0.0.0/8' } } });
+    expect(projectValue(local, teamAtlas({ routes: '10.20.0.0/16' }, {}, { routes: '172.16.0.0/12' }), routes)).toMatchObject({
+      value: '172.16.0.0/12',
+      source: 'enforced',
+      team: 'ACME',
+    });
+    expect(projectValue(tunnel(), teamAtlas({}, { routes: '10.1.0.0/16' }, {}), routes)).toMatchObject({
+      value: '10.1.0.0/16',
+      source: 'recommended',
+      team: 'ACME',
+    });
+    expect(projectValue(tunnel(), teamAtlas({ routes: '10.20.0.0/16' }, { routes: '10.1.0.0/16' }, {}), routes)).toMatchObject({
+      source: 'file',
+      recommended: '10.1.0.0/16',
+    });
+    expect(projectValue(local, teamAtlas({}, { routes: '10.1.0.0/16' }, {}), routes)).toMatchObject({
+      source: 'local',
+      value: '10.0.0.0/8',
+    });
+    // A wrong type is not taken.
+    expect(projectValue(tunnel(), teamAtlas({}, {}, { routes: 12 }), routes)).toMatchObject({ source: 'default' });
+    const p = tunnel();
+    expect(teamRefusal(p, 'routes', 'x')).toBeNull();
+    expect(teamRefusal(p, 'routes', 12)).toBe('type');
+    expect(teamRefusal(p, 'profile', A)).toBe('profile');
+    expect(teamRefusal(p, 'port', 1)).toBe('keptOff');
+    expect(teamRefusal(p, 'autoStart', true)).toBe('appScope');
+    expect(teamRefusal(p, 'nope', 1)).toBe('unknown');
+    expect(
+      teamRefusal(
+        { ...p, manifest: { ...p.manifest!, contributes: { ...p.manifest!.contributes, secrets: [{ key: 'token' }] } } },
+        'token',
+        'x',
+      ),
+    ).toBe('secret');
+    const imported = installedPlugin({
+      id: 'dev.exemple.conf',
+      version: '1.0.0',
+      contributes: { settings: [{ key: 'conf', type: 'string', scope: 'project', multiline: true, import: ['.conf'] }] },
+    });
+    expect(teamRefusal(imported, 'conf', 'x')).toBe('imported');
+    expect(teamRefusals(p, teamAtlas({}, { nope: 1 }, { port: 4444, routes: 'ok' }))).toEqual([
+      { key: 'port', part: 'enforced', why: 'keptOff' },
+      { key: 'nope', part: 'defaults', why: 'unknown' },
+    ]);
+  });
+
+  it('shows an imposed setting greyed with « Imposé par l’équipe ACME », a recommended one with its provenance, and what it refuses', async () => {
+    resetApp({ projects: [teamAtlas({ routes: '10.20.0.0/16' }, { routes: 'x' }, { routes: '172.16.0.0/12', port: 4444 })] });
+    const view = tunnel({ projectSettings: { atlas: { profile: A, routes: '10.0.0.0/8' } } });
+    fakeBackend({ plugins_list: () => [view], plugin_project_set: () => view });
+    render(SettingsModal, { page: 'projectPlugins', projectId: 'atlas' });
+    const group = await screen.findByRole('region', { name: 'Tunnel' });
+    const routes = within(group).getByRole('group', { name: 'Routes par le tunnel' });
+    expect(routes).toHaveTextContent('Imposé par l’équipe ACME');
+    const input = within(routes).getByLabelText('Routes par le tunnel') as HTMLInputElement;
+    expect(input.value).toBe('172.16.0.0/12');
+    expect(input).toBeDisabled();
+    // Nothing goes ahead of it: neither this machine's value, nor the file's, nor « Écrire dans .escouade.yml ».
+    expect(routes).not.toHaveTextContent('Réglage local de cette machine');
+    expect(within(routes).queryByRole('button', { name: 'Écrire dans .escouade.yml' })).toBeNull();
+    expect(within(routes).queryByRole('button', { name: 'Reprendre la valeur du fichier' })).toBeNull();
+    // A key its author keeps off the files: refused, with why.
+    expect(group).toHaveTextContent('L’équipe ACME règle port : refusé, son auteur le garde hors des fichiers partagés.');
+    const port = within(group).getByRole('group', { name: 'Port' });
+    expect(port).not.toHaveTextContent('Imposé par l’équipe');
+  });
+
+  it('says a recommended value comes from the team, and takes it back after a value of this machine', async () => {
+    resetApp({ projects: [teamAtlas({}, { routes: '10.1.0.0/16' }, {})] });
+    let view = tunnel();
+    const ipc = fakeBackend({ plugins_list: () => [view], plugin_project_set: () => view });
+    render(SettingsModal, { page: 'projectPlugins', projectId: 'atlas' });
+    const routes = await screen.findByRole('group', { name: 'Routes par le tunnel' });
+    expect(routes).toHaveTextContent('Recommandé par l’équipe ACME');
+    expect((within(routes).getByLabelText('Routes par le tunnel') as HTMLInputElement).value).toBe('10.1.0.0/16');
+    expect(within(routes).getByLabelText('Routes par le tunnel')).toBeEnabled();
+    view = tunnel({ projectSettings: { atlas: { routes: '10.0.0.0/8' } } });
+    plugins.list = [view];
+    const local = await within(screen.getByRole('region', { name: 'Tunnel' })).findByRole('button', {
+      name: 'Reprendre la valeur de l’équipe ACME',
+    });
+    await userEvent.click(local);
+    expect(ipc.called('plugin_project_set').at(-1)!.args).toMatchObject({ key: 'routes', clear: true });
   });
 });

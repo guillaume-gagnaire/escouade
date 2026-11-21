@@ -377,7 +377,8 @@ test('two profiles, chosen by two projects: the plugin reads the right secret fo
   expect(said).not.toContain(SECRET_A);
   expect(said).not.toContain(SECRET_B);
   expect(said).not.toContain('of profile "Interne"');
-  for (const f of fs.readdirSync(app.data)) {
+  // Not the lock the running app holds on its data folder (`instance.lock`, ESC-451: empty, and locked on Windows).
+  for (const f of fs.readdirSync(app.data).filter((f) => f !== 'instance.lock')) {
     const p = path.join(app.data, f);
     if (fs.statSync(p).isFile()) expect(fs.readFileSync(p, 'utf8')).not.toContain(SECRET_A);
   }
