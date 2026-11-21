@@ -1,0 +1,186 @@
+<!doctype html>
+<!--
+  ESC-549 : l'app mobile, la page qui compare les trois directions côte à côte, écran par écran.
+  Les images sont celles de captures/ (node design/mobile-2-3/render.mjs). Rien n'est chargé d'ailleurs.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>L'app mobile · trois directions</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<style>
+  :root {
+    --p: oklch(0.72 0.09 190);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --brand: #35c1bd;
+    --teal-ink: oklch(0.86 0.08 190);
+    --wait: oklch(0.84 0.14 82);
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --brand: oklch(0.52 0.09 190);
+    --teal-ink: oklch(0.42 0.08 190);
+    --wait: oklch(0.5 0.11 70);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--frame); color: var(--text); font: 14px/1.5 'Inter Variable', Inter, system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03';
+    -webkit-font-smoothing: antialiased; }
+  ::selection { background: color-mix(in oklch, var(--p) 30%, transparent); }
+  a { color: var(--teal-ink); text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--teal-ink); outline-offset: 2px; border-radius: 6px; }
+  main { max-width: 1480px; margin: 0 auto; padding: 32px 24px 64px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 32px; margin-bottom: 24px; }
+  header h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  header p { margin: 6px 0 0; color: var(--soft); max-width: 70ch; }
+  .ctl { display: flex; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 10px; background: rgba(127, 127, 127, 0.08); box-shadow: inset 0 0 0 1px var(--line); }
+  .seg button { all: unset; cursor: pointer; height: 30px; padding: 0 12px; border-radius: 7px; display: grid; place-items: center; font-weight: 600; font-size: 13px; color: var(--muted); }
+  .seg button[aria-pressed='true'] { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .grid { display: grid; grid-template-columns: 140px repeat(3, minmax(0, 1fr)); gap: 0 18px; }
+  .dir { background: var(--panel); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line); padding: 16px; display: grid; gap: 8px; align-content: start; }
+  .dir h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: center; }
+  .dir h2 .l { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2); font-size: 14px; }
+  .dir .tag { font-size: 12px; font-weight: 650; color: var(--teal-ink); }
+  .dir p { margin: 0; color: var(--soft); }
+  .dir ul { margin: 0; padding-left: 18px; color: var(--soft); display: grid; gap: 3px; }
+  .dir .k { font-size: 12px; font-weight: 650; color: var(--muted); margin-top: 4px; }
+  .dir.rec { box-shadow: inset 0 0 0 1.5px var(--brand); }
+  .row-h { grid-column: 1; align-self: start; position: sticky; top: 16px; padding-top: 6px; }
+  .row-h b { display: block; font-size: 15px; font-weight: 650; }
+  .row-h span { color: var(--muted); font-size: 13px; }
+  .shot { margin: 0; display: grid; justify-items: center; }
+  .shot img { width: 100%; max-width: 330px; height: auto; border-radius: 18px; box-shadow: 0 0 0 1px var(--line-2), 0 18px 40px -18px rgba(0, 0, 0, 0.6); display: block; background: var(--panel); }
+  .sep { grid-column: 1 / -1; height: 1px; background: var(--line); margin: 26px 0; }
+  .commons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .commons figcaption { margin-top: 10px; color: var(--soft); font-size: 13px; text-align: center; max-width: 330px; }
+  h3 { font-size: 18px; margin: 40px 0 8px; letter-spacing: -0.01em; }
+  .note { color: var(--muted); max-width: 90ch; }
+  table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 650; font-size: 12.5px; }
+  td:first-child { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; }
+    .row-h { grid-column: 1 / -1; position: static; margin-bottom: 8px; }
+    .dir { padding: 10px; }
+    .commons { gap: 10px; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>L'app mobile d'Escouade · trois directions</h1>
+      <p>ESC-549 (MO-0). Les mêmes écrans, les mêmes données fictives, la langue visuelle de l'app ; seules changent la navigation, la densité, la place de la boîte « À toi » face aux agents et le geste de la réponse. La conception est dans <a href="../../docs/MOBILE.md">docs/MOBILE.md</a>, les choix à trancher (M1 à M15) à son § 7.</p>
+    </div>
+    <div class="ctl">
+      <div class="seg" role="group" aria-label="Thème des captures"><button data-t="" aria-pressed="true">Sombre</button><button data-t="-clair" aria-pressed="false">Clair</button></div>
+      <div class="seg" role="group" aria-label="Taille du téléphone"><button data-s="-430" aria-pressed="true">iPhone 430</button><button data-s="-360" aria-pressed="false">Android 360</button></div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div></div>
+    <section class="dir" aria-labelledby="d-a">
+      <h2 id="d-a"><span class="l">A</span>La pile</h2><span class="tag">Ma recommandation d’abord</span>
+      <p>Une demande à la fois, en grande carte ; la pile dessous. On la règle d'un glissé (une autorisation) ou d'un toucher (un choix), la suivante monte. Agents, Kanban et espaces dans une feuille du bas.</p>
+      <span class="k">Pour</span><ul><li>Le plus rapide d'un pouce, la commande en entier sous les yeux</li><li>Le glissé ne part pas par mégarde dans une poche</li><li>La forme « une demande par écran » de la boîte du bureau</li></ul>
+      <span class="k">Contre</span><ul><li>Voir tout ce qui attend demande la jauge ou la feuille</li><li>Un geste à apprendre (avec son équivalent accessible)</li></ul>
+    </section>
+    <section class="dir rec" aria-labelledby="d-b">
+      <h2 id="d-b"><span class="l">B</span>Le fil</h2><span class="tag">Choisie par l’utilisateur (2026-11-20)</span>
+      <p>Un fil dense de tout ce qui attend, comme le centre de notifications ; une ligne se déplie sur place, on répond par des boutons. Trois onglets en bas : À toi, Agents, Kanban.</p>
+      <span class="k">Pour</span><ul><li>Tout se voit d'un coup, rangé comme la boîte du bureau</li><li>Des boutons et des onglets que tout le monde connaît</li><li>La notification et la ligne ont la même forme</li></ul>
+      <span class="k">Contre</span><ul><li>« Autoriser » est un bouton : un toucher suffit (Face ID en garde)</li><li>Déplier dans une liste dense serre la commande à 360</li></ul>
+    </section>
+    <section class="dir" aria-labelledby="d-c">
+      <h2 id="d-c"><span class="l">C</span>Les espaces</h2><span class="tag">La machine d'abord</span>
+      <p>Les espaces en cartes empilées, comme un portefeuille ; celle du dessus montre ses demandes en tuiles et ses agents. Une demande s'ouvre dans une feuille ; on maintient pour autoriser.</p>
+      <span class="k">Pour</span><ul><li>La machine nommée partout : on sait où part la réponse</li><li>Un espace coupé se voit d'un coup d'œil</li><li>Le Kanban en rangées qui défilent, lisible</li></ul>
+      <span class="k">Contre</span><ul><li>Tout ce qui attend, partout, n'est qu'un nombre</li><li>Un geste de plus pour changer d'espace</li></ul>
+    </section>
+  </div>
+
+  <div class="grid" id="rows"></div>
+
+  <h3>Créer depuis le téléphone, en B</h3>
+  <p class="note">Choisi avec la direction (M16) : un projet sur un serveur (un dépôt cloné sur le serveur, ou un dossier du serveur, le clonage suivi), un agent avec son premier message, un ticket dicté dont le titre et les critères se relisent avant de créer.</p>
+  <div class="commons" id="creation"></div>
+
+  <h3>Les écrans communs aux trois</h3>
+  <p class="note">Le verrou du système (l'empreinte sous Android, Face ID sous iOS) avant d'envoyer une autorisation ; la connexion perdue (l'écran daté, l'envoi suspendu, le brouillon gardé) ; le téléphone révoqué depuis le poste.</p>
+  <div class="commons" id="commons"></div>
+
+  <h3>En une table</h3>
+  <table>
+    <thead><tr><th></th><th>A · La pile</th><th>B · Le fil</th><th>C · Les espaces</th></tr></thead>
+    <tbody>
+      <tr><td>Navigation</td><td>La pile en plein écran, une feuille du bas (agents, Kanban, espaces), le choix de l'espace en haut</td><td>Trois onglets en bas, des puces d'espace en haut</td><td>Les espaces empilés ; dans celui du dessus, À toi · Agents · Kanban</td></tr>
+      <tr><td>Densité</td><td>Basse : une demande à l'écran</td><td>Haute : six à huit lignes à l'écran</td><td>Moyenne : des tuiles, des rangées</td></tr>
+      <tr><td>La boîte face aux agents</td><td>La boîte est l'accueil ; les agents dans la feuille</td><td>La boîte est le premier onglet ; les agents le deuxième</td><td>Par espace : ses demandes, puis ses agents</td></tr>
+      <tr><td>Répondre à une autorisation</td><td>Glisser, puis la biométrie</td><td>Toucher « Autoriser », puis la biométrie</td><td>Maintenir une seconde, puis la biométrie</td></tr>
+      <tr><td>Un choix entre des rendus</td><td>Les planches en carrousel dans la carte</td><td>Les trois planches dans la ligne dépliée</td><td>Les planches l'une sous l'autre, dans une feuille</td></tr>
+      <tr><td>La notification</td><td>Une seule, qui compte la pile</td><td>Une par agent arrêté, un résumé pour la boîte</td><td>Groupées par espace</td></tr>
+      <tr><td>Le Kanban</td><td>Une colonne à la fois, dans la feuille</td><td>Une colonne choisie, une ligne glissée pour valider</td><td>Une rangée par colonne, les tickets défilent</td></tr>
+      <tr><td>Ce qui coûte</td><td>Le geste et sa variante accessible</td><td>Le moins de travail ; le plus banal</td><td>Le plus de pixels pour la machine ; « Partout » réduit à un nombre</td></tr>
+    </tbody>
+  </table>
+</main>
+<script>
+  const SCREENS = [
+    ['accueil', 'L’accueil', 'ce qui attend, partout'],
+    ['autorisation', 'Une autorisation', 'la commande entière, le geste'],
+    ['boite', 'La boîte « À toi »', 'un choix entre trois rendus'],
+    ['conversation', 'Une conversation', 'lire, envoyer, dicter'],
+    ['kanban', 'Le Kanban', 'en lecture, un geste simple'],
+    ['notification', 'La notification', 'l’écran verrouillé'],
+    ['appairage', 'Le premier appairage', 'le QR code du poste'],
+  ];
+  const COMMONS = [
+    ['verrou', 'Le verrou biométrique avant l’envoi'],
+    ['horsligne', 'Hors ligne : l’écran daté, l’envoi suspendu'],
+    ['revoque', 'Révoqué depuis le poste'],
+  ];
+  const CREATION = [
+    ['creer-projet', 'Un projet sur un serveur, le clonage suivi'],
+    ['creer-agent', 'Un agent et son premier message'],
+    ['ticket-dicte', 'Un ticket dicté'],
+  ];
+  let theme = '';
+  let size = '-430';
+  const src = (d, r) => `captures/${d}-${r}${theme}${size}.png`;
+  const alt = (d, r, l) => `${d.toUpperCase()} · ${l}, ${theme ? 'clair' : 'sombre'}, ${size === '-430' ? 'iPhone 430 × 932' : 'Android 360 × 780'}`;
+  function draw() {
+    document.getElementById('rows').innerHTML = SCREENS.map(([r, l, s]) => `<div class="sep"></div><div class="row-h"><b>${l}</b><span>${s}</span></div>`
+      + ['a', 'b', 'c'].map((d) => `<figure class="shot"><img loading="lazy" src="${src(d, r)}" alt="${alt(d, r, l)}"></figure>`).join('')).join('');
+    document.getElementById('commons').innerHTML = COMMONS.map(([r, l]) => `<figure class="shot"><img loading="lazy" src="${src('x', r)}" alt="${l}"><figcaption>${l}</figcaption></figure>`).join('');
+    document.getElementById('creation').innerHTML = CREATION.map(([r, l]) => `<figure class="shot"><img loading="lazy" src="${src('b', r)}" alt="B · ${l}"><figcaption>${l}</figcaption></figure>`).join('');
+    document.documentElement.dataset.theme = theme ? 'light' : 'dark';
+  }
+  for (const b of document.querySelectorAll('[data-t]')) b.onclick = () => { theme = b.dataset.t; for (const x of document.querySelectorAll('[data-t]')) x.setAttribute('aria-pressed', String(x === b)); draw(); };
+  for (const b of document.querySelectorAll('[data-s]')) b.onclick = () => { size = b.dataset.s; for (const x of document.querySelectorAll('[data-s]')) x.setAttribute('aria-pressed', String(x === b)); draw(); };
+  draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,869 @@
+<!doctype html>
+<!--
+  ESC-549 : l'app mobile d'Escouade (MO-0), trois directions. Maquette statique, rien n'est branché.
+  ?d=a|b|c, &theme=light, puis #appairage (le premier appairage par QR code), #accueil (ce qui attend, partout),
+  #autorisation (une autorisation à répondre, la commande entière, le geste), #conversation (la conversation d'un agent,
+  envoyer un message, dicter), #boite (une demande de la boîte « À toi » : un choix entre trois rendus), #kanban (le
+  Kanban en lecture, un geste simple) ou #notification (l'écran verrouillé) ; en B seulement, la création choisie
+  par l'utilisateur : #creer-projet, #creer-agent, #ticket-dicte. ?d=x#verrou, #horsligne, #revoque : les
+  écrans communs aux trois. La page prend la taille de la fenêtre : 360 × 780 dessine un Android, 430 × 932 un iPhone.
+  Jetons, polices et icônes de l'app (src/app.css, src/lib/icons.ts) ; données fictives (espaces Ce poste, Travail et
+  Perso, leurs projets et leurs agents ; aucune clé, aucun compte). Captures : node design/mobile-2-3/render.mjs
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ESC-549 · l'app mobile</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/500.css" />
+<script src="icons.js"></script>
+<style>
+  /* Les jetons de src/app.css (sombre, puis clair). Les vues de tous les espaces prennent le teal d'Escouade (--p) ;
+     la conversation d'un agent prend la couleur de son projet, comme la fenêtre du bureau. */
+  :root {
+    --p: oklch(0.72 0.09 190);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --line-3: rgba(255, 255, 255, 0.2);
+    --hover: rgba(255, 255, 255, 0.045);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --dim: #8f949e;
+    --text-ai: #e9ebee;
+    --brand: #35c1bd;
+    --teal-ink: oklch(0.86 0.08 190);
+    --p-ink: color-mix(in oklch, var(--p) 70%, white);
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --wait-bg: oklch(from var(--wait) l c h / 0.07);
+    --wait-line: oklch(from var(--wait) l c h / 0.32);
+    --on-wait: #1a1405;
+    --del: oklch(0.74 0.14 22);
+    --add: oklch(0.8 0.13 155);
+    --idle: #7a7f88;
+    --primary: #f2f3f4;
+    --on-primary: #08090a;
+    --code-fg: #d5d8dd;
+    --scrim: rgba(3, 4, 5, 0.62);
+    --shade: 1;
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    --wall: linear-gradient(165deg, #173b42 0%, #0d1015 52%, #1c1830 100%);
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --line-3: rgba(15, 17, 22, 0.24);
+    --hover: rgba(15, 17, 22, 0.045);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --dim: #5c616a;
+    --text-ai: #1d2026;
+    --brand: oklch(0.52 0.09 190);
+    --teal-ink: oklch(0.42 0.08 190);
+    --p-ink: color-mix(in oklch, var(--p) 50%, #15171c);
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --wait-bg: oklch(from var(--wait) l c h / 0.09);
+    --wait-line: oklch(from var(--wait) l c h / 0.4);
+    --on-wait: #ffffff;
+    --del: oklch(0.5 0.18 25);
+    --add: oklch(0.45 0.13 155);
+    --primary: #1b1d22;
+    --on-primary: #f7f8f8;
+    --code-fg: #24272e;
+    --scrim: rgba(24, 26, 32, 0.3);
+    --shade: 0.3;
+    --wall: linear-gradient(165deg, #cde8e7 0%, #eef1f4 52%, #e1dbf2 100%);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--panel); }
+  body { font: 15px/1.45 'Inter Variable', Inter, system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03'; color: var(--text);
+    -webkit-font-smoothing: antialiased; overflow: hidden; }
+  ::selection { background: color-mix(in oklch, var(--p) 30%, transparent); }
+  p { margin: 0; }
+  h1, h2, h3 { margin: 0; text-wrap: balance; }
+  svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--mono); font-size: 0.9em; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+  .tn { font-variant-numeric: tabular-nums; }
+  .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .sp { margin-left: auto; }
+
+  /* ───────── Le téléphone : la barre d'état et l'indicateur du système (Android à 360, iPhone à 430) ───────── */
+  .phone { width: 100vw; height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; background: var(--panel);
+    --sb: 30px; --hb: 22px; --gut: 16px; }
+  .ios .phone, .phone.ios { --sb: 54px; --hb: 34px; --gut: 18px; }
+  .sb { height: var(--sb); flex: none; display: flex; align-items: center; padding: 0 18px 0 20px; font: 600 13.5px/1 'Inter Variable', sans-serif;
+    font-variant-numeric: tabular-nums; color: var(--text); position: relative; z-index: 30; }
+  .ios .sb { padding: 14px 28px 0 38px; font-size: 16px; }
+  .sb .icons { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .sb .icons svg { height: 12px; width: auto; fill: currentColor; }
+  .ios .sb .icons svg { height: 13px; }
+  .sb .island { position: absolute; left: 50%; top: 11px; width: 124px; height: 36px; border-radius: 20px; background: #000; transform: translateX(-50%); }
+  .hb { height: var(--hb); flex: none; display: grid; place-items: center; position: relative; z-index: 30; }
+  .hb::after { content: ''; width: 108px; height: 4px; border-radius: 3px; background: var(--text); opacity: 0.85; }
+  .ios .hb::after { width: 136px; height: 5px; margin-top: 6px; }
+  .scr { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+
+  /* ───────── Les pièces communes ───────── */
+  .nav { height: 52px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 8px; }
+  .nav .t { font-weight: 640; font-size: 16.5px; letter-spacing: -0.01em; min-width: 0; }
+  .nav .t small { display: block; font-size: 12.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .ib { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: var(--soft); flex: none; position: relative; }
+  .ib.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); }
+  .lt { font-size: 28px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1; }
+  .btn { height: 46px; padding: 0 16px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600;
+    font-size: 15px; background: rgba(var(--fg, 255, 255, 255), 0.05); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); white-space: nowrap; flex: none; }
+  :root[data-theme='light'] .btn:not(.pri):not(.ok):not(.ghost) { background: rgba(15, 17, 22, 0.04); }
+  .btn.pri { background: var(--primary); color: var(--on-primary); box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18); }
+  .btn.ghost { background: none; box-shadow: none; color: var(--soft); padding: 0 10px; }
+  .btn.sm { height: 38px; font-size: 14px; padding: 0 13px; border-radius: 10px; }
+  .btn.ok { background: var(--run); color: #06140c; box-shadow: none; }
+  :root[data-theme='light'] .btn.ok { color: #fff; }
+  .btn[disabled] { opacity: 0.45; }
+  .btn.grow { flex: 1; min-width: 0; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 7px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+    background: rgba(127, 127, 127, 0.1); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); }
+  .pill svg.i { width: 14px; height: 14px; }
+  .pill.w { background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); color: var(--wait); }
+  .pill.r { background: oklch(from var(--run) l c h / 0.1); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.32); color: var(--run); }
+  .pill.t { background: oklch(from var(--brand) l c h / 0.1); box-shadow: inset 0 0 0 1px oklch(from var(--brand) l c h / 0.36); color: var(--teal-ink); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--run); }
+  .dot.w { background: var(--wait); box-shadow: 0 0 0 3px oklch(from var(--wait) l c h / 0.22); }
+  .dot.idle { background: var(--idle); }
+  .pdot { width: 9px; height: 9px; border-radius: 3px; flex: none; display: inline-block; }
+  .plq { width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center; flex: none; font-weight: 700; font-size: 11.5px; color: var(--soft);
+    background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-3); }
+  .plq svg.i { width: 13px; height: 13px; }
+  .plq.lg { width: 38px; height: 38px; border-radius: 11px; font-size: 16px; }
+  .plq.lg svg.i { width: 19px; height: 19px; }
+  .where { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); min-width: 0; flex-wrap: nowrap; }
+  .where b { color: var(--soft); font-weight: 600; white-space: nowrap; }
+  .where .s { opacity: 0.6; }
+  .lab { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .cmd { margin: 0; font: 400 12.6px/1.6 var(--mono); color: var(--code-fg); background: var(--well); border-radius: 10px; padding: 10px 12px;
+    box-shadow: inset 0 0 0 1px var(--line-2); white-space: pre-wrap; word-break: break-all; }
+  .cmd .pr { color: var(--muted); user-select: none; }
+  .path { font: 400 12px/1.4 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fine { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+  .fine b { color: var(--soft); font-weight: 600; }
+  .sep { height: 1px; background: var(--line); }
+  .grab { width: 38px; height: 5px; border-radius: 3px; background: var(--line-3); margin: 8px auto 4px; flex: none; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 10; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 12; background: var(--raise); border-radius: 18px 18px 0 0; display: flex; flex-direction: column;
+    box-shadow: inset 0 1px 0 var(--line-2), 0 -20px 50px -12px rgba(0, 0, 0, calc(0.6 * var(--shade))); }
+  .seg { display: flex; padding: 3px; border-radius: 11px; background: rgba(127, 127, 127, 0.08); box-shadow: inset 0 0 0 1px var(--line); gap: 2px; min-width: 0; }
+  .seg > span { flex: 1; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: var(--muted); white-space: nowrap; min-width: 0; }
+  .seg > span.on { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, calc(0.3 * var(--shade))); }
+  .seg > span .c { font-size: 12px; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+  .badge { min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--wait); color: var(--on-wait); font-size: 11.5px; font-weight: 700;
+    display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
+  .jauge { display: flex; gap: 4px; }
+  .jauge i { flex: 1; height: 4px; border-radius: 2px; background: var(--line-2); }
+  .jauge i.w { background: var(--wait); }
+  .jauge i.cur { box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--text); }
+
+  /* Les rendus d'un choix : planches, sceau (repris de la boîte « À toi » du bureau). */
+  .plate { position: relative; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); min-width: 0; }
+  .plate.on { box-shadow: inset 0 0 0 1.5px var(--brand); }
+  .plate .shot { padding: 8px; }
+  .plate .shot svg { display: block; width: 100%; height: auto; border-radius: 7px; box-shadow: 0 0 0 1px var(--line); }
+  .plate .cred { display: flex; align-items: center; gap: 8px; padding: 8px 10px 9px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); min-width: 0; white-space: nowrap; }
+  .plate .cred .l { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-weight: 700; font-size: 12px; box-shadow: inset 0 0 0 1px var(--line-3); color: var(--soft); flex: none; }
+  .plate.on .cred .l { background: var(--brand); color: #08090a; box-shadow: none; }
+  .plate .cred b { color: var(--text); font-weight: 620; }
+  .seal { position: absolute; top: -14px; right: -8px; width: 58px; height: 58px; z-index: 2; }
+  .seal circle.bg { fill: var(--panel); stroke: var(--brand); stroke-width: 1.2; }
+  .seal circle.in { fill: none; stroke: oklch(from var(--brand) l c h / 0.45); stroke-width: 0.8; }
+  .seal text { font: 700 6.3px 'Inter Variable', Inter, sans-serif; letter-spacing: 0.16em; fill: var(--teal-ink); }
+  .seal path.ck { fill: none; stroke: var(--teal-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .opts { display: flex; gap: 6px; }
+  .opts > span { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; font-weight: 700; font-size: 16px; color: var(--soft);
+    box-shadow: inset 0 0 0 1px var(--line-2); background: rgba(127, 127, 127, 0.06); flex: none; position: relative; }
+  .opts > span.on { background: var(--brand); color: #08090a; box-shadow: none; }
+  .opts > span.rec::after { content: ''; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--teal-ink); }
+  .opts > span.on.rec::after { background: #08090a; }
+
+  /* La conversation (commune aux trois, son cadre change) */
+  .conv { flex: 1; min-height: 0; overflow: hidden; padding: 6px var(--gut) 10px; display: flex; flex-direction: column; gap: 12px; justify-content: flex-end; }
+  .msg-u { align-self: flex-end; max-width: 84%; background: var(--raise-2); border-radius: 16px 16px 4px 16px; padding: 9px 13px; box-shadow: inset 0 0 0 1px var(--line); }
+  .msg-a { color: var(--text-ai); font-size: 15px; line-height: 1.5; }
+  .msg-a code { font: 400 0.86em var(--mono); padding: 1px 5px; border-radius: 5px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+  .tool { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--muted); min-width: 0; }
+  .tool svg.i { width: 15px; height: 15px; }
+  .tool b { color: var(--soft); font-weight: 600; }
+  .tool .mono { color: var(--soft); }
+  .tool .ad { color: var(--add); font-variant-numeric: tabular-nums; }
+  .tool .dl { color: var(--del); font-variant-numeric: tabular-nums; }
+  .tools { display: grid; gap: 8px; padding-left: 2px; }
+  .composer { flex: none; margin: 0 10px 8px; border-radius: 16px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2), 0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade)));
+    display: flex; align-items: center; gap: 4px; padding: 5px 5px 5px 14px; min-height: 54px; }
+  .composer .f { flex: 1; color: var(--muted); font-size: 15px; min-width: 0; }
+  .composer .f.typed { color: var(--text); }
+  .composer .send { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); flex: none; }
+  .composer .send.off { background: rgba(127, 127, 127, 0.14); color: var(--muted); }
+  .composer .mic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: var(--soft); flex: none; }
+  .perm { border-radius: 14px; background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); padding: 12px; display: grid; gap: 9px; }
+  .perm .h { display: flex; align-items: center; gap: 8px; color: var(--wait); font-weight: 650; font-size: 14px; }
+  .perm .h svg.i { width: 16px; height: 16px; }
+  .perm .acts { display: flex; gap: 8px; }
+
+  /* Le glissé pour autoriser (A) et le maintien (C) */
+  .slide { position: relative; height: 58px; border-radius: 16px; background: rgba(127, 127, 127, 0.1); box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden;
+    display: grid; place-items: center; font-weight: 620; font-size: 15px; color: var(--soft); flex: none; }
+  .slide .fill { position: absolute; left: 0; top: 0; bottom: 0; width: var(--x, 0%); background: linear-gradient(90deg, oklch(from var(--wait) l c h / 0.18), oklch(from var(--run) l c h / 0.42)); }
+  .slide .th { position: absolute; top: 5px; left: calc(5px + (100% - 58px) * var(--k, 0)); width: 48px; height: 48px; border-radius: 12px; background: var(--primary); color: var(--on-primary);
+    display: grid; place-items: center; box-shadow: 0 4px 12px -4px rgba(0, 0, 0, calc(0.6 * var(--shade))); }
+  .slide .th svg.i { width: 20px; height: 20px; }
+  .slide .lb { position: relative; display: flex; align-items: center; gap: 8px; padding-left: 40px; }
+  .slide .lb svg.i { width: 15px; height: 15px; opacity: 0.8; }
+  .slide.live .th { background: var(--run); color: #06140c; }
+  :root[data-theme='light'] .slide.live .th { color: #fff; }
+  .hold { position: relative; height: 56px; border-radius: 16px; background: var(--primary); color: var(--on-primary); display: flex; align-items: center; justify-content: center; gap: 10px;
+    font-weight: 650; font-size: 15.5px; overflow: hidden; flex: 1; min-width: 0; }
+  .hold .sweep { position: absolute; inset: 0; width: var(--x, 0%); background: var(--run); }
+  .hold > span, .hold > svg { position: relative; }
+  .hold.live { color: #06140c; }
+  :root[data-theme='light'] .hold.live { color: #fff; }
+  .ring { width: 26px; height: 26px; transform: rotate(-90deg); position: relative; flex: none; }
+  .ring circle { fill: none; stroke-width: 3; }
+  .ring .bgc { stroke: currentColor; opacity: 0.25; }
+  .ring .fg { stroke: currentColor; stroke-linecap: round; }
+
+  /* L'écran verrouillé (notifications), dessiné comme le système */
+  .phone.locked { background: var(--wall); }
+  .lock { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding-top: 22px; }
+  .lock .date { font-size: 17px; font-weight: 550; color: var(--soft); }
+  .lock .clock { font-size: 84px; font-weight: 650; letter-spacing: -0.04em; line-height: 1; margin-top: 4px; font-variant-numeric: tabular-nums; color: var(--text); }
+  .android .lock { align-items: flex-start; padding-left: 24px; padding-right: 24px; }
+  .android .lock .clock { font-size: 72px; font-weight: 500; letter-spacing: -0.03em; }
+  .notifs { width: 100%; padding: 0 10px; margin-top: auto; margin-bottom: 18px; display: grid; gap: 8px; }
+  .android .notifs { padding: 0; }
+  .nt { border-radius: 20px; padding: 12px 14px; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 2px 11px; position: relative;
+    background: color-mix(in oklch, var(--raise) 86%, transparent); box-shadow: inset 0 0 0 1px var(--line-2), 0 8px 24px -10px rgba(0, 0, 0, calc(0.5 * var(--shade))); }
+  .android .nt { border-radius: 22px; }
+  .nt .ap { grid-row: span 3; width: 36px; height: 36px; border-radius: 9px; background: #35c1bd; color: #08090a; display: grid; place-items: center; }
+  .nt .ap svg { width: 22px; height: 22px; }
+  .nt .hd { display: flex; gap: 8px; font-size: 13px; color: var(--muted); min-width: 0; }
+  .nt .hd b { color: var(--soft); font-weight: 600; }
+  .nt .tt { font-weight: 650; font-size: 15px; line-height: 1.3; }
+  .nt .bd { font-size: 14px; color: var(--soft); line-height: 1.35; }
+  .nt .ac { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 8px; }
+  .nt .ac span { flex: 1; height: 40px; border-radius: 11px; display: grid; place-items: center; font-weight: 600; font-size: 14px; background: rgba(127, 127, 127, 0.14); }
+  .stackbehind { position: relative; }
+  .stackbehind::before, .stackbehind::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: -7px; height: 20px; border-radius: 0 0 18px 18px;
+    background: color-mix(in oklch, var(--raise) 70%, transparent); box-shadow: inset 0 -1px 0 var(--line-2); z-index: -1; }
+  .stackbehind::after { left: 28px; right: 28px; bottom: -13px; opacity: 0.7; }
+  .lock .foot { width: 100%; display: flex; justify-content: space-between; padding: 0 30px 6px; }
+  .lock .foot span { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in oklch, var(--raise) 70%, transparent); color: var(--text); }
+  .ngrp { font-size: 13px; font-weight: 650; color: var(--soft); padding: 2px 6px 0; display: flex; gap: 8px; align-items: center; }
+
+  /* ───────── A · La pile ───────── */
+  .a-top { display: flex; align-items: center; gap: 6px; padding: 4px 8px 0 var(--gut); flex: none; }
+  .chip { height: 38px; border-radius: 12px; padding: 0 10px 0 6px; display: inline-flex; align-items: center; gap: 8px; font-weight: 620; font-size: 14.5px;
+    background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); white-space: nowrap; min-width: 0; }
+  .chip svg.i { width: 15px; height: 15px; color: var(--muted); }
+  .a-head { padding: 12px var(--gut) 10px; display: grid; gap: 8px; flex: none; }
+  .a-head .r { display: flex; align-items: baseline; gap: 10px; }
+  .a-head .r .n { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .deck { flex: 1; min-height: 0; position: relative; margin: 6px var(--gut) 0; }
+  .deck .bk { position: absolute; left: 14px; right: 14px; top: 0; height: 40px; border-radius: 20px 20px 0 0; background: var(--raise); box-shadow: inset 0 1px 0 var(--line-2), inset 0 0 0 1px var(--line); opacity: 0.6; }
+  .deck .bk.b2 { left: 26px; right: 26px; top: -7px; opacity: 0.35; }
+  .card { position: absolute; left: 0; right: 0; top: 8px; bottom: 12px; border-radius: 20px; background: var(--raise); display: flex; flex-direction: column; gap: 9px; padding: 14px;
+    box-shadow: inset 0 0 0 1px var(--line-2), 0 18px 40px -16px rgba(0, 0, 0, calc(0.7 * var(--shade))); overflow: hidden; }
+  .card.w { box-shadow: inset 0 0 0 1px var(--wait-line), 0 18px 40px -16px rgba(0, 0, 0, calc(0.7 * var(--shade))); background: linear-gradient(var(--wait-bg), var(--wait-bg)), var(--raise); }
+  .card.go { box-shadow: inset 0 0 0 1.5px oklch(from var(--run) l c h / 0.6), 0 18px 40px -16px rgba(0, 0, 0, calc(0.7 * var(--shade))); transform: rotate(1.2deg) translateX(6px); }
+  .card .top { display: flex; align-items: center; gap: 8px; }
+  .card h2 { font-size: 19px; font-weight: 680; letter-spacing: -0.015em; line-height: 1.25; }
+  .card .grow { flex: 1; min-height: 0; }
+  .card .row2 { display: flex; gap: 8px; }
+  .peek { flex: none; margin-top: 4px; background: var(--raise); border-radius: 18px 18px 0 0; box-shadow: inset 0 1px 0 var(--line-2); padding: 0 8px 4px; }
+  .peek .r { display: flex; gap: 4px; }
+  .peek .r > span { flex: 1; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--soft); white-space: nowrap; min-width: 0; }
+  .peek .r > span .c { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .carousel { display: flex; gap: 10px; margin: 0 -14px; padding: 6px 14px 0; overflow: hidden; }
+  .carousel .plate { flex: 0 0 76%; }
+  .carousel .plate.side { opacity: 0.55; }
+  .ctx { border-left: 0; padding: 10px 12px; border-radius: 10px; background: rgba(127, 127, 127, 0.06); font-size: 14px; color: var(--soft); line-height: 1.45; }
+  .ctx .lab { display: block; margin-bottom: 3px; }
+
+  /* La caméra de l'appairage (commune aux trois, son cadre change) */
+  .cam { position: relative; overflow: hidden; background: radial-gradient(80% 60% at 50% 40%, #2a2f38, #0b0c0f 70%); }
+  .cam .desk { position: absolute; left: 50%; top: 46%; width: 86%; aspect-ratio: 16 / 10.5; transform: translate(-50%, -50%) rotate(-3deg) skewX(-2deg); border-radius: 10px;
+    background: #101216; box-shadow: 0 0 0 6px #1b1d22, 0 30px 60px -10px rgba(0, 0, 0, 0.8); filter: blur(0.3px); overflow: hidden; display: grid; grid-template-columns: 30% 1fr; }
+  .cam .desk .side { background: #0b0c0f; }
+  .cam .desk .main { padding: 7% 8%; display: grid; grid-template-columns: 1fr 42%; gap: 8%; align-items: center; }
+  .cam .desk .lines i { display: block; height: 5px; border-radius: 3px; background: #2a2e36; margin: 6px 0; }
+  .cam .desk .lines i:first-child { width: 70%; background: #4a4f58; height: 7px; }
+  .cam .desk .qr { background: #fff; border-radius: 4px; padding: 5%; }
+  .cam .desk .qr svg { display: block; width: 100%; height: auto; }
+  .cam .frame { position: absolute; width: 132px; height: 132px; left: calc(50% + 21%); top: 46%; transform: translate(-50%, -50%); }
+  .cam .frame i { position: absolute; width: 30px; height: 30px; border: 3.5px solid #35c1bd; }
+  .cam .frame i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; border-radius: 10px 0 0 0; }
+  .cam .frame i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; border-radius: 0 10px 0 0; }
+  .cam .frame i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; border-radius: 0 0 0 10px; }
+  .cam .frame i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; border-radius: 0 0 10px 0; }
+  .cam .found { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: rgba(8, 9, 10, 0.72); color: #f7f8f8; border-radius: 12px; padding: 8px 12px;
+    font-size: 13.5px; font-weight: 600; display: flex; gap: 8px; align-items: center; white-space: nowrap; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+  .cam .found svg.i { width: 15px; height: 15px; color: #35c1bd; }
+  .field { height: 48px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); display: flex; align-items: center; padding: 0 14px; font-size: 15px; gap: 8px; min-width: 0; }
+  .field.f { box-shadow: inset 0 0 0 1px oklch(from var(--p) l c h / 0.6), 0 0 0 3px oklch(from var(--p) l c h / 0.14); }
+  .field .caret { width: 1.5px; height: 20px; background: var(--p-ink); margin-left: -6px; }
+
+  /* ───────── B · Le fil ───────── */
+  .b-head { padding: 6px var(--gut) 8px; flex: none; display: grid; gap: 10px; }
+  .b-head .r { display: flex; align-items: center; gap: 6px; }
+  .chips { display: flex; gap: 6px; overflow: hidden; margin: 0 calc(-1 * var(--gut)); padding: 0 var(--gut); }
+  .chips > span { height: 34px; border-radius: 10px; padding: 0 11px; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--soft);
+    box-shadow: inset 0 0 0 1px var(--line-2); white-space: nowrap; flex: none; }
+  .chips > span.on { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .chips > span .c { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+  .chips > span.on .c { color: inherit; opacity: 0.7; }
+  .chips > span svg.i { width: 14px; height: 14px; }
+  .feed { flex: 1; min-height: 0; overflow: hidden; }
+  .grp { display: flex; align-items: center; gap: 7px; padding: 14px var(--gut) 6px; font-size: 13px; font-weight: 650; color: var(--muted); }
+  .grp.w { color: var(--wait); }
+  .grp svg.i { width: 14px; height: 14px; }
+  .grp .c { font-variant-numeric: tabular-nums; font-weight: 600; opacity: 0.8; }
+  .row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 3px 10px; padding: 11px var(--gut); align-items: start; position: relative; }
+  .row + .row { box-shadow: inset 0 1px 0 var(--line); }
+  .row .k { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--soft); background: rgba(127, 127, 127, 0.1); box-shadow: inset 0 0 0 1px var(--line); }
+  .row .k svg.i { width: 16px; height: 16px; }
+  .row.w .k { color: var(--wait); background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .row .tt { font-weight: 620; font-size: 15px; line-height: 1.32; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .row .mt { grid-column: 2; font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .row .mt .pdot { width: 8px; height: 8px; }
+  .row .tm { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 2px; display: flex; align-items: center; gap: 6px; }
+  .row .new { width: 8px; height: 8px; border-radius: 50%; background: var(--p-ink); }
+  .row .mini { grid-column: 2; display: flex; gap: 5px; margin-top: 5px; }
+  .row .mini svg { width: 64px; height: 40px; border-radius: 5px; box-shadow: 0 0 0 1px var(--line-2); display: block; }
+  .row.open { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2) !important; border-radius: 16px; margin: 4px 8px; padding: 12px 10px; grid-template-columns: 30px minmax(0, 1fr) auto; }
+  .row.open.w { background: linear-gradient(var(--wait-bg), var(--wait-bg)), var(--raise); box-shadow: inset 0 0 0 1px var(--wait-line) !important; }
+  .row .ex { grid-column: 1 / -1; display: grid; gap: 10px; margin-top: 8px; min-width: 0; }
+  .row .ex .acts { display: flex; gap: 8px; }
+  .row.dim { opacity: 0.5; }
+  .tabs { flex: none; display: flex; background: var(--frame); box-shadow: inset 0 1px 0 var(--line); padding: 6px 6px 0; }
+  .tabs > span { flex: 1; height: 52px; display: grid; justify-items: center; align-content: center; gap: 3px; font-size: 12px; font-weight: 600; color: var(--muted); position: relative; }
+  .tabs > span svg.i { width: 22px; height: 22px; }
+  .tabs > span.on { color: var(--text); }
+  .tabs > span.on svg.i { color: var(--p-ink); }
+  .tabs > span .badge { position: absolute; top: 2px; left: calc(50% + 6px); }
+  .strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+  .strip .plate .shot { padding: 5px; }
+  .strip .plate .cred { padding: 6px 7px; gap: 6px; font-size: 12px; }
+  .strip .plate .cred .l { width: 20px; height: 20px; }
+  .strip .seal { width: 46px; height: 46px; top: -12px; right: -8px; }
+  .swipe { position: relative; overflow: hidden; }
+  .swipe .under { position: absolute; inset: 0; display: flex; justify-content: flex-end; }
+  .swipe .under span { width: 88px; display: grid; place-items: center; align-content: center; gap: 4px; font-size: 12.5px; font-weight: 650; }
+  .swipe .under span svg.i { width: 20px; height: 20px; }
+  .swipe .under .rv { background: var(--raise-2); color: var(--soft); }
+  .swipe .under .ok { background: var(--run); color: #06140c; }
+  :root[data-theme='light'] .swipe .under .ok { color: #fff; }
+  .swipe .row { background: var(--panel); transform: translateX(-176px); }
+  .tk { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 12px var(--gut); }
+  .tk + .tk, .swipe + .tk, .tk + .swipe { box-shadow: inset 0 1px 0 var(--line); }
+  .tk .key { font-weight: 650; font-size: 13.5px; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .tk .tt { grid-column: 1 / -1; font-weight: 600; font-size: 15px; line-height: 1.3; }
+  .tk .mt { grid-column: 1 / -1; font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .loop { display: inline-flex; gap: 2px; }
+  .loop i { width: 6px; height: 6px; border-radius: 1.5px; background: var(--line-3); }
+  .loop i.d { background: var(--run); }
+  .loop i.c { background: var(--wait); }
+  .steps { display: grid; gap: 12px; }
+  .steps .st { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 2px 12px; }
+  .steps .st .n { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 13px; box-shadow: inset 0 0 0 1px var(--line-3); color: var(--soft); grid-row: span 2; }
+  .steps .st.on .n { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .steps .st b { font-weight: 640; font-size: 15px; }
+  .steps .st span { font-size: 13.5px; color: var(--muted); }
+  .code8 { display: flex; gap: 5px; align-items: center; }
+  .code8 i { flex: 1; height: 46px; border-radius: 10px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); display: grid; place-items: center; font: 500 17px var(--mono); font-style: normal; min-width: 0; }
+  .code8 i.f { box-shadow: inset 0 0 0 1px oklch(from var(--p) l c h / 0.6), 0 0 0 3px oklch(from var(--p) l c h / 0.14); }
+  .code8 b { color: var(--muted); font-weight: 400; }
+
+  /* ───────── C · Les espaces ───────── */
+  .c-top { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px var(--gut); flex: none; }
+  .c-top .t { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .c-top .s { font-size: 13.5px; color: var(--muted); }
+  .wallet { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 4px 10px 0; gap: 0; }
+  .sc { border-radius: 20px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2), 0 -6px 18px -10px rgba(0, 0, 0, calc(0.6 * var(--shade))); position: relative; }
+  .sc + .sc { margin-top: -14px; }
+  .sc .st { display: flex; align-items: center; gap: 11px; padding: 11px 12px 24px; }
+  .sc .st .nm { font-weight: 660; font-size: 16px; letter-spacing: -0.01em; line-height: 1.2; }
+  .sc .st .nm small { display: block; font-size: 12.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .sc.off { background: color-mix(in oklch, var(--raise) 70%, var(--panel)); }
+  .sc.off .st .nm { color: var(--soft); }
+  .sc.front { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 0; border-radius: 22px 22px 0 0; box-shadow: inset 0 0 0 1px var(--line-3), 0 -10px 26px -12px rgba(0, 0, 0, calc(0.7 * var(--shade))); }
+  .sc.front .st { padding-bottom: 8px; }
+  .sc .body { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
+  .sc .sh { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 650; color: var(--muted); margin-top: 4px; }
+  .sc .sh .c { font-variant-numeric: tabular-nums; }
+  .tiles { display: flex; gap: 8px; margin: 0 -12px; padding: 2px 12px 4px; overflow: hidden; flex: none; }
+  .tile { flex: 0 0 156px; height: 132px; border-radius: 14px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2); padding: 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .tile.w { background: linear-gradient(var(--wait-bg), var(--wait-bg)), var(--raise-2); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .tile .tt { font-weight: 620; font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .tile .mt { margin-top: auto; font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; }
+  .tile .mini { display: flex; gap: 3px; }
+  .tile .mini svg { width: 40px; height: 25px; border-radius: 3px; box-shadow: 0 0 0 1px var(--line-2); display: block; }
+  .tile.focus { flex-basis: 230px; height: auto; box-shadow: inset 0 0 0 1.5px var(--line-3), 0 10px 24px -12px rgba(0, 0, 0, calc(0.7 * var(--shade))); }
+  .tile.faded { opacity: 0.55; }
+  .ag { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 1px 10px; align-items: center; padding: 9px 2px; }
+  .ag + .ag { box-shadow: inset 0 1px 0 var(--line); }
+  .ag .n { font-weight: 620; font-size: 14.5px; display: flex; gap: 7px; align-items: center; min-width: 0; }
+  .ag .d { grid-column: 2; font-size: 13px; color: var(--muted); }
+  .ag .tm { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .cfoot { flex: none; display: flex; gap: 6px; padding: 8px 12px 6px; box-shadow: inset 0 1px 0 var(--line); }
+  .cfoot > span { flex: 1; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 7px; font-weight: 620; font-size: 14px; color: var(--soft); white-space: nowrap; }
+  .cfoot > span.on { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .cfoot > span .badge { margin-left: 2px; }
+  .slot { border-radius: 20px; border: 1.5px dashed var(--line-3); display: grid; place-items: center; color: var(--muted); font-size: 14px; font-weight: 600; height: 64px; }
+  .krow { display: grid; gap: 6px; }
+  .krow .kh { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 650; color: var(--soft); }
+  .krow .kh .c { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ktiles { display: flex; gap: 8px; overflow: hidden; margin: 0 -12px; padding: 2px 12px; }
+  .ktile { flex: 0 0 150px; border-radius: 12px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line); padding: 9px 10px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+  .ktile .key { font-weight: 650; font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .ktile .tt { font-size: 13.5px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .ktile.focus { flex-basis: 236px; box-shadow: inset 0 0 0 1.5px var(--wait-line), 0 10px 24px -12px rgba(0, 0, 0, calc(0.7 * var(--shade))); background: linear-gradient(var(--wait-bg), var(--wait-bg)), var(--raise-2); }
+  .ktile .acts { display: flex; gap: 6px; margin-top: 6px; }
+
+  .android .big-only { display: none !important; }
+  .ios .small-only { display: none !important; }
+  .android .a-head .fine { display: none; }
+  .phone.dark-top .sb, .phone.dark-top .hb { color: #f7f8f8; }
+  .phone.dark-top .hb::after { background: #f7f8f8; }
+  .sheet h2 { font-size: 19px; font-weight: 680; letter-spacing: -0.015em; line-height: 1.25; }
+  .sheet .top { display: flex; align-items: center; gap: 8px; }
+  .sc .st .nm { min-width: 0; }
+  .sc .st .nm small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+
+  /* La création (B) : une feuille plein écran, ses champs, le clonage suivi, la dictée */
+  .form { flex: 1; min-height: 0; overflow: hidden; padding: 4px var(--gut) 0; display: flex; flex-direction: column; gap: 14px; }
+  .fgrp { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; min-width: 0; }
+  .fgrp .h { display: flex; align-items: baseline; gap: 8px; }
+  .spaces { display: flex; gap: 6px; }
+  .spaces > span { flex: 1; min-width: 0; height: 52px; border-radius: 12px; display: flex; align-items: center; gap: 8px; padding: 0 10px; font-weight: 620; font-size: 14px;
+    box-shadow: inset 0 0 0 1px var(--line-2); white-space: nowrap; overflow: hidden; }
+  .spaces > span.on { box-shadow: inset 0 0 0 1.5px var(--p-ink); background: oklch(from var(--p) l c h / 0.08); }
+  .spaces > span.off { opacity: 0.45; }
+  /* À 360, les espaces passent en liste : une ligne chacun, le nom et l'hôte en entier. */
+  .android .spaces { flex-direction: column; gap: 4px; }
+  .android .form { gap: 12px; }
+  .android .spaces > span { flex: none; height: 42px; }
+  .android .spaces > span small { display: inline; margin-left: 8px; }
+  .spaces > span small { display: block; font-size: 11.5px; font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .field.mono-f { font: 400 13px var(--mono); }
+  .field .k { color: var(--muted); }
+  .bar { height: 6px; border-radius: 3px; background: rgba(127, 127, 127, 0.16); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: var(--x); background: var(--run); border-radius: 3px; }
+  .clone { border-radius: 14px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+  .clone .r { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 620; }
+  .clone .r .tn { margin-left: auto; color: var(--muted); font-weight: 600; font-size: 13px; }
+  .clone .log { font: 400 11.5px/1.5 var(--mono); color: var(--muted); }
+  .sw { width: 44px; height: 26px; border-radius: 13px; background: var(--p-ink); position: relative; flex: none; }
+  .sw::after { content: ''; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--panel); }
+  .opt { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); font-size: 14.5px; }
+  .opt .v { margin-left: auto; color: var(--muted); font-size: 14px; display: flex; gap: 4px; align-items: center; white-space: nowrap; }
+  .area { border-radius: 14px; background: var(--well); box-shadow: inset 0 0 0 1px oklch(from var(--p) l c h / 0.6), 0 0 0 3px oklch(from var(--p) l c h / 0.14); padding: 12px 14px;
+    font-size: 15px; line-height: 1.5; min-height: 120px; display: flex; flex-direction: column; gap: 10px; }
+  .area .tools2 { display: flex; gap: 6px; margin-top: auto; align-items: center; }
+  .formfoot { flex: none; padding: 10px var(--gut) 8px; display: flex; gap: 8px; box-shadow: inset 0 1px 0 var(--line); background: var(--panel); }
+  .dict { border-radius: 16px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); padding: 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+  .dict .live { display: flex; align-items: center; gap: 10px; }
+  .dict .live .mic2 { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--del); color: #fff; flex: none;
+    box-shadow: 0 0 0 6px oklch(from var(--del) l c h / 0.18); }
+  .dict .wave { display: flex; gap: 3px; align-items: center; height: 28px; flex: 1; min-width: 0; overflow: hidden; }
+  .dict .wave i { width: 3px; border-radius: 2px; background: var(--soft); opacity: 0.8; flex: none; }
+  .dict .said { font-size: 15px; line-height: 1.5; color: var(--text); }
+  .dict .said .tail { color: var(--muted); }
+  .crit { display: grid; gap: 6px; }
+  .crit > div { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; color: var(--soft); }
+  .crit > div svg.i { width: 16px; height: 16px; color: var(--muted); margin-top: 2px; }
+
+  /* Les écrans communs */
+  .center { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 0 22px; }
+  .center .ico { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: oklch(from var(--del) l c h / 0.1); color: var(--del); box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.3); }
+  .center .ico svg.i { width: 26px; height: 26px; }
+  .center h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+  .center p { font-size: 15px; color: var(--soft); line-height: 1.5; }
+  .lost { flex: none; margin: 0 10px 6px; border-radius: 14px; padding: 10px 12px; background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 10px; }
+  .lost svg.i { color: var(--wait); width: 18px; height: 18px; grid-row: span 2; margin-top: 1px; }
+  .lost b { font-weight: 650; font-size: 14px; }
+  .lost span { font-size: 13px; color: var(--soft); }
+  .bio { position: absolute; z-index: 20; }
+  .android .bio { left: 0; right: 0; bottom: 0; border-radius: 26px 26px 0 0; background: var(--raise-2); padding: 26px 24px 18px; display: grid; justify-items: center; gap: 10px; text-align: center;
+    box-shadow: 0 -20px 50px -10px rgba(0, 0, 0, calc(0.7 * var(--shade))); }
+  .android .bio .ttl { font-size: 19px; font-weight: 650; }
+  .android .bio .sub { font-size: 14px; color: var(--muted); margin-top: -6px; }
+  .android .bio .fp { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: oklch(from var(--brand) l c h / 0.14); color: var(--teal-ink); margin: 12px 0 2px; }
+  .android .bio .fp svg.i { width: 34px; height: 34px; }
+  .android .bio .row3 { width: 100%; display: flex; justify-content: space-between; margin-top: 10px; }
+  .ios .bio { left: 50%; top: 42%; transform: translate(-50%, -50%); width: 168px; height: 168px; border-radius: 30px; background: color-mix(in oklch, var(--raise-2) 92%, transparent);
+    display: grid; justify-items: center; align-content: center; gap: 14px; box-shadow: 0 20px 50px -10px rgba(0, 0, 0, calc(0.7 * var(--shade))), inset 0 0 0 1px var(--line-2); }
+  .ios .bio svg.i { width: 64px; height: 64px; color: var(--text); stroke-width: 1.1; }
+  .ios .bio span { font-size: 15px; font-weight: 600; }
+  .ios .bio .ttl, .ios .bio .sub, .ios .bio .fp, .ios .bio .row3, .ios .bio .fine { display: none; }
+  .android .bio .face { display: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const P = new URLSearchParams(location.search);
+const D = P.get('d') || 'a';
+const LIGHT = P.get('theme') === 'light';
+if (LIGHT) document.documentElement.dataset.theme = 'light';
+const IOS = innerWidth >= 400;
+document.documentElement.classList.add(IOS ? 'ios' : 'android');
+const ROUTE = (location.hash || '#accueil').slice(1);
+const q = (t) => `«&nbsp;${t}&nbsp;»`;
+const ic = (n, s) => `<svg class="i" viewBox="0 0 16 16"${s ? ` style="width:${s}px;height:${s}px"` : ''} aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const PHONE = IOS ? 'iPhone' : 'Pixel 8';
+
+/* ───────── Données fictives ───────── */
+const SPACES = {
+  poste: { name: 'Ce poste', host: 'DESKTOP-7QK2 · Windows', plq: ic('monitor') },
+  travail: { name: 'Travail', host: 'escouade.acme.internal', plq: 'T' },
+  perso: { name: 'Perso', host: 'vps.example.net', plq: 'P' },
+};
+const PROJ = {
+  facturation: 'oklch(0.72 0.12 250)', 'api-clients': 'oklch(0.72 0.12 300)', 'infra-k8s': 'oklch(0.72 0.12 20)',
+  'portail-adherents': 'oklch(0.72 0.12 48)', 'atlas-web': 'oklch(0.72 0.12 155)', recettes: 'oklch(0.72 0.12 120)',
+};
+const plq = (sp, lg) => `<span class="plq${lg ? ' lg' : ''}">${SPACES[sp].plq}</span>`;
+const pd = (p) => `<span class="pdot" style="background:${PROJ[p]}"></span>`;
+const CMD = `<span class="pr">$ </span>docker compose -f deploy/compose.e2e.yml up -d db
+<span class="pr">$ </span>DATABASE_URL=postgres://localhost:5433/facturation_e2e npm run migrate
+<span class="pr">$ </span>npm run test:e2e -- --grep avoirs --workers=2
+<span class="pr">$ </span>docker compose -f deploy/compose.e2e.yml down`;
+const PERM = { agent: 'tests-e2e', sp: 'travail', proj: 'facturation', title: 'Lancer les tests e2e sur une base de test', since: '4 min',
+  path: '…/facturation/.worktrees/tests-e2e', ctx: 'Les fixtures des avoirs sont prêtes. Il me faut la base de test pour lancer la suite : je la démarre avec Docker, puis je l’arrête.' };
+const ASKS = [
+  { id: 'perm', kind: 'Autorisation', icon: 'shield', w: true, sp: 'travail', proj: 'facturation', agent: 'tests-e2e', title: PERM.title, since: '4 min', news: true },
+  { id: 'q', kind: 'Question', icon: 'question', w: true, sp: 'travail', proj: 'api-clients', agent: 'migration-sql', title: 'Garder les colonnes legacy_* de la table clients ?', since: '12 min' },
+  { id: 'choix', kind: 'Choix', icon: 'choice', sp: 'poste', proj: 'portail-adherents', agent: 'design-tableau', title: 'Choisis la direction du tableau de bord', since: '40 min', mini: true },
+  { id: 'gate', kind: 'Oui ou non', icon: 'check-c', sp: 'poste', proj: 'atlas-web', agent: 'chef-atlas', title: 'Publier atlas-web 1.4.0 sur npm ?', since: '1 h', extra: 'feu vert' },
+  { id: 'tk', kind: 'Ticket à valider', icon: 'kanban', sp: 'travail', proj: 'facturation', agent: 'FAC-38', title: 'FAC-38 · Avoirs partiels sur une facture payée', since: '2 h' },
+  { id: 'dec', kind: 'Décision proposée', icon: 'diagram', sp: 'travail', proj: 'facturation', agent: 'chef-fac', title: 'Les avoirs se numérotent à part des factures', since: 'hier' },
+];
+const WORK = [
+  { agent: 'refacto-auth', sp: 'travail', proj: 'api-clients', doing: 'Écrit les tests du jeton de rafraîchissement', tm: '18 min' },
+  { agent: 'helm-chart', sp: 'travail', proj: 'infra-k8s', doing: 'Relit values.yaml de la préprod', tm: '6 min' },
+  { agent: 'api-docs', sp: 'travail', proj: 'api-clients', doing: 'Rédige le guide des webhooks', tm: '41 min' },
+  { agent: 'import-csv', sp: 'poste', proj: 'portail-adherents', doing: 'Lance les tests de l’import des adhérents', tm: '3 min' },
+];
+const OPTS = [['A', 'Courbe en tête', 'La courbe des cotisations en haut, les chiffres dessous.'], ['B', 'Cartes empilées', 'Une carte par chiffre, la courbe dans la première.'], ['C', 'Une seule page', 'Le tableau des adhérents, sans graphique.']];
+
+/* ───────── Les rendus joints (illustratifs) ───────── */
+function pal(light) {
+  return light
+    ? { bg: '#f6f7f9', pn: '#ffffff', ln: '#e2e5ea', ink: '#1b1e24', mu: '#a3a8b1', ac: '#3b6fd8', ac2: '#2c9a70', ac3: '#d58a2c' }
+    : { bg: '#111318', pn: '#1a1d24', ln: '#2a2f38', ink: '#e8eaee', mu: '#59606b', ac: '#6e9cf2', ac2: '#47c08f', ac3: '#e3a04a' };
+}
+function dash(v) {
+  const c = pal(LIGHT);
+  const r = (x, y, w, h, f, rx = 3) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${f}"/>`;
+  const bars = (x, y, n, w, f) => Array.from({ length: n }, (_, i) => r(x, y + i * 9, w - (i * 37) % 60, 3.5, f, 1.5)).join('');
+  let body = '';
+  if (v === 'A') {
+    body = r(0, 0, 54, 200, c.pn, 0) + bars(10, 30, 7, 36, c.mu) + r(10, 12, 26, 6, c.ink, 2)
+      + [0, 1, 2, 3].map((i) => r(64 + i * 63, 12, 56, 40, c.pn) + r(70 + i * 63, 20, 22, 4, c.mu, 2) + r(70 + i * 63, 30, 34, 10, i === 1 ? c.ac : c.ink, 2)).join('')
+      + r(64, 60, 245, 80, c.pn) + `<polyline points="72,124 102,110 132,116 162,92 192,98 222,78 252,84 296,70" fill="none" stroke="${c.ac}" stroke-width="2"/>`
+      + r(64, 148, 245, 44, c.pn) + bars(72, 156, 4, 200, c.mu);
+  } else if (v === 'B') {
+    body = r(0, 0, 320, 26, c.pn, 0) + r(12, 9, 40, 8, c.ink, 2) + `<circle cx="304" cy="13" r="6" fill="${c.mu}"/>`
+      + r(12, 36, 296, 62, c.pn, 8) + r(24, 48, 60, 5, c.mu, 2) + r(24, 60, 92, 18, c.ink, 3) + `<polyline points="200,86 224,74 246,80 270,60 296,54" fill="none" stroke="${c.ac}" stroke-width="2.5"/>`
+      + r(12, 106, 144, 50, c.pn, 8) + r(24, 118, 44, 5, c.mu, 2) + r(24, 130, 70, 12, c.ac2, 3)
+      + r(164, 106, 144, 50, c.pn, 8) + r(176, 118, 44, 5, c.mu, 2) + r(176, 130, 70, 12, c.ac3, 3)
+      + r(12, 164, 296, 30, c.pn, 8) + bars(24, 172, 2, 220, c.mu);
+  } else {
+    body = r(0, 0, 320, 24, c.pn, 0) + r(10, 8, 30, 8, c.ink, 2) + [0, 1, 2].map((i) => r(60 + i * 46, 6, 40, 12, c.bg, 4)).join('')
+      + r(10, 32, 300, 160, c.pn) + r(18, 40, 284, 8, c.ln, 2)
+      + Array.from({ length: 12 }, (_, i) => r(18, 54 + i * 11.4, 70, 4, c.mu, 1.5) + r(100, 54 + i * 11.4, 40, 4, c.mu, 1.5) + r(156, 54 + i * 11.4, 54, 4, c.mu, 1.5)
+        + r(230, 52 + i * 11.4, 30, 7, i % 4 === 1 ? c.ac3 : c.ac2, 3)).join('');
+  }
+  return `<svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rendu ${v} du tableau de bord">${r(0, 0, 320, 200, c.bg, 0)}${body}</svg>`;
+}
+function seal() {
+  return `<svg class="seal" viewBox="0 0 62 62" aria-hidden="true"><defs><path id="sealp" d="M31 31 m-21 0 a21 21 0 1 1 42 0 a21 21 0 1 1 -42 0"/></defs>
+    <circle class="bg" cx="31" cy="31" r="29"/><circle class="in" cx="31" cy="31" r="14"/><text><textPath href="#sealp">RECOMMANDÉ · PAR L’AGENT ·</textPath></text><path class="ck" d="M25 31.5l4 4 8-9"/></svg>`;
+}
+const plate = (l, o = {}) => {
+  const [, n, d] = OPTS.find((x) => x[0] === l);
+  return `<div class="plate ${l === 'B' ? 'on' : ''} ${o.cls || ''}">${l === 'B' && o.seal !== false ? seal() : ''}<div class="shot">${dash(l)}</div>
+    <div class="cred"><span class="l">${l}</span><b class="ell">${n}</b>${o.desc ? `<span class="ell">${d}</span>` : ''}</div></div>`;
+};
+function qrSvg() {
+  let s = '';
+  for (let y = 0; y < 25; y++) for (let x = 0; x < 25; x++) {
+    const f = (x < 7 && y < 7) || (x > 17 && y < 7) || (x < 7 && y > 17);
+    const edge = f && ((x % 24 === 0 || y % 24 === 0 || x === 6 || y === 6 || x === 18 || y === 18) || (((x > 1 && x < 5) || (x > 19 && x < 23)) && ((y > 1 && y < 5) || (y > 19 && y < 23))));
+    const on = f ? edge : ((x * 7 + y * 13 + x * y) % 5 < 2);
+    if (on) s += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  }
+  return `<svg viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="QR code d’appairage (illustratif)"><g fill="#15171c">${s}</g></svg>`;
+}
+const logo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8l4 4-4 4" fill="none" stroke="#08090a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 9.5v5M13.5 12h5M14.2 10.2l3.6 3.6M17.8 10.2l-3.6 3.6" stroke="#08090a" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+
+/* ───────── Le système : barre d'état, indicateur ───────── */
+const STATUS_ICONS = `<span class="icons">
+  <svg viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+  <svg viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.5L.6 4.2a10.5 10.5 0 0 1 14.8 0z"/></svg>
+  <svg viewBox="0 0 26 12" aria-hidden="true"><rect x="0.5" y="0.5" width="22" height="11" rx="3" fill="none" stroke="currentColor" opacity="0.45"/><rect x="2" y="2" width="16" height="8" rx="1.8"/><rect x="23.5" y="4" width="2" height="4" rx="1" opacity="0.45"/></svg></span>`;
+const statusBar = (lock) => `<div class="sb"><span>${lock && IOS ? '' : '14:36'}</span>${IOS ? '<span class="island"></span>' : ''}${STATUS_ICONS}</div>`;
+const shell = (inner, o = {}) => `<div class="phone${IOS ? ' ios' : ''}${o.lock ? ' locked' : ''}${o.cls ? ' ' + o.cls : ''}"${o.style ? ` style="${o.style}"` : ''}>${statusBar(o.lock)}<div class="scr">${inner}</div><div class="hb"></div>${o.over || ''}</div>`;
+
+/* ───────── Pièces partagées ───────── */
+const where = (a, o = {}) => `<div class="where">${o.space === false ? '' : `${plq(a.sp)}<b>${SPACES[a.sp].name}</b><span class="s">·</span>`}${pd(a.proj)}<span class="ell">${a.proj}</span><span class="s">·</span><span class="ell">${a.agent}</span></div>`;
+const cmdBlock = () => `<pre class="cmd" aria-label="La commande, en entier">${CMD}</pre>`;
+const permHead = (since = PERM.since) => `<div class="top"><span class="pill w">${ic('shield')}Autorisation</span><span class="fine">l’agent s’est arrêté</span><span class="sp fine tn">${since}</span></div>`;
+function convMessages(perm) {
+  return `<div class="msg-u">Lance la suite e2e sur feat/avoirs et dis-moi ce qui casse.</div>
+    <div class="msg-a">J’ai ajouté les fixtures des avoirs partiels. Il manque la base de test : je la démarre avec <code>docker compose</code>, puis je lance la suite filtrée sur les avoirs.</div>
+    <div class="tools">
+      <div class="tool">${ic('read')}<b>Lu</b><span class="mono ell">tests/e2e/avoirs.spec.ts</span></div>
+      <div class="tool">${ic('edit')}<b>Modifié</b><span class="mono ell">tests/fixtures/avoirs.ts</span><span class="ad">+24</span><span class="dl">−3</span></div>
+      <div class="tool">${ic('bash')}<b>Lancé</b><span class="mono ell">npm run lint</span><span class="sp" style="color:var(--run)">${ic('check', 15)}</span></div>
+    </div>${perm}`;
+}
+const composer = (o = {}) => `<div class="composer"><span class="f ${o.typed ? 'typed' : ''} ell">${o.typed || `Écrire à ${PERM.agent}…`}</span><span class="mic">${ic('mic', 20)}</span><span class="send ${o.typed && !o.off ? '' : 'off'}">${ic('send', 19)}</span></div>`;
+const convNav = (o = {}) => `<div class="nav"><span class="ib">${ic('chev-l', 22)}</span><span class="pdot" style="background:${PROJ.facturation};margin-right:6px"></span>
+  <div class="t ell">${PERM.agent}<small class="ell">${o.space ? `${SPACES.travail.name} · ` : ''}facturation · <span style="color:var(--wait)">attend ta réponse</span></small></div><span class="ib sp">${ic('more', 20)}</span></div>`;
+
+/* ═════════ A · La pile ═════════ */
+const A = {};
+const aTop = () => `<div class="a-top"><span class="chip">${'<span class="plq">' + ic('overview') + '</span>'}Partout${ic('chev-d')}</span><span class="ib sp">${ic('search', 20)}</span><span class="ib">${ic('sliders', 20)}</span></div>`;
+const aHead = (cur) => `<div class="a-head"><div class="r"><h1 class="lt">À toi</h1><span class="n">${cur} sur 6</span></div>
+  <div class="jauge" aria-label="6 demandes, 2 agents arrêtés">${ASKS.map((a, i) => `<i class="${a.w ? 'w' : ''} ${i + 1 === cur ? 'cur' : ''}"></i>`).join('')}</div>
+  <div class="fine">2 agents se sont arrêtés · 4 demandes t’attendent</div></div>`;
+const aPeek = () => `<div class="peek"><div class="grab"></div><div class="r"><span>${ic('agents')}Au travail <span class="c">3</span></span><span>${ic('kanban')}Kanban</span><span>${ic('server')}Espaces <span class="c">3</span></span></div></div>`;
+const slide = (k, o = {}) => `<div class="slide ${o.live ? 'live' : ''}" style="--k:${k};--x:${Math.round(k * 100)}%"><span class="fill"></span><span class="lb">${o.label || 'Glisser pour autoriser'}${ic(IOS ? 'face' : 'finger')}</span><span class="th">${ic(o.live ? 'check' : 'chev-r')}</span></div>`;
+A.accueil = () => shell(`${aTop()}${aHead(1)}
+  <div class="deck"><div class="bk b2"></div><div class="bk"></div>
+    <div class="card w">${permHead()}${where(PERM)}<h2>${PERM.title}</h2>
+      <span class="lab">La commande, en entier</span>${cmdBlock()}<div class="path">dans ${PERM.path}</div>
+      <div class="grow"></div><div class="fine big-only">Le glissé demande ensuite ${IOS ? 'Face ID' : 'ton empreinte'}. Sur ce téléphone, on ne coche jamais ${q('Toujours autoriser')}.</div>${slide(0)}
+      <div class="row2"><span class="btn grow">${ic('close')}Refuser</span><span class="btn grow">${ic('agents')}Conversation</span></div></div></div>${aPeek()}`);
+A.autorisation = () => shell(`<div class="nav"><span class="ib">${ic('chev-l', 22)}</span><div class="t">La pile</div><span class="sp fine tn" style="padding-right:12px">1 sur 6</span></div>
+  <div class="deck" style="margin-top:0"><div class="bk"></div>
+    <div class="card w go" style="top:4px;bottom:10px">${permHead()}${where(PERM)}<h2>${PERM.title}</h2>
+      <div class="ctx big-only"><span class="lab">Ce qu’il faisait</span>${PERM.ctx}</div>
+      <span class="lab">La commande, en entier</span>${cmdBlock()}<div class="path">dans ${PERM.path}</div>
+      <div class="grow"></div>
+      <div class="fine">Relâche : ${IOS ? 'Face ID' : 'ton empreinte'} est demandé, puis ${q('Autorisé')} part à <b>tests-e2e</b>. Rien d’autre n’est lancé depuis ce téléphone.</div>
+      ${slide(0.74, { live: true, label: 'Relâche pour autoriser' })}
+      <div class="row2"><span class="btn grow">${ic('close')}Refuser</span><span class="btn grow">${ic('clock')}Après</span></div></div></div>`);
+A.boite = () => shell(`${aTop()}${aHead(3)}
+  <div class="deck"><div class="bk b2"></div><div class="bk"></div>
+    <div class="card"><div class="top"><span class="pill">${ic('choice')}Choix</span><span class="sp fine tn">40 min</span></div>
+      ${where(ASKS[2])}<h2>Choisis la direction du tableau de bord</h2>
+      <div class="carousel">${plate('B', { desc: false })}${plate('C', { cls: 'side', seal: false })}</div>
+      <div class="fine"><b>Recommandé : B · Cartes empilées.</b> La courbe des cotisations reste lisible sur un téléphone.</div>
+      <div class="fine">Ta réponse débloque : <b>DEM-13</b> et <b>DEM-14</b>.</div>
+      <div class="grow"></div><div class="field big-only" style="color:var(--muted)">Un mot pour l’agent (facultatif)<span class="sp">${ic('mic')}</span></div>
+      <div class="row2" style="align-items:center"><div class="opts"><span>A</span><span class="on rec">B</span><span>C</span></div><span class="btn pri grow">Choisir B</span></div>
+      <div class="row2"><span class="btn ghost sm">${ic('clock')}Plus tard</span><span class="btn ghost sm sp">${ic('expand')}Comparer en grand</span></div></div></div>${aPeek()}`);
+A.conversation = () => shell(`${convNav()}<div class="conv">${convMessages(`<div class="perm"><div class="h">${ic('shield')}Autorisation · l’agent s’est arrêté</div>${cmdBlock()}${slide(0)}<div class="perm acts" style="padding:0;background:none;box-shadow:none"><span class="btn sm grow">Refuser</span><span class="btn sm grow">${ic('expand')}La carte</span></div></div>`)}</div>${composer()}`);
+A.kanban = () => shell(`${aTop()}${aHead(1)}<div class="deck"><div class="bk"></div><div class="card w">${permHead()}</div></div>${aPeek()}`,
+  { over: `<div class="scrim"></div><div class="sheet" style="top:calc(var(--sb) + 104px)"><div class="grab"></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:4px var(--gut) 10px"><h2 style="font-size:20px;font-weight:700;letter-spacing:-0.015em">Kanban</h2><span class="chip sp">${plq('travail')}${pd('facturation')}facturation${ic('chev-d')}</span></div>
+    <div style="padding:0 var(--gut) 10px"><div class="seg"><span>À faire<span class="c">4</span></span><span>En cours<span class="c">2</span></span><span class="on">À tester<span class="c">2</span></span><span>Fini<span class="c">12</span></span></div></div>
+    <div style="display:flex;gap:10px;padding:0 var(--gut);overflow:hidden;flex:1;min-height:0">
+      <div style="flex:0 0 88%;display:grid;gap:10px;align-content:start">
+        ${aTicket('FAC-38', 'Avoirs partiels sur une facture payée', 'tests-e2e', [1, 1, 1, 0, 0], true)}
+        ${aTicket('FAC-40', 'Export comptable au format FEC', 'export-fec', [1, 1, 0, 0, 0], false)}
+      </div><div style="flex:0 0 88%;opacity:0.5;display:grid;gap:10px;align-content:start">${aTicket('FAC-41', 'Relances automatiques à J+15', 'relances', [1, 0, 0, 0, 0], false)}</div></div><div class="hb"></div></div>` });
+function aTicket(key, title, agent, loop, acts) {
+  return `<div style="border-radius:14px;background:var(--raise-2);box-shadow:inset 0 0 0 1px ${acts ? 'var(--wait-line)' : 'var(--line)'};padding:12px;display:grid;gap:6px">
+    <div style="display:flex;gap:8px;align-items:center"><span class="pill w" style="height:22px">${ic('play')}À tester</span><span style="font-weight:650;font-size:13.5px;color:var(--soft)" class="tn">${key}</span><span class="sp loop">${loop.map((x, i) => `<i class="${x ? 'd' : i === loop.indexOf(0) ? 'c' : ''}"></i>`).join('')}</span></div>
+    <div style="font-weight:620;font-size:15px;line-height:1.3">${title}</div><div class="fine">${agent} · boucle ${loop.filter(Boolean).length}/5 · critères atteints</div>
+    ${acts ? `<div class="row2" style="margin-top:4px"><span class="btn sm grow">Renvoyer à l’agent</span><span class="btn sm ok grow">${ic('check')}Valider</span></div><div class="fine">${ic('ext', 13)} L’aperçu de son serveur de test s’ouvre dans le navigateur, par le tunnel.</div>` : ''}</div>`;
+}
+A.notification = () => shell(`<div class="lock"><div class="date">jeudi 20 novembre</div><div class="clock">14:36</div>
+  <div class="notifs"><div class="nt stackbehind"><span class="ap">${logo}</span><div class="hd"><b>Escouade</b><span class="sp">maintenant</span></div>
+    <div class="tt">6 choses t’attendent</div><div class="bd">tests-e2e attend une autorisation sur Travail, et 5 autres : une question, un choix, un feu vert…</div></div></div>
+  <div class="foot"><span>${ic('sound', 22)}</span><span>${ic('camera', 22)}</span></div></div>`, { lock: true });
+A.appairage = () => shell(`<div class="cam" style="flex:1"><div class="desk"><div class="side"></div><div class="main"><div class="lines"><i></i><i></i><i></i><i></i><i style="width:60%"></i></div><div class="qr">${qrSvg()}</div></div></div>
+    <div class="frame"><i></i><i></i><i></i><i></i></div><div class="found">${ic('check-c')}QR code d’Escouade lu</div>
+    <div style="position:absolute;top:8px;left:8px;right:8px;display:flex"><span class="ib" style="color:#fff;background:rgba(8,9,10,.5)">${ic('close', 20)}</span></div></div>
+  <div class="card" style="position:relative;top:auto;bottom:auto;margin:-26px 10px 6px;flex:none;border-radius:22px">
+    <div class="top">${plq('poste', true)}<div><div style="font-weight:680;font-size:17px">Ce poste</div><div class="fine">DESKTOP-7QK2 · Escouade 2.3.2 · par le tunnel WireGuard</div></div></div>
+    <span class="lab">Le nom de ce téléphone, vu du poste</span><div class="field f">${PHONE}<span class="caret"></span></div>
+    <div class="fine">La clé du tunnel et le jeton de ce téléphone restent dans ${IOS ? 'le trousseau de l’iPhone' : 'le Keystore d’Android'}. Tu le révoques à tout moment depuis le poste.</div>
+    <div class="row2"><span class="btn ghost">Annuler</span><span class="btn pri grow">Appairer ce téléphone</span></div></div>`, { style: 'background:#0b0c0f', cls: 'dark-top' });
+
+/* ═════════ B · Le fil ═════════ */
+const B = {};
+const bTabs = (on) => `<div class="tabs"><span class="${on === 'toi' ? 'on' : ''}">${ic('inbox')}À toi<span class="badge">6</span></span><span class="${on === 'ag' ? 'on' : ''}">${ic('agents')}Agents</span><span class="${on === 'kb' ? 'on' : ''}">${ic('kanban')}Kanban</span></div>`;
+const bHead = () => `<div class="b-head"><div class="r"><h1 class="lt">À toi</h1><span class="ib sp">${ic('search', 20)}</span><span class="ib">${ic('sliders', 20)}</span></div>
+  <div class="chips"><span class="on">Partout <span class="c">6</span></span><span>${plq('poste')}Ce poste <span class="c">2</span></span><span>${plq('travail')}Travail <span class="c">4</span></span><span>${plq('perso')}Perso ${ic('offline')}</span></div></div>`;
+function bRow(a, o = {}) {
+  const mini = a.mini ? `<div class="mini">${['A', 'B', 'C'].map((l) => dash(l)).join('')}</div>` : '';
+  return `<div class="row ${a.w ? 'w' : ''} ${o.open ? 'open' : ''} ${o.dim ? 'dim' : ''}"><span class="k">${ic(a.icon)}</span><span class="tt">${a.title}</span><span class="tm">${a.news && !o.open ? '<span class="new" aria-label="nouveau"></span>' : ''}${a.since}</span>
+    <span class="mt">${a.kind}<span>·</span>${plq(a.sp)}${SPACES[a.sp].name}<span>·</span>${pd(a.proj)}<span class="ell">${a.proj}</span></span>${o.open ? '' : mini}${o.ex ? `<div class="ex">${o.ex}</div>` : ''}</div>`;
+}
+const bFeed = (open) => `<div class="grp w">${ic('shield')}Tes agents se sont arrêtés <span class="c">2</span></div>${bRow(ASKS[0], open === 'perm' ? { open: true, ex: bPermEx() } : {})}${bRow(ASKS[1], { dim: !!open })}
+  <div class="grp">${ic('clock')}Aujourd’hui <span class="c">3</span></div>${bRow(ASKS[2], open === 'choix' ? { open: true, ex: bChoiceEx() } : { dim: !!open })}${bRow(ASKS[3], { dim: !!open })}${bRow(ASKS[4], { dim: !!open })}
+  <div class="grp">Plus tôt <span class="c">1</span></div>${bRow(ASKS[5], { dim: !!open })}`;
+const bPermEx = () => `<div class="fine">${PERM.agent} · ${PERM.ctx}</div>${cmdBlock()}<div class="path">dans ${PERM.path}</div>
+  <div class="acts"><span class="btn grow">Refuser</span><span class="btn pri grow">${ic(IOS ? 'face' : 'finger')}Autoriser</span></div>
+  <div class="fine" style="display:flex;gap:6px;align-items:center">${ic('lock', 14)}${IOS ? 'Face ID' : 'Ton empreinte'} avant l’envoi · <b>Conversation</b>${ic('chev-r', 14)}</div>`;
+const bChoiceEx = () => `<div class="strip">${plate('A', {})}${plate('B', {})}${plate('C', {})}</div>
+  <div class="fine"><b>Recommandé : B · Cartes empilées.</b> La courbe reste lisible sur un téléphone. Ta réponse débloque DEM-13 et DEM-14.</div>
+  <div class="acts" style="align-items:center"><div class="opts"><span>A</span><span class="on rec">B</span><span>C</span></div><span class="btn pri grow">Choisir B</span></div>
+  <div class="acts"><span class="btn ghost sm">${ic('clock')}Plus tard</span><span class="btn ghost sm">${ic('mic')}Un mot</span><span class="btn ghost sm sp">${ic('expand')}En grand</span></div>`;
+B.accueil = () => shell(`${bHead()}<div class="feed">${bFeed()}</div>${bTabs('toi')}`);
+B.autorisation = () => shell(`${bHead()}<div class="feed">${bFeed('perm')}</div>${bTabs('toi')}`);
+B.boite = () => shell(`${bHead()}<div class="feed"><div style="margin-top:-150px">${bFeed('choix')}</div></div>${bTabs('toi')}`);
+B.conversation = () => shell(`${convNav({ space: true })}<div class="conv">${convMessages(`<div class="perm"><div class="h">${ic('shield')}Autorisation · l’agent s’est arrêté</div>${cmdBlock()}<div class="acts"><span class="btn grow">Refuser</span><span class="btn pri grow">${ic(IOS ? 'face' : 'finger')}Autoriser</span></div></div>`)}</div>${composer({ typed: 'et relance seulement les avoirs si ça casse' })}`);
+B.kanban = () => shell(`<div class="b-head"><div class="r"><h1 class="lt">Kanban</h1><span class="chip sp">${plq('travail')}${pd('facturation')}facturation${ic('chev-d')}</span></div>
+  <div class="seg"><span>À faire<span class="c">4</span></span><span>En cours<span class="c">2</span></span><span class="on">À tester<span class="c">2</span></span><span>Fini<span class="c">12</span></span></div></div>
+  <div class="feed"><div class="swipe"><div class="under"><span class="rv">${ic('undo')}Renvoyer</span><span class="ok">${ic('check')}Valider</span></div>
+    <div class="tk"><span class="key">FAC-38</span><span class="loop"><i class="d"></i><i class="d"></i><i class="d"></i><i></i><i></i></span><span class="tt">Avoirs partiels sur une facture payée</span><span class="mt">${ic('play', 14)}À tester · tests-e2e · boucle 3/5</span></div></div>
+    <div class="tk"><span class="key">FAC-40</span><span class="loop"><i class="d"></i><i class="d"></i><i></i><i></i><i></i></span><span class="tt">Export comptable au format FEC</span><span class="mt">${ic('play', 14)}À tester · export-fec · boucle 2/5</span></div>
+    <div class="grp">En cours <span class="c">2</span></div>
+    <div class="tk"><span class="key">FAC-41</span><span class="loop"><i class="d"></i><i class="c"></i><i></i><i></i><i></i></span><span class="tt">Relances automatiques à J+15</span><span class="mt"><span class="dot"></span>relances · boucle 2/5</span></div>
+    <div class="tk"><span class="key">FAC-43</span><span class="loop"><i class="c"></i><i></i><i></i><i></i><i></i></span><span class="tt">Arrondis de la TVA par ligne</span><span class="mt"><span class="dot"></span>tva-lignes · boucle 1/5</span></div>
+    <div class="fine" style="padding:10px var(--gut)">Glisse un ticket vers la gauche pour le valider ou le renvoyer à son agent. Valider demande ${IOS ? 'Face ID' : 'ton empreinte'}.</div></div>${bTabs('kb')}`);
+const bNotif = (sp, title, body, time, o = {}) => `<div class="nt"><span class="ap">${logo}</span><div class="hd"><b>Escouade · ${sp}</b><span class="sp">${time}</span></div><div class="tt">${title}</div><div class="bd">${body}</div>${o.ac ? `<div class="ac"><span>Ouvrir</span></div>` : ''}</div>`;
+B.notification = () => shell(`<div class="lock"><div class="date">jeudi 20 novembre</div><div class="clock">14:36</div>
+  <div class="notifs">${bNotif('Travail', 'tests-e2e attend une autorisation', 'facturation · l’agent s’est arrêté', 'maintenant', { ac: true })}
+    ${bNotif('Travail', 'migration-sql te pose une question', 'api-clients · l’agent s’est arrêté', 'il y a 12 min')}
+    ${bNotif('À toi', '4 demandes t’attendent', 'Un choix de design-tableau, un feu vert de chef-atlas, un ticket à valider…', 'il y a 30 min')}</div>
+  <div class="foot"><span>${ic('sound', 22)}</span><span>${ic('camera', 22)}</span></div></div>`, { lock: true });
+B.appairage = () => shell(`<div class="b-head" style="padding-top:10px"><h1 class="lt">Escouade sur ce téléphone</h1>
+  <p class="fine" style="font-size:14px">Suis tes agents et réponds-leur hors de chez toi. Le téléphone se branche à ton poste ou à un serveur Escouade, par un tunnel chiffré.</p></div>
+  <div style="padding:6px var(--gut) 0;display:grid;gap:14px;flex:1;min-height:0;align-content:start">
+    <div class="steps"><div class="st"><span class="n">1</span><b>Sur ton poste</b><span>Réglages › Téléphone › ${q('Appairer un téléphone')}. Sur un serveur : <span class="mono">escouade-server pair</span>.</span></div>
+      <div class="st on"><span class="n">2</span><b>Scanne le QR code</b><span>ou tape le code à 8 caractères qui l’accompagne.</span></div></div>
+    <div class="cam" style="height:184px;border-radius:16px"><div class="desk" style="width:92%"><div class="side"></div><div class="main"><div class="lines"><i></i><i></i><i></i><i></i></div><div class="qr">${qrSvg()}</div></div></div><div class="frame" style="width:96px;height:96px;left:calc(50% + 22%)"><i></i><i></i><i></i><i></i></div></div>
+    <span class="lab">Ou le code</span><div class="code8"><i>K</i><i>7</i><i>Q</i><i>2</i><b>-</b><i>9</i><i class="f">M</i><i></i><i></i></div>
+  </div><div style="padding:10px var(--gut) 8px;display:flex"><span class="btn pri grow" disabled>Appairer</span></div>`);
+
+
+/* La création, en B (choisie le 2026-11-20 avec la direction) : une feuille plein écran, ouverte par le « + » de l'en-tête */
+const formNav = (title, sub) => `<div class="nav"><span class="btn ghost sm">Annuler</span><div class="t" style="margin:0 auto;text-align:center">${title}<small>${sub}</small></div><span class="ib">${ic('more', 20)}</span></div>`;
+const spacePick = (o = {}) => `<div class="fgrp"><span class="lab">Sur quel espace</span><div class="spaces">
+  <span class="off">${plq('poste')}<span class="ell">Ce poste<small>depuis le poste</small></span></span>
+  <span class="on">${plq('travail')}<span class="ell">Travail<small>acme.internal</small></span></span>
+  <span>${plq('perso')}<span class="ell">Perso<small>vps.example</small></span></span></div>${o.note ? `<span class="fine big-only">${o.note}</span>` : ''}</div>`;
+B['creer-projet'] = () => shell(`${formNav('Nouveau projet', 'sur un serveur')}<div class="form">
+  ${spacePick({ note: 'Un projet de ce poste se crée au poste : ses dossiers sont les siens.' })}
+  <div class="fgrp"><span class="lab">D’où</span><div class="seg"><span class="on">Cloner un dépôt</span><span>Un dossier du serveur</span></div></div>
+  <div class="fgrp"><span class="lab">L’adresse du dépôt</span><div class="field mono-f">https://github.com/acme/portail-v2.git</div>
+    <span class="fine">Cloné sur Travail, avec ses clés Git à lui ; rien ne passe par ce téléphone.</span></div>
+  <div class="fgrp"><span class="lab">Dans</span><div class="field mono-f"><span class="k">/home/escouade/projets/</span>portail-v2</div></div>
+  <div class="clone"><div class="r">${ic('download', 16)}Clonage sur Travail<span class="tn">64 % · 38 Mo</span></div><div class="bar" style="--x:64%"><i></i></div>
+    <div class="log ell">Receiving objects: 64% (5120/8000), 38.2 MiB | 4.1 MiB/s</div>
+    <div class="fine">Tu peux fermer : le clonage continue sur le serveur, et Escouade te prévient quand le projet est prêt.</div></div>
+  </div><div class="formfoot"><span class="btn grow">Fermer</span><span class="btn pri grow" disabled>Ouvrir le projet</span></div>`);
+B['creer-agent'] = () => shell(`${formNav('Nouvel agent', 'Travail · facturation')}<div class="form">
+  <div class="fgrp"><span class="lab">Projet</span><div class="opt">${plq('travail')}${pd('facturation')}<b style="font-weight:620">facturation</b><span class="v">Travail${ic('chev-d', 14)}</span></div></div>
+  <div class="fgrp"><span class="lab">Son premier message</span><div class="area">Ajoute l’export des avoirs au format FEC, avec les tests, et dis-moi ce qui manque côté comptable.
+    <div class="tools2"><span class="btn ghost sm">${ic('clip')}Joindre</span><span class="btn ghost sm">${ic('mic')}Dicter</span><span class="sp fine tn">132 / 8000</span></div></div></div>
+  <div class="fgrp"><span class="lab">Comment</span>
+    <div class="opt">${ic('spark', 16)}Modèle<span class="v">Claude · Opus · effort élevé${ic('chev-d', 14)}</span></div>
+    <div class="opt">${ic('branch', 16)}Dans son worktree<span class="sp"></span><span class="sw" aria-label="Oui"></span></div>
+    <div class="opt">${ic('shield', 16)}Permissions<span class="v">Me demander${ic('chev-d', 14)}</span></div></div>
+  <span class="fine">Les réglages du projet sur Travail ; ses permissions te reviennent ici, comme les autres.</span>
+  </div><div class="formfoot"><span class="btn pri grow">${ic('play')}Lancer l’agent</span></div>`);
+const wave = Array.from({ length: 48 }, (_, i) => `<i style="height:${6 + Math.round(Math.abs(Math.sin(i * 0.9) * 14 + Math.sin(i * 0.37) * 8))}px"></i>`).join('');
+B['ticket-dicte'] = () => shell(`${formNav('Nouveau ticket', 'Travail · facturation · À faire')}<div class="form">
+  <div class="dict"><div class="live"><span class="mic2">${ic('mic', 22)}</span><div class="wave">${wave}</div><span class="fine tn">0:21</span></div>
+    <div class="said">Quand une facture payée reçoit un avoir partiel, le reste dû doit apparaître sur le PDF, avec la date de l’avoir. Critère : le PDF de FAC-38 montre le reste dû. <span class="tail">Critère : les tests e2e couvrent…</span></div>
+    <span class="fine">La dictée du téléphone, sur l’appareil ; dis «&nbsp;critère&nbsp;» pour en ajouter un.</span></div>
+  <div class="fgrp"><span class="lab">Le titre</span><div class="field">Reste dû sur le PDF après un avoir partiel</div></div>
+  <div class="fgrp"><span class="lab">Critères d’acceptation</span><div class="crit">
+    <div>${ic('circle')}<span>Le PDF de FAC-38 montre le reste dû et la date de l’avoir</span></div>
+    <div>${ic('circle')}<span>Les tests e2e couvrent un avoir partiel sur une facture payée</span></div></div>
+    <span class="fine">Le titre et les critères sont tirés de ce que tu dis ; relis-les avant de créer. Le ticket s’écrit en entier au poste.</span></div>
+  </div><div class="formfoot"><span class="btn grow">Créer dans À faire</span><span class="btn pri grow">${ic('play')}Créer et lancer</span></div>`);
+
+/* ═════════ C · Les espaces ═════════ */
+const C = {};
+const cTop = () => `<div class="c-top"><div><div class="t">Escouade</div><div class="s">6 t’attendent, partout</div></div><span class="ib sp">${ic('plus', 20)}</span><span class="ib">${ic('sliders', 20)}</span></div>`;
+const cStrip = (sp, right, o = {}) => `<div class="sc ${o.off ? 'off' : ''}"><div class="st">${plq(sp, true)}<div class="nm">${SPACES[sp].name}<small>${o.sub || SPACES[sp].host}</small></div><span class="sp">${right}</span></div></div>`;
+function cTile(a, o = {}) {
+  const mini = a.mini ? `<div class="mini">${['A', 'B', 'C'].map((l) => dash(l)).join('')}</div>` : '';
+  return `<div class="tile ${a.w ? 'w' : ''} ${o.cls || ''}"><span class="pill ${a.w ? 'w' : ''}" style="align-self:flex-start">${ic(a.icon)}${a.kind}</span><span class="tt">${a.title}</span>${mini}<span class="mt">${pd(a.proj)}<span class="ell">${a.agent}</span><span class="sp tn">${a.since}</span></span></div>`;
+}
+const cFront = (body, foot = 'toi') => `<div class="sc front"><div class="st">${plq('travail', true)}<div class="nm">Travail<small>escouade.acme.internal · 38 ms</small></div><span class="sp badge">4</span><span class="ib" style="width:36px;height:36px">${ic('more', 18)}</span></div>
+  <div class="body">${body}</div><div class="cfoot"><span class="${foot === 'toi' ? 'on' : ''}">${ic('inbox', 16)}À toi<span class="badge">4</span></span><span class="${foot === 'ag' ? 'on' : ''}">${ic('agents', 16)}Agents</span><span class="${foot === 'kb' ? 'on' : ''}">${ic('kanban', 16)}Kanban</span></div></div>`;
+const cHome = () => `${cStrip('poste', '<span class="badge">2</span>')}${cStrip('perso', `<span class="pill">${ic('offline')}hors ligne</span>`, { off: true, sub: 'injoignable depuis 14:02' })}
+  ${cFront(`<div class="sh">${ic('inbox', 15)}À toi <span class="c">4</span></div><div class="tiles">${cTile(ASKS[0])}${cTile(ASKS[1])}${cTile(ASKS[4])}</div>
+    <div class="sh">${ic('agents', 15)}Au travail <span class="c">2</span></div>
+    ${WORK.filter((w) => w.sp === 'travail').map((w) => `<div class="ag"><span class="dot"></span><span class="n">${pd(w.proj)}${w.agent}</span><span class="tm">${w.tm}</span><span class="d ell">${w.doing}</span></div>`).join('')}`)}`;
+C.accueil = () => shell(`${cTop()}<div class="wallet">${cHome()}</div>`);
+const holdBtn = (k) => `<span class="hold live"><span class="sweep" style="--x:${Math.round(k * 100)}%"></span><svg class="ring" viewBox="0 0 26 26"><circle class="bgc" cx="13" cy="13" r="10"/><circle class="fg" cx="13" cy="13" r="10" stroke-dasharray="${(2 * Math.PI * 10).toFixed(1)}" stroke-dashoffset="${(2 * Math.PI * 10 * (1 - k)).toFixed(1)}"/></svg><span>Maintiens…</span></span>`;
+const cSheetHead = (sp, o = {}) => `<div class="grab"></div><div style="display:flex;align-items:center;gap:10px;padding:4px 14px 10px">${plq(sp, true)}<div style="min-width:0"><div style="font-weight:660;font-size:16px">${SPACES[sp].name}</div><div class="fine ell">${o.sub || SPACES[sp].host}</div></div><span class="ib sp">${ic('close', 20)}</span></div><div class="sep"></div>`;
+C.autorisation = () => shell(`${cTop()}<div class="wallet">${cHome()}</div>`, { over: `<div class="scrim"></div><div class="sheet" style="top:calc(var(--sb) + 70px)">${cSheetHead('travail', { sub: 'escouade.acme.internal · les agents tournent là-bas' })}
+  <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">${permHead()}${where(PERM, { space: false })}<h2>${PERM.title}</h2>
+    <span class="lab">La commande, en entier</span>${cmdBlock()}<div class="path">dans ${PERM.path}</div><div style="flex:1"></div>
+    <div class="fine">Maintiens une seconde, puis ${IOS ? 'Face ID' : 'ton empreinte'} : ${q('Autorisé')} part à <b>tests-e2e</b>, sur Travail.</div>
+    <div style="display:flex;gap:8px"><span class="btn">Refuser</span>${holdBtn(0.62)}</div></div><div class="hb"></div></div>` });
+C.conversation = () => shell(`<div class="nav"><span class="ib">${ic('chev-l', 22)}</span>${plq('travail')}<div class="t ell" style="margin-left:6px">${PERM.agent}<small class="ell">Travail / facturation · <span style="color:var(--wait)">attend ta réponse</span></small></div><span class="ib sp">${ic('more', 20)}</span></div>
+  <div class="conv">${convMessages(`<div class="perm"><div class="h">${ic('shield')}Autorisation · l’agent s’est arrêté</div>${cmdBlock()}<div class="acts"><span class="btn">Refuser</span><span class="hold"><svg class="ring" viewBox="0 0 26 26"><circle class="bgc" cx="13" cy="13" r="10"/></svg><span>Maintenir pour autoriser</span></span></div></div>`)}</div>${composer({ typed: '', off: true })}`);
+C.boite = () => shell(`${cTop()}<div class="wallet">${cHome()}</div>`, { over: `<div class="scrim"></div><div class="sheet" style="top:calc(var(--sb) + 24px)">${cSheetHead('poste', { sub: 'DESKTOP-7QK2 · portail-adherents · design-tableau' })}
+  <div style="padding:12px 16px 0;display:flex;flex-direction:column;gap:12px;flex:1;min-height:0;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center"><span class="pill">${ic('choice')}Choix</span><span class="fine">depuis 40 min</span></div>
+    <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.015em;line-height:1.25">Choisis la direction du tableau de bord</h2>
+    <div class="fine"><b>Recommandé : B · Cartes empilées.</b> La courbe des cotisations reste lisible sur un téléphone. Ta réponse débloque DEM-13 et DEM-14.</div>
+    <div style="display:grid;gap:14px;padding-top:6px">${plate('A', { desc: true })}${plate('B', { desc: true })}${plate('C', { desc: true })}</div></div>
+  <div style="flex:none;display:flex;gap:8px;align-items:center;padding:10px 14px 6px;box-shadow:inset 0 1px 0 var(--line);background:var(--raise)"><div class="opts"><span>A</span><span class="on rec">B</span><span>C</span></div><span class="btn pri grow">Choisir B</span></div><div class="hb"></div></div>` });
+const kTile = (key, title, meta, o = {}) => `<div class="ktile ${o.focus ? 'focus' : ''}"><span class="key tn">${key}${o.loop ? `<span class="loop sp">${o.loop}</span>` : ''}</span><span class="tt">${title}</span><span class="fine ell">${meta}</span>${o.focus ? `<div class="acts"><span class="btn sm grow">Renvoyer</span><span class="btn sm ok grow">${ic('check')}Valider</span></div>` : ''}</div>`;
+const L = (n, c) => Array.from({ length: 5 }, (_, i) => `<i class="${i < n ? 'd' : i === n && c ? 'c' : ''}"></i>`).join('');
+C.kanban = () => shell(`${cTop()}<div class="wallet">${cStrip('poste', '<span class="badge">2</span>')}${cFront(`<div class="chips" style="margin:2px -12px 4px;padding:0 12px"><span class="on">${pd('facturation')}facturation</span><span>${pd('api-clients')}api-clients</span><span>${pd('infra-k8s')}infra-k8s</span></div>
+    <div class="krow"><div class="kh">${ic('play', 15)}À tester <span class="c">2</span></div><div class="ktiles">${kTile('FAC-38', 'Avoirs partiels sur une facture payée', 'tests-e2e · boucle 3/5', { focus: true, loop: L(3) })}${kTile('FAC-40', 'Export comptable au format FEC', 'export-fec · 2/5', { loop: L(2) })}</div></div>
+    <div class="krow"><div class="kh"><span class="dot"></span>En cours <span class="c">2</span></div><div class="ktiles">${kTile('FAC-41', 'Relances automatiques à J+15', 'relances · 2/5', { loop: L(1, 1) })}${kTile('FAC-43', 'Arrondis de la TVA par ligne', 'tva-lignes · 1/5', { loop: L(0, 1) })}${kTile('FAC-44', 'Avoir sur un acompte', 'avoir-acompte')}</div></div>
+    <div class="krow"><div class="kh">${ic('circle', 15)}À faire <span class="c">4</span></div><div class="ktiles">${kTile('FAC-45', 'Mentions légales sur le PDF', 'attend FAC-38')}${kTile('FAC-46', 'Import des clients Sage', '—')}${kTile('FAC-47', 'Factures en anglais', '—')}</div></div>`, 'kb')}</div>`);
+C.notification = () => shell(`<div class="lock"><div class="date">jeudi 20 novembre</div><div class="clock">14:36</div>
+  <div class="notifs"><div class="ngrp">${plq('travail')}Travail</div>
+    <div class="nt stackbehind"><span class="ap">${logo}</span><div class="hd"><b>Escouade · Travail</b><span class="sp">maintenant</span></div><div class="tt">tests-e2e attend une autorisation</div><div class="bd">et migration-sql une réponse · 2 agents arrêtés</div></div>
+    <div class="ngrp" style="margin-top:10px">${plq('poste')}Ce poste</div>
+    <div class="nt"><span class="ap">${logo}</span><div class="hd"><b>Escouade · Ce poste</b><span class="sp">il y a 30 min</span></div><div class="tt">2 demandes t’attendent dans À toi</div><div class="bd">Un choix de design-tableau, un feu vert de chef-atlas.</div></div></div>
+  <div class="foot"><span>${ic('sound', 22)}</span><span>${ic('camera', 22)}</span></div></div>`, { lock: true });
+C.appairage = () => shell(`<div class="c-top"><div><div class="t">Ton premier espace</div><div class="s">Un espace par machine : ton poste, un serveur</div></div></div>
+  <div class="cam" style="height:44%;margin:6px 10px 0;border-radius:20px;flex:none"><div class="desk"><div class="side"></div><div class="main"><div class="lines"><i></i><i></i><i></i><i></i></div><div class="qr">${qrSvg()}</div></div></div><div class="frame"><i></i><i></i><i></i><i></i></div><div class="found">${ic('check-c')}Ce poste trouvé</div></div>
+  <div class="wallet" style="padding-top:14px">
+    <div class="sc front" style="border-radius:22px;flex:none;animation:none"><div class="st">${plq('poste', true)}<div class="nm">Ce poste<small>DESKTOP-7QK2 · Escouade 2.3.2 · WireGuard</small></div><span class="sp pill t">${ic('plus')}Nouveau</span></div>
+      <div class="body" style="padding-bottom:12px"><span class="lab">Le nom de ce téléphone, vu du poste</span><div class="field f">${PHONE}<span class="caret"></span></div>
+      <div class="fine">Clé et jeton dans ${IOS ? 'le trousseau de l’iPhone' : 'le Keystore d’Android'} ; révocable depuis le poste.</div><span class="btn pri">Ajouter l’espace</span></div></div>
+    <div class="slot" style="margin-top:10px">${ic('plus')}&nbsp;Un serveur ensuite</div></div>`);
+
+/* ═════════ Communs ═════════ */
+const X = {};
+X.verrou = () => shell(`${convNav({ space: true })}<div class="conv">${convMessages(`<div class="perm"><div class="h">${ic('shield')}Autorisation · l’agent s’est arrêté</div>${cmdBlock()}<div class="acts"><span class="btn grow">Refuser</span><span class="btn pri grow">Autoriser</span></div></div>`)}</div>${composer()}`,
+  { over: `<div class="scrim"></div><div class="bio"><div class="ttl">Autoriser la commande de <span style="white-space:nowrap">tests-e2e&nbsp;?</span></div><div class="sub">Escouade · Travail · facturation</div><div class="fp">${ic('finger')}</div><div class="fine">Touche le capteur d’empreinte</div>
+    <div class="row3"><span class="btn ghost sm">Utiliser le code</span><span class="btn ghost sm">Annuler</span></div><span class="face">${ic('face')}</span><span class="face">Face ID</span></div>` });
+X.horsligne = () => shell(`${convNav({ space: true })}<div class="lost">${ic('offline')}<b>Travail injoignable depuis 14:32</b><span>Nouvel essai dans 4 s. Les agents continuent sur le serveur ; ce que tu vois date de 14:32.</span></div>
+  <div class="conv" style="opacity:.62">${convMessages(`<div class="perm"><div class="h">${ic('shield')}Autorisation · l’agent s’est arrêté</div>${cmdBlock()}<div class="acts"><span class="btn grow" disabled>Refuser</span><span class="btn pri grow" disabled>Autoriser</span></div><div class="fine">Répondre attend la connexion : une réponse ne part jamais sur un écran périmé.</div></div>`)}</div>
+  <div class="fine" style="padding:0 18px 6px">Envoi suspendu jusqu’à la reprise ; ton brouillon est gardé.</div>${composer({ typed: 'et relance seulement les avoirs si ça casse', off: true })}`);
+X.revoque = () => shell(`<div class="nav"><span class="ib">${ic('chev-l', 22)}</span>${plq('travail')}<div class="t" style="margin-left:6px">Travail</div></div>
+  <div class="center"><span class="ico">${ic('revoke')}</span><h1>Ce téléphone n’est plus appairé à Travail</h1>
+    <p>Révoqué le 20 novembre à 14:40, depuis DESKTOP-7QK2. Sa clé et son jeton ont été effacés de ce téléphone.</p>
+    <p class="fine" style="font-size:14px">Les agents de Travail continuent. Tes autres espaces ne changent pas : Ce poste et Perso restent appairés.</p></div>
+  <div style="padding:0 var(--gut) 10px;display:grid;gap:8px"><span class="btn pri">${ic('qr')}Appairer de nouveau</span><span class="btn">Retirer Travail de ce téléphone</span></div>`);
+
+const DIRS = { a: A, b: B, c: C, x: X };
+const view = (DIRS[D] || A)[ROUTE];
+document.getElementById('root').innerHTML = view ? view() : '';
+</script>
+</body>
+</html>
