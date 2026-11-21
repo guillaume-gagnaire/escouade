@@ -610,7 +610,9 @@ if (argv[0] === 'mcp') {
     const [, frame, task = ''] = input.match(/<(tache|task)>\s*([\s\S]*?)\s*<\/\1>/) ?? [];
     const words = task.toLowerCase().match(/[a-z]+/g) ?? ['tache'];
     const asked = tongue(frame === 'task');
-    const named = `${words.slice(0, 2).join('-')}-fake${asked === 'fr' ? '' : `-${asked}`}`;
+    // The website's screenshots name their agents as Haiku would ($FAKE_CLAUDE_NAMES: a JSON file, task → name).
+    const given = process.env.FAKE_CLAUDE_NAMES ? JSON.parse(fs.readFileSync(process.env.FAKE_CLAUDE_NAMES, 'utf8'))[task.trim()] : null;
+    const named = given ?? `${words.slice(0, 2).join('-')}-fake${asked === 'fr' ? '' : `-${asked}`}`;
     const answer = () => process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: named }));
     // A task that says [muet] gets no name (the model fails), one that says [lent] gets it 3 s late.
     if (task.includes('[muet]')) {

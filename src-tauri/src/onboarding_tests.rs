@@ -91,6 +91,7 @@ fn left_half_way_it_opens_again_at_the_first_station_neither_done_nor_passed() {
         &Act::Step {
             step: OnboardingStep::Defaults,
             outcome: StepOutcome::Skipped,
+            choice: None,
         },
         &facts,
         5,
@@ -176,6 +177,7 @@ fn a_card_passed_waits_in_the_discovery_one_plugged_in_stays_and_the_station_pas
         &Act::Step {
             step: OnboardingStep::Hookups,
             outcome: StepOutcome::Skipped,
+            choice: None,
         },
         &facts,
         4,
@@ -277,6 +279,7 @@ fn later_never_undoes_a_station_done() {
         &Act::Step {
             step: OnboardingStep::Defaults,
             outcome: StepOutcome::Skipped,
+            choice: None,
         },
         &facts,
         1,
@@ -323,6 +326,7 @@ fn a_first_start_in_an_empty_data_folder_opens_it_keeps_it_and_resumes_it() {
     core.onboarding_act(Act::Step {
         step: OnboardingStep::Harness,
         outcome: StepOutcome::Skipped,
+        choice: None,
     });
     core.save_now();
     let state: serde_json::Value =
@@ -619,4 +623,203 @@ async fn the_demo_project_is_made_once_known_by_its_view_and_removed_whole() {
     let left: Vec<String> = core.projects.read().iter().map(|p| p.id.clone()).collect();
     assert_eq!(left, vec![o.id.clone()]);
     assert!(other.is_dir());
+}
+
+// === The funnel (ESC-507) ===
+
+fn names(events: &[Event]) -> Vec<&'static str> {
+    events.iter().map(Event::name).collect()
+}
+
+#[test]
+fn the_funnel_says_nothing_before_the_end_then_each_station_and_the_times_in_brackets() {
+    let mut saved = Onboarding::default();
+    let mut facts = fresh();
+    apply(
+        &mut saved,
+        &Act::Profile {
+            profile: OnboardingProfile::Ready,
+        },
+        &facts,
+        1_000,
+    );
+    // Only the first profile of a run is kept.
+    apply(
+        &mut saved,
+        &Act::Profile {
+            profile: OnboardingProfile::None,
+        },
+        &facts,
+        1_100,
+    );
+    facts.accounts = 1;
+    apply(
+        &mut saved,
+        &Act::Step {
+            step: OnboardingStep::Harness,
+            outcome: StepOutcome::Done,
+            choice: Some(OnboardingChoice::Recommended),
+        },
+        &facts,
+        2_000,
+    );
+    facts.mode_chosen = true;
+    apply(
+        &mut saved,
+        &Act::Step {
+            step: OnboardingStep::Defaults,
+            outcome: StepOutcome::Done,
+            choice: Some(OnboardingChoice::Other),
+        },
+        &facts,
+        3_000,
+    );
+    facts.projects = 1;
+    // The first turn ends 50 s after the start, in the demonstration.
+    facts.first_reply = true;
+    facts.first_reply_demo = true;
+    assert!(note_reply(&mut saved, &facts, 51_000));
+    assert!(!note_reply(&mut saved, &facts, 60_000));
+    assert!(funnel(&saved, &facts).is_empty());
+    apply(&mut saved, &Act::SkipAll, &facts, 91_000);
+    let events = funnel(&saved, &facts);
+    assert_eq!(
+        names(&events),
+        [
+            "onboarding_started",
+            "onboarding_step",
+            "onboarding_step",
+            "onboarding_step",
+            "onboarding_step",
+            "onboarding_step",
+            "onboarding_step",
+            "onboarding_step",
+            "onboarding_finished",
+            "first_reply"
+        ]
+    );
+    assert_eq!(
+        events[0],
+        Event::OnboardingStarted {
+            trigger: "first",
+            profile: "ready"
+        }
+    );
+    assert_eq!(
+        events[1],
+        Event::OnboardingStep {
+            step: "harness",
+            outcome: "done",
+            choice: Some("recommended")
+        }
+    );
+    assert_eq!(
+        events[3],
+        Event::OnboardingStep {
+            step: "defaults",
+            outcome: "done",
+            choice: Some("other")
+        }
+    );
+    // Passed by « Tout passer »: what was plugged in and the statistics.
+    assert_eq!(
+        events[4],
+        Event::OnboardingStep {
+            step: "hookups",
+            outcome: "skipped",
+            choice: None
+        }
+    );
+    assert_eq!(
+        events[8],
+        Event::OnboardingFinished {
+            skipped: 2,
+            seconds: "60-120"
+        }
+    );
+    assert_eq!(
+        events[9],
+        Event::FirstReply {
+            seconds: "<60",
+            demo: true
+        }
+    );
+    // A reply after the end is not the journey's.
+    let mut late = Onboarding::default();
+    apply(&mut late, &Act::Finish, &fresh(), 5);
+    assert!(!note_reply(&mut late, &facts, 9));
+}
+
+#[test]
+fn done_again_the_journey_has_a_funnel_of_its_own_without_the_first_reply_of_before() {
+    let mut saved = Onboarding::default();
+    let mut facts = fresh();
+    apply(&mut saved, &Act::Finish, &facts, 1_000);
+    saved.told = true;
+    facts.first_reply = true;
+    saved.first_reply_at = Some(500);
+    apply(&mut saved, &Act::Redo, &facts, 400_000);
+    assert!(!saved.told);
+    assert!(!note_reply(&mut saved, &facts, 401_000));
+    apply(&mut saved, &Act::Finish, &facts, 800_000);
+    let events = funnel(&saved, &facts);
+    assert_eq!(
+        events[0],
+        Event::OnboardingStarted {
+            trigger: "redo",
+            profile: "none"
+        }
+    );
+    assert_eq!(
+        events.last().unwrap(),
+        &Event::OnboardingFinished {
+            skipped: 0,
+            seconds: ">300"
+        }
+    );
+    assert!(!names(&events).contains(&"first_reply"));
+}
+
+#[test]
+fn a_policy_is_said_as_such_and_no_event_holds_a_name_or_a_path() {
+    let facts = Facts {
+        mode_imposed: true,
+        ..fresh()
+    };
+    let mut saved = Onboarding::default();
+    apply(&mut saved, &Act::Finish, &facts, 10);
+    let events = funnel(&saved, &facts);
+    assert!(events.contains(&Event::OnboardingStep {
+        step: "defaults",
+        outcome: "policy",
+        choice: None
+    }));
+    // Stations never left are not told.
+    assert!(!events.iter().any(|e| matches!(
+        e,
+        Event::OnboardingStep {
+            step: "project",
+            ..
+        }
+    )));
+    let text = serde_json::to_string(&events.iter().map(|e| e.name()).collect::<Vec<_>>()).unwrap();
+    assert!(!text.contains('/') && !text.contains(char::from(92)));
+}
+
+#[test]
+fn a_no_drops_the_funnel_and_no_answer_keeps_it_waiting() {
+    let dir = test_dir("onboarding-told");
+    let data = DataDir::new(dir.join("data"));
+    let core = load(&data);
+    core.onboarding_view();
+    core.onboarding_act(Act::Finish);
+    // No answer yet: it waits for one.
+    assert!(!core.onboarding.read().told);
+    core.settings.write().telemetry = Some(false);
+    core.onboarding_tell();
+    assert!(core.onboarding.read().told);
+    // Kept in state.json, read back.
+    let back: Onboarding =
+        serde_json::from_value(serde_json::to_value(&*core.onboarding.read()).unwrap()).unwrap();
+    assert!(back.told && back.run_started.is_some());
 }

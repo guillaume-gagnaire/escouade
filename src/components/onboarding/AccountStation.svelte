@@ -68,7 +68,13 @@
   }
 
   $effect(() => {
-    primary = { label: t('onboarding.continue'), disabled: !engine || (!added.length && !chosen), run: next };
+    primary = {
+      label: t('onboarding.continue'),
+      disabled: !engine || (!added.length && !chosen),
+      // The machine's account is recommended when it is signed in (the funnel of the statistics, ESC-507).
+      choice: added.length || !(machineOk && machine?.connected) ? undefined : chosen === 'machine' ? 'recommended' : 'other',
+      run: next,
+    };
   });
 </script>
 

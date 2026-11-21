@@ -3102,6 +3102,8 @@ impl Core {
         if self.telemetry.set_consent(telemetry) {
             // Said yes during the session: it counts as started.
             self.telemetry.track(self.started_event());
+            // The first launch's funnel waited for the answer (ESC-507): told now.
+            self.onboarding_tell();
         }
         if telemetry.is_some() && before_settings.telemetry != telemetry {
             // The installs of the seed waiting for the answer: sent on a yes, forgotten on a no (ESC-394).

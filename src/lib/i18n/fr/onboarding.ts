@@ -34,7 +34,7 @@ export default {
     account: { name: 'Compte', inline: 'le compte', todo: 'celui de la machine' },
     defaults: { name: 'Réglages de départ', inline: 'les réglages de départ', todo: 'le mode des agents' },
     hookups: { name: 'Ce que tu veux brancher', inline: 'ce que tu veux brancher', todo: 'tickets, voix, hébergeur' },
-    project: { name: 'Premier projet', inline: 'le premier projet', todo: 'un dossier, un clone ou la démo' },
+    project: { name: 'Premier projet', inline: 'le premier projet', todo: 'dossier, clone ou démo' },
     agent: { name: 'Premier agent', inline: 'le premier agent', todo: 'un message, une réponse' },
     telemetry: { name: 'Statistiques', inline: 'les statistiques', todo: 'partagées ou non' },
   },
@@ -163,7 +163,7 @@ export default {
   },
   project: {
     question: 'Où travaille ton premier agent ?',
-    why: 'Un projet est un dossier, avec ses agents, son Kanban et ses docs. Chaque agent y travaille dans son worktree, sur sa branche : deux agents ne se gênent pas, et rien n’entre dans ta branche sans toi.',
+    why: 'Dans un projet, chaque agent travaille dans son worktree, sur sa branche : deux agents ne se gênent pas, et rien n’entre dans ta branche sans toi.',
     folder: 'Un dossier de ta machine',
     folderHint: 'Un dépôt que tu as déjà. Escouade le lit sans rien y changer.',
     add: 'Ajouter un projet…',
@@ -266,7 +266,7 @@ export default {
       files: { one: '{count} fichier changé', other: '{count} fichiers changés' },
       noDiff: 'Il n’a rien changé : il n’y a pas de diff à voir.',
       /** `{agent}`: its name. */
-      where: 'Tu le retrouves dans la barre de ton projet, sous son nom « {agent} » ; d’autres messages s’écrivent sous sa conversation.',
+      where: 'Tu le retrouves dans la barre de ton projet, sous son nom « {agent} » ; d’autres messages s’écrivent sous sa conversation.',
       diffTitle: 'Ce que {agent} a changé',
     },
     limit: {
@@ -283,8 +283,8 @@ export default {
     },
     signedOut: {
       title: '{harness} n’est pas connecté',
-      body: '{harness} n’est pas connecté : reviens à l’étape du compte.',
-      back: 'Revenir à l’étape du compte',
+      body: '{harness} n’est pas connecté : reviens à la station du compte.',
+      back: 'Revenir à la station du compte',
     },
     failed: {
       title: 'Le tour a échoué',
@@ -316,8 +316,8 @@ export default {
     title: 'Escouade est prêt',
     body: 'Le reste se découvre en le faisant : la voix, le Kanban, les PR… La carte t’attend dans Aide › À découvrir.',
     skipped: {
-      one: '{count} étape passée : elle t’attend dans Aide › Premier lancement.',
-      other: '{count} étapes passées : elles t’attendent dans Aide › Premier lancement.',
+      one: '{count} station passée : elle t’attend dans Aide › Premier lancement.',
+      other: '{count} stations passées : elles t’attendent dans Aide › Premier lancement.',
     },
     start: 'Commencer',
     /** The map of the discovery (ESC-506), from the end of the journey. */

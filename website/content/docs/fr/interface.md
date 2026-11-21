@@ -23,7 +23,7 @@ Fermer la fenêtre ne quitte pas Escouade et ne coupe pas les agents : elle se r
 
 ## La barre des projets
 
-Une colonne étroite, à gauche, de la barre de titre à la barre d’état, comme les espaces de travail de Slack. De haut en bas : « Vue d’ensemble », une tuile par projet ouvert, le bouton `+` (« Ajouter un projet »), puis, en bas, « Stats » et « Réglages ». Au premier démarrage, sans projet, elle ne garde que `+` et « Réglages ».
+Une colonne étroite, à gauche, de la barre de titre à la barre d’état, comme les espaces de travail de Slack. De haut en bas : « Vue d’ensemble », une tuile par projet ouvert, le bouton `+` (« Ajouter un projet »), puis, en bas, « Aide » (le premier lancement, la carte « À découvrir », la documentation), « Stats » et « Réglages ». Sans projet, elle ne garde que `+`, « Aide » et « Réglages ».
 
 ### Une tuile de projet
 

@@ -17,7 +17,7 @@ One group per harness, under its name, with its state and version beside it: “
 | “Models” (OpenCode) | The models of the providers connected to OpenCode, with a search: the favorites first, then one group per provider. A model’s star makes it a favorite, which comes first in its agents’ model menu. |
 | “Installation” | For a harness that isn’t found: the command that installs it (Claude Code: `irm https://claude.ai/install.ps1 \| iex` on Windows, `curl -fsSL https://claude.ai/install.sh \| bash` on macOS and Linux). For Claude Code, the line also says whether an npm installation was interrupted, with the command that repairs it (see [Troubleshooting](troubleshooting)). |
 
-A harness’s accounts sign in on the same page, [“Accounts and harnesses”](settings-accounts): each has its state and its “Sign in…” button there. A harness that isn’t found shows only on this page. At the first start, if none is found, the welcome screen says “No harness found” and gives the command that installs each one; Escouade works as soon as one harness is found.
+A harness’s accounts sign in on the same page, [“Accounts and harnesses”](settings-accounts): each has its state and its “Sign in…” button there. A harness that isn’t found shows only on this page. At the [first launch](first-steps), if none is found, its first stop gives the command that installs each one (and the welcome screen says “No harness found”); Escouade works as soon as one harness is found.
 
 As soon as two harnesses are installed, the project has its “Default harness” (Settings › Projects › Project), the “▾” button beside “New agent” offers “New agent on …” for each one, and a ticket’s window has its “Harness” field (the project’s by default), which the autopilot follows. As soon as agents run on two harnesses, each one’s harness is named beside it: on its card, in the overview, in its header, and on its ticket’s card. The composer’s menus (models, effort, modes, / commands) are those of the agent’s harness.
 
@@ -78,10 +78,10 @@ The model, effort and mode new [agents](managing-agents) start with are set acco
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Default mode of agents” | The mode of the new agents of an account that sets none: “Accept edits”, “Ask”, “Plan” or “Auto”. Running agents and tickets keep theirs. | Chosen at the first start (“Accept edits” recommended); “Auto” for an installation from before 2.2 |
+| “Default mode of agents” | The mode of the new agents of an account that sets none: “Accept edits”, “Ask”, “Plan” or “Auto”. Running agents and tickets keep theirs. | Chosen at the first launch (“Accept edits” recommended); “Auto” for an installation from before 2.2 |
 | “Allow Bypass mode” | Opens “Bypass” mode to the agents. Off, no agent starts in or goes into Bypass, the menus don’t offer it, and Claude Code is launched without `--allow-dangerously-skip-permissions`. | Off; on for an installation that already used Bypass |
 
-At the first start, Escouade asks for this mode before any other question. “Accept edits” is recommended: it’s the most careful choice that lets a ticket move forward. Edits in the agent’s folder go through without asking (they stay in its worktree, visible in its diff) and every command asks for your approval: a booby-trapped content would do harm through a command. “Ask” stops a ticket at every file; “Auto” lets a classifier run commands without showing them to you.
+At the [first launch](first-steps), the starting settings stop asks for this mode. “Accept edits” is recommended: it’s the most careful choice that lets a ticket move forward. Edits in the agent’s folder go through without asking (they stay in its worktree, visible in its diff) and every command asks for your approval: a booby-trapped content would do harm through a command. “Ask” stops a ticket at every file; “Auto” lets a classifier run commands without showing them to you.
 
 > [!WARNING]
 > In Bypass mode, the harness waits for no permission: it reads, writes and runs commands without showing you anything, including what a booby-trapped content would make it do. Keep it for a throwaway machine or container.

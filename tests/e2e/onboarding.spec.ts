@@ -92,7 +92,7 @@ test.describe('a first launch with Claude Code signed in on the machine', () => 
     await journey.getByRole('button', { name: 'Non merci' }).click();
     await expect.poll(() => settings().telemetry).toBe(false);
     await expect(journey.getByRole('heading', { name: 'Escouade est prêt' })).toBeVisible();
-    await expect(journey).toContainText('2 étapes passées : elles t’attendent dans Aide › Premier lancement.');
+    await expect(journey).toContainText('2 stations passées : elles t’attendent dans Aide › Premier lancement.');
     await journey.getByRole('button', { name: /Commencer/ }).click();
     await expect(journey).toBeHidden();
     // The app: no project yet, the way to the first one.

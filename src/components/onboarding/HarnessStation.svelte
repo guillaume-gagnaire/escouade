@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
   import { engineOrder, hasAccount } from '../../lib/accounts';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
-  import { denial, HARNESSES_KEY } from '../../lib/locks.svelte';
-  import { onboarding, type Primary } from '../../lib/onboarding.svelte';
+  import { denial, HARNESSES_KEY, locks } from '../../lib/locks.svelte';
+  import { act, onboarding, type Primary } from '../../lib/onboarding.svelte';
   import { OS } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import type { EngineDecl, EngineId, EngineInfo, MachineAccount } from '../../lib/types';
@@ -163,9 +164,36 @@
     primary = {
       label: t('onboarding.continue'),
       disabled: !row || row.kind === 'absent' || row.disabled,
+      choice: recommended ? (chosen === recommended ? 'recommended' : 'other') : undefined,
       run: next,
     };
   });
+
+  // What Escouade found, told once to the core for the funnel of the statistics (ESC-507): a policy over the harness or the
+  // mode, else a harness signed in, else one installed, else none. Sent once every found harness's machine account is read.
+  let profiled = false;
+  function tellProfile() {
+    if (profiled) return;
+    profiled = true;
+    const l = locks.current.locks;
+    // A value imposed (the mode), or bounds (the harnesses allowed).
+    const managed = [HARNESSES_KEY, 'permissions.defaultMode'].some(
+      (k) => (l[k]?.value !== null && l[k]?.value !== undefined) || !!l[k]?.bounds?.length,
+    );
+    const profile = managed
+      ? 'managed'
+      : rows.some((r) => r.kind === 'ready')
+        ? 'ready'
+        : rows.some((r) => r.kind !== 'absent')
+          ? 'installed'
+          : 'none';
+    void act({ kind: 'profile', profile });
+  }
+  $effect(() => {
+    if (infos !== null && !app.enginesFound.some((e) => !(e in machine))) untrack(tellProfile);
+  });
+  // Left before everything was read (Entrée at once, « Tout passer »): what was found by then.
+  onDestroy(tellProfile);
 
   /** What is said of a harness's state, beside its name. */
   function stateText(r: Row): string {

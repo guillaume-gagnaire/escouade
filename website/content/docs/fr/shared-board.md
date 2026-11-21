@@ -16,7 +16,7 @@ Dans Réglages › Projets › Équipe, le groupe « Kanban partagé » dit co
 
 ## Ton nom
 
-Chaque fichier porte le nom de son auteur, et celui de qui a pris le ticket. Escouade te le demande au premier lancement, prérempli par `git config user.name` ; « Plus tard » reporte la question à ton premier partage.
+Chaque fichier porte le nom de son auteur, et celui de qui a pris le ticket. Escouade te le demande à ton premier partage, prérempli par `git config user.name`.
 
 - Tu le changes dans Réglages › Général › Toi, « Ton nom ».
 - Un projet peut avoir le sien : Réglages › Projets › Équipe › Kanban partagé, « Ton nom dans ce projet ». Vide, c’est celui de l’application.

@@ -2,7 +2,7 @@
 title: "À découvrir"
 subject: "fenetre"
 sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-decouverte.png","design/onboarding-2-3/captures/c-decouverte-clair-1024.png"]
-tickets: ["ESC-503","ESC-505","ESC-506","ESC-512","ESC-550"]
+tickets: ["ESC-503","ESC-505","ESC-506","ESC-512","ESC-550","ESC-507"]
 decisions: [200,215,223]
 compared: null
 ---
@@ -99,3 +99,11 @@ Après le premier lancement, ce qu'Escouade sait faire se découvre **en le fais
 ## Une fonctionnalité coupée (ESC-550)
 
 Les découvertes d'une fonctionnalité coupée (voir *Fonctionnalités*) quittent la carte, ses bulles et son compte : celles du Kanban (Écrire un ticket, Le pilote auto, Valider un ticket, Les sources de tickets), de l'Espace Docs (La spec et les décisions), de l'Éditeur (L'éditeur) et de la Voix (Dicter un message, Parler à un agent). Elles ne sont ni absentes ni écartées : elles ne sont pas là. Rallumée, la fonctionnalité les ramène ; une découverte faite revient cochée.
+
+## Ce que comptent les statistiques (ESC-507)
+
+Avec l'accord seulement, comme les autres statistiques d'usage, et l'identifiant de la découverte seul (une liste fermée : `ticket`, `terminal`, `dictation`, `secondAgent`…) :
+
+- `discover_done` : une découverte faite par un geste que l'app voit (un fait du cœur, ou ce que la fenêtre seule voit : l'onglet Docs, un fichier dans l'éditeur, une PR ouverte), avec `from` : `tip` quand une bulle au bon moment l'avait proposée, `other` sinon. Ce que la relecture de l'état réel coche d'elle-même n'en dit rien : sur un poste réglé avant la carte, c'est ce qui était fait avant elle.
+- `discover_dismissed` : « Écarter ».
+- `discover_hidden` : « Tout masquer » (pas « Réafficher »).

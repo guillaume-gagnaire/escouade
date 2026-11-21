@@ -49,7 +49,9 @@
     if (!at || !primary || primary.disabled || busy) return;
     busy = true;
     try {
-      if (await primary.run()) await leave(at, 'done');
+      // The choice as it was taken: the station may set another main button while its gesture runs (a project opened).
+      const choice = primary.choice;
+      if (await primary.run()) await leave(at, 'done', choice);
     } finally {
       busy = false;
     }
@@ -488,6 +490,14 @@
     }
     .keys {
       display: none;
+    }
+    /* The lanes to come are decoration (the end of the journey says them): at 1024 × 728 the line keeps « Tout passer » in view. */
+    .fan,
+    .then {
+      display: none;
+    }
+    .brand {
+      margin-bottom: 20px;
     }
   }
   @media (prefers-reduced-motion: reduce) {

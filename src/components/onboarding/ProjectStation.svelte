@@ -179,20 +179,25 @@
         busy = false;
       }
     };
+    // The answer recommended: a folder (O4), or the team's projects on a device that joined one (the funnel, ESC-507).
+    const choice = way === (team ? 'team' : 'folder') ? 'recommended' : 'other';
     if (way === 'folder')
       primary = {
+        choice,
         label: t('onboarding.project.open'),
         disabled: busy || !folderReady,
         run: () => run(() => openFolder(path.trim(), !info?.isRepo && commit)),
       };
     else if (way === 'clone')
       primary = {
+        choice,
         label: busy ? t('onboarding.project.cloning') : failure ? t('onboarding.project.retry') : t('onboarding.project.cloneGo'),
         disabled: busy || !online || !url.trim() || !parent.trim() || !folder.trim(),
         run: () => run(clone),
       };
     else if (way === 'demo')
       primary = {
+        choice,
         label: busy ? t('onboarding.project.creating') : t('onboarding.project.demoGo'),
         disabled: busy,
         run: () => run(demo),

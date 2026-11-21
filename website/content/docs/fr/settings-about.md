@@ -60,7 +60,7 @@ Si une version n’a pas pu s’installer, Escouade ne redémarre plus seule pou
 
 Escouade peut envoyer des statistiques d’usage, sans rien qui t’identifie : les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard. Elles vont à un serveur d’Escouade hébergé en France (Aptabase, open source), et à aucun tiers.
 
-Elles sont désactivées tant que tu n’as pas accepté. Au premier démarrage, y compris sur une installation qui existait déjà avant cette fonctionnalité, une fenêtre « Aider à améliorer Escouade ? » te le demande : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Si tu fermes la fenêtre sans répondre (avec `Échap`), elle revient au démarrage suivant.
+Elles sont désactivées tant que tu n’as pas accepté. La dernière station du [premier lancement](first-steps) te le demande : « Non merci » ou « Partager les statistiques ». Rien n’est envoyé avant ta réponse. Passée, la question revient une fois au démarrage suivant, dans une fenêtre ; sur une installation d’avant le premier lancement, la fenêtre revient à chaque démarrage tant qu’elle n’a pas de réponse.
 
 Le bouton « En détail » de la ligne, comme le lien « Ce qui est envoyé, en détail » de la fenêtre, ouvre la page [Confidentialité](/privacy/) : les événements envoyés et leurs informations, ce qui n’est jamais envoyé, la durée de conservation (25 mois), la base légale et tes droits.
 

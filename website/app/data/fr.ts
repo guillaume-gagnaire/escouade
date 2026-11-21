@@ -410,6 +410,7 @@ export const fr: Catalog = {
       installation: 'Installation',
       server: 'Mode serveur',
       harness: 'Les harness',
+      'first-steps': 'Premiers pas',
       'quick-start': 'Prise en main',
       interface: 'L’interface',
       'managing-agents': 'Les agents',

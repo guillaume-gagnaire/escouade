@@ -1,8 +1,8 @@
 ---
 title: "Premier lancement"
 subject: "fenetre"
-sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-harness.png","design/onboarding-2-3/captures/c-modes-clair-1024.png","design/onboarding-2-3/captures/c-projet.png","design/onboarding-2-3/captures/c-agent.png","design/onboarding-2-3/captures/c-agent-clair-1024.png"]
-tickets: ["ESC-503","ESC-504","ESC-505","ESC-506","ESC-512"]
+sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-harness.png","design/onboarding-2-3/captures/c-modes-clair-1024.png","design/onboarding-2-3/captures/c-projet.png","design/onboarding-2-3/captures/c-agent.png","design/onboarding-2-3/captures/c-agent-clair-1024.png","src-tauri/src/onboarding.rs","src-tauri/src/telemetry.rs","website/content/privacy/fr.md"]
+tickets: ["ESC-503","ESC-504","ESC-505","ESC-506","ESC-512","ESC-507"]
 decisions: [195,215,223]
 compared: null
 ---
@@ -169,3 +169,25 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 - Le parcours dit les raccourcis réels de la carte de permission (Ctrl+Entrée, Ctrl+Maj+Entrée), pas « 1, 2 ou 3 » des maquettes : l'app n'en a pas d'autres.
 - Le modèle de Whisper proposé à la station de ce qu'on branche est celui des réglages (« base » par défaut) ; les autres se choisissent dans Réglages › Voix.
 - Un poste qui a fermé la question du mode sans répondre avant la 2.3 (son mode vide, des projets) n'est pas un poste neuf : le parcours ne s'ouvre pas, le mode recommandé reste en vigueur.
+
+## La mesure de l'entonnoir (ESC-507)
+
+- **Avec l'accord seulement**, pseudonymes comme les autres statistiques (page « Statistiques d'usage » de la confidentialité du site) : jamais un nom de projet, un chemin, une adresse, un e-mail, un message ni ce qui a été choisi (ni harness, ni compte, ni dossier). Les valeurs sont des listes fermées et des tranches.
+- **Quatre événements du parcours**, dits une fois qu'un passage du parcours se termine (sa dernière station ou « Tout passer », « Fermer » quand il est refait) :
+  - `onboarding_started` : `trigger` (`first` une nouvelle installation, reprise comprise ; `redo` refait depuis Aide ou Réglages) et `profile`, ce qu'Escouade a trouvé à la station du harness (`managed` une stratégie impose le harness ou le mode ; sinon `ready` un harness connecté, `installed` installé seulement, `none` aucun) ;
+  - `onboarding_step`, un par station quittée : `step` (`harness`, `account`, `defaults`, `hookups`, `project`, `agent`, `telemetry`), `outcome` (`done`, `skipped`, `policy`) et, là où un choix est recommandé et la station faite par lui, `choice` (`recommended` gardé, `other`) : le harness, le compte de la machine quand il est connecté, « Édits auto », « Un dossier de ta machine » (« Les projets de ton équipe » sur un poste qui a rejoint une équipe) ;
+  - `onboarding_finished` : `skipped` (le nombre de stations passées) et `seconds` (sa durée, `<60`, `60-120`, `120-300`, `>300`) ;
+  - `first_reply`, quand le premier agent a fini son premier tour pendant ce passage : `seconds` (depuis son début, mêmes tranches) et `demo` (dans le projet de démonstration ou non).
+- **Rien ne part avant la réponse** : la question des statistiques est la dernière station. Ce qu'en dit le parcours est lu dans son état gardé (`state.json` : le début du passage, le profil, les choix gardés ou non, l'heure de la première réponse, et s'il a été dit), jamais dans une file d'événements : envoyé au oui, oublié au non (`told`), gardé tant qu'il n'y a pas de réponse ; un oui donné plus tard (la question redemandée au démarrage suivant, ou Réglages › Général) l'envoie alors, une fois. Un passage refait a son propre entonnoir ; la première réponse d'avant n'y compte pas.
+- **Le taux d'arrivée au premier agent** : `first_reply` ÷ `onboarding_started{trigger=first}`, par semaine (le même `installId`). L'entonnoir : `onboarding_step` par `step` et `outcome`. Le temps se lit dans les tranches de `seconds` ; `profile` dit combien arrivent sans harness prêt.
+- La station de ce qu'on branche n'a pas d'événement à elle : elle est une station de `onboarding_step`, et un plugin installé compte déjà comme `plugin_installed`.
+- Un premier tour fini après la fin du parcours (le premier agent passé) n'est pas un `first_reply`.
+
+## Les mots relus (ESC-507)
+
+- Le parcours dit « station » partout (« stop » en anglais), jamais « étape » : « Revenir à la station du compte » et « … n'est pas connecté : reviens à la station du compte. » (au lieu de « l'étape du compte » plus haut), « 2 stations passées : elles t'attendent dans Aide › Premier lancement. » (au lieu de « 2 étapes passées »).
+- La page « Premiers pas » de la documentation du site (`first-steps`) décrit le parcours, avec des captures de la vraie app (clair et sombre) prises par le script des captures du site (`tests/site-shots/first-launch.spec.ts`) ; elle est reliée depuis l'installation et la présentation.
+
+- Station 5 : son pourquoi ne redit plus ce qu'est un projet (les mots d'Escouade, juste dessous, le disent) : « Dans un projet, chaque agent travaille dans son worktree, sur sa branche : deux agents ne se gênent pas, et rien n'entre dans ta branche sans toi. » Sous la station dans la ligne, à faire : « dossier, clone ou démo ».
+- Station 6, fini : « Pour l'arrêter : Échap, ou ■ sous le message. » n'est dit que pendant le tour, plus une fois qu'il est fini.
+- En 1024 × 728, la ligne ne montre plus les voies à venir (le dessin et « Ensuite : À découvrir », décoratifs, que la fin du parcours dit) : « Tout passer » reste à l'écran sans faire défiler la ligne.

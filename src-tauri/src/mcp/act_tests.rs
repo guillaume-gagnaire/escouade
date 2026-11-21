@@ -3027,7 +3027,15 @@ async fn an_approval_made_through_the_server_is_counted_in_the_usage_statistics_
         })
         .unwrap();
     read(&c, "approve_ticket", json!({ "ticket": t.key })).await;
-    assert_eq!(counted(), [json!("app_started"), json!("ticket_approved")]);
+    // The approval does the discovery « Valider un ticket » too (ESC-507: told before the event that does it).
+    assert_eq!(
+        counted(),
+        [
+            json!("app_started"),
+            json!("discover_done"),
+            json!("ticket_approved")
+        ]
+    );
     h.wait_ticket(&t.id, "the ticket to be done", |t| t.column == Column::Done)
         .await;
     c.cancel().await.unwrap();

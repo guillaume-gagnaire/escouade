@@ -57,6 +57,14 @@ const EVENTS = [
   'ask_expired',
   'inbox_view_settled',
   'inbox_summary_shown',
+  // The first launch and the discovery (ESC-507).
+  'onboarding_started',
+  'onboarding_step',
+  'onboarding_finished',
+  'first_reply',
+  'discover_done',
+  'discover_dismissed',
+  'discover_hidden',
 ];
 /** The values some props take, written on the page as `value`. */
 const VALUES = [
@@ -107,6 +115,26 @@ const VALUES = [
   'ticketReview',
   'decision',
   'docs',
+  // The first launch and the discovery (ESC-507).
+  'first',
+  'redo',
+  'ready',
+  'installed',
+  'none',
+  'managed',
+  'harness',
+  'defaults',
+  'hookups',
+  'telemetry',
+  'done',
+  'skipped',
+  'policy',
+  'recommended',
+  '<60',
+  '60-120',
+  '120-300',
+  '>300',
+  'tip',
 ];
 const PROPS = [
   'worktree',
@@ -129,6 +157,15 @@ const PROPS = [
   'source',
   'act',
   'requests',
+  'trigger',
+  'profile',
+  'step',
+  'outcome',
+  'choice',
+  'skipped',
+  'seconds',
+  'demo',
+  'item',
 ];
 
 const source = (lang: Lang) => readFileSync(new URL(`../${privacySource(lang)}`, import.meta.url), 'utf8');

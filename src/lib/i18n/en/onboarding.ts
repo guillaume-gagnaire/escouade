@@ -27,7 +27,7 @@ export default defineZone('onboarding', {
     account: { name: 'Account', inline: 'the account', todo: 'this machine’s' },
     defaults: { name: 'Starting settings', inline: 'the starting settings', todo: 'your agents’ mode' },
     hookups: { name: 'What to plug in', inline: 'what to plug in', todo: 'tickets, voice, code host' },
-    project: { name: 'First project', inline: 'the first project', todo: 'a folder, a clone or the demo' },
+    project: { name: 'First project', inline: 'the first project', todo: 'folder, clone or demo' },
     agent: { name: 'First agent', inline: 'the first agent', todo: 'a message, an answer' },
     telemetry: { name: 'Statistics', inline: 'statistics', todo: 'shared or not' },
   },
@@ -46,7 +46,7 @@ export default defineZone('onboarding', {
     copied: 'Command copied',
     none: 'No harness is installed. Copy the command for the one you want and run it in a terminal: Escouade will find it when you come back.',
     plugin: 'Escouade installs the {harness} plugin, from the app, offline.',
-    machineAccount: 'Its agents go out on the account already signed in; a separate account is made in Settings › Accounts and harnesses.',
+    machineAccount: 'Its agents use the account already signed in; a separate account is made in Settings › Accounts and harnesses.',
     first: 'The harness you choose goes to the top of the harness order: new projects use it.',
     onlyAllowed: '{harness} is the only harness allowed on this device.',
   },
@@ -68,7 +68,7 @@ export default defineZone('onboarding', {
     whyNoModel:
       'The mode for new agents; you can change it for each one, under its message. Effort {effort}: your account’s, with your harness’s default model.',
     bypass:
-      'Off: the agent would do everything without showing you, even what a booby-trapped file told it to. Keep it for a throwaway machine; turn it on in Settings › Agents.',
+      'Off: the agent would do everything without showing you, even what booby-trapped content told it to. Keep it for a throwaway machine; turn it on in Settings › Agents.',
     bypassAllowed: 'Allowed in Settings › Agents: never offered as a starting mode, it is chosen agent by agent.',
     off: 'Off',
     allowed: 'Allowed',
@@ -134,7 +134,7 @@ export default defineZone('onboarding', {
   },
   project: {
     question: 'Where will your first agent work?',
-    why: 'A project is a folder, with its agents, its board and its docs. Each agent works in its own worktree, on its own branch: two agents never get in each other’s way, and nothing lands on your branch without you.',
+    why: 'In a project, each agent works in its own worktree, on its own branch: two agents never get in each other’s way, and nothing lands on your branch without you.',
     folder: 'A folder on your machine',
     folderHint: 'A repository you already have. Escouade reads it without changing anything.',
     add: 'Add a project…',
@@ -239,8 +239,8 @@ export default defineZone('onboarding', {
     },
     signedOut: {
       title: '{harness} isn’t signed in',
-      body: '{harness} isn’t signed in: go back to the account step.',
-      back: 'Back to the account step',
+      body: '{harness} isn’t signed in: go back to the account stop.',
+      back: 'Back to the account stop',
     },
     failed: {
       title: 'The turn failed',
@@ -269,8 +269,8 @@ export default defineZone('onboarding', {
     title: 'Escouade is ready',
     body: 'Discover the rest by doing it: voice, the board, PRs… The map is waiting in Help › Discover.',
     skipped: {
-      one: '{count} step skipped: it’s waiting in Help › First launch.',
-      other: '{count} steps skipped: they’re waiting in Help › First launch.',
+      one: '{count} stop skipped: it’s waiting in Help › First launch.',
+      other: '{count} stops skipped: they’re waiting in Help › First launch.',
     },
     start: 'Get started',
     discover: 'See what there is to discover',

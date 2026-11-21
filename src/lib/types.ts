@@ -4286,8 +4286,14 @@ export interface Cloned {
 }
 
 /** A gesture on the journey (`onboarding::Act`). */
+/** At a station that recommends a choice, whether the user kept it (ESC-507: the funnel of the statistics). */
+export type OnboardingChoice = 'recommended' | 'other';
+/** What Escouade found of the harnesses when the journey began (ESC-507). */
+export type OnboardingProfile = 'ready' | 'installed' | 'none' | 'managed';
+
 export type OnboardingAct =
-  | { kind: 'step'; step: OnboardingStep; outcome: 'done' | 'skipped' }
+  | { kind: 'step'; step: OnboardingStep; outcome: 'done' | 'skipped'; choice?: OnboardingChoice }
+  | { kind: 'profile'; profile: OnboardingProfile }
   | { kind: 'skipAll' }
   | { kind: 'finish' }
   | { kind: 'redo' }

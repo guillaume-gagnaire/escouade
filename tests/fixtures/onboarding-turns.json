@@ -1,7 +1,13 @@
 {
   "Lance les tests et dis-moi ce qui casse.": [
-    { "tool": "Read", "file": "package.json", "lines": 11 },
-    { "text": "C’est une petite liste de tâches en TypeScript. Je lance les tests pour voir ce qui casse :" },
+    {
+      "tool": "Read",
+      "file": "package.json",
+      "lines": 11
+    },
+    {
+      "text": "C’est une petite liste de tâches en TypeScript. Je lance les tests pour voir ce qui casse :"
+    },
     {
       "tool": "Bash",
       "ask": true,
@@ -18,6 +24,37 @@
       "old": "    return this.items.filter((t) => t.done);",
       "new": "    return this.items.filter((t) => !t.done);"
     },
-    { "text": "Corrigé dans `src/todo.ts`." }
+    {
+      "text": "Corrigé dans `src/todo.ts`."
+    }
+  ],
+  "Run the tests and tell me what breaks.": [
+    {
+      "tool": "Read",
+      "file": "package.json",
+      "lines": 11
+    },
+    {
+      "text": "It’s a small to-do list in TypeScript. I’ll run the tests to see what breaks:"
+    },
+    {
+      "tool": "Bash",
+      "ask": true,
+      "command": "npm test",
+      "description": "Run the tests",
+      "output": "# tests 4\n# pass 2\n# fail 2"
+    },
+    {
+      "text": "Two tests fail: `remaining()` returns the tasks that are done, and `clearDone()` counts what is left. I’ll fix the first one:"
+    },
+    {
+      "tool": "Edit",
+      "file": "src/todo.ts",
+      "old": "    return this.items.filter((t) => t.done);",
+      "new": "    return this.items.filter((t) => !t.done);"
+    },
+    {
+      "text": "Fixed in `src/todo.ts`."
+    }
   ]
 }

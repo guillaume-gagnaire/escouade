@@ -4,7 +4,7 @@ Escouade travaille en local, sur ta machine. La seule chose qui part d’elle de
 
 ## En bref
 
-- Les statistiques sont **facultatives**. Escouade te pose la question au premier démarrage (y compris après une mise à jour d’une version qui n’en avait pas) et n’envoie rien avant que tu aies répondu « Partager les statistiques ».
+- Les statistiques sont **facultatives**. Escouade te pose la question à la fin du premier lancement (et au démarrage, après une mise à jour d’une version qui n’en avait pas) et n’envoie rien avant que tu aies répondu « Partager les statistiques ». Ce qui s’est passé pendant le premier lancement attend ta réponse sur ta machine : envoyé si tu acceptes, oublié si tu refuses.
 - Elles ne contiennent **rien qui t’identifie** : un identifiant tiré au hasard, jamais dérivé de ta machine ni de toi, et aucun nom, chemin, code, conversation ni donnée Git. Comme cet identifiant dure, le RGPD les traite comme des données personnelles pseudonymes : tu as donc des droits, plus bas.
 - Elles vont à un serveur **à nous**, hébergé en France. Aucun tiers ne les reçoit.
 - Tu peux les arrêter à tout moment, et l’identifiant est alors effacé.
@@ -58,6 +58,13 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `ask_reopened` | Tu reviens sur une réponse avant que l’agent l’ait lue | — |
 | `inbox_compare_opened` | Les rendus d’un choix sont comparés en grand | — |
 | `inbox_attachment_opened` | Un fichier joint à une demande est regardé | `type` : `image`, `pdf`, `markdown`, `word`, `csv` ou `other` ; jamais son nom |
+| `onboarding_started` | Le premier lancement commence (envoyé à sa fin, avec ton accord) | `trigger` : `first` (une nouvelle installation) ou `redo` (« Refaire le premier lancement ») ; `profile` : ce qu’Escouade a trouvé, `ready` (un harness connecté), `installed` (installé, pas connecté), `none` (aucun) ou `managed` (une stratégie impose le harness ou le mode) |
+| `onboarding_step` | Une station du premier lancement est quittée | `step` : `harness`, `account`, `defaults`, `hookups`, `project`, `agent` ou `telemetry` ; `outcome` : `done` (faite), `skipped` (passée) ou `policy` (imposée) ; `choice` : là où un choix est recommandé, `recommended` (gardé) ou `other` ; jamais ce qui a été choisi (ni harness, ni compte, ni dossier) |
+| `onboarding_finished` | Le premier lancement se termine | `skipped` : le nombre de stations passées ; `seconds` : sa durée par tranche (`<60`, `60-120`, `120-300` ou `>300`) |
+| `first_reply` | Le premier agent finit son premier tour pendant le premier lancement | `seconds` : depuis le début du parcours, mêmes tranches ; `demo` : dans le projet de démonstration (oui ou non) ; jamais le message ni la réponse |
+| `discover_done` | Une découverte de la carte « À découvrir » est faite | `item` : son identifiant (`ticket`, `terminal`, `dictation`, `secondAgent`…, une liste fermée) ; `from` : `tip` (une bulle l’avait proposée) ou `other` |
+| `discover_dismissed` | Une découverte est écartée | `item` |
+| `discover_hidden` | « Tout masquer » sur la carte « À découvrir » | — |
 
 Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent, de la branche ou du dépôt, ni l’adresse d’un hébergeur, ni ce qui a été écrit.
 
@@ -108,8 +115,8 @@ Le serveur supprime les événements automatiquement au bout de 25 mois.
 
 ## Dire oui, non, ou changer d’avis
 
-- **Au premier démarrage**, une fenêtre « Aider à améliorer Escouade ? » propose « Partager les statistiques » ou « Non merci », avec un lien « Ce qui est envoyé, en détail » vers cette page. Si tu la fermes sans répondre (avec `Échap`), elle revient au démarrage suivant.
-- **Dans les réglages**, onglet « À propos », la ligne « Statistiques d’usage » a un interrupteur et un bouton « En détail » qui ouvre cette page. Il est désactivé tant que tu n’as pas accepté dans la fenêtre du premier démarrage.
+- **À la fin du premier lancement**, sa dernière station « Aider à améliorer Escouade ? » propose « Non merci » ou « Partager les statistiques », avec un lien « Ce qui est envoyé, en détail » vers cette page. Si tu la passes, la question revient une fois au démarrage suivant, dans une fenêtre. Une installation d’avant le premier lancement a la fenêtre à chaque démarrage tant qu’elle n’a pas de réponse.
+- **Dans les réglages**, onglet « À propos », la ligne « Statistiques d’usage » a un interrupteur et un bouton « En détail » qui ouvre cette page. Il est désactivé tant que tu n’as pas accepté.
 - **Quand tu désactives**, l’identifiant de l’installation est oublié, son fichier `telemetry-id` est supprimé et les événements qui attendaient encore sont abandonnés. Si tu réactives, un nouvel identifiant est tiré : l’installation compte comme une nouvelle.
 
 Voir aussi [les réglages « À propos »](settings-about).

@@ -172,7 +172,6 @@
         <p class="note">{t('onboarding.agent.done.noDiff')}</p>
       {/if}
       <p class="note">{t('onboarding.agent.done.where', { agent: agent.name })}</p>
-      <p class="note">{t('onboarding.agent.running.stop')}</p>
     {:else if turn.state === 'limit'}
       <StationHead step="agent" question={t('onboarding.agent.limit.title')} />
       <p class="warn" role="alert">

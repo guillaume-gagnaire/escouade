@@ -1,6 +1,6 @@
 # Installation
 
-The requirements of each system, installing on Windows, macOS and Linux, using a Claude Code installed in WSL, the PATH on macOS, then what you see at first launch and where updates come from.
+The requirements of each system, installing on Windows, macOS and Linux, using a Claude Code installed in WSL, the PATH on macOS, then what the first launch does and where updates come from.
 
 ## Requirements
 
@@ -118,12 +118,11 @@ If `claude` is still not found, set its path in Settings › Accounts and harnes
 
 ## First launch
 
-As long as no project exists, Escouade opens a welcome screen: its logo, the sentence “Add a project to run agents, follow their questions, and open terminals.” and the “+ Add a project” button.
+At the first start of a new install, Escouade opens the “First launch”: seven stops, one question each, the harness and its account, the mode of new agents, what to plug in, a first project, a first agent that answers, and usage statistics. Each one can be skipped with “Later”, and the journey comes back from Help › First launch. The [first steps](first-steps) describe it stop by stop.
 
-- If no harness is found, a warning says so: “No harness found”, with each one’s install command. “Search again” looks for them once one is installed, without restarting Escouade: the PATH is read again at each search, as when the window comes back to the front and when the “Harness” menu opens. Else open the settings with “Settings › Accounts and harnesses…”, the “Settings” button at the bottom of the projects rail, or `Ctrl+,`, “Accounts and harnesses” page. On macOS, `Ctrl` becomes `⌘`.
-- As long as no account is added, the screen says “No account”: “Add an account: the one already signed in on this machine, or a new one. Only the accounts added start agents.” The “Add an account…” button offers “This machine’s account”, your harness already signed in, or “A new account” (see [the accounts](accounts#add-an-account)).
-- Click “+ Add a project” to open the “New project” window. The [quick start](quick-start) describes it field by field and goes all the way to the first commit.
-- Escouade also asks, in a “Help improve Escouade?” dialog, whether it may send usage statistics: “Share statistics” or “No thanks”. Nothing is sent before you answer. The detail is on the [Privacy](/en/privacy/) page, and the choice can be changed in Settings › General (see the [“About” settings](settings-about)).
+- If no harness is found, the first stop gives each one’s install command, with “Copy”; “Search again” reads the PATH again, as the window coming back to the front does.
+- Usage statistics are asked at the last stop: “No thanks” or “Share statistics”. Nothing is sent before you answer. The detail is on the [Privacy](/en/privacy/) page, and the choice can be changed in Settings › General (see the [“About” settings](settings-about)).
+- Once the journey is closed, with no project, the welcome screen offers “+ Add a project”: the “New project” window, which the [quick start](quick-start) describes field by field.
 
 The window opens at 1440 × 900 (1000 × 600 at the minimum); Escouade then remembers its size and position. Your projects, conversations and settings are written in `~/.escouade/`: see [local data](data).
 

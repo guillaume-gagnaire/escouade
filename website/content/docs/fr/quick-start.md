@@ -6,7 +6,7 @@ Une première session pas à pas : ajouter un projet, créer un agent, choisir s
 
 Il te faut Claude Code installé et connecté à ton compte Claude, et git (voir l’[installation](installation)). Sous macOS, `Ctrl` devient `⌘` dans les raccourcis de cette page.
 
-Au premier lancement, Escouade n’a aucun compte : l’écran d’accueil dit « Aucun compte ». Clique sur « Ajouter un compte… » et garde « Le compte de la machine », ton Claude Code déjà connecté, puis « Ajouter ce compte » (voir [plusieurs comptes](accounts#aucun-compte-au-depart)). Sans compte, aucun agent ne démarre.
+Le [premier lancement](first-steps) ajoute ton compte : ton Claude Code déjà connecté, à sa première station. Si tu l’as passé, l’écran d’accueil dit « Aucun compte » : clique sur « Ajouter un compte… » et garde « Le compte de la machine », puis « Ajouter ce compte » (voir [plusieurs comptes](accounts#aucun-compte-au-depart)). Sans compte, aucun agent ne démarre.
 
 ## Ajouter un projet
 

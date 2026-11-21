@@ -306,13 +306,13 @@ describe('the first agent (ESC-505)', () => {
     expect(within(screen.getByTestId('onboarding-frame')).getByRole('button', { name: /^Autoriser/ })).toBeInTheDocument();
   });
 
-  it('once done, shows the diff, where to find the agent and how to stop it, and lets go on', async () => {
+  it('once done, shows the diff and where to find the agent, never how to stop a turn that is over, and lets go on', async () => {
     setup({ prompts: 1, touchedFiles: ['src/todo.ts'] }, [user, end()]);
     expect(await screen.findByRole('heading', { level: 1, name: 'Ton agent a répondu' })).toBeInTheDocument();
     expect(screen.getByText('L’agent a fini, dans son worktree, sur sa branche : ton dépôt n’a pas bougé.')).toBeInTheDocument();
     expect(screen.getByText('1 fichier changé')).toBeInTheDocument();
-    expect(screen.getByText(/sous son nom « tests-qui-cassent »/)).toBeInTheDocument();
-    expect(screen.getByText('Pour l’arrêter : Échap, ou ■ sous le message.')).toBeInTheDocument();
+    expect(screen.getByText(/sous son nom «\stests-qui-cassent\s»/)).toBeInTheDocument();
+    expect(screen.queryByText('Pour l’arrêter : Échap, ou ■ sous le message.')).toBeNull();
     await userEvent.click(screen.getByTestId('onboarding-diff'));
     expect(app.modal).toMatchObject({ kind: 'diff', agentId: 'a1', paths: [], title: 'Ce que tests-qui-cassent a changé' });
     app.modal = null;
@@ -342,7 +342,7 @@ describe('the first agent (ESC-505)', () => {
   it('not signed in, goes back to the account station', async () => {
     setup({ prompts: 1, status: 'error' }, [user, end({ isError: true, error: 'Invalid API key · Please run /login' })]);
     expect(await screen.findByRole('heading', { level: 1, name: 'Claude Code n’est pas connecté' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Revenir à l’étape du compte/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Revenir à la station du compte/ }));
     expect(onboarding.at).toBe('account');
   });
 
@@ -354,7 +354,7 @@ describe('the first agent (ESC-505)', () => {
     render(Onboarding);
     expect(screen.getByText('Ton premier agent a besoin d’un compte connecté : ajoute-le à la station du compte.')).toBeInTheDocument();
     expect(backend.called('create_agent')).toHaveLength(0);
-    await userEvent.click(screen.getByRole('button', { name: /Revenir à l’étape du compte/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Revenir à la station du compte/ }));
     expect(onboarding.at).toBe('account');
   });
 

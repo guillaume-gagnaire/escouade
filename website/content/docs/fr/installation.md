@@ -1,6 +1,6 @@
 # Installation
 
-Les prérequis de chaque système, les harness à installer, l’installation sous Windows, macOS et Linux, l’utilisation d’un Claude Code installé dans WSL, le PATH sous macOS, puis ce que tu vois au premier lancement et d’où viennent les mises à jour.
+Les prérequis de chaque système, les harness à installer, l’installation sous Windows, macOS et Linux, l’utilisation d’un Claude Code installé dans WSL, le PATH sous macOS, puis ce que fait le premier lancement et d’où viennent les mises à jour.
 
 ## Prérequis
 
@@ -118,12 +118,11 @@ Si `claude` reste introuvable, indique son chemin dans Réglages › Comptes et 
 
 ## Premier lancement
 
-Tant qu’aucun projet n’existe, Escouade ouvre un écran d’accueil : son logo, la phrase « Ajoute un projet pour y lancer des agents, suivre leurs questions et ouvrir des terminaux. » et le bouton « + Ajouter un projet ».
+Au premier démarrage d’une nouvelle installation, Escouade ouvre le « Premier lancement » : sept stations, une question chacune, le harness et son compte, le mode des nouveaux agents, ce que tu veux brancher, un premier projet, un premier agent qui répond et les statistiques d’usage. Chacune se passe d’un « Plus tard », et le parcours revient depuis Aide › Premier lancement. Les [premiers pas](first-steps) le décrivent station par station.
 
-- Si aucun harness n’est trouvé, un avertissement le dit : « Aucun harness trouvé », avec la commande d’installation de chacun. « Chercher à nouveau » les cherche une fois l’un d’eux installé, sans redémarrer Escouade : le PATH est relu à chaque recherche, comme au retour de la fenêtre au premier plan et à l’ouverture du menu « Harness ». Sinon, ouvre les réglages avec « Réglages › Comptes et harness… », le bouton « Réglages » en bas de la barre des projets ou `Ctrl+,`, page « Comptes et harness ». Sous macOS, `Ctrl` devient `⌘`.
-- Tant qu’aucun compte n’est ajouté, l’écran dit « Aucun compte » : « Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents. » Le bouton « Ajouter un compte… » propose « Le compte de la machine », ton harness déjà connecté, ou « Un nouveau compte » (voir [les comptes](accounts#ajouter-un-compte)).
-- Clique sur « + Ajouter un projet » pour ouvrir la fenêtre « Nouveau projet ». La [prise en main](quick-start) la décrit champ par champ et va jusqu’au premier commit.
-- Escouade te demande aussi, dans une fenêtre « Aider à améliorer Escouade ? », si elle peut envoyer des statistiques d’usage : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Le détail est sur la page [Confidentialité](/privacy/), et le choix se change dans Réglages › Général (voir [les réglages « À propos »](settings-about)).
+- Si aucun harness n’est trouvé, la première station donne la commande d’installation de chacun, avec « Copier » ; « Chercher à nouveau » relit le PATH, comme le retour de la fenêtre au premier plan.
+- Les statistiques d’usage sont demandées à la dernière station : « Non merci » ou « Partager les statistiques ». Rien n’est envoyé avant ta réponse. Le détail est sur la page [Confidentialité](/privacy/), et le choix se change dans Réglages › Général (voir [les réglages « À propos »](settings-about)).
+- Une fois le parcours fermé, sans projet, l’écran d’accueil propose « + Ajouter un projet » : la fenêtre « Nouveau projet », que la [prise en main](quick-start) décrit champ par champ.
 
 La fenêtre s’ouvre en 1440 × 900 (1000 × 600 au minimum) ; Escouade retient ensuite sa taille et sa position. Tes projets, tes conversations et tes réglages sont écrits dans `~/.escouade/` : voir les [données locales](data).
 

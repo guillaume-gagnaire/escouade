@@ -406,6 +406,7 @@ export const en: Catalog = {
       installation: 'Installation',
       server: 'Server mode',
       harness: 'The harnesses',
+      'first-steps': 'First steps',
       'quick-start': 'Quick start',
       interface: 'The interface',
       'managing-agents': 'Agents',

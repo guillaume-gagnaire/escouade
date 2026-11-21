@@ -4,7 +4,7 @@ Escouade works locally, on your machine. The only thing that leaves it on its ow
 
 ## In short
 
-- The statistics are **optional**. Escouade asks at the first start (existing installs too, after an update from a version that had none) and sends nothing until you answer “Share statistics”.
+- The statistics are **optional**. Escouade asks at the end of the first launch (and at the start, after an update from a version that had none) and sends nothing until you answer “Share statistics”. What happened during the first launch waits for your answer on your machine: sent if you accept, forgotten if you refuse.
 - They contain **nothing that identifies you**: an id drawn at random, never derived from your machine or from you, and no name, path, code, conversation or Git data. Because this id lasts, the GDPR treats them as pseudonymous personal data: so you have rights, below.
 - They go to a server **of ours**, hosted in France. No third party receives them.
 - You can stop them at any time, and the id is then deleted.
@@ -58,6 +58,13 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `ask_reopened` | You take back an answer before the agent read it | — |
 | `inbox_compare_opened` | The renders of a choice are compared full size | — |
 | `inbox_attachment_opened` | A file attached to a request is looked at | `type`: `image`, `pdf`, `markdown`, `word`, `csv` or `other`; never its name |
+| `onboarding_started` | The first launch begins (sent at its end, with your consent) | `trigger`: `first` (a new install) or `redo` (“Redo the first launch”); `profile`: what Escouade found, `ready` (a harness signed in), `installed` (installed, not signed in), `none` (none) or `managed` (a policy imposes the harness or the mode) |
+| `onboarding_step` | A station of the first launch is left | `step`: `harness`, `account`, `defaults`, `hookups`, `project`, `agent` or `telemetry`; `outcome`: `done`, `skipped` or `policy` (imposed); `choice`: where a choice is recommended, `recommended` (kept) or `other`; never what was chosen (no harness, account or folder) |
+| `onboarding_finished` | The first launch ends | `skipped`: how many stations were skipped; `seconds`: how long it took, by bracket (`<60`, `60-120`, `120-300` or `>300`) |
+| `first_reply` | The first agent ends its first turn during the first launch | `seconds`: since the journey began, same brackets; `demo`: in the demo project (yes or no); never the message or the answer |
+| `discover_done` | A discovery of the “To discover” map is done | `item`: its id (`ticket`, `terminal`, `dictation`, `secondAgent`…, a closed list); `from`: `tip` (a bubble had offered it) or `other` |
+| `discover_dismissed` | A discovery is dismissed | `item` |
+| `discover_hidden` | “Hide all” on the “To discover” map | — |
 
 An event says that a feature was used, not on what: never the name of the project, the agent, the branch or the repository, nor a host’s address, nor anything that was written.
 
@@ -108,7 +115,7 @@ The server deletes events automatically after 25 months.
 
 ## Saying yes, no, or changing your mind
 
-- **At the first start**, a “Help improve Escouade?” dialog offers “Share statistics” or “No thanks”, with a “What is sent, in detail” link to this page. If you close it without answering (with `Esc`), it comes back at the next start.
+- **At the end of the first launch**, its last station “Help improve Escouade?” offers “No thanks” or “Share statistics”, with a “What is sent, in detail” link to this page. If you skip it, the question comes back once at the next start, in a dialog. An install from before the first launch gets the dialog at each start until it has an answer.
 - **In the settings**, “About” tab, the “Usage statistics” line has a switch and an “In detail” button that opens this page. It is off until you accept in the first-start dialog.
 - **When you turn it off**, the install id is forgotten, its `telemetry-id` file is deleted, and events still waiting are dropped. If you turn it on again, a new id is drawn: the install counts as a new one.
 

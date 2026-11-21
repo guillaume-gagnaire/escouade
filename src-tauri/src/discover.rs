@@ -398,6 +398,70 @@ pub fn apply(saved: &mut Onboarding, act: &Act, f: &Facts, version: &str) -> boo
     *saved != before
 }
 
+/// How a discovery is said in the usage statistics (ESC-507): its id, as the window knows it.
+pub fn item_name(id: Discovery) -> &'static str {
+    match id {
+        Discovery::Ticket => "ticket",
+        Discovery::Autopilot => "autopilot",
+        Discovery::Docs => "docs",
+        Discovery::Sources => "sources",
+        Discovery::Dictation => "dictation",
+        Discovery::Voice => "voice",
+        Discovery::Terminal => "terminal",
+        Discovery::Editor => "editor",
+        Discovery::SecondAgent => "secondAgent",
+        Discovery::Launch => "launch",
+        Discovery::Forge => "forge",
+        Discovery::PrView => "prView",
+        Discovery::PrReview => "prReview",
+        Discovery::Approve => "approve",
+        Discovery::OpenPr => "openPr",
+        Discovery::Plugin => "plugin",
+        Discovery::Mcp => "mcp",
+        Discovery::Account => "account",
+        Discovery::Remote => "remote",
+        Discovery::Team => "team",
+    }
+}
+
+/// `id` done, as the statistics tell it: whether a bubble had offered it before.
+pub fn done_event(saved: &Onboarding, id: Discovery) -> Event {
+    Event::DiscoverDone {
+        item: item_name(id),
+        from: if saved.tipped.contains(&id) {
+            "tip"
+        } else {
+            "other"
+        },
+    }
+}
+
+/// What the statistics tell of `act`, from the state `before` it to the state `after` (ESC-507): a discovery the window
+/// saw done, one dismissed, « Tout masquer ». Nothing of what the real state ticked by itself on a read: on a device set
+/// up before, that is what was done before the map existed.
+pub fn told(before: &Onboarding, after: &Onboarding, act: &Act) -> Vec<Event> {
+    let was = |id: &Discovery| before.discover.get(id);
+    let is = |id: &Discovery| after.discover.get(id);
+    match act {
+        Act::Seen { id }
+            if is(id) == Some(&DiscoverOutcome::Done)
+                && was(id) != Some(&DiscoverOutcome::Done) =>
+        {
+            vec![done_event(before, *id)]
+        }
+        Act::Dismiss { id }
+            if is(id) == Some(&DiscoverOutcome::Dismissed)
+                && was(id) != Some(&DiscoverOutcome::Dismissed) =>
+        {
+            vec![Event::DiscoverDismissed {
+                item: item_name(*id),
+            }]
+        }
+        Act::Hide { hidden: true } if !before.discover_hidden => vec![Event::DiscoverHidden],
+        _ => Vec::new(),
+    }
+}
+
 /// The discovery a fact of the core makes done (the same moments the statistics count, consent or not).
 pub fn of_event(e: &Event) -> Option<Discovery> {
     Some(match e {
@@ -529,13 +593,18 @@ impl Core {
     pub fn discover_act(&self, act: Act, microphones: Option<usize>) -> DiscoverView {
         let window = crate::remoteapi::current() == crate::remoteapi::Client::Window;
         let facts = self.discover_facts(microphones);
-        let (changed, shown) = {
+        let (changed, events, shown) = {
             let mut saved = self.onboarding.write();
+            let before = saved.clone();
             let changed = apply(&mut saved, &act, &facts, version());
-            (changed, view(&saved, &facts, version(), window))
+            let events = told(&before, &saved, &act);
+            (changed, events, view(&saved, &facts, version(), window))
         };
         if changed {
             self.request_save();
+        }
+        for e in events {
+            self.telemetry.track(e);
         }
         shown
     }
@@ -555,13 +624,16 @@ impl Core {
 
     /// `id` done for real: ticked at once, and the window told.
     pub fn discover_done(&self, id: Discovery) {
-        {
+        let event = {
             let mut saved = self.onboarding.write();
             if saved.discover.get(&id) == Some(&DiscoverOutcome::Done) {
                 return;
             }
+            let event = done_event(&saved, id);
             saved.discover.insert(id, DiscoverOutcome::Done);
-        }
+            event
+        };
+        self.telemetry.track(event);
         self.request_save();
         self.hub.emit(UiEvent::DiscoverChanged {});
     }

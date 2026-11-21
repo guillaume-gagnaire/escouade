@@ -420,3 +420,70 @@ fn a_source_of_tickets_passed_at_the_first_launch_waits_on_the_map_until_one_is_
         DiscoverStatus::Done
     );
 }
+
+#[test]
+fn the_statistics_tell_a_discovery_done_dismissed_or_hidden_and_whether_a_bubble_offered_it() {
+    let before = Onboarding {
+        tipped: [Discovery::Dictation].into_iter().collect(),
+        ..Default::default()
+    };
+    let mut after = before.clone();
+    after
+        .discover
+        .insert(Discovery::Editor, DiscoverOutcome::Done);
+    assert_eq!(
+        told(
+            &before,
+            &after,
+            &Act::Seen {
+                id: Discovery::Editor
+            }
+        ),
+        vec![Event::DiscoverDone {
+            item: "editor",
+            from: "other"
+        }]
+    );
+    assert_eq!(
+        done_event(&before, Discovery::Dictation),
+        Event::DiscoverDone {
+            item: "dictation",
+            from: "tip"
+        }
+    );
+    // Seen again: nothing more.
+    assert!(told(
+        &after,
+        &after,
+        &Act::Seen {
+            id: Discovery::Editor
+        }
+    )
+    .is_empty());
+    let mut dismissed = before.clone();
+    dismissed
+        .discover
+        .insert(Discovery::Voice, DiscoverOutcome::Dismissed);
+    assert_eq!(
+        told(
+            &before,
+            &dismissed,
+            &Act::Dismiss {
+                id: Discovery::Voice
+            }
+        ),
+        vec![Event::DiscoverDismissed { item: "voice" }]
+    );
+    let hidden = Onboarding {
+        discover_hidden: true,
+        ..before.clone()
+    };
+    assert_eq!(
+        told(&before, &hidden, &Act::Hide { hidden: true }),
+        vec![Event::DiscoverHidden]
+    );
+    assert!(told(&hidden, &before, &Act::Hide { hidden: false }).is_empty());
+    // Every id is a closed name of its own.
+    let ids: std::collections::HashSet<_> = all().map(item_name).collect();
+    assert_eq!(ids.len(), all().count());
+}

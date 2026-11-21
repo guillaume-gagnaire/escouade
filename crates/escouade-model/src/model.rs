@@ -2974,6 +2974,41 @@ pub struct Onboarding {
     pub tipped: BTreeSet<Discovery>,
     /// The last release (« 2.3 ») whose band « Nouveau dans la … » was seen or closed; a new installation starts at its own.
     pub seen_release: Option<String>,
+    /// The funnel of the journey (ESC-507, `docs/ONBOARDING.md` § 9), told by the usage statistics once a run of it ends,
+    /// with the user's consent only (asked at its last station: nothing leaves before). When this run began (the first,
+    /// or « Refaire le premier lancement »; ms).
+    pub run_started: Option<i64>,
+    /// What Escouade found when this run began: a harness signed in, installed only, none, or a policy over it.
+    pub profile: Option<OnboardingProfile>,
+    /// At the stations that recommend a choice, whether the user kept it.
+    pub choices: BTreeMap<OnboardingStep, OnboardingChoice>,
+    /// When the first agent ended its first turn during the journey (ms), and whether in the demonstration project.
+    pub first_reply_at: Option<i64>,
+    pub first_reply_demo: bool,
+    /// The funnel of this run told (sent with the consent, or dropped with a no): never twice.
+    pub told: bool,
+}
+
+/// What Escouade found of the harnesses when the journey began (ESC-507).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum OnboardingProfile {
+    /// A harness signed in on the machine.
+    Ready,
+    /// A harness installed, signed in nowhere.
+    Installed,
+    /// No harness found.
+    None,
+    /// A policy imposes the harness or the mode.
+    Managed,
+}
+
+/// Whether the user kept the choice a station recommended (ESC-507).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum OnboardingChoice {
+    Recommended,
+    Other,
 }
 
 /// A feature to discover by doing it (ESC-506, `docs/ONBOARDING.md` § 7), in the order of its map.

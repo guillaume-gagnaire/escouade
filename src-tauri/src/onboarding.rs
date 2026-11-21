@@ -11,7 +11,11 @@
 //! at the first station neither done nor passed.
 
 use crate::core::Core;
-use crate::model::{AgentStatus, Hookup, Onboarding, OnboardingStep, StepOutcome};
+use crate::model::{
+    AgentStatus, Hookup, Onboarding, OnboardingChoice, OnboardingProfile, OnboardingStep,
+    StepOutcome,
+};
+use crate::telemetry::{self, Event};
 use escouade_policy::list::{DEFAULT_MODE, DICTATION, TELEMETRY, VOICE_ONLINE};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -43,6 +47,8 @@ pub struct Facts {
     pub projects: usize,
     /// An agent has ended a turn well (ESC-505): its first message sent by the user, its answer come.
     pub first_reply: bool,
+    /// That reply came in the demonstration project (ESC-507: the funnel says so).
+    pub first_reply_demo: bool,
     /// The statistics' question is answered (`Settings::telemetry`).
     pub telemetry_answered: bool,
     /// What a policy imposes: the mode of the new agents, the statistics.
@@ -145,7 +151,12 @@ pub enum Act {
     Step {
         step: OnboardingStep,
         outcome: StepOutcome,
+        /// At a station that recommends a choice: whether the user kept it (ESC-507, the funnel).
+        #[serde(default)]
+        choice: Option<OnboardingChoice>,
     },
+    /// What Escouade found of the harnesses at the journey's first station (ESC-507): kept once per run.
+    Profile { profile: OnboardingProfile },
     /// « Tout passer »: every station not done is passed, and the journey ends.
     SkipAll,
     /// The last station passed: the journey ends.
@@ -309,8 +320,16 @@ pub fn view(saved: &Onboarding, facts: &Facts, window: bool) -> OnboardingView {
 pub fn apply(saved: &mut Onboarding, act: &Act, facts: &Facts, now: i64) {
     saved.version = VERSION;
     saved.started.get_or_insert(now);
+    saved.run_started.get_or_insert(now);
     match act {
-        Act::Step { step, outcome } => {
+        Act::Step {
+            step,
+            outcome,
+            choice,
+        } => {
+            if let (StepOutcome::Done, Some(c)) = (outcome, choice) {
+                saved.choices.insert(*step, *c);
+            }
             // A station done stays done: « Plus tard » on a station shown again never undoes it.
             if !(*outcome == StepOutcome::Skipped
                 && (saved.steps.get(step) == Some(&StepOutcome::Done) || real(*step, facts)))
@@ -334,6 +353,14 @@ pub fn apply(saved: &mut Onboarding, act: &Act, facts: &Facts, now: i64) {
         Act::Redo => {
             saved.finished = None;
             saved.redo = true;
+            // A new run, a funnel of its own.
+            saved.run_started = Some(now);
+            saved.profile = None;
+            saved.choices.clear();
+            saved.told = false;
+        }
+        Act::Profile { profile } => {
+            saved.profile.get_or_insert(*profile);
         }
         Act::TelemetryAskedAgain => saved.telemetry_asked_again = true,
         Act::Hookup { hookup, outcome } => {
@@ -347,6 +374,91 @@ pub fn apply(saved: &mut Onboarding, act: &Act, facts: &Facts, now: i64) {
         }
     }
     settle(saved, facts);
+}
+
+// === The funnel (ESC-507, § 9) ===
+
+/// The first agent's first turn ended during the journey, kept with when (`now`, ms): the funnel's `first_reply`. Whether
+/// it was just seen.
+pub fn note_reply(saved: &mut Onboarding, facts: &Facts, now: i64) -> bool {
+    if saved.started.is_none()
+        || saved.finished.is_some()
+        || !facts.first_reply
+        || saved.first_reply_at.is_some()
+    {
+        return false;
+    }
+    saved.first_reply_at = Some(now);
+    saved.first_reply_demo = facts.first_reply_demo;
+    true
+}
+
+/// How a station's id is said in the statistics.
+pub fn step_name(step: OnboardingStep) -> &'static str {
+    match step {
+        OnboardingStep::Harness => "harness",
+        OnboardingStep::Account => "account",
+        OnboardingStep::Defaults => "defaults",
+        OnboardingStep::Hookups => "hookups",
+        OnboardingStep::Project => "project",
+        OnboardingStep::Agent => "agent",
+        OnboardingStep::Telemetry => "telemetry",
+    }
+}
+
+/// What the usage statistics tell of a run of the journey once it ended (`docs/ONBOARDING.md` § 9): it began (why, and
+/// what Escouade found), each station left (how, and whether its recommended choice was kept), it ended (how many
+/// stations passed, how long it took), and the first agent's first turn when it came during the run. Closed lists and
+/// brackets only: never a name, a path, an address or what was chosen. Nothing while the run is under way.
+pub fn funnel(saved: &Onboarding, facts: &Facts) -> Vec<Event> {
+    let (Some(began), Some(ended)) = (saved.run_started.or(saved.started), saved.finished) else {
+        return Vec::new();
+    };
+    let profile = match saved.profile {
+        Some(OnboardingProfile::Ready) => "ready",
+        Some(OnboardingProfile::Installed) => "installed",
+        Some(OnboardingProfile::Managed) => "managed",
+        Some(OnboardingProfile::None) | None => "none",
+    };
+    // A run that began after the first one is the journey done again.
+    let redo = saved.run_started.is_some_and(|r| Some(r) != saved.started);
+    let mut out = vec![Event::OnboardingStarted {
+        trigger: if redo { "redo" } else { "first" },
+        profile,
+    }];
+    let mut skipped = 0;
+    for step in STEPS {
+        let outcome = match status(step, saved, facts) {
+            StepStatus::Todo => continue,
+            StepStatus::Done => "done",
+            StepStatus::Skipped => {
+                skipped += 1;
+                "skipped"
+            }
+            StepStatus::Policy => "policy",
+        };
+        let choice = match saved.choices.get(&step) {
+            Some(OnboardingChoice::Recommended) if outcome == "done" => Some("recommended"),
+            Some(OnboardingChoice::Other) if outcome == "done" => Some("other"),
+            _ => None,
+        };
+        out.push(Event::OnboardingStep {
+            step: step_name(step),
+            outcome,
+            choice,
+        });
+    }
+    out.push(Event::OnboardingFinished {
+        skipped,
+        seconds: telemetry::seconds(ended - began),
+    });
+    if let Some(at) = saved.first_reply_at.filter(|&at| at >= began) {
+        out.push(Event::FirstReply {
+            seconds: telemetry::seconds(at - began),
+            demo: saved.first_reply_demo,
+        });
+    }
+    out
 }
 
 // === The first project (ESC-505, § 4.4) ===
@@ -584,11 +696,21 @@ impl Core {
         };
         let projects = self.projects.read().len();
         // A turn ended well: some prompt sent, the agent at rest, neither stopped by its usage limit nor failed.
-        let first_reply = self.agents.read().values().any(|h| {
-            let m = &h.lock().meta;
-            m.prompts > 0
-                && matches!(m.status, AgentStatus::Idle | AgentStatus::Done)
-                && m.resume_at.is_none()
+        let replied: Vec<String> = self
+            .agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let m = &h.lock().meta;
+                (m.prompts > 0
+                    && matches!(m.status, AgentStatus::Idle | AgentStatus::Done)
+                    && m.resume_at.is_none())
+                .then(|| m.project_id.clone())
+            })
+            .collect();
+        let first_reply = !replied.is_empty();
+        let first_reply_demo = self.projects.read().iter().any(|p| {
+            replied.contains(&p.id) && crate::demo::is_demo(self.data.root(), Path::new(&p.path))
         });
         let (mode_imposed, telemetry_imposed, dictation_off) = {
             let locks = self.locks.read();
@@ -624,6 +746,7 @@ impl Core {
             mode_chosen,
             projects,
             first_reply,
+            first_reply_demo,
             telemetry_answered,
             mode_imposed,
             telemetry_imposed,
@@ -726,11 +849,14 @@ impl Core {
         let window = crate::remoteapi::current() == crate::remoteapi::Client::Window;
         let facts = self.onboarding_facts();
         let mut saved = self.onboarding.write();
+        let now = chrono::Utc::now().timestamp_millis();
         let mut changed = settle(&mut saved, &facts);
+        changed |= note_reply(&mut saved, &facts, now);
         let shown = view(&saved, &facts, window);
         if shown.trigger == Some(Trigger::First) && saved.started.is_none() {
             saved.version = VERSION;
-            saved.started = Some(chrono::Utc::now().timestamp_millis());
+            saved.started = Some(now);
+            saved.run_started = Some(now);
             changed = true;
         }
         drop(saved);
@@ -754,16 +880,40 @@ impl Core {
         let facts = self.onboarding_facts();
         let shown = {
             let mut saved = self.onboarding.write();
-            apply(
-                &mut saved,
-                &act,
-                &facts,
-                chrono::Utc::now().timestamp_millis(),
-            );
+            let now = chrono::Utc::now().timestamp_millis();
+            apply(&mut saved, &act, &facts, now);
+            note_reply(&mut saved, &facts, now);
             view(&saved, &facts, window)
         };
+        self.onboarding_tell();
         self.request_save();
         self.with_demo(shown)
+    }
+
+    /// The funnel of the run that ended told to the usage statistics, once (ESC-507): sent with the user's yes, dropped
+    /// with a no, kept while there is no answer yet (asked once more at the next start: a yes then sends it).
+    pub fn onboarding_tell(&self) {
+        let facts = self.onboarding_facts();
+        let events = {
+            let mut saved = self.onboarding.write();
+            if saved.finished.is_none() || saved.told {
+                return;
+            }
+            if !self.telemetry.enabled() {
+                if self.settings.read().telemetry == Some(false) {
+                    saved.told = true;
+                    drop(saved);
+                    self.request_save();
+                }
+                return;
+            }
+            saved.told = true;
+            funnel(&saved, &facts)
+        };
+        for e in events {
+            self.telemetry.track(e);
+        }
+        self.request_save();
     }
 }
 

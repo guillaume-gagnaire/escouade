@@ -23,7 +23,7 @@ Closing the window does not quit Escouade and does not stop the agents: the wind
 
 ## The projects rail
 
-A narrow column on the left, from the title bar to the status bar, like Slack’s workspaces. From top to bottom: “Overview”, a tile per open project, the `+` button (“Add a project”), then, at the bottom, “Stats” and “Settings”. At the first start, with no project, it keeps `+` and “Settings” alone.
+A narrow column on the left, from the title bar to the status bar, like Slack’s workspaces. From top to bottom: “Overview”, a tile per open project, the `+` button (“Add a project”), then, at the bottom, “Help” (the first launch, the “Discover” map, the documentation), “Stats” and “Settings”. With no project, it keeps `+`, “Help” and “Settings” alone.
 
 ### A project tile
 

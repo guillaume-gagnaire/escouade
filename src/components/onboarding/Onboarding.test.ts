@@ -90,6 +90,13 @@ function core(start: OnboardingView, extra: Record<string, (a: any) => unknown> 
   });
 }
 
+/** The gestures told to the core, but what Escouade found of the harnesses (the funnel's profile, ESC-507). */
+const acts = (b: { called: (cmd: string) => { args: Record<string, any> }[] }) =>
+  b
+    .called('onboarding_act')
+    .map((c) => c.args.act)
+    .filter((a) => a.kind !== 'profile');
+
 describe('the first launch (ESC-504)', () => {
   beforeEach(() => {
     resetApp({ projects: [] });
@@ -144,7 +151,14 @@ describe('the first launch (ESC-504)', () => {
     await waitFor(() => expect(onboarding.at).toBe('defaults'));
     expect(backend.called('account_add_machine')[0].args).toEqual({ engine: 'claude' });
     expect(app.settings.accounts.map((a) => a.id)).toEqual(['principal']);
-    expect(backend.called('onboarding_act').map((c) => c.args.act)).toContainEqual({ kind: 'step', step: 'harness', outcome: 'done' });
+    expect(acts(backend)).toContainEqual({ kind: 'step', step: 'harness', outcome: 'done', choice: 'recommended' });
+    // What Escouade found, told once for the funnel of the statistics (ESC-507).
+    expect(
+      backend
+        .called('onboarding_act')
+        .filter((c) => c.args.act.kind === 'profile')
+        .map((c) => c.args.act),
+    ).toEqual([{ kind: 'profile', profile: 'ready' }]);
   });
 
   it('with no harness found, shows the command of the one chosen, copied in one click, and waits', async () => {
@@ -255,7 +269,7 @@ describe('the first launch (ESC-504)', () => {
     expect(stops()[0]).toHaveTextContent('passé · à reprendre');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(onboarding.at).toBe('defaults'));
-    expect(backend.called('onboarding_act').map((c) => c.args.act)).toEqual([
+    expect(acts(backend)).toEqual([
       { kind: 'step', step: 'harness', outcome: 'skipped' },
       { kind: 'step', step: 'account', outcome: 'skipped' },
     ]);
@@ -283,7 +297,7 @@ describe('the first launch (ESC-504)', () => {
     render(Onboarding);
     await userEvent.click(screen.getByRole('button', { name: 'Tout passer' }));
     await waitFor(() => expect(onboarding.shown).toBe(false));
-    expect(backend.called('onboarding_act').map((c) => c.args.act)).toEqual([{ kind: 'skipAll' }]);
+    expect(acts(backend)).toEqual([{ kind: 'skipAll' }]);
   });
 
   it('asks the statistics as before, neither answer put forward, then ends', async () => {
@@ -326,7 +340,7 @@ describe('the first launch (ESC-504)', () => {
     expect(screen.getByRole('radio', { name: /Plan/ })).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(screen.getByRole('button', { name: 'Fermer' }));
     await waitFor(() => expect(onboarding.shown).toBe(false));
-    expect(backend.called('onboarding_act').map((c) => c.args.act)).toEqual([{ kind: 'finish' }]);
+    expect(acts(backend)).toEqual([{ kind: 'finish' }]);
   });
 
   it('is in English too', async () => {

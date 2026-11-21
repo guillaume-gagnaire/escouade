@@ -60,7 +60,7 @@ If a version couldn’t install, Escouade no longer restarts by itself for it: y
 
 Escouade can send usage statistics, with nothing that identifies you: the features used, the version of Escouade and the system, under an id drawn at random. They go to a server of Escouade’s hosted in France (Aptabase, open source), and to no third party.
 
-They are off until you accept. At the first start, including on an install that existed before this feature, a “Help improve Escouade?” dialog asks: “Share statistics” or “No thanks”. Nothing is sent before you answer. If you close the dialog without answering (with `Esc`), it comes back at the next start.
+They are off until you accept. The last station of the [first launch](first-steps) asks: “No thanks” or “Share statistics”. Nothing is sent before you answer. Skipped, the question comes back once at the next start, in a dialog; on an install from before the first launch, the dialog comes back at each start until it has an answer.
 
 The line’s “In detail” button, like the dialog’s “What is sent, in detail” link, opens the [Privacy](/en/privacy/) page: the events sent and their props, what is never sent, how long it is kept (25 months), the legal basis and your rights.
 

@@ -63,6 +63,7 @@
     primary = {
       label: chosen && !imposed ? t('onboarding.defaults.keep', { mode: modeLabel(chosen) }) : t('onboarding.continue'),
       disabled: !chosen && !imposed,
+      choice: imposed ? undefined : chosen === RECOMMENDED_MODE ? 'recommended' : 'other',
       run: next,
     };
   });

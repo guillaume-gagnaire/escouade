@@ -16,7 +16,7 @@ In Settings › Projects › Team, the “Shared Kanban” group says how many t
 
 ## Your name
 
-Each file carries its author’s name, and the name of whoever took the ticket. Escouade asks for yours at the first launch, filled in from `git config user.name`; “Later” puts the question off until your first share.
+Each file carries its author’s name, and the name of whoever took the ticket. Escouade asks for yours at your first share, filled in from `git config user.name`.
 
 - You change it in Settings › General › You, “Your name”.
 - A project may have its own: Settings › Projects › Team › Shared Kanban, “Your name in this project”. Empty, it is the application’s.

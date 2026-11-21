@@ -3,7 +3,7 @@
 // `state.json`) and reads the real state of the app: the window shows it and asks it again after each change.
 
 import { api } from './ipc';
-import type { EngineId, Hookup, OnboardingAct, OnboardingStep, OnboardingView, StepStatus } from './types';
+import type { EngineId, Hookup, OnboardingAct, OnboardingChoice, OnboardingStep, OnboardingView, StepStatus } from './types';
 
 export const onboarding = $state<{
   /** What the core said last; null until the start. */
@@ -78,8 +78,8 @@ export function before(step: OnboardingStep): OnboardingStep | null {
 }
 
 /** `step` done or passed, then the next station, or the end. */
-export async function leave(step: OnboardingStep, outcome: 'done' | 'skipped'): Promise<void> {
-  await act({ kind: 'step', step, outcome });
+export async function leave(step: OnboardingStep, outcome: 'done' | 'skipped', choice?: OnboardingChoice): Promise<void> {
+  await act(choice ? { kind: 'step', step, outcome, choice } : { kind: 'step', step, outcome });
   const next = after(step);
   if (next) onboarding.at = next;
   else await end();
@@ -117,5 +117,7 @@ export async function redo(): Promise<void> {
 export interface Primary {
   label: string;
   disabled?: boolean;
+  /** At a station that recommends a choice: whether the one taken is it (the funnel of the statistics, ESC-507). */
+  choice?: OnboardingChoice;
   run: () => Promise<boolean>;
 }

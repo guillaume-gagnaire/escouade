@@ -6,7 +6,7 @@ A first session step by step: add a project, create an agent, choose its model, 
 
 You need Claude Code installed and signed in to your Claude account, and git (see [installation](installation)). On macOS, `Ctrl` becomes `⌘` in the shortcuts of this page.
 
-On the first launch, Escouade has no account: the first screen says “No account”. Click “Add an account…”, keep “This machine’s account”, your Claude Code already signed in, then “Add this account” (see [multiple accounts](accounts#no-account-to-begin-with)). Without an account, no agent starts.
+The [first launch](first-steps) adds your account: your Claude Code already signed in, at its first stop. If you skipped it, the welcome screen says “No account”: click “Add an account…”, keep “This machine’s account”, then “Add this account” (see [multiple accounts](accounts#no-account-to-begin-with)). Without an account, no agent starts.
 
 ## Add a project
 

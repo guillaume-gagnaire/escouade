@@ -170,6 +170,52 @@ pub enum Event {
     InboxAttachmentOpened {
         kind: &'static str,
     },
+    /// The first launch's journey began (ESC-507, `docs/ONBOARDING.md` § 9): a first start (`first`) or done again
+    /// (`redo`); what Escouade found (`ready`, `installed`, `none`, `managed`). Told once the run ends, with the consent.
+    OnboardingStarted {
+        trigger: &'static str,
+        profile: &'static str,
+    },
+    /// A station of the journey left: which (`harness` … `telemetry`), how (`done`, `skipped`, `policy`), and, where a
+    /// choice is recommended, whether it was kept (`recommended`, `other`). Never what was chosen.
+    OnboardingStep {
+        step: &'static str,
+        outcome: &'static str,
+        choice: Option<&'static str>,
+    },
+    /// The journey ended: how many stations passed, how long it took (a bracket).
+    OnboardingFinished {
+        skipped: usize,
+        seconds: &'static str,
+    },
+    /// The first agent ended its first turn during the journey: how long after it began (a bracket), in the
+    /// demonstration project or not.
+    FirstReply {
+        seconds: &'static str,
+        demo: bool,
+    },
+    /// A discovery done (ESC-506): its id (a closed list), and whether a bubble had offered it (`tip`) or not (`other`).
+    DiscoverDone {
+        item: &'static str,
+        from: &'static str,
+    },
+    /// A discovery dismissed (« Écarter »).
+    DiscoverDismissed {
+        item: &'static str,
+    },
+    /// « Tout masquer ».
+    DiscoverHidden,
+}
+
+/// A duration (ms) said as the bracket the funnel counts (`docs/ONBOARDING.md` § 9): `<60`, `60-120`, `120-300`, `>300`
+/// seconds.
+pub fn seconds(ms: i64) -> &'static str {
+    match ms / 1000 {
+        s if s < 60 => "<60",
+        s if s < 120 => "60-120",
+        s if s < 300 => "120-300",
+        _ => ">300",
+    }
 }
 
 impl Event {
@@ -216,6 +262,13 @@ impl Event {
             Event::AskReopened => "ask_reopened",
             Event::InboxCompareOpened => "inbox_compare_opened",
             Event::InboxAttachmentOpened { .. } => "inbox_attachment_opened",
+            Event::OnboardingStarted { .. } => "onboarding_started",
+            Event::OnboardingStep { .. } => "onboarding_step",
+            Event::OnboardingFinished { .. } => "onboarding_finished",
+            Event::FirstReply { .. } => "first_reply",
+            Event::DiscoverDone { .. } => "discover_done",
+            Event::DiscoverDismissed { .. } => "discover_dismissed",
+            Event::DiscoverHidden => "discover_hidden",
         }
     }
 
@@ -297,6 +350,25 @@ impl Event {
                 None => json!({ "kind": kind, "delay": delay, "via": via }),
             },
             Event::InboxAttachmentOpened { kind } => json!({ "type": kind }),
+            Event::OnboardingStarted { trigger, profile } => {
+                json!({ "trigger": trigger, "profile": profile })
+            }
+            Event::OnboardingStep {
+                step,
+                outcome,
+                choice,
+            } => match choice {
+                Some(c) => json!({ "step": step, "outcome": outcome, "choice": c }),
+                None => json!({ "step": step, "outcome": outcome }),
+            },
+            Event::OnboardingFinished { skipped, seconds } => {
+                json!({ "skipped": skipped, "seconds": seconds })
+            }
+            Event::FirstReply { seconds, demo } => {
+                json!({ "seconds": seconds, "demo": yes(*demo) })
+            }
+            Event::DiscoverDone { item, from } => json!({ "item": item, "from": from }),
+            Event::DiscoverDismissed { item } => json!({ "item": item }),
             _ => json!({}),
         };
         match props {
@@ -470,7 +542,7 @@ impl Telemetry {
         false
     }
 
-    #[cfg(test)]
+    /// Whether events are kept to leave now: the user said yes (or a policy did), outside a sandbox.
     pub(crate) fn enabled(&self) -> bool {
         self.inner.lock().install_id.is_some()
     }
@@ -939,6 +1011,29 @@ mod tests {
             Event::AskReopened,
             Event::InboxCompareOpened,
             Event::InboxAttachmentOpened { kind: "pdf" },
+            Event::OnboardingStarted {
+                trigger: "first",
+                profile: "ready",
+            },
+            Event::OnboardingStep {
+                step: "harness",
+                outcome: "done",
+                choice: Some("recommended"),
+            },
+            Event::OnboardingFinished {
+                skipped: 1,
+                seconds: "60-120",
+            },
+            Event::FirstReply {
+                seconds: "<60",
+                demo: true,
+            },
+            Event::DiscoverDone {
+                item: "terminal",
+                from: "tip",
+            },
+            Event::DiscoverDismissed { item: "voice" },
+            Event::DiscoverHidden,
         ];
         let names: std::collections::HashSet<_> = events.iter().map(Event::name).collect();
         assert_eq!(names.len(), events.len());
@@ -1038,6 +1133,45 @@ mod tests {
             Value::Object(Event::InboxAttachmentOpened { kind: "image" }.props()),
             json!({ "type": "image" })
         );
+        // The first launch's funnel (ESC-507): closed lists and brackets, never a name, a path or what was chosen.
+        assert_eq!(
+            Value::Object(
+                Event::OnboardingStep {
+                    step: "hookups",
+                    outcome: "skipped",
+                    choice: None
+                }
+                .props()
+            ),
+            json!({ "step": "hookups", "outcome": "skipped" })
+        );
+        assert_eq!(
+            Value::Object(
+                Event::FirstReply {
+                    seconds: ">300",
+                    demo: false
+                }
+                .props()
+            ),
+            json!({ "seconds": ">300", "demo": "no" })
+        );
+        assert_eq!(
+            Value::Object(
+                Event::OnboardingFinished {
+                    skipped: 0,
+                    seconds: "<60"
+                }
+                .props()
+            ),
+            json!({ "skipped": 0, "seconds": "<60" })
+        );
+        assert!(Event::DiscoverHidden.props().is_empty());
+        assert_eq!(seconds(0), "<60");
+        assert_eq!(seconds(59_999), "<60");
+        assert_eq!(seconds(60_000), "60-120");
+        assert_eq!(seconds(119_999), "60-120");
+        assert_eq!(seconds(120_000), "120-300");
+        assert_eq!(seconds(300_000), ">300");
     }
 
     #[test]
