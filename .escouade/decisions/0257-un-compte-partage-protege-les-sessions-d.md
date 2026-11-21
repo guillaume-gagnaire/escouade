@@ -1,9 +1,9 @@
 ---
-number: null
+number: 257
 id: "un-compte-partage-protege-les-sessions-d"
 title: "Un compte partagé protège les sessions du projet privé ; la réservation est une isolation de plus"
 date: "2026-11-20"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-556"
 pages: ["harness/comptes","projets/projets-prives"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/comptes","added":28,"removed":10},{"page":"projets/projets-prives","added":18,"removed":5}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -1,9 +1,9 @@
 ---
-number: null
+number: 240
 id: "l-ecran-de-la-boite-a-toi-une-vue-de-tou"
 title: "L'écran de la boîte « À toi » : une vue de tous les projets ouverte du rail, seulement serveur MCP allumé"
 date: "2026-11-17"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-510"
 pages: ["harness/boite-a-toi","fenetre/barre-des-projets","fenetre/raccourcis"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/boite-a-toi","added":35,"removed":9},{"page":"fenetre/barre-des-projets","added":10,"removed":3},{"page":"fenetre/raccourcis","added":12,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -1,9 +1,9 @@
 ---
-number: null
+number: 244
 id: "windows-l-installeur-d-une-mise-a-jour-a"
 title: "Windows : l'installeur d'une mise à jour attend la fin de l'app, met de côté les programmes en cours d'usage et relance l'app après un échec"
 date: "2026-11-18"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-533"
 pages: ["introduction/livraison"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"introduction/livraison","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

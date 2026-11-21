@@ -3,7 +3,7 @@ title: "Barre des projets"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","docs/INBOX.md (§ 6, § 10.1, § 15)","design/inbox-2-3/README.md (direction B)","docs/SERVER-UX.md (§ 4, § 5, § 6 direction B, § 11)","design/server-2-3 (captures b-*)"]
 tickets: ["ESC-158","ESC-72","ESC-167","ESC-168","ESC-504","ESC-510","ESC-537","ESC-539"]
-decisions: ["l-ecran-de-la-boite-a-toi-une-vue-de-tou",218]
+decisions: [240,218]
 compared: null
 ---
 

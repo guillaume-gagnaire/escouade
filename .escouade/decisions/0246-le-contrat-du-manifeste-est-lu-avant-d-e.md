@@ -1,9 +1,9 @@
 ---
-number: null
+number: 246
 id: "le-contrat-du-manifeste-est-lu-avant-d-e"
 title: "Le contrat du manifeste est lu avant d'être servi, et ce qui n'est pas servi coupe le plugin"
 date: "2026-11-18"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-525"
 pages: ["plugins/contrat-du-manifeste","plugins/vue-d-ensemble"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/contrat-du-manifeste","added":47,"removed":0},{"page":"plugins/vue-d-ensemble","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "Notifications"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md (chapitre 2, « Notifications, vue d'ensemble, serveur MCP »)","src-tauri/src/prnews.rs"]
 tickets: ["ESC-68","ESC-513","ESC-538"]
-decisions: ["la-boite-a-toi-montre-ce-qui-attend-aill"]
+decisions: [242]
 compared: null
 ---
 

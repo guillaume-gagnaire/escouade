@@ -1,9 +1,9 @@
 ---
-number: null
+number: 249
 id: "la-page-d-un-plugin-sert-ses-groupes-ses"
 title: "La page d'un plugin sert ses groupes, ses secrets sur plusieurs lignes et l'import d'un fichier, sans jamais garder le chemin"
 date: "2026-11-19"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-526"
 pages: ["plugins/contrat-du-manifeste"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/contrat-du-manifeste","added":19,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

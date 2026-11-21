@@ -3,7 +3,7 @@ title: "Livraison et mises à jour"
 subject: "Introduction"
 sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh","tests/e2e/fixture.ts","tests/e2e/update-guard.ts"]
 tickets: ["ESC-374","ESC-380","ESC-533","ESC-543"]
-decisions: [114,"windows-l-installeur-d-une-mise-a-jour-a","un-build-de-debug-ne-cherche-ne-telechar"]
+decisions: [114,244,251]
 compared: null
 ---
 

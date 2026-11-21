@@ -1,9 +1,9 @@
 ---
-number: null
+number: 243
 id: "un-temporaire-propre-a-chaque-ecriture-e"
 title: "Un temporaire propre à chaque écriture, et les sauvegardes de l'état sérialisées"
 date: "2026-11-18"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-535"
 pages: ["introduction/donnees-et-coupures"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"introduction/donnees-et-coupures","added":14,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -1,9 +1,9 @@
 ---
-number: null
+number: 253
 id: "la-limite-de-programmes-d-un-plugin-est"
 title: "La limite de programmes d'un plugin est celle qu'il déclare (limits.processes, 16 au plus), une permission dite au-delà de 4"
 date: "2026-11-19"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-529"
 pages: ["plugins/contrat-du-manifeste"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/contrat-du-manifeste","added":26,"removed":8}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

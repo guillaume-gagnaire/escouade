@@ -1,9 +1,9 @@
 ---
-number: null
+number: 252
 id: "un-hebergeur-ou-une-source-injoignable-s"
 title: "Un hébergeur ou une source injoignable se dit par -32503, dans chaque plugin livré"
 date: "2026-11-18"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-536"
 pages: ["git-fichiers/hebergeurs-de-code"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/hebergeurs-de-code","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

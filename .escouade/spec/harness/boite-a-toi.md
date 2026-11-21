@@ -3,7 +3,7 @@ title: "La boîte « À toi »"
 subject: "harness"
 sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 16 et § 18 pour le reversement)","design/inbox-2-3/README.md (direction B, captures b-)","docs/REMOTE.md (Le classement des commandes)"]
 tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552"]
-decisions: [210,204,"l-ecran-de-la-boite-a-toi-une-vue-de-tou","la-boite-a-toi-montre-ce-qui-attend-aill",222,227]
+decisions: [210,204,240,242,222,227]
 compared: null
 ---
 

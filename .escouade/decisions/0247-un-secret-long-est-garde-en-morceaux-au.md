@@ -1,9 +1,9 @@
 ---
-number: null
+number: 247
 id: "un-secret-long-est-garde-en-morceaux-au"
 title: "Un secret long est gardé en morceaux au trousseau, avec un en-tête et son empreinte"
 date: "2026-11-18"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-527"
 pages: ["plugins/vue-d-ensemble"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/vue-d-ensemble","added":11,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "Données locales et coupures"
 subject: "introduction"
 sources: ["Ticket ESC-469 (perte de state.json le 2026-11-15)","Ticket ESC-487 (l'écran des copies, après la reconstruction à la main du Kanban le 2026-11-15)","crates/escouade-plugin-cli/src/paths.rs","crates/escouade-model/src/backups.rs","crates/escouade-model/src/backup_view.rs","src-tauri/src/copies.rs","src-tauri/src/mcp/read.rs","src-tauri/src/conv.rs","src-tauri/src/core.rs","src/components/RecoveryBanner.svelte","src/components/settings/BackupsSection.svelte","website/content/docs/fr/data.md","website/content/docs/fr/troubleshooting.md","Ticket ESC-535 (app.log du poste de l'utilisateur, « cannot save state … os error 2 » à la sortie pour une mise à jour, 2026-11-17 et 2026-11-18)","src-tauri/src/save_tests.rs"]
 tickets: ["ESC-469","ESC-487","ESC-499","ESC-535"]
-decisions: [180,191,"un-temporaire-propre-a-chaque-ecriture-e"]
+decisions: [180,191,243]
 compared: null
 ---
 

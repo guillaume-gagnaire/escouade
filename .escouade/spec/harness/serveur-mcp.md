@@ -3,7 +3,7 @@ title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)","https://github.com/guillaume-gagnaire/escouade/pull/44"]
 tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-509","ESC-511","ESC-518","ESC-513","ESC-550"]
-decisions: [153,211,210,"la-boite-a-toi-montre-ce-qui-attend-aill"]
+decisions: [153,211,210,242]
 compared: null
 ---
 

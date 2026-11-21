@@ -1,9 +1,9 @@
 ---
-number: null
+number: 248
 id: "les-jokers-de-permissions-commands-sont"
 title: "Les jokers de permissions.commands sont servis : un mot entier d'une forme fermée, vérifié par l'hôte"
 date: "2026-11-19"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-528"
 pages: ["plugins/contrat-du-manifeste","plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/contrat-du-manifeste","added":34,"removed":6},{"page":"plugins/tous-les-plugins-en-wasm","added":3,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

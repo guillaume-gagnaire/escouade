@@ -1,9 +1,9 @@
 ---
-number: null
+number: 242
 id: "la-boite-a-toi-montre-ce-qui-attend-aill"
 title: "La boîte « À toi » montre ce qui attend ailleurs, et la prévient par un résumé"
 date: "2026-11-17"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-513"
 pages: ["harness/boite-a-toi","fenetre/notifications","harness/serveur-mcp"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/boite-a-toi","added":33,"removed":0},{"page":"fenetre/notifications","added":4,"removed":0},{"page":"harness/serveur-mcp","added":3,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-21T11:12:27+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
