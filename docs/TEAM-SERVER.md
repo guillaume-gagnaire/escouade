@@ -845,7 +845,7 @@ Le socle s'appuie sur la fondation du mode serveur (`docs/REMOTE.md`) pour le tr
 | **Essais** | | | |
 | TS-0a | Une maquette de la cryptographie dans une crate à part : journal signé, enveloppes HPKE, invitation par MAC, fourche détectée ; avec des vecteurs de test. **Fait (ESC-453), en MLS (C9-B)** : `crates/escouade-team-crypto`, son `README.md` dit ce que fait MLS, ce qui reste à nous et les points pour l'audit | — | 4 j |
 | TS-0b | La lecture des stratégies du poste sur les trois systèmes : registre `Policies`, `CFPreferencesAppValueIsForced` avec un profil installé, `/etc`. **Fait (ESC-454)** : `crates/escouade-policy`, sans profil ni GPO réels ; son `README.md` dit ce qui a été vérifié sur chaque système et ce qui reste aux essais de TS-12 | — | 2 j |
-| TS-0c | La reprise d'une session de harness copiée sur un autre poste (Claude Code, Codex), chemins réécrits | — | 2 j |
+| TS-0c | La reprise d'une session de harness copiée sur un autre poste (Claude Code, Codex), chemins réécrits. **Fait (ESC-581)** : `docs/TEAM-SESSION-COPY.md` ; la copie réécrite se reprend avec Claude Code, et Codex retrouve la sienne, mais sa réponse n'a pas pu être obtenue (modèles refusés) ; recommandation : C16-B pour Claude Code, la passation en repli | — | 2 j |
 | **Socle** | | | |
 | TS-1 | `escouade-team-server` : axum, SQLite et PostgreSQL, fichiers sur disque et S3, WebSocket, poignée de main des versions, authentification par défi signé, Docker et systemd, `init`, `/healthz` | TS-0a | 6 j |
 | TS-2 | La crate `escouade-team` : clés d'appareil au trousseau, journal signé des membres (vérification, fourche, retour en arrière), clés d'équipe et de projet par époque, rotation, révocation | TS-0a | 8 j |
