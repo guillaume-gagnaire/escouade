@@ -44,6 +44,8 @@ mod codex_tests;
 #[cfg(test)]
 mod codex_tui_tests;
 mod commands;
+#[cfg(test)]
+mod compat22_tests;
 mod conv;
 mod convsearch;
 mod copies;

@@ -119,6 +119,14 @@ export default {
   update: {
     /** A beta's version, wherever the app says it (ESC-374). */
     betaVersion: '{version} (bêta)',
+    /** The notice of a beta in its window, ready or installed (ESC-586): what it is, and how to go back. */
+    beta: {
+      what: 'C’est une version bêta : une version d’essai, pas la version stable. Elle peut avoir des défauts que la version stable n’aura plus.',
+      back: 'Revenir à la {stable} : décoche « Recevoir les versions bêta » (Réglages › Général), puis réinstalle la dernière {stable} depuis la page des versions. Tes projets, tes tickets et tes réglages restent.',
+      backStable:
+        'Revenir à la version stable : décoche « Recevoir les versions bêta » (Réglages › Général), puis réinstalle la dernière version stable depuis la page des versions. Tes projets, tes tickets et tes réglages restent.',
+      releases: 'Page des versions',
+    },
     ready: 'Escouade {version} est prête',
     notes: 'Nouveautés d’Escouade {version}',
     saveFirst: {

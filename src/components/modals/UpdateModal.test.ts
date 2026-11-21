@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { forgetDraft, setDraft } from '../../lib/drafts';
 import { buffers } from '../../lib/editor/buffers.svelte';
 import { setLang } from '../../lib/i18n';
@@ -8,6 +8,9 @@ import { readPref } from '../../lib/prefs';
 import { app } from '../../lib/state.svelte';
 import { agent, fakeBackend, resetApp } from '../../test/ipc';
 import UpdateModal from './UpdateModal.svelte';
+
+const opened: string[] = [];
+vi.mock('../../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)) }));
 
 const NOTES = '### Ajouts\n\n- Les mises à jour s’installent **sans fenêtre**.';
 const files = {
@@ -192,5 +195,39 @@ describe('UpdateModal in English', () => {
     app.modal = { kind: 'notes', version: '1.7.0', notes: NOTES };
     render(UpdateModal, { version: '1.7.0', notes: NOTES, installed: true });
     expect(screen.getByRole('dialog', { name: 'What’s new in Escouade 1.7.0' })).toBeInTheDocument();
+  });
+});
+
+// ESC-586: a beta is never shown as the stable version, ready or installed, and says how to go back.
+describe('UpdateModal of a beta', () => {
+  beforeEach(() => {
+    resetApp();
+    setLang('fr');
+    opened.length = 0;
+    app.modal = { kind: 'update' };
+  });
+
+  it('says a beta is one and how to go back to the 2.2, and opens the releases page', async () => {
+    fakeBackend();
+    render(UpdateModal, { version: '2.3.0-beta.1', notes: NOTES, installed: true });
+    expect(screen.getByRole('dialog', { name: 'Nouveautés d’Escouade 2.3.0-beta.1 (bêta)' })).toBeInTheDocument();
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent('C’est une version bêta : une version d’essai, pas la version stable.');
+    expect(note).toHaveTextContent(
+      'Revenir à la 2.2 : décoche « Recevoir les versions bêta » (Réglages › Général), puis réinstalle la dernière 2.2',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Page des versions' }));
+    expect(opened).toEqual(['https://github.com/guillaume-gagnaire/escouade/releases/latest']);
+  });
+
+  it('says it when the beta is ready too, in English, and never for a stable version', () => {
+    fakeBackend();
+    setLang('en');
+    const { unmount } = render(UpdateModal, { version: '2.3.0-beta.2', notes: NOTES });
+    expect(screen.getByRole('note')).toHaveTextContent('Going back to 2.2: untick “Receive beta versions” (Settings › General)');
+    unmount();
+    render(UpdateModal, { version: '2.3.0', notes: NOTES });
+    expect(screen.queryByRole('note')).toBeNull();
+    setLang('fr');
   });
 });

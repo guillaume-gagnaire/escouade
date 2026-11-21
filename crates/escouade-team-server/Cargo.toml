@@ -1,13 +1,13 @@
 [package]
 name = "escouade-team-server"
-version = "0.1.0"
+version = "2.2.5"
 description = "Escouade's team server (TS-1): blind, it keeps only encrypted bytes, orders the team's and the projects' streams, stores encrypted files and broadcasts them live; devices sign in by a signed challenge"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.91"
 workspace = "../../src-tauri"
-# Published with the 2.3 (binaries and image), not before.
+# Not on crates.io: its archives and image come with the releases of the app, at its version (scripts/version.mjs).
 publish = false
 
 # The fuzzing targets' bodies (`fuzzing`), for the package `fuzz/` at the root. Never in the app nor the server shipped.

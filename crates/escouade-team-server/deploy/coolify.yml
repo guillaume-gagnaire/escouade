@@ -1,0 +1,40 @@
+# The team server on Coolify (https://escouade.dev/docs/team/install#avec-coolify): a « Docker Compose » resource, this
+# file pasted as it is (or the repository and the path crates/escouade-team-server/deploy/coolify.yml).
+#
+# Coolify makes a domain for the port 8443 (SERVICE_FQDN_TEAM_8443, to set to your own name in the resource's
+# « Domains ») and routes it through its proxy (Traefik), which gets the certificate by Let's Encrypt and passes HTTPS
+# and the WebSocket of /v1/live: the members reach the server at https://<that domain>. Nothing else is published.
+#
+# Then, in Coolify, the resource › Terminal (the team container): escouade-team-server init — it prints, once, the token
+# that creates the team.
+#
+# ESCOUADE_TEAM_TAG: `latest` (the last stable version) by default; `beta` (the last beta) or a version
+# (`2.3.0-beta.1`) to try a beta. Back up the `team-data` volume: it holds only encrypted bytes.
+
+services:
+  team:
+    image: ghcr.io/guillaume-gagnaire/escouade/escouade-team-server:${ESCOUADE_TEAM_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # Coolify's domain for the port 8443, behind Traefik in TLS.
+      - SERVICE_FQDN_TEAM_8443
+      - ESCOUADE_TEAM_DATA=/data
+      - ESCOUADE_TEAM_LISTEN=0.0.0.0:8443
+      # Traefik is the only peer: the client's address is the last hop of X-Forwarded-For (the rate limits count it).
+      - ESCOUADE_TEAM_TRUST_PROXY=1
+    volumes:
+      - team-data:/data
+    read_only: true
+    # SQLite's temporary files, in memory.
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    mem_limit: 512m
+    pids_limit: 256
+
+volumes:
+  team-data:

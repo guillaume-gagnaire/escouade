@@ -19,6 +19,23 @@ describe('discord messages', () => {
     ]);
   });
 
+  // ESC-586: a beta is never announced as the stable version.
+  it('says a beta is one, after its version and before its notes, and how to go back to the stable version', () => {
+    const fr = discordMessages('### Ajouts\n\n- Le serveur d’équipe.', 'v2.3.0-beta.1');
+    expect(fr[0]).toMatch(
+      /^## Escouade 2\.3\.0-beta\.1 \(bêta\)\n-# \[Release sur GitHub\]\(<https:\/\/github\.com\/guillaume-gagnaire\/escouade\/releases\/tag\/v2\.3\.0-beta\.1>\)\n\n> \*\*Version bêta\.\*\*/,
+    );
+    expect(fr[0]).toContain('**Revenir à la 2.2**');
+    expect(fr[0]).toContain('« Recevoir les versions bêta »');
+    expect(fr[0].indexOf('Revenir à la 2.2')).toBeLessThan(fr[0].indexOf('### Ajouts'));
+    const en = discordMessages('### Added\n\n- The team server.', 'v2.3.0-beta.1', 'en');
+    expect(en[0]).toMatch(/^## Escouade 2\.3\.0-beta\.1 \(beta\)\n/);
+    expect(en[0]).toContain('**Going back to 2.2**');
+    expect(en[0]).toContain('“Receive beta versions”');
+    // A stable version says neither.
+    expect(discordMessages('- x', 'v2.3.0').join('\n')).not.toMatch(/bêta|Revenir/);
+  });
+
   it('splits long notes between lines, every message within Discord’s limit, nothing lost', () => {
     const items = Array.from({ length: 60 }, (_, i) => `- Entrée ${i} : ${'mot '.repeat(20).trim()}.`);
     const notes = `### Ajouts\n\n${items.join('\n')}`;

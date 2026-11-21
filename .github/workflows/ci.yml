@@ -714,7 +714,7 @@ jobs:
   # escouade-server (ESC-514, docs/CRATES.md § 14, docs/REMOTE.md « Le mode serveur »): the core without the desktop, for
   # Linux x64 and arm64, built where neither WebKitGTK nor GTK is installed; no library of the desktop linked
   # (scripts/server-libs.sh); started in a bare Debian container, no display: served on 127.0.0.1, a pairing code, a
-  # clean stop at SIGTERM (scripts/server-trial.sh). No release yet (its signed update is another ticket).
+  # clean stop at SIGTERM (scripts/server-trial.sh). The team server too (ESC-586), as the Release publishes it.
   server-linux:
     name: Server (Linux ${{ matrix.arch }})
     needs: escouade-js
@@ -727,7 +727,7 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -777,6 +777,22 @@ jobs:
         run: |
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::Retries=3 minisign
           sudo sh scripts/server-install-test.sh "$RUNNER_TEMP/escouade-server"
+
+      # The team server as the Release publishes it (ESC-586): tried in a bare Debian container, archived, its image made
+      # from the archive (crates/escouade-team-server/Dockerfile, PROGRAM=archive), then tried as a user runs it.
+      - name: Build escouade-team-server
+        working-directory: src-tauri
+        run: cargo build --locked -p escouade-team-server
+
+      - name: The team server in a bare Debian container, then its image from its archive
+        run: |
+          docker run --rm -v "$PWD/src-tauri/target/debug:/srv/bin:ro" -v "$PWD/scripts:/srv/scripts:ro" \
+            debian:bookworm-slim bash /srv/scripts/team-server-trial.sh /srv/bin/escouade-team-server
+          strip -o "$RUNNER_TEMP/escouade-team-server" src-tauri/target/debug/escouade-team-server
+          sh scripts/server-package.sh "$RUNNER_TEMP/escouade-team-server" 0.0.0-ci ${{ matrix.arch }} "$RUNNER_TEMP/team-dist"
+          docker build -f crates/escouade-team-server/Dockerfile --build-arg PROGRAM=archive --build-arg VERSION=0.0.0-ci \
+            -t escouade-team-server:ci "$RUNNER_TEMP/team-dist"
+          sh scripts/team-server-image-test.sh escouade-team-server:ci
 
   # The Rust tests built once, as on Windows and macOS: compiling them took 4 min and running them 9 to 13 on one runner
   # of 4 vCPUs (2026-11-10).

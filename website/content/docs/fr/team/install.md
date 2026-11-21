@@ -1,9 +1,9 @@
 # Installer le serveur d’équipe
 
-Pour qui héberge le serveur d’une équipe : le construire, le lancer avec Docker ou systemd, créer l’équipe, choisir la base et le stockage, le mettre derrière TLS, le sauvegarder, le mettre à jour et le surveiller.
+Pour qui héberge le serveur d’une équipe : l’installer (image, Coolify, binaire signé ou systemd), créer l’équipe, choisir la base et le stockage, le mettre derrière TLS, le sauvegarder, le mettre à jour et le surveiller.
 
 > [!WARNING]
-> Le serveur d’équipe est un aperçu de la 2.3. Rien n’est encore publié : ni binaire, ni image. On le construit depuis le dépôt d’Escouade. Les binaires signés et l’image publiée sont à venir.
+> Le serveur d’équipe arrive avec la 2.3, d’abord en bêta. Chaque version d’Escouade publie ses binaires signés et son image, à son numéro : pendant la bêta, prends l’étiquette `beta` (ou `2.3.0-beta.1`), car `latest` ne désigne que la dernière version stable. Les membres de l’équipe ont besoin de la 2.3 (bêta comprise) : la 2.2 ne connaît pas les équipes.
 
 ## Ce que fait le serveur
 
@@ -15,18 +15,39 @@ C’est un programme à part du mode serveur d’Escouade, qui lance des agents 
 
 - Une machine Linux joignable de tous les membres, et un nom de domaine qui pointe vers elle (`team.exemple.fr`).
 - Pour le compose d’exemple : Docker avec Compose, et les ports 80 et 443 ouverts (Caddy obtient le certificat).
-- Pour le binaire : la chaîne Rust du dépôt (`src-tauri/rust-toolchain.toml`).
+- Pour le binaire : Linux x64 ou arm64 (glibc 2.35 ou plus récent : Debian 12, Ubuntu 22.04…). Pour le construire toi-même : la chaîne Rust du dépôt (`src-tauri/rust-toolchain.toml`).
 - En option, une base PostgreSQL et un stockage compatible S3 (MinIO, Garage, AWS).
 - Côté membres : Escouade joint un serveur en `https://` ; en `http://` seulement sur la machine même (`127.0.0.1`, `localhost`), pour un essai.
 
-## Construire le binaire
+## Ce qui est publié
 
-Depuis le dépôt d’Escouade :
+Chaque version d’Escouade, sur [sa page de versions](https://github.com/guillaume-gagnaire/escouade/releases), publie le serveur d’équipe pour Linux x64 et arm64 :
+
+| Fichier | Ce que c’est |
+|---|---|
+| `escouade-team-server-<version>-linux-x64.tar.gz`, `…-linux-arm64.tar.gz` | Le programme, sa licence et les exemples de déploiement (`deploy/` : le service systemd, le compose avec Caddy, le compose de Coolify). |
+| `….tar.gz.sha256` | Son SHA-256. |
+| `….tar.gz.sig` | Sa signature, par la clé des mises à jour d’Escouade (minisign). |
+| `ghcr.io/guillaume-gagnaire/escouade/escouade-team-server` | L’image (x64 et arm64), étiquetée de la version, de `latest` pour une version stable seulement, de `beta` pour une bêta. |
+
+Chaque archive et l’image portent une attestation de provenance (GitHub, Sigstore) : `gh attestation verify <fichier> --repo guillaume-gagnaire/escouade`, ou `gh attestation verify oci://ghcr.io/guillaume-gagnaire/escouade/escouade-team-server:<version> --repo guillaume-gagnaire/escouade` pour l’image.
+
+Avant l’envoi, le Release essaie chaque binaire dans un conteneur Debian nu : sa version, `init`, `/healthz` sur `127.0.0.1`, un client trop ancien refusé, un arrêt propre.
+
+## Le binaire
+
+Avec l’archive de ta machine (ici x64) :
 
 ```sh
-cd src-tauri && cargo build --release -p escouade-team-server
-# le binaire : src-tauri/target/release/escouade-team-server
+v=2.3.0-beta.1
+curl -fLO https://github.com/guillaume-gagnaire/escouade/releases/download/v$v/escouade-team-server-$v-linux-x64.tar.gz
+curl -fLO https://github.com/guillaume-gagnaire/escouade/releases/download/v$v/escouade-team-server-$v-linux-x64.tar.gz.sha256
+sha256sum -c escouade-team-server-$v-linux-x64.tar.gz.sha256
+tar -xzf escouade-team-server-$v-linux-x64.tar.gz
+# le programme : escouade-team-server/escouade-team-server, les exemples : escouade-team-server/deploy/
 ```
+
+Pour le construire depuis le dépôt d’Escouade : `cd src-tauri && cargo build --release -p escouade-team-server` (le binaire : `src-tauri/target/release/escouade-team-server`).
 
 `escouade-team-server --help`, ou le programme lancé sans argument, liste les commandes ; `escouade-team-server init --help` (de même `serve --help`, `recovery-token --help`, ou `help serve`) donne les options d’une commande, leurs variables d’environnement et leurs valeurs par défaut, sans rien créer ni écouter. `--version` donne la version. Une option inconnue, ou qui n’est pas celle de la commande, est refusée (code de sortie 2).
 
@@ -66,19 +87,33 @@ Chaque option a sa variable d’environnement ; l’option passe devant la varia
 
 ## Avec Docker et Caddy
 
-Le dépôt donne une image (`crates/escouade-team-server/Dockerfile`, construite depuis la racine du dépôt) et un compose d’exemple dans `crates/escouade-team-server/deploy/` : le serveur, et Caddy devant lui, qui obtient et renouvelle le certificat. Le serveur n’est publié que sur le réseau du compose : seul Caddy l’atteint, WebSocket compris.
+Le compose d’exemple (`deploy/docker-compose.yml` de l’archive, `crates/escouade-team-server/deploy/` dans le dépôt, avec son `Caddyfile`) lance l’image publiée et Caddy devant elle, qui obtient et renouvelle le certificat. Le serveur n’est publié que sur le réseau du compose : seul Caddy l’atteint, WebSocket compris.
 
 ```sh
-cd crates/escouade-team-server/deploy
+cd escouade-team-server/deploy
 export ESCOUADE_TEAM_DOMAIN=team.exemple.fr   # le nom que joignent les membres, pointé vers cette machine
-docker compose build
+export ESCOUADE_TEAM_TAG=beta                 # pendant la bêta ; latest (par défaut) une fois la 2.3.0 sortie
 docker compose run --rm team-server init      # affiche le jeton qui crée l’équipe, une fois
 docker compose up -d
 ```
 
+- `ESCOUADE_TEAM_TAG` choisit l’image : `latest` par défaut (la dernière version stable), `beta` (la dernière bêta) ou une version (`2.3.0-beta.1`).
+- Pour construire l’image depuis les sources à la place, le compose a les lignes `build:` en commentaire.
+
 - Les données sont dans le volume `team-data` (la base SQLite et les fichiers).
 - Les métriques écoutent sur le port 9464 du réseau du compose, sans être publiées.
 - Pour PostgreSQL ou S3, le compose a les lignes en commentaire : la variable `ESCOUADE_TEAM_DATABASE_URL` et le service `postgres`, les variables `ESCOUADE_TEAM_S3_*`.
+
+## Avec Coolify
+
+Le compose de Coolify (`deploy/coolify.yml` de l’archive, `crates/escouade-team-server/deploy/coolify.yml` dans le dépôt) se colle tel quel dans une ressource « Docker Compose », ou se prend du dépôt par son chemin.
+
+1. Crée la ressource, colle le fichier, et mets ton nom de domaine dans « Domains » du service `team` (Coolify le crée à partir de `SERVICE_FQDN_TEAM_8443`). Son proxy (Traefik) obtient le certificat par Let’s Encrypt et passe HTTPS et le WebSocket au serveur.
+2. Pendant la bêta, mets la variable `ESCOUADE_TEAM_TAG` à `beta` dans l’onglet des variables.
+3. Déploie, puis, dans la ressource › Terminal (le conteneur `team`), lance `escouade-team-server init` : il affiche, une fois, le jeton qui crée l’équipe.
+4. Les membres joignent `https://<ton domaine>`.
+
+Le conteneur tourne en lecture seule, sans capacité, sous son propre utilisateur ; seul `/data` (le volume `team-data`) est écrit. `ESCOUADE_TEAM_TRUST_PROXY=1` y est mis : Traefik est le seul à joindre le serveur, aucun port n’est publié.
 
 ## Avec systemd
 
@@ -166,8 +201,8 @@ Avec Docker : `docker compose run --rm team-server recovery-token --team <identi
 ## Mettre à jour
 
 1. Sauvegarde la base et les fichiers.
-2. Construis la nouvelle version (`cargo build --release -p escouade-team-server`, ou `docker compose build`).
-3. Remplace le binaire et redémarre le service (`sudo systemctl restart escouade-team-server`, ou `docker compose up -d`).
+2. Prends la nouvelle version : `docker compose pull` (l’étiquette de `ESCOUADE_TEAM_TAG`), « Redeploy » dans Coolify, ou l’archive de la nouvelle version (vérifie son SHA-256).
+3. Redémarre : `docker compose up -d`, ou remplace le binaire et `sudo systemctl restart escouade-team-server`.
 
 Les sessions et les connexions en direct sont en mémoire : au redémarrage, les apps des membres se reconnectent et signent une nouvelle session d’elles-mêmes.
 
@@ -186,7 +221,6 @@ Mets donc à jour le serveur d’abord : il garde les apps d’une version en ar
 
 ## Ce qui n’est pas encore là
 
-- Les binaires signés et l’image publiée (à venir).
 - Le lien de création de l’équipe affiché par `init` : aujourd’hui, le jeton se colle dans Escouade (à venir).
 - Les rôles propriétaire et lecteur sur le serveur, qui ne connaît que administrateur et membre (à venir).
 - Les droits par projet sur le serveur : il sert un projet à tout appareil de l’équipe, et seul le chiffrement protège un projet gardé à quelques membres (à venir).

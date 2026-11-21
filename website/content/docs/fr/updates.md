@@ -18,7 +18,16 @@ L’option « Recevoir les versions bêta » (Réglages › Général, décoch
 - **Décochée**, Escouade ignore toute bêta et ne lit que `latest.json`, qui n’en contient jamais. Si tu es déjà sur une bêta, tu y restes jusqu’à la version stable qui la suit (2.2.0 après 2.2.0-beta.3) ; une version plus ancienne, comme une 2.1.5, ne la remplace pas.
 - **Cochée**, Escouade lit d’abord `beta.json`, dans la dernière release stable, qui donne la version la plus récente, bêta ou stable ; s’il manque, elle lit `latest.json`. La cocher lance aussitôt une recherche, et le réglage s’enregistre tout de suite, sans « Enregistrer ».
 
-Une bêta se reconnaît partout où Escouade dit une version : « Escouade 2.2.0-beta.1 (bêta) » dans Réglages › Général et en bas de la barre des réglages, « Mise à jour 2.2.0-beta.1 (bêta)… » dans la barre d’état. Ses notes sont dans la fenêtre de la mise à jour comme pour une autre version ; elle n’est pas annoncée sur Discord.
+Une bêta se reconnaît partout où Escouade dit une version : « Escouade 2.2.0-beta.1 (bêta) » dans Réglages › Général et en bas de la barre des réglages, « Mise à jour 2.2.0-beta.1 (bêta)… » dans la barre d’état. Ses notes sont dans la fenêtre de la mise à jour comme pour une autre version, après un encadré qui dit que c’est une bêta et comment revenir à la version stable. Elle est annoncée sur Discord et sur GitHub comme une bêta : « (bêta) » après sa version, puis le même encadré, jamais comme la version stable.
+
+### Revenir à la version stable
+
+Une bêta garde tes données lisibles par la version stable qui la précède : la 2.2 relit ce que la 2.3 bêta a écrit (projets, tickets, agents, réglages, `.escouade.yml`, tickets partagés, spec, décisions, mémoire, boîte « À toi »).
+
+1. Décoche « Recevoir les versions bêta » (Réglages › Général). Seul, ce geste te garde sur la bêta jusqu’à la version stable qui la suit (la 2.3.0 après la 2.3.0-beta.3).
+2. Pour revenir tout de suite, réinstalle la dernière version stable depuis [la page des versions](https://github.com/guillaume-gagnaire/escouade/releases/latest), par-dessus la bêta. Décoche d’abord : sinon la version stable te reproposerait aussitôt la bêta.
+
+Ce qui n’existe que dans la bêta ne passe pas : la 2.2 ne connaît ni les équipes, ni les tâches planifiées, ni les serveurs de langage. Un projet passé sur un serveur d’équipe redevient pour elle un projet de la machine : ses tickets sont ceux de son dernier état sur ce poste, et ce que l’équipe fait ensuite n’y arrive plus.
 
 ## Installer une mise à jour
 

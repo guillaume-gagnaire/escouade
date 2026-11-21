@@ -6,6 +6,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { betaNotice, betaWord, isBeta } from './beta-notes.mjs';
 import { CHANGELOGS, FALLBACKS, changelogText, langOf, releaseNotes } from './changelog.mjs';
 
 /** Discord's limit for the content of one message. */
@@ -16,12 +17,19 @@ const RELEASES = 'https://github.com/guillaume-gagnaire/escouade/releases/tag';
 /** The words of the link to the release, in each channel's language. */
 const RELEASE_LINK = { fr: 'Release sur GitHub', en: 'Release on GitHub' };
 
-/** The notes of `tag` as Discord messages: the version and a link to its release, then the notes, cut between lines. */
+/**
+ * The notes of `tag` as Discord messages: the version and a link to its release, then the notes, cut between lines. A
+ * beta says so after its version and, before its notes, what it is and how to go back to the stable version
+ * (scripts/beta-notes.mjs, ESC-586): it is never announced as the stable one.
+ */
 export function discordMessages(notes, tag, lang = 'fr') {
   const version = String(tag).replace(/^v/, '');
-  const head = `## Escouade ${version}\n-# [${RELEASE_LINK[lang]}](<${RELEASES}/v${version}>)`;
+  const shown = isBeta(tag) ? `${version} (${betaWord(lang)})` : version;
+  const head = `## Escouade ${shown}\n-# [${RELEASE_LINK[lang]}](<${RELEASES}/v${version}>)`;
+  const notice = betaNotice(tag, lang);
+  const body = notice ? `${notice}\n\n${notes}` : notes;
   return pack(
-    `${head}\n\n${notes}`.split('\n').flatMap((line) => cutLine(line, LIMIT)),
+    `${head}\n\n${body}`.split('\n').flatMap((line) => cutLine(line, LIMIT)),
     LIMIT,
   );
 }

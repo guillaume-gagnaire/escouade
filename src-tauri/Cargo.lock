@@ -2527,7 +2527,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-team-server"
-version = "0.1.0"
+version = "2.2.5"
 dependencies = [
  "async-trait",
  "axum",

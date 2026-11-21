@@ -6,6 +6,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: every version publishes it, signed archives for Linux x64 and arm64 and a Docker image, with a compose file for Caddy and a Coolify recipe; a beta takes the “beta” tag, never “latest”.
+- A beta says it is one everywhere: on GitHub, on Discord and in the “What’s new” window, with how to go back to the stable version. Going back to 2.2 keeps your projects, tickets and settings.
 - An agent that moves to another account past the threshold now waits for the turn Claude Code starts on a background task that just ended: that turn is no longer lost. The “to discover” dot on the Help tile has its color back, and a Discover bubble no longer shows over an open window, whose Escape it took. “Delete agent” no longer calls the worktree unknown for good when git is slow: its answer replaces the unknown state as soon as it comes. The Git panel keeps up with a repository that changes all the time: the history no longer stays on “Loading…”, and a deleted file leaves the list.
 - A feature you turned off that would help you is suggested at the right moment, in a small window at the bottom right: what Escouade noticed, what it would do, and “Turn on”, “Not now” or “Don’t suggest again”. One at a time, one a day at most, never while you type; nothing Escouade notices leaves your machine.
 - “Your turn” box: a request still due no longer disappears when its agent’s ticket is approved, or the agent is archived or deleted. It goes to the project’s squad lead, who gets your answer; with no lead, it stays until there is one, and the box quietly says it changed hands.

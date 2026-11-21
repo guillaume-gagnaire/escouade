@@ -106,6 +106,22 @@ export function isBeta(version: string): boolean {
   return /^\d+\.\d+\.\d+-/.test(version);
 }
 
+/**
+ * The stable line a beta goes back to (ESC-586, as scripts/beta-notes.mjs has it): `2.2` for a beta of 2.3.0, `2.3`
+ * for one of 2.3.4; null when it cannot be told (a beta of 3.0.0).
+ */
+export function stableBefore(version: string): string | null {
+  const m = version.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return null;
+  const [major, minor, patch] = m.slice(1, 4).map(Number);
+  if (patch > 0) return `${major}.${minor}`;
+  if (minor > 0) return `${major}.${minor - 1}`;
+  return null;
+}
+
+/** Where the stable versions are downloaded: a beta's way back. */
+export const RELEASES_PAGE = 'https://github.com/guillaume-gagnaire/escouade/releases/latest';
+
 /** A version as the app says it: « (bêta) » after a beta's, the app's own and an update's alike. */
 export function shownVersion(version: string): string {
   return isBeta(version) ? t('shell.update.betaVersion', { version }) : version;

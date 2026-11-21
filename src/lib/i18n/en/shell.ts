@@ -108,6 +108,13 @@ export default defineZone('shell', {
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {
     betaVersion: '{version} (beta)',
+    beta: {
+      what: 'This is a beta version: a trial version, not the stable one. It may have flaws the stable version will not.',
+      back: 'Going back to {stable}: untick “Receive beta versions” (Settings › General), then install the latest {stable} again from the releases page. Your projects, tickets and settings stay.',
+      backStable:
+        'Going back to the stable version: untick “Receive beta versions” (Settings › General), then install the latest stable version again from the releases page. Your projects, tickets and settings stay.',
+      releases: 'Releases page',
+    },
     ready: 'Escouade {version} is ready',
     notes: 'What’s new in Escouade {version}',
     saveFirst: {

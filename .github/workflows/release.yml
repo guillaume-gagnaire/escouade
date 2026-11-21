@@ -3,7 +3,8 @@ name: Release
 # A tag `vX.Y.Z` (pushed, or created with a release on GitHub's page) publishes a release: NSIS
 # installer (Windows), universal app and disk image (macOS), AppImage and .deb (Linux), signed
 # updater artifacts and the latest.json of the in-app updater, which holds the three systems;
-# escouade-server for Linux x64 and arm64 (signed archives, install.sh) and its image on ghcr.io. The app gets the tag's version.
+# escouade-server and escouade-team-server for Linux x64 and arm64 (signed archives; install.sh for the first) and their
+# images on ghcr.io (`latest` for a stable version alone). The app and the servers get the tag's version.
 # The release is a draft while the three builds upload to it (~30 min, each one rewriting
 # latest.json), and the last job publishes it once latest.json and every file it names are in:
 # the in-app updater reads the latest release, so it never meets a half-built one. A failed build
@@ -61,10 +62,17 @@ jobs:
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=true -F prerelease=$prerelease > /dev/null
           else
             flags=()
-            [ "$prerelease" = true ] && flags+=(--prerelease)
-            # The version's section of CHANGELOG.en.md, in English (a sentence pointing at the
-            # commits without one; a CI test keeps every version in it, scripts/changelog.test.ts).
-            node scripts/changelog.mjs "$TAG" --lang en > "$RUNNER_TEMP/notes.md"
+            title="Escouade $TAG"
+            [ "$prerelease" = true ] && flags+=(--prerelease) && title="Escouade $TAG (beta)"
+            # A beta says so first, and how to go back to the stable version (scripts/beta-notes.mjs, ESC-586); then
+            # the version's section of CHANGELOG.en.md, in English (a sentence pointing at the commits without one; a
+            # CI test keeps every version in it, scripts/changelog.test.ts).
+            : > "$RUNNER_TEMP/notes.md"
+            if [ "$prerelease" = true ]; then
+              node scripts/beta-notes.mjs "$TAG" --lang en > "$RUNNER_TEMP/notes.md"
+              echo >> "$RUNNER_TEMP/notes.md"
+            fi
+            node scripts/changelog.mjs "$TAG" --lang en >> "$RUNNER_TEMP/notes.md"
             # How to check the binaries (the attest job signs a provenance attestation for each, once published).
             {
               echo
@@ -76,7 +84,7 @@ jobs:
               echo "gh attestation verify <downloaded file> --repo $GITHUB_REPOSITORY"
               echo '```'
             } >> "$RUNNER_TEMP/notes.md"
-            gh release create "$TAG" --verify-tag --draft --title "Escouade $TAG" \
+            gh release create "$TAG" --verify-tag --draft --title "$title" \
               --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
             # The list may take a moment to show the new draft.
             for attempt in 1 2 3 4 5; do
@@ -349,8 +357,11 @@ jobs:
   # it), checked at once, then the image of the architecture, pushed by its digest alone: no tag points at it until the
   # release is published (`server-image`). The archives, their SHA-256 and signatures and install.sh go up to the draft;
   # the attest job attests them with the rest.
+  # The two servers of an architecture on its runner (ESC-515, ESC-586): escouade-server (Escouade's core without a
+  # window) and escouade-team-server (the team server, blind). Each one is built, tried in a bare Debian container,
+  # archived, signed and its image pushed by digest by the same script (scripts/server-release.sh).
   server:
-    name: Server (Linux ${{ matrix.arch }})
+    name: Servers (Linux ${{ matrix.arch }})
     needs: [create, escouade-js]
     if: github.repository == 'guillaume-gagnaire/escouade'
     strategy:
@@ -407,21 +418,40 @@ jobs:
           docker run --rm -v "$PWD/src-tauri/target/release:/srv/bin:ro" -v "$PWD/scripts:/srv/scripts:ro" \
             debian:trixie-slim bash /srv/scripts/server-trial.sh /srv/bin/escouade-server
 
+      - name: Build escouade-team-server
+        working-directory: src-tauri
+        env:
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
+        run: cargo build --release --locked -p escouade-team-server
+
+      # Its version the tag's, a base and a token by init, /healthz on 127.0.0.1, an old client refused, a clean stop.
+      - name: The team server in a bare Debian container
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          docker run --rm -v "$PWD/src-tauri/target/release:/srv/bin:ro" -v "$PWD/scripts:/srv/scripts:ro" \
+            debian:bookworm-slim bash /srv/scripts/team-server-trial.sh /srv/bin/escouade-team-server "${TAG#v}"
+
       - name: Log in to the GitHub Container Registry
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-      # The signing key only here, as in the app's build step.
-      - name: Archive, signature and image of the architecture
+      # The signing key only here, as in the app's build step. Each server's image is `ghcr.io/<repository>/<program>`.
+      - name: Archives, signatures and images of the architecture
         env:
           TAG: ${{ github.ref_name }}
           ARCH: ${{ matrix.arch }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          IMAGE: ghcr.io/${{ github.repository }}/escouade-server
+          REGISTRY: ghcr.io/${{ github.repository }}
           PUSH: '1'
-        run: sh scripts/server-release.sh src-tauri/target/release/escouade-server "${TAG#v}" "$ARCH" "$RUNNER_TEMP/seed" dist
+        run: |
+          IMAGE=$REGISTRY/escouade-server sh scripts/server-release.sh src-tauri/target/release/escouade-server \
+            "${TAG#v}" "$ARCH" "$RUNNER_TEMP/seed" dist
+          IMAGE=$REGISTRY/escouade-team-server sh scripts/server-release.sh src-tauri/target/release/escouade-team-server \
+            "${TAG#v}" "$ARCH" "" dist
 
       # By the release's id: a draft is not found by its tag. A file of the same name (a job started again) is replaced.
       - name: Upload to the draft
@@ -440,11 +470,11 @@ jobs:
             echo "uploaded $name"
           done
 
-      - name: Keep the image's digest for the last job
+      - name: Keep the images' digests for the last job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: server-image-${{ matrix.arch }}
-          path: dist/image-${{ matrix.arch }}.digest
+          path: dist/*-${{ matrix.arch }}.digest
 
   # Runs only when the three builds succeeded. The updater reads the latest release, so the draft
   # is published once its latest.json holds every system and each file it names is in: the three
@@ -636,11 +666,12 @@ jobs:
 
   # Once the updater reads the version, its notes go to the Discord. A job of its own: `gh run
   # rerun <id> --failed` after a refusal of Discord's posts them again without publishing again,
-  # and a failed build announces nothing. A pre-release is not announced.
+  # and a failed build announces nothing. A beta is announced as one (ESC-586): « (bêta) » after its
+  # version, and how to go back to the stable version before its notes (scripts/discord.mjs).
   announce:
     name: Announce on Discord
     needs: publish
-    if: ${{ github.repository == 'guillaume-gagnaire/escouade' && !contains(github.ref_name, '-') }}
+    if: github.repository == 'guillaume-gagnaire/escouade'
     permissions:
       contents: read
     uses: ./.github/workflows/discord.yml
@@ -703,14 +734,18 @@ jobs:
             gh attestation verify "$f" --repo "$GITHUB_REPOSITORY"
           done
 
-  # The image of escouade-server once the release is published: the two architectures' digests (the `server` job's)
-  # under one index, tagged with the version and `latest` (`beta` for a beta, never `latest`), then its provenance
-  # attested as the binaries' are (Sigstore, stored with the image), and checked as a user would:
-  #   gh attestation verify oci://ghcr.io/<repository>/escouade-server:<version> --repo <repository>
+  # The image of each server once the release is published: the two architectures' digests (the `server` job's) under
+  # one index, tagged with the version and `latest` (`beta` for a beta, never `latest`: scripts/image-tags.mjs), then
+  # its provenance attested as the binaries' are (Sigstore, stored with the image), and checked as a user would:
+  #   gh attestation verify oci://ghcr.io/<repository>/<program>:<version> --repo <repository>
   server-image:
-    name: Server image (ghcr.io)
+    name: Image of ${{ matrix.program }} (ghcr.io)
     needs: [publish, server]
     if: github.repository == 'guillaume-gagnaire/escouade'
+    strategy:
+      fail-fast: false
+      matrix:
+        program: [escouade-server, escouade-team-server]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -719,6 +754,8 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: The digests of the two architectures
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -731,14 +768,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-          IMAGE: ghcr.io/${{ github.repository }}/escouade-server
+          PROGRAM: ${{ matrix.program }}
+          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.program }}
         run: |
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           version=${TAG#v}
-          channel=latest
-          case $version in *-*) channel=beta ;; esac
-          docker buildx imagetools create -t "$IMAGE:$version" -t "$IMAGE:$channel" \
-            "$IMAGE@$(cat digests/image-x64.digest)" "$IMAGE@$(cat digests/image-arm64.digest)"
+          tags=()
+          while read -r t; do tags+=(-t "$t"); done < <(node scripts/image-tags.mjs "$IMAGE" "$TAG")
+          [ "${#tags[@]}" -eq 4 ] || { echo "::error::no tags for $TAG"; exit 1; }
+          docker buildx imagetools create "${tags[@]}" \
+            "$IMAGE@$(cat "digests/$PROGRAM-x64.digest")" "$IMAGE@$(cat "digests/$PROGRAM-arm64.digest")"
           docker buildx imagetools inspect "$IMAGE:$version"
           digest=$(docker buildx imagetools inspect "$IMAGE:$version" --format '{{json .Manifest}}' | jq -r .digest)
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
@@ -754,5 +793,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-          IMAGE: ghcr.io/${{ github.repository }}/escouade-server
+          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.program }}
         run: gh attestation verify "oci://$IMAGE:${TAG#v}" --repo "$GITHUB_REPOSITORY"

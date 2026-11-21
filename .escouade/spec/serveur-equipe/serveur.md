@@ -1,15 +1,15 @@
 ---
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466"]
-decisions: [167,168,173,178]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md"]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586"]
+decisions: [167,168,173,178,277]
 compared: null
 ---
 
 # Le serveur d'équipe
 
-Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (Docker avec Caddy, ou systemd). Il est distinct du mode serveur, qui lance des agents et ne s'expose pas. Son client est la crate `escouade-team` (voir « Le client de l'équipe »), branchée dans l'app : créer une équipe, y inviter et y entrer, voir « Entrer dans une équipe » ; la synchronisation des projets, voir « La synchronisation des projets ». Rien n'est publié avant la 2.3.
+Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (Docker avec Caddy, Coolify, ou systemd). Il est distinct du mode serveur, qui lance des agents et ne s'expose pas. Son client est la crate `escouade-team` (voir « Le client de l'équipe »), branchée dans l'app : créer une équipe, y inviter et y entrer, voir « Entrer dans une équipe » ; la synchronisation des projets, voir « La synchronisation des projets ». Publié avec chaque version d'Escouade depuis la 2.3 (voir *La publication*).
 
 ## Aveugle
 
@@ -57,5 +57,12 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 - Poignée de main des versions : le serveur accepte la version du client et la précédente ; une plus vieille est refusée avec « Mets Escouade à jour », une plus récente dit que le serveur est en retard.
 - Une limite de débit par adresse et par appareil (429 et `Retry-After`).
 - Des tailles bornées partout ; une longueur annoncée trop grande est refusée avant d'être lue.
-- TLS par rustls avec un certificat donné, ou derrière un proxy inverse (Caddy dans l'exemple).
+- TLS par rustls avec un certificat donné, ou derrière un proxy inverse (Caddy dans l'exemple, Traefik sous Coolify).
 - La base : SQLite en WAL par défaut, PostgreSQL en option.
+
+## La publication
+
+- Chaque version d'Escouade publie le serveur d'équipe à son numéro (le même que l'app), par le Release comme `escouade-server` (voir *Livraison et mises à jour*, *CI/CD*) : pour Linux x64 et arm64, une archive `escouade-team-server-<version>-linux-<arch>.tar.gz` (le programme, sa licence, les exemples de `deploy/` : systemd, compose avec Caddy, Coolify), son SHA-256 et sa signature par la clé des mises à jour ; et l'image `ghcr.io/guillaume-gagnaire/escouade/escouade-team-server`, étiquetée de la version, de `latest` pour une version stable seulement et de `beta` pour une bêta. Archives et image portent une attestation de provenance.
+- Le binaire est essayé dans un conteneur Debian nu avant tout envoi : sa version, `init` (son jeton jamais au journal), `/healthz` sur 127.0.0.1, un client sans la poignée de main refusé en 426, l'arrêt propre à SIGTERM.
+- L'image (Debian 12 slim) tourne sous son propre utilisateur (`escouade-team`), écrit dans `/data` seul (`ESCOUADE_TEAM_DATA`), écoute sur `0.0.0.0:8443` de son conteneur, et se construit depuis les sources ou depuis l'archive d'une version (`PROGRAM=archive`, celle du Release).
+- Les exemples tirent l'image publiée à l'étiquette de `ESCOUADE_TEAM_TAG` (`latest` par défaut ; `beta` ou une version pendant une bêta) : le compose derrière Caddy, qui tient TLS ; le compose de Coolify, derrière son Traefik (domaine de `SERVICE_FQDN_TEAM_8443`, `ESCOUADE_TEAM_TRUST_PROXY=1`, lecture seule, aucune capacité, aucun port publié). Leur mode d'emploi est dans la doc du site (Installer le serveur d'équipe), en français et en anglais.

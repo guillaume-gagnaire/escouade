@@ -2,8 +2,9 @@
   import { flushDrafts } from '../../lib/drafts';
   import { buffers } from '../../lib/editor/buffers.svelte';
   import { t } from '../../lib/i18n';
-  import { shownVersion } from '../../lib/updater';
+  import { isBeta, RELEASES_PAGE, shownVersion, stableBefore } from '../../lib/updater';
   import { api } from '../../lib/ipc';
+  import { openUrl } from '../../lib/opener';
   import type { SettingsPage } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import Markdown from '../conv/Markdown.svelte';
@@ -58,6 +59,18 @@
     {@const [b, rest] = subject(t('shell.update.working', { count: working }))}
     <p class="w-notice"><Icon name="info" /><span><b>{b}</b>{rest}</span></p>
   {/if}
+  {#if isBeta(version)}
+    <!-- A beta is never shown as the stable version (ESC-586): what it is, and how to go back. -->
+    {@const stable = stableBefore(version)}
+    <div class="w-notice beta" role="note">
+      <Icon name="info" />
+      <div>
+        <p>{t('shell.update.beta.what')}</p>
+        <p>{stable ? t('shell.update.beta.back', { stable }) : t('shell.update.beta.backStable')}</p>
+        <button class="btn ghost small" onclick={() => app.run(openUrl(RELEASES_PAGE))}>{t('shell.update.beta.releases')}</button>
+      </div>
+    </div>
+  {/if}
   {#if notes.trim()}
     <div class="notes"><Markdown text={notes} /></div>
   {/if}
@@ -82,6 +95,13 @@
   .warn {
     background: var(--wait-bg);
     box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  /* A beta's notice: its two sentences, then the link to the stable versions. */
+  .beta p {
+    margin: 0 0 6px;
+  }
+  .beta .btn {
+    margin-top: 2px;
   }
   /* The notes, as the preview's list: soft, their items close together. */
   .notes {

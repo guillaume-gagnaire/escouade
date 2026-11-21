@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { readVersions, setVersion } from './version.mjs';
 
@@ -61,6 +62,30 @@ describe('version script', () => {
     expect(fs.readFileSync(cargoLock, 'utf8')).toBe(
       '[[package]]\nname = "escouade-plugin-cli"\nversion = "1.2.3"\n\n[[package]]\nname = "x"\nversion = "1.2.3"\n',
     );
+  });
+
+  it('keeps the team server at the app’s version, in its manifest and in the lock (ESC-586)', () => {
+    const root = fixture();
+    const crate = path.join(root, 'crates', 'escouade-team-server', 'Cargo.toml');
+    fs.mkdirSync(path.dirname(crate), { recursive: true });
+    fs.writeFileSync(crate, '[package]\nname = "escouade-team-server"\nversion = "0.1.0"\n\n[dependencies]\naxum = { version = "0.8" }\n');
+    const cargoLock = path.join(root, 'src-tauri', 'Cargo.lock');
+    fs.writeFileSync(
+      cargoLock,
+      '[[package]]\nname = "escouade-team-server"\nversion = "0.1.0"\n\n[[package]]\nname = "x"\nversion = "0.1.0"\n',
+    );
+    setVersion(root, 'v2.3.0-beta.1');
+    expect(readVersions(root)).toEqual({ package: '2.3.0-beta.1', tauri: '2.3.0-beta.1', cargo: '2.3.0-beta.1', team: '2.3.0-beta.1' });
+    expect(fs.readFileSync(crate, 'utf8')).toContain('axum = { version = "0.8" }');
+    expect(fs.readFileSync(cargoLock, 'utf8')).toBe(
+      '[[package]]\nname = "escouade-team-server"\nversion = "2.3.0-beta.1"\n\n[[package]]\nname = "x"\nversion = "2.3.0-beta.1"\n',
+    );
+  });
+
+  it('the repository’s manifests say one version', () => {
+    const versions = Object.values(readVersions(path.join(path.dirname(fileURLToPath(import.meta.url)), '..')));
+    expect(versions.length).toBeGreaterThanOrEqual(5);
+    expect(new Set(versions).size).toBe(1);
   });
 
   it('accepts a v-prefixed tag and rejects non-semver input', () => {

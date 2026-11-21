@@ -41,12 +41,52 @@ describe('the Release of escouade-server', () => {
     expect(job(release, 'publish')).toContain('needs: [create, build, server]');
   });
 
+  // ESC-586: the team server is published as escouade-server is, by the same job and the same scripts.
+  it('builds, tries in a bare container, signs and pushes the team server too, by the same script', () => {
+    const server = job(release, 'server');
+    expect(server).toContain('cargo build --release --locked -p escouade-team-server');
+    // The trial before anything is signed or goes up.
+    const trial = server.indexOf('bash /srv/scripts/team-server-trial.sh /srv/bin/escouade-team-server "${TAG#v}"');
+    expect(trial).toBeGreaterThan(-1);
+    expect(trial).toBeLessThan(server.indexOf('sh scripts/server-release.sh'));
+    expect(server).toContain(
+      'IMAGE=$REGISTRY/escouade-team-server sh scripts/server-release.sh src-tauri/target/release/escouade-team-server',
+    );
+    expect(server).toContain('IMAGE=$REGISTRY/escouade-server sh scripts/server-release.sh src-tauri/target/release/escouade-server');
+    expect(server).toContain('path: dist/*-${{ matrix.arch }}.digest');
+    // One job of images per program, each with its digests.
+    const image = job(release, 'server-image');
+    expect(image).toContain('program: [escouade-server, escouade-team-server]');
+    expect(image).toContain('IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.program }}');
+    expect(image).toContain('digests/$PROGRAM-x64.digest');
+    expect(image).toContain('digests/$PROGRAM-arm64.digest');
+    // The team server's version is the tag's (scripts/version.mjs sets it).
+    expect(read('scripts/version.mjs')).toContain("'escouade-team-server', 'Cargo.toml'");
+  });
+
+  it('the team server’s image builds from its archive, and its compose and Coolify examples pull the published image', () => {
+    const file = read('crates/escouade-team-server/Dockerfile');
+    expect(file).toMatch(/^FROM \$\{PROGRAM\} AS program$/m);
+    expect(file).toContain('escouade-team-server-${VERSION}-linux-${arch}.tar.gz');
+    expect(file).toMatch(/^USER escouade-team$/m);
+    expect(read('scripts/server-release.sh')).toContain('--build-arg PROGRAM=archive');
+    for (const compose of ['crates/escouade-team-server/deploy/docker-compose.yml', 'crates/escouade-team-server/deploy/coolify.yml']) {
+      const active = read(compose)
+        .split('\n')
+        .filter((l) => !l.trim().startsWith('#'))
+        .join('\n');
+      expect(active, compose).toContain('image: ghcr.io/guillaume-gagnaire/escouade/escouade-team-server:${ESCOUADE_TEAM_TAG:-latest}');
+      // Never the team server's own port on the host: a proxy in TLS reaches it.
+      expect(active, compose).not.toMatch(/- ["']?\d+:8443/);
+    }
+  });
+
   it('tags the image only once the release is published, `latest` never for a beta, and attests it', () => {
     const image = job(release, 'server-image');
     expect(image).toContain('needs: [publish, server]');
     expect(image).toContain("if: github.repository == 'guillaume-gagnaire/escouade'");
     expect(image).toContain('docker buildx imagetools create');
-    expect(image).toMatch(/case \$version in \*-\*\) channel=beta ;; esac/);
+    expect(image).toContain('node scripts/image-tags.mjs "$IMAGE" "$TAG"');
     expect(image).toContain('actions/attest-build-provenance@');
     expect(image).toContain('push-to-registry: true');
     expect(image).toContain('gh attestation verify "oci://');
@@ -156,16 +196,23 @@ describe('the scripts of the server mode', () => {
     'scripts/server-install-test.sh',
     'scripts/server-trial.sh',
     'scripts/server-libs.sh',
+    'scripts/team-server-trial.sh',
+    'scripts/team-server-image-test.sh',
   ];
   const has = (shell: string) => spawnSync(shell, ['-c', 'exit 0']).status === 0;
 
+  // One shell started per script: over a second each on a loaded Windows (Git Bash), hence the time given.
   for (const shell of ['bash', 'dash']) {
-    it.skipIf(!has(shell))(`${shell} reads each of them`, () => {
-      for (const s of SCRIPTS) {
-        const r = spawnSync(shell, ['-n', s], { cwd: ROOT, encoding: 'utf8' });
-        expect(r.status, `${shell} -n ${s}: ${r.stderr}`).toBe(0);
-      }
-    });
+    it.skipIf(!has(shell))(
+      `${shell} reads each of them`,
+      () => {
+        for (const s of SCRIPTS) {
+          const r = spawnSync(shell, ['-n', s], { cwd: ROOT, encoding: 'utf8' });
+          expect(r.status, `${shell} -n ${s}: ${r.stderr}`).toBe(0);
+        }
+      },
+      60_000,
+    );
   }
 
   it('none puts an apostrophe in the message of a parameter’s expansion', () => {

@@ -18,7 +18,16 @@ The “Receive beta versions” option (Settings › General, unticked by defaul
 - **Unticked**, Escouade ignores every beta and reads only `latest.json`, which never holds one. If you are already on a beta, you stay on it until the stable version that follows it (2.2.0 after 2.2.0-beta.3); an older version, such as a 2.1.5, doesn’t replace it.
 - **Ticked**, Escouade first reads `beta.json`, in the latest stable release, which gives the most recent version, beta or stable; if it’s missing, it reads `latest.json`. Ticking it starts a check at once, and the setting is saved right away, without “Save”.
 
-A beta shows wherever Escouade says a version: “Escouade 2.2.0-beta.1 (beta)” in Settings › General and at the bottom of the settings bar, “Update 2.2.0-beta.1 (beta)…” in the status bar. Its notes are in the update window as for any version; it isn’t announced on Discord.
+A beta shows wherever Escouade says a version: “Escouade 2.2.0-beta.1 (beta)” in Settings › General and at the bottom of the settings bar, “Update 2.2.0-beta.1 (beta)…” in the status bar. Its notes are in the update window as for any version, after a box that says it is a beta and how to go back to the stable version. It is announced on Discord and on GitHub as a beta: “(beta)” after its version, then the same box, never as the stable version.
+
+### Going back to the stable version
+
+A beta keeps your data readable by the stable version before it: 2.2 reads what the 2.3 beta wrote (projects, tickets, agents, settings, `.escouade.yml`, shared tickets, spec, decisions, memory, the “Your turn” box).
+
+1. Untick “Receive beta versions” (Settings › General). On its own, this keeps you on the beta until the stable version that follows it (2.3.0 after 2.3.0-beta.3).
+2. To go back right away, install the latest stable version again from [the releases page](https://github.com/guillaume-gagnaire/escouade/releases/latest), over the beta. Untick first: otherwise the stable version would offer you the beta again at once.
+
+What exists only in the beta does not come along: 2.2 knows neither teams, nor scheduled tasks, nor language servers. A project moved to a team server becomes a project of the machine again for it: its tickets are those of its last state on this computer, and what the team does next no longer reaches it.
 
 ## Installing an update
 

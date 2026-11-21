@@ -1,6 +1,6 @@
 # escouade-team-server : le serveur d'équipe, aveugle (TS-1)
 
-Ticket ESC-456, ligne TS-1 de `docs/TEAM-SERVER.md` §16. Choix tranchés par l'utilisateur le 2026-11-14 (§15.2) : un binaire à part (C1-A), MLS (C9-B, maquetté dans `crates/escouade-team-crypto`), le chiffrement de bout en bout comme seul mode (C10-A). Rien n'est publié : les binaires et l'image viendront à la sortie de la 2.3.
+Ticket ESC-456, ligne TS-1 de `docs/TEAM-SERVER.md` §16. Choix tranchés par l'utilisateur le 2026-11-14 (§15.2) : un binaire à part (C1-A), MLS (C9-B, maquetté dans `crates/escouade-team-crypto`), le chiffrement de bout en bout comme seul mode (C10-A). Publié avec chaque version d'Escouade depuis la 2.3 (ESC-586, `.github/workflows/release.yml`) : les archives signées pour Linux x64 et arm64 et l'image `ghcr.io/guillaume-gagnaire/escouade/escouade-team-server` (`latest` pour une version stable seulement, `beta` pour une bêta).
 
 ## En bref
 
@@ -119,13 +119,13 @@ PostgreSQL : `--database postgres://user:pass@host/base` (ou `ESCOUADE_TEAM_DATA
 
 ### Docker et Caddy
 
-`Dockerfile` (contexte : la racine du dépôt) et `deploy/docker-compose.yml`, avec `deploy/Caddyfile` :
+`Dockerfile` : depuis les sources (contexte : la racine du dépôt), ou depuis l'archive d'une version (`--build-arg PROGRAM=archive`, ce que fait le Release). `deploy/docker-compose.yml` lance l'image publiée (`ESCOUADE_TEAM_TAG`, `latest` par défaut), avec `deploy/Caddyfile` ; `deploy/coolify.yml` est celui de Coolify :
 
 ```sh
 cd crates/escouade-team-server/deploy
-ESCOUADE_TEAM_DOMAIN=team.example.org docker compose build
+export ESCOUADE_TEAM_DOMAIN=team.example.org ESCOUADE_TEAM_TAG=beta
 docker compose run --rm team-server init
-ESCOUADE_TEAM_DOMAIN=team.example.org docker compose up -d
+docker compose up -d
 ```
 
 Le serveur n'est pas publié hors du réseau du compose : seul Caddy l'atteint, et le WebSocket passe par lui.

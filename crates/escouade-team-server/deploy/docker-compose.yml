@@ -1,16 +1,19 @@
-# An example: the team server behind Caddy, which holds TLS. From this folder:
-#   ESCOUADE_TEAM_DOMAIN=team.example.org docker compose build
+# An example: the team server behind Caddy, which holds TLS (https://escouade.dev/docs/team/install). From this folder:
+#   export ESCOUADE_TEAM_DOMAIN=team.example.org
 #   docker compose run --rm team-server init     # prints the token that creates the team, once
-#   ESCOUADE_TEAM_DOMAIN=team.example.org docker compose up -d
+#   docker compose up -d
+# The image is the published one (ghcr.io), at ESCOUADE_TEAM_TAG: `latest` (the last stable version) by default,
+# `beta` (the last beta) or a version (`2.3.0-beta.1`). An update: `docker compose pull && docker compose up -d`.
 # Back up the `team-data` volume (the base and the files): it holds only encrypted bytes, and is useless without the
 # members' keys.
 
 services:
   team-server:
-    build:
-      context: ../../..
-      dockerfile: crates/escouade-team-server/Dockerfile
-    image: escouade-team-server:local
+    image: ghcr.io/guillaume-gagnaire/escouade/escouade-team-server:${ESCOUADE_TEAM_TAG:-latest}
+    # Built from the sources of the repository instead (`docker compose build`):
+    # build:
+    #   context: ../../..
+    #   dockerfile: crates/escouade-team-server/Dockerfile
     restart: unless-stopped
     environment:
       ESCOUADE_TEAM_DATA: /data
