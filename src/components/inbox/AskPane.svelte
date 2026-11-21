@@ -8,6 +8,7 @@
   import { t } from '../../lib/i18n';
   import type { IconName } from '../../lib/icons';
   import { fLater, inbox, laterTimes, letter, startOption } from '../../lib/inbox/inbox.svelte';
+  import { handedSentence, orphaned } from '../../lib/inbox/handed';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { app } from '../../lib/state.svelte';
@@ -253,6 +254,7 @@
     'expired',
     'retired',
     'filesErased',
+    'handed',
   ];
 </script>
 
@@ -270,13 +272,15 @@
         <span>{ask.projectName}</span>
         {#if ask.private}<span class="pill k">{t('inbox.ask.privateMark')}</span>{/if}
         <span aria-hidden="true">·</span>
-        <b>{ask.author.agent ? agentName : t('inbox.ask.external')}</b>
+        <b>{ask.author.agent ? agentName : orphaned(ask) ? ask.author.name : t('inbox.ask.external')}</b>
+        {#if orphaned(ask)}<span>· {t('inbox.handed.author')}</span>{/if}
         {#if ask.author.chef}<span>· {t('inbox.ask.chef')}</span>{/if}
         {#if ask.ticketKey}<span aria-hidden="true">·</span><span class="tk">{ask.ticketKey}</span>{/if}
         <span>· {t('inbox.ask.ago', { time: fSince(ask.createdAt, now) })}</span>
       </span>
     </div>
     <h2 id="ask-title-{ask.id}">{ask.title}</h2>
+    {#if ask.handed}<p class="handed" data-testid="ask-handed">{handedSentence(ask, agentName)}</p>{/if}
 
     {#if ask.state === 'snoozed' && ask.snoozedUntil}
       <p class="band">
@@ -541,6 +545,7 @@
             {#if ask.gate}{t('inbox.answer.gate', { agent: agentName })}
             {:else if ask.kind === 'task'}{t('inbox.answer.taskHint')}
             {:else if ask.author.agent}{t('inbox.answer.goesTo', { agent: agentName })}
+            {:else if orphaned(ask)}{t('inbox.answer.goesToNone')}
             {:else}{t('inbox.answer.goesToClient')}{/if}
           </span>
           {#if chief && !ask.gate && ask.kind !== 'task' && !ask.delegatedTo}
@@ -605,6 +610,11 @@
     align-items: center;
     gap: 2px 6px;
     min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .handed {
+    margin: -4px 0 8px;
     color: var(--muted);
     font-size: 12px;
   }

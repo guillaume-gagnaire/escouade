@@ -59,6 +59,7 @@ export function windowAsk(over: Partial<WindowAsk> = {}): WindowAsk {
     filesErasedAt: null,
     seen: true,
     history: [{ at: now - 40 * 60_000, what: 'deposited', detail: 'design-tableau' }],
+    handed: null,
     projectName: 'demo-api',
     private: false,
     ticketKey: null,

@@ -103,6 +103,50 @@ describe('the box « À toi »', () => {
     expect(pane()).toHaveTextContent('Publier atlas-web 1.4.0 ?');
   });
 
+  it('says quietly that a request changed hands: taken over by the squad lead, or left with no author (ESC-585)', async () => {
+    const at = Date.now();
+    await show([
+      windowAsk({
+        id: 'a-10',
+        kind: 'task',
+        title: 'Les deux essais avant l’app mobile',
+        author: { agent: 'a1', name: 'design-tableau', chef: true },
+        handed: { from: 'dev-549', fromAgent: 'g1', cause: 'ticket', ticketKey: 'ESC-549', at },
+      }),
+      windowAsk({
+        id: 'a-12',
+        kind: 'confirm',
+        title: 'Le feu vert du trousseau',
+        author: { agent: null, name: 'dev-532', chef: false },
+        handed: { from: 'dev-532', fromAgent: 'g2', cause: 'archived', ticketKey: null, at },
+      }),
+      windowAsk({ id: 'a-13', title: 'Une demande qui n’a pas bougé' }),
+    ]);
+    const rows = within(screen.getByTestId('inbox-queue')).getAllByTestId('inbox-row');
+    const row = (id: string) => rows.find((r) => r.dataset.ask === id)!;
+    expect(row('a-10')).toHaveTextContent('design-tableau');
+    expect(row('a-10')).toHaveTextContent('reprise de dev-549');
+    expect(row('a-12')).toHaveTextContent('sans auteur');
+    expect(row('a-13')).not.toHaveTextContent('reprise');
+    expect(row('a-13')).not.toHaveTextContent('sans auteur');
+    await fireEvent.click(row('a-10'));
+    expect(screen.getByTestId('ask-handed')).toHaveTextContent('Reprise par design-tableau : le ticket ESC-549 de dev-549 est validé.');
+    await fireEvent.click(row('a-12'));
+    expect(screen.getByTestId('ask-handed')).toHaveTextContent(
+      'Sans auteur vivant : dev-532 a été archivé, et le projet n’a pas de chef d’escouade.',
+    );
+    expect(pane()).toHaveTextContent('dev-532');
+    expect(pane()).toHaveTextContent('Ta réponse reste ici : elle part au chef d’escouade dès que le projet en a un.');
+    expect(pane()).not.toHaveTextContent('Claude · client MCP');
+    await fireEvent.click(row('a-13'));
+    expect(screen.queryByTestId('ask-handed')).toBeNull();
+    setLang('en');
+    await fireEvent.click(row('a-10'));
+    await tick();
+    expect(screen.getByTestId('ask-handed')).toHaveTextContent('Taken over by design-tableau: dev-549’s ticket ESC-549 was validated.');
+    setLang('fr');
+  });
+
   it('shows the box empty, saying what comes there', async () => {
     await show([]);
     expect(screen.getByTestId('inbox-empty')).toHaveTextContent('Rien ne t’attend');

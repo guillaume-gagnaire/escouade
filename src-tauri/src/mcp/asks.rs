@@ -60,8 +60,9 @@ fn asker(caller: &Caller) -> Asker {
     }
 }
 
+/// The caller is `a`'s author; a request left without a living author (ESC-585) is no one's.
 fn is_mine(caller: &Caller, a: &Ask) -> bool {
-    asker(caller) == Asker::External && a.author.agent.is_none()
+    asker(caller) == Asker::External && a.author.agent.is_none() && a.handed.is_none()
         || matches!(caller, Caller::Agent(id) if a.author.agent.as_deref() == Some(id))
 }
 
@@ -440,6 +441,11 @@ fn view(core: &Core, a: &Ask, whole: bool) -> Value {
         "delegatedTo": delegated,
         "expiresAt": iso(a.expires_at),
     });
+    // It changed hands (ESC-585): whose it was, and why.
+    if let Some(h) = &a.handed {
+        v["handedFrom"] = json!(h.from);
+        v["handedWhy"] = json!(crate::asks::handover_why(i18n::ui(), h));
+    }
     if !whole {
         return v;
     }

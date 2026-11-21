@@ -596,8 +596,8 @@ async fn an_answer_can_be_taken_back_until_it_goes_then_it_is_read() {
 }
 
 #[tokio::test]
-async fn a_request_put_off_comes_back_one_past_its_date_expires_one_whose_agent_or_ticket_went_is_taken_out(
-) {
+async fn a_request_put_off_comes_back_one_past_its_date_expires_one_whose_ticket_went_is_taken_out()
+{
     let h = harness("asks-sweep");
     let (p, _) = h.project(false).await;
     let a = put_agent(&h, &p, "design");
@@ -657,9 +657,14 @@ async fn a_request_put_off_comes_back_one_past_its_date_expires_one_whose_agent_
     assert_eq!(back.state, AskState::Open);
     assert!(back.woke);
     assert_eq!(h.core.ask(&old.id).unwrap().state, AskState::Expired);
+    // Its agent deleted by hand, the project without a squad lead: it stays, with no living author
+    // (ESC-585).
     let gone = h.core.ask(&orphan.id).unwrap();
-    assert_eq!(gone.state, AskState::Retired);
-    assert_eq!(gone.reason.as_deref(), Some("Son agent a été supprimé."));
+    assert_eq!(gone.state, AskState::Open);
+    assert_eq!(gone.author.agent, None);
+    let handed = gone.handed.unwrap();
+    assert_eq!(handed.cause, HandoverCause::Deleted);
+    assert_eq!(handed.from, "agent-ag-back");
     let sent_back = h.core.ask(&of_ticket.id).unwrap();
     assert_eq!(sent_back.state, AskState::Retired);
     assert_eq!(
@@ -1145,4 +1150,240 @@ async fn a_shorter_keeping_erases_the_files_sooner_and_says_so() {
         .unwrap_err()
         .to_string()
         .contains("7 jours"));
+}
+
+// ---------- a request that changes hands (ESC-585) ----------
+
+/// The agent `dev` of a ticket under way (DEM-7) with three requests still due: one open, one put
+/// off, one answered whose answer went and was not read; then its ticket validated (the ticket done,
+/// the agent archived). The ids of the three.
+async fn three_due_then_validated(h: &Harness, p: &Project) -> (String, String, String) {
+    let dev = put_agent(h, p, "dev");
+    h.core.tickets.write().push(Ticket {
+        id: "t-7".into(),
+        project_id: p.id.clone(),
+        key: "DEM-7".into(),
+        column: Column::Doing,
+        ..Default::default()
+    });
+    let deposit = |title: &str| {
+        h.core
+            .ask_deposit(
+                agent_author(&dev),
+                &p.id,
+                Some("t-7".into()),
+                choice(title),
+                vec![],
+            )
+            .unwrap()
+            .id
+    };
+    let open = deposit("Les deux essais avant l'app mobile");
+    let later = deposit("Le feu vert du trousseau");
+    let answered = deposit("Le choix de l'étude");
+    h.core
+        .ask_snooze(&later, Some(now_ms() + 3_600_000))
+        .unwrap();
+    let ans = AnswerIn {
+        options: vec!["b".into()],
+        ..Default::default()
+    };
+    h.core.ask_answer(&answered, ans, None, vec![]).unwrap();
+    {
+        // Its answer went to `dev`, which did not read it.
+        let mut box_ = h.core.asks.lock();
+        let x = box_.list.iter_mut().find(|x| x.id == answered).unwrap();
+        let ans = x.answer.as_mut().unwrap();
+        ans.send_at = None;
+        ans.sent_at = Some(now_ms());
+    }
+    h.core.tickets.write()[0].column = Column::Done;
+    h.core.agents.read()[&dev].lock().meta.archived = true;
+    (open, later, answered)
+}
+
+#[tokio::test]
+async fn a_validated_tickets_requests_still_due_go_to_the_squad_lead_with_their_trace() {
+    let h = harness("asks-handover-chef");
+    let (p, r) = h.project(false).await;
+    on(&h);
+    let chef = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&chef, "Bonjour").await;
+    let chef_name = h.agent(&chef).name.clone();
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p.id)
+        .unwrap()
+        .chef = Some(chef.clone());
+    let (open, later, answered) = three_due_then_validated(&h, &p).await;
+    let created = |id: &str| h.core.ask(id).unwrap().created_at;
+    let before = [created(&open), created(&later), created(&answered)];
+    h.core.asks_sweep();
+    for (id, state) in [
+        (&open, AskState::Open),
+        (&later, AskState::Snoozed),
+        (&answered, AskState::Answered),
+    ] {
+        let a = h.core.ask(id).unwrap();
+        assert_eq!(a.state, state, "{id}");
+        assert_eq!(a.author.agent.as_deref(), Some(chef.as_str()), "{id}");
+        assert!(a.author.chef);
+        assert_eq!(a.author.name, chef_name);
+        let handed = a.handed.clone().unwrap();
+        assert_eq!(handed.from, "agent-ag-dev");
+        assert_eq!(handed.cause, HandoverCause::Ticket);
+        assert_eq!(handed.ticket_key.as_deref(), Some("DEM-7"));
+        // Its date stays; its trace says it.
+        assert!(before.contains(&a.created_at));
+        let last = a.history.last().unwrap();
+        assert_eq!(last.what, "handed");
+        assert_eq!(
+            last.detail,
+            format!("Reprise par {chef_name} : le ticket DEM-7 est validé")
+        );
+    }
+    // The answer not read goes again, to the lead, as a message.
+    assert!(h
+        .core
+        .ask(&answered)
+        .unwrap()
+        .answer
+        .unwrap()
+        .send_at
+        .is_some());
+    h.core.deliver_answers().await;
+    h.wait("the answer read by the lead", |h| {
+        read_by_agent(h, &r)
+            .iter()
+            .any(|m| m.contains(&format!("[Escouade · ta demande {answered}")))
+    })
+    .await;
+    let msg = read_by_agent(&h, &r)
+        .into_iter()
+        .find(|m| m.contains("[Escouade · ta demande"))
+        .unwrap();
+    assert!(
+        msg.contains("Elle était de agent-ag-dev et t’est revenue : le ticket DEM-7 est validé."),
+        "{msg}"
+    );
+    assert_eq!(h.core.ask(&answered).unwrap().state, AskState::Read);
+    // Another pass leaves them with the lead: never out because of a ticket that is done.
+    h.core.asks_sweep();
+    assert_eq!(h.core.ask(&open).unwrap().state, AskState::Open);
+    assert_eq!(h.core.ask(&later).unwrap().state, AskState::Snoozed);
+    // The lead owns them now: it may withdraw one.
+    h.core
+        .ask_withdraw(&Asker::Agent(chef.clone()), &open, "Plus utile")
+        .unwrap();
+    h.wait("its turn", |h| !h.agent(&chef).status.is_active())
+        .await;
+}
+
+#[tokio::test]
+async fn without_a_squad_lead_they_stay_with_no_living_author_until_the_project_has_one() {
+    let h = harness("asks-handover-none");
+    let (p, _) = h.project(false).await;
+    on(&h);
+    let (open, later, answered) = three_due_then_validated(&h, &p).await;
+    h.core.asks_sweep();
+    for (id, state) in [
+        (&open, AskState::Open),
+        (&later, AskState::Snoozed),
+        (&answered, AskState::Answered),
+    ] {
+        let a = h.core.ask(id).unwrap();
+        assert_eq!(a.state, state, "{id}");
+        assert_eq!(a.author.agent, None);
+        assert_eq!(a.author.name, "agent-ag-dev");
+        assert_eq!(a.handed.as_ref().unwrap().cause, HandoverCause::Ticket);
+        assert_eq!(
+            a.history.last().unwrap().detail,
+            "Sans auteur vivant : le ticket DEM-7 est validé, et le projet n’a pas de chef d’escouade"
+        );
+    }
+    // No one outside Escouade takes it for its own.
+    assert!(h.core.ask_withdraw(&Asker::External, &open, "x").is_err());
+    // Passes go by: it stays (its date still runs out).
+    h.core.asks_sweep();
+    assert_eq!(h.core.ask(&open).unwrap().state, AskState::Open);
+    // The project names a lead: they go to it, the answer not read with them.
+    let chef = put_agent(&h, &p, "chef");
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p.id)
+        .unwrap()
+        .chef = Some(chef.clone());
+    h.core.asks_sweep();
+    for id in [&open, &later, &answered] {
+        let a = h.core.ask(id).unwrap();
+        assert_eq!(a.author.agent.as_deref(), Some(chef.as_str()), "{id}");
+        let handed = a.handed.unwrap();
+        assert_eq!(handed.from, "agent-ag-dev");
+        assert_eq!(handed.cause, HandoverCause::Ticket);
+        assert_eq!(
+            a.history.last().unwrap().detail,
+            "Reprise par chef : le ticket DEM-7 est validé"
+        );
+    }
+    assert!(h
+        .core
+        .ask(&answered)
+        .unwrap()
+        .answer
+        .unwrap()
+        .send_at
+        .is_some());
+}
+
+#[tokio::test]
+async fn an_agent_archived_or_deleted_by_hand_hands_its_requests_over_too() {
+    let h = harness("asks-handover-by-hand");
+    let (p, _) = h.project(false).await;
+    on(&h);
+    let chef = put_agent(&h, &p, "chef");
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p.id)
+        .unwrap()
+        .chef = Some(chef.clone());
+    let a = put_agent(&h, &p, "design");
+    let b = put_agent(&h, &p, "back");
+    let of_a = h
+        .core
+        .ask_deposit(agent_author(&a), &p.id, None, choice("A"), vec![])
+        .unwrap()
+        .id;
+    let of_b = h
+        .core
+        .ask_deposit(agent_author(&b), &p.id, None, choice("B"), vec![])
+        .unwrap()
+        .id;
+    h.core.agents.read()[&a].lock().meta.archived = true;
+    h.core.agents.write().remove(&b);
+    h.core.asks_sweep();
+    let x = h.core.ask(&of_a).unwrap();
+    assert_eq!(x.author.agent.as_deref(), Some(chef.as_str()));
+    assert_eq!(
+        x.history.last().unwrap().detail,
+        "Reprise par chef : agent-ag-design a été archivé"
+    );
+    let y = h.core.ask(&of_b).unwrap();
+    assert_eq!(y.state, AskState::Open);
+    assert_eq!(
+        y.history.last().unwrap().detail,
+        "Reprise par chef : agent-ag-back a été supprimé"
+    );
+    // The lead archived in its turn: no living author, never out.
+    h.core.agents.read()[&chef].lock().meta.archived = true;
+    h.core.asks_sweep();
+    let x = h.core.ask(&of_a).unwrap();
+    assert_eq!(x.state, AskState::Open);
+    assert_eq!(x.author.agent, None);
+    assert_eq!(x.handed.unwrap().from, "chef");
 }

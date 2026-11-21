@@ -36,6 +36,20 @@ export default defineZone('inbox', {
     thumbs: 'The renders of its options',
     newOne: 'New request from {author}: {title}',
   },
+  /** A request that changed hands (ESC-585): its author went while it was still due. */
+  handed: {
+    mark: 'taken over from {from}',
+    markNone: 'no author',
+    to: 'Taken over by {agent}: {why}.',
+    none: 'No living author: {why}, and the project has no squad lead. Your answer stays here; it goes to the lead as soon as there is one.',
+    author: 'no author',
+    why: {
+      ticket: '{from}’s ticket {key} was validated',
+      ticketNoKey: '{from}’s ticket was validated',
+      archived: '{from} was archived',
+      deleted: '{from} was deleted',
+    },
+  },
   kind: {
     choice: 'Choice',
     confirm: 'Yes or no',
@@ -102,6 +116,7 @@ export default defineZone('inbox', {
     delegateGate: 'A go-ahead is never delegated.',
     goesTo: 'Your answer goes to {agent}, who reads it on its next turn; you can take it back until it has.',
     goesToClient: 'Your answer waits for Claude, who reads it through get_ask or wait_ask.',
+    goesToNone: 'Your answer stays here: it goes to the squad lead as soon as the project has one.',
     gate: 'A go-ahead: only you answer it. Your “yes” goes back to {agent}; it acts, with its own safeguards.',
     taskHint: 'Attach a screenshot if something is off: it goes with your answer.',
     steps: 'Its steps',
@@ -165,6 +180,7 @@ export default defineZone('inbox', {
       expired: 'Expired',
       retired: 'Taken out by Escouade',
       filesErased: 'Files erased',
+      handed: 'Changed hands',
     },
     via: { click: 'by click', keyboard: 'from the keyboard', voice: 'by voice', phone: 'from the phone', delegated: 'by delegation' },
     recentLine: '{answer} · {who} · {when}',

@@ -99,6 +99,35 @@ pub struct AskAuthor {
     pub chef: bool,
 }
 
+/// Why a request changed hands (ESC-585).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum HandoverCause {
+    /// Its agent's ticket was validated.
+    #[default]
+    Ticket,
+    /// Its agent was archived.
+    Archived,
+    /// Its agent was deleted.
+    Deleted,
+}
+
+/// A request whose author went (its ticket validated, its agent archived or deleted) and that is
+/// still due (ESC-585): it went to the project's squad lead (`Ask::author` is the lead), or, with
+/// none, it stays without a living author (`author.agent` None) until the project has one.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AskHandover {
+    /// The author it had first, by name.
+    pub from: String,
+    /// That author, by id.
+    pub from_agent: Option<String>,
+    pub cause: HandoverCause,
+    /// The ticket validated, by key.
+    pub ticket_key: Option<String>,
+    pub at: i64,
+}
+
 /// An option of a choice.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -258,6 +287,8 @@ pub struct Ask {
     /// The user saw it in the box since it was left or changed.
     pub seen: bool,
     pub history: Vec<AskEvent>,
+    /// It changed hands (ESC-585): from whom, why, when. None: its author is the one who left it.
+    pub handed: Option<AskHandover>,
 }
 
 impl Ask {

@@ -40,6 +40,20 @@ export default {
     thumbs: 'Les rendus de ses options',
     newOne: 'Nouvelle demande de {author} : {title}',
   },
+  /** A request that changed hands (ESC-585): its author went while it was still due. */
+  handed: {
+    mark: 'reprise de {from}',
+    markNone: 'sans auteur',
+    to: 'Reprise par {agent} : {why}.',
+    none: 'Sans auteur vivant : {why}, et le projet n’a pas de chef d’escouade. Ta réponse reste ici ; elle part au chef dès qu’il y en a un.',
+    author: 'sans auteur',
+    why: {
+      ticket: 'le ticket {key} de {from} est validé',
+      ticketNoKey: 'le ticket de {from} est validé',
+      archived: '{from} a été archivé',
+      deleted: '{from} a été supprimé',
+    },
+  },
   kind: {
     choice: 'Choix',
     confirm: 'Oui ou non',
@@ -109,6 +123,7 @@ export default {
     delegateGate: 'Un feu vert ne se délègue pas.',
     goesTo: 'Ta réponse part à {agent}, qui la lit à son prochain tour ; tu peux revenir dessus tant qu’il ne l’a pas lue.',
     goesToClient: 'Ta réponse attend Claude, qui la lit par get_ask ou wait_ask.',
+    goesToNone: 'Ta réponse reste ici : elle part au chef d’escouade dès que le projet en a un.',
     gate: 'Un feu vert : toi seul y réponds. Ton « oui » revient à {agent} ; c’est lui qui agit, avec ses propres garde-fous.',
     taskHint: 'Joins une capture si quelque chose cloche : elle part avec ta réponse.',
     steps: 'Ses étapes',
@@ -174,6 +189,7 @@ export default {
       expired: 'Périmée',
       retired: 'Retirée par Escouade',
       filesErased: 'Fichiers effacés',
+      handed: 'Changée de main',
     },
     via: { click: 'au clic', keyboard: 'au clavier', voice: 'à la voix', phone: 'au téléphone', delegated: 'par délégation' },
     recentLine: '{answer} · {who} · {when}',

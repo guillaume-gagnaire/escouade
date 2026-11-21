@@ -4426,6 +4426,16 @@ export interface AskEvent {
   detail: string;
 }
 
+/** Where a request that changed hands came from (`asks::AskHandover`, ESC-585). */
+export interface AskHandover {
+  /** Its first author, by name. */
+  from: string;
+  fromAgent: string | null;
+  cause: 'ticket' | 'archived' | 'deleted';
+  ticketKey: string | null;
+  at: number;
+}
+
 /** A request as the window shows it (`asks::WindowAsk`). */
 export interface WindowAsk {
   id: string;
@@ -4462,6 +4472,8 @@ export interface WindowAsk {
   filesErasedAt: number | null;
   seen: boolean;
   history: AskEvent[];
+  /** It changed hands (ESC-585): its author went while it was still due. */
+  handed: AskHandover | null;
   projectName: string;
   private: boolean;
   ticketKey: string | null;

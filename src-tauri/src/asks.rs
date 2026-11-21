@@ -8,15 +8,15 @@
 //! task. The log never holds a request's text, a path or a file's name: only its id and its shape.
 //!
 //! The box rests on the MCP server: off, the tools are not there, and the window's commands say the
-//! box is closed; the requests are kept as they are (their dates still run out, a deleted agent
-//! still takes its own out), and an answer given before still goes.
+//! box is closed; the requests are kept as they are (their dates still run out, an agent that goes
+//! hands its own to the squad lead, ESC-585), and an answer given before still goes.
 
 use crate::core::Core;
 use crate::i18n::{self, Lang};
 use crate::model::{now_ms, Column, UiEvent};
 use anyhow::{anyhow, bail, Result};
 pub use escouade_model::asks::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -524,7 +524,11 @@ pub(crate) fn room(
     now: i64,
 ) -> Result<(), String> {
     let open = |a: &&Ask| a.state.waiting();
-    let mine = |a: &&Ask| author_key(&a.author) == author_key(author);
+    // One left without a living author (ESC-585) counts for no one.
+    let mine = |a: &&Ask| {
+        author_key(&a.author) == author_key(author)
+            && !(a.handed.is_some() && a.author.agent.is_none())
+    };
     if asks.iter().filter(open).filter(mine).count() >= OPEN_PER_AUTHOR {
         return Err(tr_in!(
             lang,
@@ -578,6 +582,99 @@ pub(crate) fn record(a: &mut Ask, at: i64, what: &str, detail: String) {
     if a.history.len() > HISTORY_MAX {
         a.history.remove(1);
     }
+}
+
+/// Why a request changed hands, as its trace says it (ESC-585).
+pub(crate) fn handover_why(lang: Lang, h: &AskHandover) -> String {
+    match (h.cause, &h.ticket_key) {
+        (HandoverCause::Ticket, Some(key)) => {
+            tr_in!(
+                lang,
+                "le ticket {key} est validé",
+                "ticket {key} was validated"
+            )
+        }
+        (HandoverCause::Ticket, None) => {
+            tr_in!(lang, "son ticket est validé", "its ticket was validated")
+        }
+        (HandoverCause::Archived, _) => tr_in!(
+            lang,
+            "{from} a été archivé",
+            "{from} was archived",
+            from = h.from
+        ),
+        (HandoverCause::Deleted, _) => tr_in!(
+            lang,
+            "{from} a été supprimé",
+            "{from} was deleted",
+            from = h.from
+        ),
+    }
+}
+
+/// `a`, whose author went (`cause`), goes to the squad lead `to` (by id and name), or stays without a
+/// living author when the project has none (ESC-585): its date and its files stay, its trace says it,
+/// and an answer its author did not read goes again, to the lead. One already without an author keeps
+/// where it came from.
+pub(crate) fn hand_over(
+    a: &mut Ask,
+    now: i64,
+    cause: HandoverCause,
+    ticket_key: Option<String>,
+    to: Option<(String, String)>,
+) {
+    if a.author.agent.is_some() || a.handed.is_none() {
+        a.handed = Some(AskHandover {
+            from: a.author.name.clone(),
+            from_agent: a.author.agent.clone(),
+            cause,
+            ticket_key,
+            at: now,
+        });
+    } else if let Some(h) = a.handed.as_mut() {
+        h.at = now;
+    }
+    let Some(h) = a.handed.clone() else { return };
+    let why = handover_why(i18n::ui(), &h);
+    match to {
+        Some((id, name)) => {
+            if a.delegated_to.as_deref() == Some(id.as_str()) {
+                a.delegated_to = None;
+            }
+            let detail = tr!("Reprise par {name} : {why}", "Taken over by {name}: {why}");
+            a.author = AskAuthor {
+                agent: Some(id),
+                name,
+                chef: true,
+            };
+            record(a, now, "handed", detail);
+            if a.state == AskState::Answered {
+                if let Some(ans) = a.answer.as_mut() {
+                    if ans.send_at.is_none() {
+                        ans.send_at = Some(now);
+                        ans.sent_at = None;
+                    }
+                }
+            }
+        }
+        None => {
+            a.author = AskAuthor {
+                agent: None,
+                name: h.from.clone(),
+                chef: false,
+            };
+            record(
+                a,
+                now,
+                "handed",
+                tr!(
+                    "Sans auteur vivant : {why}, et le projet n’a pas de chef d’escouade",
+                    "No living author: {why}, and the project has no squad lead"
+                ),
+            );
+        }
+    }
+    a.updated_at = now;
 }
 
 /// The answer checked against what the request asks (§ 3.2), or why not.
@@ -726,6 +823,16 @@ pub(crate) fn answer_text(lang: Lang, a: &Ask, ans: &AskAnswer) -> String {
             title = a.title
         )
     );
+    // Taken over (ESC-585): whose it was, and why it came to its new author.
+    if let Some(h) = a.handed.as_ref().filter(|_| a.author.agent.is_some()) {
+        out.push_str(&tr_in!(
+            lang,
+            " (Elle était de {from} et t’est revenue : {why}.)",
+            " (It was {from}’s and came to you: {why}.)",
+            from = h.from,
+            why = handover_why(lang, h)
+        ));
+    }
     if let Some(note) = &ans.note {
         out.push_str(&tr_in!(
             lang,
@@ -875,10 +982,11 @@ pub enum Asker {
 }
 
 impl Asker {
-    fn is(&self, a: &AskAuthor) -> bool {
+    /// It is `a`'s author; a request left without a living author (ESC-585) is no one's.
+    fn is(&self, a: &Ask) -> bool {
         match self {
-            Self::Agent(id) => a.agent.as_deref() == Some(id),
-            Self::External => a.agent.is_none(),
+            Self::Agent(id) => a.author.agent.as_deref() == Some(id),
+            Self::External => a.author.agent.is_none() && a.handed.is_none(),
         }
     }
 }
@@ -1112,7 +1220,7 @@ impl Core {
             .iter_mut()
             .find(|a| a.id == id)
             .ok_or_else(|| not_found(lang, id))?;
-        if !asker.is(&a.author) {
+        if !asker.is(a) {
             bail!(tr!(
                 "Seul l’auteur d’une demande la change ou la retire.",
                 "Only a request’s author changes or withdraws it."
@@ -1139,7 +1247,7 @@ impl Core {
         let lang = i18n::ui();
         let now = now_ms();
         let before = self.ask(id)?;
-        if !asker.is(&before.author) || !before.state.waiting() {
+        if !asker.is(&before) || !before.state.waiting() {
             // The same refusal as under the lock.
             self.own_waiting(asker, id, |_| Ok(()))?;
         }
@@ -1666,28 +1774,44 @@ impl Core {
     }
 
     /// What changes by itself (§ 3.4): a request put off comes back at its time; one past its date
-    /// expires; one whose agent was deleted or archived, whose ticket was approved, deleted or sent
-    /// back to « À faire », or whose project went, is taken out; a closed one's files go after 30
-    /// days, and the request itself after 90 (300 kept at most).
+    /// expires; one still due whose author went (its ticket approved, the agent archived or deleted)
+    /// goes to the squad lead, or stays with no living author until the project has one (ESC-585);
+    /// one whose ticket was deleted or sent back to « À faire », or whose project went, is taken out;
+    /// a closed one's files go after 30 days, and the request itself after 90 (300 kept at most).
     pub fn asks_sweep(self: &Arc<Self>) {
         let now = now_ms();
         let files_kept = kept_days(self.settings.read().inbox_keep_days);
-        let projects: HashSet<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
-        let tickets: Vec<(String, Column)> = self
+        let chefs: HashMap<String, Option<String>> = self
+            .projects
+            .read()
+            .iter()
+            .map(|p| (p.id.clone(), p.chef.clone()))
+            .collect();
+        let projects: HashSet<String> = chefs.keys().cloned().collect();
+        let tickets: Vec<(String, Column, String)> = self
             .tickets
             .read()
             .iter()
-            .map(|t| (t.id.clone(), t.column))
+            .map(|t| (t.id.clone(), t.column, t.key.clone()))
             .collect();
-        let agents: Vec<(String, bool)> = self
+        let agents: Vec<(String, bool, String)> = self
             .agents
             .read()
             .values()
             .map(|h| {
                 let rt = h.lock();
-                (rt.meta.id.clone(), rt.meta.archived)
+                (rt.meta.id.clone(), rt.meta.archived, rt.meta.name.clone())
             })
             .collect();
+        // The squad lead of a project, alive (neither archived nor deleted): by id and name.
+        let chef_of = |project: &str| -> Option<(String, String)> {
+            let id = chefs.get(project)?.as_ref()?;
+            agents
+                .iter()
+                .find(|(x, archived, _)| x == id && !archived)
+                .map(|(x, _, name)| (x.clone(), name.clone()))
+        };
+        let mut handed = Vec::new();
         let mut closed = Vec::new();
         let mut erase = Vec::new();
         let mut changed = HashSet::new();
@@ -1709,32 +1833,66 @@ impl Core {
                     record(a, now, "woke", String::new());
                     changed.insert(a.project_id.clone());
                 }
+                // Still due: waiting, or answered and not read yet (ESC-585).
+                if !a.state.waiting() && a.state != AskState::Answered {
+                    continue;
+                }
+                let orphan = a.handed.is_some() && a.author.agent.is_none();
+                // Its ticket deleted, or sent back to « À faire » while under way: the work goes
+                // again, the request with it (a request already handed over no longer hangs on it).
+                let gone_ticket = match &a.ticket_id {
+                    Some(id) if a.handed.is_none() && a.state.waiting() => {
+                        match tickets.iter().find(|(x, _, _)| x == id) {
+                            None => {
+                                Some(tr!("Son ticket a été supprimé.", "Its ticket was deleted."))
+                            }
+                            Some((_, Column::Todo, _)) if a.ticket_started => Some(tr!(
+                                "Son ticket a été renvoyé « À faire ».",
+                                "Its ticket was sent back to “To do”."
+                            )),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                };
+                // Its author went: its ticket validated, or the agent archived or deleted. It is still
+                // the user's to do: it goes to the squad lead, never out (ESC-585).
+                let validated = a
+                    .ticket_id
+                    .as_ref()
+                    .filter(|_| a.handed.is_none())
+                    .and_then(|id| tickets.iter().find(|(x, _, _)| x == id))
+                    .filter(|(_, c, _)| *c == Column::Done)
+                    .map(|(_, _, key)| key.clone());
+                let gone_agent = a.author.agent.as_ref().and_then(|id| {
+                    match agents.iter().find(|(x, _, _)| x == id) {
+                        None => Some(HandoverCause::Deleted),
+                        Some((_, true, _)) => Some(HandoverCause::Archived),
+                        _ => None,
+                    }
+                });
+                let cause = match (&validated, gone_agent) {
+                    (Some(_), _) => Some(HandoverCause::Ticket),
+                    (None, cause) => cause,
+                };
+                if gone_ticket.is_none() {
+                    if let Some(cause) = cause {
+                        hand_over(a, now, cause, validated, chef_of(&a.project_id));
+                        changed.insert(a.project_id.clone());
+                        handed.push(a.clone());
+                    } else if orphan {
+                        // Left without a living author: it goes to the lead the project has now.
+                        if let Some(to) = chef_of(&a.project_id) {
+                            hand_over(a, now, HandoverCause::Deleted, None, Some(to));
+                            changed.insert(a.project_id.clone());
+                            handed.push(a.clone());
+                        }
+                    }
+                }
                 if !a.state.waiting() {
                     continue;
                 }
-                let gone_agent = a.author.agent.as_ref().and_then(|id| {
-                    match agents.iter().find(|(x, _)| x == id) {
-                        None => Some(tr!("Son agent a été supprimé.", "Its agent was deleted.")),
-                        Some((_, true)) => {
-                            Some(tr!("Son agent a été archivé.", "Its agent was archived."))
-                        }
-                        _ => None,
-                    }
-                });
-                let gone_ticket = a.ticket_id.as_ref().and_then(|id| {
-                    match tickets.iter().find(|(x, _)| x == id) {
-                        None => Some(tr!("Son ticket a été supprimé.", "Its ticket was deleted.")),
-                        Some((_, Column::Done)) => {
-                            Some(tr!("Son ticket est terminé.", "Its ticket is done."))
-                        }
-                        Some((_, Column::Todo)) if a.ticket_started => Some(tr!(
-                            "Son ticket a été renvoyé « À faire ».",
-                            "Its ticket was sent back to “To do”."
-                        )),
-                        _ => None,
-                    }
-                });
-                if let Some(why) = gone_agent.or(gone_ticket) {
+                if let Some(why) = gone_ticket {
                     a.state = AskState::Retired;
                     a.reason = Some(why);
                 } else if a.expires_at <= now {
@@ -1793,6 +1951,12 @@ impl Core {
         }
         for id in erase {
             let _ = std::fs::remove_dir_all(self.ask_dir(&id));
+        }
+        for a in &handed {
+            match &a.author.agent {
+                Some(id) => log::info!("ask {} handed over to agent {}", a.id, short(id)),
+                None => log::info!("ask {} kept with no living author", a.id),
+            }
         }
         for a in &closed {
             if a.state == AskState::Expired {

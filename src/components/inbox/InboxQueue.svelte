@@ -9,6 +9,7 @@
   import AskThumb from './AskThumb.svelte';
   import type { InboxItem, ViewSource } from '../../lib/inbox/views';
   import { viewTitle } from './view-title';
+  import { handedMark } from '../../lib/inbox/handed';
 
   // The queue of the box « À toi » (direction B, `b-pleine.png`): « À toi » and its count, the scope (« Tous », « Ce
   // projet »), the meter (a cell per row: green handled, amber stopped, white the one open), « 3 traitées aujourd'hui · il
@@ -68,6 +69,8 @@
     else out.push(t(`inbox.kind.${a.kind}`));
     if (a.woke) out.push(t('inbox.queue.woke'));
     else if (a.urgency === 'today') out.push(t('inbox.queue.todayMark'));
+    // It changed hands (ESC-585): said once, quietly, after the rest.
+    if (a.handed) out.push(handedMark(a));
     return out;
   }
 
