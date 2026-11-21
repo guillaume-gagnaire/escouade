@@ -131,7 +131,9 @@ test('the Kanban and the Docs space turned off take their tab and their MCP tool
     .poll(async () => (await tools(server)).filter((t) => t === 'create_ticket' || t === 'get_spec_tree'))
     .toEqual(['create_ticket', 'get_spec_tree']);
   await closeSettings(dialog);
-  await expect(tabs.getByRole('button')).toHaveText([/^Agents/, /^Kanban/, 'Docs']);
+  await expect(tabs.getByRole('button')).toHaveText([/^Agents/, /^Kanban/, /^Docs/]);
+  // The page written while the Docs space was on is still to share: the badge of its tab counts it (ESC-534).
+  await expect(tabs.getByTestId('docs-badge')).toHaveText('1');
   expect(await tools(server)).toContain('write_spec_page');
   await tabs.getByRole('button', { name: /^Kanban/ }).click();
   await expect(page.getByText('Ticket gardé')).toBeVisible();
