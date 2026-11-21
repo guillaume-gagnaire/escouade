@@ -1,0 +1,64 @@
+# ESC-445 / a-19 : l'APK de la maquette Capacitor, pour l'essai 1 sur un vrai Android d'entrée de gamme (défiler la
+# conversation de 300 messages). Ce workflow ne tourne que sur la branche d'étude study/esc-445-android (poussée par
+# le chef, jamais fusionnée ni ouverte en PR). Ubuntu seulement : il ne prend aucun Mac à la CI de main. Il n'utilise
+# aucun secret du dépôt et ne publie rien : l'APK (release, signée de la clé de débogage du runner) est un artefact
+# du run. L'adresse du faux serveur se règle sur le téléphone par le QR code de l'appairage (`/pair.png`).
+name: Étude mobile (APK Android)
+
+on:
+  push:
+    branches: [study/esc-445-android]
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-study-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: APK Capacitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      VITE_MS_SERVER: http://10.0.2.2:8445
+      VITE_MS_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: SDK Android (plateforme 36, NDK 29)
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          NDK=$("$SDKM" --list 2>/dev/null | grep -oE 'ndk;29\.[0-9.]+' | sort -V | tail -1)
+          echo "NDK : $NDK"
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0" "$NDK" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK#ndk;}" >> "$GITHUB_ENV"
+      - name: Rust (cibles Android, cargo-ndk)
+        run: |
+          rustup target add aarch64-linux-android x86_64-linux-android
+          cargo install cargo-ndk --locked
+      - name: Dépendances (Svelte, vite, marked ; Capacitor)
+        run: |
+          npm ci
+          cd mobile-study/capacitor && npm ci
+      - name: Construire l'APK
+        run: bash mobile-study/capacitor/build-android.sh
+      - name: Nommer l'APK
+        run: |
+          mkdir -p out
+          cp mobile-study/capacitor/android/app/build/outputs/apk/release/*.apk out/escouade-etude-capacitor.apk
+          sha256sum out/escouade-etude-capacitor.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-capacitor
+          path: out/escouade-etude-capacitor.apk
+          if-no-files-found: error
