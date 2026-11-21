@@ -1,6 +1,7 @@
 <script lang="ts">
   import ServersPage from '../settings/ServersPage.svelte';
   import DevicesPage from '../settings/DevicesPage.svelte';
+  import PhonePage from '../settings/PhonePage.svelte';
   import { onDestroy, tick, untrack } from 'svelte';
   import { trapFocus } from '../../lib/focus';
   import { t } from '../../lib/i18n';
@@ -211,6 +212,8 @@
             <ServersPage />
           {:else if info.id === 'devices'}
             <DevicesPage />
+          {:else if info.id === 'phone'}
+            <PhonePage />
           {:else if info.id === 'agents'}
             <AgentsPage />
           {:else if info.id === 'accounts'}

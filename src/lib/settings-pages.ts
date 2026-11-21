@@ -22,6 +22,8 @@ export type SettingsPage =
   | 'servers'
   // The devices paired to the server the window is on (ESC-539, Réglages de l'espace › Appareils).
   | 'devices'
+  // The phone's access to the core the window is on (ESC-567): this computer's, or a server's.
+  | 'phone'
   | 'agents'
   | 'accounts'
   | 'services'
@@ -74,6 +76,7 @@ export const SETTINGS_PAGES: PageInfo[] = [
   page('features', 'app', 'blocks'),
   page('servers', 'app', 'server'),
   page('devices', 'app', 'monitor'),
+  page('phone', 'app', 'phone'),
   page('agents', 'app', 'agents'),
   page('accounts', 'app', 'user'),
   page('services', 'app', 'link'),
@@ -282,6 +285,12 @@ export const SETTINGS_ROWS: RowInfo[] = [
   // Réglages de l'espace › Appareils (ESC-539).
   row('devicesList', 'devices', 'spaces.devices.title'),
   row('devicesCode', 'devices', 'spaces.devices.create'),
+  // Réglages › Téléphone (ESC-567): its own file in the core (phone.json), nothing of the settings.
+  row('phoneAccess', 'phone', 'phone.access.label'),
+  row('phonePort', 'phone', 'phone.port.label'),
+  row('phoneTailscale', 'phone', 'phone.tailscale.label'),
+  row('phonePhones', 'phone', 'phone.phones.title'),
+  row('phoneKey', 'phone', 'phone.advanced.rotate', { advanced: true }),
   row('version', 'about', { raw: 'Escouade' }),
   row('credits', 'about', 'settings.about.credits'),
   row('site', 'about', 'settings.about.site'),

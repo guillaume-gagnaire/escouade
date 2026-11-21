@@ -2,7 +2,7 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-550"]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-550","ESC-567"]
 decisions: [169,175,183,189,198,197,204,201,218]
 compared: null
 ---
@@ -164,3 +164,13 @@ Reversée dans la 2.3, la 2.2.3 ajoute deux choses que les stratégies du poste 
 
 - Ce sont des clés de l'app : une équipe les impose tant que le poste en est, comme la voix ou les mises à jour.
 - Une seule catégorie de plus dans l'ADMX, les profils, le schéma de `/etc` et la page du site : « Fonctionnalités ».
+
+## Le téléphone (ESC-567)
+
+| Clé | Sorte | Ce qu'elle verrouille ou refuse |
+| --- | --- | --- |
+| `servers.phone` | restreindre (éteint seulement) | le tunnel WireGuard du téléphone (voir *Le tunnel du téléphone*) : Réglages › Téléphone, l'interrupteur grisé avec son cadenas ; aucun port UDP ouvert, rien demandé à la box, pas d'API sur l'adresse Tailscale ; posée sur un serveur, elle vaut pour lui |
+
+- `servers.remoteApi` à `false` coupe aussi le tunnel, et grise la même ligne : sans API, pas de téléphone. `servers.phone` seule laisse l'API à un poste par SSH (le mode serveur).
+- **À la différence d'une connexion de l'API**, un tunnel allumé **s'éteint aussitôt** quand l'une ou l'autre arrive (et le cœur la relit toutes les deux secondes tant qu'il tourne) : le port UDP fermé, sa redirection retirée de la box. L'allumer est refusé, avec qui l'impose (« L’accès depuis le téléphone est interdit par la stratégie de ce poste (servers.phone). »). Retirée, l'accès revient s'il était allumé.
+- Une ligne de plus dans l'ADMX, les ADML, les profils de macOS, le schéma de `/etc` et la page du site, dans la catégorie des serveurs.

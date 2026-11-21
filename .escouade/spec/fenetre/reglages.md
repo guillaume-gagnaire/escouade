@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537","ESC-550","ESC-530"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537","ESC-550","ESC-530","ESC-567"]
 decisions: [118,119,120,121,123,124,126,145,147,181,255]
 compared: null
 ---
@@ -218,3 +218,7 @@ Une page d'Escouade de plus, juste après Général : **« Fonctionnalités »**
 
 - Le registre a une rangée par fonctionnalité (`featureKanban`, `featureEditor`, `featureDocs`, `featureCost`, `featureStats`, `featureWorkflows`, `featureScheduled`, `featureOverseer`, `featureVoice`), qui règle la clé `features` des réglages ; `featuresUsed`, le relevé fait à la mise à jour, est au cœur seul.
 - **Une fonctionnalité coupée emporte ses pages et ses rangées** : la barre et la recherche n'ont plus Overseer (Overseer coupé), Voix (Voix coupée), ni pour un projet Kanban et Tickets importés (Kanban coupé). Dans les autres pages, ses rangées partent : « Taille du texte de l'éditeur », « Serveurs de langage » et « Extensions permises de l'éditeur » (Éditeur), « Économies du cache dans la barre d'état » (Coût), « Branche des docs » (Espace Docs), le groupe « Workflow » (Workflows).
+
+## Téléphone (ESC-567)
+
+Une page de plus parmi celles d'Escouade, **Téléphone** (icône du téléphone), après Serveurs et Appareils : l'accès depuis le téléphone au cœur où est la fenêtre (le poste, ou le serveur de son espace). Elle est toujours là, sur ce poste comme dans un espace serveur ; ce qu'elle dit et règle est décrit dans *Le tunnel du téléphone*. Ses lignes dans le registre : « Accès depuis le téléphone » (verrouillée par `servers.phone` et `servers.remoteApi`), « Port UDP », « Servir aussi sur l'adresse Tailscale », « Les téléphones », et sous « Avancé » « Changer la clé du tunnel ». Elle ne règle aucune clé des réglages de l'app : le cœur garde l'accès dans son propre fichier, et chaque geste s'y applique aussitôt.

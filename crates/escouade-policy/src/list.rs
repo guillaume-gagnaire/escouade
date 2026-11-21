@@ -277,6 +277,7 @@ pub const SERVERS: &str = "servers.allowed";
 pub const PERSONAL_SPACE: &str = "servers.personalSpace";
 pub const AGGREGATE_VIEW: &str = "servers.aggregateView";
 pub const REMOTE_API: &str = "servers.remoteApi";
+pub const PHONE: &str = "servers.phone";
 pub const CONTENTLESS: &str = "servers.contentlessNotifications";
 pub const MCP_EXTERNAL: &str = "mcp.externalClients";
 pub const TEAM_SERVER: &str = "team.server";
@@ -890,7 +891,7 @@ pub const POLICIES: &[Def] = &[
         key: REMOTE_API,
         sort: Sort::Restrict,
         form: off(),
-        rows: &[],
+        rows: &["phoneAccess"],
         within: None,
         category: Category::Servers,
         later: false,
@@ -904,6 +905,26 @@ pub const POLICIES: &[Def] = &[
             title: "Deny the remote API",
             help: "The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed.",
             locks: "The remote API refused at its start and at each connection.",
+        },
+    },
+    Def {
+        key: PHONE,
+        sort: Sort::Restrict,
+        form: off(),
+        rows: &["phoneAccess"],
+        within: None,
+        category: Category::Servers,
+        later: false,
+        example: "false",
+        fr: Text {
+            title: "Interdire l’accès depuis le téléphone",
+            help: "Le tunnel WireGuard du téléphone (ESC-567) ne s’allume pas sur ce poste ni sur un serveur qui la reçoit : aucun port UDP ouvert, rien dans la box, pas d’API sur l’adresse Tailscale. Le mode serveur par SSH reste permis. Seule la valeur false (0) s’impose.",
+            locks: "Réglages › Téléphone, éteint et grisé ; un tunnel allumé s’éteint aussitôt.",
+        },
+        en: Text {
+            title: "Deny the access from the phone",
+            help: "The phone’s WireGuard tunnel (ESC-567) does not turn on on this device nor on a server that receives it: no UDP port opened, nothing in the box, no API on the Tailscale address. The server mode through SSH stays allowed. Only the value false (0) is imposed.",
+            locks: "Settings › Phone, off and grayed; a tunnel that is on turns off at once.",
         },
     },
     // ---------- MCP ----------

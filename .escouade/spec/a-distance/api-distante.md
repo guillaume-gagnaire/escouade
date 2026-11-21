@@ -2,7 +2,7 @@
 title: "L'API distante"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « La fondation commune » (points 2 à 6), « La fondation 2a », « La fondation 2b », « Le classement des commandes », « Le mode serveur, MS-1 », « Le mode serveur, MS-3 »","src-tauri/src/remoteapi (list.rs, server.rs, proto.rs, devices.rs, pairing.rs, outbox.rs, sessions.rs, window.rs)","src-tauri/src/termlog.rs (le tampon numéroté des terminaux), src-tauri/src/tui.rs (TuiOutput)","src/lib/transport.ts (le front sur deux transports), src/lib/connection.svelte.ts, src/components/ConnectionBand.svelte","crates/escouade-command (la liste unique des commandes)","crates/escouade-policy/src/list.rs (servers.remoteApi)"]
-tickets: ["ESC-478","ESC-495","ESC-514","ESC-515","ESC-537"]
+tickets: ["ESC-478","ESC-495","ESC-514","ESC-515","ESC-537","ESC-567"]
 decisions: [189,193,202,216]
 compared: null
 ---
@@ -97,3 +97,13 @@ Chaque commande du cœur a sa classe, dans une **liste unique** d'où l'IPC de l
 ## Pas encore
 
 Une adresse `wss://` d'un domaine dans le client (le tunnel SSH et « Se connecter à un serveur » : voir *Se connecter à un serveur*) ; le téléphone.
+
+## Dans le tunnel du téléphone (ESC-567)
+
+L'API est aussi servie **dans le tunnel WireGuard du téléphone** (voir *Le tunnel du téléphone*), et sur l'adresse Tailscale de la machine quand Tailscale est là ; c'est le même serveur, les mêmes commandes, les mêmes bornes (les connexions du tunnel comptent dans les mêmes nombres).
+
+- **Sur le poste**, l'accès du téléphone allumé fait tourner l'API **sans aucun port sur la machine** : elle n'est jointe que par le tunnel. Un build de développement qui l'allume aussi sur 127.0.0.1 (`ESCOUADE_REMOTE_API`) la donne aux deux.
+- **Le `Host`** : dans le tunnel, l'adresse du tunnel (`10.77.0.1`) ; sur Tailscale, l'adresse ou le nom de la machine dans le tailnet. Le bouclage n'y est pas pris (un rebond de DNS à travers le tunnel), ni l'adresse du tunnel sur 127.0.0.1.
+- **L'`Origin`** : celle de la fenêtre, ou, par le tunnel et Tailscale seulement, celle de l'app mobile (`capacitor://localhost`, `https://localhost`, `http://localhost`).
+- **Un pair du tunnel lié à un appareil** (appairé à travers lui) ne fait passer que le jeton de cet appareil ; un autre jeton par ce pair est refusé (`token`) et compte comme une poignée de main ratée.
+- Réglages › Téléphone appelle `phone_status`, `phone_set`, `phone_check`, `phone_rotate_key` et `phone_remove`, **servies** : la page d'un espace serveur agit sur le tunnel du serveur.

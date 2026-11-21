@@ -25,6 +25,8 @@ services:
     ports:
       # 127.0.0.1 of the host only: reached through an SSH tunnel. Never "46480:46480", which opens it to the Internet.
       - '127.0.0.1:46480:46480'
+      # The phone's WireGuard tunnel (escouade-server phone on): its UDP port alone, the API stays inside the tunnel.
+      # - '51820:51820/udp'
     volumes:
       - escouade-data:/data
     # Its root filesystem read-only: it writes in /data, and /tmp in memory.

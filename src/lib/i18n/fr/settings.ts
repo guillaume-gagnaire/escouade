@@ -10,6 +10,10 @@ export default {
       label: 'Serveurs',
       desc: 'Les serveurs Escouade que ce poste connaît. Chacun est un espace : ses projets, ses agents, ses comptes et ses réglages restent sur lui.',
     },
+    phone: {
+      label: 'Téléphone',
+      desc: 'L’accès depuis le téléphone : le tunnel WireGuard intégré, son port UDP, la box, l’adresse publique, Tailscale, les téléphones.',
+    },
     devices: {
       label: 'Appareils',
       desc: 'Les appareils appairés au serveur de cet espace : les lister, en retirer un, créer un code pour un nouveau.',

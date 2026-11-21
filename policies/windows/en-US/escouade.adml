@@ -205,6 +205,12 @@ Key: servers.contentlessNotifications (Boolean, true (1)). Sort: restrict. “Di
 On the device: The remote API refused at its start and at each connection.
 
 Key: servers.remoteApi (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="servers_phone">Deny the access from the phone</string>
+      <string id="servers_phone_Explain">The phone’s WireGuard tunnel (ESC-567) does not turn on on this device nor on a server that receives it: no UDP port opened, nothing in the box, no API on the Tailscale address. The server mode through SSH stays allowed. Only the value false (0) is imposed.
+
+On the device: Settings › Phone, off and grayed; a tunnel that is on turns off at once.
+
+Key: servers.phone (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
       <string id="mcp_externalClients">Outside MCP clients</string>
       <string id="mcp_externalClients_Explain">What Claude outside Escouade (an outside MCP client) may do through Escouade’s MCP server: denied (nothing), readOnly (read only), allowed (everything). Escouade’s own agents are not concerned.
 

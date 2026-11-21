@@ -46,8 +46,30 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             hosts: Vec::new(),
             debug: false,
             update: update::Asked::default(),
+            endpoint: None,
         }
     );
+    // The phone's tunnel (ESC-567).
+    use crate::server::PhoneCommand;
+    for (line, want) in [
+        ("phone", PhoneCommand::Status),
+        ("phone status", PhoneCommand::Status),
+        ("phone on", PhoneCommand::On(None)),
+        ("phone on 51900", PhoneCommand::On(Some(51900))),
+        ("phone off", PhoneCommand::Off),
+        ("phone add Pixel", PhoneCommand::Add("Pixel".into())),
+        ("phone remove abc", PhoneCommand::Remove("abc".into())),
+    ] {
+        assert_eq!(
+            server::parse(&args(line)).unwrap().command,
+            Command::Phone(want),
+            "{line}"
+        );
+    }
+    let a = server::parse(&args("phone add Pixel --endpoint vps.example.net")).unwrap();
+    assert_eq!(a.endpoint.as_deref(), Some("vps.example.net"));
+    assert!(server::parse(&args("phone add")).is_err());
+    assert!(server::parse(&args("phone on nope")).is_err());
     let a = server::parse(&args("run --data-dir /srv/escouade --port 4213 --debug")).unwrap();
     assert_eq!(a.command, Command::Run);
     assert_eq!(

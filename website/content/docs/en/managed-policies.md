@@ -112,6 +112,7 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | Deny the aggregate view | `servers.aggregateView` · Boolean `false` (`0`) · restrict | The “Everywhere” view shows only the numbers of a work server (of the allowed servers’ list, or any server without one), no text nor gesture. Set on a server, it holds for it. Only the value false (0) is imposed. | “Everywhere” gives only the numbers of these spaces. |
 | Notifications without content | `servers.contentlessNotifications` · Boolean `true` (`1`) · restrict | The notifications from a work server (of the allowed servers’ list, or any server without one) say an agent is waiting, never what. Set on a server, it holds for it. Only the value true (1) is imposed. | The notifications of these spaces carry no text. |
 | Deny the remote API | `servers.remoteApi` · Boolean `false` (`0`) · restrict | The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed. | The remote API refused at its start and at each connection. |
+| Deny the access from the phone | `servers.phone` · Boolean `false` (`0`) · restrict | The phone’s WireGuard tunnel (ESC-567) does not turn on on this device nor on a server that receives it: no UDP port opened, nothing in the box, no API on the Tailscale address. The server mode through SSH stays allowed. Only the value false (0) is imposed. | Settings › Phone, off and grayed; a tunnel that is on turns off at once. |
 
 ### Outside MCP clients
 

@@ -57,6 +57,14 @@ pub const ORIGINS: &[&str] = &[
     "https://tauri.localhost",
 ];
 
+/// The `Origin`s an app of the phone comes with besides (ESC-567): its WebView's (Capacitor's, under iOS and Android).
+/// Taken through the phone's tunnel or Tailscale alone, never on the loopback, where they would be a page of the machine.
+pub const PHONE_ORIGINS: &[&str] = &[
+    "capacitor://localhost",
+    "https://localhost",
+    "http://localhost",
+];
+
 /// A terminal to resume: its channel, and the end of the last bytes the client received of it (none: nothing yet).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Resume {

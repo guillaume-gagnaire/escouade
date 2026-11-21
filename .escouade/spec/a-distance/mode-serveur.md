@@ -2,7 +2,7 @@
 title: "Le mode serveur"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image)","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »"]
-tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539"]
+tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567"]
 decisions: [202,216]
 compared: null
 ---
@@ -145,3 +145,18 @@ Il ne dit jamais de jeton, de code, de secret ni ce qu'écrit un terminal. `--de
 - L'écran « Mettre à jour le serveur » qui lance la commande ou dit l'image (le fait est exposé : `serverUpdate`).
 - Une adresse `wss://` d'un domaine dans le client.
 - Les serveurs de langage de l'éditeur, encore refusés à distance.
+
+## Le tunnel du téléphone sur un serveur (ESC-567)
+
+Un serveur sert aussi le téléphone par le tunnel WireGuard intégré (voir *Le tunnel du téléphone*), sur la même API. Il s'allume depuis Réglages de l'espace › Téléphone dans un client connecté, ou dans son terminal :
+
+| Commande | Ce qu'elle fait |
+| --- | --- |
+| `escouade-server phone` (`status`) | Le tunnel allumé ou non, son port UDP, sa clé publique, les téléphones |
+| `escouade-server phone on [PORT]` / `off` | Allume (51820 par défaut) ou éteint le tunnel |
+| `escouade-server phone add NOM [--endpoint HÔTE]` | Ajoute un téléphone et affiche sa config WireGuard et son QR code, pour l'app WireGuard officielle ; sa clé privée n'est montrée qu'une fois et gardée nulle part |
+| `escouade-server phone remove ID` | Retire un téléphone, ses connexions coupées |
+
+- Le serveur qui tourne relit ce que ces commandes changent dans les deux secondes.
+- Il n'y a pas de box : le serveur ne demande rien à une box, et dit d'ouvrir le port UDP dans son pare-feu (et dans le `ports` de Docker ou de Coolify : `51820:51820/udp`).
+- `servers.phone` à `false` (ou `servers.remoteApi`) posée sur le serveur l'interdit.

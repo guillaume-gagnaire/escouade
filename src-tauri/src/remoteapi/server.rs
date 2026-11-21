@@ -38,7 +38,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 use tauri::ipc::InvokeResponseBody;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::sync::Notify;
 use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
@@ -294,6 +294,42 @@ pub struct RemoteApi {
 pub enum Listen {
     Port(u16),
     Bound(std::net::TcpListener),
+    /// No socket of its own: it serves the connections it is handed (`serve_stream`), the phone's tunnel's
+    /// (ESC-567: on the desktop, the API is served in the tunnel alone).
+    Nothing,
+}
+
+/// Where a connection comes from (ESC-567), which says the `Host` and the `Origin` it may give.
+#[derive(Clone)]
+pub enum Via {
+    /// A port of the loopback: the window, another machine's client through SSH.
+    Loopback,
+    /// The phone's WireGuard tunnel, from one of its peers.
+    Tunnel(Arc<dyn TunnelPeer>),
+    /// The machine's Tailscale address, from a machine of the tailnet: the names it is reached by.
+    Tailscale(Arc<Vec<String>>),
+}
+
+/// A peer of the phone's tunnel, as the API sees it (`phone`).
+pub trait TunnelPeer: Send + Sync {
+    /// The names a `Host` may give through it: the tunnel's address.
+    fn hosts(&self) -> Vec<String>;
+    /// The device it belongs to, once paired: the only token taken through it.
+    fn device(&self) -> Option<String>;
+    /// A device paired through it: it belongs to it from now on.
+    fn paired(&self, device: &str);
+    /// As the log says it.
+    fn label(&self) -> String;
+}
+
+impl Via {
+    fn hosts(&self) -> Vec<String> {
+        match self {
+            Via::Loopback => Vec::new(),
+            Via::Tunnel(peer) => peer.hosts(),
+            Via::Tailscale(names) => names.to_vec(),
+        }
+    }
 }
 
 impl RemoteApi {
@@ -319,15 +355,21 @@ impl RemoteApi {
         #[cfg(not(debug_assertions))]
         let devices = Devices::load(&core.data, core.secrets.clone());
         let listener = match listen {
-            Listen::Port(port) => TcpListener::bind((Ipv4Addr::LOCALHOST, port))
-                .await
-                .with_context(|| format!("remote API: port {port}"))?,
+            Listen::Port(port) => Some(
+                TcpListener::bind((Ipv4Addr::LOCALHOST, port))
+                    .await
+                    .with_context(|| format!("remote API: port {port}"))?,
+            ),
             Listen::Bound(socket) => {
                 socket.set_nonblocking(true)?;
-                TcpListener::from_std(socket)?
+                Some(TcpListener::from_std(socket)?)
             }
+            Listen::Nothing => None,
         };
-        let addr = listener.local_addr()?;
+        let addr = match &listener {
+            Some(l) => l.local_addr()?,
+            None => SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        };
         let api = Arc::new(Self {
             services,
             devices,
@@ -342,7 +384,10 @@ impl RemoteApi {
             stopped: Notify::new(),
             hosts: Mutex::new(Arc::new(Vec::new())),
         });
-        log::info!("remote API: listening on {addr}");
+        match &listener {
+            Some(_) => log::info!("remote API: listening on {addr}"),
+            None => log::info!("remote API: served in the phone's tunnel alone"),
+        }
         let me = api.clone();
         tokio::spawn(async move { me.accept(listener).await });
         Ok(api)
@@ -514,25 +559,36 @@ impl RemoteApi {
         }
     }
 
-    async fn accept(self: Arc<Self>, listener: TcpListener) {
+    /// A connection handed to it, from `via` (the phone's tunnel, Tailscale): served as one of its own socket's,
+    /// within the same bounds. False when it was turned away.
+    pub fn serve_stream(self: &Arc<Self>, stream: Box<dyn Io>, via: Via) -> bool {
+        if self.failing(Instant::now())
+            || self.pending.load(Ordering::Acquire) >= self.limits.pending
+        {
+            self.counts.turned_away.fetch_add(1, Ordering::Relaxed);
+            return false;
+        }
+        self.pending.fetch_add(1, Ordering::AcqRel);
+        let me = self.clone();
+        tokio::spawn(async move { me.connection(stream, via).await });
+        true
+    }
+
+    async fn accept(self: Arc<Self>, listener: Option<TcpListener>) {
         let mut devices = tokio::time::interval(DEVICES_EVERY);
         loop {
+            let accepting = async {
+                match &listener {
+                    Some(l) => l.accept().await,
+                    None => std::future::pending().await,
+                }
+            };
             tokio::select! {
                 _ = self.stopped.notified() => break,
                 _ = devices.tick() => self.sync_devices(),
-                accepted = listener.accept() => match accepted {
+                accepted = accepting => match accepted {
                     Ok((stream, _)) => {
-                        let now = Instant::now();
-                        if self.failing(now)
-                            || self.pending.load(Ordering::Acquire) >= self.limits.pending
-                        {
-                            self.counts.turned_away.fetch_add(1, Ordering::Relaxed);
-                            drop(stream);
-                            continue;
-                        }
-                        self.pending.fetch_add(1, Ordering::AcqRel);
-                        let me = self.clone();
-                        tokio::spawn(async move { me.connection(stream).await });
+                        let _ = self.serve_stream(Box::new(stream), Via::Loopback);
                     }
                     Err(e) => {
                         log::warn!("remote API: accept: {e}");
@@ -544,7 +600,7 @@ impl RemoteApi {
         log::info!("remote API: stopped");
     }
 
-    async fn connection(self: Arc<Self>, stream: TcpStream) {
+    async fn connection(self: Arc<Self>, stream: Box<dyn Io>, via: Via) {
         // The handshake under way counts until it is over, whatever its end.
         struct Pending<'a>(&'a AtomicUsize, bool);
         impl Pending<'_> {
@@ -565,10 +621,14 @@ impl RemoteApi {
             .max_message_size(Some(proto::MAX_MESSAGE))
             .max_frame_size(Some(proto::MAX_MESSAGE));
         // The callback's type is tungstenite's: its error, an HTTP answer, is large.
-        let hosts = self.hosts.lock().clone();
+        let hosts = match &via {
+            Via::Loopback => self.hosts.lock().clone(),
+            other => Arc::new(other.hosts()),
+        };
+        let through = !matches!(via, Via::Loopback);
         // The callback's type is tungstenite's: its error, an HTTP answer, is large.
         #[allow(clippy::result_large_err)]
-        let guard = |req: &Request, resp: Response| match guard(req, &hosts) {
+        let guard = |req: &Request, resp: Response| match guard(req, &hosts, through) {
             Ok(()) => Ok(resp),
             Err((status, why)) => {
                 log::warn!("remote API: refused a connection: {why}");
@@ -586,7 +646,12 @@ impl RemoteApi {
             Ok(Ok(ws)) => ws,
             Ok(Err(e)) => {
                 self.failed();
-                log::debug!("remote API: handshake of the WebSocket: {e}");
+                if through {
+                    // Said in the log of a server: what the trial in 4G looks for (a page opened in the tunnel).
+                    log::info!("remote API: a connection through the phone's tunnel or Tailscale that is no WebSocket ({e})");
+                } else {
+                    log::debug!("remote API: handshake of the WebSocket: {e}");
+                }
                 return;
             }
             Err(_) => {
@@ -645,6 +710,10 @@ impl RemoteApi {
                 Ok(ToServer::Pair { code, name }) => {
                     let messages = match self.pair(&code, &name) {
                         Ok((device, token)) => {
+                            // Through the phone's tunnel: its peer belongs to this device from now on.
+                            if let Via::Tunnel(peer) = &via {
+                                peer.paired(&device.id);
+                            }
                             let mut out = Vec::new();
                             if let Ok(text) =
                                 serde_json::to_string(&ToClient::Paired { device, token })
@@ -739,6 +808,25 @@ impl RemoteApi {
                     None,
                     None,
                     server_update,
+                ))
+            } else if let Some(bound) = match &via {
+                Via::Tunnel(peer) => peer.device().filter(|d| *d != device.id),
+                _ => None,
+            } {
+                // Through a peer of another device: its key and this token are not the same phone's.
+                self.failed();
+                log::warn!(
+                    "remote API: the token of « {} » through the tunnel's peer of another device ({bound})",
+                    device.name
+                );
+                Err(refuse(
+                    codes::TOKEN,
+                    tr!(
+                        "Jeton d’appareil absent, inconnu ou révoqué.",
+                        "Device token missing, unknown or revoked."
+                    ),
+                    None,
+                    None,
                 ))
             } else {
                 Ok(device)
@@ -1090,9 +1178,13 @@ impl RemoteApi {
     }
 }
 
+/// What a connection runs on: a TCP connection of the loopback or of Tailscale, or one of the phone's tunnel.
+pub trait Io: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static {}
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static> Io for T {}
+
 type WsSink =
-    futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<TcpStream>, Message>;
-type WsStream = futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<TcpStream>>;
+    futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<Box<dyn Io>>, Message>;
+type WsStream = futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<Box<dyn Io>>>;
 
 /// The few messages of a refusal, before the connection closes: 2 s each at most.
 async fn send_all(sink: &mut WsSink, messages: Vec<Message>) {
@@ -1216,6 +1308,7 @@ fn version_text(server: &str, client: &str, update: &str) -> String {
 fn guard(
     req: &Request,
     hosts: &[String],
+    through: bool,
 ) -> std::result::Result<(), (tauri::http::StatusCode, String)> {
     use tauri::http::StatusCode;
     if req.uri().path() != proto::PATH {
@@ -1229,7 +1322,14 @@ fn guard(
         .get("host")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
-    if !loopback_host(host) && !allowed_host(host, hosts) {
+    // Through the tunnel or Tailscale, the address the phone reached alone; on the loopback, the loopback (or a name
+    // asked for in so many words).
+    let host_ok = if through {
+        allowed_host(host, hosts)
+    } else {
+        loopback_host(host) || allowed_host(host, hosts)
+    };
+    if !host_ok {
         return Err((
             StatusCode::FORBIDDEN,
             format!("a Host that is not the loopback ({})", shown(host)),
@@ -1237,7 +1337,8 @@ fn guard(
     }
     if let Some(origin) = req.headers().get("origin") {
         let origin = origin.to_str().unwrap_or("");
-        if !proto::ORIGINS.contains(&origin) {
+        if !proto::ORIGINS.contains(&origin) && !(through && proto::PHONE_ORIGINS.contains(&origin))
+        {
             return Err((
                 StatusCode::FORBIDDEN,
                 format!("the Origin of a web page ({})", shown(origin)),

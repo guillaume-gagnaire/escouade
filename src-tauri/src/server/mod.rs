@@ -10,6 +10,9 @@
 //! - `escouade-server devices [list]`, `devices revoke <id>`: the paired devices;
 //! - `escouade-server health`: whether the server of the folder runs and still answers (the image's `HEALTHCHECK`);
 //! - `escouade-server update [--to X.Y.Z] [--beta] [--now] [--check]`: the server at a signed version (`update`);
+//! - `escouade-server phone [status]`, `phone on [PORT]`, `phone off`, `phone add NAME [--endpoint HOST]`,
+//!   `phone remove ID` (ESC-567): the phone's tunnel, its file changed, read again by a server that runs; `add` prints
+//!   the phone's WireGuard config and its QR code for the user alone (the official WireGuard app, until MO-4's pairing);
 //! - `--data-dir <folder>` (else `~/.escouade`), `--port <n>` (else [`DEFAULT_PORT`]), `--listen <address>` (another
 //!   interface than 127.0.0.1: for Docker, behind a tunnel or a proxy; it warns), `--allow-host <name>` (a `Host`
 //!   the API takes besides the loopback's: the name a TLS proxy serves it under), `--debug`, `--version`, `--help`.
@@ -55,8 +58,20 @@ pub enum Command {
     Revoke(String),
     Health,
     Update,
+    /// `phone …` (ESC-567).
+    Phone(PhoneCommand),
     Version,
     Help,
+}
+
+/// What `escouade-server phone` asks (ESC-567).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PhoneCommand {
+    Status,
+    On(Option<u16>),
+    Off,
+    Add(String),
+    Remove(String),
 }
 
 /// The command line, read.
@@ -72,6 +87,8 @@ pub struct Args {
     pub debug: bool,
     /// What `update` is asked.
     pub update: update::Asked,
+    /// Where a phone reaches the server (`phone add --endpoint`): its name or address on the Internet.
+    pub endpoint: Option<String>,
 }
 
 /// The command line `args` (without the program's name), with the process's variables. `--help` anywhere is the
@@ -98,6 +115,7 @@ pub fn parse_with(
         hosts: Vec::new(),
         debug: false,
         update: update::Asked::default(),
+        endpoint: None,
     };
     if let Some(v) = var(PORT_VAR) {
         out.port = port_of(&v)?;
@@ -148,6 +166,7 @@ pub fn parse_with(
                 out.hosts.push(v);
             }
             "--debug" => out.debug = true,
+            "--endpoint" => out.endpoint = Some(value("--endpoint")?),
             "--to" => {
                 update_flags = true;
                 out.update.to = Some(value("--to")?);
@@ -177,6 +196,18 @@ pub fn parse_with(
         ["devices", "revoke", id] => Command::Revoke(id.to_string()),
         ["health"] => Command::Health,
         ["update"] => Command::Update,
+        ["phone"] | ["phone", "status"] => Command::Phone(PhoneCommand::Status),
+        ["phone", "on"] => Command::Phone(PhoneCommand::On(None)),
+        ["phone", "on", port] => Command::Phone(PhoneCommand::On(Some(port_of(port)?))),
+        ["phone", "off"] => Command::Phone(PhoneCommand::Off),
+        ["phone", "add", name] => Command::Phone(PhoneCommand::Add(name.to_string())),
+        ["phone", "remove", id] => Command::Phone(PhoneCommand::Remove(id.to_string())),
+        ["phone", "add"] | ["phone", "remove"] => {
+            return Err(tr!(
+                "phone add attend un nom, phone remove l’id d’un téléphone (escouade-server phone)",
+                "phone add needs a name, phone remove a phone's id (escouade-server phone)"
+            ))
+        }
         ["devices", "revoke"] => {
             return Err(tr!(
                 "devices revoke attend l’id d’un appareil (escouade-server devices)",
@@ -253,7 +284,8 @@ pub fn help() -> String {
          escouade-server devices            les appareils appairés\n  \
          escouade-server devices revoke ID  révoque un appareil\n  \
          escouade-server health             le serveur tourne-t-il et répond-il ? (code 0 si oui)\n  \
-         escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z, --beta, --now, --check)\n\n\
+         escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z, --beta, --now, --check)\n  \
+         escouade-server phone              le tunnel WireGuard du téléphone (on [PORT], off, add NOM [--endpoint HÔTE], remove ID)\n\n\
          Options :\n  \
          --data-dir DOSSIER  le dossier des données (sinon ~/.escouade)\n  \
          --port N            le port de l’API distante (sinon {port})\n  \
@@ -268,7 +300,8 @@ pub fn help() -> String {
          escouade-server devices            the paired devices\n  \
          escouade-server devices revoke ID  revokes a device\n  \
          escouade-server health             does the server run and answer? (exit code 0 if so)\n  \
-         escouade-server update             puts the server at the latest signed version (--to X.Y.Z, --beta, --now, --check)\n\n\
+         escouade-server update             puts the server at the latest signed version (--to X.Y.Z, --beta, --now, --check)\n  \
+         escouade-server phone              the phone's WireGuard tunnel (on [PORT], off, add NAME [--endpoint HOST], remove ID)\n\n\
          Options:\n  \
          --data-dir FOLDER  the data folder (else ~/.escouade)\n  \
          --port N           the port of the remote API (else {port})\n  \
@@ -343,6 +376,7 @@ pub fn main(args: Vec<String>) -> i32 {
         Command::Revoke(id) => revoke(&args, id),
         Command::Health => health(&args),
         Command::Update => data_of(&args).and_then(|data| update::run(&data, &args.update)),
+        Command::Phone(what) => phone(&args, what),
         Command::Run => run(&args),
     };
     match done {
@@ -373,6 +407,93 @@ fn pair(args: &Args) -> Result<()> {
             pairing::MAX_TRIES
         )
     );
+    Ok(())
+}
+
+/// `phone …` (ESC-567): the phone's tunnel of the folder, its file changed (a server that runs reads it again within
+/// seconds). `add` prints the phone's private key, in its WireGuard config and its QR code, for the user alone: never in
+/// the log, kept nowhere.
+fn phone(args: &Args, what: &PhoneCommand) -> Result<()> {
+    let data = data_of(args)?;
+    let store = Arc::new(secrets::FileStore::open(&data)?);
+    let phone = crate::phone::Phone::load(&data, store);
+    match what {
+        PhoneCommand::Status => {
+            let s = phone.summary();
+            println!(
+                "{}",
+                if s.enabled {
+                    tr!(
+                        "Tunnel du téléphone : allumé, port UDP {}.",
+                        "Phone tunnel: on, UDP port {}.",
+                        s.port
+                    )
+                } else {
+                    tr!(
+                        "Tunnel du téléphone : éteint (port UDP {}).",
+                        "Phone tunnel: off (UDP port {}).",
+                        s.port
+                    )
+                }
+            );
+            if let Some(key) = &s.public_key {
+                println!("{}", tr!("Clé publique : {key}", "Public key: {key}"));
+            }
+            for p in phone.peers() {
+                println!("{}  {}  {}", p.id, p.name, p.address);
+            }
+        }
+        PhoneCommand::On(port) => {
+            phone.set_saved(Some(true), *port)?;
+            println!(
+                "{}",
+                tr!(
+                    "Tunnel du téléphone allumé sur le port UDP {} : ouvre-le dans le pare-feu du serveur.",
+                    "Phone tunnel on, on UDP port {}: open it in the server's firewall.",
+                    phone.summary().port
+                )
+            );
+        }
+        PhoneCommand::Off => {
+            phone.set_saved(Some(false), None)?;
+            println!(
+                "{}",
+                tr!("Tunnel du téléphone éteint.", "Phone tunnel off.")
+            );
+        }
+        PhoneCommand::Add(name) => {
+            let (config, peer) = phone.add_phone(name, args.endpoint.as_deref())?;
+            let qr = qrcode::QrCode::new(config.as_bytes())
+                .map(|c| {
+                    c.render::<qrcode::render::unicode::Dense1x2>()
+                        .quiet_zone(true)
+                        .build()
+                })
+                .unwrap_or_default();
+            println!(
+                "{}\n\n{qr}\n\n{config}\n{}",
+                tr!(
+                    "Téléphone « {} » ajouté ({}). Dans l'app WireGuard : + › Scanner un QR code.",
+                    "Phone “{}” added ({}). In the WireGuard app: + › Scan from QR code.",
+                    peer.name,
+                    peer.address
+                ),
+                tr!(
+                    "Cette config porte la clé privée du téléphone : elle n'est gardée nulle part, ne la partage pas.",
+                    "This config holds the phone's private key: it is kept nowhere, do not share it."
+                )
+            );
+        }
+        PhoneCommand::Remove(id) => {
+            if !phone.remove_peer(id)? {
+                bail!(tr!(
+                    "aucun téléphone {id} (escouade-server phone)",
+                    "no phone {id} (escouade-server phone)"
+                ));
+            }
+            println!("{}", tr!("Téléphone {id} retiré.", "Phone {id} removed."));
+        }
+    }
     Ok(())
 }
 
@@ -593,6 +714,26 @@ pub async fn serve(
         }
     };
     api.allow_hosts(endpoint.hosts.clone());
+    // The phone's tunnel (ESC-567), when Réglages de l'espace › Téléphone turned it on: the same API, in the tunnel.
+    core.phone.attach(&api);
+    core.phone.mark_server();
+    {
+        let core = core.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = core.phone.apply(&core).await {
+                log::warn!("escouade-server: the phone's tunnel is off: {e:#}");
+            }
+            // `escouade-server phone on|off|add|remove` from another process: its file read again, applied.
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                if core.phone.reload_if_changed() {
+                    if let Err(e) = core.phone.apply(&core).await {
+                        log::warn!("escouade-server: the phone's tunnel: {e:#}");
+                    }
+                }
+            }
+        });
+    }
     let addr = api.addr();
     let shown = match listen {
         Some(ip) if !ip.is_loopback() => addr.to_string(),

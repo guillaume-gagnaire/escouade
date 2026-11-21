@@ -118,6 +118,8 @@
       <true/>
       <key>servers.personalSpace</key>
       <false/>
+      <key>servers.phone</key>
+      <false/>
       <key>servers.remoteApi</key>
       <false/>
       <key>team.fingerprint</key>

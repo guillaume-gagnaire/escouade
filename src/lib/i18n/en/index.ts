@@ -44,6 +44,7 @@ import team from './team';
 import teamBoard from './teamBoard';
 import remote from './remote';
 import servers from './servers';
+import phone from './phone';
 import spaces from './spaces';
 import moves from './moves';
 import teamProjects from './teamProjects';
@@ -104,6 +105,7 @@ export const en = defineCatalog({
   teamBoard,
   remote,
   servers,
+  phone,
   spaces,
   moves,
   teamProjects,

@@ -1,11 +1,13 @@
 <script lang="ts">
-  // `describedby`: the id of the text that says more of the switch (why it cannot be changed, for instance).
+  // `describedby`: the id of the text that says more of the switch (why it cannot be changed, for instance);
+  // `onchange`: told the new value, for a switch whose change goes to the core rather than to a draft.
   let {
     on = $bindable(),
     label,
     disabled = false,
     describedby,
-  }: { on: boolean; label: string; disabled?: boolean; describedby?: string } = $props();
+    onchange,
+  }: { on: boolean; label: string; disabled?: boolean; describedby?: string; onchange?: (on: boolean) => void } = $props();
 </script>
 
 <button
@@ -16,7 +18,10 @@
   aria-label={label}
   aria-describedby={describedby}
   {disabled}
-  onclick={() => (on = !on)}
+  onclick={() => {
+    on = !on;
+    onchange?.(on);
+  }}
 ></button>
 
 <style>

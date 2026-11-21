@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Réglages › Téléphone : allume l’accès depuis ton téléphone. Escouade embarque son propre tunnel WireGuard, sans VPN ni droit d’administrateur, et n’ouvre qu’un port UDP : dans la box par UPnP ou NAT-PMP quand elle le permet, sinon il te dit quoi y faire, et il repère un CGNAT, ton adresse publique quand elle change, et Tailscale quand il est là. L’app mobile s’y appairera ; un poste géré peut l’interdire.
 - Serveur d’équipe : le fichier de l’équipe peut recommander ou imposer un réglage simple d’un plugin sur ses projets (jamais un secret ni un profil). Dans la page Plugins du projet, un réglage imposé est grisé avec « Imposé par l’équipe … », un réglage recommandé dit d’où il vient, et ce que le plugin refuse est dit avec la raison.
 - Projets privés : un agent qui tourne quand son projet devient privé s’arrête si son harness n’y est pas encore activé, aussitôt au repos ou à la fin de son tour au travail, et sa conversation dit pourquoi. Avant, son process pouvait continuer sur ce harness sans ton accord.
 - Une image jointe au message, ou au formulaire d’un ticket, s’agrandit d’un clic sur sa vignette, avant l’envoi : elle s’ouvre dans la visionneuse de la conversation, avec les autres images du message.

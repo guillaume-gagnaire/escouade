@@ -188,6 +188,9 @@ mod overseer_tests;
 mod pace;
 mod pagecrash;
 mod paths;
+pub mod phone;
+#[cfg(test)]
+mod phone_tests;
 #[cfg(test)]
 mod recovery_tests;
 #[cfg(test)]
@@ -807,20 +810,50 @@ pub fn run() {
                 Some(link) => link.listener.map(remoteapi::server::Listen::Bound),
                 None => remoteapi::server::port_asked().map(remoteapi::server::Listen::Port),
             };
+            // The phone's tunnel (ESC-567): the API it serves, made when the access goes on, without a socket of its
+            // own (served in the tunnel alone); the one of a build of development when there is one.
+            {
+                let factory_core = core.clone();
+                let factory_app = app.handle().clone();
+                core.phone.set_factory(Box::new(move || {
+                    let services = Arc::new(remoteapi::Services::of_app(
+                        factory_core.clone(),
+                        factory_app.clone(),
+                    ));
+                    Box::pin(async move {
+                        remoteapi::server::RemoteApi::start_with(
+                            services,
+                            remoteapi::server::Listen::Nothing,
+                            remoteapi::server::Limits::default(),
+                        )
+                        .await
+                    })
+                }));
+            }
+            let has_listen = listen.is_some();
             if let Some(listen) = listen {
                 let services = Arc::new(remoteapi::Services::of_app(
                     core.clone(),
                     app.handle().clone(),
                 ));
                 let handle = app.handle().clone();
+                let phone_core = core.clone();
                 tauri::async_runtime::spawn(async move {
                     let limits = remoteapi::server::Limits::default();
                     match remoteapi::server::RemoteApi::start_with(services, listen, limits).await {
                         Ok(api) => {
+                            phone_core.phone.attach(&api);
                             handle.manage(api);
                         }
                         Err(e) => log::warn!("remote API not served: {e:#}"),
                     }
+                    let _ = phone_core.phone.apply(&phone_core).await;
+                });
+            }
+            if !has_listen {
+                let phone_core = core.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = phone_core.phone.apply(&phone_core).await;
                 });
             }
             // The Principals of settings saved before 1.8.1 kept or dropped, once (ESC-128).

@@ -36,7 +36,7 @@ pub use escouade_policy::list::{
     Def as LockKey, Form, Sort, AGGREGATE_VIEW, ALLOW_BYPASS, AUTHORITIES, AUTO_UPDATE, CHANNEL,
     CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION, EXTENSIONS_ALLOWED,
     FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER,
-    PERSONAL_SPACE, PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, POLICIES as KEYS,
+    PERSONAL_SPACE, PHONE, PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, POLICIES as KEYS,
     PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS, TEAM_FINGERPRINT,
     TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
 };
@@ -782,6 +782,19 @@ impl Locks {
         Ok(())
     }
 
+    /// Whether the phone's tunnel may be on (ESC-567): the remote API allowed, and the phone too.
+    pub fn check_phone(&self) -> Result<()> {
+        self.check_remote_api()?;
+        if self.off(PHONE) {
+            bail!(tr!(
+                "L’accès depuis le téléphone est interdit {by} ({PHONE}).",
+                "The access from the phone is denied {by} ({PHONE}).",
+                by = self.by_line(PHONE)
+            ));
+        }
+        Ok(())
+    }
+
     /// What Claude outside Escouade may do through its MCP server: `denied`, `readOnly` or `allowed`.
     pub fn mcp_external(&self) -> &str {
         self.text(MCP_EXTERNAL).unwrap_or("allowed")
@@ -1442,7 +1455,18 @@ impl crate::core::Core {
         // The file of the plugins' secrets, of the app (never a project's): denied or allowed again at once (ESC-520).
         self.kept
             .deny(locks.check_secrets_file().err().map(|e| e.to_string()));
+        let phone_denied = locks.check_phone().is_err();
         *self.locks.write() = locks;
+        // The phone's tunnel off at once when a policy forbids it, on again when it no longer does (ESC-567).
+        if phone_denied {
+            self.phone.shutdown();
+        }
+        if !phone_denied && !self.phone.running() && self.phone.ready() {
+            let me = self.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = me.phone.apply(&me).await;
+            });
+        }
         *self.team_locks.write() = by_team;
         let before = self.settings.read().clone();
         let changed = {

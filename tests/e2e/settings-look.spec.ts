@@ -122,9 +122,9 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
   if (!small) expect.soft(await place(win), `the window's place, ${where}`).toLookLike(await place(pwin));
   expect.soft(await lookBut(win, ...size), `the window, ${where}`).toLookLike(await lookBut(pwin, ...size));
   const project = route === 'a-projet';
-  // At 1028 × 779, a project unfolded in the bar, with « Fonctionnalités » (ESC-550), makes it scroll: its scrollbar
-  // narrows its entries and its foot.
-  const narrowed = small && project ? ['width'] : [];
+  // A project unfolded in the bar, with « Fonctionnalités » (ESC-550) and « Téléphone » (ESC-567), makes it scroll, at
+  // 1440 × 900 too: its scrollbar narrows its entries and its foot.
+  const narrowed = project ? ['width'] : [];
   const pairs: [string, Locator, Locator, string[]][] = [
     ['the bar', win.locator('.s-nav'), pwin.locator('.a-nav'), small ? ['height'] : []],
     ['the search', win.locator('.s-nav .search'), pwin.locator('.a-nav .field.search'), []],
@@ -412,9 +412,9 @@ test('the settings open still with prefers-reduced-motion, their icons drawn', a
     .first()
     .evaluate((e) => getComputedStyle(e, '::after').transitionDuration);
   expect(Number.parseFloat(knob)).toBeLessThan(0.01);
-  // Each page of Escouade its icon (« Serveurs » too, ESC-537, « Fonctionnalités », ESC-550), « Tous les projets » and
+  // Each page of Escouade its icon (« Serveurs » too, ESC-537, « Fonctionnalités », ESC-550, « Téléphone », ESC-567), « Tous les projets » and
   // « À propos » too, and « Fermer ».
-  await expect(win.locator('.s-i svg[data-icon]')).toHaveCount(13);
+  await expect(win.locator('.s-i svg[data-icon]')).toHaveCount(14);
   await expect(win.getByRole('button', { name: 'Fermer' }).locator('svg[data-icon="close"]')).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });

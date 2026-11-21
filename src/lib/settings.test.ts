@@ -583,6 +583,7 @@ describe('settingsForm', () => {
       'Features',
       'Servers',
       'Devices',
+      'Phone',
       'Agents',
       'Accounts and harnesses',
       'Connected services',

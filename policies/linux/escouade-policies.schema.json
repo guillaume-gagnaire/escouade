@@ -265,6 +265,14 @@
       "title": "Deny the personal space",
       "type": "boolean"
     },
+    "servers.phone": {
+      "description": "The phone’s WireGuard tunnel (ESC-567) does not turn on on this device nor on a server that receives it: no UDP port opened, nothing in the box, no API on the Tailscale address. The server mode through SSH stays allowed. Only the value false (0) is imposed. Settings › Phone, off and grayed; a tunnel that is on turns off at once.",
+      "enum": [
+        false
+      ],
+      "title": "Deny the access from the phone",
+      "type": "boolean"
+    },
     "servers.remoteApi": {
       "description": "The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed. The remote API refused at its start and at each connection.",
       "enum": [

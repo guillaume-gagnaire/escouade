@@ -6725,6 +6725,57 @@ pub fn remote_pair_code(core: CoreState) -> Res<PairCode> {
     })
 }
 
+// ---------- Réglages › Téléphone (ESC-567) ----------
+//
+// Served: a server's window asks them of its core (Réglages de l'espace › Téléphone), the desktop's of its own.
+
+/// The phone's access as Réglages › Téléphone shows it: on or off, the port, the tunnel, the box, the public address,
+/// Tailscale, the phones.
+#[tauri::command]
+pub async fn phone_status(core: CoreState<'_>) -> Res<crate::phone::Status> {
+    let core = core.inner().clone();
+    Ok(core.phone.status(&core).await)
+}
+
+/// The phone's access changed: on or off, its UDP port, Tailscale on or off; applied at once. Refused when a policy
+/// of the device forbids it (`servers.remoteApi`, `servers.phone`), or when the port does not open (said as such).
+#[tauri::command]
+pub async fn phone_set(
+    core: CoreState<'_>,
+    enabled: Option<bool>,
+    port: Option<u16>,
+    tailscale: Option<bool>,
+) -> Res<crate::phone::Status> {
+    let core = core.inner().clone();
+    core.phone
+        .set(&core, enabled, port, tailscale)
+        .await
+        .map_err(err)?;
+    Ok(core.phone.status(&core).await)
+}
+
+/// The network looked at again now: the box, the public address, Tailscale.
+#[tauri::command]
+pub async fn phone_check(core: CoreState<'_>) -> Res<crate::phone::Status> {
+    let core = core.inner().clone();
+    core.phone.check().await;
+    Ok(core.phone.status(&core).await)
+}
+
+/// The tunnel's key changed: every phone must be paired again.
+#[tauri::command]
+pub async fn phone_rotate_key(core: CoreState<'_>) -> Res<crate::phone::Status> {
+    let core = core.inner().clone();
+    core.phone.rotate_key().map_err(err)?;
+    Ok(core.phone.status(&core).await)
+}
+
+/// A phone removed from the tunnel: its sessions and connections cut.
+#[tauri::command(async)]
+pub fn phone_remove(core: CoreState, id: String) -> Res<bool> {
+    core.phone.remove_peer(&id).map_err(err)
+}
+
 // ---------- What changes machines on a server (ESC-538) ----------
 //
 // This computer's side of what a server's window does here: the files of its agents kept in the downloads, its ports

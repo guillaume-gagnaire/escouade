@@ -407,6 +407,11 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `overseer_undo`
 - `overseer_view`
 - `overview_prs`
+- `phone_check` : Réglages › Téléphone (ESC-567) : le réseau revu (la box, l'adresse publique, Tailscale)
+- `phone_remove` : Réglages › Téléphone (ESC-567) : un téléphone retiré du tunnel, ses connexions coupées
+- `phone_rotate_key` : Réglages › Téléphone (ESC-567) : la clé du tunnel changée, chaque téléphone à appairer de nouveau
+- `phone_set` : Réglages › Téléphone (ESC-567) : l'accès allumé ou éteint, son port UDP, Tailscale ; refusé par la stratégie
+- `phone_status` : Réglages › Téléphone (ESC-567) : l'état du tunnel, du port, de la box, de l'adresse publique, de Tailscale
 - `plugin_approve_commands`
 - `plugin_discard`
 - `plugin_icon`
@@ -924,6 +929,22 @@ La spec le décrit (« Escouade à distance › Ce qui change de machine »), av
 
 Il repose sur la même fondation : l'API distante du cœur, servie dans un tunnel. Il vise le PC ou un serveur. Le tout se fait sans service tiers ni abonnement, avec une configuration réduite à une redirection de port dans la box et un QR code à scanner.
 
+### Le tunnel côté cœur, MO-2 (ESC-567, 2026-11-21)
+
+La spec le décrit (« Escouade à distance › Le tunnel du téléphone »). Le côté téléphone (l'app, sa clé, le QR code de l'appairage) est MO-3 et MO-4 (`MOBILE.md` § 8).
+
+- **Le pair WireGuard** (`src-tauri/src/phone/stack.rs`) : `boringtun` (le protocole seul, sans sa feature `device` : ni TUN ni pilote) sur une socket UDP du process, et `smoltcp` (une pile TCP/IP à Escouade, `medium-ip`, IPv4) dans le tunnel. Une seule tâche tient la socket, les sessions et la pile. Le cœur est `10.77.0.1/24`, chaque téléphone une adresse de `10.77.0.2` à `.254` (son `AllowedIPs`, la seule d'où ses paquets sont pris). Une poignée de main d'une clé inconnue est jetée sans réponse et comptée ; un datagramme qui n'est pas WireGuard aussi ; sous charge, les cookies de WireGuard (le `RateLimiter` de boringtun, partagé). Les octets d'une connexion attendent dans deux canaux bornés (32 morceaux de 16 Ko) : un lecteur lent retient l'écrivain par la fenêtre de TCP. 64 connexions à la fois.
+- **L'API dans le tunnel seulement** : la pile écoute `10.77.0.1:80` et remet chaque connexion à l'API (`RemoteApi::serve_stream`, `Via::Tunnel`). Sur le poste, l'API n'a alors aucune socket à elle (`Listen::Nothing`) : elle n'est sur aucune adresse de la machine. Dans le tunnel, le `Host` doit être l'adresse du tunnel (celui du bouclage y est refusé), l'`Origin` celle de la fenêtre ou de Capacitor (`capacitor://localhost`, `https://localhost`, `http://localhost`, refusées sur le bouclage), et le jeton d'appareil reste demandé. Un pair appairé comme un appareil (un `pair` passé par lui) ne prend plus que le jeton de cet appareil ; l'appareil révoqué emporte son pair.
+- **Ce qui est gardé** (`phone.json` dans le dossier des données, lisible du seul propriétaire) : allumé ou non, le port (51820 par défaut), Tailscale ou non, les pairs (nom, clé publique, adresse, appareil), l'adresse publique vue et quand elle a changé. La clé privée du tunnel est au trousseau (`phone-tunnel-key`), dans le fichier des secrets sur un serveur, dans `phone.json` quand le trousseau la refuse.
+- **La box** (`phone/nat.rs`) : l'adresse de la machine sur son réseau (la route, sans rien envoyer), une IPv6 globale ; UPnP (`igd-next`) puis NAT-PMP (écrit à la main, RFC 6886 : la passerelle UPnP, sinon le `.1` du réseau) ouvrent le port UDP pour une heure, renouvelé toutes les cinq minutes avec le regard sur le réseau, retiré à l'extinction ; l'adresse de la box sur Internet (UPnP, NAT-PMP) ; l'adresse vue de dehors par STUN (`stun.cloudflare.com`, puis `stun.l.google.com` : une requête de liaison, rien d'autre ne part). Un CGNAT (ou une double box) quand l'adresse de la box est partagée (100.64.0.0/10) ou privée, ou n'est pas l'adresse publique ; une machine sur Internet elle-même (un VPS) quand l'adresse publique est la sienne. Jamais de demande à la box sur un serveur (son pare-feu).
+- **L'adresse publique relue** toutes les cinq minutes : un changement est gardé et dit (« Changée le … (avant : …) »), pour les téléphones appairés avant.
+- **Tailscale** (`phone/tailscale.rs`) : sa commande (`tailscale ip -4`, `status --json` pour le nom MagicDNS), là où il s'installe ou dans le `PATH`, sinon la route vers 100.100.100.100. Trouvé, et « Servir aussi sur l'adresse Tailscale » allumé (par défaut), l'API est servie en TCP sur l'adresse Tailscale de la machine et le port du tunnel, pour une machine du tailnet seulement (100.64.0.0/10, `fd7a:115c:a1e0::/48`), le jeton d'appareil demandé.
+- **La stratégie** : `servers.phone` à `false` (liste unique d'`escouade-policy` : ADMX/ADML, profil macOS, schéma Linux), ou `servers.remoteApi` à `false`, interdisent le tunnel : refusé à l'allumage, éteint aussitôt quand la stratégie arrive (`apply_locks`) et revu toutes les deux secondes, rallumé quand elle part.
+- **Réglages › Téléphone** (`PhonePage.svelte`) : l'accès, le port, l'état du tunnel et l'adresse de l'API dedans, la box (ouvert par UPnP ou NAT-PMP, ou le geste à faire avec l'adresse de la machine, ce que la box a répondu), un CGNAT et ses issues, l'IPv6, l'adresse publique et son changement, Tailscale, les téléphones (leur dernière poignée de main, « Retirer »), et sous « Avancé » la clé publique et « Changer la clé du tunnel ». La même page dans un espace serveur agit sur le cœur du serveur (les commandes sont servies) et dit son pare-feu au lieu d'une box.
+- **`escouade-server phone`** : `status`, `on [PORT]`, `off`, `add NOM [--endpoint HÔTE]` (la config WireGuard du téléphone et son QR code dans le terminal, pour l'app WireGuard officielle, en attendant l'appairage de MO-4 : sa clé privée n'est gardée nulle part), `remove ID`. Le serveur qui tourne relit `phone.json` dans les deux secondes. Une page ouverte dans le tunnel qui n'est pas une WebSocket est dite dans son journal.
+- **Les essais** : Rust (`phone_tests` : la poignée de main et l'API jointe dans le tunnel par un pair WireGuard de test écrit avec la même pile, rien hors du tunnel ni d'autre `Host` ou `Origin` dedans, une clé inconnue sans réponse, un pair retiré, la clé tournée, un pair lié à son appareil et emporté par sa révocation, la box et l'adresse publique relue par une fausse box NAT-PMP et un faux STUN sur le bouclage, la stratégie qui coupe, Tailscale, un port pris, 2 Mo dans chaque sens, `escouade-server phone add` repris par le cœur qui tourne) ; Vitest (`PhonePage.test.ts`) ; e2e (`phone.spec.ts`, avec la fausse box). Aucun essai n'atteint la box de l'utilisateur : les e2e ont `ESCOUADE_PHONE_NET=off` (ou une fausse box, `fake;natpmp=…;stun=…;local=…`), lu en build de développement seulement.
+- **Pas encore** : l'essai réel en 4G (« L'ordre proposé », 1 : un geste de l'utilisateur, déposé dans « À toi ») ; le QR code de l'appairage et la sorte « téléphone » des appareils (MO-4) ; le côté téléphone (MO-3) ; un nom DynDNS donné à la place de l'adresse publique ; le pare-feu IPv6 de la box ouvert par UPnP (pinhole) ; empêcher la veille du poste tant que l'accès est allumé.
+
 ### Architecture retenue
 
 Escouade embarque un pair WireGuard, et son serveur n'est jamais exposé à Internet : seul le port UDP de WireGuard l'est.
@@ -1155,18 +1176,18 @@ Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un se
 
 **Téléphone**
 - [ ] Essais : `boringtun` + `smoltcp` dans un binaire de test, joint depuis l'app WireGuard d'un téléphone en 4G, sous Windows, macOS et Linux.
-- [ ] Module `remote` (backend) :
+- [x] Module `phone` (backend) (ESC-567, `src-tauri/src/phone`) :
   - le pair WireGuard et la pile réseau ;
   - l'API distante dans le tunnel ;
-  - les pairs et les jetons gardés (clés privées dans le trousseau comme les jetons des intégrations, en fichier sur un serveur).
-- [ ] Ouverture du port par UPnP et NAT-PMP, détection du CGNAT et de l'adresse publique, suivi de son changement.
+  - les pairs et la clé gardés (la clé privée du tunnel dans le trousseau, en fichier sur un serveur).
+- [x] Ouverture du port par UPnP et NAT-PMP, détection du CGNAT et de l'adresse publique, suivi de son changement (ESC-567, `phone::nat`).
 - [ ] Réglages › Téléphone :
-  - l'activation et le port ;
-  - un QR code par appareil ;
-  - la liste des appareils et leur révocation ;
-  - l'état : port ouvert ou non, adresse publique, dernière connexion.
+  - [x] l'activation et le port (ESC-567) ;
+  - [ ] un QR code par appareil (MO-4) ;
+  - [ ] la liste des appareils et leur révocation (les téléphones du tunnel et « Retirer » : ESC-567 ; le pair retiré avec le jeton : MO-4) ;
+  - [x] l'état : port ouvert ou non, adresse publique, dernière connexion (ESC-567).
 - [ ] La mise en page mobile des écrans retenus (option A).
-- [ ] Détection de Tailscale et de son adresse.
+- [x] Détection de Tailscale et de son adresse (ESC-567, `phone::tailscale`).
 
 **Docs**
 - [ ] README et site : le mode serveur (installation sur un VPS, connexion par SSH) et l'accès depuis le téléphone.

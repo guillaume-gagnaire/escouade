@@ -51,6 +51,8 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
         "servers.contentlessNotifications",
         // The remote API of the core (ESC-478, docs/REMOTE.md).
         "servers.remoteApi",
+        // The phone's tunnel (ESC-567).
+        "servers.phone",
         "mcp.externalClients",
         "team.server",
         "team.fingerprint",
@@ -73,7 +75,7 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
     ] {
         assert!(def(key).is_some(), "{key} missing from the list");
     }
-    assert_eq!(POLICIES.len(), 42);
+    assert_eq!(POLICIES.len(), 43);
 }
 
 #[test]

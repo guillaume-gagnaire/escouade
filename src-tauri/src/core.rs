@@ -1176,6 +1176,8 @@ pub struct Core {
     pub(crate) secrets: Arc<dyn integrations::secrets::SecretStore>,
     /// The same store, with what the file holds and the gestures on it (Réglages › Plugins, a plugin's settings).
     pub(crate) kept: Arc<integrations::kept::Kept>,
+    /// The phone's access (ESC-567): the WireGuard tunnel, the API served in it, Réglages › Téléphone.
+    pub phone: Arc<crate::phone::Phone>,
     /// Where the Trello and GitHub APIs are.
     pub bases: RwLock<integrations::Bases>,
     /// The GitHub CLI's token, once asked for.
@@ -2253,6 +2255,7 @@ impl Core {
             crate::plugins::events::QUEUE,
         );
         let overseer = crate::overseer_core::Hub::load(&data);
+        let phone = crate::phone::Phone::load(&data, secrets.clone());
         let facts = crate::facts::Bus::new();
         facts.subscribe(plugin_events.clone());
         let core = Arc::new_cyclic(|me| Self {
@@ -2368,6 +2371,7 @@ impl Core {
             accounts: RwLock::new(accounts),
             secrets,
             kept,
+            phone,
             bases: RwLock::new(integrations::Bases::from_env()),
             gh_token: Mutex::default(),
             forges: RwLock::new(crate::forge::Registry::standard()),
@@ -5862,6 +5866,8 @@ impl Core {
 
     pub fn shutdown(&self) {
         self.quitting.store(true, Ordering::Release);
+        // The phone's tunnel closes: no phone reaches a core that stops.
+        self.phone.shutdown();
         // The microphone is let go first.
         self.host.release_devices();
         self.mcp.stop();

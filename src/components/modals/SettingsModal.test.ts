@@ -101,6 +101,7 @@ describe('SettingsModal', () => {
       'Général',
       'Fonctionnalités',
       'Serveurs',
+      'Téléphone',
       'Agents',
       'Comptes et harness',
       'Services connectés',
@@ -123,6 +124,7 @@ describe('SettingsModal', () => {
       'sliders',
       'blocks',
       'server',
+      'phone',
       'agents',
       'user',
       'link',
@@ -158,7 +160,7 @@ describe('SettingsModal', () => {
     await userEvent.click(tab('site'));
     expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
-    expect(entries().slice(11, 22)).toEqual([
+    expect(entries().slice(12, 23)).toEqual([
       'demo-api',
       'site',
       'Projet',
@@ -1610,6 +1612,7 @@ describe('SettingsModal in English', () => {
       'General',
       'Features',
       'Servers',
+      'Phone',
       'Agents',
       'Accounts and harnesses',
       'Connected services',

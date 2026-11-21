@@ -345,6 +345,12 @@ escouade_command::commands! {
         commands::remote_devices,
         commands::remote_device_revoke,
         commands::remote_pair_code,
+        // Réglages › Téléphone (ESC-567): the phone's tunnel of this core, a server's from its space's settings.
+        commands::phone_status,
+        commands::phone_set,
+        commands::phone_check,
+        commands::phone_rotate_key,
+        commands::phone_remove,
         // The box « À toi » (ESC-509): the phone's first screen, its files' bytes in raw frames.
         commands::inbox_list,
         commands::inbox_get,

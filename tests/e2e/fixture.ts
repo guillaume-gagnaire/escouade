@@ -683,6 +683,9 @@ export const test = base.extend<{
       ESCOUADE_STORE_TEST_KEY: process.env.ESCOUADE_STORE_TEST_KEY,
       // Nor Open VSX (the editor's extensions, ESC-481): a closed port, unless a test starts the fake one and names it.
       ESCOUADE_TEST_OPEN_VSX: NO_STORE,
+      // Nor the user's box nor a STUN server (the phone's tunnel, ESC-567): nothing is looked at, nothing opened, unless
+      // a test names its fake box (`fake;natpmp=…;stun=…`).
+      ESCOUADE_PHONE_NET: 'off',
       // Nor the real updates of Escouade (ESC-543): a debug build given no test server checks none (`updates::endpoints_of`),
       // so that none is downloaded, and none installed at « Quitter » over the app of the machine. Only the tests of the
       // updates give theirs (`appEnv: { ESCOUADE_UPDATE_ENDPOINT }`); an inherited one is not taken. The end of each test

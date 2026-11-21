@@ -9,6 +9,10 @@ export default defineZone('settings', {
       label: 'Servers',
       desc: 'The Escouade servers this computer knows. Each one is a space: its projects, agents, accounts and settings stay on it.',
     },
+    phone: {
+      label: 'Phone',
+      desc: 'The access from the phone: the built-in WireGuard tunnel, its UDP port, the box, the public address, Tailscale, the phones.',
+    },
     devices: {
       label: 'Devices',
       desc: 'The devices paired with this space’s server: list them, remove one, create a code for a new one.',
