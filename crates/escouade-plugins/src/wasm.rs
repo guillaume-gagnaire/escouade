@@ -23,7 +23,9 @@
 //!   connection itself uses ([`forbidden`]). Two things open this (ESC-332): `{account}`, the host the user typed for one
 //!   of its accounts and that host alone, in http or on the local network; and `local:shared`, in http, the port the core
 //!   read in the output of the process it started for the plugin, while it lives. The proxy and the TLS of Réglages ›
-//!   Réseau are followed: through a proxy only the name is judged, and the journal says so.
+//!   Réseau are followed: through a proxy, the name is resolved here as well and refused when it gives an address of the
+//!   machine or of the local network (audit SEC-09); a name the machine cannot resolve is left to the proxy, and the
+//!   journal says so.
 //! - **Its thread** ([`serve`]) waits on one channel, whatever comes: a line of the core, the end of a fetch, a piece of
 //!   a stream, a timer. It writes all that came on the module's input, runs one turn, then serves what the module wrote.
 //!   What lasts runs beside it ([`Beside`]), on the host's runtime ([`net`]), and comes back on the channel: a slow call
@@ -964,6 +966,22 @@ pub fn forbidden(ip: IpAddr) -> bool {
                 let [c, d] = s[7].to_be_bytes();
                 return forbidden_v4(Ipv4Addr::new(a, b, c, d));
             }
+            let v4_of = |hi: u16, lo: u16| {
+                let [a, b] = hi.to_be_bytes();
+                let [c, d] = lo.to_be_bytes();
+                Ipv4Addr::new(a, b, c, d)
+            };
+            // 6to4 (2002::/16): the IPv4 of its relay in its next 32 bits (audit SEC-09).
+            if s[0] == 0x2002 && forbidden_v4(v4_of(s[1], s[2])) {
+                return true;
+            }
+            // Teredo (2001::/32): its server's IPv4 in the next 32 bits, its client's in the last 32, each bit flipped.
+            if s[0] == 0x2001
+                && s[1] == 0
+                && (forbidden_v4(v4_of(s[2], s[3])) || forbidden_v4(v4_of(!s[6], !s[7])))
+            {
+                return true;
+            }
             v6.is_loopback()
                 || v6.is_unspecified()
                 || v6.is_multicast()
@@ -1198,6 +1216,10 @@ impl Fetcher {
         let h = host.trim_end_matches('.').to_ascii_lowercase();
         !h.is_empty()
             && self.network.iter().any(|w| {
+                // A host too wide (no dot, a public suffix, audit SEC-09) covers nothing, read before or not.
+                if crate::manifest::network_word_refused(w) {
+                    return false;
+                }
                 let p = w.trim().trim_end_matches('.').to_ascii_lowercase();
                 match p.strip_prefix("*.") {
                     Some(d) => !d.is_empty() && h.ends_with(&format!(".{d}")),
@@ -1329,6 +1351,35 @@ impl Fetcher {
         })
     }
 
+    /// Through the proxy, which resolves the name itself, the name resolved here as well (audit SEC-09): refused when one
+    /// of its addresses is of the machine or of the local network. A name this machine cannot resolve is the proxy's to
+    /// judge (the journal says so); a host of its accounts, or a call that does not go by the proxy, is not looked at.
+    async fn judged_by_proxy(&self, judged: &Judged) -> Result<(), (i64, String)> {
+        if judged.direct || !self.proxied(&judged.name) || (self.open())(&judged.name) {
+            return Ok(());
+        }
+        let name = judged.name.trim_matches(['[', ']']);
+        let all: Vec<IpAddr> = match &self.dns {
+            Some(f) => f(name),
+            None => match tokio::net::lookup_host((name, 0)).await {
+                Ok(addrs) => addrs.map(|a| a.ip()).collect(),
+                Err(_) => Vec::new(),
+            },
+        };
+        let bad: Vec<IpAddr> = all.into_iter().filter(|ip| forbidden(*ip)).collect();
+        if bad.is_empty() {
+            return Ok(());
+        }
+        Err((
+            REFUSED,
+            Forbidden {
+                host: judged.name.clone(),
+                addrs: bad,
+            }
+            .to_string(),
+        ))
+    }
+
     /// Whether a call to `name` goes through the proxy of the settings.
     fn proxied(&self, name: &str) -> bool {
         super::socket::proxy_for(&self.live.read(), name).is_some()
@@ -1346,7 +1397,7 @@ impl Fetcher {
         let direct =
             self.routes.contains_key(&host) || parsed.as_ref().is_some_and(|u| self.is_local(u));
         let by = if !direct && self.proxied(&host) {
-            " (by the proxy: its name judged, not its addresses)"
+            " (by the proxy: its addresses judged as this machine resolves them)"
         } else {
             ""
         };
@@ -1466,6 +1517,7 @@ impl Fetcher {
     pub async fn fetch(&self, params: &Value) -> Result<Value, (i64, String)> {
         let url = params.get("url").and_then(Value::as_str).unwrap_or("");
         let judged = self.judge(url, Way::Http)?;
+        self.judged_by_proxy(&judged).await?;
         let name = judged.name.clone();
         let req = self.request(&judged, params)?.timeout(self.seconds);
         let _turn = self
@@ -1509,6 +1561,7 @@ impl Fetcher {
     ) -> Result<reqwest::Response, (i64, String)> {
         let url = params.get("url").and_then(Value::as_str).unwrap_or("");
         let judged = self.judge(url, Way::Http)?;
+        self.judged_by_proxy(&judged).await?;
         let req = self.request(&judged, params)?;
         match tokio::time::timeout(self.seconds, req.send()).await {
             Ok(r) => r.map_err(|e| refusal_of(&judged.name, e, self.seconds)),
@@ -1536,6 +1589,7 @@ impl Fetcher {
         }
         let settings = self.live.read().clone();
         if let Some(proxy) = super::socket::proxy_for(&settings, &host) {
+            self.judged_by_proxy(judged).await?;
             return super::socket::tunnel(&proxy, &host, port)
                 .await
                 .map_err(failed);

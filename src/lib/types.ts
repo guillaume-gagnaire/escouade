@@ -43,6 +43,8 @@ export interface Settings {
   proxyNeverDirect: boolean | null;
   noProxy: string;
   proxyTerminals: boolean;
+  /** « Mode hors ligne » (ESC-596): the updates, the store, the revocation list and the statistics stop. */
+  offline?: boolean;
   /** « Ignorer la vérification des certificats TLS »: through the proxy alone, nothing without one (SEC-07). */
   insecureTls: boolean;
   /** « Autorités de certification supplémentaires »: a `.pem` file trusted as well as the system's store; empty, none. */

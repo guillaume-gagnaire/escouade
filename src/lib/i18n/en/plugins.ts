@@ -142,6 +142,7 @@ export default defineZone('plugins', {
     thirdRefuse: 'Refuse',
     revocations: 'Revocation list read at {time} · no. {serial}, signed, read again every 6 hours',
     revocationsNone: 'Revocation list: none read yet; read again every 6 hours',
+    revocationsStale: 'It holds since {date}: more than 7 days without a new list, a recent withdrawal may not have reached this machine.',
     readAgain: 'Read again now',
   },
 
@@ -155,6 +156,8 @@ export default defineZone('plugins', {
     read: 'Store read on {when}',
     unreachable: 'Store unreachable: offers of {when}',
     unreachableNone: 'Store unreachable: no offer read yet',
+    offline: 'Offline mode: offers of {when}',
+    offlineNone: 'Offline mode: no offer read',
     row: 'v{from} → v{to}',
     update: 'Update',
     all: { one: 'Update all · {count}', other: 'Update all · {count}' },

@@ -161,6 +161,9 @@ export default defineZone('shell', {
   status: {
     activeWord: { one: 'active', other: 'active' },
     waitingWord: 'waiting',
+    offline: 'Offline',
+    offlineTip: 'Offline mode: no updates, no store, no revocation list, no statistics. Click for the setting.',
+    offlineImposedTip: 'Offline mode, imposed by the policy of this device: no updates, no store, no revocation list, no statistics.',
     doneWord: { one: 'done', other: 'done' },
     harnessAccount: '{harness}, {account}',
     overage: 'extra usage',

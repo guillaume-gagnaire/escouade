@@ -224,6 +224,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('noProxy', 'advanced', 'settings.network.exclusions', s('noProxy')),
   row('proxyNeverDirect', 'advanced', 'settings.network.neverDirect', s('proxyNeverDirect')),
   row('proxyTerminals', 'advanced', 'settings.network.proxyTerminals', s('proxyTerminals')),
+  row('offline', 'advanced', 'settings.network.offline', s('offline')),
   row('extraCaFile', 'advanced', 'settings.network.extraCa', s('extraCaFile')),
   row('insecureTls', 'advanced', 'settings.network.insecureTls', s('insecureTls')),
   row('pwshPath', 'advanced', { raw: 'PowerShell 7' }, s('pwshPath')),

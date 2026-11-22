@@ -143,6 +143,8 @@ export async function generate() {
     'src/manifest.ts': await pretty(manifestTs(JSON.parse(read('schemas/plugin-1.json')))),
     'vendor/plugin-manifest.mjs': read('schemas/plugin-manifest.mjs'),
     'vendor/plugin-manifest.d.ts': read('schemas/plugin-manifest.d.ts'),
+    // The public suffixes it refuses as a host of `permissions.network` (audit SEC-09).
+    'vendor/public-suffixes.mjs': read('schemas/public-suffixes.mjs'),
   };
 }
 

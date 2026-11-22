@@ -128,6 +128,20 @@
   <Row label={t('settings.network.proxyTerminals')}>
     <Switch label={t('settings.network.proxyTerminals')} bind:on={s.proxyTerminals} />
   </Row>
+  <!-- « Mode hors ligne » (ESC-596): locked on when a policy of this device imposes it. -->
+  <Row
+    label={t('settings.network.offline')}
+    desc={app.offline.imposed
+      ? `${t('settings.network.offlineDesc')} ${t('settings.network.offlineImposed')}`
+      : t('settings.network.offlineDesc')}
+    descId="offline-desc"
+  >
+    {#if app.offline.imposed}
+      <Switch label={t('settings.network.offline')} on={true} disabled describedby="offline-desc" />
+    {:else}
+      <Switch label={t('settings.network.offline')} bind:on={() => !!s.offline, (v) => (s.offline = v)} describedby="offline-desc" />
+    {/if}
+  </Row>
   <Row
     label={t('settings.network.extraCa')}
     desc={`${t('settings.network.extraCaDesc')} ${t('settings.network.certificatesNote')}`}

@@ -60,6 +60,10 @@ pub struct Settings {
     pub no_proxy: String,
     /// Also export the proxy variables in integrated terminals.
     pub proxy_terminals: bool,
+    /// « Mode hors ligne » (audit SEC-18, ESC-596): the four flows the app starts by itself stop at once, the updates
+    /// of the app and of the plugins, the store's catalogue, the revocation list and the usage statistics. A managed
+    /// device may impose it (the policy `network.offline`, `offline.rs` of the app), whatever this says.
+    pub offline: bool,
     /// « Ignorer la vérification des certificats TLS » (a proxy that decrypts the traffic with a
     /// certificate of its own): kept for the installations that have it, it holds for the
     /// connections through `proxy_url` alone, and does nothing with no proxy (`crate::tls`).
@@ -984,6 +988,7 @@ impl Default for Settings {
             proxy_never_direct: None,
             no_proxy: "localhost,127.0.0.1".into(),
             proxy_terminals: false,
+            offline: false,
             insecure_tls: false,
             extra_ca_file: String::new(),
             allow_bypass: None,

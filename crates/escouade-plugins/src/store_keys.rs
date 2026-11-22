@@ -29,8 +29,12 @@ pub enum Role {
     ThirdParty,
     /// The revocation list: a key with a password (the third parties' holds it).
     Revocation,
-    /// The backup, kept offline: every role, to go on when another key is lost or revoked.
+    /// The backup, kept offline: every role of the store's keys, to go on when another key is lost or revoked.
     Backup,
+    /// The attestation that a revocation list still holds (audit SEC-15, ESC-596): « the list n° N, of fingerprint X,
+    /// still holds on <date> », signed every week by the workflow `revocations.yml`. It never seals a plugin nor signs
+    /// a list, and no other role attests: stolen, it can only prolong a list the revocation key signed.
+    Freshness,
 }
 
 impl Role {
@@ -39,9 +43,14 @@ impl Role {
         match self {
             Role::FirstHand => crate::builtin::first_hand(id),
             Role::ThirdParty => !crate::builtin::first_hand(id),
-            Role::Revocation => false,
+            Role::Revocation | Role::Freshness => false,
             Role::Backup => true,
         }
+    }
+
+    /// Whether an attestation of freshness signed by this role holds: the freshness key's alone.
+    pub fn attests(self) -> bool {
+        matches!(self, Role::Freshness)
     }
 
     /// Whether a revocation list signed by this role holds.
@@ -251,6 +260,73 @@ fn hex_sha256(bytes: &[u8]) -> String {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
+}
+
+/// The keys of the attestations of freshness of the revocation list (audit SEC-15, ESC-596), as `store/freshness/*.pub`
+/// (not `store/keys/`, whose keys all sign seals or lists): a key of the workflow `revocations.yml`, role
+/// `Freshness` alone, that signs every week « the list n° N of fingerprint X still holds on <date> », never a list.
+/// Empty until the user makes it (`store/scripts/create-freshness-key.ts`): then a list is taken without an
+/// attestation, as before, and its age is that of its last reading.
+pub const FRESHNESS_KEYS: &[EmbeddedKey] = &[];
+
+/// What the trusted comment of an attestation of freshness starts with, followed by the list's serial and its date.
+pub const FRESH_COMMENT: &str = "escouade-revocations-fresh-v1";
+
+/// The keys an attestation of freshness is checked with: the embedded ones; in a debug build, also the key of
+/// `ESCOUADE_FRESHNESS_TEST_KEY` (the tests'), role `Freshness` alone. A release build never reads it.
+pub fn freshness_keys() -> Vec<Key> {
+    let mut keys: Vec<Key> = FRESHNESS_KEYS
+        .iter()
+        .map(|k| Key {
+            public: k.public.to_string(),
+            roles: k.roles.to_vec(),
+        })
+        .collect();
+    if cfg!(debug_assertions) {
+        if let Some(k) = std::env::var("ESCOUADE_FRESHNESS_TEST_KEY")
+            .ok()
+            .map(|k| k.trim().to_string())
+            .filter(|k| !k.is_empty())
+        {
+            keys.push(Key {
+                public: k,
+                roles: vec![Role::Freshness],
+            });
+        }
+    }
+    keys
+}
+
+/// Whether `minisig` signs the attestation `json` with one of `keys` whose role attests (`Freshness`): the bytes
+/// signed, the comment `escouade-revocations-fresh-v1 <serial> <date>`, its serial and its date given back as written.
+/// The revocation key, the backup or a bare key do not attest.
+pub fn freshness_signed<K: TrustedKey>(
+    keys: &[K],
+    json: &[u8],
+    minisig: &str,
+) -> Result<(u64, String), Refused> {
+    if keys.is_empty() {
+        return Err(Refused::NoKey);
+    }
+    let sig = Signature::decode(minisig).map_err(|_| Refused::Unreadable)?;
+    let Some(key) = signer(keys, json, &sig) else {
+        return Err(Refused::NotSigned);
+    };
+    let mut words = sig.trusted_comment().split(' ');
+    let said = match (words.next(), words.next(), words.next(), words.next()) {
+        (Some(FRESH_COMMENT), Some(serial), Some(date), None) => serial
+            .parse()
+            .map(|n| (n, date.to_string()))
+            .map_err(|_| Refused::OtherVersion)?,
+        _ => return Err(Refused::OtherVersion),
+    };
+    if key.roles().iter().any(|r| r.attests()) {
+        Ok(said)
+    } else {
+        Err(Refused::OutOfRole {
+            key: key_id(key.public()),
+        })
+    }
 }
 
 /// The id of a minisign public key (its bytes 2 to 10, as minisign writes it: hex, upper case,

@@ -29,7 +29,7 @@ Il relève 18 constats. Les trois de gravité moyenne tiennent à ce que l'appli
 2. **Projets privés** (SEC-02). Marquer un projet « privé » le cache aux agents des autres projets ; côté fichiers, c'est une consigne donnée aux harness, pas un cloisonnement du système. L'interface le dit. **Le point démontré (W-04) est fermé dans la 2.2.6** : tant qu'un projet privé existe sur le poste, le harness d'un plugin tiers n'est lancé dans aucun projet.
 3. **Sceau « Vérifié par Escouade »** (SEC-03). Une seule clé, gardée sans mot de passe sur le poste de l'éditeur, et une revue faite par un agent. **Corrigé dans Escouade 2.2.6** : les clés sont séparées par rôle, la clé sans mot de passe ne scelle plus que les plugins de l'éditeur, les tiers et la liste de révocation demandent une clé à mot de passe, et chaque sceau dit sa clé.
 
-Les quatorze constats faibles sont de la défense en profondeur : des gardes qui tiennent mais dont un bord reste ouvert, ou des plafonds qui manquent. Trois sont **corrigés dans la 2.2.6** : le jeton du serveur MCP ne passe plus sur une ligne de commande (SEC-07) ; le dossier de données est privé sous Unix, le service de secrets du bureau garde les secrets sous Linux, et le mot de passe du proxy va au trousseau (SEC-10) ; « Ne jamais sortir sans le proxy », allumé dès qu'un proxy est configuré, empêche les mises à jour de le contourner (SEC-14). Le dernier constat réunit des observations sans impact direct.
+Les quatorze constats faibles sont de la défense en profondeur : des gardes qui tiennent mais dont un bord reste ouvert, ou des plafonds qui manquent. Le dernier constat réunit des observations sans impact direct. **Corrigés dans la 2.2.6** : le jeton du serveur MCP ne passe plus sur une ligne de commande (SEC-07) ; le dossier de données est privé sous Unix, le service de secrets du bureau garde les secrets sous Linux, et le mot de passe du proxy va au trousseau (SEC-10) ; « Ne jamais sortir sans le proxy », allumé dès qu'un proxy est configuré, empêche les mises à jour de le contourner (SEC-14) ; les bords du réseau des plugins (SEC-09), la liste de révocation sans péremption (SEC-15) et, des observations (SEC-18), les noms réservés de Windows, les images du réseau local, un mode hors ligne et les points de la chaîne de publication.
 
 Une réserve : cet audit est interne, mené par un agent d'IA pour l'éditeur (section 2, « Limites »). Il dit l'état d'une version à une date ; il ne vaut pas pour les versions suivantes.
 
@@ -309,13 +309,13 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 | SEC-06 | Lancement décrit par un plugin : un fichier écrit à travers un lien | Faible | Démontré |
 | SEC-07 | Le jeton du serveur MCP passe en argument et reste en clair chez les harness | Faible | Probable ; corrigé dans la 2.2.6 |
 | SEC-08 | Flux d'un harness : une longueur annoncée suffit à arrêter l'application | Faible | Démontré |
-| SEC-09 | Réseau des plugins : trois angles morts | Faible | Démontré |
+| SEC-09 | Réseau des plugins : trois angles morts | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-10 | Données au repos : pas de trousseau sous Linux, dossier lisible sous Unix | Faible | Probable ; corrigé dans la 2.2.6 |
 | SEC-11 | La sortie d'un plugin n'est pas plafonnée pendant un tour | Faible | Démontré |
 | SEC-12 | Fenêtre principale : des droits très larges si un script y entrait | Faible | Probable ; ouverture bornée dans la 2.2.6, commandes à découper |
 | SEC-13 | Des variables d'environnement de test restent actives en version publiée | Faible | Probable |
 | SEC-14 | Mises à jour : le proxy est contourné s'il ne répond pas | Faible | Probable ; corrigé dans la 2.2.6 |
-| SEC-15 | Liste de révocation des plugins : pas de date de péremption | Faible | Théorique |
+| SEC-15 | Liste de révocation des plugins : pas de date de péremption | Faible | Théorique ; corrigé dans la 2.2.6 |
 | SEC-16 | Site de l'éditeur sans en-têtes de sécurité | Faible | Démontré ; empreintes des installateurs publiées dans la 2.2.6 |
 | SEC-17 | Serveurs locaux : un programme du poste peut les ralentir | Faible | Démontré |
 | SEC-18 | Observations diverses | Info | Observé ; en partie corrigé dans la 2.2.6 |
@@ -605,6 +605,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Démontré — tests W-11 et W-12 ; un test du projet pour le proxy |
 | Composant | `crates/escouade-plugins/src/wasm.rs` (`net/fetch`, `net/stream`, sockets) |
 | Effort de correction | Faible à moyen |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Un plugin ne joint que les hôtes de sa permission `network`, en https, sans adresse écrite, sans redirection suivie, et jamais une adresse de la machine ou du réseau local : c'est jugé sur les adresses que le nom résout, à la connexion même, ce qui tient contre le DNS rebinding (essais W-09 et W-10). Trois angles morts :
 
@@ -617,6 +618,14 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Scénario.** Un plugin tiers déclare son propre domaine, que son auteur fait pointer vers `10.0.0.5`. Sur un poste derrière un proxy interne, le plugin interroge un service de l'intranet et renvoie la réponse à son auteur par le même canal.
 
 **Recommandation.** Refuser à la lecture du manifeste un hôte sans point ou un suffixe public. Derrière un proxy, dire à l'installation que les adresses ne sont plus contrôlées, ou résoudre le nom localement en plus pour refuser les adresses privées.
+
+**Correction (Escouade 2.2.6).** Les trois angles morts sont fermés.
+
+1. Les deux lecteurs du manifeste (l'application et le store) refusent un hôte de `permissions.network` sans point, ou qui est un suffixe public de la section ICANN de la liste des suffixes publics, embarquée (`com`, `co.uk`), seul ou après `*.`. Un suffixe de la section privée, qui appartient à une seule entreprise, reste permis. L'hôte de l'application ne couvre aucun de ces mots, même d'un manifeste lu avant.
+2. Derrière un proxy, le nom est aussi résolu sur le poste, pour `net/fetch`, `net/stream` et les sockets : une adresse de la machine ou du réseau local refuse l'appel avant que le proxy soit sollicité. Un nom que le poste ne résout pas reste jugé par le seul proxy, et le journal le dit.
+3. Une adresse 6to4 est jugée par l'IPv4 qu'elle porte, une adresse Teredo par celles de son serveur et de l'hôte qu'elle désigne.
+
+Les tests W-11 et W-12 de l'annexe constatent maintenant ces refus ; des tests du projet couvrent le proxy.
 
 ## SEC-10 — Données au repos : pas de trousseau sous Linux, dossier lisible sous Unix
 
@@ -739,6 +748,7 @@ Les trois sont des tests du projet (le mode 0700 sous Unix, joué par la CI Linu
 | État | Théorique — lu dans le code |
 | Composant | `crates/escouade-plugins/src/store.rs:308-335` |
 | Effort de correction | Faible |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** La liste qui retire un plugin ou une clé est signée et numérotée : une liste plus ancienne est refusée, une liste non signée aussi (essais W-13, W-20). Mais elle n'a pas de date limite. Qui peut empêcher l'application de recevoir la nouvelle liste (le store compromis, ou un attaquant sur le réseau) maintient l'ancienne en vigueur sans limite de temps, et l'application ne le signale pas.
 
@@ -749,6 +759,14 @@ Les trois sont des tests du projet (le mode 0700 sous Unix, joué par la CI Linu
 **Ce qui atténue.** Une copie de la liste est servie par un second hôte, lu quand le store ne répond pas.
 
 **Recommandation.** Dater la liste, la republier régulièrement même inchangée, et avertir quand la dernière liste reçue a plus de quelques jours.
+
+**Correction (Escouade 2.2.6).**
+
+1. La liste est datée, et sa date est dans ce qui est signé, avec son numéro.
+2. Chaque semaine, le workflow qui copie la liste sur le site de l'éditeur la republie même inchangée : une clé de fraîcheur, à part, signe « la liste nº N, d'empreinte X, vaut encore à telle date ». Cette clé ne signe jamais une liste : volée, elle ne peut que prolonger une liste que l'éditeur a signée, jamais retirer ni rétablir un plugin. L'application refuse une attestation qui nomme une autre liste que celle qu'elle tient.
+3. Quand la liste tenue vaut depuis plus de 7 jours, l'application le dit, discrètement, à côté de l'état de la liste.
+
+Tant que l'éditeur n'a pas créé la clé de fraîcheur, l'application prend une liste sans attestation comme avant, et l'avertissement porte sur l'âge de la dernière lecture réussie : il dit alors un store injoignable depuis plus de 7 jours, pas une ancienne liste resservie.
 
 ## SEC-16 — Site de l'éditeur sans en-têtes de sécurité
 
@@ -795,7 +813,7 @@ Les trois sont des tests du projet (le mode 0700 sous Unix, joué par la CI Linu
 | État | Observé pendant les essais |
 | Composant | Divers |
 | Effort de correction | Faible, au cas par cas |
-| Correction | **En partie dans Escouade 2.2.6** — la fonction `testing`, le cache des modules précompilés, les secrets Apple et trois variables lues par une version publiée (voir « Correction » en fin de fiche) |
+| Correction | **En partie dans Escouade 2.2.6** — les noms réservés de Windows, les images du réseau local, un mode hors ligne, la fonction `testing`, le cache des modules précompilés, les secrets Apple et trois variables lues par une version publiée (voir « Correction » en fin de fiche) |
 
 - **Noms réservés de Windows.** Par `fs/write`, un plugin peut créer dans le dossier de son agent un fichier nommé `NUL`, `CON` ou `COM1`. Le fichier reste dans le dossier permis, mais les outils courants de Windows ne savent ni l'ouvrir ni le supprimer (test W-08).
 - **Image d'un chemin local.** Un message d'agent peut faire afficher une image située hors du projet, si l'utilisateur peut la lire. Seules les images sont lues, et rien ne sort du poste (essai B-08).
@@ -814,12 +832,17 @@ Les trois sont des tests du projet (le mode 0700 sous Unix, joué par la CI Linu
 
 **Recommandation.** Écarter les noms réservés de Windows dans `fs/*` et dans le lecteur d'archives. Refuser les adresses du réseau local au téléchargement d'une image distante. Ajouter un réglage « mode hors ligne » qui coupe d'un geste les quatre flux périodiques. Contrôler en CI que la fonction `testing` n'est sur aucune crate d'une construction de publication. Garder l'empreinte de chaque module précompilé avec celle du module, et recompiler quand elle ne concorde pas. Donner les secrets Apple à la seule étape qui signe, comme les autres.
 
-**Correction (Escouade 2.2.6), en partie.** Quatre points de la chaîne de publication sont faits ; les autres observations restent en l'état.
+**Correction (Escouade 2.2.6), en partie.** Chaque point de la recommandation est fait ; trois observations restent en l'état, faute de correction à faire.
 
+- **Les noms réservés de Windows** (`CON`, `PRN`, `AUX`, `NUL`, `COM1` à `COM9`, `LPT1` à `LPT9`, en toute casse, avec ou sans extension) sont refusés par les méthodes `fs/*` des plugins et par la lecture de leur dossier, sous tous les systèmes. Le lecteur d'archives refuse un tel nom, et un nom contenant `:`.
+- **L'image distante au clic** : une image distante n'est jamais téléchargée depuis la machine ni le réseau local : adresse écrite, nom de la machine, ou nom que le poste résout vers une telle adresse, même derrière un proxy ; chaque redirection est jugée de même.
+- **Un mode hors ligne** : un réglage « Mode hors ligne » coupe d'un geste les mises à jour, le catalogue du store, la liste de révocation et les statistiques ; c'est le cœur de l'application qui les refuse. La barre d'état le dit pendant qu'il dure, et un poste géré peut l'imposer par une stratégie (`network.offline` : registre `Policies` sous Windows, préférences gérées sous macOS, `/etc/escouade/policies` sous Linux). `git fetch` et la lecture des quotas, que la fiche cite aussi, ne sont pas de ces quatre flux : le premier a ses réglages, la seconde est faite par Claude Code.
 - **La fonction `testing`** est contrôlée : `scripts/no-testing.mjs` lit `cargo tree` de l'espace de travail de l'application (ses trois binaires), pour toutes les cibles, sans les dépendances de développement, et échoue si une crate y a `testing`. La CI le lance à chaque poussée, la publication avant la construction. Essayé : `testing` ajouté à une dépendance ordinaire, le contrôle échoue en la nommant.
 - **Le cache des modules précompilés** : chaque copie précompilée a son empreinte SHA-256 dans un fichier à côté d'elle (`<clé>-<version>.cwasm.sha256`), écrit par l'application avec elle. Une copie dont l'empreinte ne concorde pas, ou qui n'en a pas, n'est jamais chargée : elle est précompilée à nouveau depuis le module, et les deux fichiers sont récrits (test du projet). Un programme qui écrit les deux fichiers a déjà les droits de l'utilisateur ; ce contrôle arrête une copie changée ou déposée seule.
 - **Les secrets Apple** ne sont plus posés dans l'environnement du job : seule l'étape qui construit et signe l'application macOS les reçoit, comme la clé des mises à jour et les secrets Azure. Le job ne sait que s'il y a un certificat (`true` ou `false`), pour choisir entre la construction signée par Developer ID et la construction signée sur place. Un test du projet le vérifie dans le workflow.
 - **Trois variables lues par une version publiée.** `ESCOUADE_TERM_TRACE` (les temps des terminaux au journal) n'est plus lue que par une construction de développement. `ESCOUADE_ORT_DYLIB` (une autre bibliothèque ONNX Runtime) ne l'est plus que par une construction qui a la fonction `ort-dynamic`, faite pour essayer ce chemin ; l'application publiée ne l'a pas. `ESCOUADE_JAVY` (une autre Javy pour compiler les plugins JS/TS) reste lue : l'image du store, sans réseau, nomme ainsi la sienne. Elle est documentée : la Javy qu'elle nomme tourne sans contrôle d'empreinte, et seul celui qui règle l'environnement de l'application, qui a déjà les droits de l'utilisateur, peut en nommer une. Tests du projet pour les deux premières.
+
+Restent en l'état, sans correction demandée : l'image d'un chemin local (seules les images sont lues, rien ne sort du poste), le socket UDP de la webview (le comportement du moteur Chromium, pas un service d'Escouade), et la limite de programmes en parallèle, couverte par un test du projet sans avoir pu être observée en boîte noire. `ESCOUADE_JAVY` reste lue par une version publiée, documentée comme dit plus haut.
 
 # 6. Les contrôles en place
 
@@ -1140,11 +1163,11 @@ Fichier `poc/whitebox/audit_2_2_0.rs`, 38 tests, compilés avec les tests de l'a
 | W-05 | Jeton d'Escouade placé dans un argument de harness | Tient |
 | W-06 | Variables d'environnement : 17 propres à Escouade, au chargeur ou au `PATH` ; puis 30 par lesquelles une commande en devient une autre | Tient : toutes refusées non déclarées ; déclarées, 28 refusées, 2 admises (`CLAUDE_CONFIG_DIR`, `ANTHROPIC_BASE_URL`), qui ne sont d'aucune famille refusée |
 | W-07 | `proc/spawn` : programme ou argument non déclaré, shell, chemin, dossier libre (11 cas) ; puis `git status` avec une configuration par variables | Tient : refusé, déclaré ou non, en majuscules ou en minuscules ; rien ne s'exécute |
-| W-08 | `fs/*` : `..`, chemin absolu, UNC, `\\?\`, `~`, flux NTFS, jonction sortante, dossier clôturé, autre casse, noms réservés de Windows | Tient (noms réservés : SEC-18) |
+| W-08 | `fs/*` : `..`, chemin absolu, UNC, `\\?\`, `~`, flux NTFS, jonction sortante, dossier clôturé, autre casse, noms réservés de Windows | Tient (noms réservés : SEC-18, refusés depuis la 2.2.6) |
 | W-09 | `net/fetch` : 24 adresses piégées (schémas, sous-domaines trompeurs, identifiants dans l'adresse, adresses IP en toutes écritures) ; hôte déclaré qui résout vers la machine | Tient |
 | W-10 | 26 adresses de la machine ou du réseau local, IPv4 et IPv6 ; réponse DNS mêlant adresses publiques et locales | Tient |
-| W-11 | Adresse IPv4 portée dans une adresse 6to4 ou Teredo | **Constat** SEC-09 (sans effet pratique connu) |
-| W-12 | Domaine de premier niveau entier déclaré comme hôte | **Constat** SEC-09 |
+| W-11 | Adresse IPv4 portée dans une adresse 6to4 ou Teredo | **Constat** SEC-09 (sans effet pratique connu) ; refusée depuis la 2.2.6 |
+| W-12 | Domaine de premier niveau entier déclaré comme hôte | **Constat** SEC-09 ; refusé depuis la 2.2.6 |
 | W-13 | Sceau : 1 721 altérations d'un bit ou d'un caractère ; autre plugin, autre version ; clé révoquée ; liste non signée ; `version.json` altéré ou d'une autre version | Tient |
 | W-14 | Trame de harness : 256 Mio alloués sur la foi d'un en-tête de 29 octets | **Constat** SEC-08 |
 | W-15 | Trame de harness : longueur supérieure à la mémoire | **Constat** SEC-08 : le processus s'arrête (`0xC0000409`) |

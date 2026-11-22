@@ -611,18 +611,9 @@ fn holds_fs_never_leaves_its_roots_nor_enters_the_fence() {
                 r"\\?\{}",
                 plain(&f.base.join("wt").join(device)).replace('/', "\\")
             ));
-            assert!(
-                r.is_err() || landed.is_file(),
-                "{device}: {r:?} wrote somewhere that is no file of the root"
-            );
-            // Noted in the report: the write lands in the root, as a file named like a device, which the usual tools of
-            // Windows then neither open nor remove.
-            if landed.is_file() {
-                eprintln!(
-                    "AUDIT fs/write {device}: a file of that name was made in the agent's folder"
-                );
-                std::fs::remove_file(&landed).unwrap();
-            }
+            // SEC-18, corrected (ESC-596): refused, and no file named like a device is made in the root.
+            assert!(r.is_err(), "{device}: {r:?} was written");
+            assert!(!landed.is_file(), "{device}: a file of that name was made");
         }
     }
     // The plugin's own folder is read, never written; the manifest and hidden files are not read by `files/read`.
@@ -683,13 +674,13 @@ fn holds_the_addresses_of_the_machine_and_of_the_local_network_are_forbidden() {
     }
 }
 
-/// Noted in the report (SEC-09, of no known effect): an IPv4 address carried in a 6to4 or a Teredo address is not read.
+/// SEC-09, corrected (ESC-596): an IPv4 address carried in a 6to4 or a Teredo address is judged as itself.
 #[test]
 #[ignore = "audit 2026-11"]
-fn finding_an_ipv4_carried_in_6to4_or_teredo_is_not_judged() {
+fn holds_an_ipv4_carried_in_6to4_or_teredo_is_judged() {
     // 2002:7f00:0001:: is 127.0.0.1 behind a 6to4 relay; 2002:c0a8:0101:: is 192.168.1.1.
     for ip in ["2002:7f00:1::", "2002:c0a8:101::", "2001:0:7f00:1::"] {
-        assert!(!wasm::forbidden(ip.parse().unwrap()), "{ip} is refused now");
+        assert!(wasm::forbidden(ip.parse().unwrap()), "{ip} is reachable");
     }
 }
 
@@ -776,15 +767,15 @@ async fn holds_a_rebinding_answer_never_reaches_the_machine() {
     );
 }
 
-/// What `permissions.network` may name. Noted in the report (SEC-09): a public suffix is a host like another.
+/// What `permissions.network` may name. SEC-09, corrected (ESC-596): a public suffix, or a name without a dot, is no host.
 #[test]
 #[ignore = "audit 2026-11"]
-fn finding_a_whole_top_level_domain_is_a_host_a_plugin_may_declare() {
+fn holds_a_whole_top_level_domain_is_no_host_a_plugin_may_declare() {
     let net = Net::default();
     let f = Fetcher::new("dev.exemple.audit", &["com".to_string()], &net);
-    assert!(f.covers("anything-at-all.com"));
+    assert!(!f.covers("anything-at-all.com"));
     let wide = Fetcher::new("dev.exemple.audit", &["*.com".to_string()], &net);
-    assert!(wide.covers("anything-at-all.com"));
+    assert!(!wide.covers("anything-at-all.com"));
     // A bare star covers nothing.
     let star = Fetcher::new("dev.exemple.audit", &["*".to_string()], &net);
     assert!(!star.covers("anything-at-all.com"));
@@ -796,7 +787,7 @@ fn finding_a_whole_top_level_domain_is_a_host_a_plugin_may_declare() {
         }),
         Hand::Third,
     );
-    assert!(read.manifest.is_ok(), "the manifest refuses it now");
+    assert!(read.manifest.is_err(), "the manifest takes it");
 }
 
 // ---- The seals of the store (`plugins/store_keys.rs`, `plugins/store.rs`) -----------------------------------------

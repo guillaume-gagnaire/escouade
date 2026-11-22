@@ -59,7 +59,15 @@ export interface StoreView {
   error: string | null;
   /** By id, the version this Escouade would install: the last it can run. */
   best: Record<string, string>;
-  revocations: { serial: number | null; readAt: string | null; from: string | null; error: string | null } | null;
+  revocations: {
+    serial: number | null;
+    readAt: string | null;
+    from: string | null;
+    error: string | null;
+    /** Since when the list held is known to hold, and whether that is more than 7 days ago (audit SEC-15). */
+    holdsSince?: string | null;
+    stale?: boolean;
+  } | null;
   platform: string;
 }
 

@@ -68,3 +68,32 @@ Derrière Zscaler ou un autre proxy qui inspecte le TLS :
 4. Redémarre les agents en cours (ou attends leur prochain démarrage) : ils prennent le fichier à ce moment-là.
 
 Si une connexion échoue encore avec « UnknownIssuer », le proxy présente un autre certificat que celui choisi : prends celui que montre le navigateur pour le même site.
+
+## Mode hors ligne
+
+« Mode hors ligne », en bas du groupe « Réseau », coupe d’un geste les quatre flux qu’Escouade lance de lui-même : c’est ce qu’il faut connaître avant de régler un pare-feu.
+
+| Flux coupé | Ce qu’il fait d’habitude |
+|---|---|
+| Les mises à jour | La recherche d’une nouvelle version de l’app, toutes les 5 minutes, et celle des plugins installés, au démarrage. |
+| Le store | La lecture du catalogue de store.escouade.dev, au démarrage puis toutes les 6 heures. |
+| La liste de révocation | Lue avec le catalogue, avec sa copie et son attestation sur escouade.dev. |
+| Les statistiques | Les statistiques d’usage anonymes (si tu les as acceptées), chaque minute, et le compte des installations du store. Pendant le mode, rien n’est gardé pour partir plus tard. |
+
+Tant qu’il est allumé, la barre d’état dit « Hors ligne » ; un clic ouvre le réglage. « Rechercher des mises à jour » et « Chercher maintenant » le disent au lieu de chercher : « Mode hors ligne : offres du jj/mm hh:mm ». Le catalogue et la liste de révocation gardés sur le poste continuent de s’appliquer.
+
+Ce que tu demandes d’un geste n’est pas coupé : installer un plugin, afficher une image d’un message. Le travail des agents non plus, ni `git fetch`, ni la lecture des quotas.
+
+### Imposé par le poste
+
+Un poste géré peut l’imposer par la stratégie `network.offline` (vrai). Le réglage est alors allumé et grisé, avec « Imposé par la stratégie de ce poste. », quoi que dise le réglage. Escouade la lit :
+
+- sous Windows, dans `HKLM\SOFTWARE\Policies\Escouade` puis `HKCU\SOFTWARE\Policies\Escouade` : une valeur `REG_DWORD` nommée `network.offline`, à 1 ;
+- sous macOS, dans les préférences gérées du domaine `dev.gagnaire.escouade` qu’un profil de configuration installe (`/Library/Managed Preferences/`) : la clé `network.offline`, un booléen ;
+- sous Linux, dans `/etc/escouade/policies/*.json` : `{"network.offline": true}`, le dossier et les fichiers à root, écrits par root seul.
+
+Une stratégie posée pendant que l’app tourne s’applique dans la minute.
+
+## Images distantes
+
+Une image d’un message qui vient du web ne s’affiche qu’au clic, et jamais depuis ta machine ni ton réseau local : une adresse comme `127.0.0.1`, `192.168.…` ou `10.…`, `localhost`, ou un nom qui y mène, même derrière un proxy. Le message le dit : « Une image de cette machine ou du réseau local ne s’affiche pas ».

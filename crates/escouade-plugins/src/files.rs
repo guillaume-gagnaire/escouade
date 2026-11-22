@@ -83,7 +83,7 @@ pub fn read(folder: &Path, params: &Value) -> Result<Value, (i64, String)> {
 }
 
 /// Its parts, when it names a file of the folder: relative, `/` (or `\`) between them, none empty, `.`, `..` or
-/// hidden, no drive nor colon.
+/// hidden, no drive nor colon, none a device of Windows (audit SEC-18).
 fn parts_of(path: &str) -> Option<Vec<&str>> {
     if path.is_empty() || path.starts_with(['/', '\\']) || path.contains(['\0', ':']) {
         return None;
@@ -91,7 +91,7 @@ fn parts_of(path: &str) -> Option<Vec<&str>> {
     let parts: Vec<&str> = path.split(['/', '\\']).collect();
     parts
         .iter()
-        .all(|p| !p.is_empty() && !p.starts_with('.'))
+        .all(|p| !p.is_empty() && !p.starts_with('.') && !windows_device(p))
         .then_some(parts)
 }
 
@@ -583,7 +583,13 @@ const DEVICES: [&str; 4] = ["CON", "PRN", "AUX", "NUL"];
 /// Whether `name` names a device of Windows (`CON`, `NUL`, `COM1`, `lpt9.txt`…), whatever its case and extension: refused
 /// under every system, so that a manifest means the same everywhere (ESC-528).
 pub fn windows_device(name: &str) -> bool {
-    let stem = name.split('.').next().unwrap_or(name).to_ascii_uppercase();
+    // Windows drops the spaces and dots at its end, and before the extension: `NUL `, `nul.`, `CON .txt` are devices too.
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or(name)
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
     DEVICES.contains(&stem.as_str())
         || ((stem.starts_with("COM") || stem.starts_with("LPT"))
             && stem.len() == 4
@@ -643,7 +649,9 @@ fn plain(path: &Path) -> String {
     }
 }
 
-/// `path` as `fs/*` take it: no `..`, no `~`, no stream of an NTFS file (`a.txt:b`), nothing a string could hide.
+/// `path` as `fs/*` take it: no `..`, no `~`, no stream of an NTFS file (`a.txt:b`), no device of Windows (`NUL`,
+/// `con.txt`, `COM1`: a file of that name, which Windows' own tools can neither open nor remove, audit SEC-18), nothing
+/// a string could hide.
 fn named_path(path: &str) -> Option<PathBuf> {
     if path.is_empty() || path.contains('\0') || path.starts_with('~') {
         return None;
@@ -653,7 +661,10 @@ fn named_path(path: &str) -> Option<PathBuf> {
         .components()
         .all(|c| match c {
             Component::ParentDir => false,
-            Component::Normal(part) => !part.to_string_lossy().contains(':'),
+            Component::Normal(part) => {
+                let part = part.to_string_lossy();
+                !part.contains(':') && !windows_device(part.trim_end_matches([' ', '.']))
+            }
             _ => true,
         })
         .then_some(named)
@@ -1212,6 +1223,56 @@ pub(crate) mod tests {
         let told = b.told.borrow();
         assert!(told[0].contains("wrote 2 bytes"), "{told:?}");
         assert!(told[2].contains("refused"), "{told:?}");
+    }
+
+    /// Audit SEC-18: a file named as a device of Windows, whatever its case, its extension or its folder, is neither
+    /// written nor read, in a root or in the plugin's folder; a name that only starts like one is a file like another.
+    #[test]
+    fn a_name_of_a_device_of_windows_is_refused_in_every_method() {
+        let b = Bed::new(json!([{ "root": "agent", "access": "write" }]));
+        for name in [
+            "NUL",
+            "nul",
+            "CON",
+            "con.txt",
+            "Aux.log",
+            "PRN",
+            "COM1",
+            "com9.json",
+            "LPT1",
+            "lpt3.txt.bak",
+            "NUL.",
+            "nul ",
+            "n/e/COM1",
+        ] {
+            b.refused(
+                "fs/write",
+                json!({ "agent": "a", "root": "agent", "path": name, "text": "x" }),
+            );
+            b.refused(
+                "fs/read",
+                json!({ "agent": "a", "root": "agent", "path": name }),
+            );
+            b.refused(
+                "fs/stat",
+                json!({ "agent": "a", "root": "agent", "path": name }),
+            );
+            assert_eq!(code(&folder(), name), REFUSED, "{name}");
+        }
+        assert!(!b.base.join("wt/NUL").exists() && !b.base.join("wt/n").exists());
+        for name in [
+            "console.txt",
+            "nullable.rs",
+            "COM10",
+            "comma.txt",
+            "auxiliary",
+        ] {
+            b.call(
+                "fs/write",
+                json!({ "agent": "a", "root": "agent", "path": name, "text": "x" }),
+            )
+            .unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        }
     }
 
     #[test]

@@ -226,6 +226,7 @@ mod plugins_wasm_hosts_parity_tests;
 mod plugins_wasm_parity_tests;
 #[cfg(test)]
 use escouade_plugins::plugins_wasm_tests;
+mod offline;
 mod pragent;
 #[cfg(test)]
 mod pragent_tests;
@@ -1035,6 +1036,7 @@ pub fn run() {
                 commands::test_run_start,
                 commands::http_ready,
                 commands::update_check,
+                commands::offline_state,
                 commands::update_download,
                 commands::update_restart,
                 commands::update_postpone,

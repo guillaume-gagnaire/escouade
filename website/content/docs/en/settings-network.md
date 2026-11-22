@@ -68,3 +68,32 @@ Behind Zscaler or another proxy that inspects TLS:
 4. Restart the running agents (or wait for their next start): they take the file then.
 
 If a connection still fails with “UnknownIssuer”, the proxy shows another certificate than the one chosen: take the one the browser shows for the same site.
+
+## Offline mode
+
+“Offline mode”, at the bottom of the “Network” group, stops in one gesture the four flows Escouade starts by itself: what to know before you set a firewall.
+
+| Flow stopped | What it does otherwise |
+|---|---|
+| The updates | The search for a new version of the app, every 5 minutes, and for the installed plugins’, at the start. |
+| The store | The reading of store.escouade.dev’s catalog, at the start then every 6 hours. |
+| The revocation list | Read with the catalog, with its copy and its attestation on escouade.dev. |
+| The statistics | The anonymous usage statistics (if you accepted them), every minute, and the count of the store’s installs. While the mode lasts, nothing is kept to leave later. |
+
+While it is on, the status bar says “Offline”; a click opens the setting. “Check for updates” and “Check now” say so instead of searching: “Offline mode: offers of dd/mm hh:mm”. The catalog and the revocation list kept on the machine still apply.
+
+What you ask for by a gesture is not stopped: installing a plugin, showing an image of a message. Nor is the agents’ work, `git fetch` or the reading of the quotas.
+
+### Imposed by the device
+
+A managed device may impose it with the policy `network.offline` (true). The setting is then on and greyed out, with “Imposed by the policy of this device.”, whatever the setting says. Escouade reads it:
+
+- on Windows, in `HKLM\SOFTWARE\Policies\Escouade` then `HKCU\SOFTWARE\Policies\Escouade`: a `REG_DWORD` value named `network.offline`, set to 1;
+- on macOS, in the managed preferences of the domain `dev.gagnaire.escouade` that a configuration profile installs (`/Library/Managed Preferences/`): the key `network.offline`, a Boolean;
+- on Linux, in `/etc/escouade/policies/*.json`: `{"network.offline": true}`, the folder and the files owned and written by root alone.
+
+A policy put while the app runs applies within the minute.
+
+## Remote images
+
+An image of a message that comes from the web shows only on a click, and never from your machine or your local network: an address such as `127.0.0.1`, `192.168.…` or `10.…`, `localhost`, or a name that leads there, even behind a proxy. The message says so: “An image of this machine or of the local network is not shown”.

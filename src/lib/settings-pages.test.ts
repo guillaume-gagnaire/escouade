@@ -46,6 +46,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   proxyNeverDirect: true,
   noProxy: true,
   proxyTerminals: true,
+  offline: true,
   insecureTls: true,
   extraCaFile: true,
   allowBypass: true,

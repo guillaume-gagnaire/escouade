@@ -535,7 +535,10 @@ pub fn plugin_install(
     // through the counts the seed keeps, once (ESC-394).
     if from_seed {
         core.spawn_seed_counts();
-    } else if from_store && core.settings.read().telemetry == Some(true) {
+    } else if from_store
+        && core.settings.read().telemetry == Some(true)
+        && crate::offline::allows(crate::offline::Flow::Statistics)
+    {
         let settings = core.settings.read().clone();
         let (store, id, version) = (core.store.clone(), view.id.clone(), view.version.clone());
         let update = staged.is_some_and(|(_, update)| update);
@@ -3433,8 +3436,25 @@ pub async fn update_check(
     updates: State<'_, crate::updates::Updates>,
     manual: bool,
 ) -> Res<crate::updates::Checked> {
+    if !crate::offline::allows(crate::offline::Flow::Updates) {
+        // « Mode hors ligne » (ESC-596): nothing asked; said to the user who asked alone.
+        return Ok(crate::updates::Checked::Failed {
+            trouble: crate::updates::Trouble {
+                message: crate::offline::refusal(crate::i18n::ui()),
+                show: manual,
+                page: None,
+            },
+        });
+    }
     let settings = core.settings.read().clone();
     Ok(crate::updates::check(&app, &settings, &updates, manual).await)
+}
+
+/// « Mode hors ligne » (ESC-596): whether the four flows are stopped, and whether by a policy of this device.
+#[tauri::command]
+pub fn offline_state() -> crate::offline::State {
+    crate::offline::read_again();
+    crate::offline::state()
 }
 
 /// Downloads the update found as `id`, its signature checked, and keeps it until it installs. A

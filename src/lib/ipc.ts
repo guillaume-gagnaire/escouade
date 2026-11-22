@@ -841,6 +841,8 @@ export const api = {
    * `manual`: the user asked, so a failure is always to be shown.
    */
   updateCheck: (manual: boolean) => invoke<CheckedUpdate>('update_check', { manual }),
+  /** « Mode hors ligne » (ESC-596): whether the four flows are stopped, and whether by a policy of this device. */
+  offlineState: () => invoke<{ on: boolean; imposed: boolean }>('offline_state'),
   /**
    * Downloads the release found, its signature checked, kept by the backend until it installs: ready once it is the
    * one, superseded when a newer one took its place meanwhile.

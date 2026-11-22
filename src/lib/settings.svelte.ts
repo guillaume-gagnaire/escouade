@@ -662,6 +662,7 @@ class SettingsForm {
         if (shells) {
           app.settings = next;
           app.shells = shells;
+          if ('offline' in diff) void app.loadOffline();
           this.#base = { ...this.#base, settings: { ...this.#base.settings, ...diff } };
           // Another `claude`: the board's banner and the hint of the path say whether it is found now.
           if ('claudePath' in diff || 'wslDistro' in diff) {

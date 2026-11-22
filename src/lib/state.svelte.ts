@@ -445,6 +445,13 @@ class AppState {
   /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
   vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
+  /** « Mode hors ligne » (ESC-596), as the core holds it: on, and imposed by a policy of this device. */
+  offline = $state<{ on: boolean; imposed: boolean }>({ on: false, imposed: false });
+  /** Reads the mode again from the core (at the start, after a save of the settings). */
+  async loadOffline() {
+    const s = await api.offlineState().catch(() => null);
+    if (s) this.offline = s;
+  }
   /** When the automatic restart for the update comes (the backend warned of it), if one is planned. */
   restartAt = $state<number | null>(null);
   /** A version that did not install at the last try: told of once it is downloaded again. */
@@ -825,6 +832,8 @@ class AppState {
       this.ui.activeProject = this.projects.find((p) => p.id !== s.pageCrash?.projectId)?.id ?? null;
     }
     this.settings = s.settings;
+    this.offline = { on: !!s.settings.offline, imposed: false };
+    void this.loadOffline();
     this.usage = s.usage;
     this.git = s.git;
     this.shells = s.shells;

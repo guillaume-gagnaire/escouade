@@ -323,6 +323,70 @@ fn the_roles_say_which_ids_they_seal() {
     );
 }
 
+/// The list is judged by the revocation key, the attestation of freshness by the freshness key (audit SEC-15, ESC-596):
+/// a freshness key signs no list, seals no plugin, and is never one of `store/keys/`.
+#[test]
+fn the_freshness_key_attests_and_does_nothing_else() {
+    assert!(Role::Freshness.attests());
+    for r in [
+        Role::FirstHand,
+        Role::ThirdParty,
+        Role::Revocation,
+        Role::Backup,
+    ] {
+        assert!(!r.attests(), "{r:?}");
+    }
+    assert!(!Role::Freshness.signs_revocations());
+    assert!(
+        !Role::Freshness.seals("dev.escouade.slack") && !Role::Freshness.seals("dev.exemple.slack")
+    );
+    assert_eq!(
+        revocations_signed(
+            &[key(THIRD_PARTY, &[Role::Freshness])],
+            LIST.as_bytes(),
+            LIST_BY_THIRD,
+            2
+        ),
+        Err(Refused::OutOfRole {
+            key: key_id(THIRD_PARTY)
+        })
+    );
+}
+
+#[test]
+fn the_embedded_freshness_keys_are_those_of_store_freshness() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../store/freshness");
+    let mut found: Vec<String> = std::fs::read_dir(&dir)
+        .map(|d| {
+            d.filter_map(|e| e.ok())
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".pub"))
+                .filter_map(|e| {
+                    let text = std::fs::read_to_string(e.path()).ok()?;
+                    text.lines()
+                        .map(str::trim)
+                        .find(|l| !l.is_empty() && !l.starts_with("untrusted comment:"))
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    found.sort();
+    let mut embedded: Vec<String> = FRESHNESS_KEYS
+        .iter()
+        .map(|k| k.public.to_string())
+        .collect();
+    embedded.sort();
+    assert_eq!(
+        embedded, found,
+        "FRESHNESS_KEYS must hold the keys of store/freshness/*.pub"
+    );
+    for k in FRESHNESS_KEYS {
+        assert_eq!(k.roles, &[Role::Freshness], "{}", k.file);
+        // Never one of the keys of the seals and the lists: an attestation is no list.
+        assert!(STORE_KEYS.iter().all(|s| s.public != k.public));
+    }
+}
+
 #[test]
 fn the_embedded_keys_are_those_of_the_store_with_their_roles() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

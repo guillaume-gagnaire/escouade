@@ -24,6 +24,7 @@ export interface ManifestError {
     | 'square'
     | 'small'
     | 'network'
+    | 'host'
     | 'exclusive'
     | 'cargo'
     | 'command'
@@ -45,6 +46,8 @@ export interface ManifestError {
 /** The host of an address written whole, in lower case; null for none, or one made by a template. */
 export function writtenHost(url: string): string | null;
 /** Whether `permissions.network` covers `host`: itself, or `*.domain` for its subdomains (not the domain itself). */
+/** Whether a word of `permissions.network` is a host too wide to declare: no dot, or a public suffix (audit SEC-09). */
+export function networkWordRefused(word: string): boolean;
 export function hostCovered(host: string, network: string[]): boolean;
 export const FILE_ROOTS: string[];
 export const FILE_ACCESS: string[];

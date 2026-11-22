@@ -143,6 +143,7 @@ export default {
     thirdRefuse: 'Refuser',
     revocations: 'Liste de révocation lue à {time} · nº {serial}, signée, relue toutes les 6 heures',
     revocationsNone: 'Liste de révocation : aucune lue encore ; relue toutes les 6 heures',
+    revocationsStale: 'Elle vaut depuis le {date} : plus de 7 jours sans liste neuve, un retrait récent peut ne pas être arrivé ici.',
     readAgain: 'Relire maintenant',
   },
 
@@ -156,6 +157,8 @@ export default {
     read: 'Store lu le {when}',
     unreachable: 'Store injoignable : offres du {when}',
     unreachableNone: 'Store injoignable : aucune offre lue encore',
+    offline: 'Mode hors ligne : offres du {when}',
+    offlineNone: 'Mode hors ligne : aucune offre lue',
     row: 'v{from} → v{to}',
     update: 'Mettre à jour',
     all: { one: 'Tout mettre à jour · {count}', other: 'Tout mettre à jour · {count}' },

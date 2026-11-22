@@ -137,6 +137,8 @@ webkit2gtk = { version = "2.0", features = ["v2_20"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-notification = "2"
+# The managed preferences a configuration profile writes (`offline.rs`, ESC-596): the version already in the lock.
+plist = "1"
 # The inspector of a launch's page in a window of its own (`devpage::open_devtools`): wry's version.
 objc2 = "0.6"
 

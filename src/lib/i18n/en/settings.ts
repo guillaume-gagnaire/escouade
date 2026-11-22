@@ -347,6 +347,10 @@ export default defineZone('settings', {
     exclusions: 'Exclusions',
     exclusionsHint: 'NO_PROXY, separated by commas',
     proxyTerminals: 'Also apply the proxy to the built-in terminals',
+    offline: 'Offline mode',
+    offlineDesc:
+      'Escouade no longer contacts by itself the updates, the store, the revocation list or the statistics. What you ask for by a gesture (installing a plugin, showing an image) and the agents’ work do not change.',
+    offlineImposed: 'Imposed by the policy of this device.',
     certificates: 'Certificates',
     certificatesNote:
       'Escouade trusts recognized certificates, those installed on this system and those of the authorities file. Agents get the file the next time their process starts.',

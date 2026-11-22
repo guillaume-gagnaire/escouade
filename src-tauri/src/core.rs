@@ -1935,9 +1935,15 @@ impl<R: Runtime> Core<R> {
     /// hands them to the plugins: a version withdrawn stops, the updates of the store are offered.
     pub async fn refresh_store(&self) {
         let settings = self.settings.read().clone();
-        match crate::plugins::store::client(&settings) {
-            Ok(http) => self.store.refresh(&http, crate::i18n::ui()).await,
-            Err(e) => log::warn!("the store's client: {e}"),
+        use crate::offline::{allows, Flow};
+        if !(allows(Flow::Store) && allows(Flow::Revocations)) {
+            // « Mode hors ligne » (ESC-596): the catalogue and the list kept apply, nothing is asked.
+            self.store.say(crate::offline::refusal(crate::i18n::ui()));
+        } else {
+            match crate::plugins::store::client(&settings) {
+                Ok(http) => self.store.refresh(&http, crate::i18n::ui()).await,
+                Err(e) => log::warn!("the store's client: {e}"),
+            }
         }
         self.plugins
             .apply_store(self.store.revocations(), self.store.offers());
@@ -1948,6 +1954,15 @@ impl<R: Runtime> Core<R> {
     /// is), then the updates looked for, the Git tags, the folders, the store and the seed.
     pub async fn look_for_updates(&self) -> crate::plugins::StoreRead {
         let settings = self.settings.read().clone();
+        if !crate::offline::allows(crate::offline::Flow::Updates) {
+            // « Mode hors ligne » (ESC-596): said, nothing asked.
+            let why = crate::offline::refusal(crate::i18n::ui());
+            self.store.say(why.clone());
+            return crate::plugins::StoreRead {
+                read_at: self.store.view().read_at,
+                error: Some(why),
+            };
+        }
         let http = crate::plugins::store::client(&settings).map_err(|e| e.to_string());
         self.plugins
             .look_for_updates(
@@ -1962,6 +1977,10 @@ impl<R: Runtime> Core<R> {
     /// The installs of the seed not counted yet sent to the store with the user's consent to the statistics, forgotten on
     /// a refusal, kept until they answer (ESC-394, docs/STORE.md §5.4).
     pub async fn send_seed_counts(&self) {
+        if !crate::offline::allows(crate::offline::Flow::Statistics) {
+            // Kept for when the mode is off (ESC-596).
+            return;
+        }
         let settings = self.settings.read().clone();
         match crate::plugins::store::client(&settings) {
             Ok(http) => {
@@ -2144,6 +2163,8 @@ impl<R: Runtime> Core<R> {
         };
         let usage = UsageSnapshot::restored(&saved, &settings, ongoing, now);
         let (git, rx) = GitService::new();
+        // « Mode hors ligne » (ESC-596): what the user chose, before any flow starts.
+        crate::offline::set_chosen(settings.offline);
         let telemetry = Arc::new(Telemetry::new(
             data.telemetry_id_file(),
             app.package_info().version.to_string(),
@@ -2636,7 +2657,9 @@ impl<R: Runtime> Core<R> {
         // the view Plugins, never installed by themselves.
         if !cfg!(test) {
             let plugins = self.plugins.clone();
-            tauri::async_runtime::spawn(async move { plugins.check_updates().await });
+            if crate::offline::allows(crate::offline::Flow::Updates) {
+                tauri::async_runtime::spawn(async move { plugins.check_updates().await });
+            }
             // The store's catalogue and revocation list (STORE-9): at the start, then every 6 hours.
             let c = self.clone();
             tauri::async_runtime::spawn(async move {
@@ -2925,6 +2948,7 @@ impl<R: Runtime> Core<R> {
         let auto_resume = s.auto_resume;
         let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
         let telemetry = s.telemetry;
+        crate::offline::set_chosen(s.offline);
         let remote_all = s.remote_control_all;
         let self_update = s.claude_self_update;
         let before_settings = std::mem::replace(&mut *self.settings.write(), s);

@@ -38,6 +38,8 @@ tar = "0.4"
 # The download of the pinned Javy, by the app's own client where it has one (Réglages › Réseau's proxy).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 tokio = { version = "1", features = ["rt", "time", "net"] }
+# The public suffixes a host of `permissions.network` may not be (audit SEC-09), the list carried in the crate.
+psl = "2"
 
 # The write-through replacement of a file (`paths::write_atomic`, ESC-469).
 [target.'cfg(windows)'.dependencies]

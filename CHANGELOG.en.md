@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Security: the spec, the decisions and the documents can no longer be written or read outside the project’s `.escouade` folder, even through a path a caller did not check or towards a folder not created yet; such a path is refused with its reason.
 ## [Unreleased]
 
+- Security: an “Offline mode” (Settings › Advanced › Network) stops in one gesture the updates, the store, the revocation list and the statistics, and a managed device can impose it; the revocation list, attested every week, is flagged when it is more than 7 days old. A plugin can no longer declare a whole domain such as `com`, nor reach the local network through a proxy, nor create a `NUL` or `CON` file, and an image of the local network is no longer shown.
 - Security: the MCP server’s token no longer goes on a command line: Escouade writes its declaration in Claude Code’s `.claude.json` itself, as for the other harnesses.
 - Security: the proxy’s password goes to the system keychain, no longer in the settings (it is moved there at start); on Linux, the desktop’s secret service keeps the secrets when it is there, and the data folder is readable by you alone.
 - Security: “Never go out without the proxy”, on as soon as a proxy is set: when the proxy doesn’t answer, an update fails and says why, instead of going out directly.

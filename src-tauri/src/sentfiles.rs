@@ -741,29 +741,130 @@ pub(crate) fn remote_data_url(lang: crate::i18n::Lang, bytes: &[u8]) -> anyhow::
     Ok(data_url(media, bytes))
 }
 
+/// The addresses of a name, as this machine resolves them; none when it does not.
+pub(crate) type Lookup = std::sync::Arc<dyn Fn(&str) -> Vec<std::net::IpAddr> + Send + Sync>;
+
+/// The system's resolver, off the async workers.
+fn system_lookup() -> Lookup {
+    std::sync::Arc::new(|name: &str| {
+        use std::net::ToSocketAddrs;
+        (name, 443)
+            .to_socket_addrs()
+            .map(|a| a.map(|a| a.ip()).collect())
+            .unwrap_or_default()
+    })
+}
+
+/// Why the image at `url` is not downloaded (audit SEC-18): an address of this machine or of the local network, written
+/// in it (`127.0.0.1`, `[::1]`, `10.0.0.5`), a name of the machine (`localhost`), or a name that resolves here to one
+/// of them, even through a proxy, which would resolve it itself. A name this machine does not resolve is the proxy's.
+pub(crate) fn private_image(
+    lang: crate::i18n::Lang,
+    url: &reqwest::Url,
+    lookup: &Lookup,
+) -> Option<anyhow::Error> {
+    let host = url
+        .host_str()?
+        .trim_matches(['[', ']'])
+        .to_ascii_lowercase();
+    let host = host.trim_end_matches('.');
+    let local = match host.parse::<std::net::IpAddr>() {
+        Ok(ip) => escouade_plugins::wasm::forbidden(ip),
+        Err(_) => {
+            host == "localhost"
+                || host.ends_with(".localhost")
+                || lookup(host)
+                    .into_iter()
+                    .any(escouade_plugins::wasm::forbidden)
+        }
+    };
+    local.then(|| {
+        anyhow::anyhow!(tr_in!(
+            lang,
+            "Une image de cette machine ou du réseau local ne s’affiche pas",
+            "An image of this machine or of the local network is not shown"
+        ))
+    })
+}
+
+/// The resolver of the image's connection: the system's, the addresses of the machine and of the local network left out
+/// (a name that changes its answer between the check and the connection reaches nothing local).
+struct NoLocal(Lookup);
+
+impl reqwest::dns::Resolve for NoLocal {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let lookup = self.0.clone();
+        let name = name.as_str().to_string();
+        Box::pin(async move {
+            let all = tokio::task::spawn_blocking(move || lookup(&name))
+                .await
+                .unwrap_or_default();
+            let good: Vec<std::net::SocketAddr> = all
+                .into_iter()
+                .filter(|ip| !escouade_plugins::wasm::forbidden(*ip))
+                .map(|ip| std::net::SocketAddr::new(ip, 0))
+                .collect();
+            if good.is_empty() {
+                return Err("an address of this machine or of the local network".into());
+            }
+            let addrs: reqwest::dns::Addrs = Box::new(good.into_iter());
+            Ok(addrs)
+        })
+    }
+}
+
 /// The image of the web `src`, downloaded by the core on the user's click (never by the window,
 /// which would load any address an agent wrote, a secret in it): https only, redirects too,
 /// `MAX_REMOTE` at most, recognised by its bytes; through the proxy of the settings, without a
-/// cookie, a referrer or a user agent that would tell who asks.
+/// cookie, a referrer or a user agent that would tell who asks; never from this machine nor from the local network, nor
+/// redirected there (`private_image`, audit SEC-18).
 pub(crate) async fn fetch_image(
     settings: &crate::model::Settings,
     lang: crate::i18n::Lang,
     src: &str,
 ) -> anyhow::Result<String> {
-    let url = remote_url(lang, src)?;
-    let b = crate::tls::app_builder(settings)?
+    fetch_image_with(settings, lang, src, system_lookup()).await
+}
+
+pub(crate) async fn fetch_image_with(
+    settings: &crate::model::Settings,
+    lang: crate::i18n::Lang,
+    src: &str,
+    lookup: Lookup,
+) -> anyhow::Result<String> {
+    let mut url = remote_url(lang, src)?;
+    let client = crate::tls::app_builder(settings)?
         .timeout(std::time::Duration::from_secs(20))
         .referer(false)
-        .redirect(reqwest::redirect::Policy::custom(|attempt| {
-            if attempt.url().scheme() != "https" {
-                attempt.error("redirected out of https")
-            } else if attempt.previous().len() >= 5 {
-                attempt.stop()
-            } else {
-                attempt.follow()
-            }
-        }));
-    let mut res = b.build()?.get(url).send().await?.error_for_status()?;
+        .dns_resolver(std::sync::Arc::new(NoLocal(lookup.clone())))
+        // Each redirect is judged here as the first address is.
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?;
+    let mut redirects = 0;
+    let mut res = loop {
+        let check = (url.clone(), lookup.clone());
+        let local = tokio::task::spawn_blocking(move || private_image(lang, &check.0, &check.1))
+            .await
+            .unwrap_or(None);
+        if let Some(e) = local {
+            return Err(e);
+        }
+        let res = client.get(url.clone()).send().await?;
+        if !res.status().is_redirection() {
+            break res.error_for_status()?;
+        }
+        redirects += 1;
+        let next = res
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|l| l.to_str().ok())
+            .and_then(|l| url.join(l).ok());
+        match next {
+            Some(next) if next.scheme() == "https" && redirects <= 5 => url = next,
+            Some(next) if next.scheme() != "https" => anyhow::bail!("redirected out of https"),
+            _ => anyhow::bail!("a redirect without an address, or more than 5"),
+        }
+    };
     if res.content_length().is_some_and(|l| l > MAX_REMOTE) {
         return Err(remote_too_big(lang));
     }
@@ -1481,6 +1582,89 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(e.to_string(), "Only an https image is shown");
+    }
+
+    fn lookup(names: &'static [(&'static str, &'static str)]) -> Lookup {
+        std::sync::Arc::new(move |name: &str| {
+            names
+                .iter()
+                .filter(|(n, _)| *n == name)
+                .map(|(_, a)| a.parse().unwrap())
+                .collect()
+        })
+    }
+
+    /// Audit SEC-18: an image of this machine or of the local network is never downloaded, written as an address, as
+    /// a name of the machine, or as a name that resolves here to one of them; a public one, or a name this machine does
+    /// not know, is.
+    #[test]
+    fn an_image_of_the_machine_or_of_the_local_network_is_refused() {
+        let lang = crate::i18n::Lang::Fr;
+        let names = lookup(&[
+            ("intranet.exemple.dev", "10.0.0.5"),
+            ("both.exemple.dev", "93.184.215.14"),
+            ("both.exemple.dev", "192.168.1.4"),
+            ("v6.exemple.dev", "fd00::1"),
+            ("teredo.exemple.dev", "2002:7f00:1::"),
+            ("img.exemple.dev", "93.184.215.14"),
+        ]);
+        for src in [
+            "https://127.0.0.1/a.png",
+            "https://127.1.2.3:8443/a.png",
+            "https://[::1]/a.png",
+            "https://[::ffff:10.0.0.1]/a.png",
+            "https://10.1.2.3/a.png",
+            "https://172.16.0.1/a.png",
+            "https://192.168.0.10/a.png",
+            "https://169.254.169.254/latest/meta-data",
+            "https://localhost/a.png",
+            "https://printer.localhost./a.png",
+            "https://intranet.exemple.dev/a.png",
+            "https://both.exemple.dev/a.png",
+            "https://v6.exemple.dev/a.png",
+            "https://teredo.exemple.dev/a.png",
+        ] {
+            let url = remote_url(lang, src).unwrap();
+            let e =
+                private_image(lang, &url, &names).unwrap_or_else(|| panic!("{src} is downloaded"));
+            assert_eq!(
+                e.to_string(),
+                "Une image de cette machine ou du réseau local ne s’affiche pas"
+            );
+        }
+        for src in [
+            "https://img.exemple.dev/a.png",
+            "https://unknown.exemple.dev/a.png",
+            "https://93.184.215.14/a.png",
+        ] {
+            let url = remote_url(lang, src).unwrap();
+            assert!(private_image(lang, &url, &names).is_none(), "{src}");
+        }
+    }
+
+    /// Through a proxy too: refused before the proxy is asked, which would resolve the name itself.
+    #[tokio::test]
+    async fn an_image_of_the_local_network_is_refused_through_a_proxy_before_any_request() {
+        let proxy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        proxy.set_nonblocking(true).unwrap();
+        let settings = crate::model::Settings {
+            proxy_url: format!("http://127.0.0.1:{}", proxy.local_addr().unwrap().port()),
+            ..crate::model::Settings::default()
+        };
+        let names = lookup(&[("intranet.exemple.dev", "10.0.0.5")]);
+        for src in [
+            "https://intranet.exemple.dev/a.png",
+            "https://127.0.0.1/a.png",
+        ] {
+            let e = fetch_image_with(&settings, crate::i18n::Lang::En, src, names.clone())
+                .await
+                .unwrap_err();
+            assert_eq!(
+                e.to_string(),
+                "An image of this machine or of the local network is not shown"
+            );
+        }
+        assert!(proxy.accept().is_err(), "the proxy was asked");
     }
 
     #[test]

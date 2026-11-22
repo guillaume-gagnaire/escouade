@@ -1,9 +1,9 @@
 ---
 title: "Réseau : proxy et certificats"
 subject: "fenetre"
-sources: ["docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiches SEC-07 et SEC-28","docs/security/audit-2026-11/rapport.md, fiches SEC-10 et SEC-14 (ESC-595)","website/content/docs/fr/settings-network.md","crates/escouade-plugins/src/tls.rs","src-tauri/src/tls_tests.rs","src-tauri/src/proxysecret.rs","crates/escouade-updates/src/net.rs"]
-tickets: ["ESC-425","ESC-435","ESC-595"]
-decisions: [154,214,"audit-sec-07-10-et-14-le-jeton-du-mcp-ho"]
+sources: ["docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiches SEC-07 et SEC-28","website/content/docs/fr/settings-network.md","crates/escouade-plugins/src/tls.rs","src-tauri/src/tls_tests.rs","docs/security/audit-2026-11/rapport.md, SEC-18 (recommandations appliquées, accord a-7 du 2026-11-21)","src-tauri/src/offline.rs","src-tauri/src/sentfiles.rs","docs/TEAM-SERVER.md §6.3 (branche release/2.3)","docs/security/audit-2026-11/rapport.md, fiches SEC-10 et SEC-14 (ESC-595)","src-tauri/src/proxysecret.rs","crates/escouade-updates/src/net.rs"]
+tickets: ["ESC-425","ESC-435","ESC-596","ESC-595"]
+decisions: [154,214,"audit-sec-09-15-et-18-hotes-trop-larges","audit-sec-07-10-et-14-le-jeton-du-mcp-ho"]
 compared: null
 ---
 
@@ -52,5 +52,17 @@ Réglages › Avancé › Réseau : le proxy HTTP(S), ses exclusions, et à qui 
 
 - Les terminaux intégrés ne reçoivent ni le fichier ni la case.
 - Les agents reçoivent les exclusions telles qu'écrites (`NO_PROXY`) : leur lecture est celle de leur harness.
+
+## Le mode hors ligne (ESC-596, audit SEC-18)
+
+- **« Mode hors ligne »**, dans Réglages › Avancé › Réseau, éteint par défaut, coupe d'un geste les quatre flux qu'Escouade lance de lui-même : les mises à jour (de l'app, toutes les 5 minutes, et des plugins, au démarrage), le catalogue du store, la liste de révocation (et son attestation de fraîcheur), les statistiques d'usage (et les comptes d'installations du store). Pendant qu'il dure, aucune statistique n'est gardée pour partir plus tard.
+- **C'est le cœur qui refuse**, quoi que demande la fenêtre. « Rechercher des mises à jour » le dit (« Mode hors ligne : Escouade ne contacte ni les mises à jour, ni le store, ni la liste de révocation, ni les statistiques. »), « Chercher maintenant » des plugins aussi (« Mode hors ligne : offres du jj/mm hh:mm »). Le catalogue et la liste gardés s'appliquent.
+- **Ce qui ne change pas** : ce que l'utilisateur demande d'un geste (installer un plugin, afficher une image), le travail des agents, `git fetch`, la lecture des quotas. La description du réglage le dit.
+- **La barre de statut** dit « Hors ligne » tant qu'il dure ; un clic ouvre le réglage.
+- **Imposable par un poste géré** : la stratégie `network.offline` (un booléen) l'allume, quoi que disent les Réglages. Elle est lue là où la 2.3 lira les stratégies du poste : `HKLM\SOFTWARE\Policies\Escouade` puis `HKCU\…` (valeur `network.offline`, `REG_DWORD` 1) sous Windows, les préférences gérées de macOS (`/Library/Managed Preferences/[<utilisateur>/]dev.gagnaire.escouade.plist`), `/etc/escouade/policies/*.json` sous Linux (le dossier et les fichiers à root, écrits par root seul). Relue chaque minute. Imposé, le réglage est grisé, allumé, avec « Imposé par la stratégie de ce poste. », et l'infobulle de la barre de statut le dit.
+
+## Les images distantes (ESC-596, audit SEC-18)
+
+- Une image distante (« Afficher l'image ») n'est jamais téléchargée depuis la machine ni le réseau local : une adresse écrite (`127.0.0.1`, `[::1]`, `10.…`, `192.168.…`, `169.254.…`), un nom de la machine (`localhost`), ou un nom que cette machine résout vers une telle adresse, même derrière un proxy (qui résoudrait lui-même). Chaque redirection est jugée de même. Le message : « Une image de cette machine ou du réseau local ne s'affiche pas ».
 - Le mot de passe du proxy reste dans les variables d'environnement des agents (`HTTPS_PROXY`) : leurs harness en ont besoin pour s'authentifier.
 - Sur la ligne 2.2, « Ne jamais sortir sans le proxy » ne s'impose pas encore par un poste géré : la liste des politiques est celle de la 2.3.

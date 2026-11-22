@@ -397,6 +397,10 @@ export default {
     exclusions: 'Exclusions',
     exclusionsHint: 'NO_PROXY, séparées par des virgules',
     proxyTerminals: 'Appliquer aussi le proxy aux terminaux intégrés',
+    offline: 'Mode hors ligne',
+    offlineDesc:
+      "Escouade ne contacte plus de lui-même ni les mises à jour, ni le store, ni la liste de révocation, ni les statistiques. Ce que vous demandez d'un geste (installer un plugin, afficher une image) et le travail des agents ne changent pas.",
+    offlineImposed: 'Imposé par la stratégie de ce poste.',
     certificates: 'Certificats',
     certificatesNote:
       "Escouade fait confiance aux certificats reconnus, à ceux installés sur ce système et à ceux du fichier d'autorités. Les agents reçoivent ce fichier au prochain démarrage de leur processus.",

@@ -7,6 +7,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Sécurité : la spec, les décisions et les documents ne peuvent plus s’écrire ni se lire hors du dossier `.escouade` du projet, même par un chemin qu’un appelant n’aurait pas vérifié ou vers un dossier pas encore créé ; un tel chemin est refusé avec sa raison.
 ## [Non publié]
 
+- Sécurité : un « Mode hors ligne » (Réglages › Avancé › Réseau) coupe d’un geste les mises à jour, le store, la liste de révocation et les statistiques, et un poste géré peut l’imposer ; la liste de révocation, attestée chaque semaine, est signalée quand elle a plus de 7 jours. Un plugin ne peut plus déclarer un domaine entier comme `com`, ni joindre le réseau local à travers un proxy, ni créer un fichier `NUL` ou `CON`, et une image du réseau local ne s’affiche plus.
 - Sécurité : le jeton du serveur MCP ne passe plus sur une ligne de commande : Escouade écrit elle-même sa déclaration dans le `.claude.json` de Claude Code, comme pour les autres harness.
 - Sécurité : le mot de passe du proxy va au trousseau du système, plus dans les réglages (il y est déplacé au démarrage) ; sous Linux, le service de secrets du bureau garde les secrets quand il est là, et le dossier de données n’est lisible que de toi.
 - Sécurité : « Ne jamais sortir sans le proxy », allumé dès qu’un proxy est configuré : si le proxy ne répond pas, une mise à jour échoue en disant pourquoi, au lieu de partir en connexion directe.

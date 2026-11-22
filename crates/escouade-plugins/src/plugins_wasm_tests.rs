@@ -726,20 +726,27 @@ async fn net_fetch_refuses_at_the_connection_a_declared_host_that_resolves_to_12
     }
     let (port, l) = listener();
     // slack.com is declared, and its DNS answers 127.0.0.1: the connection is refused, nothing reaches the port.
-    let w = probe("loopback", &["slack.com", "localhost"], Limits::default());
+    // `localhost` itself is no host a manifest may declare (audit SEC-09): a declared name that the system's resolver
+    // answers as it answers localhost stands for it.
+    let w = probe(
+        "loopback",
+        &["slack.com", "local.exemple.dev"],
+        Limits::default(),
+    );
     w.rt.set_net(Net {
         routes: HashMap::new(),
         dns: Some(Arc::new(|host: &str| match host {
             "slack.com" => vec!["127.0.0.1".parse().unwrap()],
-            other => std::net::ToSocketAddrs::to_socket_addrs(&(other, 0))
+            "local.exemple.dev" => std::net::ToSocketAddrs::to_socket_addrs(&("localhost", 0))
                 .map(|a| a.map(|s| s.ip()).collect())
                 .unwrap_or_default(),
+            _ => Vec::new(),
         })),
         ..Net::default()
     });
     let urls = [
         format!("https://slack.com:{port}/api/x"),
-        format!("https://localhost:{port}/x"),
+        format!("https://local.exemple.dev:{port}/x"),
     ];
     let r =
         w.rt.call(&w.id, "try", json!({ "urls": urls }))
@@ -752,7 +759,7 @@ async fn net_fetch_refuses_at_the_connection_a_declared_host_that_resolves_to_12
     // localhost, by the system's resolver: 127.0.0.1 (and ::1).
     let local = r[1].as_str().unwrap();
     assert!(
-        local.starts_with("localhost resolves to ") && local.contains("127.0.0.1"),
+        local.starts_with("local.exemple.dev resolves to ") && local.contains("127.0.0.1"),
         "{local}"
     );
     assert!(l.accept().is_err(), "nothing reached the port");
@@ -795,6 +802,12 @@ async fn net_fetch_refuses_every_address_of_the_machine_and_of_the_local_network
         "::127.0.0.1",
         "64:ff9b::7f00:1",
         "64:ff9b::a00:1",
+        // 6to4 (audit SEC-09): 127.0.0.1 and 192.168.1.1 behind a relay.
+        "2002:7f00:1::",
+        "2002:c0a8:101::1",
+        // Teredo: a server of the machine, a client of the local network (10.0.0.1, each bit flipped).
+        "2001:0:7f00:1::",
+        "2001:0:4136:e378:8000:63bf:f5ff:fffe",
     ];
     for a in refused {
         assert!(wasm::forbidden(a.parse().unwrap()), "{a}");
@@ -806,6 +819,9 @@ async fn net_fetch_refuses_every_address_of_the_machine_and_of_the_local_network
         "2606:4700::1111",
         "::ffff:1.1.1.1",
         "64:ff9b::101:101",
+        // 6to4 and Teredo that carry 1.1.1.1.
+        "2002:101:101::1",
+        "2001:0:4136:e378:8000:63bf:fefe:fefe",
     ] {
         assert!(!wasm::forbidden(a.parse().unwrap()), "{a}");
     }

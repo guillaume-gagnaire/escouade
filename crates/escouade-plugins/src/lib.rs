@@ -136,6 +136,8 @@ pub mod plugins_reactor_tests;
 pub mod plugins_runtime_tests;
 // The jokers of `permissions.commands` and their hostile cases (ESC-528).
 #[cfg(test)]
+mod plugins_fresh_tests;
+#[cfg(test)]
 mod plugins_jokers_tests;
 #[cfg(test)]
 mod plugins_rust_build_tests;
