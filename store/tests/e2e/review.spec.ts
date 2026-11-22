@@ -123,7 +123,9 @@ test('the administrator reads the queue, makes a token, gets the report and the 
   await page.goto(`/plugins/${seeded.ids.slack}`);
   await expect(page.locator('.review-note.signed')).toContainText('Relu par Escouade le');
   await expect(page.locator('.review-note.signed li').first()).toHaveText('Réseau vers hooks.slack.com seulement');
-  await expect(page.locator('.chain li.signed')).toContainText('Signée par Escouade');
+  // The seal names the role of the key that signed it (audit SEC-03, ESC-592): the run's key, given as it is without a
+  // file of store/keys, is taken as the backup, which may sign every id.
+  await expect(page.locator('.chain li.signed')).toContainText('Signée par la clé de secours');
 
   // Done: the signed version left « À relire » for « Faites ».
   await page.goto('/review?tab=done');
