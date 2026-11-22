@@ -710,6 +710,8 @@ pub struct PluginView {
     /// « Vérifié par Escouade »: a version of the store whose signature holds here, now, with the
     /// app's keys against the `version.json` kept (offline too).
     pub verified: bool,
+    /// The key that made that seal and the role it sealed in (ESC-592): what the plugin's page says.
+    pub seal: Option<store_keys::SealKey>,
     /// What the revocation list says of this version, if anything.
     pub withdrawn: Option<Withdrawn>,
     /// A plugin not installed from the store whose id the store has (from a git repository, a
@@ -1144,6 +1146,7 @@ impl Plugins {
 
     fn view(&self, l: &Loaded, lang: Lang) -> PluginView {
         let i = &l.installed;
+        let seal = self.sealed(l);
         let (manifest, ignored, state) = match &l.read {
             Err(Fault::Missing) => (
                 None,
@@ -1247,7 +1250,8 @@ impl Plugins {
             asks: manifest.as_ref().map(asks).unwrap_or_default(),
             secret_keys: manifest.as_ref().map(secret_keys).unwrap_or_default(),
             update: self.updates.read().get(&i.id).cloned(),
-            verified: self.sealed(l),
+            verified: seal.is_some(),
+            seal,
             withdrawn: self.withdrawn_in(l, lang),
             in_store: (!matches!(
                 i.origin,
@@ -1866,36 +1870,36 @@ impl Plugins {
         self.data.plugins_dir().join(".store").join(id)
     }
 
-    /// Whether the seal of a plugin of the store holds, here and now: its `version.json` kept is
+    /// The seal of a plugin of the store when it holds, here and now: its `version.json` kept is
     /// the one it was installed by, its signature holds with the app's keys (less those the list
-    /// revokes) for this id and this version, and the list does not take it off.
-    fn sealed(&self, l: &Loaded) -> bool {
+    /// revokes) whose role covers this id, for this version, and the list does not take it off.
+    /// Gives the key that made it.
+    fn sealed(&self, l: &Loaded) -> Option<store_keys::SealKey> {
         let Origin::Store {
             version, sha256, ..
         } = &l.installed.origin
         else {
-            return false;
+            return None;
         };
         let Some(Proof {
             json,
             minisig: Some(sig),
         }) = &l.proof
         else {
-            return false;
+            return None;
         };
         if store::sha256(json) != *sha256 {
-            return false;
+            return None;
         }
         let list = self.revocations.read();
         if list
             .as_ref()
             .is_some_and(|li| li.find(&l.installed.id, version, "unverify").is_some())
         {
-            return false;
+            return None;
         }
         let keys = store::trusted_keys(list.as_ref());
-        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
-        store_keys::verified_with(&keys, json, sig, &l.installed.id, version).is_ok()
+        store_keys::seal_of(&keys, json, sig, &l.installed.id, version).ok()
     }
 
     /// The version a plugin runs, as the revocation list names it.

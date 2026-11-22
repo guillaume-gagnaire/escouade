@@ -1,4 +1,4 @@
-import { readSignature, verifySigned, type PublicKey } from './minisign';
+import { readSignature, signsList, verifySigned, type PublicKey } from './minisign';
 
 // The revocation list's file (docs/STORE.md, §4.6), read and checked without a database: the store runs it before it
 // takes a list in, and scripts/copy-revocations.ts before it copies the list on escouade.dev. It imports nothing but
@@ -71,6 +71,8 @@ export function checkRevocations(json: string, minisig: string, keys: readonly P
   const [word, serial] = sig.trustedComment.split(/\s+/);
   if (word !== REVOCATIONS_COMMENT || serial !== String(list.serial))
     return { error: `the trusted comment must be "${REVOCATIONS_COMMENT} ${list.serial} …"` };
+  if (!signsList(key, json))
+    return { error: `signed by the key ${key.id} of the first hand, which signs no revocation list since ESC-592` };
   if (list.keys_revoked?.includes(key.id)) return { error: 'signed by a key the list itself revokes' };
   if (list.serial <= after) return { error: `serial ${list.serial} is not above ${after}` };
   return { list, key };

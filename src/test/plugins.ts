@@ -54,6 +54,7 @@ export function installedPlugin(manifest: unknown): PluginView {
     commands: [],
     commandsApproved: true,
     verified: true,
+    seal: { id: 'E0516468FFDCBDD5', role: 'first-hand' },
     withdrawn: null,
     inStore: null,
   };

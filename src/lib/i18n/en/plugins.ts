@@ -88,6 +88,15 @@ export default defineZone('plugins', {
     short: 'Verified',
     long: 'Verified by Escouade',
     label: 'Verified by Escouade, v{version}',
+    key: 'Signed with {role} · {id}',
+    keyTip:
+      'The review is made by an AI agent of Escouade, then the version is signed with {role} ({id}); the app checks it again here with its keys.',
+    role: {
+      firstHand: 'the key of Escouade’s plugins',
+      thirdParty: 'the key of third-party plugins',
+      revocation: 'the revocation key',
+      backup: 'the backup key',
+    },
   },
 
   withdrawn: {

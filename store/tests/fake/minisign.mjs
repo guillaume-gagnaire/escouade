@@ -3,6 +3,18 @@ import { createHash, createPrivateKey, generateKeyPairSync, randomBytes, sign } 
 // A minisign key made for a test (never a file of the repository): its `.pub` text and a signer that writes
 // `.minisig` files as minisign does (prehashed, `ED`). The real key of the store lives on the user's machine alone.
 
+/**
+ * The head of a minisign secret key's file, its second line (ESC-592): the algorithm, then `Sc` (scrypt) for a key
+ * locked by a password, two zero bytes for one without; what admin.ts's `locked` reads, and nothing else.
+ */
+const head = (password) =>
+  Buffer.concat([Buffer.from('Ed'), password ? Buffer.from('Sc') : Buffer.alloc(2), Buffer.from('B2'), Buffer.alloc(152)]).toString(
+    'base64',
+  );
+
+/** A secret of fake-minisign.mjs written as a key of minisign is: a comment, the head, then the test's secret. */
+const keyFile = (secret, password) => `untrusted comment: a key of a test (fake-minisign.mjs)\n${head(password)}\n${secret}\n`;
+
 /** A fresh key pair: `pub` is the `.pub` file's text, `sign(data, trusted)` the `.minisig` file's. */
 export function testKey() {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
@@ -15,6 +27,13 @@ export function testKey() {
     id: hex,
     /** What tests/fake/fake-minisign.mjs reads in place of minisign's encrypted secret key (a test file, never the real one). */
     secret: JSON.stringify({ id: id.toString('hex'), pkcs8: privateKey.export({ format: 'pem', type: 'pkcs8' }) }),
+    /** The same secret in a file shaped as minisign's, locked by a password (`locked`) or not (`open`). */
+    get locked() {
+      return keyFile(this.secret, true);
+    },
+    get open() {
+      return keyFile(this.secret, false);
+    },
     /** @param {Buffer | string} data @param {string} trusted */
     sign(data, trusted, { legacy = false } = {}) {
       const bytes = Buffer.from(data);
@@ -33,7 +52,7 @@ export function testKey() {
  * @param {string} secret @param {Buffer | string} data @param {string} trusted
  */
 export function signWithSecret(secret, data, trusted) {
-  const s = JSON.parse(secret);
+  const s = JSON.parse(secret.trim().startsWith('{') ? secret : secret.trim().split(/\r?\n/).at(-1));
   const key = createPrivateKey(s.pkcs8);
   const id = Buffer.from(s.id, 'hex');
   const sig = sign(null, createHash('blake2b512').update(Buffer.from(data)).digest(), key);

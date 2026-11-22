@@ -27,7 +27,7 @@ Il relève 18 constats. Les trois de gravité moyenne tiennent à ce que l'appli
 
 1. **Plugins tiers** (SEC-01). « N'installer que des versions vérifiées » n'est allumé que pour une installation neuve, et ne juge que le store. Un plugin tiers peut décrire un harness, donc faire lancer un programme du poste hors du bac à sable ; la fenêtre d'installation montre la ligne de commande. **Corrigé dans la 2.2.6** : le réglage vaut aussi pour les dossiers et les dépôts, s'allume à la mise à jour d'une installation sans plugin tiers, et le harness d'un tiers demande l'accord à son premier lancement, sa commande entière redite.
 2. **Projets privés** (SEC-02). Marquer un projet « privé » le cache aux agents des autres projets ; côté fichiers, c'est une consigne donnée aux harness, pas un cloisonnement du système. L'interface le dit.
-3. **Sceau « Vérifié par Escouade »** (SEC-03). Une seule clé, gardée sans mot de passe sur le poste de l'éditeur, et une revue faite par un agent. L'éditeur connaît ce point et garde ce fonctionnement.
+3. **Sceau « Vérifié par Escouade »** (SEC-03). Une seule clé, gardée sans mot de passe sur le poste de l'éditeur, et une revue faite par un agent. **Corrigé dans Escouade 2.2.6** : les clés sont séparées par rôle, la clé sans mot de passe ne scelle plus que les plugins de l'éditeur, les tiers et la liste de révocation demandent une clé à mot de passe, et chaque sceau dit sa clé.
 
 Les quatorze constats faibles sont de la défense en profondeur : des gardes qui tiennent mais dont un bord reste ouvert, ou des plafonds qui manquent. Le dernier constat réunit des observations sans impact direct.
 
@@ -297,13 +297,13 @@ Escouade ne chiffre pas ses données au repos : elle s'en remet au chiffrement d
 
 # 5. Les constats
 
-Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité et sa raison, l'état de la preuve, le composant et l'effort de correction, puis la description, la preuve, un scénario réaliste et la recommandation. Un constat que l'éditeur connaît et laisse en l'état le dit dans sa fiche (SEC-03).
+Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité et sa raison, l'état de la preuve, le composant et l'effort de correction, puis la description, la preuve, un scénario réaliste et la recommandation. Un constat corrigé depuis la version auditée le dit dans sa fiche, avec la version qui le corrige (SEC-01 et SEC-03, corrigés dans la 2.2.6).
 
 | Id | Titre | Gravité | État |
 | --- | --- | --- | --- |
 | SEC-01 | Plugins tiers : installables sans revue hors du store, et capables de faire lancer un programme | Moyenne | Démontré ; corrigé dans la 2.2.6 |
 | SEC-02 | « Projet privé » est une consigne, pas un cloisonnement | Moyenne | Démontré |
-| SEC-03 | Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent | Moyenne | Probable |
+| SEC-03 | Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent | Moyenne | Probable · corrigé dans la 2.2.6 |
 | SEC-04 | Dépendances : des avis ouverts hors de l'application, sans délai de correction | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-05 | Politique de contenu : styles en ligne autorisés, directives manquantes | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-06 | Lancement décrit par un plugin : un fichier écrit à travers un lien | Faible | Démontré |
@@ -396,7 +396,7 @@ Test W-04 : un lancement qui pose le chemin protégé dans une variable sans eff
 | État | Probable — la pratique est lue dans la documentation et l'outillage du dépôt, et précisée par l'éditeur ; la portée de la clé est vérifiée dans le code ; le dossier des clés n'a pas été lu, par consigne |
 | Composant | Revue et signature des plugins du store |
 | Effort de correction | Moyen |
-| Position de l'éditeur | **Accepté** — l'éditeur connaît ce point, garde ce fonctionnement et le dit |
+| Position de l'éditeur | **Corrigé dans Escouade 2.2.6** — accepté à la date de l'audit, puis corrigé : voir « La correction », en fin de fiche |
 
 **Description.** Une version de plugin « vérifiée » porte une signature minisign que l'application contrôle avec deux clés publiques embarquées : la clé de tous les jours et une clé de secours. Le modèle de menace du store décrit la clé secrète comme « chiffrée par mot de passe, hors ligne en dehors des signatures ». En pratique, la clé de tous les jours est gardée sans mot de passe sur le poste de l'éditeur, pour qu'un agent automatisé signe seul les plugins de première main. La revue qui précède cette signature est faite, elle aussi, par un agent d'IA.
 
@@ -445,6 +445,15 @@ Et une raison de ne pas la monter : l'exploitation demande toujours trois condit
 **Ce que le sceau veut dire.** Le sceau « Vérifié par Escouade » d'un plugin de première main dit « publié par l'éditeur d'Escouade », après une revue faite par un agent : il ne dit pas « relu par un humain ». C'est le même niveau de confiance que celui accordé à l'application elle-même, dont ces plugins sont des morceaux.
 
 **Recommandation.** Rendre l'engagement vérifiable : une clé distincte et protégée pour les tiers, la clé de la première main limitée par le code à `dev.escouade.*`, la liste de révocation signée par une clé protégée. Tenir toute clé hors de portée des agents qui lisent du contenu tiers. Faire relire par un humain toute version avant signature, ou dire sur la page du plugin que la revue est automatisée. Aligner `docs/STORE.md` (§4.5 et §7) sur la pratique. Pour un poste d'entreprise : s'en tenir aux plugins de première main livrés avec l'application.
+
+**La correction (Escouade 2.2.6).** Ce qui était annoncé est devenu un contrôle, dans le code, et se vérifie aux trois points que la fiche donnait :
+
+1. **Une clé par rôle, la première main bornée par le code.** L'application connaît ses clés publiques par leur rôle (`STORE_KEYS`, `crates/escouade-plugins/src/store_keys.rs`) : la clé de la première main (la clé de tous les jours d'avant, E0516468FFDCBDD5) ne scelle que `dev.escouade.*` ; une clé distincte, à mot de passe, scelle les plugins tiers et signe la liste de révocation ; la clé de secours vaut pour tout. Un sceau hors de son rôle est refusé, avec sa raison, à l'installation, à la mise à jour, à l'amorce et à chaque lecture d'un plugin installé ; des tests le montrent (`store_keys_tests.rs`). Le store et l'outillage appliquent les mêmes rôles, tirés du nom des fichiers de `store/keys/`, et refusent de prendre ou d'envoyer une signature hors de son rôle.
+2. **La liste de révocation** ne se signe plus par la clé sans mot de passe : seule la liste qu'elle avait signée avant (nº 1, vide), désignée par l'empreinte de ses octets, tient encore. Les 119 sceaux publiés à la date de la correction, tous `dev.escouade.*`, restent valides.
+3. **Chaque sceau dit sa clé** : son identifiant et son rôle sont au catalogue du store, sur la page du plugin (qui dit aussi que la revue est faite par un agent d'IA, puis signée) et dans la vue Plugins de l'application.
+4. **L'outillage** choisit la clé selon l'identifiant ou le rôle, refuse une clé des tiers ou de la révocation sans mot de passe, et laisse minisign demander ce mot de passe à chaque signature, sans le lire ni le garder. `docs/STORE.md` (§4.5, §4.6, §7) dit la pratique réelle : qui revoit, qui signe, avec quelle clé.
+
+Ce qui reste : la clé de la première main est toujours sans mot de passe, sur le poste de l'éditeur, pour que le chef d'escouade signe seul ses propres plugins après sa revue ; le pire cas d'un vol, une version forgée de la première main, demande toujours de la faire servir et un clic de mise à jour. La clé des tiers et de la révocation est créée par l'éditeur sur son poste ; tant qu'elle n'est pas embarquée, un plugin tiers et une nouvelle liste ne se signent que par la clé de secours. Une application antérieure à la 2.2.6 ne connaît pas ces rôles.
 
 ## SEC-04 — Dépendances : des avis ouverts hors de l'application, sans délai de correction
 

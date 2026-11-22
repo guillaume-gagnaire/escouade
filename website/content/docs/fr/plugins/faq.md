@@ -10,7 +10,7 @@ Non : un plugin du store tourne dans l’app, en WASM, qu’il soit écrit en Ty
 
 ### « Vérifié par Escouade », « Non vérifié » : quelle différence ?
 
-Une version vérifiée a été relue par Escouade et signée ; l’app vérifie la signature elle-même, sans faire confiance au store. Une version non vérifiée a passé les contrôles automatiques du store, mais personne n’a lu son code ; un plugin installé depuis un dossier ou un dépôt git l’est toujours. Voir [la sécurité des plugins](plugins/security).
+Une version vérifiée a été relue par un agent d’IA d’Escouade, puis signée par une clé dont le rôle couvre ce plugin ; l’app vérifie la signature elle-même, sans faire confiance au store. Une version non vérifiée a passé les contrôles automatiques du store, mais personne n’a lu son code ; un plugin installé depuis un dossier ou un dépôt git l’est toujours. Voir [la sécurité des plugins](plugins/security).
 
 ### Un plugin peut-il voir mes projets privés ?
 

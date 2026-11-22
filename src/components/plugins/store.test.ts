@@ -126,6 +126,7 @@ function installed(over: Partial<PluginView> = {}): PluginView {
     commands: [],
     commandsApproved: true,
     verified: true,
+    seal: null,
     withdrawn: null,
     inStore: null,
     ...over,

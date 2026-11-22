@@ -4,7 +4,9 @@ import { accounts, installsDaily, plugins, versions } from '../db/schema';
 import type { Db } from './db';
 import { parseRevocations, revoked, type RevocationList } from './revocation-list';
 import { lastRevocations } from './revocations';
-import { signatureIndex, verifiedBy } from './signatures';
+import { sealKey, signatureIndex, verifiedBy } from './signatures';
+import { service } from './service';
+import type { PublicKey, Role } from './minisign';
 import { compareVersions, sha256, wasmOf, type Binary } from './versions';
 import { iconSrc, type Icon } from '../../shared/tile';
 
@@ -40,8 +42,9 @@ export interface CatalogVersion {
   escouade: { api: string; min: string; max?: string };
   /** Signed by the review (docs/STORE.md §4.5): its signature is at `files.signature`, to check with the keys the app embeds. */
   verified: boolean;
-  /** The public summary of the review, when verified. */
-  review?: { signed_at: string; summary: { fr: string; en: string } | null };
+  /** The public summary of the review, when verified, and the key that signed it with the role it sealed in (ESC-592):
+   *  the key of the first hand for `dev.escouade.*`, the third parties' for the others, or the backup. */
+  review?: { signed_at: string; summary: { fr: string; en: string } | null; key: { id: string; role: Role | null } };
   /** Taken back by its author: no longer offered to install nor as an update; those who have it keep it. */
   yanked: boolean;
   /** Why its badge was withdrawn by the revocation list, if it was. */
@@ -98,7 +101,7 @@ const day = (d: Date) => d.toISOString().slice(0, 10);
 const isPre = (v: string) => /^\d+\.\d+\.\d+-/.test(v);
 
 /** Builds the catalogue as of `now`: the published versions, less those the revocation list disables. */
-export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
+export async function buildCatalog(db: Db, now = new Date(), keys: readonly PublicKey[] = service.keys): Promise<Catalog> {
   const today = day(now);
   const yesterday = day(new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000));
   const rows = await db
@@ -138,7 +141,7 @@ export async function buildCatalog(db: Db, now = new Date()): Promise<Catalog> {
       platforms: Object.keys(binaries).sort(),
       escouade: { api: escouade.api, min: escouade.min, ...(escouade.max ? { max: escouade.max } : {}) },
       verified: !!sig,
-      ...(sig ? { review: { signed_at: sig.signedAt.toISOString(), summary: sig.summary } } : {}),
+      ...(sig ? { review: { signed_at: sig.signedAt.toISOString(), summary: sig.summary, key: sealKey(keys, sig.keyId, plugin.id) } } : {}),
       yanked: !!v.yankedAt,
       ...(unverify ? { unverified: unverify.reason } : {}),
       permissions: (m.permissions ?? {}) as Record<string, unknown>,

@@ -3,7 +3,7 @@
 // in one line, and the calls of the view Plugins.
 import { invoke } from '@tauri-apps/api/core';
 import { t } from './i18n';
-import { textOf, type Category, type ManifestText } from './plugins';
+import { textOf, type Category, type KeyRole, type ManifestText } from './plugins';
 
 export interface CatalogVersion {
   version: string;
@@ -13,7 +13,8 @@ export interface CatalogVersion {
   platforms: string[];
   escouade: { api: string | number; min: string; max?: string };
   verified: boolean;
-  review?: { signed_at: string; summary: { fr: string; en: string } | null };
+  /** The review's summary, and the key that signed with its role (ESC-592; absent from a store before it). */
+  review?: { signed_at: string; summary: { fr: string; en: string } | null; key?: { id: string; role: KeyRole | null } };
   yanked: boolean;
   unverified?: { fr: string; en: string };
   permissions: {

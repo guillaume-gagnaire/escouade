@@ -9,7 +9,8 @@ import { accounts, adminTokens, installsDaily, plugins, reports, signatures, ver
 import { buildCatalog, forgetCatalog } from '../../server/utils/catalog';
 import { migrateDb, openDb, type Db } from '../../server/utils/db';
 import { catalog as listing, pluginPage } from '../../server/utils/listing';
-import { readPublicKey } from '../../server/utils/minisign';
+import { readKeyFile, readPublicKey } from '../../server/utils/minisign';
+import { service } from '../../server/utils/service';
 import {
   acceptSignature,
   adminBearer,
@@ -243,6 +244,53 @@ describe.skipIf(!url)('the review queue and the signatures', () => {
           null,
         ),
       ).toMatchObject({ ok: true, keyId: backup.id });
+    });
+
+    it('takes the key of the first hand for dev.escouade.* alone, the third parties’ for the others, and names the key (ESC-592)', async () => {
+      const first = testKey();
+      const third = testKey();
+      const roles = [
+        readKeyFile('store.pub', first.pub)!,
+        readKeyFile('third-party.pub', third.pub)!,
+        readKeyFile('backup.pub', backup.pub)!,
+      ];
+      await plugin('io.github.sroux.ntfy');
+      const theirs = await version('io.github.sroux.ntfy', '1.0.0');
+      await plugin('dev.escouade.ntfy');
+      const own = await version('dev.escouade.ntfy', '1.0.0');
+      const at = (id: string, json: string, by: ReturnType<typeof testKey>) =>
+        acceptSignature(db, admin, roles, { id, version: '1.0.0', minisig: sign(json, id, '1.0.0', by) }, null, T0);
+      expect(await at('io.github.sroux.ntfy', theirs.json, first)).toMatchObject({
+        error: 'signature',
+        detail: expect.stringContaining('of the first hand, which seals dev.escouade.* plugins only'),
+      });
+      expect(await at('dev.escouade.ntfy', own.json, third)).toMatchObject({
+        error: 'signature',
+        detail: expect.stringContaining("does not seal Escouade's plugins"),
+      });
+      expect(await db.select().from(signatures)).toEqual([]);
+      expect(await at('io.github.sroux.ntfy', theirs.json, third)).toMatchObject({ ok: true, keyId: third.id });
+      expect(await at('dev.escouade.ntfy', own.json, first)).toMatchObject({ ok: true, keyId: first.id });
+      // The catalogue and the page say which key signed, and in which role.
+      const c = await buildCatalog(db, T0, roles);
+      const review = (id: string) => c.plugins.find((p) => p.id === id)!.versions[0]!.review;
+      expect(review('io.github.sroux.ntfy')?.key).toEqual({ id: third.id, role: 'third-party' });
+      expect(review('dev.escouade.ntfy')?.key).toEqual({ id: first.id, role: 'first-hand' });
+      const kept = service.keys;
+      service.keys = roles;
+      try {
+        expect((await pluginPage(db, archives, 'dev.escouade.ntfy'))!.latest!.signature).toMatchObject({
+          keyId: first.id,
+          role: 'first-hand',
+        });
+      } finally {
+        service.keys = kept;
+      }
+      // The revocation list: by the third parties' key, never by the first hand's.
+      expect(await depositRevocations(db, admin, roles, revocations(1, [], {}, first), null)).toMatchObject({
+        error: expect.anything(),
+      });
+      expect(await depositRevocations(db, admin, roles, revocations(1, [], {}, third), null)).toEqual({ serial: 1 });
     });
 
     it('is refused when it is not the store’s key, not these bytes, or names another version', async () => {

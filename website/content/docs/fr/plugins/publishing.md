@@ -108,7 +108,7 @@ Publier une version ne change rien chez ceux qui ont le plugin : Escouade la **p
 
 ## Préparer la revue
 
-La revue « Vérifié par Escouade » est faite à la main, version par version, sur le poste de l’équipe d’Escouade : elle télécharge l’archive gardée par le store, en vérifie les empreintes, lit le code au regard des permissions déclarées et fait passer le [banc de conformité](plugins/testing) dans un conteneur sans réseau. Elle signe ensuite `version.json` avec une clé qui ne quitte jamais ce poste : ni le store, ni la CI ne l’ont. Ce qui la rend rapide :
+La revue « Vérifié par Escouade » est faite par un agent d’IA, version par version, sur le poste de l’équipe d’Escouade : elle télécharge l’archive gardée par le store, en vérifie les empreintes, lit le code au regard des permissions déclarées et fait passer le [banc de conformité](plugins/testing) dans un conteneur sans réseau. L’éditeur signe ensuite `version.json` avec la clé des plugins tiers, à mot de passe, qui ne quitte jamais ce poste : ni le store, ni la CI ne l’ont ([les clés du sceau](plugins/security#les-cles-du-sceau)). Ce qui la rend rapide :
 
 - **des permissions exactes** : chaque hôte joint dans `permissions.network`, chaque secret dans `contributes.secrets`, rien de plus ;
 - **du code lisible** : un fichier compilé (`dist/`) a sa source dans le dépôt et s’en reconstruit ; pas de code minifié sans source, pas de texte encodé en base64 ;

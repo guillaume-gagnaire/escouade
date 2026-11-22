@@ -30,16 +30,17 @@ export const E2E_FIRST_PARTY_REPO = `${E2E_CHEF_LOGIN}/escouade-app`;
 
 /**
  * The signing key of the end-to-end tests: made once in the system's temporary folder (never in the repository),
- * the same for the runner and its workers; its public half is the store's STORE_KEYS_DIR during the run.
+ * the same for the runner and its workers; its public half is the store's STORE_KEYS_DIR during the run, as the backup
+ * (`backup.pub`: every role, ESC-592), since the runs seal plugins of the first hand and third parties' alike.
  */
 export function e2eKey(): { dir: string; keys: string; secret: string } {
-  const dir = join(tmpdir(), 'escouade-store-e2e-key');
+  const dir = join(tmpdir(), 'escouade-store-e2e-key-2');
   const keys = join(dir, 'keys');
   const secret = join(dir, 'store.key');
   if (!existsSync(secret)) {
     mkdirSync(keys, { recursive: true });
     const k = testKey();
-    writeFileSync(join(keys, 'store.pub'), k.pub);
+    writeFileSync(join(keys, 'backup.pub'), k.pub);
     writeFileSync(secret, k.secret);
   }
   return { dir, keys, secret };

@@ -1,13 +1,13 @@
 # Plugin security
 
-A plugin from the store goes through three guards: the store’s eleven checks on submission, the “Verified by Escouade” review done by hand, and the app’s checks on every install. This page says what each one holds, what the review refuses, and what the seal does not promise.
+A plugin from the store goes through three guards: the store’s eleven checks on submission, the “Verified by Escouade” review, made by an AI agent then signed, and the app’s checks on every install. This page says what each one holds, what the review refuses, and what the seal does not promise.
 
 ## What the app checks
 
 On install and on every update, Escouade downloads `version.json`, the archive and its WASM module, then checks:
 
 - **the fingerprints**: `version.json` against the catalog, the archive, the module and the manifest against `version.json` (SHA-256). One byte changed, on the store, on the way or in a cache, stops the install;
-- **the signature**, for a verified version: `version.json` signed with minisign by Escouade’s key, the signature’s comment naming this id and this number. The public keys are in the app; the secret key lives on one machine, encrypted, never on the store’s server, never in the CI or in a repository. So the store cannot make a seal;
+- **the signature**, for a verified version: `version.json` signed with minisign by a key of Escouade whose role covers this plugin (see [the keys of the seal](#the-keys-of-the-seal)), the signature’s comment naming this id and this number. The public keys are in the app; the secret keys live on one machine, never on the store’s server, never in the CI or in a repository. So the store cannot make a seal;
 - **the archive**, read in memory, without a symbolic link or a path that leaves the plugin’s folder;
 - **the folder** `version.json` names for a plugin kept in a subfolder of its repository: a plain relative path, without `..`, an absolute path or a backslash; otherwise nothing is installed. The store, for its part, refuses at submission a folder that goes through a symbolic link.
 
@@ -17,7 +17,19 @@ An installed plugin’s seal is checked again on your machine, without the store
 
 “Verified by Escouade” stands for **one version**: its code at the published commit, its archive and its module, recompiled by the review, named by the fingerprint of its `version.json`. A new version is “not verified” until its own review, even if the one before was: an update is where an honest plugin can change hands. **Install verified versions only**, in the Plugins view, refuses any version without a seal.
 
-The seal says that a person read this code against what it declares, and that the bench ran it without network. It does not promise there is no bug, nor the quality of the third-party service the plugin reaches.
+The seal says that an AI agent of Escouade read this code against what it declares, that the bench ran it without network, then that the version was signed. It is not a human review: the plugin’s page, on the store and in the Plugins view, says so with the key that signed. It does not promise there is no bug, nor the quality of the third-party service the plugin reaches.
+
+## The keys of the seal
+
+Each key of Escouade has a role, written in the code of the app, of the store and of their tools: a signature out of its role is refused, with its reason.
+
+| Key | What it seals | Who signs |
+| --- | --- | --- |
+| **The key of Escouade’s plugins** | the `dev.escouade.*` plugins, and nothing else | the squad’s chief, the agent that made the review; the key has no password |
+| **The key of third-party plugins** | the plugins of other authors, and the revocation list | the publisher, who types the key’s password at each signature |
+| **The backup key** | everything, the day another key is lost or stolen | the publisher; it is kept offline |
+
+Each seal says its key: its id is in the signature’s file (`version.json.minisig`), in the store’s catalog, on the plugin’s page and in the app’s Plugins view (“Signed with the key of Escouade’s plugins · E0516468FFDCBDD5”). So a key without a password stolen from the publisher’s machine seals no plugin of another author, nor a revocation list.
 
 ## What the review refuses
 
@@ -48,7 +60,7 @@ The review reads each version with a script that prepares leads for it, file and
 
 ## Withdrawal and the revocation list
 
-Escouade reads a **revocation list** signed by the same key, at startup then every 6 hours, and refuses a list older than the last one read. It has two kinds of entries:
+Escouade reads a **revocation list** signed by the key of third-party plugins and of the revocation list (or the backup key), at startup then every 6 hours, and refuses a list older than the last one read. It has two kinds of entries:
 
 - **remove the seal**: the plugin keeps running, a banner says why;
 - **emergency withdrawal**: the app stops the plugin, disables it and says why, with “Uninstall”. It deletes nothing on its own: your data is yours.

@@ -885,7 +885,7 @@ fn holds_a_revoked_key_seals_nothing() {
         store_keys::verified_with(&none, SIGNED.as_bytes(), SEAL, "dev.exemple.slack", "1.2.0"),
         Err(Refused::NoKey)
     );
-    assert_eq!(store_keys::STORE_PUBLIC_KEYS.len(), 2);
+    assert_eq!(store_keys::STORE_KEYS.len(), 2);
     // A list that is not signed by a key of the app, or of another serial, is no list.
     let json = serde_json::to_vec(&list).unwrap();
     assert!(store::check_list(&keys, &json, SEAL, 0).is_err());

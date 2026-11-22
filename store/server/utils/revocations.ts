@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { desc } from 'drizzle-orm';
 import { revocationLists } from '../db/schema';
 import type { Db } from './db';
-import { readPublicKey, type PublicKey } from './minisign';
+import { readKeyFile, type PublicKey } from './minisign';
 import { checkRevocations } from './revocation-list';
 
 // The revocation list (docs/STORE.md, §4.6): signed on the user's machine with the store's key, never on the server.
@@ -11,14 +11,17 @@ import { checkRevocations } from './revocation-list';
 // its serial is above the last one; it serves the last list as it was signed, bytes and `.minisig`, and drops the
 // versions it disables from the catalogue. A copy is published on escouade.dev (scripts/copy-revocations.ts).
 
-/** The public keys of `dir` (`*.pub`, minisign's files): the ones the app embeds. A file that does not read is said. */
+/**
+ * The public keys of `dir` (`*.pub`, minisign's files): the ones the app embeds, each with the roles of its name
+ * (`ROLES_BY_FILE`). A file that does not read, or whose name has no role, is said and left out.
+ */
 export async function loadKeys(dir: string): Promise<PublicKey[]> {
   const names = await readdir(dir).catch(() => [] as string[]);
   const keys: PublicKey[] = [];
   for (const name of names.filter((n) => n.endsWith('.pub')).sort()) {
-    const key = readPublicKey(await readFile(join(dir, name), 'utf8'));
+    const key = readKeyFile(name, await readFile(join(dir, name), 'utf8'));
     if (key) keys.push(key);
-    else console.warn(`[store] ${name} in ${dir} is not a minisign public key: left out`);
+    else console.warn(`[store] ${name} in ${dir} is not a minisign public key of a known role (store, third-party, backup): left out`);
   }
   return keys;
 }

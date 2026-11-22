@@ -1,4 +1,4 @@
-import { readSignature, verifySigned, type PublicKey } from './minisign';
+import { readSignature, sealRole, verifySigned, type PublicKey, type Role } from './minisign';
 
 // The signature of a verified version (docs/STORE.md, §4.5): minisign's, made on the user's machine with the store's
 // key, over the version's `version.json` byte for byte, its trusted comment `escouade-verified-v1 <id>@<version>
@@ -12,11 +12,13 @@ export const VERIFIED_COMMENT = 'escouade-verified-v1';
 /** The trusted comment of version `version` of plugin `id`, signed on `date` (an ISO date). */
 export const verifiedComment = (id: string, version: string, date: string) => `${VERIFIED_COMMENT} ${id}@${version} ${date}`;
 
-export type CheckedSignature = { key: PublicKey; date: string } | { error: string };
+export type CheckedSignature = { key: PublicKey; date: string; role: Role } | { error: string };
 
 /**
  * Whether `minisig` signs `versionJson` (its exact bytes) as version `version` of `id`, with one of `keys` that
- * `revokedKeys` does not name (the revocation list's `keys_revoked`, §7). Gives the key and the date of the signature.
+ * `revokedKeys` does not name (the revocation list's `keys_revoked`, §7) and whose role covers this id (the key of
+ * the first hand seals `dev.escouade.*` alone, the third parties' never seals it: SEC-03). Gives the key, the role it
+ * sealed in and the date of the signature.
  */
 export function checkVersionSignature(
   versionJson: string | Buffer,
@@ -40,5 +42,12 @@ export function checkVersionSignature(
   const [word, target, date, ...rest] = sig.trustedComment.split(' ');
   if (word !== VERIFIED_COMMENT || target !== `${id}@${version}` || !date || rest.length || Number.isNaN(Date.parse(date)))
     return { error: `the trusted comment must be "${verifiedComment(id, version, '<date>')}"` };
-  return { key, date };
+  const role = sealRole(key, id);
+  if (!role)
+    return {
+      error: id.startsWith('dev.escouade.')
+        ? `signed by the key ${key.id}, which does not seal Escouade's plugins (dev.escouade.*)`
+        : `signed by the key ${key.id} of the first hand, which seals dev.escouade.* plugins only`,
+    };
+  return { key, date, role };
 }

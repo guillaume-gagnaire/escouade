@@ -1,7 +1,17 @@
 <script lang="ts">
   import { fDate } from '../../lib/format';
   import { locale, t } from '../../lib/i18n';
-  import { activeIn, asksOf, categoriesOf, contributionsOf, originOf, shortPrint, sourceUrl, type PluginView } from '../../lib/plugins';
+  import {
+    activeIn,
+    asksOf,
+    categoriesOf,
+    contributionsOf,
+    originOf,
+    roleKey,
+    shortPrint,
+    sourceUrl,
+    type PluginView,
+  } from '../../lib/plugins';
   import { plugins, type PluginTab } from '../../lib/plugins-view.svelte';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
@@ -82,6 +92,12 @@
           {#if m?.license}<span>{m.license}</span>{/if}
           <span class="mono">{plugin.id}</span>
         </div>
+        {#if plugin.verified && plugin.seal}
+          {@const role = t(`plugins.seal.role.${roleKey(plugin.seal.role)}`)}
+          <p class="sealkey" use:tip={{ text: t('plugins.seal.keyTip', { role, id: plugin.seal.id }) }}>
+            {t('plugins.seal.key', { role, id: plugin.seal.id })}
+          </p>
+        {/if}
         <p class="desc">{plugin.description || t('plugins.page.noDescription')}</p>
       </div>
       <div class="act">
@@ -328,6 +344,11 @@
   }
   .meta .mono {
     font-size: 11px;
+  }
+  .sealkey {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 11.5px;
   }
   .desc {
     margin: 8px 0 0;

@@ -88,6 +88,16 @@ export default {
     short: 'Vérifié',
     long: 'Vérifié par Escouade',
     label: 'Vérifié par Escouade, v{version}',
+    // The key that made the seal, by its role (ESC-592): Escouade's own plugins, the third parties', the backup.
+    key: 'Signé par {role} · {id}',
+    keyTip:
+      'La revue est faite par un agent d’IA d’Escouade, puis la version est signée par {role} ({id}) ; l’app la revérifie ici avec ses clés.',
+    role: {
+      firstHand: 'la clé des plugins d’Escouade',
+      thirdParty: 'la clé des plugins tiers',
+      revocation: 'la clé de la révocation',
+      backup: 'la clé de secours',
+    },
   },
 
   withdrawn: {

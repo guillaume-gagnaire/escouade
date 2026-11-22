@@ -43,6 +43,7 @@ function view(m: Manifest, over: Partial<PluginView> = {}): PluginView {
     manifest: m,
     installedAt: '2026-11-08T10:00:00Z',
     verified: true,
+    seal: null,
     withdrawn: null,
     inStore: null,
     choices: { enabled: true, projects: {}, revoked: [], settings: {} },

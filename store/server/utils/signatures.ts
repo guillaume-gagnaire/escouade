@@ -1,5 +1,6 @@
 import { signatures } from '../db/schema';
 import type { Db } from './db';
+import { sealRole, type PublicKey, type Role } from './minisign';
 import { revoked, type RevocationList } from './revocation-list';
 
 // Which versions are verified (docs/STORE.md, §4.4): a signature taken in for the version's very `version.json` (its
@@ -23,6 +24,15 @@ export async function signatureIndex(db: Db): Promise<SignatureIndex> {
   return new Map(
     rows.map((r) => [at(r.pluginId, r.version), { sha256: r.versionSha256, keyId: r.keyId, signedAt: r.signedAt, summary: r.summary }]),
   );
+}
+
+/**
+ * The key that made the signature of a version of `id`, and the role it sealed in (audit SEC-03, ESC-592): what the
+ * catalogue, the plugin's page and the app say of a seal. `role` is null for a key the store no longer has.
+ */
+export function sealKey(keys: readonly PublicKey[], keyId: string, id: string): { id: string; role: Role | null } {
+  const key = keys.find((k) => k.id === keyId);
+  return { id: keyId, role: key ? sealRole(key, id) : null };
 }
 
 /** The signature that makes version `version` of `id` (fingerprint `sha256`) verified, or null. */

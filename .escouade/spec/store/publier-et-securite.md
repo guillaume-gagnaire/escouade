@@ -2,8 +2,8 @@
 title: "Publier sur le store, la sécurité des plugins et l'essai réel"
 subject: "store"
 sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts","store/deploy/seccomp-bubblewrap.json","store/deploy/apparmor-bubblewrap","store/server/utils/readme.ts","store/app/components/StorePlugin.vue"]
-tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336","ESC-356","ESC-366"]
-decisions: [21,25,43,72,86,91]
+tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336","ESC-356","ESC-366","ESC-592"]
+decisions: [21,25,43,72,86,91,"les-cles-du-sceau-separees-par-role-la-p"]
 compared: "2026-10-31T19:50:09+01:00"
 ---
 
@@ -86,3 +86,11 @@ Cette partie remplace, dans la section précédente, « Il reste à l'hébergeme
 - **Le contrôle** : un `store.docs` qui ne mène à aucune page markdown (dossier absent, sans `.md`) est un avertissement du contrôle README, qui passe quand même. Le contrôle du manifeste refuse déjà un chemin qui sort du plugin. La page de soumission montre l'avertissement aux couleurs d'une attente.
 - **Dans l'app**, la vue Plugins ne montre ni le README ni les pages : elle renvoie à la page du store (« Lire sa documentation sur le store »). Montrer la documentation dans l'app reste un chantier à part.
 - La documentation des auteurs (`plugins/publishing`, `plugins/manifest`, fr et en) donne la forme avec un exemple d'arborescence.
+
+## Les clés du sceau et ce que la page du plugin dit (ESC-592, audit SEC-03)
+
+Ceci remplace, dans *La documentation des auteurs*, « signature avec ses clés embarquées, clé secrète jamais sur le serveur ni dans la CI » et la revue « faite à la main ».
+- **Le store prend un sceau selon le rôle de la clé** (le nom de son fichier dans `store/keys/` : `store.pub` la première main, `third-party.pub` les tiers et la révocation, `backup.pub` le secours ; un autre nom n'est pris par personne) : la clé de la première main pour `dev.escouade.*` seulement, celle des tiers pour un tiers seulement, le secours pour tout. Une signature hors de son rôle est refusée au dépôt, avec sa raison ; une liste de révocation de la clé de la première main aussi (la nº 1 d'avant tient encore). La copie de la liste sur escouade.dev et l'amorce de l'app appliquent les mêmes rôles.
+- **Le catalogue dit la clé de chaque sceau** : `review.key`, son `id` et son `role` (`first-hand`, `third-party`, `backup`).
+- **La page d'un plugin vérifié** dit que la revue est faite par un agent d'IA, puis signée : « La revue est faite par un agent d'IA d'Escouade, puis la version est signée par la clé des plugins d'Escouade (E0516468FFDCBDD5). » ; dans « D'où il vient », la ligne « Signature » dit « Signée par la clé des plugins d'Escouade » (ou « des plugins tiers », « de secours ») et l'id de la clé.
+- **La documentation du site** (« La sécurité des plugins », fr et en) a une section « Les clés du sceau » : la clé de chaque rôle, ce qu'elle scelle, qui signe ; « Publier sur le store » et la FAQ disent que la revue est faite par un agent d'IA et que la signature d'un tiers se fait par la clé des plugins tiers, à mot de passe.

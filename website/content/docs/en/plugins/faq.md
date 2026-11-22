@@ -10,7 +10,7 @@ No: a plugin of the store runs inside the app, in WASM, whether it is written in
 
 ### “Verified by Escouade”, “Unverified”: what is the difference?
 
-A verified version was reviewed by Escouade and signed; the app checks the signature itself, without trusting the store. An unverified version passed the store’s automatic checks, but nobody read its code; a plugin installed from a folder or a git repository always is. See [plugin security](plugins/security).
+A verified version was reviewed by an AI agent of Escouade, then signed with a key whose role covers this plugin; the app checks the signature itself, without trusting the store. An unverified version passed the store’s automatic checks, but nobody read its code; a plugin installed from a folder or a git repository always is. See [plugin security](plugins/security).
 
 ### Can a plugin see my private projects?
 

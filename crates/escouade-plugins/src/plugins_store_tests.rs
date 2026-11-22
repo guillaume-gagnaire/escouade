@@ -213,9 +213,9 @@ async fn a_verified_version_installs_with_its_seal_checked_here_and_again_offlin
 
 #[tokio::test]
 async fn without_the_store_key_a_verified_version_installs_without_a_seal() {
-    // No ESCOUADE_STORE_TEST_KEY: as a release before the user gives the keys (STORE_PUBLIC_KEYS empty).
+    // No ESCOUADE_STORE_TEST_KEY: as a release before the user gives the keys (STORE_KEYS empty).
     let fake = Fake::start();
-    if !crate::store_keys::STORE_PUBLIC_KEYS.is_empty() {
+    if !crate::store_keys::STORE_KEYS.is_empty() {
         return;
     }
     let (_, store, plugins) = ready(&fake, "nokey").await;

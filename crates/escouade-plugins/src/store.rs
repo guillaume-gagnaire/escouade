@@ -281,10 +281,10 @@ impl RevocationList {
     }
 
     /// The keys a seal is checked with under this list: `keys` less those it revokes.
-    pub fn trusted(&self, keys: &[String]) -> Vec<String> {
+    pub fn trusted<K: store_keys::TrustedKey + Clone>(&self, keys: &[K]) -> Vec<K> {
         let revoked = self.keys_revoked.clone().unwrap_or_default();
         keys.iter()
-            .filter(|k| !revoked.contains(&store_keys::key_id(k)))
+            .filter(|k| !revoked.contains(&store_keys::key_id(k.public())))
             .cloned()
             .collect()
     }
@@ -295,7 +295,7 @@ impl RevocationList {
 pub enum ListRefused {
     /// It does not read as a list.
     Malformed,
-    /// Not signed by a key of the app, or signed for another serial.
+    /// Not signed by a key of the app that signs lists, or signed for another serial.
     Signature(store_keys::Refused),
     /// Signed by a key the list itself revokes.
     RevokedSigner,
@@ -303,10 +303,11 @@ pub enum ListRefused {
     Older { serial: u64, seen: u64 },
 }
 
-/// Reads and checks a revocation list: signed by one of `keys` with its own serial, not by a key
-/// it revokes, and not below `seen` (the serial of the last list taken).
-pub fn check_list(
-    keys: &[String],
+/// Reads and checks a revocation list: signed by one of `keys` that signs lists
+/// (`store_keys::revocations_signed`) with its own serial, not by a key it revokes, and not below
+/// `seen` (the serial of the last list taken).
+pub fn check_list<K: store_keys::TrustedKey>(
+    keys: &[K],
     json: &[u8],
     minisig: &str,
     seen: u64,
@@ -315,8 +316,7 @@ pub fn check_list(
     if list.serial < 1 || list.entries.iter().any(|e| e.id.trim().is_empty()) {
         return Err(ListRefused::Malformed);
     }
-    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
-    let signer = store_keys::revocations_signed(&keys, json, minisig, list.serial)
+    let signer = store_keys::revocations_signed(keys, json, minisig, list.serial)
         .map_err(ListRefused::Signature)?;
     if list
         .keys_revoked
@@ -915,7 +915,8 @@ pub(super) fn check_version_json(
 
 /// The seal of `json`, checked here with the app's keys less those `list` revokes, never taken from anyone's word: the
 /// signature when it holds, None for an app that embeds no key (it shows no seal, it does not refuse), a refusal for one
-/// that does not hold.
+/// that does not hold, or that a key made out of its role (the key of the first hand on an id out of `dev.escouade.*`,
+/// audit SEC-03), its reason said.
 pub(super) fn check_seal(
     json: &[u8],
     sig: String,
@@ -924,11 +925,22 @@ pub(super) fn check_seal(
     list: Option<&RevocationList>,
     lang: Lang,
 ) -> Result<Option<String>, String> {
-    let keys = trusted_keys(list);
-    let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
-    match store_keys::verified_with(&refs, json, &sig, id, version) {
+    check_seal_with(&trusted_keys(list), json, sig, id, version, lang)
+}
+
+/// `check_seal` with the keys given (the tests' own, in their roles).
+pub(crate) fn check_seal_with<K: store_keys::TrustedKey>(
+    keys: &[K],
+    json: &[u8],
+    sig: String,
+    id: &str,
+    version: &str,
+    lang: Lang,
+) -> Result<Option<String>, String> {
+    match store_keys::verified_with(keys, json, &sig, id, version) {
         Ok(()) => Ok(Some(sig)),
         Err(store_keys::Refused::NoKey) => Ok(None),
+        Err(store_keys::Refused::OutOfRole { key }) => Err(out_of_role(&key, id, lang)),
         Err(_) => Err(tr_in!(
             lang,
             "La signature de cette version ne tient pas avec les clés d'Escouade : rien n'est installé.",
@@ -985,8 +997,26 @@ pub(super) fn check_module(bytes: &[u8], w: &WasmRef, lang: Lang) -> Result<(), 
     Ok(())
 }
 
+/// Why a seal of a key of the app out of its role is refused: the key of the first hand seals `dev.escouade.*` alone,
+/// the third parties' never seals it.
+pub fn out_of_role(key: &str, id: &str, lang: Lang) -> String {
+    if crate::builtin::first_hand(id) {
+        tr_in!(
+            lang,
+            "Cette version est signée par la clé {key}, qui ne scelle pas les plugins d'Escouade (dev.escouade.*) : rien n'est installé.",
+            "This version is signed by the key {key}, which does not seal Escouade's plugins (dev.escouade.*): nothing is installed."
+        )
+    } else {
+        tr_in!(
+            lang,
+            "Cette version de {id} est signée par la clé {key} de la première main d'Escouade, qui ne scelle que les plugins dev.escouade.* : rien n'est installé.",
+            "This version of {id} is signed by the key {key} of Escouade's first hand, which seals dev.escouade.* plugins only: nothing is installed."
+        )
+    }
+}
+
 /// The app's keys less those the list revokes.
-pub fn trusted_keys(list: Option<&RevocationList>) -> Vec<String> {
+pub fn trusted_keys(list: Option<&RevocationList>) -> Vec<store_keys::Key> {
     let keys = store_keys::keys();
     match list {
         Some(l) => l.trusted(&keys),
@@ -999,7 +1029,7 @@ pub fn trusted_keys(list: Option<&RevocationList>) -> Vec<String> {
 async fn fetch_list(
     http: &reqwest::Client,
     url: &str,
-    keys: &[String],
+    keys: &[store_keys::Key],
     seen: u64,
 ) -> Result<Option<(Vec<u8>, String, RevocationList)>, FetchError> {
     let res = http
@@ -1053,6 +1083,11 @@ fn list_error(e: &FetchError, lang: Lang) -> String {
             lang,
             "Cette version d'Escouade n'embarque pas encore les clés du store : la liste de révocation n'est pas lue.",
             "This version of Escouade does not embed the store's keys yet: the revocation list is not read."
+        ),
+        FetchError::Refused(ListRefused::Signature(store_keys::Refused::OutOfRole { key })) => tr_in!(
+            lang,
+            "La liste de révocation reçue est signée par la clé {key}, qui ne signe pas les listes : elle a été refusée.",
+            "The revocation list received is signed by the key {key}, which signs no list: it was refused."
         ),
         FetchError::Refused(_) => tr_in!(
             lang,
