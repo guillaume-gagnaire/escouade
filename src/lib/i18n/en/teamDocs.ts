@@ -44,6 +44,13 @@ export default defineZone('teamDocs', {
     mineTitle: 'Mine',
     theirsTitle: 'Theirs',
   },
+  refused: {
+    page: 'A page from the team was set aside: its path “{key}” leaves the spec’s folder. Nothing of it was written on this machine; the other pages are read.',
+    decision:
+      'A decision from the team was set aside: its id “{key}” is no decision’s. Nothing of it was written on this machine; the other decisions are read.',
+    by: 'Written by the device {device}.',
+    mine: 'Written by this machine.',
+  },
   lost: {
     text: 'Decision “{title}”: a teammate changed “{field}” at the same time; their version won. Yours: “{mine}”.',
     ok: 'Got it',

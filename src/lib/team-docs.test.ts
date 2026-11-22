@@ -11,15 +11,16 @@ describe('the bands above the docs of a team’s project (TS-9)', () => {
     expect(syncState(teamDocsView({ onServer: false }))).toBeNull();
   });
 
-  it('puts the conflicts first, what waits last', () => {
+  it('puts what was set aside first, then the conflicts, what waits last', () => {
     const v = teamDocsView({
+      refused: [{ kind: 'page', key: '../x', device: 'ab', member: null, mine: false }],
       waitingNumbers: ['choix'],
       repoFiles: ['.escouade/spec/a/b.md'],
       tooLarge: ['video.mp4'],
       decisionConflicts: [{ id: 'd', title: 'D', field: 'context', mine: 'x', theirs: 'y', stamp: '01' }],
       conflicts: [{ path: 'a/b', title: 'B', mine: 'm', theirs: 't', base: '', agentId: null }],
     });
-    expect(bands(v).map((b) => b.kind)).toEqual(['conflict', 'lost', 'repoFiles', 'tooLarge', 'waiting']);
+    expect(bands(v).map((b) => b.kind)).toEqual(['refused', 'conflict', 'lost', 'repoFiles', 'tooLarge', 'waiting']);
   });
 
   it('says offline, the changes waiting, or in step', () => {

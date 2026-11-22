@@ -64,6 +64,28 @@ describe('the bands above the docs of a team’s project', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 
+  it('says a page and a decision of the team set aside, their path or id going elsewhere, and who wrote them', async () => {
+    fakeBackend({
+      team_docs_status: () =>
+        teamDocsView({
+          refused: [
+            { kind: 'page', key: '../../../x/SKILL', device: '0123456789abcdef0123456789abcdef', member: null, mine: false },
+            { kind: 'decision', key: 'C:\\x\\evil', device: 'fedcba9876543210fedcba9876543210', member: null, mine: true },
+          ],
+        }),
+    });
+    render(TeamDocsBands, { project: ofTeam() });
+    const page = await found('[data-refused="page"]');
+    expect(page).toHaveAttribute('role', 'alert');
+    expect(page).toHaveTextContent(
+      'Une page venue de l’équipe a été écartée : son chemin « ../../../x/SKILL » sort du dossier de la spec.',
+    );
+    expect(page).toHaveTextContent('Écrite par l’appareil 01234567.');
+    const decision = await found('[data-refused="decision"]');
+    expect(decision).toHaveTextContent('son id « C:\\x\\evil » n’est pas celui d’une décision');
+    expect(decision).toHaveTextContent('Écrite par ce poste.');
+  });
+
   it('gives a conflict to the writer agent, and says it works on it', async () => {
     const conflict = { path: 'a/b', title: 'B', mine: 'm', theirs: 't', base: '', agentId: null as string | null };
     const b = fakeBackend({

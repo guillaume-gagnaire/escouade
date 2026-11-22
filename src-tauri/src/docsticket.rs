@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::core::Core;
-use crate::docs::{self, Space, DECISIONS, ROOT, SPEC};
+use crate::docs::{self, DocFile, Space, DECISIONS, ROOT, SPEC};
 use crate::model::Column;
 
 /// What a ticket's copy brought to the branch.
@@ -37,6 +37,7 @@ pub struct Poured {
 pub fn seed(from: &Space, to: &Space) -> Result<()> {
     for sub in [SPEC, DECISIONS] {
         for rel in from.md_files(sub) {
+            let rel = DocFile::of(&rel)?;
             to.raw_write(sub, &rel, &from.raw_read(sub, &rel)?)?;
         }
     }
@@ -49,20 +50,22 @@ pub fn seed(from: &Space, to: &Space) -> Result<()> {
 /// decisions that name it follow.
 pub fn pour(work: &Space, base: &Space, into: &Space) -> Result<Poured> {
     let mut out = Poured::default();
-    let changed =
-        |sub: &str, rel: &str, text: &str| base.raw_read(sub, rel).ok().as_deref() != Some(text);
+    let changed = |sub: &str, rel: &DocFile, text: &str| {
+        base.raw_read(sub, rel).ok().as_deref() != Some(text)
+    };
 
     // The decisions first, for their numbers. A proposal accepted by the validation took its number
     // after the branch's register already (ESC-303); one the branch took meanwhile all the same
     // gets the next free one.
     let base_numbers: HashSet<u32> = base.decisions().iter().filter_map(|d| d.number).collect();
     let mut taken: HashSet<u32> = into.decisions().iter().filter_map(|d| d.number).collect();
-    let mut decisions: Vec<(String, docs::Decision)> = Vec::new();
+    let mut decisions: Vec<(DocFile, docs::Decision)> = Vec::new();
     let mut kept_decisions = HashSet::new();
     for rel in work.md_files(DECISIONS) {
         kept_decisions.insert(rel.clone());
-        let text = work.raw_read(DECISIONS, &rel)?;
-        if !changed(DECISIONS, &rel, &text) {
+        let file = DocFile::of(&rel)?;
+        let text = work.raw_read(DECISIONS, &file)?;
+        if !changed(DECISIONS, &file, &text) {
             continue;
         }
         let Ok(mut d) = docs::decision_read(&text) else {
@@ -71,7 +74,7 @@ pub fn pour(work: &Space, base: &Space, into: &Space) -> Result<Poured> {
         if d.id.is_empty() {
             d.id = docs::id_of_file(std::path::Path::new(&rel));
         }
-        decisions.push((rel, d));
+        decisions.push((file, d));
     }
     let mut renumber: HashMap<u32, u32> = HashMap::new();
     let mut next = into.next_number().max(work.next_number());
@@ -91,14 +94,18 @@ pub fn pour(work: &Space, base: &Space, into: &Space) -> Result<Poured> {
         d.number = d.number.map(map);
         d.supersedes = d.supersedes.iter().map(|n| map(*n)).collect();
         d.superseded_by = d.superseded_by.map(map);
-        let name = if moved { d.file_name() } else { rel };
+        let name = if moved {
+            DocFile::decision(&d).ok_or_else(|| crate::paths::outside(&d.id))?
+        } else {
+            rel
+        };
         into.raw_write(DECISIONS, &name, &docs::decision_write(&d))?;
         out.decisions.push(d.reference());
     }
     // A proposal numbered in the copy left its file `<id>.md`: gone from the branch too.
     for rel in base.md_files(DECISIONS) {
         if !kept_decisions.contains(&rel) {
-            into.raw_remove(DECISIONS, &rel)?;
+            into.raw_remove(DECISIONS, &DocFile::of(&rel)?)?;
         }
     }
 
@@ -106,8 +113,9 @@ pub fn pour(work: &Space, base: &Space, into: &Space) -> Result<Poured> {
     let mut kept = HashSet::new();
     for rel in work.md_files(SPEC) {
         kept.insert(rel.clone());
-        let text = work.raw_read(SPEC, &rel)?;
-        if !changed(SPEC, &rel, &text) {
+        let file = DocFile::of(&rel)?;
+        let text = work.raw_read(SPEC, &file)?;
+        if !changed(SPEC, &file, &text) {
             continue;
         }
         let path = rel.trim_end_matches(".md").to_string();
@@ -125,12 +133,12 @@ pub fn pour(work: &Space, base: &Space, into: &Space) -> Result<Poured> {
                 .collect();
             docs::page_write(&p)
         };
-        into.raw_write(SPEC, &rel, &text)?;
+        into.raw_write(SPEC, &file, &text)?;
         out.pages.push(path);
     }
     for rel in base.md_files(SPEC) {
         if !kept.contains(&rel) {
-            into.raw_remove(SPEC, &rel)?;
+            into.raw_remove(SPEC, &DocFile::of(&rel)?)?;
             out.removed.push(rel.trim_end_matches(".md").to_string());
         }
     }

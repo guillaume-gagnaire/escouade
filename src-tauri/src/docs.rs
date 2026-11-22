@@ -100,6 +100,64 @@ pub fn document_path(rel: &str) -> Option<String> {
         .then(|| segs.join("/"))
 }
 
+/// Whether `id` has the form of a decision's id: one file name, of 120 characters at most, which goes nowhere
+/// else (no `/`, `\`, `:`, no character Windows refuses in a name, no control character, no leading dot, no
+/// trailing dot or space, no name Windows keeps). What `decision_id` makes always has it, and so does the name of
+/// a decision's file written by hand (`id_of_file`).
+pub fn decision_id_ok(id: &str) -> bool {
+    !id.is_empty()
+        && id.chars().count() <= 120
+        && !id.starts_with('.')
+        && !id.ends_with(['.', ' '])
+        && !id.chars().any(|c| {
+            c.is_control() || matches!(c, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*')
+        })
+        && !reserved_stem(&id.to_lowercase())
+}
+
+/// A file under `.escouade/<sub>` whose path was judged before any reading or writing of the disk (SR3-01): the
+/// only path `Space::raw_read`, `raw_write` and `raw_remove` take. Relative, `/` between its segments, none of
+/// them empty, `.` or `..`, absolute, a drive or a share, and nothing in it that Windows reads as a way elsewhere.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocFile(String);
+
+impl DocFile {
+    /// A path found under the folder (listed by `md_files`), or one of Escouade's own names.
+    pub fn of(rel: &str) -> Result<DocFile> {
+        let segs: Vec<&str> = rel.split('/').collect();
+        let ok = !rel.is_empty()
+            && segs.len() <= MAX_FOLDER_DEPTH + 2
+            && segs.iter().all(|s| {
+                !s.is_empty()
+                    && !s.starts_with("..")
+                    && *s != "."
+                    && !s.ends_with(['.', ' '])
+                    && !s.chars().any(|c| {
+                        c.is_control()
+                            || matches!(c, '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*')
+                    })
+            });
+        if !ok {
+            return Err(crate::paths::outside(rel));
+        }
+        Ok(DocFile(rel.to_string()))
+    }
+
+    /// A page's file: `path` as `page_path` keeps it (the same judgement as a page written here), else None.
+    pub fn page(path: &str) -> Option<DocFile> {
+        (page_path(path).as_deref() == Some(path)).then(|| DocFile(format!("{path}.md")))
+    }
+
+    /// A decision's file (`Decision::file_name`), when its id has the form of one (`decision_id_ok`).
+    pub fn decision(d: &Decision) -> Option<DocFile> {
+        decision_id_ok(&d.id).then(|| DocFile(d.file_name()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 // ---------- headers ----------
 
 fn front_value<T: Serialize + ?Sized>(v: &T) -> String {
@@ -830,18 +888,19 @@ impl Space {
             .collect()
     }
 
-    pub(crate) fn raw_read(&self, sub: &str, rel: &str) -> Result<String> {
-        let file = self.file(sub, rel)?;
+    pub(crate) fn raw_read(&self, sub: &str, rel: &DocFile) -> Result<String> {
+        let file = self.file(sub, rel.as_str())?;
         self.read_text(&file)
     }
 
-    pub(crate) fn raw_write(&self, sub: &str, rel: &str, text: &str) -> Result<()> {
-        let file = self.file(sub, rel)?;
+    /// Writes `rel`, a path judged before (`DocFile`): never one that came as it was from elsewhere (SR3-01).
+    pub(crate) fn raw_write(&self, sub: &str, rel: &DocFile, text: &str) -> Result<()> {
+        let file = self.file(sub, rel.as_str())?;
         self.write(&file, text.as_bytes())
     }
 
-    pub(crate) fn raw_remove(&self, sub: &str, rel: &str) -> Result<()> {
-        let file = self.file(sub, rel)?;
+    pub(crate) fn raw_remove(&self, sub: &str, rel: &DocFile) -> Result<()> {
+        let file = self.file(sub, rel.as_str())?;
         if file.is_file() {
             std::fs::remove_file(file)?;
         }
@@ -1178,7 +1237,10 @@ impl Space {
         let was = prior.and_then(|old| self.file_of(old).map(|f| (old, f)));
         let file = match &was {
             Some((old, f)) if old.number == d.number => f.clone(),
-            _ => self.file(DECISIONS, &d.file_name())?,
+            _ => {
+                let name = DocFile::decision(d).ok_or_else(|| crate::paths::outside(&d.id))?;
+                self.file(DECISIONS, name.as_str())?
+            }
         };
         self.write(&file, decision_write(d).as_bytes())?;
         if let Some((_, f)) = was {
@@ -1370,7 +1432,7 @@ impl Space {
             if !page.decisions.iter().any(|x| cites(&page, x)) {
                 continue;
             }
-            let rel = format!("{}.md", page.path);
+            let rel = DocFile::of(&format!("{}.md", page.path))?;
             let mut p = page_read(&page.path, &self.raw_read(SPEC, &rel)?);
             let mut cited: Vec<Ref> = Vec::new();
             for x in &p.decisions {

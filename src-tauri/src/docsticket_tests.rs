@@ -48,7 +48,11 @@ fn only_what_the_ticket_changed_is_poured_and_the_teams_writes_stay() {
         p.body = "Un acompte de 30 %.".into()
     })
     .unwrap();
-    work.raw_remove(SPEC, "compte/connexion.md").unwrap();
+    work.raw_remove(
+        SPEC,
+        &crate::docs::DocFile::of("compte/connexion.md").unwrap(),
+    )
+    .unwrap();
     work.decision_propose(None, proposal("Quatre échéances"))
         .unwrap();
     // The team meanwhile, on the branch: another page.

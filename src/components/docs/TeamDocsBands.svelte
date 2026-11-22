@@ -77,7 +77,16 @@
       >
     </div>
     {#each shown as b, i (i)}
-      {#if b.kind === 'conflict'}
+      {#if b.kind === 'refused'}
+        {@const text = [
+          t(b.refused.kind === 'page' ? 'teamDocs.refused.page' : 'teamDocs.refused.decision', { key: b.refused.key }),
+          b.refused.mine ? t('teamDocs.refused.mine') : t('teamDocs.refused.by', { device: b.refused.device.slice(0, 8) }),
+        ].join(' ')}
+        <div class="band refused" role="alert" data-refused={b.refused.kind}>
+          <Icon name="shield" size={14} />
+          <span class="why" use:tip={{ text, cut: true }}>{text}</span>
+        </div>
+      {:else if b.kind === 'conflict'}
         <div class="band conflict" role="alert" data-conflict={b.conflict.path}>
           <Icon name="merge" size={14} />
           <span class="why">{t('teamDocs.conflict.text', { title: b.conflict.title || b.conflict.path })}</span>
@@ -186,6 +195,13 @@
   }
   .band.quiet > :global(.icon) {
     color: var(--muted);
+  }
+  .band.refused {
+    background: oklch(from var(--del) l c h / 0.08);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.34);
+  }
+  .band.refused > :global(.icon) {
+    color: var(--del);
   }
   .band .btn {
     flex: none;

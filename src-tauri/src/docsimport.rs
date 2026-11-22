@@ -373,7 +373,8 @@ impl Space {
 
     /// What was imported into this spec: the paths (files or folders) it came from, with the day.
     pub fn imported(&self) -> Vec<ImportedFrom> {
-        self.raw_read(docs::SPEC, IMPORTS)
+        docs::DocFile::of(IMPORTS)
+            .and_then(|f| self.raw_read(docs::SPEC, &f))
             .ok()
             .and_then(|t| serde_json::from_str::<ImportsFile>(&t).ok())
             .map(|f| f.imports)
@@ -392,7 +393,11 @@ impl Space {
             at: chrono::Local::now().format("%Y-%m-%d").to_string(),
         });
         let text = serde_json::to_string_pretty(&ImportsFile { imports })?;
-        self.raw_write(docs::SPEC, IMPORTS, &format!("{text}\n"))
+        self.raw_write(
+            docs::SPEC,
+            &docs::DocFile::of(IMPORTS)?,
+            &format!("{text}\n"),
+        )
     }
 
     /// What every agent of a project whose spec is in Escouade (one page at least) is told: the spec and

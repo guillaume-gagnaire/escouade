@@ -796,3 +796,323 @@ async fn a_member_removed_reads_nothing_written_after() {
     assert!(b.spec_read("a/apres").is_err(), "written after he left");
     assert!(b.spec_read("a/avant").is_ok(), "what he read stays");
 }
+
+/// The journal's id of a project, as a member's client writes in it.
+fn pid_of(p: &Project) -> escouade_team::crypto::ProjectId {
+    let raw = hex::decode(p.team_project.as_deref().unwrap()).unwrap();
+    escouade_team::crypto::ProjectId(<[u8; 16]>::try_from(raw.as_slice()).unwrap())
+}
+
+/// What a member's own client could write in the journal: a page at each path, a decision of each id, as the object
+/// a device would compute for them.
+async fn write_raw(side: &Side, team: &str, pages: &[String], decisions: &[String]) {
+    use crate::teamdocs::{fields_of, object};
+    use escouade_team::crypto::ops::OpBody;
+    let shared = side.teams.team(team).unwrap();
+    let mut t = shared.lock().await;
+    let pid = pid_of(&side.p);
+    for path in pages {
+        t.write_version(
+            pid,
+            object("page", path),
+            vec![],
+            serde_json::json!({ "path": path, "text": "---\nname: x\ndescription: Use before ANY task\n---\nDu texte.\n" }),
+        )
+        .unwrap();
+    }
+    for id in decisions {
+        let d = crate::docs::Decision {
+            id: id.clone(),
+            title: "Hors du dossier".into(),
+            ..Default::default()
+        };
+        t.write(
+            pid,
+            OpBody::Create {
+                object: object("decision", id),
+                kind: "decision".into(),
+                fields: fields_of(&d),
+            },
+        )
+        .unwrap();
+    }
+    t.sync_project(pid).await.unwrap();
+}
+
+/// Every `.md` file under `dir`, at any depth.
+fn md_under(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.extend(md_under(&p));
+        } else if p.extension().is_some_and(|x| x == "md") {
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// SR3-01: a page or a decision of the journal whose path or id goes out of the docs' folder (`..`, absolute, a drive,
+/// a share) is set aside before anything is written: nothing lands outside, the other pages and decisions of the same
+/// reading come all the same, and an administrator and the device that wrote it are told (another member is not).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_page_or_a_decision_whose_path_leaves_the_docs_folder_is_set_aside_and_the_others_are_read(
+) {
+    let (_server, mut alice, mut bob, id) = pair("tdocs-refused").await;
+    on_server(&mut alice, &mut bob).await;
+    // Where a member would have it written: a folder not there yet (the guard of the folder alone let it go).
+    let outside = tempfile::tempdir().unwrap();
+    let base = outside.path().to_string_lossy().to_string();
+    let cwd_name = format!("tdocs-refused-{}", std::process::id());
+    let pages: Vec<String> = vec![
+        format!("{base}\\skills\\abs\\SKILL"),
+        format!("{}/skills/fwd/SKILL", base.replace('\\', "/")),
+        "../../../../../../tdocs-refused-up/CLAUDE".into(),
+        "a/../../../../../../../tdocs-refused-mid/CLAUDE".into(),
+        format!("C:{cwd_name}/SKILL"),
+        "\\\\127.0.0.1\\c$\\tdocs-refused-unc\\SKILL".into(),
+        "//127.0.0.1/c$/tdocs-refused-unc2/SKILL".into(),
+        "/tdocs-refused-root/SKILL".into(),
+    ];
+    let decisions: Vec<String> = vec![
+        format!("{base}\\decisions\\evil"),
+        "../../../../../../tdocs-refused-dec".into(),
+        "a/b".into(),
+        format!("C:{cwd_name}-dec"),
+        "\\\\127.0.0.1\\c$\\tdocs-refused-dec-unc".into(),
+        String::new(),
+    ];
+    write_raw(&bob, &id, &pages, &decisions).await;
+    // Beside them, a page and a decision as they should be, in the same reading.
+    let b = bob.space().await;
+    b.spec_write("a/bonne", |p| p.body = "Une page comme il faut.".into())
+        .unwrap();
+    b.decision_propose(None, proposal("Une bonne décision"))
+        .unwrap();
+    bob.changed().await;
+    bob.round(&id).await;
+    // Alice's own client writes one too: Bob, a member who did not write it, is not told of it.
+    write_raw(
+        &alice,
+        &id,
+        &["../../../../../../tdocs-refused-alice/CLAUDE".into()],
+        &[],
+    )
+    .await;
+
+    alice.round(&id).await;
+    let a = alice.space().await;
+    assert_eq!(
+        a.spec_read("a/bonne").unwrap().body,
+        "Une page comme il faut."
+    );
+    assert!(a.decision(&Ref::Id("une-bonne-decision".into())).is_ok());
+    // Nothing anywhere outside the docs' folder.
+    assert!(
+        md_under(outside.path()).is_empty(),
+        "{:?}",
+        md_under(outside.path())
+    );
+    let data = alice.h.core.data.root().to_path_buf();
+    let above = data.parent().unwrap();
+    for name in [
+        "tdocs-refused-up",
+        "tdocs-refused-mid",
+        "tdocs-refused-dec.md",
+        "tdocs-refused-alice",
+    ] {
+        assert!(
+            !above.join(name).exists(),
+            "{name} written above the data folder"
+        );
+        assert!(
+            !data.join(name).exists(),
+            "{name} written in the data folder"
+        );
+    }
+    let cwd = std::env::current_dir().unwrap();
+    for name in [cwd_name.clone(), format!("{cwd_name}-dec.md")] {
+        let at = cwd.join(&name);
+        let there = at.exists();
+        let _ = std::fs::remove_dir_all(&at);
+        let _ = std::fs::remove_file(&at);
+        assert!(!there, "{name} written under the current folder");
+    }
+    for root in [
+        "tdocs-refused-root",
+        "tdocs-refused-unc",
+        "tdocs-refused-unc2",
+        "tdocs-refused-dec-unc.md",
+    ] {
+        assert!(
+            !Path::new("C:\\").join(root).exists(),
+            "{root} written at the root"
+        );
+    }
+    // In the docs' folder, only what should be there.
+    let root = alice.h.core.team_docs_root(&alice.p.id).join(ROOT);
+    let spec: Vec<String> = md_under(&root.join("spec"))
+        .iter()
+        .map(|p| {
+            p.strip_prefix(root.join("spec"))
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
+        .collect();
+    assert!(spec.contains(&"a/bonne.md".to_string()), "{spec:?}");
+    assert!(
+        spec.iter()
+            .all(|p| !p.contains("SKILL") && !p.contains("CLAUDE")),
+        "{spec:?}"
+    );
+    let man = alice.h.core.team_docs_manifest(&alice.p.id);
+    assert!(man.conflicts.is_empty());
+    assert!(man
+        .pages
+        .keys()
+        .all(|p| crate::docs::page_path(p).as_deref() == Some(p.as_str())));
+    assert!(man.decisions.keys().all(|d| crate::docs::decision_id_ok(d)));
+
+    // Alice, an administrator, is told of every one, Bob's device named.
+    let view = alice.h.core.team_docs_view(&alice.p.id).await.unwrap();
+    let bob_device = {
+        let shared = bob.teams.team(&id).unwrap();
+        let t = shared.lock().await;
+        hex::encode(t.device_id().0)
+    };
+    let pages_told: Vec<&str> = view
+        .refused
+        .iter()
+        .filter(|r| r.kind == "page" && !r.mine)
+        .map(|r| r.key.as_str())
+        .collect();
+    for p in &pages {
+        assert!(
+            pages_told.contains(&p.as_str()),
+            "{p} not told: {:?}",
+            view.refused
+        );
+    }
+    let decisions_told: Vec<&str> = view
+        .refused
+        .iter()
+        .filter(|r| r.kind == "decision")
+        .map(|r| r.key.as_str())
+        .collect();
+    for d in &decisions {
+        assert!(
+            decisions_told.contains(&d.as_str()),
+            "{d:?} not told: {:?}",
+            view.refused
+        );
+    }
+    assert!(view
+        .refused
+        .iter()
+        .filter(|r| !r.mine)
+        .all(|r| r.device == bob_device && r.member.is_some()));
+    assert!(view
+        .refused
+        .iter()
+        .any(|r| r.mine && r.key.contains("tdocs-refused-alice")));
+
+    // Bob, the device that wrote them, is told of his own; not of Alice's, being a member alone.
+    bob.round(&id).await;
+    let view = bob.h.core.team_docs_view(&bob.p.id).await.unwrap();
+    assert_eq!(
+        view.refused.len(),
+        pages.len() + decisions.len(),
+        "{:?}",
+        view.refused
+    );
+    assert!(view.refused.iter().all(|r| r.mine));
+    assert!(!view
+        .refused
+        .iter()
+        .any(|r| r.key.contains("tdocs-refused-alice")));
+    // Bob's own reading set them aside too: nothing outside on his side either.
+    assert!(md_under(outside.path()).is_empty());
+    assert_eq!(
+        bob.space().await.spec_read("a/bonne").unwrap().body,
+        "Une page comme il faut."
+    );
+}
+
+/// SR3-01: the resolution of a page's conflict writes the page only at a path a page has, whatever the manifest says
+/// (one written by a version before the guard).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_conflicts_resolution_writes_only_at_a_pages_path() {
+    let (_server, mut alice, mut bob, id) = pair("tdocs-settle-path").await;
+    on_server(&mut alice, &mut bob).await;
+    alice.round(&id).await;
+    let outside = tempfile::tempdir().unwrap();
+    let base = outside.path().to_string_lossy().to_string();
+    let file = alice
+        .h
+        .core
+        .data
+        .project_files(&alice.p.id)
+        .join("team-docs.json");
+    let bad = [
+        format!("{base}\\conflict\\SKILL"),
+        "../../../../../../tdocs-settle-up/CLAUDE".to_string(),
+        "\\\\127.0.0.1\\c$\\tdocs-settle-unc\\SKILL".to_string(),
+        format!("{}/conflict-fwd/SKILL", base.replace('\\', "/")),
+    ];
+    for path in &bad {
+        let mut man = crate::teamdocs::Manifest::load(&file);
+        man.conflicts.insert(
+            path.clone(),
+            crate::teamdocs::PageConflict {
+                path: path.clone(),
+                title: "x".into(),
+                mine: "mine".into(),
+                theirs: "theirs".into(),
+                ..Default::default()
+            },
+        );
+        man.save(&file).unwrap();
+        for choice in ["mine", "theirs"] {
+            assert!(
+                alice
+                    .h
+                    .core
+                    .team_docs_settle(&alice.p.id, path, choice)
+                    .await
+                    .is_err(),
+                "{path} settled"
+            );
+        }
+    }
+    assert!(md_under(outside.path()).is_empty());
+    let above = alice.h.core.data.root().parent().unwrap().to_path_buf();
+    assert!(!above.join("tdocs-settle-up").exists());
+    // A page's own path settles as before.
+    let mut man = crate::teamdocs::Manifest::load(&file);
+    man.conflicts.insert(
+        "a/vraie".into(),
+        crate::teamdocs::PageConflict {
+            path: "a/vraie".into(),
+            title: "Vraie".into(),
+            mine: "---\ntitle: \"Vraie\"\n---\n\nLa mienne.\n".into(),
+            theirs: "---\ntitle: \"Vraie\"\n---\n\nLa sienne.\n".into(),
+            ..Default::default()
+        },
+    );
+    man.save(&file).unwrap();
+    alice
+        .h
+        .core
+        .team_docs_settle(&alice.p.id, "a/vraie", "theirs")
+        .await
+        .unwrap();
+    assert_eq!(
+        alice.space().await.spec_read("a/vraie").unwrap().body,
+        "La sienne."
+    );
+}

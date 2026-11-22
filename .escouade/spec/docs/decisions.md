@@ -2,7 +2,7 @@
 title: "Décisions"
 subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/docs.rs","src-tauri/src/docsbranch.rs","src-tauri/src/docsticket.rs","src-tauri/src/mcp/docs.rs","src-tauri/src/tickets.rs","src/lib/decisions.ts","src/lib/i18n/fr/docs.ts"]
-tickets: ["ESC-259","ESC-263","ESC-303","ESC-377","ESC-482"]
+tickets: ["ESC-259","ESC-263","ESC-303","ESC-377","ESC-482","ESC-644"]
 decisions: [115]
 compared: "2026-10-30T05:29:15+01:00"
 ---
@@ -64,3 +64,5 @@ Pour un projet dont les docs sont sur le serveur d'équipe (voir *Les docs d'un 
 - Jusqu'à ce que ce poste relise l'ordre du serveur (hors ligne), la décision est acceptée sans numéro et se cite par son id ; le numéro venu, son fichier le prend, et les pages, les tickets et ce qui est à planifier qui la citaient par son id le citent.
 - Ses champs (titre, contexte, décision, conséquences…) s'écrivent un par un : deux postes qui changent le même champ en même temps, le dernier gagne, et l'autre le voit en tête de l'onglet Docs.
 - Une décision importée du dépôt garde son numéro ; la suivante prend le numéro d'après.
+
+- **La forme d'un id**, jugée avant d'écrire le fichier d'une décision, ici comme pour celle qui vient d'un collègue : un seul nom de fichier, de 120 caractères au plus, sans `/`, `\`, `:`, `< > " | ? *` ni caractère de contrôle, sans point en tête, ni point ou espace en fin, et pas un nom que Windows garde (`con`, `nul`…). Ce que fabrique Escouade l'a toujours ; une décision du journal d'un autre id est écartée avant le disque, avec un bandeau aux administrateurs et à l'appareil qui l'a écrite (voir *Les docs d'un projet d'équipe*, « Ce que le poste refuse à la lecture »).

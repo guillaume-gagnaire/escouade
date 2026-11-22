@@ -1,8 +1,8 @@
 ---
 title: "Les docs d'un projet d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","src-tauri/src/teamdocs.rs","src-tauri/src/teampour.rs","src/lib/i18n/fr/teamDocs.ts"]
-tickets: ["ESC-482","ESC-493","ESC-518"]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","src-tauri/src/teamdocs.rs","src-tauri/src/teampour.rs","src/lib/i18n/fr/teamDocs.ts","src-tauri/src/docs.rs"]
+tickets: ["ESC-482","ESC-493","ESC-518","ESC-644"]
 decisions: [192,194]
 compared: null
 ---
@@ -74,3 +74,17 @@ C'est un choix de l'équipe, gardé dans le journal : le même pour tous ses mem
 - Les écarts des comparaisons au code et le texte extrait restent par poste.
 - Un document de plus de 20 Mo ne part pas.
 - L'auteur d'une version n'est pas nommé dans les conflits (« un collègue ») : l'annuaire chiffré des noms est TS-4.
+
+## Ce que le poste refuse à la lecture (SR3-01)
+
+Ce qu'un collègue écrit au journal est jugé sur le poste qui le lit, **avant tout accès au disque**, comme ce que ce poste écrit lui-même : un membre ne fait jamais écrire un fichier hors du dossier des docs chez un autre.
+
+- **Une page** : son chemin doit être celui qu'une page écrite ici aurait (`docs::page_path`, le même jugement : des segments en minuscules et tirets, 4 niveaux au plus, ni `..`, ni chemin absolu, ni lecteur `C:`, ni partage `\\serveur`, ni `\`). Sinon elle est écartée.
+- **Une décision** : son id nomme son fichier (`<id>.md`, `NNNN-<id>.md`). La forme d'un id : un seul nom de fichier, de 120 caractères au plus, sans `/`, `\`, `:`, ni caractère que Windows refuse dans un nom (`< > " | ? *`), sans caractère de contrôle, sans point en tête, ni point ou espace en fin, et pas un nom que Windows garde (`con`, `nul`…). Ce que fabrique Escouade (`decision_id`, le nom d'un fichier écrit à la main) l'a toujours. Une décision d'un autre id est écartée.
+- **La résolution d'un conflit** (« Garder la mienne », « Prendre la sienne ») n'écrit la page qu'à un chemin de page, jugé de nouveau au moment d'écrire.
+- **Les fichiers de la spec et des décisions** ne se lisent, ne s'écrivent et ne se retirent qu'à un chemin jugé avant (`DocFile`) : relatif, sans segment vide, `.`, `..`, absolu, lecteur ou partage.
+- **Ce poste ne publie pas** une page ou une décision qui serait écartée chez les autres (un fichier nommé à la main hors de ces formes reste sur ce poste).
+
+**Écartée, la lecture continue** : les autres pages, décisions et documents du même passage arrivent ; une page ou une décision qui ne s'écrit pas (un disque qui refuse) n'arrête plus le passage non plus.
+
+**L'alarme** : en tête de l'onglet Docs, un bandeau rouge, sur le poste d'un **administrateur** et sur **l'appareil qui l'a écrite** : « Une page venue de l'équipe a été écartée : son chemin « … » sort du dossier de la spec. Rien n'en a été écrit sur ce poste ; les autres pages se lisent. Écrite par l'appareil 0123abcd. » (ou « Écrite par ce poste. »), et de même pour une décision (« son id « … » n'est pas celui d'une décision »). Un autre membre ne la voit pas ; le journal du poste la note toujours. Le bandeau dit ce qu'a écarté la dernière lecture : il part quand le journal n'en a plus.

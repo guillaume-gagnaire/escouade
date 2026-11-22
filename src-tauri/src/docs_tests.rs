@@ -1487,3 +1487,96 @@ fn a_revision_keeps_what_it_does_not_give_and_replaces_what_it_gives_empty_inclu
         )
         .is_err());
 }
+
+/// SR3-01: the only paths the files of the spec and the decisions are read, written and removed at are judged first
+/// (`DocFile`): a way up, an absolute path, a drive, a share are no path of the folder.
+#[test]
+fn a_doc_file_is_judged_before_the_disk_and_never_leaves_the_folder() {
+    for ok in ["a/b.md", "a/b/c.md", ".imports.json", "0004-un-titre.md"] {
+        assert_eq!(DocFile::of(ok).unwrap().as_str(), ok);
+    }
+    for bad in [
+        "",
+        "../x.md",
+        "a/../../x.md",
+        "a/./b.md",
+        "/abs.md",
+        "//serveur/partage/x.md",
+        "\\\\serveur\\partage\\x.md",
+        "C:\\Users\\x\\SKILL.md",
+        "C:/Users/x/SKILL.md",
+        "C:x.md",
+        "a\\..\\..\\x.md",
+        "a//b.md",
+        "a/b./c.md",
+        "a/.../c.md",
+        "a/b /c.md",
+        "a/b\u{0}c.md",
+    ] {
+        assert!(DocFile::of(bad).is_err(), "{bad:?}");
+    }
+    // A page's: exactly what `page_path` keeps, nothing it would change.
+    assert_eq!(DocFile::page("a/b").unwrap().as_str(), "a/b.md");
+    for bad in [
+        "../../x/SKILL",
+        "C:\\x\\SKILL",
+        "C:/x/SKILL",
+        "\\\\srv\\c$\\x",
+        "//srv/c$/x",
+        "/x",
+        "A/B",
+        "a/b.md",
+        "a/../b",
+        "",
+    ] {
+        assert!(DocFile::page(bad).is_none(), "{bad:?}");
+    }
+}
+
+/// SR3-01: the form of a decision's id, written: one file name, which goes nowhere else.
+#[test]
+fn a_decisions_id_is_one_file_name_and_its_file_stays_in_the_folder() {
+    for ok in [
+        "facturer-en-licornes",
+        "d-0012",
+        "facturer-en-licornes-2",
+        "Choix_fait à la main",
+        "v1.2",
+    ] {
+        assert!(decision_id_ok(ok), "{ok}");
+    }
+    assert!(decision_id_ok(&decision_id("Facturer en licornes")));
+    assert!(decision_id_ok(&decision_id("1234")));
+    assert!(decision_id_ok(&decision_id("")));
+    for bad in [
+        "",
+        ".",
+        "..",
+        "../x",
+        "a/b",
+        "a\\b",
+        "C:\\x\\evil",
+        "C:x",
+        "\\\\srv\\c$\\x",
+        "/x",
+        "x.",
+        "x ",
+        ".cache",
+        "con",
+        "NUL",
+        "a*b",
+        "a?b",
+        "a\u{7}b",
+        &*"x".repeat(121),
+    ] {
+        assert!(!decision_id_ok(bad), "{bad:?}");
+    }
+    let mut d = Decision {
+        id: "../../evil".into(),
+        ..Default::default()
+    };
+    assert!(DocFile::decision(&d).is_none());
+    d.id = "bon-choix".into();
+    d.number = Some(7);
+    assert_eq!(DocFile::decision(&d).unwrap().as_str(), "0007-bon-choix.md");
+}

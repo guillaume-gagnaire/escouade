@@ -44,6 +44,13 @@ export default {
     mineTitle: 'La mienne',
     theirsTitle: 'La sienne',
   },
+  refused: {
+    page: 'Une page venue de l’équipe a été écartée : son chemin « {key} » sort du dossier de la spec. Rien n’en a été écrit sur ce poste ; les autres pages se lisent.',
+    decision:
+      'Une décision venue de l’équipe a été écartée : son id « {key} » n’est pas celui d’une décision. Rien n’en a été écrit sur ce poste ; les autres décisions se lisent.',
+    by: 'Écrite par l’appareil {device}.',
+    mine: 'Écrite par ce poste.',
+  },
   lost: {
     text: 'Décision « {title} » : un collègue a changé « {field} » en même temps ; sa version a gagné. La tienne : « {mine} ».',
     ok: 'Compris',

@@ -14,6 +14,7 @@ export function teamDocsView(over: Partial<TeamDocsView> = {}): TeamDocsView {
     tooLarge: [],
     waitingNumbers: [],
     maxDocument: 20 * 1024 * 1024,
+    refused: [],
     ...over,
   };
 }

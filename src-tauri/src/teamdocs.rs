@@ -40,7 +40,7 @@ use std::sync::{Arc, LazyLock};
 
 use anyhow::{anyhow, bail, Result};
 use escouade_team::crypto::ops::{OpBody, Value};
-use escouade_team::crypto::{ObjectId, ProjectId};
+use escouade_team::crypto::{DeviceId, ObjectId, ProjectId, Role};
 use escouade_team::merge::merge3;
 use escouade_team::Team;
 use serde::{Deserialize, Serialize};
@@ -48,7 +48,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use crate::core::Core;
-use crate::docs::{self, Space, DECISIONS, DOCUMENTS, ROOT, SPEC};
+use crate::docs::{self, DocFile, Space, DECISIONS, DOCUMENTS, ROOT, SPEC};
 use crate::model::{Project, UiEvent};
 
 /// The counter of the decisions' numbers in the journal.
@@ -157,6 +157,26 @@ pub struct DecisionConflict {
     pub stamp: String,
 }
 
+/// A page or a decision of the journal set aside before it reached the disk (SR3-01): its path is not one a page has
+/// (`docs::page_path`), or its id not one a decision has (`docs::decision_id_ok`). The others are read all the
+/// same; it is shown to the administrators and to the device that wrote it, the reading of the others goes on.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RefusedDoc {
+    /// `page` or `decision`.
+    pub kind: String,
+    /// The path or the id as the journal gave it, cut to [`REFUSED_KEY`] characters.
+    pub key: String,
+    /// The device that wrote it (hex), and its member (hex) when the journal says it.
+    pub device: String,
+    pub member: Option<String>,
+    /// This device wrote it.
+    pub mine: bool,
+}
+
+/// The most characters of a refused path or id kept to show.
+const REFUSED_KEY: usize = 200;
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Manifest {
@@ -174,6 +194,8 @@ pub struct Manifest {
     pub repo_files: Vec<String>,
     /// The repository's docs were imported by this machine.
     pub imported: bool,
+    /// What the last reading of the journal set aside (SR3-01), as this device is to be told of it.
+    pub refused: Vec<RefusedDoc>,
 }
 
 impl Manifest {
@@ -262,7 +284,7 @@ fn removed(content: &Value) -> bool {
 fn decision_files(space: &Space) -> BTreeMap<String, (String, docs::Decision)> {
     let mut out = BTreeMap::new();
     for rel in space.md_files(DECISIONS) {
-        let Ok(text) = space.raw_read(DECISIONS, &rel) else {
+        let Ok(text) = DocFile::of(&rel).and_then(|f| space.raw_read(DECISIONS, &f)) else {
             continue;
         };
         let Ok(mut d) = docs::decision_read(&text) else {
@@ -270,6 +292,10 @@ fn decision_files(space: &Space) -> BTreeMap<String, (String, docs::Decision)> {
         };
         if d.id.is_empty() {
             d.id = docs::id_of_file(Path::new(&rel));
+        }
+        // A decision whose id is no decision's goes nowhere: the others would set it aside (SR3-01).
+        if !docs::decision_id_ok(&d.id) {
+            continue;
         }
         out.insert(d.id.clone(), (rel, d));
     }
@@ -296,8 +322,12 @@ pub async fn publish(
     let mut present = BTreeSet::new();
     for rel in space.md_files(SPEC) {
         let path = rel.trim_end_matches(".md").to_string();
+        // A file whose path is no page's stays here: the others would set it aside (SR3-01).
+        let Some(file) = DocFile::page(&path) else {
+            continue;
+        };
         present.insert(path.clone());
-        let text = space.raw_read(SPEC, &rel)?;
+        let text = space.raw_read(SPEC, &file)?;
         let h = hash(text.as_bytes());
         let seen = man.pages.get(&path).cloned();
         if seen.as_ref().is_some_and(|s| s.hash == h) {
@@ -575,6 +605,36 @@ pub async fn publish(
 
 // === Journal → folder ===
 
+/// A page or a decision set aside (`kind`, its path or id `key`), written by `device`: said in the log.
+fn refused(
+    team: &mut Team,
+    pid: ProjectId,
+    me: DeviceId,
+    kind: &str,
+    key: &str,
+    device: Option<DeviceId>,
+) -> RefusedDoc {
+    let member = device.and_then(|d| {
+        team.replica(&pid)
+            .ok()
+            .and_then(|r| r.author_member(&d).ok().flatten())
+    });
+    let r = RefusedDoc {
+        kind: kind.to_string(),
+        key: key.chars().take(REFUSED_KEY).collect(),
+        device: device.map(|d| hex::encode(d.0)).unwrap_or_default(),
+        member: member.map(|m| hex::encode(m.0)),
+        mine: device == Some(me),
+    };
+    log::warn!(
+        "team docs: a {kind} of the journal set aside, its {} is not one ({:?}, device {})",
+        if kind == "page" { "path" } else { "id" },
+        r.key,
+        r.device
+    );
+    r
+}
+
 /// What a settling did.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Settled {
@@ -584,6 +644,8 @@ pub struct Settled {
     pub merged: Vec<String>,
     /// The decisions whose number came for this machine's acceptance: (id, number).
     pub numbered: Vec<(String, u32)>,
+    /// The pages and the decisions set aside, every one of them (whoever is told of it).
+    pub refused: Vec<RefusedDoc>,
 }
 
 /// What the journal holds comes to the folder, but what this machine changed and did not publish yet: each page its
@@ -600,6 +662,13 @@ pub async fn settle(
     let e = |e: escouade_team::Error| anyhow!(crate::teams::say(&e));
     let me = team.device_id();
     let mut out = Settled::default();
+    // Who is told of what is set aside: an administrator, and the device that wrote it.
+    let me_member = team.identity().member;
+    let admin = team
+        .members()
+        .map_err(e)?
+        .iter()
+        .any(|(m, role, _)| *m == me_member && *role == Role::Admin);
     // The pages.
     let objects = team.replica(&pid).map_err(e)?.versioned().map_err(e)?;
     for obj in objects {
@@ -619,6 +688,18 @@ pub async fn settle(
         if object("page", &path) != obj {
             continue;
         }
+        // Judged as a page written here is, before anything is read or written of the disk (SR3-01).
+        let Some(file) = DocFile::page(&path) else {
+            out.refused.push(refused(
+                team,
+                pid,
+                me,
+                "page",
+                &path,
+                Some(current.stamp.device),
+            ));
+            continue;
+        };
         let mut heads: Vec<_> = std::iter::once(current.clone())
             .chain(vs.conflicts.iter().cloned())
             .collect();
@@ -705,9 +786,8 @@ pub async fn settle(
         } else {
             man.conflicts.remove(&path);
         }
-        let rel = format!("{path}.md");
         let seen = man.pages.get(&path).cloned();
-        let local = space.raw_read(SPEC, &rel).ok();
+        let local = space.raw_read(SPEC, &file).ok();
         // Changed here and not published yet: it goes at the next publish, after the version it was.
         if let (Some(l), Some(s)) = (&local, &seen) {
             if hash(l.as_bytes()) != s.hash {
@@ -716,7 +796,11 @@ pub async fn settle(
         }
         if removed(&content) {
             if local.is_some() {
-                space.raw_remove(SPEC, &rel)?;
+                // One page that does not go never stops the others.
+                if let Err(err) = space.raw_remove(SPEC, &file) {
+                    log::warn!("team docs: page {path} not removed: {err:#}");
+                    continue;
+                }
                 out.changed += 1;
             }
             man.pages.remove(&path);
@@ -726,7 +810,10 @@ pub async fn settle(
             continue;
         };
         if local.as_deref() != Some(text) {
-            space.raw_write(SPEC, &rel, text)?;
+            if let Err(err) = space.raw_write(SPEC, &file, text) {
+                log::warn!("team docs: page {path} not written: {err:#}");
+                continue;
+            }
             out.changed += 1;
         }
         let mine = !theirs_merge
@@ -764,6 +851,19 @@ pub async fn settle(
         if object("decision", &id) != view.id {
             continue;
         }
+        let mut fields = view.fields.clone();
+        fields.remove("removed");
+        // Its id names its file: judged before anything is read or written of the disk (SR3-01).
+        if !docs::decision_id_ok(&id) || decision_of(&fields, None).id != id {
+            let device = team
+                .replica(&pid)
+                .ok()
+                .and_then(|r| r.field_stamp(&view.id, "id").ok().flatten())
+                .map(|s| s.device);
+            out.refused
+                .push(refused(team, pid, me, "decision", &id, device));
+            continue;
+        }
         let r = team.replica(&pid).map_err(e)?;
         let number = r.number(COUNTER, &view.id).map_err(e)?;
         for c in r.conflicts(&view.id).map_err(e)? {
@@ -793,25 +893,36 @@ pub async fn settle(
         }
         if view.fields.get("removed") == Some(&Value::Bool(true)) {
             if let Some((rel, _)) = local {
-                space.raw_remove(DECISIONS, rel)?;
+                // One decision that does not go never stops the others.
+                if let Err(err) = DocFile::of(rel).and_then(|f| space.raw_remove(DECISIONS, &f)) {
+                    log::warn!("team docs: decision {id} not removed: {err:#}");
+                    continue;
+                }
                 out.changed += 1;
             }
             man.decisions.remove(&id);
             continue;
         }
-        let mut fields = view.fields.clone();
-        fields.remove("removed");
         let d = decision_of(&fields, number);
-        let name = d.file_name();
+        let Some(file) = DocFile::decision(&d) else {
+            continue;
+        };
+        let name = file.as_str().to_string();
         let text = docs::decision_write(&d);
         let same = local.is_some_and(|(rel, l)| *rel == name && l == &d);
         if !same {
-            if let Some((rel, _)) = local {
-                if *rel != name {
-                    space.raw_remove(DECISIONS, rel)?;
+            let wrote = (|| -> Result<()> {
+                if let Some((rel, _)) = local {
+                    if *rel != name {
+                        space.raw_remove(DECISIONS, &DocFile::of(rel)?)?;
+                    }
                 }
+                space.raw_write(DECISIONS, &file, &text)
+            })();
+            if let Err(err) = wrote {
+                log::warn!("team docs: decision {id} not written: {err:#}");
+                continue;
             }
-            space.raw_write(DECISIONS, &name, &text)?;
             out.changed += 1;
         }
         let mine = seen
@@ -831,6 +942,13 @@ pub async fn settle(
             }
         }
     }
+    // What was set aside: told to an administrator, and to the device that wrote it.
+    man.refused = out
+        .refused
+        .iter()
+        .filter(|r| admin || r.mine)
+        .cloned()
+        .collect();
     // The conflicts of the decisions: the latest reading's.
     let lost_now: Vec<DecisionConflict> = lost;
     let dismissed_keep: BTreeSet<String> = man.dismissed.clone();
@@ -1040,6 +1158,9 @@ pub struct TeamDocsView {
     /// The decisions accepted here whose number waits for the server.
     pub waiting_numbers: Vec<String>,
     pub max_document: u64,
+    /// The pages and decisions of the journal set aside, its path or id not one (SR3-01): to an administrator, and to
+    /// the device that wrote it.
+    pub refused: Vec<RefusedDoc>,
 }
 
 // === The core ===
@@ -1228,7 +1349,8 @@ impl Core {
                 let mut d = old.clone();
                 d.state = docs::State::Superseded;
                 d.superseded_by = Some(number);
-                space.raw_write(DECISIONS, &d.file_name(), &docs::decision_write(&d))?;
+                let file = DocFile::decision(&d).ok_or_else(|| crate::paths::outside(&d.id))?;
+                space.raw_write(DECISIONS, &file, &docs::decision_write(&d))?;
             }
         }
         self.docs_numbered(&project.id, &was, &now);
@@ -1340,6 +1462,7 @@ impl Core {
             .map(|(p, _)| p.clone())
             .collect();
         view.waiting_numbers = man.asked.iter().cloned().collect();
+        view.refused = man.refused.clone();
         Ok(view)
     }
 
@@ -1527,7 +1650,8 @@ impl Core {
                 ))
             })?;
         let space = Space::new(self.team_docs_root(project_id), None);
-        let rel = format!("{path}.md");
+        // The path came from the journal: judged again before the disk (SR3-01).
+        let rel = DocFile::page(path).ok_or_else(|| crate::paths::outside(path))?;
         match choice {
             "mine" | "theirs" => {
                 let text = if choice == "mine" {

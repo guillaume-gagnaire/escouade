@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : une page ou une décision venue de l’équipe ne s’écrit plus que dans le dossier des docs du projet. Celle dont le chemin ou l’id mènerait ailleurs sur ton disque est écartée avant toute écriture, les autres se lisent quand même, et un bandeau le dit en tête de l’onglet Docs aux administrateurs et au poste qui l’a écrite.
 - Sécurité : un lien d’invitation d’équipe commence maintenant par escouade:// et s’ouvre directement dans Escouade, sans passer par une page du serveur d’équipe, qui pouvait en lire le secret. Les liens d’avant (https://…/join/…) ne servent plus : demande-en un nouveau.
 - Sécurité : retirer un téléphone dans Réglages › Téléphone révoque aussi son accès, et retirer un appareil retire avec lui ceux qui ont été appairés depuis lui, ce que l’écran Appareils dit avant. Un code d’appairage ne se crée plus depuis un appareil appairé, et chaque retrait garde le vrai nom de qui l’a fait.
 - Serveur d’équipe : un administrateur peut couper d’urgence un harness, un modèle ou un plugin pour toute l’équipe ou un projet, ou arrêter tous ses agents. C’est signé, appliqué dans la seconde sur chaque poste en ligne (au retour pour les autres), dit par une bande avec qui l’a demandé et pourquoi, et levé d’un clic. Les projets personnels ne sont jamais touchés.

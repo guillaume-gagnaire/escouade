@@ -26,6 +26,15 @@ export interface DecisionConflict {
   stamp: string;
 }
 
+/** A page or a decision of the journal set aside before the disk: its path, or its id, is no page's or decision's. */
+export interface RefusedDoc {
+  kind: 'page' | 'decision';
+  key: string;
+  device: string;
+  member: string | null;
+  mine: boolean;
+}
+
 export interface TeamDocsView {
   canChoose: boolean;
   onServer: boolean;
@@ -38,6 +47,7 @@ export interface TeamDocsView {
   tooLarge: string[];
   waitingNumbers: string[];
   maxDocument: number;
+  refused: RefusedDoc[];
 }
 
 export type Settle = 'mine' | 'theirs' | 'agent';
@@ -50,8 +60,9 @@ export const teamDocsApi = {
   removeRepoFiles: (id: string) => invoke<TeamDocsView>('team_docs_remove_repo_files', { id }),
 };
 
-/** What a band above the Docs says, in the order shown: the conflicts first, what waits last. */
+/** What a band above the Docs says, in the order shown: what was set aside, the conflicts, what waits last. */
 export type Band =
+  | { kind: 'refused'; refused: RefusedDoc }
   | { kind: 'conflict'; conflict: PageConflict }
   | { kind: 'lost'; lost: DecisionConflict }
   | { kind: 'repoFiles'; files: string[] }
@@ -61,6 +72,8 @@ export type Band =
 export function bands(view: TeamDocsView | null | undefined): Band[] {
   if (!view?.onServer) return [];
   const out: Band[] = [];
+  // Set aside first: it says someone wrote what goes elsewhere on the disk.
+  for (const refused of view.refused ?? []) out.push({ kind: 'refused', refused });
   for (const conflict of view.conflicts) out.push({ kind: 'conflict', conflict });
   for (const lost of view.decisionConflicts) out.push({ kind: 'lost', lost });
   if (view.repoFiles.length) out.push({ kind: 'repoFiles', files: view.repoFiles });
