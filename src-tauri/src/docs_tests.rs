@@ -1487,3 +1487,91 @@ fn a_revision_keeps_what_it_does_not_give_and_replaces_what_it_gives_empty_inclu
         )
         .is_err());
 }
+
+/// ESC-643: the guard of the files holds alone, before any disk access, whatever its callers
+/// checked; a parent that does not exist yet skips nothing.
+#[test]
+fn the_guard_of_the_files_refuses_every_way_out_on_its_own() {
+    let (s, root) = space("docs-file-guard");
+    let docs = root.join(".escouade").join(DOCUMENTS);
+    for bad in [
+        "",
+        "a//b",
+        "a/",
+        ".",
+        "./a",
+        "..",
+        "../x",
+        "a/../../b",
+        "a/./b",
+        r"C:\x",
+        "C:x",
+        "c:/x",
+        r"\\?\C:\x",
+        r"\\.\pipe\x",
+        r"\\serveur\partage\x",
+        "/etc/x",
+        r"a\..\..\b",
+        r"\x",
+        "a:flux",
+        "page.md:secret",
+        "con.md",
+        "a/NUL",
+        "com1.txt",
+        "lpt9",
+        "conin$",
+        "a/b.",
+        "a/b ",
+        "a/\u{0}b",
+    ] {
+        for sub in [SPEC, DECISIONS, DOCUMENTS] {
+            let err = s.file(sub, bad).expect_err(bad).to_string();
+            assert!(
+                err.contains(&crate::paths::outside(bad).to_string()),
+                "{bad}: {err}"
+            );
+            assert!(
+                err.len() > crate::paths::outside(bad).to_string().len(),
+                "{bad}: no reason"
+            );
+        }
+        assert!(
+            !docs.join("x").exists() && !root.join("x").exists(),
+            "{bad}"
+        );
+    }
+    // A parent that does not exist yet: refused all the same, and nothing written anywhere.
+    assert!(s.raw_write(DOCUMENTS, "nouveau/../../../x", "x").is_err());
+    assert!(s
+        .raw_write(SPEC, "absent/dossier/../../../../x.md", "x")
+        .is_err());
+    assert!(!root.join("x").exists() && !root.join(".escouade").join("x").exists());
+    assert!(!root.join(".escouade").join("x.md").exists());
+}
+
+#[test]
+fn the_guard_of_the_files_lets_the_lawful_paths_through() {
+    let (s, root) = space("docs-file-lawful");
+    let esc = root.join(".escouade");
+    for (sub, rel) in [
+        (SPEC, "paiement.md"),
+        (SPEC, "paiement/recu-fiscal/envoi/relance.md"),
+        (SPEC, ".imports.json"),
+        (DECISIONS, "0001-tarif-famille.md"),
+        (DECISIONS, "tarif-famille.md"),
+        (DOCUMENTS, "Contrats/2026/cahier v2.pdf"),
+        (DOCUMENTS, "Comptes rendus/.gitkeep"),
+        (DOCUMENTS, "console.md"),
+        (DOCUMENTS, "com10.txt"),
+    ] {
+        let at = s.file(sub, rel).unwrap_or_else(|e| panic!("{rel}: {e}"));
+        assert_eq!(
+            at,
+            esc.join(sub).join(rel.split('/').collect::<PathBuf>()),
+            "{rel}"
+        );
+        s.raw_write(sub, rel, "ok")
+            .unwrap_or_else(|e| panic!("{rel}: {e}"));
+        assert_eq!(s.raw_read(sub, rel).unwrap(), "ok", "{rel}");
+    }
+}

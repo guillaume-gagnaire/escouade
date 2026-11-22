@@ -81,7 +81,7 @@ fn reserved(c: char) -> bool {
 }
 
 /// Windows opens these as devices, whatever their extension (`con.png` is the console).
-fn is_device(name: &str) -> bool {
+pub(crate) fn is_device(name: &str) -> bool {
     let stem = name.split('.').next().unwrap_or_default().trim_end();
     let stem = stem.to_lowercase();
     if matches!(

@@ -4,6 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+- Sécurité : la spec, les décisions et les documents ne peuvent plus s’écrire ni se lire hors du dossier `.escouade` du projet, même par un chemin qu’un appelant n’aurait pas vérifié ou vers un dossier pas encore créé ; un tel chemin est refusé avec sa raison.
 ## [Non publié]
 
 - Sécurité : le jeton du serveur MCP ne passe plus sur une ligne de commande : Escouade écrit elle-même sa déclaration dans le `.claude.json` de Claude Code, comme pour les autres harness.

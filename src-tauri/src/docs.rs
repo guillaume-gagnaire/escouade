@@ -631,6 +631,86 @@ fn is_link(p: &Path) -> bool {
     std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
 }
 
+/// Why `seg`, a segment of a path asked under `.escouade/<sub>`, cannot be one, if it cannot.
+/// Read from the text alone, before any access to the disk: what would lead elsewhere than to a
+/// plain name inside the folder, on any of the systems the app runs on.
+fn bad_segment(seg: &str) -> Option<String> {
+    let why = if seg.is_empty() {
+        // `a//b`, a trailing `/`, or a leading one (an absolute path).
+        tr!(
+            "un segment est vide (ou le chemin est absolu)",
+            "a segment is empty (or the path is absolute)"
+        )
+    } else if seg == "." || seg == ".." {
+        tr!("un segment est « {s} »", "a segment is “{s}”", s = seg)
+    } else if seg.contains('\\') {
+        // A Windows separator: a drive's root, a UNC or device prefix (`\\?\`, `\\.\`), `..`.
+        tr!("un segment contient « \\ »", "a segment holds “\\”")
+    } else if seg.contains(':') {
+        // A drive (`C:`) or an NTFS stream (`page.md:x`).
+        tr!(
+            "un segment contient « : » (lecteur ou flux)",
+            "a segment holds “:” (a drive or a stream)"
+        )
+    } else if seg.chars().any(char::is_control) {
+        tr!(
+            "un segment contient un caractère de contrôle",
+            "a segment holds a control character"
+        )
+    } else if seg.ends_with(['.', ' ']) {
+        // Windows drops them: `b.` would be `b`, `.. ` would be `..`.
+        tr!(
+            "un segment finit par un point ou une espace",
+            "a segment ends with a dot or a space"
+        )
+    } else if crate::attachfiles::is_device(seg) {
+        tr!(
+            "« {s} » est un nom réservé de Windows",
+            "“{s}” is a name Windows reserves",
+            s = seg
+        )
+    } else if !Path::new(seg)
+        .components()
+        .all(|c| matches!(c, std::path::Component::Normal(_)))
+    {
+        tr!("un segment n'est pas un nom", "a segment is not a name")
+    } else {
+        return None;
+    };
+    Some(why)
+}
+
+/// The refusal of `rel`, with why: `paths::outside`, its reason after it.
+fn refused(rel: &str, why: &str) -> anyhow::Error {
+    anyhow::anyhow!("{} ({why})", crate::paths::outside(rel))
+}
+
+/// Why `at`, under `base` lexically, leaves it on the disk, if it does: the deepest of its
+/// folders that exists (the file itself left out, its own link refused apart), links resolved,
+/// is not under `base` resolved. None when `base` is not there yet (nothing under it is).
+fn leaves(base: &Path, at: &Path) -> Option<String> {
+    let real_base = base.canonicalize().ok()?;
+    let mut probe = at.parent();
+    while let Some(p) = probe {
+        if !p.starts_with(base) {
+            break;
+        }
+        if let Ok(real) = p.canonicalize() {
+            return (!real.starts_with(&real_base))
+                .then(|| tr!("il mène hors du dossier", "it leads out of the folder"));
+        }
+        if p.symlink_metadata().is_ok() {
+            // There, but not resolved: a dangling link, or a folder that cannot be read.
+            return Some(tr!(
+                "un dossier du chemin ne se résout pas",
+                "a folder of the path does not resolve"
+            ));
+        }
+        probe = p.parent();
+    }
+    None
+}
+
 fn refuse_link(p: &Path) -> anyhow::Error {
     anyhow::anyhow!(tr!(
         "{p} est un lien symbolique : ignoré",
@@ -762,8 +842,14 @@ impl Space {
     }
 
     /// `rel` under `.escouade/<sub>`, with no link on the way (the file itself included when it
-    /// is there). `rel` is a path `page_path` or `document_path` accepted.
-    fn file(&self, sub: &str, rel: &str) -> Result<PathBuf> {
+    /// is there). Its callers hand it a path `page_path` or `document_path` accepted, but it holds
+    /// alone (ESC-643): each segment is checked before any access to the disk (`bad_segment`),
+    /// the whole is then under the folder lexically, and the part of it that exists, canonically.
+    /// A parent that is not there yet skips nothing.
+    pub(crate) fn file(&self, sub: &str, rel: &str) -> Result<PathBuf> {
+        if let Some(why) = rel.split('/').find_map(bad_segment) {
+            return Err(refused(rel, &why));
+        }
         let base = self.dir(sub)?;
         let mut at = base.clone();
         for seg in rel.split('/') {
@@ -772,13 +858,20 @@ impl Space {
                 return Err(refuse_link(&at));
             }
         }
-        // Whatever the pieces were, the whole stays under the folder.
-        if let Ok(real) = at.parent().map(Path::canonicalize).transpose() {
-            if let (Some(real), Ok(b)) = (real, base.canonicalize()) {
-                if !real.starts_with(&b) {
-                    return Err(crate::paths::outside(rel));
-                }
-            }
+        // Lexically: nothing but plain names between the folder and the file.
+        let plain = at.strip_prefix(&base).is_ok_and(|r| {
+            r.components()
+                .all(|c| matches!(c, std::path::Component::Normal(_)))
+        });
+        if !plain {
+            return Err(refused(
+                rel,
+                &tr!("il sort du dossier", "it leaves the folder"),
+            ));
+        }
+        // Canonically, for the part that exists: its deepest folder there stays under the folder.
+        if let Some(why) = leaves(&base, &at) {
+            return Err(refused(rel, &why));
         }
         Ok(at)
     }
@@ -787,10 +880,14 @@ impl Space {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        // Made now, the folders are checked again: none of them may be a link.
+        // Made now, the folders are checked again: none of them may be a link, and the file's
+        // folder, as it is on the disk, stays under `.escouade`.
         let mut at = path.parent();
         while let Some(p) = at {
             if p.ends_with(ROOT) {
+                if let Some(why) = leaves(p, path) {
+                    return Err(refused(&path.display().to_string(), &why));
+                }
                 break;
             }
             if is_link(p) {
