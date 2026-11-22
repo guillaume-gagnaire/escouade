@@ -4,10 +4,13 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-- Security: the spec, the decisions and the documents can no longer be written or read outside the project’s `.escouade` folder, even through a path a caller did not check or towards a folder not created yet; such a path is refused with its reason.
+## [2.2.7] — 2026-11-22
+
 - Plugins: “From a folder…” now copies the plugin alone, without `target/`, `node_modules/` or what Git ignores, and installs a Rust plugin on the module `escouade-plugin build` put in `packs/`; without a module, the refusal says what to do, and the journal names the file really loaded.
+
 ## [2.2.6] — 2026-11-22
 
+- Security: the spec, the decisions and the documents can no longer be written or read outside the project’s `.escouade` folder, even through a path a caller did not check or towards a folder not created yet; such a path is refused with its reason.
 - Security: a crafted address (nested `blob:`) can no longer crash the app, through a link or a plugin.
 - Security: an “Offline mode” (Settings › Advanced › Network) stops in one gesture the updates, the store, the revocation list and the statistics, and a managed device can impose it; the revocation list, attested every week, is flagged when it is more than 7 days old. A plugin can no longer declare a whole domain such as `com`, nor reach the local network through a proxy, nor create a `NUL` or `CON` file, and an image of the local network is no longer shown.
 - Security: the MCP server’s token no longer goes on a command line: Escouade writes its declaration in Claude Code’s `.claude.json` itself, as for the other harnesses.

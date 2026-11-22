@@ -4,10 +4,13 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-- Sécurité : la spec, les décisions et les documents ne peuvent plus s’écrire ni se lire hors du dossier `.escouade` du projet, même par un chemin qu’un appelant n’aurait pas vérifié ou vers un dossier pas encore créé ; un tel chemin est refusé avec sa raison.
+## [2.2.7] — 2026-11-22
+
 - Plugins : « Depuis un dossier… » ne copie plus que le plugin, sans `target/`, `node_modules/` ni ce qu’ignore Git, et installe un plugin en Rust sur le module que `escouade-plugin build` a rangé dans `packs/` ; sans module, le refus dit quoi faire, et le journal nomme le fichier vraiment chargé.
+
 ## [2.2.6] — 2026-11-22
 
+- Sécurité : la spec, les décisions et les documents ne peuvent plus s’écrire ni se lire hors du dossier `.escouade` du projet, même par un chemin qu’un appelant n’aurait pas vérifié ou vers un dossier pas encore créé ; un tel chemin est refusé avec sa raison.
 - Sécurité : une adresse piégée (des `blob:` imbriqués) ne peut plus faire tomber l’app, ni par un lien, ni par un plugin.
 - Sécurité : un « Mode hors ligne » (Réglages › Avancé › Réseau) coupe d’un geste les mises à jour, le store, la liste de révocation et les statistiques, et un poste géré peut l’imposer ; la liste de révocation, attestée chaque semaine, est signalée quand elle a plus de 7 jours. Un plugin ne peut plus déclarer un domaine entier comme `com`, ni joindre le réseau local à travers un proxy, ni créer un fichier `NUL` ou `CON`, et une image du réseau local ne s’affiche plus.
 - Sécurité : le jeton du serveur MCP ne passe plus sur une ligne de commande : Escouade écrit elle-même sa déclaration dans le `.claude.json` de Claude Code, comme pour les autres harness.
