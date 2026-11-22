@@ -14,7 +14,8 @@ The app says so under the group’s title: “Claude Code processes, quota reads
 
 | Setting | Effect | Default |
 |---|---|---|
-| “HTTP(S) proxy” | The proxy’s address, for example `http://user:password@proxy:3128`. Empty (“none”), connections are direct. | Empty |
+| “HTTP(S) proxy” | The proxy’s address, for example `http://user:password@proxy:3128`. Empty (“none”), connections are direct. The password goes to the system keychain: see [“The proxy’s password”](#the-proxy-s-password). | Empty |
+| “Never go out without the proxy” | When the proxy doesn’t answer, an update or a download fails with its reason instead of going out directly. Grayed with no proxy. | On as soon as a proxy is set |
 | “Exclusions” | The hosts that don’t go through the proxy, separated by commas (the `NO_PROXY` list). | `localhost,127.0.0.1` |
 | “Also apply the proxy to the built-in terminals” | Terminals also get the proxy variables. | Off |
 
@@ -22,10 +23,20 @@ The app says so under the group’s title: “Claude Code processes, quota reads
 
 - **Claude Code processes**: agents, and the other calls to Claude Code that Escouade makes (naming an agent, commit messages, signing in to an account). They get `HTTPS_PROXY`, `HTTP_PROXY`, their lowercase variants, and `NO_PROXY` (with `no_proxy`) if “Exclusions” isn’t empty. An agent only sees them the next time its process (re)starts: an agent already running keeps its settings until then.
 - **Quota reads and integrations** (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, Azure Boards): the app’s requests go through the proxy and respect “Exclusions”.
-- **Updates**: checking and downloading go through the proxy. An invalid proxy address makes the check fail, with the message “invalid proxy address”. When the proxy itself doesn’t answer (switched off, or a computer outside the company network), Escouade tries once without the proxy and the failure message gives both tries; when the proxy refuses the request, it isn’t made again without the proxy. See [“Behind a company proxy”](updates#behind-a-company-proxy).
+- **Updates**: checking and downloading go through the proxy. An invalid proxy address makes the check fail, with the message “invalid proxy address”. When the proxy itself doesn’t answer (switched off, or a computer outside the company network), the update fails and says so, as long as “Never go out without the proxy” is on; off, Escouade tries once without the proxy and the failure message gives both tries. When the proxy refuses the request, it is never made again without the proxy. See [“Behind a company proxy”](updates#behind-a-company-proxy).
 - **Built-in terminals**: only if “Also apply the proxy to the built-in terminals” is on. The same variables are then added to terminals, launch commands, and worktree commands. See [terminals](terminals).
 
 Without a proxy address, Escouade adds no proxy variable: processes keep your session’s environment.
+
+### The proxy’s password
+
+Type the address with your username and password, as before. Escouade keeps the password in the system keychain (Windows Credential Manager, the macOS Keychain, the desktop’s secret service on Linux), never in `settings.json`: from the next start, the field shows the address without it (`http://user@proxy:3128`), and says so below. Agents and the app’s connections still get the whole address. To change the password, type the address with the new one; another username, or an address with no username, takes it out of the keychain.
+
+A password an earlier version wrote in `settings.json` is taken out of it at the first start, and goes to the keychain. Without a keychain (Linux without a secret service, WSL), it stays in `settings.json`, apart from the address, readable by you alone.
+
+### Never go out without the proxy
+
+On as soon as a proxy is set, until you turn it off. When the proxy doesn’t answer, checking for or downloading an update fails with its reason, for example “couldn’t reach github.com through the proxy 127.0.0.1:9000 (…); nothing is tried without the proxy: “Never go out without the proxy” is on (Settings › Advanced › Network)”. Nothing goes out directly, which a company where every connection goes through the proxy expects. Likewise, if the proxy’s password is no longer in the keychain at start, agents don’t start and say so, until you type the address again with its password. Turn it off for Escouade to try once without the proxy when yours can’t be reached (a laptop outside the company network, for example); what it downloads stays checked by its signature.
 
 ## Certificates
 

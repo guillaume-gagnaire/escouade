@@ -2104,6 +2104,18 @@ impl<R: Runtime> Core<R> {
             &data,
         ));
         let secrets: Arc<dyn integrations::secrets::SecretStore> = kept.clone();
+        // The proxy's password in the keychain, never in the file (SEC-10): one an earlier version wrote in the address
+        // moves there now, and the file is written again without it.
+        if crate::proxysecret::on_load(&mut settings, &*secrets) {
+            match serde_json::to_vec_pretty(&settings) {
+                Ok(bytes) => {
+                    if let Err(e) = paths::write_atomic(&data.settings_file(), &bytes) {
+                        log::warn!("proxy: the settings could not be written again: {e}");
+                    }
+                }
+                Err(e) => log::warn!("proxy: the settings could not be written again: {e}"),
+            }
+        }
         let accounts = integrations::secrets::load_accounts(
             &data,
             &*secrets,
@@ -2906,6 +2918,8 @@ impl<R: Runtime> Core<R> {
         accounts::normalize(&mut s);
         accounts::check(&s)?;
         accounts::keep_remote_refusals(&self.settings.read().accounts, &mut s.accounts);
+        // The window's address has no password (SEC-10): the one kept goes back in it, a new one to the keychain.
+        crate::proxysecret::on_save(&self.settings.read(), &mut s, &*self.secrets);
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
@@ -3921,6 +3935,8 @@ impl<R: Runtime> Core<R> {
         // A harness of a third party: its whole command agreed to by the user first, else it does not start, said
         // (audit SEC-01, ESC-589). Nothing of it runs before, not even its version.
         self.check_harness_consent(harness, &program)?;
+        // Its network first (SEC-14): never out without the proxy's password when it must go through the proxy.
+        crate::proxysecret::refuse_without_password(&settings)?;
         // Starting an agent is the gesture by which a harness described by anyone's plugin may be asked its version.
         engine::registry::gesture(harness.id());
         // A version older than the tested ones is refused, with its reason.

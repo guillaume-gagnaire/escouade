@@ -799,6 +799,46 @@ test('the proxy configured in the settings reaches Claude', async ({ app }) => {
   expect(app.launches().at(-1)?.proxy).toBe('http://proxy.local:3128');
 });
 
+// SEC-10 and SEC-14 (ESC-595): the proxy's password goes to the (sandboxed) keychain, never to settings.json nor back to the
+// window, while Claude still gets the whole address; « Ne jamais sortir sans le proxy » is on as soon as a proxy is set.
+test('the proxy’s password stays out of the settings’ file and the window, and Claude gets it all the same', async ({ app }) => {
+  const { page } = app;
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  let dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await openSettingsPage(dialog, 'Avancé');
+  const never = () => dialog.getByRole('switch', { name: 'Ne jamais sortir sans le proxy' });
+  await expect(never()).toBeDisabled();
+  await dialog.getByPlaceholder('aucun').fill('http://ada:s3cret@proxy.local:3128');
+  await expect(never()).toHaveAttribute('aria-checked', 'true');
+  await closeSettings(dialog);
+  await addProject(page, app.repo);
+  await send(page, 'Bonjour');
+  await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
+  expect(app.launches().at(-1)?.proxy).toBe('http://ada:s3cret@proxy.local:3128');
+  const file = fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8');
+  expect(file).not.toContain('s3cret');
+  expect(JSON.parse(file).proxyUrl).toBe('http://ada@proxy.local:3128');
+  // The app started again: the window gets the address without its password, said to be in the keychain, the switch
+  // still on; the password read back from the keychain reaches Claude.
+  const beforeRestart = app.launches().length;
+  const again = await app.restart();
+  await again.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  dialog = again.getByRole('dialog', { name: 'Réglages' });
+  await openSettingsPage(dialog, 'Avancé');
+  await expect(dialog.getByPlaceholder('aucun')).toHaveValue('http://ada@proxy.local:3128');
+  await expect(dialog.getByText(/gardé dans le trousseau du système/)).toBeVisible();
+  await expect(never()).toHaveAttribute('aria-checked', 'true');
+  await closeSettings(dialog);
+  expect(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).not.toContain('s3cret');
+  await send(again, 'Encore');
+  await expect(again.getByText('Bonjour, tu as dit : Encore')).toBeVisible();
+  // Every launch since the restart, whenever it came: the agent's process may start as soon as the app is back
+  // (ESC-582), before the message, which then needs no launch of its own.
+  const since = app.launches().slice(beforeRestart);
+  expect(since.length).toBeGreaterThan(0);
+  expect(since.map((l) => l.proxy)).toEqual(since.map(() => 'http://ada:s3cret@proxy.local:3128'));
+});
+
 test('Ctrl+N creates another agent, Ctrl+J gives the focus to the card of the one waiting, and Enter opens it', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);

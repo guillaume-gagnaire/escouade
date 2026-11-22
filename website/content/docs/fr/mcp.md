@@ -23,12 +23,12 @@ Escouade démarre alors le serveur et le déclare dans chaque compte actif de ch
 
 | Harness | Fichier (compte Principal) | Comment |
 | --- | --- | --- |
-| Claude Code | `~/.claude.json` | `claude mcp add --scope user --transport http escouade <adresse> --header "Authorization: Bearer <jeton>"`, lancée comme le compte lance Claude Code (son exécutable, son dossier de configuration) |
+| Claude Code | `~/.claude.json` | écrit par Escouade, `mcpServers.escouade`, comme `claude mcp add --scope user --transport http` l’écrirait |
 | Codex | `~/.codex/config.toml` | écrit par Escouade, `[mcp_servers.escouade]` |
 | OpenCode | `~/.config/opencode/opencode.json` (sous `$XDG_CONFIG_HOME` quand il est défini ; l’`opencode.jsonc` qui est là, s’il y en a un) | écrit par Escouade, `mcp.escouade` |
 | Copilot CLI | `~/.copilot/mcp-config.json` | écrit par Escouade, `mcpServers.escouade` |
 
-Un autre compte a le même fichier dans son dossier. Pour Codex, OpenCode et Copilot CLI, dont la ligne de commande ne sait pas déclarer un serveur avec son en-tête, Escouade écrit l’entrée lui-même et garde tout le reste du fichier tel quel, commentaires, ordre et fins de ligne compris ; un fichier lié à celui de « Principal » reste un lien. Les entrées :
+Un autre compte a le même fichier dans son dossier. Escouade écrit l’entrée elle-même, sans lancer aucune commande : le jeton ne passe sur aucune ligne de commande, où les autres programmes du poste pourraient le lire dans la liste des processus. Elle garde tout le reste du fichier tel quel et garde tout le reste du fichier tel quel, commentaires, ordre et fins de ligne compris ; un fichier lié à celui de « Principal » reste un lien. Les entrées :
 
 ```toml
 # Codex
@@ -46,7 +46,7 @@ http_headers = { Authorization = "Bearer <jeton>" }
     "headers": { "Authorization": "Bearer <jeton>" }
   }
 }
-// Copilot CLI
+// Claude Code (.claude.json) et Copilot CLI
 "mcpServers": {
   "escouade": {
     "type": "http",
@@ -56,12 +56,12 @@ http_headers = { Authorization = "Bearer <jeton>" }
 }
 ```
 
-Le jeton est écrit **en clair** dans chacun de ces fichiers, ce que la note du groupe dit.
+Le jeton est écrit **en clair** dans chacun de ces fichiers, lisibles de ton seul compte : tout programme qui les lit peut piloter Escouade, ce que la note du groupe dit. L’entrée ne nomme pas une variable d’environnement à la place du jeton : elle sert un harness lancé hors d’Escouade, dans ton terminal, où aucune variable d’Escouade n’est posée. Les processus qu’Escouade lance elle-même reçoivent leur jeton par une variable ou un fichier privé, jamais sur leur ligne de commande.
 
 Sous l’interrupteur, l’onglet liste chaque déclaration : le harness et le compte (« Codex · compte Principal »), le fichier, et son état, « Déclaré » ou « Pas déclaré ».
 
 - Une entrée déjà à jour est laissée telle quelle. Une entrée différente (un autre port, un autre jeton) est remplacée. Un compte ajouté ou réactivé plus tard reçoit la déclaration, et un harness installé plus tard aussi : quand tu reviens dans la fenêtre d’Escouade, ou dès qu’elle montre la page « Agents » ou la liste des harness de Réglages › Comptes et harness.
-- Si elle échoue pour un compte, l’onglet dit pourquoi (« Pas déclaré pour le compte Pro : … ») et ce qu’il faut faire à la main : pour Claude Code, la commande à lancer (« À lancer à la main dans PowerShell : »), écrite pour PowerShell sous Windows et pour `sh` ailleurs ; pour les autres, l’entrée à ajouter au fichier (« À ajouter à la main dans … : »). Le jeton y est masqué à l’écran ; « Copier la commande » ou « Copier l’entrée » copie la vraie. Un fichier qui n’est pas un TOML ou un JSON valide n’est pas touché.
+- Si elle échoue pour un compte, l’onglet dit pourquoi (« Pas déclaré pour le compte Pro : … ») et ce qu’il faut faire à la main : l’entrée à ajouter au fichier (« À ajouter à la main dans … : »), Claude Code compris. Le jeton y est masqué à l’écran ; « Copier l’entrée » copie la vraie. Un fichier qui n’est pas un TOML ou un JSON valide n’est pas touché.
 - Éteindre l’interrupteur change le jeton tout de suite (l’ancien n’ouvre plus rien), puis retire l’entrée de chaque compte de chaque harness : chaque fichier redevient celui d’avant, à l’octet près ; un fichier qu’Escouade avait créé est supprimé. Les agents déjà lancés perdent les outils tout de suite eux aussi (leurs jetons sont oubliés) : rallumé, l’interrupteur les leur rend au prochain démarrage de leur processus (« Relancer »). Supprimer un compte retire la sienne.
 - Si le serveur ne démarre pas, l’onglet le dit (« Le serveur n’a pas démarré : … »).
 
@@ -261,7 +261,7 @@ Sont aussi refusées, et notées : une requête sans jeton (« Requête refusé
 ## Jeton et réseau
 
 - Le serveur n’écoute que sur `127.0.0.1`, sur un port libre entre 47000 et 47999, choisi au premier démarrage puis gardé (il en change seulement quand le sien est pris, et la déclaration est alors refaite dans chaque compte).
-- Chaque requête porte un jeton, dans l’en-tête `Authorization: Bearer`. Celui de Claude hors Escouade est gardé dans le trousseau du système ; quand il le refuse, et sous Linux, dans `~/.escouade/mcp-token.json`, lisible par toi seul. Il est aussi écrit en clair dans la config de chaque harness installé où l’interrupteur le déclare (`~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.copilot/mcp-config.json` pour « Principal »). Celui d’un agent est propre à cet agent, vit en mémoire et dans un fichier de configuration sous `~/.escouade/mcp/` que l’app retire quand son processus s’arrête. Un agent sans les outils démarre avec `~/.escouade/mcp-refused.json`, qui écarte le serveur.
+- Chaque requête porte un jeton, dans l’en-tête `Authorization: Bearer`. Celui de Claude hors Escouade est gardé dans le trousseau du système ; sous Linux, le service de secrets du bureau quand il est là ; quand le trousseau le refuse, ou qu’il n’y en a pas, dans `~/.escouade/mcp-token.json`, lisible par toi seul. Il est aussi écrit en clair dans la config de chaque harness installé où l’interrupteur le déclare (`~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.copilot/mcp-config.json` pour « Principal »). Celui d’un agent est propre à cet agent, vit en mémoire et dans un fichier de configuration sous `~/.escouade/mcp/` que l’app retire quand son processus s’arrête. Un agent sans les outils démarre avec `~/.escouade/mcp-refused.json`, qui écarte le serveur.
 - Une requête envoyée par une page web (en-tête `Origin`) ou adressée à un autre nom que `127.0.0.1` ou `localhost` est refusée, même avec un jeton : un site que tu visites ne peut pas appeler le serveur.
 - Un autre client MCP se connecte à `http://127.0.0.1:<port>/mcp` avec le même en-tête. L’adresse et le jeton se lisent dans l’entrée `escouade` du `.claude.json` du compte, ou dans la commande que l’onglet propose quand la déclaration échoue.
 

@@ -36,8 +36,26 @@ pub struct Settings {
     pub pwsh_path: String,
     pub bash_path: String,
     pub wsl_distro: String,
-    /// HTTP(S) proxy URL, e.g. `http://user:pass@proxy:3128`. Empty = direct connection.
+    /// HTTP(S) proxy URL, e.g. `http://user:pass@proxy:3128`. Empty = direct connection. Its password is in memory
+    /// alone: the file and the window get the address without it (SEC-10, `crate::proxy`), the keychain keeps it.
+    #[serde(serialize_with = "crate::proxy::serialize_without_password")]
     pub proxy_url: String,
+    /// The proxy's password, on a machine whose keychain refused it (Linux without a Secret Service, WSL): kept in the
+    /// settings' file, readable by its owner only, apart from the address. Empty when the keychain keeps it.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub proxy_password_in_file: String,
+    /// The proxy's password went to the keychain: a start that does not find it there knows it is lost, rather than
+    /// that the address never had one (a proxy with a user's name alone).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub proxy_password_kept: bool,
+    /// Kept in the keychain, and not found there at this start: the address is in memory without its password. Never
+    /// written; with « Ne jamais sortir sans le proxy », no agent starts (`proxy_held_back`).
+    #[serde(skip)]
+    pub proxy_password_missing: bool,
+    /// « Ne jamais sortir sans le proxy » (SEC-14, ESC-595): with a proxy in the settings, an update or a download that
+    /// cannot go through it fails with its reason, never tried directly. None until the user sets it: on
+    /// (`never_direct`).
+    pub proxy_never_direct: Option<bool>,
     /// Comma-separated hosts that bypass the proxy (NO_PROXY).
     pub no_proxy: String,
     /// Also export the proxy variables in integrated terminals.
@@ -907,6 +925,19 @@ impl Settings {
         env
     }
 
+    /// Whether nothing goes out without the proxy (« Ne jamais sortir sans le proxy », SEC-14): a proxy is in the
+    /// settings and the setting is on, as it is until the user turns it off. Without a proxy, nothing to go through.
+    pub fn never_direct(&self) -> bool {
+        !self.proxy_url.trim().is_empty() && self.proxy_never_direct.unwrap_or(true)
+    }
+
+    /// Whether no agent may start (SEC-14): « Ne jamais sortir sans le proxy » is on and the proxy's password, kept in
+    /// the keychain, was not found there at this start. Its process would go out with an address the proxy refuses, or
+    /// around it.
+    pub fn proxy_held_back(&self) -> bool {
+        self.never_direct() && self.proxy_password_missing
+    }
+
     /// Environment variables to inject into child processes for the configured proxy.
     pub fn proxy_env(&self) -> Vec<(String, String)> {
         let url = self.proxy_url.trim();
@@ -947,6 +978,10 @@ impl Default for Settings {
             bash_path: String::new(),
             wsl_distro: String::new(),
             proxy_url: String::new(),
+            proxy_password_in_file: String::new(),
+            proxy_password_kept: false,
+            proxy_password_missing: false,
+            proxy_never_direct: None,
             no_proxy: "localhost,127.0.0.1".into(),
             proxy_terminals: false,
             insecure_tls: false,
@@ -4006,6 +4041,43 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&s).unwrap()["insecureTls"],
             json!(true)
+        );
+    }
+
+    /// SEC-14: « Ne jamais sortir sans le proxy » is on as soon as a proxy is in the settings, until the user turns it
+    /// off; without a proxy there is nothing to go through.
+    #[test]
+    fn never_direct_is_on_by_default_with_a_proxy_and_off_without_one() {
+        let mut s = Settings::default();
+        assert_eq!(s.proxy_never_direct, None);
+        assert!(!s.never_direct());
+        s.proxy_url = " http://proxy:3128 ".into();
+        assert!(s.never_direct());
+        s.proxy_never_direct = Some(false);
+        assert!(!s.never_direct());
+        s.proxy_never_direct = Some(true);
+        s.proxy_url = "  ".into();
+        assert!(!s.never_direct());
+        let read: Settings = serde_json::from_value(json!({ "proxyNeverDirect": false })).unwrap();
+        assert_eq!(read.proxy_never_direct, Some(false));
+    }
+
+    /// SEC-10: the settings serialized (their file, the window) hold the proxy's address without its password, and the
+    /// password apart only while the keychain refuses it.
+    #[test]
+    fn the_settings_serialized_never_hold_the_proxys_password_in_its_address() {
+        let mut s = Settings {
+            proxy_url: "http://ada:secret@proxy:3128".into(),
+            ..Default::default()
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["proxyUrl"], json!("http://ada@proxy:3128"));
+        assert!(v.get("proxyPasswordInFile").is_none());
+        assert!(!v.to_string().contains("secret"));
+        s.proxy_password_in_file = "secret".into();
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["proxyPasswordInFile"],
+            json!("secret")
         );
     }
 

@@ -222,6 +222,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   // Avancé › Réseau, Terminaux, Pièces jointes, Recherche par le sens, Données locales.
   row('proxyUrl', 'advanced', 'settings.network.proxyUrl', s('proxyUrl')),
   row('noProxy', 'advanced', 'settings.network.exclusions', s('noProxy')),
+  row('proxyNeverDirect', 'advanced', 'settings.network.neverDirect', s('proxyNeverDirect')),
   row('proxyTerminals', 'advanced', 'settings.network.proxyTerminals', s('proxyTerminals')),
   row('extraCaFile', 'advanced', 'settings.network.extraCa', s('extraCaFile')),
   row('insecureTls', 'advanced', 'settings.network.insecureTls', s('insecureTls')),

@@ -43,6 +43,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   bashPath: true,
   wslDistro: true,
   proxyUrl: true,
+  proxyNeverDirect: true,
   noProxy: true,
   proxyTerminals: true,
   insecureTls: true,

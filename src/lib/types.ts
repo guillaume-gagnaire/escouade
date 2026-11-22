@@ -37,7 +37,10 @@ export interface Settings {
   pwshPath: string;
   bashPath: string;
   wslDistro: string;
+  /** The proxy's address, without its password: the keychain keeps it, the backend puts it back (SEC-10). */
   proxyUrl: string;
+  /** « Ne jamais sortir sans le proxy » (SEC-14): null until the user sets it, on with a proxy (`neverDirect`). */
+  proxyNeverDirect: boolean | null;
   noProxy: string;
   proxyTerminals: boolean;
   /** « Ignorer la vérification des certificats TLS »: through the proxy alone, nothing without one (SEC-07). */

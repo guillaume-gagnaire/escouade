@@ -29,7 +29,7 @@ Il relève 18 constats. Les trois de gravité moyenne tiennent à ce que l'appli
 2. **Projets privés** (SEC-02). Marquer un projet « privé » le cache aux agents des autres projets ; côté fichiers, c'est une consigne donnée aux harness, pas un cloisonnement du système. L'interface le dit.
 3. **Sceau « Vérifié par Escouade »** (SEC-03). Une seule clé, gardée sans mot de passe sur le poste de l'éditeur, et une revue faite par un agent. **Corrigé dans Escouade 2.2.6** : les clés sont séparées par rôle, la clé sans mot de passe ne scelle plus que les plugins de l'éditeur, les tiers et la liste de révocation demandent une clé à mot de passe, et chaque sceau dit sa clé.
 
-Les quatorze constats faibles sont de la défense en profondeur : des gardes qui tiennent mais dont un bord reste ouvert, ou des plafonds qui manquent. Le dernier constat réunit des observations sans impact direct.
+Les quatorze constats faibles sont de la défense en profondeur : des gardes qui tiennent mais dont un bord reste ouvert, ou des plafonds qui manquent. Trois sont **corrigés dans la 2.2.6** : le jeton du serveur MCP ne passe plus sur une ligne de commande (SEC-07) ; le dossier de données est privé sous Unix, le service de secrets du bureau garde les secrets sous Linux, et le mot de passe du proxy va au trousseau (SEC-10) ; « Ne jamais sortir sans le proxy », allumé dès qu'un proxy est configuré, empêche les mises à jour de le contourner (SEC-14). Le dernier constat réunit des observations sans impact direct.
 
 Une réserve : cet audit est interne, mené par un agent d'IA pour l'éditeur (section 2, « Limites »). Il dit l'état d'une version à une date ; il ne vaut pas pour les versions suivantes.
 
@@ -270,7 +270,7 @@ L'inventaire vient du code : toutes les adresses écrites dans les sources Rust 
 
 **Ce qui part par défaut**, sans geste : R1 (contrôle de mise à jour), R2 (catalogue du store), puis, dès qu'un projet et un compte existent, R3 (git fetch), R4 (quotas, par Claude Code), R5 (les harness) et R6. Aucun de ces flux ne porte de code vers l'éditeur d'Escouade. Le code de l'application ne nomme aucune adresse d'Anthropic : R4, R5, R6 et R15 sont des connexions de Claude Code.
 
-**Le proxy.** Réglages › Avancé › Réseau prend une adresse de proxy, une liste d'exclusions, un fichier d'autorités de certification, et l'option « Ignorer la vérification des certificats TLS ». Le proxy s'applique aux requêtes de l'application et aux harness (variables `HTTPS_PROXY`). Deux points à connaître : si le proxy configuré ne répond pas, le contrôle de mise à jour tente une fois une connexion directe (SEC-14) ; l'option sur les certificats, déconseillée, ne vaut que pour une connexion qui passe par le proxy (section 6.1).
+**Le proxy.** Réglages › Avancé › Réseau prend une adresse de proxy, une liste d'exclusions, un fichier d'autorités de certification, et l'option « Ignorer la vérification des certificats TLS ». Le proxy s'applique aux requêtes de l'application et aux harness (variables `HTTPS_PROXY`). Deux points à connaître : si le proxy configuré ne répond pas, le contrôle de mise à jour tente une fois une connexion directe (SEC-14, corrigé dans la 2.2.6 : plus jamais tant que « Ne jamais sortir sans le proxy » est allumé, ce qu'il est d'office avec un proxy) ; l'option sur les certificats, déconseillée, ne vaut que pour une connexion qui passe par le proxy (section 6.1).
 
 **Ce qui écoute.** Rien sur le réseau. Sur `127.0.0.1` : le serveur MCP (port entre 47000 et 47999, seulement si « Les agents peuvent piloter Escouade » est allumé) et le serveur de hooks (port libre, seulement quand une vue terminal d'un harness est ouverte).
 
@@ -307,14 +307,14 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 | SEC-04 | Dépendances : des avis ouverts hors de l'application, sans délai de correction | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-05 | Politique de contenu : styles en ligne autorisés, directives manquantes | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-06 | Lancement décrit par un plugin : un fichier écrit à travers un lien | Faible | Démontré |
-| SEC-07 | Le jeton du serveur MCP passe en argument et reste en clair chez les harness | Faible | Probable |
+| SEC-07 | Le jeton du serveur MCP passe en argument et reste en clair chez les harness | Faible | Probable ; corrigé dans la 2.2.6 |
 | SEC-08 | Flux d'un harness : une longueur annoncée suffit à arrêter l'application | Faible | Démontré |
 | SEC-09 | Réseau des plugins : trois angles morts | Faible | Démontré |
-| SEC-10 | Données au repos : pas de trousseau sous Linux, dossier lisible sous Unix | Faible | Probable |
+| SEC-10 | Données au repos : pas de trousseau sous Linux, dossier lisible sous Unix | Faible | Probable ; corrigé dans la 2.2.6 |
 | SEC-11 | La sortie d'un plugin n'est pas plafonnée pendant un tour | Faible | Démontré |
 | SEC-12 | Fenêtre principale : des droits très larges si un script y entrait | Faible | Probable ; ouverture bornée dans la 2.2.6, commandes à découper |
 | SEC-13 | Des variables d'environnement de test restent actives en version publiée | Faible | Probable |
-| SEC-14 | Mises à jour : le proxy est contourné s'il ne répond pas | Faible | Probable |
+| SEC-14 | Mises à jour : le proxy est contourné s'il ne répond pas | Faible | Probable ; corrigé dans la 2.2.6 |
 | SEC-15 | Liste de révocation des plugins : pas de date de péremption | Faible | Théorique |
 | SEC-16 | Site de l'éditeur sans en-têtes de sécurité | Faible | Démontré ; empreintes des installateurs publiées dans la 2.2.6 |
 | SEC-17 | Serveurs locaux : un programme du poste peut les ralentir | Faible | Démontré |
@@ -550,6 +550,7 @@ Cela vaut pour la fenêtre principale et pour la barre des fenêtres « Pages »
 | État | Probable — lu dans le code ; un test du projet affirme la ligne de commande |
 | Composant | Déclaration du serveur MCP dans les harness |
 | Effort de correction | Moyen (dépend de ce que chaque harness accepte) |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Pour que Claude Code, dans un terminal, pilote Escouade, l'application déclare son serveur dans la configuration du harness. Elle le fait par la commande `claude mcp add … --header "Authorization: Bearer <jeton>"` : le jeton est un argument de processus, lisible par les autres programmes de l'utilisateur et, sous Unix, par tous les comptes de la machine pendant l'exécution. Il est ensuite écrit en clair dans le fichier de configuration du harness, alors que l'application le garde elle-même au trousseau.
 
@@ -560,6 +561,14 @@ Cela vaut pour la fenêtre principale et pour la barre des fenêtres « Pages »
 **Ce qui atténue.** Le serveur est éteint par défaut. Éteindre l'option change le jeton à l'instant (`src-tauri/src/mcp/mod.rs:267-280`). Les jetons des agents, eux, ne passent ni par un argument ni par un fichier durable : celui d'un agent est retiré des fichiers de son interface quand elle se ferme (`src-tauri/src/tui.rs:782-810`). Copilot CLI reçoit le jeton par un fichier privé, pas dans une variable d'environnement dont ses commandes hériteraient (`plugins/copilot/src/terminal.rs:230-236`).
 
 **Recommandation.** Écrire l'entrée directement dans le fichier de configuration du harness plutôt que par la ligne de commande. Quand le harness le permet, référencer une variable d'environnement plutôt que le jeton. Documenter que tout programme du poste qui lit ce fichier pilote Escouade.
+
+**Correction (Escouade 2.2.6).**
+
+1. Escouade écrit elle-même l'entrée de Claude Code dans le `.claude.json` du compte, comme `claude mcp add --scope user --transport http` l'écrirait, en JSON strict et le reste du fichier gardé, comme elle le faisait déjà pour Codex, OpenCode et Copilot CLI. Aucun programme n'est plus lancé pour déclarer le serveur : le jeton n'est l'argument d'aucun process. La déclaration à la main est l'entrée à coller, plus une commande.
+2. Une variable d'environnement : chaque harness de la première main sait en nommer une (Claude Code `${VAR}` dans un en-tête, Codex `bearer_token_env_var`, OpenCode `{env:VAR}`, Copilot CLI `${VAR}`). Escouade s'en sert pour ce qu'elle lance : les hooks de la vue Claude Code, le terminal d'un agent Codex ; ses agents reçoivent leur jeton par un fichier privé effacé à leur arrêt. L'entrée de l'utilisateur, elle, sert un harness lancé hors d'Escouade, où aucune variable d'Escouade n'est posée : une variable n'y ouvrirait rien, le jeton y reste écrit, dans un fichier lisible de son seul propriétaire.
+3. La note de « Les agents peuvent piloter Escouade » dit que le jeton est écrit en clair dans ces fichiers et que tout programme qui les lit peut piloter Escouade.
+
+L'entrée écrite sans process lancé est un test du projet.
 
 ## SEC-08 — Flux d'un harness : une longueur annoncée suffit à arrêter l'application
 
@@ -617,6 +626,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Probable — lu dans le code ; Linux et macOS n'ont pas été essayés |
 | Composant | `crates/escouade-forge/src/integrations/secrets.rs`, `src-tauri/src/paths.rs` |
 | Effort de correction | Moyen |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Sous Windows et macOS, les jetons vont au trousseau du système. Sous Linux, l'application n'utilise aucun trousseau : les jetons restent dans un fichier du dossier de données, lisible par son propriétaire seul. Par ailleurs, seuls les fichiers qui tiennent un secret sont créés en mode privé. Le dossier de données et les conversations suivent le masque par défaut du système : sur une machine Unix partagée, un autre compte peut lire les conversations, donc des extraits du code des projets. Enfin, l'adresse du proxy, mot de passe compris si l'utilisateur l'y a mis, est écrite en clair dans les réglages et passée en variable aux agents.
 
@@ -625,6 +635,14 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Scénario.** Sur une machine de développement Linux partagée, un autre utilisateur parcourt le dossier de données de la victime et lit les conversations de ses agents.
 
 **Recommandation.** Créer le dossier de données en mode 0700. Sous Linux, utiliser le service de secrets du bureau quand il existe. Garder le mot de passe du proxy au trousseau.
+
+**Correction (Escouade 2.2.6).** Les trois points de la recommandation sont faits.
+
+1. Sous Unix, le dossier de données et ses conversations sont créés en mode 0700, et le dossier est remis en 0700 à chaque démarrage : celui qu'une version d'avant a créé selon le masque du système est réparé.
+2. Sous Linux, les secrets vont au service de secrets du bureau (GNOME Keyring, KWallet) quand il répond au démarrage, par D-Bus. Sans lui (WSL, un serveur, pas de bus de session), le repli d'avant, que la fenêtre dit : un fichier lisible de son seul propriétaire.
+3. Le mot de passe du proxy va au trousseau. Les réglages et la fenêtre n'ont plus que l'adresse sans lui ; il n'est remis dans l'adresse qu'en mémoire, pour les connexions et les variables des agents. Au démarrage, une adresse écrite avec son mot de passe par une version d'avant le donne au trousseau, et le fichier est réécrit sans lui. Sans trousseau, il reste dans le fichier des réglages, à part de l'adresse.
+
+Les trois sont des tests du projet (le mode 0700 sous Unix, joué par la CI Linux et macOS).
 
 ## SEC-11 — La sortie d'un plugin n'est pas plafonnée pendant un tour
 
@@ -699,6 +717,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Probable — lu dans le code |
 | Composant | `src-tauri/src/updates.rs:858-883`, `crates/escouade-updates/src/net.rs:9-12` |
 | Effort de correction | Faible |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Si le proxy des réglages est injoignable (connexion refusée, délai, nom inconnu), le contrôle de mise à jour et le téléchargement tentent une fois une connexion directe. Un proxy qui **répond** par un refus n'est jamais contourné : le code le dit et s'y tient. Dans une entreprise où toute sortie doit passer par le proxy, la tentative directe est un écart, même si le pare-feu la bloquera.
 
@@ -709,6 +728,8 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Ce qui atténue.** Ce qui est téléchargé reste vérifié par sa signature. Cette route directe vérifie toujours les certificats, même quand « Ignorer la vérification » est cochée (`crates/escouade-updates/src/net.rs:102-113`).
 
 **Recommandation.** Un réglage « ne jamais sortir sans le proxy », allumé d'office quand un proxy est configuré.
+
+**Correction (Escouade 2.2.6).** Réglages › Avancé › Réseau a « Ne jamais sortir sans le proxy », allumé d'office dès qu'un proxy est configuré, tant que l'utilisateur ne l'éteint pas. Allumé, un contrôle ou un téléchargement de mise à jour dont le proxy ne répond pas échoue avec sa raison (« rien n'est tenté sans le proxy : « Ne jamais sortir sans le proxy » est allumé »), sans tentative directe. C'est une clé simple des réglages, qu'un poste géré pourra imposer avec la liste des politiques de la 2.3. Le scénario d'un proxy injoignable, au contrôle comme au téléchargement, est un test du projet : rien n'atteint le serveur en direct.
 
 ## SEC-15 — Liste de révocation des plugins : pas de date de péremption
 

@@ -610,10 +610,35 @@ impl DataDir {
         self.0.join("update.json")
     }
 
+    /// The folder and its conversations made, readable by their owner alone under Unix (SEC-10, ESC-595): the folder in
+    /// mode 0700 when it is made, and put back in it at each start (one an earlier version made with the system's
+    /// mask, `umask`, is repaired), so that another account of the machine reads neither the conversations nor the
+    /// rest. Under Windows, the folder of the user's profile keeps its own rights.
     pub fn ensure(&self) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(PRIVATE_DIR_MODE)
+                .create(self.conversations())?;
+            let root = std::fs::metadata(&self.0)?;
+            if root.permissions().mode() & 0o777 != PRIVATE_DIR_MODE {
+                std::fs::set_permissions(
+                    &self.0,
+                    std::fs::Permissions::from_mode(PRIVATE_DIR_MODE),
+                )?;
+            }
+            Ok(())
+        }
+        #[cfg(not(unix))]
         std::fs::create_dir_all(self.conversations())
     }
 }
+
+/// The mode of the data folder under Unix: its owner alone reads, writes and goes in it (SEC-10).
+#[cfg(unix)]
+pub const PRIVATE_DIR_MODE: u32 = 0o700;
 
 /// Whether the agent `id` has a folder of its own for its joined files (`DataDir::agent_files`): a
 /// plain id that does not start with `_`.
@@ -713,6 +738,33 @@ fn is_local_key(key: &str) -> bool {
 mod tests {
     use super::*;
     use escouade_base::testing::{make_dir_link, test_dir};
+
+    /// SEC-10: the data folder is made in mode 0700, and one an earlier version left readable by all is put back in it
+    /// at the next start; the conversations' folder is made private too.
+    #[cfg(unix)]
+    #[test]
+    fn the_data_folder_is_made_and_kept_private_under_unix() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let root = test_dir("esc595-private-data").join("data");
+        let data = DataDir::new(root.clone());
+        data.ensure().unwrap();
+        assert_eq!(mode(&root), 0o700);
+        assert_eq!(mode(&data.conversations()), 0o700);
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+        data.ensure().unwrap();
+        assert_eq!(mode(&root), 0o700, "repaired at the next start");
+    }
+
+    /// Under every system, `ensure` makes the folder and its conversations, and a second call changes nothing.
+    #[test]
+    fn ensure_makes_the_data_folder_and_may_run_again() {
+        let root = test_dir("esc595-ensure").join("data");
+        let data = DataDir::new(root.clone());
+        data.ensure().unwrap();
+        data.ensure().unwrap();
+        assert!(data.conversations().is_dir());
+    }
 
     #[test]
     fn the_databases_of_the_retired_index_are_erased_once_and_nothing_else() {

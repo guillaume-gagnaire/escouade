@@ -14,7 +14,8 @@ L’app le dit sous le titre du groupe : « Le proxy est transmis aux processus
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Proxy HTTP(S) » | L’adresse du proxy, par exemple `http://utilisateur:motdepasse@proxy:3128`. Vide (« aucun »), les connexions sont directes. | Vide |
+| « Proxy HTTP(S) » | L’adresse du proxy, par exemple `http://utilisateur:motdepasse@proxy:3128`. Vide (« aucun »), les connexions sont directes. Le mot de passe va au trousseau du système : voir [« Le mot de passe du proxy »](#le-mot-de-passe-du-proxy). | Vide |
+| « Ne jamais sortir sans le proxy » | Si le proxy ne répond pas, une mise à jour ou un téléchargement échoue avec sa raison au lieu de partir en connexion directe. Grisé sans proxy. | Activé dès qu’un proxy est configuré |
 | « Exclusions » | Les hôtes qui ne passent pas par le proxy, séparés par des virgules (la liste `NO_PROXY`). | `localhost,127.0.0.1` |
 | « Appliquer aussi le proxy aux terminaux intégrés » | Les terminaux reçoivent aussi les variables du proxy. | Désactivé |
 
@@ -22,10 +23,20 @@ L’app le dit sous le titre du groupe : « Le proxy est transmis aux processus
 
 - **Les processus Claude Code** : les agents, et les autres appels à Claude Code que fait Escouade (nom d’un agent, messages de commit, connexion à un compte). Ils reçoivent `HTTPS_PROXY`, `HTTP_PROXY`, leurs variantes en minuscules, et `NO_PROXY` (avec `no_proxy`) si « Exclusions » n’est pas vide. Un agent ne les voit qu’au prochain (re)démarrage de son processus : un agent déjà en cours garde ses réglages jusque-là.
 - **La lecture des quotas et les intégrations** (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, Azure Boards) : les requêtes de l’app passent par le proxy et respectent « Exclusions ».
-- **Les mises à jour** : la recherche et le téléchargement passent par le proxy. Une adresse de proxy invalide fait échouer la recherche, avec le message « adresse du proxy invalide ». Quand le proxy lui-même ne répond pas (arrêté, ou poste hors du réseau de l’entreprise), Escouade essaie une fois sans proxy et le message d’échec dit les deux essais ; quand le proxy refuse la requête, elle n’est pas refaite sans lui. Voir [« Derrière un proxy d’entreprise »](updates#derriere-un-proxy-d-entreprise).
+- **Les mises à jour** : la recherche et le téléchargement passent par le proxy. Une adresse de proxy invalide fait échouer la recherche, avec le message « adresse du proxy invalide ». Quand le proxy lui-même ne répond pas (arrêté, ou poste hors du réseau de l’entreprise), la mise à jour échoue en le disant, tant que « Ne jamais sortir sans le proxy » est activé ; éteint, Escouade essaie une fois sans proxy et le message d’échec dit les deux essais. Quand le proxy refuse la requête, elle n’est jamais refaite sans lui. Voir [« Derrière un proxy d’entreprise »](updates#derriere-un-proxy-d-entreprise).
 - **Les terminaux intégrés** : seulement si « Appliquer aussi le proxy aux terminaux intégrés » est activé. Les mêmes variables sont alors ajoutées aux terminaux, aux commandes de lancement et aux commandes de worktree. Voir [les terminaux](terminals).
 
 Sans adresse de proxy, Escouade n’ajoute aucune variable de proxy : les processus gardent l’environnement de ta session.
+
+### Le mot de passe du proxy
+
+Écris l’adresse avec ton identifiant et ton mot de passe, comme avant. Escouade garde le mot de passe dans le trousseau du système (le Gestionnaire d’identification de Windows, le Trousseau de macOS, le service de secrets du bureau sous Linux), jamais dans `settings.json` : au démarrage suivant, le champ montre l’adresse sans lui (`http://utilisateur@proxy:3128`), et le dit dessous. Les agents et les connexions de l’app reçoivent toujours l’adresse entière. Pour changer le mot de passe, écris l’adresse avec le nouveau ; un autre identifiant, ou une adresse sans identifiant, le retire du trousseau.
+
+Un mot de passe qu’une version précédente avait écrit dans `settings.json` y est retiré au premier démarrage, et va au trousseau. Sans trousseau (Linux sans service de secrets, WSL), il reste dans `settings.json`, à part de l’adresse, lisible par toi seul.
+
+### Ne jamais sortir sans le proxy
+
+Activé dès qu’un proxy est configuré, tant que tu ne l’éteins pas. Si le proxy ne répond pas, la recherche ou le téléchargement d’une mise à jour échoue avec sa raison, par exemple « connexion impossible à github.com par le proxy 127.0.0.1:9000 (…) ; rien n’est tenté sans le proxy : « Ne jamais sortir sans le proxy » est allumé (Réglages › Avancé › Réseau) ». Rien ne part en connexion directe, ce qu’attend une entreprise dont toute sortie passe par le proxy. De même, si le mot de passe du proxy n’est plus dans le trousseau au démarrage, les agents ne démarrent pas et le disent, jusqu’à ce que tu réécrives l’adresse avec son mot de passe. Éteins-le pour qu’Escouade retente une fois sans proxy quand le tien est injoignable (un portable hors du réseau de l’entreprise, par exemple) ; ce qu’elle télécharge reste vérifié par sa signature.
 
 ## Certificats
 

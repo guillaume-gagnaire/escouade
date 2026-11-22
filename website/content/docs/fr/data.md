@@ -4,7 +4,7 @@ Tout ce qu’Escouade garde sur ton disque : le dossier ~/.escouade/ et chacun d
 
 ## Le dossier de données
 
-Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous Windows). Réglages › Avancé › Données locales le rappelle sur la ligne « Données locales ».
+Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous Windows). Réglages › Avancé › Données locales le rappelle sur la ligne « Données locales ». Sous macOS et Linux, le dossier n’est lisible que de toi (mode `0700`) : Escouade le crée ainsi et le remet ainsi à chaque démarrage, pour qu’un autre compte de la machine ne lise pas tes conversations.
 
 | Fichier ou dossier | Contenu |
 |---|---|
@@ -17,7 +17,7 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `conversations/<agent>.jsonl` | Le journal de chaque conversation, nommé d’après l’identifiant de l’agent, à raison d’une opération (ajout ou correction d’un élément) par ligne. Effacé avec l’agent ; ceux d’un projet fermé restent avec son historique. |
 | `closed-projects/<projet>.json` | L’historique d’un projet fermé, nommé d’après l’identifiant du projet : le projet entier (réglages, Kanban, intégrations, commandes), ses agents (archivés compris), ses tickets, l’agent affiché et la date de fermeture. Ses conversations restent dans `conversations/`, les images et les fichiers de ses tickets dans `tickets/`, les copies de fichiers joints à ses agents dans `attachments/`, ses statistiques dans `stats.db`. Le fichier disparaît quand le projet est rouvert ou que son historique est effacé (voir [Projets fermés](settings-projects#projets-fermes)). |
 | `claude/<compte>/` | Le dossier de configuration de Claude Code de chaque compte ajouté dans Réglages › Comptes et harness : sa connexion et ses conversations. Le compte de la machine (Principal) n’en a pas : il utilise celui de ton propre Claude Code. |
-| `mcp-token.json` | Le jeton du serveur MCP pour Claude hors Escouade, seulement quand le trousseau du système le refuse (toujours sous Linux). |
+| `mcp-token.json` | Le jeton du serveur MCP pour Claude hors Escouade, seulement quand le trousseau du système le refuse (sous Linux, quand il n’y a pas de service de secrets). |
 | `plugin-secrets.json` | Les secrets des plugins, seulement si tu as choisi « Garder dans un fichier lisible de toi seul » sur un poste sans trousseau. En clair, lisible par toi seul, jamais copié dans `backups/`. |
 | `mcp/<agent>.json` | La configuration MCP d’un agent d’Escouade, avec son jeton. Effacée quand son processus s’arrête, et à chaque démarrage et arrêt de l’app. |
 | `tui/<agent>.json` | Les réglages de hooks que la vue Claude Code d’un agent passe à Claude Code. Le jeton n’y est pas : il passe par une variable d’environnement. |
@@ -61,10 +61,11 @@ C’est fait pour les démonstrations et les essais. Avec un dossier à part :
 Les jetons ne sont pas dans les réglages :
 
 - **Jira, Trello, GitHub, Linear, ClickUp.** Le jeton de chaque service est dans le trousseau du système : le Credential Manager de Windows, le Trousseau d’accès de macOS. Il y a une entrée par service (`jira`, `trello`, `github`, `linear`, `clickup`) sous le service `dev.gagnaire.escouade`. `integrations.json` garde le reste du compte. Quand le trousseau refuse l’entrée, Réglages › Services connectés le dit (« Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json. ») et le jeton reste dans ce fichier, lisible par toi seul sous macOS et Linux.
-- **Linux.** Il n’y a pas de trousseau pris en charge : les jetons des intégrations restent dans `integrations.json`.
+- **Linux.** Le service de secrets du bureau (GNOME Keyring, KWallet) sert de trousseau quand il répond au démarrage. Sans lui (WSL, un serveur sans bureau), les jetons des intégrations restent dans `integrations.json`.
+- **Mot de passe du proxy.** Dans le trousseau (une entrée `proxy`), jamais dans `settings.json`, qui garde l’adresse sans lui ; sans trousseau, dans `settings.json`, à part de l’adresse. Voir [le réseau](settings-network#le-mot-de-passe-du-proxy).
 - **Secrets des plugins.** Ils sont dans le trousseau, sous `plugin:<id>:<clé>`. Sans trousseau (Linux, WSL), « Garder » le dit à côté du champ et propose « Garder dans un fichier lisible de toi seul » : le secret va alors, en clair, dans `plugin-secrets.json`, lisible par toi seul. Ce choix vaut pour ce poste, jamais pour un projet ; Réglages › Plugins le montre et « Retirer le fichier » l’efface avec ses secrets. Un trousseau qui arrive ensuite ne déplace rien tout seul : la page du plugin propose « Déplacer vers le trousseau ».
 - **Serveur MCP.** Le jeton de Claude hors Escouade est dans le trousseau (une entrée `mcp`), sinon dans `mcp-token.json`. Celui de chaque agent est dans son `mcp/<agent>.json`, qui disparaît avec son processus.
-- **Dictée en ligne.** La clé de chaque service est dans le trousseau, une entrée par service (`dictation-openai`, `dictation-groq`, `dictation-mistral`, `dictation-elevenlabs`, `dictation-deepgram`), jamais dans un fichier : sous Linux, elle ne peut pas être enregistrée. « Effacer la clé », dans Réglages › Voix, retire son entrée. Voir [la dictée](chat).
+- **Dictée en ligne.** La clé de chaque service est dans le trousseau, une entrée par service (`dictation-openai`, `dictation-groq`, `dictation-mistral`, `dictation-elevenlabs`, `dictation-deepgram`), jamais dans un fichier : sous Linux sans service de secrets, elle ne peut pas être enregistrée. « Effacer la clé », dans Réglages › Voix, retire son entrée. Voir [la dictée](chat).
 - **Connexion de Claude Code.** Elle n’est pas à Escouade : Claude Code la garde dans le dossier de chaque compte (le fichier `.credentials.json`), et sous macOS dans le trousseau. Voir [les comptes Claude](accounts).
 
 Pour retirer un jeton, déconnecte le service dans Réglages › Services connectés : son entrée quitte le trousseau. Voir [les intégrations](integrations).

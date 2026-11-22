@@ -387,6 +387,13 @@ export default {
     proxyUrl: 'Proxy HTTP(S)',
     proxyUrlHint: 'ex. http://utilisateur:motdepasse@proxy:3128',
     proxyUrlNone: 'aucun',
+    /** Under the address: where its password went (SEC-10). */
+    proxyPasswordNote:
+      'Le mot de passe de l’adresse est gardé dans le trousseau du système, jamais dans les réglages : l’adresse s’affiche sans lui. Pour le changer, écris l’adresse avec le nouveau.',
+    neverDirect: 'Ne jamais sortir sans le proxy',
+    neverDirectDesc:
+      'Allumé d’office avec un proxy. Si le proxy ne répond pas, une mise à jour ou un téléchargement échoue avec sa raison au lieu de partir en connexion directe.',
+    neverDirectNoProxy: 'Sans proxy configuré, rien à imposer : toutes les connexions sont directes.',
     exclusions: 'Exclusions',
     exclusionsHint: 'NO_PROXY, séparées par des virgules',
     proxyTerminals: 'Appliquer aussi le proxy aux terminaux intégrés',

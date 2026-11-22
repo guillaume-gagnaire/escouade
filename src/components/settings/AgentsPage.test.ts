@@ -93,7 +93,7 @@ describe('Agents › « Piloter Escouade » (McpSection)', () => {
     // Which harnesses and files get the entry, and the token in plain text in each.
     expect(
       screen.getByText(
-        'Escouade déclare son serveur dans la config de chaque compte actif de chaque harness installé : ~/.claude.json (Claude Code, par claude mcp add), ~/.codex/config.toml (Codex), ~/.config/opencode/opencode.json (OpenCode), ~/.copilot/mcp-config.json (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Le jeton y est écrit en clair. Désactiver change le jeton, puis retire l’entrée partout. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt.',
+        'Escouade écrit elle-même son serveur dans la config de chaque compte actif de chaque harness installé : ~/.claude.json (Claude Code), ~/.codex/config.toml (Codex), ~/.config/opencode/opencode.json (OpenCode), ~/.copilot/mcp-config.json (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Aucune commande n’est lancée : le jeton ne passe sur aucune ligne de commande. Il est écrit en clair dans ces fichiers, lisibles de ton seul compte : tout programme qui les lit peut piloter Escouade. Désactiver change le jeton, puis retire l’entrée partout. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt.',
       ),
     ).toBeInTheDocument();
     // Off: nothing is said of a declaration.
@@ -321,7 +321,7 @@ describe('Agents › « Piloter Escouade » (McpSection)', () => {
     expect(await screen.findByText('Refused')).toBeInTheDocument();
     expect(
       screen.getByText(
-        /~\/\.copilot\/mcp-config\.json \(Copilot CLI\) for the Main account, the rest of the file and its comments kept\. The token is written there in plain text\./,
+        /~\/\.copilot\/mcp-config\.json \(Copilot CLI\) for the Main account, the rest of the file and its comments kept\. No command is run: the token is on no command line\. It is written in plain text in those files, readable by your account alone: any program that reads them can drive Escouade\./,
       ),
     ).toBeInTheDocument();
   });

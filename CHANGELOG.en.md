@@ -6,6 +6,9 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: the MCP server’s token no longer goes on a command line: Escouade writes its declaration in Claude Code’s `.claude.json` itself, as for the other harnesses.
+- Security: the proxy’s password goes to the system keychain, no longer in the settings (it is moved there at start); on Linux, the desktop’s secret service keeps the secrets when it is there, and the data folder is readable by you alone.
+- Security: “Never go out without the proxy”, on as soon as a proxy is set: when the proxy doesn’t answer, an update fails and says why, instead of going out directly.
 - Downloads: each release gives the SHA-256 of its installers (`SHA256SUMS.txt`), and the site’s Installation page tells how to compare your file’s before you open it.
 - Private projects: a harness from a third-party plugin is no longer launched there, as nothing proves it holds their fence; the conversation, the “Harness” menu and the project’s settings say so. A third-party agent already there stops, at once at rest, at the end of its turn at work. Escouade’s own harnesses keep their fence.
 - Security: “Install verified versions only” now holds for folders and git repositories too, which are accepted only when they are a verified version of the store; development mode stays a gesture of its own. It turns on with this update when you have no third-party plugin installed.

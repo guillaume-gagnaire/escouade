@@ -28,6 +28,7 @@ pub mod paths;
 pub mod pricing;
 pub mod proc;
 pub mod projectfile;
+pub mod proxy;
 pub mod prreview;
 pub mod registry;
 pub mod repos;

@@ -53,7 +53,7 @@ export interface App {
   data: string;
   /** The test's folder: the app's data (`data`), the repository and Principal's Claude Code folder (`claude`) are in it. */
   root: string;
-  /** Principal's `.claude.json`: where the fake `claude mcp add` declares Escouade's server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
+  /** Principal's `.claude.json`: where Escouade declares its server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
   claudeJson: string;
   /** Principal's `config.toml` of Codex: where « Les agents peuvent piloter Escouade » declares the server (`CODEX_HOME` is a test folder). */
   codexToml: string;

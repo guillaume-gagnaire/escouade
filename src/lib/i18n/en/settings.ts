@@ -338,6 +338,12 @@ export default defineZone('settings', {
     proxyUrl: 'HTTP(S) proxy',
     proxyUrlHint: 'e.g. http://user:password@proxy:3128',
     proxyUrlNone: 'none',
+    proxyPasswordNote:
+      'The address’s password is kept in the system keychain, never in the settings: the address shows without it. To change it, type the address with the new one.',
+    neverDirect: 'Never go out without the proxy',
+    neverDirectDesc:
+      'On by default with a proxy. If the proxy doesn’t answer, an update or a download fails with its reason instead of going out directly.',
+    neverDirectNoProxy: 'With no proxy set, there is nothing to enforce: every connection is direct.',
     exclusions: 'Exclusions',
     exclusionsHint: 'NO_PROXY, separated by commas',
     proxyTerminals: 'Also apply the proxy to the built-in terminals',

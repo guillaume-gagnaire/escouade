@@ -113,6 +113,7 @@ export const SETTINGS: Settings = {
   wslDistro: '',
   proxyUrl: '',
   noProxy: 'localhost',
+  proxyNeverDirect: null,
   proxyTerminals: false,
   insecureTls: false,
   extraCaFile: '',

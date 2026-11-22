@@ -19,6 +19,8 @@
   // « Pièces jointes » (from « Harness »), « Recherche par le sens » (from « Projets › Tous les projets ») and « Données
   // locales » (from « À propos »).
   const s = $derived(settingsForm.settings);
+  /** A proxy is set: « Ne jamais sortir sans le proxy » has something to enforce (SEC-14). */
+  const hasProxy = $derived(s.proxyUrl.trim() !== '');
   /** Why a number typed is not saved (ESC-380), the one saved staying. */
   const numberError = (key: NumberSetting) =>
     settingsForm.badNumbers.has(key) ? t('settings.problem.number', { value: app.settings[key] }) : '';
@@ -97,13 +99,31 @@
 {/snippet}
 
 <Group title={t('settings.groups.network')} note={t('settings.network.proxyNote')} anchor="network">
-  {@render text(
-    t('settings.network.proxyUrl'),
-    t('settings.network.proxyUrlHint'),
-    s.proxyUrl,
-    (v) => (s.proxyUrl = v),
-    t('settings.network.proxyUrlNone'),
-  )}
+  <!-- An address with a user's name: its password is in the keychain, the address shown without it (SEC-10). -->
+  <Row
+    label={t('settings.network.proxyUrl')}
+    hint={t('settings.network.proxyUrlHint')}
+    desc={s.proxyUrl.includes('@') ? t('settings.network.proxyPasswordNote') : ''}
+  >
+    <input
+      class="field mono input"
+      aria-label={t('settings.network.proxyUrl')}
+      spellcheck="false"
+      placeholder={t('settings.network.proxyUrlNone')}
+      value={s.proxyUrl}
+      oninput={(e) => (s.proxyUrl = e.currentTarget.value)}
+    />
+  </Row>
+  <Row
+    label={t('settings.network.neverDirect')}
+    desc={hasProxy ? t('settings.network.neverDirectDesc') : t('settings.network.neverDirectNoProxy')}
+  >
+    <Switch
+      label={t('settings.network.neverDirect')}
+      disabled={!hasProxy}
+      bind:on={() => hasProxy && s.proxyNeverDirect !== false, (v) => (s.proxyNeverDirect = v)}
+    />
+  </Row>
   {@render text(t('settings.network.exclusions'), t('settings.network.exclusionsHint'), s.noProxy, (v) => (s.noProxy = v))}
   <Row label={t('settings.network.proxyTerminals')}>
     <Switch label={t('settings.network.proxyTerminals')} bind:on={s.proxyTerminals} />

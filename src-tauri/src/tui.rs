@@ -1595,6 +1595,8 @@ impl<R: Runtime> Core<R> {
         // Its plugin describes the launch (`terminal/launch`), which the core checks; switched off or uninstalled, the
         // interface does not start, and the window says why.
         let plugin = crate::plugins::harness::plugged_for(harness.id(), harness_name, true)?;
+        // Never out without the proxy's password when it must go through the proxy (SEC-14).
+        crate::proxysecret::refuse_without_password(&settings)?;
         let token = self.hooks.grant(id);
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();
         let env_names: Vec<String> = env

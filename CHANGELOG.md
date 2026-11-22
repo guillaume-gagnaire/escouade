@@ -6,6 +6,9 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : le jeton du serveur MCP ne passe plus sur une ligne de commande : Escouade écrit elle-même sa déclaration dans le `.claude.json` de Claude Code, comme pour les autres harness.
+- Sécurité : le mot de passe du proxy va au trousseau du système, plus dans les réglages (il y est déplacé au démarrage) ; sous Linux, le service de secrets du bureau garde les secrets quand il est là, et le dossier de données n’est lisible que de toi.
+- Sécurité : « Ne jamais sortir sans le proxy », allumé dès qu’un proxy est configuré : si le proxy ne répond pas, une mise à jour échoue en disant pourquoi, au lieu de partir en connexion directe.
 - Téléchargements : chaque release donne l’empreinte SHA-256 de ses installeurs (`SHA256SUMS.txt`), et la page Installation du site dit comment comparer celle de ton fichier avant de l’ouvrir.
 - Projets privés : un harness d’un plugin tiers n’y est plus lancé, car rien ne prouve qu’il tient leur clôture ; la conversation, le menu « Harness » et les réglages du projet le disent. Un agent tiers déjà là s’arrête, au repos aussitôt, au travail à la fin de son tour. Les harness d’Escouade gardent leur clôture.
 - Sécurité : « N’installer que des versions vérifiées » vaut aussi pour les dossiers et les dépôts git, acceptés seulement s’ils sont une version vérifiée du store ; le mode développement reste un geste à part. Il s’allume avec cette mise à jour si tu n’as aucun plugin tiers installé.

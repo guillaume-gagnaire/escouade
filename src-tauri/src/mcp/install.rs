@@ -1,12 +1,9 @@
 //! Escouade's server declared in every harness installed, account by account (« Les agents
-//! peuvent piloter Escouade », ESC-119). In Claude Code by `claude mcp add --scope user --transport
-//! http escouade <url> --header "Authorization: Bearer <token>"`, run as the account runs Claude
-//! Code (its `claude`, its `CLAUDE_CONFIG_DIR`), so that the entry lands in that account's
-//! `.claude.json`; in Codex, OpenCode and Copilot CLI, written by Escouade in the account's user
-//! config (`engine::userconfig`).
-//!
-//! The CLI only writes. What is declared is read from `.claude.json` itself: `claude mcp get`
-//! connects to the server, which is slow, and a failed connection says nothing of the entry.
+//! peuvent piloter Escouade », ESC-119), written by Escouade in the account's user config (`engine::userconfig`):
+//! Claude Code's `.claude.json` (where its `claude` and its `CLAUDE_CONFIG_DIR` lead), Codex's `config.toml`,
+//! OpenCode's `opencode.json`, Copilot CLI's `mcp-config.json`. No harness's program is run for it: `claude mcp add
+//! --header` put the token on a command line, which the other programs of the machine read in the list of the
+//! processes (SEC-07, ESC-595).
 
 use crate::accounts;
 use crate::core::Core;
@@ -25,7 +22,7 @@ const FOCUS_RUN_EVERY: Duration = Duration::from_secs(60);
 // How an account's program is run, the entry wanted, what a declaration did and where the server stands in an
 // account: `escouade-mcp`; the server's entry and how a token is hidden come from `escouade-engines` through it.
 pub use escouade_mcp::install::{
-    mask_bearer, run, wanted, Declaration, Declared, Entry, Standing, Target, COMMAND_TIMEOUT,
+    mask_bearer, wanted, Declaration, Declared, Entry, Standing, Target, COMMAND_TIMEOUT,
 };
 
 /// The entry the user config `config` of `engine` holds under the server's name, if it holds one.
@@ -144,13 +141,17 @@ impl<R: Runtime> Core<R> {
 
     /// The user config of an account of a harness Escouade writes it in itself: in its folder
     /// (`accounts::config_dir`; in unit tests, a Principal's is in the core's own data folder,
-    /// never the machine user's).
+    /// never the machine user's). Claude Code's is its `.claude.json`, where its `claude` goes by it (for the default
+    /// folder, in the home folder, not in `~/.claude`; for a `claude` of WSL, in its Linux home).
     pub(crate) fn user_config_file(
         &self,
         settings: &Settings,
         account: &Account,
     ) -> Option<PathBuf> {
         let user = harness(account).user_config()?;
+        if account.engine == EngineId::CLAUDE {
+            return Some(self.claude_json_of(settings, account));
+        }
         let dir = match accounts::own_dir(account) {
             None if cfg!(test) => self
                 .data
@@ -175,32 +176,8 @@ impl<R: Runtime> Core<R> {
                 timeout: COMMAND_TIMEOUT,
             });
         }
-        let program = accounts::program(account, settings).ok_or_else(|| {
-            anyhow!(crate::engine::missing_line(
-                account.engine,
-                crate::i18n::ui()
-            ))
-        })?;
-        let (env, home) = self.claude_app_env(account, settings);
-        let mut vars = [settings.claude_env(), accounts::launch_env(account)].concat();
-        if cfg!(test) {
-            // Tests may run inside a Claude Code session with a `CLAUDE_CONFIG_DIR` of its own, which
-            // Principal's processes would inherit: blank, the fake `claude` goes by its home alone.
-            if vars.iter().all(|(k, _)| k != "CLAUDE_CONFIG_DIR") {
-                vars.push(("CLAUDE_CONFIG_DIR".into(), String::new()));
-            }
-            vars.push((
-                "FAKE_CLAUDE_HOME".into(),
-                home.to_string_lossy().into_owned(),
-            ));
-        }
-        Ok(Target {
-            program,
-            env: vars,
-            cwd: self.data.root().to_path_buf(),
-            config: accounts::claude_json_with(account, env.as_deref(), &home),
-            timeout: COMMAND_TIMEOUT,
-        })
+        userconfig::none()?;
+        unreachable!("userconfig::none always refuses")
     }
 
     /// The `.claude.json` of a Claude Code account, as its `claude` goes by it.
@@ -217,23 +194,7 @@ impl<R: Runtime> Core<R> {
             let replace = current(engine, &file).is_some();
             return engine.manual_declaration(cfg!(windows), "", None, entry, replace);
         }
-        let replace = current(engine, &self.claude_json_of(settings, account)).is_some();
-        // A `claude` of WSL: the command for a terminal of its distribution, its folder there.
-        if let Some(wsl) = accounts::program(account, settings).and_then(|p| p.wsl().cloned()) {
-            let dir = accounts::own_dir(account).map(|d| wsl.linux_path(d).unwrap_or(d.into()));
-            return engine.manual_declaration(false, &wsl.path, dir.as_deref(), entry, replace);
-        }
-        let typed = [account.claude_path.trim(), settings.claude_path.trim()]
-            .into_iter()
-            .find(|p| !p.is_empty())
-            .unwrap_or("claude");
-        engine.manual_declaration(
-            cfg!(windows),
-            typed,
-            accounts::own_dir(account),
-            entry,
-            replace,
-        )
+        String::new()
     }
 
     /// The server declared in `account`: how that went.

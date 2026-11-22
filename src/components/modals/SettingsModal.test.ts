@@ -287,6 +287,41 @@ describe('SettingsModal', () => {
     expect(app.settings.proxyUrl).toBe('http://proxy:3128');
   });
 
+  it('« Ne jamais sortir sans le proxy » is on as soon as a proxy is set, and can be turned off (SEC-14)', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    render(SettingsModal);
+    await userEvent.click(tab('Avancé'));
+    const never = () => screen.getByRole('switch', { name: 'Ne jamais sortir sans le proxy' });
+    // No proxy: nothing to enforce, the switch off and grayed.
+    expect(never()).toHaveAttribute('aria-checked', 'false');
+    expect(never()).toBeDisabled();
+    expect(screen.getByText(/Sans proxy configuré, rien à imposer/)).toBeInTheDocument();
+    await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://127.0.0.1:9000');
+    // A proxy: on by default, the setting left unanswered (null) until the user turns it.
+    expect(never()).toHaveAttribute('aria-checked', 'true');
+    expect(never()).toBeEnabled();
+    expect(screen.getByText(/une mise à jour ou un téléchargement échoue avec sa raison/)).toBeInTheDocument();
+    await userEvent.click(never());
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({
+      proxyUrl: 'http://127.0.0.1:9000',
+      proxyNeverDirect: false,
+    });
+    expect(never()).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(never());
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.proxyNeverDirect).toBe(true);
+  });
+
+  it('says the proxy’s password is in the keychain when the address has a user’s name (SEC-10)', async () => {
+    fakeBackend({ save_settings: () => [] });
+    app.settings.proxyUrl = 'http://ada@127.0.0.1:9000';
+    render(SettingsModal);
+    await userEvent.click(tab('Avancé'));
+    expect(screen.getByDisplayValue('http://ada@127.0.0.1:9000')).toBeInTheDocument();
+    expect(screen.getByText(/Le mot de passe de l’adresse est gardé dans le trousseau du système/)).toBeInTheDocument();
+  });
+
   it('turns TLS verification off for a proxy with a certificate of its own', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     render(SettingsModal);

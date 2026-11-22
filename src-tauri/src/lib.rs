@@ -238,6 +238,9 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod proxysecret;
+#[cfg(test)]
+mod proxysecret_tests;
 mod prreview;
 mod prview;
 #[cfg(test)]

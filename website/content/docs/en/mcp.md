@@ -23,12 +23,12 @@ Escouade then starts the server and declares it in each active account of each h
 
 | Harness | File (Main account) | How |
 | --- | --- | --- |
-| Claude Code | `~/.claude.json` | `claude mcp add --scope user --transport http escouade <address> --header "Authorization: Bearer <token>"`, run as the account runs Claude Code (its program, its configuration folder) |
+| Claude Code | `~/.claude.json` | written by Escouade, `mcpServers.escouade`, as `claude mcp add --scope user --transport http` would write it |
 | Codex | `~/.codex/config.toml` | written by Escouade, `[mcp_servers.escouade]` |
 | OpenCode | `~/.config/opencode/opencode.json` (under `$XDG_CONFIG_HOME` when it is set; the `opencode.jsonc` there, if there is one) | written by Escouade, `mcp.escouade` |
 | Copilot CLI | `~/.copilot/mcp-config.json` | written by Escouade, `mcpServers.escouade` |
 
-Another account has the same file in its folder. For Codex, OpenCode and Copilot CLI, whose command line cannot declare a server with its header, Escouade writes the entry itself and keeps all the rest of the file as it was, comments, order and line endings included; a file linked to the Main account’s stays a link. The entries:
+Another account has the same file in its folder. Escouade writes the entry itself, without running any command: the token goes on no command line, where the other programs of the computer could read it in the list of processes. It keeps all the rest of the file as it was and keeps all the rest of the file as it was, comments, order and line endings included; a file linked to the Main account’s stays a link. The entries:
 
 ```toml
 # Codex
@@ -46,7 +46,7 @@ http_headers = { Authorization = "Bearer <token>" }
     "headers": { "Authorization": "Bearer <token>" }
   }
 }
-// Copilot CLI
+// Claude Code (.claude.json) and Copilot CLI
 "mcpServers": {
   "escouade": {
     "type": "http",
@@ -56,12 +56,12 @@ http_headers = { Authorization = "Bearer <token>" }
 }
 ```
 
-The token is written **in plain text** in each of these files, which the group’s note says.
+The token is written **in plain text** in each of these files, readable by your account alone: any program that reads them can drive Escouade, which the group’s note says. The entry does not name an environment variable instead of the token: it serves a harness launched outside Escouade, in your terminal, where no variable of Escouade’s is set. The processes Escouade launches itself get their token through a variable or a private file, never on their command line.
 
 Under the switch, the tab lists each declaration: the harness and the account (“Codex · Main account”), the file, and its state, “Declared” or “Not declared”.
 
 - An entry already up to date is left as it is. A different entry (another port, another token) is replaced. An account added or switched back on later gets the declaration, and so does a harness installed later: when you come back to Escouade’s window, or as soon as it shows the “Agents” page or the list of harnesses in Settings › Accounts and harnesses.
-- If it fails for an account, the tab says why (“Not declared for the Pro account: …”) and what to do by hand: for Claude Code, the command to run (“Run it by hand in PowerShell:”), written for PowerShell on Windows and for `sh` elsewhere; for the others, the entry to add to the file (“Add it by hand to …:”). The token is masked on screen; “Copy the command” or “Copy the entry” copies the real one. A file that is not valid TOML or JSON is left alone.
+- If it fails for an account, the tab says why (“Not declared for the Pro account: …”) and what to do by hand: the entry to add to the file (“Add it by hand to …:”), Claude Code included. The token is masked on screen; “Copy the entry” copies the real one. A file that is not valid TOML or JSON is left alone.
 - Turning the switch off changes the token at once (the old one opens nothing any more), then takes the entry out of each account of each harness: each file is back to what it was, byte for byte; a file Escouade had made is deleted. Agents already running lose the tools at once too (their tokens are forgotten): turned back on, the switch gives them back at their process’s next start (“Restart”). Removing an account takes its entry out.
 - If the server does not start, the tab says so (“The server did not start: …”).
 
@@ -261,7 +261,7 @@ Also refused, and logged: a request without a token (“Request refused: no toke
 ## Token and network
 
 - The server only listens on `127.0.0.1`, on a free port between 47000 and 47999, chosen at the first start and then kept (it only changes when its own is taken, and the declaration is then redone in every account).
-- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; when it refuses it, and on Linux, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in the config of each harness installed the switch declares it in (`~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.copilot/mcp-config.json` for “Main”). An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
+- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; on Linux, the desktop’s secret service when there is one; when the keychain refuses it, or there is none, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in the config of each harness installed the switch declares it in (`~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.copilot/mcp-config.json` for “Main”). An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
 - A request sent by a web page (`Origin` header) or addressed to a name other than `127.0.0.1` or `localhost` is refused, even with a token: a site you visit cannot call the server.
 - Another MCP client connects to `http://127.0.0.1:<port>/mcp` with the same header. The address and the token can be read in the account’s `.claude.json`, in the `escouade` entry, or in the command the tab offers when the declaration fails.
 
