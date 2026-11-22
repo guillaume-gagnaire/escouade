@@ -137,8 +137,9 @@ test.describe('a third party’s harness in a private project', () => {
     // Not offered by its menu « Harness », and refused by the core there.
     await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
     await expect(page.getByRole('menuitemradio', { name: /Faux ACP/ })).toHaveCount(0);
-    // Closed by its backdrop: the menu « Harness » keeps no focus for Escape once its items are read.
-    await page.locator('div.backdrop').click();
+    // Closed by its backdrop: the menu « Harness » keeps no focus for Escape once its items are read. Clicked in a corner,
+    // away from the menu: at its centre, the menu above it took the click (the CI's window, 2026-11-22).
+    await page.locator('div.backdrop').click({ position: { x: 4, y: 4 } });
     await expect(page.locator('div.backdrop')).toHaveCount(0);
     const projects = JSON.parse(fs.readFileSync(path.join(app.data, 'state.json'), 'utf8')).projects as { id: string; name: string }[];
     const projectId = projects.find((p) => p.name === 'demo-api')!.id;
