@@ -1090,10 +1090,13 @@ export async function openNewProject(page: Page, lang: Language = 'fr') {
   // first in the page, asks the core for the closed projects before it opens anything, and that answer came after the
   // 15 s below as a loaded machine started the app (ESC-522). Which one is known once the work area says it: empty until the
   // app is ready (App.svelte, `!app.ready`), then the panel without a harness until the harness' plugin is loaded
-  // (`enginesFound` empty, filled by `refreshEngines`), and only then its button; or the work area of a project.
+  // (`enginesFound` empty, filled by `refreshEngines`), and only then its button; or the work area of a project. A first
+  // installation without an account (ESC-128) shows « Aucun compte » there, with no button of its own (Welcome.svelte,
+  // `noAccount`): the rail's « + » then, once that panel says the app is ready (ESC-622).
   const panel = page.locator('.work').getByRole('button', { name: words.addProject });
   const project = page.locator('.work:not(:empty):not(:has(.welcome))');
-  await expect(panel.or(project).first()).toBeVisible({ timeout: 60_000 });
+  const noAccount = page.locator('.work .welcome #no-account');
+  await expect(panel.or(project).or(noAccount).first()).toBeVisible({ timeout: 60_000 });
   await ((await panel.count()) ? panel.first() : page.getByRole('button', { name: words.addProject }).first()).click();
   const item = page.getByRole('menuitem', { name: words.addProject });
   const dialog = page.getByRole('dialog');
