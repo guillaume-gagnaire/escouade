@@ -17,6 +17,7 @@
     proposedProfile,
     summaryOf,
     teamRefusals,
+    deviceRefusals,
   } from '../../lib/plugin-profiles';
   import { lockLine } from '../../lib/locks.svelte';
   import { textOf, type PluginView } from '../../lib/plugins';
@@ -144,6 +145,14 @@
         >{t('plugins.projectPage.pluginPage')}</button
       >
     </div>
+    {#each deviceRefusals(p) as r (r.key)}
+      <p class="refused" role="note">
+        <Icon name="warn" size={12} />{t('plugins.projectPage.deviceRefused', {
+          key: r.key,
+          why: t(`plugins.projectPage.teamWhy.${r.why}`),
+        })}
+      </p>
+    {/each}
     {#each teamRefusals(p, project) as r (`${r.part}:${r.key}`)}
       <p class="refused" role="note">
         <Icon name="warn" size={12} />{t('plugins.projectPage.teamRefused', {
@@ -200,7 +209,7 @@
             {#if f.description}<span>{textOf(f.description, lang)}</span>{/if}
             {#if locked}
               <span class="mark" data-shared="team" data-testid="plugin-team-lock"
-                ><Icon name="lock" size={12} />{lockLine({ kind: 'team', team: v.team ?? '' })}</span
+                ><Icon name="lock" size={12} />{lockLine(v.by ?? { kind: 'team', team: v.team ?? '' })}</span
               >
             {:else if !repo}
               <span class="mark" data-shared="machine"><Icon name="lock" size={12} />{t('plugins.projectPage.machine')}</span>

@@ -16,6 +16,8 @@
       <string>6C1D2F8E-3B4A-4E5F-9A0B-7C8D9E0F1A2B</string>
       <key>PayloadVersion</key>
       <integer>1</integer>
+      <key>accounts.reservation</key>
+      <string>required</string>
       <key>extensions.allowed</key>
       <dict>
         <key>*</key>
@@ -83,6 +85,14 @@
       <array>
         <string>com.example.unwanted</string>
       </array>
+      <key>plugins.projectSettings</key>
+      <dict>
+        <key>dev.acme.ci</key>
+        <dict>
+          <key>level</key>
+          <string>strict</string>
+        </dict>
+      </dict>
       <key>plugins.verifiedOnly</key>
       <true/>
       <key>projects.deniedFiles</key>

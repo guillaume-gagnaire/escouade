@@ -238,6 +238,9 @@ export default defineZone('accounts', {
         'The private projects {names} also go to this account: their sessions stay their own, the account’s sign-in and settings are common.',
     },
     reserveTo: 'Reserve to “{name}”',
+    reservationDenied: 'No account is reserved to a project: a private project goes on the shared accounts, its fence keeps its sessions.',
+    reservationRequired: 'Its agents go only on an account reserved to it alone, never on a shared account, even at the limit.',
+    reservationLast: 'Its last reserved account: it stays so while the policy imposes it.',
   },
 
   reserve: {

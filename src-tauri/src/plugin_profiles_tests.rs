@@ -580,6 +580,7 @@ fn team(defaults: Value, enforced: Value) -> profiles::TeamValues {
         team: "Acme".into(),
         defaults: map(defaults),
         enforced: map(enforced),
+        device: Map::new(),
     }
 }
 
@@ -751,4 +752,107 @@ async fn a_team_s_imposed_setting_is_read_by_the_plugin_and_nothing_goes_ahead_o
     h.core.apply_team_settings("acme", "Acme", None);
     let got = ask(h, "settings/get", json!({ "project": s.atlas })).await;
     assert_eq!(got["result"]["routes"], json!("10.20.0.0/16"));
+}
+
+// ── What the managed device imposes (rank 6, `plugins.projectSettings`, ESC-564) ─────────────────────────────────────
+
+#[test]
+fn the_managed_device_imposes_over_the_team_and_never_a_secret_nor_a_profile() {
+    let m = read(&tunnel(json!(null)));
+    let mut c = Choices::default();
+    c.project_settings
+        .insert("p1".into(), map(json!({ "routes": "10.0.0.0/8" })));
+    let a = profiles::Profile {
+        id: profiles::new_id(),
+        values: map(json!({ "name": "Client A" })),
+    };
+    c.profiles.insert("vpn".into(), vec![a.clone()]);
+    let mut t = team(json!({}), json!({ "routes": "172.16.0.0/12" }));
+    t.device =
+        map(json!({ "routes": "192.168.0.0/16", "token": "t0ken", "profile": a.id, "port": 1 }));
+    let got = profiles::settings_with_team(Some(&m), &c, Some("p1"), true, None, Some(&t));
+    // Rank 6 over the team's rank 5 and this machine's rank 4.
+    assert_eq!(got["routes"], json!("192.168.0.0/16"));
+    assert!(got.get("token").is_none(), "a secret never");
+    assert_eq!(got["profile"], Value::Null, "a profile never");
+    assert!(got.get("port").is_none(), "repo: false never");
+    // A value of the wrong type is ignored: the team's holds then.
+    t.device = map(json!({ "routes": 12 }));
+    let got = profiles::settings_with_team(Some(&m), &c, Some("p1"), true, None, Some(&t));
+    assert_eq!(got["routes"], json!("172.16.0.0/12"));
+    // Where the plugin is not on, nothing of it.
+    t.device = map(json!({ "routes": "192.168.0.0/16" }));
+    let off = profiles::settings_with_team(Some(&m), &c, Some("p1"), false, None, Some(&t));
+    assert_eq!(off["routes"], json!("0.0.0.0/0"));
+    // The lock said, for a value the plugin takes only.
+    let device = map(json!({ "routes": "192.168.0.0/16", "token": "x" }));
+    let why = crate::plugin_profiles::device_lock(&device, &m, "routes").unwrap();
+    assert!(
+        why.contains("stratégie de ce poste (plugins.projectSettings)"),
+        "{why}"
+    );
+    assert!(crate::plugin_profiles::device_lock(&device, &m, "token").is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_managed_device_imposes_a_setting_of_each_project_the_plugin_reads_and_nothing_goes_ahead(
+) {
+    let s = setup("profiles-device").await;
+    let h = &s.h;
+    h.core
+        .plugin_project_set(ID, &s.atlas, "routes", Some(json!("10.0.0.0/8")))
+        .unwrap();
+    let policy = |v: Value| crate::locks::Managed {
+        values: [(
+            escouade_policy::list::PLUGIN_PROJECT_SETTINGS.to_string(),
+            (v, "test".to_string()),
+        )]
+        .into(),
+        warnings: Vec::new(),
+    };
+    h.core.set_managed(policy(
+        json!({ ID: { "routes": "192.168.0.0/16", "token": "t0ken" } }),
+    ));
+    assert!(h.core.locks.read().warnings.is_empty());
+    // Every project where it is on reads the imposed value; the secret is never given.
+    for p in [&s.atlas, &s.portail] {
+        let got = ask(h, "settings/get", json!({ "project": p })).await;
+        assert_eq!(got["result"]["routes"], json!("192.168.0.0/16"), "{p}");
+        assert!(got["result"].get("token").is_none());
+    }
+    // Nothing goes ahead of it: neither this machine's value nor « Écrire dans .escouade.yml ».
+    let why = h
+        .core
+        .plugin_project_set(ID, &s.atlas, "routes", Some(json!("10.9.0.0/16")))
+        .unwrap_err();
+    assert!(why.contains("stratégie de ce poste"), "{why}");
+    let why = h
+        .core
+        .plugin_project_write(ID, &s.atlas, "routes")
+        .unwrap_err();
+    assert!(why.contains("stratégie de ce poste"), "{why}");
+    assert!(!journal(h).contains("192.168.0.0/16"));
+    // A team never imposes it by this key: said, and ignored.
+    h.core.set_team_policies(Some(crate::locks::TeamPolicies {
+        id: "acme".into(),
+        team: "Acme".into(),
+        enforced: [(
+            escouade_policy::list::PLUGIN_PROJECT_SETTINGS.to_string(),
+            json!({ ID: { "routes": "1.1.1.1/32" } }),
+        )]
+        .into(),
+        ..Default::default()
+    }));
+    assert!(h
+        .core
+        .locks
+        .read()
+        .warnings
+        .iter()
+        .any(|w| w.contains("plugins.projectSettings")));
+    h.core.set_team_policies(None);
+    // Removed: this machine's value is the project's again.
+    h.core.set_managed(crate::locks::Managed::default());
+    let got = ask(h, "settings/get", json!({ "project": s.atlas })).await;
+    assert_eq!(got["result"]["routes"], json!("10.0.0.0/8"));
 }

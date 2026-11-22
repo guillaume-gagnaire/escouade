@@ -170,6 +170,13 @@
         <decimal value="1" />
       </enabledValue>
     </policy>
+    <policy name="plugins_projectSettings" class="Both" displayName="$(string.plugins_projectSettings)" explainText="$(string.plugins_projectSettings_Explain)" presentation="$(presentation.plugins_projectSettings)" key="Software\Policies\Escouade">
+      <parentCategory ref="plugins" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <text id="plugins_projectSettings" valueName="plugins.projectSettings" required="true" maxLength="4096" />
+      </elements>
+    </policy>
     <policy name="secrets_fileFallback" class="Both" displayName="$(string.secrets_fileFallback)" explainText="$(string.secrets_fileFallback_Explain)" key="Software\Policies\Escouade" valueName="secrets.fileFallback">
       <parentCategory ref="plugins" />
       <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
@@ -190,6 +197,24 @@
       <enabledValue>
         <decimal value="1" />
       </enabledValue>
+    </policy>
+    <policy name="accounts_reservation" class="Both" displayName="$(string.accounts_reservation)" explainText="$(string.accounts_reservation_Explain)" presentation="$(presentation.accounts_reservation)" key="Software\Policies\Escouade">
+      <parentCategory ref="projects" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <enum id="accounts_reservation" valueName="accounts.reservation" required="true">
+          <item displayName="$(string.accounts_reservation_denied)">
+            <value>
+              <string>denied</string>
+            </value>
+          </item>
+          <item displayName="$(string.accounts_reservation_required)">
+            <value>
+              <string>required</string>
+            </value>
+          </item>
+        </enum>
+      </elements>
     </policy>
     <policy name="projects_maxParallel" class="Both" displayName="$(string.projects_maxParallel)" explainText="$(string.projects_maxParallel_Explain)" presentation="$(presentation.projects_maxParallel)" key="Software\Policies\Escouade">
       <parentCategory ref="projects" />

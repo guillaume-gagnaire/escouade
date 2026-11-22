@@ -22,7 +22,7 @@
 //! injectable (`Core::set_team_policies`) and empty in the app. The core refuses a write of what is locked, by the
 //! window, the MCP and the `.escouade.yml` (`Locks::check_settings`, `Locks::check_project`, `Locks::file_refusal`).
 
-use crate::model::{AgentMeta, Project, Settings};
+use crate::model::{Account, AgentMeta, EngineId, Project, Settings};
 use anyhow::{bail, Result};
 use serde::Serialize;
 use serde_json::Value;
@@ -33,12 +33,13 @@ use std::collections::BTreeMap;
 // generated from it. Some keys are only read and kept (their feature comes later): named by the tests alone.
 #[allow(unused_imports)]
 pub use escouade_policy::list::{
-    Def as LockKey, Form, Sort, AGGREGATE_VIEW, ALLOW_BYPASS, AUTHORITIES, AUTO_UPDATE, CHANNEL,
-    CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION, EXTENSIONS_ALLOWED,
-    FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MAX_PARALLEL, MCP_EXTERNAL, MODELS, MODES_KEY,
-    ONLY_THIS_SERVER, PERSONAL_SPACE, PHONE, PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY,
-    POLICIES as KEYS, PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS,
-    TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
+    Def as LockKey, Form, Sort, ACCOUNT_RESERVATION, AGGREGATE_VIEW, ALLOW_BYPASS, AUTHORITIES,
+    AUTO_UPDATE, CHANNEL, CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION,
+    EXTENSIONS_ALLOWED, FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MAX_PARALLEL, MCP_EXTERNAL, MODELS,
+    MODES_KEY, ONLY_THIS_SERVER, PERSONAL_SPACE, PHONE, PLUGINS_ALLOWED, PLUGINS_DENIED,
+    PLUGIN_ORIGINS_KEY, PLUGIN_PROJECT_SETTINGS, POLICIES as KEYS, PROXY_EXCLUSIONS, PROXY_URL,
+    REMOTE, REMOTE_API, SECRETS_FILE, SERVERS, TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY,
+    VERIFIED_ONLY, VOICE_ONLINE,
 };
 
 /// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
@@ -413,6 +414,12 @@ impl Locks {
                     let name = &team.team;
                     let by = LockedBy::Team { team: name.clone() };
                     match (k.sort, normalize(k, v)) {
+                        // A team imposes a plugin's setting by its own keys (`plugins.<id>.<key>`, ESC-532).
+                        _ if k.key == PLUGIN_PROJECT_SETTINGS => out.warnings.push(tr!(
+                            "« {key} » de l’équipe {name} ignoré : une équipe impose un réglage de plugin par plugins.<id>.<clé> de son fichier",
+                            "“{key}” of the team {name} ignored: a team imposes a plugin’s setting by plugins.<id>.<key> of its file",
+                            key = k.key
+                        )),
                         // §6.5: never imposed by a team, whatever it signs.
                         (Sort::Executable, _) => out.warnings.push(tr!(
                             "« {key} » de l’équipe {name} ignoré : une commande n’est jamais imposée par l’équipe",
@@ -932,6 +939,122 @@ impl Locks {
             .unwrap_or_else(|| tr!("par la stratégie de ce poste", "by this device’s policy"))
     }
 
+    // ---------- the settings of each project of a plugin (ESC-564) ----------
+
+    /// What the managed device imposes on the settings of each project of the plugin `id` (`plugins.projectSettings`),
+    /// by setting key: judged against its manifest where it is read (`profiles::team_refusal`).
+    pub fn plugin_project_values(&self, id: &str) -> serde_json::Map<String, Value> {
+        self.value(PLUGIN_PROJECT_SETTINGS)
+            .and_then(|v| v.get(id))
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    // ---------- the reservation of an account (ESC-564) ----------
+
+    /// `accounts.reservation` imposed to `denied`: no account is reserved to a project.
+    pub fn reservation_denied(&self) -> bool {
+        self.text(ACCOUNT_RESERVATION) == Some("denied")
+    }
+
+    /// `accounts.reservation` imposed to `required`: a private project goes only on an account reserved to it alone.
+    pub fn reservation_required(&self) -> bool {
+        self.text(ACCOUNT_RESERVATION) == Some("required")
+    }
+
+    /// « Réserver un compte à un projet est interdit par la stratégie de ce poste (accounts.reservation). »
+    pub fn reservation_denial(&self) -> String {
+        let by = self.by_of(ACCOUNT_RESERVATION);
+        tr!(
+            "Réserver un compte à un projet est interdit {by} (accounts.reservation) : un projet privé part sur les comptes partagés, sa clôture protège ses sessions.",
+            "Reserving an account to a project is not allowed {by} (accounts.reservation): a private project goes on the shared accounts, its fence keeps its sessions."
+        )
+    }
+
+    /// Who imposes `key`, said (« par la stratégie de ce poste »).
+    fn by_of(&self, key: &str) -> String {
+        self.by(key)
+            .map(LockedBy::by)
+            .unwrap_or_else(|| tr!("par la stratégie de ce poste", "by this device’s policy"))
+    }
+
+    /// Why an agent of `project` on `engine` may not go on the account `account` (none: the automatic choice, refused
+    /// when no active account of `engine` is reserved to it alone) while `accounts.reservation` is `required` and the
+    /// project private. None when it may.
+    pub fn reservation_refusal(
+        &self,
+        settings: &Settings,
+        project: &Project,
+        engine: EngineId,
+        account: Option<&str>,
+    ) -> Option<String> {
+        if !project.private || !self.reservation_required() {
+            return None;
+        }
+        let (by, name) = (self.by_of(ACCOUNT_RESERVATION), &project.name);
+        let rule = tr!(
+            "Le projet privé « {name} » ne part que sur un compte réservé à lui seul, imposé {by} (accounts.reservation)",
+            "The private project “{name}” goes only on an account reserved to it alone, imposed {by} (accounts.reservation)"
+        );
+        match account.filter(|id| !id.is_empty()) {
+            Some(id) => {
+                let a = settings.accounts.iter().find(|a| a.id == id)?;
+                (!crate::accounts::dedicated(a, &project.id)).then(|| {
+                    let account = crate::accounts::name_in(crate::i18n::ui(), a);
+                    tr!(
+                        "{rule} : « {account} » est partagé avec d’autres projets.",
+                        "{rule}: “{account}” is shared with other projects."
+                    )
+                })
+            }
+            None => {
+                let own = settings.accounts.iter().any(|a| {
+                    a.active && a.engine == engine && crate::accounts::dedicated(a, &project.id)
+                });
+                (!own).then(|| {
+                    let harness = crate::engine::by_name(engine);
+                    tr!(
+                        "{rule} : aucun compte {harness} actif ne lui est réservé. Réserve-lui un compte dans Réglages › Projets › Confidentialité.",
+                        "{rule}: no active {harness} account is reserved to it. Reserve it one in Settings › Projects › Privacy."
+                    )
+                })
+            }
+        }
+    }
+
+    /// A change of the accounts from `before` to `after` refused when it takes from a private project of `projects`
+    /// its last active account reserved to it alone while `accounts.reservation` is `required` (« Ne plus le
+    /// réserver », « Partager à nouveau », « Inactif »).
+    pub fn check_reservations(
+        &self,
+        projects: &[Project],
+        before: &[Account],
+        after: &[Account],
+    ) -> Result<()> {
+        if !self.reservation_required() {
+            return Ok(());
+        }
+        for p in projects.iter().filter(|p| p.private) {
+            let own = |list: &[Account]| {
+                list.iter()
+                    .filter(|a| a.active && crate::accounts::dedicated(a, &p.id))
+                    .map(|a| a.name.clone())
+                    .collect::<Vec<_>>()
+            };
+            let had = own(before);
+            if !had.is_empty() && own(after).is_empty() {
+                let (by, name) = (self.by_of(ACCOUNT_RESERVATION), &p.name);
+                let account = &had[0];
+                bail!(tr!(
+                    "Le projet privé « {name} » ne part que sur un compte réservé à lui seul, imposé {by} (accounts.reservation) : « {account} » est le dernier, il le reste.",
+                    "The private project “{name}” goes only on an account reserved to it alone, imposed {by} (accounts.reservation): “{account}” is the last one, it stays so."
+                ));
+            }
+        }
+        Ok(())
+    }
+
     // ---------- what they do to the settings ----------
 
     /// The app's settings brought within the locks; the keys that changed them.
@@ -968,6 +1091,13 @@ impl Locks {
         if self.on(FORCE_PRIVATE) && !s.private_projects {
             s.private_projects = true;
             changed.push(FORCE_PRIVATE);
+        }
+        // No account reserved to a project (ESC-564): each serves every project again.
+        if self.reservation_denied() && s.accounts.iter().any(|a| !a.projects.is_empty()) {
+            for a in &mut s.accounts {
+                a.projects.clear();
+            }
+            changed.push(ACCOUNT_RESERVATION);
         }
         if let Some(url) = self.text(PROXY_URL) {
             if s.proxy_url.trim() != url {
@@ -1075,6 +1205,7 @@ impl Locks {
                     .denial(MODES_KEY, &asked)
                     .unwrap_or_else(|| self.imposed(ALLOW_BYPASS)))
             }
+            Some(&ACCOUNT_RESERVATION) => bail!(self.reservation_denial()),
             Some(key) => bail!(self.imposed(key)),
         }
     }
@@ -1096,6 +1227,11 @@ impl Locks {
             p.private = true;
             changed.push(FORCE_PRIVATE);
         }
+        // A private project goes only on its own accounts, even at the limit (ESC-564).
+        if self.reservation_required() && p.shared_on_limit {
+            p.shared_on_limit = false;
+            changed.push(ACCOUNT_RESERVATION);
+        }
         if self.check_effort(&p.board.effort).is_err() {
             p.board.effort = self.effort_within(&p.board.effort);
             changed.push(MAX_EFFORT);
@@ -1116,6 +1252,9 @@ impl Locks {
         }
         if !after.private && self.on(FORCE_PRIVATE) {
             bail!(self.imposed(FORCE_PRIVATE));
+        }
+        if after.shared_on_limit && !before.shared_on_limit && self.reservation_required() {
+            bail!(self.imposed(ACCOUNT_RESERVATION));
         }
         if after.board.effort != before.board.effort {
             self.check_effort(&after.board.effort)?;
@@ -1402,6 +1541,33 @@ impl crate::core::Core {
         self.apply_locks();
     }
 
+    /// A change of the accounts judged by `accounts.reservation` (ESC-564), each private project by its own locks: what
+    /// `save_settings` goes through, after the app's locks.
+    pub(crate) fn check_reservations(&self, before: &[Account], after: &[Account]) -> Result<()> {
+        let projects = self.projects.read().clone();
+        for p in projects.iter().filter(|p| p.private) {
+            self.locks_for(&p.id)
+                .check_reservations(std::slice::from_ref(p), before, after)?;
+        }
+        Ok(())
+    }
+
+    /// Why an agent of the project `project_id` on `engine` may not go on `account` (none: the automatic choice) while
+    /// `accounts.reservation` is `required` (ESC-564): what a new agent, a ticket and every start go through.
+    pub(crate) fn reservation_refusal(
+        &self,
+        project_id: &str,
+        engine: EngineId,
+        account: Option<&str>,
+    ) -> Option<anyhow::Error> {
+        let project = self.project(project_id).ok()?;
+        let locks = self.locks_for(project_id);
+        let settings = self.settings.read().clone();
+        locks
+            .reservation_refusal(&settings, &project, engine, account)
+            .map(anyhow::Error::msg)
+    }
+
     /// The locks of a project: its team's when it is of one (ranks 5 and 6), the app's otherwise.
     pub(crate) fn locks_for(&self, project_id: &str) -> Locks {
         let team = self
@@ -1584,6 +1750,26 @@ impl crate::core::Core {
             })
             .map(|(id, _)| id.clone())
             .collect();
+        // What runs at rest on a shared account while its private project is to go only on its own (ESC-564): judged
+        // apart, never under an agent's lock.
+        let running: Vec<String> = self
+            .agents
+            .read()
+            .iter()
+            .filter(|(id, h)| {
+                let rt = h.lock();
+                !idle.contains(id)
+                    && !rt.meta.status.is_active()
+                    && (rt.proc.is_some() || rt.tui.is_some())
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        let mut idle = idle;
+        idle.extend(
+            running
+                .into_iter()
+                .filter(|id| self.run_refusal(id).is_some()),
+        );
         for id in idle {
             let c = self.clone();
             tauri::async_runtime::spawn(async move { c.settle_locked_mode(&id).await });

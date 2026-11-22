@@ -276,6 +276,11 @@ export default {
         'Les projets privés {names} partent aussi sur ce compte : leurs sessions restent à eux, la connexion et les réglages du compte sont communs.',
     },
     reserveTo: 'Réserver à « {name} »',
+    /** ESC-564 : ce qu'impose la stratégie accounts.reservation. */
+    reservationDenied:
+      'Aucun compte n’est réservé à un projet : un projet privé part sur les comptes partagés, sa clôture protège ses sessions.',
+    reservationRequired: 'Ses agents ne partent que sur un compte réservé à lui seul, jamais sur un compte partagé, même à la limite.',
+    reservationLast: 'Son dernier compte réservé : il le reste tant que la stratégie l’impose.',
   },
 
   /** ESC-556 : une réservation qui laisserait des projets ouverts sans compte actif de son harness, demandée d'abord. */

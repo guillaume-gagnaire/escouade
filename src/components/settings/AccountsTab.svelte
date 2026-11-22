@@ -63,6 +63,7 @@
   import NoPlugin from './NoPlugin.svelte';
   import Row from './Row.svelte';
   import ReserveConfirm from './ReserveConfirm.svelte';
+  import { lockLine, reservationLock } from '../../lib/locks.svelte';
   import Switch from './Switch.svelte';
   import Icon from '../Icon.svelte';
   import QuotaMeter from '../QuotaMeter.svelte';
@@ -240,6 +241,11 @@
   const activeOf = (engine: EngineId) => accounts.filter((a) => a.active && engineOfAccount(a) === engine).length;
   /** « Ordre des harness », once there are two harnesses to put in order. */
   const order = $derived(engineOrder());
+  /** No account reserved to a project, imposed (`accounts.reservation`, ESC-564): « Réservé aux projets » greyed. */
+  const reservationDenied = $derived.by(() => {
+    const r = reservationLock();
+    return r?.value === 'denied' ? r.by : null;
+  });
   /** Principal may be reserved like any account: the projects none serves then, told under the list. */
   const orphans = $derived(projectsWithoutAccount());
   const orphansText = $derived(
@@ -780,7 +786,7 @@
             {#if app.projects.length || closedOnes.length}
               <div class="l2" role="group" aria-label={t('accounts.tab.reserved')}>
                 <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
-                <span class="chips">
+                <span class="chips" inert={!!reservationDenied} aria-disabled={reservationDenied ? true : undefined}>
                   {#each app.projects as p (p.id)}
                     <!-- Nothing reserved is every project: all the squares are lit, the boxes stay unticked. -->
                     <label class="chip-t">
@@ -805,6 +811,11 @@
                   {/each}
                   {#if !reserved.length}<span class="hint">{t('accounts.tab.reservedAll')}</span>{/if}
                 </span>
+                {#if reservationDenied}
+                  <p class="lock" data-testid="reservation-lock">
+                    <Icon name="lock" size={13} /><span>{lockLine(reservationDenied)} · {t('accounts.private.reservationDenied')}</span>
+                  </p>
+                {/if}
               </div>
             {/if}
             <!-- A private project still goes to it, shared (ESC-141): reserved to that project alone, it is no longer. -->
@@ -816,7 +827,7 @@
                     names: fList(sharing.map((p) => t('accounts.tab.quoted', { name: p.name }))),
                   })}
                 </p>
-                {#if sharing.length === 1}
+                {#if sharing.length === 1 && !reservationDenied}
                   <button class="btn" use:tip={t('accounts.private.reserveTitle')} onclick={() => reserveTo(a, sharing[0].id)}>
                     {t('accounts.private.reserveTo', { name: sharing[0].name })}
                   </button>
@@ -974,6 +985,16 @@
 </Group>
 
 <style>
+  /* What `accounts.reservation` imposes (ESC-564): a padlock and who imposes it, as a locked row says it. */
+  .lock {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 550;
+  }
   /* An account's card (`.acct` of the 2.0 design): its name, its sign-in, its quota and its switch on the first line; its
      folder, executable, new agents, budget and projects under it, each after its key. */
   .list {

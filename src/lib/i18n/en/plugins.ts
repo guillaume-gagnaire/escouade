@@ -391,6 +391,7 @@ export default defineZone('plugins', {
     teamRecommended: 'Recommended by the team {team}',
     teamUse: 'Take the team {team}’s value again',
     teamRefused: 'The team {team} sets {key}: refused, {why}. This setting does not apply.',
+    deviceRefused: 'This device’s policy sets {key}: refused, {why}. This setting does not apply.',
     teamWhy: {
       unknown: 'the plugin declares no such setting',
       secret: 'it is a secret: it stays in each device’s keychain',

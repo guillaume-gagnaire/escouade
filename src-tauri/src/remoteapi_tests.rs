@@ -1835,3 +1835,80 @@ async fn a_client_at_a_distance_reads_and_switches_the_features_of_its_core() {
     assert!(!h.core.feature_on(Feature::Voice));
     h.stop();
 }
+
+// The reservation of an account (ESC-564): a client at a distance sees the same lock as the window, and the core refuses
+// it the gesture the policy forbids.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_client_at_a_distance_sees_the_reservation_locked_and_is_refused_the_gesture() {
+    use escouade_policy::list::ACCOUNT_RESERVATION;
+    let (_dir, h, api, token) = served("remote-reservation").await;
+    {
+        let mut s = h.core.settings.read().clone();
+        s.accounts.push(crate::model::Account {
+            id: "pro".into(),
+            name: "Pro".into(),
+            config_dir: _dir.join("claude-pro").to_string_lossy().into(),
+            ..Default::default()
+        });
+        h.core.save_settings(s).unwrap();
+    }
+    let policy = |v: &str| crate::locks::Managed {
+        values: [(
+            ACCOUNT_RESERVATION.to_string(),
+            (Value::String(v.into()), "test".to_string()),
+        )]
+        .into(),
+        warnings: Vec::new(),
+    };
+    h.core.set_managed(policy("denied"));
+    let mut c = Client::connect(&api, &token).await;
+    let initial = c.ok("subscribe", json!({"channel": "__CHANNEL__:1"})).await;
+    let lock = &initial["locks"]["locks"][ACCOUNT_RESERVATION];
+    assert_eq!(lock["value"], "denied", "{initial:#}");
+    assert_eq!(lock["by"]["kind"], "device", "{lock}");
+    // « Réserver Pro à ce projet » from the client: refused, said as the window says it.
+    let mut pro = initial["settings"]["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["id"] == "pro")
+        .unwrap()
+        .clone();
+    pro["projects"] = json!(["client"]);
+    match c.call("account_update", json!({ "account": pro })).await {
+        ToClient::Reply { error: Some(e), .. } => {
+            assert!(e.to_string().contains("accounts.reservation"), "{e:?}")
+        }
+        other => panic!("not refused: {other:?}"),
+    }
+    // Changed while it is connected: the client is told the new lock.
+    h.core.set_managed(policy("required"));
+    c.until("the lock told to the client", |m| {
+        channel_data(m, 1).is_some_and(|d| {
+            d["type"] == "locks" && d["locks"]["locks"][ACCOUNT_RESERVATION]["value"] == "required"
+        })
+    })
+    .await;
+    // A setting of each project of a plugin imposed by the device (ESC-564): the client is told it as the window is.
+    h.core.set_managed(crate::locks::Managed {
+        values: [(
+            escouade_policy::list::PLUGIN_PROJECT_SETTINGS.to_string(),
+            (
+                json!({ "dev.acme.ci": { "level": "strict" } }),
+                "test".to_string(),
+            ),
+        )]
+        .into(),
+        warnings: Vec::new(),
+    });
+    c.until("the plugin's setting locked at the client", |m| {
+        channel_data(m, 1).is_some_and(|d| {
+            let l = &d["locks"]["locks"][escouade_policy::list::PLUGIN_PROJECT_SETTINGS];
+            d["type"] == "locks"
+                && l["value"]["dev.acme.ci"]["level"] == "strict"
+                && l["by"]["kind"] == "device"
+        })
+    })
+    .await;
+    h.stop();
+}

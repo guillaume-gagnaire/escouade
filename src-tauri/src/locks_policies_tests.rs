@@ -434,3 +434,289 @@ fn without_the_personal_space_only_a_server_of_the_list_is_added() {
         .check_ssh_server("vps.example.net")
         .is_ok());
 }
+
+// ---------- the reservation of an account (ESC-564) ----------
+
+fn account(id: &str, projects: &[&str]) -> crate::model::Account {
+    crate::model::Account {
+        id: id.into(),
+        name: id.to_uppercase(),
+        projects: projects.iter().map(|p| (*p).to_owned()).collect(),
+        ..Default::default()
+    }
+}
+
+fn private(id: &str) -> Project {
+    let mut p = crate::core::blank_project("/p");
+    p.id = id.into();
+    p.name = id.into();
+    p.private = true;
+    p
+}
+
+#[test]
+fn a_reservation_denied_empties_each_accounts_list_and_a_save_that_reserves_is_refused() {
+    let locks = locks(&[(ACCOUNT_RESERVATION, json!("denied"))]);
+    assert!(locks.warnings.is_empty(), "{:?}", locks.warnings);
+    assert!(locks.reservation_denied() && !locks.reservation_required());
+    let mut s = Settings {
+        accounts: vec![account("main", &[]), account("pro", &["client"])],
+        ..Default::default()
+    };
+    assert_eq!(locks.clamp_settings(&mut s), [ACCOUNT_RESERVATION]);
+    assert!(s.accounts.iter().all(|a| a.projects.is_empty()));
+    assert!(locks.check_settings(&s).is_ok());
+    // « Réserver … à ce projet », a box of « Réservé aux projets »: refused, said with who imposes it.
+    let mut reserve = s.clone();
+    reserve.accounts[1].projects = vec!["client".into()];
+    let err = locks.check_settings(&reserve).unwrap_err().to_string();
+    assert_eq!(
+        err,
+        "Réserver un compte à un projet est interdit par la stratégie de ce poste (accounts.reservation) : un projet privé part sur les comptes partagés, sa clôture protège ses sessions."
+    );
+    // A private project goes on the shared accounts, as in 2.2.5: nothing refuses them.
+    let client = private("client");
+    assert!(locks
+        .reservation_refusal(&s, &client, crate::model::EngineId::CLAUDE, Some("main"))
+        .is_none());
+    // A value outside its choices locks nothing, and is said.
+    let odd = super::policies_tests::locks(&[(ACCOUNT_RESERVATION, json!("sometimes"))]);
+    assert!(odd.locks.is_empty());
+    assert_eq!(odd.warnings.len(), 1, "{:?}", odd.warnings);
+}
+
+#[test]
+fn a_reservation_required_keeps_a_private_project_on_its_own_accounts_and_its_last_one() {
+    let locks = locks(&[(ACCOUNT_RESERVATION, json!("required"))]);
+    let claude = crate::model::EngineId::CLAUDE;
+    let mut client = private("client");
+    client.shared_on_limit = true;
+    // « Comptes partagés à la limite », off and locked.
+    assert_eq!(locks.clamp_project(&mut client), [ACCOUNT_RESERVATION]);
+    assert!(!client.shared_on_limit);
+    let mut on = client.clone();
+    on.shared_on_limit = true;
+    let err = locks.check_project(&client, &on).unwrap_err().to_string();
+    assert!(err.contains("accounts.reservation"), "{err}");
+    // No account of its own: the automatic choice is refused, and says what to do.
+    let shared = Settings {
+        accounts: vec![account("main", &[]), account("pro", &["client", "site"])],
+        ..Default::default()
+    };
+    let err = locks
+        .reservation_refusal(&shared, &client, claude, None)
+        .unwrap();
+    assert_eq!(
+        err,
+        "Le projet privé « client » ne part que sur un compte réservé à lui seul, imposé par la stratégie de ce poste (accounts.reservation) : aucun compte Claude Code actif ne lui est réservé. Réserve-lui un compte dans Réglages › Projets › Confidentialité."
+    );
+    // One reserved to it alone: the automatic choice may, a shared account named is refused.
+    let own = Settings {
+        accounts: vec![account("main", &[]), account("pro", &["client"])],
+        ..Default::default()
+    };
+    assert!(locks
+        .reservation_refusal(&own, &client, claude, None)
+        .is_none());
+    assert!(locks
+        .reservation_refusal(&own, &client, claude, Some("pro"))
+        .is_none());
+    let err = locks
+        .reservation_refusal(&own, &client, claude, Some("main"))
+        .unwrap();
+    assert!(
+        err.ends_with(": « MAIN » est partagé avec d’autres projets."),
+        "{err}"
+    );
+    // A project that is not private goes where it goes.
+    let mut site = private("site");
+    site.private = false;
+    assert!(locks
+        .reservation_refusal(&shared, &site, claude, Some("main"))
+        .is_none());
+    // « Ne plus le réserver » on its last account, « Partager à nouveau » or « Inactif »: refused; with another left, free.
+    let projects = [client.clone()];
+    let unreserved = [account("main", &[]), account("pro", &[])];
+    let err = locks
+        .check_reservations(&projects, &own.accounts, &unreserved)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("« PRO » est le dernier"), "{err}");
+    let shared_again = [account("main", &[]), account("pro", &["client", "site"])];
+    assert!(locks
+        .check_reservations(&projects, &own.accounts, &shared_again)
+        .is_err());
+    let mut off = own.accounts.clone();
+    off[1].active = false;
+    assert!(locks
+        .check_reservations(&projects, &own.accounts, &off)
+        .is_err());
+    let two = [account("main", &["client"]), account("pro", &["client"])];
+    assert!(locks
+        .check_reservations(
+            &projects,
+            &two,
+            &[account("main", &[]), account("pro", &["client"])]
+        )
+        .is_ok());
+    // Without the policy, nothing of it.
+    let free = super::policies_tests::locks(&[]);
+    assert!(free
+        .check_reservations(&projects, &own.accounts, &unreserved)
+        .is_ok());
+    assert!(free
+        .reservation_refusal(&shared, &client, claude, None)
+        .is_none());
+}
+
+#[test]
+fn a_team_imposes_the_reservation_as_the_device_does_and_the_device_wins() {
+    let acme = team(&[(ACCOUNT_RESERVATION, json!("required"))]);
+    let by_team = Locks::compute(KEYS, Some(&acme), &Managed::default());
+    assert!(by_team.warnings.is_empty(), "{:?}", by_team.warnings);
+    assert!(by_team.reservation_required());
+    let s = Settings {
+        accounts: vec![account("main", &[])],
+        ..Default::default()
+    };
+    let err = by_team
+        .reservation_refusal(&s, &private("client"), crate::model::EngineId::CLAUDE, None)
+        .unwrap();
+    assert!(
+        err.contains("imposé par l’équipe Acme (accounts.reservation)"),
+        "{err}"
+    );
+    // The key is the app's, not a project's: it holds for the app while the device is in the team.
+    assert!(!project_scoped(ACCOUNT_RESERVATION));
+    // The device's value wins over the team's.
+    let both = Locks::compute(
+        KEYS,
+        Some(&acme),
+        &managed(&[(ACCOUNT_RESERVATION, json!("denied"))]),
+    );
+    assert!(both.reservation_denied());
+}
+
+#[tokio::test]
+async fn a_private_project_goes_only_on_its_own_account_while_the_policy_requires_it() {
+    let h = harness("locks-reserve");
+    let (p, _) = h.project(false).await;
+    let mut project = h.core.project(&p.id).unwrap();
+    project.private = true;
+    project.shared_on_limit = true;
+    h.core.update_project(project).unwrap();
+    // Claude Code turned on for it by the user (ESC-404).
+    crate::harness_scope_tests::turn_on_every_harness(&h, &p.id);
+    let pro = crate::core_tests::second_account(&h);
+    h.core
+        .set_managed(managed(&[(ACCOUNT_RESERVATION, json!("required"))]));
+    // Brought within at once: « Comptes partagés à la limite » off.
+    assert!(!h.core.project(&p.id).unwrap().shared_on_limit);
+    // No account of its own yet: no agent starts, said.
+    let err = h
+        .core
+        .create_agent(&p.id, None)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("aucun compte Claude Code actif ne lui est réservé"),
+        "{err}"
+    );
+    // « Réserver Pro à ce projet »: its agents go there, never on Principal.
+    let mut reserved = pro.clone();
+    reserved.projects = vec![p.id.clone()];
+    h.core.update_claude_account(reserved.clone()).unwrap();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    assert_eq!(a.account, "pro");
+    let principal = crate::accounts::principal().id;
+    let err = h
+        .core
+        .create_agent_with(
+            &p.id,
+            crate::core::AgentOptions {
+                account: Some(principal.clone()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("est partagé avec d’autres projets"), "{err}");
+    // « Ne plus le réserver » on its last account: refused, and the account stays its own.
+    let mut back = reserved.clone();
+    back.projects.clear();
+    let err = h.core.update_claude_account(back).unwrap_err().to_string();
+    assert!(err.contains("est le dernier, il le reste"), "{err}");
+    assert_eq!(
+        h.core
+            .settings
+            .read()
+            .accounts
+            .iter()
+            .find(|a| a.id == "pro")
+            .unwrap()
+            .projects,
+        std::slice::from_ref(&p.id)
+    );
+    // Turned to `denied`: the reservations go, a private project goes on the shared accounts again.
+    h.core
+        .set_managed(managed(&[(ACCOUNT_RESERVATION, json!("denied"))]));
+    assert!(h
+        .core
+        .settings
+        .read()
+        .accounts
+        .iter()
+        .all(|a| a.projects.is_empty()));
+    let err = h
+        .core
+        .update_claude_account(reserved)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("interdit par la stratégie de ce poste"),
+        "{err}"
+    );
+    assert!(h.core.create_agent(&p.id, None).await.is_ok());
+}
+
+#[tokio::test]
+async fn an_agent_of_a_private_project_on_a_shared_account_stops_between_two_turns_when_the_policy_comes(
+) {
+    let h = harness("locks-reserve-live");
+    let (p, _) = h.project(false).await;
+    let mut project = h.core.project(&p.id).unwrap();
+    project.private = true;
+    h.core.update_project(project).unwrap();
+    crate::harness_scope_tests::turn_on_every_harness(&h, &p.id);
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&a, "Bonjour").await;
+    assert!(
+        h.core.agent(&a).unwrap().lock().proc.is_some(),
+        "its process kept"
+    );
+    h.core
+        .set_managed(managed(&[(ACCOUNT_RESERVATION, json!("required"))]));
+    h.wait("the agent to say it stops", |h| {
+        h.items(&a).iter().any(|i| i["kind"] == "notice")
+    })
+    .await;
+    assert!(h.core.agent(&a).unwrap().lock().proc.is_none());
+    let said = h.items(&a);
+    assert!(
+        said.iter().any(|i| i["kind"] == "notice"
+            && i["text"].as_str().unwrap_or_default().contains(
+                "est partagé avec d’autres projets. L’agent s’arrête à la fin de son tour."
+            )),
+        "{said:?}"
+    );
+    // Its next message is refused, with the same reason.
+    let err = h
+        .core
+        .send_message(&a, "encore".into(), vec![])
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("accounts.reservation"), "{err}");
+}

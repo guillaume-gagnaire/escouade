@@ -738,4 +738,20 @@ mod tests {
         assert_eq!(policies.get("future.setting").unwrap().value, json!(1));
         assert!(matches!(policies.warnings(), [Warning::UnknownKey { .. }]));
     }
+
+    #[test]
+    fn the_reservation_of_an_account_is_read_from_the_registry_as_its_choice() {
+        // ESC-564: a REG_SZ of the ADMX's enum, under HKLM.
+        let machine = values(&[("accounts.reservation", sz("required"))]);
+        let policies = from_nodes(Some(&machine), None, &crate::known_keys());
+        let read = policies.get("accounts.reservation").unwrap();
+        assert_eq!(read.source, Source::Machine);
+        let def = crate::list::def("accounts.reservation").unwrap();
+        assert_eq!(
+            crate::list::convert(def, &read.value),
+            Ok(json!("required"))
+        );
+        assert!(crate::list::convert(def, &json!("sometimes")).is_err());
+        assert!(policies.warnings().is_empty());
+    }
 }

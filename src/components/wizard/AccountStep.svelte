@@ -13,6 +13,7 @@
   import Checks from './Checks.svelte';
   import ReserveConfirm from '../settings/ReserveConfirm.svelte';
   import type { Account, Project } from '../../lib/types';
+  import { reservationLock } from '../../lib/locks.svelte';
 
   // « Compte et commit »: the harness and the account the project's agents go to, whether it is private and the accounts
   // reserved to it then, who writes the commits, Remote Control.
@@ -33,6 +34,8 @@
   const missing = $derived(!hasAccount(engine));
   let adding = $state(false);
 
+  /** What `accounts.reservation` imposes (ESC-564): no account reserved, or its own accounts alone. */
+  const reservation = $derived(reservationLock());
   /** Another harness: the account preferred and the accounts to reserve were the other one's. */
   function setEngine(e: EngineId) {
     if ((form.config.engine ?? 'claude') === e) return;
@@ -134,7 +137,14 @@
     <Switch label={t('settings.project.private')} bind:on={form.config.private} />
   </Row>
   {#if form.config.private}
-    <Row label={t('wizard.account.reserved')} desc={t('wizard.account.reservedDesc', { harness: engineName(engine) })} wide>
+    <Row
+      label={t('wizard.account.reserved')}
+      desc={reservation?.value === 'denied'
+        ? t('accounts.private.reservationDenied')
+        : t('wizard.account.reservedDesc', { harness: engineName(engine) })}
+      wide
+      lockedBy={reservation?.value === 'denied' ? reservation.by : null}
+    >
       {#if reservable.length}
         <ul class="accounts" aria-label={t('wizard.account.reserved')}>
           {#each reservable as a (a.id)}
@@ -156,7 +166,11 @@
         <p class="none">{t('wizard.account.reservedNone', { harness: engineName(engine) })}</p>
       {/if}
     </Row>
-    <Row label={t('accounts.private.sharedOnLimit')} desc={t('accounts.private.sharedOnLimitDesc')}>
+    <Row
+      label={t('accounts.private.sharedOnLimit')}
+      desc={t('accounts.private.sharedOnLimitDesc')}
+      lockedBy={reservation?.value === 'required' ? reservation.by : null}
+    >
       <Switch label={t('accounts.private.sharedOnLimit')} bind:on={form.config.sharedOnLimit} />
     </Row>
   {/if}

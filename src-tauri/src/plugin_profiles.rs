@@ -69,7 +69,30 @@ pub fn team_lock(
         })
 }
 
+/// Why a setting of each project cannot be set on this machine: the managed device imposes it (`plugins.projectSettings`,
+/// rank 6, ESC-564), with a value the plugin takes. None: it may be.
+pub fn device_lock(
+    device: &serde_json::Map<String, Value>,
+    m: &Manifest,
+    key: &str,
+) -> Option<String> {
+    device
+        .get(key)
+        .is_some_and(|v| profiles::team_refusal(m, key, v).is_none())
+        .then(|| {
+            tr!(
+                "Ce réglage est imposé par la stratégie de ce poste (plugins.projectSettings) : il ne se change pas sur ce poste.",
+                "This setting is imposed by this device’s policy (plugins.projectSettings): it cannot be changed on this device."
+            )
+        })
+}
+
 impl Core {
+    /// `device_lock` for the plugin `id`, as the policies of this device now are.
+    fn device_lock_of(&self, m: &Manifest, id: &str, key: &str) -> Option<String> {
+        device_lock(&self.locks.read().plugin_project_values(id), m, key)
+    }
+
     fn plugin_manifest(&self, id: &str) -> Result<Manifest, String> {
         self.plugins
             .get(id, crate::i18n::ui())
@@ -301,7 +324,11 @@ impl Core {
         let decl = self.project_setting(id, key)?;
         let p = self.project(project).map_err(|e| e.to_string())?;
         if value.is_some() {
-            if let Some(why) = team_lock(&p, &self.plugin_manifest(id)?, id, key) {
+            let m = self.plugin_manifest(id)?;
+            if let Some(why) = self
+                .device_lock_of(&m, id, key)
+                .or_else(|| team_lock(&p, &m, id, key))
+            {
                 return Err(why);
             }
         }
@@ -357,11 +384,11 @@ impl Core {
         key: &str,
     ) -> Result<crate::model::Project, String> {
         let decl = self.project_setting(id, key)?;
-        if let Some(why) = self
-            .project(project)
-            .ok()
-            .and_then(|p| team_lock(&p, &self.plugin_manifest(id).ok()?, id, key))
-        {
+        if let Some(why) = self.project(project).ok().and_then(|p| {
+            let m = self.plugin_manifest(id).ok()?;
+            self.device_lock_of(&m, id, key)
+                .or_else(|| team_lock(&p, &m, id, key))
+        }) {
             return Err(why);
         }
         if !profiles::from_repo(&decl) {

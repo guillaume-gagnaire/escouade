@@ -763,6 +763,9 @@ impl Core {
         if id.is_empty() {
             return Ok(id);
         }
+        if let Some(refusal) = self.reservation_refusal(&project.id, engine, Some(&id)) {
+            return Err(refusal);
+        }
         match accounts::ticket_refusal(&self.settings.read(), project, engine, &id) {
             Some(refusal) => Err(refusal),
             None => Ok(id),
@@ -1646,11 +1649,21 @@ impl Core {
             let name = project.map_or_else(|| project_id.to_string(), |p| p.name);
             return Err(accounts::no_account(project_id, &name, engine));
         }
+        // A private project with no account of its own while a policy requires one (ESC-564).
+        if let Some(e) = self.reservation_refusal(project_id, engine, None) {
+            return Err(e);
+        }
         let settings = self.project_accounts(&all, engine, project_id);
         let preferred =
             project.and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        self.pick_account_for(&settings, preferred.as_deref(), family)
-            .ok_or_else(|| accounts::no_account_of(engine))
+        let id = self
+            .pick_account_for(&settings, preferred.as_deref(), family)
+            .ok_or_else(|| accounts::no_account_of(engine))?;
+        // Its preferred account shared with other projects is not one of its own either.
+        match self.reservation_refusal(project_id, engine, Some(&id)) {
+            Some(e) => Err(e),
+            None => Ok(id),
+        }
     }
 
     /// What a new agent of the project on `engine` goes with unless it says its own: the defaults
@@ -2242,7 +2255,8 @@ impl Core {
         if signed_out {
             return Some(Lost::SignedOut);
         }
-        accounts::ticket_refusal(&settings, project, engine, id)
+        self.reservation_refusal(&project.id, engine, Some(id))
+            .or_else(|| accounts::ticket_refusal(&settings, project, engine, id))
             .map(|e| Lost::Refused(e.to_string()))
     }
 

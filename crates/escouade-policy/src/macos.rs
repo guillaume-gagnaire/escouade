@@ -476,4 +476,23 @@ mod tests {
         assert_eq!(policies.get("future.policy").unwrap().value, json!(1));
         assert!(matches!(policies.warnings(), [Warning::UnknownKey { .. }]));
     }
+
+    #[test]
+    fn the_reservation_of_an_account_is_read_from_a_forced_profile() {
+        // ESC-564: a string forced by the MDM's profile; one only written by `defaults write` is no policy.
+        let fake = Fake(HashMap::from([(
+            "accounts.reservation",
+            (PrefValue::String("denied".into()), true),
+        )]));
+        let policies = read_preferences(&fake, &crate::known_keys());
+        let read = policies.get("accounts.reservation").unwrap();
+        assert_eq!(read.source, Source::Profile);
+        let def = crate::list::def("accounts.reservation").unwrap();
+        assert_eq!(crate::list::convert(def, &read.value), Ok(json!("denied")));
+        let unforced = Fake(HashMap::from([(
+            "accounts.reservation",
+            (PrefValue::String("denied".into()), false),
+        )]));
+        assert!(read_preferences(&unforced, &crate::known_keys()).is_empty());
+    }
 }

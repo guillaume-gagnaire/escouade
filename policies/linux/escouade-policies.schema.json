@@ -4,6 +4,15 @@
   "additionalProperties": false,
   "description": "A file of /etc/escouade/policies/*.json (root:root, 0644). Generated from crates/escouade-policy/src/list.rs: do not edit.",
   "properties": {
+    "accounts.reservation": {
+      "description": "denied: no account is reserved to a project; a private project goes on the shared accounts, its fence keeps its sessions. required: a private project goes only on an account reserved to it alone, never on a shared account, even at the limit. denied: each account’s “Reserved to projects” emptied and grayed, “Reserve … to this project” and “Add a reserved account…” refused. required: “Shared accounts at the limit” off and grayed, “Stop reserving it” refused on the last account reserved to a private project, an agent of a private project refused on a shared account.",
+      "enum": [
+        "denied",
+        "required"
+      ],
+      "title": "Account reservation",
+      "type": "string"
+    },
     "extensions.allowed": {
       "additionalProperties": {
         "items": {
@@ -166,6 +175,17 @@
       },
       "title": "Denied plugins",
       "type": "array"
+    },
+    "plugins.projectSettings": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "description": "A JSON object: its keys are plugin ids, its values the settings of project scope this device imposes in each project where the plugin is on (dev.acme.ci, level: strict). A simple setting only (text, number, boolean, choice): never a secret, a profile, a value imported nor a setting its author keeps off the files; such a setting is ignored and said. A team imposes its own by its file (plugins.id.key). Projects › Plugins, the setting grayed with the padlock and Imposed by this device’s policy; the plugin reads the imposed value.",
+      "title": "Imposed plugin settings in each project",
+      "type": "object"
     },
     "plugins.verifiedOnly": {
       "description": "A version of the store without the “Verified by Escouade” seal is refused, at an install as at an update. Only the value true (1) is imposed. Plugins › “Install verified versions only”, on and grayed.",

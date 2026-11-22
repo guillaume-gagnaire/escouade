@@ -89,6 +89,12 @@ Key: plugins.denied (list). Sort: restrict.</string>
 On the device: Plugins › “Install verified versions only”, on and grayed.
 
 Key: plugins.verifiedOnly (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="plugins_projectSettings">Imposed plugin settings in each project</string>
+      <string id="plugins_projectSettings_Explain">A JSON object: its keys are plugin ids, its values the settings of project scope this device imposes in each project where the plugin is on (dev.acme.ci, level: strict). A simple setting only (text, number, boolean, choice): never a secret, a profile, a value imported nor a setting its author keeps off the files; such a setting is ignored and said. A team imposes its own by its file (plugins.id.key).
+
+On the device: Projects › Plugins, the setting grayed with the padlock and Imposed by this device’s policy; the plugin reads the imposed value.
+
+Key: plugins.projectSettings (JSON). Sort: value.</string>
       <string id="secrets_fileFallback">Deny the file of the plugins’ secrets</string>
       <string id="secrets_fileFallback_Explain">On a device without a system keychain, a plugin’s secret can no longer be kept in a file readable by its user alone: only the keychain keeps it. A file already chosen is no longer read; its secrets move to the keychain or are erased with it. Only the value false (0) is imposed.
 
@@ -107,6 +113,14 @@ Key: extensions.allowed (JSON). Sort: restrict.</string>
 On the device: “New projects are private” and each project’s “Private project”, on and grayed.
 
 Key: projects.forcePrivate (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="accounts_reservation">Account reservation</string>
+      <string id="accounts_reservation_Explain">denied: no account is reserved to a project; a private project goes on the shared accounts, its fence keeps its sessions. required: a private project goes only on an account reserved to it alone, never on a shared account, even at the limit.
+
+On the device: denied: each account’s “Reserved to projects” emptied and grayed, “Reserve … to this project” and “Add a reserved account…” refused. required: “Shared accounts at the limit” off and grayed, “Stop reserving it” refused on the last account reserved to a private project, an agent of a private project refused on a shared account.
+
+Key: accounts.reservation (string, denied, required). Sort: restrict.</string>
+      <string id="accounts_reservation_denied">denied</string>
+      <string id="accounts_reservation_required">required</string>
       <string id="projects_maxParallel">Ceiling of the tickets in parallel</string>
       <string id="projects_maxParallel_Explain">The most tickets “In progress” at once in each project’s Kanban, from 1 to 64. It lowers the machine’s bound (16 on a desktop, 64 on a server), never raises it; between this device and the team, the lower one holds.
 
@@ -326,10 +340,18 @@ Key: features.voice (Boolean, true, false). Sort: value.</string>
       <presentation id="plugins_denied">
         <listBox refId="plugins_denied">Denied plugins</listBox>
       </presentation>
+      <presentation id="plugins_projectSettings">
+        <textBox refId="plugins_projectSettings">
+          <label>Imposed plugin settings in each project</label>
+        </textBox>
+      </presentation>
       <presentation id="extensions_allowed">
         <textBox refId="extensions_allowed">
           <label>Editor’s allowed extensions</label>
         </textBox>
+      </presentation>
+      <presentation id="accounts_reservation">
+        <dropdownList refId="accounts_reservation" noSort="true">Account reservation</dropdownList>
       </presentation>
       <presentation id="projects_maxParallel">
         <decimalTextBox refId="projects_maxParallel">Ceiling of the tickets in parallel</decimalTextBox>

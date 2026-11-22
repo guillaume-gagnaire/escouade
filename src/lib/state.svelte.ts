@@ -409,6 +409,11 @@ class AppState {
   onImposed(f: (s: Settings) => void): void {
     this.#imposed.push(f);
   }
+  /** Called at each `locks` event with the projects as the core brought them within the policies (ESC-564). */
+  #locked: ((projects: Project[]) => void)[] = [];
+  onLocked(f: (projects: Project[]) => void): void {
+    this.#locked.push(f);
+  }
   /** Settings the core changed by itself (a policy, « Activer » of a proposal at the right moment): taken, and by an open form. */
   takeSettings(s: Settings): void {
     this.settings = withPosteVoice(s);
@@ -1120,6 +1125,8 @@ class AppState {
         setLocks(e.locks, e.teams);
         // A policy changed while the app runs brought the settings within it (TS-12): taken, and by an open form.
         if (e.settings) this.takeSettings(e.settings);
+        // The projects it brought within it came before (`project` events): an open form takes them.
+        for (const f of this.#locked) f($state.snapshot(this.projects) as Project[]);
         break;
       case 'mcpStatus':
       case 'mcpDeclared':

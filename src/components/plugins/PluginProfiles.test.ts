@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
+import { setLocks } from '../../lib/locks.svelte';
 import {
   kindsOf,
   projectFields,
@@ -400,5 +401,55 @@ describe('what the project’s team sets on a plugin', () => {
     });
     await userEvent.click(local);
     expect(ipc.called('plugin_project_set').at(-1)!.args).toMatchObject({ key: 'routes', clear: true });
+  });
+});
+
+// What the managed device imposes on the settings of each project (rank 6, `plugins.projectSettings`, ESC-564): ahead of
+// the team's, greyed with « Imposé par la stratégie de ce poste »; never a secret, a profile or what is kept off the files.
+describe('what the managed device imposes on a plugin’s setting of each project', () => {
+  const device = (values: Record<string, unknown>) =>
+    setLocks({
+      locks: {
+        'plugins.projectSettings': {
+          key: 'plugins.projectSettings',
+          value: { 'dev.exemple.tunnel': values },
+          by: { kind: 'device', source: 'HKLM' },
+          bounds: [],
+        },
+      },
+      rows: {},
+      warnings: [],
+    });
+
+  it('ranks it over the team and this machine, never a value the plugin refuses', () => {
+    const routes = projectFields(tunnel().manifest).find((f) => f.key === 'routes')!;
+    const local = tunnel({ projectSettings: { atlas: { routes: '10.0.0.0/8' } } });
+    device({ routes: '192.168.0.0/16' });
+    expect(projectValue(local, teamAtlas({}, {}, { routes: '172.16.0.0/12' }), routes)).toMatchObject({
+      value: '192.168.0.0/16',
+      source: 'enforced',
+      by: { kind: 'device' },
+    });
+    device({ routes: 12 });
+    expect(projectValue(local, atlas(), routes)).toMatchObject({ source: 'local', value: '10.0.0.0/8' });
+    setLocks(undefined);
+    expect(projectValue(local, atlas(), routes)).toMatchObject({ source: 'local' });
+  });
+
+  it('shows the setting greyed with its padlock and « Imposé par la stratégie de ce poste », and what it refuses', async () => {
+    device({ routes: '192.168.0.0/16', port: 4444 });
+    resetApp({ projects: [atlas({ routes: '10.20.0.0/16' })] });
+    const view = tunnel({ projectSettings: { atlas: { profile: A, routes: '10.0.0.0/8' } } });
+    fakeBackend({ plugins_list: () => [view], plugin_project_set: () => view });
+    render(SettingsModal, { page: 'projectPlugins', projectId: 'atlas' });
+    const group = await screen.findByRole('region', { name: 'Tunnel' });
+    const routes = within(group).getByRole('group', { name: 'Routes par le tunnel' });
+    expect(within(routes).getByTestId('plugin-team-lock')).toHaveTextContent('Imposé par la stratégie de ce poste');
+    const input = within(routes).getByLabelText('Routes par le tunnel') as HTMLInputElement;
+    expect(input.value).toBe('192.168.0.0/16');
+    expect(input).toBeDisabled();
+    expect(within(routes).queryByRole('button', { name: 'Écrire dans .escouade.yml' })).toBeNull();
+    expect(group).toHaveTextContent('La stratégie de ce poste règle port : refusé, son auteur le garde hors des fichiers partagés.');
+    setLocks(undefined);
   });
 });

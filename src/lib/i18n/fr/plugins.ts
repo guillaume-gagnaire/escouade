@@ -391,6 +391,8 @@ export default {
     teamRecommended: 'Recommandé par l’équipe {team}',
     teamUse: 'Reprendre la valeur de l’équipe {team}',
     teamRefused: 'L’équipe {team} règle {key} : refusé, {why}. Ce réglage ne s’applique pas.',
+    /** ESC-564 : un réglage que la stratégie de ce poste (plugins.projectSettings) ne peut pas imposer. */
+    deviceRefused: 'La stratégie de ce poste règle {key} : refusé, {why}. Ce réglage ne s’applique pas.',
     teamWhy: {
       unknown: 'le plugin ne déclare pas ce réglage',
       secret: 'c’est un secret : il reste dans le trousseau de chaque poste',

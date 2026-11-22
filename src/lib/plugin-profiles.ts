@@ -1,7 +1,19 @@
 import { invoke } from './transport';
 import type { FieldSetting } from './plugin-fields';
 import { activeIn, textOf, type Manifest, type ManifestText, type PluginView, type SecretState } from './plugins';
-import type { Project } from './types';
+import type { LockedBy, Project } from './types';
+import { keyLockedBy, locks } from './locks.svelte';
+
+/** The key of the policies by which the managed device imposes the settings of each project of plugins (ESC-564). */
+export const PLUGIN_PROJECT_SETTINGS = 'plugins.projectSettings';
+
+/** What the managed device imposes on the settings of each project of the plugin `id` (rank 6), and who; null when nothing. */
+export function deviceValues(id: string): { by: LockedBy; values: Record<string, unknown> } | null {
+  const by = keyLockedBy(PLUGIN_PROJECT_SETTINGS, locks.current);
+  const all = locks.current.locks[PLUGIN_PROJECT_SETTINGS]?.value as Record<string, unknown> | null | undefined;
+  const values = all && typeof all === 'object' ? all[id] : undefined;
+  return by && values && typeof values === 'object' ? { by, values: values as Record<string, unknown> } : null;
+}
 
 // A plugin's profiles and its settings of each project (ESC-530, issues #38 and #39; docs/PLUGINS-CONTRACT-STUDY.md §2.2 and
 // §3.1). A profile (`contributes.profiles`) is made, changed and deleted on the plugin's page; each project chooses its own in
@@ -145,6 +157,8 @@ export interface ProjectValue {
   recommended?: unknown;
   /** The team's name, when it imposes or recommends the value. */
   team?: string;
+  /** Who imposes it, when it is imposed: the managed device (rank 6) or the team (rank 5). */
+  by?: LockedBy;
 }
 
 /** Why a team's key of a plugin is refused (`profiles::team_refusal`). */
@@ -184,6 +198,16 @@ export function teamValues(
   return Object.keys(defaults).length || Object.keys(enforced).length ? { team: t.team, defaults, enforced } : null;
 }
 
+/** The keys the managed device sets on the plugin that will not apply, with why (ESC-564). */
+export function deviceRefusals(p: PluginView): { key: string; why: TeamRefusal }[] {
+  const d = deviceValues(p.id);
+  if (!d) return [];
+  return Object.entries(d.values).flatMap(([key, v]) => {
+    const why = teamRefusal(p, key, v);
+    return why ? [{ key, why }] : [];
+  });
+}
+
 /** The keys the project's team sets on the plugin that will not apply, with why. */
 export function teamRefusals(p: PluginView, project: Project): { key: string; part: 'defaults' | 'enforced'; why: TeamRefusal }[] {
   const t = teamValues(project, p.id);
@@ -208,7 +232,12 @@ export function projectValue(p: PluginView, project: Project, f: FieldSetting): 
   const recommended = byTeam('defaults');
   const fromFile = fromRepo(f) && f.key in file && fits(f, file[f.key]) ? file[f.key] : undefined;
   const extra = { ...(recommended !== undefined ? { recommended } : {}), ...(team ? { team: team.team } : {}) };
-  if (enforced !== undefined) return { value: enforced, source: 'enforced', file: fromFile, ...extra };
+  // Rank 6, the managed device's (ESC-564), judged as the team's: never a secret, a profile, a value imported.
+  const device = deviceValues(p.id);
+  if (device && f.key in device.values && teamRefusal(p, f.key, device.values[f.key]) === null)
+    return { value: device.values[f.key], source: 'enforced', file: fromFile, ...extra, by: device.by };
+  if (enforced !== undefined)
+    return { value: enforced, source: 'enforced', file: fromFile, ...extra, by: { kind: 'team', team: team?.team ?? '' } };
   if (f.key in local && fits(f, local[f.key])) return { value: local[f.key], source: 'local', file: fromFile, ...extra };
   if (fromFile !== undefined) return { value: fromFile, source: 'file', file: fromFile, ...extra };
   if (recommended !== undefined) return { value: recommended, source: 'recommended', ...extra };

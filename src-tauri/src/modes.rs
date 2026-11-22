@@ -325,7 +325,12 @@ impl Core {
         let locks = self.locks_for(&project_id);
         let bypass = self.bypass_allowed();
         let meta = h.lock().meta.clone();
-        refusal_of(&meta, &locks, bypass, crate::i18n::ui())
+        refusal_of(&meta, &locks, bypass, crate::i18n::ui()).or_else(|| {
+            // On a shared account while its private project is to go only on its own (ESC-564).
+            let account = crate::accounts::get(&self.settings.read(), &meta.account).id;
+            self.reservation_refusal(&project_id, meta.engine, Some(&account))
+                .map(|e| e.to_string())
+        })
     }
 
     /// What runs of the agent `id` — its process, its interface (the terminal view, the one kept up for Remote Control)
@@ -375,14 +380,27 @@ impl Core {
     /// its project (TS-11), and the mode its harness runs it in judged (`settle_mode`). Refused, what still runs of it
     /// (a process started ahead, an interface kept up) stops, said with the same reason (ESC-497).
     pub(crate) fn judge_start(self: &Arc<Self>, id: &str) -> Result<()> {
-        let (engine, project_id) = {
+        let (engine, project_id, account) = {
             let h = self.agent(id)?;
             let rt = h.lock();
-            (rt.meta.engine, rt.meta.project_id.clone())
+            (
+                rt.meta.engine,
+                rt.meta.project_id.clone(),
+                rt.meta.account.clone(),
+            )
         };
+        // Its account: one of its own for a private project while a policy requires it (ESC-564). Principal when it
+        // names none.
+        let account = crate::accounts::get(&self.settings.read(), &account).id;
         let judged = self
             .locks_for(&project_id)
             .check_engine(engine.as_str())
+            .and_then(
+                |()| match self.reservation_refusal(&project_id, engine, Some(&account)) {
+                    Some(e) => Err(e),
+                    None => Ok(()),
+                },
+            )
             .and_then(|()| self.settle_mode(id));
         if let Err(e) = &judged {
             self.stop_out_of_rule(id, &stopped(crate::i18n::ui(), &e.to_string()));

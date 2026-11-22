@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: a managed device or a team can forbid reserving an account to a project, or require a private project to go only on an account reserved to it alone. The refused gesture is greyed under a padlock, in the window as from a remote client, and an agent on a shared account stops between two turns. A managed device can also impose a plugin’s simple setting in each project, never a secret nor a profile.
 - Kanban: “In parallel” now goes up to 16 tickets at once on your computer, and up to 64 on a server. Beyond 6, a warning says what your machine holds and that the quota goes faster, refusing nothing; a managed device or a team can set a ceiling.
 - Choose your features, one per screen, with a screenshot of the app and a big “Turn on” switch: at the first launch right after your first agent, and at the update, where what you already use stays on. “Skip” keeps only the essentials, and Settings › Features shows them again.
 - Team server: the team’s private store of plugins. An administrator makes the team’s key and its namespace on their computer, each version is checked on the computer of who proposes it and again on that of who signs it, and each member installs it themselves from the Plugins view, “Acme · private”; the team can also withdraw a version.

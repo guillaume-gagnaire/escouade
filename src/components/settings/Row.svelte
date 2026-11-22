@@ -10,7 +10,7 @@
   // lines under what it does (« Trouvé : … », « Claude Code seulement : … »); `error`, why what is typed is not saved
   // (ESC-380), under it with `errorId` for the field's aria-describedby. `row`: its id in `SETTINGS_ROWS`; when the policies
   // of this device or a team impose its value (its `lockedBy`, TS-11), its control is greyed and inert, with a padlock
-  // and who imposes it.
+  // and who imposes it. `lockedBy`: who imposes it when no row of the register says it (`accounts.reservation`, ESC-564).
   let {
     label,
     hint = '',
@@ -22,6 +22,7 @@
     error = '',
     errorId,
     row,
+    lockedBy = null,
     children,
   }: {
     label: string;
@@ -34,9 +35,10 @@
     error?: string;
     errorId?: string;
     row?: string;
+    lockedBy?: import('../../lib/types').LockedBy | null;
     children?: Snippet;
   } = $props();
-  const lock = $derived(row ? (SETTINGS_ROWS.find((r) => r.id === row)?.lockedBy ?? null) : null);
+  const lock = $derived(lockedBy ?? (row ? (SETTINGS_ROWS.find((r) => r.id === row)?.lockedBy ?? null) : null));
 </script>
 
 <div class="sr" class:wide class:locked={!!lock}>

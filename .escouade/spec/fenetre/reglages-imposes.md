@@ -1,9 +1,9 @@
 ---
 title: "Réglages imposés"
 subject: "fenetre"
-sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-550","ESC-567","ESC-620"]
-decisions: [169,175,183,189,198,197,204,201,218,281]
+sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)","src-tauri/src/locks.rs (accounts.reservation, ESC-564)"]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-550","ESC-564","ESC-567","ESC-620"]
+decisions: [169,175,183,189,198,197,204,201,218,282,281]
 compared: null
 ---
 
@@ -165,6 +165,40 @@ Reversée dans la 2.3, la 2.2.3 ajoute deux choses que les stratégies du poste 
 - Ce sont des clés de l'app : une équipe les impose tant que le poste en est, comme la voix ou les mises à jour.
 - Une seule catégorie de plus dans l'ADMX, les profils, le schéma de `/etc` et la page du site : « Fonctionnalités ».
 
+## La réservation d'un compte (ESC-564)
+
+La 2.2.5 apporte la réservation d'un compte à un projet privé, et « Partager à nouveau » (voir *Comptes*, « Un compte réservé au projet privé »). Une clé de la liste unique l'encadre, du poste comme de l'équipe.
+
+| Clé | Sorte | Ce qu'elle verrouille ou refuse |
+| --- | --- | --- |
+| `accounts.reservation` | restreindre, un choix : `denied` ou `required` | `denied` : aucun compte n'est réservé à un projet. `required` : un projet privé ne part que sur un compte réservé à lui seul. |
+
+- **Pourquoi une clé et deux valeurs** : les deux cas s'excluent. Deux interrupteurs laisseraient imposer les deux à la fois, et un projet privé ne pourrait alors plus rien démarrer. Une valeur hors de `denied` et `required` est ignorée et dite. Une équipe l'impose comme le poste ; entre les deux, la valeur du poste gagne. C'est une clé de l'app, pas d'un projet : une équipe l'impose tant que le poste est dans l'équipe.
+- **`denied`** : au démarrage comme à chaud, la liste « Réservé aux projets » de chaque compte est vidée et réécrite : chaque compte sert de nouveau tous les projets. Un projet privé part sur les comptes partagés, et sa clôture protège ses sessions, comme la 2.2.5 le fait déjà. Le cœur refuse tout enregistrement qui réserve un compte : la fenêtre, l'assistant « Nouveau projet », l'API distante. Le refus dit « Réserver un compte à un projet est interdit par la stratégie de ce poste (accounts.reservation) : un projet privé part sur les comptes partagés, sa clôture protège ses sessions. »
+  - Dans Réglages › Comptes et harness, « Réservé aux projets » de chaque compte est grisé et inerte, avec le cadenas et « Imposé par … · Aucun compte n'est réservé à un projet : … ». « Réserver à « client » » n'est plus offert.
+  - Dans la Confidentialité d'un projet privé, le même cadenas est en tête des comptes, et « Réserver … à ce projet » et « Ajouter un compte réservé… » sont grisés.
+  - Dans l'assistant, « Comptes réservés à ce projet » porte le cadenas.
+- **`required`** : un projet privé ne part que sur un compte réservé à lui seul, jamais sur un compte partagé, même à la limite.
+  - « Comptes partagés à la limite » est éteint et verrouillé (cadenas, « Imposé par … ») dans la Confidentialité et dans l'assistant. Le cœur refuse de le rallumer.
+  - Un nouvel agent, un ticket, `create_agent` (y compris avec un compte nommé), un compte mis sur un ticket et **chaque démarrage** d'un agent passent par le même jugement. Sans compte à lui : « Le projet privé « client » ne part que sur un compte réservé à lui seul, imposé par la stratégie de ce poste (accounts.reservation) : aucun compte Claude Code actif ne lui est réservé. Réserve-lui un compte dans Réglages › Projets › Confidentialité. » Sur un compte partagé : « … : « Principal » est partagé avec d'autres projets. » Le compte préféré du projet ne passe pas outre.
+  - Un agent qui tourne sur un compte partagé quand la stratégie arrive s'arrête entre deux tours, comme un agent d'un harness devenu interdit. La raison est suivie de « L'agent s'arrête à la fin de son tour. », et son message suivant est refusé.
+  - « Ne plus le réserver », « Partager à nouveau », une case décochée ou « Inactif » qui retirerait à un projet privé son **dernier** compte actif réservé à lui seul sont refusés : « … : « Pro » est le dernier, il le reste. » Le bouton « Ne plus le réserver » du dernier compte est grisé, sa bulle dit pourquoi. Avec un autre compte à lui, c'est libre.
+  - Un projet rouvert avec son historique est ramené dans la stratégie dès qu'il revient.
+- **Un client distant** voit les mêmes verrous : l'état initial et chaque événement `locks` les portent, et le cœur lui refuse les mêmes gestes, avec la même raison.
+- Les e2e `policies` (`denied`, posée au démarrage) et `policies-live` (`required`, posée puis retirée pendant que l'app tourne) l'essaient.
+
+## Les réglages d'un plugin dans chaque projet (ESC-564)
+
+La 2.2.5 apporte les réglages d'un plugin dans chaque projet et le profil choisi par projet (ESC-530). L'équipe impose déjà un réglage simple par `plugins.<id>.<clé>` de son fichier (ESC-532, rang 5). Le poste géré le fait par une clé de la liste unique :
+
+| Clé | Sorte | Ce qu'elle verrouille ou refuse |
+| --- | --- | --- |
+| `plugins.projectSettings` | valeur, JSON `{"<id du plugin>": {"<clé>": valeur}}` | dans chaque projet où le plugin est actif, le réglage imposé (rang 6, devant celui de l'équipe) : grisé dans Projets › Plugins, avec le cadenas et « Imposé par la stratégie de ce poste » ; le plugin lit la valeur imposée (`settings/get`) |
+
+- **Un réglage simple seulement**, jugé comme celui de l'équipe : texte, nombre, booléen, choix, sur plusieurs lignes aussi. **Jamais** un secret, un profil, une valeur importée, un réglage que son auteur garde hors des fichiers (`"repo": false`), un réglage de l'app ni une valeur du mauvais type. Un tel réglage ne s'applique pas, et la page Plugins du projet le dit : « La stratégie de ce poste règle token : refusé, c'est un secret : … ».
+- Rien ne passe devant : ni la valeur de cette machine, ni « Écrire dans .escouade.yml ». Le cœur refuse les deux (« Ce réglage est imposé par la stratégie de ce poste (plugins.projectSettings) : il ne se change pas sur ce poste. »), à la fenêtre comme à un client distant. Oublier la valeur de cette machine reste possible.
+- **Le poste géré seulement** : une équipe qui écrit `plugins.projectSettings` dans son `enforced` est ignorée, et c'est dit. Elle impose ses réglages de plugin par `plugins.<id>.<clé>`.
+- Changée à chaud, la page suit en quelques secondes ; retirée, le réglage est de nouveau libre. L'e2e `policies-live` l'essaie : un plugin de test, sa stratégie posée puis retirée pendant que l'app tourne.
 ## Le téléphone (ESC-567)
 
 | Clé | Sorte | Ce qu'elle verrouille ou refuse |

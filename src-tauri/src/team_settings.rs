@@ -153,6 +153,7 @@ pub fn plugin_values(
         team: team.team.clone(),
         defaults: pick(&team.defaults),
         enforced: pick(&team.enforced),
+        device: Map::new(),
     }
 }
 

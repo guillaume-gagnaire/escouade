@@ -490,6 +490,24 @@ class SettingsForm {
     for (const [k, v] of Object.entries(changed)) draft[k] = structuredClone(v);
   }
 
+  /**
+   * A project brought within the policies while the app runs (TS-12, ESC-564): its fields a policy may set (private, shared
+   * accounts at the limit, Remote Control) taken by its draft and its base, as `takeImposed` takes the settings; the others
+   * stay as typed. Without it, the open form would save the old value again and be refused.
+   */
+  takeImposedProject(p: Project) {
+    const b = this.#base.projects[p.id] as unknown as Record<string, unknown> | undefined;
+    const d = this.projects[p.id] as unknown as Record<string, unknown> | undefined;
+    if (!b || !d) return;
+    const fresh = draftOf(p) as unknown as Record<string, unknown>;
+    const changed: Record<string, unknown> = {};
+    for (const k of ['private', 'sharedOnLimit', 'remoteControl'])
+      if (JSON.stringify(fresh[k]) !== JSON.stringify(b[k])) changed[k] = fresh[k];
+    if (!Object.keys(changed).length) return;
+    this.#rebase(p.id, (x) => ({ ...x, ...changed }));
+    for (const [k, v] of Object.entries(changed)) d[k] = structuredClone(v);
+  }
+
   /** « Ton nom » filled with git's name (ESC-243) when it has none and was not emptied on purpose. */
   prefillName(git: string | null) {
     const base = this.#base.settings;
@@ -784,3 +802,4 @@ class SettingsForm {
 
 export const settingsForm = new SettingsForm();
 app.onImposed((s) => settingsForm.takeImposed(s));
+app.onLocked((projects) => projects.forEach((p) => settingsForm.takeImposedProject(p)));

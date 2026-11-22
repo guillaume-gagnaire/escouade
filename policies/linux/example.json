@@ -1,4 +1,5 @@
 {
+  "accounts.reservation": "required",
   "extensions.allowed": {
     "*": false,
     "dracula-theme": true,
@@ -42,6 +43,11 @@
   "plugins.denied": [
     "com.example.unwanted"
   ],
+  "plugins.projectSettings": {
+    "dev.acme.ci": {
+      "level": "strict"
+    }
+  },
   "plugins.verifiedOnly": true,
   "projects.deniedFiles": [
     "**/.env",

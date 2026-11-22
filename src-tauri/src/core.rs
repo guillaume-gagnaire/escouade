@@ -3089,6 +3089,9 @@ impl Core {
         accounts::check(&s)?;
         // What the policies lock is not the window's to change (TS-11): refused, and said.
         self.locks.read().check_settings(&s)?;
+        // A private project keeps its last account reserved to it alone while a policy requires one (ESC-564).
+        let before_accounts = self.settings.read().accounts.clone();
+        self.check_reservations(&before_accounts, &s.accounts)?;
         accounts::keep_remote_refusals(&self.settings.read().accounts, &mut s.accounts);
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
@@ -7234,6 +7237,10 @@ impl Core {
             Some(a) if a.engine == meta.engine => a.id.clone(),
             _ => self.account_for_new(project_id, meta.engine)?,
         };
+        // A private project on an account shared with others, while a policy requires its own (ESC-564).
+        if let Some(e) = self.reservation_refusal(project_id, meta.engine, Some(&meta.account)) {
+            return Err(e);
+        }
         // Its model, effort and mode: those asked for, else its account's (ESC-128), from the default mode imposed when
         // one is (its team's for a project of a team, ESC-497).
         let defaults = accounts::defaults_with(
@@ -9515,6 +9522,8 @@ impl Core {
             .iter()
             .map(|a| a.id.clone())
             .collect();
+        // Taken apart, never under the projects' lock: a history brought back within the policies (ESC-564).
+        let locks = self.locks.read().clone();
         let (project, back) = {
             let mut projects = self.projects.write();
             // The history's project is open by now (the window asked twice): it is the answer,
@@ -9525,10 +9534,11 @@ impl Core {
             if let Some(open) = open {
                 return Ok((open.clone(), true));
             }
-            let project = match &closed {
+            let mut project = match &closed {
                 Some(c) => c.reopened(&path, name, color, worktree_per_agent, &accounts),
                 None => fresh,
             };
+            locks.clamp_project(&mut project);
             projects.push(project.clone());
             (project, closed)
         };
@@ -11823,9 +11833,16 @@ impl crate::plugins::events::Place for Core {
 
     fn project_team(&self, id: &str, plugin: &str) -> Option<crate::plugins::profiles::TeamValues> {
         let p = self.project(id).ok()?;
-        let team = p.shared.team_plugins.as_ref()?;
-        let values = crate::team_settings::plugin_values(team, plugin);
-        (!values.defaults.is_empty() || !values.enforced.is_empty()).then_some(values)
+        let mut values = p
+            .shared
+            .team_plugins
+            .as_ref()
+            .map(|team| crate::team_settings::plugin_values(team, plugin))
+            .unwrap_or_default();
+        // Rank 6, the managed device's (ESC-564), for every project.
+        values.device = self.locks.read().plugin_project_values(plugin);
+        (!values.defaults.is_empty() || !values.enforced.is_empty() || !values.device.is_empty())
+            .then_some(values)
     }
 }
 

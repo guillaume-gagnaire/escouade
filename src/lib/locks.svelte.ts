@@ -42,6 +42,17 @@ export function keyLockedBy(key: string, l: Locks = locks.current): LockedBy | n
   return lock?.by && lock.value !== null && lock.value !== undefined ? lock.by : null;
 }
 
+/** The key of the reservation of an account (ESC-564): `denied`, no account reserved to a project; `required`, a private
+ *  project goes only on an account reserved to it alone. */
+export const RESERVATION_KEY = 'accounts.reservation';
+
+/** What `accounts.reservation` imposes, and who; null when nothing does. */
+export function reservationLock(l: Locks = locks.current): { value: 'denied' | 'required'; by: LockedBy } | null {
+  const by = keyLockedBy(RESERVATION_KEY, l);
+  const value = l.locks[RESERVATION_KEY]?.value;
+  return by && (value === 'denied' || value === 'required') ? { value, by } : null;
+}
+
 /** « Imposé par la stratégie de ce poste », « Imposé par l'équipe Acme ». */
 export function lockLine(by: LockedBy): string {
   return by.kind === 'team' ? t('settings.locks.byTeam', { team: by.team }) : t('settings.locks.byDevice');

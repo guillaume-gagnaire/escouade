@@ -516,4 +516,27 @@ mod tests {
             ["10.json", "9.json", "a.json", "b.json"]
         );
     }
+
+    #[test]
+    fn the_reservation_of_an_account_is_read_from_a_file_of_etc() {
+        // ESC-564: the JSON schema's string, the last file winning.
+        let files = [
+            (
+                PathBuf::from("/etc/escouade/policies/10.json"),
+                r#"{"accounts.reservation": "denied"}"#.to_owned(),
+            ),
+            (
+                PathBuf::from("/etc/escouade/policies/20.json"),
+                r#"{"accounts.reservation": "required"}"#.to_owned(),
+            ),
+        ];
+        let policies = from_contents(&files, &crate::known_keys());
+        let read = policies.get("accounts.reservation").unwrap();
+        assert_eq!(read.value, json!("required"));
+        assert_eq!(
+            read.source,
+            Source::File("/etc/escouade/policies/20.json".into())
+        );
+        assert!(policies.warnings().is_empty(), "{:?}", policies.warnings());
+    }
 }

@@ -89,6 +89,12 @@ Clé : plugins.denied (liste). Sorte : restreindre.</string>
 Sur le poste : Plugins › « N’installer que des versions vérifiées », allumé et grisé.
 
 Clé : plugins.verifiedOnly (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="plugins_projectSettings">Réglages imposés des plugins dans chaque projet</string>
+      <string id="plugins_projectSettings_Explain">Un objet JSON : ses clés sont des ids de plugins, ses valeurs les réglages de portée project que ce poste impose dans chaque projet où le plugin est actif (dev.acme.ci, level : strict). Un réglage simple seulement (texte, nombre, booléen, choix) : jamais un secret, un profil, une valeur importée ni un réglage que son auteur garde hors des fichiers ; un tel réglage est ignoré et dit. Une équipe impose les siens par son fichier (plugins.id.clé).
+
+Sur le poste : Projets › Plugins, le réglage grisé avec le cadenas et Imposé par la stratégie de ce poste ; le plugin lit la valeur imposée.
+
+Clé : plugins.projectSettings (JSON). Sorte : valeur.</string>
       <string id="secrets_fileFallback">Interdire le fichier des secrets des plugins</string>
       <string id="secrets_fileFallback_Explain">Sur un poste sans trousseau système, le secret d’un plugin ne peut plus être gardé dans un fichier lisible de son seul utilisateur : il n’est gardé que par le trousseau. Un fichier déjà choisi n’est plus lu ; ses secrets se déplacent vers le trousseau ou s’effacent avec lui. Seule la valeur false (0) s’impose.
 
@@ -107,6 +113,14 @@ Clé : extensions.allowed (JSON). Sorte : restreindre.</string>
 Sur le poste : « Nouveaux projets privés » et « Projet privé » de chaque projet, allumés et grisés.
 
 Clé : projects.forcePrivate (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="accounts_reservation">Réservation des comptes</string>
+      <string id="accounts_reservation_Explain">denied : aucun compte n’est réservé à un projet ; un projet privé part sur les comptes partagés, sa clôture protège ses sessions. required : un projet privé ne part que sur un compte réservé à lui seul, jamais sur un compte partagé, même à la limite.
+
+Sur le poste : denied : « Réservé aux projets » de chaque compte vidé et grisé, « Réserver … à ce projet » et « Ajouter un compte réservé… » refusés. required : « Comptes partagés à la limite » éteint et grisé, « Ne plus le réserver » refusé sur le dernier compte réservé d’un projet privé, un agent de projet privé refusé sur un compte partagé.
+
+Clé : accounts.reservation (chaîne, denied, required). Sorte : restreindre.</string>
+      <string id="accounts_reservation_denied">denied</string>
+      <string id="accounts_reservation_required">required</string>
       <string id="projects_maxParallel">Plafond des tickets en parallèle</string>
       <string id="projects_maxParallel_Explain">Le plus de tickets « En cours » à la fois dans le Kanban de chaque projet, de 1 à 64. Il abaisse la borne de la machine (16 sur un poste, 64 sur un serveur), jamais ne la relève ; entre ce poste et l’équipe, le plus bas tient.
 
@@ -326,10 +340,18 @@ Clé : features.voice (booléen, true, false). Sorte : valeur.</string>
       <presentation id="plugins_denied">
         <listBox refId="plugins_denied">Plugins interdits</listBox>
       </presentation>
+      <presentation id="plugins_projectSettings">
+        <textBox refId="plugins_projectSettings">
+          <label>Réglages imposés des plugins dans chaque projet</label>
+        </textBox>
+      </presentation>
       <presentation id="extensions_allowed">
         <textBox refId="extensions_allowed">
           <label>Extensions permises de l’éditeur</label>
         </textBox>
+      </presentation>
+      <presentation id="accounts_reservation">
+        <dropdownList refId="accounts_reservation" noSort="true">Réservation des comptes</dropdownList>
       </presentation>
       <presentation id="projects_maxParallel">
         <decimalTextBox refId="projects_maxParallel">Plafond des tickets en parallèle</decimalTextBox>

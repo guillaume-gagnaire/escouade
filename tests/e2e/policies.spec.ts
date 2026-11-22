@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 test.use({
   appEnv: async ({}, use) => {
@@ -19,6 +19,8 @@ test.use({
         'permissions.allowBypass': false,
         'updates.channel': 'stable',
         'permissions.modes': ['plan', 'default'],
+        // No account reserved to a project (ESC-564).
+        'accounts.reservation': 'denied',
         'some.future': 1,
       }),
     );
@@ -26,7 +28,16 @@ test.use({
     fs.rmSync(dir, { recursive: true, force: true });
   },
   // Ticked before the start: the policy brings it back within them.
-  preStart: { run: () => ({ betaUpdates: true, agentMode: 'auto' }) },
+  // The machine's account reserved to a project before the start: the policy empties its list.
+  preStart: {
+    run: () => ({
+      betaUpdates: true,
+      agentMode: 'auto',
+      accounts: [
+        { id: 'principal', name: 'Principal', engine: 'claude', configDir: '', claudePath: '', active: true, projects: ['ailleurs'] },
+      ],
+    }),
+  },
 });
 
 test('a setting imposed by this device’s policy is greyed, with its padlock and who imposes it', async ({ app }) => {
@@ -70,4 +81,33 @@ test('a setting imposed by this device’s policy is greyed, with its padlock an
   // The settings file holds what they lock.
   const saved = JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
   expect([saved.betaUpdates, saved.telemetry, saved.allowBypass, saved.agentMode]).toEqual([false, false, false, 'default']);
+});
+
+// ESC-564: `accounts.reservation` imposed to `denied`. The reservation made before the start is gone, « Réservé aux projets »
+// is greyed with its padlock, and a private project's « Réserver … à ce projet » and « Ajouter un compte réservé… » too.
+test('no account may be reserved to a project: the gestures are greyed with their padlock', async ({ app }) => {
+  const { page, data } = app;
+  const saved = () => JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
+  expect(saved().accounts.find((a: { id: string }) => a.id === 'principal').projects ?? []).toEqual([]);
+  await addProject(page, app.repo, { name: 'client', firstAgent: false });
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await openSettingsPage(dialog, 'Comptes et harness');
+  const reserved = dialog.getByRole('group', { name: 'Réservé aux projets' }).first();
+  await expect(reserved.locator('.chips')).toHaveAttribute('aria-disabled', 'true');
+  await expect(reserved.getByTestId('reservation-lock')).toHaveText(
+    'Imposé par la stratégie de ce poste · Aucun compte n’est réservé à un projet : un projet privé part sur les comptes partagés, sa clôture protège ses sessions.',
+  );
+  // Inert: a click does not tick the project.
+  await reserved.getByRole('checkbox').first().click({ force: true });
+  await expect(reserved.getByRole('checkbox').first()).not.toBeChecked();
+
+  await openSettingsPage(dialog, 'Confidentialité', { project: 'client' });
+  await dialog.getByRole('switch', { name: 'Projet privé' }).click();
+  await expect(dialog.getByTestId('reservation-lock')).toContainText('Imposé par la stratégie de ce poste');
+  await expect(dialog.getByRole('button', { name: 'Réserver Principal à ce projet' })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Ajouter un compte réservé…' })).toBeDisabled();
+  // Its agents go on the shared account, as in 2.2.5: said, the fence keeping its sessions.
+  await expect(dialog.getByTestId('private-shared')).toContainText('Ses sessions restent à lui');
+  expect(saved().accounts.flatMap((a: { projects?: string[] }) => a.projects ?? [])).toEqual([]);
 });

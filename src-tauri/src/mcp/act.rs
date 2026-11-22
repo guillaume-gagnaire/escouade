@@ -1736,8 +1736,11 @@ pub(super) async fn create_agent(
     // An account of the project's harness it may use (ESC-153's checks), else the automatic choice.
     let account = account_setting(core, a.account.as_deref()).filter(|id| !id.is_empty());
     if let Some(id) = &account {
-        let refusal =
-            accounts::ticket_refusal(&core.settings.read(), &project, project.engine(), id);
+        let refusal = core
+            .reservation_refusal(&project.id, project.engine(), Some(id))
+            .or_else(|| {
+                accounts::ticket_refusal(&core.settings.read(), &project, project.engine(), id)
+            });
         if let Some(e) = refusal {
             return Err(ToolError::Refused(format!("{e:#}")));
         }

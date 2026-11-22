@@ -11,6 +11,7 @@
   import { wholeApp } from '../../lib/plugins-settings';
   import { plugins } from '../../lib/plugins-view.svelte';
   import { settingsForm } from '../../lib/settings.svelte';
+  import { lockLine, locksFor, reservationLock } from '../../lib/locks.svelte';
   import { IS_WINDOWS } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
@@ -39,6 +40,12 @@
   const asDrafted = $derived({ id: project.id, account: draft.account, private: draft.private, sharedOnLimit: draft.sharedOnLimit });
   const ownAccounts = $derived(accountsFor(asDrafted, privateEngine).filter((a) => dedicated(a, project.id)));
   const sharedAccounts = $derived(sharedBy(asDrafted, privateEngine));
+  /** What `accounts.reservation` imposes on it (ESC-564): no reservation, or its own accounts alone. */
+  const reservation = $derived(reservationLock(locksFor(live)));
+  const denied = $derived(reservation?.value === 'denied');
+  const required = $derived(reservation?.value === 'required');
+  /** Its last account of its own, kept while the policy requires one. */
+  const lastKept = $derived(required && ownAccounts.length === 1);
   const quotedNames = (list: Account[]) => fList(list.map((a) => t('accounts.tab.quoted', { name: accountName(a) })));
 
   /**
@@ -128,6 +135,13 @@
          stays common, and the reservation as one more layer of isolation, optional. -->
     <div class="sub-h" data-anchor="private-accounts"><b>{t('accounts.tab.list')}</b></div>
     <div class="private-accounts">
+      {#if reservation}
+        <p class="lock" data-testid="reservation-lock">
+          <Icon name="lock" size={13} /><span
+            >{lockLine(reservation.by)} · {t(denied ? 'accounts.private.reservationDenied' : 'accounts.private.reservationRequired')}</span
+          >
+        </p>
+      {/if}
       {#if ownAccounts.length}
         <div class="acct-note" data-testid="private-own">
           <Icon name="check-c" size={14} /><span class="grow" role="status"
@@ -135,7 +149,12 @@
             {#if ownAccounts.some(isPrincipal)}{t('accounts.private.machineToo', { harness })}{/if}</span
           >
           {#each ownAccounts as a (a.id)}
-            <button class="btn" use:tip={t('accounts.private.unreserveTitle')} onclick={() => unreserve($state.snapshot(a), project.id)}>
+            <button
+              class="btn"
+              disabled={lastKept}
+              use:tip={lastKept ? t('accounts.private.reservationLast') : t('accounts.private.unreserveTitle')}
+              onclick={() => unreserve($state.snapshot(a), project.id)}
+            >
               {ownAccounts.length > 1 ? `${t('accounts.private.unreserve')} · ${accountName(a)}` : t('accounts.private.unreserve')}
             </button>
           {/each}
@@ -153,11 +172,16 @@
               {t('accounts.private.optional')}{/if}</span
           >
           {#each sharedAccounts as a (a.id)}
-            <button class="btn" use:tip={t('accounts.private.reserveTitle')} onclick={() => reserveHere(a)}>
+            <button
+              class="btn"
+              disabled={denied}
+              use:tip={denied ? t('accounts.private.reservationDenied') : t('accounts.private.reserveTitle')}
+              onclick={() => reserveHere(a)}
+            >
               {t('accounts.private.reserve', { name: accountName(a) })}
             </button>
           {/each}
-          <button class="btn" onclick={addReserved}>
+          <button class="btn" disabled={denied} use:tip={denied ? t('accounts.private.reservationDenied') : ''} onclick={addReserved}>
             {t('accounts.private.add')}
           </button>
         </div>
@@ -173,7 +197,11 @@
         onclose={() => (asking = null)}
       />
     {/if}
-    <Row label={t('accounts.private.sharedOnLimit')} desc={t('accounts.private.sharedOnLimitDesc')}>
+    <Row
+      label={t('accounts.private.sharedOnLimit')}
+      desc={t('accounts.private.sharedOnLimitDesc')}
+      lockedBy={required ? reservation!.by : null}
+    >
       <Switch label={t('accounts.private.sharedOnLimit')} bind:on={draft.sharedOnLimit} />
     </Row>
   {/if}
@@ -225,6 +253,16 @@
 </Group>
 
 <style>
+  /* What `accounts.reservation` imposes (ESC-564): a padlock and who imposes it, as a locked row says it. */
+  .lock {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 550;
+  }
   /* A title inside a group, its explanation beside it. */
   .sub-h {
     display: flex;

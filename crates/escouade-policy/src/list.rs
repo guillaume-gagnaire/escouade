@@ -260,10 +260,16 @@ pub const PLUGINS_ALLOWED: &str = "plugins.allowed";
 pub const PLUGINS_DENIED: &str = "plugins.denied";
 pub const VERIFIED_ONLY: &str = "plugins.verifiedOnly";
 pub const SECRETS_FILE: &str = "secrets.fileFallback";
+/// The settings of each project of plugins the managed device imposes (ESC-564): `{"<plugin id>": {"<key>": value}}`.
+pub const PLUGIN_PROJECT_SETTINGS: &str = "plugins.projectSettings";
 pub const EXTENSIONS_ALLOWED: &str = "extensions.allowed";
 pub const FORCE_PRIVATE: &str = "projects.forcePrivate";
 pub const DENIED_FILES: &str = "projects.deniedFiles";
 pub const MAX_PARALLEL: &str = "projects.maxParallel";
+pub const ACCOUNT_RESERVATION: &str = "accounts.reservation";
+/// What `accounts.reservation` may impose (ESC-564): no account reserved to a project, or a private project on an
+/// account reserved to it alone.
+pub const RESERVATIONS: &[&str] = &["denied", "required"];
 pub const PROXY_URL: &str = "proxy.url";
 pub const PROXY_EXCLUSIONS: &str = "proxy.exclusions";
 pub const DENY_INSECURE_TLS: &str = "proxy.denyInsecureTls";
@@ -519,6 +525,26 @@ pub const POLICIES: &[Def] = &[
         },
     },
     Def {
+        key: PLUGIN_PROJECT_SETTINGS,
+        sort: Sort::Value,
+        form: Form::Json,
+        rows: &[],
+        within: None,
+        category: Category::Plugins,
+        later: false,
+        example: r#"{"dev.acme.ci": {"level": "strict"}}"#,
+        fr: Text {
+            title: "Réglages imposés des plugins dans chaque projet",
+            help: "Un objet JSON : ses clés sont des ids de plugins, ses valeurs les réglages de portée project que ce poste impose dans chaque projet où le plugin est actif (dev.acme.ci, level : strict). Un réglage simple seulement (texte, nombre, booléen, choix) : jamais un secret, un profil, une valeur importée ni un réglage que son auteur garde hors des fichiers ; un tel réglage est ignoré et dit. Une équipe impose les siens par son fichier (plugins.id.clé).",
+            locks: "Projets › Plugins, le réglage grisé avec le cadenas et Imposé par la stratégie de ce poste ; le plugin lit la valeur imposée.",
+        },
+        en: Text {
+            title: "Imposed plugin settings in each project",
+            help: "A JSON object: its keys are plugin ids, its values the settings of project scope this device imposes in each project where the plugin is on (dev.acme.ci, level: strict). A simple setting only (text, number, boolean, choice): never a secret, a profile, a value imported nor a setting its author keeps off the files; such a setting is ignored and said. A team imposes its own by its file (plugins.id.key).",
+            locks: "Projects › Plugins, the setting grayed with the padlock and Imposed by this device’s policy; the plugin reads the imposed value.",
+        },
+    },
+    Def {
         key: SECRETS_FILE,
         sort: Sort::Restrict,
         form: off(),
@@ -578,6 +604,29 @@ pub const POLICIES: &[Def] = &[
             title: "Private projects by default",
             help: "Every project is private: its agents see no other project, and no other project sees it. Only the value true (1) is imposed.",
             locks: "“New projects are private” and each project’s “Private project”, on and grayed.",
+        },
+    },
+    Def {
+        key: ACCOUNT_RESERVATION,
+        sort: Sort::Restrict,
+        form: Form::Choice {
+            choices: RESERVATIONS,
+            restricted: None,
+        },
+        rows: &[],
+        within: None,
+        category: Category::Projects,
+        later: false,
+        example: r#""required""#,
+        fr: Text {
+            title: "Réservation des comptes",
+            help: "denied : aucun compte n’est réservé à un projet ; un projet privé part sur les comptes partagés, sa clôture protège ses sessions. required : un projet privé ne part que sur un compte réservé à lui seul, jamais sur un compte partagé, même à la limite.",
+            locks: "denied : « Réservé aux projets » de chaque compte vidé et grisé, « Réserver … à ce projet » et « Ajouter un compte réservé… » refusés. required : « Comptes partagés à la limite » éteint et grisé, « Ne plus le réserver » refusé sur le dernier compte réservé d’un projet privé, un agent de projet privé refusé sur un compte partagé.",
+        },
+        en: Text {
+            title: "Account reservation",
+            help: "denied: no account is reserved to a project; a private project goes on the shared accounts, its fence keeps its sessions. required: a private project goes only on an account reserved to it alone, never on a shared account, even at the limit.",
+            locks: "denied: each account’s “Reserved to projects” emptied and grayed, “Reserve … to this project” and “Add a reserved account…” refused. required: “Shared accounts at the limit” off and grayed, “Stop reserving it” refused on the last account reserved to a private project, an agent of a private project refused on a shared account.",
         },
     },
     Def {

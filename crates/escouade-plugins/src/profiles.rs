@@ -14,7 +14,7 @@
 //!
 //! The ranks of a setting of each project: 1 the manifest's default, 2 what the project's team recommends (its file's
 //! `defaults`, TS-13, ESC-532), 3 the project's `.escouade.yml`, 4 this machine's value, 5 what the team imposes (its
-//! `enforced`). The managed device (6) locks no setting of a plugin. A team sets a **simple** setting of each project
+//! `enforced`), 6 what the managed device imposes (`plugins.projectSettings`, ESC-564), judged as the team's. A team sets a **simple** setting of each project
 //! alone (`team_refusal`): never a secret, a profile, a value imported from a file nor what its author keeps off the
 //! shared files (`"repo": false`).
 
@@ -265,6 +265,8 @@ pub struct TeamValues {
     pub team: String,
     pub defaults: Map<String, Value>,
     pub enforced: Map<String, Value>,
+    /// What the managed device imposes (rank 6, `plugins.projectSettings`, ESC-564): ahead of the team's, judged the same.
+    pub device: Map<String, Value>,
 }
 
 /// Why a team's key of a plugin is refused (`team_refusal`).
@@ -402,7 +404,7 @@ pub fn settings_with_team(
                 (Some(_), None) => default_profile(m, choices, kind),
             };
             out.insert(key.to_string(), v);
-        } else if let Some(v) = by_team(|t| &t.enforced) {
+        } else if let Some(v) = by_team(|t| &t.device).or_else(|| by_team(|t| &t.enforced)) {
             out.insert(key.to_string(), v.clone());
         } else if let Some(v) = mine.filter(|v| fits(d, v)) {
             out.insert(key.to_string(), v.clone());

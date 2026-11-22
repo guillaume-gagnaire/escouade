@@ -2,7 +2,7 @@
 title: "Les profils d'un plugin et ses réglages d'un projet"
 subject: "plugins"
 sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.1 à §1.3, §2, §3, §6 à §8 et §10 (choix n° 1 à 4 tranchés le 2026-11-17 ; choix n° 10, TS-13, le 2026-11-17 : une valeur simple seulement)","design/plugins-contract-2-3/captures (release/2.3) : b-plugin, b-profil, b-projet","issues GitHub #38 et #39 (un auteur de plugin tiers)","crates/escouade-plugins/src/profiles.rs","crates/escouade-plugins/src/runtime.rs","crates/escouade-plugins/src/events.rs","src-tauri/src/plugin_profiles.rs","src-tauri/src/plugin_secrets.rs","src-tauri/src/projectfile.rs","src-tauri/src/team_settings.rs","src/lib/plugin-profiles.ts","src/components/plugins/PluginProfiles.svelte","src/components/plugins/ProfileModal.svelte","src/components/settings/ProjectPluginsPage.svelte","schemas/plugin-protocol-1.json","crates/escouade-plugin-kit/src/serve.rs","sdk/plugin/src/index.ts","sdk/plugin/src/testing.ts","crates/escouade-plugins/src/bench/fake.rs","website/content/docs/fr/plugins/project-credentials.md"]
-tickets: ["ESC-530","ESC-531","ESC-532"]
+tickets: ["ESC-530","ESC-531","ESC-532","ESC-564"]
 decisions: [255]
 compared: null
 ---
@@ -111,3 +111,12 @@ Réglages › Projets › *projet* › **Plugins**, entre « Tickets importés �
 
 - Le faux Escouade du SDK et le banc ne simulent pas encore les rangs de l'équipe (2 et 5).
 - Un profil n'a pas de groupes à lui : ses champs simples, puis ses secrets.
+
+## Ce que le poste géré impose (ESC-564)
+
+Ceci remplace « Le poste géré (rang 6) ne verrouille aucun réglage de plugin » plus haut. Le poste géré impose un réglage simple de portée `project` au **rang 6**, devant ce qu'impose l'équipe (rang 5). Il le fait par la stratégie `plugins.projectSettings` (voir *Réglages imposés*) : un objet JSON `{"<id du plugin>": {"<clé>": valeur}}`, qui vaut pour **chaque projet** où le plugin est actif.
+
+- **Seulement un réglage simple**, refusé comme celui de l'équipe : jamais un secret, un profil, une valeur importée, un réglage `"repo": false`, un réglage de l'app, une clé que le plugin ne déclare pas ni une valeur d'un autre type. Le refus est dit en tête du groupe du plugin : « La stratégie de ce poste règle token : refusé, c'est un secret : il reste dans le trousseau de chaque poste. Ce réglage ne s'applique pas. »
+- Dans la page Plugins du projet, le réglage imposé est grisé, avec le cadenas et « Imposé par la stratégie de ce poste ». Rien ne passe devant : la valeur de cette machine et « Écrire dans .escouade.yml » sont refusés par le cœur (« Ce réglage est imposé par la stratégie de ce poste (plugins.projectSettings) : il ne se change pas sur ce poste. »). Le plugin lit la valeur imposée par `settings/get { project }`, et son journal ne la dit pas.
+- Une équipe n'impose pas cette clé : la sienne est ignorée, et c'est dit. Elle passe par `plugins.<id>.<clé>` de son fichier.
+- Un client distant reçoit le même verrou. Changée pendant que l'app tourne, la page suit ; retirée, le réglage est de nouveau libre.

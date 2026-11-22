@@ -301,6 +301,10 @@ fn the_table_names_its_keys_once_with_their_sort_and_rows() {
                     // Refused at a secret's field, and the file no longer read (ESC-520).
                     SECRETS_FILE,
                     DENIED_FILES,
+                    // Shown per value where one reserves an account, refused by the core (ESC-564).
+                    ACCOUNT_RESERVATION,
+                    // Locked in the page Plugins of a project, setting by setting (ESC-564).
+                    PLUGIN_PROJECT_SETTINGS,
                     // A ceiling: the setting stays set below it, set_board and the board keep it (ESC-620).
                     MAX_PARALLEL,
                     VOICE_ONLINE,
