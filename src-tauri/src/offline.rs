@@ -210,7 +210,7 @@ fn system_policy() -> bool {
         .iter()
         .filter(|p| std::fs::symlink_metadata(p).is_ok_and(|m| m.is_file() && root_only(&m)))
         .filter_map(|p| std::fs::read_to_string(p).ok().and_then(|t| from_json(&t)))
-        .last()
+        .next_back()
         .unwrap_or(false)
 }
 
