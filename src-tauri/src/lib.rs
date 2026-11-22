@@ -329,6 +329,7 @@ mod switching;
 mod switching_tests;
 mod syspath;
 mod taskout;
+mod team_breakers;
 mod team_projects;
 mod team_settings;
 mod teamboard;

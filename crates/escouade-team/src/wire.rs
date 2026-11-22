@@ -160,6 +160,9 @@ pub struct DeviceInfo {
     pub public_key: Vec<u8>,
     pub role: Role,
     pub revoked: bool,
+    /// A live connection of it is open now (TS-15). Absent from a server of before: false.
+    #[serde(default)]
+    pub online: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

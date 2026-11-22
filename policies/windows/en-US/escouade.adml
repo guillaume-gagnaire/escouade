@@ -258,6 +258,12 @@ Key: team.fingerprint (string). Sort: value.</string>
 On the device: Another team server is refused, with the reason.
 
 Key: team.onlyThisServer (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="team_maxOfflineHours">No new team agent without contact for N hours</string>
+      <string id="team_maxOfflineHours_Explain">An agent of a team’s project no longer starts when its team’s server has not answered for this many hours: a circuit breaker set meanwhile cannot be missed. Personal projects are not touched.
+
+On the device: The start of a team agent is refused, with the hour of the last contact; the team’s band says it.
+
+Key: team.maxOfflineHours (number, 1–720). Sort: restrict.</string>
       <string id="features_kanban">Kanban feature</string>
       <string id="features_kanban_Explain">Tickets, the autopilot and ticket sources: true turns it on, false turns it off (its tab, its MCP tools, its autopilot). Its tickets are kept.
 
@@ -390,6 +396,9 @@ Key: features.voice (Boolean, true, false). Sort: value.</string>
         <textBox refId="team_fingerprint">
           <label>Team fingerprint</label>
         </textBox>
+      </presentation>
+      <presentation id="team_maxOfflineHours">
+        <decimalTextBox refId="team_maxOfflineHours">No new team agent without contact for N hours</decimalTextBox>
       </presentation>
     </presentationTable>
   </resources>

@@ -289,6 +289,10 @@ pub fn refusal_of(
     if let Err(e) = locks.check_engine(meta.engine.as_str()) {
         return Some(e.to_string());
     }
+    // A model taken out (a team's circuit breaker, TS-15) or not allowed: what runs on it stops too.
+    if let Err(e) = locks.check_model(meta.engine.as_str(), &meta.model) {
+        return Some(e.to_string());
+    }
     let engine = crate::engine::of(meta);
     let allowed = bypass_setting && locks.check_mode(BYPASS).is_ok();
     check_in(engine, &meta.mode, &meta.mode, allowed, locks, lang)

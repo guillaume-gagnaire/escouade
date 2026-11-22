@@ -4,6 +4,7 @@
 
 import { invoke } from './transport';
 import { teamSettingsApi, type TeamSettingsView } from './team-settings';
+import { teamBreakersApi, type BreakersView } from './team-breakers';
 import { teamCostsApi } from './team-costs';
 import { app } from './state.svelte';
 
@@ -109,6 +110,8 @@ class Teams {
   loaded = $state(false);
   /** The signed settings of each team this device is in (TS-13), by team id: the band and the screen read them. */
   settings = $state<Record<string, TeamSettingsView>>({});
+  /** The circuit breakers of each team this device is in (TS-15), by team id: the band and the screen read them. */
+  breakers = $state<Record<string, BreakersView>>({});
 
   async load() {
     try {
@@ -117,8 +120,24 @@ class Teams {
       this.list = [];
     }
     this.loaded = true;
-    await this.loadSettings();
+    await Promise.all([this.loadSettings(), this.loadBreakers()]);
     await this.tellGrain();
+  }
+
+  async loadBreakers() {
+    const next: Record<string, BreakersView> = {};
+    for (const team of this.list.filter((x) => x.joined)) {
+      try {
+        next[team.id] = await teamBreakersApi.get(team.id);
+      } catch {
+        // A team that does not open: its card says why.
+      }
+    }
+    this.breakers = next;
+  }
+
+  putBreakers(b: BreakersView) {
+    this.breakers = { ...this.breakers, [b.team]: b };
   }
 
   /** The teams whose « par membre » this session offered to tell already (TS-16, C15). */

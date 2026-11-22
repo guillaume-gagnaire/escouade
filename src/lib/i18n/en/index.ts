@@ -42,6 +42,7 @@ import stats from './stats';
 import subagents from './subagents';
 import team from './team';
 import teamBoard from './teamBoard';
+import teamBreakers from './teamBreakers';
 import remote from './remote';
 import servers from './servers';
 import phone from './phone';
@@ -105,6 +106,7 @@ export const en = defineCatalog({
   overseer,
   team,
   teamBoard,
+  teamBreakers,
   remote,
   servers,
   phone,

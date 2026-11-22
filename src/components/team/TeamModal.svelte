@@ -14,7 +14,8 @@
     | 'projects'
     | 'costs'
     | 'plugins'
-    | 'told';
+    | 'told'
+    | 'breakers';
 </script>
 
 <script lang="ts">
@@ -34,6 +35,7 @@
   import TeamRecover from './TeamRecover.svelte';
   import TeamProjects from './TeamProjects.svelte';
   import TeamSettings from './TeamSettings.svelte';
+  import TeamBreakers from './TeamBreakers.svelte';
   import TeamCosts from './TeamCosts.svelte';
   import TeamCostsTold from './TeamCostsTold.svelte';
   import TeamPlugins from './TeamPlugins.svelte';
@@ -91,7 +93,8 @@
       step === 'settings' ||
       step === 'projects' ||
       step === 'plugins' ||
-      step === 'costs',
+      step === 'costs' ||
+      step === 'breakers',
   );
 </script>
 
@@ -133,6 +136,8 @@
     <TeamCostsTold {teamId} name={team?.name ?? ''} ondone={close} onsee={() => go('costs')} />
   {:else if step === 'settings' && teamId}
     <TeamSettings {teamId} onback={() => go('home')} />
+  {:else if step === 'breakers' && teamId}
+    <TeamBreakers {teamId} onback={() => go('home')} />
   {:else if step === 'device' && teamId}
     <TeamDevice {teamId} onback={() => go('home')} />
   {:else if step === 'join'}

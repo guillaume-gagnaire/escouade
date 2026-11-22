@@ -93,6 +93,12 @@ escouade_command::commands! {
         commands::team_memory_of_ticket,
         commands::team_memory_set_review,
         commands::team_forget,
+        // The administrator's circuit breaker (TS-15): the team's, whichever machine the client is on.
+        commands::team_breakers,
+        commands::team_breaker_online,
+        commands::team_breaker_set,
+        commands::team_breaker_lift,
+        commands::team_breakers_retry,
         // The costs and the quotas of the team (TS-16, ESC-547).
         commands::team_costs,
         commands::team_costs_ack,

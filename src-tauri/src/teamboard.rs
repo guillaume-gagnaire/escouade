@@ -289,6 +289,18 @@ impl Core {
     /// The teams of this data folder, for the Kanban of their projects (set at the start).
     pub(crate) fn set_teams(self: &Arc<Self>, teams: Arc<Teams>) {
         *self.team_link.write() = Some(teams.clone());
+        // The team's circuit breakers (TS-15): those in force of each team to the core's locks, from what this device
+        // read last at once.
+        {
+            let me = Arc::downgrade(self);
+            teams.set_breakers_sink(Arc::new(move |id, name, view| {
+                if let Some(core) = me.upgrade() {
+                    core.set_team_breakers_of(id, name, view);
+                }
+            }));
+            let started = teams.clone();
+            tauri::async_runtime::spawn(async move { started.start_breakers().await });
+        }
         let me = Arc::downgrade(self);
         teams.set_projects_sink(Arc::new(move |id| {
             if let Some(core) = me.upgrade() {

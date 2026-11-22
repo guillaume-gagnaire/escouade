@@ -5669,6 +5669,73 @@ pub async fn team_forget(teams: TeamsState<'_>, team: String) -> Res<()> {
     teams.forget(&team).await
 }
 
+// ---------- The administrator's circuit breaker (TS-15) ----------
+
+/// A team's breakers with what its revocation list withdraws (TS-14), which the circuit breaker reads.
+fn with_withdrawn(
+    core: &CoreState<'_>,
+    view: Res<crate::teams::BreakersView>,
+) -> Res<crate::teams::BreakersView> {
+    let mut view = view?;
+    view.withdrawn = core
+        .team_withdrawn(&view.team)
+        .into_iter()
+        .map(|(id, reason)| crate::teams::WithdrawnView { id, reason })
+        .collect();
+    Ok(view)
+}
+
+/// A team's circuit breakers as this device read them: those in force, those lifted, what was refused, and what the
+/// team's revocation list withdraws.
+#[tauri::command]
+pub async fn team_breakers(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+) -> Res<crate::teams::BreakersView> {
+    with_withdrawn(&core, teams.breakers(&team).await)
+}
+
+/// The other devices of the team online now: what the confirmation of a breaker says will stop.
+#[tauri::command]
+pub async fn team_breaker_online(teams: TeamsState<'_>, team: String) -> Res<usize> {
+    teams.breaker_online(&team).await
+}
+
+/// An administrator sets a circuit breaker (its scope, what it takes out, its reason), signed by this device. No tool of
+/// the MCP server does it.
+#[tauri::command]
+pub async fn team_breaker_set(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+    ask: crate::teams::BreakerAsk,
+) -> Res<crate::teams::BreakersView> {
+    with_withdrawn(&core, teams.breaker_set(&team, ask).await)
+}
+
+/// An administrator lifts a circuit breaker in force. No tool of the MCP server does it.
+#[tauri::command]
+pub async fn team_breaker_lift(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+    breaker: String,
+    by: String,
+) -> Res<crate::teams::BreakersView> {
+    with_withdrawn(&core, teams.breaker_lift(&team, &breaker, &by).await)
+}
+
+/// « Réessayer » after an alarm of a team's breakers.
+#[tauri::command]
+pub async fn team_breakers_retry(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+) -> Res<crate::teams::BreakersView> {
+    with_withdrawn(&core, teams.breakers_retry(&team).await)
+}
+
 // ---------- The costs and the quotas of the team (TS-16) ----------
 
 /// The table of a team's costs: every device's totals on an administrator's device, this device's own on a member's,

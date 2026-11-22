@@ -290,6 +290,7 @@ pub const MCP_EXTERNAL: &str = "mcp.externalClients";
 pub const TEAM_SERVER: &str = "team.server";
 pub const TEAM_FINGERPRINT: &str = "team.fingerprint";
 pub const ONLY_THIS_SERVER: &str = "team.onlyThisServer";
+pub const MAX_OFFLINE_HOURS: &str = "team.maxOfflineHours";
 pub const FEATURE_KANBAN: &str = "features.kanban";
 pub const FEATURE_DOCS: &str = "features.docs";
 pub const FEATURE_EDITOR: &str = "features.editor";
@@ -1082,6 +1083,26 @@ pub const POLICIES: &[Def] = &[
             title: "Refuse any other team server",
             help: "Only the team server the policy sets may be joined. Only the value true (1) is imposed.",
             locks: "Another team server is refused, with the reason.",
+        },
+    },
+    Def {
+        key: MAX_OFFLINE_HOURS,
+        sort: Sort::Restrict,
+        form: Form::Number { min: 1, max: 720 },
+        rows: &[],
+        within: None,
+        category: Category::Enrollment,
+        later: false,
+        example: "24",
+        fr: Text {
+            title: "Pas de nouvel agent d’équipe sans contact depuis N heures",
+            help: "Un agent d’un projet d’équipe ne démarre plus quand le serveur de son équipe n’a pas répondu depuis ce nombre d’heures : un coupe-circuit posé pendant l’absence ne peut pas manquer. Les projets personnels ne sont pas touchés.",
+            locks: "Le démarrage d’un agent d’équipe est refusé, avec l’heure du dernier contact ; la bande de l’équipe le dit.",
+        },
+        en: Text {
+            title: "No new team agent without contact for N hours",
+            help: "An agent of a team’s project no longer starts when its team’s server has not answered for this many hours: a circuit breaker set meanwhile cannot be missed. Personal projects are not touched.",
+            locks: "The start of a team agent is refused, with the hour of the last contact; the team’s band says it.",
         },
     },
     // ---------- features (F-1, ESC-550) ----------

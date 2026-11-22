@@ -162,6 +162,10 @@ pub mod wire {
         pub public_key: Vec<u8>,
         pub role: Role,
         pub revoked: bool,
+        /// A live connection of it is open now (TS-15: « sur combien de postes en ligne »). Absent from a server of
+        /// before: false.
+        #[serde(default)]
+        pub online: bool,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -640,6 +644,7 @@ pub async fn devices(State(app): State<Shared>, authed: Authed) -> Result<Cbor<D
                 public_key: d.public_key.to_vec(),
                 role: d.role,
                 revoked: d.revoked_at.is_some(),
+                online: app.hub.is_live(&d.id),
             })
             .collect(),
     }))
@@ -830,6 +835,14 @@ const JOIN_PAGE: &str = include_str!("join.html");
 /// only its writers are known here.
 pub const CATALOG_STREAM: Id = *b"escouade/project";
 
+/// The stream of the team's circuit breakers (`escouade_team::breaker::BREAKER_STREAM`, TS-15): its administrators'
+/// too. The clients judge each entry's signature and its author's role; the server, which knows the roles, does not
+/// keep a member's (defense in depth).
+pub const BREAKER_STREAM: Id = *b"escouade/breaker";
+
+/// The streams only an administrator writes.
+pub const ADMIN_STREAMS: [Id; 2] = [CATALOG_STREAM, BREAKER_STREAM];
+
 /// The stream of the administrators' key of the costs (`escouade_team::costs::KEY_STREAM`, TS-16): its public half and
 /// its wraps for the administrators' devices, written by an administrator alone.
 pub const COST_KEY_STREAM: Id = *b"escouade/costkey";
@@ -843,15 +856,16 @@ pub const COST_TOTALS_STREAM: Id = *b"escouade/costsum";
 pub const PLUGINS_STREAM: Id = *b"escouade/plugins";
 
 /// The streams of the team itself (its list of projects, its settings, the proposals of its members, TS-7, the costs,
-/// TS-16, its private store, TS-14): open to every device of the team, always. Nobody restricts them, or a member could
-/// shut the administrators out of them.
-pub const TEAM_STREAMS: [Id; 6] = [
+/// TS-16, its private store, TS-14, the circuit breakers, TS-15): open to every device of the team, always. Nobody restricts
+/// them, or a member could shut the administrators out of them.
+pub const TEAM_STREAMS: [Id; 7] = [
     CATALOG_STREAM,
     *b"escouade/setting",
     *b"escouade/propose",
     COST_KEY_STREAM,
     COST_TOTALS_STREAM,
     PLUGINS_STREAM,
+    BREAKER_STREAM,
 ];
 
 async fn append(
@@ -944,12 +958,15 @@ pub async fn append_project(
 ) -> Result<Cbor<Appended>, Problem> {
     let project = path_id(&project)?;
     may(&app, &authed, &project).await?;
-    // The team's list of projects (TS-8) is its administrators': the clients refuse a member's entry at the reading,
-    // and the server, which knows the roles, does not even keep one (defense in depth).
-    if project == CATALOG_STREAM && !authed.is_admin() {
-        return Err(Problem::forbidden(
-            "only an administrator writes the team's list of projects",
-        ));
+    // The team's list of projects (TS-8) and its circuit breakers (TS-15) are its administrators': the clients refuse
+    // a member's entry at the reading, and the server, which knows the roles, does not even keep one (defense in
+    // depth).
+    if ADMIN_STREAMS.contains(&project) && !authed.is_admin() {
+        return Err(Problem::forbidden(if project == CATALOG_STREAM {
+            "only an administrator writes the team's list of projects"
+        } else {
+            "only an administrator sets or lifts a circuit breaker"
+        }));
     }
     // The administrators' key of the costs (TS-16) likewise: a member who wrote one would have the totals sealed to a
     // key of its own (the clients refuse it at the reading too).

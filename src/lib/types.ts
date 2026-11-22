@@ -3200,7 +3200,13 @@ export interface InitialState {
 }
 
 /** Who imposes a lock (TS-11): the policy of this device (rank 6), or a team (rank 5). */
-export type LockedBy = { kind: 'device'; source: string } | { kind: 'team'; team: string };
+export type LockedBy =
+  | { kind: 'device'; source: string }
+  | { kind: 'team'; team: string }
+  /** A team's circuit breaker (TS-15): who set it and why. */
+  | { kind: 'breaker'; team: string; by: string; reason: string }
+  /** The team's revocation list (TS-14), read by the circuit breaker: a plugin withdrawn in every version. */
+  | { kind: 'withdrawn'; team: string; reason: string };
 
 /** One rank's list of a bound: what it allows. */
 export interface LockBound {
@@ -3214,6 +3220,8 @@ export interface Lock {
   value: unknown;
   by: LockedBy | null;
   bounds: LockBound[];
+  /** What a team's circuit breaker takes out of it (TS-15): denied whatever the bounds allow. */
+  denies?: { by: LockedBy; denied: string[] }[];
 }
 
 /** The locks of the moment (`locks::Locks`): by key, the keys locking each row of `SETTINGS_ROWS`, the warnings. */
@@ -3221,6 +3229,8 @@ export interface Locks {
   locks: Record<string, Lock>;
   rows: Record<string, string[]>;
   warnings: string[];
+  /** A team's circuit breaker that stops every agent (TS-15). */
+  halt?: LockedBy;
 }
 
 /** « En parallèle » of a Kanban (ESC-620, `parallel::Capacity`): its bound (16 on a desktop, 64 on a server), the ceiling

@@ -397,6 +397,13 @@
         <decimal value="1" />
       </enabledValue>
     </policy>
+    <policy name="team_maxOfflineHours" class="Both" displayName="$(string.team_maxOfflineHours)" explainText="$(string.team_maxOfflineHours_Explain)" presentation="$(presentation.team_maxOfflineHours)" key="Software\Policies\Escouade">
+      <parentCategory ref="enrollment" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <decimal id="team_maxOfflineHours" valueName="team.maxOfflineHours" required="true" minValue="1" maxValue="720" />
+      </elements>
+    </policy>
     <policy name="features_kanban" class="Both" displayName="$(string.features_kanban)" explainText="$(string.features_kanban_Explain)" key="Software\Policies\Escouade" valueName="features.kanban">
       <parentCategory ref="features" />
       <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />

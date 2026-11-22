@@ -1,0 +1,93 @@
+import { defineZone } from '../types';
+
+// The administrator's circuit breaker (TS-15): see the French catalog.
+export default defineZone('teamBreakers', {
+  open: 'Circuit breaker',
+  title: 'The team’s circuit breaker',
+  lead: 'An administrator takes a harness, a model or a plugin out of the team’s projects, or stops all its agents: each device online applies it within the second, the others when they come back. It only restricts, and lasts until an administrator lifts it. Personal projects are never touched.',
+  leadMember: 'Only an administrator sets or lifts a circuit breaker. This device checks each one’s signature and its author’s role.',
+  none: 'No circuit breaker in force.',
+  active: 'In force',
+  lifted: 'Lifted',
+  withdrawn: 'Withdrawn by the team’s revocation list',
+  withdrawnLead:
+    'These plugins of the team’s store are withdrawn in all their versions by its revocation list, signed by the team’s key: turned off on each device, their install refused. It is changed in the team’s “Plugins”.',
+  withdrawnOne: 'The plugin {id}: {reason}',
+  setAt: 'Set by {by} on {at}',
+  liftedAt: 'Lifted by {by} on {at}',
+  lift: 'Lift',
+  lastContact: 'Last contact with the server: {at}',
+  neverContact: 'The server never answered this device yet.',
+  refused: {
+    one: '{count} entry refused by this device (signature or role)',
+    other: '{count} entries refused by this device (signature or role)',
+  },
+  alarm: {
+    rollback: 'The server hides an entry of the circuit breaker already read: this device keeps what it read and reads nothing more.',
+    rewritten: 'The server changed an entry of the circuit breaker already read: this device keeps what it read and reads nothing more.',
+    server: 'The server numbers the circuit breaker’s entries backwards: this device reads nothing more.',
+    fork: 'The server shows two versions of the team: contact an administrator.',
+    retry: 'Try again',
+  },
+  form: {
+    title: 'Set a circuit breaker',
+    scope: 'Scope',
+    scopeTeam: 'The whole team',
+    scopeProject: 'One project of the team',
+    project: 'Project',
+    noProject: 'No project of the team has a team Kanban on this device.',
+    what: 'What is taken out',
+    harness: 'A harness',
+    model: 'A model',
+    plugin: 'A plugin',
+    agents: 'All agents',
+    modelId: 'Model',
+    pluginId: 'Plugin',
+    pluginHint:
+      'A plugin is of the app: it is cut on each member’s whole device. For a harness, take the harness out instead: only the team’s space is touched.',
+    uninstall: 'Uninstall it too',
+    reason: 'Reason',
+    reasonHint: 'Each member reads it on their band.',
+    by: 'Signed by',
+    next: 'Continue',
+  },
+  confirm: {
+    title: 'What will stop',
+    online: {
+      one: 'On {count} device online, within the second; the others when they come back.',
+      other: 'On {count} devices online, within the second; the others when they come back.',
+    },
+    noneOnline: 'No other device is online: each will apply it when it comes back, before any new start.',
+    onlineUnknown: 'The number of devices online cannot be read: each applies it online or when it comes back.',
+    set: 'Cut',
+    back: 'Edit',
+  },
+  what: {
+    harnessOf: 'the harness {name}',
+    modelOf: 'the model {name}',
+    pluginOf: 'the plugin {name}',
+    pluginUninstalledOf: 'the plugin {name} (uninstalled)',
+    agentsOf: 'all agents',
+  },
+  scope: {
+    teamOf: 'the whole team {team}',
+    projectOf: 'the project {project} of the team {team}',
+  },
+  stops: {
+    harness: 'No agent of the team’s projects starts on {name} any more; those that run stop between two turns.',
+    model: 'No agent of the team’s projects starts on the model {name} any more; those that run stop between two turns.',
+    plugin: 'The plugin {name} is switched off on each device.',
+    pluginUninstall: 'The plugin {name} is switched off, then uninstalled, on each device.',
+    agents:
+      'All agents of the team’s projects stop at once, as when the app quits: the turn under way is lost, each resumes its session once the circuit breaker is lifted.',
+  },
+  band: {
+    asked: 'Stop asked by {by}: {reason}',
+    cut: 'Taken out: {what}',
+    more: { one: 'and {count} other circuit breaker', other: 'and {count} other circuit breakers' },
+    contact: 'No new agent of the team {team}: its server has not answered for over {hours} h (this device’s policy)',
+    lastContact: 'Last contact: {at}',
+    never: 'No contact yet',
+    view: 'View',
+  },
+});

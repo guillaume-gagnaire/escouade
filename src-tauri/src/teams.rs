@@ -291,6 +291,8 @@ struct Known {
     settings_seen: Option<u64>,
     /// The name this device signs the team's settings with (« Claire Martin »).
     signer_name: String,
+    /// When the team's server last answered this device (seconds, TS-15: « sans contact depuis N heures »).
+    last_contact: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -474,6 +476,12 @@ pub struct Teams {
     /// The teams whose live feed told of a claim (a ticket taken, renewed, given back) since their Kanban last read the
     /// claims (TS-6).
     claim_frames: Mutex<std::collections::BTreeSet<String>>,
+    /// What each team's circuit breakers say on this device, as last read (TS-15).
+    breaker_views: Mutex<BTreeMap<String, escouade_team::breaker::View>>,
+    /// Told the breakers in force of a team (None: the device left it): the core applies them.
+    on_breakers: Mutex<Option<BreakersSink>>,
+    /// The teams whose last reading failed: their breakers are read again before a start (`Core::team_gate`).
+    stale: Mutex<std::collections::BTreeSet<String>>,
     /// What each team's costs are on this device, as last read (TS-16).
     cost_views: Mutex<BTreeMap<String, escouade_team::costs::View>>,
     /// This device's member in each team (hex), as last read.
@@ -498,6 +506,11 @@ pub use team_files::{SettingsDraft, TeamSettingsView};
 mod team_catalog;
 pub use team_catalog::{CatalogOf, MemberView};
 
+#[path = "teams_breakers.rs"]
+mod team_breakers;
+pub use team_breakers::{
+    BreakerAsk, BreakersSink, BreakersView, WithdrawnView, GATE as BREAKER_GATE,
+};
 #[path = "teams_costs.rs"]
 mod team_costs;
 
@@ -555,6 +568,9 @@ impl Teams {
             on_docs: Mutex::default(),
             on_projects: Mutex::default(),
             claim_frames: Mutex::default(),
+            breaker_views: Mutex::default(),
+            on_breakers: Mutex::default(),
+            stale: Mutex::default(),
             cost_views: Mutex::default(),
             cost_members: Mutex::default(),
         };
@@ -1072,7 +1088,16 @@ impl Teams {
         let before = self.view(id).await?;
         let done = {
             let mut t = team.lock().await;
-            match t.sync().await {
+            let read = t.sync().await;
+            if read.is_ok() {
+                // The server answered: its circuit breakers first of all (TS-15), so that one set applies before
+                // anything else of the reading.
+                self.touch(id);
+                self.read_breakers(id, &mut t).await;
+            } else {
+                self.mark_stale(id);
+            }
+            match read {
                 Ok(_) => match t.serve(now()).await {
                     Ok(_) => match sync_projects(&mut t).await {
                         Ok(()) => {
@@ -1159,6 +1184,7 @@ impl Teams {
             return Err("L’équipe est en cours d’usage : réessaie.".to_string());
         }
         self.forget_settings(id);
+        self.forget_breakers(id);
         self.cost_views.lock().remove(id);
         self.cost_members.lock().remove(id);
         self.known.lock().retain(|k| k.id != id);

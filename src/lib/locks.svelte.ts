@@ -55,11 +55,16 @@ export function reservationLock(l: Locks = locks.current): { value: 'denied' | '
 
 /** « Imposé par la stratégie de ce poste », « Imposé par l'équipe Acme ». */
 export function lockLine(by: LockedBy): string {
+  if (by.kind === 'breaker') return t('settings.locks.byBreaker', { by: by.by, team: by.team, reason: by.reason });
+  if (by.kind === 'withdrawn') return t('settings.locks.byWithdrawn', { team: by.team, reason: by.reason });
   return by.kind === 'team' ? t('settings.locks.byTeam', { team: by.team }) : t('settings.locks.byDevice');
 }
 
-/** Who denies `choice` of the bound `key` (the device first, then the team); null when every bound allows it. */
+/** Who denies `choice` of the bound `key`: a team's circuit breaker first (TS-15), then the device, then the team; null
+ *  when nothing does. */
 export function deniedBy(key: string, choice: string, l: Locks = locks.current): LockedBy | null {
+  const cut = l.locks[key]?.denies?.find((d) => d.denied.includes(choice));
+  if (cut) return cut.by;
   const bounds = [...(l.locks[key]?.bounds ?? [])].sort((a, b) => Number(b.by.kind === 'device') - Number(a.by.kind === 'device'));
   return bounds.find((b) => !b.allowed.includes(choice))?.by ?? null;
 }
@@ -68,6 +73,8 @@ export function deniedBy(key: string, choice: string, l: Locks = locks.current):
 export function denial(key: string, choice: string, l: Locks = locks.current): string | null {
   const by = deniedBy(key, choice, l);
   if (!by) return null;
+  if (by.kind === 'breaker') return t('settings.locks.deniedBreaker', { by: by.by, team: by.team });
+  if (by.kind === 'withdrawn') return t('settings.locks.deniedWithdrawn', { team: by.team });
   return by.kind === 'team' ? t('settings.locks.deniedTeam', { team: by.team }) : t('settings.locks.deniedDevice');
 }
 

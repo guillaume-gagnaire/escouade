@@ -2,7 +2,7 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)","src-tauri/src/locks.rs (accounts.reservation, ESC-564)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-550","ESC-564","ESC-567","ESC-620"]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-546","ESC-550","ESC-567","ESC-564","ESC-620"]
 decisions: [169,175,183,189,198,197,204,201,218,282,281]
 compared: null
 ---
@@ -155,6 +155,17 @@ Reversée dans la 2.3, la 2.2.3 ajoute deux choses que les stratégies du poste 
 - **Dans la fenêtre** : au champ d'un secret que le trousseau a refusé, le cadenas et « Imposé par … : le fichier des secrets est interdit sur ce poste, seul le trousseau système garde un secret. » remplacent l'offre du fichier. Dans Réglages › Plugins, le groupe du fichier dit « Imposé par … : ce fichier n'est plus lu. Déplace ses secrets vers le trousseau depuis la page de chaque plugin, ou retire-le. »
 - **Le compte, le modèle et l'effort qu'un agent donne à celui qu'il crée** (`create_agent`, PR 44) : avant que rien ne soit fait, le harness du compte choisi passe par `harnesses.allowed`, le modèle demandé par `harnesses.allowedModels` et l'effort demandé par `harnesses.maxEffort`. Un effort demandé au-dessus du plafond est refusé, en disant qui l'impose, et rien n'est créé. Un effort laissé à son compte descend au plafond, comme pour toute création. Le mode est jugé comme pour les autres créations (ESC-497).
 - **Le pilote ACP** (ESC-491) passe par le même jugement du mode. La session neuve d'après un redémarrage démarre par `judge_start`. Un tour que le harness lance seul compte comme un travail : un mode devenu interdit pendant ce tour arrête le process à la fin du tour, avec sa raison.
+
+## Le coupe-circuit de l'équipe (TS-15)
+
+Le coupe-circuit d'un administrateur (page « Le coupe-circuit de l'administrateur ») passe par ce même moteur, comme une restriction de rang 5 :
+
+- son `locked_by` est `{ kind: "breaker", team, by, reason }` : « Retiré par le coupe-circuit de Claire Martin (équipe Acme) : fuite de clé chez le fournisseur X » ;
+- un harness, un modèle ou un plugin qu'il retire est **refusé quoi que permettent les bornes** (`denies` d'une clé : `harnesses.allowed`, `harnesses.allowedModels`, `plugins.denied`) ; « tous les agents » refuse tout démarrage d'un agent des projets de l'équipe (`halt`) ;
+- il ne grise aucune ligne entière des réglages et n'en réécrit aucune : seul le choix retiré est grisé, et tout revient à sa levée ;
+- un coupe-circuit d'un projet de l'équipe ne vaut que pour les verrous de ce projet.
+
+La liste unique des stratégies gagne **`team.maxOfflineHours`** (un nombre d'heures, de 1 à 720) : « Pas de nouvel agent d'équipe sans contact depuis N heures ». Passé ce délai sans réponse du serveur d'une équipe, aucun agent de ses projets ne démarre ; les projets personnels ne sont pas touchés. La bande du coupe-circuit le dit, avec l'heure du dernier contact.
 
 ## Les fonctionnalités (ESC-550)
 

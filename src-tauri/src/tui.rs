@@ -1273,6 +1273,8 @@ impl Core {
             (rt.meta.engine, rt.meta.project_id.clone())
         };
         self.check_harness_in(engine, &project_id)?;
+        // A team's circuit breakers read again when its server was away, and « sans contact depuis N heures » (TS-15).
+        self.team_gate(&project_id).await?;
         // A harness the policies do not allow (TS-11), and the mode its harness runs it in, judged by the policies of
         // the device and of its team (ESC-497), then by « Autoriser le mode Bypass » (SEC-09, ESC-489): its view does
         // not start either, and what still runs of it (a process started ahead, an interface kept up) stops, said.
@@ -1376,6 +1378,8 @@ impl Core {
             (rt.meta.engine, rt.meta.project_id.clone())
         };
         self.check_harness_in(engine, &project_id)?;
+        // A team's circuit breakers read again when its server was away, and « sans contact depuis N heures » (TS-15).
+        self.team_gate(&project_id).await?;
         self.judge_start(id)?;
         if self.running_interface(&h, false).is_some() {
             return Ok(());

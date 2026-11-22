@@ -269,22 +269,33 @@ impl Core {
         out
     }
 
-    /// Applies the team's revocation list to its plugins here, as the store's list is (TS-14, the kill switch of §9).
-    fn team_plugins_apply(&self, team: &str, store: &Store) {
-        let list = store.revocations.as_ref().and_then(|r| {
+    /// The team's revocation list, its signature checked by the team's keys; None when it has none, or it does not hold.
+    fn team_revocation_list(
+        team: &str,
+        store: &Store,
+    ) -> Option<crate::plugins::store::RevocationList> {
+        store.revocations.as_ref().and_then(|r| {
             crate::plugins::store::check_list(&store.trusted_keys(), &r.json, &r.minisig, 0)
                 .map_err(|e| log::warn!("team {team}: its revocation list refused: {e:?}"))
                 .ok()
-        });
+        })
+    }
+
+    /// Applies the team's revocation list to its plugins here, as the store's list is (TS-14, the kill switch of §9).
+    fn team_plugins_apply(&self, team: &str, store: &Store) {
+        let list = Self::team_revocation_list(team, store);
         if list.is_some() {
             self.plugins.apply_team(team, list);
         }
     }
 
-    /// After each reading of the team: its revocation list applied to its plugins here.
-    pub(crate) fn team_plugins_after_read(&self, team: &str) {
+    /// After each reading of the team: its revocation list applied to its plugins here, and read by the circuit breaker
+    /// (TS-15, `team_breakers.rs`): a plugin it withdraws in every version is taken out through the locks.
+    pub(crate) fn team_plugins_after_read(self: &Arc<Self>, team: &str) {
         if let Some(of) = self.teams_link().and_then(|t| t.plugins_view(team)) {
             self.team_plugins_apply(team, &of.store);
+            let list = Self::team_revocation_list(team, &of.store);
+            self.set_team_withdrawals(team, list.as_ref());
         }
     }
 

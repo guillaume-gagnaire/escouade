@@ -26,6 +26,7 @@ export default {
     pairJoin: 'Ajouter cet appareil par un code',
     recover: 'Récupérer une équipe',
     settings: 'Réglages de l’équipe',
+    breakers: 'Coupe-circuit de l’équipe',
   },
   home: {
     lead: 'Une équipe partage, sur un serveur d’équipe qu’elle héberge, ce qu’Escouade garde aujourd’hui sur ce poste. Tout y est chiffré de bout en bout : le serveur ne lit rien.',

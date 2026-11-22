@@ -527,6 +527,11 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `suggest_worktree_steps`
 - `target_cis`
 - `task_output`
+- `team_breaker_lift`
+- `team_breaker_online`
+- `team_breaker_set`
+- `team_breakers`
+- `team_breakers_retry`
 - `team_confirm_words`
 - `team_cost_notice`
 - `team_costs`

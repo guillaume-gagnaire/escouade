@@ -6196,6 +6196,61 @@ async fn a_ticket_whose_folder_went_starts_its_agent_loose() {
     h.core.mcp.stop();
 }
 
+/// TS-15: a tool that would start an agent on a harness a team's circuit breaker takes out is refused, with who and
+/// why; the same harness in a personal project passes. No tool sets or lifts a circuit breaker.
+#[tokio::test]
+async fn the_tools_are_refused_what_a_circuit_breaker_takes_out_and_none_sets_one() {
+    let h = harness("mcp-act-breaker");
+    let (p, _) = h.project(false).await;
+    let t = made(&h, &p, "Coupé").await;
+    h.core.set_project_team(&p.id, Some("acme".into())).unwrap();
+    h.core.set_team_breakers_of(
+        "acme",
+        "Acme",
+        Some(&escouade_team::breaker::View {
+            active: vec![escouade_team::breaker::Breaker {
+                id: "aa".repeat(16),
+                scope: escouade_team::breaker::Scope::Team,
+                what: escouade_team::breaker::What::Harness {
+                    id: "claude".into(),
+                },
+                reason: "fuite de clé chez le fournisseur X".into(),
+                by: "Claire Martin".into(),
+                member: "01".repeat(16),
+                at: 1,
+                serial: 1,
+                seq: 1,
+            }],
+            ..Default::default()
+        }),
+    );
+    let c = external(&h).await;
+    let said = refused(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Bonjour" }),
+    )
+    .await;
+    assert!(
+        said.contains("Le harness « claude » est retiré par le coupe-circuit de Claire Martin (équipe Acme) : fuite de clé chez le fournisseur X."),
+        "{said}"
+    );
+    let said = refused(
+        &c,
+        "update_ticket",
+        json!({ "ticket": t.id, "account": PRINCIPAL }),
+    )
+    .await;
+    assert!(said.contains("Claire Martin"), "{said}");
+    // No tool of the server sets, lifts or even reads a circuit breaker.
+    let tools = c.list_all_tools().await.unwrap();
+    assert!(tools.iter().all(|t| {
+        let n = t.name.to_lowercase();
+        !n.contains("breaker") && !n.contains("circuit") && !n.contains("kill")
+    }));
+    h.core.mcp.stop();
+}
+
 /// TS-11: what the policies of this device lock is refused by the tools too, and said: a mode of the Kanban outside the
 /// modes allowed, an agent or a ticket's account on a harness not allowed.
 #[tokio::test]

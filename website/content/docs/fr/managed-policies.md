@@ -130,6 +130,7 @@ Chaque stratégie a une clé, le même nom partout : la valeur du registre, la c
 | Serveur d’équipe | `team.server` · chaîne · valeur | L’adresse du serveur d’équipe de l’entreprise : le membre n’a plus qu’à accepter son invitation. | Gardé par l’app ; l’écran d’entrée dans l’équipe le préremplira (à venir). |
 | Empreinte de l’équipe | `team.fingerprint` · chaîne · valeur | L’empreinte de l’équipe attendue sur le serveur d’équipe : une équipe d’une autre empreinte est refusée. | Gardée par l’app ; vérifiée à l’entrée dans l’équipe (à venir). |
 | Refuser tout autre serveur d’équipe | `team.onlyThisServer` · booléen `true` (`1`) · restreindre | Seul le serveur d’équipe posé par la stratégie peut être joint. Seule la valeur true (1) s’impose. | Un autre serveur d’équipe est refusé, avec la raison. |
+| Pas de nouvel agent d’équipe sans contact depuis N heures | `team.maxOfflineHours` · nombre 1–720 · restreindre | Un agent d’un projet d’équipe ne démarre plus quand le serveur de son équipe n’a pas répondu depuis ce nombre d’heures : un coupe-circuit posé pendant l’absence ne peut pas manquer. Les projets personnels ne sont pas touchés. | Le démarrage d’un agent d’équipe est refusé, avec l’heure du dernier contact ; la bande de l’équipe le dit. |
 
 ## Déployer
 

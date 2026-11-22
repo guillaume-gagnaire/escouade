@@ -23,6 +23,7 @@ export default defineZone('team', {
     pairJoin: 'Add this device by a code',
     recover: 'Recover a team',
     settings: 'Team settings',
+    breakers: 'The team’s circuit breaker',
   },
   home: {
     lead: 'A team shares, on a team server it hosts, what Escouade keeps on this machine today. Everything there is end-to-end encrypted: the server reads nothing.',

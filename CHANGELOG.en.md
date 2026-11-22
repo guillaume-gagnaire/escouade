@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: an administrator can cut a harness, a model or a plugin in an emergency for the whole team or one project, or stop all its agents. It is signed, applied within the second on each device online (on their return for the others), told by a band with who asked and why, and lifted in one click. Personal projects are never touched.
 - Security: a file a server sends you opens on a click only when it is an image, a PDF or a text (Markdown, CSV and JSON included, read in Escouade’s editor). Anything else is only downloaded and shown in its folder, and the window says why; under macOS, the copy is put in quarantine like a download of the web.
 - Escouade’s mobile app takes shape, not published yet: on Android and iPhone, three tabs (Your turn, Agents, Kanban) and a chip per space show what waits on your computer and your servers, each followed by its own connection, in the phone’s theme and language.
 - Security: a managed device or a team can forbid reserving an account to a project, or require a private project to go only on an account reserved to it alone. The refused gesture is greyed under a padlock, in the window as from a remote client, and an agent on a shared account stops between two turns. A managed device can also impose a plugin’s simple setting in each project, never a secret nor a profile.

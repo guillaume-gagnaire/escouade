@@ -317,6 +317,8 @@ fn the_table_names_its_keys_once_with_their_sort_and_rows() {
                     TEAM_SERVER,
                     TEAM_FINGERPRINT,
                     ONLY_THIS_SERVER,
+                    // Refused at the start of a team agent (TS-15, the circuit breaker).
+                    MAX_OFFLINE_HOURS,
                 ]
                 .contains(&k.key),
                 "{} locks no row",

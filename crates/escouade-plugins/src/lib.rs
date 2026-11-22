@@ -797,6 +797,9 @@ pub struct Plugins {
     reloaded: Mutex<Vec<ReloadHook>>,
     /// The store's revocation list, as last taken (STORE-9).
     revocations: RwLock<Option<store::RevocationList>>,
+    /// The plugins a team's circuit breaker takes out (TS-15), with what the sheet says: disabled while it holds, as
+    /// the store's revocation list does, the user's own switch untouched.
+    cuts: RwLock<BTreeMap<String, String>>,
     /// The revocation lists of the teams (TS-14), by team: each applies to its team's plugins alone.
     team_revocations: RwLock<BTreeMap<String, store::RevocationList>>,
     /// The folder of the app's program: beside it, a build of development finds the workspace's modules
@@ -924,6 +927,7 @@ impl Plugins {
             staged: Mutex::new(HashMap::new()),
             reloaded: Mutex::new(Vec::new()),
             revocations: RwLock::new(None),
+            cuts: RwLock::new(BTreeMap::new()),
             team_revocations: RwLock::new(BTreeMap::new()),
             app_dir,
             offers: RwLock::new(HashMap::new()),
@@ -1200,6 +1204,10 @@ impl Plugins {
                                 i.id,
                                 m.id
                             ),
+                        }
+                    } else if let Some(why) = self.cuts.read().get(&i.id) {
+                        State::Disabled {
+                            reason: why.clone(),
                         }
                     } else if let Some(w) =
                         self.withdrawn_in(l, lang).filter(|w| w.action == "disable")
@@ -1987,6 +1995,28 @@ impl Plugins {
             reason: e.reason.get(lang).to_string(),
             date: e.date.chars().take(10).collect(),
         })
+    }
+
+    /// The plugins a team's circuit breaker takes out (TS-15), each with the line its sheet shows: disabled while it
+    /// holds (`State::Disabled`), enabled again once it is lifted, the user's switch never written. The ids whose state
+    /// changed are given back; those now cut are told to the hooks of `on_reload` (the runtime forgets them).
+    pub fn set_cuts(&self, cuts: BTreeMap<String, String>) -> Vec<String> {
+        let before = std::mem::replace(&mut *self.cuts.write(), cuts.clone());
+        let mut changed: Vec<String> = Vec::new();
+        for id in cuts.keys().filter(|id| !before.contains_key(*id)) {
+            log::warn!("plugin {id}: taken out by a team's circuit breaker, stopped");
+            for hook in self.reloaded.lock().iter() {
+                hook(id);
+            }
+            changed.push(id.clone());
+        }
+        changed.extend(before.keys().filter(|id| !cuts.contains_key(*id)).cloned());
+        changed
+    }
+
+    /// Whether a team's circuit breaker takes the plugin `id` out.
+    pub fn is_cut(&self, id: &str) -> bool {
+        self.cuts.read().contains_key(id)
     }
 
     /// Takes the store's revocation list and offers (at the start, then every 6 hours): a version

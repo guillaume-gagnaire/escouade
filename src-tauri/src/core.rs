@@ -988,6 +988,11 @@ pub struct Core {
     /// What each team of this device imposes (rank 5) and recommends (rank 2), by team id: its signed `.escouade.yml`
     /// (TS-13, `team_settings.rs`); injectable (`set_team_policies`).
     pub team_policies: RwLock<BTreeMap<String, crate::locks::TeamPolicies>>,
+    /// The circuit breakers in force of each team (TS-15, `team_breakers.rs`), by team id: rank 5 restrictions.
+    pub team_breakers: RwLock<BTreeMap<String, crate::team_breakers::TeamBreakers>>,
+    /// The plugins each team's revocation list withdraws in every version (TS-14), by team id: the circuit breaker
+    /// reads them (`team_breakers.rs`).
+    pub team_withdrawals: RwLock<BTreeMap<String, crate::team_breakers::TeamWithdrawals>>,
     /// The locks of each team's projects (ranks 5 and 6), by team id: `locks_for` gives a project its own.
     pub team_locks: RwLock<BTreeMap<String, crate::locks::Locks>>,
     /// What each team sets on its projects, of the keys of a project's file (TS-13): by team id.
@@ -2278,6 +2283,8 @@ impl Core {
             managed: RwLock::new(managed),
             policy_watch: Mutex::new(None),
             team_policies: RwLock::new(BTreeMap::new()),
+            team_breakers: RwLock::new(BTreeMap::new()),
+            team_withdrawals: RwLock::new(BTreeMap::new()),
             team_locks: RwLock::new(BTreeMap::new()),
             team_layers: RwLock::new(BTreeMap::new()),
             team_costs: Mutex::new(Default::default()),
@@ -4095,6 +4102,8 @@ impl Core {
         // Its harness's plugin off for its project (ESC-404): the plugin would get all it does.
         let project_id = h.lock().meta.project_id.clone();
         self.check_harness_in(engine, &project_id)?;
+        // A team's circuit breakers read again when its server was away, and « sans contact depuis N heures » (TS-15).
+        self.team_gate(&project_id).await?;
         #[cfg(test)]
         {
             let hold = self.start_hold.lock().take();

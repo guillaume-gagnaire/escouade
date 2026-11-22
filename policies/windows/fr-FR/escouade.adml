@@ -258,6 +258,12 @@ Clé : team.fingerprint (chaîne). Sorte : valeur.</string>
 Sur le poste : Un autre serveur d’équipe est refusé, avec la raison.
 
 Clé : team.onlyThisServer (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="team_maxOfflineHours">Pas de nouvel agent d’équipe sans contact depuis N heures</string>
+      <string id="team_maxOfflineHours_Explain">Un agent d’un projet d’équipe ne démarre plus quand le serveur de son équipe n’a pas répondu depuis ce nombre d’heures : un coupe-circuit posé pendant l’absence ne peut pas manquer. Les projets personnels ne sont pas touchés.
+
+Sur le poste : Le démarrage d’un agent d’équipe est refusé, avec l’heure du dernier contact ; la bande de l’équipe le dit.
+
+Clé : team.maxOfflineHours (nombre, 1–720). Sorte : restreindre.</string>
       <string id="features_kanban">Fonctionnalité Kanban</string>
       <string id="features_kanban_Explain">Les tickets, le pilote auto et les sources de tickets : true l’allume, false la coupe (son onglet, ses outils MCP, son pilote auto). Ses tickets restent.
 
@@ -390,6 +396,9 @@ Clé : features.voice (booléen, true, false). Sorte : valeur.</string>
         <textBox refId="team_fingerprint">
           <label>Empreinte de l’équipe</label>
         </textBox>
+      </presentation>
+      <presentation id="team_maxOfflineHours">
+        <decimalTextBox refId="team_maxOfflineHours">Pas de nouvel agent d’équipe sans contact depuis N heures</decimalTextBox>
       </presentation>
     </presentationTable>
   </resources>

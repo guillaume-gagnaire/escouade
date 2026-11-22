@@ -35,11 +35,11 @@ use std::collections::BTreeMap;
 pub use escouade_policy::list::{
     Def as LockKey, Form, Sort, ACCOUNT_RESERVATION, AGGREGATE_VIEW, ALLOW_BYPASS, AUTHORITIES,
     AUTO_UPDATE, CHANNEL, CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION,
-    EXTENSIONS_ALLOWED, FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MAX_PARALLEL, MCP_EXTERNAL, MODELS,
-    MODES_KEY, ONLY_THIS_SERVER, PERSONAL_SPACE, PHONE, PLUGINS_ALLOWED, PLUGINS_DENIED,
-    PLUGIN_ORIGINS_KEY, PLUGIN_PROJECT_SETTINGS, POLICIES as KEYS, PROXY_EXCLUSIONS, PROXY_URL,
-    REMOTE, REMOTE_API, SECRETS_FILE, SERVERS, TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY,
-    VERIFIED_ONLY, VOICE_ONLINE,
+    EXTENSIONS_ALLOWED, FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MAX_OFFLINE_HOURS, MAX_PARALLEL,
+    MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER, PERSONAL_SPACE, PHONE, PLUGINS_ALLOWED,
+    PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, PLUGIN_PROJECT_SETTINGS, POLICIES as KEYS,
+    PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS, TEAM_FINGERPRINT,
+    TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
 };
 
 /// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
@@ -80,13 +80,25 @@ pub enum LockedBy {
     Device { source: String },
     /// Rank 5: the team's name.
     Team { team: String },
+    /// Rank 5 too: a circuit breaker of the team (TS-15, §9), its administrator's name and reason (« Arrêt demandé par
+    /// Claire Martin : fuite de clé chez le fournisseur X »).
+    Breaker {
+        team: String,
+        by: String,
+        reason: String,
+    },
+    /// Rank 5 too: the emergency withdrawal of a plugin by the team's revocation list (TS-14, `disable` for every
+    /// version), which the circuit breaker reads (§9): signed by the team's key, its reason as the list says it.
+    Withdrawn { team: String, reason: String },
 }
 
 impl LockedBy {
     pub fn rank(&self) -> Rank {
         match self {
             LockedBy::Device { .. } => Rank::Managed,
-            LockedBy::Team { .. } => Rank::TeamEnforced,
+            LockedBy::Team { .. } | LockedBy::Breaker { .. } | LockedBy::Withdrawn { .. } => {
+                Rank::TeamEnforced
+            }
         }
     }
 
@@ -97,6 +109,14 @@ impl LockedBy {
                 tr!("par la stratégie de ce poste", "by this device’s policy")
             }
             LockedBy::Team { team } => tr!("par l’équipe {team}", "by the team {team}"),
+            LockedBy::Breaker { team, by, reason } => tr!(
+                "par le coupe-circuit de {by} (équipe {team}) : {reason}",
+                "by the circuit breaker of {by} (team {team}): {reason}"
+            ),
+            LockedBy::Withdrawn { team, reason } => tr!(
+                "par la liste de révocation de l’équipe {team} : {reason}",
+                "by the revocation list of the team {team}: {reason}"
+            ),
         }
     }
 }
@@ -250,6 +270,39 @@ pub struct Lock {
     /// by whoever reads it (`check_extension`). Empty for the other keys.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub layers: Vec<Imposed>,
+    /// What a circuit breaker takes out of this key (TS-15): a harness, a model, a plugin. It only restricts: denied
+    /// whatever the bounds allow.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub denies: Vec<Denial>,
+}
+
+/// What a circuit breaker denies of a key, and who set it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Denial {
+    pub by: LockedBy,
+    pub denied: Vec<String>,
+}
+
+impl Lock {
+    fn empty(key: &str) -> Lock {
+        Lock {
+            key: key.to_owned(),
+            value: None,
+            by: None,
+            bounds: Vec::new(),
+            layers: Vec::new(),
+            denies: Vec::new(),
+        }
+    }
+
+    /// The circuit breaker that denies `choice`.
+    pub fn cut_by(&self, choice: &str) -> Option<&LockedBy> {
+        self.denies
+            .iter()
+            .find(|d| d.denied.iter().any(|x| x == choice))
+            .map(|d| &d.by)
+    }
 }
 
 impl Lock {
@@ -267,8 +320,11 @@ impl Lock {
         )
     }
 
-    /// Who denies `choice`, the device first; None when every bound allows it.
+    /// Who denies `choice`: a circuit breaker first, then the device, then the team; None when nothing does.
     pub fn denied_by(&self, choice: &str) -> Option<&LockedBy> {
+        if let Some(by) = self.cut_by(choice) {
+            return Some(by);
+        }
         let mut bounds: Vec<&Bound> = self.bounds.iter().collect();
         bounds.sort_by_key(|b| std::cmp::Reverse(b.by.rank()));
         bounds
@@ -286,6 +342,20 @@ pub struct Locks {
     /// Each with the row it locks: the window greys a row by it (`locked_by`).
     pub rows: BTreeMap<String, Vec<String>>,
     pub warnings: Vec<String>,
+    /// A circuit breaker that stops every agent (TS-15): none starts, those that run stop at once.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub halt: Option<LockedBy>,
+    /// The circuit breakers of one project of the team: applied to that project's locks alone (`for_project`).
+    #[serde(skip)]
+    pub scoped: Vec<(String, Breaker)>,
+}
+
+/// A circuit breaker of a team, as the core applies it (TS-15, `escouade_team::breaker`).
+pub use escouade_team::breaker::{Breaker, What as Cut};
+
+/// A model a circuit breaker names: the model itself, or the same one behind a provider (`anthropic/claude-opus-5-5`).
+fn same_model(asked: &str, cut: &str) -> bool {
+    asked == cut || asked.rsplit_once('/').is_some_and(|(_, m)| m == cut)
 }
 
 /// A value of a rank, read in the key's form; Err says why it is left out.
@@ -459,6 +529,7 @@ impl Locks {
                         })
                         .collect(),
                     layers: Vec::new(),
+                    denies: Vec::new(),
                 }
             } else if let Form::Ceiling { choices } = k.form {
                 // A ceiling: the lower one holds, the managed device's when they are equal.
@@ -473,6 +544,7 @@ impl Locks {
                     by: Some(by),
                     bounds: Vec::new(),
                     layers: Vec::new(),
+                    denies: Vec::new(),
                 }
             } else if matches!(k.form, Form::Number { .. }) && k.sort == Sort::Restrict {
                 // A ceiling of a number (`projects.maxParallel`, ESC-620): the lower one holds, the managed device's
@@ -487,6 +559,7 @@ impl Locks {
                     by: Some(by),
                     bounds: Vec::new(),
                     layers: Vec::new(),
+                    denies: Vec::new(),
                 }
             } else if k.form == Form::Union {
                 // What each rank denies or adds, together; said imposed by the strongest.
@@ -504,6 +577,7 @@ impl Locks {
                     by: Some(layers[0].0.clone()),
                     bounds: Vec::new(),
                     layers: Vec::new(),
+                    denies: Vec::new(),
                 }
             } else {
                 // A value: the managed device's wins (it comes first).
@@ -525,6 +599,7 @@ impl Locks {
                     by: Some(by),
                     bounds: Vec::new(),
                     layers: each,
+                    denies: Vec::new(),
                 }
             };
             for row in k.rows {
@@ -561,7 +636,22 @@ impl Locks {
 
     /// Why `choice` is not allowed by the bound `key`: « Le harness codex n'est pas permis par la stratégie de ce poste. »
     pub fn denial(&self, key: &str, choice: &str) -> Option<String> {
-        let by = self.locks.get(key)?.denied_by(choice)?.by();
+        let lock = self.locks.get(key)?;
+        if let Some(cut) = lock.cut_by(choice) {
+            let by = cut.by();
+            return Some(if key == HARNESSES {
+                tr!(
+                    "Le harness « {choice} » est retiré {by}.",
+                    "The harness “{choice}” is taken out {by}."
+                )
+            } else {
+                tr!(
+                    "« {choice} » est retiré {by} ({key}).",
+                    "“{choice}” is taken out {by} ({key})."
+                )
+            });
+        }
+        let by = lock.denied_by(choice)?.by();
         Some(if key == MODES_KEY {
             tr!(
                 "Le mode « {choice} » n’est pas permis {by}.",
@@ -642,12 +732,100 @@ impl Locks {
         Ok(())
     }
 
-    /// The harness `engine`, refused when a bound denies it.
+    /// The harness `engine`, refused when a bound or a circuit breaker denies it, or when a circuit breaker stops every
+    /// agent (TS-15): what every start of an agent goes through.
     pub fn check_engine(&self, engine: &str) -> Result<()> {
+        self.check_halt()?;
         match self.denial(HARNESSES, engine) {
             Some(why) => bail!(why),
             None => Ok(()),
         }
+    }
+
+    /// Refused when a circuit breaker stops every agent (TS-15).
+    pub fn check_halt(&self) -> Result<()> {
+        match &self.halt {
+            Some(by) => bail!(tr!(
+                "Les agents de l’équipe sont arrêtés {by}.",
+                "The team’s agents are stopped {by}.",
+                by = by.by()
+            )),
+            None => Ok(()),
+        }
+    }
+
+    /// The circuit breaker that takes the plugin `id` out.
+    pub fn plugin_cut(&self, id: &str) -> Option<&LockedBy> {
+        self.get(PLUGINS_DENIED)?.cut_by(id)
+    }
+
+    /// The circuit breakers of a team applied (`team`: its name): what each takes out, denied. One that holds for a
+    /// project of the team is kept aside, for that project's locks alone (`for_project`). Nothing else changes: a
+    /// breaker only restricts.
+    pub fn apply_breakers(&mut self, team: &str, breakers: &[Breaker]) {
+        for b in breakers {
+            if !matches!(b.scope, escouade_team::breaker::Scope::Team) {
+                self.scoped.push((team.to_owned(), b.clone()));
+                continue;
+            }
+            self.apply_breaker(team, b);
+        }
+    }
+
+    fn apply_breaker(&mut self, team: &str, b: &Breaker) {
+        let by = LockedBy::Breaker {
+            team: team.to_owned(),
+            by: b.by.clone(),
+            reason: b.reason.clone(),
+        };
+        let (key, id) = match &b.what {
+            Cut::Agents => {
+                self.halt.get_or_insert(by);
+                return;
+            }
+            Cut::Harness { id } => (HARNESSES, id),
+            Cut::Model { id } => (MODELS, id),
+            Cut::Plugin { id, .. } => (PLUGINS_DENIED, id),
+        };
+        self.locks
+            .entry(key.to_owned())
+            .or_insert_with(|| Lock::empty(key))
+            .denies
+            .push(Denial {
+                by,
+                denied: vec![id.clone()],
+            });
+    }
+
+    /// The plugins the team `team`'s revocation list withdraws in every version (TS-14, `disable`), denied as a circuit
+    /// breaker's are (`plugins.denied`): disabled here, refused at their install, until the list takes them back.
+    pub fn apply_withdrawals(&mut self, team: &str, withdrawn: &[(String, String)]) {
+        for (id, reason) in withdrawn {
+            self.locks
+                .entry(PLUGINS_DENIED.to_owned())
+                .or_insert_with(|| Lock::empty(PLUGINS_DENIED))
+                .denies
+                .push(Denial {
+                    by: LockedBy::Withdrawn {
+                        team: team.to_owned(),
+                        reason: reason.clone(),
+                    },
+                    denied: vec![id.clone()],
+                });
+        }
+    }
+
+    /// The locks of a project of the team (its journal `journal`, hex): these, with the circuit breakers that hold for
+    /// that project alone.
+    pub fn for_project(&self, journal: Option<&str>) -> Locks {
+        let mut out = self.clone();
+        let scoped = std::mem::take(&mut out.scoped);
+        for (team, b) in &scoped {
+            if b.holds_for(journal) {
+                out.apply_breaker(team, b);
+            }
+        }
+        out
     }
 
     /// « Ce réglage est imposé par la stratégie de ce poste (telemetry.enabled). »
@@ -716,6 +894,19 @@ impl Locks {
         if model.is_empty() {
             return Ok(());
         }
+        // A circuit breaker takes it out (TS-15), whatever the harness.
+        if let Some(by) = self.get(MODELS).and_then(|l| {
+            l.denies
+                .iter()
+                .find(|d| d.denied.iter().any(|c| same_model(model, c)))
+                .map(|d| &d.by)
+        }) {
+            bail!(tr!(
+                "Le modèle « {model} » est retiré {by}.",
+                "The model “{model}” is taken out {by}.",
+                by = by.by()
+            ));
+        }
         let Some(allowed) = self.value(MODELS).and_then(|m| m.get(engine)) else {
             return Ok(());
         };
@@ -732,6 +923,13 @@ impl Locks {
     /// A plugin `id` installed from `origin` (one of `plugins.allowedOrigins`' names: `store-verified`, `store`,
     /// `git`, `folder`, `dev`), refused when the policies do not allow it.
     pub fn check_plugin(&self, id: &str, origin: &str) -> Result<()> {
+        if let Some(by) = self.plugin_cut(id) {
+            bail!(tr!(
+                "Le plugin « {id} » est retiré {by}.",
+                "The plugin “{id}” is taken out {by}.",
+                by = by.by()
+            ));
+        }
         if self
             .value(PLUGINS_DENIED)
             .is_some_and(|d| strings(d).iter().any(|x| x == id))
@@ -1568,16 +1766,42 @@ impl crate::core::Core {
             .map(anyhow::Error::msg)
     }
 
-    /// The locks of a project: its team's when it is of one (ranks 5 and 6), the app's otherwise.
+    /// The locks of a project: its team's when it is of one (ranks 5 and 6, with the circuit breakers that hold for it,
+    /// TS-15), the app's otherwise.
     pub(crate) fn locks_for(&self, project_id: &str) -> Locks {
-        let team = self
+        let (team, journal) = self
             .projects
             .read()
             .iter()
             .find(|p| p.id == project_id)
-            .and_then(|p| p.team.clone());
-        team.and_then(|t| self.team_locks.read().get(&t).cloned())
-            .unwrap_or_else(|| self.locks.read().clone())
+            .map(|p| (p.team.clone(), p.team_project.clone()))
+            .unwrap_or_default();
+        team.and_then(|t| {
+            self.team_locks
+                .read()
+                .get(&t)
+                .map(|l| l.for_project(journal.as_deref()))
+        })
+        .unwrap_or_else(|| self.locks.read().clone())
+    }
+
+    /// The locks of each project, by its id (`locks_for` for all, the locks taken once): what `settle_agents` reads.
+    pub(crate) fn locks_by_project(&self) -> BTreeMap<String, Locks> {
+        let base = self.locks.read().clone();
+        let teams = self.team_locks.read().clone();
+        self.projects
+            .read()
+            .iter()
+            .map(|p| {
+                let locks = p
+                    .team
+                    .as_ref()
+                    .and_then(|t| teams.get(t))
+                    .map(|l| l.for_project(p.team_project.as_deref()))
+                    .unwrap_or_else(|| base.clone());
+                (p.id.clone(), locks)
+            })
+            .collect()
     }
 
     /// Rank 6, as read (`Managed::read` at the start, `watch_policies` at each change; a test gives its own). The locks
@@ -1609,14 +1833,55 @@ impl crate::core::Core {
     /// agents (each at the end of its turn). The window is told.
     pub(crate) fn apply_locks(self: &std::sync::Arc<Self>) {
         let teams = self.team_policies.read().clone();
+        let breakers = self.team_breakers.read().clone();
         let managed = self.managed.read().clone();
-        let locks = Locks::compute(KEYS, app_wide(&teams).as_ref(), &managed);
+        let mut locks = Locks::compute(KEYS, app_wide(&teams).as_ref(), &managed);
         for w in &locks.warnings {
             log::warn!("policies: {w}");
         }
-        let mut by_team: BTreeMap<String, Locks> = teams
-            .iter()
-            .map(|(id, t)| (id.clone(), Locks::compute(KEYS, Some(t), &managed)))
+        // A plugin is of the app (`project_scoped`): a team's circuit breaker that takes one out holds for the app.
+        for t in breakers.values() {
+            let plugins: Vec<Breaker> = t
+                .breakers
+                .iter()
+                .filter(|b| matches!(b.what, Cut::Plugin { .. }))
+                .cloned()
+                .map(|mut b| {
+                    b.scope = escouade_team::breaker::Scope::Team;
+                    b
+                })
+                .collect();
+            locks.apply_breakers(&t.name, &plugins);
+        }
+        // The emergency withdrawals of each team's revocation list (TS-14), read by the circuit breaker: a plugin is of
+        // the app, so they hold for the app.
+        for t in self.team_withdrawals.read().values() {
+            locks.apply_withdrawals(&t.name, &t.withdrawn);
+        }
+        // Each team's locks: its signed file's, with its circuit breakers (TS-15), for a team with either.
+        let mut ids: Vec<&String> = teams.keys().chain(breakers.keys()).collect();
+        ids.sort();
+        ids.dedup();
+        let mut by_team: BTreeMap<String, Locks> = ids
+            .into_iter()
+            .map(|id| {
+                let cut = breakers.get(id);
+                let name = teams
+                    .get(id)
+                    .map(|t| t.team.clone())
+                    .or_else(|| cut.map(|c| c.name.clone()))
+                    .unwrap_or_else(|| id.clone());
+                let own = teams.get(id).cloned().unwrap_or_else(|| TeamPolicies {
+                    id: id.clone(),
+                    team: name.clone(),
+                    ..Default::default()
+                });
+                let mut l = Locks::compute(KEYS, Some(&own), &managed);
+                if let Some(c) = cut {
+                    l.apply_breakers(&name, &c.breakers);
+                }
+                (id.clone(), l)
+            })
             .collect();
         // A budget of the team, or of this member, gone beyond with `costs.stopAutopilot` (TS-16): the autopilot of
         // every project of the team is stopped, its switch greyed with who imposes it.
@@ -1631,6 +1896,7 @@ impl crate::core::Core {
                     by: Some(LockedBy::Team { team }),
                     bounds: Vec::new(),
                     layers: Vec::new(),
+                    denies: Vec::new(),
                 },
             );
             locks
@@ -1670,6 +1936,7 @@ impl crate::core::Core {
             Box::new(self.settings.read().clone())
         });
         self.settle_locks();
+        self.settle_breakers();
         self.hub.emit(crate::model::UiEvent::Locks {
             locks: self.locks.read().clone(),
             teams: self.team_locks.read().clone(),
@@ -1724,25 +1991,16 @@ impl crate::core::Core {
     pub(crate) fn settle_agents(self: &std::sync::Arc<Self>) {
         // Taken apart, never held under an agent's lock.
         let base = self.locks.read().clone();
-        let teams = self.team_locks.read().clone();
+        let by_project = self.locks_by_project();
         let bypass = self.bypass_allowed();
         let lang = crate::i18n::ui();
-        let of = |team: &Option<String>| -> &Locks {
-            team.as_ref().and_then(|t| teams.get(t)).unwrap_or(&base)
-        };
-        let team_of: BTreeMap<String, Option<String>> = self
-            .projects
-            .read()
-            .iter()
-            .map(|p| (p.id.clone(), p.team.clone()))
-            .collect();
         let idle: Vec<String> = self
             .agents
             .read()
             .iter()
             .filter(|(_, h)| {
                 let rt = h.lock();
-                let locks = of(team_of.get(&rt.meta.project_id).unwrap_or(&None));
+                let locks = by_project.get(&rt.meta.project_id).unwrap_or(&base);
                 !rt.meta.status.is_active()
                     && (locks.agent_mode_denied(&rt.meta)
                         || (rt.proc.is_some() || rt.tui.is_some())

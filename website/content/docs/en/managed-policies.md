@@ -130,6 +130,7 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | Team server | `team.server` · string · value | The address of the company’s team server: the member only has to accept their invitation. | Kept by the app; the screen to join the team will fill it in (to come). |
 | Team fingerprint | `team.fingerprint` · string · value | The fingerprint of the team expected on the team server: a team of another fingerprint is refused. | Kept by the app; checked when joining the team (to come). |
 | Refuse any other team server | `team.onlyThisServer` · Boolean `true` (`1`) · restrict | Only the team server the policy sets may be joined. Only the value true (1) is imposed. | Another team server is refused, with the reason. |
+| No new team agent without contact for N hours | `team.maxOfflineHours` · number 1–720 · restrict | An agent of a team’s project no longer starts when its team’s server has not answered for this many hours: a circuit breaker set meanwhile cannot be missed. Personal projects are not touched. | The start of a team agent is refused, with the hour of the last contact; the team’s band says it. |
 
 ## Deploy
 

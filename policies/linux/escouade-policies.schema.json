@@ -313,6 +313,13 @@
       "title": "Team fingerprint",
       "type": "string"
     },
+    "team.maxOfflineHours": {
+      "description": "An agent of a team’s project no longer starts when its team’s server has not answered for this many hours: a circuit breaker set meanwhile cannot be missed. Personal projects are not touched. The start of a team agent is refused, with the hour of the last contact; the team’s band says it.",
+      "maximum": 720,
+      "minimum": 1,
+      "title": "No new team agent without contact for N hours",
+      "type": "integer"
+    },
     "team.onlyThisServer": {
       "description": "Only the team server the policy sets may be joined. Only the value true (1) is imposed. Another team server is refused, with the reason.",
       "enum": [

@@ -90,6 +90,14 @@ impl Hub {
             .retain(|_, tx| tx.receiver_count() > 0);
     }
 
+    /// Whether the device has a live connection open now.
+    pub fn is_live(&self, device: &Id) -> bool {
+        self.per_device
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(device)
+    }
+
     fn enter(&self, device: Id, max: u32) -> bool {
         let mut map = self.per_device.lock().unwrap_or_else(|e| e.into_inner());
         let n = map.entry(device).or_default();

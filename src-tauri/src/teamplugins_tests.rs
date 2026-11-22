@@ -530,6 +530,13 @@ async fn the_revocation_list_disables_and_the_policy_bounds_what_the_store_insta
         "{:?}",
         got.state
     );
+    // The circuit breaker of TS-15 reads the same list: withdrawn in every version, the plugin is a lock that names the
+    // list and its reason, refused at its install whatever its origin.
+    assert!(matches!(
+        bob.h.core.locks.read().plugin_cut("fr.acme.rules"),
+        Some(crate::locks::LockedBy::Withdrawn { reason, .. }) if reason.contains("Fuite")
+    ));
+    assert_eq!(bob.h.core.team_withdrawn(&team).len(), 1);
     let view = bob.h.core.team_plugins(&team).await.unwrap();
     assert!(view
         .plugins
