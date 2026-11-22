@@ -43,9 +43,9 @@ pub fn invite(data: &[u8]) {
                 "a host that is not one: {}",
                 link.server
             );
-            let to_server = InviteLink::server_part(&url);
-            assert!(!to_server.contains(&URL_SAFE_NO_PAD.encode(link.secret)));
-            assert!(!to_server.contains(&URL_SAFE_NO_PAD.encode(link.team)));
+            // The link opens the app, never a web page whose script would read its secret.
+            assert!(url.starts_with("escouade://team/join/"), "{url}");
+            assert!(url.contains(&URL_SAFE_NO_PAD.encode(link.secret)));
             let _ = link.server_token();
         }
     }

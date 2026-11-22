@@ -70,7 +70,8 @@ async fn a_team_is_created_and_an_invitation_serves_once() {
     );
     assert_eq!(invited.expires_at, NOW + 72 * 3600);
     let (before, after) = invited.url.split_once('#').unwrap();
-    assert!(before.starts_with("https://team.example.org/join/"));
+    // The app's link (SR2-08): it opens Escouade, never a page of the server.
+    assert!(before.starts_with("escouade://team/join/team.example.org/"));
     assert!(after.contains("s=") && after.contains("t="));
     assert!(!before.contains(&invited.link.server_token()));
 

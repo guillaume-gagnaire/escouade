@@ -3,9 +3,9 @@
 //! first (`single-instance`). It opens the plugin's page in the view Plugins and never installs anything: installing stays the
 //! user's gesture, with its permissions shown. A link the app cannot read is said, and nothing else is done.
 //!
-//! `escouade://team/join/<server>/<id>#s=…&t=…` (TS-3): an invitation to a team, as the team server's page hands it over
-//! (`/join/<id>`, the secret read after the `#` in the browser). It opens « Rejoindre une équipe » with the link filled in,
-//! its server and the team's six words shown: joining stays the user's gesture.
+//! `escouade://team/join/<server>/<id>#s=…&t=…` (TS-3, SR2-08): an invitation to a team, the link as the inviting device
+//! made it (clicked in a message, or scanned): it never passes through a page of the server. It opens « Rejoindre une
+//! équipe » with the link filled in, its server and the team's six words shown: joining stays the user's gesture.
 //!
 //! `escouade://overseer` (ESC-468): the Overseer's screen, as its global shortcut opens it (`hotkey`); under Wayland, where
 //! an app has no global shortcut, the desktop's own shortcut runs `xdg-open escouade://overseer`.
@@ -28,7 +28,7 @@ const MAX_LEN: usize = 600;
 pub enum DeepLink {
     /// The page of the plugin `id`: its page in the store, its own when it is installed.
     Plugin { id: String },
-    /// An invitation to a team (TS-3): the link as `teams::parse_link` reads it, `https://<server>/join/<id>#…`.
+    /// An invitation to a team (TS-3): the link as `teams::parse_link` reads it, `escouade://team/join/<server>/<id>#…`.
     TeamJoin { link: String },
     /// The Overseer's screen (ESC-468).
     Overseer,
@@ -113,7 +113,7 @@ pub fn deliver<R: Runtime>(app: &AppHandle<R>, urls: impl IntoIterator<Item = St
             // The server's name, never the secret after the `#`.
             DeepLink::TeamJoin { link } => log::info!(
                 "deep link: an invitation to a team of {}",
-                link.trim_start_matches("https://")
+                link.trim_start_matches(escouade_team::crypto::invite::LINK_PREFIX)
                     .split('/')
                     .next()
                     .unwrap_or("")

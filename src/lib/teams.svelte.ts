@@ -51,8 +51,8 @@ export interface Created {
 }
 
 export interface InviteView {
+  /** `escouade://team/join/<server>/<id>#…`: opens Escouade, never a web page (SR2-08). */
   url: string;
-  deepLink: string;
   expiresAt: number;
   ready: boolean;
   /** The link's QR code, SVG (made by the backend: dark on light). */

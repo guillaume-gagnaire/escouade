@@ -157,8 +157,10 @@ fn the_installers_register_the_scheme() {
 
 #[test]
 fn reads_an_invitation_to_a_team_and_keeps_its_secret_out_of_a_bad_one() {
-    let url = "https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    // The link is the app's (SR2-08): handed to the window as it came, for « Rejoindre une équipe » to show its
+    // server and its team's six words; joining stays the user's gesture.
     let deep = "escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    let url = deep;
     assert_eq!(parse(deep), DeepLink::TeamJoin { link: url.into() });
     assert_eq!(
         parse(&deep.replace("escouade://team", "Escouade://Team")),
@@ -181,6 +183,9 @@ fn reads_an_invitation_to_a_team_and_keeps_its_secret_out_of_a_bad_one() {
     }
     // Found among a launch's arguments.
     assert_eq!(links_in(["escouade.exe", deep]), vec![deep.to_string()]);
+    // A web link of before is no link of the app's.
+    let old = "https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    assert!(links_in(["escouade.exe", old]).is_empty());
 }
 
 #[test]

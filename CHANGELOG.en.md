@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: a team invitation link now starts with escouade:// and opens straight in Escouade, without going through a page of the team server, which could read its secret. Links from before (https://…/join/…) no longer work: ask for a new one.
 - Security: removing a phone in Settings › Phone also revokes its access, and removing a device also removes the devices paired from it, which the Devices screen says beforehand. A pairing code can no longer be created from a paired device, and each removal keeps the true name of who made it.
 - Team server: an administrator can cut a harness, a model or a plugin in an emergency for the whole team or one project, or stop all its agents. It is signed, applied within the second on each device online (on their return for the others), told by a band with who asked and why, and lifted in one click. Personal projects are never touched.
 - Security: a file a server sends you opens on a click only when it is an image, a PDF or a text (Markdown, CSV and JSON included, read in Escouade’s editor). Anything else is only downloaded and shown in its folder, and the window says why; under macOS, the copy is put in quarantine like a download of the web.

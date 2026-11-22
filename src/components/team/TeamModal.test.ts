@@ -34,8 +34,7 @@ function team(over: Partial<TeamView> = {}): TeamView {
 }
 
 const INVITE = {
-  url: 'https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AAAA&t=BBBB',
-  deepLink: 'escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff#s=AAAA&t=BBBB',
+  url: 'escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff#s=AAAA&t=BBBB',
   expiresAt: 1_900_000_000,
   ready: true,
   qr: '<svg xmlns="http://www.w3.org/2000/svg" data-testid="qr"><rect width="10" height="10"/></svg>',
@@ -186,17 +185,46 @@ describe('the screens of the team server (TS-3)', () => {
       team_join_preview: () => ({ server: 'team.acme.fr', fingerprint: SIX, ownDevice: false }),
       team_join: () => waiting,
     });
-    render(TeamModal, { props: { step: 'join', link: INVITE.deepLink } });
-    expect(screen.getByLabelText('Lien d’invitation')).toHaveValue(INVITE.deepLink);
+    render(TeamModal, { props: { step: 'join', link: INVITE.url } });
+    expect(screen.getByLabelText('Lien d’invitation')).toHaveValue(INVITE.url);
     expect(await screen.findByText(/Vérifie ces six mots avec la personne qui t’invite/)).toBeInTheDocument();
     for (const w of SIX) expect(screen.getByText(w)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Rejoindre' }));
-    expect(backend.called('team_join')[0].args).toEqual({ link: INVITE.deepLink, name: '' });
+    expect(backend.called('team_join')[0].args).toEqual({ link: INVITE.url, name: '' });
     expect(await screen.findByRole('status')).toHaveTextContent('Un administrateur en ligne te fait entrer');
     // The administrator let it in: the backend says the team changed.
     teams.put(team({ role: 'member', escrow: 'le RSSI' }));
     expect(await screen.findByText('Tu es dans l’équipe « ACME ».')).toBeInTheDocument();
     expect(screen.getByRole('note')).toHaveTextContent('l’organisation peut lire son contenu');
+  });
+
+  it('refuses a link of the old form (https://…/join/…) with the word to ask for a new one, nothing sent', async () => {
+    const OLD = 'Ce lien d’invitation a l’ancienne forme (https://…/join/…) et ne sert plus : demande un nouveau lien à qui t’invite.';
+    const backend = fakeBackend({
+      team_list: () => [],
+      team_join_preview: () => {
+        throw OLD;
+      },
+    });
+    render(TeamModal, { props: { step: 'join', link: 'https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AAAA&t=BBBB' } });
+    expect(await screen.findByText(/a l’ancienne forme/)).toHaveTextContent('demande un nouveau lien');
+    expect(screen.queryByText(/Vérifie ces six mots/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Rejoindre' })).toBeDisabled();
+    expect(backend.called('team_join')).toEqual([]);
+  });
+
+  it('opened by a link, shows its server and six words and joins only on « Rejoindre »', async () => {
+    const backend = fakeBackend({
+      team_list: () => [],
+      team_join_preview: () => ({ server: 'team.acme.fr', fingerprint: SIX, ownDevice: false }),
+      team_join: () => team({ joined: false, role: 'none' }),
+    });
+    render(TeamModal, { props: { step: 'join', link: INVITE.url } });
+    expect(await screen.findByText('team.acme.fr')).toBeInTheDocument();
+    for (const w of SIX) expect(screen.getByText(w)).toBeInTheDocument();
+    expect(backend.called('team_join')).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: 'Retour' }));
+    expect(backend.called('team_join')).toEqual([]);
   });
 
   it('says an invitation already used, as the backend says it', async () => {

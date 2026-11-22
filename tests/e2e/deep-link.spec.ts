@@ -56,3 +56,25 @@ test.describe('a link to a plugin the store does not have', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });
+
+test.describe('an invitation to a team, opened from elsewhere (SR2-08)', () => {
+  const LINK =
+    'escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM';
+  test.use({ appArgs: [LINK] });
+
+  test('opens « Rejoindre une équipe » with its server and six words, and joins nothing without the user', async ({ app }) => {
+    const { page } = app;
+    const dialog = page.getByRole('dialog', { name: 'Rejoindre une équipe' });
+    await expect(dialog.getByLabel('Lien d’invitation')).toHaveValue(LINK);
+    await expect(dialog.getByText('team.acme.fr', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('group', { name: 'Empreinte de l’équipe' }).getByRole('listitem')).toHaveCount(6);
+    await expect(dialog.getByRole('button', { name: 'Rejoindre' })).toBeEnabled();
+    // Nothing joined, nothing asked of the server: joining stays the user's gesture.
+    const teams = await page.evaluate(() =>
+      (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string): Promise<unknown> } }).__TAURI_INTERNALS__.invoke('team_list'),
+    );
+    expect(teams).toEqual([]);
+    await dialog.getByRole('button', { name: 'Retour' }).click();
+    await expect(page.getByText('Cet appareil n’est dans aucune équipe.')).toBeVisible();
+  });
+});

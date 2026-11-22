@@ -311,7 +311,10 @@ async fn the_pairing_relay_takes_one_try(b: Backend) {
 }
 
 #[tokio::test]
-async fn the_page_of_an_invitation_link_hands_it_to_escouade_and_loads_nothing() {
+async fn the_page_of_an_old_invitation_link_reads_nothing_of_it_and_runs_no_script() {
+    // SR2-08: the secret of an invitation never passes through a page of the server. A link of before opened in a
+    // browser gets a fixed text that says to ask for a new one: no script (the policy forbids any), nothing that
+    // reads what follows the `#`, no resource from elsewhere.
     let s = TestServer::start(&Backend::Sqlite).await;
     let id = "00112233445566778899aabbccddeeff";
     let r = s
@@ -327,19 +330,42 @@ async fn the_page_of_an_invitation_link_hands_it_to_escouade_and_loads_nothing()
         .unwrap()
         .to_string();
     assert!(csp.starts_with("default-src 'none'"), "{csp}");
-    let nonce = csp
-        .split("'nonce-")
-        .nth(1)
-        .unwrap()
-        .split('\'')
-        .next()
-        .unwrap()
-        .to_string();
+    assert!(
+        csp.contains("script-src 'none'") && !csp.contains("nonce"),
+        "{csp}"
+    );
+    assert_eq!(r.headers()["referrer-policy"], "no-referrer");
     let page = r.text().await.unwrap();
-    assert!(page.contains(&format!("<script nonce=\"{nonce}\">")));
-    assert!(page.contains("escouade://team/join/"));
-    assert!(!page.contains("http://") && !page.contains("src="));
-    // Not an id: refused.
+    let lower = page.to_ascii_lowercase();
+    for never in [
+        "<script",
+        "location",
+        "hash",
+        " on",
+        "javascript:",
+        "src=",
+        "href=",
+        "http://",
+        "<a ",
+        "<form",
+    ] {
+        assert!(!lower.contains(never), "{never} in the page");
+    }
+    assert!(page.contains("Demande un nouveau lien"));
+    assert!(page.contains("escouade://"));
+    // The same page for every id: nothing of the link in it.
+    let other = s
+        .client()
+        .http
+        .get(format!("{}/join/ffeeddccbbaa99887766554433221100", s.base))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert_eq!(other, page);
+    assert!(!page.contains(id));
     let r = s
         .client()
         .http

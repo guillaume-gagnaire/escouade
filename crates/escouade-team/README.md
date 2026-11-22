@@ -88,7 +88,7 @@ La plus haute époque vue et sa tête vont dans leur propre entrée du trousseau
 
 ### Inviter : le secret après le `#` (C6-A)
 
-- `Team::invite_for(objet, maintenant, durée)` : 72 h par défaut, un seul usage. Le lien `https://<serveur>/join/<id>#s=<secret>&t=<empreinte>` (et `&m=<membre>` pour un autre appareil d'un membre).
+- `Team::invite_for(objet, maintenant, durée)` : 72 h par défaut, un seul usage. Le lien `escouade://team/join/<serveur>/<id>#s=<secret>&t=<empreinte>` (et `&m=<membre>` pour un autre appareil d'un membre) : il ouvre Escouade, jamais une page web, que le serveur d'équipe servirait et dont le script lirait le secret (SR2-08). Un lien de l'ancienne forme (`https://<serveur>/join/<id>#…`) est refusé (`InvitationError::OldForm`), et une invitation faite avant (`Invitation::app_link` faux) n'admet plus personne.
 - **Le jeton du serveur est dérivé du secret** (`invite::server_token`, HKDF) : l'administrateur en enregistre le SHA-256 auprès du serveur (`POST /v1/devices/enrollments {token_hash}`), qui ne voit jamais le secret. Le lien seul suffit donc à l'invité (`Team::join_link`).
 - **Usage unique, des deux côtés** : le serveur ne laisse servir le jeton qu'une fois (un second usage : 409 `token_used`, `Error::InvitationUsed` pour l'invité légitime, et une alerte pour les administrateurs, que `serve` lit et que l'app montre sur l'invitation) ; le groupe ne l'admet qu'une fois (`Invitation::used`).
 - **L'expiration, des deux côtés** : le serveur oublie le jeton à son terme (`Error::InvitationUnknown`), et un administrateur en ligne après lui n'admet plus la demande.

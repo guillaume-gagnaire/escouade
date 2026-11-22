@@ -2,8 +2,8 @@
 title: "Entrer dans une équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md"]
-tickets: ["ESC-461"]
-decisions: [173]
+tickets: ["ESC-461","ESC-633"]
+decisions: [173,286]
 compared: null
 ---
 
@@ -35,14 +35,21 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 ## Inviter
 
 - Un administrateur choisit le rôle (membre ou administrateur) et la durée (24 h, **72 h par défaut**, 7 jours). Un lien sert **une seule fois**.
-- Le lien : `https://<serveur>/join/<id>#s=<secret>&t=<empreinte>`. Ce qui suit le `#` ne va jamais au serveur. La fenêtre le donne à copier, et en QR code.
-- Ouvert dans un navigateur, le serveur montre une page qui passe le lien entier à Escouade (`escouade://team/join/<serveur>/<id>#…`) ; collé, il marche aussi.
+- Le lien : `escouade://team/join/<serveur>/<id>#s=<secret>&t=<empreinte>` (et `&m=<membre>` pour un autre appareil d'un membre). La fenêtre le donne à copier, et en QR code ; elle dit que l'invité le clique ou, si sa messagerie ne le rend pas cliquable, le colle dans « Rejoindre par un lien ».
+- **Le secret ne passe jamais par une page web** : il n'y a aucune forme `https://` du lien qui le porte. HTTP n'envoie pas ce qui suit le `#`, mais une page servie par le serveur d'équipe le lirait dans le navigateur, et un serveur piraté entrerait alors à la place de l'invité. Une page statique ailleurs (escouade.dev) ferait d'un autre site un tiers de confiance : écartée aussi.
 - Le jeton du serveur que l'invité utilise est dérivé du secret : le serveur n'en garde que l'empreinte, et ne laisse entrer qu'une fois.
 - Les invitations de l'équipe sont listées sur sa carte : ouverte (jusqu'à quand), en attente d'un administrateur, utilisée, expirée.
 
+## Les liens de l'ancienne forme
+
+- Un lien `https://<serveur>/join/<id>#…` (d'avant la 2.3, qui ouvrait une page du serveur) est **refusé**, collé comme ouvert : « Ce lien d'invitation a l'ancienne forme (https://…/join/…) et ne sert plus : demande un nouveau lien à qui t'invite. Les liens d'Escouade commencent maintenant par escouade://. » Rien ne part.
+- L'appareil qui a fait une invitation avant ce changement **n'admet plus personne avec elle**, MAC valide ou non : elle est listée expirée. Son lien a pu passer par la page du serveur.
+- Ouvert dans un navigateur, un tel lien mène à la page `/join/<id>` du serveur, qui n'est plus qu'un texte fixe sans script (voir « Le serveur d'équipe »).
+
 ## Rejoindre
 
-- « Rejoindre par un lien », ou un lien `escouade://team/join` ouvert : la fenêtre montre le serveur et les six mots de l'équipe. **L'invité les vérifie** avec qui l'invite : s'ils diffèrent, il n'entre pas. Rejoindre reste son geste.
+- « Rejoindre par un lien », ou un lien `escouade://team/join` ouvert (un clic dans une messagerie, un navigateur, un QR code scanné) : la fenêtre s'ouvre sur « Rejoindre une équipe », le lien rempli, et montre le serveur et les six mots de l'équipe. **Un lien venu d'ailleurs ne fait rien d'autre** : aucune requête ne part avant « Rejoindre ». **L'invité vérifie les six mots** avec qui l'invite : s'ils diffèrent, il n'entre pas. Rejoindre reste son geste.
+- Le schéma `escouade://` est celui de l'app sur les trois systèmes : l'installeur l'enregistre sous Windows et Linux (`.deb`, `.rpm`), le bundle sous macOS, et l'app elle-même pour une AppImage.
 - La demande part ; un administrateur en ligne le fait entrer (« Un administrateur en ligne te fait entrer : cette fenêtre le dira »). Le groupe rejoint doit avoir l'empreinte du lien.
 - **Une invitation déjà utilisée** : « Cette invitation a déjà servi : demande un nouveau lien à son administrateur, qui est prévenu. » Sur la carte de l'équipe de l'administrateur, l'invitation dit que quelqu'un l'a réutilisée après son invité, et quand : le lien a peut-être fuité.
 - **Une invitation expirée** est refusée par le serveur, et un administrateur en ligne après son terme ne fait plus entrer la demande.
@@ -50,7 +57,7 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 ## Un administrateur en ligne
 
 À chaque lecture, l'appareil :
-- fait entrer les demandes des invitations qu'il a faites (un Welcome MLS) ;
+- fait entrer les demandes des invitations qu'il a faites (un Welcome MLS), sauf celles d'une invitation de l'ancienne forme ;
 - s'il est administrateur du serveur, enregistre le jeton qu'un membre a demandé pour son propre appareil (voir plus bas) ;
 - tient **les rôles du serveur au pas du registre** : un administrateur nommé après son inscription le devient aussi sur le serveur, un administrateur redevenu membre aussi ; le dernier administrateur du serveur reste ;
 - lit les seconds usages de ses invitations.

@@ -2,8 +2,8 @@
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586"]
-decisions: [167,168,173,178,277]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-633"]
+decisions: [167,168,173,178,277,286]
 compared: null
 ---
 
@@ -14,7 +14,7 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 ## Aveugle
 
 - Il ne garde que des octets chiffrés de bout en bout (seul mode), et les métadonnées que voici : des ids opaques, les clés publiques des appareils, leurs rôles, les tailles, les heures, l'appareil qui a écrit, l'empreinte (SHA-256) des jetons d'inscription.
-- Il n'exécute rien (aucun agent, commande, plugin ni harness) et n'a aucune clé de contenu. Il ne voit jamais le secret d'une invitation ni un code court.
+- Il n'exécute rien (aucun agent, commande, plugin ni harness) et n'a aucune clé de contenu. Il ne voit jamais le secret d'une invitation ni un code court : le lien d'une invitation (`escouade://team/join/…`) ne passe par aucune de ses pages.
 - D'une opération d'un projet, il ne voit que son époque, sa taille, son heure et l'appareil qui l'envoie.
 - Son journal et ses métriques Prometheus ne portent aucun id d'équipe, de projet, d'appareil ni de fichier, aucune adresse, aucun jeton : seulement les modèles des routes, les statuts et des compteurs.
 
@@ -33,9 +33,9 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 - Un relais en mémoire pour « Ajouter un appareil » par un code de 8 caractères : l'appareil dans l'équipe ouvre un créneau (3 caractères, la tête du code), le nouvel appareil, pas encore inscrit, y fait **un seul essai**, puis prend la réponse scellée. Un créneau dure 10 minutes ; quatre au plus par équipe.
 - Il ne porte que les messages d'un PAKE (SPAKE2) et une réponse scellée : rien qui permette au serveur d'essayer des codes.
 
-## La page d'un lien d'invitation
+## La page d'un lien d'invitation de l'ancienne forme
 
-`/join/<id>`, ouvert dans un navigateur : une page sans ressource d'ailleurs, dont le script (par son nonce seul) lit le secret après le `#` dans le navigateur et passe le lien entier à Escouade (`escouade://team/join/…`). Le secret n'atteint jamais le serveur.
+`/join/<id>`, ouvert dans un navigateur (un lien `https://<serveur>/join/<id>#…` d'avant la 2.3) : un **texte fixe**, le même pour tout id, qui dit que ce lien ne sert plus et qu'il faut en demander un neuf, à cliquer ou coller dans Escouade. **Aucun script** (sa politique de sécurité les interdit tous), aucune ressource d'ailleurs, aucun lien, rien du lien lu. Une page du serveur ne touche jamais le secret d'une invitation : le script d'une page qu'il sert pourrait lire ce qui suit le `#` dans le navigateur, et le serveur piraté de la menace n°1 entrerait à la place de l'invité.
 
 ## L'authentification
 

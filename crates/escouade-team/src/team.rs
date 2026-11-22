@@ -114,7 +114,8 @@ pub struct Synced {
 #[derive(Clone, Debug)]
 pub struct Invited {
     pub link: InviteLink,
-    /// `https://<server>/join/<id>#…`, to send or to show as a QR code.
+    /// `escouade://team/join/<server>/<id>#…`, to send or to show as a QR code: it opens Escouade, never a page of
+    /// the server.
     pub url: String,
     /// Seconds since the epoch.
     pub expires_at: u64,

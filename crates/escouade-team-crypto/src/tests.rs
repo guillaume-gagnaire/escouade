@@ -535,13 +535,9 @@ fn a_leaked_link_gives_no_content() {
         )
         .unwrap();
     let url = link.to_url();
-    // The server sees the part before the `#` only: no secret in it.
-    let seen = InviteLink::server_part(&url);
-    assert!(!seen.contains('#'));
-    assert!(!seen.contains(&base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        link.secret
-    )));
+    // The link opens the app, never a web page of the server (whose script would read what follows the `#`).
+    assert!(url.starts_with("escouade://team/join/team.example.org/"));
+    assert!(!url.contains("https://") && !url.contains("http://"));
     // The link holds an id, the secret and the team's fingerprint: no key.
     let leaked = InviteLink::parse(&url).unwrap();
     assert_eq!(leaked, link);
@@ -905,7 +901,24 @@ fn an_invitation_link_round_trips_and_rejects_garbage() {
         team: [3; 32],
         member: None,
     };
-    assert_eq!(InviteLink::parse(&link.to_url()).unwrap(), link);
+    let url = link.to_url();
+    assert_eq!(
+        url,
+        "escouade://team/join/team.example.org/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM"
+    );
+    assert_eq!(InviteLink::parse(&url).unwrap(), link);
+    // The scheme in any case, a `/` after the id, a port: read the same.
+    assert_eq!(
+        InviteLink::parse(&url.replace("escouade://team/join/", "Escouade://Team/Join/")).unwrap(),
+        link
+    );
+    assert_eq!(
+        InviteLink::parse(&url.replace("01#s=", "01/#s=")).unwrap(),
+        link
+    );
+    let mut port = link.clone();
+    port.server = "localhost:4210".into();
+    assert_eq!(InviteLink::parse(&port.to_url()).unwrap(), port);
     assert_eq!(link.team(), TeamFingerprint([3; 32]));
     // Another device of a member: the member rides along, after the `#` too.
     let mut own = link.clone();
@@ -921,7 +934,27 @@ fn an_invitation_link_round_trips_and_rejects_garbage() {
     use base64::Engine as _;
     let secret = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([2u8; 32]);
     assert_ne!(link.server_token(), secret);
+    // The form of before, which opened the server's page: refused, to ask for a new one; still read when a device
+    // kept it while joining.
+    let old = "https://team.example.org/join/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    assert!(matches!(
+        InviteLink::parse(old),
+        Err(Error::Invitation(InvitationError::OldForm))
+    ));
+    assert!(matches!(
+        InviteLink::parse(&old.replace("https://", "http://")),
+        Err(Error::Invitation(InvitationError::OldForm))
+    ));
+    assert_eq!(InviteLink::parse_kept(old).unwrap(), link);
+    assert_eq!(InviteLink::parse_kept(&url).unwrap(), link);
     for bad in [
+        "escouade://team/join/team.example.org/0101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+        "escouade://team/join/team.example.org/01010101010101010101010101010101",
+        "escouade://team/join/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+        "escouade://team/join/a/b/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+        "escouade://team/join/evil@x/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+        "escouade://team/join/team.example.org/01010101010101010101010101010101#t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+        "escouade://plugin/team.example.org/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
         "http://team.example.org/join/01#s=AA&t=AA",
         "https://team.example.org/join/0101#s=AA&t=AA",
         "https://team.example.org/join/01010101010101010101010101010101",
@@ -932,11 +965,48 @@ fn an_invitation_link_round_trips_and_rejects_garbage() {
         "https://team.example.org/join/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
     ] {
         assert!(InviteLink::parse(bad).is_err(), "{bad}");
+        assert!(InviteLink::parse_kept(bad).is_err(), "{bad}");
     }
     let _ = WelcomeDelivery {
         welcome: Vec::new(),
         confirmation: [0; 32],
     };
+}
+
+#[test]
+fn an_invitation_made_before_the_app_links_lets_no_one_in() {
+    let (_relay, mut alice, _) = new_team(None);
+    let link = alice
+        .invite(
+            Purpose::NewMember(Role::Member),
+            NOW,
+            DEFAULT_LIFETIME,
+            SERVER,
+        )
+        .unwrap();
+    assert!(alice.saved_state().invitations[0].app_link);
+    // One of now keeps its expiry when the device starts again.
+    let now = crate::device::kept_invitation(alice.saved_state().invitations[0].clone());
+    assert_eq!(now.expires_at, NOW + DEFAULT_LIFETIME);
+    // Made before (its link was `https://…/join/…`, which may have opened the server's page): its request, MAC
+    // and all, is refused.
+    alice.invitation_mut(&link.id).unwrap().app_link = false;
+    let mut bob = TeamDevice::new(member(2)).unwrap();
+    let request = bob.request_join(&link).unwrap();
+    assert!(matches!(
+        alice.admit(&request, NOW),
+        Err(Error::Invitation(InvitationError::OldForm))
+    ));
+    // A state saved before has no such field: an invitation of before, expired once the device starts again.
+    let mut saved = serde_json::to_value(alice.saved_state()).unwrap();
+    saved["invitations"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("app_link");
+    let state: crate::device::SavedState = serde_json::from_value(saved).unwrap();
+    let kept = crate::device::kept_invitation(state.invitations[0].clone());
+    assert!(!kept.app_link);
+    assert_eq!(kept.expires_at, 0);
 }
 
 #[test]

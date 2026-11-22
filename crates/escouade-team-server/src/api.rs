@@ -798,16 +798,13 @@ pub async fn pair_close(
 
 // === The page of an invitation link ===
 
-/// `/join/<id>`: an invitation link opened in a browser. The secret after the `#` never reaches the server; the
-/// page's script reads it where it is (`location.hash`) and hands the whole link to Escouade
-/// (`escouade://team/join/<server>/<id>#…`). No resource from elsewhere, a script by its nonce alone.
+/// `/join/<id>`: an invitation link of before (`https://<server>/join/<id>#…`) opened in a browser. A page of this
+/// server never touches an invitation's secret (SR2-08): a script of its own could read what follows the `#`
+/// (`location.hash`), and a server taken over would then enter in the invitee's place. The links are now the app's
+/// (`escouade://team/join/<server>/<id>#…`); this page is a fixed text that says to ask for a new one: no script
+/// (the policy forbids any), no resource from elsewhere, nothing read of the link.
 pub async fn join_page(Path(id): Path<String>) -> Result<Response, Problem> {
     path_id(&id)?;
-    let nonce = hex::encode(crate::util::random::<16>());
-    let page = JOIN_PAGE.replace("{nonce}", &nonce);
-    let policy = format!(
-        "default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-{nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-    );
     Ok((
         [
             (
@@ -816,7 +813,7 @@ pub async fn join_page(Path(id): Path<String>) -> Result<Response, Problem> {
             ),
             (
                 header::CONTENT_SECURITY_POLICY,
-                HeaderValue::from_str(&policy).expect("a policy is a header value"),
+                HeaderValue::from_static(JOIN_POLICY),
             ),
             (
                 header::REFERRER_POLICY,
@@ -824,12 +821,15 @@ pub async fn join_page(Path(id): Path<String>) -> Result<Response, Problem> {
             ),
             (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
         ],
-        page,
+        JOIN_PAGE,
     )
         .into_response())
 }
 
 const JOIN_PAGE: &str = include_str!("join.html");
+
+/// No script at all, no resource from elsewhere.
+const JOIN_POLICY: &str = "default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 /// The stream of the team's list of projects (`escouade_team::catalog::CATALOG_STREAM`): its content is encrypted,
 /// only its writers are known here.

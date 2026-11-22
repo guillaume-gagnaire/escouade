@@ -23,12 +23,14 @@ Elle liste les équipes de cet appareil, et propose « Créer une équipe », 
 
 ## Rejoindre par un lien
 
-Un administrateur t’envoie un lien de la forme `https://team.exemple.fr/join/…#s=…&t=…`. Il sert une seule fois, et expire (72 h par défaut). Ce qui suit le `#` est un secret qui ne passe jamais par le serveur.
+Un administrateur t’envoie un lien de la forme `escouade://team/join/team.exemple.fr/…#s=…&t=…`. Il sert une seule fois, et expire (72 h par défaut). Ce qui suit le `#` est un secret : le lien s’ouvre dans Escouade, jamais sur une page web, et le secret ne passe pas par le serveur.
 
-1. Ouvre le lien dans ton navigateur : la page du serveur le passe à Escouade. Ou colle-le dans « Rejoindre par un lien ».
+1. Clique le lien : Escouade s’ouvre sur « Rejoindre une équipe », le lien rempli, sans rien faire de plus. Si ta messagerie ne le rend pas cliquable, copie-le et colle-le dans « Rejoindre par un lien ».
 2. Escouade montre le serveur et les six mots de l’empreinte de l’équipe. **Vérifie-les avec la personne qui t’invite** : ce sont ceux de son équipe. S’ils diffèrent, n’entre pas.
 3. Donne à l’équipe un nom sur cet appareil, puis « Rejoindre ».
 4. La demande part. Un administrateur en ligne te fait entrer : rien à faire, la fenêtre le dit (« Tu es dans l’équipe … »).
+
+Un lien de l’ancienne forme (`https://…/join/…`, d’avant la 2.3) est refusé : demande un nouveau lien à qui t’invite.
 
 Si l’app dit « Cette invitation a déjà servi : demande un nouveau lien à son administrateur, qui est prévenu. », quelqu’un s’en est servi avant toi : le lien a peut-être fuité. Si le serveur ne connaît pas l’invitation, elle a expiré ou un administrateur ne l’a pas encore validée : réessaie dans un moment, ou demande un nouveau lien.
 

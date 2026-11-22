@@ -3,16 +3,22 @@
 //!
 //! 1. The administrator's device draws an id (16 bytes) and a secret `s` (32 bytes), and keeps the [`Invitation`]:
 //!    role, expiry, single use.
-//! 2. The link: `https://<server>/join/<id>#s=<s>&t=<team fingerprint>` (base64url), and `&m=<member>` for another
-//!    device of a member already there (the QR code of §3.4). Nothing after the `#` reaches the server: neither
-//!    browsers nor HTTP send it. The invitee's token for the server is derived from `s` ([`server_token`]): the
-//!    administrator registers its SHA-256 with the server, which never sees `s` and lets the token serve once.
+//! 2. The link: `escouade://team/join/<server>/<id>#s=<s>&t=<team fingerprint>` (base64url), and `&m=<member>` for
+//!    another device of a member already there (the QR code of §3.4). It opens Escouade (a click, or pasted in it),
+//!    never a web page: a page the team server serves would read the secret after the `#` in the browser
+//!    (`location.hash`), and a server taken over would enter in the invitee's place (SR2-08). The invitee's token
+//!    for the server is derived from `s` ([`server_token`]): the administrator registers its SHA-256 with the server,
+//!    which never sees `s` and lets the token serve once.
 //! 3. The invitee's device makes its keys and an MLS KeyPackage, and sends a [`JoinRequest`]: the KeyPackage and
 //!    `HMAC-SHA256(s, id ‖ KeyPackage)`. The server, without `s`, cannot put its own KeyPackage in its place.
 //! 4. An administrator's device checks the MAC, commits the Add (and the roster's new member), and sends the
 //!    Welcome with a confirmation `HMAC-SHA256(s, group ‖ epoch ‖ epoch authenticator)`.
 //! 5. The invitee checks that the group it joined has the team fingerprint of its link and the confirmation: the
 //!    server cannot show it another team.
+//!
+//! The links of before (`https://<server>/join/<id>#…`, which opened the server's page) are refused: by the invitee's
+//! app ([`InvitationError::OldForm`], to ask for a new one), and by the inviting device, which admits no one with an
+//! invitation made before ([`Invitation::app_link`]).
 //!
 //! A link that leaks gives the entry only to the first who uses it, never the content: it holds no key. The
 //! legitimate invitee then sees "invitation already used", and the administrator is told.
@@ -52,6 +58,10 @@ pub struct Invitation {
     pub purpose: Purpose,
     pub expires_at: u64,
     pub used: bool,
+    /// Its link is the app's (`escouade://`), never a page of the server (SR2-08). False for an invitation made
+    /// before, whose `https://` link may have been opened on the server's page: it lets no one in.
+    #[serde(default)]
+    pub app_link: bool,
 }
 
 /// The link, parsed.
@@ -75,10 +85,14 @@ pub fn server_token(secret: &[u8; 32]) -> String {
     ))
 }
 
+/// The scheme and path of a link: what the app registers (`escouade://`) and reads.
+pub const LINK_PREFIX: &str = "escouade://team/join/";
+
 impl InviteLink {
+    /// `escouade://team/join/<server>/<id>#s=…&t=…` (and `&m=…`): opens Escouade, never a web page.
     pub fn to_url(&self) -> String {
         let mut url = format!(
-            "https://{}/join/{}#s={}&t={}",
+            "{LINK_PREFIX}{}/{}#s={}&t={}",
             self.server,
             hex::encode(self.id),
             URL_SAFE_NO_PAD.encode(self.secret),
@@ -95,19 +109,46 @@ impl InviteLink {
         server_token(&self.secret)
     }
 
-    /// What the server receives of the link: the part before the `#`.
-    pub fn server_part(url: &str) -> &str {
-        url.split('#').next().unwrap_or(url)
+    /// Reads a link: `escouade://team/join/<server>/<id>#…` (the scheme and path in any case, a `/` after the id
+    /// allowed). A link of before (`https://<server>/join/<id>#…`) is [`InvitationError::OldForm`]: it may have
+    /// opened the server's page, which reads the secret.
+    pub fn parse(url: &str) -> Result<Self, Error> {
+        let bad = || Error::Invitation(InvitationError::Malformed);
+        let head = url.get(..LINK_PREFIX.len()).ok_or_else(bad)?;
+        if !head.eq_ignore_ascii_case(LINK_PREFIX) {
+            // Of the old form, also as typed for a server on this machine (`http://`).
+            let https = url.replacen("http://", "https://", 1);
+            return Err(match Self::parse_old(&https) {
+                Ok(_) => Error::Invitation(InvitationError::OldForm),
+                Err(e) => e,
+            });
+        }
+        let (before, fragment) = url[LINK_PREFIX.len()..].split_once('#').ok_or_else(bad)?;
+        let before = before.strip_suffix('/').unwrap_or(before);
+        let (server, id_hex) = before.split_once('/').ok_or_else(bad)?;
+        Self::parts(server, id_hex, fragment)
     }
 
-    pub fn parse(url: &str) -> Result<Self, Error> {
+    /// A link as a device kept it while joining: of either form, for a device that began to join before the links
+    /// changed. Never for a link given by someone ([`InviteLink::parse`]).
+    pub fn parse_kept(url: &str) -> Result<Self, Error> {
+        Self::parse(url).or_else(|_| Self::parse_old(url))
+    }
+
+    /// The form of before: `https://<server>/join/<id>#…`.
+    fn parse_old(url: &str) -> Result<Self, Error> {
         let bad = || Error::Invitation(InvitationError::Malformed);
         let rest = url.strip_prefix("https://").ok_or_else(bad)?;
         let (before, fragment) = rest.split_once('#').ok_or_else(bad)?;
         let (server, id_hex) = before.split_once("/join/").ok_or_else(bad)?;
+        Self::parts(server, id_hex, fragment)
+    }
+
+    fn parts(server: &str, id_hex: &str, fragment: &str) -> Result<Self, Error> {
+        let bad = || Error::Invitation(InvitationError::Malformed);
         let mut id = [0u8; 16];
         hex::decode_to_slice(id_hex, &mut id).map_err(|_| bad())?;
-        if server.is_empty() || server.contains(['/', '?', '@', ' ']) {
+        if server.is_empty() || server.contains(['/', '?', '@', ' ', '#', '\\']) {
             return Err(bad());
         }
         let mut secret = None;
@@ -168,6 +209,8 @@ pub struct WelcomeDelivery {
 pub enum InvitationError {
     #[error("the invitation link is malformed")]
     Malformed,
+    #[error("the invitation link is of the old form (https://…/join/…): ask for a new one")]
+    OldForm,
     #[error("no such invitation")]
     Unknown,
     #[error("the invitation was already used")]

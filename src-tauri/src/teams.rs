@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use escouade_team::crypto::invite::{InviteLink, DEFAULT_LIFETIME};
+use escouade_team::crypto::invite::{InvitationError, InviteLink, DEFAULT_LIFETIME};
 use escouade_team::crypto::roster::EscrowPublic;
 use escouade_team::crypto::{MemberId, Purpose, RecoveryKey, Role};
 use escouade_team::pairing::{PairCode, Pairing};
@@ -171,35 +171,20 @@ fn base_of(host: &str) -> String {
     }
 }
 
-/// An invitation link as pasted or opened: `https://<server>/join/<id>#…`, or `escouade://team/join/<server>/<id>#…`
-/// (what the server's page hands to the app). The secret is after the `#`.
+/// An invitation link as pasted or opened: `escouade://team/join/<server>/<id>#…` (SR2-08: it never passes through a
+/// page of the server). The secret is after the `#`. A link of before (`https://<server>/join/<id>#…`, which opened
+/// the server's page, whose script read the secret) is refused: its invitation lets no one in any more.
 pub fn parse_link(text: &str) -> Result<InviteLink, String> {
     let text: String = text.trim().chars().filter(|c| !c.is_whitespace()).collect();
-    let bad = || {
-        "Ce n’est pas un lien d’invitation d’équipe complet (il finit par #s=…&t=…).".to_string()
-    };
-    let https = match text.get(..20) {
-        Some(head) if head.eq_ignore_ascii_case("escouade://team/join") => {
-            let rest = text[20..].trim_start_matches('/');
-            let (before, fragment) = rest.split_once('#').ok_or_else(bad)?;
-            let (host, id) = before.rsplit_once('/').ok_or_else(bad)?;
-            format!("https://{host}/join/{id}#{fragment}")
-        }
-        _ => text.replacen("http://", "https://", 1),
-    };
-    InviteLink::parse(&https).map_err(|_| bad())
+    InviteLink::parse(&text).map_err(|e| match e {
+        CryptoError::Invitation(InvitationError::OldForm) => OLD_FORM.to_string(),
+        _ => "Ce n’est pas un lien d’invitation d’équipe complet (escouade://team/join/…#s=…&t=…)."
+            .to_string(),
+    })
 }
 
-/// The deep link of an invitation: what the server's page opens (`escouade://team/join/<server>/<id>#…`).
-pub fn deep_link(link: &InviteLink) -> String {
-    let url = link.to_url();
-    let fragment = url.split_once('#').map_or("", |(_, f)| f);
-    format!(
-        "escouade://team/join/{}/{}#{fragment}",
-        link.server,
-        hex::encode(link.id)
-    )
-}
+/// What the window says of a link of before (`https://…/join/…`).
+pub const OLD_FORM: &str = "Ce lien d’invitation a l’ancienne forme (https://…/join/…) et ne sert plus : demande un nouveau lien à qui t’invite. Les liens d’Escouade commencent maintenant par escouade://.";
 
 /// The QR code of a link, as SVG, dark on light whatever the theme (the cameras read it so).
 pub fn qr_svg(text: &str) -> String {
@@ -233,6 +218,7 @@ pub fn say(e: &TeamError) -> String {
         TeamError::CodeTried => "Ce code a déjà eu son essai : demandes-en un nouveau sur l’autre appareil.".into(),
         TeamError::CodeGone => "Ce code n’existe plus (10 minutes passées, ou il a servi) : demandes-en un nouveau.".into(),
         TeamError::NoRecoveryWrap => "Le serveur ne garde aucune clé de secours de cette équipe.".into(),
+        TeamError::Crypto(CryptoError::Invitation(InvitationError::OldForm)) => OLD_FORM.into(),
         TeamError::Crypto(CryptoError::Words) => "Ces mots ne sont pas une clé de secours : vérifie-les (24 mots, dans l’ordre).".into(),
         TeamError::Crypto(CryptoError::NotAdmin) => "Seul un administrateur de l’équipe peut le faire.".into(),
         TeamError::Crypto(CryptoError::Decrypt) => "Ces mots n’ouvrent pas la dernière clé de secours de l’équipe : est-ce la clé en vigueur ?".into(),
@@ -348,8 +334,8 @@ pub struct Created {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct InviteView {
+    /// `escouade://team/join/<server>/<id>#…`: to copy, to click, or as the QR code.
     pub url: String,
-    pub deep_link: String,
     pub expires_at: u64,
     pub ready: bool,
     /// The link's QR code, SVG.
@@ -421,7 +407,6 @@ fn invitation_view(i: &InvitationInfo) -> InvitationView {
 fn invite_view(invited: &Invited) -> InviteView {
     InviteView {
         url: invited.url.clone(),
-        deep_link: deep_link(&invited.link),
         expires_at: invited.expires_at,
         ready: invited.ready,
         qr: qr_svg(&invited.url),

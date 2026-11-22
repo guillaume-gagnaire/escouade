@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::integrations::secrets::{MemoryStore, SecretStore};
-use crate::teams::{address, deep_link, is_loopback, parse_link, qr_svg, Teams, FORK};
+use crate::teams::{address, is_loopback, parse_link, qr_svg, Teams, FORK, OLD_FORM};
 
 #[test]
 fn an_address_is_https_but_on_this_machine() {
@@ -48,21 +48,29 @@ fn an_address_is_https_but_on_this_machine() {
 
 #[test]
 fn a_link_is_read_pasted_or_opened_and_shown_as_a_qr_code() {
-    let url = "https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    let url = "escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
     let link = parse_link(url).unwrap();
     assert_eq!(link.server, "team.acme.fr");
-    // Pasted with a break in it, or opened by the server's page.
+    assert_eq!(link.to_url(), url);
+    // Pasted with a break in it.
     assert_eq!(
         parse_link(&format!(" {}\n{} ", &url[..40], &url[40..])).unwrap(),
         link
     );
-    let deep = deep_link(&link);
-    assert!(
-        deep.starts_with("escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff#s=")
-    );
-    assert_eq!(parse_link(&deep).unwrap(), link);
     // Without its secret: not a link.
     assert!(parse_link(url.split('#').next().unwrap()).is_err());
+    // A link of before, which opened the server's page (SR2-08): refused, with the word to ask for a new one.
+    let old = "https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    assert_eq!(parse_link(old).unwrap_err(), OLD_FORM);
+    assert_eq!(
+        parse_link(&old.replace("https://", "http://")).unwrap_err(),
+        OLD_FORM
+    );
+    assert!(OLD_FORM.contains("demande un nouveau lien"));
+    assert_ne!(
+        parse_link("https://team.acme.fr/join/x").unwrap_err(),
+        OLD_FORM
+    );
     let svg = qr_svg(url);
     assert!(svg.contains("<svg") && svg.contains("#000000"));
 }
@@ -139,9 +147,10 @@ async fn two_data_folders_of_one_machine_a_team_an_invitation_and_its_admission(
     let invite = alice.invite(&id, "member", None).await.unwrap();
     assert!(invite.ready && invite.qr.contains("<svg"));
     assert!(invite
-        .deep_link
+        .url
         .starts_with(&format!("escouade://team/join/{host}/")));
-    let preview = bob.join_preview(&invite.deep_link).unwrap();
+    assert!(!invite.url.contains("http"));
+    let preview = bob.join_preview(&invite.url).unwrap();
     assert_eq!(preview.fingerprint, created.team.fingerprint);
     assert!(!preview.own_device);
     let waiting = bob.join(&invite.url, "").await.unwrap();

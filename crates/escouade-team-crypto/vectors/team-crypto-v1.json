@@ -93,7 +93,7 @@
     "id": "1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d",
     "secret": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
     "team": "49e7f9cd1df47acde9b2b950bed5776c99f782249020cd28d4f560250db36501",
-    "url": "https://team.example.org/join/1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d#s=Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4&t=Sef5zR30es3psrlQvtV3bJn3giSQIM0o1PVgJQ2zZQE",
+    "url": "escouade://team/join/team.example.org/1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d#s=Xl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl4&t=Sef5zR30es3psrlQvtV3bJn3giSQIM0o1PVgJQ2zZQE",
     "key_package": "6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b",
     "join_mac": "547f2688156e5a39a045138f395bc834030b872c3fd4a83f62cd10eb7531cde9",
     "group_id": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",

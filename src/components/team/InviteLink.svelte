@@ -23,6 +23,7 @@
     <input class="field mono" readonly value={invite.url} aria-label={label} onfocus={(e) => e.currentTarget.select()} />
     <button class="btn" onclick={copy}>{copied ? t('team.create.copied') : t('team.create.copy')}</button>
   </div>
+  <span class="paste">{t('team.invite.paste')}</span>
 </div>
 {#if invite.qr}
   <figure class="qr">
@@ -46,6 +47,10 @@
   .line {
     display: flex;
     gap: 8px;
+  }
+  .paste {
+    color: var(--dim);
+    font-size: 12px;
   }
   .line input {
     flex: 1;

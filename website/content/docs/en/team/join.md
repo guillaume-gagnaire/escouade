@@ -23,12 +23,14 @@ It lists the teams of this device, and offers “Create a team”, “Join by a 
 
 ## Join by a link
 
-An administrator sends you a link like `https://team.example.org/join/…#s=…&t=…`. It serves only once, and expires (72 h by default). What follows the `#` is a secret that never goes through the server.
+An administrator sends you a link like `escouade://team/join/team.example.org/…#s=…&t=…`. It serves only once, and expires (72 h by default). What follows the `#` is a secret: the link opens in Escouade, never on a web page, and the secret does not go through the server.
 
-1. Open the link in your browser: the server’s page hands it to Escouade. Or paste it in “Join by a link”.
+1. Click the link: Escouade opens on “Join a team”, the link filled in, and does nothing more. If your messaging app does not make it clickable, copy it and paste it in “Join by a link”.
 2. Escouade shows the server and the six words of the team’s fingerprint. **Check them with the person inviting you**: they are their team’s. If they differ, don’t join.
 3. Give the team a name on this device, then “Join”.
 4. The request goes out. An administrator online lets you in: nothing to do, the window says so (“You are in the team …”).
+
+A link of the old form (`https://…/join/…`, from before 2.3) is refused: ask the person inviting you for a new link.
 
 If the app says the invitation was already used, someone used it before you: the link may have leaked, and its administrator is told; ask them for a new link. If the server doesn’t know the invitation, it expired or no administrator has let it through yet: try again in a moment, or ask for a new link.
 

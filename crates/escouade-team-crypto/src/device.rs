@@ -219,6 +219,16 @@ impl TeamDevice<OpenMlsRustCrypto> {
     }
 }
 
+/// An invitation as a device started again keeps it. One made before the links became the app's (SR2-08) is expired
+/// at once: its `https://` link may have opened the server's page, which reads the secret. It lets no one in, and
+/// is listed so (`stage_admit` refuses it besides).
+pub(crate) fn kept_invitation(mut invitation: Invitation) -> Invitation {
+    if !invitation.app_link {
+        invitation.expires_at = 0;
+    }
+    invitation
+}
+
 impl<P: OpenMlsProvider> TeamDevice<P> {
     /// A device on `provider`, its keys and identity given (the client reads them from the keychain).
     pub fn with_identity(provider: P, signer: SignatureKeyPair, identity: Identity) -> Self {
@@ -252,10 +262,10 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         device.invitations = state
             .invitations
             .iter()
-            .map(|i| (i.id, i.clone()))
+            .map(|i| (i.id, kept_invitation(i.clone())))
             .collect();
         device.joining = match &state.joining {
-            Some(url) => Some(InviteLink::parse(url)?),
+            Some(url) => Some(InviteLink::parse_kept(url)?),
             None => None,
         };
         device.removed = state.removed;
@@ -847,6 +857,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 purpose,
                 expires_at: now.saturating_add(lifetime),
                 used: false,
+                app_link: true,
             },
         );
         Ok(InviteLink {
@@ -856,6 +867,12 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             team,
             member,
         })
+    }
+
+    /// An invitation of this device, to change in a test (one made before the links became the app's).
+    #[cfg(test)]
+    pub(crate) fn invitation_mut(&mut self, id: &[u8; 16]) -> Option<&mut Invitation> {
+        self.invitations.get_mut(id)
     }
 
     /// The invitee: makes its KeyPackage and proves the link's secret.
@@ -890,6 +907,9 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             .get(&request.invitation)
             .ok_or(InvitationError::Unknown)?
             .clone();
+        if !invitation.app_link {
+            return Err(InvitationError::OldForm.into());
+        }
         if invitation.used {
             return Err(InvitationError::AlreadyUsed.into());
         }

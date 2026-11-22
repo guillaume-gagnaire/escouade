@@ -147,14 +147,22 @@ test('a team created, an invitation, a second client that joins and is let in by
   await page.getByRole('button', { name: 'Inviter quelqu’un' }).click();
   await page.getByRole('button', { name: 'Créer le lien' }).click();
   const linkField = page.getByLabel('Le lien à envoyer');
-  await expect(linkField).toHaveValue(new RegExp(`^https://${host.replace(/\./g, '\\.')}/join/[0-9a-f]{32}#s=`));
+  // The app's link (SR2-08): it opens Escouade, never a page of the server.
+  await expect(linkField).toHaveValue(new RegExp(`^escouade://team/join/${host.replace(/\./g, '\\.')}/[0-9a-f]{32}#s=`));
   const link = await linkField.inputValue();
   await expect(page.getByRole('img', { name: 'Ou fais scanner ce QR code' }).locator('svg')).toBeVisible();
   await expect(page.getByText(/Prêt : l’invité peut venir/)).toBeVisible();
   await shoot(page, '06-invitation');
-  // The server never saw the secret: its page hands the link to Escouade by the browser's `location.hash`.
-  const joinPage = await (await fetch(link.replace('https://', 'http://').split('#')[0])).text();
-  expect(joinPage).toContain('escouade://team/join/');
+  expect(link).not.toMatch(/https?:/);
+  await expect(page.getByText(/colle dans Escouade, « Rejoindre par un lien »/)).toBeVisible();
+  // The page of a link of before: a fixed text, no script to read what follows the `#`.
+  const id = /\/([0-9a-f]{32})#/.exec(link)![1];
+  const old = `https://${host}/join/${id}#${link.split('#')[1]}`;
+  const served = await fetch(`http://${host}/join/${id}`);
+  expect(served.headers.get('content-security-policy')).toContain("script-src 'none'");
+  const joinPage = await served.text();
+  expect(joinPage).not.toMatch(/<script|location|hash/i);
+  expect(joinPage).toContain('Demande un nouveau lien');
 
   // Bob: a data folder of his own.
   const bobData = path.join(app.root, 'bob-data');
@@ -164,6 +172,10 @@ test('a team created, an invitation, a second client that joins and is let in by
   await openTeams(page);
   await expect(page.getByText('Cet appareil n’est dans aucune équipe.')).toBeVisible();
   await page.getByRole('button', { name: /Rejoindre par un lien/ }).click();
+  // The link of before: refused, with the word to ask for a new one; nothing sent.
+  await page.getByLabel('Lien d’invitation').fill(old);
+  await expect(page.getByText(/a l’ancienne forme/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rejoindre' })).toBeDisabled();
   await page.getByLabel('Lien d’invitation').fill(link);
   // The six words of the link: the same as Alice's.
   await expect(page.getByText(/Vérifie ces six mots/)).toBeVisible();

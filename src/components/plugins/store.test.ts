@@ -382,7 +382,7 @@ describe('the link escouade://plugin/<id> (STORE-11)', () => {
   });
 
   it('opens « Rejoindre une équipe » on an invitation to a team (TS-3), the link filled in, nothing joined', async () => {
-    const link = 'https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AAAA&t=BBBB';
+    const link = 'escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff#s=AAAA&t=BBBB';
     const backend = fakeBackend({ deep_links_take: () => [{ kind: 'teamJoin', link }] });
     app.modal = null;
     await plugins.takeLinks();
