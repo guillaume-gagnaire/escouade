@@ -23,6 +23,7 @@ both!(
     a_false_signature_is_refused,
     a_member_gone_reads_nothing_new,
     a_snapshot_then_a_new_device,
+    an_unreadable_snapshot_leaves_the_journal,
     the_copy_resumes_after_a_cut,
     an_invitation_gives_access_to_a_project,
 );
@@ -491,7 +492,8 @@ async fn a_snapshot_then_a_new_device(b: Backend) {
     let done = c[0].1.sync_project(p).await.unwrap();
     assert!(done.snapshot_made);
     let raw = c[0].1.client().read_project(&p.0, 0, None).await.unwrap();
-    assert!(raw.entries.is_empty(), "the server forgot the operations");
+    // The server keeps the operations it holds for its retention (SR2-01).
+    assert_eq!(raw.entries.first().map(|e| e.seq), Some(1));
     assert_eq!(raw.snapshot, Some(10));
 
     // A new device of the team starts from the snapshot.
@@ -525,14 +527,16 @@ async fn a_snapshot_then_a_new_device(b: Backend) {
     let read = dave.sync_project(p).await.unwrap();
     assert_eq!(read.applied, 1);
     assert_eq!(state(&mut c[0].1, &p), state(&mut dave, &p));
-    // A snapshot signed by nobody of the team is refused: Mallory's bytes in its place.
+    // A snapshot signed by nobody of the team (bytes a member put there) is put aside, never taken (SR2-01): a new
+    // device starts from the one before it and the journal, flags it to the server, and notes who posted it.
     let forged = escouade_team::crypto::ops::Sealed {
         scope: Scope::Team,
         epoch: 0,
         nonce: [0; 24],
         ciphertext: vec![1; 64],
     };
-    c[0].1
+    let bob_device = c[1].1.device().identity().device;
+    c[1].1
         .client()
         .put_snapshot(&p.0, 11, wire::encode(&forged))
         .await
@@ -542,8 +546,90 @@ async fn a_snapshot_then_a_new_device(b: Backend) {
         .join(&mut c[0].1, &erin_place, member(5), Role::Member)
         .await;
     erin.follow(p).unwrap();
-    let e = erin.sync_project(p).await.unwrap_err();
-    assert!(matches!(e, Error::Forged { .. }), "{e}");
+    let read = erin.sync_project(p).await.unwrap();
+    assert_eq!(read.discarded, 1);
+    assert!(read.from_snapshot, "the snapshot before it");
+    assert_eq!(state(&mut c[0].1, &p), state(&mut erin, &p));
+    let alerts = erin.snapshot_alerts();
+    assert_eq!(alerts.len(), 1);
+    assert_eq!(
+        (alerts[0].project, alerts[0].upto, alerts[0].posted_by),
+        (p, 11, bob_device)
+    );
+    assert!(alerts[0].found_here);
+    // Once only: the next reading does not take it again.
+    assert_eq!(erin.sync_project(p).await.unwrap().discarded, 0);
+    // Alice, past it, checks it once all the same, and puts it aside too.
+    assert_eq!(c[0].1.sync_project(p).await.unwrap().discarded, 1);
+    // The administrator is told by the server (read once a minute at most), and removes it; a member cannot.
+    c[0].1.serve(NOW + 60).await.unwrap();
+    let told = c[0].1.snapshot_alerts();
+    assert_eq!(told.len(), 1);
+    assert_eq!((told[0].upto, told[0].posted_by), (11, bob_device));
+    let e = c[1].1.remove_snapshot(p, 11).await.unwrap_err();
+    assert!(matches!(e, Error::Refused(_)), "{e}");
+    assert!(c[0].1.remove_snapshot(p, 11).await.unwrap());
+    assert!(c[0].1.snapshot_alerts().is_empty());
+    c[0].1.serve(NOW + 61).await.unwrap();
+    assert!(c[0].1.snapshot_alerts().is_empty());
+    let raw = c[0].1.client().read_project(&p.0, 0, None).await.unwrap();
+    assert_eq!(raw.latest, Some(10));
+    // A snapshot that names an epoch the team never reached: the device past it reads the team, then puts it aside.
+    c[0].1
+        .set_field(p, tickets[2], "title", json!("T2 bis"))
+        .unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    let ahead = escouade_team::crypto::ops::Sealed {
+        epoch: 999,
+        ..forged
+    };
+    c[1].1
+        .client()
+        .put_snapshot(&p.0, 12, wire::encode(&ahead))
+        .await
+        .unwrap();
+    let read = dave.sync_project(p).await.unwrap();
+    assert_eq!((read.applied, read.discarded), (1, 1));
+    assert_eq!(dave.snapshot_alerts()[0].upto, 12);
+    assert_eq!(state(&mut c[0].1, &p), state(&mut dave, &p));
+    w.finish().await;
+}
+
+/// SR2-01: a member puts bytes of nobody as the project's only snapshot. A new device puts it aside and reads the whole
+/// journal, which the server kept; the members' copies stay the same.
+async fn an_unreadable_snapshot_leaves_the_journal(b: Backend) {
+    let w = World::on(&b).await;
+    let mut c = crew(&w, 2, |_| {}).await;
+    let p = c[0].1.create_project(None).await.unwrap();
+    for i in 0..3 {
+        c[0].1
+            .create_ticket(p, fields(&[("title", json!(format!("T{i}")))]))
+            .unwrap();
+    }
+    c[0].1.sync_project(p).await.unwrap();
+    let garbage = escouade_team::crypto::ops::Sealed {
+        scope: Scope::Team,
+        epoch: 0,
+        nonce: [7; 24],
+        ciphertext: vec![2; 48],
+    };
+    c[1].1
+        .client()
+        .put_snapshot(&p.0, 3, wire::encode(&garbage))
+        .await
+        .unwrap();
+    let carol_place = w.place();
+    let mut carol = w
+        .join(&mut c[0].1, &carol_place, member(3), Role::Member)
+        .await;
+    carol.follow(p).unwrap();
+    let read = carol.sync_project(p).await.unwrap();
+    assert_eq!(
+        (read.discarded, read.from_snapshot, read.applied),
+        (1, false, 4)
+    );
+    assert_eq!(state(&mut c[0].1, &p), state(&mut carol, &p));
+    assert_eq!(carol.snapshot_alerts().len(), 1);
     w.finish().await;
 }
 

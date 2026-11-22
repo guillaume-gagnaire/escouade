@@ -65,14 +65,17 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS commits BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE project_entries ADD COLUMN IF NOT EXISTS kind BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE project_entries ADD COLUMN IF NOT EXISTS epoch BIGINT;
 CREATE UNIQUE INDEX IF NOT EXISTS project_commits ON project_entries(team_id, project_id, epoch) WHERE kind = 1;
-CREATE TABLE IF NOT EXISTS project_snapshots (
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS pruned BIGINT NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS snapshots (
     team_id BYTEA NOT NULL,
     project_id BYTEA NOT NULL,
     upto BIGINT NOT NULL,
     device_id BYTEA NOT NULL,
     at BIGINT NOT NULL,
     payload BYTEA NOT NULL,
-    PRIMARY KEY (team_id, project_id)
+    flagged_by BYTEA,
+    flagged_at BIGINT,
+    PRIMARY KEY (team_id, project_id, upto)
 );
 CREATE TABLE IF NOT EXISTS files (
     team_id BYTEA NOT NULL,
@@ -354,6 +357,26 @@ impl Store for Postgres {
         client
             .batch_execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS handed_by BYTEA")
             .await?;
+        // A base made before the retention (SR2-01): one snapshot per project, its messages already forgotten. The
+        // schema of the search path (a test's own, or the base's).
+        let old = client
+            .query_one("SELECT to_regclass('project_snapshots') IS NOT NULL", &[])
+            .await?
+            .get::<_, bool>(0);
+        if old {
+            client
+                .batch_execute(
+                    "BEGIN;
+                     INSERT INTO snapshots (team_id, project_id, upto, device_id, at, payload)
+                       SELECT team_id, project_id, upto, device_id, at, payload FROM project_snapshots
+                       ON CONFLICT DO NOTHING;
+                     UPDATE projects p SET pruned = s.upto FROM project_snapshots s
+                       WHERE s.team_id = p.team_id AND s.project_id = p.id;
+                     DROP TABLE project_snapshots;
+                     COMMIT;",
+                )
+                .await?;
+        }
         Ok(())
     }
 
@@ -796,7 +819,7 @@ impl Store for Postgres {
         project: Id,
         snapshot: Snapshot,
         quotas: Quotas,
-    ) -> Result<u64> {
+    ) -> Result<()> {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await?;
         let stored: i64 = tx
@@ -816,44 +839,26 @@ impl Store for Postgres {
         if seq.is_none_or(|s| (s as u64) < snapshot.upto) || snapshot.upto == 0 {
             return Err(StoreError::Snapshot("beyond the project's stream"));
         }
-        let old = tx
-            .query_opt(
-                "SELECT upto, length(payload)::BIGINT FROM project_snapshots WHERE team_id = $1 AND project_id = $2",
+        let last: Option<i64> = tx
+            .query_one(
+                "SELECT MAX(upto) FROM snapshots WHERE team_id = $1 AND project_id = $2",
                 &[&team.as_slice(), &project.as_slice()],
             )
             .await?
-            .map(|r| (r.get::<_, i64>(0), r.get::<_, i64>(1)));
-        if old.is_some_and(|(upto, _)| upto as u64 >= snapshot.upto) {
+            .get(0);
+        if last.is_some_and(|upto| upto as u64 >= snapshot.upto) {
             return Err(StoreError::Snapshot("not after the one kept"));
         }
-        let upto = snapshot.upto as i64;
-        let row = tx
-            .query_one(
-                "SELECT COUNT(*), COALESCE(SUM(length(payload)), 0)::BIGINT FROM project_entries
-                 WHERE team_id = $1 AND project_id = $2 AND kind = 0 AND seq <= $3",
-                &[&team.as_slice(), &project.as_slice(), &upto],
-            )
-            .await?;
-        let (pruned, freed): (i64, i64) = (row.get(0), row.get(1));
         let size = snapshot.payload.len() as i64;
-        let after = stored - freed - old.map_or(0, |o| o.1) + size;
-        if after as u64 > quotas.team_bytes {
+        if (stored + size) as u64 > quotas.team_bytes {
             return Err(StoreError::Quota);
         }
         tx.execute(
-            "DELETE FROM project_entries WHERE team_id = $1 AND project_id = $2 AND kind = 0 AND seq <= $3",
-            &[&team.as_slice(), &project.as_slice(), &upto],
-        )
-        .await?;
-        tx.execute(
-            "INSERT INTO project_snapshots (team_id, project_id, upto, device_id, at, payload)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (team_id, project_id) DO UPDATE SET
-               upto = EXCLUDED.upto, device_id = EXCLUDED.device_id, at = EXCLUDED.at, payload = EXCLUDED.payload",
+            "INSERT INTO snapshots (team_id, project_id, upto, device_id, at, payload) VALUES ($1, $2, $3, $4, $5, $6)",
             &[
                 &team.as_slice(),
                 &project.as_slice(),
-                &upto,
+                &(snapshot.upto as i64),
                 &snapshot.device.as_slice(),
                 &snapshot.at,
                 &snapshot.payload,
@@ -861,20 +866,27 @@ impl Store for Postgres {
         )
         .await?;
         tx.execute(
-            "UPDATE teams SET stored = $2 WHERE id = $1",
-            &[&team.as_slice(), &after],
+            "UPDATE teams SET stored = stored + $2 WHERE id = $1",
+            &[&team.as_slice(), &size],
         )
         .await?;
         tx.commit().await?;
-        Ok(pruned as u64)
+        Ok(())
     }
 
-    async fn snapshot(&self, team: Id, project: Id) -> Result<Option<Snapshot>> {
+    async fn snapshot(
+        &self,
+        team: Id,
+        project: Id,
+        before: Option<u64>,
+    ) -> Result<Option<Snapshot>> {
+        let before = before.map_or(i64::MAX, |b| b.min(i64::MAX as u64) as i64);
         let client = self.client.lock().await;
         let row = client
             .query_opt(
-                "SELECT upto, device_id, at, payload FROM project_snapshots WHERE team_id = $1 AND project_id = $2",
-                &[&team.as_slice(), &project.as_slice()],
+                "SELECT upto, device_id, at, payload FROM snapshots
+                 WHERE team_id = $1 AND project_id = $2 AND upto < $3 ORDER BY upto DESC LIMIT 1",
+                &[&team.as_slice(), &project.as_slice(), &before],
             )
             .await?;
         row.map(|r| {
@@ -891,12 +903,169 @@ impl Store for Postgres {
     async fn snapshot_upto(&self, team: Id, project: Id) -> Result<Option<u64>> {
         let client = self.client.lock().await;
         Ok(client
-            .query_opt(
-                "SELECT upto FROM project_snapshots WHERE team_id = $1 AND project_id = $2",
+            .query_one(
+                "SELECT MAX(upto) FROM snapshots WHERE team_id = $1 AND project_id = $2",
                 &[&team.as_slice(), &project.as_slice()],
             )
             .await?
-            .map(|r| r.get::<_, i64>(0) as u64))
+            .get::<_, Option<i64>>(0)
+            .map(|u| u as u64))
+    }
+
+    async fn flag_snapshot(
+        &self,
+        team: Id,
+        project: Id,
+        upto: u64,
+        device: Id,
+        now: i64,
+    ) -> Result<bool> {
+        let upto = upto.min(i64::MAX as u64) as i64;
+        let found = self
+            .client
+            .lock()
+            .await
+            .execute(
+                "UPDATE snapshots SET flagged_by = COALESCE(flagged_by, $4), flagged_at = COALESCE(flagged_at, $5)
+                 WHERE team_id = $1 AND project_id = $2 AND upto = $3",
+                &[&team.as_slice(), &project.as_slice(), &upto, &device.as_slice(), &now],
+            )
+            .await?;
+        Ok(found > 0)
+    }
+
+    async fn remove_snapshot(&self, team: Id, project: Id, upto: u64) -> Result<bool> {
+        let upto = upto.min(i64::MAX as u64) as i64;
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await?;
+        tx.query_one(
+            "SELECT stored FROM teams WHERE id = $1 FOR UPDATE",
+            &[&team.as_slice()],
+        )
+        .await?;
+        let size = tx
+            .query_opt(
+                "SELECT length(payload)::BIGINT FROM snapshots WHERE team_id = $1 AND project_id = $2 AND upto = $3",
+                &[&team.as_slice(), &project.as_slice(), &upto],
+            )
+            .await?
+            .map(|r| r.get::<_, i64>(0));
+        let Some(size) = size else {
+            return Ok(false);
+        };
+        let pruned = tx
+            .query_opt(
+                "SELECT pruned FROM projects WHERE team_id = $1 AND id = $2",
+                &[&team.as_slice(), &project.as_slice()],
+            )
+            .await?
+            .map_or(0, |r| r.get::<_, i64>(0));
+        if upto <= pruned {
+            return Err(StoreError::Snapshot(
+                "the stream was pruned to it: its messages are gone",
+            ));
+        }
+        tx.execute(
+            "DELETE FROM snapshots WHERE team_id = $1 AND project_id = $2 AND upto = $3",
+            &[&team.as_slice(), &project.as_slice(), &upto],
+        )
+        .await?;
+        tx.execute(
+            "UPDATE teams SET stored = stored - $2 WHERE id = $1",
+            &[&team.as_slice(), &size],
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    async fn unreadable_snapshots(&self, team: Id) -> Result<Vec<Unreadable>> {
+        let rows = self
+            .client
+            .lock()
+            .await
+            .query(
+                "SELECT project_id, upto, device_id, at, flagged_by, flagged_at FROM snapshots
+                 WHERE team_id = $1 AND flagged_at IS NOT NULL ORDER BY flagged_at, project_id, upto",
+                &[&team.as_slice()],
+            )
+            .await?;
+        rows.iter()
+            .map(|r| {
+                Ok(Unreadable {
+                    project: id_of(r.get(0))?,
+                    upto: r.get::<_, i64>(1) as u64,
+                    device: id_of(r.get(2))?,
+                    at: r.get(3),
+                    flagged_by: id_of(r.get(4))?,
+                    flagged_at: r.get(5),
+                })
+            })
+            .collect()
+    }
+
+    async fn prune_snapshots(&self, cut: i64) -> Result<u64> {
+        let mut client = self.client.lock().await;
+        // For each project, its last snapshot old enough that nobody flagged, when it is past what is pruned.
+        let due = client
+            .query(
+                "SELECT s.team_id, s.project_id, MAX(s.upto) FROM snapshots s
+                 JOIN projects p ON p.team_id = s.team_id AND p.id = s.project_id
+                 WHERE s.at <= $1 AND s.flagged_at IS NULL AND s.upto > p.pruned
+                 GROUP BY s.team_id, s.project_id",
+                &[&cut],
+            )
+            .await?;
+        let mut forgotten = 0u64;
+        for row in due {
+            let (team, project, upto): (Vec<u8>, Vec<u8>, i64) =
+                (row.get(0), row.get(1), row.get(2));
+            let tx = client.transaction().await?;
+            tx.query_one(
+                "SELECT stored FROM teams WHERE id = $1 FOR UPDATE",
+                &[&team],
+            )
+            .await?;
+            let r = tx
+                .query_one(
+                    "SELECT COUNT(*), COALESCE(SUM(length(payload)), 0)::BIGINT FROM project_entries
+                     WHERE team_id = $1 AND project_id = $2 AND kind = 0 AND seq <= $3",
+                    &[&team, &project, &upto],
+                )
+                .await?;
+            let (messages, freed): (i64, i64) = (r.get(0), r.get(1));
+            let older: i64 = tx
+                .query_one(
+                    "SELECT COALESCE(SUM(length(payload)), 0)::BIGINT FROM snapshots
+                     WHERE team_id = $1 AND project_id = $2 AND upto < $3",
+                    &[&team, &project, &upto],
+                )
+                .await?
+                .get(0);
+            tx.execute(
+                "DELETE FROM project_entries WHERE team_id = $1 AND project_id = $2 AND kind = 0 AND seq <= $3",
+                &[&team, &project, &upto],
+            )
+            .await?;
+            tx.execute(
+                "DELETE FROM snapshots WHERE team_id = $1 AND project_id = $2 AND upto < $3",
+                &[&team, &project, &upto],
+            )
+            .await?;
+            tx.execute(
+                "UPDATE projects SET pruned = $3 WHERE team_id = $1 AND id = $2",
+                &[&team, &project, &upto],
+            )
+            .await?;
+            tx.execute(
+                "UPDATE teams SET stored = stored - $2 WHERE id = $1",
+                &[&team, &(freed + older)],
+            )
+            .await?;
+            tx.commit().await?;
+            forgotten += messages as u64;
+        }
+        Ok(forgotten)
     }
 
     async fn read(

@@ -65,14 +65,16 @@ CREATE TABLE IF NOT EXISTS project_entries (
     payload BLOB NOT NULL,
     PRIMARY KEY (team_id, project_id, seq)
 );
-CREATE TABLE IF NOT EXISTS project_snapshots (
+CREATE TABLE IF NOT EXISTS snapshots (
     team_id BLOB NOT NULL,
     project_id BLOB NOT NULL,
     upto INTEGER NOT NULL,
     device_id BLOB NOT NULL,
     at INTEGER NOT NULL,
     payload BLOB NOT NULL,
-    PRIMARY KEY (team_id, project_id)
+    flagged_by BLOB,
+    flagged_at INTEGER,
+    PRIMARY KEY (team_id, project_id, upto)
 );
 CREATE TABLE IF NOT EXISTS files (
     team_id BLOB NOT NULL,
@@ -359,6 +361,8 @@ impl Store for Sqlite {
                 ("project_entries", "epoch", "INTEGER"),
                 // A base made before a ticket could be handed (TS-17).
                 ("claims", "handed_by", "BLOB"),
+                // A base made before the retention of the snapshots (SR2-01): the number the messages are gone up to.
+                ("projects", "pruned", "INTEGER NOT NULL DEFAULT 0"),
             ] {
                 let has: bool = c
                     .prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?1"))?
@@ -370,6 +374,23 @@ impl Store for Sqlite {
             c.execute_batch(
                 "CREATE UNIQUE INDEX IF NOT EXISTS project_commits ON project_entries(team_id, project_id, epoch) WHERE kind = 1",
             )?;
+            // A base made before the retention (SR2-01): one snapshot per project, its messages already forgotten.
+            let old: bool = c
+                .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'project_snapshots'")?
+                .exists([])?;
+            if old {
+                let tx = c.transaction()?;
+                tx.execute_batch(
+                    "INSERT OR IGNORE INTO snapshots (team_id, project_id, upto, device_id, at, payload)
+                       SELECT team_id, project_id, upto, device_id, at, payload FROM project_snapshots;
+                     UPDATE projects SET pruned = (SELECT s.upto FROM project_snapshots s
+                       WHERE s.team_id = projects.team_id AND s.project_id = projects.id)
+                     WHERE EXISTS (SELECT 1 FROM project_snapshots s
+                       WHERE s.team_id = projects.team_id AND s.project_id = projects.id);
+                     DROP TABLE project_snapshots;",
+                )?;
+                tx.commit()?;
+            }
             Ok(())
         })
         .await
@@ -757,7 +778,7 @@ impl Store for Sqlite {
         project: Id,
         snapshot: Snapshot,
         quotas: Quotas,
-    ) -> Result<u64> {
+    ) -> Result<()> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let stored: i64 = tx.query_row(
@@ -775,62 +796,52 @@ impl Store for Sqlite {
             if seq.is_none_or(|s| (s as u64) < snapshot.upto) || snapshot.upto == 0 {
                 return Err(StoreError::Snapshot("beyond the project's stream"));
             }
-            let old: Option<(i64, i64)> = tx
-                .query_row(
-                    "SELECT upto, length(payload) FROM project_snapshots WHERE team_id = ?1 AND project_id = ?2",
-                    params![team.as_slice(), project.as_slice()],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()?;
-            if old.is_some_and(|(upto, _)| upto as u64 >= snapshot.upto) {
+            let last: Option<i64> = tx.query_row(
+                "SELECT MAX(upto) FROM snapshots WHERE team_id = ?1 AND project_id = ?2",
+                params![team.as_slice(), project.as_slice()],
+                |r| r.get(0),
+            )?;
+            if last.is_some_and(|upto| upto as u64 >= snapshot.upto) {
                 return Err(StoreError::Snapshot("not after the one kept"));
             }
-            let upto = snapshot.upto as i64;
-            let (pruned, freed): (i64, i64) = tx.query_row(
-                "SELECT COUNT(*), COALESCE(SUM(length(payload)), 0) FROM project_entries
-                 WHERE team_id = ?1 AND project_id = ?2 AND kind = 0 AND seq <= ?3",
-                params![team.as_slice(), project.as_slice(), upto],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )?;
             let size = snapshot.payload.len() as i64;
-            let after = stored - freed - old.map_or(0, |o| o.1) + size;
-            if after as u64 > quotas.team_bytes {
+            if (stored + size) as u64 > quotas.team_bytes {
                 return Err(StoreError::Quota);
             }
             tx.execute(
-                "DELETE FROM project_entries WHERE team_id = ?1 AND project_id = ?2 AND kind = 0 AND seq <= ?3",
-                params![team.as_slice(), project.as_slice(), upto],
-            )?;
-            tx.execute(
-                "INSERT INTO project_snapshots (team_id, project_id, upto, device_id, at, payload)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                 ON CONFLICT (team_id, project_id) DO UPDATE SET
-                   upto = excluded.upto, device_id = excluded.device_id, at = excluded.at, payload = excluded.payload",
+                "INSERT INTO snapshots (team_id, project_id, upto, device_id, at, payload) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     team.as_slice(),
                     project.as_slice(),
-                    upto,
+                    snapshot.upto as i64,
                     snapshot.device.as_slice(),
                     snapshot.at,
                     snapshot.payload
                 ],
             )?;
             tx.execute(
-                "UPDATE teams SET stored = ?2 WHERE id = ?1",
-                params![team.as_slice(), after],
+                "UPDATE teams SET stored = stored + ?2 WHERE id = ?1",
+                params![team.as_slice(), size],
             )?;
             tx.commit()?;
-            Ok(pruned as u64)
+            Ok(())
         })
         .await
     }
 
-    async fn snapshot(&self, team: Id, project: Id) -> Result<Option<Snapshot>> {
+    async fn snapshot(
+        &self,
+        team: Id,
+        project: Id,
+        before: Option<u64>,
+    ) -> Result<Option<Snapshot>> {
         self.run(move |c| {
+            let before = before.map_or(i64::MAX, |b| b.min(i64::MAX as u64) as i64);
             let row: Option<(i64, Vec<u8>, i64, Vec<u8>)> = c
                 .query_row(
-                    "SELECT upto, device_id, at, payload FROM project_snapshots WHERE team_id = ?1 AND project_id = ?2",
-                    params![team.as_slice(), project.as_slice()],
+                    "SELECT upto, device_id, at, payload FROM snapshots
+                     WHERE team_id = ?1 AND project_id = ?2 AND upto < ?3 ORDER BY upto DESC LIMIT 1",
+                    params![team.as_slice(), project.as_slice(), before],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
                 )
                 .optional()?;
@@ -850,12 +861,157 @@ impl Store for Sqlite {
     async fn snapshot_upto(&self, team: Id, project: Id) -> Result<Option<u64>> {
         self.run(move |c| {
             Ok(c.query_row(
-                "SELECT upto FROM project_snapshots WHERE team_id = ?1 AND project_id = ?2",
+                "SELECT MAX(upto) FROM snapshots WHERE team_id = ?1 AND project_id = ?2",
                 params![team.as_slice(), project.as_slice()],
-                |r| r.get::<_, i64>(0),
-            )
-            .optional()?
+                |r| r.get::<_, Option<i64>>(0),
+            )?
             .map(|u| u as u64))
+        })
+        .await
+    }
+
+    async fn flag_snapshot(
+        &self,
+        team: Id,
+        project: Id,
+        upto: u64,
+        device: Id,
+        now: i64,
+    ) -> Result<bool> {
+        self.run(move |c| {
+            let upto = upto.min(i64::MAX as u64) as i64;
+            let found = c.execute(
+                "UPDATE snapshots SET flagged_by = COALESCE(flagged_by, ?4), flagged_at = COALESCE(flagged_at, ?5)
+                 WHERE team_id = ?1 AND project_id = ?2 AND upto = ?3",
+                params![team.as_slice(), project.as_slice(), upto, device.as_slice(), now],
+            )?;
+            Ok(found > 0)
+        })
+        .await
+    }
+
+    async fn remove_snapshot(&self, team: Id, project: Id, upto: u64) -> Result<bool> {
+        self.run(move |c| {
+            let upto = upto.min(i64::MAX as u64) as i64;
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let size: Option<i64> = tx
+                .query_row(
+                    "SELECT length(payload) FROM snapshots WHERE team_id = ?1 AND project_id = ?2 AND upto = ?3",
+                    params![team.as_slice(), project.as_slice(), upto],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            let Some(size) = size else {
+                return Ok(false);
+            };
+            let pruned: i64 = tx
+                .query_row(
+                    "SELECT pruned FROM projects WHERE team_id = ?1 AND id = ?2",
+                    params![team.as_slice(), project.as_slice()],
+                    |r| r.get(0),
+                )
+                .optional()?
+                .unwrap_or(0);
+            if upto <= pruned {
+                return Err(StoreError::Snapshot(
+                    "the stream was pruned to it: its messages are gone",
+                ));
+            }
+            tx.execute(
+                "DELETE FROM snapshots WHERE team_id = ?1 AND project_id = ?2 AND upto = ?3",
+                params![team.as_slice(), project.as_slice(), upto],
+            )?;
+            tx.execute(
+                "UPDATE teams SET stored = stored - ?2 WHERE id = ?1",
+                params![team.as_slice(), size],
+            )?;
+            tx.commit()?;
+            Ok(true)
+        })
+        .await
+    }
+
+    async fn unreadable_snapshots(&self, team: Id) -> Result<Vec<Unreadable>> {
+        self.run(move |c| {
+            let mut stmt = c.prepare_cached(
+                "SELECT project_id, upto, device_id, at, flagged_by, flagged_at FROM snapshots
+                 WHERE team_id = ?1 AND flagged_at IS NOT NULL ORDER BY flagged_at, project_id, upto",
+            )?;
+            let rows = stmt.query_map([team.as_slice()], |r| {
+                Ok((
+                    r.get::<_, Vec<u8>>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, Vec<u8>>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, Vec<u8>>(4)?,
+                    r.get::<_, i64>(5)?,
+                ))
+            })?;
+            let mut out = Vec::new();
+            for row in rows {
+                let (project, upto, device, at, flagged_by, flagged_at) = row?;
+                out.push(Unreadable {
+                    project: id_of(project)?,
+                    upto: upto as u64,
+                    device: id_of(device)?,
+                    at,
+                    flagged_by: id_of(flagged_by)?,
+                    flagged_at,
+                });
+            }
+            Ok(out)
+        })
+        .await
+    }
+
+    async fn prune_snapshots(&self, cut: i64) -> Result<u64> {
+        self.run(move |c| {
+            // For each project, its last snapshot old enough that nobody flagged, when it is past what is pruned.
+            let due: Vec<(Vec<u8>, Vec<u8>, i64)> = {
+                let mut stmt = c.prepare_cached(
+                    "SELECT s.team_id, s.project_id, MAX(s.upto) FROM snapshots s
+                     JOIN projects p ON p.team_id = s.team_id AND p.id = s.project_id
+                     WHERE s.at <= ?1 AND s.flagged_at IS NULL AND s.upto > p.pruned
+                     GROUP BY s.team_id, s.project_id",
+                )?;
+                let rows = stmt.query_map([cut], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+                rows.collect::<rusqlite::Result<_>>()?
+            };
+            let mut forgotten = 0u64;
+            for (team, project, upto) in due {
+                let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                let (messages, freed): (i64, i64) = tx.query_row(
+                    "SELECT COUNT(*), COALESCE(SUM(length(payload)), 0) FROM project_entries
+                     WHERE team_id = ?1 AND project_id = ?2 AND kind = 0 AND seq <= ?3",
+                    params![team, project, upto],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?;
+                let older: i64 = tx.query_row(
+                    "SELECT COALESCE(SUM(length(payload)), 0) FROM snapshots
+                     WHERE team_id = ?1 AND project_id = ?2 AND upto < ?3",
+                    params![team, project, upto],
+                    |r| r.get(0),
+                )?;
+                tx.execute(
+                    "DELETE FROM project_entries WHERE team_id = ?1 AND project_id = ?2 AND kind = 0 AND seq <= ?3",
+                    params![team, project, upto],
+                )?;
+                tx.execute(
+                    "DELETE FROM snapshots WHERE team_id = ?1 AND project_id = ?2 AND upto < ?3",
+                    params![team, project, upto],
+                )?;
+                tx.execute(
+                    "UPDATE projects SET pruned = ?3 WHERE team_id = ?1 AND id = ?2",
+                    params![team, project, upto],
+                )?;
+                tx.execute(
+                    "UPDATE teams SET stored = stored - ?2 WHERE id = ?1",
+                    params![team, freed + older],
+                )?;
+                tx.commit()?;
+                forgotten += messages as u64;
+            }
+            Ok(forgotten)
         })
         .await
     }
@@ -1086,6 +1242,63 @@ impl Store for Sqlite {
 mod tests {
     use super::*;
     use crate::db::{ClaimAsk, Store, StoreError, MAX_CLAIMS};
+
+    /// A base from before the retention (SR2-01) kept one snapshot per project, its messages already forgotten: the
+    /// snapshot moves to the new table, the project says its stream is pruned to it (an administrator cannot remove
+    /// it: nothing would take its place), and the old table goes.
+    #[tokio::test]
+    async fn a_base_from_before_the_retention_keeps_its_snapshots() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Sqlite::open(&dir.path().join("team.db")).unwrap();
+        store.migrate().await.unwrap();
+        let (team, project) = ([1u8; 16], [2u8; 16]);
+        store
+            .run(move |c| {
+                c.execute_batch(
+                    "CREATE TABLE project_snapshots (
+                        team_id BLOB NOT NULL, project_id BLOB NOT NULL, upto INTEGER NOT NULL,
+                        device_id BLOB NOT NULL, at INTEGER NOT NULL, payload BLOB NOT NULL,
+                        PRIMARY KEY (team_id, project_id))",
+                )?;
+                c.execute(
+                    "INSERT INTO teams (id, created_at, stored) VALUES (?1, 0, 3)",
+                    [team.as_slice()],
+                )?;
+                c.execute(
+                    "INSERT INTO projects (team_id, id, seq) VALUES (?1, ?2, 9)",
+                    params![team.as_slice(), project.as_slice()],
+                )?;
+                c.execute(
+                    "INSERT INTO project_snapshots VALUES (?1, ?2, 7, ?3, 5, X'010203')",
+                    params![team.as_slice(), project.as_slice(), [3u8; 16].as_slice()],
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        store.migrate().await.unwrap();
+        let s = store.snapshot(team, project, None).await.unwrap().unwrap();
+        assert_eq!(
+            (s.upto, s.device, s.at, s.payload),
+            (7, [3u8; 16], 5, vec![1, 2, 3])
+        );
+        assert!(matches!(
+            store.remove_snapshot(team, project, 7).await,
+            Err(StoreError::Snapshot(_))
+        ));
+        let gone: bool = store
+            .run(|c| {
+                Ok(
+                    c.prepare("SELECT 1 FROM sqlite_master WHERE name = 'project_snapshots'")?
+                        .exists([])?,
+                )
+            })
+            .await
+            .unwrap();
+        assert!(!gone);
+        // Again: nothing to do.
+        store.migrate().await.unwrap();
+    }
 
     /// A project holds `MAX_CLAIMS` claims at most (TS-18): one more ticket is refused, one held already is still
     /// taken again. The claims are written straight into the base, as the routes would take long to make so many.

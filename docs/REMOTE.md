@@ -539,6 +539,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `team_costs_send`
 - `team_costs_untold`
 - `team_create`
+- `team_dismiss_snapshot`
 - `team_docs_choose`
 - `team_docs_dismiss`
 - `team_docs_remove_repo_files`
@@ -575,6 +576,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `team_projects`
 - `team_projects_retry`
 - `team_recover`
+- `team_remove_snapshot`
 - `team_settings`
 - `team_settings_check`
 - `team_settings_consent`

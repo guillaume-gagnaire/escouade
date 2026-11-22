@@ -28,6 +28,7 @@ const TEAM: TeamView = {
   recoveryStale: false,
   alarm: null,
   invitations: [],
+  snapshotAlerts: [],
   lastError: null,
 };
 

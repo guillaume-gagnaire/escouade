@@ -296,6 +296,26 @@ pub struct InvitationView {
     pub reused_at: Option<i64>,
 }
 
+/// A project's snapshot found unreadable and put aside (SR2-01): the copy reads the journal instead. An administrator
+/// removes it from the server; a member hides it.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotAlertView {
+    /// The project's stream, hex (`Project::team_project` for a Kanban of the team).
+    pub project: String,
+    pub upto: u64,
+    /// The device that posted it, hex; its member's role in the team (`admin`, `member`), when it is still in.
+    pub posted_by: String,
+    pub posted_by_role: Option<String>,
+    /// It is this device.
+    pub posted_by_me: bool,
+    /// Seconds since the epoch.
+    pub posted_at: i64,
+    pub found_at: i64,
+    /// This device found it (else another device of the team, as the server tells the administrators).
+    pub found_here: bool,
+}
+
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamView {
@@ -328,6 +348,8 @@ pub struct TeamView {
     pub recovery_stale: bool,
     pub alarm: Option<AlarmView>,
     pub invitations: Vec<InvitationView>,
+    /// The projects' snapshots put aside (SR2-01), the newest first.
+    pub snapshot_alerts: Vec<SnapshotAlertView>,
     pub last_error: Option<String>,
 }
 
@@ -419,6 +441,14 @@ fn invite_view(invited: &Invited) -> InviteView {
         ready: invited.ready,
         qr: qr_svg(&invited.url),
     }
+}
+
+/// A project's stream as the window names it: 32 hex digits.
+fn stream_id(hex_id: &str) -> Result<escouade_team::crypto::ProjectId, String> {
+    let mut out = [0u8; 16];
+    hex::decode_to_slice(hex_id.trim(), &mut out)
+        .map_err(|_| "Ce projet n’est pas un projet de l’équipe.".to_string())?;
+    Ok(escouade_team::crypto::ProjectId(out))
 }
 
 fn words(w: [&'static str; 6]) -> Vec<String> {
@@ -725,6 +755,7 @@ impl Teams {
             recovery_stale: false,
             alarm: known.alarm.clone(),
             invitations: Vec::new(),
+            snapshot_alerts: Vec::new(),
             last_error: known.last_error.clone(),
         };
         let Some(team) = team.filter(|_| joined) else {
@@ -749,6 +780,24 @@ impl Teams {
         }
         view.head = team.head_words().map(words).unwrap_or_default();
         view.invitations = team.invitations().iter().map(invitation_view).collect();
+        let members = team.members().unwrap_or_default();
+        view.snapshot_alerts = team
+            .snapshot_alerts()
+            .into_iter()
+            .map(|a| SnapshotAlertView {
+                project: hex::encode(a.project.0),
+                upto: a.upto,
+                posted_by: hex::encode(a.posted_by.0),
+                posted_by_role: members
+                    .iter()
+                    .find(|(_, _, devices)| devices.contains(&a.posted_by))
+                    .map(|(_, role, _)| role_name(*role)),
+                posted_by_me: a.posted_by == me.device,
+                posted_at: a.posted_at,
+                found_at: a.found_at,
+                found_here: a.found_here,
+            })
+            .collect();
         view
     }
 
@@ -1157,6 +1206,44 @@ impl Teams {
 
     /// Forgets the team on this device: its state and its keys. The group keeps its leaf until an administrator
     /// removes it (TS-4).
+    /// Removes a project's snapshot found unreadable from the server (an administrator's, SR2-01): the one before it,
+    /// and the journal, take its place for every device.
+    pub async fn remove_snapshot(
+        &self,
+        id: &str,
+        project: &str,
+        upto: u64,
+    ) -> Result<TeamView, String> {
+        let project = stream_id(project)?;
+        let team = self.team(id)?;
+        {
+            let mut t = team.lock().await;
+            t.remove_snapshot(project, upto)
+                .await
+                .map_err(|e| self.failed(id, e))?;
+        }
+        (self.changed)();
+        self.view(id).await
+    }
+
+    /// Hides the alert of a snapshot put aside on this device.
+    pub async fn dismiss_snapshot(
+        &self,
+        id: &str,
+        project: &str,
+        upto: u64,
+    ) -> Result<TeamView, String> {
+        let project = stream_id(project)?;
+        let team = self.team(id)?;
+        {
+            let mut t = team.lock().await;
+            t.dismiss_snapshot_alert(project, upto)
+                .map_err(|e| say(&e))?;
+        }
+        (self.changed)();
+        self.view(id).await
+    }
+
     pub async fn forget(&self, id: &str) -> Result<(), String> {
         self.pairings.lock().remove(id);
         if let Some(live) = self.live.lock().remove(id) {

@@ -386,6 +386,20 @@ impl TokenKind {
     }
 }
 
+/// A project's snapshot a device found unreadable (SR2-01): its messages are never pruned while it is flagged, and an
+/// administrator is told (`unreadable_snapshots`), with the device that posted it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unreadable {
+    pub project: Id,
+    pub upto: u64,
+    /// The device that posted it, and when.
+    pub device: Id,
+    pub at: i64,
+    /// The first device that found it unreadable, and when.
+    pub flagged_by: Id,
+    pub flagged_at: i64,
+}
+
 /// A token used again after its first use (a leaked invitation link): what an administrator is told.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TokenAlert {
@@ -513,19 +527,45 @@ pub trait Store: Send + Sync {
         page: Page,
     ) -> Result<(Vec<Entry>, bool)>;
 
-    /// Keeps a project's snapshot in place of the one before, and forgets the stream's messages up to its number
-    /// (the commits stay: a device follows the project's group by them). The bytes forgotten go back to the quota.
-    /// Gives how many entries were forgotten.
+    /// Keeps a project's snapshot beside the ones before (SR2-01): nothing is forgotten when it comes. Its bytes count
+    /// in the quota. Refused when it is not after the last one kept, or beyond the stream.
     async fn put_snapshot(
         &self,
         team: Id,
         project: Id,
         snapshot: Snapshot,
         quotas: Quotas,
-    ) -> Result<u64>;
-    async fn snapshot(&self, team: Id, project: Id) -> Result<Option<Snapshot>>;
+    ) -> Result<()>;
+    /// A project's last snapshot, or with `before` its last one before that number (a device that found the last one
+    /// unreadable goes back to the one before).
+    async fn snapshot(
+        &self,
+        team: Id,
+        project: Id,
+        before: Option<u64>,
+    ) -> Result<Option<Snapshot>>;
     /// The number the last snapshot of a project holds up to, if any.
     async fn snapshot_upto(&self, team: Id, project: Id) -> Result<Option<u64>>;
+    /// Notes that `device` found the snapshot of `project` at `upto` unreadable (the first device and time are kept).
+    /// False when there is no such snapshot.
+    async fn flag_snapshot(
+        &self,
+        team: Id,
+        project: Id,
+        upto: u64,
+        device: Id,
+        now: i64,
+    ) -> Result<bool>;
+    /// Removes the snapshot of `project` at `upto` (an administrator's): its bytes go back to the quota. False when
+    /// there is no such snapshot; refused (`Snapshot`) for the one the stream was pruned to, its messages gone.
+    async fn remove_snapshot(&self, team: Id, project: Id, upto: u64) -> Result<bool>;
+    /// The team's snapshots a device found unreadable, for its administrators.
+    async fn unreadable_snapshots(&self, team: Id) -> Result<Vec<Unreadable>>;
+    /// The retention of SR2-01: for each project, its last snapshot older than `cut` (seconds since the epoch) that no
+    /// device flagged takes the place of the messages it holds: they and the snapshots before it are forgotten, their
+    /// bytes given back to the quota (the commits stay: a device follows the project's group by them). Gives how many
+    /// messages were forgotten.
+    async fn prune_snapshots(&self, cut: i64) -> Result<u64>;
 
     /// Reserves a file's place before its bytes are written.
     async fn reserve_file(

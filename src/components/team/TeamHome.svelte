@@ -5,7 +5,8 @@
   import { t } from '../../lib/i18n';
   import { fDateTime } from '../../lib/format';
   import { isOpen } from '../../lib/team-words';
-  import { errorText, teams, teamsApi, type InvitationView, type TeamView } from '../../lib/teams.svelte';
+  import { errorText, teams, teamsApi, type InvitationView, type SnapshotAlertView, type TeamView } from '../../lib/teams.svelte';
+  import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
   import ForkAlarm from './ForkAlarm.svelte';
   import SixWords from './SixWords.svelte';
@@ -38,6 +39,22 @@
       await teams.load();
     });
   const newRecovery = (team: TeamView) => act(team, async () => onwords(team.id, await teamsApi.newRecovery(team.id)));
+  const removeSnapshot = (team: TeamView, a: SnapshotAlertView) =>
+    act(team, async () => teams.put(await teamsApi.removeSnapshot(team.id, a.project, a.upto)));
+  const dismissSnapshot = (team: TeamView, a: SnapshotAlertView) =>
+    act(team, async () => teams.put(await teamsApi.dismissSnapshot(team.id, a.project, a.upto)));
+
+  /** A snapshot's project by its name on this machine (its Kanban of the team), else the start of its id. */
+  const projectName = (a: SnapshotAlertView) => app.projects.find((p) => p.teamProject === a.project)?.name ?? a.project.slice(0, 8);
+
+  function postedBy(a: SnapshotAlertView): string {
+    const date = fDateTime(a.postedAt * 1000);
+    if (a.postedByMe) return t('team.snapshots.postedByMe', { date });
+    const device = a.postedBy.slice(0, 8);
+    if (!a.postedByRole) return t('team.snapshots.postedBy', { date, device });
+    const role = a.postedByRole === 'admin' ? t('team.card.admin') : t('team.card.member');
+    return t('team.snapshots.postedByRole', { date, device, role });
+  }
 
   const roleLabel = (team: TeamView) =>
     !team.joined
@@ -86,6 +103,37 @@
 
     {#if team.escrow}
       <p class="escrow" role="note"><Icon name="shield" size={13} />{t('team.card.escrow', { holder: team.escrow })}</p>
+    {/if}
+
+    {#if team.joined && !team.alarm && team.snapshotAlerts?.length}
+      <div class="snaps" role="alert" aria-label={t('team.snapshots.title')}>
+        <span class="lbl">{t('team.snapshots.title')}</span>
+        <p>{t('team.snapshots.lead')}</p>
+        <ul>
+          {#each team.snapshotAlerts as a (a.project + ':' + a.upto)}
+            <li>
+              <span class="what">{t('team.snapshots.item', { project: projectName(a), upto: a.upto })}</span>
+              <span class="st">{postedBy(a)}</span>
+              <span class="st"
+                >{a.foundHere
+                  ? t('team.snapshots.foundHere', { date: fDateTime(a.foundAt * 1000) })
+                  : t('team.snapshots.foundElsewhere', { date: fDateTime(a.foundAt * 1000) })}</span
+              >
+              {#if team.role === 'admin'}
+                <span class="st">{t('team.snapshots.adminHint')}</span>
+                <button class="btn danger" disabled={busy === team.id} onclick={() => removeSnapshot(team, a)}
+                  >{t('team.snapshots.remove')}</button
+                >
+              {:else}
+                <span class="st">{t('team.snapshots.memberHint')}</span>
+                <button class="btn ghost" disabled={busy === team.id} onclick={() => dismissSnapshot(team, a)}
+                  >{t('team.snapshots.dismiss')}</button
+                >
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </div>
     {/if}
 
     {#if team.joined && !team.alarm}
@@ -215,6 +263,46 @@
     flex: none;
     margin-top: 2px;
     color: var(--wait);
+  }
+  .snaps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .snaps p {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .snaps ul {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .snaps li {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    font-size: 12.5px;
+  }
+  .snaps .what {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .snaps .st {
+    color: var(--muted);
+  }
+  .snaps .btn {
+    margin-top: 4px;
   }
   .team {
     display: flex;

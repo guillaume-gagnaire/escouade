@@ -361,7 +361,7 @@ async fn the_server_sees_opaque_ids_devices_and_hours(b: Backend) {
         "project_access",
         "project_entries",
         "projects",
-        "project_snapshots",
+        "snapshots",
     ] {
         let mut stmt = db.prepare(&format!("SELECT * FROM {table}")).unwrap();
         let cols = stmt.column_count();

@@ -43,7 +43,7 @@ pub use escouade_team_crypto::Error as CryptoError;
 pub use keychain::{KeyPlace, Keychain, MemoryKeychain, Vault};
 pub use pairing::{PairCode, PairState};
 pub use storage::{SqliteStorage, StorageError, TeamProvider};
-pub use team::{Applied, Invited, Options, Served, Setup, Synced, Team};
+pub use team::{Applied, Invited, Options, Served, Setup, SnapshotAlert, Synced, Team};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

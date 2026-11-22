@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: on the team server, a member can no longer erase a project’s history or the administrators’ entries with a snapshot. The team’s own streams take none any more, and the operations a snapshot covers stay 30 days. A snapshot that does not open is put aside on the computer, which reads the journal instead, and the administrators see who posted it and remove it in one click.
 - Security: recovering a team by its 24 words now joins only the team itself. The rescue sheet also carries the team’s six words, which the “Recover a team” screen asks for, and only an envelope signed by an administrator of the team is followed; the escrow key likewise. A sheet without these six words is to be made again from an administrator device.
 - Security: a page or a decision from the team is now written only in the project’s docs folder. One whose path or id would lead elsewhere on your disk is set aside before anything is written, the others are read all the same, and a band at the top of the Docs tab says so to the administrators and to the machine that wrote it.
 - Security: a team invitation link now starts with escouade:// and opens straight in Escouade, without going through a page of the team server, which could read its secret. Links from before (https://…/join/…) no longer work: ask for a new one.

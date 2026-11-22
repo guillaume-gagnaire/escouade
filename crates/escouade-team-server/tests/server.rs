@@ -30,8 +30,8 @@ both!(
     a_snapshot_takes_the_place_of_the_start_of_a_projects_stream,
 );
 
-/// TS-5: a project's snapshot forgets the messages up to its number (the commits stay), gives their bytes back,
-/// and is never replaced by an older one.
+/// TS-5: a project's snapshot is kept beside its stream, and never followed by an older one. Since SR2-01 the messages
+/// it holds stay (the retention forgets them later: `tests/snapshots.rs`), and its bytes count in the quota.
 async fn a_snapshot_takes_the_place_of_the_start_of_a_projects_stream(b: Backend) {
     let s = TestServer::start(&b).await;
     let alice = s.new_team().await;
@@ -88,16 +88,18 @@ async fn a_snapshot_takes_the_place_of_the_start_of_a_projects_stream(b: Backend
         )
         .await
         .ok();
-    assert_eq!(kept.pruned, 4);
-    assert_eq!(used(&alice).await, before - 4000 + 100);
-    // The commit stays, then what came after; the reading from before says where the snapshot is.
+    assert_eq!(kept.pruned, 0);
+    assert_eq!(used(&alice).await, before + 100);
+    // Every entry stays; the reading from before says where the snapshot is, any reading where the last one is.
     let read = alice.read_project(&p, 0).await;
     assert_eq!(
         read.entries.iter().map(|e| e.seq).collect::<Vec<_>>(),
-        [5, 6]
+        [1, 2, 3, 4, 5, 6]
     );
     assert_eq!(read.snapshot, Some(5));
-    assert_eq!(alice.read_project(&p, 5).await.snapshot, None);
+    assert_eq!(read.latest, Some(5));
+    let past = alice.read_project(&p, 5).await;
+    assert_eq!((past.snapshot, past.latest), (None, Some(5)));
     let got: SnapshotInfo = alice.client.get(&path).await.ok();
     assert_eq!((got.upto, got.payload), (5, vec![7; 100]));
     assert_eq!(got.device, bob.id.to_vec());

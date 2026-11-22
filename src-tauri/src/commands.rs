@@ -5669,6 +5669,28 @@ pub async fn team_docs_remove_repo_files(
     core.team_docs_remove_repo_files(&id).await.map_err(err)
 }
 
+/// Removes a project's snapshot found unreadable from the team's server (an administrator's, SR2-01).
+#[tauri::command]
+pub async fn team_remove_snapshot(
+    teams: TeamsState<'_>,
+    team: String,
+    project: String,
+    upto: u64,
+) -> Res<crate::teams::TeamView> {
+    teams.remove_snapshot(&team, &project, upto).await
+}
+
+/// Hides the alert of a project's snapshot put aside on this device (SR2-01).
+#[tauri::command]
+pub async fn team_dismiss_snapshot(
+    teams: TeamsState<'_>,
+    team: String,
+    project: String,
+    upto: u64,
+) -> Res<crate::teams::TeamView> {
+    teams.dismiss_snapshot(&team, &project, upto).await
+}
+
 /// Forgets the team on this device.
 #[tauri::command]
 pub async fn team_forget(teams: TeamsState<'_>, team: String) -> Res<()> {

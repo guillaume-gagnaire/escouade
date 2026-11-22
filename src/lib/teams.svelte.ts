@@ -25,6 +25,21 @@ export interface InvitationView {
   reusedAt: number | null;
 }
 
+/** A project's snapshot found unreadable and put aside (SR2-01): the copy reads the journal instead. */
+export interface SnapshotAlertView {
+  /** The project's stream, hex: `Project.teamProject` for a Kanban of the team. */
+  project: string;
+  upto: number;
+  /** The device that posted it, hex, and its member's role when it is still in the team. */
+  postedBy: string;
+  postedByRole: 'admin' | 'member' | null;
+  postedByMe: boolean;
+  /** Seconds since the epoch. */
+  postedAt: number;
+  foundAt: number;
+  foundHere: boolean;
+}
+
 export interface TeamView {
   id: string;
   name: string;
@@ -46,6 +61,8 @@ export interface TeamView {
   recoveryStale: boolean;
   alarm: AlarmView | null;
   invitations: InvitationView[];
+  /** The projects' snapshots put aside (SR2-01), the newest first. */
+  snapshotAlerts: SnapshotAlertView[];
   lastError: string | null;
 }
 
@@ -103,6 +120,8 @@ export const teamsApi = {
     invoke<Created>('team_recover', { server, token, words, teamWords, name }),
   sync: (team: string) => invoke<TeamView>('team_sync', { team }),
   forget: (team: string) => invoke<void>('team_forget', { team }),
+  removeSnapshot: (team: string, project: string, upto: number) => invoke<TeamView>('team_remove_snapshot', { team, project, upto }),
+  dismissSnapshot: (team: string, project: string, upto: number) => invoke<TeamView>('team_dismiss_snapshot', { team, project, upto }),
 };
 
 /** A backend error as text (the commands answer French sentences). */

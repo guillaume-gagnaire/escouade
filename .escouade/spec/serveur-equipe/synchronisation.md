@@ -2,8 +2,8 @@
 title: "La synchronisation des projets"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
-tickets: ["ESC-466","ESC-479","ESC-482","ESC-519"]
-decisions: [168,173,178,199]
+tickets: ["ESC-466","ESC-479","ESC-482","ESC-519","ESC-637"]
+decisions: [168,173,178,199,288]
 compared: null
 ---
 
@@ -56,12 +56,20 @@ Chaque projet d'une équipe est un **journal d'opérations** : « créer le tick
 - **Revenir en arrière**, ou **changer une entrée déjà lue** : l'appareil relit la dernière entrée lue avant de lire plus loin.
 - **Une opération qui cite une autre tête** du journal des membres : c'est la fourche (voir « Le client de l'équipe »).
 
-Dans tous ces cas, l'appareil s'arrête et le dit, comme pour la fourche : « Le serveur a rejoué, réordonné, retiré ou forgé une opération d'un projet de l'équipe », et il n'envoie plus rien à l'équipe tant qu'une lecture n'a pas réussi.
+Dans tous ces cas, l'appareil s'arrête et le dit, comme pour la fourche : « Le serveur a rejoué, réordonné, retiré ou forgé une opération d'un projet de l'équipe », et il n'envoie plus rien à l'équipe tant qu'une lecture n'a pas réussi. Un **instantané** qui ne s'ouvre pas n'arrête pas l'appareil : il est écarté (voir plus bas).
 
 ## Les instantanés
 
-- Au-delà de 10 000 entrées depuis le dernier, un appareil de l'équipe écrit un **instantané** chiffré et signé de l'état du projet, avec la chaîne de chaque appareil et les numéros donnés. Le serveur oublie alors les opérations d'avant ; il garde les commits du groupe du projet.
-- Un nouvel appareil, ou un appareil resté absent au-delà, part du dernier instantané. Il en vérifie la signature et la tête, et vérifie que chaque chaîne va au moins aussi loin que ce qu'il a lu. Un instantané forgé est refusé.
+- Au-delà de 10 000 entrées depuis le dernier, un appareil de l'équipe écrit un **instantané** chiffré et signé de l'état du projet, avec la chaîne de chaque appareil et les numéros donnés.
+- **Le serveur n'oublie rien à sa pose** (SR2-01). Il garde les opérations que couvre l'instantané pendant **30 jours**, puis les oublie ; il garde les commits du groupe du projet. Il ne les oublie jamais tant qu'un appareil a signalé l'instantané comme illisible. Il garde aussi les instantanés d'avant, tant que le dernier n'a pas pris la place du journal.
+- **Pas d'instantané sur les flux de l'équipe** : la liste des projets, les réglages imposés, les propositions, les coûts, le store privé et le coupe-circuit. Leurs entrées sont signées par leurs auteurs, et le serveur refuse tout instantané sur ces flux, à un administrateur comme à un membre.
+- Un nouvel appareil, ou un appareil resté absent au-delà, part du dernier instantané. Il en vérifie la signature, la tête et son numéro. Il vérifie aussi que chaque chaîne va au moins aussi loin que ce qu'il a lu, et que ses propres opérations reçues par le serveur y sont.
+- **Un appareil déjà au-delà vérifie une fois** chaque nouvel instantané : il doit s'ouvrir, et n'avancer aucune chaîne plus loin que ce que l'appareil a lu. Un instantané douteux est ainsi signalé avant que le serveur n'oublie le journal.
+- **Un instantané qui ne s'ouvre pas est écarté**, sans alarme qui arrête l'équipe. C'est un instantané fait d'octets de personne, scellé à une époque que l'équipe n'a jamais atteinte (une fois l'équipe relue), ou dont l'état oublie ce que l'appareil a lu. L'appareil :
+  - le signale au serveur, qui garde alors le journal et prévient les administrateurs ;
+  - ne le reprend plus, et lit l'instantané d'avant, ou le journal tant qu'il est là ;
+  - note une alerte, montrée dans la carte de l'équipe : le projet, le numéro, l'appareil qui l'a posé (et le rôle de son membre), et quand.
+- **Les administrateurs** voient dans la carte de l'équipe chaque instantané qu'un appareil a signalé, avec l'appareil qui l'a posé. Ils le retirent du serveur par « Retirer l'instantané » : l'instantané d'avant et le journal reprennent sa place sur tous les appareils. Le serveur refuse de retirer celui sur lequel le flux a déjà été élagué, puisque ses opérations sont parties. Un membre masque l'alerte (« Masquer »).
 
 ## La rotation
 
@@ -77,4 +85,4 @@ Jusqu'à TS-6, le serveur servait un projet à tout appareil de l'équipe, et se
 
 ## Ce que l'appareil lit du serveur, borné (TS-18)
 
-Un serveur qui ment ne fait pas non plus allouer sans borne l'appareil qui le lit : une réponse annoncée plus longue que 32 Mio (une page d'un flux, un fichier ou un instantané, et leur enveloppe) est refusée avant d'en lire un octet, une réponse sans longueur dès qu'elle la dépasse, et un message de la connexion en direct de plus de 4 Mio la ferme ; l'appareil le prend comme un serveur qui ne répond pas. Ce que vérifient les cibles de fuzzing de ces lectures (la convergence, les signatures fausses, les fourches et les retours en arrière, les instantanés) est dans `docs/TEAM-SERVER.md` §14 et le README d'`escouade-team`.
+Un serveur qui ment ne fait pas non plus allouer sans borne l'appareil qui le lit : une réponse annoncée plus longue que 32 Mio (une page d'un flux, un fichier ou un instantané, et leur enveloppe) est refusée avant d'en lire un octet, une réponse sans longueur dès qu'elle la dépasse, et un message de la connexion en direct de plus de 4 Mio la ferme ; l'appareil le prend comme un serveur qui ne répond pas. Une lecture essaie au plus 16 instantanés illisibles à la suite avant de lire le journal. Ce que vérifient les cibles de fuzzing de ces lectures (la convergence, les signatures fausses, les fourches et les retours en arrière, les instantanés) est dans `docs/TEAM-SERVER.md` §14 et le README d'`escouade-team`.

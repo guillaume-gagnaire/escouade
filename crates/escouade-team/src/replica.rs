@@ -105,8 +105,10 @@ pub struct ProjectMeta {
     /// This device's operations the server took, by their number, until they are read back: one the server drops
     /// in silence shows.
     pub sent: BTreeMap<u64, Chain>,
-    /// The number the snapshot this copy holds goes up to.
+    /// The number the snapshot this copy holds goes up to (loaded, made here, or checked once this device was past it).
     pub snapshot: Option<u64>,
+    /// The snapshots of the stream this device found unreadable and put aside (SR2-01), by their number.
+    pub discarded: BTreeSet<u64>,
     pub clock: Clock,
 }
 

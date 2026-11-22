@@ -11,8 +11,12 @@
 //!   members' head checked (a fork), its place in its device's chain checked (played again, reordered, dropped,
 //!   two for one place), then applied. The commits of a project's own group are checked and merged on the way.
 //! - **Snapshots**: past [`super::Options::snapshot_every`] entries after the last one, a device of the team seals
-//!   and signs the state, and the server forgets the operations before it. A device that comes later (or that was
-//!   away past it) starts from the snapshot, its signature and its chains checked against what it saw.
+//!   and signs the state. The server keeps the operations it holds for its retention (30 days, SR2-01), then forgets
+//!   them. A device that comes later (or that was away past it) starts from the snapshot, its signature and its chains
+//!   checked against what it saw; a device already past it checks it once all the same. A snapshot that does not open
+//!   (bytes of nobody, a state that drops what this device saw) is put aside: the server is told (it then keeps the
+//!   operations, and its administrators are told, with the device that posted it), the device notes an alert, and
+//!   reads the snapshot before it, or the journal, instead.
 
 use std::collections::BTreeSet;
 
@@ -37,6 +41,8 @@ pub struct ProjectSynced {
     pub commits: usize,
     /// The copy started again from a snapshot.
     pub from_snapshot: bool,
+    /// The snapshots found unreadable and put aside (SR2-01).
+    pub discarded: usize,
     /// The operations of this device sent.
     pub sent: usize,
     /// This device wrote a snapshot.
@@ -82,6 +88,9 @@ fn entry_digest(e: &Entry) -> [u8; 32] {
 }
 
 /// The error that says the team is to be read first: the operation cites a later epoch.
+/// The snapshots one reading tries, the last first, when they do not open (SR2-01): past them, the journal.
+const MAX_SNAPSHOTS_TRIED: usize = 16;
+
 fn behind(e: &Error) -> bool {
     matches!(e, Error::Crypto(CryptoError::Behind(_)))
 }
@@ -719,6 +728,7 @@ impl Team {
         self.open_replica(&project)?;
         self.check_last_project(project).await?;
         let mut report = ProjectSynced::default();
+        let mut latest;
         loop {
             let meta = self.open_replica(&project)?.meta()?;
             let page = self
@@ -726,10 +736,10 @@ impl Team {
                 .read_project(&project.0, meta.cursor, None)
                 .await;
             let page = self.heard(page)?;
+            latest = page.latest.or(page.snapshot);
             if let Some(upto) = page.snapshot {
-                if meta.snapshot.is_none_or(|s| s < upto) {
-                    self.take_snapshot(project, upto).await?;
-                    report.from_snapshot = true;
+                if meta.snapshot.is_none_or(|s| s < upto) && !meta.discarded.contains(&upto) {
+                    report.from_snapshot |= self.take_snapshot(project, upto, &mut report).await?;
                 }
             }
             for entry in page.entries {
@@ -737,6 +747,17 @@ impl Team {
             }
             if !page.more {
                 break;
+            }
+        }
+        // A snapshot this device is past: checked once all the same, so that a bad one is flagged before the server
+        // forgets the operations it holds (SR2-01).
+        if let Some(latest) = latest {
+            let meta = self.open_replica(&project)?.meta()?;
+            if meta.cursor >= latest
+                && meta.snapshot.is_none_or(|s| s < latest)
+                && !meta.discarded.contains(&latest)
+            {
+                self.check_snapshot(project, latest, &mut report).await?;
             }
         }
         // An operation the server took and never showed: dropped.
@@ -911,61 +932,220 @@ impl Team {
 
     // === Snapshots ===
 
-    /// Starts again from the project's snapshot: its signature by a leaf of its epoch, its members' head, its
-    /// number, and each device's chain at least as far as this device saw it, checked; then the state is the
-    /// snapshot's, with the operations after it (and this device's not sent yet).
-    async fn take_snapshot(&mut self, project: ProjectId, upto: u64) -> Result<(), Error> {
-        let info = self.client.get_snapshot(&project.0).await;
-        let Some(info) = self.heard(info)? else {
-            return Err(Error::Server("a snapshot said but not served".into()));
-        };
-        let forged = Error::Forged { seq: info.upto };
-        let sealed: Sealed =
-            wire::decode(&info.payload).map_err(|_| Error::Forged { seq: info.upto })?;
+    /// Opens a snapshot the server served, and checks it against what this device saw: sealed and signed by a leaf of
+    /// its epoch, its number the one served, its members' head, each device's chain. `past`: this device read beyond
+    /// it, its chains are at least the snapshot's; else it starts from it, the snapshot's chains are at least its own
+    /// and its own operations the server took are in it. A snapshot that fails is [`Error::Forged`], to put aside (a
+    /// member may have posted it: SR2-01); one sealed at an epoch of the team this device is behind is
+    /// [`CryptoError::Behind`] until `team_read` (the team read since), then forged too: the team never reached it.
+    fn open_snapshot(
+        &mut self,
+        project: ProjectId,
+        info: &wire::SnapshotInfo,
+        past: bool,
+        team_read: bool,
+    ) -> Result<(Snapshot, Scope), Error> {
+        let forged = || Error::Forged { seq: info.upto };
+        let sealed: Sealed = wire::decode(&info.payload).map_err(|_| forged())?;
         let known = self.scope_of(&project)?;
         if known.is_some_and(|s| s != sealed.scope) {
-            return Err(forged);
+            return Err(forged());
         }
         let record = match self.device.record_for(&project, sealed.scope, sealed.epoch) {
             Ok(r) => r,
+            Err(CryptoError::Behind(_)) if team_read && sealed.scope == Scope::Team => {
+                return Err(forged())
+            }
             Err(e @ CryptoError::Behind(_)) => return Err(e.into()),
             Err(_) => return Err(Error::NoAccess),
         };
         let snap: Snapshot = sealed
             .open_snapshot(record, &project)
-            .map_err(|_| Error::Forged { seq: info.upto })?;
-        if snap.upto != info.upto || info.upto < upto {
-            return Err(Error::Forged { seq: info.upto });
+            .map_err(|_| forged())?;
+        if snap.upto != info.upto {
+            return Err(forged());
         }
         if let HeadCheck::Behind = self.device.check_head(snap.team_epoch, &snap.team_head)? {
+            if team_read {
+                return Err(forged());
+            }
             return Err(CryptoError::Behind(snap.team_epoch).into());
         }
         let own = self.device.identity().device;
+        let meta = self.open_replica(&project)?.meta()?;
+        if past {
+            // What it says of each device, this device read already: no further, the same operation where it stops.
+            for (device, c) in &snap.chains {
+                match meta.chains.get(device) {
+                    Some(seen)
+                        if seen.dseq > c.dseq
+                            || (seen.dseq == c.dseq && seen.digest == c.digest) => {}
+                    _ => return Err(forged()),
+                }
+            }
+        } else {
+            for (device, seen) in &meta.chains {
+                match snap.chains.get(device) {
+                    Some(c)
+                        if c.dseq > seen.dseq
+                            || (c.dseq == seen.dseq && c.digest == seen.digest) => {}
+                    _ => return Err(forged()),
+                }
+            }
+            // This device's operations the server took up to there are in it.
+            for (_, c) in meta.sent.range(..=snap.upto) {
+                if snap.chains.get(&own).is_none_or(|o| o.dseq < c.dseq) {
+                    return Err(forged());
+                }
+            }
+        }
+        Ok((snap, sealed.scope))
+    }
+
+    /// Opens a snapshot (see [`Team::open_snapshot`]), the team read again first when this device is behind the
+    /// epoch it names. None when it does not open: it is put aside ([`Team::put_aside`]).
+    async fn open_or_put_aside(
+        &mut self,
+        project: ProjectId,
+        info: &wire::SnapshotInfo,
+        past: bool,
+        report: &mut ProjectSynced,
+    ) -> Result<Option<(Snapshot, Scope)>, Error> {
+        let mut opened = self.open_snapshot(project, info, past, false);
+        if behind(opened.as_ref().err().unwrap_or(&Error::NoKeys)) {
+            self.sync().await?;
+            opened = self.open_snapshot(project, info, past, true);
+        }
+        match opened {
+            Ok(snap) => Ok(Some(snap)),
+            Err(Error::Forged { .. }) => {
+                self.put_aside(project, info).await?;
+                report.discarded += 1;
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// A snapshot that does not open is put aside (SR2-01): this device never takes it again, tells the server (the
+    /// operations it holds then stay past the retention, and the administrators are told), and notes an alert that
+    /// names the device that posted it. The reading goes on from the snapshot before it, or from the journal.
+    async fn put_aside(
+        &mut self,
+        project: ProjectId,
+        info: &wire::SnapshotInfo,
+    ) -> Result<(), Error> {
+        log::warn!(
+            "team: a snapshot of a project does not open (number {}): put aside, the journal read instead",
+            info.upto
+        );
+        let flagged = self.client.flag_snapshot(&project.0, info.upto).await;
+        self.heard(flagged)?;
         let r = self.open_replica(&project)?;
         let mut meta = r.meta()?;
-        for (device, seen) in &meta.chains {
-            match snap.chains.get(device) {
-                Some(c)
-                    if c.dseq > seen.dseq || (c.dseq == seen.dseq && c.digest == seen.digest) => {}
-                _ => return Err(Error::ServerRollback { seen: meta.cursor }),
+        meta.discarded.insert(info.upto);
+        r.set_meta(&meta)?;
+        let posted_by = <[u8; 16]>::try_from(info.device.as_slice())
+            .map(escouade_team_crypto::DeviceId)
+            .map_err(|_| Error::Server("a snapshot of no device".into()))?;
+        self.note_snapshot_alert(super::SnapshotAlert {
+            project,
+            upto: info.upto,
+            posted_by,
+            posted_at: info.at,
+            found_at: now_ms() as i64 / 1000,
+            found_here: true,
+        })
+    }
+
+    /// Starts again from the project's snapshot (see [`Team::open_snapshot`]): the state is the snapshot's, with the
+    /// operations after it (and this device's not sent yet). One that does not open is put aside, and the one before
+    /// it is tried, as long as it is after what this device read (SR2-01). False when none was taken: the journal is
+    /// read from where this device is (it is there while the retention runs).
+    async fn take_snapshot(
+        &mut self,
+        project: ProjectId,
+        upto: u64,
+        report: &mut ProjectSynced,
+    ) -> Result<bool, Error> {
+        let mut before: Option<u64> = None;
+        for _ in 0..MAX_SNAPSHOTS_TRIED {
+            let info = self.client.get_snapshot(&project.0, before).await;
+            let Some(info) = self.heard(info)? else {
+                if before.is_none() {
+                    return Err(Error::Server("a snapshot said but not served".into()));
+                }
+                return Ok(false);
+            };
+            match before {
+                None if info.upto < upto => return Err(Error::Forged { seq: info.upto }),
+                Some(b) if info.upto >= b => {
+                    return Err(Error::Server("a snapshot served out of order".into()))
+                }
+                _ => {}
             }
-        }
-        // This device's operations the server took up to there are in it.
-        for (seq, c) in meta.sent.clone().range(..=snap.upto) {
-            if snap.chains.get(&own).is_none_or(|o| o.dseq < c.dseq) {
-                return Err(Error::Withheld { seq: *seq });
+            let meta = self.open_replica(&project)?.meta()?;
+            if info.upto <= meta.cursor || meta.snapshot.is_some_and(|s| s >= info.upto) {
+                return Ok(false);
             }
-            meta.sent.remove(seq);
+            before = Some(info.upto);
+            if meta.discarded.contains(&info.upto) {
+                continue;
+            }
+            let Some((snap, scope)) = self
+                .open_or_put_aside(project, &info, false, report)
+                .await?
+            else {
+                continue;
+            };
+            let r = self.open_replica(&project)?;
+            let mut meta = r.meta()?;
+            for seq in meta.sent.clone().range(..=snap.upto).map(|(s, _)| *s) {
+                meta.sent.remove(&seq);
+            }
+            for (device, c) in &snap.chains {
+                meta.chains.insert(*device, *c);
+            }
+            meta.snapshot = Some(snap.upto);
+            if meta.scope.is_none() {
+                meta.scope = Some(scope);
+            }
+            r.load_snapshot(&snap.state, snap.upto)?;
+            r.set_meta(&meta)?;
+            return Ok(true);
         }
-        for (device, c) in &snap.chains {
-            meta.chains.insert(*device, *c);
+        Ok(false)
+    }
+
+    /// Checks once the project's last snapshot, this device being past it (SR2-01): one that does not open is put
+    /// aside and flagged before the server forgets the operations it holds; one that opens counts as the last snapshot
+    /// (the next is due [`super::Options::snapshot_every`] entries after it). Behind the epoch it names, or without
+    /// access to its key, this device leaves it to the others.
+    async fn check_snapshot(
+        &mut self,
+        project: ProjectId,
+        latest: u64,
+        report: &mut ProjectSynced,
+    ) -> Result<(), Error> {
+        let info = self.client.get_snapshot(&project.0, None).await;
+        let Some(info) = self.heard(info)? else {
+            return Ok(());
+        };
+        let meta = self.open_replica(&project)?.meta()?;
+        if info.upto != latest || info.upto > meta.cursor {
+            return Ok(());
         }
-        meta.snapshot = Some(snap.upto);
-        if meta.scope.is_none() {
-            meta.scope = Some(sealed.scope);
+        match self.open_or_put_aside(project, &info, true, report).await {
+            Ok(Some(_)) => {
+                let r = self.open_replica(&project)?;
+                let mut meta = r.meta()?;
+                meta.snapshot = Some(info.upto);
+                r.set_meta(&meta)
+            }
+            Ok(None) => Ok(()),
+            Err(Error::NoAccess) | Err(Error::Crypto(CryptoError::Behind(_))) => Ok(()),
+            Err(e) => Err(e),
         }
-        r.load_snapshot(&snap.state, snap.upto)?;
-        r.set_meta(&meta)
     }
 
     /// Writes a snapshot when [`super::Options::snapshot_every`] entries came after the last one, and nothing of

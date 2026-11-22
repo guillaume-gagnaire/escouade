@@ -55,6 +55,9 @@ pub struct Limits {
     pub claim_lease: Duration,
     /// The lease of a ticket handed to a teammate (TS-17, §11): 14 days, while they have not taken it.
     pub hand_lease: Duration,
+    /// How long the messages a snapshot holds stay after it (SR2-01): 30 days. A device that finds the snapshot
+    /// unreadable reads them instead, and flags it: a flagged snapshot never takes their place.
+    pub snapshot_retention: Duration,
 }
 
 impl Default for Limits {
@@ -73,6 +76,7 @@ impl Default for Limits {
             enrollment_ttl_max: Duration::from_secs(7 * 24 * 3600),
             claim_lease: Duration::from_secs(10 * 60),
             hand_lease: Duration::from_secs(14 * 24 * 3600),
+            snapshot_retention: Duration::from_secs(30 * 24 * 3600),
         }
     }
 }

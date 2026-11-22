@@ -1100,7 +1100,8 @@ impl ServerClient {
         .await
     }
 
-    /// Sends a project's snapshot: the server forgets the messages up to `upto`. Gives how many it forgot.
+    /// Sends a project's snapshot. The server keeps the messages up to `upto` for its retention (SR2-01): it gives
+    /// how many it forgot at once, none.
     pub async fn put_snapshot(
         &self,
         project: &[u8; 16],
@@ -1117,15 +1118,21 @@ impl ServerClient {
         Ok(ok_cbor::<SnapshotKept>(reply)?.pruned)
     }
 
-    /// A project's last snapshot; None when it has none.
+    /// A project's last snapshot, or with `before` its last one before that number (SR2-01: the one before a
+    /// snapshot found unreadable); None when it has none.
     pub async fn get_snapshot(
         &self,
         project: &[u8; 16],
+        before: Option<u64>,
     ) -> Result<Option<SnapshotInfo>, ClientError> {
+        let mut path = format!("/v1/projects/{}/snapshot", hex::encode(project));
+        if let Some(b) = before {
+            path.push_str(&format!("?before={b}"));
+        }
         let reply = self
             .authed(Call {
                 method: Method::Get,
-                path: format!("/v1/projects/{}/snapshot", hex::encode(project)),
+                path,
                 content_type: None,
                 body: Vec::new(),
                 token: None,
@@ -1135,6 +1142,59 @@ impl ServerClient {
             return Ok(None);
         }
         Ok(Some(ok_cbor(reply)?))
+    }
+
+    /// Tells the server this device found the project's snapshot at `upto` unreadable (SR2-01): its messages stay,
+    /// and the administrators are told. False when the server has no such snapshot (removed meanwhile).
+    pub async fn flag_snapshot(&self, project: &[u8; 16], upto: u64) -> Result<bool, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                format!("/v1/projects/{}/snapshot/unreadable", hex::encode(project)),
+                &SnapshotFlag { upto },
+            ))
+            .await?;
+        match reply.status {
+            204 => Ok(true),
+            404 => Ok(false),
+            _ => Err(refusal(&reply)),
+        }
+    }
+
+    /// Removes the project's snapshot at `upto` (an administrator's, SR2-01). False when the server has none there.
+    pub async fn remove_snapshot(
+        &self,
+        project: &[u8; 16],
+        upto: u64,
+    ) -> Result<bool, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Delete,
+                path: format!("/v1/projects/{}/snapshot?upto={upto}", hex::encode(project)),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        match reply.status {
+            204 => Ok(true),
+            404 => Ok(false),
+            _ => Err(refusal(&reply)),
+        }
+    }
+
+    /// The team's snapshots a device found unreadable (an administrator's, SR2-01).
+    pub async fn unreadable_snapshots(&self) -> Result<Vec<UnreadableInfo>, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Get,
+                path: "/v1/snapshots/unreadable".into(),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        Ok(ok_cbor::<UnreadableSnapshots>(reply)?.snapshots)
     }
 
     /// Writes an encrypted file, once (refused if it exists).

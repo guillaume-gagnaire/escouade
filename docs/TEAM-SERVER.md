@@ -136,6 +136,11 @@ Chaque projet d'équipe est un **journal d'opérations** : « créer le ticket X
 - Chaque opération porte l'id de son auteur (membre et appareil) et sa signature, plus la tête du journal des membres qu'il connaissait (§3.7).
 - Le serveur ne peut pas réordonner les opérations d'un même appareil sans que ça se voie : chaque opération cite la précédente du même appareil.
 - Pour compacter, un instantané chiffré de l'état remplace le début du journal. Il est fait par un appareil de l'équipe et signé, au-delà de 10 000 opérations par exemple.
+- **Un instantané ne détruit rien à sa pose** (SR2-01, ESC-637). N'importe quel appareil d'un projet en pose un : le serveur ne lit pas son contenu, il ne peut donc pas savoir s'il est bon. D'où quatre règles :
+  - **Pas d'instantané sur les flux de l'équipe** (liste des projets, réglages imposés, propositions, coûts, store privé, coupe-circuit) : leurs entrées sont signées par leurs auteurs, souvent un administrateur, et aucun appareil n'y lit d'instantané. Le serveur refuse (`403`), à tous.
+  - **Les messages couverts restent 30 jours.** Passé ce délai, le serveur les oublie (les commits restent), mais seulement si aucun appareil n'a dit l'instantané illisible. Il garde aussi les instantanés d'avant tant que le dernier n'a pas remplacé le journal.
+  - **Un instantané qui ne s'ouvre pas est écarté par l'appareil** : octets de personne, époque que l'équipe n'a jamais atteinte, état qui oublie ce que l'appareil avait lu. Les cas : un appareil neuf, un appareil revenu après une absence, et aussi un appareil déjà au-delà, qui vérifie une fois chaque nouvel instantané. L'appareil le signale au serveur, garde une alerte qui nomme l'appareil qui l'a posé, et lit l'instantané d'avant ou le journal. Les administrateurs voient l'alerte dans la carte de l'équipe.
+  - **Un administrateur retire un instantané** (« Retirer l'instantané ») : celui d'avant et le journal reprennent sa place sur tous les appareils. Le serveur refuse de retirer celui sur lequel le flux a déjà été élagué, puisque ses messages sont partis.
 
 ### 2.5 Le hors-ligne
 

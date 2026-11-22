@@ -150,6 +150,23 @@ pub struct Served {
     pub roles: usize,
     /// The invitations found used twice since the last time.
     pub alerts: usize,
+    /// The snapshots found unreadable the server told this administrator of, new since the last time (SR2-01).
+    pub snapshot_alerts: usize,
+}
+
+/// A project's snapshot found unreadable (SR2-01): put aside, the copy read from the journal instead. This device found
+/// it, or (an administrator's) another device of the team did and the server said so.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SnapshotAlert {
+    pub project: ProjectId,
+    /// The number it holds up to.
+    pub upto: u64,
+    /// The device that posted it, and when (seconds since the epoch, as the server says).
+    pub posted_by: DeviceId,
+    pub posted_at: i64,
+    /// When it was found unreadable (seconds since the epoch), and whether this device found it.
+    pub found_at: i64,
+    pub found_here: bool,
 }
 
 /// A second use of one of this device's invitations, as the server told it.
@@ -186,6 +203,8 @@ struct Meta {
     granted: BTreeSet<[u8; 32]>,
     /// The second uses of this device's invitations.
     alerts: Vec<ReuseAlert>,
+    /// The snapshots found unreadable (SR2-01): by this device, and for an administrator the ones the server lists.
+    snapshot_alerts: Vec<SnapshotAlert>,
     /// The epoch whose roster the server's roles were last put in step with.
     roles_epoch: Option<u64>,
     /// The administrators of each epoch this device lived through, as its roster said (TS-13: a version of the team's
@@ -300,7 +319,13 @@ pub struct Team {
     /// The writes of a ticket's holder the server refused since the last [`Team::take_refused`]: another device took
     /// the ticket over (TS-6).
     refused: Vec<sync::Refused>,
+    /// When an administrator's device last read the snapshots found unreadable (seconds, as `serve` was given it):
+    /// once a minute at most, the server's rate is the team's.
+    snapshot_alerts_at: Option<u64>,
 }
+
+/// Seconds between two readings of the snapshots found unreadable by an administrator's device (SR2-01).
+const SNAPSHOT_ALERTS_EVERY: u64 = 60;
 
 impl Team {
     /// Creates a team on the server with the token of `escouade-team-server init`: this device enrols, makes its
@@ -547,6 +572,7 @@ impl Team {
             replicas: BTreeMap::new(),
             refused: Vec::new(),
             online: None,
+            snapshot_alerts_at: None,
         }
     }
 
@@ -1444,6 +1470,7 @@ impl Team {
         self.admit_pending(now, &mut served).await?;
         self.grant_tokens(&mut served).await?;
         self.read_alerts(&mut served).await?;
+        self.read_snapshot_alerts(now, &mut served).await?;
         self.roles_in_step(&mut served).await?;
         self.anchors_in_step()?;
         self.serve_projects(now).await?;
@@ -1632,6 +1659,122 @@ impl Team {
             })?;
         }
         Ok(())
+    }
+
+    /// An administrator's: the snapshots the devices of the team found unreadable, as the server lists them (SR2-01).
+    /// The list follows the server's: a snapshot removed leaves it. Once a minute at most.
+    async fn read_snapshot_alerts(&mut self, now: u64, served: &mut Served) -> Result<(), Error> {
+        if !self.device.is_admin()?
+            || self
+                .snapshot_alerts_at
+                .is_some_and(|at| now.saturating_sub(at) < SNAPSHOT_ALERTS_EVERY)
+        {
+            return Ok(());
+        }
+        self.snapshot_alerts_at = Some(now);
+        let listed = match self.client.unreadable_snapshots().await {
+            Ok(l) => l,
+            // Not an administrator on the server yet (the roles follow the roster).
+            Err(e) if e.status() == Some(403) => return Ok(()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut alerts = Vec::new();
+        for u in listed {
+            let (Ok(project), Ok(device)) = (
+                <[u8; 16]>::try_from(u.project.as_slice()),
+                <[u8; 16]>::try_from(u.device.as_slice()),
+            ) else {
+                continue;
+            };
+            let project = ProjectId(project);
+            let here = self
+                .meta
+                .snapshot_alerts
+                .iter()
+                .find(|a| a.project == project && a.upto == u.upto);
+            alerts.push(SnapshotAlert {
+                project,
+                upto: u.upto,
+                posted_by: DeviceId(device),
+                posted_at: u.at,
+                found_at: here.map_or(u.flagged_at, |a| a.found_at),
+                found_here: here.is_some_and(|a| a.found_here),
+            });
+        }
+        if alerts != self.meta.snapshot_alerts {
+            served.snapshot_alerts += alerts
+                .iter()
+                .filter(|a| {
+                    !self
+                        .meta
+                        .snapshot_alerts
+                        .iter()
+                        .any(|b| b.project == a.project && b.upto == a.upto)
+                })
+                .count();
+            self.step(|t| {
+                t.meta.snapshot_alerts = alerts;
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
+    /// The snapshots found unreadable (SR2-01), the newest first.
+    pub fn snapshot_alerts(&self) -> Vec<SnapshotAlert> {
+        let mut out = self.meta.snapshot_alerts.clone();
+        out.sort_by_key(|a| std::cmp::Reverse(a.found_at));
+        out
+    }
+
+    /// Hides an alert of a snapshot found unreadable on this device (a member's: an administrator's follows the
+    /// server's list until the snapshot is removed).
+    pub fn dismiss_snapshot_alert(&mut self, project: ProjectId, upto: u64) -> Result<(), Error> {
+        self.step(|t| {
+            t.meta
+                .snapshot_alerts
+                .retain(|a| !(a.project == project && a.upto == upto));
+            Ok(())
+        })
+    }
+
+    /// Removes a project's snapshot from the server (an administrator's, SR2-01): the one before, and the journal
+    /// after it, take its place for every device. Its alert goes. False when the server had none there.
+    pub async fn remove_snapshot(&mut self, project: ProjectId, upto: u64) -> Result<bool, Error> {
+        if !self.device.is_admin()? {
+            return Err(Error::Refused(
+                "only an administrator removes a snapshot".into(),
+            ));
+        }
+        let removed =
+            match self.client.remove_snapshot(&project.0, upto).await {
+                Ok(r) => r,
+                Err(e) if e.code() == Some("snapshot_refused") => return Err(Error::Refused(
+                    "this snapshot is the start of the project's stream now: its messages are gone"
+                        .into(),
+                )),
+                Err(e) => return Err(e.into()),
+            };
+        self.dismiss_snapshot_alert(project, upto)?;
+        // The server's list read again at the next `serve`.
+        self.snapshot_alerts_at = None;
+        Ok(removed)
+    }
+
+    /// This device found a project's snapshot unreadable: noted, for the interface.
+    pub(crate) fn note_snapshot_alert(&mut self, alert: SnapshotAlert) -> Result<(), Error> {
+        if self
+            .meta
+            .snapshot_alerts
+            .iter()
+            .any(|a| a.project == alert.project && a.upto == alert.upto)
+        {
+            return Ok(());
+        }
+        self.step(|t| {
+            t.meta.snapshot_alerts.push(alert);
+            Ok(())
+        })
     }
 
     async fn roles_in_step(&mut self, served: &mut Served) -> Result<(), Error> {

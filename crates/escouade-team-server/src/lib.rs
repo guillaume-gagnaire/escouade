@@ -204,8 +204,14 @@ impl Server {
                 "/v1/projects/{project}/snapshot",
                 get(api::get_snapshot)
                     .put(api::put_snapshot)
+                    .delete(api::remove_snapshot)
                     .layer(Extension(body::Max(limits.max_file + (4 << 10)))),
             )
+            .route(
+                "/v1/projects/{project}/snapshot/unreadable",
+                post(api::flag_snapshot),
+            )
+            .route("/v1/snapshots/unreadable", get(api::unreadable_snapshots))
             .route("/v1/files/usage", get(api::usage))
             .route(
                 "/v1/files/{file}",
@@ -251,6 +257,10 @@ impl Server {
                 app.pairs.sweep();
                 if let Err(e) = app.store.sweep_tokens(util::now()).await {
                     tracing::warn!("tokens: {e}");
+                }
+                let cut = util::now() - app.limits.snapshot_retention.as_secs() as i64;
+                if let Err(e) = app.store.prune_snapshots(cut).await {
+                    tracing::warn!("snapshots: {e}");
                 }
             }
         })

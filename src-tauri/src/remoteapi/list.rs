@@ -93,6 +93,9 @@ escouade_command::commands! {
         commands::team_memory_of_ticket,
         commands::team_memory_set_review,
         commands::team_forget,
+        // The snapshots put aside (SR2-01, ESC-637).
+        commands::team_remove_snapshot,
+        commands::team_dismiss_snapshot,
         // The administrator's circuit breaker (TS-15): the team's, whichever machine the client is on.
         commands::team_breakers,
         commands::team_breaker_online,

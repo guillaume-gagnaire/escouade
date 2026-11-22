@@ -265,6 +265,10 @@ pub mod wire {
         /// to there are forgotten: start from the snapshot).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub snapshot: Option<u64>,
+        /// A project's stream: the number its last snapshot holds up to, whatever `since` (SR2-01): a device past it
+        /// checks it once all the same, and flags it when it does not open.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub latest: Option<u64>,
     }
 
     /// A project's snapshot, as a device sends it.
@@ -288,8 +292,36 @@ pub mod wire {
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct SnapshotKept {
-        /// The messages of the stream forgotten.
+        /// The messages of the stream forgotten at once: none since SR2-01 (they stay for the retention, then go
+        /// when no device flagged the snapshot).
         pub pruned: u64,
+    }
+
+    /// The snapshot a device found unreadable (SR2-01).
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct SnapshotFlag {
+        pub upto: u64,
+    }
+
+    /// A snapshot a device found unreadable, as the team's administrators are told (SR2-01).
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UnreadableInfo {
+        #[serde(with = "serde_bytes")]
+        pub project: Vec<u8>,
+        pub upto: u64,
+        /// The device that posted it, and when.
+        #[serde(with = "serde_bytes")]
+        pub device: Vec<u8>,
+        pub at: i64,
+        /// The first device that found it unreadable, and when.
+        #[serde(with = "serde_bytes")]
+        pub flagged_by: Vec<u8>,
+        pub flagged_at: i64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UnreadableSnapshots {
+        pub snapshots: Vec<UnreadableInfo>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1267,6 +1299,7 @@ pub async fn read_team(
         entries,
         more,
         snapshot: None,
+        latest: None,
     }))
 }
 
@@ -1288,21 +1321,23 @@ pub async fn read_project(
         )
         .await
         .map_err(store_problem)?;
-    let snapshot = app
+    let latest = app
         .store
         .snapshot_upto(authed.device.team, project)
         .await
-        .map_err(store_problem)?
-        .filter(|upto| *upto > q.since);
+        .map_err(store_problem)?;
     Ok(Cbor(Entries {
         entries,
         more,
-        snapshot,
+        snapshot: latest.filter(|upto| *upto > q.since),
+        latest,
     }))
 }
 
-/// Keeps a project's snapshot (TS-5): its messages up to `upto` are forgotten, its commits stay. A snapshot not
-/// after the one kept, or beyond the stream, is refused (409 `snapshot_refused`).
+/// Keeps a project's snapshot (TS-5) beside the ones before. Its messages up to `upto` stay for the retention
+/// (SR2-01, `Limits::snapshot_retention`): the sweep forgets them after it, unless a device flagged the snapshot
+/// unreadable. A snapshot not after the last one kept, or beyond the stream, is refused (409 `snapshot_refused`); one of
+/// the team's own streams too (403): their entries are signed by their writers, no device reads a snapshot of them.
 pub async fn put_snapshot(
     State(app): State<Shared>,
     authed: Authed,
@@ -1310,6 +1345,11 @@ pub async fn put_snapshot(
     Cbor(req): Cbor<SnapshotPut>,
 ) -> Result<Cbor<SnapshotKept>, Problem> {
     let project = path_id(&project)?;
+    if TEAM_STREAMS.contains(&project) {
+        return Err(Problem::forbidden(
+            "the team's own streams take no snapshot: their entries stay",
+        ));
+    }
     may(&app, &authed, &project).await?;
     if req.payload.is_empty() {
         return Err(Problem::bad_request("empty", "a snapshot carries bytes"));
@@ -1317,8 +1357,7 @@ pub async fn put_snapshot(
     if req.payload.len() > app.limits.max_file {
         return Err(Problem::too_large(app.limits.max_file));
     }
-    let pruned = app
-        .store
+    app.store
         .put_snapshot(
             authed.device.team,
             project,
@@ -1332,19 +1371,33 @@ pub async fn put_snapshot(
         )
         .await
         .map_err(store_problem)?;
-    Ok(Cbor(SnapshotKept { pruned }))
+    Ok(Cbor(SnapshotKept { pruned: 0 }))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct Before {
+    #[serde(default)]
+    pub before: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Upto {
+    pub upto: u64,
+}
+
+/// A project's last snapshot, or with `?before=n` its last one before `n` (a device that found the last one
+/// unreadable goes back to the one before, SR2-01).
 pub async fn get_snapshot(
     State(app): State<Shared>,
     authed: Authed,
     Path(project): Path<String>,
+    Query(q): Query<Before>,
 ) -> Result<Cbor<SnapshotInfo>, Problem> {
     let project = path_id(&project)?;
     may(&app, &authed, &project).await?;
     let s = app
         .store
-        .snapshot(authed.device.team, project)
+        .snapshot(authed.device.team, project, q.before)
         .await
         .map_err(store_problem)?
         .ok_or_else(Problem::not_found)?;
@@ -1353,6 +1406,92 @@ pub async fn get_snapshot(
         device: s.device.to_vec(),
         at: s.at,
         payload: s.payload,
+    }))
+}
+
+/// A device of the project found its snapshot at `upto` unreadable (SR2-01): the snapshot is flagged, its messages are
+/// never pruned while it is, and the team's administrators are told (`unreadable_snapshots`). 404 without such a
+/// snapshot.
+pub async fn flag_snapshot(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(project): Path<String>,
+    Cbor(req): Cbor<SnapshotFlag>,
+) -> Result<StatusCode, Problem> {
+    let project = path_id(&project)?;
+    may(&app, &authed, &project).await?;
+    let found = app
+        .store
+        .flag_snapshot(
+            authed.device.team,
+            project,
+            req.upto,
+            authed.device.id,
+            now(),
+        )
+        .await
+        .map_err(store_problem)?;
+    if !found {
+        return Err(Problem::not_found());
+    }
+    Metrics::inc(&app.metrics.unreadable_snapshots);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// An administrator removes a project's snapshot at `?upto=n` (SR2-01): the one before, and the messages after it,
+/// take its place. 404 without such a snapshot; 409 `snapshot_refused` for the one the stream was pruned to (its
+/// messages are gone: nothing would take its place).
+pub async fn remove_snapshot(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(project): Path<String>,
+    Query(q): Query<Upto>,
+) -> Result<StatusCode, Problem> {
+    let project = path_id(&project)?;
+    if !authed.is_admin() {
+        return Err(Problem::forbidden(
+            "only an administrator removes a snapshot",
+        ));
+    }
+    let found = app
+        .store
+        .remove_snapshot(authed.device.team, project, q.upto)
+        .await
+        .map_err(store_problem)?;
+    if !found {
+        return Err(Problem::not_found());
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The team's snapshots a device found unreadable, each with the device that posted it (SR2-01): for its
+/// administrators.
+pub async fn unreadable_snapshots(
+    State(app): State<Shared>,
+    authed: Authed,
+) -> Result<Cbor<UnreadableSnapshots>, Problem> {
+    if !authed.is_admin() {
+        return Err(Problem::forbidden(
+            "only an administrator reads the unreadable snapshots",
+        ));
+    }
+    let list = app
+        .store
+        .unreadable_snapshots(authed.device.team)
+        .await
+        .map_err(store_problem)?;
+    Ok(Cbor(UnreadableSnapshots {
+        snapshots: list
+            .into_iter()
+            .map(|u| UnreadableInfo {
+                project: u.project.to_vec(),
+                upto: u.upto,
+                device: u.device.to_vec(),
+                at: u.at,
+                flagged_by: u.flagged_by.to_vec(),
+                flagged_at: u.flagged_at,
+            })
+            .collect(),
     }))
 }
 

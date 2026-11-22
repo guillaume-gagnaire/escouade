@@ -19,6 +19,8 @@ pub struct Metrics {
     pub project_entries: AtomicU64,
     pub entry_bytes: AtomicU64,
     pub epoch_conflicts: AtomicU64,
+    /// Snapshots a device found unreadable (SR2-01).
+    pub unreadable_snapshots: AtomicU64,
     /// Tickets taken or given back (TS-6).
     pub claims: AtomicU64,
     /// Claims refused: another device held the ticket.
@@ -66,7 +68,7 @@ impl Metrics {
                 escape(route)
             );
         }
-        let counters: [(&str, &str, &AtomicU64); 12] = [
+        let counters: [(&str, &str, &AtomicU64); 13] = [
             (
                 "escouade_team_auth_failures_total",
                 "Refused sign-ins and sessions.",
@@ -96,6 +98,11 @@ impl Metrics {
                 "escouade_team_epoch_conflicts_total",
                 "Commits refused: their epoch had one already.",
                 &self.epoch_conflicts,
+            ),
+            (
+                "escouade_team_unreadable_snapshots_total",
+                "Snapshots a device found unreadable and flagged.",
+                &self.unreadable_snapshots,
             ),
             (
                 "escouade_team_claims_total",

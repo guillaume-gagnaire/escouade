@@ -272,10 +272,14 @@ pub struct EpochTaken {
 pub struct Entries {
     pub entries: Vec<Entry>,
     pub more: bool,
-    /// A project's stream: the number its last snapshot holds up to, when it is after `since` (its messages up to
-    /// there are forgotten: start from the snapshot).
+    /// A project's stream: the number its last snapshot holds up to, when it is after `since` (start from the
+    /// snapshot: its messages may be gone, after the retention).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snapshot: Option<u64>,
+    /// A project's stream: the number its last snapshot holds up to, whatever `since` (SR2-01): a device past it
+    /// checks it once all the same, and flags it when it does not open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest: Option<u64>,
 }
 
 /// A project's snapshot, as a device sends it (TS-5).
@@ -300,6 +304,33 @@ pub struct SnapshotInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SnapshotKept {
     pub pruned: u64,
+}
+
+/// The snapshot a device found unreadable (SR2-01).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SnapshotFlag {
+    pub upto: u64,
+}
+
+/// A snapshot a device found unreadable, as the team's administrators are told (SR2-01).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UnreadableInfo {
+    #[serde(with = "serde_bytes")]
+    pub project: Vec<u8>,
+    pub upto: u64,
+    /// The device that posted it, and when.
+    #[serde(with = "serde_bytes")]
+    pub device: Vec<u8>,
+    pub at: i64,
+    /// The first device that found it unreadable, and when.
+    #[serde(with = "serde_bytes")]
+    pub flagged_by: Vec<u8>,
+    pub flagged_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UnreadableSnapshots {
+    pub snapshots: Vec<UnreadableInfo>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

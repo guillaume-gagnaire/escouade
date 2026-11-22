@@ -2,8 +2,8 @@
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-633"]
-decisions: [167,168,173,178,277,286]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633"]
+decisions: [167,168,173,178,277,288,286]
 compared: null
 ---
 
@@ -47,7 +47,13 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 - Un flux par équipe (les messages MLS) et un par projet (les opérations chiffrées, et les commits du groupe d'un projet gardé à quelques membres). Le serveur numérote chaque entrée, la garde et la diffuse ; un appareil relit depuis le numéro n pour reprendre.
 - Les commits MLS, de l'équipe comme du groupe d'un projet : le premier pour une époque gagne. Un second pour la même époque est refusé, avec les entrées depuis le commit gagnant, pour que l'appareil rattrape.
-- **Les instantanés d'un projet** : un appareil de l'équipe envoie l'état chiffré du projet jusqu'à un numéro ; le serveur garde le dernier, oublie les opérations d'avant (pas les commits) et rend leurs octets au quota. Un instantané qui n'est pas après celui gardé, ou qui va au-delà du flux, est refusé. La lecture d'un projet dit où est l'instantané quand il est après le numéro demandé.
+- **Les instantanés d'un projet** (SR2-01) : un appareil du projet envoie l'état chiffré du projet jusqu'à un numéro. Le serveur le garde à côté des précédents, et ses octets comptent dans le quota.
+  - **Rien n'est oublié à sa pose.** Les opérations qu'il couvre restent **30 jours**, puis le serveur les oublie (pas les commits) et rend leurs octets au quota, avec les instantanés d'avant. Il ne le fait jamais pour un instantané qu'un appareil a signalé comme illisible.
+  - Un instantané qui n'est pas après le dernier, ou qui va au-delà du flux, est refusé.
+  - **Aucun instantané sur les flux de l'équipe** : la liste des projets, les réglages imposés, les propositions, les coûts, le store privé, le coupe-circuit. Le serveur le refuse (`403`), à un administrateur comme à un membre.
+  - La lecture d'un projet dit où est le dernier instantané : quand il est après le numéro demandé (l'appareil en part), et toujours (l'appareil déjà au-delà le vérifie une fois). Un appareil peut demander l'instantané d'avant un numéro.
+  - Un appareil du projet signale un instantané illisible. Les administrateurs de l'équipe lisent la liste de ces instantanés : le projet, le numéro, l'appareil qui l'a posé et quand, le premier appareil qui l'a signalé et quand. Les membres ne la lisent pas.
+  - **Un administrateur retire un instantané** : l'instantané d'avant et le journal reprennent sa place, ses octets reviennent au quota. Le serveur refuse de retirer celui sur lequel le flux a déjà été élagué, puisque ses opérations sont parties.
 - Les fichiers chiffrés (documents, images) : sur le disque ou dans un stockage compatible S3 (MinIO, Garage, AWS), écrits une fois, avec une taille maximale par fichier (25 Mio par défaut) et un quota par équipe (2 Gio par défaut) qui compte aussi les flux et les instantanés.
 - La diffusion en direct par WebSocket : un appareil abonné reçoit les nouvelles entrées de tous les flux de son équipe, et rien des autres équipes.
 
@@ -58,7 +64,7 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 - Une limite de débit par adresse et par appareil (429 et `Retry-After`).
 - Des tailles bornées partout ; une longueur annoncée trop grande est refusée avant d'être lue.
 - TLS par rustls avec un certificat donné, ou derrière un proxy inverse (Caddy dans l'exemple, Traefik sous Coolify).
-- La base : SQLite en WAL par défaut, PostgreSQL en option.
+- La base : SQLite en WAL par défaut, PostgreSQL en option. Une base d'avant la rétention garde ses instantanés : le flux y est déjà élagué jusqu'à eux.
 
 ## La publication
 

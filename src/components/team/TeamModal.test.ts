@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../../lib/state.svelte';
 import { teams, type TeamView } from '../../lib/teams.svelte';
-import { fakeBackend, resetApp } from '../../test/ipc';
+import { fakeBackend, project, resetApp } from '../../test/ipc';
 import TeamModal from './TeamModal.svelte';
 import { fill } from '../../test/fill';
 
@@ -30,6 +30,7 @@ function team(over: Partial<TeamView> = {}): TeamView {
     recoveryStale: false,
     alarm: null,
     invitations: [],
+    snapshotAlerts: [],
     lastError: null,
     ...over,
   };
@@ -87,6 +88,58 @@ describe('the screens of the team server (TS-3)', () => {
     const confirm = screen.getByRole('alertdialog');
     await userEvent.click(within(confirm).getByRole('button', { name: 'Retirer de cet appareil' }));
     expect(backend.called('team_forget')[0].args).toEqual({ team: team().id });
+  });
+
+  it('says a snapshot put aside, who posted it, and lets an administrator remove it (SR2-01)', async () => {
+    const alert = {
+      project: 'aa'.repeat(16),
+      upto: 42,
+      postedBy: '0123456789abcdef0123456789abcdef',
+      postedByRole: 'member' as const,
+      postedByMe: false,
+      postedAt: 1_800_000_000,
+      foundAt: 1_800_000_100,
+      foundHere: false,
+    };
+    app.projects = [project({ id: 'p1', name: 'Atlas', teamProject: 'aa'.repeat(16) })];
+    const backend = fakeBackend({
+      team_list: () => [team({ snapshotAlerts: [alert] })],
+      team_remove_snapshot: () => team(),
+    });
+    render(TeamModal);
+    const band = await screen.findByRole('alert', { name: 'Instantanés écartés' });
+    expect(band).toHaveTextContent('Atlas · jusqu’à l’entrée 42');
+    expect(band).toHaveTextContent(/par l’appareil 01234567 \(Membre\)/);
+    expect(band).toHaveTextContent(/Signalé par un appareil de l’équipe/);
+    expect(within(band).queryByRole('button', { name: 'Masquer' })).toBeNull();
+    await userEvent.click(within(band).getByRole('button', { name: 'Retirer l’instantané' }));
+    expect(backend.called('team_remove_snapshot')[0].args).toEqual({ team: team().id, project: alert.project, upto: 42 });
+    expect(screen.queryByRole('alert', { name: 'Instantanés écartés' })).toBeNull();
+  });
+
+  it('lets a member hide a snapshot this device put aside (SR2-01)', async () => {
+    const alert = {
+      project: 'bb'.repeat(16),
+      upto: 7,
+      postedBy: 'ffeeddccbbaa99887766554433221100',
+      postedByRole: null,
+      postedByMe: false,
+      postedAt: 1_800_000_000,
+      foundAt: 1_800_000_100,
+      foundHere: true,
+    };
+    const backend = fakeBackend({
+      team_list: () => [team({ role: 'member', snapshotAlerts: [alert] })],
+      team_dismiss_snapshot: () => team({ role: 'member' }),
+    });
+    render(TeamModal);
+    const band = await screen.findByRole('alert', { name: 'Instantanés écartés' });
+    expect(band).toHaveTextContent('bbbbbbbb · jusqu’à l’entrée 7');
+    expect(band).toHaveTextContent(/Écarté par cet appareil/);
+    expect(band).toHaveTextContent(/administrateurs de l’équipe sont prévenus/);
+    expect(within(band).queryByRole('button', { name: 'Retirer l’instantané' })).toBeNull();
+    await userEvent.click(within(band).getByRole('button', { name: 'Masquer' }));
+    expect(backend.called('team_dismiss_snapshot')[0].args).toEqual({ team: team().id, project: alert.project, upto: 7 });
   });
 
   it('creates a team, shows its 24 words once, and asks three of them back', async () => {

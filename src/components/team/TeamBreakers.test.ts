@@ -34,6 +34,7 @@ const TEAM: TeamView = {
   alarm: null,
   invitations: [],
   lastError: null,
+  snapshotAlerts: [],
 };
 
 const CUT: Breaker = {
