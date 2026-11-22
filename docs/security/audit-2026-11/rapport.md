@@ -305,14 +305,14 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 | SEC-02 | « Projet privé » est une consigne, pas un cloisonnement | Moyenne | Démontré |
 | SEC-03 | Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent | Moyenne | Probable |
 | SEC-04 | Dépendances : des avis ouverts hors de l'application, sans délai de correction | Faible | Démontré |
-| SEC-05 | Politique de contenu : styles en ligne autorisés, directives manquantes | Faible | Démontré |
+| SEC-05 | Politique de contenu : styles en ligne autorisés, directives manquantes | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-06 | Lancement décrit par un plugin : un fichier écrit à travers un lien | Faible | Démontré |
 | SEC-07 | Le jeton du serveur MCP passe en argument et reste en clair chez les harness | Faible | Probable |
 | SEC-08 | Flux d'un harness : une longueur annoncée suffit à arrêter l'application | Faible | Démontré |
 | SEC-09 | Réseau des plugins : trois angles morts | Faible | Démontré |
 | SEC-10 | Données au repos : pas de trousseau sous Linux, dossier lisible sous Unix | Faible | Probable |
 | SEC-11 | La sortie d'un plugin n'est pas plafonnée pendant un tour | Faible | Démontré |
-| SEC-12 | Fenêtre principale : des droits très larges si un script y entrait | Faible | Probable |
+| SEC-12 | Fenêtre principale : des droits très larges si un script y entrait | Faible | Probable ; ouverture bornée dans la 2.2.6, commandes à découper |
 | SEC-13 | Des variables d'environnement de test restent actives en version publiée | Faible | Probable |
 | SEC-14 | Mises à jour : le proxy est contourné s'il ne répond pas | Faible | Probable |
 | SEC-15 | Liste de révocation des plugins : pas de date de péremption | Faible | Théorique |
@@ -484,6 +484,7 @@ Et une raison de ne pas la monter : l'exploitation demande toujours trois condit
 | État | Démontré — essai B-07 |
 | Composant | `src-tauri/tauri.conf.json:32` |
 | Effort de correction | Moyen (les styles en ligne viennent de l'interface elle-même) |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** La politique de contenu de la fenêtre bloque les scripts en ligne, `eval`, les scripts et les connexions vers l'extérieur, les images et cadres distants : quinze tentatives bloquées à l'essai. Elle autorise en revanche les styles en ligne (`style-src 'unsafe-inline'`), et ne fixe ni `form-action`, ni `base-uri`, ni `frame-ancestors`.
 
@@ -500,6 +501,13 @@ Essai B-07 : les quinze tentatives de script, de connexion et de chargement sont
 **Scénario.** Si un contenu tiers parvenait à injecter du HTML, il ne pourrait pas exécuter de script, mais pourrait redessiner l'interface : recouvrir un bouton « Refuser » par un faux « Autoriser », par exemple.
 
 **Recommandation.** Ajouter `form-action 'none'`, `base-uri 'none'`, `object-src 'none'`, `frame-ancestors 'none'`. Viser la suppression de `'unsafe-inline'` pour les styles (styles par classes, ou empreintes).
+
+**Correction (Escouade 2.2.6).** Les deux points de la recommandation sont faits.
+
+1. La politique fixe `object-src 'none'`, `base-uri 'none'`, `form-action 'none'` et `frame-ancestors 'none'`.
+2. Une balise `<style>` ne s'applique plus qu'avec le nonce que Tauri donne à la page à chaque chargement : `style-src 'self' 'nonce-…'`, sans `'unsafe-inline'`. Les balises que l'interface crée elle-même (celles du terminal, de l'éditeur, du thème d'un plugin) reçoivent ce nonce à leur création. Une balise qu'un texte injecté apporterait n'en a pas, et ne s'applique pas. Les attributs `style`, qu'écrit le framework de l'interface, restent permis par `style-src-attr 'unsafe-inline'`.
+
+Cela vaut pour la fenêtre principale et pour la barre des fenêtres « Pages », qui est la même page. La vue d'un plugin est dessinée dans la fenêtre principale. La page d'un lancement est celle de l'application développée, sous sa propre politique. Un test de bout en bout lit la politique réelle de la fenêtre et vérifie qu'une balise `<style>` injectée sans nonce ne s'applique pas. Le scénario « recouvrir un bouton Refuser » ne passe plus par une balise de style. Il ne passe pas non plus par un attribut : l'assainissement retire déjà l'attribut `style` des messages.
 
 ## SEC-06 — Lancement décrit par un plugin : un fichier écrit à travers un lien
 
@@ -627,6 +635,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Probable — lu dans la configuration |
 | Composant | `src-tauri/capabilities/default.json`, `src-tauri/src/lib.rs:650-999` |
 | Effort de correction | Moyen |
+| Correction | **Ouverture par le système bornée dans Escouade 2.2.6** ; le découpage des commandes reste à faire (voir « Correction » en fin de fiche) |
 
 **Description.** La fenêtre principale peut appeler 348 commandes du cœur, sans découpage : terminaux, fichiers, git, plugins, réglages. Elle peut aussi demander au système d'ouvrir n'importe quel chemin du disque avec son programme par défaut. C'est normal pour l'interface d'un outil de développement, mais cela veut dire qu'une seule exécution de script dans la fenêtre vaudrait un contrôle complet du poste. Toute la sécurité de cette frontière repose sur l'assainissement du contenu et la politique de contenu.
 
@@ -643,6 +652,11 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Ce qui tient.** La page de l'application en cours de développement s'affiche dans une webview à part, à laquelle aucune commande ne répond (`src-tauri/src/windowthread.rs:224-231`, et la capacité ne nomme que la fenêtre principale). Les outils de développement de la fenêtre sont fermés dans une version publiée (`src-tauri/src/lib.rs:412`).
 
 **Recommandation.** Restreindre `opener:allow-open-path` aux dossiers des projets et au dossier de données. Activer le mode d'isolation de Tauri, ou découper les commandes par capacité, pour qu'un script injecté n'ait pas tout d'un coup.
+
+**Correction (Escouade 2.2.6).** Le premier point est fait ; le second reste ouvert.
+
+1. La fenêtre n'a plus la permission `opener:allow-open-path` : elle ne peut plus demander au système d'ouvrir un chemin sans passer par le cœur. Chaque ouverture d'un chemin par le système passe par une seule garde du cœur : un fichier dans son programme, un dossier dans le gestionnaire de fichiers, un élément montré dans son dossier. La garde ne laisse passer que ce qui est dans le dossier de données, le dossier d'un projet, le dossier de ses nouveaux worktrees, ou le dossier et le worktree de l'un de ses agents. Elle juge le chemin là où il mène vraiment : un lien, une jonction, `..` et un chemin `\\?\…` sont résolus avant. Un chemin réseau hors de ces dossiers est refusé sans que le disque soit interrogé, et un périphérique de Windows n'est jamais ouvert. Hors de ces dossiers, le refus est dit à l'utilisateur, avec sa raison. La fenêtre ne fait jamais ouvrir un programme ou un script, pas même dans un projet : l'exécutable déposé par un agent du scénario n'est plus ouvert. Ce sont des tests du projet.
+2. **Les commandes restent d'un bloc.** La fenêtre principale peut toujours appeler toutes les commandes du cœur, dont celle qui ouvre un terminal. Leur découpage par capacité est à reprendre avec l'application mobile, qui appellera les mêmes commandes. Ce découpage reste la défense à poser ; d'ici là, cette frontière repose toujours sur l'assainissement et sur la politique de contenu (SEC-05, corrigé).
 
 ## SEC-13 — Des variables d'environnement de test restent actives en version publiée
 

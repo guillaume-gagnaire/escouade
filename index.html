@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <title>Escouade</title>
+    <!-- Tauri gives this style the page's nonce at each load: the styles the interface creates carry it too
+         (src/lib/style-nonce.ts); a `<style>` without it is not applied (src-tauri/tauri.conf.json, audit SEC-05). -->
+    <style id="escouade-style-nonce"></style>
   </head>
   <body>
     <div id="app"></div>

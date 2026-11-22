@@ -536,19 +536,21 @@ pub fn reveal_folder(dir: PathBuf) -> Result<Reveal> {
 
 /// Shows `what` in the system's file manager: the Explorer, the Finder, or the desktop's on Linux
 /// (asked through D-Bus). On a thread of its own, as the trash: Windows' shell wants COM set up its
-/// way on the thread that calls it.
-pub fn reveal(what: Reveal) -> Result<()> {
+/// way on the thread that calls it. Only inside `roots`, the folders of the projects, their
+/// worktrees and the data folder (`opening`, audit SEC-12).
+pub fn reveal(what: Reveal, roots: Vec<PathBuf>) -> Result<()> {
     std::thread::spawn(move || {
         reveal_with(
             &what,
             |path| {
+                let allowed = crate::opening::allow(&roots, path, true)?;
                 select_and_again(
                     path,
-                    |p| crate::outside::open(crate::outside::What::Reveal(p)),
+                    |_| allowed.open(),
                     || std::thread::sleep(std::time::Duration::from_secs(1)),
                 )
             },
-            |dir| crate::outside::open(crate::outside::What::Path(dir)),
+            |dir| crate::opening::allow(&roots, dir, false)?.open(),
         )
         .inspect_err(|e| log::warn!("reveal {what:?}: {e:#}"))
     })

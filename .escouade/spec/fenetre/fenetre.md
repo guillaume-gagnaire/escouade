@@ -1,9 +1,9 @@
 ---
 title: "Fenêtre"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md","src/components/ContextMenu.svelte"]
-tickets: ["ESC-71","ESC-109","ESC-101","ESC-380"]
-decisions: []
+sources: ["docs/SPEC.md","src/components/ContextMenu.svelte","docs/security/audit-2026-11/rapport.md"]
+tickets: ["ESC-71","ESC-109","ESC-101","ESC-380","ESC-593"]
+decisions: ["l-ouverture-par-le-systeme-bornee-aux-do"]
 compared: null
 order: 5
 ---
@@ -72,6 +72,29 @@ La fenêtre principale d'Escouade. Elle est sans cadre et suit un thème clair o
 - Un autre lien (chemin relatif, `#…`, lien vide) ne fait rien.
 - Dans les terminaux et la vue Claude Code, un lien OSC 8 (un texte différent de l'adresse, comme ceux qu'écrit Claude Code) s'ouvre dans le navigateur au clic, sans demander de confirmation. Seuls `http` et `https` y sont cliquables. Une URL écrite en clair s'ouvre aussi dans le navigateur.
 
+### Sécurité de la fenêtre
+
+Le contenu des agents s'affiche comme du texte, assaini (voir *Conversation*). Si un message passait un jour l'assainissement, ce qu'il apporterait ne pourrait ni lancer de script, ni redessiner l'interface, ni faire ouvrir par le système ce qu'il veut (audit de sécurité de la 2.2.0, SEC-05 et SEC-12).
+
+**Ouvrir par le système.**
+
+- Un fichier dans son programme, un dossier dans le gestionnaire de fichiers, un élément montré dans son dossier : le système ne les ouvre que dans le dossier de données d'Escouade, le dossier d'un projet, le dossier de ses nouveaux worktrees (« Dossier des worktrees »), et le dossier et le worktree de chacun de ses agents. Cela vaut pour « Ouvrir le dossier » d'un projet, du dossier de données et des copies de l'état, pour « Afficher dans l'Explorateur » de l'éditeur, pour un fichier qu'un agent a envoyé, une image de son message, et un fichier d'une demande de « À toi ».
+- Le cœur juge le chemin là où il mène vraiment : un lien, une jonction, `..` et un chemin `\\?\C:\…` sont résolus avant. Un chemin réseau (`\\serveur\partage`) qui n'est pas, tel qu'il est écrit, dans un de ces dossiers est refusé sans que le disque soit interrogé, puisque l'interroger joindrait déjà le serveur. Un projet sous WSL (`\\wsl.localhost\…`) y est. Un périphérique de Windows (`\\.\pipe\…`) et un chemin incomplet (`C:notes.txt`, relatif) sont refusés.
+- Montré dans son dossier, un élément n'est pas suivi : un lien d'un projet vers ailleurs est montré comme le lien. Ouvert, il est refusé.
+- Le refus se dit dans un toast, avec sa raison : « « D:\ailleurs » est hors des dossiers des projets, de leurs worktrees et du dossier de données d'Escouade : Escouade ne le fait pas ouvrir par le système. » Quand un lien ou `..` mène ailleurs, le toast dit où : « « … » mène à « … », hors des dossiers… ». Un chemin qui n'existe plus : « « … » n'existe pas ou ne se lit pas ».
+- Un fichier envoyé par un agent, ou une image de son message, qui est hors de ces dossiers (dans un dossier temporaire du poste, par exemple) ne s'ouvre plus et ne se montre plus dans son dossier. Ce que la conversation en affiche reste affiché.
+- Un programme ou un script ne s'ouvre jamais, même dans un projet : ni par ce que la fenêtre ouvre d'elle-même, ni quand un agent l'a envoyé (voir *Conversation*). Il se montre dans son dossier.
+- La fenêtre n'a aucune permission de Tauri pour ouvrir un chemin : chaque ouverture passe par le cœur. Les adresses `http(s)` gardent leur chemin, le navigateur (voir *Liens*).
+
+**La politique de contenu.**
+
+- Aucun script en ligne, aucun `eval`, rien de chargé ni de joint ailleurs que l'app. Aucun formulaire n'envoie rien (`form-action 'none'`), aucune balise `<base>` ne déplace les adresses (`base-uri 'none'`), aucun objet ne se charge (`object-src 'none'`), et aucune page ne met la fenêtre dans un cadre (`frame-ancestors 'none'`).
+- Une balise `<style>` ne s'applique qu'avec le nonce que Tauri donne à la page à chaque chargement, sur la balise `<style>` de `index.html` : `style-src 'self' 'nonce-…'`, sans `'unsafe-inline'`. Les balises que l'interface crée elle-même reçoivent ce nonce à leur création : celles du terminal, de l'éditeur, du thème d'un plugin. Une balise apportée par un texte n'en a pas et ne s'applique pas : le navigateur le signale comme une violation de la politique.
+- Les attributs `style`, qu'écrit l'interface, restent permis (`style-src-attr 'unsafe-inline'`). L'assainissement retire déjà l'attribut `style` des messages.
+- Cela vaut pour la fenêtre principale et pour la barre des fenêtres « Pages » : c'est la même page, chacune avec son nonce. La vue d'un plugin est dessinée dans la fenêtre principale, sous sa politique. La page d'un lancement est celle de l'app développée, sous sa propre politique, sans aucune commande d'Escouade (voir *La page du lancement*). Le serveur de développement (`npm run tauri dev`) n'applique pas de politique : seule l'app construite le fait.
+
+**Les commandes de la fenêtre** restent d'un bloc : la fenêtre principale et la barre des fenêtres « Pages » peuvent appeler toutes les commandes du cœur. Leur découpage par capacité est à reprendre avec l'app mobile, qui appellera les mêmes commandes.
+
 ## Réglages
 
 Réglages › Application › « Affichage » :
@@ -85,3 +108,4 @@ Tous s'appliquent et s'enregistrent tout de suite.
 ## Limites
 
 - Le zoom ne change pas la taille minimale de la fenêtre : un palier qui ne tient pas dans la fenêtre n'est pas appliqué.
+- Un fichier qu'un agent envoie hors des dossiers des projets, de leurs worktrees et du dossier de données ne s'ouvre pas depuis la conversation : l'agent peut le mettre dans son worktree.

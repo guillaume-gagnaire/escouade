@@ -380,12 +380,17 @@ fn not_run(lang: crate::i18n::Lang, name: &str) -> anyhow::Error {
     ))
 }
 
-/// `path` opened with its application, or shown in its folder (`reveal`).
-pub(crate) fn open_or_reveal(path: PathBuf, reveal: bool) -> anyhow::Result<()> {
+/// `path` opened with its application, or shown in its folder (`reveal`): only inside `roots`, the
+/// folders of the projects, their worktrees and the data folder (`opening`, audit SEC-12).
+pub(crate) fn open_or_reveal(
+    roots: Vec<PathBuf>,
+    path: PathBuf,
+    reveal: bool,
+) -> anyhow::Result<()> {
     if reveal {
-        crate::fsedit::reveal(crate::fsedit::Reveal::Select(path))
+        crate::fsedit::reveal(crate::fsedit::Reveal::Select(path), roots)
     } else {
-        crate::outside::open(crate::outside::What::Path(&path))
+        crate::opening::allow(&roots, &path, false)?.open()
     }
 }
 
@@ -715,7 +720,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         reveal: bool,
     ) -> anyhow::Result<()> {
         let (folder, cwd, input, sent, fence) = self.sent_call(id, item)?;
-        let lang = crate::i18n::ui();
+        let (lang, roots) = (crate::i18n::ui(), self.open_roots());
         tokio::task::spawn_blocking(move || {
             let path = target(
                 &folder,
@@ -727,7 +732,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
                 &fence,
                 lang,
             )?;
-            open_or_reveal(path, reveal)
+            open_or_reveal(roots, path, reveal)
         })
         .await?
     }
@@ -743,8 +748,13 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     pub async fn open_local_image(&self, id: &str, src: &str, reveal: bool) -> anyhow::Result<()> {
         let cwd = self.agent(id)?.lock().meta.cwd.clone();
         let (fence, src, lang) = (self.agent_fence(id), src.to_string(), crate::i18n::ui());
+        let roots = self.open_roots();
         tokio::task::spawn_blocking(move || {
-            open_or_reveal(local_target(&cwd, &src, reveal, &fence, lang)?, reveal)
+            open_or_reveal(
+                roots,
+                local_target(&cwd, &src, reveal, &fence, lang)?,
+                reveal,
+            )
         })
         .await?
     }

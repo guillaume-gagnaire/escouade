@@ -2083,7 +2083,7 @@ impl<R: Runtime> Core<R> {
                 n = f.name
             ));
         }
-        crate::sentfiles::open_or_reveal(path, reveal)
+        crate::sentfiles::open_or_reveal(self.open_roots(), path, reveal)
     }
 
     /// `inbox_answer`: the user's answer, with the files joined to it (copies of the window's drafts,

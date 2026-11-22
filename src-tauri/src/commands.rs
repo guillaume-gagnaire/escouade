@@ -207,14 +207,37 @@ pub fn open_url(url: String) -> Res<()> {
     if !["http", "https", "mailto", "tel"].contains(&scheme.as_str()) {
         return Err(err(anyhow::anyhow!("not a link Escouade opens: {scheme}:")));
     }
-    crate::outside::open(crate::outside::What::Url(&url)).map_err(err)
+    crate::outside::open_url(&url).map_err(err)
 }
 
 /// A file or a folder the window opens outside (its program, the file manager; Windows' under
-/// WSLg, `outside`).
+/// WSLg, `outside`): only inside the folders of the projects, their worktrees and the data folder,
+/// where it really is (`opening`, audit SEC-12), and never a program or a script, as a file an agent
+/// sent (ESC-171).
 #[tauri::command(async)]
-pub fn open_path(path: String) -> Res<()> {
-    crate::outside::open(crate::outside::What::Path(std::path::Path::new(&path))).map_err(err)
+pub fn open_path(core: CoreState, path: String) -> Res<()> {
+    open_path_in(&core, std::path::Path::new(&path)).map_err(err)
+}
+
+/// `open_path`.
+pub(crate) fn open_path_in<R: tauri::Runtime>(
+    core: &Core<R>,
+    path: &std::path::Path,
+) -> anyhow::Result<()> {
+    let allowed = core.allow_open(path, false)?;
+    if !allowed.real().is_dir()
+        && (crate::sentfiles::runnable(path) || crate::sentfiles::runnable(allowed.real()))
+    {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        anyhow::bail!(tr!(
+            "« {name} » est un programme ou un script : Escouade ne le fait pas ouvrir par le système.",
+            "“{name}” is a program or a script: Escouade doesn’t have the system open it."
+        ));
+    }
+    allowed.open()
 }
 
 #[tauri::command]
@@ -2618,7 +2641,8 @@ pub async fn fs_reveal(
         .map_err(err)?;
     // The file manager can take a moment to answer (WSL's share starts its distribution, D-Bus
     // waits for the file manager): off the async workers.
-    tokio::task::spawn_blocking(move || fsedit::reveal(what))
+    let roots = core.open_roots();
+    tokio::task::spawn_blocking(move || fsedit::reveal(what, roots))
         .await
         .map_err(|e| e.to_string())?
         .map_err(err)

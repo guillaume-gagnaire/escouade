@@ -64,6 +64,20 @@ describe('RecoveryBanner (ESC-469)', () => {
     expect(screen.getByTestId('recovery-item')).not.toHaveTextContent('is lost');
   });
 
+  it('says why the core refused to open the copies’ folder (audit SEC-12)', async () => {
+    const why =
+      '« D:\\ailleurs » est hors des dossiers des projets, de leurs worktrees et du dossier de données d’Escouade : Escouade ne le fait pas ouvrir par le système.';
+    fakeBackend({
+      open_path: () => {
+        throw why;
+      },
+    });
+    app.recovered = [recovery()];
+    render(RecoveryBanner);
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le dossier des copies' }));
+    await waitFor(() => expect(app.toasts.map((t) => [t.text, t.kind])).toContainEqual([why, 'error']));
+  });
+
   it('stays until closed, then forgets it in the data folder too, and opens the copies’ folder', async () => {
     const backend = fakeBackend();
     app.recovered = [recovery(), recovery({ file: 'plugins.json', damage: 'invalid' })];

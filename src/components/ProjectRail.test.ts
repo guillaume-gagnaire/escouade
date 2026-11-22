@@ -264,6 +264,21 @@ describe('ProjectRail', () => {
     expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p2', color: PROJECT_COLORS[3] });
   });
 
+  it('opens the project’s folder from its menu, and says why when the core refuses it (audit SEC-12)', async () => {
+    const why =
+      '« \\\\attaquant\\partage » est hors des dossiers des projets, de leurs worktrees et du dossier de données d’Escouade : Escouade ne le fait pas ouvrir par le système.';
+    const backend = fakeBackend({
+      open_path: () => {
+        throw why;
+      },
+    });
+    render(ProjectRail);
+    await fireEvent.contextMenu(tile('studio-web'));
+    menu.open!.items.find((i) => i.label === 'Ouvrir le dossier')!.onClick!();
+    expect(backend.called('open_path')[0].args.path).toBe(app.projects.find((p) => p.id === 'p2')!.path);
+    await vi.waitFor(() => expect(app.toasts.map((t) => [t.text, t.kind])).toContainEqual([why, 'error']));
+  });
+
   it('opens the settings of a project from its menu', async () => {
     fakeBackend();
     render(ProjectRail);

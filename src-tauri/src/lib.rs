@@ -151,6 +151,9 @@ mod navigation;
 mod notify;
 #[cfg(test)]
 mod opencode_tests;
+mod opening;
+#[cfg(test)]
+mod opening_tests;
 mod outside;
 mod pace;
 mod pagecrash;
