@@ -2,8 +2,8 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-550","ESC-567"]
-decisions: [169,175,183,189,198,197,204,201,218]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-550","ESC-567","ESC-620"]
+decisions: [169,175,183,189,198,197,204,201,218,281]
 compared: null
 ---
 
@@ -174,3 +174,13 @@ Reversée dans la 2.3, la 2.2.3 ajoute deux choses que les stratégies du poste 
 - `servers.remoteApi` à `false` coupe aussi le tunnel, et grise la même ligne : sans API, pas de téléphone. `servers.phone` seule laisse l'API à un poste par SSH (le mode serveur).
 - **À la différence d'une connexion de l'API**, un tunnel allumé **s'éteint aussitôt** quand l'une ou l'autre arrive (et le cœur la relit toutes les deux secondes tant qu'il tourne) : le port UDP fermé, sa redirection retirée de la box. L'allumer est refusé, avec qui l'impose (« L’accès depuis le téléphone est interdit par la stratégie de ce poste (servers.phone). »). Retirée, l'accès revient s'il était allumé.
 - Une ligne de plus dans l'ADMX, les ADML, les profils de macOS, le schéma de `/etc` et la page du site, dans la catégorie des serveurs.
+
+## Le plafond des tickets en parallèle (ESC-620)
+
+| Clé | Sorte | Ce qu'elle verrouille ou refuse |
+| --- | --- | --- |
+| `projects.maxParallel` | restreindre, un plafond (un nombre de 1 à 64) | « En parallèle » du Kanban de chaque projet : la borne de la machine (16 sur un poste, 64 sur un serveur) abaissée, jamais relevée ; le plafond et sa provenance dits sous le réglage, qui reste réglable en dessous ; `set_board` refuse plus haut ; un Kanban réglé plus haut ne démarre pas plus de tickets |
+
+- Entre le poste géré et l'équipe, **le plus bas tient** (comme `harnesses.maxEffort`), le poste géré à égalité. Celui de l'équipe ne vaut que pour ses projets ; celui du poste pour tous, et pour l'assistant « Nouveau projet ».
+- Une valeur hors de 1 à 64, ou qui n'est pas un nombre, est ignorée et dite ; une chaîne d'un nombre (un `REG_SZ`) est prise.
+- Une ligne de plus dans l'ADMX, les ADML, les profils de macOS, le schéma de `/etc` et la page du site, dans la catégorie des projets.

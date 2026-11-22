@@ -1403,6 +1403,9 @@ impl Core {
         if self.project(project_id)?.board.effort != s.effort {
             self.locks_for(project_id).check_effort(&s.effort)?;
         }
+        // « En parallèle » changed is brought within its bound (ESC-620); one kept as it is stays, a ceiling imposed
+        // since bounds it where the board starts (`board_within`).
+        let max = self.parallel_max(project_id);
         let project = {
             let mut projects = self.projects.write();
             let p = projects
@@ -1422,7 +1425,11 @@ impl Core {
                 action: one_of(s.action, &["merge", "pr", "push", "keep"], default.action),
                 strategy: one_of(s.strategy, &["merge", "squash", "rebase"], default.strategy),
                 conflict: one_of(s.conflict, &["ask", "agent", "abort"], default.conflict),
-                max_parallel: s.max_parallel.clamp(1, 6),
+                max_parallel: if s.max_parallel == before.board.max_parallel {
+                    s.max_parallel
+                } else {
+                    s.max_parallel.clamp(escouade_model::parallel::MIN, max)
+                },
                 ..s
             };
             // What the window set of its `.escouade.yml`: kept on this machine, ahead of the file.
@@ -1931,7 +1938,9 @@ impl Core {
             }
             // A ticket « En revue » whose CI failed goes back to its agent first (ESC-60): it holds
             // a place while its agent fixes it, as one « En cours ».
-            let fixes = crate::ticketprs::to_fix(&self.tickets.read(), &p.id, &p.board);
+            // « En parallèle » within its bound (ESC-620): 16 on a desktop, 64 on a server, under an imposed ceiling.
+            let within = self.board_within(&p);
+            let fixes = crate::ticketprs::to_fix(&self.tickets.read(), &p.id, &within);
             for id in fixes {
                 let Ok(t) = self.ticket(&id) else { continue };
                 if self.ticket_hold(&p, &t, engine_of(&t)).is_some() {
@@ -1952,7 +1961,7 @@ impl Core {
                 // A ticket that waits for a request of the box « À toi » not answered yet (ESC-509): the
                 // autopilot leaves it, as one that comes after another not done.
                 let asked = self.tickets_waiting_asks();
-                board::to_start(&tickets, &p.id, &p.board, |t| {
+                board::to_start(&tickets, &p.id, &within, |t| {
                     if (red || budget || asked.contains(&t.id)) && !t.forced {
                         return true;
                     }

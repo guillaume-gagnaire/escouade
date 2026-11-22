@@ -263,6 +263,7 @@ pub const SECRETS_FILE: &str = "secrets.fileFallback";
 pub const EXTENSIONS_ALLOWED: &str = "extensions.allowed";
 pub const FORCE_PRIVATE: &str = "projects.forcePrivate";
 pub const DENIED_FILES: &str = "projects.deniedFiles";
+pub const MAX_PARALLEL: &str = "projects.maxParallel";
 pub const PROXY_URL: &str = "proxy.url";
 pub const PROXY_EXCLUSIONS: &str = "proxy.exclusions";
 pub const DENY_INSECURE_TLS: &str = "proxy.denyInsecureTls";
@@ -577,6 +578,29 @@ pub const POLICIES: &[Def] = &[
             title: "Private projects by default",
             help: "Every project is private: its agents see no other project, and no other project sees it. Only the value true (1) is imposed.",
             locks: "“New projects are private” and each project’s “Private project”, on and grayed.",
+        },
+    },
+    Def {
+        key: MAX_PARALLEL,
+        sort: Sort::Restrict,
+        form: Form::Number {
+            min: escouade_model::parallel::MIN,
+            max: escouade_model::parallel::SERVER_MAX,
+        },
+        rows: &[],
+        within: None,
+        category: Category::Projects,
+        later: false,
+        example: "8",
+        fr: Text {
+            title: "Plafond des tickets en parallèle",
+            help: "Le plus de tickets « En cours » à la fois dans le Kanban de chaque projet, de 1 à 64. Il abaisse la borne de la machine (16 sur un poste, 64 sur un serveur), jamais ne la relève ; entre ce poste et l’équipe, le plus bas tient.",
+            locks: "Réglages › Kanban › « En parallèle » ne va pas au-delà, le plafond et sa provenance dits sous le réglage ; set_board refuse plus haut, et un Kanban réglé plus haut ne lance pas plus de tickets que le plafond.",
+        },
+        en: Text {
+            title: "Ceiling of the tickets in parallel",
+            help: "The most tickets “In progress” at once in each project’s Kanban, from 1 to 64. It lowers the machine’s bound (16 on a desktop, 64 on a server), never raises it; between this device and the team, the lower one holds.",
+            locks: "Settings › Kanban › “In parallel” goes no higher, the ceiling and where it comes from said under the setting; set_board refuses higher, and a Kanban set higher starts no more tickets than the ceiling.",
         },
     },
     Def {

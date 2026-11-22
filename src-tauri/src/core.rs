@@ -1006,6 +1006,8 @@ pub struct Core {
     pub ui: RwLock<UiState>,
     /// The state of the interface of each client of the remote API, while it is connected (never saved).
     pub client_ui: RwLock<HashMap<crate::remoteapi::Client, UiState>>,
+    /// This core is a server's (`escouade-server`, ESC-620): its Kanbans go up to 64 tickets at once, not 16.
+    pub(crate) server: AtomicBool,
     pub agents: RwLock<HashMap<String, AgentHandle>>,
     pub stats: Stats,
     pub usage: Mutex<UsageSnapshot>,
@@ -2283,6 +2285,7 @@ impl Core {
             tickets: RwLock::new(tickets),
             ui: RwLock::new(state.ui),
             client_ui: RwLock::new(HashMap::new()),
+            server: AtomicBool::new(false),
             agents: RwLock::new(agents),
             usage: Mutex::new(usage),
             models: RwLock::new(state.models),

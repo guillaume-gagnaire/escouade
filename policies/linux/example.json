@@ -48,6 +48,7 @@
     "**/*.pem"
   ],
   "projects.forcePrivate": true,
+  "projects.maxParallel": 8,
   "proxy.authorities": "C:\\ProgramData\\Corp\\root-ca.pem",
   "proxy.denyInsecureTls": true,
   "proxy.exclusions": [

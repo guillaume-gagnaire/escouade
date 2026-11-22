@@ -717,6 +717,8 @@ pub async fn serve(
     // The phone's tunnel (ESC-567), when Réglages de l'espace › Téléphone turned it on: the same API, in the tunnel.
     core.phone.attach(&api);
     core.phone.mark_server();
+    // Its Kanbans go up to 64 tickets at once (ESC-620).
+    core.mark_server();
     {
         let core = core.clone();
         tauri::async_runtime::spawn(async move {

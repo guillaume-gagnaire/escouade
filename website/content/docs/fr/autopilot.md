@@ -16,7 +16,9 @@ Rien ne démarre, pilote auto allumé ou non, dans trois cas :
 
 ## Combien d’agents en parallèle
 
-Le réglage « En parallèle » (Réglages › Projets › Kanban) fixe le nombre de tickets « En cours » en même temps : de 1 à 6, 2 par défaut. L’en-tête compte les places libres (« 1 place libre », « Toutes les places sont prises »).
+Le réglage « En parallèle » (Réglages › Projets › Kanban) fixe le nombre de tickets « En cours » en même temps : de 1 à 16 sur ton poste, jusqu’à 64 sur un [serveur](server), 2 par défaut. L’en-tête compte les places libres (« 1 place libre », « Toutes les places sont prises »).
+
+Au-delà de 6, un avertissement sous le réglage dit combien d’agents qui compilent et lancent des tests ta machine tient à peu près (d’après ses cœurs, sa mémoire et la place d’un agent, mesurée sur le dépôt d’Escouade), et que le quota de ton compte part plus vite. Ce n’est qu’une indication : rien n’est refusé. Le service informatique ou ton équipe peut fixer un plafond ; il est dit sous le réglage, avec qui l’impose (voir [Stratégies du poste](managed-policies)).
 
 Un ticket « En cours » occupe une place, y compris quand son agent attend sa remise à zéro de quota. Un ticket bloqué n’en occupe plus.
 

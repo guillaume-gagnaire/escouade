@@ -2,7 +2,7 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)","https://github.com/guillaume-gagnaire/escouade/pull/44","crates/escouade-mcp/src/http.rs (Gate::answer, error)","CI de release/2.3, run 44936350320 (Windows)"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-509","ESC-511","ESC-518","ESC-513","ESC-550","ESC-619"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-509","ESC-511","ESC-518","ESC-513","ESC-550","ESC-619","ESC-620"]
 decisions: [153,211,210,242,279]
 compared: null
 ---
@@ -198,7 +198,7 @@ Ceux de la fenêtre et du pilote auto :
   - « Seulement le chef d'escouade » : le seul agent que l'utilisateur a choisi pour le projet de l'agent qui demande (Réglages › Projets › Équipe › « Chef d'escouade »). Aucun outil du serveur ne le pose, et le principal d'un dossier ne l'est pas (`create_agent` rend principal tout agent qui en crée un autre). Personne n'est chef tant que l'utilisateur ne l'a pas choisi, mise à jour comprise, et le chef ne compte qu'avec cette valeur ;
   - « Tous les agents » : chacun, ce qui retire l'humain de la boucle.
   - Le refus dit la raison et où changer le réglage ; la demande attend la réponse de l'utilisateur. `list_requests` ne change pas : lire n'est pas répondre. La réponse d'un agent permis reste tracée dans la conversation de l'agent qui demandait (« Autorisé par <auteur> via Escouade »).
-- **`set_board` a les contrôles de la fenêtre** : modèle connu ; effort parmi `low`, `medium`, `high`, `xhigh` et `max` ; mode parmi `auto`, `default`, `plan` et `acceptEdits` ; branche cible = une branche locale du projet ; « En parallèle » de 1 à 6. Refusés : `bypassPermissions` (sauf s'il est déjà le mode du Kanban) et `testsFirst: true` sans commande de test, pour l'allumer seulement. Aucun champ donné : erreur. L'aller-retour `get_board` → `set_board` passe toujours : une cible égale à celle du Kanban (même vide, sur une HEAD détachée) ou à celle que `get_board` montre est laissée telle quelle, sans contrôle, même si la branche a été supprimée depuis ; toute autre doit être une branche locale du projet (une cible vide qui diffère de celle du Kanban est une erreur) ; un `testsFirst` déjà allumé passe.
+- **`set_board` a les contrôles de la fenêtre** : modèle connu ; effort parmi `low`, `medium`, `high`, `xhigh` et `max` ; mode parmi `auto`, `default`, `plan` et `acceptEdits` ; branche cible = une branche locale du projet ; « En parallèle » de 1 à `maxParallelLimit` (16 sur un poste, 64 sur un serveur, moins sous un plafond imposé, ESC-620). Refusés : `bypassPermissions` (sauf s'il est déjà le mode du Kanban) et `testsFirst: true` sans commande de test, pour l'allumer seulement. Aucun champ donné : erreur. L'aller-retour `get_board` → `set_board` passe toujours : une cible égale à celle du Kanban (même vide, sur une HEAD détachée) ou à celle que `get_board` montre est laissée telle quelle, sans contrôle, même si la branche a été supprimée depuis ; toute autre doit être une branche locale du projet (une cible vide qui diffère de celle du Kanban est une erreur) ; un `testsFirst` déjà allumé passe.
 - `start_ticket`, qui n'a pas de mode, donne les mêmes contrôles au modèle et à l'effort d'un ticket, et à eux seuls.
 
 ### Garde-fous du flux du Kanban
@@ -342,6 +342,12 @@ Les instructions que le serveur donne à chaque harness disent, en plus de ce qu
 ## Les outils d'une fonctionnalité coupée (ESC-550)
 
 Les outils du Kanban, de l'Espace Docs, des Workflows, des Tâches programmées et de l'Overseer appartiennent à leur fonctionnalité (la liste exacte est dans *Fonctionnalités*). Coupée, ils sont **absents** de `tools/list`, qui n'est jamais gardée par le client (TTL 0). Ils sont **refusés avant de tourner** s'ils sont appelés quand même : « La fonctionnalité « Kanban » est coupée (Réglages › Fonctionnalités) : ce qu’elle fait n’est pas disponible. L’utilisateur peut la rallumer, ses données sont gardées. », ou « … coupée par la stratégie de ce poste … » quand elle est imposée. L'appel compte comme refusé dans l'activité. Les outils de l'essentiel (projets, agents, boîte « À toi », mémoire partagée, pull requests, quotas) ne sont d'aucune fonctionnalité.
+
+## « En parallèle » dans `get_board` et `set_board` (ESC-620)
+
+- `get_board` dit `maxParallel` ramené dans sa borne, et `maxParallelLimit`, le plus qu'il prend : 16 sur un poste, 64 sur un serveur, moins sous un plafond imposé (`projects.maxParallel`, voir *Kanban*, « Les tickets en parallèle »). `set_board` reprend sa réponse telle quelle.
+- `set_board` refuse un `maxParallel` hors de 1 à `maxParallelLimit`, sans rien changer, en disant la borne et d'où elle vient (« maxParallel va de 1 à 16 sur un poste (reçu 20). », « maxParallel vaut au plus 8, le plafond imposé par l'équipe Acme (reçu 9). »). La borne n'est plus « de 1 à 6 ».
+- `start_ticket` compte les places dans la même borne.
 
 ## Depuis ESC-619 : un refus de la porte est une erreur JSON-RPC
 

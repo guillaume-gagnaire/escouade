@@ -141,7 +141,7 @@ test('a private project with its Kanban set, made by the assistant, exports its 
 
   // Kanban: its tickets' agents in full.
   await dialog.getByRole('button', { name: /Kanban/ }).click();
-  await dialog.getByRole('group', { name: 'En parallèle' }).getByRole('button', { name: '4' }).click();
+  await dialog.getByRole('spinbutton', { name: 'En parallèle' }).fill('4');
   await dialog.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }).click();
   await dialog.getByRole('combobox', { name: 'Effort' }).selectOption('xhigh');
   await dialog.getByRole('combobox', { name: 'Mode' }).selectOption('plan');

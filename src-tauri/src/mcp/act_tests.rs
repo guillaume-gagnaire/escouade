@@ -4070,6 +4070,7 @@ async fn a_boards_settings_change_only_the_ones_given_and_the_core_and_the_windo
             "conventional": true,
             "conflict": "ask",
             "maxParallel": 2,
+            "maxParallelLimit": 16,
             "autopilot": false,
             "model": "opus",
             "effort": "max",
@@ -4260,15 +4261,16 @@ async fn a_setting_that_does_not_fit_or_is_the_users_to_give_is_refused_with_the
             "error",
             vec!["vide"],
         ),
+        // Within 1 and 16 on a desktop (ESC-620).
         (
             json!({ "project": "demo", "maxParallel": 0 }),
             "error",
-            vec!["1", "6"],
+            vec!["1", "16", "un poste"],
         ),
         (
-            json!({ "project": "demo", "maxParallel": 7 }),
+            json!({ "project": "demo", "maxParallel": 17 }),
             "error",
-            vec!["1", "6"],
+            vec!["1", "16", "un poste", "17"],
         ),
         // The server runs no command: the test command is the user's, set in the window.
         (
@@ -4296,7 +4298,7 @@ async fn a_setting_that_does_not_fit_or_is_the_users_to_give_is_refused_with_the
     let none = refused(&c, "set_board", json!({ "project": "nope", "draft": true })).await;
     assert!(none.contains("Aucun projet « nope »"), "{none}");
 
-    // The boundaries are in: one agent in parallel, six; the app's mode by an empty one; no tests
+    // The boundaries are in: one agent in parallel, sixteen; the app's mode by an empty one; no tests
     // first, with no command, is no change to refuse.
     let v = read(
         &c,
@@ -4308,10 +4310,10 @@ async fn a_setting_that_does_not_fit_or_is_the_users_to_give_is_refused_with_the
     read(
         &c,
         "set_board",
-        json!({ "project": "demo", "maxParallel": 6 }),
+        json!({ "project": "demo", "maxParallel": 16 }),
     )
     .await;
-    assert_eq!(board_of(&h, &p).max_parallel, 6);
+    assert_eq!(board_of(&h, &p).max_parallel, 16);
     for effort in ["low", "medium", "high", "xhigh", "max"] {
         let v = read(
             &c,
@@ -4793,7 +4795,6 @@ fn the_refusals_of_set_board_are_written_in_the_language_of_the_interface() {
         ),
         (json!({ "project": "p", "target": "nope" }), "error"),
         (json!({ "project": "p", "target": " " }), "error"),
-        (json!({ "project": "p", "maxParallel": 9 }), "error"),
         (json!({ "project": "p", "testsFirst": true }), "refused"),
     ];
     for (args, kind) in cases {
@@ -6310,4 +6311,115 @@ async fn a_ticket_gets_its_own_target_by_the_tools_and_changes_it_in_any_column_
     )
     .await;
     assert!(e.contains("terminé"), "{e}");
+}
+
+/// ESC-620: « En parallèle » goes to 16 on a desktop, to 64 on a server, and no higher than a ceiling the device's policy
+/// imposes; set_board refuses beyond and says why, start_ticket counts the places within the same bound.
+#[tokio::test]
+async fn the_tickets_in_parallel_go_to_sixteen_on_a_desktop_sixty_four_on_a_server_and_under_a_ceiling(
+) {
+    let h = harness("mcp-act-parallel-bound");
+    let p = project(&h).await;
+    edit_board(&h, &p, |b| b.prefix = "DEM".into());
+    let c = external(&h).await;
+    let v = read(&c, "get_board", json!({ "project": "demo" })).await;
+    assert_eq!(
+        (&v["maxParallel"], &v["maxParallelLimit"]),
+        (&json!(2), &json!(16))
+    );
+
+    // A desktop: up to 16, beyond 6 taken as it is.
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "maxParallel": 12 }),
+    )
+    .await;
+    assert_eq!(v["maxParallel"], 12);
+    assert_eq!(board_of(&h, &p).max_parallel, 12);
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "maxParallel": 20 }),
+    )
+    .await;
+    assert!(
+        said.contains("16") && said.contains("un poste") && said.contains("20"),
+        "{said}"
+    );
+    assert_eq!(board_of(&h, &p).max_parallel, 12);
+
+    // start_ticket counts the places of the bound: 7 at work leave a place of the 12, none of 7.
+    for n in 0..7 {
+        put(
+            &h,
+            ticket(
+                &p,
+                &format!("DEM-{}", 20 + n),
+                "En route",
+                Column::Doing,
+                20 + n,
+            ),
+        );
+    }
+    edit_board(&h, &p, |b| b.max_parallel = 7);
+    let a = made(&h, &p, "Une de plus").await;
+    let full = refused(&c, "start_ticket", json!({ "ticket": a.key })).await;
+    assert!(
+        full.contains("(7,") && full.contains("« En parallèle »"),
+        "{full}"
+    );
+
+    // A server: up to 64.
+    h.core.mark_server();
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "maxParallel": 40 }),
+    )
+    .await;
+    assert_eq!(
+        (&v["maxParallel"], &v["maxParallelLimit"]),
+        (&json!(40), &json!(64))
+    );
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "maxParallel": 65 }),
+    )
+    .await;
+    assert!(said.contains("64") && said.contains("un serveur"), "{said}");
+
+    // A ceiling imposed by the device: get_board says the Kanban within it, the stored value is kept, set_board
+    // refuses above it and names who imposes it.
+    h.core.set_managed(crate::locks::Managed {
+        values: [(
+            crate::locks::MAX_PARALLEL.to_owned(),
+            (json!(8), "the machine's policy".to_owned()),
+        )]
+        .into_iter()
+        .collect(),
+        warnings: Vec::new(),
+    });
+    let v = read(&c, "get_board", json!({ "project": "demo" })).await;
+    assert_eq!(
+        (&v["maxParallel"], &v["maxParallelLimit"]),
+        (&json!(8), &json!(8))
+    );
+    assert_eq!(board_of(&h, &p).max_parallel, 40);
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "maxParallel": 9 }),
+    )
+    .await;
+    assert!(
+        said.contains('8') && said.contains("stratégie de ce poste"),
+        "{said}"
+    );
+    // What get_board answers is given back as it is.
+    let got = read(&c, "get_board", json!({ "project": "demo" })).await;
+    assert_eq!(read(&c, "set_board", got.clone()).await["maxParallel"], 8);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
 }

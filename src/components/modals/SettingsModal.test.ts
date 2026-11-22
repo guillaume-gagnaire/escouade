@@ -801,7 +801,8 @@ describe('SettingsModal', () => {
     render(SettingsModal, { page: 'board', projectId: 'p1' });
     await userEvent.click(within(screen.getByRole('group', { name: 'En cas de conflit' })).getByRole('button', { name: "L'agent résout" }));
     await userEvent.click(screen.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }));
-    await userEvent.click(within(screen.getByRole('group', { name: 'En parallèle' })).getByRole('button', { name: '4' }));
+    await userEvent.clear(screen.getByRole('spinbutton', { name: 'En parallèle' }));
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'En parallèle' }), '4');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Modèle' }), 'opus');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Mode' }), 'plan');
     await afterGesture();

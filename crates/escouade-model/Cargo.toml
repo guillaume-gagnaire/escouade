@@ -34,7 +34,8 @@ flate2 = "1"
 uuid = { version = "1", features = ["v4"] }
 dirs = "7"
 log = "0.4"
-tokio = { version = "1", features = ["process", "io-util", "time"] }
+# `select!` (`proc`): the macros, which the app's features gave it until a crate built it alone (escouade-policy, ESC-620).
+tokio = { version = "1", features = ["process", "io-util", "time", "macros"] }
 portable-pty = "0.9"
 # What a watcher of files was told (`git::is_read`).
 notify = "8"
@@ -46,7 +47,7 @@ url = "2"
 schemars = "1"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

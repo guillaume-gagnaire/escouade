@@ -3836,6 +3836,16 @@ pub fn board_set(core: CoreState, project_id: String, settings: BoardSettings) -
     core.board_set(&project_id, settings).map_err(err)
 }
 
+/// « En parallèle » of a project's Kanban (ESC-620): its bound, the ceiling imposed and where it comes from, and what
+/// the machine holds; a server's for a server's space (served by the remote API).
+#[tauri::command(async)]
+pub fn board_capacity(
+    core: CoreState,
+    project_id: Option<String>,
+) -> Res<crate::parallel::Capacity> {
+    core.board_capacity(project_id.as_deref()).map_err(err)
+}
+
 /// « Reprendre maintenant » in the board's header: the autopilot's pause is lifted.
 #[tauri::command(async)]
 pub fn autopilot_resume(core: CoreState) {

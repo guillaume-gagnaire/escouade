@@ -35,10 +35,10 @@ use std::collections::BTreeMap;
 pub use escouade_policy::list::{
     Def as LockKey, Form, Sort, AGGREGATE_VIEW, ALLOW_BYPASS, AUTHORITIES, AUTO_UPDATE, CHANNEL,
     CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION, EXTENSIONS_ALLOWED,
-    FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER,
-    PERSONAL_SPACE, PHONE, PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, POLICIES as KEYS,
-    PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS, TEAM_FINGERPRINT,
-    TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
+    FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MAX_PARALLEL, MCP_EXTERNAL, MODELS, MODES_KEY,
+    ONLY_THIS_SERVER, PERSONAL_SPACE, PHONE, PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY,
+    POLICIES as KEYS, PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS,
+    TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
 };
 
 /// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
@@ -467,6 +467,20 @@ impl Locks {
                     bounds: Vec::new(),
                     layers: Vec::new(),
                 }
+            } else if matches!(k.form, Form::Number { .. }) && k.sort == Sort::Restrict {
+                // A ceiling of a number (`projects.maxParallel`, ESC-620): the lower one holds, the managed device's
+                // when they are equal.
+                let (by, value) = layers
+                    .into_iter()
+                    .min_by_key(|(_, v)| v.as_u64().unwrap_or(u64::MAX))
+                    .expect("one layer at least");
+                Lock {
+                    key: k.key.to_owned(),
+                    value: Some(value),
+                    by: Some(by),
+                    bounds: Vec::new(),
+                    layers: Vec::new(),
+                }
             } else if k.form == Form::Union {
                 // What each rank denies or adds, together; said imposed by the strongest.
                 let mut all: Vec<String> = Vec::new();
@@ -673,6 +687,12 @@ impl Locks {
             )),
             _ => Ok(()),
         }
+    }
+
+    /// The ceiling of the tickets at once (`projects.maxParallel`, ESC-620), and who imposes it.
+    pub fn max_parallel(&self) -> Option<(u32, &LockedBy)> {
+        let n = self.value(MAX_PARALLEL)?.as_u64()?;
+        Some((u32::try_from(n).unwrap_or(u32::MAX), self.by(MAX_PARALLEL)?))
     }
 
     /// `effort` brought down to the ceiling, when it is above it.

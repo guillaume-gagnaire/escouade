@@ -104,7 +104,7 @@ The agents that take this project’s tickets. See [the Kanban](board).
 
 | Setting | Effect | Default |
 |---|---|---|
-| “In parallel” | The number of tickets “In progress” at once: 1, 2, 3, 4, 5, or 6. Beyond that, “To do” tickets wait for a free slot. | 2 |
+| “In parallel” | The number of tickets “In progress” at once: from 1 to 16 on your computer, up to 64 on a server, less under an imposed ceiling (shown under the setting, with who imposes it). Beyond that, “To do” tickets wait for a free slot. Beyond 6, a warning says what your machine holds and that the quota goes faster, refusing nothing. | 2 |
 | “Model” | The model of the ticket agents: “Default (…)”, which follows the model of the account that starts it, or Fable, Opus, Sonnet, Haiku. | “Default” |
 | “Effort” | “Default”, or Low, Medium, High, Very high, Max. | “Default” |
 | “Mode” | “Default”, or the permission mode: Auto, Ask, Plan, Accept edits, Bypass. | “Default” |

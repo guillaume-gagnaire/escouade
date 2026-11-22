@@ -61,7 +61,7 @@ Un ticket décrit une tâche : un titre, une description et des critères d’ac
 
 ### Pilote auto
 
-Le pilote auto est ce qui fait partir les tickets « À faire » tout seul, dès qu’une place se libère. Il est activé par défaut sur un projet : le réglage « En parallèle » fixe combien d’agents prennent des tickets en même temps (de 1 à 6, 2 par défaut), chacun dans son worktree. Il se met en pause près de la limite de tes quotas (réglage « Pause au-delà du quota »). Voir [le pilote auto](autopilot).
+Le pilote auto est ce qui fait partir les tickets « À faire » tout seul, dès qu’une place se libère. Il est activé par défaut sur un projet : le réglage « En parallèle » fixe combien d’agents prennent des tickets en même temps (de 1 à 16, jusqu’à 64 sur un serveur, 2 par défaut), chacun dans son worktree. Il se met en pause près de la limite de tes quotas (réglage « Pause au-delà du quota »). Voir [le pilote auto](autopilot).
 
 ### Worktree
 

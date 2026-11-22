@@ -61,7 +61,7 @@ A ticket describes a task: a title, a description and acceptance criteria. A pro
 
 ### Autopilot
 
-Autopilot is what starts the “To do” tickets by itself as soon as a slot is free. It is on by default for a project: the “In parallel” setting sets how many agents take tickets at the same time (from 1 to 6, 2 by default), each in its own worktree. It pauses near the limit of your quotas (the “Pause above quota” setting). See [autopilot](autopilot).
+Autopilot is what starts the “To do” tickets by itself as soon as a slot is free. It is on by default for a project: the “In parallel” setting sets how many agents take tickets at the same time (from 1 to 16, up to 64 on a server, 2 by default), each in its own worktree. It pauses near the limit of your quotas (the “Pause above quota” setting). See [autopilot](autopilot).
 
 ### Worktree
 

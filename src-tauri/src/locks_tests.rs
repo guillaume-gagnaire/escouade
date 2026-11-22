@@ -301,6 +301,8 @@ fn the_table_names_its_keys_once_with_their_sort_and_rows() {
                     // Refused at a secret's field, and the file no longer read (ESC-520).
                     SECRETS_FILE,
                     DENIED_FILES,
+                    // A ceiling: the setting stays set below it, set_board and the board keep it (ESC-620).
+                    MAX_PARALLEL,
                     VOICE_ONLINE,
                     SERVERS,
                     PERSONAL_SPACE,

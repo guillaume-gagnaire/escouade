@@ -790,7 +790,7 @@ pub struct SetBoardArgs {
     )]
     pub conflict: Option<ConflictArg>,
     #[schemars(
-        description = "The most tickets in progress at once, 1 to 6. Leave it out to keep the current one."
+        description = "The most tickets in progress at once: from 1 to maxParallelLimit of get_board (16 on a desktop, 64 on a server, lower when a ceiling is imposed). Leave it out to keep the current one."
     )]
     pub max_parallel: Option<u32>,
     #[schemars(

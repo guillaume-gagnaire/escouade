@@ -191,6 +191,13 @@
         <decimal value="1" />
       </enabledValue>
     </policy>
+    <policy name="projects_maxParallel" class="Both" displayName="$(string.projects_maxParallel)" explainText="$(string.projects_maxParallel_Explain)" presentation="$(presentation.projects_maxParallel)" key="Software\Policies\Escouade">
+      <parentCategory ref="projects" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <decimal id="projects_maxParallel" valueName="projects.maxParallel" required="true" minValue="1" maxValue="64" />
+      </elements>
+    </policy>
     <policy name="projects_deniedFiles" class="Both" displayName="$(string.projects_deniedFiles)" explainText="$(string.projects_deniedFiles_Explain)" presentation="$(presentation.projects_deniedFiles)" key="Software\Policies\Escouade">
       <parentCategory ref="projects" />
       <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />

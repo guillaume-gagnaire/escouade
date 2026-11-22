@@ -723,7 +723,7 @@ pub(super) async fn start_ticket(
             )));
         }
         let all = core.tickets.read().clone();
-        let max = project.board.max_parallel.clamp(1, 6);
+        let max = core.board_within(&project).max_parallel;
         let busy = all
             .iter()
             .filter(|x| {
@@ -1024,13 +1024,6 @@ pub(super) fn board_change(
     let effort = effort_setting(lang, a.effort.as_deref())?;
     let mode = mode_setting(lang, &board.mode, a.mode.as_deref())?;
     let target = target_setting(lang, &board.target, current, branches, a.target.as_deref())?;
-    if let Some(n) = a.max_parallel.filter(|n| !(1..=6).contains(n)) {
-        return Err(ToolError::Failed(tr_in!(
-            lang,
-            "Le maximum de tickets en parallèle va de 1 à 6 ({n} donné).",
-            "The most tickets in parallel goes from 1 to 6 ({n} given)."
-        )));
-    }
     // Only turning it on needs a command: one already on (the window shows it off with no command,
     // as `get_board` does) is taken as it is.
     if a.tests_first == Some(true) && !board.tests_first && board.test_command.trim().is_empty() {
@@ -1177,6 +1170,11 @@ pub(super) async fn set_board(
     };
     // The Kanban as it is now: what the window changed meanwhile is not written over.
     let board = core.project(&project.id).map_err(failure)?.board;
+    // Within its bound (ESC-620): 16 on a desktop, 64 on a server, under a ceiling imposed.
+    if let Some(n) = a.max_parallel {
+        core.check_parallel(&project.id, n)
+            .map_err(|e| ToolError::Failed(format!("{e:#}")))?;
+    }
     let changed = board_change(i18n::ui(), &board, &branches, &current, &a, model)?;
     let saved = core.board_set(&project.id, changed).map_err(failure)?;
     let changes = board_changes(i18n::ui(), &board, &saved.board);
@@ -1780,7 +1778,7 @@ pub(super) async fn create_agent(
     // One at a time from the count to the first message: two calls at once do not both find a
     // place free.
     let _one = core.mcp.acting.lock().await;
-    let max = project.board.max_parallel.clamp(1, 6) as usize;
+    let max = core.board_within(&project).max_parallel as usize;
     let working = core
         .agents
         .read()

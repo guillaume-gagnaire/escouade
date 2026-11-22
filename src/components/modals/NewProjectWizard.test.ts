@@ -550,7 +550,8 @@ describe('the assistant’s private project and Kanban (ESC-163)', () => {
     // Kanban: its tickets' agents in full.
     await userEvent.click(screen.getByRole('button', { name: /Kanban/ }));
     expect(step()).toBe('kanban');
-    await userEvent.click(within(screen.getByRole('group', { name: 'En parallèle' })).getByRole('button', { name: '4' }));
+    await userEvent.clear(screen.getByRole('spinbutton', { name: 'En parallèle' }));
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'En parallèle' }), '4');
     await userEvent.click(screen.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }));
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Effort' }), 'xhigh');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Mode' }), 'plan');

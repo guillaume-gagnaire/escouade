@@ -308,6 +308,9 @@ mod server_moves_tests;
 mod server_tests;
 mod serverfolders;
 // « Se connecter à un serveur » (ESC-537): the client of the server mode, its SSH tunnel and its pairing.
+mod parallel;
+#[cfg(test)]
+mod parallel_tests;
 #[cfg(feature = "desktop")]
 mod servers;
 #[cfg(test)]

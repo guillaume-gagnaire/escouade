@@ -104,7 +104,7 @@ Les agents qui prennent les tickets de ce projet. Voir [le Kanban](board).
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « En parallèle » | Le nombre de tickets « En cours » en même temps : 1, 2, 3, 4, 5 ou 6. Au-delà, les tickets « À faire » attendent une place libre. | 2 |
+| « En parallèle » | Le nombre de tickets « En cours » en même temps : de 1 à 16 sur ton poste, jusqu’à 64 sur un serveur, moins sous un plafond imposé (dit sous le réglage, avec qui l’impose). Au-delà, les tickets « À faire » attendent une place libre. Au-delà de 6, un avertissement dit ce que ta machine tient et que le quota part plus vite, sans rien refuser. | 2 |
 | « Modèle » | Le modèle des agents de ticket : « Par défaut (…) », qui suit le modèle du compte qui le lance, ou Fable, Opus, Sonnet, Haiku. | « Par défaut » |
 | « Effort » | « Par défaut », ou Bas, Moyen, Élevé, Très élevé, Max. | « Par défaut » |
 | « Mode » | « Par défaut », ou le mode de permission : Auto, Demander, Plan, Édits auto, Bypass. | « Par défaut » |

@@ -16,7 +16,9 @@ Nothing starts, whether the autopilot is on or not, in three cases:
 
 ## How many agents in parallel
 
-The “In parallel” setting (Settings › Projects › Kanban) sets how many tickets are “In progress” at the same time: from 1 to 6, 2 by default. The header counts the free slots (“1 free slot”, “All slots are taken”).
+The “In parallel” setting (Settings › Projects › Kanban) sets how many tickets are “In progress” at the same time: from 1 to 16 on your computer, up to 64 on a [server](server), 2 by default. The header counts the free slots (“1 free slot”, “All slots are taken”).
+
+Beyond 6, a warning under the setting says about how many agents that compile and run tests your machine holds (from its cores, its memory and the room an agent takes, measured on Escouade’s repository), and that your account’s quota goes faster. It is only an indication: nothing is refused. Your IT department or your team can set a ceiling; it is shown under the setting, with who imposes it (see [Device policies](managed-policies)).
 
 An “In progress” ticket holds a slot, even while its agent waits for its quota to reset. A blocked ticket no longer holds one.
 

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -90,7 +90,8 @@ describe('BoardTab in English', () => {
     expect(screen.getByRole('switch', { name: 'Assign tickets automatically' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: /above quota/ })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Agents' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'In parallel' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'In parallel' })).toHaveValue(2);
+    expect(screen.getByText('From 1 to 16')).toBeInTheDocument();
     expect(within(screen.getByRole('combobox', { name: 'Model' })).getByRole('option', { name: 'Default (Sonnet)' })).toBeInTheDocument();
     const effort = within(screen.getByRole('combobox', { name: 'Effort' }));
     expect(effort.getByRole('option', { name: 'Default' })).toBeInTheDocument();
@@ -103,7 +104,8 @@ describe('BoardTab in English', () => {
     setLang('fr');
     flushSync();
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toBeInTheDocument();
-    expect(within(screen.getByRole('group', { name: 'En parallèle' })).getAllByRole('button').length).toBeGreaterThan(0);
+    expect(screen.getByRole('spinbutton', { name: 'En parallèle' })).toBeInTheDocument();
+    expect(screen.getByText('De 1 à 16')).toBeInTheDocument();
     expect(screen.getByText('feat: limiter les tentatives de connexion [DEM-42]')).toBeInTheDocument();
   });
 
@@ -113,5 +115,74 @@ describe('BoardTab in English', () => {
     expect(titles.at(-1)).toBe('Workflow');
     expect(titles.slice(0, -1)).toEqual(['When I approve a ticket in “To review”', 'Before and after', 'Autopilot', 'Agents']);
     expect(document.querySelector('#sg-workflow')).toHaveAttribute('data-anchor', 'workflow');
+  });
+});
+
+// « En parallèle » (ESC-620): up to 16 on a desktop, 64 on a server, under a ceiling imposed; beyond 6 a warning.
+describe('BoardTab, the tickets in parallel', () => {
+  const capacity = (over: Record<string, unknown> = {}) => ({
+    server: false,
+    limit: 16,
+    max: 16,
+    ceiling: null,
+    warnAbove: 6,
+    machine: { cores: 16, memoryMb: 32 * 1024 },
+    fits: 4,
+    agentMb: 6 * 1024,
+    ...over,
+  });
+
+  beforeEach(() => {
+    resetApp({ projects: [project()] });
+    app.git.p1 = gitInfo();
+    settingsForm.open({ page: 'board', projectId: 'p1' });
+    setLang('fr');
+  });
+
+  it('takes a number up to its bound, and says the machine and the quota beyond 6 without refusing', async () => {
+    const be = fakeBackend({ git_branches: () => ['main'], board_capacity: () => capacity() });
+    render(BoardTab, { project: app.projects[0] });
+    const field = screen.getByRole('spinbutton', { name: 'En parallèle' });
+    await waitFor(() => expect(be.called('board_capacity')[0]?.args).toEqual({ projectId: 'p1' }));
+    expect(screen.queryByText(/Au-delà de 6/)).toBeNull();
+    await userEvent.clear(field);
+    await userEvent.type(field, '12');
+    expect(settingsForm.project!.board.maxParallel).toBe(12);
+    expect(screen.getByText(/Au-delà de 6 : ce poste \(16 cœurs, 32 Go\) tient environ 4 agents/)).toBeInTheDocument();
+    expect(screen.getByText(/Le quota du compte part aussi plus vite/)).toBeInTheDocument();
+    // Beyond the bound: brought back to it when the field is left.
+    await userEvent.clear(field);
+    await userEvent.type(field, '40');
+    await userEvent.tab();
+    expect(settingsForm.project!.board.maxParallel).toBe(16);
+    expect(field).toHaveValue(16);
+  });
+
+  it('goes to 64 on a server, the warning said of the server', async () => {
+    fakeBackend({ git_branches: () => ['main'], board_capacity: () => capacity({ server: true, limit: 64, max: 64 }) });
+    render(BoardTab, { project: app.projects[0] });
+    await waitFor(() => expect(screen.getByText('De 1 à 64')).toBeInTheDocument());
+    const field = screen.getByRole('spinbutton', { name: 'En parallèle' });
+    await userEvent.clear(field);
+    await userEvent.type(field, '40');
+    await userEvent.tab();
+    expect(settingsForm.project!.board.maxParallel).toBe(40);
+    expect(screen.getByText(/Au-delà de 6 : le serveur/)).toBeInTheDocument();
+  });
+
+  it('shows the ceiling imposed and where it comes from, and goes no higher', async () => {
+    fakeBackend({
+      git_branches: () => ['main'],
+      board_capacity: () => capacity({ server: true, limit: 64, max: 8, ceiling: { value: 8, by: { kind: 'team', team: 'Acme' } } }),
+    });
+    render(BoardTab, { project: app.projects[0] });
+    await waitFor(() => expect(screen.getByText('Plafond de 8, imposé par l’équipe Acme')).toBeInTheDocument());
+    expect(screen.getByText('De 1 à 8')).toBeInTheDocument();
+    const field = screen.getByRole('spinbutton', { name: 'En parallèle' });
+    expect(field).toHaveAttribute('max', '8');
+    await userEvent.clear(field);
+    await userEvent.type(field, '12');
+    await userEvent.tab();
+    expect(settingsForm.project!.board.maxParallel).toBe(8);
   });
 });

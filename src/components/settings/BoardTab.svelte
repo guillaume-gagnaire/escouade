@@ -11,6 +11,7 @@
   import BranchPicker from '../branches/BranchPicker.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
+  import ParallelRow from './ParallelRow.svelte';
   import Row from './Row.svelte';
   import SharedMark from './SharedMark.svelte';
   import Switch from './Switch.svelte';
@@ -46,7 +47,6 @@
   const PR_UPDATE_IDS: BoardSettings['prUpdate'][] = ['merge', 'rebase'];
   const prUpdates = $derived(PR_UPDATE_IDS.map((value) => ({ value, label: t(`boardSettings.tab.prUpdates.${value}`) })));
   const conflicts = $derived(CONFLICT_IDS.map((value) => ({ value, label: t(`boardSettings.tab.conflicts.${value}`) })));
-  const PARALLEL = [1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
 </script>
 
 <Group title={t('boardSettings.tab.actionsTitle')} plain>
@@ -194,9 +194,7 @@
 </Group>
 
 <Group title={t('common.agents')}>
-  <Row label={t('boardSettings.tab.parallel')} desc={t('boardSettings.tab.parallelDesc')}>
-    <Chips label={t('boardSettings.tab.parallel')} options={PARALLEL} mono bind:value={b.maxParallel} />
-  </Row>
+  <ParallelRow projectId={project.id} bind:value={b.maxParallel} />
   <Row label={t('common.model')} shared="board.model">
     <select class="field select" aria-label={t('common.model')} bind:value={b.model}>
       <option value="">{t('boardSettings.tab.defaultModel', { model: modelLabel(newAgentDefaults(project).model, app.models) })}</option>

@@ -6,6 +6,7 @@
   import type { BoardAction, BoardSettings } from '../../lib/types';
   import type { WizardForm } from '../../lib/wizard-form.svelte';
   import Chips from '../settings/Chips.svelte';
+  import ParallelRow from '../settings/ParallelRow.svelte';
   import Row from '../settings/Row.svelte';
   import Switch from '../settings/Switch.svelte';
   import Icon from '../Icon.svelte';
@@ -35,7 +36,6 @@
       label: t(`boardSettings.tab.conflicts.${value}`),
     })),
   );
-  const PARALLEL = [1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
 </script>
 
 <Checks {form} step="kanban" />
@@ -91,9 +91,7 @@
       bind:on={() => b.testsFirst && !!b.testCommand.trim(), (v) => (form.config.board.testsFirst = v)}
     />
   </Row>
-  <Row label={t('boardSettings.tab.parallel')} desc={t('boardSettings.tab.parallelDesc')}>
-    <Chips label={t('boardSettings.tab.parallel')} options={PARALLEL} mono bind:value={form.config.board.maxParallel} />
-  </Row>
+  <ParallelRow projectId={null} bind:value={form.config.board.maxParallel} />
   <Row label={t('boardSettings.tab.autoAssign')} desc={t('boardSettings.tab.autoAssignDesc')}>
     <Switch label={t('boardSettings.tab.autoAssign')} bind:on={form.config.board.autopilot} />
   </Row>

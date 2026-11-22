@@ -242,6 +242,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `back_to_previous_account`
 - `back_up_now`
 - `backups_view`
+- `board_capacity`
 - `board_set`
 - `branch_check`
 - `branch_create`

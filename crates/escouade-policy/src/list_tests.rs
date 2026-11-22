@@ -75,7 +75,9 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
     ] {
         assert!(def(key).is_some(), "{key} missing from the list");
     }
-    assert_eq!(POLICIES.len(), 43);
+    // The ceiling of the tickets in parallel (ESC-620).
+    assert!(def("projects.maxParallel").is_some());
+    assert_eq!(POLICIES.len(), 44);
 }
 
 #[test]

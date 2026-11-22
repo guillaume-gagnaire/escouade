@@ -107,6 +107,12 @@ Clé : extensions.allowed (JSON). Sorte : restreindre.</string>
 Sur le poste : « Nouveaux projets privés » et « Projet privé » de chaque projet, allumés et grisés.
 
 Clé : projects.forcePrivate (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="projects_maxParallel">Plafond des tickets en parallèle</string>
+      <string id="projects_maxParallel_Explain">Le plus de tickets « En cours » à la fois dans le Kanban de chaque projet, de 1 à 64. Il abaisse la borne de la machine (16 sur un poste, 64 sur un serveur), jamais ne la relève ; entre ce poste et l’équipe, le plus bas tient.
+
+Sur le poste : Réglages › Kanban › « En parallèle » ne va pas au-delà, le plafond et sa provenance dits sous le réglage ; set_board refuse plus haut, et un Kanban réglé plus haut ne lance pas plus de tickets que le plafond.
+
+Clé : projects.maxParallel (nombre, 1–64). Sorte : restreindre.</string>
       <string id="projects_deniedFiles">Motifs de fichiers interdits</string>
       <string id="projects_deniedFiles_Explain">Des motifs de fichiers (à la manière de .gitignore) que les agents ne lisent ni n’écrivent, ajoutés à ceux des projets.
 
@@ -324,6 +330,9 @@ Clé : features.voice (booléen, true, false). Sorte : valeur.</string>
         <textBox refId="extensions_allowed">
           <label>Extensions permises de l’éditeur</label>
         </textBox>
+      </presentation>
+      <presentation id="projects_maxParallel">
+        <decimalTextBox refId="projects_maxParallel">Plafond des tickets en parallèle</decimalTextBox>
       </presentation>
       <presentation id="projects_deniedFiles">
         <listBox refId="projects_deniedFiles">Motifs de fichiers interdits</listBox>

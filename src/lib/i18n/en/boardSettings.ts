@@ -124,6 +124,18 @@ export default defineZone('boardSettings', {
 
     parallel: 'In parallel',
     parallelDesc: 'Beyond that, “To do” tickets wait for a free slot',
+    parallelRange: 'From 1 to {max}',
+    parallelCeilingDevice: 'Ceiling of {max}, imposed by this device’s policy',
+    parallelCeilingTeam: 'Ceiling of {max}, imposed by the team {team}',
+    parallelDesktop: 'this device',
+    parallelServer: 'the server',
+    parallelMachine: '{machine} ({cores} cores, {memory} GB)',
+    parallelMachineCores: '{machine} ({cores} cores)',
+    parallelWarn: {
+      one: 'Beyond {above}: {machine} holds about {count} agent that compiles and runs tests (≈ {agent} GB each, measured on Escouade’s repository). The account’s quota also goes faster.',
+      other:
+        'Beyond {above}: {machine} holds about {count} agents that compile and run tests (≈ {agent} GB each, measured on Escouade’s repository). The account’s quota also goes faster.',
+    },
     defaultModel: 'Default ({model})',
     default: 'Default',
     effort: 'Effort',

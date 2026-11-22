@@ -71,6 +71,7 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | Policy | Key and type | What it does | On the device |
 | --- | --- | --- | --- |
 | Private projects by default | `projects.forcePrivate` · Boolean `true` (`1`) · restrict | Every project is private: its agents see no other project, and no other project sees it. Only the value true (1) is imposed. | “New projects are private” and each project’s “Private project”, on and grayed. |
+| Ceiling of the tickets in parallel | `projects.maxParallel` · number 1–64 · restrict | The most tickets “In progress” at once in each project’s Kanban, from 1 to 64. It lowers the machine’s bound (16 on a desktop, 64 on a server), never raises it; between this device and the team, the lower one holds. | Settings › Kanban › “In parallel” goes no higher, the ceiling and where it comes from said under the setting; set_board refuses higher, and a Kanban set higher starts no more tickets than the ceiling. |
 | Denied file patterns | `projects.deniedFiles` · list · restrict | File patterns (the .gitignore way) agents neither read nor write, added to those of the projects. | Read and kept; applied to the agents with a project’s fence of files (to come). |
 
 ### Proxy and certificates

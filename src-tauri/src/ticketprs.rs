@@ -433,12 +433,14 @@ pub fn busy(tickets: &[Ticket], project_id: &str) -> usize {
 }
 
 /// The tickets « En revue » of `project_id` whose CI the autopilot gives to their agent now, in
-/// the board's order, while places are free.
+/// the board's order, while places are free. `s` comes within the bound of its « En parallèle »
+/// (`Core::board_within`, ESC-620).
 pub fn to_fix(tickets: &[Ticket], project_id: &str, s: &BoardSettings) -> Vec<String> {
     if !s.autopilot {
         return Vec::new();
     }
-    let free = (s.max_parallel.clamp(1, 6) as usize).saturating_sub(busy(tickets, project_id));
+    let free = (s.max_parallel.max(escouade_model::parallel::MIN) as usize)
+        .saturating_sub(busy(tickets, project_id));
     tickets
         .iter()
         .filter(|t| t.project_id == project_id && auto_fixable(t))

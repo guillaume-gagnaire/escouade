@@ -11,6 +11,7 @@ import type {
 } from './vscode/extensions';
 import type {
   Cloned,
+  ParallelCapacity,
   FolderCheck,
   DiscoverAct,
   DiscoverView,
@@ -953,6 +954,8 @@ export const api = {
   ticketPrFixReviews: (id: string) => invoke<void>('ticket_pr_fix_reviews', { id }),
   ticketPrUpdateBranch: (id: string) => invoke<void>('ticket_pr_update_branch', { id }),
   boardSet: (projectId: string, settings: BoardSettings) => invoke<Project>('board_set', { projectId, settings }),
+  /** « En parallèle » (ESC-620): its bound, the ceiling imposed, what the machine holds; null: a project to come. */
+  boardCapacity: (projectId: string | null) => invoke<ParallelCapacity>('board_capacity', { projectId }),
   /** « Reprendre maintenant »: the autopilot's pause (a quota, a usage limit) is lifted. */
   autopilotResume: () => invoke<void>('autopilot_resume'),
   gitBranches: (projectId: string) => invoke<string[]>('git_branches', { projectId }),

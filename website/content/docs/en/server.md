@@ -132,7 +132,7 @@ When your computer’s version and the server’s differ, the server refuses the
 
 ## Advised limits
 
-Measured on the image, on an x64 computer: the server at rest, its plugins loaded, takes about 235 MB and 106 tasks (processes and threads); an agent of the tests’ fake `claude` in the middle of a turn adds about 18 MB and 7. A real harness weighs more: count several hundred MB per working agent, plus what its commands start (builds, tests). The Compose example sets `mem_limit: 4g` and `pids_limit: 2048`: enough for a few agents at a time; raise them with the number of agents in parallel.
+Measured on the image, on an x64 computer: the server at rest, its plugins loaded, takes about 235 MB and 106 tasks (processes and threads); an agent of the tests’ fake `claude` in the middle of a turn adds about 18 MB and 7. A real harness weighs more: count several hundred MB per working agent, plus what its commands start (builds, tests). The Compose example sets `mem_limit: 4g` and `pids_limit: 2048`: enough for a few agents at a time; raise them with the number of agents in parallel. On a server, the Kanban takes up to 64 tickets at once (16 on a computer); beyond 6, Settings › Kanban says what the server’s machine holds.
 
 ## Commands
 

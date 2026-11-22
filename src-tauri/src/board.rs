@@ -405,7 +405,8 @@ pub fn turn_end(
 /// `autopilot_pause` holds them back), a ticket of another harness going on. The autopilot
 /// leaves a ticket that comes after one not "Terminé" yet for the next; one launched by hand
 /// starts all the same (the window asked first). The autopilot never starts a ticket another one of
-/// the team shared (ESC-190): only « Lancer » does.
+/// the team shared (ESC-190): only « Lancer » does. `s` comes within the bound of its « En parallèle »
+/// (`Core::board_within`, ESC-620).
 pub fn to_start(
     tickets: &[Ticket],
     project_id: &str,
@@ -417,7 +418,7 @@ pub fn to_start(
     // A ticket under way on a teammate's machine (ESC-190) takes no place here; one « En revue »
     // whose agent fixes its CI does (ESC-60).
     let busy = crate::ticketprs::busy(tickets, project_id);
-    let free = (s.max_parallel.clamp(1, 6) as usize).saturating_sub(busy);
+    let free = (s.max_parallel.max(escouade_model::parallel::MIN) as usize).saturating_sub(busy);
     // A ticket gone, or of another project, holds nothing back.
     let unfinished: HashSet<&str> = mine()
         .filter(|t| t.column != Column::Done)

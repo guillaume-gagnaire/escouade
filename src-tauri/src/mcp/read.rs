@@ -1025,6 +1025,8 @@ pub(crate) struct BoardView {
     /// "ask", "agent" or "abort".
     conflict: String,
     max_parallel: u32,
+    /// The most `maxParallel` takes (ESC-620): 16 on a desktop, 64 on a server, under a ceiling imposed.
+    max_parallel_limit: u32,
     autopilot: bool,
     /// What the Kanban sets for its tickets' agents; empty: the app's (`defaults`).
     model: String,
@@ -1067,7 +1069,8 @@ pub(crate) async fn board_view(core: &Core, project: &Project) -> BoardView {
         cleanup: b.cleanup,
         conventional: b.conventional,
         conflict: b.conflict.clone(),
-        max_parallel: b.max_parallel.clamp(1, 6),
+        max_parallel: core.board_within(project).max_parallel,
+        max_parallel_limit: core.parallel_max(&project.id),
         autopilot: b.autopilot,
         model: b.model.clone(),
         effort: b.effort.clone(),

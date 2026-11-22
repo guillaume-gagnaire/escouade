@@ -188,6 +188,13 @@
       "title": "Private projects by default",
       "type": "boolean"
     },
+    "projects.maxParallel": {
+      "description": "The most tickets “In progress” at once in each project’s Kanban, from 1 to 64. It lowers the machine’s bound (16 on a desktop, 64 on a server), never raises it; between this device and the team, the lower one holds. Settings › Kanban › “In parallel” goes no higher, the ceiling and where it comes from said under the setting; set_board refuses higher, and a Kanban set higher starts no more tickets than the ceiling.",
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Ceiling of the tickets in parallel",
+      "type": "integer"
+    },
     "proxy.authorities": {
       "description": "The path of a .pem file of authorities trusted besides the system’s store (a corporate proxy’s root). Settings › Advanced › Network › “Extra certificate authorities”, grayed.",
       "title": "Certificate authorities file",

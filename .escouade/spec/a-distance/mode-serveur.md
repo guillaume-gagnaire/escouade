@@ -2,8 +2,8 @@
 title: "Le mode serveur"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image)","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »"]
-tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567"]
-decisions: [202,216]
+tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620"]
+decisions: [202,216,281]
 compared: null
 ---
 
@@ -160,3 +160,11 @@ Un serveur sert aussi le téléphone par le tunnel WireGuard intégré (voir *Le
 - Le serveur qui tourne relit ce que ces commandes changent dans les deux secondes.
 - Il n'y a pas de box : le serveur ne demande rien à une box, et dit d'ouvrir le port UDP dans son pare-feu (et dans le `ports` de Docker ou de Coolify : `51820:51820/udp`).
 - `servers.phone` à `false` (ou `servers.remoteApi`) posée sur le serveur l'interdit.
+
+## Les tickets en parallèle sur un serveur (ESC-620)
+
+Un serveur tourne H24 sur une machine qu'on dimensionne pour lui : son Kanban prend **jusqu'à 64 tickets à la fois** (16 sur un poste), voir *Kanban*, « Les tickets en parallèle ».
+
+- La borne est celle du cœur qui fait tourner le Kanban : un client qui règle l'espace d'un serveur la reçoit du serveur (`board_capacity`, servie par l'API distante), avec la machine du serveur (ses cœurs, sa mémoire) pour l'avertissement au-delà de 6.
+- Une stratégie posée sur le serveur (`projects.maxParallel`) ou l'équipe d'un projet l'abaisse, comme sur un poste.
+- Les limites conseillées de l'image (4 Go, 2048 tâches) valent pour quelques agents ; pour beaucoup d'agents, compter la place d'un agent que dit l'avertissement (environ 6 Go et 2 cœurs pour un agent qui compile et lance des tests, jusqu'à 17 Go au pic d'une compilation).

@@ -2036,7 +2036,7 @@ pub struct BoardSettings {
     pub conventional: bool,
     /// "ask", "agent" or "abort".
     pub conflict: String,
-    /// Tickets "En cours" at once, 1 to 6.
+    /// Tickets "En cours" at once, within `parallel::max` (ESC-620: 16 on a desktop, 64 on a server).
     pub max_parallel: u32,
     /// The ticket agents' model, effort and mode; empty: the app's defaults.
     pub model: String,

@@ -92,6 +92,8 @@
       </array>
       <key>projects.forcePrivate</key>
       <true/>
+      <key>projects.maxParallel</key>
+      <integer>8</integer>
       <key>proxy.authorities</key>
       <string>C:\ProgramData\Corp\root-ca.pem</string>
       <key>proxy.denyInsecureTls</key>

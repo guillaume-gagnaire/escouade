@@ -957,7 +957,7 @@ async fn the_board_settings_stay_within_bounds_and_keep_the_tickets_key() {
                 action: "pr".into(),
                 strategy: "rebase".into(),
                 conflict: "agent".into(),
-                max_parallel: 9,
+                max_parallel: 20,
                 autopilot: false,
                 ..Default::default()
             },
@@ -965,7 +965,7 @@ async fn the_board_settings_stay_within_bounds_and_keep_the_tickets_key() {
         .unwrap();
     assert_eq!(
         (saved.board.action.as_str(), saved.board.max_parallel),
-        ("pr", 6)
+        ("pr", 16)
     );
     // Valid choices are kept as they are.
     assert_eq!(

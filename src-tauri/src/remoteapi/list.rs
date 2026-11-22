@@ -423,6 +423,7 @@ escouade_command::commands! {
         commands::ticket_pr_fix_reviews,
         commands::ticket_pr_update_branch,
         commands::board_set,
+        commands::board_capacity,
         commands::autopilot_resume,
         commands::forges,
         commands::forge_check,

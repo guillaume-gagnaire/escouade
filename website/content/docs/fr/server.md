@@ -132,7 +132,7 @@ Quand la version de ton poste et celle du serveur diffèrent, le serveur refuse 
 
 ## Les limites conseillées
 
-Mesuré sur l’image, sur un poste x64 : le serveur au repos, ses plugins chargés, prend environ 235 Mo et 106 tâches (processus et threads) ; un agent du faux `claude` des tests en plein tour en ajoute environ 18 Mo et 7. Un vrai harness pèse plus : compte plusieurs centaines de Mo par agent qui travaille, et ce que lancent ses commandes (builds, tests). L’exemple Compose fixe `mem_limit: 4g` et `pids_limit: 2048` : de quoi faire travailler quelques agents à la fois ; monte-les avec le nombre d’agents en parallèle.
+Mesuré sur l’image, sur un poste x64 : le serveur au repos, ses plugins chargés, prend environ 235 Mo et 106 tâches (processus et threads) ; un agent du faux `claude` des tests en plein tour en ajoute environ 18 Mo et 7. Un vrai harness pèse plus : compte plusieurs centaines de Mo par agent qui travaille, et ce que lancent ses commandes (builds, tests). L’exemple Compose fixe `mem_limit: 4g` et `pids_limit: 2048` : de quoi faire travailler quelques agents à la fois ; monte-les avec le nombre d’agents en parallèle. Sur un serveur, le Kanban prend jusqu’à 64 tickets à la fois (16 sur un poste) ; au-delà de 6, Réglages › Kanban dit ce que tient la machine du serveur.
 
 ## Les commandes
 

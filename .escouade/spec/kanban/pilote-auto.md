@@ -61,7 +61,7 @@ L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automat
 ## Réglages
 
 - « Pilote auto », dans l'en-tête du Kanban.
-- Le nombre de places, dans les réglages du Kanban : de 1 à 6, 2 par défaut.
+- Le nombre de places, dans les réglages du Kanban : de 1 à 16 sur un poste, à 64 sur un serveur, sous un plafond imposé, 2 par défaut (voir *Kanban*, « Les tickets en parallèle », ESC-620).
 - « Pause du pilote auto au-delà du quota », « pour tous les projets » : 80, 90, 95 ou 100 %, 100 % par défaut. Une autre valeur écrite à la main vaut 100 %. C'est un réglage de l'app, dans Réglages › Comptes et harness › « Quand un quota est épuisé », à côté de « Changer de compte à » (avant la 2.2, dans la page Kanban d'un projet ; sa clé, `quotaPause`, n'a pas changé).
 - « Pause quand la CI de la cible est rouge » (Réglages › *projet* › Kanban, par projet) : éteint par défaut.
 

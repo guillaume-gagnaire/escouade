@@ -71,6 +71,7 @@ Chaque stratégie a une clé, le même nom partout : la valeur du registre, la c
 | Stratégie | Clé et type | Ce qu’elle fait | Sur le poste |
 | --- | --- | --- | --- |
 | Projets privés d’office | `projects.forcePrivate` · booléen `true` (`1`) · restreindre | Chaque projet est privé : ses agents ne voient aucun autre projet, et aucun autre projet ne le voit. Seule la valeur true (1) s’impose. | « Nouveaux projets privés » et « Projet privé » de chaque projet, allumés et grisés. |
+| Plafond des tickets en parallèle | `projects.maxParallel` · nombre 1–64 · restreindre | Le plus de tickets « En cours » à la fois dans le Kanban de chaque projet, de 1 à 64. Il abaisse la borne de la machine (16 sur un poste, 64 sur un serveur), jamais ne la relève ; entre ce poste et l’équipe, le plus bas tient. | Réglages › Kanban › « En parallèle » ne va pas au-delà, le plafond et sa provenance dits sous le réglage ; set_board refuse plus haut, et un Kanban réglé plus haut ne lance pas plus de tickets que le plafond. |
 | Motifs de fichiers interdits | `projects.deniedFiles` · liste · restreindre | Des motifs de fichiers (à la manière de .gitignore) que les agents ne lisent ni n’écrivent, ajoutés à ceux des projets. | Lu et gardé ; appliqué aux agents avec la clôture des fichiers d’un projet (à venir). |
 
 ### Proxy et certificats

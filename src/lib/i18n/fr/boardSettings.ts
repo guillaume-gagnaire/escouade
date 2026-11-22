@@ -137,6 +137,19 @@ export default {
       'Le pilote auto ne démarre aucun ticket tant que la CI de la branche cible est en échec. Un ticket lancé à la main part quand même.',
     parallel: 'En parallèle',
     parallelDesc: 'Au-delà, les tickets « À faire » attendent une place libre',
+    // ESC-620: up to 16 on a desktop, 64 on a server; the ceiling imposed, and beyond 6 what the machine holds.
+    parallelRange: 'De 1 à {max}',
+    parallelCeilingDevice: 'Plafond de {max}, imposé par la stratégie de ce poste',
+    parallelCeilingTeam: 'Plafond de {max}, imposé par l’équipe {team}',
+    parallelDesktop: 'ce poste',
+    parallelServer: 'le serveur',
+    parallelMachine: '{machine} ({cores} cœurs, {memory} Go)',
+    parallelMachineCores: '{machine} ({cores} cœurs)',
+    parallelWarn: {
+      one: 'Au-delà de {above} : {machine} tient environ {count} agent qui compile et lance des tests (≈ {agent} Go chacun, mesuré sur le dépôt d’Escouade). Le quota du compte part aussi plus vite.',
+      other:
+        'Au-delà de {above} : {machine} tient environ {count} agents qui compilent et lancent des tests (≈ {agent} Go chacun, mesuré sur le dépôt d’Escouade). Le quota du compte part aussi plus vite.',
+    },
     defaultModel: 'Par défaut ({model})',
     default: 'Par défaut',
     effort: 'Effort',

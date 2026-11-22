@@ -107,6 +107,12 @@ Key: extensions.allowed (JSON). Sort: restrict.</string>
 On the device: “New projects are private” and each project’s “Private project”, on and grayed.
 
 Key: projects.forcePrivate (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="projects_maxParallel">Ceiling of the tickets in parallel</string>
+      <string id="projects_maxParallel_Explain">The most tickets “In progress” at once in each project’s Kanban, from 1 to 64. It lowers the machine’s bound (16 on a desktop, 64 on a server), never raises it; between this device and the team, the lower one holds.
+
+On the device: Settings › Kanban › “In parallel” goes no higher, the ceiling and where it comes from said under the setting; set_board refuses higher, and a Kanban set higher starts no more tickets than the ceiling.
+
+Key: projects.maxParallel (number, 1–64). Sort: restrict.</string>
       <string id="projects_deniedFiles">Denied file patterns</string>
       <string id="projects_deniedFiles_Explain">File patterns (the .gitignore way) agents neither read nor write, added to those of the projects.
 
@@ -324,6 +330,9 @@ Key: features.voice (Boolean, true, false). Sort: value.</string>
         <textBox refId="extensions_allowed">
           <label>Editor’s allowed extensions</label>
         </textBox>
+      </presentation>
+      <presentation id="projects_maxParallel">
+        <decimalTextBox refId="projects_maxParallel">Ceiling of the tickets in parallel</decimalTextBox>
       </presentation>
       <presentation id="projects_deniedFiles">
         <listBox refId="projects_deniedFiles">Denied file patterns</listBox>

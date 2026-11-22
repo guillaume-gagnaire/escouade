@@ -11,6 +11,8 @@ workspace = "../../src-tauri"
 publish = false
 
 [dependencies]
+# The one bound of the tickets at once (`parallel`, ESC-620), that `projects.maxParallel` lowers.
+escouade-model = { path = "../escouade-model" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

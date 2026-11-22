@@ -3223,6 +3223,24 @@ export interface Locks {
   warnings: string[];
 }
 
+/** « En parallèle » of a Kanban (ESC-620, `parallel::Capacity`): its bound (16 on a desktop, 64 on a server), the ceiling
+ *  imposed and who imposes it, and what the machine holds (the server's, for a server's space). */
+export interface ParallelCapacity {
+  server: boolean;
+  /** The machine's bound: 16 or 64. */
+  limit: number;
+  /** The bound with the ceiling: the most the setting takes. */
+  max: number;
+  ceiling: { value: number; by: LockedBy } | null;
+  /** Beyond it, the warning. */
+  warnAbove: number;
+  machine: { cores: number; memoryMb: number };
+  /** About how many agents that compile and run tests the machine holds. */
+  fits: number;
+  /** The room an agent takes, measured (MB). */
+  agentMb: number;
+}
+
 /** A file of the data folder found unreadable at a start, and what was done (`backups::Recovery`, ESC-469). */
 export interface Recovery {
   /** As named in the data folder: `state.json`, `settings.json`, `plugins.json`, `integrations.json`. */
