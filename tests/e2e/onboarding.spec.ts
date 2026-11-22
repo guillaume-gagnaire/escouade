@@ -167,7 +167,16 @@ test.describe('a first launch with no harness on the machine', () => {
     await expect(page.getByRole('region', { name: 'Aucun harness trouvé' })).toBeVisible();
     const state = () => read(path.join(app.root, 'data', 'state.json'));
     await expect.poll(() => state().onboarding?.finished ?? null).not.toBeNull();
-    expect(Object.values(state().onboarding.steps)).toEqual(['skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped']);
+    expect(Object.values(state().onboarding.steps)).toEqual([
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+    ]);
     // The statistics passed: asked once more at the next start, as the window of before, then never again.
     page = await app.restart();
     const ask = page.getByRole('dialog', { name: 'Aider à améliorer Escouade ?' });
