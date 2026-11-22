@@ -56,6 +56,10 @@ export default {
     keysInFile: 'Le trousseau du système a refusé les clés de cet appareil : elles sont dans un fichier lisible de toi seul.',
     wordsPending: 'La clé de secours n’a pas été confirmée.',
     wordsLost: 'La clé de secours n’a jamais été confirmée : fais-en une nouvelle, et note-la cette fois.',
+    recoveryStale:
+      'Un administrateur a quitté son rôle depuis la clé de secours en vigueur : fais une nouvelle clé de secours et imprime la nouvelle feuille.',
+    recoveryOutdated:
+      'La clé de secours de cette équipe date d’avant les six mots de l’équipe : elle ne peut plus la ramener. Fais une nouvelle clé de secours et imprime la nouvelle feuille.',
     showWords: 'Revoir les 24 mots',
     newRecovery: 'Nouvelle clé de secours',
     invite: 'Inviter…',
@@ -99,8 +103,8 @@ export default {
     escrowHint: 'Tout le contenu lui est aussi chiffré : l’organisation peut toujours le lire. Chaque membre le voit, à tout moment.',
     escrowHolder: 'Qui la détient',
     escrowHolderPlaceholder: 'Le RSSI d’ACME',
-    escrowPublic: 'Sa moitié publique',
-    escrowPublicPlaceholder: 'escouade-escrow-public:1:…',
+    escrowPublic: 'Sa moitié pour l’équipe',
+    escrowPublicPlaceholder: 'escouade-escrow-team:2:…',
     escrowMake: 'Créer la paire ici',
     escrowSecret: 'La moitié secrète, à remettre à son détenteur. Elle n’est montrée qu’une fois.',
     copy: 'Copier',
@@ -110,8 +114,12 @@ export default {
   },
   words: {
     lead: 'Si tous les administrateurs perdent leurs appareils, ces 24 mots ramènent l’équipe. Note-les maintenant : ils ne seront plus montrés.',
-    where: 'Imprime-les, ou garde-les dans le gestionnaire de mots de passe de l’organisation. Jamais dans un message.',
-    noted: 'J’ai noté les 24 mots',
+    where:
+      'Imprime-les avec les six mots de l’équipe, ou garde-les dans le gestionnaire de mots de passe de l’organisation. Jamais dans un message.',
+    team: 'Les six mots de l’équipe',
+    teamHint:
+      'À noter avec les 24 mots, sur la même feuille : la récupération les demande aussi, et ne ramène que l’équipe qui les porte. Ils ne sont pas secrets.',
+    noted: 'J’ai noté les 24 mots et les six mots de l’équipe',
     next: 'Continuer',
     confirmLead: 'Pour vérifier que tu les as notés, retape les mots demandés.',
     word: 'Mot n° {n}',
@@ -192,6 +200,12 @@ export default {
     tokenHint: 'L’hébergeur du serveur le donne par « escouade-team-server recovery-token --team <identifiant> ».',
     words: 'Les 24 mots',
     wordsPlaceholder: 'abandon ability able …',
+    team: 'Les six mots de l’équipe',
+    teamHint: 'Sur la feuille de secours, sous les 24 mots. Ils disent quelle équipe revient : jamais ceux qu’un autre te dicte.',
+    teamPlaceholder: 'zoo wing lab …',
+    noTeamWords: 'Ma feuille n’a pas ces six mots',
+    oldSheet:
+      'Une feuille sans les six mots de l’équipe date d’avant eux : sa clé de secours ne ramène plus l’équipe. S’il reste un appareil administrateur, fais-y une nouvelle clé de secours (« Nouvelle clé de secours ») et imprime la nouvelle feuille.',
     name: 'Nom de l’équipe sur cet appareil',
     submit: 'Récupérer l’équipe',
     working: 'Récupération…',

@@ -320,7 +320,7 @@ async fn the_escrow_key_is_shown_to_every_member_and_reads_the_content() {
     let provider = OpenMlsRustCrypto::default();
     let escrow = EscrowKey::generate(provider.crypto(), provider.rand(), "le RSSI d'ACME").unwrap();
     let token = w.server.server.new_team_token().await.unwrap();
-    let (mut alice, _) = Team::create(pa.setup(), &token, member(1), Some(escrow.public()), NOW)
+    let (mut alice, _) = Team::create(pa.setup(), &token, member(1), Some(escrow.team_half()), NOW)
         .await
         .unwrap();
     let mut bob = w.join(&mut alice, &pb, member(2), Role::Member).await;
@@ -344,7 +344,10 @@ async fn the_escrow_key_is_shown_to_every_member_and_reads_the_content() {
         })
         .next()
         .expect("the escrow wrap of the epoch");
-    let record = escrow.open(provider.crypto(), &group, &wrap).unwrap();
+    let team = alice.fingerprint().unwrap();
+    let record = escrow
+        .open(provider.crypto(), &team, &group, &wrap)
+        .unwrap();
     let ops = alice
         .client()
         .read_project(&PROJECT.0, 0, None)
@@ -376,6 +379,7 @@ async fn the_recovery_key_brings_the_team_back_through_the_server() {
         .unwrap();
     let team = alice.id();
     let six = alice.fingerprint().unwrap();
+    let six_words = six.words().join(" ");
     // Alice loses her only device: the team has no administrator left.
     drop(alice);
 
@@ -383,16 +387,27 @@ async fn the_recovery_key_brings_the_team_back_through_the_server() {
     let token = w.server.server.new_recovery_token(team).await.unwrap();
     let typo = words.replacen(recovery.words()[3], "zoo", 1);
     assert!(matches!(
-        Team::recover(rescue.setup(), &token, &typo).await,
+        Team::recover(rescue.setup(), &token, &typo, &six_words).await,
         Err(Error::Crypto(CryptoError::Words))
+    ));
+    // The six words of the team are asked too (a sheet printed without them cannot recover).
+    assert!(matches!(
+        Team::recover(rescue.setup(), &token, &words, "").await,
+        Err(Error::Crypto(CryptoError::OtherTeam))
     ));
 
     // The words, through the server: the recovery leaf comes back, lets Carol's new device in as an administrator,
     // which gives the team a new recovery key; the old one's leaf leaves.
-    let (mut carol, new_recovery) =
-        Team::recover_onto(rescue.setup(), carol_place.setup(), &token, &words, NOW)
-            .await
-            .unwrap();
+    let (mut carol, new_recovery) = Team::recover_onto(
+        rescue.setup(),
+        carol_place.setup(),
+        &token,
+        &words,
+        &six_words,
+        NOW,
+    )
+    .await
+    .unwrap();
     assert_eq!(carol.id(), team);
     assert_eq!(carol.fingerprint().unwrap(), six, "the same team");
     assert!(carol.is_admin().unwrap());
@@ -423,7 +438,153 @@ async fn the_recovery_key_brings_the_team_back_through_the_server() {
 
     // The old words open nothing now.
     let token = w.server.server.new_recovery_token(team).await.unwrap();
-    assert!(Team::recover(other.setup(), &token, &words).await.is_err());
+    assert!(Team::recover(other.setup(), &token, &words, &six_words)
+        .await
+        .is_err());
+}
+
+/// SR2-09: a wrap that a member writes in the stream, sealed to the team's recovery key, for a group of the member's
+/// own with the team's id and genesis, is passed over; the recovery lands in the team's own group.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_recovery_passes_over_a_wrap_no_administrator_anchored() {
+    use escouade_team::crypto::anchor::Anchor;
+    use escouade_team::crypto::recovery::{RecoveryWrap, WrapAuthor};
+    use escouade_team::crypto::TeamDevice;
+    let w = World::new().await;
+    let (pa, pb, pr) = (w.place(), w.place(), w.place());
+    let token = w.server.server.new_team_token().await.unwrap();
+    let (mut alice, recovery) = Team::create(pa.setup(), &token, member(1), None, NOW)
+        .await
+        .unwrap();
+    let mut bob = w.join(&mut alice, &pb, member(2), Role::Member).await;
+    bob.sync().await.unwrap();
+    let real = alice.device().group_id().unwrap();
+    let six = alice.fingerprint().unwrap();
+
+    // Bob's group: the team's id and genesis (the same six words), the team's recovery key, Bob its administrator.
+    let roster = bob.roster().unwrap();
+    let mut forged = roster.clone();
+    forged.members.insert(member(2), Role::Admin);
+    let made_up = Anchor::from_seed([0x5a; 32]);
+    forged.recovery.anchor_key = made_up.public();
+    let mut fake = TeamDevice::new(member(2)).unwrap();
+    fake.create_team(NOW, None).unwrap();
+    let wrap = {
+        let (provider, signer, group) = fake.mls();
+        let _ = group;
+        let group = openmls::prelude::MlsGroup::builder()
+            .with_group_id(openmls::prelude::GroupId::from_slice(&real))
+            .ciphersuite(escouade_team::crypto::CIPHERSUITE)
+            .use_ratchet_tree_extension(true)
+            .with_group_context_extensions(forged.to_extensions().unwrap())
+            .with_capabilities(escouade_team::crypto::device::capabilities())
+            .build(
+                provider,
+                signer,
+                openmls::prelude::CredentialWithKey {
+                    credential: escouade_team::crypto::Identity {
+                        member: member(2),
+                        device: escouade_team::crypto::DeviceId([0x42; 16]),
+                        kind: escouade_team::crypto::DeviceKind::Device,
+                    }
+                    .credential(),
+                    signature_key: signer.to_public_vec().into(),
+                },
+            )
+            .unwrap();
+        use openmls::prelude::tls_codec::Serialize as _;
+        let info = group
+            .export_group_info(provider.crypto(), signer, true)
+            .unwrap()
+            .tls_serialize_detached()
+            .unwrap();
+        let by = WrapAuthor {
+            group_id: &real,
+            team: six,
+            leaf: signer,
+            anchor: &made_up,
+        };
+        let record = bob.device().records().last().unwrap().clone();
+        RecoveryWrap::seal(
+            provider.crypto(),
+            &forged.recovery,
+            &by,
+            &record,
+            info,
+            None,
+        )
+        .unwrap()
+    };
+    bob.client()
+        .append_message(&wire::encode(&TeamMessage::Recovery {
+            group: real.clone(),
+            wrap,
+        }))
+        .await
+        .unwrap();
+    // Bob's device does not count it as the epoch's wrap.
+    bob.sync().await.unwrap();
+
+    // Every administrator lost their devices: the words and the six words bring the team back, its own group.
+    drop(alice);
+    let rtoken = w.server.server.new_recovery_token(bob.id()).await.unwrap();
+    let words = recovery.words().join(" ");
+    let back = Team::recover(pr.setup(), &rtoken, &words, &six.words().join(" "))
+        .await
+        .unwrap();
+    assert_eq!(back.device().group_id().unwrap(), real);
+    assert_eq!(back.fingerprint().unwrap(), six);
+    bob.sync().await.unwrap();
+    assert_eq!(bob.epoch().unwrap(), back.epoch().unwrap(), "Bob follows");
+}
+
+/// SR2-09: the anchor reaches a second administrator's device through the stream (never a member's), and when a
+/// member's commit moves the team on, an administrator's device writes the wrap of the new epoch: the recovery
+/// still works once every administrator is gone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_anchor_reaches_the_administrators_and_the_wraps_follow_a_members_commit() {
+    let w = World::new().await;
+    let (pa, pd, pb, pr) = (w.place(), w.place(), w.place(), w.place());
+    let token = w.server.server.new_team_token().await.unwrap();
+    let (mut alice, recovery) = Team::create(pa.setup(), &token, member(1), None, NOW)
+        .await
+        .unwrap();
+    let mut dave = w.join(&mut alice, &pd, member(4), Role::Admin).await;
+    let mut bob = w.join(&mut alice, &pb, member(2), Role::Member).await;
+    let anchor = recovery.anchor().public();
+    online(&mut alice, NOW).await;
+    dave.sync_at(NOW).await.unwrap();
+    bob.sync_at(NOW).await.unwrap();
+    assert!(dave.device().holds_anchor(&anchor), "Dave got the anchor");
+    assert!(!bob.device().holds_anchor(&anchor), "Bob never does");
+    assert!(!alice.recovery_stale());
+
+    // Bob, a member, changes the keys: his commit writes no wrap; Dave's device writes the one of the epoch.
+    bob.rotate().await.unwrap();
+    let epoch = bob.epoch().unwrap();
+    drop(alice);
+    online(&mut dave, NOW).await;
+    let stream = dave.client().read_team(0, None).await.unwrap();
+    let latest = stream
+        .entries
+        .iter()
+        .filter(|e| e.kind == Kind::Message)
+        .filter_map(|e| match wire::decode::<TeamMessage>(&e.payload) {
+            Ok(TeamMessage::Recovery { wrap, .. }) => Some(wrap.epoch),
+            _ => None,
+        })
+        .max();
+    assert_eq!(latest, Some(epoch));
+
+    // Every administrator gone: the recovery joins at that epoch.
+    let six = dave.fingerprint().unwrap().words().join(" ");
+    drop(dave);
+    let rtoken = w.server.server.new_recovery_token(bob.id()).await.unwrap();
+    let back = Team::recover(pr.setup(), &rtoken, &recovery.words().join(" "), &six)
+        .await
+        .unwrap();
+    bob.sync().await.unwrap();
+    assert_eq!(bob.epoch().unwrap(), back.epoch().unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -455,4 +616,88 @@ async fn a_fork_is_an_alarm_and_the_reading_stays_stopped() {
     );
     assert_eq!(Error::Rewritten { seq: 3 }.alarm(), Some(Alarm::Rewritten));
     assert_eq!(Error::InvitationUsed.alarm(), None);
+}
+
+/// SR2-09: an administrator made a member again still holds the anchor of the current words. The card says to make a
+/// new recovery key; until then, a wrap the anchor signed with a member's leaf does not hide the administrators' own.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_former_administrators_wrap_does_not_hide_the_teams_own() {
+    use escouade_team::crypto::recovery::{RecoveryWrap, WrapAuthor};
+    use openmls::prelude::tls_codec::Serialize as _;
+    let w = World::new().await;
+    let (pa, pd, pr) = (w.place(), w.place(), w.place());
+    let token = w.server.server.new_team_token().await.unwrap();
+    let (mut alice, recovery) = Team::create(pa.setup(), &token, member(1), None, NOW)
+        .await
+        .unwrap();
+    let mut dave = w.join(&mut alice, &pd, member(4), Role::Admin).await;
+    online(&mut alice, NOW).await;
+    dave.sync_at(NOW).await.unwrap();
+    assert!(dave.device().holds_anchor(&recovery.anchor().public()));
+    alice.set_role(member(4), Role::Member).await.unwrap();
+    assert!(
+        alice.recovery_stale(),
+        "a former administrator may hold the anchor"
+    );
+    dave.sync_at(NOW).await.unwrap();
+
+    // Dave, a member now, signs a wrap of the team's group with the anchor and his own leaf.
+    let real = alice.device().group_id().unwrap();
+    let team = alice.fingerprint().unwrap();
+    let roster = dave.roster().unwrap();
+    let record = dave.device().records().last().unwrap().clone();
+    let anchor = recovery.anchor();
+    let wrap = {
+        let (provider, signer, group) = dave.device_mut().mls();
+        let info = group
+            .export_group_info(provider.crypto(), signer, true)
+            .unwrap()
+            .tls_serialize_detached()
+            .unwrap();
+        let by = WrapAuthor {
+            group_id: &real,
+            team,
+            leaf: signer,
+            anchor: &anchor,
+        };
+        RecoveryWrap::seal(
+            provider.crypto(),
+            &roster.recovery,
+            &by,
+            &record,
+            info,
+            None,
+        )
+        .unwrap()
+    };
+    assert_eq!(wrap.epoch, alice.epoch().unwrap());
+    dave.client()
+        .append_message(&wire::encode(&TeamMessage::Recovery {
+            group: real.clone(),
+            wrap,
+        }))
+        .await
+        .unwrap();
+
+    // The recovery passes it over and follows Alice's wrap of the same epoch.
+    let rtoken = w
+        .server
+        .server
+        .new_recovery_token(alice.id())
+        .await
+        .unwrap();
+    let back = Team::recover(
+        pr.setup(),
+        &rtoken,
+        &recovery.words().join(" "),
+        &team.words().join(" "),
+    )
+    .await
+    .unwrap();
+    assert_eq!(back.device().group_id().unwrap(), real);
+
+    // A new recovery key: nobody but the administrators holds its anchor.
+    alice.sync_at(NOW).await.unwrap();
+    alice.replace_recovery().await.unwrap();
+    assert!(!alice.recovery_stale());
 }

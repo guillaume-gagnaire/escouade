@@ -5,6 +5,7 @@
 //!
 //! What the client writes in the team's stream, the server does not read: [`TeamMessage`], beside the MLS commits.
 
+use escouade_team_crypto::anchor::AnchorGrant;
 use escouade_team_crypto::content::SealedObject;
 use escouade_team_crypto::history::HistoryLink;
 use escouade_team_crypto::invite::{JoinRequest, WelcomeDelivery};
@@ -396,6 +397,9 @@ pub enum TeamMessage {
         project: [u8; 16],
         link: HistoryLink,
     },
+    /// The anchor of the recovery or of the escrow wraps (SR2-09), sealed by an administrator's device for another
+    /// administrator's device, to the X25519 form of its leaf key (`escouade_team_crypto::anchor`).
+    Anchor(AnchorGrant),
 }
 
 /// What a [`TeamMessage::TokenRequest`] holds, once opened.
@@ -427,7 +431,16 @@ pub fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use escouade_team_crypto::recovery::{RecoveryWrap, Sealed};
+    use escouade_team_crypto::recovery::{RecoveryWrap, Sealed, WrapSignatures};
+
+    fn signed() -> WrapSignatures {
+        WrapSignatures {
+            team: [3; 32],
+            signer: vec![4; 32],
+            signature: vec![5; 64],
+            anchor: vec![6; 64],
+        }
+    }
 
     #[test]
     fn the_team_messages_round_trip() {
@@ -439,6 +452,7 @@ mod tests {
                     kem_output: vec![5; 32],
                     ciphertext: vec![6; 40],
                 },
+                signed: signed(),
             },
         };
         let back: TeamMessage = decode(&encode(&m)).unwrap();
@@ -452,9 +466,21 @@ mod tests {
                 kem_output: vec![1; 32],
                 ciphertext: vec![2; 20_000],
             },
+            signed: signed(),
         });
         assert!(
             matches!(decode::<TeamMessage>(&encode(&long)).unwrap(), TeamMessage::Escrow(w) if w.sealed.ciphertext.len() == 20_000)
+        );
+        let grant = TeamMessage::Anchor(AnchorGrant {
+            device: [8; 16],
+            anchor: vec![9; 32],
+            sealed: Sealed {
+                kem_output: vec![1; 32],
+                ciphertext: vec![2; 48],
+            },
+        });
+        assert!(
+            matches!(decode::<TeamMessage>(&encode(&grant)).unwrap(), TeamMessage::Anchor(g) if g.device == [8; 16] && g.anchor == vec![9; 32])
         );
         let g = TeamMessage::TokenGranted { hash: [7; 32] };
         assert!(

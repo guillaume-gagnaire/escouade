@@ -1,9 +1,10 @@
 <script lang="ts">
   // « Récupérer une équipe » (TS-3, §3.5, C7-B): when no administrator has a device left, the server's address, the
-  // token its host gives (`escouade-team-server recovery-token`) and the 24 words bring the team back on this device,
-  // an administrator; the team then gets a new recovery key, shown once.
+  // token its host gives (`escouade-team-server recovery-token`), the 24 words and the team's six words, both from the
+  // rescue sheet, bring the team back on this device, an administrator; the team then gets a new recovery key, shown
+  // once. The six words come from the sheet, never from the server (SR2-09); a sheet without them is told as too old.
   import { t } from '../../lib/i18n';
-  import { wordCount, wordsTyped } from '../../lib/team-words';
+  import { SIX, wordCount, wordsTyped } from '../../lib/team-words';
   import { errorText, teamsApi, type Created } from '../../lib/teams.svelte';
 
   let { onmade, onback }: { onmade: (c: Created) => void; onback: () => void } = $props();
@@ -11,18 +12,22 @@
   let server = $state('');
   let token = $state('');
   let words = $state('');
+  let teamWords = $state('');
+  let noTeamWords = $state(false);
   let name = $state('');
   let busy = $state(false);
   let failure = $state('');
 
   const count = $derived(wordCount(words));
+  const teamCount = $derived(wordCount(teamWords));
 
   async function go() {
     busy = true;
     failure = '';
     try {
-      const made = await teamsApi.recover(server, token, wordsTyped(words), name);
+      const made = await teamsApi.recover(server, token, wordsTyped(words), wordsTyped(teamWords), name);
       words = '';
+      teamWords = '';
       onmade(made);
     } catch (e) {
       failure = errorText(e);
@@ -62,13 +67,30 @@
       placeholder={t('team.recover.wordsPlaceholder')}></textarea>
   </label>
   <label class="row">
+    <span class="lbl">{t('team.recover.team')} · {teamCount}/{SIX}</span>
+    <input
+      class="field mono"
+      bind:value={teamWords}
+      disabled={noTeamWords}
+      autocomplete="off"
+      spellcheck="false"
+      placeholder={t('team.recover.teamPlaceholder')}
+    />
+    <span class="hint">{t('team.recover.teamHint')}</span>
+  </label>
+  <label class="check"><input type="checkbox" bind:checked={noTeamWords} /><span>{t('team.recover.noTeamWords')}</span></label>
+  {#if noTeamWords}<p class="old" role="note">{t('team.recover.oldSheet')}</p>{/if}
+  <label class="row">
     <span class="lbl">{t('team.recover.name')}</span>
     <input class="field" bind:value={name} maxlength="80" />
   </label>
   {#if failure}<p class="error" role="alert">{failure}</p>{/if}
   <div class="foot">
     <button type="button" class="btn ghost" onclick={onback}>{t('team.common.back')}</button>
-    <button type="submit" class="btn primary" disabled={busy || !server.trim() || !token.trim() || count !== 24}
+    <button
+      type="submit"
+      class="btn primary"
+      disabled={busy || !server.trim() || !token.trim() || count !== 24 || noTeamWords || teamCount !== SIX}
       >{busy ? t('team.recover.working') : t('team.recover.submit')}</button
     >
   </div>
@@ -91,6 +113,23 @@
   }
   .error {
     color: var(--del);
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--soft);
+    font-size: 13px;
+  }
+  .old {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--soft);
+    font-size: 13px;
+    line-height: 1.5;
   }
   .form {
     display: flex;

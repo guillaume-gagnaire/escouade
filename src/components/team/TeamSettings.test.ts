@@ -24,6 +24,8 @@ const TEAM: TeamView = {
   keysInFile: false,
   recoveryConfirmed: true,
   wordsPending: false,
+  recoveryOutdated: false,
+  recoveryStale: false,
   alarm: null,
   invitations: [],
   lastError: null,

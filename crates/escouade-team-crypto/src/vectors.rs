@@ -16,7 +16,7 @@ use crate::history::HistoryLink;
 use crate::identity::{MemberId, ObjectId, ProjectId};
 use crate::invite::{join_mac, welcome_confirmation, InviteLink};
 use crate::keys::{head, object_key, project_key, EpochMember, EpochRecord};
-use crate::recovery::{RecoveryKey, RecoveryWrap};
+use crate::recovery::{RecoveryKey, RecoveryWrap, WrapAuthor};
 use crate::roster::{Genesis, TeamFingerprint};
 
 const PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/vectors/team-crypto-v1.json");
@@ -41,6 +41,8 @@ struct RecoveryVector {
     words: String,
     signature_key: String,
     hpke_key: String,
+    /// The public half of the recovery anchor (SR2-09), drawn from the words.
+    anchor_key: String,
     identity: String,
 }
 
@@ -197,12 +199,20 @@ fn make(wrap: Option<RecoveryWrap>) -> Vectors {
 
     let group_info = b"a GroupInfo, as the committer exports it".to_vec();
     let wrap = wrap.unwrap_or_else(|| {
+        let anchor = recovery.anchor();
+        let by = WrapAuthor {
+            group_id: &group_id,
+            team: fingerprint,
+            leaf: &signer,
+            anchor: &anchor,
+        };
         RecoveryWrap::seal(
             crypto,
             &recovery_public,
-            &group_id,
+            &by,
             &record,
             group_info.clone(),
+            None,
         )
         .unwrap()
     });
@@ -216,6 +226,7 @@ fn make(wrap: Option<RecoveryWrap>) -> Vectors {
             words: recovery.words().join(" "),
             signature_key: h(&recovery_public.signature_key),
             hpke_key: h(&recovery_public.hpke_key),
+            anchor_key: h(&recovery_public.anchor_key),
             identity: h(recovery.identity().to_bytes()),
         },
         fingerprint: FingerprintVector {
@@ -296,13 +307,23 @@ fn the_vectors_hold() {
     let key = RecoveryKey::from_words(&stored.recovery.words).unwrap();
     assert_eq!(key.words(), RecoveryKey::from_entropy(entropy).words());
     let group_id = hex::decode(&stored.recovery_wrap.group_id).unwrap();
-    let (record, group_info) = stored
+    let opened = stored
         .recovery_wrap
         .wrap
         .open(provider.crypto(), &key, &group_id)
         .unwrap();
-    assert_eq!(record, stored.recovery_wrap.record);
-    assert_eq!(h(group_info), stored.recovery_wrap.group_info);
+    assert_eq!(opened.record, stored.recovery_wrap.record);
+    assert_eq!(h(&opened.group_info), stored.recovery_wrap.group_info);
+    // Signed by the words' anchor, for the vector's team.
+    assert!(stored.recovery_wrap.wrap.is_anchored(
+        &group_id,
+        &TeamFingerprint(stored.recovery_wrap.wrap.signed.team),
+        &key.anchor().public()
+    ));
+    assert_eq!(
+        h(stored.recovery_wrap.wrap.signed.team),
+        stored.fingerprint.fingerprint
+    );
 
     // And what each vector's outputs open.
     assert_eq!(

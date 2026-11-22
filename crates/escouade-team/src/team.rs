@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ed25519_dalek::SigningKey;
+use escouade_team_crypto::anchor::AnchorGrant;
 use escouade_team_crypto::content::SealedObject;
 use escouade_team_crypto::invite::{InviteLink, JoinRequest, WelcomeDelivery, DEFAULT_LIFETIME};
 use escouade_team_crypto::keys::EpochRecord;
@@ -32,6 +33,7 @@ use escouade_team_crypto::{
     Change, Checkpoint, DeviceId, DeviceKind, Identity, MemberId, ObjectId, Processed, ProjectId,
     Publication, Purpose, RecoveryKey, Role, Roster, SavedState, TeamDevice, CIPHERSUITE,
 };
+use escouade_team_crypto::{EscrowTeamHalf, TeamFingerprint};
 use openmls_basic_credential::SignatureKeyPair;
 use openmls_traits::OpenMlsProvider;
 use serde::{Deserialize, Serialize};
@@ -198,6 +200,16 @@ struct Meta {
     invite_projects: Vec<([u8; 16], Vec<ProjectId>)>,
     /// The members to give access to a project kept to some members, once they are in (an administrator's work).
     grants: Vec<(MemberId, ProjectId)>,
+    /// The highest epoch whose recovery wrap, signed by the roster's anchor, is in the stream (SR2-09): an
+    /// administrator's device writes the one of an epoch a member's commit made.
+    recovery_wrapped: Option<u64>,
+    /// The same for the escrow wraps.
+    escrow_wrapped: Option<u64>,
+    /// The anchors' grants in the stream: (device, anchor's public half), whoever sealed them.
+    anchors_given: BTreeSet<([u8; 16], Vec<u8>)>,
+    /// The recovery anchor of the roster, and every member who was an administrator while this device saw it in
+    /// place: one of them who is no longer an administrator may still hold it ([`Team::recovery_stale`]).
+    anchor_holders: Option<(Vec<u8>, BTreeSet<MemberId>)>,
 }
 
 fn digest(bytes: &[u8]) -> [u8; 32] {
@@ -298,7 +310,7 @@ impl Team {
         setup: Setup,
         token: &str,
         member: MemberId,
-        escrow: Option<EscrowPublic>,
+        escrow: Option<EscrowTeamHalf>,
         created_at: u64,
     ) -> Result<(Team, RecoveryKey), Error> {
         let mut team = Self::enrol(setup, token, member).await?;
@@ -394,9 +406,21 @@ impl Team {
     /// the operator's token (`escouade-team-server recovery-token`) and the 24 words. This device enrols, reads the
     /// stream for the last recovery wrap, opens it with the words, and joins the group by an external commit, as the
     /// recovery leaf: an administrator. It then invites the new devices ([`Team::recover_onto`] does the rest).
-    pub async fn recover(setup: Setup, token: &str, words: &str) -> Result<Team, Error> {
+    ///
+    /// `team_words` are the six words of the team's fingerprint, typed from the rescue sheet: the wrap must be signed
+    /// by the anchor the 24 words give, for that team, by an administrator's leaf of its epoch (SR2-09). A wrap anyone
+    /// else wrote is passed over; none left is [`Error::NoRecoveryWrap`].
+    pub async fn recover(
+        setup: Setup,
+        token: &str,
+        words: &str,
+        team_words: &str,
+    ) -> Result<Team, Error> {
         // The words first: a typo does not spend the token.
         let key = RecoveryKey::from_words(words)?;
+        if team_words.split_whitespace().count() != 6 {
+            return Err(Error::Crypto(CryptoError::OtherTeam));
+        }
         let auth = SigningKey::from_bytes(&random::<32>());
         let enrolled = ServerClient::enroll(&*setup.transport, token, &auth)
             .await
@@ -416,7 +440,7 @@ impl Team {
             keys.device,
             SigningKey::from_bytes(&keys.auth),
         );
-        let (group, wrap) = last_recovery_wrap(&client).await?;
+        let (group, wrap) = recovery_wrap(&client, &key, words, team_words).await?;
         let dir = setup.folder.join(hex::encode(keys.team));
         if dir.join(STATE_FILE).exists() {
             return Err(Error::Refused("this device already holds this team".into()));
@@ -424,7 +448,8 @@ impl Team {
         std::fs::create_dir_all(&dir).map_err(|e| Error::Storage(e.to_string()))?;
         let attempt = async {
             let provider = TeamProvider::new(open_storage(&dir, &keys)?);
-            let (device, publication) = TeamDevice::recover_with(provider, words, &wrap, &group)?;
+            let (device, publication) =
+                TeamDevice::recover_with(provider, words, team_words, &wrap, &group)?;
             let (from_epoch, commit) = publication.commit.clone().ok_or_else(|| {
                 Error::Crypto(CryptoError::Mls("a recovery without its commit".into()))
             })?;
@@ -467,9 +492,10 @@ impl Team {
         setup: Setup,
         token: &str,
         words: &str,
+        team_words: &str,
         now: u64,
     ) -> Result<(Team, RecoveryKey), Error> {
-        let mut leaf = Self::recover(rescue, token, words).await?;
+        let mut leaf = Self::recover(rescue, token, words, team_words).await?;
         leaf.sync_at(now).await?;
         let invited = leaf
             .invite_for(Purpose::NewMember(Role::Admin), now, OWN_DEVICE_LIFETIME)
@@ -608,6 +634,22 @@ impl Team {
         self.meta.admins.get(&epoch)
     }
 
+    /// Whether someone who was an administrator while the current recovery key was in place is no longer one (they
+    /// left, or became a member): they may still hold its anchor (SR2-09), so the team makes a new recovery key and
+    /// prints the new sheet. As far as this device saw: its own time in the team only.
+    pub fn recovery_stale(&self) -> bool {
+        let Ok(roster) = self.device.roster() else {
+            return false;
+        };
+        self.meta
+            .anchor_holders
+            .as_ref()
+            .is_some_and(|(key, holders)| {
+                *key == roster.recovery.anchor_key
+                    && holders.iter().any(|m| roster.role(m) != Some(Role::Admin))
+            })
+    }
+
     /// Who signed with `signature_key` at `epoch`: a leaf of that epoch's record, None when this device does not hold
     /// the epoch or no leaf has the key.
     pub fn signer_at(&self, epoch: u64, signature_key: &[u8]) -> Option<Identity> {
@@ -739,14 +781,22 @@ impl Team {
 
     fn save(&mut self) -> Result<(), Error> {
         if let (Ok(epoch), Ok(roster)) = (self.device.epoch(), self.device.roster()) {
-            self.meta.admins.entry(epoch).or_insert_with(|| {
-                roster
-                    .members
-                    .iter()
-                    .filter(|(_, r)| **r == Role::Admin)
-                    .map(|(m, _)| *m)
-                    .collect()
-            });
+            let admins: BTreeSet<MemberId> = roster
+                .members
+                .iter()
+                .filter(|(_, r)| **r == Role::Admin)
+                .map(|(m, _)| *m)
+                .collect();
+            match &mut self.meta.anchor_holders {
+                Some((key, holders)) if *key == roster.recovery.anchor_key => {
+                    holders.extend(admins.iter().copied());
+                }
+                _ => {
+                    self.meta.anchor_holders =
+                        Some((roster.recovery.anchor_key.clone(), admins.clone()));
+                }
+            }
+            self.meta.admins.entry(epoch).or_insert(admins);
         }
         let storage = self.device.provider().storage();
         storage.put_ours(b"state", &self.device.saved_state())?;
@@ -806,9 +856,11 @@ impl Team {
         }
         if let Some(wrap) = p.recovery {
             let group = self.device.group_id().unwrap_or_default();
+            self.meta.recovery_wrapped = self.meta.recovery_wrapped.max(Some(wrap.epoch));
             self.meta.outbox.push(TeamMessage::Recovery { group, wrap });
         }
         if let Some(w) = p.escrow {
+            self.meta.escrow_wrapped = self.meta.escrow_wrapped.max(Some(w.epoch));
             self.meta.outbox.push(TeamMessage::Escrow(w));
         }
     }
@@ -1031,9 +1083,43 @@ impl Team {
                 name.extend_from_slice(&random::<8>());
                 self.storage().put_ours(&name, &link)?;
             }
-            TeamMessage::Recovery { .. } | TeamMessage::Escrow(_) => {}
+            TeamMessage::Recovery { group, wrap } => {
+                if self.device.group_id().is_ok_and(|g| g == group)
+                    && !self.device.is_removed()
+                    && self
+                        .device
+                        .recovery_wrap_is_anchored(&wrap)
+                        .unwrap_or(false)
+                {
+                    self.meta.recovery_wrapped = self.meta.recovery_wrapped.max(Some(wrap.epoch));
+                }
+            }
+            TeamMessage::Escrow(wrap) => {
+                if self.device.group_id().is_ok()
+                    && !self.device.is_removed()
+                    && self.device.escrow_wrap_is_anchored(&wrap).unwrap_or(false)
+                {
+                    self.meta.escrow_wrapped = self.meta.escrow_wrapped.max(Some(wrap.epoch));
+                }
+            }
+            TeamMessage::Anchor(grant) => self.take_grant(grant),
         }
         Ok(())
+    }
+
+    /// A grant of an anchor (SR2-09): noted as given, and taken when it is for this device.
+    fn take_grant(&mut self, grant: AnchorGrant) {
+        self.meta
+            .anchors_given
+            .insert((grant.device, grant.anchor.clone()));
+        if self.device.group_id().is_err() || self.device.is_removed() {
+            return;
+        }
+        match self.device.take_anchor(&grant, &self.keys.mls) {
+            Ok(true) => log::info!("team: this device holds the team's anchor"),
+            Ok(false) => {}
+            Err(e) => log::warn!("team: an anchor's grant refused: {e}"),
+        }
     }
 
     fn take_welcome(
@@ -1359,9 +1445,56 @@ impl Team {
         self.grant_tokens(&mut served).await?;
         self.read_alerts(&mut served).await?;
         self.roles_in_step(&mut served).await?;
+        self.anchors_in_step()?;
         self.serve_projects(now).await?;
         self.flush().await?;
         Ok(served)
+    }
+
+    /// An administrator's device holding the anchors (SR2-09): gives them to the administrators' devices that do
+    /// not hold them yet, and writes the wraps of the current epoch when no anchored one is in the stream (a
+    /// member's commit made it).
+    fn anchors_in_step(&mut self) -> Result<(), Error> {
+        if !self.device.is_admin()? {
+            return Ok(());
+        }
+        let grants = self.device.anchor_grants(&self.meta.anchors_given)?;
+        let epoch = self.device.epoch()?;
+        let roster = self.device.roster()?;
+        let need_recovery = self.meta.recovery_wrapped < Some(epoch)
+            && self.device.holds_anchor(&roster.recovery.anchor_key);
+        let need_escrow = self.meta.escrow_wrapped < Some(epoch)
+            && roster
+                .escrow
+                .as_ref()
+                .is_some_and(|e| self.device.holds_anchor(&e.anchor_key));
+        let wraps = if need_recovery || need_escrow {
+            let mut wraps = self.device.current_wraps()?;
+            if !need_recovery {
+                wraps.recovery = None;
+            }
+            if !need_escrow {
+                wraps.escrow = None;
+            }
+            Some(wraps)
+        } else {
+            None
+        };
+        if grants.is_empty() && wraps.is_none() {
+            return Ok(());
+        }
+        self.step(|t| {
+            for grant in grants {
+                t.meta
+                    .anchors_given
+                    .insert((grant.device, grant.anchor.clone()));
+                t.meta.outbox.push(TeamMessage::Anchor(grant));
+            }
+            if let Some(wraps) = wraps {
+                t.queue(wraps);
+            }
+            Ok(())
+        })
     }
 
     async fn admit_pending(&mut self, now: u64, served: &mut Served) -> Result<(), Error> {
@@ -1542,12 +1675,27 @@ impl Team {
     pub async fn replace_recovery(&mut self) -> Result<RecoveryKey, Error> {
         let key = RecoveryKey::from_entropy(random::<32>());
         let public = key.public(self.device.crypto())?;
+        // This device signs the wraps of the new key: it keeps its anchor (never the words).
+        self.step(|t| {
+            t.device.keep_anchor(key.anchor());
+            Ok(())
+        })?;
         self.apply(Change::ReplaceRecovery(public)).await?;
         Ok(key)
     }
 
     /// Sets the organisation's escrow key, or takes it away (an administrator's). Every member sees it (C7-B).
-    pub async fn set_escrow(&mut self, escrow: Option<EscrowPublic>) -> Result<Applied, Error> {
+    pub async fn set_escrow(&mut self, escrow: Option<EscrowTeamHalf>) -> Result<Applied, Error> {
+        let escrow = match escrow {
+            Some(half) => {
+                self.step(|t| {
+                    t.device.keep_anchor(half.anchor.clone());
+                    Ok(())
+                })?;
+                Some(half.public)
+            }
+            None => None,
+        };
         self.apply(Change::SetEscrow(escrow)).await
     }
 
@@ -1726,10 +1874,41 @@ fn identity(keys: &DeviceKeys) -> Identity {
     }
 }
 
-/// The last recovery wrap of the team's stream, and the group's id it is sealed for.
-async fn last_recovery_wrap(client: &ServerClient) -> Result<(Vec<u8>, RecoveryWrap), Error> {
+/// The recovery wrap to follow (SR2-09): of those in the team's stream that the anchor of these words signed, the
+/// newest that passes every check of [`TeamDevice::recover_with`] (tried in memory first, nothing sent), and the
+/// group's id it is sealed for. A wrap anyone else wrote is passed over; one that the anchor signed but that fails a
+/// check (a former administrator's) does not hide an older good one.
+async fn recovery_wrap(
+    client: &ServerClient,
+    key: &RecoveryKey,
+    words: &str,
+    team_words: &str,
+) -> Result<(Vec<u8>, RecoveryWrap), Error> {
+    let mut anchored = anchored_recovery_wraps(client, key).await?;
+    // The newest epoch first, and in an epoch the last written first (the sort keeps that order).
+    anchored.reverse();
+    anchored.sort_by_key(|(_, w)| std::cmp::Reverse(w.epoch));
+    let mut first_error = None;
+    for (group, wrap) in anchored {
+        match TeamDevice::recover(words, team_words, &wrap, &group) {
+            Ok(_) => return Ok((group, wrap)),
+            Err(e) => {
+                first_error.get_or_insert(e);
+            }
+        }
+    }
+    Err(first_error.map_or(Error::NoRecoveryWrap, Error::Crypto))
+}
+
+/// The recovery wraps of the team's stream signed by the anchor of these words, in the stream's order (the latest
+/// last), with the group's id each is sealed for.
+async fn anchored_recovery_wraps(
+    client: &ServerClient,
+    key: &RecoveryKey,
+) -> Result<Vec<(Vec<u8>, RecoveryWrap)>, Error> {
+    let anchor = key.anchor().public();
     let mut since = 0;
-    let mut last: Option<(Vec<u8>, RecoveryWrap)> = None;
+    let mut found: Vec<(Vec<u8>, RecoveryWrap)> = Vec::new();
     loop {
         let page = client.read_team(since, None).await?;
         for e in page.entries {
@@ -1740,8 +1919,10 @@ async fn last_recovery_wrap(client: &ServerClient) -> Result<(Vec<u8>, RecoveryW
             if let Ok(TeamMessage::Recovery { group, wrap }) =
                 wire::decode::<TeamMessage>(&e.payload)
             {
-                if last.as_ref().is_none_or(|(_, w)| wrap.epoch >= w.epoch) {
-                    last = Some((group, wrap));
+                let anchored =
+                    wrap.is_anchored(&group, &TeamFingerprint(wrap.signed.team), &anchor);
+                if anchored {
+                    found.push((group, wrap));
                 }
             }
         }
@@ -1749,7 +1930,7 @@ async fn last_recovery_wrap(client: &ServerClient) -> Result<(Vec<u8>, RecoveryW
             break;
         }
     }
-    last.ok_or(Error::NoRecoveryWrap)
+    Ok(found)
 }
 
 fn signer(keys: &DeviceKeys) -> SignatureKeyPair {

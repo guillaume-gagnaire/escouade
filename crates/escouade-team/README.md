@@ -28,7 +28,7 @@ Ce que TS-2 y a changé :
 | `client.rs` | `ServerClient`, le client du protocole v1 du serveur, derrière le trait `Transport`. `HttpTransport` est celui de l'app : le client reqwest du cœur, et le même proxy (tunnel CONNECT) et le même TLS pour `/v1/live`. `LiveFeed` revient seul |
 | `team.rs` | `Team` : créer, rejoindre, ouvrir, lire le flux, committer, faire tourner les clés, retirer, révoquer, inviter et admettre, écrire et lire les objets et les fichiers ; `serve` (le travail d'un appareil en ligne pour les autres), la récupération, le code court |
 | `pairing.rs` | Le code court de 8 caractères (TS-3) : SPAKE2 sur le relais du serveur, un seul essai |
-| `escrow.rs` | La clé de séquestre de l'organisation en texte : sa moitié publique, son secret |
+| `escrow.rs` | La clé de séquestre de l'organisation en texte : la moitié de l'équipe (sa clé publique et l'ancre de ses enveloppes), son secret |
 | `wire.rs` | Les corps CBOR du serveur, et `TeamMessage`, ce que le client écrit dans le flux d'équipe à côté des commits (liens, enveloppes, balises, demandes, Welcome) |
 | `replica.rs` | La copie locale d'un projet (TS-5) : SQLite, un fichier par projet, le journal rejoué, la fusion champ par champ, le conflit gardé, les versions des pages (leur historique et leur base commune, TS-9), les numéros des compteurs (TS-9), la file d'envoi |
 | `merge.rs` | La fusion à trois voies d'un texte, ligne par ligne (TS-6 et TS-9) : une page, une description écrites des deux côtés |
@@ -107,8 +107,10 @@ La plus haute époque vue et sa tête vont dans leur propre entrée du trousseau
 
 ### La récupération par la clé de secours, à travers le serveur
 
+**L'ancre** (SR2-09, `escouade_team_crypto::anchor`) : `Team::create` et `Team::replace_recovery` gardent l'ancre des mots sur l'appareil (dans son état chiffré, jamais les mots) ; `Team::serve` d'un appareil administrateur la donne aux autres appareils administrateurs (`TeamMessage::Anchor`, scellée à leur feuille ; `Meta::anchors_given` retient ce qui est donné) et écrit les enveloppes de l'époque quand le commit d'un membre n'en a pas fait (`Meta::recovery_wrapped`, `escrow_wrapped`). Le commit d'un membre ne fait jamais d'enveloppe. Tests : `tests/onboarding.rs` (une enveloppe d'un groupe de membre écartée, l'ancre jusqu'au second administrateur, l'enveloppe après le commit d'un membre) et `escouade-team-crypto/src/tests.rs`.
+
 `Team::recover_onto` : le jour où plus aucun administrateur n'a d'appareil, l'hébergeur donne un jeton (`escouade-team-server recovery-token --team <id>`). Avec lui et les 24 mots :
-1. la feuille de récupération s'inscrit (administrateur du serveur), lit la dernière enveloppe de récupération du flux (`TeamMessage::Recovery {group, wrap}`), l'ouvre avec les mots et entre dans le groupe par un commit externe ;
+1. la feuille de récupération s'inscrit (administrateur du serveur), lit la dernière enveloppe de récupération du flux (`TeamMessage::Recovery {group, wrap}`) **signée par l'ancre de ces mots** (les autres sont écartées), vérifie les six mots de l'équipe tapés depuis la feuille de secours et la GroupInfo (empreinte, clé de secours, feuille administrateur qui a signé), puis entre dans le groupe par un commit externe ;
 2. elle invite un nouvel appareil administrateur, celui de la machine, et l'admet ; puis elle le met administrateur du serveur ;
 3. le nouvel appareil remplace la clé de secours (la feuille de l'ancienne quitte le groupe dans le même commit) ; l'appareil serveur de la feuille est révoqué, ses clés oubliées.
 

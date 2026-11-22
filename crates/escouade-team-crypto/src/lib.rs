@@ -8,6 +8,7 @@
 //! The cryptographic layer of the client, `escouade-team` (TS-2), which adds the keychain, the storage and the
 //! server around it; pure and synchronous, without any I/O.
 
+pub mod anchor;
 pub mod beacon;
 pub mod content;
 pub mod costkey;
@@ -31,6 +32,7 @@ mod vectors;
 
 use openmls::prelude::Ciphersuite;
 
+pub use anchor::{Anchor, AnchorGrant};
 pub use beacon::Beacon;
 pub use costkey::CostKey;
 pub use device::{
@@ -38,7 +40,7 @@ pub use device::{
 };
 pub use identity::{DeviceId, DeviceKind, Identity, MemberId, ObjectId, ProjectId};
 pub use invite::{InvitationError, InviteLink, Purpose};
-pub use recovery::{EscrowKey, RecoveryKey};
+pub use recovery::{EscrowKey, EscrowTeamHalf, RecoveryKey};
 pub use roster::{Role, Roster, TeamFingerprint};
 
 /// The suite: `MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519` (0x0003, RFC 9420 §17.1). X25519 and Ed25519
@@ -87,6 +89,12 @@ pub enum Error {
     Encoding(String),
     #[error("no randomness")]
     Random,
+    /// The six words of the team typed back (from the rescue sheet) are not those of the wrap's team (SR2-09).
+    #[error("these six words are not the team's: check them on the rescue sheet")]
+    OtherTeam,
+    /// A recovery or escrow wrap that no administrator of the team signed, with the team's anchor (SR2-09).
+    #[error("this wrap is not signed by an administrator of the team")]
+    Unanchored,
 }
 
 pub(crate) fn mls(e: impl std::fmt::Debug) -> Error {

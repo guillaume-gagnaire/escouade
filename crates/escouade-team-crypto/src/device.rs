@@ -12,7 +12,7 @@
 //! the pending commit) is given out by [`TeamDevice::saved_state`] and [`TeamDevice::records`], and taken back by
 //! [`TeamDevice::restore`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use openmls::prelude::tls_codec::{Deserialize as _, Serialize as _};
 use openmls::prelude::{
@@ -29,6 +29,7 @@ use openmls_traits::OpenMlsProvider;
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use crate::anchor::{Anchor, AnchorGrant};
 use crate::beacon::Beacon;
 use crate::content::{ObjectHeader, SealedObject};
 use crate::history::{walk_back, HistoryLink};
@@ -39,7 +40,9 @@ use crate::invite::{
 };
 use crate::keys::{head, EpochMember, EpochRecord, CONTENT_LABEL, HISTORY_LABEL};
 use crate::policy::check_commit;
-use crate::recovery::{EscrowWrap, RecoveryKey, RecoveryWrap};
+use crate::recovery::{
+    admin_signed, EscrowTeamHalf, EscrowWrap, RecoveryKey, RecoveryWrap, WrapAuthor,
+};
 use crate::roster::{
     EscrowPublic, Genesis, RecoveryPublic, Role, Roster, TeamFingerprint, ROSTER_EXTENSION,
 };
@@ -141,7 +144,24 @@ pub struct SavedState {
     /// apart, as the team's: [`TeamDevice::project_records`]).
     #[serde(default)]
     pub projects: Vec<crate::project::SavedProject>,
+    /// The anchors this device holds (`anchor.rs`): an administrator's device signs the recovery and escrow wraps
+    /// with them.
+    #[serde(default)]
+    pub anchors: Vec<SavedAnchor>,
 }
+
+/// An anchor's seed, in the device's encrypted state (never in a log).
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+pub struct SavedAnchor(#[serde(with = "hex::serde")] pub [u8; 32]);
+
+impl std::fmt::Debug for SavedAnchor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SavedAnchor(..)")
+    }
+}
+
+/// The most anchors a device keeps: the roster's two, and a few made for a change still waiting.
+const MAX_ANCHORS: usize = 8;
 
 /// The leaf capabilities every device of the team announces: the suite, the roster's extension, basic credentials.
 pub fn capabilities() -> Capabilities {
@@ -189,6 +209,8 @@ pub struct TeamDevice<P: OpenMlsProvider = OpenMlsRustCrypto> {
     pending: Option<PendingCommit>,
     /// The MLS groups of the projects kept to some members (`project.rs`).
     pub(crate) projects: BTreeMap<ProjectId, crate::project::ProjectGroup>,
+    /// The anchors this device holds, by their public half (`anchor.rs`).
+    anchors: BTreeMap<Vec<u8>, Anchor>,
 }
 
 impl TeamDevice<OpenMlsRustCrypto> {
@@ -212,10 +234,17 @@ impl TeamDevice<OpenMlsRustCrypto> {
     /// [`TeamDevice::recover_with`], in memory.
     pub fn recover(
         words: &str,
+        team_words: &str,
         wrap: &RecoveryWrap,
         group_id: &[u8],
     ) -> Result<(Self, Publication), Error> {
-        Self::recover_with(OpenMlsRustCrypto::default(), words, wrap, group_id)
+        Self::recover_with(
+            OpenMlsRustCrypto::default(),
+            words,
+            team_words,
+            wrap,
+            group_id,
+        )
     }
 }
 
@@ -244,6 +273,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             removed: false,
             pending: None,
             projects: BTreeMap::new(),
+            anchors: BTreeMap::new(),
         }
     }
 
@@ -286,6 +316,9 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             device.group = Some(group);
         }
         device.load_projects(&state.projects)?;
+        for saved in &state.anchors {
+            device.keep_anchor(Anchor::from_seed(saved.0));
+        }
         Ok(device)
     }
 
@@ -301,6 +334,11 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             removed: self.removed,
             pending: self.pending.clone(),
             projects: self.saved_projects(),
+            anchors: self
+                .anchors
+                .values()
+                .map(|a| SavedAnchor(*a.seed()))
+                .collect(),
         }
     }
 
@@ -408,9 +446,14 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
     pub fn create_team(
         &mut self,
         created_at: u64,
-        escrow: Option<EscrowPublic>,
+        escrow: Option<EscrowTeamHalf>,
     ) -> Result<(RecoveryKey, Publication), Error> {
         let recovery = RecoveryKey::generate(self.provider.rand())?;
+        self.keep_anchor(recovery.anchor());
+        let escrow = escrow.map(|half| {
+            self.keep_anchor(half.anchor);
+            half.public
+        });
         let roster = Roster {
             genesis: Genesis {
                 owner: self.identity.member,
@@ -442,7 +485,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         Ok((
             recovery,
             Publication {
-                recovery: Some(recovery_wrap),
+                recovery: recovery_wrap,
                 escrow: escrow_wrap,
                 ..Default::default()
             },
@@ -486,23 +529,182 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         Ok(record)
     }
 
-    /// The recovery wrap of an epoch, and the escrow wrap when the roster has an escrow key.
-    fn wraps(&self, record: &EpochRecord) -> Result<(RecoveryWrap, Option<EscrowWrap>), Error> {
+    /// The recovery wrap of an epoch, and the escrow wrap when the roster has an escrow key: made by an
+    /// administrator's device that holds the roster's anchors (SR2-09), none otherwise (a member's commit leaves the
+    /// wraps of its epoch to an administrator, [`Self::current_wraps`]).
+    fn wraps(
+        &self,
+        record: &EpochRecord,
+    ) -> Result<(Option<RecoveryWrap>, Option<EscrowWrap>), Error> {
+        if !self.is_admin()? {
+            return Ok((None, None));
+        }
         let group = self.group()?;
         let roster = self.roster()?;
         let crypto = self.provider.crypto();
         let group_id = group.group_id().as_slice();
-        let group_info = encode(
-            &group
-                .export_group_info(crypto, &self.signer, true)
-                .map_err(mls)?,
-        )?;
-        let recovery = RecoveryWrap::seal(crypto, &roster.recovery, group_id, record, group_info)?;
-        let escrow = match &roster.escrow {
-            Some(escrow) => Some(EscrowWrap::seal(crypto, escrow, group_id, record)?),
+        let team = TeamFingerprint::of(group_id, &roster.genesis);
+        let escrow_anchor = roster
+            .escrow
+            .as_ref()
+            .and_then(|e| self.anchor_of(&e.anchor_key));
+        let recovery = match self.anchor_of(&roster.recovery.anchor_key) {
+            Some(anchor) => {
+                let group_info = encode(
+                    &group
+                        .export_group_info(crypto, &self.signer, true)
+                        .map_err(mls)?,
+                )?;
+                let by = WrapAuthor {
+                    group_id,
+                    team,
+                    leaf: &self.signer,
+                    anchor,
+                };
+                Some(RecoveryWrap::seal(
+                    crypto,
+                    &roster.recovery,
+                    &by,
+                    record,
+                    group_info,
+                    escrow_anchor,
+                )?)
+            }
             None => None,
         };
+        let escrow = match (&roster.escrow, escrow_anchor) {
+            (Some(escrow), Some(anchor)) => {
+                let by = WrapAuthor {
+                    group_id,
+                    team,
+                    leaf: &self.signer,
+                    anchor,
+                };
+                Some(EscrowWrap::seal(crypto, escrow, &by, record, &roster)?)
+            }
+            _ => None,
+        };
         Ok((recovery, escrow))
+    }
+
+    /// The wraps of the current epoch, for an administrator's device to write them when the commit that made the
+    /// epoch did not (a member's).
+    pub fn current_wraps(&self) -> Result<Publication, Error> {
+        let record = self.current_record()?.clone();
+        let (recovery, escrow) = self.wraps(&record)?;
+        Ok(Publication {
+            recovery,
+            escrow,
+            ..Default::default()
+        })
+    }
+
+    fn anchor_of(&self, public: &[u8]) -> Option<&Anchor> {
+        if public.is_empty() {
+            return None;
+        }
+        self.anchors.get(public)
+    }
+
+    /// Keeps an anchor (made here, or given by a grant): only the ones the roster names sign anything.
+    pub fn keep_anchor(&mut self, anchor: Anchor) {
+        if self.anchors.len() >= MAX_ANCHORS {
+            if let Ok(roster) = self.roster() {
+                let current: BTreeSet<Vec<u8>> = std::iter::once(roster.recovery.anchor_key)
+                    .chain(roster.escrow.map(|e| e.anchor_key))
+                    .collect();
+                self.anchors.retain(|k, _| current.contains(k));
+            }
+        }
+        self.anchors.insert(anchor.public(), anchor);
+    }
+
+    /// Whether this device holds the anchor of this public half.
+    pub fn holds_anchor(&self, public: &[u8]) -> bool {
+        self.anchor_of(public).is_some()
+    }
+
+    /// Whether a recovery wrap read in the stream is signed by the anchor of the current roster, for this team.
+    pub fn recovery_wrap_is_anchored(&self, wrap: &RecoveryWrap) -> Result<bool, Error> {
+        let roster = self.roster()?;
+        let group_id = self.group_id()?;
+        let team = TeamFingerprint::of(&group_id, &roster.genesis);
+        Ok(wrap.is_anchored(&group_id, &team, &roster.recovery.anchor_key))
+    }
+
+    /// Whether an escrow wrap read in the stream is signed by the escrow anchor of the current roster.
+    pub fn escrow_wrap_is_anchored(&self, wrap: &EscrowWrap) -> Result<bool, Error> {
+        let roster = self.roster()?;
+        let Some(escrow) = &roster.escrow else {
+            return Ok(false);
+        };
+        let group_id = self.group_id()?;
+        let team = TeamFingerprint::of(&group_id, &roster.genesis);
+        Ok(wrap.is_anchored(&group_id, &team, &escrow.anchor_key))
+    }
+
+    /// The anchors of the current roster this device holds, sealed for each administrator's device of the group
+    /// that `given` (device, anchor's public half) does not name yet. A member's device gives none.
+    pub fn anchor_grants(
+        &self,
+        given: &BTreeSet<([u8; 16], Vec<u8>)>,
+    ) -> Result<Vec<AnchorGrant>, Error> {
+        if !self.is_admin()? {
+            return Ok(Vec::new());
+        }
+        let roster = self.roster()?;
+        let group = self.group()?;
+        let group_id = group.group_id().as_slice();
+        let anchors: Vec<&Anchor> = std::iter::once(roster.recovery.anchor_key.as_slice())
+            .chain(roster.escrow.as_ref().map(|e| e.anchor_key.as_slice()))
+            .filter_map(|k| self.anchor_of(k))
+            .collect();
+        let mut grants = Vec::new();
+        for m in group.members() {
+            let Ok(identity) = Identity::from_credential(&m.credential) else {
+                continue;
+            };
+            if identity == self.identity
+                || identity.kind != DeviceKind::Device
+                || roster.role(&identity.member) != Some(Role::Admin)
+            {
+                continue;
+            }
+            for anchor in &anchors {
+                if given.contains(&(identity.device.0, anchor.public())) {
+                    continue;
+                }
+                grants.push(AnchorGrant::seal(
+                    self.provider.crypto(),
+                    group_id,
+                    identity.device,
+                    &m.signature_key,
+                    anchor,
+                )?);
+            }
+        }
+        Ok(grants)
+    }
+
+    /// Takes a grant for this device: `leaf_seed` is the seed of this device's leaf key (the client's keychain
+    /// holds it). True when it gave an anchor this device did not hold.
+    pub fn take_anchor(
+        &mut self,
+        grant: &AnchorGrant,
+        leaf_seed: &[u8; 32],
+    ) -> Result<bool, Error> {
+        if grant.device != self.identity.device.0 || self.holds_anchor(&grant.anchor) {
+            return Ok(false);
+        }
+        let own = ed25519_dalek::SigningKey::from_bytes(leaf_seed)
+            .verifying_key()
+            .to_bytes();
+        if own.as_slice() != self.signer.public() {
+            return Err(Error::BadSignature);
+        }
+        let anchor = grant.open(self.provider.crypto(), &self.group_id()?, leaf_seed)?;
+        self.keep_anchor(anchor);
+        Ok(true)
     }
 
     // === Commits ===
@@ -692,7 +894,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             commit: None,
             welcome,
             history: Some(history),
-            recovery: Some(recovery),
+            recovery,
             escrow,
         })
     }
@@ -766,14 +968,21 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
     }
 
     /// Sets or clears the organisation's escrow key. Every member sees it.
-    pub fn set_escrow(&mut self, escrow: Option<EscrowPublic>) -> Result<Publication, Error> {
+    pub fn set_escrow(&mut self, escrow: Option<EscrowTeamHalf>) -> Result<Publication, Error> {
+        let escrow = escrow.map(|half| {
+            self.keep_anchor(half.anchor);
+            half.public
+        });
         self.commit_now(Change::SetEscrow(escrow))
     }
 
     /// Puts a new recovery key in place of the old one (after a recovery, or when the words may have leaked), and
     /// removes the old recovery leaf if it is in the group.
-    pub fn replace_recovery(&mut self, recovery: RecoveryPublic) -> Result<Publication, Error> {
-        self.commit_now(Change::ReplaceRecovery(recovery))
+    pub fn replace_recovery(&mut self, recovery: &RecoveryKey) -> Result<Publication, Error> {
+        self.keep_anchor(recovery.anchor());
+        self.commit_now(Change::ReplaceRecovery(
+            recovery.public(self.provider.crypto())?,
+        ))
     }
 
     /// Processes a commit of the server's log: MLS checks it, then the team's rules (`policy.rs`), then it is merged.
@@ -1200,18 +1409,34 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
 
     /// The recovery key comes back: its words open the last recovery wrap, and it joins the group by an external
     /// commit, as the recovery leaf, an administrator. It then invites the new devices.
+    ///
+    /// Before anything joins (SR2-09): the wrap must be signed by the anchor the words give, for the team whose six
+    /// words `team_words` are (typed from the rescue sheet, never read from the server); its GroupInfo must be of the
+    /// same group and epoch, its roster must give that fingerprint and hold this recovery key and its anchor, and the
+    /// leaf that signed the wrap must be an administrator's in it.
     pub fn recover_with(
         provider: P,
         words: &str,
+        team_words: &str,
         wrap: &RecoveryWrap,
         group_id: &[u8],
     ) -> Result<(Self, Publication), Error> {
         let key = RecoveryKey::from_words(words)?;
-        let (previous, group_info) = wrap.open(provider.crypto(), &key, group_id)?;
-        let group_info = match decode(&group_info)?.extract() {
+        let team = TeamFingerprint(wrap.signed.team);
+        if !team.matches_words(team_words) {
+            return Err(Error::OtherTeam);
+        }
+        let opened = wrap.open(provider.crypto(), &key, group_id)?;
+        let group_info = match decode(&opened.group_info)?.extract() {
             MlsMessageBodyIn::GroupInfo(gi) => gi,
             _ => return Err(Error::Encoding("a recovery wrap holds a GroupInfo".into())),
         };
+        if group_info.group_id().as_slice() != group_id
+            || group_info.epoch().as_u64() != wrap.epoch
+            || opened.record.epoch != wrap.epoch
+        {
+            return Err(Error::Unanchored);
+        }
         let mut device = Self::with_identity(provider, key.signature_keys(), key.identity());
         let (group, bundle) = MlsGroup::external_commit_builder()
             .with_config(join_config())
@@ -1233,6 +1458,27 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             .map_err(mls)?
             .finalize(&device.provider)
             .map_err(mls)?;
+        // The GroupInfo's own roster and leaves (an external commit changes neither the roster nor the other
+        // leaves; this device's own leaf is left out below). Nothing has gone to the server yet.
+        let roster = Roster::from_extensions(group.extensions())?;
+        if TeamFingerprint::of(group_id, &roster.genesis) != team {
+            return Err(Error::OtherTeam);
+        }
+        if roster.recovery.signature_key != key.signature_keys().to_public_vec()
+            || roster.recovery.anchor_key != key.anchor().public()
+        {
+            return Err(Error::Unanchored);
+        }
+        let leaves: Vec<(Identity, Vec<u8>)> = group
+            .members()
+            .filter_map(|m| {
+                Identity::from_credential(&m.credential)
+                    .ok()
+                    .map(|i| (i, m.signature_key))
+            })
+            .filter(|(i, _)| *i != device.identity)
+            .collect();
+        admin_signed(&roster, &leaves, &wrap.signed.signer)?;
         let commit = encode(bundle.commit())?;
         device.group = Some(group);
         device
@@ -1241,6 +1487,11 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             .expect("set above")
             .merge_pending_commit(&device.provider)
             .map_err(mls)?;
+        device.keep_anchor(key.anchor());
+        if let Some(anchor) = opened.escrow_anchor {
+            device.keep_anchor(anchor);
+        }
+        let previous = opened.record.clone();
         let from_epoch = previous.epoch;
         device.records.insert(previous.epoch, previous.clone());
         let record = device.enter_epoch()?;
@@ -1257,7 +1508,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 commit: Some((from_epoch, commit)),
                 welcome: None,
                 history: Some(history),
-                recovery: Some(recovery),
+                recovery,
                 escrow,
             },
         ))

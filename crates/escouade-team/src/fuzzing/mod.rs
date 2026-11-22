@@ -195,7 +195,7 @@ impl World {
             EscrowKey::generate(provider.crypto(), provider.rand(), "Org").expect("an escrow");
         let mut alice = TeamDevice::new(member(1)).expect("a device");
         let (recovery, _) = alice
-            .create_team(NOW, Some(escrow.public()))
+            .create_team(NOW, Some(escrow.team_half()))
             .expect("a team");
         let mut bob = join(&mut alice, member(2), &mut []);
         let p = alice.rotate().expect("epoch 2");
@@ -254,6 +254,7 @@ fn mutate(roster: &Roster, op: u8, data: &mut impl Iterator<Item = u8>) -> Vec<u
             r.escrow = Some(EscrowPublic {
                 hpke_key: vec![data.next().unwrap_or(0); 32],
                 holder: "x".into(),
+                anchor_key: vec![data.next().unwrap_or(0); 32],
             })
         }
         5 => r.recovery.signature_key = vec![data.next().unwrap_or(0); 32],
@@ -729,11 +730,11 @@ mod tests {
         });
         // envelope: the recovery wrap of the vectors, the escrow key's texts.
         write("envelope", "vector-recovery-wrap", &wire::encode(&wrap));
-        let (public, secret) = crate::escrow::new_pair("Org").unwrap();
+        let (half, secret) = crate::escrow::new_pair("Org").unwrap();
         write(
             "envelope",
-            "escrow-public",
-            crate::escrow::public_text(&public).as_bytes(),
+            "escrow-team",
+            crate::escrow::team_text(&half).as_bytes(),
         );
         write("envelope", "escrow-secret", secret.as_bytes());
         write("envelope", "vector-record", &record.to_bytes());

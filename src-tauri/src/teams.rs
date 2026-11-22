@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use escouade_team::crypto::invite::{InvitationError, InviteLink, DEFAULT_LIFETIME};
-use escouade_team::crypto::roster::EscrowPublic;
+use escouade_team::crypto::EscrowTeamHalf;
 use escouade_team::crypto::{MemberId, Purpose, RecoveryKey, Role};
 use escouade_team::pairing::{PairCode, Pairing};
 use escouade_team::team::{InvitationInfo, Invited, OWN_DEVICE_LIFETIME};
@@ -217,7 +217,9 @@ pub fn say(e: &TeamError) -> String {
         TeamError::WrongCode => "Le code ne correspond pas. Un code ne sert qu’à un essai : demandes-en un nouveau sur l’autre appareil.".into(),
         TeamError::CodeTried => "Ce code a déjà eu son essai : demandes-en un nouveau sur l’autre appareil.".into(),
         TeamError::CodeGone => "Ce code n’existe plus (10 minutes passées, ou il a servi) : demandes-en un nouveau.".into(),
-        TeamError::NoRecoveryWrap => "Le serveur ne garde aucune clé de secours de cette équipe.".into(),
+        TeamError::NoRecoveryWrap => "Le serveur ne garde aucune enveloppe de secours signée par un administrateur de l’équipe pour ces mots. Une feuille de secours d’avant les six mots de l’équipe ne sert plus : imprimes-en une neuve depuis un appareil administrateur.".into(),
+        TeamError::Crypto(CryptoError::OtherTeam) => "Ces six mots ne sont pas ceux de l’équipe : recopie-les depuis la feuille de secours, sous les 24 mots.".into(),
+        TeamError::Crypto(CryptoError::Unanchored) => "Cette enveloppe de secours n’est pas signée par un administrateur de l’équipe : elle est écartée.".into(),
         TeamError::Crypto(CryptoError::Invitation(InvitationError::OldForm)) => OLD_FORM.into(),
         TeamError::Crypto(CryptoError::Words) => "Ces mots ne sont pas une clé de secours : vérifie-les (24 mots, dans l’ordre).".into(),
         TeamError::Crypto(CryptoError::NotAdmin) => "Seul un administrateur de l’équipe peut le faire.".into(),
@@ -318,6 +320,12 @@ pub struct TeamView {
     pub recovery_confirmed: bool,
     /// The recovery words are still held, to show (until they are confirmed).
     pub words_pending: bool,
+    /// The team's recovery key was made before its anchor (SR2-09): no wrap of it is signed, so it brings nothing
+    /// back. An administrator makes a new one, and prints the new sheet.
+    pub recovery_outdated: bool,
+    /// Someone who was an administrator under the current recovery key no longer is: they may still hold its anchor,
+    /// so an administrator makes a new key and prints the new sheet.
+    pub recovery_stale: bool,
     pub alarm: Option<AlarmView>,
     pub invitations: Vec<InvitationView>,
     pub last_error: Option<String>,
@@ -713,6 +721,8 @@ impl Teams {
             keys_in_file: team.is_some_and(|t| matches!(t.key_place(), KeyPlace::File(_))),
             recovery_confirmed: known.recovery_confirmed,
             words_pending,
+            recovery_outdated: false,
+            recovery_stale: false,
             alarm: known.alarm.clone(),
             invitations: Vec::new(),
             last_error: known.last_error.clone(),
@@ -729,6 +739,8 @@ impl Teams {
             };
             view.admins = roster.admins();
             view.members = roster.members.len();
+            view.recovery_outdated = roster.recovery.anchor_key.is_empty();
+            view.recovery_stale = team.recovery_stale();
             view.escrow = roster.escrow.map(|e| e.holder);
         }
         view.epoch = team.epoch().ok();
@@ -768,11 +780,11 @@ impl Teams {
     /// A new escrow key pair for the organisation (C7-B): its public half for the team, its secret to give to whoever
     /// holds it, shown once.
     pub fn escrow_new(&self, holder: &str) -> Result<EscrowPair, String> {
-        let (public, secret) = escouade_team::escrow::new_pair(holder).map_err(|e| say(&e))?;
+        let (half, secret) = escouade_team::escrow::new_pair(holder).map_err(|e| say(&e))?;
         Ok(EscrowPair {
-            public: escouade_team::escrow::public_text(&public),
+            public: escouade_team::escrow::team_text(&half).to_string(),
             secret: secret.to_string(),
-            holder: public.holder,
+            holder: half.public.holder,
         })
     }
 
@@ -789,9 +801,9 @@ impl Teams {
         if token.is_empty() {
             return Err("Donne le jeton que `escouade-team-server init` a affiché.".into());
         }
-        let escrow: Option<EscrowPublic> = match escrow {
-            Some((public, holder)) => {
-                Some(escouade_team::escrow::parse_public(&public, &holder).map_err(|e| say(&e))?)
+        let escrow: Option<EscrowTeamHalf> = match escrow {
+            Some((half, holder)) => {
+                Some(escouade_team::escrow::parse_team(&half, &holder).map_err(|e| say(&e))?)
             }
             None => None,
         };
@@ -1007,19 +1019,22 @@ impl Teams {
     // === Recovery ===
 
     /// The holder of the recovery key brings the team back on this device (every administrator lost theirs): the
-    /// server's address, the operator's token (`escouade-team-server recovery-token`) and the 24 words. This device
-    /// becomes an administrator, and the team gets a new recovery key, whose 24 words are shown once.
+    /// server's address, the operator's token (`escouade-team-server recovery-token`), the 24 words and the six words
+    /// of the team, both from the rescue sheet (SR2-09: the team's anchor is the words' and the six words', never the
+    /// server's). This device becomes an administrator, and the team gets a new recovery key, whose 24 words are
+    /// shown once.
     pub async fn recover(
         &self,
         server: &str,
         token: &str,
         words: &str,
+        team_words: &str,
         name: &str,
     ) -> Result<Created, String> {
         let (base, host) = address(server)?;
         let rescue = self.rescue_setup(&base, &host)?;
         let setup = self.setup(&base, &host)?;
-        let (team, key) = Team::recover_onto(rescue, setup, token.trim(), words, now())
+        let (team, key) = Team::recover_onto(rescue, setup, token.trim(), words, team_words, now())
             .await
             .map_err(|e| say(&e))?;
         let id = hex::encode(team.id());

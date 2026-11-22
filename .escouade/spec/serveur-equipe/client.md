@@ -2,8 +2,8 @@
 title: "Le client de l'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
-tickets: ["ESC-458","ESC-461","ESC-466","ESC-471"]
-decisions: [168,173,178]
+tickets: ["ESC-458","ESC-461","ESC-466","ESC-471","ESC-632"]
+decisions: [168,173,178,288]
 compared: null
 ---
 
@@ -55,6 +55,13 @@ Ce que fait Escouade, sur chaque appareil, pour être dans une équipe d'un serv
 
 - Un nouvel appareil lit tout le contenu d'avant son arrivée, par la chaîne des liens d'historique.
 - Si le lien d'une époque manque (son auteur s'est arrêté avant de l'envoyer), tout membre qui tient cette époque et la précédente l'écrit.
+
+## La récupération et le séquestre, ancrés sur l'équipe
+
+- **L'ancre** : une clé de signature tirée des 24 mots de la clé de secours, que seuls les appareils administrateurs tiennent. L'appareil qui fait les mots la garde dans son état chiffré, jamais les mots ; un appareil administrateur en ligne la donne à chaque autre appareil administrateur, scellée à la clé de sa feuille, dans le flux d'équipe. Un membre ne la reçoit jamais, le serveur ne voit qu'un chiffré. Sa moitié publique est au registre. Le séquestre a la sienne, tirée de sa moitié secrète, qui vient avec la moitié pour l'équipe.
+- **Les enveloppes** de secours et de séquestre de chaque époque portent l'empreinte de l'équipe et deux signatures : celle de la feuille de l'appareil administrateur qui les a faites, et celle de l'ancre. Le commit d'un membre n'en fait pas : un appareil administrateur en ligne écrit celles de l'époque. L'enveloppe de secours garde aussi l'ancre du séquestre, pour que l'équipe récupérée continue de lui sceller.
+- **La récupération** vérifie l'ancre (refaite depuis les mots) et les six mots tapés depuis la feuille de secours ; puis, sur l'état du groupe de l'enveloppe (même groupe, même époque), son empreinte, sa clé de secours, son ancre, et que la feuille qui a signé y est celle d'un administrateur. Seulement ensuite elle entre. Elle essaie les enveloppes ancrées de la plus récente à la plus ancienne : une qui ne passe pas ne cache pas une bonne. Voir « Entrer dans une équipe », Récupérer une équipe.
+- **Ce qui reste** : un ancien administrateur garde l'ancre des mots de son temps. Retiré, son appareil révoqué n'écrit plus dans le flux et il lui faudrait le serveur avec lui ; redevenu membre, il y écrit encore. Chaque appareil retient donc qui a été administrateur sous la clé de secours en vigueur, et la carte de l'équipe dit à ses administrateurs d'en faire une nouvelle dès que l'un d'eux a quitté son rôle. Et après le départ du dernier administrateur, le commit d'un membre (un appareil ajouté, « Changer les clés ») laisse l'équipe sans enveloppe de sa dernière époque : la récupération n'est alors plus possible.
 
 ## Le serveur qui ment
 

@@ -194,7 +194,7 @@ If every administrator of a team loses their devices, its owner keeps the 24-wor
 escouade-team-server recovery-token --team <id> --data /var/lib/escouade-team-server
 ```
 
-The team’s id (32 hexadecimal digits) is shown in Escouade, when the team is created and on its card (“Team id”). The token enrolls one device as an administrator of the server; it gives no key: the 24 words give them. The holder types them in “Recover a team”, with the server’s address and the token.
+The team’s id (32 hexadecimal digits) is shown in Escouade, when the team is created and on its card (“Team id”). The token enrolls one device as an administrator of the server; it gives no key: the 24 words give them. The holder types them in “Recover a team”, with the team’s six words from the same sheet, the server’s address and the token.
 
 With Docker: `docker compose run --rm team-server recovery-token --team <id>`.
 

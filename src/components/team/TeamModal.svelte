@@ -116,6 +116,7 @@
     <RecoveryWords
       {teamId}
       {words}
+      fingerprint={(team ?? made)?.fingerprint ?? []}
       ondone={() => {
         words = [];
         go(fromCreate ? 'created' : 'home');

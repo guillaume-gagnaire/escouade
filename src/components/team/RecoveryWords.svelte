@@ -1,11 +1,13 @@
 <script lang="ts">
-  // The recovery key (C7-B): its 24 words shown once, then three of them typed back to prove they were written down.
+  // The recovery key (C7-B): its 24 words shown once, with the team's six words for the rescue sheet (SR2-09: the
+  // recovery asks for both), then three of the 24 typed back to prove they were written down.
   import { untrack } from 'svelte';
   import { t } from '../../lib/i18n';
   import { pickPositions } from '../../lib/team-words';
   import { errorText, teams, teamsApi } from '../../lib/teams.svelte';
+  import SixWords from './SixWords.svelte';
 
-  let { teamId, words, ondone }: { teamId: string; words: string[]; ondone: () => void } = $props();
+  let { teamId, words, fingerprint, ondone }: { teamId: string; words: string[]; fingerprint: string[]; ondone: () => void } = $props();
 
   let confirming = $state(false);
   let noted = $state(false);
@@ -41,6 +43,9 @@
   <ol class="grid mono" aria-label={t('team.title.words')}>
     {#each words as w, i (i)}<li><span class="n">{i + 1}</span><span class="w">{w}</span></li>{/each}
   </ol>
+  {#if fingerprint.length}
+    <SixWords words={fingerprint} label={t('team.words.team')} hint={t('team.words.teamHint')} />
+  {/if}
   <p class="hint">{t('team.words.where')}</p>
   <label class="check"><input type="checkbox" bind:checked={noted} /><span>{t('team.words.noted')}</span></label>
   <div class="foot">

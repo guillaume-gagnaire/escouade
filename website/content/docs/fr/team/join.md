@@ -60,7 +60,7 @@ Chaque équipe a sa carte dans la fenêtre des équipes :
 
 Celui qui crée l’équipe en devient le propriétaire et reçoit sa **clé de secours** : 24 mots, montrés une seule fois, dont il retape trois. Si tous les administrateurs perdent leurs appareils, ces mots et un jeton que donne l’hébergeur du serveur ramènent l’équipe (« Récupérer une équipe »).
 
-- Note-les à la création : imprime-les, ou garde-les dans le gestionnaire de mots de passe de l’organisation. Jamais dans un message.
+- Note-les à la création avec les six mots de l’équipe, montrés en dessous : imprime-les, ou garde-les dans le gestionnaire de mots de passe de l’organisation. Jamais dans un message. La récupération demande les 24 mots et les six mots.
 - Tant qu’ils ne sont pas confirmés, la carte le dit. Si l’app a été fermée avant, les mots sont perdus : « Nouvelle clé de secours » en fait une autre.
 - Une récupération donne une nouvelle clé de secours ; l’ancienne n’ouvre plus rien.
 

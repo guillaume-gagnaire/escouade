@@ -40,6 +40,10 @@ export interface TeamView {
   keysInFile: boolean;
   recoveryConfirmed: boolean;
   wordsPending: boolean;
+  /** The recovery key was made before its anchor (SR2-09): it brings nothing back, a new one is to make. */
+  recoveryOutdated: boolean;
+  /** An administrator under the current recovery key no longer is one: a new key and sheet are advised. */
+  recoveryStale: boolean;
   alarm: AlarmView | null;
   invitations: InvitationView[];
   lastError: string | null;
@@ -95,7 +99,8 @@ export const teamsApi = {
   pairStep: (team: string) => invoke<PairView>('team_pair_step', { team }),
   pairCancel: (team: string) => invoke<void>('team_pair_cancel', { team }),
   pairJoin: (server: string, code: string, name: string) => invoke<TeamView>('team_pair_join', { server, code, name }),
-  recover: (server: string, token: string, words: string, name: string) => invoke<Created>('team_recover', { server, token, words, name }),
+  recover: (server: string, token: string, words: string, teamWords: string, name: string) =>
+    invoke<Created>('team_recover', { server, token, words, teamWords, name }),
   sync: (team: string) => invoke<TeamView>('team_sync', { team }),
   forget: (team: string) => invoke<void>('team_forget', { team }),
 };

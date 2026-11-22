@@ -26,6 +26,8 @@ function team(over: Partial<TeamView> = {}): TeamView {
     keysInFile: false,
     recoveryConfirmed: true,
     wordsPending: false,
+    recoveryOutdated: false,
+    recoveryStale: false,
     alarm: null,
     invitations: [],
     lastError: null,
@@ -108,13 +110,16 @@ describe('the screens of the team server (TS-3)', () => {
       escrowPublic: null,
       escrowHolder: null,
     });
-    // The words, numbered.
+    // The words, numbered, and the team's six words for the same sheet (SR2-09: the recovery asks for both).
     const grid = await screen.findByRole('list', { name: 'La clé de secours' });
     expect(within(grid).getAllByRole('listitem')).toHaveLength(24);
     expect(within(grid).getByText('mot24')).toBeInTheDocument();
+    const sheet = screen.getByRole('group', { name: 'Les six mots de l’équipe' });
+    for (const w of SIX) expect(within(sheet).getByText(w)).toBeInTheDocument();
+    expect(within(sheet).getByText(/la récupération les demande aussi/)).toBeInTheDocument();
     const next = screen.getByRole('button', { name: 'Continuer' });
     expect(next).toBeDisabled();
-    await userEvent.click(screen.getByLabelText('J’ai noté les 24 mots'));
+    await userEvent.click(screen.getByLabelText('J’ai noté les 24 mots et les six mots de l’équipe'));
     await userEvent.click(next);
     // Three words asked, by their numbers: a wrong one is refused.
     const inputs = screen.getAllByLabelText(/Mot n° \d+/);
@@ -144,7 +149,7 @@ describe('the screens of the team server (TS-3)', () => {
     const backend = fakeBackend({
       team_list: () => [],
       team_escrow_new: (a: { holder: string }) => ({
-        public: 'escouade-escrow-public:1:PUB',
+        public: 'escouade-escrow-team:2:PUB.ANC',
         secret: 'escouade-escrow-secret:1:SEC',
         holder: a.holder,
       }),
@@ -159,9 +164,12 @@ describe('the screens of the team server (TS-3)', () => {
     await userEvent.type(screen.getByLabelText('Qui la détient'), 'le RSSI');
     await userEvent.click(screen.getByRole('button', { name: 'Créer la paire ici' }));
     expect(await screen.findByText('escouade-escrow-secret:1:SEC')).toBeInTheDocument();
-    expect(screen.getByLabelText('Sa moitié publique')).toHaveValue('escouade-escrow-public:1:PUB');
+    expect(screen.getByLabelText('Sa moitié pour l’équipe')).toHaveValue('escouade-escrow-team:2:PUB.ANC');
     await userEvent.click(screen.getByRole('button', { name: 'Créer l’équipe' }));
-    expect(backend.called('team_create')[0].args).toMatchObject({ escrowPublic: 'escouade-escrow-public:1:PUB', escrowHolder: 'le RSSI' });
+    expect(backend.called('team_create')[0].args).toMatchObject({
+      escrowPublic: 'escouade-escrow-team:2:PUB.ANC',
+      escrowHolder: 'le RSSI',
+    });
   });
 
   it('invites: a role, a life, one use; the link to send and its QR code', async () => {
@@ -285,7 +293,7 @@ describe('the screens of the team server (TS-3)', () => {
     expect(backend.called('team_pair_join')[0].args).toEqual({ server: 'team.acme.fr', code: 'K7Q4-M2XZ', name: '' });
   });
 
-  it('recovers a team by its 24 words and the operator’s token, then shows the new key', async () => {
+  it('recovers a team by its 24 words, its six words and the operator’s token, then shows the new key', async () => {
     const backend = fakeBackend({
       team_list: () => [],
       team_recover: () => ({ team: team({ members: 3, admins: 2 }), words: WORDS }),
@@ -300,14 +308,52 @@ describe('the screens of the team server (TS-3)', () => {
     await userEvent.paste(WORDS.slice(0, 23).join(' '));
     expect(submit).toBeDisabled();
     await userEvent.paste(' MOT24');
+    // The team's six words, from the sheet: the recovery waits for all six.
+    expect(submit).toBeDisabled();
+    const six = screen.getByLabelText(/Les six mots de l’équipe/);
+    await fill(six, 'Alpha bravo charlie delta echo');
+    expect(submit).toBeDisabled();
+    await fill(six, 'Alpha  bravo charlie delta echo FOXTROT');
     await userEvent.click(submit);
     expect(backend.called('team_recover')[0].args).toEqual({
       server: 'team.acme.fr',
       token: 'jeton-de-l-hebergeur',
       words: [...WORDS.slice(0, 23), 'mot24'].join(' '),
+      teamWords: SIX.join(' '),
       name: '',
     });
     expect(await screen.findByRole('list', { name: 'La clé de secours' })).toBeInTheDocument();
+  });
+
+  it('tells a rescue sheet without the team’s six words as too old, and sends nothing', async () => {
+    const backend = fakeBackend({ team_list: () => [] });
+    render(TeamModal, { props: { step: 'recover' } });
+    await fill(screen.getByLabelText('Adresse du serveur'), 'team.acme.fr');
+    await fill(screen.getByLabelText(/Jeton de récupération/), 'jeton');
+    await fill(screen.getByLabelText(/Les 24 mots/), WORDS.join(' '));
+    await userEvent.click(screen.getByLabelText('Ma feuille n’a pas ces six mots'));
+    expect(screen.getByRole('note')).toHaveTextContent(/fais-y une nouvelle clé de secours/);
+    expect(screen.getByLabelText(/Les six mots de l’équipe/)).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Récupérer l’équipe' })).toBeDisabled();
+    expect(backend.called('team_recover')).toHaveLength(0);
+  });
+
+  it('asks an administrator for a new rescue sheet when the recovery key predates the six words', async () => {
+    fakeBackend({ team_list: () => [team({ recoveryOutdated: true })] });
+    render(TeamModal);
+    expect(await screen.findByText(/date d’avant les six mots de l’équipe/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nouvelle clé de secours' })).toBeInTheDocument();
+  });
+
+  it('advises a new rescue sheet once an administrator under the current one has left their role', async () => {
+    fakeBackend({
+      team_list: () => [team({ recoveryStale: true }), team({ id: 'ff', name: 'Autre', role: 'member', recoveryStale: true })],
+    });
+    render(TeamModal);
+    const own = await screen.findByRole('region', { name: 'ACME' });
+    expect(within(own).getByText(/Un administrateur a quitté son rôle/)).toBeInTheDocument();
+    // A member cannot make one: not told.
+    expect(within(screen.getByRole('region', { name: 'Autre' })).queryByText(/Un administrateur a quitté son rôle/)).toBeNull();
   });
 
   it('tells an invitation reused after its invitee', async () => {

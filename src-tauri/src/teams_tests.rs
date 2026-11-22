@@ -117,6 +117,10 @@ async fn two_data_folders_of_one_machine_a_team_an_invitation_and_its_admission(
     assert_eq!(created.team.role, "admin");
     assert_eq!(created.team.admins, 1);
     assert!(!created.team.recovery_confirmed && created.team.words_pending);
+    assert!(
+        !created.team.recovery_outdated,
+        "a new team's recovery key is anchored"
+    );
     let id = created.team.id.clone();
     // Three words typed back: a wrong one is refused, the right ones confirm and the words are let go.
     let w = &created.words;

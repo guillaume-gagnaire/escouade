@@ -194,7 +194,7 @@ Si tous les administrateurs d’une équipe perdent leurs appareils, son propri�
 escouade-team-server recovery-token --team <identifiant> --data /var/lib/escouade-team-server
 ```
 
-L’identifiant de l’équipe (32 chiffres hexadécimaux) est montré dans Escouade, à la création de l’équipe et sur sa carte (« Identifiant de l’équipe »). Le jeton inscrit un appareil comme administrateur du serveur ; il ne donne aucune clé : les 24 mots les donnent. Le détenteur les tape dans « Récupérer une équipe », avec l’adresse du serveur et le jeton.
+L’identifiant de l’équipe (32 chiffres hexadécimaux) est montré dans Escouade, à la création de l’équipe et sur sa carte (« Identifiant de l’équipe »). Le jeton inscrit un appareil comme administrateur du serveur ; il ne donne aucune clé : les 24 mots les donnent. Le détenteur les tape dans « Récupérer une équipe », avec les six mots de l’équipe de la même feuille, l’adresse du serveur et le jeton.
 
 Avec Docker : `docker compose run --rm team-server recovery-token --team <identifiant>`.
 

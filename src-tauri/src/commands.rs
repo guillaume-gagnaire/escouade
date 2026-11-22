@@ -5467,7 +5467,8 @@ pub async fn team_list(teams: TeamsState<'_>) -> Res<Vec<crate::teams::TeamView>
 }
 
 /// Creates a team: the server's address, the token of `escouade-team-server init`, a name, and the organisation's
-/// escrow key if any (its public half and who holds it). Gives the 24 words of the recovery key, shown once.
+/// escrow key if any (the team's half of it, `escouade-escrow-team:2:`, and who holds it). Gives the 24 words of the
+/// recovery key, shown once.
 #[tauri::command]
 pub async fn team_create(
     core: CoreState<'_>,
@@ -5491,7 +5492,8 @@ pub async fn team_create(
     Ok(created)
 }
 
-/// A new escrow key pair for the organisation: its public half, and its secret to give to whoever holds it.
+/// A new escrow key pair for the organisation: the team's half (its public key and the anchor of its wraps), and its
+/// secret to give to whoever holds it.
 #[tauri::command]
 pub fn team_escrow_new(teams: TeamsState<'_>, holder: String) -> Res<crate::teams::EscrowPair> {
     teams.escrow_new(&holder)
@@ -5575,16 +5577,20 @@ pub async fn team_pair_join(
     teams.pair_join(&server, &code, &name).await
 }
 
-/// Brings a team back by its recovery key: the server's address, the operator's token and the 24 words.
+/// Brings a team back by its recovery key: the server's address, the operator's token, the 24 words and the six words
+/// of the team (both from the rescue sheet).
 #[tauri::command]
 pub async fn team_recover(
     teams: TeamsState<'_>,
     server: String,
     token: String,
     words: String,
+    team_words: String,
     name: String,
 ) -> Res<crate::teams::Created> {
-    teams.recover(&server, &token, &words, &name).await
+    teams
+        .recover(&server, &token, &words, &team_words, &name)
+        .await
 }
 
 /// Reads the team's stream now (« Réessayer » under an alarm).

@@ -49,6 +49,11 @@ pub struct RecoveryPublic {
     /// The X25519 key the epochs are sealed to (HPKE), for it to join again.
     #[serde(with = "hex::serde")]
     pub hpke_key: Vec<u8>,
+    /// The public half of the recovery anchor (`anchor.rs`): every recovery wrap is signed by it. Drawn from the
+    /// words too, held by the administrators' devices alone. Empty for a key made before it (no wrap of it is
+    /// accepted: print a new rescue sheet).
+    #[serde(default, with = "hex::serde", skip_serializing_if = "Vec::is_empty")]
+    pub anchor_key: Vec<u8>,
 }
 
 /// The public half of the organisation's escrow key: every epoch's secrets are sealed to it, so the organisation can
@@ -59,6 +64,10 @@ pub struct EscrowPublic {
     pub hpke_key: Vec<u8>,
     /// Who holds it, as the administrator said it ("the CISO of ACME").
     pub holder: String,
+    /// The public half of the escrow anchor (`anchor.rs`), drawn from the escrow seed: every escrow wrap is signed
+    /// by it, and the organisation checks it with its own seed. Empty for a pair made before it (no wrap is made).
+    #[serde(default, with = "hex::serde", skip_serializing_if = "Vec::is_empty")]
+    pub anchor_key: Vec<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,6 +134,12 @@ impl TeamFingerprint {
         h.update(group_id);
         h.update(serde_json::to_vec(genesis).expect("a genesis always serializes"));
         Self(h.finalize().into())
+    }
+
+    /// Whether six words typed back (from the rescue sheet) are this fingerprint's: case and spaces do not matter.
+    pub fn matches_words(&self, typed: &str) -> bool {
+        let typed: Vec<String> = typed.split_whitespace().map(str::to_lowercase).collect();
+        typed.len() == 6 && typed.iter().zip(self.words()).all(|(a, b)| a == b)
     }
 
     /// The first 66 bits, as six words of the BIP-39 English list (11 bits each).

@@ -11,8 +11,9 @@ use openmls_traits::OpenMlsProvider;
 
 use crate::device::{capabilities, decode, encode};
 use crate::invite::{join_mac, InviteLink, JoinRequest, WelcomeDelivery, DEFAULT_LIFETIME};
+use crate::keys::EpochRecord;
 use crate::keys::{aead_open, expand, project_key};
-use crate::recovery::EscrowWrap;
+use crate::recovery::{EscrowWrap, RecoveryWrap};
 use crate::relay::Relay;
 use crate::roster::{Role, TeamFingerprint};
 use crate::*;
@@ -37,7 +38,7 @@ fn publish(relay: &mut Relay, publication: Publication) {
 }
 
 /// The owner creates the team.
-fn new_team(escrow: Option<roster::EscrowPublic>) -> (Relay, TeamDevice, RecoveryKey) {
+fn new_team(escrow: Option<EscrowTeamHalf>) -> (Relay, TeamDevice, RecoveryKey) {
     let mut relay = Relay::default();
     let mut owner = TeamDevice::new(member(1)).unwrap();
     let (recovery, publication) = owner.create_team(NOW, escrow).unwrap();
@@ -730,6 +731,8 @@ fn the_recovery_key_recovers_the_team() {
     publish(&mut relay, alice.rotate().unwrap());
     sync(&relay, &mut [&mut bob]);
     let group_id = alice.group_id().unwrap();
+    let team = alice.fingerprint().unwrap();
+    let six = team.words().join(" ");
     let lost_device = alice.identity().device;
     // Alice, the only administrator, loses her only device.
     drop(alice);
@@ -740,6 +743,7 @@ fn the_recovery_key_recovers_the_team() {
     assert!(matches!(
         TeamDevice::recover(
             &wrong.join(" "),
+            &six,
             relay.latest_recovery().unwrap(),
             &group_id
         ),
@@ -747,8 +751,13 @@ fn the_recovery_key_recovers_the_team() {
     ));
     // The 24 words, typed again (any case, any spaces).
     let typed = words.join("  ").to_uppercase();
-    let (mut rescue, publication) =
-        TeamDevice::recover(&typed, relay.latest_recovery().unwrap(), &group_id).unwrap();
+    let (mut rescue, publication) = TeamDevice::recover(
+        &typed,
+        &six.to_uppercase(),
+        relay.latest_recovery().unwrap(),
+        &group_id,
+    )
+    .unwrap();
     publish(&mut relay, publication);
     assert!(rescue.is_admin().unwrap());
     sync(&relay, &mut [&mut bob]);
@@ -769,12 +778,7 @@ fn the_recovery_key_recovers_the_team() {
     publish(&mut relay, alice2.remove_device(lost_device).unwrap());
     sync(&relay, &mut [&mut bob, &mut rescue]);
     let renewed = RecoveryKey::generate(OpenMlsRustCrypto::default().rand()).unwrap();
-    publish(
-        &mut relay,
-        alice2
-            .replace_recovery(renewed.public(alice2.crypto()).unwrap())
-            .unwrap(),
-    );
+    publish(&mut relay, alice2.replace_recovery(&renewed).unwrap());
     sync(&relay, &mut [&mut bob, &mut rescue]);
     assert!(rescue.is_removed());
     let after = alice2.seal(project(1), object(2), 1, b"after").unwrap();
@@ -784,16 +788,19 @@ fn the_recovery_key_recovers_the_team() {
     assert!(matches!(
         TeamDevice::recover(
             &words.join(" "),
+            &six,
             relay.latest_recovery().unwrap(),
             &group_id
         ),
-        Err(Error::Decrypt)
+        Err(Error::Unanchored)
     ));
-    let (_, stale) = TeamDevice::recover(&words.join(" "), &relay.recovery[&2], &group_id).unwrap();
+    let (_, stale) =
+        TeamDevice::recover(&words.join(" "), &six, &relay.recovery[&2], &group_id).unwrap();
     assert!(bob.process_commit(&stale.commit.unwrap().1).is_err());
     // The new words would.
     let (_, fresh) = TeamDevice::recover(
         &renewed.words().join(" "),
+        &six,
         relay.latest_recovery().unwrap(),
         &group_id,
     )
@@ -810,7 +817,7 @@ fn the_escrow_key_reads_everything_and_every_member_sees_it() {
         "the CISO of ACME",
     )
     .unwrap();
-    let (mut relay, mut alice, _) = new_team(Some(escrow.public()));
+    let (mut relay, mut alice, _) = new_team(Some(escrow.team_half()));
     let mut bob = join(
         &mut relay,
         &mut alice,
@@ -827,9 +834,10 @@ fn the_escrow_key_reads_everything_and_every_member_sees_it() {
 
     // The organisation opens the last wrap, walks the history back, and reads both.
     let group_id = alice.group_id().unwrap();
+    let team = alice.fingerprint().unwrap();
     let crypto = crypto_provider.crypto();
     let latest = escrow
-        .open(crypto, &group_id, relay.latest_escrow().unwrap())
+        .open(crypto, &team, &group_id, relay.latest_escrow().unwrap())
         .unwrap();
     let mut records = vec![latest.clone()];
     records.extend(history::walk_back(&group_id, &latest, 0, |e| relay.history_link(e)).unwrap());
@@ -852,7 +860,7 @@ fn the_escrow_key_reads_everything_and_every_member_sees_it() {
     // A wrap opened for one epoch is not one of another.
     let mut moved: EscrowWrap = relay.escrow[&last_wrapped].clone();
     moved.epoch = 0;
-    assert!(escrow.open(crypto, &group_id, &moved).is_err());
+    assert!(escrow.open(crypto, &team, &group_id, &moved).is_err());
 
     // A team without one has none.
     let (relay, alice, _) = new_team(None);
@@ -1514,4 +1522,353 @@ fn a_project_commit_out_of_the_rules_is_refused() {
         alice.project_process_commit(&p, &commit),
         Err(Error::Policy(_))
     ));
+}
+
+// === SR2-09: the recovery and the escrow anchored on the team ===
+
+/// A device whose leaf key is made of `seed` (the client keeps it in the keychain), to take an anchor's grant.
+fn device_of(who: MemberId, seed: u8) -> (TeamDevice, [u8; 32]) {
+    let seed = [seed; 32];
+    let public = ed25519_dalek::SigningKey::from_bytes(&seed)
+        .verifying_key()
+        .to_bytes()
+        .to_vec();
+    let signer =
+        SignatureKeyPair::from_raw(CIPHERSUITE.signature_algorithm(), seed.to_vec(), public);
+    let provider = OpenMlsRustCrypto::default();
+    let device = DeviceId::random(provider.rand()).unwrap();
+    let identity = Identity {
+        member: who,
+        device,
+        kind: DeviceKind::Device,
+    };
+    (TeamDevice::with_identity(provider, signer, identity), seed)
+}
+
+/// [`join`], for a device made by the test.
+fn join_as(
+    relay: &mut Relay,
+    admin: &mut TeamDevice,
+    purpose: Purpose,
+    mut device: TeamDevice,
+) -> TeamDevice {
+    let link = admin
+        .invite(purpose, NOW, DEFAULT_LIFETIME, SERVER)
+        .unwrap();
+    let link = InviteLink::parse(&link.to_url()).unwrap();
+    let request = device.request_join(&link).unwrap();
+    publish(relay, admin.admit(&request, NOW).unwrap());
+    device
+        .accept_welcome(&relay.welcomes[&link.id].clone())
+        .unwrap();
+    device
+}
+
+/// The GroupInfo of a device's current epoch, as a wrap holds it.
+fn group_info_of(device: &mut TeamDevice) -> Vec<u8> {
+    let (provider, signer, group) = device.mls();
+    encode(
+        &group
+            .export_group_info(provider.crypto(), signer, true)
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_recovery_follows_only_a_wrap_an_administrator_anchored_for_the_team() {
+    let (mut relay, mut alice, recovery) = new_team(None);
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let words = recovery.words().join(" ");
+    let group_id = alice.group_id().unwrap();
+    let team = alice.fingerprint().unwrap();
+    let six = team.words().join(" ");
+    let roster = alice.roster().unwrap();
+    let provider = OpenMlsRustCrypto::default();
+    let crypto = provider.crypto();
+    let record = alice.record(alice.epoch().unwrap()).unwrap().clone();
+
+    // Only an administrator's device holds the anchor.
+    assert!(!bob.holds_anchor(&roster.recovery.anchor_key));
+    assert!(alice.holds_anchor(&roster.recovery.anchor_key));
+    let legit = relay.latest_recovery().unwrap().clone();
+    assert!(bob.recovery_wrap_is_anchored(&legit).unwrap());
+
+    // A group of a member's own, with the team's id and genesis (so the same fingerprint), the team's recovery key,
+    // and the member as its administrator: its wrap is signed by an anchor that is not the words'.
+    let mut fake = TeamDevice::new(member(2)).unwrap();
+    let mut forged = roster.clone();
+    forged.members.insert(member(2), Role::Admin);
+    let made_up = Anchor::from_seed([0x66; 32]);
+    forged.recovery.anchor_key = made_up.public();
+    let group = MlsGroup::builder()
+        .with_group_id(openmls::prelude::GroupId::from_slice(&group_id))
+        .ciphersuite(CIPHERSUITE)
+        .with_wire_format_policy(MIXED_CIPHERTEXT_WIRE_FORMAT_POLICY)
+        .use_ratchet_tree_extension(true)
+        .with_group_context_extensions(forged.to_extensions().unwrap())
+        .with_capabilities(capabilities())
+        .build(&fake.provider, &fake.signer, fake.credential_with_key())
+        .unwrap();
+    fake.group = Some(group);
+    assert_eq!(fake.fingerprint().unwrap(), team);
+    let fake_epoch: EpochRecord = alice.record(0).unwrap().clone();
+    let fake_info = group_info_of(&mut fake);
+    let by = recovery::WrapAuthor {
+        group_id: &group_id,
+        team,
+        leaf: &fake.signer,
+        anchor: &made_up,
+    };
+    let steered =
+        RecoveryWrap::seal(crypto, &forged.recovery, &by, &fake_epoch, fake_info, None).unwrap();
+    assert!(matches!(
+        TeamDevice::recover(&words, &six, &steered, &group_id),
+        Err(Error::Unanchored)
+    ));
+    assert!(!bob.recovery_wrap_is_anchored(&steered).unwrap());
+
+    // The team's own group, its anchor (as if it had leaked), but signed by a member's leaf: refused too.
+    let info = group_info_of(&mut bob);
+    let anchor = recovery.anchor();
+    let by_member = recovery::WrapAuthor {
+        group_id: &group_id,
+        team,
+        leaf: &bob.signer,
+        anchor: &anchor,
+    };
+    let record_now = bob.record(bob.epoch().unwrap()).unwrap().clone();
+    let by_bob = RecoveryWrap::seal(
+        crypto,
+        &roster.recovery,
+        &by_member,
+        &record_now,
+        info,
+        None,
+    )
+    .unwrap();
+    assert_eq!(record_now.epoch, record.epoch);
+    assert!(matches!(
+        TeamDevice::recover(&words, &six, &by_bob, &group_id),
+        Err(Error::Unanchored)
+    ));
+
+    // Without its signatures, or with another leaf named: refused.
+    let mut unsigned = legit.clone();
+    unsigned.signed.anchor = vec![0; 64];
+    unsigned.signed.signature = vec![0; 64];
+    assert!(matches!(
+        TeamDevice::recover(&words, &six, &unsigned, &group_id),
+        Err(Error::Unanchored)
+    ));
+    let mut renamed = legit.clone();
+    renamed.signed.signer = bob.signature_key();
+    assert!(matches!(
+        TeamDevice::recover(&words, &six, &renamed, &group_id),
+        Err(Error::Unanchored)
+    ));
+
+    // Another team's wrap, or another team's six words: refused.
+    let (other_relay, other, other_recovery) = new_team(None);
+    let other_wrap = other_relay.latest_recovery().unwrap();
+    let other_six = other.fingerprint().unwrap().words().join(" ");
+    let other_id = other.group_id().unwrap();
+    assert!(matches!(
+        TeamDevice::recover(&words, &six, other_wrap, &other_id),
+        Err(Error::OtherTeam)
+    ));
+    assert!(matches!(
+        TeamDevice::recover(&words, &other_six, other_wrap, &other_id),
+        Err(Error::Unanchored)
+    ));
+    assert!(matches!(
+        TeamDevice::recover(
+            &other_recovery.words().join(" "),
+            &six,
+            other_wrap,
+            &other_id
+        ),
+        Err(Error::OtherTeam)
+    ));
+    // The six words of the sheet are typed back in any case; a wrong one is refused.
+    let mut wrong = team.words();
+    wrong[5] = if wrong[5] == "zoo" { "abandon" } else { "zoo" };
+    assert!(matches!(
+        TeamDevice::recover(&words, &wrong.join(" "), &legit, &group_id),
+        Err(Error::OtherTeam)
+    ));
+
+    // The legitimate wrap, with the words and the six words: the team comes back, its members follow.
+    let (rescue, publication) =
+        TeamDevice::recover(&words, &six.to_uppercase(), &legit, &group_id).unwrap();
+    assert_eq!(rescue.fingerprint().unwrap(), team);
+    assert!(publication.recovery.is_some());
+    publish(&mut relay, publication);
+    sync(&relay, &mut [&mut bob, &mut alice]);
+    assert_eq!(bob.epoch().unwrap(), rescue.epoch().unwrap());
+}
+
+#[test]
+fn the_anchor_goes_to_the_administrators_devices_alone() {
+    let (mut relay, mut alice, recovery) = new_team(None);
+    let anchor_key = recovery.anchor().public();
+    let (carol, carol_seed) = device_of(member(3), 3);
+    let mut carol = join_as(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Admin),
+        carol,
+    );
+    let (bob, bob_seed) = device_of(member(2), 2);
+    let mut bob = join_as(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        bob,
+    );
+    sync(&relay, &mut [&mut carol]);
+
+    // Alice seals the anchor for Carol, an administrator, and not for Bob, a member; Bob's device gives none.
+    let grants = alice.anchor_grants(&Default::default()).unwrap();
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].device, carol.identity().device.0);
+    assert_eq!(grants[0].anchor, anchor_key);
+    assert!(bob.anchor_grants(&Default::default()).unwrap().is_empty());
+    let given = [(carol.identity().device.0, anchor_key.clone())]
+        .into_iter()
+        .collect();
+    assert!(alice.anchor_grants(&given).unwrap().is_empty());
+
+    // Bob cannot take Carol's grant; Carol can, and her commits then make anchored wraps.
+    assert!(!bob.take_anchor(&grants[0], &bob_seed).unwrap());
+    assert!(matches!(
+        carol.take_anchor(&grants[0], &bob_seed),
+        Err(Error::BadSignature)
+    ));
+    assert!(carol.take_anchor(&grants[0], &carol_seed).unwrap());
+    assert!(!carol.take_anchor(&grants[0], &carol_seed).unwrap());
+    let rotated = carol.rotate().unwrap();
+    publish(&mut relay, rotated);
+    sync(&relay, &mut [&mut alice, &mut bob]);
+    let wrap = relay.latest_recovery().unwrap();
+    assert_eq!(wrap.epoch, carol.epoch().unwrap());
+    assert!(bob.recovery_wrap_is_anchored(wrap).unwrap());
+
+    // The anchor stays in the device's saved state.
+    let state = carol.saved_state();
+    assert_eq!(state.anchors.len(), 1);
+    assert!(!format!("{state:?}").contains(&hex::encode(recovery.anchor().seed())));
+
+    // A member's commit leaves the wraps of its epoch to an administrator's device.
+    let published = bob.rotate().unwrap();
+    assert!(published.recovery.is_none());
+    publish(&mut relay, published);
+    sync(&relay, &mut [&mut alice, &mut carol]);
+    assert!(relay.latest_recovery().unwrap().epoch < bob.epoch().unwrap());
+    assert!(bob.current_wraps().unwrap().recovery.is_none());
+    let current = alice.current_wraps().unwrap();
+    assert_eq!(
+        current.recovery.as_ref().unwrap().epoch,
+        bob.epoch().unwrap()
+    );
+    publish(&mut relay, current);
+    let (_, back) = TeamDevice::recover(
+        &recovery.words().join(" "),
+        &alice.fingerprint().unwrap().words().join(" "),
+        relay.latest_recovery().unwrap(),
+        &alice.group_id().unwrap(),
+    )
+    .unwrap();
+    assert!(bob.process_commit(&back.commit.unwrap().1).is_ok());
+}
+
+#[test]
+fn the_escrow_reads_only_what_an_administrator_anchored_for_the_team() {
+    let crypto_provider = OpenMlsRustCrypto::default();
+    let crypto = crypto_provider.crypto();
+    let escrow = EscrowKey::generate(crypto, crypto_provider.rand(), "the CISO of ACME").unwrap();
+    let (mut relay, mut alice, recovery) = new_team(Some(escrow.team_half()));
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let group_id = alice.group_id().unwrap();
+    let team = alice.fingerprint().unwrap();
+    let roster = alice.roster().unwrap();
+
+    // A member makes no escrow wrap; an administrator's device writes the one of the epoch.
+    let published = bob.rotate().unwrap();
+    assert!(published.escrow.is_none());
+    publish(&mut relay, published);
+    sync(&relay, &mut [&mut alice]);
+    publish(&mut relay, alice.current_wraps().unwrap());
+    let legit = relay.latest_escrow().unwrap().clone();
+    assert_eq!(legit.epoch, bob.epoch().unwrap());
+    assert!(escrow.open(crypto, &team, &group_id, &legit).is_ok());
+    assert!(bob.escrow_wrap_is_anchored(&legit).unwrap());
+
+    // Sealed to the escrow key by a member, with an anchor that is not the escrow's: refused.
+    let record = bob.record(bob.epoch().unwrap()).unwrap().clone();
+    let made_up = Anchor::from_seed([0x67; 32]);
+    let mut public = roster.escrow.clone().unwrap();
+    public.anchor_key = made_up.public();
+    let by = recovery::WrapAuthor {
+        group_id: &group_id,
+        team,
+        leaf: &bob.signer,
+        anchor: &made_up,
+    };
+    let forged = EscrowWrap::seal(crypto, &public, &by, &record, &roster).unwrap();
+    assert!(matches!(
+        escrow.open(crypto, &team, &group_id, &forged),
+        Err(Error::Unanchored)
+    ));
+    assert!(!bob.escrow_wrap_is_anchored(&forged).unwrap());
+
+    // With the escrow's anchor (as if it had leaked) but a member's leaf: refused.
+    let anchor = escrow.anchor();
+    let by_member = recovery::WrapAuthor {
+        group_id: &group_id,
+        team,
+        leaf: &bob.signer,
+        anchor: &anchor,
+    };
+    let by_bob = EscrowWrap::seal(
+        crypto,
+        roster.escrow.as_ref().unwrap(),
+        &by_member,
+        &record,
+        &roster,
+    )
+    .unwrap();
+    assert!(matches!(
+        escrow.open(crypto, &team, &group_id, &by_bob),
+        Err(Error::Unanchored)
+    ));
+
+    // Another team's fingerprint: refused.
+    let (_, other, _) = new_team(None);
+    assert!(matches!(
+        escrow.open(crypto, &other.fingerprint().unwrap(), &group_id, &legit),
+        Err(Error::OtherTeam)
+    ));
+
+    // A recovery keeps the escrow anchor: the recovered team goes on sealing to the organisation.
+    let (rescue, publication) = TeamDevice::recover(
+        &recovery.words().join(" "),
+        &team.words().join(" "),
+        relay.latest_recovery().unwrap(),
+        &group_id,
+    )
+    .unwrap();
+    let sealed = publication.escrow.unwrap();
+    assert_eq!(sealed.epoch, rescue.epoch().unwrap());
+    assert!(escrow.open(crypto, &team, &group_id, &sealed).is_ok());
 }

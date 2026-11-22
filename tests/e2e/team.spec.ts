@@ -126,7 +126,9 @@ test('a team created, an invitation, a second client that joins and is let in by
   await expect(grid.getByRole('listitem')).toHaveCount(24, { timeout: 30_000 });
   const words = await grid.locator('.w').allTextContents();
   await shoot(page, '03-mots');
-  await page.getByLabel('J’ai noté les 24 mots').check();
+  // The team's six words on the same sheet (SR2-09): the recovery asks for them too.
+  await expect(page.getByRole('group', { name: 'Les six mots de l’équipe' }).getByRole('listitem')).toHaveCount(6);
+  await page.getByLabel('J’ai noté les 24 mots et les six mots de l’équipe').check();
   await page.getByRole('button', { name: 'Continuer' }).click();
   const asked = page.getByLabel(/Mot n° \d+/);
   await expect(asked).toHaveCount(3);
@@ -218,6 +220,7 @@ test('a team created, an invitation, a second client that joins and is let in by
   await shoot(page, '12-code-nouvel-appareil');
   await page.getByRole('button', { name: 'Retour' }).click();
   await page.getByRole('button', { name: /Récupérer une équipe/ }).click();
+  await expect(page.getByLabel(/Les six mots de l’équipe/)).toBeVisible();
   await shoot(page, '13-recuperer');
   await page.getByRole('button', { name: 'Retour' }).click();
   // The link a second time (a third data folder would be told; here, Bob himself): refused, said.

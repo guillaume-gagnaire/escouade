@@ -61,6 +61,7 @@ Each team has its card in the teams window:
 Whoever creates the team becomes its owner and gets its **recovery key**: 24 words, shown only once, three of which they type back. If every administrator loses their devices, these words and a token from the server’s host bring the team back (“Recover a team”).
 
 - Write them down at creation: print them, or keep them in the organization’s password manager. Never in a message.
+- Write them down with the team’s six words, shown under them: the recovery asks for the 24 words and the six words.
 - As long as they are not confirmed, the card says so. If the app was closed before, the words are lost: “New recovery key” makes another one.
 - A recovery gives a new recovery key; the old one no longer opens anything.
 

@@ -102,6 +102,11 @@
       {#if team.role === 'admin' && !team.recoveryConfirmed}
         <p class="advice">{t('team.card.wordsLost')}</p>
       {/if}
+      {#if team.role === 'admin' && team.recoveryOutdated}
+        <p class="advice" role="alert">{t('team.card.recoveryOutdated')}</p>
+      {:else if team.role === 'admin' && team.recoveryStale}
+        <p class="advice">{t('team.card.recoveryStale')}</p>
+      {/if}
       {#if team.invitations.length}
         <div class="invs">
           <span class="lbl">{t('team.card.invitations')}</span>

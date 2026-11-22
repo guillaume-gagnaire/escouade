@@ -34,6 +34,9 @@ export function codeComplete(text: string): boolean {
   return CODE.test(typedCode(text).replace('-', ''));
 }
 
+/** The six words of the team's fingerprint as typed back from the rescue sheet: the same as the 24 words. */
+export const SIX = 6;
+
 /** The 24 words as typed back for a recovery: spaces of any kind, any case, one space between each. */
 export function wordsTyped(text: string): string {
   return text.trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ');

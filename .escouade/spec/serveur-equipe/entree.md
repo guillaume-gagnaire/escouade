@@ -2,8 +2,8 @@
 title: "Entrer dans une équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md"]
-tickets: ["ESC-461","ESC-633"]
-decisions: [173,286]
+tickets: ["ESC-461","ESC-632","ESC-633"]
+decisions: [173,286,288]
 compared: null
 ---
 
@@ -22,15 +22,16 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 ## Créer une équipe
 
 - L'adresse du serveur, le jeton qu'a affiché `escouade-team-server init` (il ne sert qu'une fois), un nom.
-- **La clé de secours**, obligatoire : 24 mots, montrés une fois, en grille numérotée. « J'ai noté les 24 mots », puis le propriétaire retape trois mots tirés au hasard (leur numéro donné). Tant qu'il ne l'a pas fait, la carte de l'équipe le dit et propose « Nouvelle clé de secours » : les mots ne sont gardés qu'en mémoire, une app arrêtée avant les a perdus.
-- **L'empreinte de l'équipe** : six mots, ceux de sa genèse, les mêmes chez chaque membre. Chaque invitation les porte.
+- **La clé de secours**, obligatoire : 24 mots, montrés une fois, en grille numérotée, et sous eux **les six mots de l'équipe** (son empreinte), à noter sur la même feuille de secours : la récupération demande les deux. « J'ai noté les 24 mots et les six mots de l'équipe », puis le propriétaire retape trois des 24 mots tirés au hasard (leur numéro donné). Tant qu'il ne l'a pas fait, la carte de l'équipe le dit et propose « Nouvelle clé de secours » : les mots ne sont gardés qu'en mémoire, une app arrêtée avant les a perdus. « Nouvelle clé de secours » montre de même une feuille neuve.
+- **L'empreinte de l'équipe** : six mots, ceux de sa genèse, les mêmes chez chaque membre. Chaque invitation les porte, et la feuille de secours aussi.
 - **Un second administrateur** est recommandé tant qu'il n'y en a qu'un : l'écran de fin et la carte de l'équipe le disent.
 - L'identifiant de l'équipe est montré à la création : l'hébergeur en a besoin pour un jeton de récupération.
 
 ## La clé de séquestre (en option)
 
-- À la création : « Ajouter une clé de séquestre de l'organisation », qui la détient, et sa moitié publique, collée ou faite sur place (« Créer la paire ici » : la moitié secrète est montrée une fois, à remettre à son détenteur).
+- À la création : « Ajouter une clé de séquestre de l'organisation », qui la détient, et sa moitié pour l'équipe (`escouade-escrow-team:2:…`), collée ou faite sur place (« Créer la paire ici » : la moitié secrète est montrée une fois, à remettre à son détenteur). La moitié pour l'équipe porte la clé publique et l'ancre qui signe les enveloppes de séquestre : elle ne se colle que dans Escouade. Une moitié publique d'avant (`escouade-escrow-public:1:`) est refusée : il faut refaire la paire.
 - Tout le contenu lui est aussi chiffré : l'organisation peut toujours le lire. **Chaque membre le voit**, sur la carte de l'équipe et en entrant : « Cette équipe a une clé de séquestre : l'organisation peut lire son contenu. Détenteur : … ».
+- L'organisation ne lit que ce qu'un administrateur de l'équipe a scellé : chaque enveloppe de séquestre porte l'empreinte de l'équipe et le registre de son époque, et elle est signée par la feuille d'un administrateur et par l'ancre du séquestre (que redonne sa moitié secrète).
 
 ## Inviter
 
@@ -60,6 +61,7 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 - fait entrer les demandes des invitations qu'il a faites (un Welcome MLS), sauf celles d'une invitation de l'ancienne forme ;
 - s'il est administrateur du serveur, enregistre le jeton qu'un membre a demandé pour son propre appareil (voir plus bas) ;
 - tient **les rôles du serveur au pas du registre** : un administrateur nommé après son inscription le devient aussi sur le serveur, un administrateur redevenu membre aussi ; le dernier administrateur du serveur reste ;
+- donne **l'ancre de la clé de secours** (et celle du séquestre) aux appareils administrateurs qui ne l'ont pas encore, et écrit les enveloppes de secours et de séquestre de l'époque quand le commit d'un membre n'en a pas fait (voir « Le client de l'équipe ») ;
 - lit les seconds usages de ses invitations.
 
 ## Ajouter un de ses appareils
@@ -71,8 +73,11 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 
 ## Récupérer une équipe
 
-- Quand plus aucun administrateur n'a d'appareil : « Récupérer une équipe », avec l'adresse du serveur, un jeton que l'hébergeur donne (`escouade-team-server recovery-token --team <identifiant>`) et les 24 mots.
-- Cet appareil revient dans l'équipe, administrateur (sur le serveur aussi), et l'équipe reçoit **une nouvelle clé de secours**, montrée une fois et confirmée comme à la création. L'ancienne n'ouvre plus rien.
+- Quand plus aucun administrateur n'a d'appareil : « Récupérer une équipe », avec l'adresse du serveur, un jeton que l'hébergeur donne (`escouade-team-server recovery-token --team <identifiant>`), les 24 mots et **les six mots de l'équipe**, tous lus sur la feuille de secours (jamais ceux qu'un autre dicte, jamais ceux du serveur). Le bouton attend les 24 et les 6.
+- **La récupération ne rejoint que l'équipe elle-même.** Elle ne suit qu'une enveloppe signée par un administrateur de l'équipe (par sa feuille, et par l'ancre que redonnent les 24 mots), pour l'équipe de ces six mots ; avant d'entrer, elle vérifie encore sur l'état du groupe de l'enveloppe qu'il est celui de ces six mots et de cette clé de secours, et que la feuille qui a signé y est administrateur. Une enveloppe écrite par un membre, par le serveur ou pour une autre équipe est écartée ; la récupération essaie les autres, de la plus récente à la plus ancienne, avant d'envoyer quoi que ce soit. Si aucune ne passe : « Le serveur ne garde aucune enveloppe de secours signée par un administrateur de l'équipe pour ces mots… ». Des six mots faux : « Ces six mots ne sont pas ceux de l'équipe : recopie-les depuis la feuille de secours, sous les 24 mots. »
+- **Une feuille sans les six mots** : « Ma feuille n'a pas ces six mots » dit qu'elle date d'avant eux, que sa clé ne ramène plus l'équipe, et qu'il faut en faire une nouvelle (« Nouvelle clé de secours ») sur un appareil administrateur s'il en reste un ; rien ne part. Sur un appareil administrateur, la carte d'une équipe dont la clé de secours date d'avant le dit aussi.
+- **Après le départ ou la rétrogradation d'un administrateur**, il gardait l'ancre de la clé en vigueur : la carte de l'équipe le dit à ses administrateurs (« Un administrateur a quitté son rôle depuis la clé de secours en vigueur : fais une nouvelle clé de secours et imprime la nouvelle feuille. »).
+- Cet appareil revient dans l'équipe, administrateur (sur le serveur aussi), et l'équipe reçoit **une nouvelle clé de secours**, montrée une fois avec les six mots et confirmée comme à la création. L'ancienne n'ouvre plus rien.
 - Des mots faux sont refusés avant d'utiliser le jeton.
 
 ## L'alerte de fourche
