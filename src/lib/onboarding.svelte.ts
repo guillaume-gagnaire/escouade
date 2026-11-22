@@ -120,4 +120,8 @@ export interface Primary {
   /** At a station that recommends a choice: whether the one taken is it (the funnel of the statistics, ESC-507). */
   choice?: OnboardingChoice;
   run: () => Promise<boolean>;
+  /** The words of « Plus tard » at this station (the features': « Passer : garder l'essentiel »). */
+  later?: string;
+  /** « Retour » within the station first (a screen of the features before): true when it went back there. */
+  back?: () => boolean;
 }

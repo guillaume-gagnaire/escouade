@@ -9,6 +9,7 @@
 // A client of the remote API shows its core's proposals the same way. Nothing here leaves the machine.
 
 import { momentTaken, permissionWaiting, takeMoment, typing, discover } from './discover.svelte';
+import { tour } from './features-tour.svelte';
 import { api } from './ipc';
 import { onboarding } from './onboarding.svelte';
 import { app } from './state.svelte';
@@ -33,10 +34,11 @@ function turnOnScreen(): boolean {
 
 /**
  * Not the moment: the user types, an agent waits for a permission, a turn on screen goes on, the first launch or a
- * window is over the screen, or a bubble of the discovery is there (it goes first).
+ * window is over the screen (the assistant of the features too, ESC-559), or a bubble of the discovery is there (it goes
+ * first).
  */
 export function busy(): boolean {
-  return typing() || permissionWaiting() || turnOnScreen() || onboarding.shown || app.modal !== null || !!discover.tip;
+  return typing() || permissionWaiting() || turnOnScreen() || onboarding.shown || tour.shown || app.modal !== null || !!discover.tip;
 }
 
 let asking = false;

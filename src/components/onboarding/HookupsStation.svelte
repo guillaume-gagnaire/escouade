@@ -2,6 +2,8 @@
   import { tick, untrack } from 'svelte';
   import { onlineService } from '../../lib/dictation';
   import { dictation, type DictationTarget } from '../../lib/dictation.svelte';
+  import { featureSwitch } from '../../lib/features';
+  import { setFeature } from '../../lib/features-tour.svelte';
   import { fBytes, fList } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { BY_FORGE, SERVICES } from '../../lib/integrations';
@@ -121,6 +123,12 @@
     }
   }
 
+  /** The feature a choice here is for, switched on by that choice (F-2, ESC-559): a new installation has every feature
+   * off until its assistant, and choosing a source of tickets or the voice is the user's gesture for them. */
+  async function want(f: 'kanban' | 'voice') {
+    if (!featureSwitch(app.settings, f)) await setFeature(f, true);
+  }
+
   // The sources: choosing one installs its plugin, then its form opens (a source of a code host: the host's).
   let forges = $state<ReturnType<typeof ForgesSection>>();
   let hostForm = $state(false);
@@ -128,6 +136,7 @@
   $effect(() => {
     const id = source;
     if (!id) return;
+    untrack(() => void want('kanban'));
     untrack(() =>
       need('sources', id).then(async (ok) => {
         const host = BY_FORGE[id as Service];
@@ -192,12 +201,15 @@
   /** The settings of the voice, written as Réglages › Voix writes them (the core installs nothing more for them). */
   async function saveVoice(patch: Partial<NonNullable<typeof app.settings.voice>>) {
     const settings = { ...$state.snapshot(app.settings), voice: { ...$state.snapshot(app.settings.voice), ...patch } };
+    // The voice chosen: its feature on (F-2), in the same save.
+    if (settings.features) settings.features = { ...settings.features, voice: true };
     if (await app.run(api.saveSettings(settings).then(() => true))) app.settings = settings;
   }
   $effect(() => {
     const mode = voiceMode;
     untrack(() => {
       if (mode === 'local' && app.settings.voice?.transcription === 'online') void saveVoice({ transcription: 'local' });
+      else if (mode) void want('voice');
     });
   });
   $effect(() => {

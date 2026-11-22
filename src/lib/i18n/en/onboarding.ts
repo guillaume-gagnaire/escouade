@@ -3,7 +3,7 @@ import { defineZone } from '../types';
 // The first launch (ESC-504, docs/ONBOARDING.md, direction C « La ligne »).
 export default defineZone('onboarding', {
   title: 'First launch',
-  subtitle: { one: '{count} stop · about 2 minutes', other: '{count} stops · about 2 minutes' },
+  subtitle: { one: '{count} stop · about 3 minutes', other: '{count} stops · about 3 minutes' },
   line: 'The stops of the first launch',
   skipAll: 'Skip all',
   later: 'Later',
@@ -29,6 +29,7 @@ export default defineZone('onboarding', {
     hookups: { name: 'What to plug in', inline: 'what to plug in', todo: 'tickets, voice, code host' },
     project: { name: 'First project', inline: 'the first project', todo: 'folder, clone or demo' },
     agent: { name: 'First agent', inline: 'the first agent', todo: 'a message, an answer' },
+    features: { name: 'Features', inline: 'features', todo: 'what Escouade shows you' },
     telemetry: { name: 'Statistics', inline: 'statistics', todo: 'shared or not' },
   },
   harness: {

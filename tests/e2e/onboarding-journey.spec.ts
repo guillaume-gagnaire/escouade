@@ -103,13 +103,16 @@ test.describe('a first launch from one end to the other', () => {
     await journey()
       .getByRole('button', { name: /^Continuer/ })
       .click();
+    // The features (F-2, ESC-559): passed, what is used kept.
+    await expect(heading(page, 'Que veux-tu voir autour de tes agents ?')).toBeVisible();
+    await journey().getByRole('button', { name: 'Passer : garder l’essentiel' }).click();
     await expect(heading(page, 'Aider à améliorer Escouade ?')).toBeVisible();
     page = await app.restart();
     await expect(page.getByRole('region', { name: 'Premier lancement' })).toBeVisible();
     await expect(heading(page, 'Aider à améliorer Escouade ?')).toBeVisible();
     const line = page.getByRole('navigation', { name: 'Les stations du premier lancement' }).getByRole('listitem');
     await expect(line.nth(4)).toContainText('bac-a-sable');
-    await expect(line.nth(6)).toContainText('maintenant');
+    await expect(line.nth(7)).toContainText('maintenant');
     await journey().getByRole('button', { name: 'Non merci' }).click();
     await expect(journey()).toContainText('Escouade est prêt');
 
@@ -127,6 +130,7 @@ test.describe('a first launch from one end to the other', () => {
       hookups: 'done',
       project: 'done',
       agent: 'done',
+      features: 'skipped',
       telemetry: 'done',
     });
     expect(JSON.stringify({ p: o.profile, c: o.choices })).not.toMatch(/bac-a-sable|ada@|[\\/]/);

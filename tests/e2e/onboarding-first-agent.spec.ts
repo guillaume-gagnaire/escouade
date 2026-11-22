@@ -161,6 +161,8 @@ for (const theme of ['dark', 'light'] as const)
       await expect(diff).toBeHidden();
       // On: the statistics, the end, the app on the demonstration, its band; deleted from it, its folder gone.
       await journey.getByRole('button', { name: /^Continuer/ }).click();
+      await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu voir autour de tes agents ?' })).toBeVisible();
+      await journey.getByRole('button', { name: 'Passer : garder l’essentiel' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
       const line = page.getByRole('navigation', { name: 'Les stations du premier lancement' }).getByRole('listitem');
       await expect(line.nth(4)).toContainText('bac-a-sable');
@@ -235,6 +237,8 @@ test.describe('the first agent in a folder of the machine', () => {
     await expect(journey).toContainText('Il n’a rien changé : il n’y a pas de diff à voir.');
     await fitsAcross(page);
     await journey.getByRole('button', { name: /^Continuer/ }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu voir autour de tes agents ?' })).toBeVisible();
+    await journey.getByRole('button', { name: 'Passer : garder l’essentiel' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
     const state = JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'state.json'), 'utf8'));
     await expect
@@ -265,6 +269,8 @@ test.describe('the first agent on an account at its usage limit', () => {
     await fitsAcross(page);
     // « Plus tard »: the station waits in Aide › Premier lancement, the journey goes on.
     await journey.getByRole('button', { name: 'Plus tard' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu voir autour de tes agents ?' })).toBeVisible();
+    await journey.getByRole('button', { name: 'Passer : garder l’essentiel' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
     const line = page.getByRole('navigation', { name: 'Les stations du premier lancement' }).getByRole('listitem');
     await expect(line.nth(5)).toContainText('passé · à reprendre');

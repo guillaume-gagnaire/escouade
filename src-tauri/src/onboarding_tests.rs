@@ -53,7 +53,15 @@ fn a_device_already_set_up_never_has_it_imposed() {
     assert!(v.open);
     assert_eq!(v.trigger, Some(Trigger::Redo));
     assert_eq!(v.resume_at, Some(OnboardingStep::Harness));
-    assert!(v.steps.iter().all(|s| s.status == StepStatus::Done));
+    // The features (F-2) are chosen by the gesture alone: their switches always hold something.
+    for s in &v.steps {
+        let want = if s.id == OnboardingStep::Features {
+            StepStatus::Todo
+        } else {
+            StepStatus::Done
+        };
+        assert_eq!(s.status, want, "{:?}", s.id);
+    }
 }
 
 #[test]
@@ -306,6 +314,52 @@ fn what_a_policy_imposes_is_shown_locked() {
     assert!(!v.ask_telemetry_again);
 }
 
+#[test]
+fn the_features_are_a_station_done_by_the_gesture_and_locked_when_a_policy_imposes_them_all() {
+    // F-2 (ESC-559): passed, it waits in Aide › Premier lancement like any other; done, it stays done.
+    let mut saved = Onboarding::default();
+    let facts = fresh();
+    apply(
+        &mut saved,
+        &Act::Step {
+            step: OnboardingStep::Features,
+            outcome: StepOutcome::Skipped,
+            choice: None,
+        },
+        &facts,
+        1,
+    );
+    let v = view(&saved, &facts, true);
+    assert_eq!(status_of(&v, OnboardingStep::Features), StepStatus::Skipped);
+    apply(
+        &mut saved,
+        &Act::Step {
+            step: OnboardingStep::Features,
+            outcome: StepOutcome::Done,
+            choice: None,
+        },
+        &facts,
+        2,
+    );
+    assert_eq!(
+        status_of(&view(&saved, &facts, true), OnboardingStep::Features),
+        StepStatus::Done
+    );
+    // Every switch imposed by the device or the team: shown locked, crossed in one « Continuer ».
+    let imposed = Facts {
+        features_imposed: true,
+        ..fresh()
+    };
+    assert_eq!(
+        status_of(
+            &view(&Onboarding::default(), &imposed, true),
+            OnboardingStep::Features
+        ),
+        StepStatus::Policy
+    );
+    assert_eq!(step_name(OnboardingStep::Features), "features");
+}
+
 /// The core of a data folder, as the app starts on it.
 fn load(data: &DataDir) -> std::sync::Arc<Core> {
     let app = mock_app();
@@ -455,7 +509,12 @@ fn the_offers_are_read_in_the_registry_the_seed_and_the_policies() {
 fn the_first_agent_is_a_station_between_the_project_and_the_statistics_done_by_a_reply() {
     let at = |s| STEPS.iter().position(|x| *x == s).unwrap();
     assert_eq!(at(OnboardingStep::Agent), at(OnboardingStep::Project) + 1);
-    assert_eq!(at(OnboardingStep::Telemetry), at(OnboardingStep::Agent) + 1);
+    // The features (F-2, ESC-559) between the first agent and the statistics.
+    assert_eq!(at(OnboardingStep::Features), at(OnboardingStep::Agent) + 1);
+    assert_eq!(
+        at(OnboardingStep::Telemetry),
+        at(OnboardingStep::Features) + 1
+    );
     // A project open, no reply yet: the journey goes on at the first agent.
     let facts = Facts {
         accounts: 1,
@@ -479,7 +538,7 @@ fn the_first_agent_is_a_station_between_the_project_and_the_statistics_done_by_a
     };
     let v = view(&saved, &replied, true);
     assert_eq!(status_of(&v, OnboardingStep::Agent), StepStatus::Done);
-    assert_eq!(v.resume_at, Some(OnboardingStep::Telemetry));
+    assert_eq!(v.resume_at, Some(OnboardingStep::Features));
 }
 
 #[test]
@@ -694,6 +753,7 @@ fn the_funnel_says_nothing_before_the_end_then_each_station_and_the_times_in_bra
             "onboarding_step",
             "onboarding_step",
             "onboarding_step",
+            "onboarding_step",
             "onboarding_finished",
             "first_reply"
         ]
@@ -731,14 +791,22 @@ fn the_funnel_says_nothing_before_the_end_then_each_station_and_the_times_in_bra
         }
     );
     assert_eq!(
-        events[8],
-        Event::OnboardingFinished {
-            skipped: 2,
-            seconds: "60-120"
+        events[7],
+        Event::OnboardingStep {
+            step: "features",
+            outcome: "skipped",
+            choice: None
         }
     );
     assert_eq!(
         events[9],
+        Event::OnboardingFinished {
+            skipped: 3,
+            seconds: "60-120"
+        }
+    );
+    assert_eq!(
+        events[10],
         Event::FirstReply {
             seconds: "<60",
             demo: true

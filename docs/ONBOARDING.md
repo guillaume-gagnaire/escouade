@@ -176,6 +176,24 @@ Version courte des modes, pour une colonne étroite (direction A) : « Les modif
 
 Les amorces dépendent du projet. « Lance les tests » n'est proposée que si le projet a une commande de test reconnue (`package.json`, `Cargo.toml`, `pyproject.toml`…), et seulement sur la démonstration si Node est sur la machine.
 
+### 4.5 bis Les fonctionnalités (F-2, ESC-559)
+
+Ajoutée après ON-4, par l'assistant des fonctionnalités (`docs/FEATURES.md` § 1) : **une station de plus, la 7ᵉ des 8, entre le premier agent et les statistiques**. Le premier agent reste le « aha » et n'arrive pas plus tard ; l'utilisateur, qui vient de voir l'app au travail, choisit ce qu'elle montre autour des agents en le sachant ; les statistiques restent la dernière question (O7).
+
+**Ce qu'elle règle** : les interrupteurs de Réglages › Fonctionnalités, les mêmes. **Recommandé** : rien, une fonctionnalité par écran, chacune allumée par le geste ; une installation neuve les a coupées (`NEW_INSTALL`), sauf ce que « Ce que tu veux brancher » a allumé (une source de tickets : le Kanban ; la voix : la Voix).
+
+| | Français | English |
+| --- | --- | --- |
+| Question | Que veux-tu voir autour de tes agents ? | What do you want to see around your agents? |
+| Pourquoi | Une fonctionnalité par écran : allume celles qui te servent. L'essentiel est toujours là : les agents, le panneau Git, les terminaux et les lancements. | One feature per screen: turn on the ones you need. The essentials are always there: the agents, the Git panel, the terminals and the launches. |
+| Un écran | Le Kanban · une phrase · trois points · « Activer le Kanban » | The Kanban · a sentence · three points · “Turn on the Kanban” |
+| Utilisée | Tu l'utilises déjà sur 2 projets : il reste allumé. | You already use it on 2 projects: it stays on. |
+| Plus tard | Passer : garder l'essentiel | Skip: keep the essentials |
+| Sous la station | 2 allumées · l'essentiel seul | 2 on · the essentials only |
+| Imposée | Toutes les fonctionnalités sont imposées sur ce poste : elles se montrent ici, sans se changer. | Every feature is imposed on this device: they are shown here, and cannot be changed. |
+
+**Au clavier** : depuis la question, ↓ va à l'interrupteur, Espace le bascule, Entrée fait « Suivant » (« Continuer » au dernier écran), ← → changent d'écran, Échap passe. « Retour » revient d'un écran avant de revenir à la station d'avant. **Faite** par le geste seul (« Continuer » au dernier écran, ou l'assistant fini ailleurs) : ses interrupteurs ont toujours une valeur, l'état réel ne dit pas qu'ils ont été choisis. L'entonnoir la compte (`onboarding_step`, `step: features`).
+
 ### 4.6 Les statistiques
 
 **Ce qu'elle règle** : l'accord des statistiques, la même question qu'aujourd'hui (`shell.telemetry.*`), à la fin du parcours (choix O7). Aucune réponse n'est mise en avant. **Ce qui reste sur le poste** est dit en une ligne.

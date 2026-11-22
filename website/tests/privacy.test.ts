@@ -125,6 +125,7 @@ const VALUES = [
   'harness',
   'defaults',
   'hookups',
+  'features',
   'telemetry',
   'done',
   'skipped',

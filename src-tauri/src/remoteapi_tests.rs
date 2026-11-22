@@ -1814,12 +1814,12 @@ fn a_session_keeps_its_terminals_within_its_bounds_and_is_forgotten_in_time() {
 async fn a_client_at_a_distance_reads_and_switches_the_features_of_its_core() {
     use crate::features::Feature;
     let (_dir, h, api, token) = served("remote-features").await;
-    // Its core has the Docs space off.
+    // Its core has the Docs space off, the rest on (a new installation's are off until its assistant, F-2).
     {
         let mut s = h.core.settings.read().clone();
-        s.features
-            .get_or_insert_with(Default::default)
-            .set(Feature::Docs, false);
+        let mut f = crate::features::Features::all(true);
+        f.set(Feature::Docs, false);
+        s.features = Some(f);
         h.core.save_settings(s).unwrap();
     }
     let mut c = Client::connect(&api, &token).await;

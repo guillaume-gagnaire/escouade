@@ -57,6 +57,8 @@
   import ImportModal from './components/modals/ImportModal.svelte';
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
   import Onboarding from './components/onboarding/Onboarding.svelte';
+  import FeaturesTourModal from './components/features/FeaturesTourModal.svelte';
+  import { loadTour, tour } from './lib/features-tour.svelte';
   import { onboarding } from './lib/onboarding.svelte';
   import DiscoverMap from './components/discover/DiscoverMap.svelte';
   import DiscoverTip from './components/discover/DiscoverTip.svelte';
@@ -176,6 +178,11 @@
   // on « Aide », its band, its bubbles).
   $effect(() => {
     if (app.ready && !onboarding.shown) untrack(() => void loadDiscover());
+  });
+  // The assistant of the features (F-2, ESC-559): open by itself at the first window of the version that brings the
+  // choice, on an installation updated to it; never over the first launch, whose station it is.
+  $effect(() => {
+    if (app.ready && !onboarding.shown) untrack(() => void loadTour());
   });
 
   // The proposals of a feature switched off at the right moment (F-3, ESC-558): asked now and then once the app is
@@ -557,6 +564,10 @@
 {:else if app.modal?.kind === 'schedule'}
   <!-- « Programmer » (ESC-448): the ticket's form for a scheduled task; it saves the task itself. -->
   <TicketForm projectId={app.modal.projectId} scheduling task={app.modal.task} onsubmit={() => false} resume={app.modal.resume} />
+{/if}
+
+{#if tour.shown && !onboarding.shown && !app.modal}
+  <FeaturesTourModal />
 {/if}
 
 <!-- The Overseer's voice is its own screen's (ESC-468), never this overlay. -->

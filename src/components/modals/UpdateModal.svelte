@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { flushDrafts } from '../../lib/drafts';
+  import { metFeatures, tour } from '../../lib/features-tour.svelte';
   import { buffers } from '../../lib/editor/buffers.svelte';
   import { t } from '../../lib/i18n';
   import { isBeta, RELEASES_PAGE, shownVersion, stableBefore } from '../../lib/updater';
@@ -8,6 +10,7 @@
   import type { SettingsPage } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import Markdown from '../conv/Markdown.svelte';
+  import FeatureTour from '../features/FeatureTour.svelte';
   import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
@@ -34,6 +37,14 @@
 
   const close = () => (app.modal = back ? { kind: 'settings', page: back, resume: true } : null);
 
+  // The novelties (F-2, ESC-559, choice of the chief): a feature an update brought has its screen here, with the same
+  // switch as the assistant's. Shown once: met as soon as they are on screen.
+  const fresh = $state(untrack(() => (installed ? [...(tour.view?.new ?? [])] : [])));
+  let at = $state(0);
+  $effect(() => {
+    if (fresh.length) untrack(() => void metFeatures(fresh));
+  });
+
   /** A notice's sentence, its subject in bold as the preview has it: what comes before its first colon. */
   function subject(text: string): [string, string] {
     const at = text.indexOf(':');
@@ -47,7 +58,7 @@
   title={installed
     ? t('shell.update.notes', { version: shownVersion(version) })
     : t('shell.update.ready', { version: shownVersion(version) })}
-  width={560}
+  width={fresh.length ? 1040 : 560}
   onclose={close}
 >
   {#snippet lead()}<span class="lead"><Icon name="download" /></span>{/snippet}
@@ -71,6 +82,12 @@
       </div>
     </div>
   {/if}
+  {#if fresh.length}
+    <section class="new" aria-labelledby="new-features">
+      <h3 id="new-features">{t('features.tour.newTitle', { count: fresh.length })}</h3>
+      <FeatureTour list={fresh} bind:at mode="new" />
+    </section>
+  {/if}
   {#if notes.trim()}
     <div class="notes"><Markdown text={notes} /></div>
   {/if}
@@ -90,6 +107,17 @@
   .lead {
     display: inline-flex;
     color: var(--p-ink);
+  }
+  .new {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .new h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
   }
   /* Unsaved files: the notice in amber, the restart closed until they are saved. */
   .warn {

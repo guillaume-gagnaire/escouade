@@ -5,7 +5,7 @@ import type { Tree } from '../types';
 export default {
   title: 'Premier lancement',
   /** `{count}`: the stations. */
-  subtitle: { one: '{count} station · environ 2 minutes', other: '{count} stations · environ 2 minutes' },
+  subtitle: { one: '{count} station · environ 3 minutes', other: '{count} stations · environ 3 minutes' },
   /** The name of the line of the stations, for a screen reader. */
   line: 'Les stations du premier lancement',
   skipAll: 'Tout passer',
@@ -36,6 +36,7 @@ export default {
     hookups: { name: 'Ce que tu veux brancher', inline: 'ce que tu veux brancher', todo: 'tickets, voix, hébergeur' },
     project: { name: 'Premier projet', inline: 'le premier projet', todo: 'dossier, clone ou démo' },
     agent: { name: 'Premier agent', inline: 'le premier agent', todo: 'un message, une réponse' },
+    features: { name: 'Fonctionnalités', inline: 'les fonctionnalités', todo: 'ce qu’Escouade te montre' },
     telemetry: { name: 'Statistiques', inline: 'les statistiques', todo: 'partagées ou non' },
   },
   harness: {

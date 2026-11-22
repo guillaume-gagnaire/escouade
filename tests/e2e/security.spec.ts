@@ -52,6 +52,9 @@ test.describe('the first start of a new installation (SEC-09)', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Ton premier message' })).toBeVisible();
     await expect(journey).toContainText('Ton premier agent a besoin d’un projet');
     await journey.getByRole('button', { name: 'Plus tard' }).click();
+    // The features (F-2, ESC-559), passed: no switch changed.
+    await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu voir autour de tes agents ?' })).toBeVisible();
+    await journey.getByRole('button', { name: 'Passer : garder l’essentiel' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
     expect(settings().telemetry ?? null).toBeNull();
   });

@@ -24,14 +24,17 @@ use std::path::Path;
 pub const VERSION: u32 = 1;
 
 /// The stations, in their order (§ 4). « Ce que tu veux brancher » (ESC-512) comes after the starting settings and before
-/// the project: a code host connected there gives the project's station its repositories to clone.
-pub const STEPS: [OnboardingStep; 7] = [
+/// the project: a code host connected there gives the project's station its repositories to clone. The features (F-2,
+/// ESC-559) come after the first agent and before the statistics: the user has seen the app at work, and what it shows
+/// around the agents is chosen knowing it; the first agent comes no later for it.
+pub const STEPS: [OnboardingStep; 8] = [
     OnboardingStep::Harness,
     OnboardingStep::Account,
     OnboardingStep::Defaults,
     OnboardingStep::Hookups,
     OnboardingStep::Project,
     OnboardingStep::Agent,
+    OnboardingStep::Features,
     OnboardingStep::Telemetry,
 ];
 
@@ -61,6 +64,8 @@ pub struct Facts {
     pub voice_ready: bool,
     /// The dictation turned off by a policy (`voice.dictation`): the voice's card is shown locked.
     pub dictation_off: bool,
+    /// Every feature imposed by a policy (`features.<id>`): the station of the features is shown locked.
+    pub features_imposed: bool,
 }
 
 /// Where a station stands.
@@ -211,6 +216,9 @@ pub fn real(step: OnboardingStep, facts: &Facts) -> bool {
         OnboardingStep::Hookups => HOOKUPS.iter().any(|&h| hookup_real(h, facts)),
         OnboardingStep::Project => facts.projects > 0,
         OnboardingStep::Agent => facts.first_reply,
+        // The switches are always set to something (`NEW_INSTALL`): only the user's gesture at the station says they
+        // were chosen.
+        OnboardingStep::Features => false,
         OnboardingStep::Telemetry => facts.telemetry_answered,
     }
 }
@@ -220,6 +228,7 @@ fn imposed(step: OnboardingStep, facts: &Facts) -> bool {
     match step {
         OnboardingStep::Defaults => facts.mode_imposed,
         OnboardingStep::Telemetry => facts.telemetry_imposed,
+        OnboardingStep::Features => facts.features_imposed,
         _ => false,
     }
 }
@@ -402,6 +411,7 @@ pub fn step_name(step: OnboardingStep) -> &'static str {
         OnboardingStep::Hookups => "hookups",
         OnboardingStep::Project => "project",
         OnboardingStep::Agent => "agent",
+        OnboardingStep::Features => "features",
         OnboardingStep::Telemetry => "telemetry",
     }
 }
@@ -712,12 +722,15 @@ impl Core {
         let first_reply_demo = self.projects.read().iter().any(|p| {
             replied.contains(&p.id) && crate::demo::is_demo(self.data.root(), Path::new(&p.path))
         });
-        let (mode_imposed, telemetry_imposed, dictation_off) = {
+        let (mode_imposed, telemetry_imposed, dictation_off, features_imposed) = {
             let locks = self.locks.read();
             (
                 locks.value(DEFAULT_MODE).is_some(),
                 locks.value(TELEMETRY).is_some(),
                 locks.value(DICTATION) == Some(&serde_json::Value::Bool(false)),
+                crate::features::Feature::ALL
+                    .iter()
+                    .all(|f| locks.value(f.policy()).is_some()),
             )
         };
         let (sources_connected, forge_connected) = {
@@ -754,6 +767,7 @@ impl Core {
             forge_connected,
             voice_ready,
             dictation_off,
+            features_imposed,
         }
     }
 

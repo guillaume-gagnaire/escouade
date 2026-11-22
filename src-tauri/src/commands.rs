@@ -4301,6 +4301,22 @@ pub async fn demo_remove(core: CoreState<'_>, id: String) -> Res<()> {
     core.demo_remove(&id).await.map_err(err)
 }
 
+/// The assistant of the features (F-2, ESC-559) as the window shows it: open by itself at the first window of the version
+/// that brings the switches, what is used, the features a later version brought.
+#[tauri::command(async)]
+pub fn features_tour_view(core: CoreState) -> crate::features::TourView {
+    core.features_tour_view()
+}
+
+/// A gesture on the assistant of the features: ended or passed, features met in the window of the novelties.
+#[tauri::command(async)]
+pub fn features_tour_act(
+    core: CoreState,
+    act: crate::features::TourAct,
+) -> crate::features::TourView {
+    core.features_tour_act(act)
+}
+
 /// The discovery of the features (ESC-506) as the window shows it. `microphones`: those the window found (`voice_info`),
 /// None when it cannot tell.
 #[tauri::command(async)]

@@ -459,6 +459,9 @@ escouade_command::commands! {
         // « Ce que tu veux brancher » (ESC-512): what it offers, and the plugin of what is chosen from the seed.
         commands::onboarding_offers,
         commands::onboarding_need,
+        // The assistant of the features (F-2, ESC-559): shown in the window alone.
+        commands::features_tour_view,
+        commands::features_tour_act,
         // The discovery of the features (ESC-506).
         commands::discover_view,
         commands::discover_act,

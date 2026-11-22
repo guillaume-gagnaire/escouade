@@ -107,14 +107,22 @@ fn every_tool_of_a_feature_is_a_tool_the_server_has() {
 }
 
 #[test]
-fn a_new_installation_has_every_feature_on_and_nothing_noted_as_used() {
+fn a_new_installation_has_every_feature_off_until_its_assistant_and_nothing_noted_as_used() {
     let dir = test_dir("features-new");
     let data = DataDir::new(dir.join("data"));
     let core = load(&data);
     let s = core.settings.read().clone();
-    assert_eq!(s.features, Some(Features::all(true)));
+    // F-2 (ESC-559): `NEW_INSTALL` is the assistant's choice; its station of the first launch switches them on.
+    assert_eq!(s.features, Some(Features::all(false)));
     assert!(s.features_used.is_empty());
-    assert_eq!(saved(&data)["features"]["kanban"], json!(true));
+    assert_eq!(saved(&data)["features"]["kanban"], json!(false));
+    // The assistant is a station of the journey there, never open by itself as at an update; every feature is met.
+    let saved = core.onboarding.read().clone();
+    assert!(!saved.features_due);
+    assert_eq!(saved.features_known.len(), Feature::ALL.len());
+    let v = core.features_tour_view();
+    assert!(!v.open);
+    assert!(v.new.is_empty());
 }
 
 #[test]
@@ -166,10 +174,45 @@ fn an_update_keeps_on_what_it_uses_and_notes_it_the_rest_as_a_new_installation()
             (Feature::Voice, 0),
         ]
     );
-    // What it uses is on; the rest as a new installation has it: on.
-    assert_eq!(s.features, Some(Features::all(true)));
+    // What it uses is on; the rest as a new installation has it: off (F-2, the assistant's choice).
+    let on: Vec<Feature> = Feature::ALL
+        .into_iter()
+        .filter(|f| s.features.as_ref().unwrap().get(*f))
+        .collect();
+    assert_eq!(
+        on,
+        [
+            Feature::Kanban,
+            Feature::Docs,
+            Feature::Stats,
+            Feature::Scheduled,
+            Feature::Overseer,
+            Feature::Voice
+        ]
+    );
     let file = saved(&data);
     assert_eq!(file["features"]["docs"], json!(true));
+    assert_eq!(file["features"]["editor"], json!(false));
+    // The assistant opens by itself at the next window, and says what is used: « il reste allumé ».
+    let v = core.features_tour_view();
+    assert!(v.open);
+    assert_eq!(
+        v.used
+            .iter()
+            .find(|u| u.feature == Feature::Kanban)
+            .map(|u| u.projects),
+        Some(1)
+    );
+    assert!(
+        !crate::remoteapi::as_client(crate::remoteapi::Client::Remote(1), || core
+            .features_tour_view())
+        .open
+    );
+    // Passed (« Passer : garder l'essentiel »): no switch changes, and it never opens again by itself.
+    let before = core.settings.read().features.clone();
+    assert!(!core.features_tour_act(TourAct::End).open);
+    assert_eq!(core.settings.read().features, before);
+    core.save_now();
     assert_eq!(
         file["featuresUsed"][0],
         json!({ "feature": "kanban", "projects": 1 })
@@ -179,6 +222,10 @@ fn an_update_keeps_on_what_it_uses_and_notes_it_the_rest_as_a_new_installation()
     drop(core);
     let again = load(&data);
     assert!(!again.feature_on(Feature::Docs));
+    assert!(
+        !again.features_tour_view().open,
+        "ended, it never opens again by itself"
+    );
     // Were a new installation to have them off, the rest would be off and what is used on.
     let rest_off = escouade_model::features::settle(&s.features_used, false);
     let on: Vec<Feature> = Feature::ALL
@@ -446,4 +493,92 @@ fn the_cost_and_the_statistics_switch_alone_and_keep_their_data() {
     }
     // Saved, read back whole.
     assert_eq!(saved(&h.core.data)["features"]["cost"], json!(true));
+}
+
+// === F-2 (ESC-559): the assistant ===
+
+#[test]
+fn what_is_used_is_what_was_noted_and_what_is_used_now_each_once() {
+    let u = |feature, projects| FeatureUse { feature, projects };
+    let noted = [u(Feature::Kanban, 1), u(Feature::Voice, 0)];
+    let now = [u(Feature::Kanban, 3), u(Feature::Docs, 2)];
+    assert_eq!(
+        merge_used(&noted, &now),
+        [
+            u(Feature::Kanban, 3),
+            u(Feature::Docs, 2),
+            u(Feature::Voice, 0)
+        ]
+    );
+}
+
+#[test]
+fn a_source_of_tickets_connected_uses_the_kanban() {
+    let h = harness("features-source");
+    assert!(!h
+        .core
+        .features_in_use()
+        .iter()
+        .any(|u| u.feature == Feature::Kanban));
+    h.core.accounts.write().trello = Some(Default::default());
+    let used = h.core.features_tour_view().used;
+    assert_eq!(
+        used.iter()
+            .find(|u| u.feature == Feature::Kanban)
+            .map(|u| u.projects),
+        Some(0)
+    );
+}
+
+#[test]
+fn a_feature_a_later_version_brings_has_its_screen_in_the_novelties_then_is_met() {
+    let h = harness("features-novelties");
+    assert!(h.core.features_tour_view().new.is_empty());
+    // An installation that met the features of before: the voice is « new » to it.
+    h.core
+        .onboarding
+        .write()
+        .features_known
+        .remove(&Feature::Voice);
+    let v = h.core.features_tour_view();
+    assert_eq!(v.new, [Feature::Voice]);
+    assert!(!v.open, "the novelties never open the assistant");
+    let v = h.core.features_tour_act(TourAct::Met {
+        features: vec![Feature::Voice],
+    });
+    assert!(v.new.is_empty());
+    // Ended, the assistant has met them all and its station of the first launch is done.
+    h.core.onboarding.write().features_known.clear();
+    h.core.onboarding.write().features_due = true;
+    let v = h.core.features_tour_act(TourAct::End);
+    assert!(!v.open && v.new.is_empty());
+    assert_eq!(
+        h.core
+            .onboarding
+            .read()
+            .steps
+            .get(&crate::model::OnboardingStep::Features),
+        Some(&crate::model::StepOutcome::Done)
+    );
+}
+
+#[test]
+fn the_assistant_is_kept_in_the_state_and_its_act_reads_from_the_window() {
+    let act: TourAct =
+        serde_json::from_value(json!({ "kind": "met", "features": ["kanban"] })).unwrap();
+    assert_eq!(
+        act,
+        TourAct::Met {
+            features: vec![Feature::Kanban]
+        }
+    );
+    let act: TourAct = serde_json::from_value(json!({ "kind": "end" })).unwrap();
+    assert_eq!(act, TourAct::End);
+    // Kept in state.json with the journey.
+    let s: crate::model::Onboarding = serde_json::from_value(
+        json!({ "featuresDue": true, "featuresKnown": ["kanban", "voice"] }),
+    )
+    .unwrap();
+    assert!(s.features_due);
+    assert_eq!(s.features_known.len(), 2);
 }

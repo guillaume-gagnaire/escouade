@@ -1,5 +1,6 @@
 <script lang="ts">
   import { FEATURE_ICONS, FEATURES, featureRow, featureSwitch, NEEDS } from '../../lib/features';
+  import { reviewTour } from '../../lib/features-tour.svelte';
   import { t } from '../../lib/i18n';
   import { lockLine } from '../../lib/locks.svelte';
   import { SETTINGS_ROWS } from '../../lib/settings-pages';
@@ -19,7 +20,8 @@
   // Réglages › Fonctionnalités (F-1, ESC-550, maquette design/features/reglages-fonctionnalites.png, direction A): the
   // essential first, never switched off; then each feature with what it does, what it takes with it when it is off (its
   // data stay), and its switch. A switch a policy imposes is greyed with who imposes it; « Tâches programmées » goes with
-  // the Kanban. Saved as it changes, as every page. « Revoir la présentation » comes with the assistant (F-2).
+  // the Kanban. Saved as it changes, as every page. « Revoir la présentation » opens the assistant again (F-2, ESC-559),
+  // the settings' window closed first.
   const s = $derived(settingsForm.settings);
 
   /** The switches of the draft, made whole the first time one is set (the core settled them: never null for long). */
@@ -81,6 +83,13 @@
   {/each}
 </div>
 <p class="foot">{t('features.page.foot')}</p>
+<div class="review">
+  <div class="lab">
+    <b class="l">{t('features.tour.review')}</b>
+    <span class="d">{t('features.tour.reviewDesc')}</span>
+  </div>
+  <button class="btn" onclick={() => void reviewTour()}><Icon name="sparkle" size={13} />{t('features.tour.review')}</button>
+</div>
 
 <!-- « Ne plus proposer » of a proposal at the right moment (F-3, ESC-558), given back here. -->
 <Group title={t('features.declined.title')} note={t('features.declined.desc')} data-testid="declined-offers">
@@ -179,6 +188,18 @@
   }
   .ctl[aria-disabled='true'] {
     cursor: default;
+  }
+  .review {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(var(--fg-rgb), 0.06);
+  }
+  .review .btn {
+    flex: none;
+    gap: 6px;
   }
   .foot {
     margin: 14px 0 0;

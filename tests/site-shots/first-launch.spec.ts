@@ -101,6 +101,8 @@ for (const theme of ['dark', 'light'] as const)
         return;
       }
       await journey.getByRole('button', { name: new RegExp(`^${L.continue}`) }).click();
+      // The features (F-2, ESC-559): passed.
+      await journey.getByRole('button', { name: (language === 'fr' ? fr : en).features.tour.skip }).click();
       await journey.getByRole('button', { name: language === 'fr' ? 'Non merci' : 'No thanks' }).click();
       await journey.getByRole('button', { name: L.end.discover }).click();
       await expect(page.getByRole('heading', { level: 1, name: language === 'fr' ? 'À découvrir' : 'Discover' })).toBeVisible();

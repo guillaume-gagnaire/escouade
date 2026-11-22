@@ -667,6 +667,12 @@ export const test = base.extend<{
           autoUpdate: false,
           // A message sent during a turn goes at once, as the tests expect.
           midTurnDelaySecs: 0,
+          // Every feature on, as a user who switched them all (F-2, ESC-559: a new installation has them off until its
+          // assistant, an update off but what it uses), and the assistant of the update not opened. `features: null`
+          // makes the installation one of before the switches.
+          features: Object.fromEntries(
+            ['kanban', 'editor', 'docs', 'cost', 'stats', 'workflows', 'scheduled', 'overseer', 'voice'].map((f) => [f, true]),
+          ),
           ...given,
           accounts: accountsFor(given, appEnv),
         }),

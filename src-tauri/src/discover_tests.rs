@@ -330,6 +330,9 @@ fn load(data: &DataDir) -> std::sync::Arc<Core> {
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), data.clone());
     std::mem::forget(app);
+    // Every feature on, as a user who switched them all: a new installation has them off until its assistant (F-2), and
+    // the discoveries of a feature off are not on the map.
+    core.settings.write().features = Some(crate::features::Features::all(true));
     core
 }
 

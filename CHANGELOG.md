@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Choisis tes fonctionnalités, une par écran, avec une capture de l’app et un grand interrupteur « Activer » : au premier lancement juste après ton premier agent, et à la mise à jour, où ce que tu utilises déjà reste allumé. « Passer » ne garde que l’essentiel, et Réglages › Fonctionnalités te les remontre.
 - Serveur d’équipe : le store de plugins privés de l’équipe. Un administrateur crée sur son poste la clé de l’équipe et son espace de noms, chaque version est contrôlée sur le poste de qui la propose puis sur celui de qui la signe, et chaque membre l’installe lui-même depuis la vue Plugins, « Acme · privé » ; l’équipe peut aussi retirer une version.
 - Serveur d’équipe : chaque version le publie, archives signées pour Linux x64 et arm64 et image Docker, avec un compose pour Caddy et une recette Coolify ; une bêta prend l’étiquette « beta », jamais « latest ».
 - Une bêta se dit bêta partout : sur GitHub, sur Discord et dans la fenêtre « Nouveautés », avec comment revenir à la version stable. Revenir à la 2.2 garde tes projets, tes tickets et tes réglages.

@@ -1,9 +1,9 @@
 ---
 title: "Premier lancement"
 subject: "fenetre"
-sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-harness.png","design/onboarding-2-3/captures/c-modes-clair-1024.png","design/onboarding-2-3/captures/c-projet.png","design/onboarding-2-3/captures/c-agent.png","design/onboarding-2-3/captures/c-agent-clair-1024.png","src-tauri/src/onboarding.rs","src-tauri/src/telemetry.rs","website/content/privacy/fr.md"]
-tickets: ["ESC-503","ESC-504","ESC-505","ESC-506","ESC-512","ESC-507"]
-decisions: [195,215,223]
+sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-harness.png","design/onboarding-2-3/captures/c-modes-clair-1024.png","design/onboarding-2-3/captures/c-projet.png","design/onboarding-2-3/captures/c-agent.png","design/onboarding-2-3/captures/c-agent-clair-1024.png","src-tauri/src/onboarding.rs","src-tauri/src/telemetry.rs","website/content/privacy/fr.md","docs/FEATURES.md § 1 (l'assistant des fonctionnalités)","design/features/assistant.png"]
+tickets: ["ESC-503","ESC-504","ESC-505","ESC-506","ESC-512","ESC-507","ESC-559"]
+decisions: [195,215,223,280]
 compared: null
 ---
 
@@ -191,3 +191,19 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 - Station 5 : son pourquoi ne redit plus ce qu'est un projet (les mots d'Escouade, juste dessous, le disent) : « Dans un projet, chaque agent travaille dans son worktree, sur sa branche : deux agents ne se gênent pas, et rien n'entre dans ta branche sans toi. » Sous la station dans la ligne, à faire : « dossier, clone ou démo ».
 - Station 6, fini : « Pour l'arrêter : Échap, ou ■ sous le message. » n'est dit que pendant le tour, plus une fois qu'il est fini.
 - En 1024 × 728, la ligne ne montre plus les voies à venir (le dessin et « Ensuite : À découvrir », décoratifs, que la fin du parcours dit) : « Tout passer » reste à l'écran sans faire défiler la ligne.
+
+## Station 7, les fonctionnalités (ESC-559)
+
+Une station de plus : **huit**, « 8 stations · environ 3 minutes » (au lieu de « 7 stations · environ 2 minutes »). Elle vient **après le premier agent et avant les statistiques**, qui deviennent la station 8 : l'utilisateur a vu l'app au travail et choisit ce qu'elle montre autour des agents en le sachant ; le premier agent, le moment qui prouve qu'Escouade vaut le temps qu'on lui donne, n'arrive pas plus tard ; les statistiques restent la dernière question, avant que rien ne parte.
+
+- « Que veux-tu voir autour de tes agents ? » — « Une fonctionnalité par écran : allume celles qui te servent. L'essentiel est toujours là : les agents, le panneau Git, les terminaux et les lancements. »
+- Dessous, **l'assistant des fonctionnalités** (voir *Fonctionnalités*) : une fonctionnalité par écran, sa capture de la vraie app, trois points, « Activer le Kanban ». Rien n'est allumé d'avance sur une installation neuve, sauf ce que « Ce que tu veux brancher » a allumé et ce qui est utilisé, dit sur son écran (« Tu l'utilises déjà : elle reste allumée. »). En pied de station : « Tout se change plus tard dans Réglages › Fonctionnalités. »
+- **Le pied** : « Suivant » passe à l'écran suivant, « Continuer » au dernier finit la station ; « Retour » revient d'un écran avant de revenir à la station d'avant ; sa « Plus tard » s'appelle « **Passer : garder l'essentiel** » et ne change aucun interrupteur.
+- **Au clavier** : depuis la question, ↓ va à l'interrupteur (comme aux choix des autres stations), Espace le bascule, Entrée fait « Suivant », ← → changent d'écran, Échap passe la station.
+- **Faite** par le geste seul (« Continuer » au dernier écran, ou l'assistant fini depuis la mise à jour ou « Revoir la présentation ») : ses interrupteurs ont toujours une valeur, l'état réel ne dit pas qu'ils ont été choisis. Refait, la station montre les interrupteurs tels qu'ils sont, et ce qui est utilisé simplement (« Utilisée sur 2 projets »).
+- **Sous la station**, sur la ligne : « 2 allumées », ou « l'essentiel seul ».
+- **Imposée** : quand le poste géré ou l'équipe impose les neuf fonctionnalités, la station est faite et verrouillée : « Toutes les fonctionnalités sont imposées sur ce poste : elles se montrent ici, sans se changer. », traversée en un « Continuer ». Une seule imposée se montre verrouillée sur son écran, avec qui l'impose.
+
+**Ce que tu veux brancher** allume la fonctionnalité de ce qu'on y choisit, une installation neuve ayant tout coupé avant l'assistant : choisir une source de tickets allume le Kanban, choisir la voix (Whisper sur la machine ou un service en ligne) allume la Voix, avant son essai du micro.
+
+**L'entonnoir** : la station est une valeur de plus de `onboarding_step`, `step: features` (page de confidentialité du site mise à jour) ; aucun événement de plus. « Tout passer » la passe avec les autres : 3 stations passées quand le projet et l'agent l'étaient aussi.

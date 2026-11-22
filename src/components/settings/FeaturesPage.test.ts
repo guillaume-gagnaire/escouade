@@ -56,8 +56,8 @@ describe('Réglages › Fonctionnalités (F-1, ESC-550)', () => {
     // What it takes is what the switch describes, for a screen reader.
     const docs = panel().getByRole('switch', { name: 'Espace Docs' });
     expect(document.getElementById(docs.getAttribute('aria-describedby')!)).toHaveTextContent('ses outils MCP disparaissent');
-    // « Revoir la présentation » comes with the assistant (F-2): not before.
-    expect(panel().queryByRole('button', { name: /présentation/ })).toBeNull();
+    // « Revoir la présentation » (F-2, ESC-559): the assistant again.
+    expect(panel().getByRole('button', { name: 'Revoir la présentation' })).toBeInTheDocument();
   });
 
   it('switches a feature off and saves it at once', async () => {

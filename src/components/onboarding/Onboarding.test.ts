@@ -126,7 +126,7 @@ describe('the first launch (ESC-504)', () => {
     ]);
     expect(items[0]).toHaveAttribute('aria-current', 'step');
     expect(items[0]).toHaveTextContent('maintenant');
-    expect(screen.getByText('6 stations · environ 2 minutes')).toBeInTheDocument();
+    expect(screen.getByText('6 stations · environ 3 minutes')).toBeInTheDocument();
     const q = screen.getByRole('heading', { level: 1, name: 'Avec quel harness tes agents travaillent-ils ?' });
     await waitFor(() => expect(q).toHaveFocus());
     expect(q).toHaveAccessibleDescription(/Un harness est le programme d’agent de code de ta machine/);
@@ -350,6 +350,6 @@ describe('the first launch (ESC-504)', () => {
     render(Onboarding);
     expect(screen.getByRole('heading', { name: 'Which harness will your agents run on?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip all' })).toBeInTheDocument();
-    expect(screen.getByText('6 stops · about 2 minutes')).toBeInTheDocument();
+    expect(screen.getByText('6 stops · about 3 minutes')).toBeInTheDocument();
   });
 });

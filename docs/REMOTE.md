@@ -320,6 +320,8 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `feature_offer` : la proposition d’une fonctionnalité coupée à montrer maintenant (F-3, ESC-558), celle du cœur ; jamais pendant le tour d’un agent que le client montre (`visible`)
 - `feature_offer_act`
 - `feature_offers`
+- `features_tour_act`
+- `features_tour_view`
 - `file_suggestions`
 - `forge_check`
 - `forge_connect`

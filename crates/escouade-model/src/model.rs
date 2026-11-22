@@ -239,7 +239,8 @@ pub struct Settings {
     pub overseer: OverseerSettings,
     /// « Fonctionnalités » (Réglages › Fonctionnalités, F-1, ESC-550): each whole feature on or off. None in settings
     /// saved before it: the first start that knows them settles them from what the installation uses
-    /// (`Core::settle_features`); a new installation has them all on.
+    /// (`Core::settle_features`); a new installation has them as `features::NEW_INSTALL` says (off), until the
+    /// assistant of the first launch (F-2) switches them on.
     pub features: Option<crate::features::Features>,
     /// What the installation already used when the switches were settled at an update (`Core::settle_features`): kept
     /// on, and said by the assistant of F-2. Written once, by the backend alone.
@@ -2922,6 +2923,8 @@ pub enum OnboardingStep {
     Project,
     /// The first agent: a message proposed, sent by the user's click, its answer, its first permission, its diff (ESC-505).
     Agent,
+    /// The features (F-2, ESC-559): the assistant, one feature per screen, each switched on or left off.
+    Features,
     /// The usage statistics' agreement.
     Telemetry,
 }
@@ -2987,6 +2990,12 @@ pub struct Onboarding {
     pub first_reply_demo: bool,
     /// The funnel of this run told (sent with the consent, or dropped with a no): never twice.
     pub told: bool,
+    /// The assistant of the features (F-2, ESC-559) to open by itself at the next window: this installation was updated to
+    /// the version that brings the switches (`Core::settle_features`). Ended or passed, never again by itself.
+    pub features_due: bool,
+    /// The features this installation has met, as the switches came to it or in the assistant: one a later version brings
+    /// is not among them until the window of the novelties gives it its screen.
+    pub features_known: BTreeSet<crate::features::Feature>,
     /// The proposals of a feature switched off, at the right moment (F-3, ESC-558): what was noticed and answered.
     pub offers: crate::features::FeatureOffers,
 }

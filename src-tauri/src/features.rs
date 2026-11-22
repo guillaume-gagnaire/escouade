@@ -12,8 +12,18 @@
 //! Its data stay (tickets, pages, scheduled tasks, the Overseer's journal…) and come back when it is on again.
 //!
 //! The switches are settled once, at the first start of the version that brings them (`Core::settle_features`): what
-//! the installation already uses is kept on (and noted, for the assistant of F-2), the rest is as a new installation has
-//! it (`escouade_model::features::NEW_INSTALL`: on).
+//! the installation already uses is kept on (and noted, for the assistant), the rest is as a new installation has it
+//! (`escouade_model::features::NEW_INSTALL`: off, the assistant's choice).
+//!
+//! **The assistant** (F-2, ESC-559, `docs/FEATURES.md` § 1): one feature per screen, a capture of the real app, what it
+//! does in three points and a big switch « Activer ». It is a station of the first launch's journey
+//! (`OnboardingStep::Features`), it opens by itself at the first window of the version that brings the switches on an
+//! installation updated to it ([`Core::features_tour_view`]), and « Revoir la présentation » of Réglages ›
+//! Fonctionnalités opens it again. Its switches are the settings' own (the window saves them as the page does): « Passer »
+//! changes none, so it keeps the essential and what is used. A feature a later version brings has its screen in the
+//! window of the novelties (`TourView::new`).
+
+use serde::{Deserialize, Serialize};
 
 use crate::core::Core;
 use crate::model::{Discovery, Settings};
@@ -200,7 +210,7 @@ impl Core {
                 });
             }
         };
-        // Kanban: the projects with tickets.
+        // Kanban: the projects with tickets; a source of tickets connected (at the first launch, Réglages) feeds it too.
         let with_tickets = {
             let tickets = self.tickets.read();
             projects
@@ -321,6 +331,12 @@ impl Core {
                 projects: 0,
             });
         }
+        if with_tickets == 0 && self.onboarding_facts().sources_connected {
+            used.push(FeatureUse {
+                feature: Feature::Kanban,
+                projects: 0,
+            });
+        }
         used.sort_by_key(|u| u.feature);
         used
     }
@@ -328,8 +344,20 @@ impl Core {
     /// Once, at the first start of the version that brings the switches (F-1): an installation updated keeps on what
     /// it uses (noted in `features_used`), the rest as a new installation has it; a new installation has them all on
     /// already (`Core::load`). Brought within the policies, written at once.
+    /// The installation updated has the assistant open by itself at its next window (`Onboarding::features_due`), and every
+    /// installation has met the features of this version (`Onboarding::features_known`).
     pub(crate) fn settle_features(&self) {
-        if self.settings.read().features.is_some() {
+        let update = self.settings.read().features.is_none();
+        {
+            let mut saved = self.onboarding.write();
+            if saved.features_known.is_empty() {
+                saved.features_known = Feature::ALL.into_iter().collect();
+            }
+            // A new installation has it at its station of the first launch.
+            saved.features_due |= update && !self.fresh;
+        }
+        self.request_save();
+        if !update {
             return;
         }
         let used = self.features_in_use();
@@ -395,6 +423,100 @@ impl Core {
             }
         }
         self.hub.emit(crate::model::UiEvent::DiscoverChanged {});
+    }
+}
+
+/// The assistant of the features (F-2, ESC-559) as the window shows it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TourView {
+    /// To open by itself now: the first window of the version that brings the switches, on an installation updated to it.
+    /// Never for a client of the remote API.
+    pub open: bool,
+    /// What the installation uses, feature by feature: what was noted at the update (`featuresUsed`) and what it uses now
+    /// (a source of tickets connected, the voice set at the first launch). « Il reste allumé ».
+    pub used: Vec<FeatureUse>,
+    /// The features a later update brought that this installation has not met: the window of the novelties gives each
+    /// its screen, with the same switch.
+    pub new: Vec<Feature>,
+}
+
+/// A gesture on the assistant.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TourAct {
+    /// Ended (« Terminer ») or passed (« Passer : garder l'essentiel »): it never opens again by itself, and every
+    /// feature is met. Its switches were saved as they changed; « Passer » changes none.
+    End,
+    /// The features shown in the window of the novelties: met.
+    Met { features: Vec<Feature> },
+}
+
+/// `used` and `now` together, each feature once, with the most projects either says.
+pub fn merge_used(used: &[FeatureUse], now: &[FeatureUse]) -> Vec<FeatureUse> {
+    let mut out: Vec<FeatureUse> = Vec::new();
+    for u in used.iter().chain(now) {
+        match out.iter_mut().find(|o| o.feature == u.feature) {
+            Some(o) => o.projects = o.projects.max(u.projects),
+            None => out.push(u.clone()),
+        }
+    }
+    out.sort_by_key(|u| u.feature);
+    out
+}
+
+/// The view of the assistant, from what is kept and what is used.
+pub fn tour_view(
+    saved: &crate::model::Onboarding,
+    used: Vec<FeatureUse>,
+    window: bool,
+) -> TourView {
+    TourView {
+        open: window && saved.features_due,
+        used,
+        new: if saved.features_known.is_empty() {
+            Vec::new()
+        } else {
+            Feature::ALL
+                .into_iter()
+                .filter(|f| !saved.features_known.contains(f))
+                .collect()
+        },
+    }
+}
+
+/// `act` done on what is kept.
+pub fn tour_apply(saved: &mut crate::model::Onboarding, act: &TourAct) {
+    match act {
+        TourAct::End => {
+            saved.features_due = false;
+            saved.features_known.extend(Feature::ALL);
+            // Its station of the first launch is done too: done again from Aide, it shows so.
+            saved.steps.insert(
+                crate::model::OnboardingStep::Features,
+                crate::model::StepOutcome::Done,
+            );
+        }
+        TourAct::Met { features } => saved.features_known.extend(features.iter().copied()),
+    }
+}
+
+impl Core {
+    /// The assistant of the features as the window shows it (F-2).
+    pub fn features_tour_view(&self) -> TourView {
+        let window = crate::remoteapi::current() == crate::remoteapi::Client::Window;
+        // One lock at a time: a read taken twice waits behind a writer queued in between.
+        let noted = self.settings.read().features_used.clone();
+        let used = merge_used(&noted, &self.features_in_use());
+        let saved = self.onboarding.read().clone();
+        tour_view(&saved, used, window)
+    }
+
+    /// `act` on the assistant; its view then.
+    pub fn features_tour_act(&self, act: TourAct) -> TourView {
+        tour_apply(&mut self.onboarding.write(), &act);
+        self.request_save();
+        self.features_tour_view()
     }
 }
 

@@ -1,9 +1,9 @@
 ---
 title: "Fonctionnalités"
 subject: "fenetre"
-sources: ["docs/FEATURES.md § 1 et § 2 (conception du 2026-10-28, choix du chef)","design/features/reglages-fonctionnalites.png","design/features/assistant.png","design/features/captures/proposition-fonctionnalite-clair-1440.png","docs/ONBOARDING.md § 7 (les découvertes)","crates/escouade-model/src/features.rs (le registre)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur)","src-tauri/src/offers.rs (les propositions, leurs signaux et leurs seuils)","src/lib/features.ts (dans la fenêtre)","src/lib/offers.svelte.ts (les propositions dans la fenêtre)"]
-tickets: ["ESC-550","ESC-558"]
-decisions: [226,276]
+sources: ["docs/FEATURES.md § 1 et § 2 (conception du 2026-10-28, choix du chef)","design/features/reglages-fonctionnalites.png","design/features/assistant.png","design/features/captures/proposition-fonctionnalite-clair-1440.png","docs/ONBOARDING.md § 7 (les découvertes)","crates/escouade-model/src/features.rs (le registre)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur)","src-tauri/src/offers.rs (les propositions, leurs signaux et leurs seuils)","src/lib/features.ts (dans la fenêtre)","src/lib/offers.svelte.ts (les propositions dans la fenêtre)","docs/FEATURES.md § 1 (conception du 2026-10-28, choix du chef)","docs/ONBOARDING.md § 7 (les découvertes) et § 4.5 bis (la station des fonctionnalités)","crates/escouade-model/src/features.rs (le registre, NEW_INSTALL)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur, l'assistant)","src/components/features/FeatureTour.svelte (l'assistant)","tests/site-shots/features-tour.spec.ts (les captures de l'assistant)"]
+tickets: ["ESC-550","ESC-558","ESC-559"]
+decisions: [226,276,280]
 compared: null
 ---
 
@@ -51,7 +51,7 @@ Une page d'Escouade de la direction A, juste après Général : « Fonctionnalit
 - En pied : « Une fonctionnalité coupée disparaît vraiment, ce qu’elle faisait en fond s’arrête ; ses données restent et reviennent quand tu la rallumes. »
 - **« Propositions écartées »** (ESC-558), après le pied : « Ce que tu as choisi de ne plus te voir proposer quand ça servirait. » Une ligne par fonctionnalité écartée par « Ne plus proposer », son icône et son nom, avec « Reproposer » (« Reproposer « Kanban » » pour un lecteur d'écran), qui la rend aux propositions. Sans aucune : « Aucune : Escouade peut te proposer une fonctionnalité coupée au moment où elle servirait, une à la fois, au plus une par jour. »
 - **Les pages d'une fonctionnalité coupée** quittent la barre et la recherche des réglages : Overseer, Voix, et pour un projet Kanban et Tickets importés. Les rangées d'une autre page qu'elle emporte en quittent la recherche aussi.
-- « Revoir la présentation » vient avec l'assistant (F-2) : la page ne l'a pas encore.
+- En pied aussi, **« Revoir la présentation »** rouvre l'assistant (voir *L'assistant* plus bas).
 
 ## Proposer une fonctionnalité coupée au bon moment (ESC-558)
 
@@ -109,9 +109,9 @@ Chaque fonctionnalité a sa stratégie dans la liste unique (`features.kanban` �
 
 ## Après une mise à jour, et pour une installation neuve
 
-- **Une installation neuve** a tout allumé (`NEW_INSTALL`), jusqu'à ce que l'assistant du premier lancement (F-2) fasse le choix. Ainsi rien n'est caché à qui ne voit pas l'assistant (un parcours passé, un client d'un serveur).
+- **Une installation neuve** a tout coupé sauf l'essentiel (`NEW_INSTALL`, le choix de l'assistant, ESC-559) : la station des fonctionnalités du premier lancement allume chacune d'un geste, et « Ce que tu veux brancher » allume celle de ce qu'on y choisit.
 - **Une installation mise à jour** vers la version qui apporte les interrupteurs les règle une fois, à son premier démarrage. Elle relève ce qu'elle utilise et l'allume :
-  - le Kanban : les projets qui ont des tickets ;
+  - le Kanban : les projets qui ont des tickets, ou une source de tickets connectée (ESC-559) ;
   - l'Espace Docs : les projets qui ont une spec, des décisions ou des documents dans `.escouade/`, une branche des docs, ou une discussion ;
   - l'Éditeur : un fichier ouvert dans l'éditeur (la découverte), un volet de l'éditeur, des extensions, des serveurs de langage réglés ou permis, une taille de texte réglée ;
   - les Workflows : les projets dont des workflows ont été lus ;
@@ -120,8 +120,8 @@ Chaque fonctionnalité a sa stratégie dans la liste unique (`features.kanban` �
   - la Voix : réglée, un modèle téléchargé, ou la dictée déjà utilisée ;
   - les Statistiques : leur vue laissée ouverte ;
   - le Coût : un budget par jour, ou les économies du cache dans la barre.
-  Le reste suit la valeur d'une installation neuve : allumé.
-- Ce relevé est gardé (`featuresUsed`, le nombre de projets pour chacune). Réglages › Fonctionnalités le dit. L'assistant de F-2 le dira (« Tu l'utilises déjà sur 2 projets : il reste allumé ») et ne coupera jamais une fonctionnalité utilisée. Le relevé ne se refait jamais : le choix de l'utilisateur n'est plus deviné.
+  Le reste suit la valeur d'une installation neuve : coupé, jusqu'à l'assistant de la mise à jour qui le présente.
+- Ce relevé est gardé (`featuresUsed`, le nombre de projets pour chacune). Réglages › Fonctionnalités le dit. L'assistant le dit (« Tu l'utilises déjà sur 2 projets : il reste allumé ») et son « Passer » ne coupe jamais une fonctionnalité utilisée. Le relevé ne se refait jamais : le choix de l'utilisateur n'est plus deviné.
 
 ## À distance
 
@@ -133,5 +133,35 @@ L'état des fonctionnalités vient du cœur : un client de l'API distante ou une
 - Un client MCP qui a gardé la liste d'avant voit encore les outils d'une fonctionnalité coupée : leur appel est refusé avec la raison.
 - Le Coût coupé ne retire pas les multiplicateurs de prix des modèles (Copilot « ×3 ») du menu des modèles : ils servent à choisir un modèle.
 - Les découvertes des fonctionnalités coupées partent de la carte ; une découverte faite reste faite et revient cochée.
-- « Revoir la présentation » et l'assistant (F-2) viennent après.
 - Les propositions : les jours et les heures de « la même consigne » sont ceux du fuseau du cœur ; une proposition montrée sur deux clients à la fois y reste jusqu'à sa réponse sur chacun (la réponse de l'un vaut pour le cœur, pas pour l'écran de l'autre). L'Overseer n'est remarqué que lorsque la fenêtre redemande (chaque minute) : des agents en attente sur trois projets moins d'une minute peuvent passer inaperçus.
+
+## L'assistant (ESC-559)
+
+**Une fonctionnalité par écran** (maquette `design/features/assistant.png`, mise dans la ligne du premier lancement) :
+
+- En haut, les fonctionnalités en pastilles : « ✓ Agents et conversation » d'abord (l'essentiel, toujours là, pas un bouton), puis les neuf dans l'ordre du registre, cochées quand elles sont allumées ; celle à l'écran est l'étape en cours (`aria-current`). À droite, « 2 / 9 » (« Fonctionnalité 2 sur 9 » pour un lecteur d'écran).
+- L'écran : **une capture de la vraie app** (la fonctionnalité à sa place, dans le thème et la langue de la fenêtre), son titre (« Le Kanban »), à quoi elle sert en une phrase, **trois points**, et **un grand interrupteur « Activer le Kanban »** (un `switch`, décrit par ce qu'elle emporte quand on la coupe). Dessous :
+  - ce qui est utilisé : « Tu l'utilises déjà sur 2 projets : il reste allumé. » (« Tu l'utilises déjà : elle reste allumée. » pour une fonctionnalité sans projet ; accordé à chacune) ; quand l'assistant est revu, simplement « Utilisée sur 2 projets » ;
+  - les Tâches programmées, Kanban coupé : « Part avec « Kanban » : rallume-le d'abord. », l'interrupteur fermé ;
+  - **une fonctionnalité imposée** par le poste géré ou l'équipe : l'interrupteur grisé, le cadenas et qui l'impose (« Imposé par la stratégie de ce poste », « Imposé par l'équipe Acme »).
+- Ses interrupteurs sont ceux des réglages : chaque geste s'enregistre aussitôt, comme sur la page Réglages › Fonctionnalités, et le cœur arrête ou relance ce qu'elle fait.
+- On passe d'un écran à l'autre par « Suivant » et « Précédent », par les pastilles, ou par ← →. Clavier, lecteur d'écran, « réduire les animations » (un fondu seulement), 1440 × 900 et 1024 × 728 (la capture passe au-dessus du texte quand la place manque), clair et sombre, français et anglais.
+- **« Passer : garder l'essentiel » ne change aucun interrupteur** : ce qui n'a pas été allumé reste coupé, ce qui est utilisé reste allumé. Il ne garde donc que l'essentiel et ce qui est utilisé.
+- **Ce qui est utilisé** : le relevé de la mise à jour (`featuresUsed`) et ce qui l'est au moment où l'assistant s'ouvre, avec le plus grand nombre de projets des deux. Une source de tickets connectée compte pour le Kanban.
+
+**Où il s'ouvre** :
+
+- **Au premier lancement**, c'est une station de la ligne, entre le premier agent et les statistiques (voir *Premier lancement*).
+- **À la première fenêtre de la version qui apporte le choix**, sur une installation qui l'a mise à jour : la fenêtre « Choisis tes fonctionnalités » (« Escouade te laisse maintenant choisir ce qu'il te montre. Ce que tu utilises reste allumé ; le reste attend ton geste. ») s'ouvre d'elle-même, par-dessus l'app, jamais sur le premier lancement. « Passer : garder l'essentiel », « Précédent », « Suivant », « Terminer » au dernier écran ; Échap passe. Finie ou passée, elle ne revient plus d'elle-même. Un client de l'API distante ne la voit jamais.
+- **« Revoir la présentation »**, au pied de Réglages › Fonctionnalités (« Chaque fonctionnalité, écran par écran, avec son interrupteur. ») : la fenêtre des réglages se ferme, l'assistant s'ouvre, « Les fonctionnalités d'Escouade », avec les interrupteurs tels qu'ils sont ; « Fermer la présentation » au lieu de « Passer ».
+- **La fenêtre des nouveautés** (celle d'une mise à jour installée, « Voir les nouveautés ») : une fonctionnalité qu'une mise à jour apporte, que l'installation n'a pas encore rencontrée, y a son écran et le même interrupteur, sous « Nouvelle fonctionnalité », avant les notes. Elle y vient allumée (un interrupteur absent des réglages est allumé) ; vue, elle est rencontrée et ne revient plus. La 2.3 apporte les neuf ensemble : l'assistant les présente, la fenêtre des nouveautés n'en a aucune.
+
+**L'état gardé** (`state.json`, avec le premier lancement) : l'assistant de la mise à jour à ouvrir (`featuresDue`, posé par le relevé d'une installation mise à jour, jamais d'une neuve) et les fonctionnalités rencontrées (`featuresKnown` : toutes celles de la version au premier démarrage, puis celles que la fenêtre des nouveautés a montrées). Commandes `features_tour_view` et `features_tour_act` (la fenêtre seule les montre, servies comme les autres).
+
+**Les captures** viennent de la vraie app, refaites par un script : `npm run site-shots -- --grep "features"` (`tests/site-shots/features-tour.spec.ts`, sur la démo des captures du site), chaque fonctionnalité dans les deux thèmes et les deux langues, en JPEG de 960 × 540, dans `public/features/`. Une capture qui manque laisse l'icône de la fonctionnalité à sa place.
+
+## Une installation neuve, une mise à jour : le choix de l'assistant (ESC-559)
+
+- **Une installation neuve a toutes les fonctionnalités coupées** (`NEW_INSTALL`), l'essentiel seul, jusqu'à la station de l'assistant du premier lancement, où chacune s'allume d'un geste. Ce que l'utilisateur choisit à « Ce que tu veux brancher » allume sa fonctionnalité : une source de tickets le Kanban, la voix (Whisper ou un service) la Voix.
+- **Une installation mise à jour** garde allumé ce qu'elle utilise (le relevé) et coupe le reste jusqu'à l'assistant de la mise à jour, qui le lui présente. Seule la constante `NEW_INSTALL` a changé dans le cœur.
+- Ce que l'utilisateur choisit n'est jamais deviné ensuite : le relevé ne se refait pas, l'assistant ne s'ouvre plus de lui-même une fois fini ou passé.

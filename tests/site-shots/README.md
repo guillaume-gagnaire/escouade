@@ -23,6 +23,7 @@ npm run site-shots                    # les 30 images, en français puis en angl
 - `npm run site-shots -- --project=fr` (ou `en`) : une langue seulement.
 - `npm run site-shots -- --grep "code hosts"` : les 4 images des hébergeurs seulement (`prs`, `pr-review`, `board-review`, `environments`), contre le faux GitHub de `tests/fixtures/fake-trackers.mjs`, sur une démo à part : un ticket « En revue » et deux tickets mergés aux commits des environnements.
 - `npm run site-shots -- --grep "first launch"` : les 4 images du premier lancement seulement (`first-launch-harness` et `first-launch-agent` en sombre, `first-launch-defaults` et `first-launch-discover` en clair), sur une nouvelle installation avec le faux `claude` connecté et le projet de démonstration (`first-launch.spec.ts`), pour la page « Premiers pas » de la doc.
+- `npm run site-shots -- --grep "features"` : les 36 captures de l'assistant des fonctionnalités (ESC-559), pas celles du site : chaque fonctionnalité à sa place dans l'app, dans les deux thèmes, en JPEG de 960 × 540 dans `public/features/<fr|en>/` (`features-tour.spec.ts`), que l'app embarque et montre. À refaire quand l'interface d'une fonctionnalité change, puis `npx tauri build --debug --no-bundle`.
 - `ESCOUADE_SHOTS_OUT=C:\tmp\shots` : les images ailleurs que dans le site, pour les regarder d'abord ; en cas d'échec, `test-results/…/failed-<langue>.png` montre la fenêtre.
 - `ESCOUADE_E2E_ROOT` : un autre dossier de démo, à un chemin qui ne dit rien de la machine.
 

@@ -20,6 +20,8 @@ import type {
   HookupOffer,
   OnboardingAct,
   OnboardingView,
+  FeaturesTourView,
+  FeaturesTourAct,
   BackupDiff,
   BackupsView,
   RestoreOutcome,
@@ -229,6 +231,10 @@ export const api = {
   telemetrySet: (consent: boolean) => invoke<void>('telemetry_set', { consent }),
   /** The first launch's journey (ESC-504): open at a new installation's first start, or left half-way. */
   onboardingView: () => invoke<OnboardingView>('onboarding_view'),
+  /** The assistant of the features (F-2, ESC-559): open by itself after the update that brings them, what is used, what is new. */
+  featuresTourView: () => invoke<FeaturesTourView>('features_tour_view'),
+  /** A gesture on it: ended or passed, features met in the window of the novelties. */
+  featuresTourAct: (act: FeaturesTourAct) => invoke<FeaturesTourView>('features_tour_act', { act }),
   /** A station done or passed, « Tout passer », its end, « Refaire le premier lancement »; the journey as it then is. */
   onboardingAct: (act: OnboardingAct) => invoke<OnboardingView>('onboarding_act', { act }),
   /** What « Ce que tu veux brancher » offers (ESC-512): the sources, the voice services, the code hosts, read by the core. */

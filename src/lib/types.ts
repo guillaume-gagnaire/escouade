@@ -4233,7 +4233,7 @@ export interface OverseerView {
 }
 
 /** A station of the first launch's journey (ESC-504, `docs/ONBOARDING.md` § 4), in its order. */
-export type OnboardingStep = 'harness' | 'account' | 'defaults' | 'hookups' | 'project' | 'agent' | 'telemetry';
+export type OnboardingStep = 'harness' | 'account' | 'defaults' | 'hookups' | 'project' | 'agent' | 'features' | 'telemetry';
 
 /** Where a station stands (`onboarding::StepStatus`): done by the real state, passed, or imposed by a policy. */
 export type StepStatus = 'todo' | 'done' | 'skipped' | 'policy';
@@ -4524,6 +4524,18 @@ export interface FeatureUse {
   projects: number;
 }
 
+/** The assistant of the features (F-2, ESC-559, `features::TourView`). */
+export interface FeaturesTourView {
+  /** To open by itself now: the first window of the version that brings the switches, on an installation updated to it. */
+  open: boolean;
+  /** What the installation uses: noted at the update, and now (a source of tickets, the voice set). « Il reste allumé ». */
+  used: FeatureUse[];
+  /** The features a later update brought, not met yet: the window of the novelties gives each its screen. */
+  new: Feature[];
+}
+
+/** A gesture on the assistant of the features (`features::TourAct`). */
+export type FeaturesTourAct = { kind: 'end' } | { kind: 'met'; features: Feature[] };
 /** What Escouade noticed of a feature switched off (F-3, ESC-558, `offers::Signal`). */
 export type OfferSignal =
   'mcpTickets' | 'longPrompts' | 'specEdits' | 'documents' | 'usageLimit' | 'agentFiles' | 'sameMessage' | 'waitingProjects';

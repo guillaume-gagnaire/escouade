@@ -82,6 +82,9 @@ test.describe('a first launch with Claude Code signed in on the machine', () => 
     await expect(page.getByRole('heading', { level: 1, name: 'Ton premier message' })).toBeVisible();
     await expect(journey).toContainText('Ton premier agent a besoin d’un projet');
     await page.keyboard.press('Escape');
+    // The features (F-2, ESC-559): Échap is « Passer : garder l’essentiel ».
+    await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu voir autour de tes agents ?' })).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
     const line = page.getByRole('navigation', { name: 'Les stations du premier lancement' });
     await expect(line.getByRole('listitem').nth(3)).toContainText('rien de branché');
@@ -92,7 +95,7 @@ test.describe('a first launch with Claude Code signed in on the machine', () => 
     await journey.getByRole('button', { name: 'Non merci' }).click();
     await expect.poll(() => settings().telemetry).toBe(false);
     await expect(journey.getByRole('heading', { name: 'Escouade est prêt' })).toBeVisible();
-    await expect(journey).toContainText('2 stations passées : elles t’attendent dans Aide › Premier lancement.');
+    await expect(journey).toContainText('3 stations passées : elles t’attendent dans Aide › Premier lancement.');
     await journey.getByRole('button', { name: /Commencer/ }).click();
     await expect(journey).toBeHidden();
     // The app: no project yet, the way to the first one.
@@ -105,6 +108,7 @@ test.describe('a first launch with Claude Code signed in on the machine', () => 
       hookups: 'done',
       project: 'skipped',
       agent: 'skipped',
+      features: 'skipped',
       telemetry: 'done',
     });
     expect(state().onboarding.hookups).toEqual({ sources: 'skipped', voice: 'skipped', forge: 'skipped' });
@@ -163,7 +167,7 @@ test.describe('a first launch with no harness on the machine', () => {
     await expect(page.getByRole('region', { name: 'Aucun harness trouvé' })).toBeVisible();
     const state = () => read(path.join(app.root, 'data', 'state.json'));
     await expect.poll(() => state().onboarding?.finished ?? null).not.toBeNull();
-    expect(Object.values(state().onboarding.steps)).toEqual(['skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped']);
+    expect(Object.values(state().onboarding.steps)).toEqual(['skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped']);
     // The statistics passed: asked once more at the next start, as the window of before, then never again.
     page = await app.restart();
     const ask = page.getByRole('dialog', { name: 'Aider à améliorer Escouade ?' });
@@ -234,6 +238,10 @@ for (const theme of ['dark', 'light'] as const) {
       await page.keyboard.press('Escape');
       await expect(page.getByRole('heading', { level: 1, name: 'Ton premier message' })).toBeVisible();
       await whole('agent');
+      await page.keyboard.press('Escape');
+      // The features (F-2, ESC-559): one feature per screen, its switch.
+      await expect(page.getByRole('heading', { level: 1, name: 'Que veux-tu voir autour de tes agents ?' })).toBeVisible();
+      await whole('fonctionnalites');
       await page.keyboard.press('Escape');
       await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
       await whole('statistiques');

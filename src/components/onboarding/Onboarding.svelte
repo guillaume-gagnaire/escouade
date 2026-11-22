@@ -5,12 +5,14 @@
   import { openMap } from '../../lib/discover.svelte';
   import { t } from '../../lib/i18n';
   import { before, close, end, leave, onboarding, refresh, skipAll, stations, statusOf, type Primary } from '../../lib/onboarding.svelte';
+  import { onCount } from '../../lib/features-tour.svelte';
   import { locks } from '../../lib/locks.svelte';
   import { app } from '../../lib/state.svelte';
   import type { OnboardingStep } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import AccountStation from './AccountStation.svelte';
   import DefaultsStation from './DefaultsStation.svelte';
+  import FeaturesStation from './FeaturesStation.svelte';
   import AgentStation from './AgentStation.svelte';
   import HarnessStation from './HarnessStation.svelte';
   import HookupsStation from './HookupsStation.svelte';
@@ -61,6 +63,7 @@
     await leave(at, 'skipped');
   }
   function back() {
+    if (at && primary?.back?.()) return;
     const b = at ? before(at) : list.at(-1);
     if (b) onboarding.at = b;
   }
@@ -98,7 +101,9 @@
       else start();
     } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !target.closest('[role=radiogroup]')) {
       // From the question, to its choices.
-      const radio = document.querySelector<HTMLElement>('.onb [role=radio][tabindex="0"], .onb [role=checkbox][data-card]');
+      const radio = document.querySelector<HTMLElement>(
+        '.onb [role=radio][tabindex="0"], .onb [role=checkbox][data-card], .onb [role=switch][data-tour]',
+      );
       if (radio) {
         e.preventDefault();
         radio.focus();
@@ -133,6 +138,10 @@
         return app.projects[0]?.name ?? t(`onboarding.stations.${step}.todo`);
       case 'agent':
         return Object.values(app.agents).find((a) => a.prompts > 0)?.name ?? t(`onboarding.stations.${step}.todo`);
+      case 'features': {
+        const n = onCount();
+        return n ? t('features.tour.on', { count: n }) : t('features.tour.none');
+      }
       case 'telemetry':
         return app.settings.telemetry ? t('shell.telemetry.yes') : t('shell.telemetry.no');
     }
@@ -195,6 +204,8 @@
           <ProjectStation bind:primary />
         {:else if at === 'agent'}
           <AgentStation bind:primary />
+        {:else if at === 'features'}
+          <FeaturesStation bind:primary />
         {:else if at === 'telemetry'}
           <TelemetryStation bind:primary />
         {:else}
@@ -217,7 +228,7 @@
       {/if}
       <span class="sp"></span>
       {#if at}
-        <button class="btn ghost" disabled={busy} onclick={later}>{t('onboarding.later')}</button>
+        <button class="btn ghost" disabled={busy} onclick={later}>{primary?.later ?? t('onboarding.later')}</button>
         {#if primary}
           <button class="btn primary lg" disabled={busy || primary.disabled} onclick={go}
             >{primary.label}<Icon name="right" size={13} /></button

@@ -102,9 +102,10 @@ impl Feature {
     }
 }
 
-/// The switches of the features (`Settings::features`): on unless switched off. A new installation has them all on,
-/// until the assistant of the first start chooses (F-2); an installation updated to the version that brings them has
-/// what it already uses on (`Core::settle_features`).
+/// The switches of the features (`Settings::features`): a switch missing from the file is on (a feature a later version
+/// brings comes on, and the window of the novelties presents it). A new installation has them as `NEW_INSTALL` says, and
+/// the assistant of the first launch chooses (F-2); an installation updated to the version that brings them has what it
+/// already uses on, the rest as `NEW_INSTALL` says (`Core::settle_features`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Features {
@@ -195,9 +196,11 @@ pub struct FeatureUse {
     pub projects: u32,
 }
 
-/// What a new installation has, until the assistant of the first start (F-2) chooses: every feature on, so that
-/// nothing is hidden from whoever never sees the assistant (a device whose journey is passed, a client of a server).
-pub const NEW_INSTALL: bool = true;
+/// What a new installation has, and what an updated one has of what it does not use: the choice of the assistant (F-2,
+/// ESC-559), where each feature is switched on by a gesture and « Passer » keeps only the essential and what is used.
+/// Every feature off until then: the assistant of the first launch, or the one of the update, presents them one by one.
+/// (F-1 had them all on until the assistant came.)
+pub const NEW_INSTALL: bool = false;
 
 /// The switches of an installation updated to the version that brings them: what it uses on, the rest as a new
 /// installation has it (`fresh`, `NEW_INSTALL` in the app).
@@ -282,6 +285,20 @@ mod tests {
         s.set(Feature::Docs, false);
         let off: Vec<_> = Feature::ALL.into_iter().filter(|f| !s.on(*f)).collect();
         assert_eq!(off, vec![Feature::Docs]);
+    }
+
+    #[test]
+    fn the_assistant_chooses_a_new_installation_and_an_update_keeps_what_it_uses() {
+        // F-2 (ESC-559): nothing on before the assistant's gesture, but what is used.
+        const { assert!(!NEW_INSTALL) };
+        assert_eq!(settle(&[], NEW_INSTALL), Features::all(false));
+        let used = [FeatureUse {
+            feature: Feature::Kanban,
+            projects: 2,
+        }];
+        let s = settle(&used, NEW_INSTALL);
+        let on: Vec<_> = Feature::ALL.into_iter().filter(|f| s.on(*f)).collect();
+        assert_eq!(on, vec![Feature::Kanban]);
     }
 
     #[test]

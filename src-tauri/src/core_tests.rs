@@ -118,6 +118,8 @@ pub(crate) fn harness(name: &str) -> Harness {
         os_notifications: false,
         idle_stop_minutes: 1,
         accounts: vec![crate::accounts::principal()],
+        // Every feature on, as a user who switched them all (F-2: a new installation has none until its assistant).
+        features: Some(crate::features::Features::all(true)),
         ..Default::default()
     };
     std::fs::write(data.settings_file(), serde_json::to_vec(&settings).unwrap()).unwrap();

@@ -149,7 +149,7 @@ describe('« Ce que tu veux brancher » (ESC-512)', () => {
     const line = within(screen.getByRole('navigation')).getAllByRole('listitem');
     expect(line[3]).toHaveTextContent('Ce que tu veux brancher');
     expect(line[3].querySelector('[aria-current="step"]')).not.toBeNull();
-    expect(screen.getByText('7 stations · environ 2 minutes')).toBeInTheDocument();
+    expect(screen.getByText('7 stations · environ 3 minutes')).toBeInTheDocument();
     expect(cards().map((c) => c.textContent?.trim())).toEqual(['Une source de tickets', 'La voix', 'Un hébergeur de code']);
     for (const c of cards()) expect(c).toHaveAttribute('aria-checked', 'false');
     // The real list of the core: a source of a plugin of the store among them, named as it is.
