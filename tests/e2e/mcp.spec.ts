@@ -340,6 +340,20 @@ test.describe('a private project', () => {
     return rows.map((r) => r.name).sort();
   }
 
+  /** « Projet privé » switched on in the settings of `project`. */
+  async function makePrivate(page: import('@playwright/test').Page, project: string) {
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await openSettingsPage(dialog, 'Confidentialité');
+    await dialog.getByRole('button', { name: project }).click();
+    await dialog.getByRole('switch', { name: 'Projet privé' }).click();
+    await closeSettings(dialog);
+  }
+
+  // What its agent's conversation says when Claude Code is not turned on for the project made private (ESC-582).
+  const STOPPED =
+    'Claude Code n’est pas activé pour ce projet privé : son plugin n’en reçoit rien tant que tu ne l’y actives pas (« Activer »). L’agent s’arrête.';
+
   test('is listed to its own agents alone, who see no other, and the user sees both', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);
@@ -347,26 +361,56 @@ test.describe('a private project', () => {
     const open = agentServer(streams(app)[0].argv);
     await addProject(page, app.repo, { name: 'coffre' });
     await expect.poll(() => streams(app).length).toBe(2);
-    const vault = agentServer(streams(app)[1].argv);
     // Before: neither is private, each agent sees both.
     expect(await projectNames(open)).toEqual(['coffre', 'demo-api']);
-    // « Projet privé » switched on in the settings of « coffre ».
-    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await openSettingsPage(dialog, 'Confidentialité');
-    await dialog.getByRole('button', { name: 'coffre' }).click();
-    await dialog.getByRole('switch', { name: 'Projet privé' }).click();
-    await closeSettings(dialog);
+    expect(await projectNames(agentServer(streams(app)[1].argv))).toEqual(['coffre', 'demo-api']);
+    await makePrivate(page, 'coffre');
     // Its tile says so; the other's does not.
-    const lock = 'Projet privé : invisible pour les agents des autres projets';
     await expect(page.getByRole('tab', { name: 'coffre, privé' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'coffre, privé' }).locator('.lock')).toBeVisible();
     await expect(page.getByRole('tab', { name: /^demo-api/ }).locator('.lock')).toHaveCount(0);
+    // A private project has Claude Code off until the user turns it on there (ESC-404): its agent at rest stopped
+    // (ESC-582). « Activer » on its card, the agreement, and its next message starts it again, with a token of its own.
+    await page.locator('.agents .card').first().click();
+    const held = page.getByTestId('harness-held');
+    await expect(held).toContainText('Claude Code n’est pas activé pour ce projet privé');
+    await held.getByRole('button', { name: 'Activer' }).click();
+    const ask = page.getByRole('dialog', { name: 'Activer Claude Code pour ce projet privé ?' });
+    await ask.getByRole('button', { name: 'Activer' }).click();
+    await expect(held).toBeHidden();
+    await send(page, 'Bonjour');
+    await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
+    await expect.poll(() => streams(app).length).toBe(3);
+    const vault = agentServer(streams(app)[2].argv);
     expect(await projectNames(open)).toEqual(['demo-api']);
     expect(await projectNames(vault)).toEqual(['coffre']);
     // Claude outside Escouade, the user's own token: both.
     await expect.poll(() => declared(app)?.token ?? null).not.toBeNull();
     expect(await projectNames(declared(app)!)).toEqual(['coffre', 'demo-api']);
+  });
+
+  test('its agent on a harness not turned on there stops, and the server refuses it with a JSON-RPC error', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo, { name: 'coffre' });
+    await expect.poll(() => streams(app).length).toBe(1);
+    const vault = agentServer(streams(app)[0].argv);
+    expect(await projectNames(vault)).toEqual(['coffre']);
+    await makePrivate(page, 'coffre');
+    // Its conversation says why it stops, and its card offers « Activer ».
+    await page.locator('.agents .card').first().click();
+    await expect(page.getByText(STOPPED)).toBeVisible();
+    await expect(page.getByTestId('harness-held').getByRole('button', { name: 'Activer' })).toBeVisible();
+    // Its token went with its process: the server answers the JSON-RPC error its client reads, not a bare text.
+    await expect.poll(async () => (await rpc(vault, 3, 'tools/call', { name: 'list_projects', arguments: {} })).status).toBe(401);
+    const refused = await rpc(vault, 4, 'tools/call', { name: 'list_projects', arguments: {} });
+    expect(refused.json).toEqual({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32001, message: 'Requête refusée : jeton inconnu' },
+    });
+    // Nothing starts it again until the user turns Claude Code on.
+    await page.waitForTimeout(1000);
+    expect(streams(app)).toHaveLength(1);
   });
 });
 

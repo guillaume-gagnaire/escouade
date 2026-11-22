@@ -713,6 +713,9 @@ class SettingsForm {
         // What was saved, and nothing else of the project.
         Object.assign(p, fields, links ? { integrations: links } : {});
         this.#rebase(id, (b) => ({ ...b, ...sent }));
+        // Made private or not (ESC-619): its harnesses not turned on there now ask, or no longer; an agent the core just
+        // stopped for it (ESC-582) shows « Activer » on its card.
+        if (fields.private !== undefined) void app.refreshHarnessScope();
       } else if (!saved) ok = false;
     }
     const board = this.#boardChanges(id);

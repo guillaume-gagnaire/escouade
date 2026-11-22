@@ -1,7 +1,7 @@
 //! The MCP server on a free port, against a real MCP client (rmcp's) and raw HTTP requests.
 
 use super::activity::{self, ActivityEntry, Outcome};
-use super::http::{MAX_BODY, MAX_TEXT_BODY};
+use super::http::{INVALID_PARAMS, INVALID_REQUEST, MAX_BODY, MAX_TEXT_BODY, REFUSED};
 use super::tools::Tools;
 use super::*;
 use crate::core_tests::{harness, Harness};
@@ -300,15 +300,28 @@ async fn post_or_cut(port: u16, headers: &[(&str, &str)], body: &str) -> Option<
     Some((resp.status().as_u16(), resp.text().await.ok()?))
 }
 
-/// Refused at the gate for its size: 413 (its text when it says one), or the connection cut while
-/// the body was written.
+/// Refused at the gate for its size: 413 (the message of its JSON-RPC error, answering the id 1
+/// of `call_of`, when it says one), or the connection cut while the body was written.
 async fn refused_for_size(port: u16, headers: &[(&str, &str)], body: &str, says: Option<&str>) {
     if let Some((status, text)) = post_or_cut(port, headers, body).await {
         assert_eq!(status, 413, "{text}");
         if let Some(says) = says {
-            assert_eq!(text, says);
+            assert_eq!(refusal(&text, json!(1), INVALID_REQUEST), says);
         }
     }
+}
+
+/// The message of a refusal at the gate, once its body is seen to be a well-formed JSON-RPC error
+/// (ESC-619) answering `id` with `code`, and nothing else.
+fn refusal(text: &str, id: Value, code: i64) -> String {
+    let answer: Value = serde_json::from_str(text).unwrap_or_else(|e| panic!("{e}: {text}"));
+    assert_eq!(answer["jsonrpc"], "2.0", "{text}");
+    assert_eq!(answer["id"], id, "{text}");
+    assert_eq!(answer["error"]["code"], code, "{text}");
+    assert!(answer.get("result").is_none(), "{text}");
+    assert_eq!(answer.as_object().unwrap().len(), 3, "{text}");
+    assert_eq!(answer["error"].as_object().unwrap().len(), 2, "{text}");
+    answer["error"]["message"].as_str().unwrap().to_string()
 }
 
 pub(super) fn bearer(token: &str) -> String {
@@ -1394,7 +1407,10 @@ async fn a_call_of_an_unknown_tool_is_refused_before_rmcp_keeps_its_name() {
         )
         .await;
         assert_eq!(status, 400, "{text}");
-        assert_eq!(text, "Requête refusée : outil inconnu");
+        assert_eq!(
+            refusal(&text, json!(1), INVALID_PARAMS),
+            "Requête refusée : outil inconnu"
+        );
     }
     // In a batch, or with a name that is no string, it is refused all the same.
     let batch = format!(
@@ -1448,6 +1464,98 @@ async fn a_request_without_image_or_file_is_capped_far_below_the_one_of_a_ticket
     }
     // Beyond 32 MiB nothing passes, declared or not.
     refused_for_size(port, &headers, &call_of("create_ticket", MAX_BODY), None).await;
+    h.core.mcp.stop();
+}
+
+/// ESC-619: whatever the guard that refuses it, a request is answered a JSON-RPC error its client
+/// reads (`application/json`, `jsonrpc`, `id`, `error.code`, `error.message`), never a bare text,
+/// with the HTTP status of the guard: an agent whose process stopped (its token forgotten) reads
+/// why, as the JSON it awaits.
+#[tokio::test]
+async fn a_request_refused_at_the_gate_is_answered_a_well_formed_json_rpc_error() {
+    let h = harness("mcp-refusal-json-rpc");
+    let (port, token) = started(&h);
+    let auth = bearer(&token);
+    let answer = |status: u16, resp: &reqwest::Response| {
+        assert_eq!(resp.status().as_u16(), status);
+        assert_eq!(
+            resp.headers()["content-type"].to_str().unwrap(),
+            "application/json"
+        );
+    };
+    let send = |headers: Vec<(&'static str, String)>, body: String| {
+        let mut req = http()
+            .post(url(port))
+            .header("content-type", "application/json")
+            .header("accept", "application/json, text/event-stream");
+        for (name, value) in headers {
+            req = req.header(name, value);
+        }
+        req.body(body).send()
+    };
+    // No token, or one the server no longer knows (an agent's whose process stopped): 401, the
+    // id unread (`null`), `WWW-Authenticate` as ever.
+    for headers in [
+        vec![],
+        vec![("authorization", bearer("jeton-d-un-process-arrete"))],
+    ] {
+        let resp = send(headers, INITIALIZE.to_string()).await.unwrap();
+        answer(401, &resp);
+        assert_eq!(resp.headers()["www-authenticate"], "Bearer");
+        let text = resp.text().await.unwrap();
+        let message = refusal(&text, Value::Null, REFUSED);
+        assert!(message.starts_with("Requête refusée : "), "{message}");
+    }
+    // A web page's Origin: 403.
+    let resp = send(
+        vec![
+            ("origin", "http://localhost".into()),
+            ("authorization", auth.clone()),
+        ],
+        INITIALIZE.to_string(),
+    )
+    .await
+    .unwrap();
+    answer(403, &resp);
+    assert_eq!(
+        refusal(&resp.text().await.unwrap(), Value::Null, REFUSED),
+        "Requête refusée : en-tête Origin d’une page web (http://localhost)"
+    );
+    // Another path: 404.
+    let resp = http()
+        .post(format!("http://127.0.0.1:{port}/other"))
+        .header("authorization", &auth)
+        .send()
+        .await
+        .unwrap();
+    answer(404, &resp);
+    assert_eq!(
+        refusal(&resp.text().await.unwrap(), Value::Null, REFUSED),
+        "Requête refusée : chemin inconnu (/other)"
+    );
+    // A tool the server does not have: 400, the request's own id answered (a number, or a string),
+    // a long one or one that is no id answered `null`.
+    for (id, answered) in [
+        (json!(7), json!(7)),
+        (json!("appel-7"), json!("appel-7")),
+        (json!("x".repeat(129)), Value::Null),
+        (json!({"pas": "un id"}), Value::Null),
+    ] {
+        let body = json!({
+            "jsonrpc": "2.0", "id": id, "method": "tools/call",
+            "params": { "name": "not_a_tool", "arguments": {} }
+        });
+        let resp = send(vec![("authorization", auth.clone())], body.to_string())
+            .await
+            .unwrap();
+        answer(400, &resp);
+        assert_eq!(
+            refusal(&resp.text().await.unwrap(), answered, INVALID_PARAMS),
+            "Requête refusée : outil inconnu"
+        );
+    }
+    // Every one logged, as before.
+    assert_eq!(refusals(&h).len(), 8);
     h.core.mcp.stop();
 }
 

@@ -182,6 +182,23 @@ describe('PrivacyPage: « Projet privé » (ESC-139)', () => {
     expect(backend.called('save_settings')).toHaveLength(0);
   });
 
+  it('made private or not, reads again which harnesses wait for « Activer » there (ESC-619)', async () => {
+    // What the core answers once the project is saved: Claude Code not turned on for it yet, then nothing held.
+    let scope: Record<string, { off: string[]; asks: string[] }> = { p1: { off: [], asks: ['claude'] } };
+    const backend = fakeBackend({ harness_scope: () => scope });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    expect(app.harnessScope).toEqual({});
+    await userEvent.click(screen.getByRole('switch', { name: LABEL }));
+    await afterGesture();
+    await vi.waitFor(() => expect(app.harnessScope).toEqual({ p1: { off: [], asks: ['claude'] } }));
+    expect(backend.called('harness_scope').length).toBeGreaterThan(0);
+    // Back to not private: no card left saying « Activer ».
+    scope = {};
+    await userEvent.click(screen.getByRole('switch', { name: LABEL }));
+    await afterGesture();
+    await vi.waitFor(() => expect(app.harnessScope).toEqual({}));
+  });
+
   /** The eight harnesses of the first hand, their plugins installed. */
   const EIGHT = ['claude', 'codex', 'opencode', 'copilot', 'cursor', 'vibe', 'agy', 'gemini'].map((id) =>
     id === 'claude' ? CLAUDE_ENGINE : { ...BARE_ENGINE, id, caps: { ...BARE_ENGINE.caps, remoteControl: false } },

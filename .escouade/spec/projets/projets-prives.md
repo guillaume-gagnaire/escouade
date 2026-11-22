@@ -1,9 +1,9 @@
 ---
 title: "Projets privés"
 subject: "Projets"
-sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)","src-tauri/src/harness_scope.rs (settle_harnesses_in)","src-tauri/src/modes.rs (run_refusal)","CI de release/2.3, run 44893172996 (macOS)"]
-tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556","ESC-582"]
-decisions: [154,257,259]
+sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)","src-tauri/src/harness_scope.rs (settle_harnesses_in)","src-tauri/src/modes.rs (run_refusal)","CI de release/2.3, run 44893172996 (macOS)","src/lib/settings.svelte.ts (#saveProject)","CI de release/2.3, run 44936350320 (Windows)"]
+tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556","ESC-582","ESC-619"]
+decisions: [154,257,259,279]
 compared: null
 ---
 
@@ -96,3 +96,10 @@ Dans un projet privé, chaque harness est coupé d'office tant que l'utilisateur
 
 - **Sous Windows**, la description de « Projet privé » ajoute : « Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client. Un plugin tiers n’y est lancé qu’une fois activé par toi pour ce projet. » La doc du site (Réglages › Projets) le dit aussi.
 - **Un harness d'un plugin tiers** (dont l'id ne commence pas par `dev.escouade.`) n'est lancé dans un projet privé qu'une fois allumé pour ce projet par l'utilisateur (« Activer », ou le bouton du projet dans la page du plugin) : avant, son état est « demande » et tout démarrage est refusé (voir *Harness*, un harness coupé pour un projet). La migration unique qui allume, pour un projet privé, les harness que ses agents utilisaient déjà (ESC-404) n'allume que ceux d'Escouade : un harness tiers y demande l'accord.
+
+## Quand le projet devient privé par la fenêtre (ESC-619)
+
+Ce qui suit complète *Un harness pas encore activé quand le projet devient privé*.
+
+- Dès que Réglages › Confidentialité a enregistré « Projet privé » (allumé ou éteint), la fenêtre relit quels harness y attendent « Activer » : la conversation d'un agent arrêté au passage en privé montre aussitôt la carte « Claude Code n’est pas activé pour ce projet privé : cet agent ne démarre pas et ne reçoit rien. » avec « Activer », sans attendre un autre geste. Le projet redevenu non privé, la carte part. Par `.escouade.yml` ou une stratégie, la fenêtre reçoit le projet changé et relit de même.
+- « Activer », puis l'accord, allume le harness pour le projet ; le message suivant relance l'agent (session gardée), avec un nouveau jeton du serveur MCP. L'ancien jeton, oublié avec le process arrêté, est refusé (401, une erreur JSON-RPC : voir *Serveur MCP*).

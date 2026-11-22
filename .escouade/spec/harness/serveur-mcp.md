@@ -1,9 +1,9 @@
 ---
 title: "Serveur MCP"
 subject: "Harness"
-sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)","https://github.com/guillaume-gagnaire/escouade/pull/44"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-509","ESC-511","ESC-518","ESC-513","ESC-550"]
-decisions: [153,211,210,242]
+sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)","https://github.com/guillaume-gagnaire/escouade/pull/44","crates/escouade-mcp/src/http.rs (Gate::answer, error)","CI de release/2.3, run 44936350320 (Windows)"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487","ESC-509","ESC-511","ESC-518","ESC-513","ESC-550","ESC-619"]
+decisions: [153,211,210,242,279]
 compared: null
 ---
 
@@ -342,3 +342,11 @@ Les instructions que le serveur donne à chaque harness disent, en plus de ce qu
 ## Les outils d'une fonctionnalité coupée (ESC-550)
 
 Les outils du Kanban, de l'Espace Docs, des Workflows, des Tâches programmées et de l'Overseer appartiennent à leur fonctionnalité (la liste exacte est dans *Fonctionnalités*). Coupée, ils sont **absents** de `tools/list`, qui n'est jamais gardée par le client (TTL 0). Ils sont **refusés avant de tourner** s'ils sont appelés quand même : « La fonctionnalité « Kanban » est coupée (Réglages › Fonctionnalités) : ce qu’elle fait n’est pas disponible. L’utilisateur peut la rallumer, ses données sont gardées. », ou « … coupée par la stratégie de ce poste … » quand elle est imposée. L'appel compte comme refusé dans l'activité. Les outils de l'essentiel (projets, agents, boîte « À toi », mémoire partagée, pull requests, quotas) ne sont d'aucune fonctionnalité.
+
+## Depuis ESC-619 : un refus de la porte est une erreur JSON-RPC
+
+Ce qui suit complète *Jetons et garde-fous* et la lecture du corps par la porte (`Gate::admit`).
+
+- Une requête refusée avant d'atteindre un outil (`Host`, `Origin`, jeton absent ou inconnu, chemin, outil inconnu, taille, corps illisible) garde le statut HTTP de son garde-fou (403 ; 401 avec `WWW-Authenticate: Bearer` ; 404 ; 400 ; 413) et répond, en `application/json`, une erreur JSON-RPC : `{"jsonrpc": "2.0", "id": …, "error": {"code": …, "message": "Requête refusée : …"}}`, jamais un texte nu. Un client MCP lit la raison comme la réponse qu'il attend : par exemple l'agent dont le process s'est arrêté (son jeton oublié), quand son projet devient privé sans que son harness y soit activé (voir *Projets privés*).
+- Le code : -32602 (`Invalid params`, celui que MCP donne à un outil inconnu) pour un outil inconnu ; -32600 (`Invalid Request`) pour une requête trop volumineuse ou un corps illisible ; -32001 (une erreur du serveur) pour les autres.
+- L'`id` : celui de la requête refusée quand la porte a lu son corps (un outil inconnu ; une requête trop volumineuse qui n'est pas un lot) et qu'il est un nombre ou une chaîne de 128 octets au plus ; sinon `null`, l'id de JSON-RPC quand il n'a pas pu être lu. Rien d'autre de ce que le client a envoyé n'est répété, ni dans la réponse ni dans l'activité.

@@ -111,7 +111,27 @@ enum Refusal {
     Unreadable,
 }
 
+/// The JSON-RPC code of a refusal of the server itself (the range -32000 to -32099 is the server's).
+pub const REFUSED: i64 = -32001;
+/// JSON-RPC's `Invalid Request`.
+pub const INVALID_REQUEST: i64 = -32600;
+/// JSON-RPC's `Invalid params`, which MCP answers for a tool the server does not have.
+pub const INVALID_PARAMS: i64 = -32602;
+
+/// The longest id of a request a refusal repeats: a longer one, or one that is neither a number nor a string, is
+/// answered `null` (JSON-RPC's id when it could not be read).
+const MAX_ID: usize = 128;
+
 impl Refusal {
+    /// The JSON-RPC error code it is answered with.
+    fn code(&self) -> i64 {
+        match self {
+            Refusal::UnknownTool => INVALID_PARAMS,
+            Refusal::TooLarge | Refusal::Unreadable => INVALID_REQUEST,
+            _ => REFUSED,
+        }
+    }
+
     fn status(&self) -> StatusCode {
         match self {
             Refusal::NoHost | Refusal::Host(_) | Refusal::Origin(_) => StatusCode::FORBIDDEN,
@@ -205,10 +225,10 @@ impl<H: Host, S: ServerHandler> Gate<H, S> {
         let asked = format!("{} {}", req.method(), req.uri().path());
         let (caller, mut req) = match self.admit(&core, req).await {
             Ok(admitted) => admitted,
-            Err((caller, refusal)) => {
+            Err((caller, refusal, id)) => {
                 let message = refusal.message();
                 core.refused(caller.as_ref(), &asked, message.clone());
-                let mut answer = text(refusal.status(), message);
+                let mut answer = error(refusal.status(), refusal.code(), message, id);
                 if refusal.status() == StatusCode::UNAUTHORIZED {
                     answer.headers_mut().insert(
                         header::WWW_AUTHENTICATE,
@@ -227,16 +247,25 @@ impl<H: Host, S: ServerHandler> Gate<H, S> {
 
     /// Who `req` comes from, once its `Host`, its `Origin`, its token, its path and its body
     /// pass, with the request to give rmcp (its body read, `MAX_BODY` at most); else why it does
-    /// not, with its caller when its token was read. The body is read for a known caller only: a
+    /// not, with its caller when its token was read and the id of the request it refuses (`null`
+    /// when its body was not read). The body is read for a known caller only: a
     /// `tools/call` must name a tool the server has (rmcp keeps the name of each it is asked,
     /// refused or not), and a request without image or file stays under `MAX_TEXT_BODY`.
     async fn admit(
         &self,
         core: &H,
         req: Request<Incoming>,
-    ) -> Result<(Caller, Request<Full<Bytes>>), (Option<Caller>, Refusal)> {
-        let caller = self.admit_head(core, &req)?;
-        let too_large = |caller: &Caller| (Some(caller.clone()), Refusal::TooLarge);
+    ) -> Result<(Caller, Request<Full<Bytes>>), (Option<Caller>, Refusal, serde_json::Value)> {
+        let caller = self
+            .admit_head(core, &req)
+            .map_err(|(caller, refusal)| (caller, refusal, serde_json::Value::Null))?;
+        let too_large = |caller: &Caller| {
+            (
+                Some(caller.clone()),
+                Refusal::TooLarge,
+                serde_json::Value::Null,
+            )
+        };
         let declared = req
             .headers()
             .get(header::CONTENT_LENGTH)
@@ -254,10 +283,10 @@ impl<H: Host, S: ServerHandler> Gate<H, S> {
             {
                 return Err(too_large(&caller))
             }
-            Err(_) => return Err((Some(caller), Refusal::Unreadable)),
+            Err(_) => return Err((Some(caller), Refusal::Unreadable, serde_json::Value::Null)),
         };
-        if let Err(refusal) = check_body(&self.tools, &bytes) {
-            return Err((Some(caller), refusal));
+        if let Err((refusal, id)) = check_body(&self.tools, &bytes) {
+            return Err((Some(caller), refusal, id));
         }
         Ok((caller, Request::from_parts(parts, Full::new(bytes))))
     }
@@ -311,8 +340,12 @@ impl<H: Host, S: ServerHandler> Gate<H, S> {
 
 /// Whether a request's body may reach rmcp: a `tools/call` (alone or in a batch) names a tool of
 /// `tools`, and a body that calls none of `BULKY_TOOLS` weighs `MAX_TEXT_BODY` at most. A body
-/// that is not JSON is left to rmcp to answer, under the same cap.
-fn check_body<S: Send + Sync + 'static>(tools: &ToolRouter<S>, body: &[u8]) -> Result<(), Refusal> {
+/// that is not JSON is left to rmcp to answer, under the same cap. Refused, with the id of the
+/// message refused (`null` for a batch too large, or an id `answer_id` does not repeat).
+fn check_body<S: Send + Sync + 'static>(
+    tools: &ToolRouter<S>,
+    body: &[u8],
+) -> Result<(), (Refusal, serde_json::Value)> {
     let value: serde_json::Value = serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
     let messages = match &value {
         serde_json::Value::Array(list) => list.as_slice(),
@@ -326,14 +359,28 @@ fn check_body<S: Send + Sync + 'static>(tools: &ToolRouter<S>, body: &[u8]) -> R
         // A name that is not a string is no tool's either.
         let name = message["params"]["name"].as_str().unwrap_or_default();
         if !tools.has_route(name) {
-            return Err(Refusal::UnknownTool);
+            return Err((Refusal::UnknownTool, answer_id(message)));
         }
         bulky |= BULKY_TOOLS.contains(&name);
     }
     if !bulky && body.len() > MAX_TEXT_BODY {
-        return Err(Refusal::TooLarge);
+        let id = match &value {
+            serde_json::Value::Object(_) => answer_id(&value),
+            _ => serde_json::Value::Null,
+        };
+        return Err((Refusal::TooLarge, id));
     }
     Ok(())
+}
+
+/// The id a refusal of `message` answers: its own when it is a number or a string of `MAX_ID`
+/// bytes at most, else `null`.
+fn answer_id(message: &serde_json::Value) -> serde_json::Value {
+    match &message["id"] {
+        id @ serde_json::Value::Number(_) => id.clone(),
+        serde_json::Value::String(s) if s.len() <= MAX_ID => serde_json::Value::String(s.clone()),
+        _ => serde_json::Value::Null,
+    }
 }
 
 /// The token of an `Authorization: Bearer <token>` header (the scheme in any case).
@@ -348,6 +395,23 @@ fn shown(value: &header::HeaderValue) -> String {
     clip(&String::from_utf8_lossy(value.as_bytes()))
 }
 
+/// A refusal as the client's JSON-RPC reads it: `{"jsonrpc": "2.0", "id", "error": {"code",
+/// "message"}}`, with its HTTP status (`application/json`).
+fn error(status: StatusCode, code: i64, message: String, id: serde_json::Value) -> Response<Reply> {
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": { "code": code, "message": message },
+    });
+    let mut answer = Response::new(Reply::Text(Some(Bytes::from(body.to_string()))));
+    *answer.status_mut() = status;
+    answer.headers_mut().insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_static("application/json"),
+    );
+    answer
+}
+
 fn text(status: StatusCode, message: String) -> Response<Reply> {
     let mut answer = Response::new(Reply::Text(Some(Bytes::from(message))));
     *answer.status_mut() = status;
@@ -358,7 +422,7 @@ fn text(status: StatusCode, message: String) -> Response<Reply> {
     answer
 }
 
-/// What the server answers: rmcp's body, or a refusal's text.
+/// What the server answers: rmcp's body, or a refusal's.
 pub enum Reply {
     Mcp(Pin<Box<dyn Body<Data = Bytes, Error = Infallible> + Send>>),
     Text(Option<Bytes>),
