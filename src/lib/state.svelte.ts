@@ -18,7 +18,7 @@ import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
 import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
-import { errorText, missingAccountOf, missingAccountProjectOf } from './refusal';
+import { errorText, missingAccountOf, missingAccountProjectOf, notOpened } from './refusal';
 import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
 import type { IconName } from './icons';
 import type { SettingsPage } from './settings-pages';
@@ -2212,6 +2212,19 @@ class AppState {
     } catch (e) {
       this.refused(e);
       return undefined;
+    }
+  }
+
+  /**
+   * « Ouvrir » of a file (`open`): a refusal to hand it to the system (a program, an installer, a disk, a shortcut, a page) says
+   * why, with « Afficher dans le dossier » (`reveal`) on its toast; any other refusal is told as usual.
+   */
+  async openFile(open: Promise<void>, reveal: () => Promise<void>): Promise<void> {
+    try {
+      await open;
+    } catch (e) {
+      if (!notOpened(e)) return this.refused(e);
+      this.toast(errorText(e), 'error', { label: t('conv.sent.reveal'), onClick: () => void this.run(reveal()) });
     }
   }
 

@@ -305,7 +305,7 @@ async fn the_files_bounds_are_held_before_reading() {
                 name: "rapport.pdf".into(),
                 declared: None,
                 option: None,
-                source: Source::File(opened, FILE_MAX + 1),
+                source: Source::File(opened, FILE_MAX + 1, None),
             }],
         )
         .unwrap_err();
@@ -377,7 +377,7 @@ async fn a_file_is_copied_and_outlives_the_worktree_it_came_from() {
                     name: "b.png".into(),
                     declared: Some("image/png".into()),
                     option: Some("b".into()),
-                    source: Source::File(opened, PNG.len() as u64),
+                    source: Source::File(opened, PNG.len() as u64, None),
                 },
                 bytes("etude.pdf", PDF, None),
             ],

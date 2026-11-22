@@ -105,10 +105,10 @@ pub struct AskDraft {
 }
 
 /// Where a file comes from: its bytes (given in base64), or a file opened where the caller may give
-/// one, with its length.
+/// one, with its length and its path (its mark of the web kept on the copy, `quarantine::carry`).
 pub enum Source {
     Bytes(Vec<u8>),
-    File(std::fs::File, u64),
+    File(std::fs::File, u64, Option<PathBuf>),
 }
 
 /// A file given with a request.
@@ -125,7 +125,7 @@ impl Incoming {
     fn length(&self) -> u64 {
         match &self.source {
             Source::Bytes(b) => b.len() as u64,
-            Source::File(_, n) => *n,
+            Source::File(_, n, _) => *n,
         }
     }
 }
@@ -815,9 +815,11 @@ pub(crate) fn copy_files(
         if box_weight + total + f.length() > BOX_MAX {
             return Err(box_full(lang));
         }
+        let mut origin = None;
         let bytes = match f.source {
             Source::Bytes(b) => b,
-            Source::File(file, _) => {
+            Source::File(file, _, from) => {
+                origin = from;
                 let mut b = Vec::new();
                 file.take(FILE_MAX + 1).read_to_end(&mut b).map_err(|e| {
                     tr_in!(
@@ -853,6 +855,12 @@ pub(crate) fn copy_files(
                     "Copying the file failed: {e}"
                 )
             })?;
+        // A file from elsewhere: Gatekeeper judges it on its opening (macOS), its mark of the web kept
+        // (Windows).
+        if let Some(from) = &origin {
+            crate::quarantine::carry(from, &path);
+        }
+        crate::quarantine::mark(&path);
         out.push(AskFile {
             file,
             name,
@@ -2076,12 +2084,8 @@ impl<R: Runtime> Core<R> {
         }
         let a = self.ask(id)?;
         let (f, path) = self.ask_file(&a, Some(file), None)?;
-        if !reveal && !opens_safely(&f, &path) {
-            bail!(tr!(
-                "« {n} » peut lancer un programme ou un script : Escouade ne l’ouvre pas, elle l’affiche dans son dossier.",
-                "“{n}” can run a program or a script: Escouade doesn’t open it, it shows it in its folder.",
-                n = f.name
-            ));
+        if let Some(why) = refused_opening(&f, &path).filter(|_| !reveal) {
+            return Err(crate::sentfiles::not_run(i18n::ui(), &f.name, why));
         }
         crate::sentfiles::open_or_reveal(self.open_roots(), path, reveal)
     }
@@ -2116,7 +2120,7 @@ impl<R: Runtime> Core<R> {
                 name: f.name,
                 declared: None,
                 option: None,
-                source: Source::File(h, length),
+                source: Source::File(h, length, Some(real)),
             });
         }
         let a = self.ask_answer(id, ans, None, incoming)?;
@@ -2183,13 +2187,18 @@ pub(crate) fn answered_event(a: &Ask) -> Option<crate::telemetry::Event> {
     })
 }
 
-/// Whether « Ouvrir » may hand a file to the system: never a program or a script (by its name, or
-/// marked executable), nor what a browser would run (an SVG, a page).
-pub(crate) fn opens_safely(f: &AskFile, path: &Path) -> bool {
+/// Why « Ouvrir » may not hand a file to the system: a program or a script (by its name, or
+/// marked executable), an installer, a disk, a shortcut (`sentfiles::runnable_why`), or what a
+/// browser would run (an SVG, a page). None for a file it may open.
+pub(crate) fn refused_opening(f: &AskFile, path: &Path) -> Option<crate::sentfiles::Why> {
     let lower = f.name.to_ascii_lowercase();
+    let lower = lower.trim_end_matches(['.', ' ']);
     let page = f.media_type == "image/svg+xml"
-        || [".html", ".htm", ".xhtml", ".svg", ".mht", ".mhtml"]
+        || [".html", ".htm", ".xhtml", ".xht", ".shtml", ".svg"]
             .iter()
             .any(|e| lower.ends_with(e));
-    !(page || crate::sentfiles::runnable_name(&f.name) || crate::sentfiles::runnable(path))
+    if page {
+        return Some(crate::sentfiles::Why::Page);
+    }
+    crate::sentfiles::runnable_why(&f.name).or_else(|| crate::sentfiles::runnable_path_why(path))
 }

@@ -1,8 +1,8 @@
 ---
 title: "Fenêtre"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md","src/components/ContextMenu.svelte","docs/security/audit-2026-11/rapport.md"]
-tickets: ["ESC-71","ESC-109","ESC-101","ESC-380","ESC-593"]
+sources: ["docs/SPEC.md","src/components/ContextMenu.svelte","docs/security/audit-2026-11/rapport.md","src-tauri/src/sentfiles.rs (RUNNABLE, ESC-628)","src-tauri/src/quarantine.rs (ESC-628)","Microsoft, Blocked attachments in Outlook (support.microsoft.com/outlook/blocked-attachments-in-outlook)"]
+tickets: ["ESC-71","ESC-109","ESC-101","ESC-380","ESC-593","ESC-628"]
 decisions: ["l-ouverture-par-le-systeme-bornee-aux-do"]
 compared: null
 order: 5
@@ -83,7 +83,14 @@ Le contenu des agents s'affiche comme du texte, assaini (voir *Conversation*). S
 - Montré dans son dossier, un élément n'est pas suivi : un lien d'un projet vers ailleurs est montré comme le lien. Ouvert, il est refusé.
 - Le refus se dit dans un toast, avec sa raison : « « D:\ailleurs » est hors des dossiers des projets, de leurs worktrees et du dossier de données d'Escouade : Escouade ne le fait pas ouvrir par le système. » Quand un lien ou `..` mène ailleurs, le toast dit où : « « … » mène à « … », hors des dossiers… ». Un chemin qui n'existe plus : « « … » n'existe pas ou ne se lit pas ».
 - Un fichier envoyé par un agent, ou une image de son message, qui est hors de ces dossiers (dans un dossier temporaire du poste, par exemple) ne s'ouvre plus et ne se montre plus dans son dossier. Ce que la conversation en affiche reste affiché.
-- Un programme ou un script ne s'ouvre jamais, même dans un projet : ni par ce que la fenêtre ouvre d'elle-même, ni quand un agent l'a envoyé (voir *Conversation*). Il se montre dans son dossier.
+- **Escouade n'ouvre jamais, même dans un projet, un fichier que le système lancerait, installerait, monterait ou suivrait en l'ouvrant** (ESC-628), sous Windows, macOS et Linux à la fois (un fichier d'un système se reçoit sur un autre) : ni par ce que la fenêtre ouvre d'elle-même, ni quand un agent l'a envoyé (voir *Conversation*), ni une pièce jointe de « À toi ». Il se montre dans son dossier. Quatre familles, chaque type justifié dans `sentfiles::RUNNABLE` :
+  - **un programme ou un script** : programmes, scripts de Windows (batch, PowerShell et ses modules, manifestes et fichiers de mise en forme, Windows Script Host, HTA, Python), consoles de gestion (`.msc`), aides compilées (`.chm`, `.hlp`), dépanneurs (`.diagcab`), compléments Excel (`.xll`), applications XAML et ClickOnce, configurations de Windows Sandbox, archives web (`.mht`, `.mhtml`) ; sous macOS les applications, scripts de Terminal (`.command`, `.tool`), réglages de Terminal (`.terminal`), flux Automator, AppleScript ; sous Linux les scripts, lanceurs (`.desktop`), AppImage, `.bin` ; Java (`.jar`, `.jnlp`) partout ; un fichier marqué exécutable sous macOS et Linux, quel que soit son nom ;
+  - **un installeur** : MSI, MSU, paquets d'apps (`.appinstaller`, `.msix`, `.appx` et leurs lots), gadgets, entrées du registre ; `.pkg`, `.mpkg`, extensions du noyau, panneaux de réglages et économiseurs d'écran de macOS ; `.run`, `.deb`, `.rpm`, `.snap`, `.flatpakref` ;
+  - **une image de disque**, montée à l'ouverture : `.iso`, `.img`, `.vhd`, `.vhdx`, `.dmg` ;
+  - **un raccourci**, qui suit ce qu'il désigne, un programme ou le dossier d'un autre ordinateur (avec l'identité de l'utilisateur) aussi : `.lnk`, `.url`, `.website`, `.scf`, bibliothèques et recherches enregistrées (`.library-ms`, `.search-ms`, `.searchconnector-ms`), raccourcis des Paramètres, thèmes ; `.webloc`, `.inetloc`, `.fileloc` de macOS.
+- Le nom est jugé quelle que soit sa casse, ses points et espaces finaux, que Windows retire (`a.msc.`, `a.iso `), et son flux (`a.msc::$DATA`, `notes.txt:a.lnk`).
+- Le refus dit pourquoi, selon la famille, et propose le dossier : « « rapport.terminal » est un programme ou un script : l'ouvrir le lancerait. Escouade ne l'ouvre pas ; « Afficher dans le dossier » le montre sans le lancer. » (« est un installeur : l'ouvrir installerait une application ou un composant », « est une image de disque : l'ouvrir monterait le disque et ses fichiers », « est un raccourci : l'ouvrir suivrait ce qu'il désigne… », « est une page : l'ouvrir ferait lancer ses scripts par le navigateur »). Son toast porte le bouton « Afficher dans le dossier ». Le cœur marque ce refus (`not-opened|`) pour que la fenêtre offre ce bouton ; un fichier que la fenêtre sait déjà refusé n'a que « Afficher dans le dossier », sans « Ouvrir ».
+- **La quarantaine de macOS** : un fichier qu'Escouade copie ou reçoit (une pièce jointe d'une demande de « À toi », une image qu'un agent envoie, copiée dans le dossier de données) porte l'attribut `com.apple.quarantine`, pour que Gatekeeper le juge à son ouverture ; un fichier qu'un agent envoie et qui reste où il l'a laissé le reçoit quand l'utilisateur l'ouvre. Un fichier déjà en quarantaine garde la sienne, qui dit d'où il vient. Sous Windows, la copie garde la marque du web (`Zone.Identifier`) que sa source porte déjà ; Escouade n'en invente pas. Linux n'a pas de telle marque.
 - La fenêtre n'a aucune permission de Tauri pour ouvrir un chemin : chaque ouverture passe par le cœur. Les adresses `http(s)` gardent leur chemin, le navigateur (voir *Liens*).
 
 **La politique de contenu.**
@@ -109,3 +116,4 @@ Tous s'appliquent et s'enregistrent tout de suite.
 
 - Le zoom ne change pas la taille minimale de la fenêtre : un palier qui ne tient pas dans la fenêtre n'est pas appliqué.
 - Un fichier qu'un agent envoie hors des dossiers des projets, de leurs worktrees et du dossier de données ne s'ouvre pas depuis la conversation : l'agent peut le mettre dans son worktree.
+- La liste des types refusés est une liste de noms : un type que le système apprendrait à lancer demain n'y est qu'une fois ajouté. Sous macOS, la quarantaine laisse Gatekeeper juger aussi ce que la liste ne connaît pas.

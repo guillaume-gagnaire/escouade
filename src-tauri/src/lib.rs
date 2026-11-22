@@ -246,6 +246,7 @@ mod prview;
 #[cfg(test)]
 mod prview_tests;
 mod pty;
+mod quarantine;
 mod repos;
 #[cfg(test)]
 mod repos_tests;

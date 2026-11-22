@@ -158,6 +158,8 @@ pub(crate) fn deliver(folder: &Path, call: &str, cwd: &str, input: &Value, fence
                             .and_then(|_| std::fs::copy(&path, dir.join(&file)));
                         match made {
                             Ok(_) => {
+                                // An image of elsewhere: Gatekeeper judges it on its opening.
+                                crate::quarantine::mark(&dir.join(&file));
                                 copied += size;
                                 entry["copy"] = json!(format!(
                                     "{}/{file}",
@@ -365,19 +367,58 @@ pub(crate) fn target(
         ));
     };
     // A program the agent sent is never run, whatever the window asks: shown in its folder only.
-    if !reveal && (runnable_name(name) || runnable(&found)) {
-        return Err(not_run(lang, name));
+    if let Some(why) = runnable_why(name).or_else(|| runnable_path_why(&found)) {
+        if !reveal {
+            return Err(not_run(lang, name, why));
+        }
     }
     Ok(found)
 }
 
-/// The refusal to open a program or a script `name`: Escouade only shows it in its folder.
-fn not_run(lang: crate::i18n::Lang, name: &str) -> anyhow::Error {
-    anyhow::anyhow!(tr_in!(
-        lang,
-        "« {name} » est un programme ou un script : Escouade ne l’ouvre pas, elle l’affiche dans son dossier.",
-        "“{name}” is a program or a script: Escouade doesn’t open it, it shows it in its folder."
-    ))
+/// A refusal to open a file: the window offers « Afficher dans le dossier » with it
+/// (`commands::err` marks it `not-opened|`).
+#[derive(Debug)]
+pub(crate) struct NotOpened(pub String);
+
+impl std::fmt::Display for NotOpened {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for NotOpened {}
+
+/// The refusal to open `name`, which the system would run, install, mount or follow (`why`):
+/// it says why, and that Escouade only shows it in its folder.
+pub(crate) fn not_run(lang: crate::i18n::Lang, name: &str, why: Why) -> anyhow::Error {
+    let text = match why {
+        Why::Program => tr_in!(
+            lang,
+            "« {name} » est un programme ou un script : l’ouvrir le lancerait. Escouade ne l’ouvre pas ; « Afficher dans le dossier » le montre sans le lancer.",
+            "“{name}” is a program or a script: opening it would run it. Escouade doesn’t open it; “Show in folder” shows it without running it."
+        ),
+        Why::Install => tr_in!(
+            lang,
+            "« {name} » est un installeur : l’ouvrir installerait une application ou un composant. Escouade ne l’ouvre pas ; « Afficher dans le dossier » le montre sans l’ouvrir.",
+            "“{name}” is an installer: opening it would install an application or a component. Escouade doesn’t open it; “Show in folder” shows it without opening it."
+        ),
+        Why::Disk => tr_in!(
+            lang,
+            "« {name} » est une image de disque : l’ouvrir monterait le disque et ses fichiers. Escouade ne l’ouvre pas ; « Afficher dans le dossier » la montre sans l’ouvrir.",
+            "“{name}” is a disk image: opening it would mount the disk and its files. Escouade doesn’t open it; “Show in folder” shows it without opening it."
+        ),
+        Why::Link => tr_in!(
+            lang,
+            "« {name} » est un raccourci : l’ouvrir suivrait ce qu’il désigne, un programme ou le dossier d’un autre ordinateur aussi. Escouade ne l’ouvre pas ; « Afficher dans le dossier » le montre sans l’ouvrir.",
+            "“{name}” is a shortcut: opening it would follow what it names, a program or another computer’s folder as well. Escouade doesn’t open it; “Show in folder” shows it without opening it."
+        ),
+        Why::Page => tr_in!(
+            lang,
+            "« {name} » est une page : l’ouvrir ferait lancer ses scripts par le navigateur. Escouade ne l’ouvre pas ; « Afficher dans le dossier » la montre sans l’ouvrir.",
+            "“{name}” is a page: opening it would have the browser run its scripts. Escouade doesn’t open it; “Show in folder” shows it without opening it."
+        ),
+    };
+    anyhow::Error::new(NotOpened(text))
 }
 
 /// `path` opened with its application, or shown in its folder (`reveal`): only inside `roots`, the
@@ -394,62 +435,166 @@ pub(crate) fn open_or_reveal(
     }
 }
 
-/// The extensions of what the system runs when it opens it: programs, scripts, installers,
-/// shortcuts, of Windows, macOS and Linux alike (a file of one is sent to any of them).
-const RUNNABLE: &[&str] = &[
-    "exe",
-    "com",
-    "bat",
-    "cmd",
-    "ps1",
-    "vbs",
-    "vbe",
-    "js",
-    "jse",
-    "wsf",
-    "wsh",
-    "msi",
-    "msp",
-    "scr",
-    "pif",
-    "lnk",
-    "url",
-    "hta",
-    "cpl",
-    "reg",
-    "jar",
-    "appref-ms",
-    "app",
-    "command",
-    "sh",
-    "pkg",
-    "dmg",
-    "desktop",
-    "appimage",
+/// The extensions of what the system runs, installs, mounts or follows when it opens it, on
+/// Windows, macOS and Linux alike (a file of one is sent to any of them). Each one says why.
+const RUNNABLE: &[(&str, Why)] = &[
+    // Windows: programs and installers.
+    ("exe", Why::Program),          // a program
+    ("com", Why::Program),          // a program (MS-DOS)
+    ("scr", Why::Program),          // a screen saver: a program
+    ("pif", Why::Program),          // a program's shortcut: runs it
+    ("cpl", Why::Program),          // a Control Panel item: a library loaded and run
+    ("msi", Why::Install),          // an installer
+    ("msp", Why::Install),          // an installer's patch
+    ("msu", Why::Install),          // an update's installer
+    ("appinstaller", Why::Install), // installs an app from where it says (App Installer)
+    ("msix", Why::Install),         // an app's package: installed on opening
+    ("msixbundle", Why::Install),   // packages of an app: installed on opening
+    ("appx", Why::Install),         // an app's package: installed on opening
+    ("appxbundle", Why::Install),   // packages of an app: installed on opening
+    ("application", Why::Install),  // a ClickOnce application: installed and run
+    ("appref-ms", Why::Program),    // a ClickOnce application's shortcut: runs it
+    ("xbap", Why::Program),         // a XAML application run in the browser
+    ("gadget", Why::Install),       // a desktop gadget: installed on opening
+    ("jar", Why::Program),          // a Java program (Windows, macOS, Linux)
+    ("jnlp", Why::Program),         // a Java Web Start program: fetched and run
+    // Windows: scripts.
+    ("bat", Why::Program),    // a batch script
+    ("cmd", Why::Program),    // a batch script
+    ("ps1", Why::Program),    // a PowerShell script
+    ("psm1", Why::Program),   // a PowerShell module: a script
+    ("psd1", Why::Program),   // a PowerShell manifest: loads its modules
+    ("ps1xml", Why::Program), // PowerShell's formatting: runs script blocks
+    ("vbs", Why::Program),    // a VBScript
+    ("vbe", Why::Program),    // an encoded VBScript
+    ("js", Why::Program),     // a JScript (Windows Script Host)
+    ("jse", Why::Program),    // an encoded JScript
+    ("ws", Why::Program),     // a Windows Script
+    ("wsf", Why::Program),    // a Windows Script
+    ("wsh", Why::Program),    // Windows Script Host settings: run the script they name
+    ("hta", Why::Program),    // an HTML application: runs with the user's rights
+    ("py", Why::Program),     // a Python script, run by Windows' Python launcher
+    ("pyw", Why::Program),    // a Python script without its window
+    ("pyz", Why::Program),    // a Python program (zip)
+    ("pyzw", Why::Program),   // a Python program without its window
+    ("reg", Why::Install),    // registry entries: written on opening
+    // Windows: shortcuts and files that run what they name, or reach out with the user's
+    // authentication (a remote folder, an icon on a share).
+    ("lnk", Why::Link),                // a shortcut: runs what it names
+    ("url", Why::Link),                // an Internet shortcut: opens its target, a program as well
+    ("website", Why::Link),            // a pinned site: opens its address
+    ("scf", Why::Link),                // an Explorer command: reaches the share its icon names
+    ("library-ms", Why::Link), // a library: reaches the folders it names, remote ones as well
+    ("search-ms", Why::Link),  // a saved search: shows the files of a remote folder as local ones
+    ("searchconnector-ms", Why::Link), // a search connector: reaches the place it names
+    ("settingcontent-ms", Why::Link), // a Settings shortcut: runs the command it names
+    ("theme", Why::Link),      // a theme: fetches its images where it says, remote ones as well
+    ("themepack", Why::Link),  // themes: fetch their images where they say
+    ("wsb", Why::Program),     // a Windows Sandbox: runs the command it names
+    ("msc", Why::Program),     // a management console: can run scripts
+    ("chm", Why::Program),     // compiled HTML help: runs its scripts
+    ("hlp", Why::Program),     // WinHelp: can run macros
+    ("diagcab", Why::Program), // a troubleshooter: runs its scripts
+    ("xll", Why::Program),     // an Excel add-in: a library loaded and run
+    ("mht", Why::Program),     // a web archive opened outside the browser's protections
+    ("mhtml", Why::Program),   // a web archive opened outside the browser's protections
+    // Disks (Windows, macOS, Linux): mounted on opening, their files then free of the mark of the
+    // web.
+    ("iso", Why::Disk),  // a disk image
+    ("img", Why::Disk),  // a disk image
+    ("vhd", Why::Disk),  // a virtual disk
+    ("vhdx", Why::Disk), // a virtual disk
+    ("dmg", Why::Disk),  // a macOS disk image
+    // macOS.
+    ("app", Why::Program),         // an application
+    ("command", Why::Program),     // a shell script run in Terminal
+    ("tool", Why::Program),        // a shell script run in Terminal
+    ("terminal", Why::Program),    // Terminal settings: run the command they hold
+    ("workflow", Why::Program), // an Automator workflow: runs its actions, installed as a quick action
+    ("scpt", Why::Program),     // an AppleScript (compiled)
+    ("scptd", Why::Program),    // an AppleScript (bundle)
+    ("applescript", Why::Program), // an AppleScript (text)
+    ("webloc", Why::Link),      // a link: opens its address
+    ("inetloc", Why::Link),     // a link: opens its address
+    ("fileloc", Why::Link),     // a link to a file: opens it, a program as well
+    ("pkg", Why::Install),      // an installer
+    ("mpkg", Why::Install),     // installers
+    ("kext", Why::Install),     // a kernel extension: installed
+    ("prefpane", Why::Install), // a System Settings pane: installed, its code loaded
+    ("saver", Why::Install),    // a screen saver: installed, its code loaded
+    // Linux.
+    ("sh", Why::Program),         // a shell script
+    ("desktop", Why::Program),    // a launcher: runs the command it names
+    ("appimage", Why::Program),   // a program
+    ("run", Why::Install),        // a self-extracting installer
+    ("bin", Why::Program),        // a self-extracting installer, a program
+    ("deb", Why::Install),        // a package: installed with its scripts
+    ("rpm", Why::Install),        // a package: installed with its scripts
+    ("snap", Why::Install),       // a package: installed
+    ("flatpakref", Why::Install), // an application: installed from where it says
 ];
 
-/// Whether the name `name` is one of a program or a script (`RUNNABLE`), whatever its case.
-pub(crate) fn runnable_name(name: &str) -> bool {
-    let name = name.trim().trim_end_matches(['.', ' ', '/', '\\']);
-    name.rsplit_once('.')
-        .is_some_and(|(_, ext)| RUNNABLE.contains(&ext.to_ascii_lowercase().as_str()))
+/// What a file the system would run, install, mount or follow does on opening: the reason
+/// Escouade gives for not opening it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Why {
+    /// A program or a script: run.
+    Program,
+    /// An installer or a package: installs an application or a component.
+    Install,
+    /// A disk image: mounted.
+    Disk,
+    /// A shortcut or a link: opens what it names, a program or a folder of another computer
+    /// (with the user's authentication) as well.
+    Link,
+    /// A page (HTML, SVG): its scripts run by the browser.
+    Page,
 }
 
-/// Whether the file `path` is a program or a script: by its name, or, under macOS and Linux,
-/// marked executable.
-pub(crate) fn runnable(path: &Path) -> bool {
-    if runnable_name(&path.to_string_lossy()) {
-        return true;
+/// Why the name `name` is one of a file the system runs, installs, mounts or follows
+/// (`RUNNABLE`), whatever its case, its final dots and spaces (that Windows drops), and its
+/// stream (`a.msc::$DATA`, `a.txt:b.msc`). None for any other.
+pub(crate) fn runnable_why(name: &str) -> Option<Why> {
+    let name = name.trim().trim_end_matches(['.', ' ', '/', '\\']);
+    let last = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    last.split(':').find_map(|part| {
+        let part = part.trim().trim_end_matches(['.', ' ']);
+        let (_, ext) = part.rsplit_once('.')?;
+        let ext = ext.to_ascii_lowercase();
+        RUNNABLE
+            .iter()
+            .find(|(e, _)| *e == ext)
+            .map(|&(_, why)| why)
+    })
+}
+
+/// Whether the name `name` is one of a file the system runs, installs, mounts or follows
+/// (`runnable_why`).
+pub(crate) fn runnable_name(name: &str) -> bool {
+    runnable_why(name).is_some()
+}
+
+/// Why the file `path` is one the system runs, installs, mounts or follows: by its name, or,
+/// under macOS and Linux, marked executable (a program).
+pub(crate) fn runnable_path_why(path: &Path) -> Option<Why> {
+    if let Some(why) = runnable_why(&path.to_string_lossy()) {
+        return Some(why);
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         if std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
         {
-            return true;
+            return Some(Why::Program);
         }
     }
-    false
+    None
+}
+
+/// Whether the file `path` is one the system runs, installs, mounts or follows
+/// (`runnable_path_why`).
+pub(crate) fn runnable(path: &Path) -> bool {
+    runnable_path_why(path).is_some()
 }
 
 /// The image a message of the agent shows in Markdown by a local path (`![…](C:/…/a.png)`,
@@ -487,8 +632,8 @@ pub(crate) fn local_target(
             "Image not found: {src}"
         ));
     };
-    if !reveal && runnable(&path) {
-        return Err(not_run(lang, &name_of(src)));
+    if let Some(why) = runnable_path_why(&path).filter(|_| !reveal) {
+        return Err(not_run(lang, &name_of(src), why));
     }
     Ok(path)
 }
@@ -732,6 +877,10 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
                 &fence,
                 lang,
             )?;
+            // Opened where the agent left it: Gatekeeper judges it all the same (macOS).
+            if !reveal {
+                crate::quarantine::mark(&path);
+            }
             open_or_reveal(roots, path, reveal)
         })
         .await?
@@ -1112,6 +1261,188 @@ mod tests {
             std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
             assert!(runnable(&bin));
         }
+    }
+
+    /// Each name refused with its reason, whatever its case, its final dots and spaces, its stream.
+    fn refused(names: &[(&str, Why)]) {
+        for &(name, why) in names {
+            for shown in [
+                name.to_string(),
+                name.to_ascii_uppercase(),
+                format!("{name}."),
+                format!("{name} "),
+                format!("{name}. ."),
+                format!("C:\\work\\{name}"),
+                format!("/work/{name}"),
+                format!("{name}::$DATA"),
+                format!("notes.txt:{name}"),
+            ] {
+                assert_eq!(runnable_why(&shown), Some(why), "{shown}");
+            }
+        }
+    }
+
+    #[test]
+    fn what_windows_runs_installs_mounts_or_follows_on_opening_is_never_opened() {
+        use Why::*;
+        refused(&[
+            ("a.exe", Program),
+            ("a.scr", Program),
+            ("a.cpl", Program),
+            ("a.msc", Program),
+            ("a.chm", Program),
+            ("a.hlp", Program),
+            ("a.hta", Program),
+            ("a.xll", Program),
+            ("a.diagcab", Program),
+            ("a.xbap", Program),
+            ("a.application", Install),
+            ("a.appref-ms", Program),
+            ("a.ps1", Program),
+            ("a.psm1", Program),
+            ("a.psd1", Program),
+            ("a.ps1xml", Program),
+            ("a.ws", Program),
+            ("a.wsf", Program),
+            ("a.py", Program),
+            ("a.pyw", Program),
+            ("a.wsb", Program),
+            ("a.mht", Program),
+            ("a.mhtml", Program),
+            ("a.msi", Install),
+            ("a.msu", Install),
+            ("a.appinstaller", Install),
+            ("a.msix", Install),
+            ("a.msixbundle", Install),
+            ("a.appx", Install),
+            ("a.appxbundle", Install),
+            ("a.gadget", Install),
+            ("a.reg", Install),
+            ("a.iso", Disk),
+            ("a.img", Disk),
+            ("a.vhd", Disk),
+            ("a.vhdx", Disk),
+            ("a.lnk", Link),
+            ("a.url", Link),
+            ("a.website", Link),
+            ("a.scf", Link),
+            ("a.library-ms", Link),
+            ("a.search-ms", Link),
+            ("a.searchconnector-ms", Link),
+            ("a.settingcontent-ms", Link),
+            ("a.theme", Link),
+            ("a.themepack", Link),
+        ]);
+    }
+
+    #[test]
+    fn what_macos_runs_installs_mounts_or_follows_on_opening_is_never_opened() {
+        use Why::*;
+        refused(&[
+            ("Tool.app", Program),
+            ("go.command", Program),
+            ("go.tool", Program),
+            ("a.terminal", Program),
+            ("a.workflow", Program),
+            ("a.scpt", Program),
+            ("a.scptd", Program),
+            ("a.applescript", Program),
+            ("a.jar", Program),
+            ("a.pkg", Install),
+            ("a.mpkg", Install),
+            ("a.kext", Install),
+            ("a.prefpane", Install),
+            ("a.saver", Install),
+            ("a.dmg", Disk),
+            ("a.iso", Disk),
+            ("a.webloc", Link),
+            ("a.inetloc", Link),
+            ("a.fileloc", Link),
+        ]);
+    }
+
+    #[test]
+    fn what_linux_runs_installs_mounts_or_follows_on_opening_is_never_opened() {
+        use Why::*;
+        refused(&[
+            ("go.sh", Program),
+            ("a.desktop", Program),
+            ("a.AppImage", Program),
+            ("a.bin", Program),
+            ("a.run", Install),
+            ("a.deb", Install),
+            ("a.rpm", Install),
+            ("a.snap", Install),
+            ("a.flatpakref", Install),
+            ("a.img", Disk),
+        ]);
+    }
+
+    #[test]
+    fn a_document_is_opened_whatever_its_name_looks_like() {
+        for name in [
+            "a.pdf",
+            "a.docx",
+            "notes.txt",
+            "a.zip",
+            "a.png",
+            "exe",
+            "msc",
+            "a.exe.pdf",
+            "binary.md",
+            "a.terminal.txt",
+            "C:\\work.exe\\a.txt",
+            "/work.app/notes.md",
+            "",
+            ".",
+            "a.",
+        ] {
+            assert_eq!(runnable_why(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn the_refusal_says_why_and_offers_the_folder() {
+        let lang = crate::i18n::Lang::Fr;
+        for (why, word) in [
+            (Why::Program, "programme ou un script"),
+            (Why::Install, "installeur"),
+            (Why::Disk, "image de disque"),
+            (Why::Link, "raccourci"),
+            (Why::Page, "page"),
+        ] {
+            let e = not_run(lang, "a", why);
+            assert!(e.downcast_ref::<NotOpened>().is_some());
+            let text = e.to_string();
+            assert!(text.contains(word), "{text}");
+            assert!(text.contains("« Afficher dans le dossier »"), "{text}");
+        }
+        let e = not_run(crate::i18n::Lang::En, "a.iso", Why::Disk).to_string();
+        assert!(
+            e.contains("disk image") && e.contains("“Show in folder”"),
+            "{e}"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn an_image_an_agent_sends_is_copied_in_quarantine() {
+        let root = test_dir("sent-quarantine");
+        let work = root.join("wt");
+        let png = file(&work, "a.png", PNG);
+        let cwd = work.to_string_lossy().to_string();
+        let sent = deliver(
+            &root.join("agent"),
+            "q1",
+            &cwd,
+            &json!({ "files": [png] }),
+            &Fence::default(),
+        );
+        let copy = root
+            .join("agent")
+            .join(sent[0]["copy"].as_str().expect("copied"));
+        let v = crate::quarantine::read(&copy).expect("quarantined");
+        assert!(v.ends_with(";Escouade;"), "{v}");
     }
 
     #[test]

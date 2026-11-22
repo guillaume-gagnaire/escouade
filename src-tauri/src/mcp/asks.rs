@@ -172,6 +172,7 @@ async fn one_file(
                 _ => path,
             };
             let w = within.map(Path::to_path_buf);
+            let origin = std::path::PathBuf::from(&full);
             let (file, length) =
                 tokio::task::spawn_blocking(move || open_within(&full, w.as_deref()))
                     .await
@@ -183,7 +184,7 @@ async fn one_file(
                 name,
                 declared: f.media_type,
                 option,
-                source: Source::File(file, length),
+                source: Source::File(file, length, Some(origin)),
             })
         }
     }

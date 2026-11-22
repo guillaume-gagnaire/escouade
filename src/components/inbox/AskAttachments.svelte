@@ -6,6 +6,7 @@
   import type { IconName } from '../../lib/icons';
   import { inbox } from '../../lib/inbox/inbox.svelte';
   import { api } from '../../lib/ipc';
+  import { opensOutside } from '../../lib/runnable';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
   import type { AskFile, WindowAsk } from '../../lib/types';
@@ -23,9 +24,7 @@
   let { ask, files, reading = $bindable<string | null>(null) }: { ask: WindowAsk; files: AskFile[]; reading?: string | null } = $props();
 
   /** What « Ouvrir » would hand to a program: the core refuses it, the line offers the folder instead. */
-  const RUNS =
-    /\.(exe|msi|bat|cmd|ps1|psm1|sh|bash|zsh|app|command|js|mjs|cjs|vbs|vbe|wsf|jar|lnk|scr|com|pif|html?|xhtml|svg|mht|mhtml|hta|reg|py|pl|rb|apk|deb|rpm|dmg|pkg)$/i;
-  const runs = (f: AskFile) => RUNS.test(f.name);
+  const runs = (f: AskFile) => opensOutside(f.name);
 
   const ICON: Record<string, IconName> = { archive: 'archive', sheet: 'sheet', document: 'file', code: 'code', generic: 'file' };
   const iconOf = (f: AskFile): IconName => (f.kind === 'pdf' ? 'file' : (ICON[fileCategory(f.name)] ?? 'file'));
@@ -78,8 +77,9 @@
     if (await app.run(api.inboxSaveFile(ask.id, f.file))) app.toast(t('inbox.files.saved', { name: f.name }), 'ok');
   }
   function open(f: AskFile, reveal: boolean) {
-    if (!reveal) void looked(f);
-    void app.run(api.inboxOpenFile(ask.id, f.file, reveal));
+    if (reveal) return void app.run(api.inboxOpenFile(ask.id, f.file, true));
+    void looked(f);
+    void app.openFile(api.inboxOpenFile(ask.id, f.file, false), () => api.inboxOpenFile(ask.id, f.file, true));
   }
 </script>
 

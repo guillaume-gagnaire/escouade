@@ -59,7 +59,10 @@
     if (img) shown = galleryOf(img);
   };
 
-  const act = (index: number, reveal: boolean) => app.run(api.sentFileOpen(agentId, item.id, index, reveal));
+  const act = (index: number, reveal: boolean) =>
+    reveal
+      ? app.run(api.sentFileOpen(agentId, item.id, index, true))
+      : app.openFile(api.sentFileOpen(agentId, item.id, index, false), () => api.sentFileOpen(agentId, item.id, index, true));
 </script>
 
 <div class="sent" data-sent={item.id}>

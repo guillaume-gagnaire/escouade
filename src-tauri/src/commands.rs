@@ -48,6 +48,10 @@ type CoreState<'a> = State<'a, Arc<Core>>;
 /// that harness (`errorText`).
 fn err(e: anyhow::Error) -> String {
     let text = format!("{e:#}");
+    // A file not opened (a program, an installer, a disk, a shortcut): the window offers its folder.
+    if e.downcast_ref::<crate::sentfiles::NotOpened>().is_some() {
+        return format!("not-opened|{text}");
+    }
     crate::accounts::marked(&e, text)
 }
 
@@ -225,17 +229,16 @@ pub(crate) fn open_path_in<R: tauri::Runtime>(
     path: &std::path::Path,
 ) -> anyhow::Result<()> {
     let allowed = core.allow_open(path, false)?;
-    if !allowed.real().is_dir()
-        && (crate::sentfiles::runnable(path) || crate::sentfiles::runnable(allowed.real()))
-    {
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        anyhow::bail!(tr!(
-            "« {name} » est un programme ou un script : Escouade ne le fait pas ouvrir par le système.",
-            "“{name}” is a program or a script: Escouade doesn’t have the system open it."
-        ));
+    if !allowed.real().is_dir() {
+        let why = crate::sentfiles::runnable_path_why(path)
+            .or_else(|| crate::sentfiles::runnable_path_why(allowed.real()));
+        if let Some(why) = why {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            return Err(crate::sentfiles::not_run(crate::i18n::ui(), &name, why));
+        }
     }
     allowed.open()
 }
@@ -4462,6 +4465,17 @@ pub async fn docs_recent(core: CoreState<'_>, id: String) -> Res<Vec<crate::docs
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_file_not_opened_is_marked_for_the_window_to_offer_its_folder() {
+        let e = crate::sentfiles::not_run(Lang::Fr, "a.msc", crate::sentfiles::Why::Program);
+        let text = err(e);
+        assert!(
+            text.starts_with("not-opened|« a.msc » est un programme"),
+            "{text}"
+        );
+        assert_eq!(err(anyhow::anyhow!("autre")), "autre");
+    }
 
     #[test]
     fn the_refusals_of_a_terminal_read_in_english() {
