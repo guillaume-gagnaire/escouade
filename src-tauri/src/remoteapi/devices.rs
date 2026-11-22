@@ -8,7 +8,12 @@
 //!
 //! A revoked device leaves a trace beside the list (`remote-revoked.json`, ESC-537): its name, when and by whom, and
 //! its token's SHA-256 (never the token), so that a client that still presents it is told « revoked on …, from … »
-//! rather than « unknown ». The last [`MAX_REVOKED`] are kept.
+//! rather than « unknown ». The last [`MAX_REVOKED`] are kept. Who revoked it is the device of the connection that
+//! asked, or the window, never a name the asker gives (SR1-02).
+//!
+//! Each device keeps the device it was paired from (`pairedBy`: the one that asked for its code; none for the window
+//! or `escouade-server pair`). A device revoked takes with it the devices paired from it, and theirs (SR1-02): one
+//! that leaked cannot leave a device of its own behind.
 
 use crate::integrations::secrets::{keep_secret, SecretStore};
 use crate::model::{new_id, now_ms};
@@ -58,6 +63,10 @@ pub struct Device {
     pub created_at: i64,
     #[serde(default)]
     pub last_seen: Option<i64>,
+    /// The device it was paired from (the one that asked for its code), none for the window or `escouade-server pair`:
+    /// revoking that one revokes it too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paired_by: Option<String>,
 }
 
 /// A device as its file keeps it: its token there only when the keychain refused it.
@@ -144,6 +153,7 @@ impl Devices {
             name: name.into(),
             created_at: now_ms(),
             last_seen: None,
+            paired_by: None,
         };
         Self {
             file: None,
@@ -185,6 +195,12 @@ impl Devices {
 
     /// A new device named `name`, and its token: given once, to the device; kept in the keychain (or the file).
     pub fn add(&self, name: &str) -> Result<(Device, String)> {
+        self.add_from(name, None)
+    }
+
+    /// A new device named `name`, paired from the device `paired_by` (the one that asked for its code; none: the
+    /// window, `escouade-server pair`), and its token.
+    pub fn add_from(&self, name: &str, paired_by: Option<&str>) -> Result<(Device, String)> {
         let name = name.trim();
         if name.is_empty() {
             bail!(tr!("un appareil a un nom", "a device has a name"));
@@ -194,6 +210,7 @@ impl Devices {
             name: name.to_string(),
             created_at: now_ms(),
             last_seen: None,
+            paired_by: paired_by.map(str::to_string),
         };
         let token = escouade_mcp::new_token();
         let in_file = match keep_secret(&*self.store, &entry(&device.id), &token) {
@@ -212,28 +229,49 @@ impl Devices {
         self.revoke_by(id, None)
     }
 
-    /// The device `id` revoked at the demand of the device named `by` (none: the server itself), its trace kept.
+    /// The device `id` revoked at the demand of the device named `by` (none: the server itself), its trace kept, and
+    /// the devices paired from it with it. False when there is none.
     pub fn revoke_by(&self, id: &str, by: Option<&str>) -> Result<bool> {
+        Ok(!self.revoke_with(id, by)?.is_empty())
+    }
+
+    /// The devices paired from `id`, and from them, as far as it goes (not `id` itself).
+    pub fn born_of(&self, id: &str) -> Vec<Device> {
+        let known = self.known.read();
+        let all: Vec<Device> = known.iter().map(|(d, _, _)| d.clone()).collect();
+        descendants(&all, id)
+            .into_iter()
+            .filter_map(|i| all.iter().find(|d| d.id == i).cloned())
+            .collect()
+    }
+
+    /// As `revoke_by`: the devices revoked, `id` first, then those paired from it (none: there was no `id`).
+    pub fn revoke_with(&self, id: &str, by: Option<&str>) -> Result<Vec<Device>> {
         let gone = self.change(|known| {
-            let gone: Vec<(Device, String, bool)> = known
+            if !known.iter().any(|(d, _, _)| d.id == id) {
+                return Vec::new();
+            }
+            let all: Vec<Device> = known.iter().map(|(d, _, _)| d.clone()).collect();
+            let mut ids = vec![id.to_string()];
+            ids.extend(descendants(&all, id));
+            let gone: Vec<(Device, String, bool)> = ids
                 .iter()
-                .filter(|(d, _, _)| d.id == id)
-                .cloned()
+                .filter_map(|i| known.iter().find(|(d, _, _)| d.id == *i).cloned())
                 .collect();
-            known.retain(|(d, _, _)| d.id != id);
+            known.retain(|(d, _, _)| !ids.contains(&d.id));
             gone
         })?;
-        if let (Some(file), Some((device, token, _))) = (&self.file, gone.first()) {
+        if let (Some(file), false) = (&self.file, gone.is_empty()) {
             let traces = file.with_file_name(REVOKED_FILE);
-            let trace = Trace {
-                name: device.name.clone(),
-                at: now_ms(),
-                by: by.map(str::to_string),
-                hash: token_hash(token),
-            };
+            let at = now_ms();
             let kept = crate::headless::with_file_lock(&traces, || {
                 let mut all = read_traces(&traces);
-                all.push(trace);
+                all.extend(gone.iter().map(|(device, token, _)| Trace {
+                    name: device.name.clone(),
+                    at,
+                    by: by.map(str::to_string),
+                    hash: token_hash(token),
+                }));
                 let over = all.len().saturating_sub(MAX_REVOKED);
                 all.drain(..over);
                 let bytes = serde_json::to_vec_pretty(&all)?;
@@ -244,13 +282,21 @@ impl Devices {
                 log::warn!("remote API: a revoked device's trace not kept: {e:#}");
             }
         }
-        let gone = !gone.is_empty();
-        if gone {
-            if let Err(e) = self.store.delete(&entry(id)) {
+        for (device, _, _) in &gone {
+            if let Err(e) = self.store.delete(&entry(&device.id)) {
                 log::warn!("remote API: the system keychain did not forget a revoked device's token: {e:#}");
             }
         }
-        Ok(gone)
+        Ok(gone.into_iter().map(|(d, _, _)| d).collect())
+    }
+
+    /// The name of the device `id`, while it is one.
+    pub fn name_of(&self, id: &str) -> Option<String> {
+        self.known
+            .read()
+            .iter()
+            .find(|(d, _, _)| d.id == id)
+            .map(|(d, _, _)| d.name.clone())
     }
 
     /// The device whose token `presented` is, compared in constant time with every one of them.
@@ -326,4 +372,22 @@ impl Devices {
         let bytes = serde_json::to_vec_pretty(&kept)?;
         crate::paths::write_private(file, &bytes).with_context(|| format!("writing {FILE}"))
     }
+}
+
+/// The ids of the devices paired from `id`, and from them, as far as it goes (a loop in the file stops it).
+fn descendants(all: &[Device], id: &str) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    let mut from = vec![id.to_string()];
+    while let Some(parent) = from.pop() {
+        for d in all {
+            if d.paired_by.as_deref() == Some(parent.as_str())
+                && d.id != id
+                && !found.contains(&d.id)
+            {
+                found.push(d.id.clone());
+                from.push(d.id.clone());
+            }
+        }
+    }
+    found
 }

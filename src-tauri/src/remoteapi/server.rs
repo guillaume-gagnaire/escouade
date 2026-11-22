@@ -425,16 +425,32 @@ impl RemoteApi {
     }
 
     /// The device `id` revoked: its token forgotten, its connections closed, its sessions forgotten.
+    /// The devices paired from it go with it (SR1-02).
     pub fn revoke(&self, id: &str) -> Result<bool> {
-        let gone = self.devices.revoke(id)?;
-        for conn in self.live.lock().values().filter(|c| c.device == id) {
+        let gone = self.devices.revoke_with(id, None)?;
+        self.cut(id, &gone);
+        Ok(!gone.is_empty())
+    }
+
+    /// The connections of the devices `gone` (revoked with `id`) closed, their sessions forgotten.
+    fn cut(&self, id: &str, gone: &[super::devices::Device]) {
+        let ids: Vec<&str> = std::iter::once(id)
+            .chain(gone.iter().map(|d| d.id.as_str()))
+            .collect();
+        for conn in self
+            .live
+            .lock()
+            .values()
+            .filter(|c| ids.contains(&c.device.as_str()))
+        {
             conn.kicked.notify_one();
         }
-        self.sessions.forget_device(id);
-        if gone {
-            log::info!("remote API: device {id} revoked");
+        for id in &ids {
+            self.sessions.forget_device(id);
         }
-        Ok(gone)
+        for d in gone {
+            log::info!("remote API: device {} revoked", d.id);
+        }
     }
 
     /// A new device paired by the code `code` (`pairing`), named `name`: it and its token, or the refusal's code and text.
@@ -453,9 +469,20 @@ impl RemoteApi {
             return Err((codes::POLICY, e.to_string(), None));
         }
         let data = core.data.clone();
-        if let Err(refusal) = super::pairing::redeem(&data, code, crate::model::now_ms()) {
+        let paired_by = match super::pairing::redeem_by(&data, code, crate::model::now_ms()) {
+            Ok(by) => by,
+            Err(refusal) => {
+                self.failed();
+                log::warn!("remote API: pairing refused: {}", refusal.reason());
+                return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
+            }
+        };
+        // A code asked by a device revoked since: no device is born of it (SR1-02).
+        self.devices.refresh();
+        if let Some(by) = paired_by.as_deref().filter(|by| !self.devices.holds(by)) {
             self.failed();
-            log::warn!("remote API: pairing refused: {}", refusal.reason());
+            log::warn!("remote API: pairing refused: the code's device ({by}) was revoked");
+            let refusal = super::pairing::Refusal::NoCode;
             return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
         }
         // The name, as the user typed it: printable, 64 characters at most.
@@ -465,7 +492,7 @@ impl RemoteApi {
         } else {
             name
         };
-        match self.devices.add(&name) {
+        match self.devices.add_from(&name, paired_by.as_deref()) {
             Ok((device, token)) => {
                 log::info!("remote API: device « {} » paired", device.name);
                 Ok((device, token))
@@ -478,16 +505,23 @@ impl RemoteApi {
     }
 
     /// The device whose token `token` is, forgetting this server (ESC-537): revoked, its own name said as who asked;
-    /// its connections closed, its sessions forgotten. None when the token is no device's.
-    fn unpair(&self, token: &str) -> Option<super::devices::Device> {
+    /// its connections closed, its sessions forgotten, and the devices paired from it with it. None when the token is
+    /// no device's, or not the device of the tunnel's peer it comes through (as the handshake, SR1-10).
+    fn unpair(&self, token: &str, via: &Via) -> Option<super::devices::Device> {
         self.devices.refresh();
         let device = self.devices.find(token)?;
-        match self.devices.revoke_by(&device.id, Some(&device.name)) {
-            Ok(_) => {
-                for conn in self.live.lock().values().filter(|c| c.device == device.id) {
-                    conn.kicked.notify_one();
-                }
-                self.sessions.forget_device(&device.id);
+        if let Via::Tunnel(peer) = via {
+            if let Some(bound) = peer.device().filter(|d| *d != device.id) {
+                log::warn!(
+                    "remote API: « {} » forgetting this server through the tunnel's peer of another device ({bound}): refused",
+                    device.name
+                );
+                return None;
+            }
+        }
+        match self.devices.revoke_with(&device.id, Some(&device.name)) {
+            Ok(gone) => {
+                self.cut(&device.id, &gone);
                 log::info!(
                     "remote API: device « {} » forgot this server: revoked",
                     device.name
@@ -735,7 +769,7 @@ impl RemoteApi {
                 }
                 // A device that forgets this server (ESC-537): its token revoked; closed either way.
                 Ok(ToServer::Unpair { token }) => {
-                    let messages = match self.unpair(&token) {
+                    let messages = match self.unpair(&token, &via) {
                         Some(_) => {
                             let mut out = Vec::new();
                             if let Ok(text) = serde_json::to_string(&ToClient::Unpaired {}) {
@@ -1135,7 +1169,7 @@ impl RemoteApi {
             body,
         };
         let reply = (command.call)(call);
-        let (done, client) = (conn.clone(), conn.client.clone());
+        let (done, client, device) = (conn.clone(), conn.client.clone(), conn.device.clone());
         let name = command.name;
         let panicked = move || {
             Err(Failure::refused(
@@ -1155,7 +1189,7 @@ impl RemoteApi {
                 lane_of(name),
                 Box::new(move || {
                     let out = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                        super::as_client(client, job)
+                        super::as_caller(client, device, job)
                     }))
                     .unwrap_or_else(|_| panicked());
                     done.answer(id, out);
@@ -1166,7 +1200,7 @@ impl RemoteApi {
                 Box::new(move || {
                     // Started in its turn on its lane, as the IPC starts it; it runs on the runtime.
                     tokio::runtime::Handle::current().spawn(async move {
-                        let out = AssertUnwindSafe(super::scoped(client, future))
+                        let out = AssertUnwindSafe(super::scoped_caller(client, device, future))
                             .catch_unwind()
                             .await
                             .unwrap_or_else(|_| panicked());

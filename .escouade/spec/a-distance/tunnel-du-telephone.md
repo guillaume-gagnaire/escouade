@@ -2,8 +2,8 @@
 title: "Le tunnel du téléphone"
 subject: "a-distance"
 sources: ["docs/MOBILE.md § 3.1, § 3.10, § 8 (MO-2), M12","docs/REMOTE.md, « Le téléphone » (« Architecture retenue », « Configuration, pour l'utilisateur », « Points durs (sur le PC) », « Alternative sans WireGuard dans l'app », « Le tunnel côté cœur, MO-2 »)","src-tauri/src/phone (mod.rs, stack.rs, nat.rs, tailscale.rs)","src-tauri/src/remoteapi/server.rs (Via, serve_stream, Listen::Nothing)","src/components/settings/PhonePage.svelte","crates/escouade-policy/src/list.rs (servers.phone)"]
-tickets: ["ESC-567"]
-decisions: [230,262]
+tickets: ["ESC-567","ESC-630"]
+decisions: [230,262,285]
 compared: null
 ---
 
@@ -65,3 +65,7 @@ Le tunnel dit son port, chaque poignée de main d'un téléphone, chaque télép
 ## Pas encore
 
 L'essai réel avec un téléphone en 4G (un geste de l'utilisateur) ; le QR code de l'appairage depuis Réglages › Téléphone et la sorte « téléphone » des appareils ; l'app elle-même ; un nom DynDNS à la place de l'adresse publique ; le pare-feu IPv6 de la box ouvert par Escouade ; empêcher la veille du poste tant que l'accès est allumé.
+
+## Retirer un téléphone (ESC-630)
+
+« Retirer » un téléphone, dans Réglages › Téléphone ou par `escouade-server phone remove ID`, retire son pair **et révoque l'appareil de l'API distante qui lui est lié** (appairé à travers lui), avec les appareils nés de lui : son jeton ne vaut plus nulle part, ni par Tailscale, ni par la boucle locale d'un serveur, ni par un autre pair. L'écran le dit : « Pixel retiré et son accès révoqué ». Un pair qui n'a jamais été lié à un appareil est retiré du tunnel, et l'écran dit qu'aucun jeton n'était lié à lui.

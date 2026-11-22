@@ -1,9 +1,9 @@
 ---
 title: "L'API distante"
 subject: "a-distance"
-sources: ["docs/REMOTE.md, « La fondation commune » (points 2 à 6), « La fondation 2a », « La fondation 2b », « Le classement des commandes », « Le mode serveur, MS-1 », « Le mode serveur, MS-3 »","src-tauri/src/remoteapi (list.rs, server.rs, proto.rs, devices.rs, pairing.rs, outbox.rs, sessions.rs, window.rs)","src-tauri/src/termlog.rs (le tampon numéroté des terminaux), src-tauri/src/tui.rs (TuiOutput)","src/lib/transport.ts (le front sur deux transports), src/lib/connection.svelte.ts, src/components/ConnectionBand.svelte","crates/escouade-command (la liste unique des commandes)","crates/escouade-policy/src/list.rs (servers.remoteApi)"]
-tickets: ["ESC-478","ESC-495","ESC-514","ESC-515","ESC-537","ESC-567"]
-decisions: [189,193,202,216]
+sources: ["docs/REMOTE.md, « La fondation commune » (points 2 à 6), « La fondation 2a », « La fondation 2b », « Le classement des commandes », « Le mode serveur, MS-1 », « Le mode serveur, MS-3 »","src-tauri/src/remoteapi (list.rs, server.rs, proto.rs, devices.rs, pairing.rs, outbox.rs, sessions.rs, window.rs)","src-tauri/src/termlog.rs (le tampon numéroté des terminaux), src-tauri/src/tui.rs (TuiOutput)","src/lib/transport.ts (le front sur deux transports), src/lib/connection.svelte.ts, src/components/ConnectionBand.svelte","crates/escouade-command (la liste unique des commandes)","crates/escouade-policy/src/list.rs (servers.remoteApi)","Revue de sécurité 2.3 (ESC-624), constats SR1-02, SR1-03, SR1-10 : src-tauri/src/commands.rs (remote_device_revoke, remote_pair_code, phone_remove), src-tauri/src/remoteapi_tests.rs, src-tauri/src/phone_tests.rs"]
+tickets: ["ESC-478","ESC-495","ESC-514","ESC-515","ESC-537","ESC-567","ESC-630"]
+decisions: [189,193,202,216,285]
 compared: null
 ---
 
@@ -107,3 +107,11 @@ L'API est aussi servie **dans le tunnel WireGuard du téléphone** (voir *Le tun
 - **L'`Origin`** : celle de la fenêtre, ou, par le tunnel et Tailscale seulement, celle de l'app mobile (`capacitor://localhost`, `https://localhost`, `http://localhost`).
 - **Un pair du tunnel lié à un appareil** (appairé à travers lui) ne fait passer que le jeton de cet appareil ; un autre jeton par ce pair est refusé (`token`) et compte comme une poignée de main ratée.
 - Réglages › Téléphone appelle `phone_status`, `phone_set`, `phone_check`, `phone_rotate_key` et `phone_remove`, **servies** : la page d'un espace serveur agit sur le tunnel du serveur.
+
+## Qui révoque, qui appaire (ESC-630)
+
+- **L'auteur d'une révocation vient de la connexion** : la trace d'un appareil révoqué (ce que son client lit : « révoqué le …, depuis … ») nomme l'appareil de la connexion qui l'a demandée, ou « la fenêtre d'Escouade » quand c'est la fenêtre du cœur ; `escouade-server devices revoke` n'en nomme aucun. Jamais un nom donné par l'appelant : `remote_device_revoke` ne prend que l'id de l'appareil.
+- **Chaque appareil garde d'où il est né** (`pairedBy`) : l'appareil qui a demandé son code d'appairage, ou rien pour un code de la fenêtre ou d'`escouade-server pair`. **Révoquer un appareil révoque aussi ceux qui sont nés de lui**, et les leurs, par la fenêtre, l'API ou `escouade-server devices revoke` : leurs connexions se ferment, chacun garde sa trace. Un code demandé par un appareil révoqué depuis n'appaire plus aucun appareil (refus `pairing`, comme un code qui n'attend plus).
+- **Un code d'appairage ne se demande pas à distance** : `remote_pair_code` n'est donné qu'à la fenêtre du cœur ; un client de l'API qui le demande est refusé, avec sa raison (« lance escouade-server pair sur le serveur, ou crée-le dans la fenêtre d'Escouade de cette machine »). Un jeton qui fuit ne fait donc naître aucun appareil. Les appareils « poste » (les portées de MO-4) y auront droit.
+- **Le désappairage par le tunnel** (`unpair`) fait le contrôle de la poignée de main : par le pair d'un téléphone lié à un appareil, seul le jeton de cet appareil est pris ; un autre jeton y est refusé (`token`) et ne révoque rien.
+- **« Retirer » un téléphone** (`phone_remove`) retire son pair et **révoque l'appareil qui lui est lié** (et ceux nés de lui) : son jeton ne passe plus par aucune voie, ni Tailscale, ni la boucle locale, ni un autre pair. Un pair jamais lié à un appareil est retiré du tunnel, et la réponse le dit (`neverLinked`) : aucun jeton n'était lié à lui.

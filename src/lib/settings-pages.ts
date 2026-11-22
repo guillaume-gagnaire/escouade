@@ -284,7 +284,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('serversConnect', 'servers', 'servers.connect'),
   // Réglages de l'espace › Appareils (ESC-539).
   row('devicesList', 'devices', 'spaces.devices.title'),
-  row('devicesCode', 'devices', 'spaces.devices.create'),
+  row('devicesCode', 'devices', 'spaces.devices.pairTitle'),
   // Réglages › Téléphone (ESC-567): its own file in the core (phone.json), nothing of the settings.
   row('phoneAccess', 'phone', 'phone.access.label'),
   row('phonePort', 'phone', 'phone.port.label'),

@@ -67,7 +67,8 @@ export default {
     idle: 'Tunnel au repos',
     address: 'Adresse dans le tunnel : {address}',
     remove: 'Retirer',
-    removed: '{name} retiré du tunnel',
+    removed: '{name} retiré et son accès révoqué',
+    removedUnlinked: '{name} retiré du tunnel. Il n’était lié à aucun appareil : aucun jeton à révoquer.',
   },
   advanced: {
     key: 'Clé publique du tunnel : {key}',

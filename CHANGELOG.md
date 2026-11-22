@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : retirer un téléphone dans Réglages › Téléphone révoque aussi son accès, et retirer un appareil retire avec lui ceux qui ont été appairés depuis lui, ce que l’écran Appareils dit avant. Un code d’appairage ne se crée plus depuis un appareil appairé, et chaque retrait garde le vrai nom de qui l’a fait.
 - Serveur d’équipe : un administrateur peut couper d’urgence un harness, un modèle ou un plugin pour toute l’équipe ou un projet, ou arrêter tous ses agents. C’est signé, appliqué dans la seconde sur chaque poste en ligne (au retour pour les autres), dit par une bande avec qui l’a demandé et pourquoi, et levé d’un clic. Les projets personnels ne sont jamais touchés.
 - Sécurité : un fichier qu’un serveur t’envoie ne s’ouvre d’un clic que s’il est une image, un PDF ou un texte (Markdown, CSV et JSON compris, lus dans l’éditeur d’Escouade). Tout le reste est seulement téléchargé et montré dans son dossier, et la fenêtre dit pourquoi ; sous macOS, la copie est mise en quarantaine comme un téléchargement du web.
 - L’app mobile d’Escouade prend forme, pas encore publiée : sur Android et iPhone, trois onglets (À toi, Agents, Kanban) et une puce par espace montrent ce qui attend sur ton poste et tes serveurs, chacun suivi par sa propre connexion, dans le thème et la langue du téléphone.

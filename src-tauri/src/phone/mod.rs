@@ -561,14 +561,21 @@ impl Phone {
     }
 
     /// The phone `id` removed: its sessions and connections cut. False when there was none.
+    /// Its device's token stays: `take_peer` says which it was, for Réglages › Téléphone to revoke it (SR1-03).
     pub fn remove_peer(&self, id: &str) -> Result<bool> {
+        Ok(self.take_peer(id)?.is_some())
+    }
+
+    /// The phone `id` removed, as `remove_peer`: the peer it was (its `device`, the device it was paired as), none when
+    /// there was none.
+    pub fn take_peer(&self, id: &str) -> Result<Option<Peer>> {
         let gone = {
             let mut saved = self.saved.lock();
-            let before = saved.peers.len();
+            let gone = saved.peers.iter().find(|p| p.id == id).cloned();
             saved.peers.retain(|p| p.id != id);
-            before != saved.peers.len()
+            gone
         };
-        if gone {
+        if gone.is_some() {
             self.save()?;
             self.push_peers();
             log::info!("phone: peer {id} removed");

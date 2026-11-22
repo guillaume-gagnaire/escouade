@@ -6958,17 +6958,26 @@ pub fn remote_devices(core: CoreState) -> Vec<crate::remoteapi::devices::Device>
     crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone()).list()
 }
 
-/// The device `id` revoked at the demand of the device named `by`: the API closes its connections within two seconds.
-/// False when there was none.
-#[tauri::command(async)]
-pub fn remote_device_revoke(core: CoreState, id: String, by: Option<String>) -> Res<bool> {
-    crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone())
-        .revoke_by(&id, by.as_deref().filter(|b| !b.trim().is_empty()))
-        .map_err(err)
+/// Who asks a revocation, as its trace keeps it (SR1-02): the device of the connection that called, by its name, or
+/// the window; never a name the caller gives.
+fn revoker(devices: &crate::remoteapi::devices::Devices) -> String {
+    match crate::remoteapi::current_device() {
+        Some(id) => devices.name_of(&id).unwrap_or(id),
+        None => tr!("la fenêtre d’Escouade", "Escouade’s window"),
+    }
 }
 
-/// A pairing code asked from a device already paired (S5): ten minutes, one device; it takes the place of the one that
-/// waited.
+/// The device `id` revoked, and the devices paired from it with it (SR1-02): the API closes their connections within
+/// two seconds. Who asked is the caller (`revoker`). False when there was none.
+#[tauri::command(async)]
+pub fn remote_device_revoke(core: CoreState, id: String) -> Res<bool> {
+    let devices = crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone());
+    let by = revoker(&devices);
+    devices.revoke_by(&id, Some(&by)).map_err(err)
+}
+
+/// A pairing code (S5): ten minutes, one device; it takes the place of the one that waited. Asked by the window alone:
+/// a device paired to the API is refused, so that a leaked token cannot make devices of its own (SR1-02).
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PairCode {
@@ -6978,8 +6987,18 @@ pub struct PairCode {
 
 #[tauri::command(async)]
 pub fn remote_pair_code(core: CoreState) -> Res<PairCode> {
-    let code =
-        crate::remoteapi::pairing::create(&core.data, crate::model::now_ms()).map_err(err)?;
+    if crate::remoteapi::current() != crate::remoteapi::Client::Window {
+        return Err(tr!(
+            "Un code d’appairage ne se crée pas depuis un appareil appairé : lance « escouade-server pair » sur le serveur, ou crée-le dans la fenêtre d’Escouade de cette machine.",
+            "A pairing code is not created from a paired device: run “escouade-server pair” on the server, or create it in Escouade’s window on that machine."
+        ));
+    }
+    let code = crate::remoteapi::pairing::create_by(
+        &core.data,
+        crate::model::now_ms(),
+        crate::remoteapi::current_device().as_deref(),
+    )
+    .map_err(err)?;
     Ok(PairCode {
         code: code.text,
         expires_at: code.expires_at,
@@ -7031,10 +7050,44 @@ pub async fn phone_rotate_key(core: CoreState<'_>) -> Res<crate::phone::Status> 
     Ok(core.phone.status(&core).await)
 }
 
-/// A phone removed from the tunnel: its sessions and connections cut.
+/// A phone removed (Réglages › Téléphone): what was done.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PhoneRemoved {
+    /// Its peer was one, and is gone from the tunnel.
+    pub removed: bool,
+    /// Its peer was paired as a device (`peer.device`): that device's token was revoked with it.
+    pub revoked: bool,
+    /// Its peer was never paired as a device: no token was tied to it, none was revoked (said so).
+    pub never_linked: bool,
+}
+
+/// A phone removed from the tunnel, its sessions and connections cut, and the device it was paired as revoked (SR1-03),
+/// with the devices paired from it: its token no longer passes by any way (Tailscale, the loopback, another peer).
 #[tauri::command(async)]
-pub fn phone_remove(core: CoreState, id: String) -> Res<bool> {
-    core.phone.remove_peer(&id).map_err(err)
+pub fn phone_remove(core: CoreState, id: String) -> Res<PhoneRemoved> {
+    let Some(peer) = core.phone.take_peer(&id).map_err(err)? else {
+        return Ok(PhoneRemoved {
+            removed: false,
+            revoked: false,
+            never_linked: false,
+        });
+    };
+    let Some(device) = peer.device else {
+        return Ok(PhoneRemoved {
+            removed: true,
+            revoked: false,
+            never_linked: true,
+        });
+    };
+    let devices = crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone());
+    let by = revoker(&devices);
+    let revoked = devices.revoke_by(&device, Some(&by)).map_err(err)?;
+    Ok(PhoneRemoved {
+        removed: true,
+        revoked,
+        never_linked: false,
+    })
 }
 
 // ---------- What changes machines on a server (ESC-538) ----------

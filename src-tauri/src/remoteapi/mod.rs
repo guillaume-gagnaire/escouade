@@ -101,12 +101,34 @@ impl Client {
 
 tokio::task_local! {
     static CLIENT: Client;
+    /// The device of the connection whose call runs (`server`): its id, as `devices` keeps it.
+    static DEVICE: String;
 }
 
 /// The client of the call running now: the window when no connection of the API called (the IPC, the core's own
 /// tasks).
 pub fn current() -> Client {
     CLIENT.try_with(Client::clone).unwrap_or(Client::Window)
+}
+
+/// The device of the call running now (its id) when a connection of the API called; none for the window (the IPC,
+/// the core's own tasks). Who asks a revocation or a pairing code is read here, never from an argument (SR1-02).
+pub fn current_device() -> Option<String> {
+    DEVICE.try_with(String::clone).ok()
+}
+
+/// `f` run as a call of `client`, a connection of the device `device`.
+pub fn as_caller<T>(client: Client, device: String, f: impl FnOnce() -> T) -> T {
+    CLIENT.sync_scope(client, || DEVICE.sync_scope(device, f))
+}
+
+/// The future `f` run as a call of `client`, a connection of the device `device`.
+pub fn scoped_caller<F: Future>(
+    client: Client,
+    device: String,
+    f: F,
+) -> impl Future<Output = F::Output> {
+    CLIENT.scope(client, DEVICE.scope(device, f))
 }
 
 /// `f` run as a call of `client`.
@@ -451,6 +473,12 @@ pub struct State<'r, T: Send + Sync + 'static>(&'r T);
 impl<'r, T: Send + Sync + 'static> State<'r, T> {
     pub fn inner(&self) -> &'r T {
         self.0
+    }
+
+    /// A state given by a test, to call a command as the window does (`remoteapi::current()` is the window).
+    #[cfg(test)]
+    pub fn of_test(value: &'r T) -> Self {
+        State(value)
     }
 }
 

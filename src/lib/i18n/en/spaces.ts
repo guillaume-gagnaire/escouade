@@ -65,13 +65,20 @@ export default {
     revoke: 'Remove',
     revokeTitle: 'Remove {device} from {name}?',
     revokeText: 'Its token no longer works: its connections close, and it will need a new code to come back.',
+    revokeAlso: {
+      one: 'And {count} device paired from it, removed with it: {names}.',
+      other: 'And {count} devices paired from it, removed with it: {names}.',
+    },
     revoked: '{device} removed from {name}',
+    revokedWith: {
+      one: '{device} and {count} device paired from it removed from {name}',
+      other: '{device} and {count} devices paired from it removed from {name}',
+    },
+    pairedFrom: 'paired from {device}',
     none: 'No paired device.',
     pairTitle: 'Pair a device',
-    pairText: 'Run escouade-server pair on the server, or create a 10-minute code here for a single device.',
-    create: 'Create a code',
-    code: 'Pairing code: {code}',
-    expires: 'It lasts until {time}, for a single device.',
+    pairText:
+      'Run escouade-server pair on the server: a 10-minute code, for a single device. It is not created from a paired device, so that a token that leaked cannot give birth to others.',
     unavailable: 'Devices are read on a server: go to a server’s space.',
   },
 } as const satisfies Tree;

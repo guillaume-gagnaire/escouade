@@ -66,7 +66,8 @@ export default defineZone('phone', {
     idle: 'Tunnel at rest',
     address: 'Address in the tunnel: {address}',
     remove: 'Remove',
-    removed: '{name} removed from the tunnel',
+    removed: '{name} removed and its access revoked',
+    removedUnlinked: '{name} removed from the tunnel. It was tied to no device: no token to revoke.',
   },
   advanced: {
     key: 'The tunnel’s public key: {key}',

@@ -414,7 +414,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `overseer_view`
 - `overview_prs`
 - `phone_check` : Réglages › Téléphone (ESC-567) : le réseau revu (la box, l'adresse publique, Tailscale)
-- `phone_remove` : Réglages › Téléphone (ESC-567) : un téléphone retiré du tunnel, ses connexions coupées
+- `phone_remove` : Réglages › Téléphone (ESC-567) : un téléphone retiré du tunnel, ses connexions coupées, l’appareil qui lui est lié révoqué (ESC-630)
 - `phone_rotate_key` : Réglages › Téléphone (ESC-567) : la clé du tunnel changée, chaque téléphone à appairer de nouveau
 - `phone_set` : Réglages › Téléphone (ESC-567) : l'accès allumé ou éteint, son port UDP, Tailscale ; refusé par la stratégie
 - `phone_status` : Réglages › Téléphone (ESC-567) : l'état du tunnel, du port, de la box, de l'adresse publique, de Tailscale
@@ -479,10 +479,10 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `refresh_usage`
 - `refresh_workflows`
 - `refuse_delete` : la suppression qu’un agent demande, refusée sur sa carte (ESC-511)
-- `remote_device_revoke` : Réglages de l’espace › Appareils (ESC-539) : un appareil appairé au cœur retiré, ses connexions fermées
+- `remote_device_revoke` : Réglages de l’espace › Appareils (ESC-539) : un appareil appairé au cœur retiré avec ceux nés de lui, ses connexions fermées ; l’auteur pris de la connexion (ESC-630)
 - `remote_devices` : Réglages de l’espace › Appareils (ESC-539) : les appareils appairés au cœur
 - `remote_image`
-- `remote_pair_code` : Réglages de l’espace › Appareils (ESC-539) : un code d’appairage de 10 minutes créé depuis un appareil déjà appairé (S5)
+- `remote_pair_code` : un code d’appairage de 10 minutes, donné à la fenêtre du cœur seule ; refusé à un client distant (ESC-630)
 - `remove_project`
 - `remove_workflow_file`
 - `rename_agent`
@@ -911,7 +911,7 @@ La spec le décrit (« Escouade à distance › Les espaces ») ; la conception 
 - **Un tunnel par serveur** (`servers::Servers`, `live` par serveur) : chaque serveur connu a le sien, ouvert au démarrage (`resume` → `ensure`, sauf s'il est refusé par la stratégie ou n'a plus de jeton), tenu avec ses propres essais ; aller sur ce poste ne le ferme pas, « Retirer » le ferme. `open` passe par le tunnel déjà tenu (une poignée de main avec le jeton), sinon en ouvre un. `link_of(id)`, `links()` ; `server_retry` d'un espace ne relance que son tunnel.
 - **La fenêtre lit les autres espaces** (`src/lib/spaces.svelte.ts`) : une `RemoteTransport` par serveur, chacune son état (`connectionOf`) et sa reprise, ou l'IPC de ce poste quand la fenêtre est sur un serveur ; toutes les 3 s, `space_glance`.
 - **`space_glance`** (servie, `src-tauri/src/glance.rs`) : ce qui attend (le nombre, les agents qui attendent avec leur première demande coupée à 400 caractères, ceux au travail, 40 au plus, les demandes de la boîte « À toi », 20 au plus, les projets nommés, les couleurs des trois premiers), jamais une conversation. `counts: true` (la stratégie de ce poste), ou `servers.aggregateView` à `false` sur le cœur lui-même : les nombres seuls. `contentless` dit `servers.contentlessNotifications` du cœur.
-- **Les appareils** (servies) : `remote_devices`, `remote_device_revoke` (le nom de l'appareil qui le demande gardé dans la trace ; l'API ferme ses connexions à sa relecture, 2 s), `remote_pair_code` (S5 : un code de 10 minutes créé depuis un client appairé).
+- **Les appareils** (servies) : `remote_devices`, `remote_device_revoke` (l'appareil de la connexion qui le demande gardé dans la trace, ceux nés de lui révoqués avec lui ; l'API ferme leurs connexions à sa relecture, 2 s), `remote_pair_code` (S5 revu par ESC-630 : un code de 10 minutes donné à la fenêtre du cœur seule, refusé à un client distant).
 - **Un espace dans sa fenêtre** (`servers::window`, `space_window`, du bureau) : une `WebviewWindow` `space-<id>` (`space-here` pour ce poste) sur `index.html?space=<id>` ; son transport demande `server_link { space }`. Une par espace (S14) ; la capacité `default` couvre `space-*` ; la fermer la ferme (la principale va seule au tray).
 - **Les notifications** : une demande nouvelle d'un autre serveur, vue par sa lecture, est notifiée par `space_notify` (du bureau : les réglages de ce poste, le son, le toast, un clic qui émet `space-focus` à la fenêtre principale) ; celles du cœur de ce poste disent « Ce poste · … » dès qu'un serveur est connu (`TauriHost::notify`).
 - **Les stratégies** (`escouade-policy`, plus « à venir ») : `servers.personalSpace` à `false` refuse tout serveur hors de `servers.allowed` (aucun sans liste) ; `servers.aggregateView`, `servers.contentlessNotifications` s'appliquent aux serveurs de travail (de `servers.allowed`, ou tous sans liste). `servers_view` porte les verrous de ce poste, que la fenêtre lit même sur un serveur.

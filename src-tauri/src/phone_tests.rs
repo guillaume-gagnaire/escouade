@@ -841,3 +841,140 @@ async fn a_key_kept_in_the_keychain_is_read_again_never_made_anew() {
     );
     h.stop();
 }
+
+// ---------- « Retirer » a phone, Unpair through a peer (SR1-03, SR1-10) ----------
+
+/// The handshake of `token` on a connection handed to the API as Tailscale's listener hands one: its first answer.
+async fn hello_by_tailscale(api: &Arc<RemoteApi>, token: &str) -> ToClient {
+    let (ours, theirs) = tokio::io::duplex(1 << 20);
+    let names = Arc::new(vec!["100.101.102.103".to_string()]);
+    assert!(api.serve_stream(
+        Box::new(theirs),
+        crate::remoteapi::server::Via::Tailscale(names)
+    ));
+    let req = format!("ws://100.101.102.103{}", proto::PATH)
+        .into_client_request()
+        .unwrap();
+    let (mut ws, _) = tokio_tungstenite::client_async(req, ours).await.unwrap();
+    ws.send(Message::text(
+        serde_json::to_string(&ToServer::Hello {
+            version: VERSION.into(),
+            token: token.into(),
+            session: None,
+        })
+        .unwrap(),
+    ))
+    .await
+    .unwrap();
+    loop {
+        match tokio::time::timeout(Duration::from_secs(30), ws.next()).await {
+            Ok(Some(Ok(Message::Text(t)))) => return serde_json::from_str(&t).unwrap(),
+            Ok(Some(Ok(_))) => continue,
+            other => panic!("no answer to the handshake: {other:?}"),
+        }
+    }
+}
+
+/// A phone paired through the tunnel (its peer linked to the new device): the peer's id, the device and its token.
+async fn paired_phone(h: &Headless, name: &str) -> (Phone, String, String, String) {
+    let udp = turn_on(h).await;
+    let phone = Phone::new(udp, core_key(h), Ipv4Addr::new(10, 77, 0, 2));
+    let peer = h.core.phone.add_peer(name, &phone.key()).unwrap();
+    let code = crate::remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    let s = phone.reach(20).await.unwrap();
+    let mut ws = open(s, &TUNNEL_ADDRESS.to_string(), None).await.unwrap();
+    send(
+        &mut ws,
+        &ToServer::Pair {
+            code: code.text,
+            name: name.into(),
+        },
+    )
+    .await;
+    let Some(ToClient::Paired { device, token }) = next(&mut ws).await else {
+        panic!("paired")
+    };
+    (phone, peer.id, device.id, token)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_a_phone_revokes_its_device_and_its_token_passes_no_other_way() {
+    let (h, api, _token) = core("phone-remove-revokes", Listen::Nothing).await;
+    let (_phone, peer, device, token) = paired_phone(&h, "Pixel").await;
+    assert!(matches!(
+        hello_by_tailscale(&api, &token).await,
+        ToClient::Welcome { .. }
+    ));
+    // « Retirer » in Réglages › Téléphone: the peer gone, and its device's token revoked, signed by the window.
+    let state = crate::remoteapi::State::of_test(&h.core);
+    let removed = crate::commands::phone_remove(state, peer).unwrap();
+    assert!(
+        removed.removed && removed.revoked && !removed.never_linked,
+        "{removed:?}"
+    );
+    assert!(h.core.phone.peers().is_empty());
+    api.devices().refresh();
+    assert!(!api.devices().list().iter().any(|d| d.id == device));
+    // Its token no longer passes by Tailscale; it is told revoked, by whom.
+    match hello_by_tailscale(&api, &token).await {
+        ToClient::Refused { code, revoked, .. } => {
+            assert_eq!(code, "token");
+            let window = tr!("la fenêtre d’Escouade", "Escouade’s window");
+            assert_eq!(revoked.and_then(|r| r.by), Some(window));
+        }
+        other => panic!("a removed phone's token still welcome: {other:?}"),
+    }
+    // The other device stays.
+    assert!(api.devices().list().iter().any(|d| d.name == "Téléphone"));
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_a_phone_never_paired_as_a_device_says_so_and_revokes_nothing() {
+    let (h, api, _token) = core("phone-remove-unlinked", Listen::Nothing).await;
+    let (_, public) = stack::new_key();
+    let peer = h
+        .core
+        .phone
+        .add_peer("iPhone", &stack::key_text(&public))
+        .unwrap();
+    let state = crate::remoteapi::State::of_test(&h.core);
+    let removed = crate::commands::phone_remove(state.clone(), peer.id.clone()).unwrap();
+    assert!(
+        removed.removed && !removed.revoked && removed.never_linked,
+        "{removed:?}"
+    );
+    assert_eq!(api.devices().list().len(), 1);
+    // None any more: nothing done.
+    let again = crate::commands::phone_remove(state, peer.id).unwrap();
+    assert!(!again.removed && !again.revoked && !again.never_linked);
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unpair_through_the_peer_of_another_device_is_refused_as_the_handshake_is() {
+    let (h, api, other) = core("phone-unpair-bound", Listen::Nothing).await;
+    let (phone, _peer, device, own) = paired_phone(&h, "Pixel").await;
+    // Another device's token through this phone's peer: refused, that device kept.
+    let s = phone.reach(20).await.unwrap();
+    let mut ws = open(s, &TUNNEL_ADDRESS.to_string(), None).await.unwrap();
+    send(
+        &mut ws,
+        &ToServer::Unpair {
+            token: other.clone(),
+        },
+    )
+    .await;
+    assert_eq!(refused_code(&next(&mut ws).await.unwrap()), Some("token"));
+    assert!(
+        api.devices().find(&other).is_some(),
+        "another device unpaired through this peer"
+    );
+    // Its own: unpaired.
+    let s = phone.reach(20).await.unwrap();
+    let mut ws = open(s, &TUNNEL_ADDRESS.to_string(), None).await.unwrap();
+    send(&mut ws, &ToServer::Unpair { token: own }).await;
+    assert!(matches!(next(&mut ws).await, Some(ToClient::Unpaired {})));
+    assert!(!api.devices().holds(&device));
+    h.stop();
+}

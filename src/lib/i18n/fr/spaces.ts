@@ -69,13 +69,20 @@ export default {
     revoke: 'Retirer',
     revokeTitle: 'Retirer {device} de {name} ?',
     revokeText: 'Son jeton ne vaut plus : ses connexions se ferment, et pour revenir il lui faudra un nouveau code.',
+    revokeAlso: {
+      one: 'Et {count} appareil appairé depuis lui, retiré avec lui : {names}.',
+      other: 'Et {count} appareils appairés depuis lui, retirés avec lui : {names}.',
+    },
     revoked: '{device} retiré de {name}',
+    revokedWith: {
+      one: '{device} et {count} appareil appairé depuis lui retirés de {name}',
+      other: '{device} et {count} appareils appairés depuis lui retirés de {name}',
+    },
+    pairedFrom: 'appairé depuis {device}',
     none: 'Aucun appareil appairé.',
     pairTitle: 'Appairer un appareil',
-    pairText: 'Lance escouade-server pair sur le serveur, ou crée ici un code de 10 minutes pour un seul appareil.',
-    create: 'Créer un code',
-    code: 'Code d’appairage : {code}',
-    expires: 'Il vaut jusqu’à {time}, pour un seul appareil.',
+    pairText:
+      'Lance escouade-server pair sur le serveur : un code de 10 minutes, pour un seul appareil. Il ne se crée pas depuis un appareil appairé, pour qu’un jeton qui aurait fuité ne puisse pas en faire naître d’autres.',
     unavailable: 'Les appareils se lisent sur un serveur : va sur l’espace d’un serveur.',
   },
 } as const satisfies Tree;

@@ -166,3 +166,44 @@ test('Réglages › Téléphone turns the tunnel on, says the box to open and th
   await expect(dialog.getByTestId('phone-state')).toContainText('Éteint');
   await expect.poll(() => udpFree(UDP)).toBe(true);
 });
+
+test('« Retirer » a phone revokes the device it was paired as, and says so', async ({ app }) => {
+  // A phone paired through the tunnel (its peer tied to its device), and another device, written before the start.
+  const now = Date.now();
+  fs.writeFileSync(
+    path.join(app.data, 'remote-devices.json'),
+    JSON.stringify([
+      { id: 'dev-pixel', name: 'Pixel 8', createdAt: now, token: 'e2e-token-of-the-pixel-0123456789abcdef' },
+      { id: 'dev-pc', name: 'Portable', createdAt: now, token: 'e2e-token-of-the-laptop-0123456789abcde' },
+    ]),
+  );
+  fs.writeFileSync(
+    path.join(app.data, 'phone.json'),
+    JSON.stringify({
+      enabled: false,
+      port: UDP,
+      tailscale: false,
+      peers: [
+        {
+          id: 'peer-pixel',
+          name: 'Pixel 8',
+          publicKey: 'cHVibGljLWtleS1vZi10aGUtcGl4ZWwtZm9yLXRlc3Q=',
+          address: '10.77.0.2',
+          device: 'dev-pixel',
+          addedAt: now,
+        },
+      ],
+    }),
+  );
+  const page = await app.restart();
+  const dialog = await openSettingsPage(page, 'Téléphone');
+  const row = dialog.getByTestId('phone-row').filter({ hasText: 'Pixel 8' });
+  await row.getByRole('button', { name: 'Retirer' }).click();
+  await expect(page.getByText('Pixel 8 retiré et son accès révoqué')).toBeVisible();
+  await expect(dialog.getByText(/Aucun téléphone appairé/)).toBeVisible();
+  // Its device revoked, signed by the window; the other one kept.
+  const devices = JSON.parse(fs.readFileSync(path.join(app.data, 'remote-devices.json'), 'utf8')) as { id: string }[];
+  expect(devices.map((d) => d.id)).toEqual(['dev-pc']);
+  const traces = JSON.parse(fs.readFileSync(path.join(app.data, 'remote-revoked.json'), 'utf8')) as { name: string; by: string }[];
+  expect(traces).toEqual([expect.objectContaining({ name: 'Pixel 8', by: 'la fenêtre d’Escouade' })]);
+});

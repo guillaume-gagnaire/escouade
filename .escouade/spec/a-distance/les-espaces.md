@@ -2,8 +2,8 @@
 title: "Les espaces"
 subject: "a-distance"
 sources: ["docs/SERVER-UX.md (§ 5 les espaces, § 6 les trois directions, § 7 S1 à S16, § 8 MS-5, § 10, § 11)","design/server-2-3/maquette.html?d=b et ses captures b-* (b-un, b-deux, b-trois, b-serveur, b-coupure, b-appareils)","docs/REMOTE.md, « Plusieurs serveurs pilotés par un seul Escouade », « Les espaces, MS-5 (ESC-539) »","src-tauri/src/servers (mod.rs, window.rs), src-tauri/src/glance.rs","src/lib/spaces.svelte.ts, src/components/servers (RailSpace, Everywhere), src/components/settings/DevicesPage.svelte","src-tauri/src/servers_tests.rs, src-tauri/src/glance_tests.rs, src/components/servers/spaces.test.ts, tests/e2e/spaces.spec.ts"]
-tickets: ["ESC-539","ESC-538"]
-decisions: [218]
+tickets: ["ESC-539","ESC-538","ESC-630"]
+decisions: [218,285]
 compared: null
 ---
 
@@ -60,12 +60,12 @@ Tant que ce poste ne connaît aucun serveur, la fenêtre est celle d'avant, au p
 
 ## Réglages de l'espace › Appareils
 
-- Sur un serveur, la page **Appareils** des réglages : les appareils appairés au serveur, avec leur dernier passage ; **ce poste marqué « Ce poste »**, son geste « Se déconnecter » menant à Réglages › Serveurs (où « Retirer » oublie le serveur et le prie de révoquer ce poste) ; **« Retirer »** un autre appareil, après confirmation : son jeton ne vaut plus, ses connexions se ferment dans les deux secondes, la trace du serveur dit qui l'a retiré.
-- **« Créer un code »** (S5) : un code d'appairage de 10 minutes, pour un seul appareil, créé depuis un client déjà appairé (le chemin du téléphone) ; il remplace celui qui attendait.
+- Sur un serveur, la page **Appareils** des réglages : les appareils appairés au serveur, avec leur dernier passage et, pour un appareil né d'un autre, « appairé depuis … » ; **ce poste marqué « Ce poste »**, son geste « Se déconnecter » menant à Réglages › Serveurs (où « Retirer » oublie le serveur et le prie de révoquer ce poste) ; **« Retirer »** un autre appareil, après confirmation : son jeton ne vaut plus, ses connexions se ferment dans les deux secondes. **Les appareils nés de lui partent avec lui**, et la confirmation le dit avant (« Et 1 appareil appairé depuis lui, retiré avec lui : Tablette. »). La trace du serveur dit qui l'a retiré : l'appareil de la connexion de la fenêtre, tel que le serveur le connaît, jamais un nom que la fenêtre donne (voir *L'API distante*, « Qui révoque, qui appaire »).
+- **Appairer un appareil** : la page dit de lancer `escouade-server pair` sur le serveur (un code de 10 minutes, pour un seul appareil). Un code ne se crée pas depuis un appareil appairé : le serveur le refuse à un client distant (S5 revu par ESC-630), pour qu'un jeton qui a fuité ne fasse pas naître d'autres appareils ; les appareils « poste » de MO-4 y auront droit.
 
 ## Ce que le serveur sert pour les espaces
 
-Commandes servies (`remoteapi/list.rs`) : `space_glance` (ce qui attend, `counts` pour les seuls nombres), `remote_devices`, `remote_device_revoke`, `remote_pair_code`. Commandes du bureau : `server_links`, `server_link` d'une fenêtre d'espace, `server_retry` d'un espace, `space_window`, `space_notify`.
+Commandes servies (`remoteapi/list.rs`) : `space_glance` (ce qui attend, `counts` pour les seuls nombres), `remote_devices` (avec `pairedBy`), `remote_device_revoke` (l'id seul), `remote_pair_code` (refusée à un client distant, avec sa raison). Commandes du bureau : `server_links`, `server_link` d'une fenêtre d'espace, `server_retry` d'un espace, `space_window`, `space_notify`.
 
 ## Avec ce qui change de machine (ESC-538)
 

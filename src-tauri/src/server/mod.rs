@@ -485,13 +485,32 @@ fn phone(args: &Args, what: &PhoneCommand) -> Result<()> {
             );
         }
         PhoneCommand::Remove(id) => {
-            if !phone.remove_peer(id)? {
+            let Some(peer) = phone.take_peer(id)? else {
                 bail!(tr!(
                     "aucun téléphone {id} (escouade-server phone)",
                     "no phone {id} (escouade-server phone)"
                 ));
+            };
+            // Its device's token revoked with it (SR1-03): it no longer passes by any way.
+            match peer.device {
+                Some(device) => {
+                    devices_of(&data)?.revoke(&device)?;
+                    println!(
+                        "{}",
+                        tr!(
+                            "Téléphone {id} retiré et son accès révoqué.",
+                            "Phone {id} removed and its access revoked."
+                        )
+                    );
+                }
+                None => println!(
+                    "{}",
+                    tr!(
+                        "Téléphone {id} retiré du tunnel (il n'était lié à aucun appareil).",
+                        "Phone {id} removed from the tunnel (it was tied to no device)."
+                    )
+                ),
             }
-            println!("{}", tr!("Téléphone {id} retiré.", "Phone {id} removed."));
         }
     }
     Ok(())

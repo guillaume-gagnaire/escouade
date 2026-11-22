@@ -1912,3 +1912,189 @@ async fn a_client_at_a_distance_sees_the_reservation_locked_and_is_refused_the_g
     .await;
     h.stop();
 }
+
+// ---------- who revokes, who pairs (SR1-02, SR1-10) ----------
+
+/// A device paired with the code `code`, named `name`: it and its token (the server's answer to `Pair`), or the
+/// refusal's code.
+async fn pair(
+    api: &RemoteApi,
+    code: &str,
+    name: &str,
+) -> Result<(remoteapi::devices::Device, String), String> {
+    let ws = open(api.addr(), proto::PATH, None, None).await.unwrap();
+    let mut c = Client {
+        ws,
+        next: 1,
+        seen: Vec::new(),
+    };
+    c.send(&ToServer::Pair {
+        code: code.into(),
+        name: name.into(),
+    })
+    .await;
+    match parse(&c.recv().await.expect("an answer to the pairing")) {
+        Some(ToClient::Paired { device, token }) => Ok((device, token)),
+        Some(other) => Err(code_of(&other).unwrap_or("?").to_string()),
+        None => Err("?".into()),
+    }
+}
+
+fn id_of(api: &RemoteApi, name: &str) -> String {
+    api.devices()
+        .list()
+        .into_iter()
+        .find(|d| d.name == name)
+        .unwrap_or_else(|| panic!("no device {name}"))
+        .id
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_revocation_s_author_is_the_device_of_the_connection_never_a_name_it_gives() {
+    let (_dir, h, api, token) = served("remote-revoker").await;
+    let (owner, owner_token) = api.devices().add("PC du propriétaire").unwrap();
+    let mut phone = Client::connect(&api, &token).await;
+    // A name given besides the id is not read: the trace says the device that asked.
+    let gone = phone
+        .ok(
+            "remote_device_revoke",
+            json!({ "id": owner.id, "by": "Serveur (administrateur)" }),
+        )
+        .await;
+    assert_eq!(gone, json!(true));
+    let trace = api.devices().revoked(&owner_token).expect("a trace");
+    assert_eq!(trace.by.as_deref(), Some("Téléphone"));
+    let traces =
+        std::fs::read_to_string(h.core.data.root().join(remoteapi::devices::REVOKED_FILE)).unwrap();
+    assert!(!traces.contains("Serveur (administrateur)"), "{traces}");
+    // The revoked one is told who it was.
+    let (_, refused) = Client::hello(&api, VERSION, &owner_token).await;
+    match refused {
+        ToClient::Refused {
+            revoked: Some(r), ..
+        } => assert_eq!(r.by.as_deref(), Some("Téléphone")),
+        other => panic!("{other:?}"),
+    }
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pairing_code_is_refused_to_a_paired_device_with_its_reason_and_given_to_the_window() {
+    let (_dir, h, api, token) = served("remote-pair-code").await;
+    let mut phone = Client::connect(&api, &token).await;
+    match phone.call("remote_pair_code", json!({})).await {
+        ToClient::Reply {
+            ok: None,
+            error: Some(e),
+            ..
+        } => {
+            assert!(e.to_string().contains("escouade-server pair"), "{e}")
+        }
+        other => panic!("a code given to a paired device: {other:?}"),
+    }
+    assert!(remoteapi::pairing::waiting_until(&h.core.data, crate::model::now_ms()).is_none());
+    // The window has it, and the device born of it was paired from nothing but the window.
+    let code = crate::commands::remote_pair_code(remoteapi::State::of_test(&h.core)).unwrap();
+    let (device, _) = pair(&api, &code.code, "Tablette").await.unwrap();
+    assert_eq!(device.paired_by, None);
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn revoking_a_device_revokes_the_devices_paired_from_it_and_theirs_and_no_other() {
+    let (_dir, h, api, token) = served("remote-cascade").await;
+    let phone = id_of(&api, "Téléphone");
+    let (_, owner_token) = api.devices().add("PC du propriétaire").unwrap();
+    // A code asked by the phone (as a device « poste » will, MO-4): the tablet is paired from it, the laptop from the tablet.
+    let code =
+        remoteapi::pairing::create_by(&h.core.data, crate::model::now_ms(), Some(&phone)).unwrap();
+    let (tablet, tablet_token) = pair(&api, &code.text, "Tablette").await.unwrap();
+    assert_eq!(tablet.paired_by.as_deref(), Some(phone.as_str()));
+    let code =
+        remoteapi::pairing::create_by(&h.core.data, crate::model::now_ms(), Some(&tablet.id))
+            .unwrap();
+    let (laptop, laptop_token) = pair(&api, &code.text, "Portable").await.unwrap();
+    assert_eq!(laptop.paired_by.as_deref(), Some(tablet.id.as_str()));
+    let born: Vec<String> = api
+        .devices()
+        .born_of(&phone)
+        .into_iter()
+        .map(|d| d.name)
+        .collect();
+    assert_eq!(born, ["Tablette", "Portable"]);
+    // Kept in the file, and shown: the window reads `pairedBy`.
+    let mut owner = Client::connect(&api, &owner_token).await;
+    let listed = owner.ok("remote_devices", json!({})).await;
+    let of = |name: &str| {
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["name"] == name)
+            .cloned()
+            .unwrap()
+    };
+    assert_eq!(of("Portable")["pairedBy"], json!(tablet.id));
+    assert!(of("Téléphone").get("pairedBy").is_none());
+
+    // The phone revoked: the devices born of it go with it, their connections closed; the owner's stays.
+    let mut connected = Client::connect(&api, &laptop_token).await;
+    assert!(api.revoke(&phone).unwrap());
+    assert!(
+        connected.closed().await,
+        "a device born of the revoked one stays connected"
+    );
+    for presented in [&token, &tablet_token, &laptop_token] {
+        let (_, refused) = Client::hello(&api, VERSION, presented).await;
+        assert_eq!(code_of(&refused), Some(codes::TOKEN), "{refused:?}");
+    }
+    let left: Vec<String> = api.devices().list().into_iter().map(|d| d.name).collect();
+    assert_eq!(left, ["PC du propriétaire"]);
+    assert!(owner.ok("closed_projects", json!({})).await.is_array());
+    // Each has its trace: told « revoked » rather than « unknown ».
+    for presented in [&tablet_token, &laptop_token] {
+        assert!(api.devices().revoked(presented).is_some());
+    }
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_code_asked_by_a_device_revoked_since_pairs_no_device() {
+    let (_dir, h, api, _token) = served("remote-orphan-code").await;
+    let phone = id_of(&api, "Téléphone");
+    let code =
+        remoteapi::pairing::create_by(&h.core.data, crate::model::now_ms(), Some(&phone)).unwrap();
+    assert!(api.revoke(&phone).unwrap());
+    assert_eq!(
+        pair(&api, &code.text, "Intrus").await.unwrap_err(),
+        codes::PAIRING
+    );
+    assert!(api.devices().list().is_empty());
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_window_s_revocation_is_signed_by_the_window_and_takes_the_devices_born_of_it() {
+    let (_dir, h, api, token) = served("remote-window-revoke").await;
+    let phone = id_of(&api, "Téléphone");
+    let code =
+        remoteapi::pairing::create_by(&h.core.data, crate::model::now_ms(), Some(&phone)).unwrap();
+    let (_, tablet_token) = pair(&api, &code.text, "Tablette").await.unwrap();
+    assert!(crate::commands::remote_device_revoke(
+        remoteapi::State::of_test(&h.core),
+        phone.clone()
+    )
+    .unwrap());
+    let window = tr!("la fenêtre d’Escouade", "Escouade’s window");
+    for presented in [&token, &tablet_token] {
+        let trace = api.devices().revoked(presented).expect("a trace");
+        assert_eq!(trace.by.as_deref(), Some(window.as_str()));
+    }
+    // The API reads the file again: they are put out.
+    wait("the devices revoked by the window put out", || {
+        api.devices().refresh();
+        api.devices().list().is_empty()
+    })
+    .await;
+    h.stop();
+}

@@ -53,6 +53,10 @@ struct Waiting {
     hash: String,
     expires_at: i64,
     tries_left: u32,
+    /// The device that asked for it (SR1-02): the device born of it is paired from it, and goes when it is revoked.
+    /// None: the window or `escouade-server pair`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    by: Option<String>,
 }
 
 /// Why a code was refused: what the client tells the user.
@@ -152,6 +156,11 @@ fn remove(path: &std::path::Path) {
 
 /// A new code for `data`, from now (`now`, ms): it takes the place of the one that waited.
 pub fn create(data: &DataDir, now: i64) -> Result<Code> {
+    create_by(data, now, None)
+}
+
+/// A new code asked by the device `by` (none: the window, `escouade-server pair`), kept with it.
+pub fn create_by(data: &DataDir, now: i64, by: Option<&str>) -> Result<Code> {
     let mut bytes = [0u8; LENGTH];
     getrandom::fill(&mut bytes).map_err(|e| anyhow::anyhow!("random: {e}"))?;
     let letters: String = bytes
@@ -162,6 +171,7 @@ pub fn create(data: &DataDir, now: i64) -> Result<Code> {
         hash: hash(&letters),
         expires_at: now + LIFETIME_MS,
         tries_left: MAX_TRIES,
+        by: by.map(str::to_string),
     };
     let path = file(data);
     with_file_lock(&path, || write(&path, &waiting))?;
@@ -174,6 +184,15 @@ pub fn create(data: &DataDir, now: i64) -> Result<Code> {
 /// The code `presented` given for `data` at `now`: Ok once, when it is the one that waits and has not ended; it ends
 /// then. A wrong one costs a try.
 pub fn redeem(data: &DataDir, presented: &str, now: i64) -> std::result::Result<(), Refusal> {
+    redeem_by(data, presented, now).map(|_| ())
+}
+
+/// As `redeem`, with the device that asked for the code (none: the window, `escouade-server pair`).
+pub fn redeem_by(
+    data: &DataDir,
+    presented: &str,
+    now: i64,
+) -> std::result::Result<Option<String>, Refusal> {
     let path = file(data);
     let outcome = with_file_lock(&path, || {
         let Some(mut waiting) = read(&path) else {
@@ -191,7 +210,7 @@ pub fn redeem(data: &DataDir, presented: &str, now: i64) -> std::result::Result<
         let right = code.len() == LENGTH && escouade_mcp::same_token(&hash(&code), &waiting.hash);
         if right {
             remove(&path);
-            return Ok(Ok(()));
+            return Ok(Ok(waiting.by));
         }
         waiting.tries_left -= 1;
         if waiting.tries_left == 0 {

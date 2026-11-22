@@ -2,11 +2,12 @@
 // ways out, the public address that changed, a server's firewall, Tailscale, the phones, the key turned, and the policy
 // of the device that greys the switch.
 
-import { cleanup, render, screen, within } from '@testing-library/svelte';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { locks, NO_LOCKS } from '../../lib/locks.svelte';
+import { app } from '../../lib/state.svelte';
 import { fakeBackend } from '../../test/ipc';
 import type { Locks } from '../../lib/types';
 import PhonePage from './PhonePage.svelte';
@@ -69,7 +70,7 @@ function serve(extra: Record<string, (args: any) => unknown> = {}) {
     },
     phone_check: () => status,
     phone_rotate_key: () => ({ ...status, publicKey: 'bmV3LWtleQ==' }),
-    phone_remove: () => true,
+    phone_remove: (a) => ({ removed: true, revoked: a.id === 'p1', neverLinked: a.id !== 'p1' }),
     ...extra,
   });
 }
@@ -80,6 +81,7 @@ beforeEach(() => {
   setLang('fr');
   locks.current = NO_LOCKS;
   status = base();
+  app.toasts = [];
   serve();
 });
 afterEach(() => {
@@ -170,8 +172,17 @@ describe('Réglages › Téléphone', () => {
     const rows = await screen.findAllByTestId('phone-row');
     expect(rows[0]).toHaveTextContent('Tunnel ouvert · dernière poignée de main à l’instant');
     expect(rows[1]).toHaveTextContent('Tunnel au repos · Adresse dans le tunnel : 10.77.0.3');
+    // A phone paired as a device: its token revoked with its peer, said so (SR1-03).
+    await userEvent.click(within(rows[0]).getByRole('button', { name: 'Retirer' }));
+    expect(callsOf('phone_remove').at(-1)?.args).toEqual({ id: 'p1' });
+    await waitFor(() => expect(app.toasts.map((t) => t.text)).toEqual(['Pixel 8 retiré et son accès révoqué']));
+    // A peer never paired as a device: no token to revoke, said too.
+    app.toasts = [];
     await userEvent.click(within(rows[1]).getByRole('button', { name: 'Retirer' }));
     expect(callsOf('phone_remove').at(-1)?.args).toEqual({ id: 'p2' });
+    await waitFor(() =>
+      expect(app.toasts.map((t) => t.text)).toEqual(['iPhone retiré du tunnel. Il n’était lié à aucun appareil : aucun jeton à révoquer.']),
+    );
   });
 
   it('says there is no phone yet, the pairing coming with the app', async () => {

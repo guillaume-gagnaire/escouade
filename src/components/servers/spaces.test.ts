@@ -359,7 +359,7 @@ describe('« Partout »', () => {
 });
 
 describe('Réglages', () => {
-  it('lists the devices of the space’s server, this computer marked; creates a code', async () => {
+  it('lists the devices of the space’s server, this computer marked; removes one without saying who asks', async () => {
     connection.server = { ...TRAVAIL, active: true };
     connection.state = 'open';
     backend = fakeBackend({
@@ -367,7 +367,6 @@ describe('Réglages', () => {
         { id: 'd1', name: 'DESKTOP-7QK2 · Windows', createdAt: 1, lastSeen: 2 },
         { id: 'd2', name: 'Pixel 8', createdAt: 1 },
       ],
-      remote_pair_code: () => ({ code: 'K7Q4-MXR9', expiresAt: Date.now() + 600_000 }),
       remote_device_revoke: () => true,
     });
     render(DevicesPage);
@@ -375,12 +374,39 @@ describe('Réglages', () => {
     expect(rows[0]).toHaveTextContent('Ce poste');
     expect(within(rows[0]).getByRole('button', { name: 'Se déconnecter' })).toBeVisible();
     await userEvent.click(within(rows[1]).getByRole('button', { name: 'Retirer' }));
+    expect(screen.queryByTestId('device-born')).toBeNull();
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Retirer' }));
+    // Who asks is the window's connection, as the server knows it: the window never names it (SR1-02).
+    await vi.waitFor(() => expect(backend.called('remote_device_revoke')[0]?.args).toEqual({ id: 'd2' }));
+    // A code is created on the server, never from here: no button, the way said.
+    expect(screen.queryByRole('button', { name: /Créer un code/ })).toBeNull();
+    expect(screen.getByText(/Lance escouade-server pair sur le serveur/)).toBeVisible();
+  });
+
+  it('says before removing a device the devices paired from it, which go with it', async () => {
+    connection.server = { ...TRAVAIL, active: true };
+    connection.state = 'open';
+    app.toasts = [];
+    backend = fakeBackend({
+      remote_devices: () => [
+        { id: 'd1', name: 'DESKTOP-7QK2 · Windows', createdAt: 1, lastSeen: 2 },
+        { id: 'd2', name: 'Pixel 8', createdAt: 1 },
+        { id: 'd3', name: 'Tablette', createdAt: 2, pairedBy: 'd2' },
+        { id: 'd4', name: 'Portable', createdAt: 3, pairedBy: 'd3' },
+      ],
+      remote_device_revoke: () => true,
+    });
+    render(DevicesPage);
+    const rows = await screen.findAllByTestId('device-row');
+    expect(rows[2]).toHaveTextContent('appairé depuis Pixel 8');
+    await userEvent.click(within(rows[1]).getByRole('button', { name: 'Retirer' }));
+    expect(screen.getByTestId('device-born')).toHaveTextContent(
+      'Et 2 appareils appairés depuis lui, retirés avec lui : Tablette, Portable.',
+    );
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Retirer' }));
     await vi.waitFor(() =>
-      expect(backend.called('remote_device_revoke')[0]?.args).toMatchObject({ id: 'd2', by: 'DESKTOP-7QK2 · Windows' }),
+      expect(app.toasts.map((x) => x.text)).toEqual(['Pixel 8 et 2 appareils appairés depuis lui retirés de Travail']),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Créer un code' }));
-    expect(await screen.findByTestId('device-code')).toHaveTextContent('K7Q4-MXR9');
   });
 
   it('shows the policies on the servers locked, with who imposes them', async () => {

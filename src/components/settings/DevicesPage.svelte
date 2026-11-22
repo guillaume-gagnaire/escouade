@@ -1,11 +1,12 @@
 <script lang="ts">
   // Réglages de l'espace › Appareils (ESC-539, docs/SERVER-UX.md § 2 step 8, S5, design `b-appareils`): the devices
   // paired to the server the window is on — this computer marked, its « Se déconnecter » being « Retirer » of
-  // Réglages › Serveurs (S15) —, removing another one (its connections close within two seconds), and a pairing code
-  // created from here, ten minutes for one device (the phone's way). Read from the server, through the window's own
-  // connection: nothing of it is this computer's.
+  // Réglages › Serveurs (S15) —, removing another one (its connections close within two seconds) with the devices
+  // paired from it, said before (SR1-02). A code is created on the server (`escouade-server pair`), never from a paired
+  // device: the server refuses it. Read from the server, through the window's own connection: nothing of it is this
+  // computer's.
   import { connection } from '../../lib/connection.svelte';
-  import { fDate, fTime } from '../../lib/format';
+  import { fDate } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { invoke } from '../../lib/transport';
   import { app } from '../../lib/state.svelte';
@@ -16,13 +17,13 @@
     name: string;
     createdAt: number;
     lastSeen?: number | null;
+    pairedBy?: string | null;
   }
 
   const server = $derived(connection.server);
   let devices = $state<Device[] | null>(null);
   let failed = $state('');
   let confirm = $state<Device | null>(null);
-  let code = $state<{ code: string; expiresAt: number } | null>(null);
   let busy = $state(false);
 
   async function load() {
@@ -41,24 +42,39 @@
   /** This computer, as the server knows it: by the name it was paired under. */
   const mine = (d: Device) => !!server && d.name === server.device;
 
+  /** The devices paired from `d`, and from them: the server revokes them with it. */
+  function bornOf(d: Device): Device[] {
+    const all = devices ?? [];
+    const found: Device[] = [];
+    const from = [d.id];
+    while (from.length) {
+      const parent = from.pop();
+      for (const x of all)
+        if (x.pairedBy === parent && x.id !== d.id && !found.includes(x)) {
+          found.push(x);
+          from.push(x.id);
+        }
+    }
+    return found;
+  }
+
+  const nameOf = (id: string) => devices?.find((x) => x.id === id)?.name;
+
   async function revoke(d: Device) {
     confirm = null;
     busy = true;
     try {
-      await invoke<boolean>('remote_device_revoke', { id: d.id, by: server?.device ?? null });
-      app.toast(t('spaces.devices.revoked', { device: d.name, name: server?.name ?? '' }), 'ok');
+      // Who asks is the window's connection, as the server knows it: never said by the window (SR1-02).
+      const born = bornOf(d).length;
+      await invoke<boolean>('remote_device_revoke', { id: d.id });
+      const name = server?.name ?? '';
+      app.toast(
+        born
+          ? t('spaces.devices.revokedWith', { device: d.name, count: born, name })
+          : t('spaces.devices.revoked', { device: d.name, name }),
+        'ok',
+      );
       await load();
-    } catch (e) {
-      app.toast(String(e), 'error');
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function create() {
-    busy = true;
-    try {
-      code = await invoke<{ code: string; expiresAt: number }>('remote_pair_code');
     } catch (e) {
       app.toast(String(e), 'error');
     } finally {
@@ -90,7 +106,9 @@
                 {
                   date: fDate(d.createdAt),
                 },
-              )}</span
+              )}{#if d.pairedBy && nameOf(d.pairedBy)}{' · '}{t('spaces.devices.pairedFrom', {
+                  device: nameOf(d.pairedBy) ?? '',
+                })}{/if}</span
             >
           </div>
           {#if mine(d)}
@@ -110,6 +128,12 @@
     <div class="confirm" role="alertdialog" aria-label={t('spaces.devices.revokeTitle', { device: c.name, name: server.name })}>
       <b>{t('spaces.devices.revokeTitle', { device: c.name, name: server.name })}</b>
       <p>{t('spaces.devices.revokeText')}</p>
+      {#if bornOf(c).length}
+        {@const born = bornOf(c)}
+        <p data-testid="device-born">
+          {t('spaces.devices.revokeAlso', { count: born.length, names: born.map((x) => x.name).join(', ') })}
+        </p>
+      {/if}
       <div class="acts">
         <button class="btn" onclick={() => (confirm = null)}>{t('common.cancel')}</button>
         <button class="btn primary danger-bg" onclick={() => void revoke(c)}>{t('spaces.devices.revoke')}</button>
@@ -120,13 +144,7 @@
     <div>
       <b>{t('spaces.devices.pairTitle')}</b>
       <p>{t('spaces.devices.pairText')}</p>
-      {#if code}
-        <p class="code" data-testid="device-code" aria-live="polite">
-          {t('spaces.devices.code', { code: code.code })} · {t('spaces.devices.expires', { time: fTime(code.expiresAt) })}
-        </p>
-      {/if}
     </div>
-    <button class="btn" disabled={busy} onclick={() => void create()}><Icon name="key" size={12} />{t('spaces.devices.create')}</button>
   </div>
 {/if}
 
@@ -222,9 +240,5 @@
   .pair > div {
     display: grid;
     gap: 4px;
-  }
-  .code {
-    color: var(--text) !important;
-    font-weight: 600;
   }
 </style>

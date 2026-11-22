@@ -141,8 +141,9 @@
 
   async function remove(p: PeerStatus) {
     try {
-      await invoke<boolean>('phone_remove', { id: p.id });
-      app.toast(t('phone.phones.removed', { name: p.name }), 'ok');
+      // Its device's token revoked with its peer (SR1-03); a peer never paired as a device had none: said so.
+      const r = await invoke<{ removed: boolean; revoked: boolean; neverLinked: boolean }>('phone_remove', { id: p.id });
+      app.toast(t(r.neverLinked ? 'phone.phones.removedUnlinked' : 'phone.phones.removed', { name: p.name }), 'ok');
       await load();
     } catch (e) {
       app.toast(String(e), 'error');
