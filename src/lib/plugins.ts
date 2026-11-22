@@ -201,6 +201,11 @@ export interface PluginPreview {
    * version whose files are its own.
    */
   matchesStore?: string;
+  /**
+   * The module a `run.wasm` plugin of a folder will run, by its path in the folder: `packs/<id>-<version>.wasm` or
+   * `plugin.wasm` (issue #43, ESC-652). The fingerprint covers it.
+   */
+  module?: string;
 }
 
 /** Why a plugin was not installed. */

@@ -18,7 +18,7 @@ Its sidebar:
 
 Two buttons at the top of the view:
 
-- **From a folder…**: the plugin’s folder, the one of its `escouade-plugin.json`. Escouade copies it into its data (`~/.escouade/plugins/<id>`), without its git history, and pins it by the SHA-256 fingerprint of its files: a copy changed afterwards loads disabled, and says so.
+- **From a folder…**: the plugin’s folder, the one of its `escouade-plugin.json`. Escouade copies the plugin alone into its data (`~/.escouade/plugins/<id>`): neither its git history, nor `target/`, nor `node_modules/`, nor what Git ignores when the folder is in a repository, and of `packs/` only the module of the manifest’s version (`packs/<id>-<version>.wasm`), the one a plugin in Rust runs on, else its `plugin.wasm`. A link is never followed. The copy is pinned by the SHA-256 fingerprint of its files, its module included, which the install window shows: a copy changed afterwards loads disabled, and says so. A plugin in Rust without a built module is refused, and the refusal says what to do.
 - **From a git repository…**: the repository’s address and a tag (`v1.2.0`). Escouade clones it at that tag alone and pins it by its commit.
 
 Nothing is installed at once: the plugin is read, set aside, and the install window opens.
@@ -155,4 +155,4 @@ The seal of an installed plugin is checked again on your machine, with the `vers
 
 ## The developer mode
 
-In development, “Load a folder…” reads a plugin’s folder where it is, without a copy or a fingerprint, and reads it again as soon as a file changes. A plugin in Rust runs there on the last module `escouade-plugin build` wrote for the version of its manifest (`packs/<id>-<version>.wasm`), a plugin in JS/TS on its bundle (`npm run build`); a folder not built yet is refused, and the refusal says what to run. Its journal is read live in the Journal tab. See [the manifest](plugins/manifest) and [the protocol](plugins/api) to write one.
+In development, “Load a folder…” reads a plugin’s folder where it is, without a copy or a fingerprint, and reads it again as soon as a file changes. A plugin in Rust runs there on the last module `escouade-plugin build` wrote for the version of its manifest (`packs/<id>-<version>.wasm`), a plugin in JS/TS on its bundle (`npm run build`); a folder not built yet is refused, and the refusal says what to run. Its journal is read live in the Journal tab, and names the file loaded at each start. That is the difference with “From a folder…”, which installs a frozen copy, pinned by its fingerprint: building the folder again does not change it, it must be installed again. “Load a folder…” follows the folder itself, to write it. See [the manifest](plugins/manifest) and [the protocol](plugins/api) to write one.

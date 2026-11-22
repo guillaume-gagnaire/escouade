@@ -137,6 +137,9 @@ pub mod plugins_runtime_tests;
 // The jokers of `permissions.commands` and their hostile cases (ESC-528).
 #[cfg(test)]
 mod plugins_fresh_tests;
+// « Depuis un dossier… » on a plugin's folder as its author has it (issue #43, ESC-652).
+#[cfg(test)]
+mod plugins_folder_tests;
 #[cfg(test)]
 mod plugins_jokers_tests;
 #[cfg(test)]
@@ -832,6 +835,10 @@ pub struct Preview {
     /// the store, verified, whose files are the same as its own (`hold_to_store`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matches_store: Option<String>,
+    /// The module a `run.wasm` plugin of a folder will run, by its path in what was set aside (or in the folder in
+    /// development): `packs/<id>-<version>.wasm` or `plugin.wasm` (issue #43, ESC-652). The fingerprint covers it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
 }
 
 /// The installed version an inspection would replace.
@@ -1356,7 +1363,23 @@ impl Plugins {
     /// `discard`.
     pub fn inspect_folder(&self, src: &Path, lang: Lang) -> Result<Preview, Refusal> {
         let m = Self::checked(src, manifest::Hand::Third, lang)?;
-        let (dir, digest) = self.set_aside(src, lang)?;
+        let (dir, digest) = self.set_aside(src, &m, lang)?;
+        // Issue #43: a Rust module is built by its author; what was set aside must hold it, as it is what will run.
+        let copied = Origin::Folder {
+            path: String::new(),
+        };
+        if wasm::Built::of_folder(&copied, &m).is_some_and(|b| b.module(&dir).is_none()) {
+            remove_dir(&dir);
+            return Err(Refusal::other(tr_in!(
+                lang,
+                "Ce dossier n'a pas de module construit : lance `escouade-plugin build`, ou charge-le depuis En développement › Charger un dossier… (Escouade y cherche {}/{}-{}.wasm, puis {})",
+                "This folder has no built module: run `escouade-plugin build`, or load it from In development › Load a folder… (Escouade looks there for {}/{}-{}.wasm, then {})",
+                wasm::PACKS,
+                m.id,
+                m.version,
+                wasm::MODULE_FILE
+            )));
+        }
         let path = std::path::absolute(src)
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| src.display().to_string());
@@ -1428,7 +1451,7 @@ impl Plugins {
                 .await
                 .map_err(|e| Refusal::other(e.to_string()))?;
             let m = Self::checked(&clone, manifest::Hand::Third, lang)?;
-            let (dir, digest) = self.set_aside(&clone, lang)?;
+            let (dir, digest) = self.set_aside(&clone, &m, lang)?;
             Ok(self.stage(
                 Installed {
                     id: m.id.clone(),
@@ -1536,6 +1559,13 @@ impl Plugins {
             .map(|p| grown(&wanted, &p.asks))
             .unwrap_or_default();
         let read_from = dir.clone().unwrap_or_else(|| self.folder_of(&installed));
+        let module = wasm::Built::of_folder(&installed.origin, &m)
+            .and_then(|b| b.module(&read_from))
+            .and_then(|f| {
+                f.strip_prefix(&read_from)
+                    .ok()
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+            });
         let preview = Preview {
             icon: m.icon.as_deref().and_then(|r| icon_data(&read_from, r)),
             token: token.clone(),
@@ -1558,6 +1588,7 @@ impl Plugins {
             verified,
             unverified,
             matches_store: None,
+            module,
         };
         let mut staged = self.staged.lock();
         // What was set aside for this plugin and never answered goes: one inspection per plugin at a time is enough.
@@ -1678,9 +1709,14 @@ impl Plugins {
         Ok(view)
     }
 
-    /// Sets aside a copy of the folder `src`: its history (`.git`) and its links left out. Gives
-    /// the copy and the SHA-256 of its files.
-    fn set_aside(&self, src: &Path, lang: Lang) -> Result<(PathBuf, String), Refusal> {
+    /// Sets aside a copy of the folder `src` of the plugin `m`: what is not the plugin and its links left out
+    /// ([`Sift`], issue #43). Gives the copy and the SHA-256 of its files.
+    fn set_aside(
+        &self,
+        src: &Path,
+        m: &Manifest,
+        lang: Lang,
+    ) -> Result<(PathBuf, String), Refusal> {
         let root = self.data.plugins_dir();
         let fail = |e: std::io::Error| {
             Refusal::other(tr_in!(
@@ -1692,7 +1728,8 @@ impl Plugins {
         };
         std::fs::create_dir_all(&root).map_err(fail)?;
         let incoming = root.join(format!(".incoming-{}", uuid::Uuid::new_v4().simple()));
-        match copy_tree(src, &incoming).and_then(|_| digest(&incoming)) {
+        let sift = Sift::of(src, m);
+        match copy_tree(src, &incoming, "", &sift, false).and_then(|_| digest(&incoming)) {
             Ok(d) => Ok((incoming, d)),
             Err(e) => {
                 remove_dir(&incoming);
@@ -2718,19 +2755,149 @@ fn left_out(name: &std::ffi::OsStr) -> bool {
     name == ".git"
 }
 
-/// Copies the folder `src` to `to` (made), its history and its links left out.
-fn copy_tree(src: &Path, to: &Path) -> std::io::Result<()> {
+/// The folders that are never the plugin, wherever they are in its folder (issue #43): its git history, Rust's
+/// compilation, npm's packages.
+const NOT_THE_PLUGIN: &[&str] = &[".git", "target", "node_modules"];
+
+/// What the copy of a plugin's folder keeps (issue #43, ESC-652): neither [`NOT_THE_PLUGIN`], nor what Git ignores when
+/// the folder is in a repository, nor of `packs/` (what `escouade-plugin build` writes) anything but the module of the
+/// manifest's version; but what the manifest names (its icon, its bundle, its program…) and its module, wherever they
+/// are (`.git` aside). What is left out is not in the copy, which is all that runs and all the fingerprint covers.
+struct Sift {
+    /// What Git ignores there, by path in the folder (`/` between folders, no `/` at the end).
+    ignored: std::collections::HashSet<String>,
+    /// The files of the folder kept wherever they are.
+    named: std::collections::HashSet<String>,
+}
+
+impl Sift {
+    fn of(src: &Path, m: &Manifest) -> Self {
+        let mut named: std::collections::HashSet<String> = [
+            manifest::FILE.to_string(),
+            wasm::MODULE_FILE.to_string(),
+            format!(
+                "{}/{}",
+                wasm::PACKS,
+                wasm::Built::of(&m.id, &m.version).name
+            ),
+        ]
+        .into();
+        // Every string of the manifest that names a file of the folder: `icon`, `run.js`, `run.command`, its args…
+        let read = std::fs::read(src.join(manifest::FILE)).ok();
+        if let Some(v) = read.and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok()) {
+            let mut texts = Vec::new();
+            strings(&v, &mut texts);
+            for t in texts {
+                let rel = manifest::icon_path(t);
+                let inside = !rel.is_empty()
+                    && !rel.starts_with('/')
+                    && !rel.contains(':')
+                    && !rel.split('/').any(|c| c == ".." || c.is_empty());
+                if inside && src.join(&rel).is_file() {
+                    named.insert(rel);
+                }
+            }
+        }
+        Self {
+            ignored: ignored_by_git(src),
+            named,
+        }
+    }
+
+    /// Whether the entry `rel` of the folder (its `name`) is left out, what it holds with it.
+    fn leaves_out(&self, rel: &str, name: &str) -> bool {
+        NOT_THE_PLUGIN.contains(&name) || rel == wasm::PACKS || self.ignored.contains(rel)
+    }
+
+    /// Whether the folder `rel`, left out, holds a file kept wherever it is.
+    fn holds_named(&self, rel: &str) -> bool {
+        let at = format!("{rel}/");
+        self.named.iter().any(|n| n.starts_with(&at))
+    }
+}
+
+/// The strings of a JSON value, wherever they are.
+fn strings<'a>(v: &'a serde_json::Value, out: &mut Vec<&'a str>) {
+    match v {
+        serde_json::Value::String(s) => out.push(s),
+        serde_json::Value::Array(a) => a.iter().for_each(|v| strings(v, out)),
+        serde_json::Value::Object(o) => o.values().for_each(|v| strings(v, out)),
+        _ => {}
+    }
+}
+
+/// What Git ignores in the folder `dir` (`git ls-files --others --ignored --exclude-standard --directory`), by path in
+/// it; nothing when it is in no repository, or git is not there. The folder is a third party's: its config may not run
+/// anything here (`core.fsmonitor` off). The command runs on a thread of its own, whoever calls it.
+fn ignored_by_git(dir: &Path) -> std::collections::HashSet<String> {
+    let cwd = dir.display().to_string();
+    let listed = std::thread::scope(|s| {
+        s.spawn(|| {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .ok()?;
+            rt.block_on(crate::git::run(
+                &cwd,
+                &[
+                    "-c",
+                    "core.fsmonitor=false",
+                    "ls-files",
+                    "-z",
+                    "--others",
+                    "--ignored",
+                    "--exclude-standard",
+                    "--directory",
+                ],
+            ))
+            .ok()
+        })
+        .join()
+        .ok()
+        .flatten()
+    });
+    let Some(out) = listed else {
+        return Default::default();
+    };
+    let ignored: std::collections::HashSet<String> = out
+        .split(|b| *b == 0)
+        .map(|p| String::from_utf8_lossy(p).trim_end_matches('/').to_string())
+        .filter(|p| !p.is_empty())
+        .collect();
+    // The folder itself ignored (it is in a folder its repository ignores): those rules say nothing of its own files.
+    if ignored.contains(".") || ignored.iter().any(|p| p.starts_with("../")) {
+        return Default::default();
+    }
+    ignored
+}
+
+/// Copies the folder `src` (at `at` in the plugin's folder) to `to` (made), sifted by `sift`, its links left out
+/// (never followed); `named_only`: in a folder left out, the files kept wherever they are alone.
+fn copy_tree(
+    src: &Path,
+    to: &Path,
+    at: &str,
+    sift: &Sift,
+    named_only: bool,
+) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
-        if left_out(&entry.file_name()) {
+        let name = entry.file_name();
+        if left_out(&name) {
             continue;
         }
+        let rel = format!("{at}{}", name.to_string_lossy());
         let kind = entry.file_type()?;
-        let dest = to.join(entry.file_name());
+        let out = named_only || sift.leaves_out(&rel, &name.to_string_lossy());
+        let dest = to.join(&name);
         if kind.is_dir() {
-            copy_tree(&entry.path(), &dest)?;
-        } else if kind.is_file() {
+            if !out {
+                copy_tree(&entry.path(), &dest, &format!("{rel}/"), sift, false)?;
+            } else if sift.holds_named(&rel) {
+                copy_tree(&entry.path(), &dest, &format!("{rel}/"), sift, true)?;
+            }
+        } else if kind.is_file() && (!out || sift.named.contains(&rel)) {
             std::fs::copy(entry.path(), &dest)?;
         }
     }

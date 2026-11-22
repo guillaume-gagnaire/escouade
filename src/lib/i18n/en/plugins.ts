@@ -222,6 +222,8 @@ export default defineZone('plugins', {
     storeUnsigned: 'None: version not verified',
     checkedAtInstall: 'checked again here at the install',
     folderPrint: '{print} · files copied',
+    module: 'Module',
+    moduleCovered: '{path} · covered by the fingerprint',
   },
 
   page: {

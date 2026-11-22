@@ -332,15 +332,14 @@ struct Host {
     journal: Arc<Journal>,
     /// The agents it was given, for `fs/*` and `proc/*`.
     agents: super::files::Agents,
-    /// A folder in development: where its `run.wasm` module is built (issue #43).
+    /// A folder, in development or copied: where its `run.wasm` module is built (issue #43, ESC-652).
     built: Option<super::wasm::Built>,
 }
 
-/// Where the module of a folder in development is built (issue #43); none for an installed plugin.
+/// Where the module of a folder, in development or copied, is built (issue #43, ESC-652); none for a plugin of the store,
+/// the seed or a repository.
 fn built_of(view: &super::PluginView) -> Option<super::wasm::Built> {
-    let m = view.manifest.as_ref()?;
-    matches!(view.origin, super::Origin::Dev { .. })
-        .then(|| super::wasm::Built::of(&m.id, &m.version))
+    super::wasm::Built::of_folder(&view.origin, view.manifest.as_ref()?)
 }
 
 /// The plugins' processes of the app.
@@ -1420,6 +1419,8 @@ impl Host {
         let conn = {
             // In WASM (ESC-320, ESC-331): its module from the cache, or made now, off the runtime's threads.
             let js = run.js.as_deref().unwrap_or(super::wasm::MODULE_FILE);
+            // The file it is made of, as the journal names it: its bundle, its module of `packs/` or its `plugin.wasm`.
+            let source = super::wasm::Modules::source(&self.folder, run, self.built.as_ref());
             let (modules, folder, program) = (rt.modules.clone(), self.folder.clone(), run.clone());
             let built = self.built.clone();
             let asked = Instant::now();
@@ -1455,7 +1456,7 @@ impl Host {
                 Kind::Start,
                 format!(
                     "started {} in WASM, isolated: {} ({took} ms)",
-                    self.folder.join(js).display(),
+                    source.display(),
                     made.describe()
                 ),
             );

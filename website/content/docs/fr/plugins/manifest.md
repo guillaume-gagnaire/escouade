@@ -229,7 +229,7 @@ Le cas complet, du manifeste au programme : [des identifiants par projet](plugin
 Escouade installe un plugin de quatre façons :
 
 - **Depuis le store** : la version est téléchargée de store.escouade.dev et vérifiée (son empreinte, sa signature quand elle est vérifiée par Escouade) avant d’être copiée au même endroit (voir [installer un plugin](plugins/installer#depuis-le-store)).
-- **Depuis un dossier** : le dossier est copié dans `~/.escouade/plugins/<id>/`, sans son historique git, et fixé par l’empreinte SHA-256 de ses fichiers.
+- **Depuis un dossier** : le plugin seul est copié dans `~/.escouade/plugins/<id>/`, sans son historique git, `target/`, `node_modules/` ni ce qu’ignore Git, avec de `packs/` le module de sa version, et fixé par l’empreinte SHA-256 de ses fichiers.
 - **Depuis un dépôt git et une étiquette** (`v1.2.0`) : Escouade clone cette étiquette seule, la copie au même endroit, et la fixe par son commit. Un plugin est toujours fixé à une version ; installer une autre étiquette remplace la précédente.
 - **Un dossier en développement** : chargé là où il est, sans copie, et relu dès qu’un de ses fichiers change. C’est le mode des auteurs de plugins.
 

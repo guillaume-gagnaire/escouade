@@ -312,8 +312,20 @@ impl Modules {
         Ok((module, Made::Precompiled))
     }
 
+    /// The file the module of the program `run` of the plugin of `folder` is made of, as [`Modules::of`] reads it: its
+    /// bundle, the module `built` names, or its `plugin.wasm` (what its journal names, ESC-652).
+    pub fn source(folder: &Path, run: &super::manifest::Run, built: Option<&Built>) -> PathBuf {
+        match &run.js {
+            Some(js) => folder.join(super::manifest::icon_path(js)),
+            None => built
+                .and_then(|b| b.module(folder))
+                .unwrap_or_else(|| folder.join(MODULE_FILE)),
+        }
+    }
+
     /// The module of the program `run` of the plugin of `folder`, whichever of the two it is; a process has none.
-    /// `built`: the folder is one in development (`Origin::Dev`), whose `run.wasm` module is the last one built.
+    /// `built`: the folder is one in development or copied ([`Built::of_folder`]), whose `run.wasm` module is the last one
+    /// built.
     pub fn of(
         &self,
         folder: &Path,
@@ -384,7 +396,8 @@ impl Modules {
 /// The module of a `run.wasm` folder in development (issue #43): the last one `escouade-plugin build` wrote for the
 /// version of its manifest, `packs/<id>-<version>.wasm`, else the `plugin.wasm` its author put beside the manifest.
 /// Nothing is taken from outside the folder, and nothing is compiled when it is loaded: without either, it says what to
-/// run. An installed plugin (the store, the seed, a copy) has its `plugin.wasm` alone.
+/// run. A folder copied by « Depuis un dossier… » looks there the same way, its copy holding of `packs/` that module alone
+/// (ESC-652); a plugin of the store, the seed or a repository has its `plugin.wasm` alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Built {
     /// `<id>-<version>.wasm`, the file of `packs/`.
@@ -399,6 +412,21 @@ impl Built {
         Self {
             name: format!("{id}-{version}.wasm"),
         }
+    }
+
+    /// Where the module of the `run.wasm` plugin `m` of `origin` is looked for, when it is a folder: in development
+    /// (issue #43), or copied by « Depuis un dossier… », whose copy kept of `packs/` the module of its version alone
+    /// (ESC-652). None for another program, or a plugin of the store, the seed or a repository (its `plugin.wasm`).
+    pub fn of_folder(origin: &crate::Origin, m: &super::manifest::Manifest) -> Option<Self> {
+        let folder = matches!(
+            origin,
+            crate::Origin::Dev { .. } | crate::Origin::Folder { .. }
+        );
+        let rust = m
+            .run
+            .as_ref()
+            .is_some_and(|r| r.js.is_none() && r.wasm.is_some());
+        (folder && rust).then(|| Self::of(&m.id, &m.version))
     }
 
     /// The module there is in `folder`: the one built for this version first.

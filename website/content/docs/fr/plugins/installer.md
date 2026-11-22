@@ -18,7 +18,7 @@ Sa barre latérale :
 
 Deux boutons en tête de la vue :
 
-- **Depuis un dossier…** : le dossier du plugin, celui de son `escouade-plugin.json`. Escouade le copie dans ses données (`~/.escouade/plugins/<id>`), sans son historique git, et le fixe par l’empreinte SHA-256 de ses fichiers : une copie modifiée ensuite se charge désactivée, et le dit.
+- **Depuis un dossier…** : le dossier du plugin, celui de son `escouade-plugin.json`. Escouade n’en copie que le plugin dans ses données (`~/.escouade/plugins/<id>`) : ni son historique git, ni `target/`, ni `node_modules/`, ni ce qu’ignore Git quand le dossier est dans un dépôt, et de `packs/` le seul module de la version du manifeste (`packs/<id>-<version>.wasm`), celui sur lequel tourne un plugin en Rust, sinon son `plugin.wasm`. Un lien n’est jamais suivi. La copie est fixée par l’empreinte SHA-256 de ses fichiers, son module compris, que la fenêtre d’installation montre : une copie modifiée ensuite se charge désactivée, et le dit. Un plugin en Rust sans module construit est refusé, et le refus dit quoi faire.
 - **Depuis un dépôt git…** : l’adresse du dépôt et une étiquette (`v1.2.0`). Escouade le clone à cette étiquette seule et le fixe par son commit.
 
 Rien n’est installé tout de suite : le plugin est lu, mis de côté, et la fenêtre d’installation s’ouvre.
@@ -155,4 +155,4 @@ Le sceau d’un plugin installé est revérifié sur ta machine, avec le `versio
 
 ## Le mode développeur
 
-En développement, « Charger un dossier… » lit le dossier d’un plugin où il est, sans copie ni empreinte, et le relit dès qu’un fichier change. Un plugin en Rust y tourne sur le dernier module que `escouade-plugin build` a écrit pour la version de son manifeste (`packs/<id>-<version>.wasm`), un plugin en JS/TS sur son bundle (`npm run build`) ; un dossier pas encore construit est refusé, et le refus dit quoi lancer. Son journal se lit en direct dans l’onglet Journal. Voir [le manifeste](plugins/manifest) et [le protocole](plugins/api) pour l’écrire.
+En développement, « Charger un dossier… » lit le dossier d’un plugin où il est, sans copie ni empreinte, et le relit dès qu’un fichier change. Un plugin en Rust y tourne sur le dernier module que `escouade-plugin build` a écrit pour la version de son manifeste (`packs/<id>-<version>.wasm`), un plugin en JS/TS sur son bundle (`npm run build`) ; un dossier pas encore construit est refusé, et le refus dit quoi lancer. Son journal se lit en direct dans l’onglet Journal, et nomme le fichier chargé à chaque démarrage. C’est la différence avec « Depuis un dossier… », qui installe une copie figée, fixée par son empreinte : reconstruire le dossier ne la change pas, il faut l’installer de nouveau. « Charger un dossier… » suit le dossier lui-même, pour l’écrire. Voir [le manifeste](plugins/manifest) et [le protocole](plugins/api) pour l’écrire.

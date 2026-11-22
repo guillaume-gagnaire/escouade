@@ -222,6 +222,8 @@ export default {
     storeUnsigned: 'Aucune : version non vérifiée',
     checkedAtInstall: 'revérifiée ici à l’installation',
     folderPrint: '{print} · fichiers copiés',
+    module: 'Module',
+    moduleCovered: '{path} · compris dans l’empreinte',
   },
 
   page: {

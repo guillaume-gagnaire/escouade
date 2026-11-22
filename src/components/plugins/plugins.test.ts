@@ -156,6 +156,24 @@ describe('the install window', () => {
     expect(d.getByRole('button', { name: 'Installer quand même' })).toBeTruthy();
   });
 
+  it('says the module a run.wasm plugin of a folder will run, covered by its fingerprint (ESC-652)', () => {
+    const folder = { kind: 'folder' as const, path: 'C:/dev/mon-plugin' };
+    plugins.install = {
+      kind: 'preview',
+      preview: preview({ origin: folder, fingerprint: 'sha256:9a1b', module: 'packs/dev.exemple.slack-1.2.0.wasm' }),
+      busy: false,
+      error: null,
+    };
+    render(InstallModal, { step: plugins.install });
+    expect(screen.getByTestId('module').textContent).toBe('packs/dev.exemple.slack-1.2.0.wasm · compris dans l’empreinte');
+  });
+
+  it('shows no module for a plugin that has none to choose', () => {
+    plugins.install = { kind: 'preview', preview: preview(), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    expect(screen.queryByTestId('module')).toBeNull();
+  });
+
   it('says a JS/TS plugin runs inside Escouade, isolated, and that its hosts are enforced (ESC-320)', () => {
     const wasm = { ...MANIFEST, run: { command: '', js: 'dist/plugin.mjs', args: [] } };
     plugins.install = { kind: 'preview', preview: preview({ manifest: wasm }), busy: false, error: null };

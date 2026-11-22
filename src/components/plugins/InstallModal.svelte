@@ -145,6 +145,12 @@
         <span class="k">{t('plugins.origin.fingerprint')}</span><span class="v mono" use:tip={{ text: p.fingerprint, aria: false }}
           >{print}</span
         >
+        {#if p.module}
+          <!-- The module a run.wasm plugin of a folder runs: its packs/ one or its plugin.wasm (issue #43, ESC-652). -->
+          <span class="k">{t('plugins.origin.module')}</span><span class="v mono" data-testid="module"
+            >{dev ? p.module : t('plugins.origin.moduleCovered', { path: p.module })}</span
+          >
+        {/if}
         <span class="k">{t('plugins.origin.signature')}</span>{#if p.verified}<span class="v ok">{t('plugins.origin.signedHere')}</span
           >{:else if store}<span class="v no">{t('plugins.origin.storeUnsigned')}</span>{:else}<span class="v no"
             >{t('plugins.origin.unsigned')}</span
