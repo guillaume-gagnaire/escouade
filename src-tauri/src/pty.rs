@@ -78,9 +78,20 @@ struct Input {
 
 /// `ESCOUADE_TERM_TRACE` set: each write to a terminal, and the first output after it, go to the
 /// log with their times (µs since the epoch), to measure a keystroke's way (docs/SPEC.md, *Terminaux*).
+/// A build of development only: a published one ignores the variable (SEC-18 of the security audit, ESC-594).
 fn tracing() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("ESCOUADE_TERM_TRACE").is_some())
+    *ON.get_or_init(|| {
+        traced(
+            std::env::var_os("ESCOUADE_TERM_TRACE").is_some(),
+            cfg!(debug_assertions),
+        )
+    })
+}
+
+/// Whether the terminals are traced: `ESCOUADE_TERM_TRACE` set (`set`), in a build of development (`dev`).
+pub(crate) fn traced(set: bool, dev: bool) -> bool {
+    set && dev
 }
 
 fn now_us() -> i64 {
@@ -1430,6 +1441,17 @@ impl PtyManager {
 
 /// Tests starting a real shell run one at a time: several Windows PowerShells booting at once on a
 /// CI runner can outlast what the tests wait for, and the ping tests would see each other's pings.
+/// SEC-18 of the security audit (ESC-594): `ESCOUADE_TERM_TRACE` traces the terminals in a build of development alone; a
+/// published build ignores it.
+#[cfg(test)]
+#[test]
+fn escouade_term_trace_is_ignored_by_a_published_build() {
+    assert!(traced(true, true));
+    assert!(!traced(true, false), "a published build ignores it");
+    assert!(!traced(false, true));
+    assert!(!traced(false, false));
+}
+
 #[cfg(test)]
 fn one_shell_at_a_time() -> std::sync::MutexGuard<'static, ()> {
     static SHELLS: std::sync::Mutex<()> = std::sync::Mutex::new(());

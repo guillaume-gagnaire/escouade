@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Downloads: each release gives the SHA-256 of its installers (`SHA256SUMS.txt`), and the site’s Installation page tells how to compare your file’s before you open it.
 - Private projects: a harness from a third-party plugin is no longer launched there, as nothing proves it holds their fence; the conversation, the “Harness” menu and the project’s settings say so. A third-party agent already there stops, at once at rest, at the end of its turn at work. Escouade’s own harnesses keep their fence.
 - Security: “Install verified versions only” now holds for folders and git repositories too, which are accepted only when they are a verified version of the store; development mode stays a gesture of its own. It turns on with this update when you have no third-party plugin installed.
 - Security: a harness described by a third-party plugin asks for your agreement at its first launch, its whole command said, and again when an update changes it; refused, its agent does not start. Settings › Plugins can refuse them all.

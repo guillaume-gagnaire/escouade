@@ -1,9 +1,9 @@
 ---
 title: "Livraison et mises à jour"
 subject: "Introduction"
-sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh","tests/e2e/fixture.ts","tests/e2e/update-guard.ts"]
-tickets: ["ESC-374","ESC-380","ESC-533","ESC-543"]
-decisions: [114,244,251]
+sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml",".github/workflows/advisories.yml","scripts/beta-channel.mjs","scripts/release-sums.mjs","scripts/no-testing.mjs","docs/SECURITY-DEPENDENCIES.md","docs/security/audit-2026-11/rapport.md (SEC-04, SEC-16, SEC-18)","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh","tests/e2e/fixture.ts","tests/e2e/update-guard.ts"]
+tickets: ["ESC-374","ESC-380","ESC-533","ESC-543","ESC-594"]
+decisions: [114,244,251,"chaine-de-publication-empreintes-des-ins"]
 compared: null
 ---
 
@@ -129,3 +129,11 @@ Sur GitHub Actions :
 
 - Un build de debug (développement, tests de bout en bout, tests Rust) ne lit jamais le vrai serveur des mises à jour, seulement un serveur de test : celui de `ESCOUADE_UPDATE_ENDPOINT`, ou les adresses de sa configuration quand elles sont toutes sur cette machine (`localhost`, `127.x.x.x`, `::1`). Sans serveur de test, la recherche est coupée : rien de neuf, et « Rechercher une mise à jour » dit « les mises à jour sont coupées dans un build de debug ». Il ne télécharge et n'installe un installeur que venu d'un serveur sur cette machine, jamais une vraie version : celle-ci s'installerait dans le dossier de l'app installée sur le poste, qu'elle fermerait d'abord. Un installeur refusé laisse « Quitter » fermer l'app comme d'habitude. Un build de release ne change pas : il lit l'adresse de sa configuration et ignore `ESCOUADE_UPDATE_ENDPOINT`.
 - Les tests de bout en bout ne donnent un serveur de mises à jour que dans les tests des mises à jour, et un test échoue si son app a lu une autre adresse ou lancé une installation (lu dans son journal).
+
+## Depuis ESC-594 : l'intégrité de la chaîne de publication (audit SEC-04, SEC-16, SEC-18)
+
+- **Les empreintes des installateurs** : avant de publier la release, son dernier job calcule l'empreinte SHA-256 de chacun de ses fichiers, hors `latest.json`, `beta.json` et signatures (`.sig`), les relit par `sha256sum -c` et les dépose dans `SHA256SUMS.txt`, au format de `sha256sum` (`<empreinte>  <nom>`, par nom ; `scripts/release-sums.mjs`, testé). Un job relancé le remplace. Les notes de la release le disent, avec les commandes de chaque système, et la page Installation du site a une section « Vérifier le téléchargement » (`Get-FileHash`, `shasum -a 256`, `sha256sum -c SHA256SUMS.txt --ignore-missing`), qui rappelle l'attestation de provenance (`gh attestation verify`).
+- **Aucun code de test dans un build publié** : `scripts/no-testing.mjs` lit `cargo tree` de l'espace de travail de l'app (ses trois binaires), pour toutes les cibles, sans les dépendances de développement, et échoue en nommant chaque crate qui y a la fonction `testing`. La CI le lance (job Windows de format et Clippy), et `release.yml` avant la construction.
+- **Les secrets Apple** ne sont donnés qu'à l'étape qui construit et signe l'app macOS, comme la clé des mises à jour et les secrets Azure ; plus rien ne les pose dans l'environnement du job. Le job ne sait que s'il y a un certificat (`APPLE_SIGNING`, `true` ou `false`) : avec, la construction signée par Developer ID et notarisée ; sans, la même construction que Windows et Linux, l'app macOS signée sur place. Les deux formes de l'étape restent pareilles (un test le vérifie).
+- **Les avis des dépendances** (`advisories.yml`) : l'app échoue sur tout avis, le store et le site sur un avis élevé ou critique (`npm audit --omit=dev --audit-level=high`), leurs avis faibles et moyens restant dits dans le run. Les délais de correction sont dans `docs/SECURITY-DEPENDENCIES.md` : 7 jours pour un avis élevé ou critique.
+- **Trois variables lues par l'app** : `ESCOUADE_TERM_TRACE` (les temps des terminaux au journal) n'est lue que par un build de développement ; `ESCOUADE_ORT_DYLIB` (une autre bibliothèque ONNX Runtime) que par un build qui a la fonction `ort-dynamic`, que la release n'a pas ; `ESCOUADE_JAVY` reste lue partout, l'image du store nommant ainsi sa Javy (voir *Les programmes JS/TS des plugins*).

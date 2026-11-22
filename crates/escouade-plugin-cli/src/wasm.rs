@@ -227,6 +227,10 @@ impl Compiler {
     /// The pinned Javy: `ESCOUADE_JAVY`, else the one downloaded into the app's tools, its archive checked by its
     /// SHA-256 (the release's, noted here), then the program itself at each use, against the SHA-256 noted beside it
     /// once its archive was checked (ESC-322): a Javy changed since is never run, and is downloaded again.
+    /// `ESCOUADE_JAVY` is kept in a published build (SEC-18 of the security audit, ESC-594): the store's image names its
+    /// own Javy by it (store/Dockerfile), with no network to download one, and the tests and scripts/escouade-js.sh use
+    /// it. The Javy it names is run without its SHA-256 checked: only whoever sets the app's environment, who has the
+    /// user's rights already, can name one.
     pub fn javy(&self) -> Result<PathBuf, String> {
         if let Some(p) = std::env::var_os("ESCOUADE_JAVY") {
             return Ok(PathBuf::from(p));

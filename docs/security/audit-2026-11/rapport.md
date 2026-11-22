@@ -304,7 +304,7 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 | SEC-01 | Plugins tiers : installables sans revue hors du store, et capables de faire lancer un programme | Moyenne | Démontré ; corrigé dans la 2.2.6 |
 | SEC-02 | « Projet privé » est une consigne, pas un cloisonnement | Moyenne | Démontré |
 | SEC-03 | Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent | Moyenne | Probable |
-| SEC-04 | Dépendances : des avis ouverts hors de l'application, sans délai de correction | Faible | Démontré |
+| SEC-04 | Dépendances : des avis ouverts hors de l'application, sans délai de correction | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-05 | Politique de contenu : styles en ligne autorisés, directives manquantes | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-06 | Lancement décrit par un plugin : un fichier écrit à travers un lien | Faible | Démontré |
 | SEC-07 | Le jeton du serveur MCP passe en argument et reste en clair chez les harness | Faible | Probable |
@@ -316,9 +316,9 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 | SEC-13 | Des variables d'environnement de test restent actives en version publiée | Faible | Probable |
 | SEC-14 | Mises à jour : le proxy est contourné s'il ne répond pas | Faible | Probable |
 | SEC-15 | Liste de révocation des plugins : pas de date de péremption | Faible | Théorique |
-| SEC-16 | Site de l'éditeur sans en-têtes de sécurité | Faible | Démontré |
+| SEC-16 | Site de l'éditeur sans en-têtes de sécurité | Faible | Démontré ; empreintes des installateurs publiées dans la 2.2.6 |
 | SEC-17 | Serveurs locaux : un programme du poste peut les ralentir | Faible | Démontré |
-| SEC-18 | Observations diverses | Info | Observé |
+| SEC-18 | Observations diverses | Info | Observé ; en partie corrigé dans la 2.2.6 |
 
 ## SEC-01 — Plugins tiers : installables sans revue hors du store, et capables de faire lancer un programme
 
@@ -454,6 +454,7 @@ Et une raison de ne pas la monter : l'exploitation demande toujours trois condit
 | État | Démontré — outils lancés pendant l'audit, sorties en annexes A et B |
 | Composant | `deny.toml`, `.github/workflows/advisories.yml`, dépendances du store et du site |
 | Effort de correction | Faible |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Les avis de sécurité des dépendances sont contrôlés en CI : `cargo deny check advisories` (application, plugins) et `npm audit --omit=dev` (application, store, site), à chaque pull request, à chaque poussée sur `main` et sur les branches de publication, et chaque nuit (`.github/workflows/advisories.yml:13`, `:47`, `:76`). Dependabot propose les mises à jour, groupées, chaque mois (`.github/dependabot.yml:7-87`). Pour l'application, le contrôle est bloquant, et aucun avis n'y est atteignable. Trois points restent.
 
@@ -475,6 +476,12 @@ Et une raison de ne pas la monter : l'exploitation demande toujours trois condit
 **Scénario.** Une faille exploitable est publiée dans une bibliothèque du serveur du store. La CI la signale chaque nuit sans échouer ; sans délai écrit, la correction attend. Le store ne détient aucune clé de signature et ne peut pas forger un sceau (section 6.8), mais c'est lui qui sert le catalogue, les versions non vérifiées et la liste de révocation (SEC-15).
 
 **Recommandation.** Récrire la raison des quatre avis écartés. Écrire un délai cible de correction (7 jours pour un avis élevé), et rendre bloquants en CI les avis élevés du store et du site.
+
+**Correction (Escouade 2.2.6).** Les trois points de la recommandation sont faits.
+
+1. La raison des quatre avis `zip` écartés dit ce qui porte la version visée : `zip` 4.6.1 ne vient que du module de mise à jour, sous Windows, qui n'ouvre une archive qu'une fois sa signature vérifiée, et la mise à jour de Windows est un installateur ; le code de l'application emploie `zip` 9 (`deny.toml`, `docs/SECURITY-DEPENDENCIES.md`). Il n'y a pas de pendant npm : aucun avis npm n'est écarté.
+2. Le délai cible est écrit (`docs/SECURITY-DEPENDENCIES.md`, « Délais de correction ») : 7 jours pour un avis élevé ou critique, partout. Pour l'application, tout avis rend la CI rouge jusqu'à ce qu'il soit corrigé ou écarté avec sa raison ; pour le store et le site, un avis moyen part avec la mise à jour mensuelle qui le ferme.
+3. `npm audit` du store et du site échoue sur un avis élevé ou critique (`--audit-level=high`) ; les avis faibles et moyens restent dits dans le run. Celui de l'application échoue sur tout avis, comme avant. Essayé sur une branche locale : un avis élevé ajouté au store fait échouer la commande du job, les seuls avis moyens d'aujourd'hui la laissent passer.
 
 ## SEC-05 — Politique de contenu : styles en ligne autorisés, directives manquantes
 
@@ -721,6 +728,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Démontré — requêtes en lecture seule, annexe D (N-01 à N-06) |
 | Composant | `website/nginx.conf`, hébergement du site |
 | Effort de correction | Faible |
+| Correction | **En partie dans Escouade 2.2.6** — les empreintes des installateurs (voir « Correction » en fin de fiche) |
 
 **Description.** Le store de plugins répond avec un jeu complet d'en-têtes : politique de contenu à nonce, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, politiques d'origine croisée, aucun en-tête CORS pour une origine étrangère, TLS 1.0 et 1.1 refusés. Le site de l'éditeur, lui, n'envoie **aucun** de ces en-têtes et annonce la version de son serveur. Sans HSTS, une première visite en `http` peut être détournée avant la redirection. Le store annonce aussi son cadriciel (`X-Powered-By`).
 
@@ -729,6 +737,8 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Scénario.** Sur un réseau hostile, un utilisateur qui tape l'adresse du site sans `https://` est redirigé vers une copie qui propose un installateur piégé. La signature du système d'exploitation est alors le dernier rempart.
 
 **Recommandation.** Ajouter HSTS, une politique de contenu, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, et masquer la version du serveur. Publier les empreintes des installateurs.
+
+**Correction (Escouade 2.2.6), en partie.** Chaque release publie `SHA256SUMS.txt`, l'empreinte SHA-256 de chaque installateur et de chaque paquet, calculée sur les fichiers de la release une fois les trois constructions faites, avant sa publication, et relue par `sha256sum -c` dans le même job (`.github/workflows/release.yml`, « SHA-256 of the installers »). Les notes de la release et la page Installation du site (« Vérifier le téléchargement ») disent comment comparer l'empreinte d'un fichier, système par système, et rappellent l'attestation de provenance. Les en-têtes du site restent à poser.
 
 ## SEC-17 — Serveurs locaux : un programme du poste peut les ralentir
 
@@ -755,6 +765,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Observé pendant les essais |
 | Composant | Divers |
 | Effort de correction | Faible, au cas par cas |
+| Correction | **En partie dans Escouade 2.2.6** — la fonction `testing`, le cache des modules précompilés, les secrets Apple et trois variables lues par une version publiée (voir « Correction » en fin de fiche) |
 
 - **Noms réservés de Windows.** Par `fs/write`, un plugin peut créer dans le dossier de son agent un fichier nommé `NUL`, `CON` ou `COM1`. Le fichier reste dans le dossier permis, mais les outils courants de Windows ne savent ni l'ouvrir ni le supprimer (test W-08).
 - **Image d'un chemin local.** Un message d'agent peut faire afficher une image située hors du projet, si l'utilisateur peut la lire. Seules les images sont lues, et rien ne sort du poste (essai B-08).
@@ -772,6 +783,13 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Scénario.** Aucun scénario d'attaque direct : ce sont des points de comportement à connaître avant de régler un pare-feu et des postes.
 
 **Recommandation.** Écarter les noms réservés de Windows dans `fs/*` et dans le lecteur d'archives. Refuser les adresses du réseau local au téléchargement d'une image distante. Ajouter un réglage « mode hors ligne » qui coupe d'un geste les quatre flux périodiques. Contrôler en CI que la fonction `testing` n'est sur aucune crate d'une construction de publication. Garder l'empreinte de chaque module précompilé avec celle du module, et recompiler quand elle ne concorde pas. Donner les secrets Apple à la seule étape qui signe, comme les autres.
+
+**Correction (Escouade 2.2.6), en partie.** Quatre points de la chaîne de publication sont faits ; les autres observations restent en l'état.
+
+- **La fonction `testing`** est contrôlée : `scripts/no-testing.mjs` lit `cargo tree` de l'espace de travail de l'application (ses trois binaires), pour toutes les cibles, sans les dépendances de développement, et échoue si une crate y a `testing`. La CI le lance à chaque poussée, la publication avant la construction. Essayé : `testing` ajouté à une dépendance ordinaire, le contrôle échoue en la nommant.
+- **Le cache des modules précompilés** : chaque copie précompilée a son empreinte SHA-256 dans un fichier à côté d'elle (`<clé>-<version>.cwasm.sha256`), écrit par l'application avec elle. Une copie dont l'empreinte ne concorde pas, ou qui n'en a pas, n'est jamais chargée : elle est précompilée à nouveau depuis le module, et les deux fichiers sont récrits (test du projet). Un programme qui écrit les deux fichiers a déjà les droits de l'utilisateur ; ce contrôle arrête une copie changée ou déposée seule.
+- **Les secrets Apple** ne sont plus posés dans l'environnement du job : seule l'étape qui construit et signe l'application macOS les reçoit, comme la clé des mises à jour et les secrets Azure. Le job ne sait que s'il y a un certificat (`true` ou `false`), pour choisir entre la construction signée par Developer ID et la construction signée sur place. Un test du projet le vérifie dans le workflow.
+- **Trois variables lues par une version publiée.** `ESCOUADE_TERM_TRACE` (les temps des terminaux au journal) n'est plus lue que par une construction de développement. `ESCOUADE_ORT_DYLIB` (une autre bibliothèque ONNX Runtime) ne l'est plus que par une construction qui a la fonction `ort-dynamic`, faite pour essayer ce chemin ; l'application publiée ne l'a pas. `ESCOUADE_JAVY` (une autre Javy pour compiler les plugins JS/TS) reste lue : l'image du store, sans réseau, nomme ainsi la sienne. Elle est documentée : la Javy qu'elle nomme tourne sans contrôle d'empreinte, et seul celui qui règle l'environnement de l'application, qui a déjà les droits de l'utilisateur, peut en nommer une. Tests du projet pour les deux premières.
 
 # 6. Les contrôles en place
 
@@ -875,7 +893,7 @@ Ce chapitre montre ce qui est en place, partie par partie, avec la preuve dans l
 | Le SDK des plugins est publié avec une identité de workflow (`id-token`), sans jeton durable | `.github/workflows/sdk-publish.yml:33-35` | — |
 | Peu de code `unsafe` de première main, concentré dans les appels au système (processus, pseudo-terminaux, WSL) | `crates/escouade-model/src/job.rs`, `pty.rs`, `proc.rs`, `wsl.rs` | `cargo geiger` (annexe C) |
 | Les avis de sécurité des dépendances sont contrôlés à chaque pull request, à chaque poussée et chaque nuit, de façon bloquante pour l'application : aucun n'y est atteignable. Dependabot propose les mises à jour chaque mois | `.github/workflows/advisories.yml:13`, `:47`, `:76` ; `.github/dependabot.yml:7-87` | `cargo audit`, `cargo deny`, `npm audit` relancés (annexes A et B) ; ce qui reste ouvert hors de l'application : SEC-04 |
-| Les actions de la CI sont figées par l'empreinte de leur commit (83 références dans sept workflows, aucune étiquette). Le workflow de publication est en lecture seule par défaut, et les secrets de signature sont donnés à l'étape qui signe ; ceux d'Apple, à partir de la dernière étape avant la construction (SEC-18) | `.github/workflows/release.yml:17-18`, `:234-236`, `:281-287`, `:539-542` | Lu ; `semgrep` ne relève aucune action référencée par une étiquette (annexe C) |
+| Les actions de la CI sont figées par l'empreinte de leur commit (83 références dans sept workflows, aucune étiquette). Le workflow de publication est en lecture seule par défaut, et les secrets de signature sont donnés à l'étape qui signe ; ceux d'Apple aussi depuis la 2.2.6 (SEC-18) | `.github/workflows/release.yml:17-18`, `:234-236`, `:281-287`, `:539-542` | Lu ; `semgrep` ne relève aucune action référencée par une étiquette (annexe C) |
 | Chaque binaire publié porte une attestation de provenance, que le workflow vérifie lui-même comme un utilisateur le ferait | `.github/workflows/release.yml:549-592` | P-04 : vérifiée pour les cinq binaires de la 2.2.0 (section 6.11) |
 | Le code qui ne sert qu'aux tests n'entre pas dans une construction normale de l'application | `src-tauri/Cargo.toml:240-253` | `cargo tree -e no-dev` : la fonction `testing` n'est sur aucune crate (SEC-18) |
 

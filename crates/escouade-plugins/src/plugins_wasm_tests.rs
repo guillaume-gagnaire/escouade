@@ -607,9 +607,11 @@ async fn the_module_is_precompiled_at_the_installation_loaded_from_the_cache_and
         n
     };
     let kept = names();
-    assert_eq!(kept.len(), 2, "{kept:?}");
+    // The module, its precompiled one and the SHA-256 of that one (SEC-18).
+    assert_eq!(kept.len(), 3, "{kept:?}");
     assert!(kept.iter().any(|n| n.ends_with(".wasm")));
     assert!(kept.iter().any(|n| n.ends_with("-2.2.0.cwasm")));
+    assert!(kept.iter().any(|n| n.ends_with("-2.2.0.cwasm.sha256")));
     // Its start: from the cache, in a few milliseconds.
     assert_eq!(
         w.rt.prepare(&w.id).unwrap().join().unwrap(),
@@ -638,10 +640,12 @@ async fn the_module_is_precompiled_at_the_installation_loaded_from_the_cache_and
         "{after:?}"
     );
     assert!(
-        !after.iter().any(|n| n.ends_with("-2.2.0.cwasm")),
+        !after
+            .iter()
+            .any(|n| n.ends_with("-2.2.0.cwasm") || n.ends_with("-2.2.0.cwasm.sha256")),
         "{after:?}"
     );
-    assert_eq!(after.len(), 2);
+    assert_eq!(after.len(), 3);
     assert!(rt.journal(&w.id).iter().any(|e| e
         .text
         .contains("ready: its module precompiled for this version of Escouade")));

@@ -270,7 +270,7 @@ impl Modules {
             crate::paths::write_cache(&wasm, &bytes).map_err(|e| e.to_string())?;
         }
         let pre = w(module.serialize())?;
-        crate::paths::write_cache(&native, &pre).map_err(|e| e.to_string())?;
+        keep_precompiled(&native, &pre).map_err(|e| e.to_string())?;
         Ok((module, made))
     }
 
@@ -300,11 +300,11 @@ impl Modules {
         match shared {
             // Another process may be writing the same bytes: it is only a cache.
             Some(_) => {
-                let _ = crate::paths::write_cache(&native, &pre);
+                let _ = keep_precompiled(&native, &pre);
             }
             None => {
                 std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
-                crate::paths::write_cache(&native, &pre).map_err(|e| e.to_string())?;
+                keep_precompiled(&native, &pre).map_err(|e| e.to_string())?;
             }
         }
         Ok((module, Made::Precompiled))
@@ -343,7 +343,7 @@ impl Modules {
         if let Ok(dir) = std::fs::read_dir(&self.cache) {
             for e in dir.flatten() {
                 let name = e.file_name().to_string_lossy().to_string();
-                if name.starts_with(&format!("{key}-")) && name.ends_with(".cwasm") {
+                if name.starts_with(&format!("{key}-")) && is_precompiled(&name) {
                     let _ = std::fs::remove_file(e.path());
                 }
             }
@@ -365,9 +365,10 @@ impl Modules {
             return;
         };
         let own = format!("-{}.cwasm", self.app_version);
+        let own_sum = format!("{own}{SUM}");
         for e in dir.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
-            if name.ends_with(".cwasm") && !name.ends_with(&own) {
+            if is_precompiled(&name) && !name.ends_with(&own) && !name.ends_with(&own_sum) {
                 let _ = std::fs::remove_file(e.path());
             }
         }
@@ -431,11 +432,47 @@ fn of_the_build(folder: &Path) -> Option<&Path> {
     (cfg!(any(debug_assertions, test)) && built).then_some(folder)
 }
 
+/// What follows the name of a precompiled module for the file that keeps its SHA-256 (SEC-18 of the security audit,
+/// ESC-594): `<key>-<version>.cwasm.sha256`, beside it.
+pub const SUM: &str = ".sha256";
+
+/// The file that keeps the SHA-256 of the precompiled module `native`.
+pub fn sum_of(native: &Path) -> PathBuf {
+    let mut s = native.as_os_str().to_owned();
+    s.push(SUM);
+    PathBuf::from(s)
+}
+
+/// Whether `name` is a precompiled module of the cache, or the file of its SHA-256.
+fn is_precompiled(name: &str) -> bool {
+    name.ends_with(".cwasm") || name.ends_with(&format!(".cwasm{SUM}"))
+}
+
+/// Keeps the precompiled module `pre` at `native`, then its SHA-256 beside it: [`precompiled`] loads it only while the
+/// two agree.
+fn keep_precompiled(native: &Path, pre: &[u8]) -> std::io::Result<()> {
+    crate::paths::write_cache(native, pre)?;
+    crate::paths::write_cache(&sum_of(native), sha256(pre).as_bytes())
+}
+
+/// The precompiled module of `path`, in the cache, when its bytes are those whose SHA-256 was kept beside it when this
+/// app wrote it (SEC-18 of the security audit, ESC-594), and wasmtime can load it. A precompiled module is native code,
+/// loaded outside the sandbox: one changed since it was written, or without its SHA-256, is never loaded; it is
+/// precompiled again from its module, and both are written again.
 fn precompiled(path: &Path) -> Option<Module> {
     // Read whole, not mapped: under Windows a mapped file could be neither replaced nor taken out of the cache.
     let pre = std::fs::read(path).ok()?;
-    // SAFETY: a file this app wrote itself (`Module::serialize`) into its own cache, never one received;
-    // wasmtime checks it was made by this same version ([`module_version`]) and configuration.
+    let kept = std::fs::read_to_string(sum_of(path)).unwrap_or_default();
+    if kept.trim() != sha256(&pre) {
+        log::warn!(
+            "{}: not the precompiled module this app wrote (its SHA-256 is not the one kept beside it); precompiled again",
+            path.display()
+        );
+        return None;
+    }
+    // SAFETY: a file this app wrote itself (`Module::serialize`) into its own cache, never one received, whose bytes are
+    // still the ones it wrote (their SHA-256, above); wasmtime checks it was made by this same version
+    // ([`module_version`]) and configuration.
     match unsafe { Module::deserialize(engine(), &pre) } {
         Ok(m) => Some(m),
         Err(e) => {

@@ -87,6 +87,22 @@ sudo apt install ./Escouade_*_amd64.deb
 
 On Linux, the tokens of the integrations (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) are kept in `~/.escouade/integrations.json`, because no system keychain is supported.
 
+### Verify the download
+
+Each release has, among its files, `SHA256SUMS.txt`: the SHA-256 of each installer and package. Download it with your installer, compute the hash of your file and compare it with its line: if they differ, the file is not the one the release published, so do not open it.
+
+| System | Command | What it says |
+|---|---|---|
+| Windows (PowerShell) | `Get-FileHash .\Escouade_X.Y.Z_x64-setup.exe` | the hash, in upper case, to compare with the file’s line |
+| macOS | `shasum -a 256 Escouade_*.dmg` | the hash, to compare with the file’s line |
+| Linux | `sha256sum -c SHA256SUMS.txt --ignore-missing` | `OK` for each file in the folder |
+
+The hash says the file is intact, not who made it: the installer’s signature (Windows, macOS) and the provenance attestation say that. Each file of the release carries a GitHub attestation that ties it to the commit and the workflow that built it; with the [GitHub CLI](https://cli.github.com/):
+
+```sh
+gh attestation verify <downloaded file> --repo guillaume-gagnaire/escouade
+```
+
 ## Claude Code in WSL
 
 On Windows, Escouade can run a Claude Code installed in WSL.

@@ -74,6 +74,8 @@ jobs:
               echo '```sh'
               echo "gh attestation verify <downloaded file> --repo $GITHUB_REPOSITORY"
               echo '```'
+              echo
+              echo 'Their SHA-256 are in `SHA256SUMS.txt`, among the files of the release: compare the one of your download (`sha256sum -c SHA256SUMS.txt --ignore-missing` on Linux, `shasum -a 256 <file>` on macOS, `Get-FileHash <file>` in PowerShell). How to: https://escouade.dev/en/docs/installation/#verify-the-download'
             } >> "$RUNNER_TEMP/notes.md"
             gh release create "$TAG" --verify-tag --draft --title "Escouade $TAG" \
               --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
@@ -156,6 +158,10 @@ jobs:
     # The universal macOS app went past 75 min on several betas: two targets of ~44 min each (no Rust cache on a tag),
     # then signed and notarized.
     timeout-minutes: 150
+    env:
+      # Whether the repository holds an Apple Developer ID certificate: 'true' or 'false', never the secret itself, which
+      # only the macOS step that builds and signs is given (SEC-18 of the security audit, ESC-594).
+      APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -247,28 +253,10 @@ jobs:
         shell: bash
         run: scripts/onnxruntime.sh ${{ runner.os == 'macOS' && 'macos' || 'linux' }}
 
-      # Last step before the build, so that no other one (no action but tauri-action's, and the cache's closing step) sees
-      # the secrets: they go from here on in the environment of the steps that follow.
-      # Optional: with an Apple Developer ID certificate in the repository secrets, the app is
-      # signed and notarized (no Gatekeeper warning). Without it, it is signed ad hoc. Only set
-      # when present: an empty APPLE_CERTIFICATE would make the build try to import it.
-      - name: Apple signing (when configured)
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
-            if [ -n "${!v}" ]; then
-              echo "::add-mask::${!v}"
-              echo "$v=${!v}" >> "$GITHUB_ENV"
-            fi
-          done
+      # Testing's code (secrets kept in memory, fake services) never enters a published build: no crate the build compiles
+      # may have the `testing` feature on (SEC-18 of the security audit, ESC-594). Checked on the tag's own dependencies.
+      - name: No test code in the build
+        run: node scripts/no-testing.mjs
 
       # Uploads to the draft the create job made, by its id: tauri-action looks a release up by
       # tag (getReleaseByTag), which does not see a draft, and would make a second release. With
@@ -279,7 +267,34 @@ jobs:
       # build as variables, and Windows starts no process (MSBuild's nodes, whisper.cpp) with one
       # of more than 32,767 characters, which the notes of 1.8.0 are; the publish job writes them
       # into latest.json.
+      # Two forms of the same step, as the Apple secrets are only given to the step that signs (SEC-18 of the security
+      # audit, ESC-594), and only when there: an empty APPLE_CERTIFICATE or APPLE_SIGNING_IDENTITY would make the build
+      # try to import or sign with it. With an Apple Developer ID certificate in the repository secrets (APPLE_SIGNING, in
+      # the job's env, says only whether it is), the macOS app is signed and notarized (no Gatekeeper warning); without
+      # it, the second form builds it signed ad hoc, as it builds Windows and Linux. Keep the two forms alike.
+      - name: Build, sign (Developer ID) and upload to the draft
+        if: runner.os == 'macOS' && env.APPLE_SIGNING == 'true'
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
+        with:
+          releaseId: ${{ needs.create.outputs.release-id }}
+          tagName: ${{ github.ref_name }}
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}
+
       - name: Build, sign and upload to the draft
+        if: runner.os != 'macOS' || env.APPLE_SIGNING != 'true'
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -319,7 +334,7 @@ jobs:
           test ! -e "$app/Contents/MacOS/escouade-plugins"
           codesign --verify --deep --strict "$app"
           # Only a warning: the build already requires the notarization, and Gatekeeper's reading must not keep a release a draft.
-          if [ -n "$APPLE_ID" ]; then spctl --assess --type execute --verbose=2 "$app" || echo "::warning::spctl does not accept $app (the notarization is required by the build itself)"; fi
+          if [ "$APPLE_SIGNING" = true ]; then spctl --assess --type execute --verbose=2 "$app" || echo "::warning::spctl does not accept $app (the notarization is required by the build itself)"; fi
           # The plugins' WASM modules run from memory wasmtime makes executable: without these entitlements the hardened
           # runtime kills the app as soon as a plugin starts (2.2.0-beta.3 on every Mac). Their absence keeps the release a draft.
           ent=$(codesign -d --entitlements - --xml "$app" 2>/dev/null || codesign -d --entitlements :- "$app" 2>/dev/null)
@@ -399,6 +414,31 @@ jobs:
           gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$asset" > "$RUNNER_TEMP/latest.json"
           jq -e '.notes | length > 0' "$RUNNER_TEMP/latest.json" > /dev/null
           node scripts/release-check.mjs "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/assets.json" "$TAG"
+
+      # The SHA-256 of each installer and package, in SHA256SUMS.txt beside them (SEC-16 of the security audit, ESC-594):
+      # what the site's Installation page tells to compare (`sha256sum -c`, Get-FileHash, `shasum -a 256`). Computed here,
+      # on the files of the draft once the three builds are in, so that it names each of them; a run started again
+      # replaces it. The updater's JSON and signatures are left out: they are no download of a user.
+      - name: SHA-256 of the installers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.create.outputs.release-id }}
+        run: |
+          mkdir "$RUNNER_TEMP/sums"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/sums-assets.json"
+          jq -r '.[] | select(.name | test("\\.(json|sig|txt)$") | not) | "\(.id) \(.name)"' "$RUNNER_TEMP/sums-assets.json" > "$RUNNER_TEMP/sums-list.txt"
+          test -s "$RUNNER_TEMP/sums-list.txt"
+          while read -r id name; do
+            gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$id" > "$RUNNER_TEMP/sums/$name"
+          done < "$RUNNER_TEMP/sums-list.txt"
+          node scripts/release-sums.mjs "$RUNNER_TEMP/sums" > "$RUNNER_TEMP/SHA256SUMS.txt"
+          (cd "$RUNNER_TEMP/sums" && sha256sum -c "$RUNNER_TEMP/SHA256SUMS.txt")
+          old=$(jq -r 'map(select(.name == "SHA256SUMS.txt")) | first | .id // empty' "$RUNNER_TEMP/sums-assets.json")
+          [ -z "$old" ] || gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$old"
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: text/plain" \
+            --data-binary "@$RUNNER_TEMP/SHA256SUMS.txt" \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=SHA256SUMS.txt" > /dev/null
+          { echo '### SHA-256'; echo; echo '```'; cat "$RUNNER_TEMP/SHA256SUMS.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       # The beta channel (ESC-374): beta.json, always in the latest stable release, holds the most
       # recent version, stable or beta (scripts/beta-channel.mjs picks it); an app with « Recevoir

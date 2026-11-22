@@ -11,7 +11,7 @@ default-run = "escouade"
 
 [features]
 # ONNX Runtime loaded from a library at run time, as on Intel Macs and Linux: to try that path elsewhere
-# (`ESCOUADE_ORT_DYLIB` names the library).
+# (`ESCOUADE_ORT_DYLIB` names the library, read by a build with this feature alone).
 ort-dynamic = ["escouade-voice-local/ort-dynamic"]
 
 [lib]

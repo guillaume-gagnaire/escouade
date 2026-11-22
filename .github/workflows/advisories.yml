@@ -57,15 +57,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The app's interface: nothing is left, so a new advisory fails.
+          # The app's interface: nothing is left, so any new advisory fails.
           - dir: .
-            blocking: true
-          # The store and the site have advisories that their own updates close (docs/security/audit-2026-11, annex B):
-          # said in the run, without failing it, until those updates are made; then set blocking to true.
+            level: low
+          # The store and the site (SEC-04 of the security audit, ESC-594): a high or critical advisory fails the job, a
+          # low or moderate one is listed in the run without failing it. How soon each must be closed is written in
+          # docs/SECURITY-DEPENDENCIES.md (7 days for a high one).
           - dir: store
-            blocking: false
+            level: high
           - dir: website
-            blocking: false
+            level: high
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -75,5 +76,5 @@ jobs:
 
       - name: npm audit (production dependencies)
         working-directory: ${{ matrix.dir }}
-        continue-on-error: ${{ !matrix.blocking }}
-        run: npm audit --omit=dev
+        # Every advisory is listed; those of `level` or above fail the job.
+        run: npm audit --omit=dev --audit-level=${{ matrix.level }}
