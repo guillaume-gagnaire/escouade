@@ -94,6 +94,8 @@ pub(crate) fn carry(from: &Path, to: &Path) {
 
 #[cfg(test)]
 mod tests {
+    // Its tests are of Windows and macOS: elsewhere the module is empty.
+    #[allow(unused_imports)]
     use super::*;
 
     #[cfg(target_os = "macos")]
