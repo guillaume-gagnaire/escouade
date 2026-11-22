@@ -4001,7 +4001,8 @@ impl<R: Runtime> Core<R> {
         // harness that reads them so. Not written, it does not start: it would read them.
         let privacy = self.agent_privacy(id);
         spawn.fence = self.agent_fence(id);
-        spawn.private = privacy.own;
+        // A private project on the machine (SEC-02b, ESC-623): a third party's harness starts in none.
+        spawn.private = !privacy.private.is_empty();
         if !spawn.fence.is_empty() {
             let refused = matches!(spawn.escouade, Escouade::Denied { .. });
             if let Some(v) = engine.fence_settings(refused, &spawn.fence, &spawn.program) {
@@ -9296,6 +9297,11 @@ impl<R: Runtime> Core<R> {
         let project = self.project(&project.id).unwrap_or(project);
         self.watch_project(&project);
         self.need_project_plugins(&project);
+        // A private project on the machine now (« Nouveaux projets privés », its history or its file): what runs of the
+        // agents on a third party's harness stops, said (SEC-02b, ESC-623).
+        if project.private {
+            self.settle_third_party();
+        }
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
             // reachable again as they are when the app starts.
@@ -9461,9 +9467,9 @@ impl<R: Runtime> Core<R> {
         if renamed {
             self.rename_remote_sessions(&updated.id);
         }
-        // Made private: what runs of its agents on a third party's harness stops, said (SEC-02, ESC-590).
+        // Made private: what runs of the agents of every project on a third party's harness stops, said (SEC-02b).
         if updated.private && !before.private {
-            self.settle_third_party_in(&updated.id);
+            self.settle_third_party();
         }
         Ok(())
     }

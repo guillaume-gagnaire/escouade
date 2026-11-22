@@ -1,8 +1,10 @@
 // SEC-02 (ESC-590): a harness of a third party's plugin is never launched in a private project. The plugin of
 // tests/fixtures/plugins/fake-acp/ (`dev.example.fake-acp`, a third party's) describes « Faux ACP »; its agent at rest
 // stops as soon as its project is made private, said in its conversation; the settings say the limit; the menu no longer
-// offers it there, and a new agent on it is refused with why.
+// offers it there, and a new agent on it is refused with why. SEC-02b (ESC-623): while a private project exists, the same
+// in a project that is not private, and given back once none is left.
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +16,9 @@ const FIXTURE = path.join(ROOT, 'tests', 'fixtures', 'plugins', 'fake-acp');
 const BIN = path.join(ROOT, 'tests', 'fixtures', 'acp-bin');
 const ENGINE = 'plugin:dev.example.fake-acp:fake-acp';
 const LIMIT = 'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé';
+// The page’s end of it, and the core’s and the card’s why (SEC-02b, ESC-623): while a private project exists, in no project.
+const PAGE_TAIL = ' : tant qu’il en existe un sur ce poste, il n’est lancé dans aucun projet, et un agent qui en a un s’arrête.';
+const WHY = 'Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture';
 
 type Result<T> = { ok: T } | { err: unknown };
 
@@ -62,16 +67,14 @@ test.describe('a third party’s harness in a private project', () => {
     // « Projet privé »: the page says the limit.
     const dialog = await openSettingsPage(page, 'Confidentialité');
     await dialog.getByRole('switch', { name: 'Projet privé' }).click();
-    await expect(dialog.getByTestId('private-third-party')).toHaveText(
-      `${LIMIT} : il n’y est pas lancé, et un agent qui en a un s’arrête.`,
-    );
+    await expect(dialog.getByTestId('private-third-party')).toHaveText(`${LIMIT}${PAGE_TAIL}`);
     await closeSettings(dialog);
 
     // Its agent, at rest, stops at once: its conversation says why, and nothing to turn on.
     const conv = page.locator('main.conv');
-    await expect(conv.getByText(new RegExp(`^${LIMIT}.*L’agent s’arrête\\.$`))).toBeVisible();
+    await expect(conv.getByText(new RegExp(`^${WHY}.*L’agent s’arrête\\.$`))).toBeVisible();
     const card = page.getByTestId('harness-third-party');
-    await expect(card).toContainText(LIMIT);
+    await expect(card).toContainText(WHY);
     await expect(card.getByRole('button')).toHaveCount(0);
 
     // Not offered by the menu « Harness » of the project any more.
@@ -83,6 +86,78 @@ test.describe('a third party’s harness in a private project', () => {
     const projectId = JSON.parse(fs.readFileSync(path.join(app.data, 'state.json'), 'utf8')).projects[0].id as string;
     const made = await invoke(page, 'create_agent', { projectId, model: null, engine: ENGINE, isolated: null, base: null });
     expect('err' in made).toBe(true);
-    expect(String((made as { err: unknown }).err)).toContain(LIMIT);
+    expect(String((made as { err: unknown }).err)).toContain(WHY);
+  });
+
+  // SEC-02b (ESC-623): another project made private stops the agent of a project that is not private; the menu of that
+  // project leaves the harness out and the core refuses it there; the other project public again, it is offered again.
+  test('another project made private stops it in a project that is not, and no private project left gives it back', async ({ app }) => {
+    const { page } = app;
+    const read = await invoke<{ token: string }>(page, 'plugin_inspect_folder', { path: FIXTURE });
+    expect('ok' in read, JSON.stringify(read)).toBe(true);
+    expect('ok' in (await invoke(page, 'plugin_install', { token: (read as { ok: { token: string } }).ok.token }))).toBe(true);
+
+    await addProject(page, app.repo, { firstAgent: false });
+    await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
+    await page.getByRole('menuitemradio', { name: /Faux ACP/ }).click();
+    const consent = page.getByRole('dialog', { name: 'Lancer Faux ACP ?' });
+    await consent.getByRole('button', { name: 'Autoriser et lancer' }).click();
+    await expect(consent).toHaveCount(0);
+    await send(page, 'bonjour');
+    await expect(page.getByText('Faux ACP a reçu : bonjour')).toBeVisible({ timeout: 60_000 });
+
+    // A second project in a repository of its own (the first one's holds what its agent wrote), made private.
+    const client = path.join(path.dirname(app.repo), 'client');
+    fs.mkdirSync(client, { recursive: true });
+    for (const args of [
+      ['init', '-q', '-b', 'main'],
+      ['config', 'user.email', 'e2e@test'],
+      ['config', 'user.name', 'e2e'],
+      ['commit', '-q', '--allow-empty', '-m', 'init'],
+    ])
+      execFileSync('git', args, { cwd: client, stdio: 'pipe' });
+    await addProject(page, client, { firstAgent: false });
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await openSettingsPage(dialog, 'Confidentialité', { project: 'client' });
+    await dialog.getByRole('switch', { name: 'Projet privé' }).click();
+    await expect(dialog.getByTestId('private-third-party')).toHaveText(`${LIMIT}${PAGE_TAIL}`);
+    await closeSettings(dialog);
+
+    // Back to « demo-api », not private: its agent stopped at once, said; nothing to turn on.
+    await page
+      .locator('nav.rail')
+      .getByRole('tab', { name: /demo-api/ })
+      .click();
+    const conv = page.locator('main.conv');
+    await expect(conv.getByText(new RegExp(`^${WHY}.*L’agent s’arrête\\.$`))).toBeVisible();
+    const card = page.getByTestId('harness-third-party');
+    await expect(card).toContainText(WHY);
+    await expect(card.getByRole('button')).toHaveCount(0);
+    // Not offered by its menu « Harness », and refused by the core there.
+    await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
+    await expect(page.getByRole('menuitemradio', { name: /Faux ACP/ })).toHaveCount(0);
+    // Closed by its backdrop: the menu « Harness » keeps no focus for Escape once its items are read.
+    await page.locator('div.backdrop').click();
+    await expect(page.locator('div.backdrop')).toHaveCount(0);
+    const projects = JSON.parse(fs.readFileSync(path.join(app.data, 'state.json'), 'utf8')).projects as { id: string; name: string }[];
+    const projectId = projects.find((p) => p.name === 'demo-api')!.id;
+    const made = await invoke(page, 'create_agent', { projectId, model: null, engine: ENGINE, isolated: null, base: null });
+    expect('err' in made).toBe(true);
+    expect(String((made as { err: unknown }).err)).toContain(WHY);
+
+    // « client » public again: the harness is offered in « demo-api » again; nothing started by itself.
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    await openSettingsPage(dialog, 'Confidentialité', { project: 'client' });
+    await dialog.getByRole('switch', { name: 'Projet privé' }).click();
+    await closeSettings(dialog);
+    await page
+      .locator('nav.rail')
+      .getByRole('tab', { name: /demo-api/ })
+      .click();
+    await expect(page.getByTestId('harness-third-party')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
+    await expect(page.getByRole('menuitemradio', { name: /Faux ACP/ })).toHaveCount(1);
+    await page.keyboard.press('Escape');
   });
 });

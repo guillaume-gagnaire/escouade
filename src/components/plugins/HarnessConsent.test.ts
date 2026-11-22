@@ -200,8 +200,22 @@ describe('a third party’s harness in a private project (SEC-02)', () => {
     expect(harnessHeld('p2', 'codex')).toBe(false);
     expect(engineOptions('codex', 'p2')).toEqual([
       { value: 'claude', label: 'Claude Code' },
-      { value: 'codex', label: 'Harness nu (plugin tiers : pas dans un projet privé)' },
+      { value: 'codex', label: 'Harness nu (plugin tiers : un projet privé existe)' },
     ]);
+  });
+
+  // SEC-02b (ESC-623): while a private project exists, the core refuses it in a project that is not private too; the
+  // window follows its scope there as well.
+  it('is left out of the menus of a project that is not private when the core says so', () => {
+    app.harnessScope = { p1: { off: [], asks: [], thirdParty: ['codex'] }, p2: { off: [], asks: [], thirdParty: ['codex'] } };
+    expect(offered('p1').map((e) => e.id)).toEqual(['claude']);
+    expect(unusable('codex', 'p1')).toBe('thirdParty');
+    expect(harnessThirdParty('p1', 'codex')).toBe(true);
+    expect(harnessHeld('p1', 'codex')).toBe(false);
+    // No private project left: the core says nothing of it, offered again.
+    app.harnessScope = {};
+    expect(offered('p1').map((e) => e.id)).toEqual(['claude', 'codex']);
+    expect(unusable('codex', 'p1')).toBeNull();
   });
 
   it('says so on the conversation of its agent, with nothing to turn on', async () => {
@@ -213,7 +227,7 @@ describe('a third party’s harness in a private project (SEC-02)', () => {
     render(Conversation, { agent: a, project: VAULT });
     const card = await screen.findByTestId('harness-third-party');
     expect(card).toHaveTextContent(
-      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : cet agent, sur Harness nu, ne démarre pas. Choisis un harness d’Escouade, ou retire « Projet privé » à ce projet.',
+      'Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture, cet agent, sur Harness nu, ne démarre dans aucun projet. Prends un harness d’Escouade, ou retire « Projet privé » de tes projets.',
     );
     expect(within(card).queryByRole('button')).toBeNull();
     expect(screen.queryByTestId('harness-held')).toBeNull();
@@ -228,14 +242,14 @@ describe('a third party’s harness in a private project (SEC-02)', () => {
     backend();
     render(Conversation, { agent: a, project: VAULT });
     expect(await screen.findByTestId('harness-third-party')).toHaveTextContent(
-      'A harness from a third-party plugin can’t guarantee the fence of a private project',
+      'A private project exists on this machine: a harness from a third-party plugin can’t guarantee its fence',
     );
   });
 
   it('a new agent on it is refused by the core, its reason said', async () => {
     app.harnessScope = { p2: { off: [], asks: [], thirdParty: ['codex'] } };
     const why =
-      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : Harness nu n’y est pas lancé. Choisis un harness d’Escouade, ou retire « Projet privé » à ce projet.';
+      'Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture, Harness nu n’est lancé dans aucun projet. Prends un harness d’Escouade, ou retire « Projet privé » de tes projets.';
     const b = backend({
       create_agent: () => {
         throw why;

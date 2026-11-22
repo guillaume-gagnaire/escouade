@@ -67,7 +67,7 @@ Un garde-fou est une règle du harness, qu’une commande peut contourner ; une 
 > [!WARNING]
 > Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : Claude Code n’y a pas de bac à sable, et une commande qui construit son chemin autrement lit le dossier. La page le dit sous « Projet privé ». Pour séparer deux clients, prends un compte Windows (ou un poste) par client.
 
-Un harness d’un plugin tiers (dont l’id ne commence pas par `dev.escouade.`, qu’il le serve ou le décrive) ne peut pas garantir la clôture d’un projet privé : il n’y est jamais lancé, même activé pour ce projet. Le menu « Harness » le dit, un agent qui en a un ne démarre pas, et un agent tiers déjà là s’arrête quand le projet devient privé, au repos aussitôt, au travail à la fin de son tour. Les harness d’Escouade y demandent d’abord ton accord (« Activer »), puis gardent leur clôture.
+Un harness d’un plugin tiers (dont l’id ne commence pas par `dev.escouade.`, qu’il le serve ou le décrive) ne peut pas garantir la clôture d’un projet privé : tant qu’un projet privé existe sur ton poste, il n’est lancé dans aucun projet, même activé. Le menu « Harness » le dit, un agent qui en a un ne démarre pas, et rendre un projet privé arrête les agents tiers de tous tes projets, au repos aussitôt, au travail à la fin de leur tour. Il revient quand plus aucun projet n’est privé. Les harness d’Escouade demandent d’abord ton accord dans un projet privé (« Activer »), puis gardent leur clôture.
 
 ## Workflow
 

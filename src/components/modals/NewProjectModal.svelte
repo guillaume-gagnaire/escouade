@@ -180,6 +180,8 @@
   async function show(p: import('../../lib/types').Project, agent: string | null) {
     if (app.projects.some((x) => x.id === p.id)) app.replaceProject(p);
     else app.projects.push(p);
+    // Made private (SEC-02b): a third party’s harness is refused in every project now, read again.
+    void app.refreshHarnessScope();
     app.selectProject(p.id);
     app.modal = null;
     if (!agent) return;

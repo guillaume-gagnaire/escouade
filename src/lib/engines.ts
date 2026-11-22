@@ -96,7 +96,7 @@ export function found(): EngineDecl[] {
 
 /**
  * Why a harness cannot be used (ESC-391): its program not found, its plugin off or not installed, no account of its own;
- * in a project, its plugin turned off for it (ESC-404), or a third party’s in a private project (SEC-02).
+ * in a project, its plugin turned off for it (ESC-404), or a third party’s while a private project exists (SEC-02).
  */
 export type Unusable = 'notFound' | 'pluginOff' | 'noAccount' | 'projectOff' | 'thirdParty';
 
@@ -120,7 +120,8 @@ export function harnessAsks(projectId: string | null | undefined, engine: Engine
 }
 
 /**
- * Whether `engine` is a third party’s harness in the private project `projectId` (SEC-02, ESC-590): never launched there,
+ * Whether `engine` is a third party’s harness refused in the project `projectId` while a private project exists on the
+ * machine (SEC-02, ESC-590; SEC-02b, ESC-623): launched in no project then,
  * whatever its switch; nothing turns it on.
  */
 export function harnessThirdParty(projectId: string | null | undefined, engine: EngineId | null | undefined): boolean {

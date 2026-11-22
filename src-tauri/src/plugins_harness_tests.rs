@@ -1096,7 +1096,7 @@ fn w04_a_fence_said_where_no_one_reads_it_no_longer_launches_a_third_party_in_a_
             .to_string();
         assert!(
             why.starts_with(
-                "Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé"
+                "Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture"
             ),
             "{why}"
         );

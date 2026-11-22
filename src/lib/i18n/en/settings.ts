@@ -157,7 +157,7 @@ export default defineZone('settings', {
     pluginOff: '{name} (plugin off)',
     noAccount: '{name} (no account)',
     projectOff: '{name} (off for this project)',
-    thirdParty: '{name} (third-party plugin: not in a private project)',
+    thirdParty: '{name} (third-party plugin: a private project exists)',
   },
   permissions: {
     title: 'Permissions',
@@ -442,7 +442,7 @@ export default defineZone('settings', {
     privateWindows:
       'On Windows, an agent’s fence is an instruction given to its harness, not a partition of the system: a command can get around it. To keep two clients apart, one Windows account per client.',
     privateThirdParty:
-      'A harness from a third-party plugin can’t guarantee the fence of a private project: it isn’t launched there, and an agent on one stops.',
+      'A harness from a third-party plugin can’t guarantee the fence of a private project: while one exists on this machine, it isn’t launched in any project, and an agent on one stops.',
     fenceTitle: 'Its files',
     fenceDesc:
       'The agents of the other projects neither read nor write its folder, its worktrees, its data in Escouade’s folder or its harness sessions. Its own read none of these for the other projects, nor the rest of Escouade’s folder. A guard is a rule of the harness, which a command can get around; a barrier holds for all its commands.',

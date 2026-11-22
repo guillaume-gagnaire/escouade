@@ -1175,8 +1175,8 @@ fn down(name: &str, e: CallError) -> anyhow::Error {
 }
 
 /// A harness of a third party (`first_hand` false: neither its plugin nor the one describing it is `dev.escouade.*`)
-/// does not start for an agent of a private project (SEC-02, ESC-590): its launch can say it applies the fence, the core
-/// could only find the fence's paths as words of it (audit test W-04).
+/// does not start while a private project is on the machine (SEC-02, ESC-590; SEC-02b, ESC-623): its launch can say it
+/// applies the fence, the core could only find the fence's paths as words of it (audit test W-04).
 pub fn check_private(name: &str, first_hand: bool, private: bool) -> Result<()> {
     if private && !first_hand {
         bail!(crate::harness_scope::third_party_refusal(name));

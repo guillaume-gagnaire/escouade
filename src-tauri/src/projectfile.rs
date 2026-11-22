@@ -1794,9 +1794,9 @@ impl<R: Runtime> Core<R> {
         if before.workflows_enabled != after.workflows_enabled {
             self.workflow_fixes_changed(&after.id);
         }
-        // Made private by the file: what runs of its agents on a third party's harness stops, said (SEC-02, ESC-590).
+        // Made private by the file: what runs of every project's agents on a third party's harness stops (SEC-02b).
         if after.private && !before.private {
-            self.settle_third_party_in(&after.id);
+            self.settle_third_party();
         }
         Some(after)
     }

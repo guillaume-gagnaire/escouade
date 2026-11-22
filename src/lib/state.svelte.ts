@@ -2002,6 +2002,8 @@ class AppState {
   /** Forgets a project the backend removed, with its editor (unsaved files included: the close was confirmed). */
   forgetProject(id: string) {
     this.projects = this.projects.filter((x) => x.id !== id);
+    // The last private project gone (SEC-02b): a third party’s harness is permitted again elsewhere, read again.
+    void this.refreshHarnessScope();
     if (this.ui.activeProject === id) this.ui.activeProject = this.projects[0]?.id ?? null;
     delete this.editor[id];
     delete this.board[id];

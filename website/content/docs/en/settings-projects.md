@@ -67,7 +67,7 @@ A guard is a rule of the harness, which a command can get around; a barrier hold
 > [!WARNING]
 > On Windows, an agent’s fence is an instruction given to its harness, not a partition of the system: Claude Code has no sandbox there, and a command that builds its path another way reads the folder. The page says so under “Private project”. To keep two clients apart, use one Windows account (or one computer) per client.
 
-A harness from a third-party plugin (one whose id doesn’t start with `dev.escouade.`, whether it serves or describes it) can’t guarantee the fence of a private project: it is never launched there, even turned on for that project. The “Harness” menu says so, an agent on one doesn’t start, and a third-party agent already there stops when the project becomes private, at once at rest, at the end of its turn at work. Escouade’s own harnesses ask you first there (“Turn on”), then keep their fence.
+A harness from a third-party plugin (one whose id doesn’t start with `dev.escouade.`, whether it serves or describes it) can’t guarantee the fence of a private project: while a private project exists on your machine, it isn’t launched in any project, even turned on. The “Harness” menu says so, an agent on one doesn’t start, and making a project private stops the third-party agents of all your projects, at once at rest, at the end of their turn at work. It comes back once no project is private. Escouade’s own harnesses ask you first in a private project (“Turn on”), then keep their fence.
 
 ## Workflow
 

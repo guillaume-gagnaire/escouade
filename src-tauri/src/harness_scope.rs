@@ -4,8 +4,9 @@
 //! plugin off until the user turns it on (§3.3): its first agent on a harness asks the user once, in the window
 //! (« Activer » turns the plugin on for it, `enable_harness_in`). No tool of the MCP server turns one on, nor does the
 //! Kanban: a ticket there is blocked, with why. A harness of a third party's plugin (not `dev.escouade.*`, described or
-//! served) is never launched in a private project (SEC-02, ESC-590): nothing proves it holds the fence, whatever the
-//! user turns on; one already running there stops, at rest at once, at work at the end of its turn.
+//! served) is never launched in a private project (SEC-02, ESC-590), nor in any project while a private project is on
+//! the machine (SEC-02b, ESC-623): nothing proves it holds the fence that keeps the private project's folders from it,
+//! whatever the user turns on; one already running stops, at rest at once, at work at the end of its turn.
 
 use crate::core::Core;
 use crate::model::EngineId;
@@ -25,14 +26,15 @@ pub enum InProject {
     Off,
     /// A private project the user has not turned it on for yet: offered, its first agent asks first.
     Asks,
-    /// A private project, and a harness of a third party's plugin: never launched there, whatever its switch (SEC-02,
-    /// ESC-590). The core could only find the fence's paths as words of its launch, which a variable no one reads
-    /// satisfies (audit test W-04).
+    /// A harness of a third party's plugin while a private project is on the machine: launched in no project, whatever
+    /// its switch (SEC-02, ESC-590; SEC-02b, ESC-623). The core could only find the fence's paths as words of its
+    /// launch, which a variable no one reads satisfies (audit test W-04), and that fence is also what keeps an agent of
+    /// another project out of the private project's folders.
     ThirdParty,
 }
 
 /// The harnesses of a project that are not on (`InProject`), as the window reads them: `off` not offered, `asks`
-/// offered once the user agrees, `third_party` not offered (a third party's in a private project, SEC-02).
+/// offered once the user agrees, `third_party` not offered (a third party's while a private project exists, SEC-02).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HarnessScope {
@@ -41,12 +43,18 @@ pub struct HarnessScope {
     pub third_party: Vec<EngineId>,
 }
 
-/// Why a harness of a third party's plugin, `name`, is not launched in a private project (SEC-02, ESC-590): the limit,
-/// and what the user may do.
+/// Why a harness of a third party's plugin, `name`, is launched in no project while a private project is on the machine
+/// (SEC-02, ESC-590; SEC-02b, ESC-623): the limit, and what the user may do.
 pub fn third_party_refusal(name: &str) -> String {
-    tr!(
-        "Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : {name} n’y est pas lancé. Choisis un harness d’Escouade, ou retire « Projet privé » à ce projet.",
-        "A harness from a third-party plugin can’t guarantee the fence of a private project: {name} isn’t launched there. Pick one of Escouade’s harnesses, or turn “Private project” off for this project.",
+    third_party_refusal_in(crate::i18n::ui(), name)
+}
+
+/// `third_party_refusal` in `lang`.
+pub fn third_party_refusal_in(lang: crate::i18n::Lang, name: &str) -> String {
+    tr_in!(
+        lang,
+        "Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture, {name} n’est lancé dans aucun projet. Prends un harness d’Escouade, ou retire « Projet privé » de tes projets.",
+        "A private project exists on this machine: a harness from a third-party plugin can’t guarantee its fence, so {name} isn’t launched in any project. Pick one of Escouade’s harnesses, or turn “Private project” off for your projects.",
         name = name
     )
 }
@@ -61,14 +69,18 @@ impl<R: Runtime> Core<R> {
         let Some(plugin) = crate::plugins::harness::plugin_of(engine) else {
             return InProject::On;
         };
-        let private = self
-            .projects
-            .read()
-            .iter()
-            .find(|p| p.id == project_id)
-            .is_some_and(|p| p.private);
-        // A third party's: never in a private project, whatever its switch there (SEC-02).
-        if private && !crate::plugins::builtin::first_hand(&plugin) {
+        let (private, any_private) = {
+            let projects = self.projects.read();
+            (
+                projects
+                    .iter()
+                    .find(|p| p.id == project_id)
+                    .is_some_and(|p| p.private),
+                projects.iter().any(|p| p.private),
+            )
+        };
+        // A third party's: in no project while a private one is on the machine, whatever its switch (SEC-02, SEC-02b).
+        if any_private && !crate::plugins::builtin::first_hand(&plugin) {
             return InProject::ThirdParty;
         }
         let Some(choices) = self.plugins.choices(&plugin) else {
@@ -159,7 +171,8 @@ impl<R: Runtime> Core<R> {
         self.project(project_id)?;
         let plugin = crate::plugins::harness::plugin_of(engine)
             .ok_or_else(|| anyhow!("{engine}: no plugin to turn on"))?;
-        // Turned on or not, a third party's harness runs in no private project (SEC-02): « Activer » says why.
+        // Turned on or not, a third party's harness runs nowhere while a private project exists (SEC-02): « Activer »
+        // says why.
         if self.harness_in(engine, project_id) == InProject::ThirdParty {
             return Err(anyhow!(self
                 .harness_refusal(engine, project_id)
@@ -195,27 +208,35 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
-    /// The project `project_id` made private (SEC-02, ESC-590): what runs of each of its agents on a third party's
-    /// harness (its process, its interface) stops, said in its conversation; at rest at once, at work at the end of its
-    /// turn (`settle_locked_mode`, through `run_refusal`), as ESC-497 settles a mode no longer allowed. Its turn is not
-    /// cut: the user did not cut the harness, only made the project private.
-    pub(crate) fn settle_third_party_in(self: &Arc<Self>, project_id: &str) {
-        let running: Vec<(String, EngineId)> = self
-            .project_agents(project_id)
-            .iter()
+    /// A project made private, or a private one added (SEC-02, ESC-590; SEC-02b, ESC-623): what runs of each agent of
+    /// every project on a third party's harness (its process, its interface) stops, said in its conversation; at rest at
+    /// once, at work at the end of its turn (`settle_locked_mode`, through `run_refusal`), as ESC-497 settles a mode no
+    /// longer allowed. Its turn is not cut: the user did not cut the harness, only made a project private. When no
+    /// private project is left, nothing starts again by itself.
+    pub(crate) fn settle_third_party(self: &Arc<Self>) {
+        let running: Vec<(String, EngineId, String)> = self
+            .agents
+            .read()
+            .values()
             .filter_map(|h| {
                 let rt = h.lock();
                 (!rt.meta.archived
                     && !rt.meta.status.is_active()
                     && (rt.proc.is_some() || rt.tui.is_some()))
-                .then(|| (rt.meta.id.clone(), rt.meta.engine))
+                .then(|| {
+                    (
+                        rt.meta.id.clone(),
+                        rt.meta.engine,
+                        rt.meta.project_id.clone(),
+                    )
+                })
             })
             .collect();
-        for (id, engine) in running {
-            if self.harness_in(engine, project_id) != InProject::ThirdParty {
+        for (id, engine, project_id) in running {
+            if self.harness_in(engine, &project_id) != InProject::ThirdParty {
                 continue;
             }
-            if let Some(why) = self.harness_refusal(engine, project_id) {
+            if let Some(why) = self.harness_refusal(engine, &project_id) {
                 self.stop_out_of_rule(&id, &crate::modes::stopped(crate::i18n::ui(), &why));
             }
         }

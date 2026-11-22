@@ -1,9 +1,9 @@
 ---
 title: "Projets privés"
 subject: "Projets"
-sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)","docs/security/audit-2026-11/rapport.md (SEC-02, test W-04)","src-tauri/src/harness_scope.rs","Choix de l'utilisateur, demande a-4 (2026-11-21)"]
-tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556","ESC-590"]
-decisions: [154,257,"un-harness-d-un-plugin-tiers-n-est-jamai"]
+sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)","docs/security/audit-2026-11/rapport.md (SEC-02, test W-04)","src-tauri/src/harness_scope.rs","Choix de l'utilisateur, demande a-4 (2026-11-21)","Choix a-28 (option b), tranché le 2026-11-22 sur délégation de l'utilisateur"]
+tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556","ESC-590","ESC-623"]
+decisions: [154,257,"un-harness-d-un-plugin-tiers-n-est-jamai","un-harness-tiers-n-est-lance-nulle-part"]
 compared: null
 ---
 
@@ -49,7 +49,7 @@ Réserver un compte au projet privé sépare aussi ce qui reste commun : c'est u
 
 Changer « Projet privé » ne coupe rien sur le moment ; le serveur MCP le prend dès l'appel suivant. Un agent dont le process a démarré sur une autre confidentialité (son projet privé ou non, et la liste des projets privés) le relance avant son tour suivant, entre deux tours seulement (ni tour en cours, ni préparation, ni tâche de fond, ni remote control ; session gardée, `--resume`). Une interface de vue terminal garde les siennes jusqu'à son prochain lancement. Un chemin créé depuis (un agent, un ticket, un fichier joint ou une session d'un autre projet) ne relance rien : il attend le prochain démarrage de l'agent.
 
-Seule exception : un agent sur le harness d'un plugin tiers, dont le projet devient privé (par la fenêtre ou par le `.escouade.yml`), s'arrête (voir plus bas, « Les harness des plugins tiers »).
+Seule exception : quand un projet devient privé (par la fenêtre ou par le `.escouade.yml`), ou qu'un projet privé arrive sur le poste (nouveau, rouvert avec son historique), les agents sur le harness d'un plugin tiers s'arrêtent, **dans tous les projets** (voir plus bas, « Les harness des plugins tiers »).
 
 ### Ce qu'Escouade fait passer d'un projet à l'autre
 
@@ -70,7 +70,7 @@ Seule exception : un agent sur le harness d'un plugin tiers, dont le projet devi
 - Le cloisonnement des fichiers est un « garde-fou » ou une « barrière » selon le harness, jamais une vraie barrière pour tous : un compte système par projet n'est pas proposé, les harness, leurs comptes et les outils de l'utilisateur n'y suivraient pas. Un vrai cloisonnement sous Windows natif (AppContainer, un compte du système par ensemble de projets, le bac à sable de Windows) est à chiffrer dans une étude à part avant d'être promis.
 - Entre projets qui ne sont pas privés, rien n'est cloisonné.
 - Sur un compte partagé, ce que le harness tient lui-même pour tous les projets (l'historique des prompts que Claude Code rappelle, sa mémoire globale, ses réglages) reste commun : la clôture ne vaut que pour les outils des agents.
-- Un agent d'un projet qui n'est pas privé, sur le harness d'un plugin tiers, garde la clôture des projets privés telle que son lancement la dit (chaque chemin cherché dans ses arguments, ses variables et ses fichiers) : ce contrôle reste celui d'avant.
+- Un projet privé sur le poste prive tous les projets des harness des plugins tiers (voir plus bas) : c'est le prix de la clôture, tant que le contrat des plugins ne permet pas à un tiers de la prouver.
 
 ## Sous clôture, sur OpenCode (ESC-364)
 
@@ -90,12 +90,14 @@ Seule exception : un agent sur le harness d'un plugin tiers, dont le projet devi
 
 - **Sous Windows**, la description de « Projet privé » ajoute : « Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client. » La doc du site (Réglages › Projets) le dit aussi.
 
-## Les harness des plugins tiers (SEC-02, ESC-590)
+## Les harness des plugins tiers (SEC-02, ESC-590 ; SEC-02b, ESC-623)
 
-Un harness d'un plugin tiers (dont l'id ne commence pas par `dev.escouade.` : le plugin qui le sert, ou celui qui le décrit pour le client ACP) **n'est jamais lancé dans un projet privé**, qu'il y soit activé ou non. Le cœur ne pouvait vérifier sa clôture qu'en cherchant chaque chemin comme un mot de son lancement : un chemin posé dans une variable que personne ne lit, ou dans un argument qui l'autorise, suffisait (test W-04 de l'audit de la 2.2.0). Le contrat des plugins ne permet pas aujourd'hui de prouver la clôture autrement : c'est donc un refus.
+Un harness d'un plugin tiers (dont l'id ne commence pas par `dev.escouade.` : le plugin qui le sert, ou celui qui le décrit pour le client ACP) **n'est lancé dans aucun projet tant qu'un projet privé existe sur le poste**, qu'il y soit activé ou non, que le projet de l'agent soit privé ou non. Le cœur ne pouvait vérifier sa clôture qu'en cherchant chaque chemin comme un mot de son lancement : un chemin posé dans une variable que personne ne lit, ou dans un argument qui l'autorise, suffisait (test W-04 de l'audit de la 2.2.0). Or cette clôture est aussi ce qui tient les dossiers d'un projet privé hors de portée d'un agent d'un autre projet : un agent tiers d'un projet public, détourné, aurait pu lire le projet privé. Le contrat des plugins ne permet pas aujourd'hui de prouver la clôture autrement : c'est donc un refus, partout.
 
-- **Le refus se dit, avec sa raison et le geste possible** : « Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : <harness> n’y est pas lancé. Choisis un harness d’Escouade, ou retire « Projet privé » à ce projet. » C'est la réponse d'un nouvel agent, d'un message, d'une reprise, d'un démarrage anticipé, de la vue terminal, d'un ticket (bloqué avec cette raison) et de « Activer », qui n'allume rien. Le cœur le refuse aussi au lancement même du harness, avant que son programme tourne.
-- **La fenêtre** : le menu « Harness » du projet ne le propose plus (celui d'un ticket ou du projet qui l'a déjà le garde, avec « (plugin tiers : pas dans un projet privé) ») ; la conversation d'un de ses agents le dit dans une bande, sans bouton ; sous « Projet privé », les réglages du projet disent : « Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : il n’y est pas lancé, et un agent qui en a un s’arrête. »
-- **Un agent déjà là** : quand son projet devient privé, un agent sur un harness tiers dont le process ou l'interface tourne s'arrête aussitôt s'il est au repos ; au travail, il finit son tour, puis s'arrête. Sa conversation le dit : la raison, puis « L’agent s’arrête. » ou « L’agent s’arrête à la fin de son tour. ». Sa session est gardée ; rien ne le relance tant que le projet est privé.
-- **Le projet de nouveau public** : le harness tiers y retrouve sa place, selon son bouton pour ce projet.
-- **Les harness d'Escouade** (`dev.escouade.*`, signés) gardent leur clôture comme avant : allumés pour le projet privé par l'utilisateur (« Activer »), ils y tournent, chaque chemin refusé dit à leur harness. La migration unique qui allume, pour un projet privé, les harness que ses agents utilisaient déjà (ESC-404) n'allume que ceux d'Escouade.
+Un projet privé « existe » quand il est ouvert dans Escouade (un projet retiré n'en est plus un ; un projet rouvert avec son historique l'est de nouveau s'il était privé).
+
+- **Le refus se dit, avec sa raison et le geste possible** : « Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture, <harness> n’est lancé dans aucun projet. Prends un harness d’Escouade, ou retire « Projet privé » de tes projets. » (en anglais : « A private project exists on this machine: a harness from a third-party plugin can’t guarantee its fence, so <harness> isn’t launched in any project. Pick one of Escouade’s harnesses, or turn “Private project” off for your projects. »). C'est la réponse d'un nouvel agent, d'un message, d'une reprise, d'un démarrage anticipé, de la vue terminal, d'un ticket (bloqué par le Kanban avec cette raison, refusé par `start_ticket` du serveur MCP), des commandes de l'API distante, et de « Activer », qui n'allume rien. Le cœur le refuse aussi au lancement même du harness, avant que son programme tourne.
+- **La fenêtre** : le menu « Harness » de chaque projet ne le propose plus (celui d'un ticket ou du projet qui l'a déjà le garde, avec « (plugin tiers : un projet privé existe) ») ; la conversation d'un de ses agents le dit dans une bande, sans bouton ; sous « Projet privé », les réglages du projet disent : « Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : tant qu’il en existe un sur ce poste, il n’est lancé dans aucun projet, et un agent qui en a un s’arrête. » La fenêtre relit ce jugement quand un projet devient privé ou ne l'est plus, quand un projet arrive et quand un projet est retiré.
+- **Un agent déjà là** : quand un projet devient privé, ou qu'un projet privé arrive, chaque agent sur un harness tiers, **de tous les projets**, dont le process ou l'interface tourne s'arrête aussitôt s'il est au repos ; au travail, il finit son tour, puis s'arrête. Sa conversation le dit : la raison, puis « L’agent s’arrête. » ou « L’agent s’arrête à la fin de son tour. ». Sa session est gardée ; rien ne le relance tant qu'un projet privé existe.
+- **Plus aucun projet privé** (le dernier redevenu public, ou retiré) : les harness tiers retrouvent leur place, dans chaque projet selon son bouton. Rien ne repart tout seul : un message, un ticket ou « Reprendre » les relance.
+- **Les harness d'Escouade** (`dev.escouade.*`, signés) gardent leur clôture comme avant : allumés pour le projet privé par l'utilisateur (« Activer »), ils y tournent, chaque chemin refusé dit à leur harness ; dans les autres projets, rien ne change pour eux. La migration unique qui allume, pour un projet privé, les harness que ses agents utilisaient déjà (ESC-404) n'allume que ceux d'Escouade.

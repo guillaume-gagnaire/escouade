@@ -188,7 +188,7 @@ export default {
     pluginOff: '{name} (plugin coupé)',
     noAccount: '{name} (aucun compte)',
     projectOff: '{name} (coupé pour ce projet)',
-    thirdParty: '{name} (plugin tiers : pas dans un projet privé)',
+    thirdParty: '{name} (plugin tiers : un projet privé existe)',
   },
   /** Réglages › Agents › Permissions, and the question of the first start (SEC-09). */
   permissions: {
@@ -505,7 +505,7 @@ export default {
       'Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client.',
     /** Under « Projet privé » (SEC-02, ESC-590): a third party’s harness is not launched there. */
     privateThirdParty:
-      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : il n’y est pas lancé, et un agent qui en a un s’arrête.',
+      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : tant qu’il en existe un sur ce poste, il n’est lancé dans aucun projet, et un agent qui en a un s’arrête.',
     /** Under « Projet privé »: what keeps its files from the other projects' agents, harness by harness (ESC-140). */
     fenceTitle: 'Ses fichiers',
     fenceDesc:

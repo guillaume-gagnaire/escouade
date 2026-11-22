@@ -2277,7 +2277,7 @@ async fn a_third_party_description_does_not_start_for_an_agent_of_a_private_proj
         .to_string();
     assert!(
         err.starts_with(
-            "Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé"
+            "Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture"
         ),
         "{err}"
     );

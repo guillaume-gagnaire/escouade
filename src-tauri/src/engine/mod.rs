@@ -185,7 +185,8 @@ pub struct Spawn {
     /// The paths its tools are refused (« Projet privé », `fence`): each harness is told them its
     /// way.
     pub fence: crate::fence::Fence,
-    /// Its project is private (« Projet privé »): a third party’s harness refuses to start (SEC-02, ESC-590).
+    /// A project of the machine is private (« Projet privé »): a third party’s harness refuses to start, in any project
+    /// (SEC-02, ESC-590; SEC-02b, ESC-623).
     pub private: bool,
     /// A settings file of its own (Claude Code: `--settings`, `Engine::fence_settings`), written
     /// for its fence: it holds the refusal of Escouade's server too, Claude Code reading one only.

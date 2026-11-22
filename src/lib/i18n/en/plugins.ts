@@ -314,7 +314,7 @@ export default defineZone('plugins', {
     cardPrivate: '{name} is not turned on for this private project: this agent does not start and gets nothing.',
     cardOff: '{name} is off for this project: this agent does not start and gets nothing.',
     cardThirdParty:
-      'A harness from a third-party plugin can’t guarantee the fence of a private project: this agent, on {name}, does not start. Pick one of Escouade’s harnesses, or turn “Private project” off for this project.',
+      'A private project exists on this machine: a harness from a third-party plugin can’t guarantee its fence, so this agent, on {name}, starts in no project. Pick one of Escouade’s harnesses, or turn “Private project” off for your projects.',
     ticketWhy: 'Its harness, {name}, is not turned on for this project.',
     commandFrom: 'A command given by the plugin {plugin}, not by Escouade: read it before running it.',
     // The agreement to a harness of a third party at its first launch, its whole command said (SEC-01, ESC-589).

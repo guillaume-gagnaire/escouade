@@ -29,7 +29,7 @@ describe('PrivacyPage under Windows', () => {
     app.modal = { kind: 'settings' };
     render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     expect(screen.getByTestId('private-third-party')).toHaveTextContent(
-      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : il n’y est pas lancé, et un agent qui en a un s’arrête.',
+      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : tant qu’il en existe un sur ce poste, il n’est lancé dans aucun projet, et un agent qui en a un s’arrête.',
     );
   });
 
