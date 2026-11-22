@@ -109,6 +109,7 @@
   </Row>
   {#if draft.private}
     {@const harness = engineName(privateEngine)}
+    <p class="note" data-testid="private-third-party">{t('settings.project.privateThirdParty')}</p>
     <div class="sub-h"><b>{t('settings.project.fenceTitle')}</b><span>{t('settings.project.fenceDesc')}</span></div>
     <ul class="fence" aria-label={t('settings.project.fenceTitle')}>
       {#each fence as f (f.id)}

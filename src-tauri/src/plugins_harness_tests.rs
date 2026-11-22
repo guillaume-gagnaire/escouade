@@ -1069,3 +1069,46 @@ fn the_attach_of_a_shared_process_sets_only_the_variables_its_plugin_may_set() {
         assert!(err.to_string().contains(refused), "{refused}: {err}");
     }
 }
+
+/// Audit test W-04 replayed (SEC-02, ESC-590): a third party's launch that sets the fence's path in a variable no
+/// harness reads, or in an argument that allows it, satisfied the word search of `check_launch`. For an agent of a
+/// private project, a third party's harness is refused before (`check_private`), whatever its launch; Escouade's own
+/// keeps its fence as before, judged on its launch.
+#[test]
+fn w04_a_fence_said_where_no_one_reads_it_no_longer_launches_a_third_party_in_a_private_project() {
+    let fence = vec!["C:/clients/acme-secret".to_string()];
+    let mut decoy = launch(&["outil"]);
+    decoy.env.push(EnvVar {
+        name: "AUDIT_NOTE".into(),
+        value: "ignored: C:/clients/acme-secret".into(),
+    });
+    let mut reversed = launch(&["outil", "--add-dir", r"C:\clients\acme-secret"]);
+    reversed.fence_applied = true;
+    for l in [&decoy, &reversed] {
+        // What the word search alone lets through…
+        assert_eq!(
+            check_launch("Tiers", false, None, &fence, false, None, l),
+            Ok(())
+        );
+        // …no longer starts in a private project.
+        let why = harness::check_private("Tiers", false, true)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            why.starts_with(
+                "Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé"
+            ),
+            "{why}"
+        );
+    }
+    // Out of a private project, nothing is refused by it; Escouade's own hand is never refused by it.
+    assert!(harness::check_private("Tiers", false, false).is_ok());
+    assert!(harness::check_private("Claude Code", true, true).is_ok());
+    // The first hand's fence is judged as before: spelled in its launch, it goes; left out, it is refused.
+    let mut spelled = launch(&["minimal-harness", "--deny", "C:/clients/acme-secret"]);
+    spelled.fence_applied = true;
+    assert!(check_launch("Minimal", true, None, &fence, false, None, &spelled).is_ok());
+    let mut forgot = launch(&["minimal-harness"]);
+    forgot.fence_applied = true;
+    assert!(check_launch("Minimal", true, None, &fence, false, None, &forgot).is_err());
+}

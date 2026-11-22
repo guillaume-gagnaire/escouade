@@ -304,6 +304,8 @@ export default {
     loading: 'Lecture du plugin…',
     cardPrivate: '{name} n’est pas activé pour ce projet privé : cet agent ne démarre pas et ne reçoit rien.',
     cardOff: '{name} est coupé pour ce projet : cet agent ne démarre pas et ne reçoit rien.',
+    cardThirdParty:
+      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : cet agent, sur {name}, ne démarre pas. Choisis un harness d’Escouade, ou retire « Projet privé » à ce projet.',
     ticketWhy: 'Son harness, {name}, n’est pas activé pour ce projet.',
     commandFrom: 'Commande donnée par le plugin {plugin}, pas par Escouade : lis-la avant de la lancer.',
     // The agreement to a harness of a third party at its first launch, its whole command said (SEC-01, ESC-589).

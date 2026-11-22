@@ -3600,6 +3600,8 @@ export interface CacheHeat {
 export interface HarnessScope {
   off: EngineId[];
   asks: EngineId[];
+  /** A third party’s harnesses, in a private project: never launched there (SEC-02, ESC-590). */
+  thirdParty?: EngineId[];
 }
 
 /** Why the command of a harness of a third party does not run now (SEC-01, ESC-589). */

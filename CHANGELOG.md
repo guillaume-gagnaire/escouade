@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Projets privés : un harness d’un plugin tiers n’y est plus lancé, car rien ne prouve qu’il tient leur clôture ; la conversation, le menu « Harness » et les réglages du projet le disent. Un agent tiers déjà là s’arrête, au repos aussitôt, au travail à la fin de son tour. Les harness d’Escouade gardent leur clôture.
 - Sécurité : « N’installer que des versions vérifiées » vaut aussi pour les dossiers et les dépôts git, acceptés seulement s’ils sont une version vérifiée du store ; le mode développement reste un geste à part. Il s’allume avec cette mise à jour si tu n’as aucun plugin tiers installé.
 - Sécurité : un harness décrit par un plugin tiers demande ton accord à son premier lancement, sa commande entière redite, et de nouveau quand une mise à jour la change ; refusé, son agent ne démarre pas. Réglages › Plugins peut tous les refuser.
 - Boîte « À toi » : un filtre par type, en haut de la liste (autorisations, questions, feux verts, tickets, décisions…), chacun avec son nombre ; tu en choisis plusieurs à la fois, ton choix est gardé, et « Effacer » remet tout. Ce qu’il cache se dit d’une ligne discrète, et le compte de la tuile dit toujours tout ce qui t’attend.

@@ -3985,6 +3985,7 @@ impl<R: Runtime> Core<R> {
         // harness that reads them so. Not written, it does not start: it would read them.
         let privacy = self.agent_privacy(id);
         spawn.fence = self.agent_fence(id);
+        spawn.private = privacy.own;
         if !spawn.fence.is_empty() {
             let refused = matches!(spawn.escouade, Escouade::Denied { .. });
             if let Some(v) = engine.fence_settings(refused, &spawn.fence, &spawn.program) {
@@ -9443,6 +9444,10 @@ impl<R: Runtime> Core<R> {
         // Their sessions on claude.ai are called « projet · agent ».
         if renamed {
             self.rename_remote_sessions(&updated.id);
+        }
+        // Made private: what runs of its agents on a third party's harness stops, said (SEC-02, ESC-590).
+        if updated.private && !before.private {
+            self.settle_third_party_in(&updated.id);
         }
         Ok(())
     }

@@ -185,6 +185,8 @@ pub struct Spawn {
     /// The paths its tools are refused (« Projet privé », `fence`): each harness is told them its
     /// way.
     pub fence: crate::fence::Fence,
+    /// Its project is private (« Projet privé »): a third party’s harness refuses to start (SEC-02, ESC-590).
+    pub private: bool,
     /// A settings file of its own (Claude Code: `--settings`, `Engine::fence_settings`), written
     /// for its fence: it holds the refusal of Escouade's server too, Claude Code reading one only.
     pub settings: Option<PathBuf>,
@@ -223,6 +225,7 @@ impl Spawn {
             read_dirs: Vec::new(),
             escouade: Escouade::Denied { file: None },
             fence: crate::fence::Fence::default(),
+            private: false,
             settings: None,
             label: format!("agent {}", meta.id),
             account: meta.account.clone(),

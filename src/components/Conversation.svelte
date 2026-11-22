@@ -35,7 +35,7 @@
   import { workflows } from '../lib/workflows.svelte';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import HeatFigure from './HeatFigure.svelte';
-  import { capsOf, engineName, harnessHeld, showsCost, speakerOf } from '../lib/engines';
+  import { capsOf, engineName, harnessHeld, harnessThirdParty, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { localCommandViews } from '../lib/localcmd';
   import { subagentInfo } from '../lib/subagents';
@@ -645,7 +645,18 @@
 <!-- Its harness off for its project (ESC-404): it does not start nor get anything until « Activer », the same agreement as
      before a first agent. -->
 {#snippet harnessCard()}
-  {#if !agent.archived && harnessHeld(agent.projectId, agent.engine ?? 'claude')}
+  <!-- A third party’s harness in a private project (SEC-02, ESC-590): said, and nothing to turn on. -->
+  {#if !agent.archived && harnessThirdParty(agent.projectId, agent.engine ?? 'claude')}
+    <div
+      class="banner held"
+      class:top={harnessView}
+      role="region"
+      aria-label={t('settings.project.private')}
+      data-testid="harness-third-party"
+    >
+      <span>{t('plugins.harness.cardThirdParty', { name: engineName(agent.engine) })}</span>
+    </div>
+  {:else if !agent.archived && harnessHeld(agent.projectId, agent.engine ?? 'claude')}
     {@const project = app.projects.find((p) => p.id === agent.projectId)}
     {@const off = !!app.harnessScope[agent.projectId]?.off.includes(agent.engine ?? 'claude')}
     <div class="banner held" class:top={harnessView} role="region" aria-label={t('plugins.harness.enable')} data-testid="harness-held">

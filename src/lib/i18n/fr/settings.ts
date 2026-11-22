@@ -188,6 +188,7 @@ export default {
     pluginOff: '{name} (plugin coupé)',
     noAccount: '{name} (aucun compte)',
     projectOff: '{name} (coupé pour ce projet)',
+    thirdParty: '{name} (plugin tiers : pas dans un projet privé)',
   },
   /** Réglages › Agents › Permissions, and the question of the first start (SEC-09). */
   permissions: {
@@ -494,7 +495,10 @@ export default {
       'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
     /** Under « Projet privé » on Windows (SEC-08): what the fence is there, and is not. */
     privateWindows:
-      'Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client. Un plugin tiers n’y est lancé qu’une fois activé par toi pour ce projet.',
+      'Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client.',
+    /** Under « Projet privé » (SEC-02, ESC-590): a third party’s harness is not launched there. */
+    privateThirdParty:
+      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : il n’y est pas lancé, et un agent qui en a un s’arrête.',
     /** Under « Projet privé »: what keeps its files from the other projects' agents, harness by harness (ESC-140). */
     fenceTitle: 'Ses fichiers',
     fenceDesc:

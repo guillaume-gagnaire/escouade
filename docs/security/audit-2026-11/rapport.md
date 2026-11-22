@@ -360,6 +360,7 @@ Le scénario `npx un-paquet` ne lance plus rien sans cet accord : c'est un test 
 | État | Démontré pour le contrôle des lancements (test W-04) ; probable pour le reste (lu) |
 | Composant | `src-tauri/src/fence.rs`, `src-tauri/src/plugins/harness.rs` |
 | Effort de correction | Élevé pour un vrai cloisonnement |
+| Correction | **En partie dans Escouade 2.2.6** — le point 2, pour un agent d'un projet privé (voir « Correction » en fin de fiche) |
 
 **Description.** Marquer un projet « privé » cache ce projet aux agents des autres projets. Côté serveur MCP, c'est tenu par le cœur. Côté fichiers, la « clôture » est une liste de chemins passée au harness comme règles de refus. Trois limites :
 
@@ -384,6 +385,8 @@ Test W-04 : un lancement qui pose le chemin protégé dans une variable sans eff
 **Ce qui atténue.** L'interface dit la limite : sous Windows, la description du réglage écrit que « la clôture d'un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner », et conseille un compte Windows par ensemble de projets à séparer (`src/lib/i18n/fr/settings.ts:491`). Sous macOS, Linux et WSL, le bac à sable de Claude Code applique la clôture à toutes les commandes. Le harness d'un plugin tiers n'est lancé dans un projet privé qu'une fois activé par l'utilisateur pour ce projet (`src-tauri/src/harness_scope.rs:250-253`). Le lancement d'une vue de terminal est refusé par le cœur s'il n'applique pas la clôture (`src-tauri/src/plugins/harness.rs:1111-1131`) ; la vue Copilot CLI, qui ne sait pas la tenir, se refuse elle-même à un agent clôturé (`plugins/copilot/src/terminal.rs:178-186`, test W-29).
 
 **Recommandation.** Pour un poste d'entreprise : un poste, ou un compte du système, par ensemble de projets à séparer. Pour le produit : pour un plugin tiers, remplacer la recherche d'une sous-chaîne par une preuve vérifiable, ou refuser le lancement dans un projet privé ; à terme, un bac à sable du système sous Windows.
+
+**Correction (Escouade 2.2.6), en partie.** Le harness d'un plugin tiers (ni le plugin qui le sert ni celui qui le décrit n'est `dev.escouade.*`) n'est plus lancé dans un projet privé, qu'il y soit activé ou non : le cœur le refuse pour le projet, puis au lancement même, avant de lire sa description, et le dit (« Un harness d'un plugin tiers ne peut pas garantir la clôture d'un projet privé »). Un agent tiers déjà actif quand son projet devient privé s'arrête, au repos aussitôt, au travail à la fin de son tour. Le lancement de W-04 ne démarre donc plus un agent d'un projet privé. Restent ouverts : le point 1 (Windows natif, dont un vrai cloisonnement fait l’objet d’une étude à part), le point 3, et le point 2 pour un agent d'un projet **non** privé sur un harness tiers, dont la clôture des projets privés reste jugée par la recherche d'une sous-chaîne. Les harness de première main gardent leur clôture telle que décrite plus haut.
 
 ## SEC-03 — Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent
 

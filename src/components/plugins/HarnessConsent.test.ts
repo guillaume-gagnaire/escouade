@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/svelte';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,7 +16,7 @@ vi.mock('../../lib/terminals', () => ({
   openTerminal: async () => ({ id: 't', projectId: '', name: '', shell: '' }),
 }));
 
-import { choosesEngine, engineOptions, harnessAsks, harnessHeld, offered, unusable } from '../../lib/engines';
+import { choosesEngine, engineOptions, harnessAsks, harnessHeld, harnessThirdParty, offered, unusable } from '../../lib/engines';
 import { setLang } from '../../lib/i18n';
 import type { PluginView } from '../../lib/plugins';
 import { app } from '../../lib/state.svelte';
@@ -183,5 +183,67 @@ describe('the cards of a harness off for its project (ESC-404)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Activer' }));
     await waitFor(() => expect(b.called('ticket_resume').map((c) => c.args)).toEqual([{ id: 't9' }]));
     expect(b.called('harness_enable_in')).toHaveLength(1);
+  });
+});
+
+// SEC-02 (ESC-590): a third party's harness is never launched in a private project; the window says why, and offers
+// nothing to turn on.
+describe('a third party’s harness in a private project (SEC-02)', () => {
+  it('is left out of its menus, said why, and asks nothing', () => {
+    app.harnessScope = { p2: { off: [], asks: [], thirdParty: ['codex'] } };
+    expect(offered('p2').map((e) => e.id)).toEqual(['claude']);
+    expect(offered('p1').map((e) => e.id)).toEqual(['claude', 'codex']);
+    expect(unusable('codex', 'p2')).toBe('thirdParty');
+    expect(harnessThirdParty('p2', 'codex')).toBe(true);
+    expect(harnessThirdParty('p1', 'codex')).toBe(false);
+    expect(harnessAsks('p2', 'codex')).toBe(false);
+    expect(harnessHeld('p2', 'codex')).toBe(false);
+    expect(engineOptions('codex', 'p2')).toEqual([
+      { value: 'claude', label: 'Claude Code' },
+      { value: 'codex', label: 'Harness nu (plugin tiers : pas dans un projet privé)' },
+    ]);
+  });
+
+  it('says so on the conversation of its agent, with nothing to turn on', async () => {
+    const a = agent({ id: 'tiers', projectId: 'p2', status: 'idle', engine: 'codex' });
+    resetApp({ projects: [OPEN, VAULT], agents: [a] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.harnessScope = { p2: { off: [], asks: [], thirdParty: ['codex'] } };
+    backend();
+    render(Conversation, { agent: a, project: VAULT });
+    const card = await screen.findByTestId('harness-third-party');
+    expect(card).toHaveTextContent(
+      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : cet agent, sur Harness nu, ne démarre pas. Choisis un harness d’Escouade, ou retire « Projet privé » à ce projet.',
+    );
+    expect(within(card).queryByRole('button')).toBeNull();
+    expect(screen.queryByTestId('harness-held')).toBeNull();
+  });
+
+  it('says it in English too', async () => {
+    setLang('en');
+    const a = agent({ id: 'tiers', projectId: 'p2', status: 'idle', engine: 'codex' });
+    resetApp({ projects: [OPEN, VAULT], agents: [a] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.harnessScope = { p2: { off: [], asks: [], thirdParty: ['codex'] } };
+    backend();
+    render(Conversation, { agent: a, project: VAULT });
+    expect(await screen.findByTestId('harness-third-party')).toHaveTextContent(
+      'A harness from a third-party plugin can’t guarantee the fence of a private project',
+    );
+  });
+
+  it('a new agent on it is refused by the core, its reason said', async () => {
+    app.harnessScope = { p2: { off: [], asks: [], thirdParty: ['codex'] } };
+    const why =
+      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : Harness nu n’y est pas lancé. Choisis un harness d’Escouade, ou retire « Projet privé » à ce projet.';
+    const b = backend({
+      create_agent: () => {
+        throw why;
+      },
+    });
+    await app.newAgent('p2', 'codex');
+    expect(app.modal).toBeNull();
+    expect(b.called('create_agent')).toHaveLength(1);
+    expect(app.toasts.map((t) => t.text)).toContain(why);
   });
 });

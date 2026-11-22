@@ -223,12 +223,19 @@ pub fn stopped(lang: Lang, why: &str) -> String {
 }
 
 impl<R: Runtime> Core<R> {
-    /// Why the agent `id`, as it runs now, may not run on (`refusal_of`): what a change of « Autoriser le mode Bypass »
-    /// looks at, and what a start does not take a live process over with.
+    /// Why the agent `id`, as it runs now, may not run on (a third party's harness in a private project, `refusal_of`):
+    /// what a change of « Autoriser le mode Bypass » or of « Projet privé » looks at, what the end of a turn judges
+    /// again, and what a start does not take a live process over with.
     pub(crate) fn run_refusal(&self, id: &str) -> Option<String> {
         let h = self.agent(id).ok()?;
         let bypass = self.bypass_allowed();
         let meta = h.lock().meta.clone();
+        // A third party's harness in a private project (SEC-02, ESC-590): read apart, never under the agent's lock.
+        if self.harness_in(meta.engine, &meta.project_id)
+            == crate::harness_scope::InProject::ThirdParty
+        {
+            return self.harness_refusal(meta.engine, &meta.project_id);
+        }
         refusal_of(&meta, bypass, crate::i18n::ui())
     }
 

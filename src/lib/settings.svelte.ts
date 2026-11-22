@@ -709,6 +709,8 @@ class SettingsForm {
         // What was saved, and nothing else of the project.
         Object.assign(p, fields, links ? { integrations: links } : {});
         this.#rebase(id, (b) => ({ ...b, ...sent }));
+        // Made private or not: its harnesses read again (ESC-404), a third party's refused there said at once (SEC-02).
+        if ('private' in fields) void app.refreshHarnessScope();
       } else if (!saved) ok = false;
     }
     const board = this.#boardChanges(id);

@@ -1174,6 +1174,16 @@ fn down(name: &str, e: CallError) -> anyhow::Error {
     }
 }
 
+/// A harness of a third party (`first_hand` false: neither its plugin nor the one describing it is `dev.escouade.*`)
+/// does not start for an agent of a private project (SEC-02, ESC-590): its launch can say it applies the fence, the core
+/// could only find the fence's paths as words of it (audit test W-04).
+pub fn check_private(name: &str, first_hand: bool, private: bool) -> Result<()> {
+    if private && !first_hand {
+        bail!(crate::harness_scope::third_party_refusal(name));
+    }
+    Ok(())
+}
+
 /// The checks of a launch's description (`engine/launch`, `terminal/launch`): what the core guarantees whatever the
 /// plugin. Answers why it is refused. `first_hand`: the plugin is of Escouade's own hand (`dev.escouade.*`, which installs
 /// signed alone), the only one whose word that it holds the fence itself (`fence_by_client`, the generic ACP plugin) is
@@ -1624,6 +1634,9 @@ impl Engine for ProcessEngine {
     }
 
     fn spawn(&self, spawn: Spawn, on_frame: OnFrame, on_exit: OnExit) -> Result<Process> {
+        // A third party’s harness in a private project: nothing proves it holds the fence, which its launch could only
+        // spell as words found anywhere (SEC-02, ESC-590). The core refuses it before (`harness_in`); here too.
+        check_private(self.name, self.first_hand, spawn.private)?;
         // Those the core sets itself, on its manifest's word.
         let mut named = self.decl.account_var.iter().chain(&self.decl.key_var);
         let refused = |v: &&String| {

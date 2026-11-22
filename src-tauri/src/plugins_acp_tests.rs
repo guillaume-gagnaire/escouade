@@ -2253,3 +2253,37 @@ fn w_32_what_a_described_harness_words_is_shown_and_judged() {
 /// Prime Agent's, on the same bench (ESC-485).
 #[path = "plugins_prime_agent_tests.rs"]
 mod prime_agent;
+
+/// SEC-02 (ESC-590): a harness a third party describes does not start for an agent of a private project, whatever its
+/// launch would say of the fence: refused before its program runs, said; the same harness of Escouade's own hand is
+/// not judged so.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_third_party_description_does_not_start_for_an_agent_of_a_private_project() {
+    let (rt, _, _) = runtime("tiers-prive");
+    let decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+    let engine = described(&rt, OWNER, decl);
+    let dir = bench_dir("plg6-tiers-prive");
+    let meta = AgentMeta {
+        id: crate::model::new_id(),
+        cwd: dir.to_string_lossy().to_string(),
+        ..Default::default()
+    };
+    let mut spawn = Spawn::of(&meta, fake_acp(), Vec::new());
+    spawn.private = true;
+    let err = engine
+        .spawn(spawn, Box::new(|_| {}), Box::new(|_, _| {}))
+        .err()
+        .expect("it started")
+        .to_string();
+    assert!(
+        err.starts_with(
+            "Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé"
+        ),
+        "{err}"
+    );
+    assert!(
+        !dir.join("fake-acp.jsonl").exists(),
+        "its program never ran"
+    );
+    rt.shutdown();
+}
