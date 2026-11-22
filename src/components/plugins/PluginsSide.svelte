@@ -5,6 +5,12 @@
   import type { IconName } from '../../lib/icons';
   import Icon from '../Icon.svelte';
   import { categoriesOfCatalog } from '../../lib/store';
+  import { teams } from '../../lib/teams.svelte';
+  import { onMount } from 'svelte';
+
+  onMount(() => void teams.load());
+  /** « Équipe » (TS-14): the plugins of the teams' private stores, when this device is in a team. */
+  const inTeam = $derived(teams.list.some((x) => x.joined));
 
   // The sidebar of the view Plugins (choice 214): Store, Installés, Mises à jour (their count in amber), En développement,
   // then the categories with their count.
@@ -49,6 +55,15 @@
         >{/if}</button
     >
   {/each}
+  {#if inTeam}
+    <button
+      class="it"
+      class:on={on({ kind: 'team' })}
+      aria-current={on({ kind: 'team' }) ? 'page' : undefined}
+      data-testid="plugins-nav-team"
+      onclick={() => plugins.show({ kind: 'team' })}><Icon name="team" size={14} /><span>{t('teamPlugins.store.nav')}</span></button
+    >
+  {/if}
   <h5>{t('plugins.nav.categories')}</h5>
   {#each CATEGORIES as c (c)}
     <button

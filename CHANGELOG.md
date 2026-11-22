@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : le store de plugins privés de l’équipe. Un administrateur crée sur son poste la clé de l’équipe et son espace de noms, chaque version est contrôlée sur le poste de qui la propose puis sur celui de qui la signe, et chaque membre l’installe lui-même depuis la vue Plugins, « Acme · privé » ; l’équipe peut aussi retirer une version.
 - Serveur d’équipe : chaque version le publie, archives signées pour Linux x64 et arm64 et image Docker, avec un compose pour Caddy et une recette Coolify ; une bêta prend l’étiquette « beta », jamais « latest ».
 - Une bêta se dit bêta partout : sur GitHub, sur Discord et dans la fenêtre « Nouveautés », avec comment revenir à la version stable. Revenir à la 2.2 garde tes projets, tes tickets et tes réglages.
 - Un agent qui passe sur un autre compte au-delà du seuil attend désormais le tour que Claude Code ouvre sur une tâche de fond qui vient de finir : ce tour n’est plus perdu. Le point « à découvrir » de la tuile Aide a retrouvé sa couleur, et une bulle « À découvrir » ne s’affiche plus par-dessus une fenêtre ouverte, dont elle prenait l’Échap. « Supprimer l’agent » ne dit plus le worktree inconnu pour de bon quand git tarde : sa réponse remplace l’état inconnu dès qu’elle arrive. Le panneau Git suit le dépôt même quand il change sans cesse : l’historique ne reste plus sur « Chargement… », et un fichier supprimé quitte la liste.

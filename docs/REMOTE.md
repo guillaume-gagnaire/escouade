@@ -554,6 +554,13 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `team_pair_join`
 - `team_pair_start`
 - `team_pair_step`
+- `team_plugin_dismiss`
+- `team_plugin_inspect`
+- `team_plugin_revoke`
+- `team_plugin_sign`
+- `team_plugins`
+- `team_plugins_all`
+- `team_plugins_retry`
 - `team_project_accept_board`
 - `team_project_put`
 - `team_project_remove`
@@ -736,6 +743,9 @@ Elles changent de machine en mode serveur (table « Ce qui change de machine »)
 - `shared_preview` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `suggest_run_commands_at` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `suggest_worktree_steps_at` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `team_plugin_key_create` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `team_plugin_key_import` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `team_plugin_submit` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `team_project_clone` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 - `team_project_logo` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 

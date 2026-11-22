@@ -49,6 +49,7 @@ import moves from './moves';
 import teamProjects from './teamProjects';
 import teamDocs from './teamDocs';
 import teamCosts from './teamCosts';
+import teamPlugins from './teamPlugins';
 import wizard from './wizard';
 import voice from './voice';
 import plugins from './plugins';
@@ -110,6 +111,7 @@ export const fr = {
   teamProjects,
   teamDocs,
   teamCosts,
+  teamPlugins,
 } as const;
 
 export type Catalog = typeof fr;

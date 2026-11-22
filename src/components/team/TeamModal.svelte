@@ -13,6 +13,7 @@
     | 'settings'
     | 'projects'
     | 'costs'
+    | 'plugins'
     | 'told';
 </script>
 
@@ -35,6 +36,7 @@
   import TeamSettings from './TeamSettings.svelte';
   import TeamCosts from './TeamCosts.svelte';
   import TeamCostsTold from './TeamCostsTold.svelte';
+  import TeamPlugins from './TeamPlugins.svelte';
 
   let {
     step: first = 'home',
@@ -77,6 +79,7 @@
   function titleOf(s: TeamStep): string {
     if (s === 'projects') return t('teamProjects.title');
     if (s === 'costs') return t('teamCosts.title');
+    if (s === 'plugins') return t('teamPlugins.title');
     if (s === 'told') return t('teamCosts.told.title');
     return t(`team.title.${s}`);
   }
@@ -87,6 +90,7 @@
       step === 'invite' ||
       step === 'settings' ||
       step === 'projects' ||
+      step === 'plugins' ||
       step === 'costs',
   );
 </script>
@@ -121,6 +125,8 @@
     <TeamInvite {teamId} onback={() => go('home')} />
   {:else if step === 'projects' && teamId}
     <TeamProjects {teamId} onback={() => go('home')} />
+  {:else if step === 'plugins' && teamId}
+    <TeamPlugins {teamId} onback={() => go('home')} />
   {:else if step === 'costs' && teamId}
     <TeamCosts {teamId} onback={() => go('home')} />
   {:else if step === 'told' && teamId}

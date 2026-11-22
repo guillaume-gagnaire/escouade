@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: the team’s private store of plugins. An administrator makes the team’s key and its namespace on their computer, each version is checked on the computer of who proposes it and again on that of who signs it, and each member installs it themselves from the Plugins view, “Acme · private”; the team can also withdraw a version.
 - Team server: every version publishes it, signed archives for Linux x64 and arm64 and a Docker image, with a compose file for Caddy and a Coolify recipe; a beta takes the “beta” tag, never “latest”.
 - A beta says it is one everywhere: on GitHub, on Discord and in the “What’s new” window, with how to go back to the stable version. Going back to 2.2 keeps your projects, tickets and settings.
 - An agent that moves to another account past the threshold now waits for the turn Claude Code starts on a background task that just ended: that turn is no longer lost. The “to discover” dot on the Help tile has its color back, and a Discover bubble no longer shows over an open window, whose Escape it took. “Delete agent” no longer calls the worktree unknown for good when git is slow: its answer replaces the unknown state as soon as it comes. The Git panel keeps up with a repository that changes all the time: the history no longer stays on “Loading…”, and a deleted file leaves the list.

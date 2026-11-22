@@ -290,10 +290,12 @@ impl Core {
     pub(crate) fn set_teams(self: &Arc<Self>, teams: Arc<Teams>) {
         *self.team_link.write() = Some(teams.clone());
         let me = Arc::downgrade(self);
-        teams.set_projects_sink(Arc::new(move |_| {
+        teams.set_projects_sink(Arc::new(move |id| {
             if let Some(core) = me.upgrade() {
                 core.team_boards_soon();
                 core.team_join_listed_soon();
+                // The team's revocation list to its plugins here (TS-14).
+                core.team_plugins_after_read(id);
             }
         }));
         let me = Arc::downgrade(self);

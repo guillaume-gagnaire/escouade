@@ -34,6 +34,11 @@ pub fn usage(lang: Lang) -> String {
   escouade-plugin fetch <dossier>
       Télécharge les dépendances d'un plugin `run.wasm` depuis crates.io, sans rien lancer du
       plugin : `build` les trouve ensuite hors ligne, comme au store.
+  escouade-plugin team-check <dossier> --tag <étiquette> [--last <version>] [--out <archive>] [--json]
+      Joue les contrôles du store privé d'une équipe : l'archive saine, le manifeste, la version
+      égale à l'étiquette et plus grande que la dernière publiée, les permissions, aucun binaire,
+      la compilation deux fois dans un dossier neuf ; dit l'empreinte que l'administrateur qui
+      signe doit retrouver. --out écrit l'archive contrôlée.
   escouade-plugin cache [clear] [--json]
       Dit où sont les copies des compilations `run.wasm`, la chaîne d'outils et les dépendances,
       et ce qu'elles pèsent ; `clear` retire les copies qu'aucune compilation ne tient.
@@ -79,6 +84,11 @@ Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version
   escouade-plugin fetch <folder>
       Downloads the dependencies of a `run.wasm` plugin from crates.io, running nothing of the
       plugin: `build` then finds them offline, as at the store.
+  escouade-plugin team-check <folder> --tag <tag> [--last <version>] [--out <archive>] [--json]
+      Plays the checks of a team's private store: a sound archive, the manifest, the version equal
+      to the tag and above the last one published, the permissions, no binary, the compilation
+      twice in a fresh folder; says the digest the administrator who signs must find again.
+      --out writes the archive checked.
   escouade-plugin cache [clear] [--json]
       Says where the copies of the `run.wasm` compilations, the toolchain and the dependencies
       are, and what they weigh; `clear` removes the copies no compilation holds.
@@ -236,6 +246,23 @@ pub fn main(args: Vec<String>, more: Option<More>) -> i32 {
             build(&folder, lang, hand, out, flag("--json"))
         }
         "fetch" => fetch(&folder, lang, hand),
+        "team-check" => {
+            let value = |name: &str| {
+                args.iter()
+                    .position(|a| a == name)
+                    .and_then(|i| args.get(i + 1))
+                    .cloned()
+            };
+            team_check(
+                &folder,
+                lang,
+                &app_version,
+                value("--tag").unwrap_or_default(),
+                value("--last"),
+                value("--out").map(PathBuf::from),
+                flag("--json"),
+            )
+        }
         "test" | "dev" => match more {
             Some(more) => more(&Call {
                 command,
@@ -598,6 +625,68 @@ fn fetch(folder: &Path, lang: Lang, hand: manifest::Hand) -> i32 {
             eprintln!("{why}");
             1
         }
+    }
+}
+
+/// `team-check`: the checks of a team's private store (TS-14) on the folder, packed as the app packs it.
+fn team_check(
+    folder: &Path,
+    lang: Lang,
+    app_version: &str,
+    tag: String,
+    last: Option<String>,
+    out: Option<PathBuf>,
+    json: bool,
+) -> i32 {
+    use crate::team;
+    let gz = match team::pack(folder, lang) {
+        Ok(gz) => gz,
+        Err(why) => {
+            eprintln!("✗ {why}");
+            return 1;
+        }
+    };
+    let compiler = team::Toolchains {
+        data: crate::paths::tools_data_dir(),
+    };
+    let report = team::check(
+        &gz,
+        &team::Against {
+            tag: &tag,
+            last: last.as_deref(),
+            app_version,
+        },
+        &compiler,
+        lang,
+    );
+    if let Some(out) = &out {
+        if let Err(e) = std::fs::write(out, &gz) {
+            eprintln!("{}: {e}", out.display());
+            return 1;
+        }
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_default()
+        );
+    } else {
+        for c in &report.checks {
+            println!("{} {} : {}", if c.ok { "✓" } else { "✗" }, c.key, c.detail);
+        }
+        println!("  archive sha256 {}", report.archive_sha256);
+        if let Some(m) = &report.module_sha256 {
+            println!("  module sha256 {m}");
+        }
+        println!(
+            "  {}",
+            tr_in!(lang, "empreinte {}", "digest {}", report.digest)
+        );
+    }
+    if report.ok {
+        0
+    } else {
+        1
     }
 }
 

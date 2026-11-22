@@ -22,6 +22,8 @@
   const update = $derived(!!p?.previous);
   // From the store (STORE-9, choices 177 and 178): its fingerprints checked, its seal checked here with the app's keys.
   const store = $derived(p?.origin.kind === 'store' ? p.origin : null);
+  // From a team's private store (TS-14): signed by the team's key, checked twice by its devices, never by Escouade.
+  const team = $derived(p?.origin.kind === 'team' ? p.origin : null);
   const title = $derived(
     !p
       ? t('plugins.install.gitTitle')
@@ -44,7 +46,7 @@
       ? t('plugins.install.load')
       : update
         ? t('plugins.install.update')
-        : p?.verified
+        : p?.verified || team
           ? t('plugins.install.install')
           : t('plugins.install.installAnyway'),
   );
@@ -67,7 +69,9 @@
           ? t('plugins.origin.folderPrint', { print: p.fingerprint })
           : p.origin.kind === 'store'
             ? t('plugins.origin.storePrint', { print: shortPrint(p.fingerprint) })
-            : p.fingerprint,
+            : p.origin.kind === 'team'
+              ? t('plugins.origin.teamPrint', { print: shortPrint(p.fingerprint) })
+              : p.fingerprint,
   );
 </script>
 
@@ -100,8 +104,8 @@
         <div>
           <h3>
             {p.name}
-            {#if p.verified}<Seal version={p.version} long />{:else}<span class="ptag"
-                >{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span
+            {#if p.verified}<Seal version={p.version} long />{:else if team}<span class="ptag">{originOf(p.origin)}</span>{:else}<span
+                class="ptag">{dev ? t('plugins.tag.dev') : t('plugins.tag.unverified')}</span
               >{/if}
           </h3>
           <div class="ln">
@@ -121,6 +125,12 @@
             {p.unverified ? t('plugins.install.sealWithdrawn', { reason: p.unverified }) : t('plugins.install.storeUnverifiedBody')}</span
           >
         </p>
+      {:else if team}
+        <p class="notice">
+          <Icon name="info" size={14} /><span
+            ><b>{t('plugins.install.teamSigned', { team: team.name })}</b> {t('plugins.install.teamSignedBody')}</span
+          >
+        </p>
       {:else if !dev && !store}
         <p class="notice">
           <Icon name="info" size={14} /><span><b>{t('plugins.install.unverified')}</b> {t('plugins.install.unverifiedBody')}</span>
@@ -135,9 +145,9 @@
           >{print}</span
         >
         <span class="k">{t('plugins.origin.signature')}</span>{#if p.verified}<span class="v ok">{t('plugins.origin.signedHere')}</span
-          >{:else if store}<span class="v no">{t('plugins.origin.storeUnsigned')}</span>{:else}<span class="v no"
-            >{t('plugins.origin.unsigned')}</span
-          >{/if}
+          >{:else if team}<span class="v ok">{t('plugins.origin.teamSigned', { team: team.name })}</span>{:else if store}<span class="v no"
+            >{t('plugins.origin.storeUnsigned')}</span
+          >{:else}<span class="v no">{t('plugins.origin.unsigned')}</span>{/if}
       </div>
       {#if p.previous}
         {#if more}

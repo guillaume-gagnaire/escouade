@@ -133,6 +133,16 @@ The defenses, in layers:
 
 These rules extend those of a repository’s [.escouade.yml](escouade-yml), whose commands already run only once approved on each machine.
 
+## The private store of plugins
+
+A team publishes its own plugins on its server, signed by its key, installable by its members alone. The server only sees encrypted files: the checks run on the devices.
+
+- **The team’s key** is a minisign pair of its own, with its backup key, made on an administrator’s device (the teams window, “Plugins”), never on the server. It stays sealed by a password on that device; the backup key goes to the folder they choose, to keep off line. Its public keys and **its namespace** (`fr.acme.*`) are declared to the team by an entry the administrator signs.
+- **The app’s hard refusals**: a signature of the team outside its namespace; `dev.escouade.*`, never; a namespace that holds a plugin installed on the device from another origin. A plugin of the team never replaces a plugin of the same id from elsewhere: its page says “Acme · private”.
+- **Publishing**: the public store’s checks (the manifest, the version equal to the tag and above the last, a sound archive, the permissions, no binary, the compilation twice in a fresh folder) run on the device of who proposes, then again on that of the administrator who signs; they sign only when both digests are the same. `escouade-plugin team-check` plays them without the app.
+- **The team’s revocation list**, signed by its key, in the format of the store’s, its number never going back: a version withdrawn is disabled on each device at its next reading.
+- **The installation policy**: the keys `plugins.allowedOrigins` (`team-store`), `plugins.allowed` and `plugins.denied` of the team’s file and of the [device policies](managed-policies). Installing stays the member’s gesture, from the Plugins view, after the window of the permissions; an agent publishes and signs nothing.
+
 ## Device policies
 
 The IT department also imposes settings through its own tools, with no team server at all: group policies or Intune on Windows, a configuration profile on macOS, files under `/etc/escouade/policies` on Linux. See [device policies](managed-policies).

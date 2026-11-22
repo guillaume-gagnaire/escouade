@@ -28,7 +28,9 @@ export type Origin =
    * where the seed has not its files; never in a release (ESC-355, the origin `builtin` gone). Not the same as a
    * `dev.escouade.*` of the store: the origin tells them apart, never the id.
    */
-  | { kind: 'workspace' };
+  | { kind: 'workspace' }
+  /** A version of a team's private store (TS-14): signed by the team's key, inside its namespace; « Acme · privé ». */
+  | { kind: 'team'; team: string; name: string; version: string; sha256: string };
 
 /** Whether this plugin is a module of the workspace of a build of development, by its origin alone. */
 export const ofTheWorkspace = (p: Pick<PluginView, 'origin'>) => p.origin.kind === 'workspace';
@@ -574,6 +576,8 @@ export function originOf(o: Origin): string {
       return 'store.escouade.dev';
     case 'workspace':
       return 'plugins-wasm';
+    case 'team':
+      return `${o.name} · ${t('teamPlugins.store.private')}`;
     default:
       return o.path;
   }

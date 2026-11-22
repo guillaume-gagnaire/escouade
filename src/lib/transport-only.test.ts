@@ -48,6 +48,7 @@ describe('the window and the core', () => {
       'components/plugins/StorePluginPage.svelte': ['@tauri-apps/plugin-opener'],
       'components/settings/AdvancedPage.svelte': ['@tauri-apps/plugin-dialog'],
       'components/team/TeamClone.svelte': ['@tauri-apps/plugin-dialog'],
+      'components/team/TeamPlugins.svelte': ['@tauri-apps/plugin-dialog'],
       'components/TitleBar.svelte': ['@tauri-apps/api/window'],
       'lib/appearance.ts': ['@tauri-apps/api/window'],
       'lib/display.svelte.ts': ['@tauri-apps/api/webview', '@tauri-apps/api/window'],

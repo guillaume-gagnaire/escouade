@@ -2653,6 +2653,15 @@ impl Core {
                 .read()
                 .check_plugin(&id, crate::locks::origin_name(&origin))
                 .map_err(|e| crate::plugins::Refusal::other(e.to_string()))?;
+            // A plugin of a team's store (TS-14): that team's own installation policy too (§6.4: its origins, the ids it
+            // allows or denies), whatever the other teams of the device allow.
+            if let Some(team) = origin.team() {
+                if let Some(locks) = self.team_locks.read().get(team) {
+                    locks
+                        .check_plugin(&id, crate::locks::origin_name(&origin))
+                        .map_err(|e| crate::plugins::Refusal::other(e.to_string()))?;
+                }
+            }
         }
         if let Some((id, true)) = &staged {
             self.plugin_runtime.forget(id);

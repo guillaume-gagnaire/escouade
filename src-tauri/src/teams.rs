@@ -500,7 +500,11 @@ pub use team_catalog::{CatalogOf, MemberView};
 
 #[path = "teams_costs.rs"]
 mod team_costs;
+
+#[path = "teams_plugins.rs"]
+mod team_plugins;
 pub use team_costs::month_now;
+pub use team_plugins::StoreOf;
 
 impl Teams {
     /// The teams of the data folder's `teams` (made if needed), each opened from its state and the keychain.
@@ -1074,6 +1078,7 @@ impl Teams {
                         Ok(()) => {
                             self.read_settings(id, &mut t).await;
                             self.read_catalog(&mut t).await;
+                            self.read_plugins(&mut t).await;
                             self.read_costs(id, &mut t).await;
                             Ok(())
                         }

@@ -68,6 +68,8 @@ pub mod sort;
 pub mod store;
 // The seal of a version from the store, checked with the keys the app embeds (STORE-8).
 pub mod store_keys;
+// A version of a team's private store, checked again before it is written (TS-14).
+pub mod team;
 // Whom the TLS connections trust (the app's requests, the plugins' network, the updates).
 pub mod tls;
 /// The plugins in WASM, inside the app: `run.js` (ESC-320), `run.wasm` (ESC-331).
@@ -212,6 +214,28 @@ pub enum Origin {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         seed: bool,
     },
+    /// A version of a team's private store (TS-14): signed by the team's key, inside its namespace, its archive and
+    /// module read from the team's server. Never Escouade's own hand, never in place of a plugin of the same id from
+    /// elsewhere: a plugin's identity is its origin and its id.
+    Team {
+        /// The team's id on this device, and its name (« Acme · privé »).
+        team: String,
+        #[serde(default)]
+        name: String,
+        version: String,
+        /// The SHA-256 of the statement the team's key signed.
+        sha256: String,
+    },
+}
+
+impl Origin {
+    /// The team a plugin of a team's store comes from.
+    pub fn team(&self) -> Option<&str> {
+        match self {
+            Origin::Team { team, .. } => Some(team),
+            _ => None,
+        }
+    }
 }
 
 /// What the plugin `id` of `origin` may take of Escouade's own (ESC-314): the hand its manifest is
@@ -228,7 +252,9 @@ pub fn hand_of(origin: &Origin, id: &str) -> manifest::Hand {
         Origin::Store { verified: true, .. } | Origin::Workspace => true,
         Origin::Store { seed: true, .. } => cfg!(debug_assertions),
         Origin::Dev { .. } => dev_of_the_first_hand(),
-        Origin::Store { .. } | Origin::Folder { .. } | Origin::Git { .. } => false,
+        Origin::Store { .. } | Origin::Folder { .. } | Origin::Git { .. } | Origin::Team { .. } => {
+            false
+        }
     };
     if ours && builtin::first_hand(id) {
         manifest::Hand::First
@@ -771,6 +797,8 @@ pub struct Plugins {
     reloaded: Mutex<Vec<ReloadHook>>,
     /// The store's revocation list, as last taken (STORE-9).
     revocations: RwLock<Option<store::RevocationList>>,
+    /// The revocation lists of the teams (TS-14), by team: each applies to its team's plugins alone.
+    team_revocations: RwLock<BTreeMap<String, store::RevocationList>>,
     /// The folder of the app's program: beside it, a build of development finds the workspace's modules
     /// (`<target>/plugins-wasm`, `builtin::folder`).
     app_dir: PathBuf,
@@ -896,6 +924,7 @@ impl Plugins {
             staged: Mutex::new(HashMap::new()),
             reloaded: Mutex::new(Vec::new()),
             revocations: RwLock::new(None),
+            team_revocations: RwLock::new(BTreeMap::new()),
             app_dir,
             offers: RwLock::new(HashMap::new()),
             seed,
@@ -1241,7 +1270,7 @@ impl Plugins {
             withdrawn: self.withdrawn_in(l, lang),
             in_store: (!matches!(
                 i.origin,
-                Origin::Store { .. } | Origin::Dev { .. } | Origin::Workspace
+                Origin::Store { .. } | Origin::Dev { .. } | Origin::Workspace | Origin::Team { .. }
             ))
             .then(|| self.offers.read().get(&i.id).cloned())
             .flatten(),
@@ -1598,6 +1627,25 @@ impl Plugins {
         let mut installed = staged.installed;
         installed.installed_at = now();
         let id = installed.id.clone();
+        // A plugin's identity is its origin and its id (TS-14): a team's plugin never takes the place of one of the
+        // same id from elsewhere, nor the other way round.
+        let other = self
+            .loaded
+            .read()
+            .iter()
+            .find(|l| l.installed.id == id)
+            .map(|l| l.installed.origin.team().map(str::to_owned))
+            .filter(|was| *was != installed.origin.team().map(str::to_owned));
+        if other.is_some() {
+            if let Some(d) = staged.dir {
+                remove_dir(&d);
+            }
+            return Err(Refusal::other(tr_in!(
+                lang,
+                "Un plugin {id} d'une autre origine est déjà installé : un plugin d'équipe ne prend jamais la place d'un autre du même id. Désinstalle-le d'abord.",
+                "A plugin {id} of another origin is installed already: a team's plugin never takes the place of another of the same id. Uninstall it first."
+            )));
+        }
         let before = self
             .loaded
             .read()
@@ -1840,6 +1888,8 @@ impl Plugins {
                 }
                 Origin::Dev { .. } | Origin::Workspace => None,
                 Origin::Store { .. } => self.store_update(&i.id, &version),
+                // A team's newer version is offered by the team's page (the core reads the team's store).
+                Origin::Team { .. } => None,
             };
             let mut updates = self.updates.write();
             match found {
@@ -1911,6 +1961,21 @@ impl Plugins {
 
     fn withdrawn_in(&self, l: &Loaded, lang: Lang) -> Option<Withdrawn> {
         let version = Self::running_version(l)?;
+        // A plugin of a team's store: its team's list too, and that list only for it (TS-14).
+        if let Some(team) = l.installed.origin.team() {
+            let lists = self.team_revocations.read();
+            if let Some(e) = lists.get(team).and_then(|list| {
+                list.find(&l.installed.id, &version, "disable")
+                    .or_else(|| list.find(&l.installed.id, &version, "unverify"))
+            }) {
+                return Some(Withdrawn {
+                    action: e.action.clone(),
+                    version,
+                    reason: e.reason.get(lang).to_string(),
+                    date: e.date.chars().take(10).collect(),
+                });
+            }
+        }
         let list = self.revocations.read();
         let list = list.as_ref()?;
         let e = list
@@ -2314,6 +2379,108 @@ impl Plugins {
     /// its files written in a folder set aside, its module in the cache,
     /// pinned by the SHA-256 of its `version.json`.
     pub fn inspect_store(&self, f: store::Fetched, lang: Lang) -> Result<Preview, Refusal> {
+        self.inspect_fetched(f, None, lang)
+    }
+
+    /// An installed plugin of another origin whose id is in the namespace `prefix` of the team `team`: the team's
+    /// store is then refused here whole (TS-14).
+    pub fn team_conflict(&self, prefix: &str, team: &str) -> Option<String> {
+        self.loaded
+            .read()
+            .iter()
+            .find(|l| {
+                team::within(&l.installed.id, prefix) && l.installed.origin.team() != Some(team)
+            })
+            .map(|l| l.installed.id.clone())
+    }
+
+    /// What installing a version of a team's store would do (TS-14): its statement checked again here (the team's
+    /// key, the namespace, never `dev.escouade.*`, the archive and the module it names), the namespace free of any
+    /// plugin of another origin, then as a version of the store: its files set aside, its module in the cache.
+    pub fn inspect_team(&self, f: team::TeamFetched, lang: Lang) -> Result<Preview, Refusal> {
+        let refused = |why: String| {
+            Refusal::other(tr_in!(
+                lang,
+                "Ce plugin de l'équipe {} est refusé : {why}",
+                "This plugin of the team {} is refused: {why}",
+                f.name
+            ))
+        };
+        let s = team::checked(&f).map_err(refused)?;
+        if let Some(id) = self.team_conflict(&f.prefix, &f.team) {
+            return Err(refused(tr_in!(
+                lang,
+                "{id}, dans l'espace {}.*, est installé d'une autre origine",
+                "{id}, in the namespace {}.*, is installed from another origin",
+                f.prefix
+            )));
+        }
+        let files = store::read_archive(&f.archive)
+            .map_err(|e| refused(format!("the archive does not read: {e}")))?;
+        let sha256 = store::sha256(&f.statement);
+        let origin = Origin::Team {
+            team: f.team.clone(),
+            name: f.name.clone(),
+            version: s.version.clone(),
+            sha256: sha256.clone(),
+        };
+        self.inspect_fetched(
+            store::Fetched {
+                id: s.id,
+                version: s.version,
+                sha256,
+                repository: String::new(),
+                path: String::new(),
+                tag: s.tag,
+                commit: String::new(),
+                version_json: f.statement,
+                minisig: None,
+                unverified: None,
+                files,
+                module: f.module,
+                seed: false,
+                unsigned: false,
+            },
+            Some(origin),
+            lang,
+        )
+    }
+
+    /// Takes the revocation list of the team `team` (TS-14): a version of its plugins it withdraws is disabled, its
+    /// process stopped by the hooks of `on_reload`, as the store's list does. It applies to that team's plugins alone.
+    pub fn apply_team(&self, team: &str, list: Option<store::RevocationList>) {
+        let disabled = |me: &Self| -> Vec<String> {
+            me.loaded
+                .read()
+                .iter()
+                .filter(|l| l.installed.origin.team() == Some(team))
+                .filter(|l| me.withdrawn(l).is_some_and(|w| w.action == "disable"))
+                .map(|l| l.installed.id.clone())
+                .collect()
+        };
+        let before = disabled(self);
+        {
+            let mut lists = self.team_revocations.write();
+            match list {
+                Some(l) => lists.insert(team.to_owned(), l),
+                None => lists.remove(team),
+            };
+        }
+        let after = disabled(self);
+        for id in after.iter().filter(|id| !before.contains(id)) {
+            log::warn!("plugin {id}: withdrawn by its team's revocation list, stopped");
+            for hook in self.reloaded.lock().iter() {
+                hook(id);
+            }
+        }
+    }
+
+    fn inspect_fetched(
+        &self,
+        f: store::Fetched,
+        team_origin: Option<Origin>,
+        lang: Lang,
+    ) -> Result<Preview, Refusal> {
         let root = self.data.plugins_dir();
         let fail = |e: std::io::Error| {
             Refusal::other(tr_in!(
@@ -2420,10 +2587,14 @@ impl Plugins {
             }
         };
         let verified = f.minisig.is_some();
+        let fingerprint = match &team_origin {
+            Some(_) => format!("team:{}", f.sha256),
+            None => format!("store:{}", f.sha256),
+        };
         Ok(self.stage(
             Installed {
                 id: m.id.clone(),
-                origin: Origin::Store {
+                origin: team_origin.unwrap_or_else(|| Origin::Store {
                     version: f.version.clone(),
                     sha256: f.sha256.clone(),
                     verified,
@@ -2432,8 +2603,8 @@ impl Plugins {
                     tag: f.tag.clone(),
                     commit: f.commit.clone(),
                     seed: f.seed,
-                },
-                fingerprint: format!("store:{}", f.sha256),
+                }),
+                fingerprint,
                 digest,
                 installed_at: String::new(),
                 choices: Choices::default(),

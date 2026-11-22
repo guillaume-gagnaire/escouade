@@ -338,6 +338,9 @@ mod teamdocs_tests;
 mod teamhandoff;
 mod teamjoin;
 mod teammemory;
+mod teamplugins;
+#[cfg(test)]
+mod teamplugins_tests;
 mod teampour;
 mod teams;
 #[cfg(test)]

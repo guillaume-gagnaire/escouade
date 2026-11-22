@@ -133,6 +133,16 @@ Les défenses, en couches :
 
 Ces règles prolongent celles du [.escouade.yml](escouade-yml) d’un dépôt, dont les commandes ne tournent déjà qu’une fois approuvées sur chaque machine.
 
+## Le store de plugins privés
+
+Une équipe publie ses propres plugins sur son serveur, signés par sa clé, installables par ses seuls membres. Le serveur ne voit que des fichiers chiffrés : les contrôles tournent sur les postes.
+
+- **La clé de l’équipe** est une paire minisign à part, avec sa clé de secours, créée sur le poste d’un administrateur (la fenêtre des équipes, « Plugins »), jamais sur le serveur. Elle reste scellée par un mot de passe sur ce poste ; la clé de secours va dans le dossier qu’il choisit, à garder hors ligne. Ses clés publiques et **son espace de noms** (`fr.acme.*`) sont déclarés à l’équipe par une entrée signée de l’administrateur.
+- **Les refus en dur de l’app** : une signature de l’équipe hors de son espace ; `dev.escouade.*`, jamais ; un espace qui contient un plugin installé sur le poste d’une autre origine. Un plugin de l’équipe ne remplace jamais un plugin du même id venu d’ailleurs : sa page dit « Acme · privé ».
+- **La publication** : les contrôles du store public (le manifeste, la version égale à l’étiquette et plus grande que la dernière, l’archive saine, les permissions, aucun binaire, la compilation deux fois dans un dossier neuf) tournent sur le poste de qui propose, puis à nouveau sur celui de l’administrateur qui signe ; il ne signe que si les deux empreintes sont les mêmes. `escouade-plugin team-check` les joue sans l’app.
+- **La liste de révocation de l’équipe**, signée par sa clé, au format de celle du store, son numéro ne reculant jamais : une version retirée est désactivée sur chaque poste à sa lecture suivante.
+- **La politique d’installation** : les clés `plugins.allowedOrigins` (`team-store`), `plugins.allowed` et `plugins.denied` du fichier de l’équipe et des [stratégies du poste](managed-policies). Installer reste le geste du membre, depuis la vue Plugins, après la fenêtre des permissions ; un agent ne publie ni ne signe rien.
+
 ## Les stratégies du poste
 
 Le service informatique impose aussi des réglages par ses propres outils, sans aucun serveur d’équipe : stratégies de groupe ou Intune sous Windows, profil de configuration sous macOS, fichiers sous `/etc/escouade/policies` sous Linux. Voir [les stratégies du poste](managed-policies).

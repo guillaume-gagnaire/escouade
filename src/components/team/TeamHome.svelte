@@ -129,6 +129,7 @@
         <button class="btn" onclick={() => onstep('projects', team.id)}>{t('teamProjects.open')}</button>
         <button class="btn" onclick={() => onstep('settings', team.id)}>{t('team.settings.open')}</button>
         <button class="btn" onclick={() => onstep('costs', team.id)}>{t('teamCosts.open')}</button>
+        <button class="btn" onclick={() => onstep('plugins', team.id)}>{t('teamPlugins.open')}</button>
         {#if team.role === 'admin'}
           <button class="btn ghost" disabled={busy === team.id} onclick={() => newRecovery(team)}>{t('team.card.newRecovery')}</button>
         {/if}

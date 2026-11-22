@@ -10,6 +10,7 @@ pub mod cli;
 pub mod manifest;
 pub mod paths;
 pub mod rust;
+pub mod team;
 pub mod wasm;
 
 /// This crate's version: the app's (scripts/version.mjs keeps them together).

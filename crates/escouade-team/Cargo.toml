@@ -50,6 +50,12 @@ log = "0.4"
 # The short code of « Ajouter un appareil » (§3.4): a PAKE, SPAKE2 on Ed25519 (RustCrypto), one try per connection.
 spake2 = "0.4"
 zeroize = { version = "1", features = ["derive"] }
+# The team's signing key of its private store (TS-14): minisign's prehash (BLAKE2b-512), its password (PBKDF2), and
+# minisign's own reader to check what it signs.
+blake2 = "0.10"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+sha2_10 = { package = "sha2", version = "0.10" }
+minisign-verify = "0.3"
 
 [dev-dependencies]
 escouade-team-server = { path = "../escouade-team-server" }

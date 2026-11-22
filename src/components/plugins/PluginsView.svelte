@@ -13,6 +13,7 @@
   import SeedOffers from './SeedOffers.svelte';
   import StoreHome from './StoreHome.svelte';
   import StorePluginPage from './StorePluginPage.svelte';
+  import TeamStore from './TeamStore.svelte';
   import { app } from '../../lib/state.svelte';
   import { fTime } from '../../lib/format';
 
@@ -87,6 +88,9 @@
           {:else if page.kind === 'dev'}
             <h2>{t('plugins.dev.title')}</h2>
             <span class="sub">{t('plugins.dev.sub')}</span>
+          {:else if page.kind === 'team'}
+            <h2>{t('teamPlugins.store.title')}</h2>
+            <span class="sub">{t('teamPlugins.store.sub')}</span>
           {:else}
             <h2>{t(`plugins.cat.${page.category}`)}</h2>
           {/if}
@@ -117,6 +121,8 @@
             >
           {:else if page.kind === 'dev'}
             <button class="btn" onclick={() => plugins.fromFolder(true)}><Icon name="folder" size={14} />{t('plugins.loadDev')}</button>
+          {:else if page.kind === 'team'}
+            <span></span>
           {:else}
             <button class="btn" onclick={() => plugins.fromFolder()}><Icon name="folder" size={14} />{t('plugins.fromFolder')}</button>
             <button class="btn" onclick={() => plugins.fromGit()}><Icon name="branch" size={14} />{t('plugins.fromGit')}</button>
@@ -244,6 +250,8 @@
               </div>
             </div>
           {/if}
+        {:else if page.kind === 'team'}
+          <TeamStore />
         {:else}
           {@const rows = plugins.list.filter((p) => categoriesOf(p).includes(page.category))}
           {#if plugins.store?.catalog}<StoreHome category={page.category} />{/if}

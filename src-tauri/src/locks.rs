@@ -1159,6 +1159,7 @@ pub fn origin_name(origin: &crate::plugins::Origin) -> &'static str {
         Origin::Workspace => "store-verified",
         Origin::Store { seed: true, .. } | Origin::Store { verified: true, .. } => "store-verified",
         Origin::Store { .. } => "store",
+        Origin::Team { .. } => "team-store",
     }
 }
 

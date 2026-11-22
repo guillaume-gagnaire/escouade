@@ -838,15 +838,20 @@ pub const COST_KEY_STREAM: Id = *b"escouade/costkey";
 /// what its device spent, sealed to the administrators' key.
 pub const COST_TOTALS_STREAM: Id = *b"escouade/costsum";
 
+/// The stream of the team's private store of plugins (`escouade_team::plugins::PLUGINS_STREAM`, TS-14): every member
+/// proposes there, the devices refuse what an administrator alone writes from anyone else.
+pub const PLUGINS_STREAM: Id = *b"escouade/plugins";
+
 /// The streams of the team itself (its list of projects, its settings, the proposals of its members, TS-7, the costs,
-/// TS-16): open to every device of the team, always. Nobody restricts them, or a member could shut the administrators
-/// out of them.
-pub const TEAM_STREAMS: [Id; 5] = [
+/// TS-16, its private store, TS-14): open to every device of the team, always. Nobody restricts them, or a member could
+/// shut the administrators out of them.
+pub const TEAM_STREAMS: [Id; 6] = [
     CATALOG_STREAM,
     *b"escouade/setting",
     *b"escouade/propose",
     COST_KEY_STREAM,
     COST_TOTALS_STREAM,
+    PLUGINS_STREAM,
 ];
 
 async fn append(

@@ -53,6 +53,14 @@ escouade_command::commands! {
         commands::store_view,
         commands::team_list,
         commands::team_projects,
+        // The team's private store (TS-14, ESC-579): the window's alone, never the MCP server's.
+        commands::team_plugins,
+        commands::team_plugins_all,
+        commands::team_plugin_sign,
+        commands::team_plugin_revoke,
+        commands::team_plugin_dismiss,
+        commands::team_plugins_retry,
+        commands::team_plugin_inspect,
         commands::team_project_put,
         commands::team_project_remove,
         commands::team_projects_retry,
@@ -558,6 +566,11 @@ escouade_command::commands! {
         commands::docs_document_add,
         commands::team_project_clone,
         commands::team_project_logo,
+        // The team's private store (TS-14): a folder of the core's machine (the backup key's, the plugin's), a file of
+        // it (the sealed key).
+        commands::team_plugin_key_create,
+        commands::team_plugin_key_import,
+        commands::team_plugin_submit,
         commands::inspect_setup,
         commands::first_commit,
         commands::create_project,

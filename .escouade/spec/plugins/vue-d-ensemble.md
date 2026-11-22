@@ -2,7 +2,7 @@
 title: "Les plugins : vue d'ensemble"
 subject: "plugins"
 sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs","docs/PLUGINS-CONTRACT-STUDY.md §1.4, §3.3 (release/2.3)","website/content/docs/fr/plugins/manifest.md","docs/PLUGINS-CONTRACT-STUDY.md §4.4, §7 (release/2.3, ESC-501)","crates/escouade-plugins/src/secrets.rs"]
-tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-520","ESC-524","ESC-525","ESC-527","ESC-582"]
+tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-520","ESC-524","ESC-525","ESC-527","ESC-582","ESC-579"]
 decisions: [142,204,247,259]
 compared: null
 ---
@@ -103,3 +103,7 @@ Le trousseau de Windows refuse un secret de plus de 1 280 caractères (`keyring`
 - **`#` est réservé aux morceaux.** Une clé de `contributes.secrets` n'en contient jamais (le lecteur du manifeste ne prend que lettres, chiffres, `_`, `.` et `-`). Une clé de `permissions.secrets` qui en contient n'est ni montrée ni gardée. Pour `secrets/get`, ce n'est jamais une clé du plugin (`-32001`). Le magasin refuse tout nom de morceau (`…#a<n>`, `…#b<n>`).
 - **Le journal d'un plugin** masque un secret entier, comme avant. Pour un secret de plusieurs lignes, il masque aussi chacune de ses lignes de plus de 8 caractères.
 - **Essai réel** : fait le 2026-11-18 sous Windows 11, avec le vrai trousseau et un service à part (`…trial-esc527`). Une valeur factice de 6 Ko est refusée d'un seul tenant, puis gardée en 6 morceaux, relue, réécrite dans l'autre emplacement, raccourcie, oubliée. Aucune entrée de l'essai ne reste. C'est le test ignoré d'office `real_keychain` de `crates/escouade-forge/src/integrations/secrets.rs`.
+
+## Le store d'une équipe (ESC-579)
+
+Une origine de plus : **le store privé d'une équipe** (`team-store` pour les stratégies), voir *Le store de plugins privés*. Un plugin de l'équipe est signé par la clé de l'équipe, jamais un id `dev.escouade.*`, toujours dans l'espace de noms de l'équipe ; il s'installe depuis la vue Plugins, « Équipe », par le geste du membre, après la fenêtre de ses permissions. Sa page dit « Acme · privé ». Il ne prend jamais la place d'un plugin du même id venu d'ailleurs, ni l'inverse : l'identité d'un plugin installé est son origine plus son id.

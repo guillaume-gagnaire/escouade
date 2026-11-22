@@ -5797,6 +5797,145 @@ async fn team_projects_of(
     crate::team_projects::combine(of, team, &locals)
 }
 
+/// The team's private store (TS-14), read from the server: its key, its namespace, its plugins, the proposals.
+#[tauri::command]
+pub async fn team_plugins(
+    core: CoreState<'_>,
+    team: String,
+) -> Res<crate::teamplugins::TeamPluginsView> {
+    core.team_plugins(&team).await
+}
+
+/// The stores of every team of this device, as last read: what the page Plugins shows of them.
+#[tauri::command]
+pub async fn team_plugins_all(
+    core: CoreState<'_>,
+) -> Res<Vec<crate::teamplugins::TeamPluginsView>> {
+    Ok(core.team_plugins_all().await)
+}
+
+/// What the key's creation answers: the store, and where the backup key was written.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamKeyMade {
+    view: crate::teamplugins::TeamPluginsView,
+    backup: String,
+}
+
+/// An administrator makes the team's key and its backup on this machine (never the server) and declares them with the
+/// namespace; the backup key's file goes to `backup_dir`, to keep elsewhere.
+#[tauri::command]
+pub async fn team_plugin_key_create(
+    core: CoreState<'_>,
+    team: String,
+    namespace: String,
+    password: String,
+    backup_dir: String,
+) -> Res<TeamKeyMade> {
+    let (view, backup) = core
+        .team_plugin_key_create(
+            &team,
+            &namespace,
+            &password,
+            std::path::Path::new(&backup_dir),
+        )
+        .await?;
+    Ok(TeamKeyMade { view, backup })
+}
+
+/// Another administrator's machine takes the team's sealed key (or its backup) from a file.
+#[tauri::command]
+pub async fn team_plugin_key_import(
+    core: CoreState<'_>,
+    team: String,
+    file: String,
+    password: String,
+) -> Res<crate::teamplugins::TeamPluginsView> {
+    core.team_plugin_key_import(&team, std::path::Path::new(&file), &password)
+        .await
+}
+
+/// A member proposes the plugin of a folder: the checks of the store played here, the compilation twice.
+#[tauri::command]
+pub async fn team_plugin_submit(
+    core: CoreState<'_>,
+    team: String,
+    folder: String,
+    tag: String,
+) -> Res<crate::teamplugins::Submitted> {
+    core.team_plugin_submit(&team, std::path::Path::new(&folder), &tag)
+        .await
+}
+
+/// What the signature answers: this machine's checks, and the store.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamSigned {
+    report: escouade_plugin_cli::team::Report,
+    view: crate::teamplugins::TeamPluginsView,
+}
+
+/// An administrator plays the checks again and signs a proposal by the team's key when the digests are the same.
+#[tauri::command]
+pub async fn team_plugin_sign(
+    core: CoreState<'_>,
+    team: String,
+    proposal: String,
+    password: String,
+) -> Res<TeamSigned> {
+    let (report, view) = core.team_plugin_sign(&team, &proposal, &password).await?;
+    Ok(TeamSigned { report, view })
+}
+
+/// An administrator withdraws versions of a team's plugin: the team's revocation list, signed, its serial one further.
+#[tauri::command]
+pub async fn team_plugin_revoke(
+    core: CoreState<'_>,
+    team: String,
+    plugin: String,
+    versions: Option<Vec<String>>,
+    reason: String,
+    password: String,
+    revoke_key: Option<String>,
+) -> Res<crate::teamplugins::TeamPluginsView> {
+    core.team_plugin_revoke(&team, &plugin, versions, &reason, &password, revoke_key)
+        .await
+}
+
+/// « Réessayer » after an alarm of the team's store.
+#[tauri::command]
+pub async fn team_plugins_retry(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+) -> Res<crate::teamplugins::TeamPluginsView> {
+    teams.plugins_retry(&team).await?;
+    core.team_plugins(&team).await
+}
+
+/// A proposal set aside.
+#[tauri::command]
+pub async fn team_plugin_dismiss(
+    core: CoreState<'_>,
+    team: String,
+    proposal: String,
+) -> Res<crate::teamplugins::TeamPluginsView> {
+    core.team_plugin_dismiss(&team, &proposal).await
+}
+
+/// What installing a team's plugin would do: checked again, set aside for the window of its permissions
+/// (`plugin_install` installs it, the member's gesture).
+#[tauri::command]
+pub async fn team_plugin_inspect(
+    core: CoreState<'_>,
+    team: String,
+    id: String,
+    version: Option<String>,
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
+    core.team_plugin_inspect(&team, &id, version.as_deref())
+        .await
+}
+
 /// « Projets de l'équipe »: the team's list, read from the server, next to the projects of this device.
 #[tauri::command]
 pub async fn team_projects(

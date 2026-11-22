@@ -19,6 +19,7 @@ import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
 import { api } from './ipc';
 import { overseer } from './overseer.svelte';
+import { teamPluginsApi } from './team-plugins';
 
 export type PluginTab = 'overview' | 'permissions' | 'versions' | 'projects' | 'settings' | 'journal';
 
@@ -30,7 +31,9 @@ export type PluginsPage =
   | { kind: 'category'; category: Category }
   | { kind: 'plugin'; id: string; tab: PluginTab }
   /** A plugin of the store's catalogue, not installed (STORE-9). */
-  | { kind: 'storePlugin'; id: string; tab: StoreTab };
+  | { kind: 'storePlugin'; id: string; tab: StoreTab }
+  /** The plugins of the teams' private stores (TS-14). */
+  | { kind: 'team' };
 
 export type StoreTab = 'overview' | 'permissions' | 'versions';
 
@@ -240,6 +243,11 @@ class PluginsStore {
         app.modal = { kind: 'team', step: 'join', link: link.link };
       } else app.toast(t('plugins.deepLink.bad', { url: link.url }), 'error');
     }
+  }
+
+  /** « Installer » of a team's plugin (TS-14): read from the team's server, checked again, shown before anything. */
+  fromTeam(team: string, id: string, version: string | null = null) {
+    return this.inspect(() => teamPluginsApi.inspect(team, id, version));
   }
 
   /** « Installer » from the store: downloaded and checked, then shown before anything is installed. */
