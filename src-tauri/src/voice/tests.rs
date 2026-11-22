@@ -298,12 +298,20 @@ fn a_microphone_unplugged_ends_the_listening_with_why_and_lets_it_go() {
     put_model(&h.voice.store, "base");
     let id = session(h.voice.start(&choice("base", "fr")).unwrap());
     h.script.fail(VoiceError::NoDevice);
-    std::thread::sleep(Duration::from_millis(150));
-    let ended = h.events.lock().iter().find_map(|e| match e {
-        VoiceEvent::Ended { session, error } if *session == id => Some(error.clone()),
-        _ => None,
-    });
-    assert!(ended.flatten().is_some_and(|e| !e.is_empty()));
+    // Seen by the thread of the level at its next tick, which drops the capture then says the end: waited for, not
+    // given 150 ms that a loaded machine outlasts (ESC-545).
+    let ended = |h: &Harness| {
+        h.events.lock().iter().find_map(|e| match e {
+            VoiceEvent::Ended { session, error } if *session == id => Some(error.clone()),
+            _ => None,
+        })
+    };
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while ended(&h).is_none() {
+        assert!(Instant::now() < deadline, "the listening never ended");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(ended(&h).flatten().is_some_and(|e| !e.is_empty()));
     assert!(h.script.dropped.load(Ordering::Acquire));
     h.voice.cancel();
 }

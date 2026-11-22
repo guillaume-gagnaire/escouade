@@ -36,7 +36,11 @@ impl<K: Eq + Hash + Clone> Limiter<K> {
 
     /// Takes one token for `key`; `Err(seconds)` until the next one when there is none.
     pub fn take(&self, key: &K) -> Result<(), u64> {
-        let now = Instant::now();
+        self.take_at(key, Instant::now())
+    }
+
+    /// `take`, at `now`: the clock of a test.
+    fn take_at(&self, key: &K, now: Instant) -> Result<(), u64> {
         let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
         let bucket = buckets.entry(key.clone()).or_insert(Bucket {
             tokens: self.rate.burst,
@@ -56,7 +60,11 @@ impl<K: Eq + Hash + Clone> Limiter<K> {
 
     /// Forgets the buckets that have filled up again.
     pub fn sweep(&self) {
-        let now = Instant::now();
+        self.sweep_at(Instant::now())
+    }
+
+    /// `sweep`, at `now`.
+    fn sweep_at(&self, now: Instant) {
         let rate = self.rate;
         self.buckets
             .lock()
@@ -95,16 +103,18 @@ mod tests {
             per_second: 1000.0,
             burst: 3.0,
         });
+        // The clock in the test's hand: at 1000 a second, a thread put aside for a millisecond on a loaded machine found
+        // its bucket filled again between two takes (ESC-545).
+        let start = Instant::now();
+        let at = |ms: u64| start + std::time::Duration::from_millis(ms);
         for _ in 0..3 {
-            limiter.take(&1).unwrap();
+            limiter.take_at(&1, at(0)).unwrap();
         }
-        assert!(limiter.take(&1).is_err());
+        assert!(limiter.take_at(&1, at(0)).is_err());
         // Another key has its own bucket.
-        limiter.take(&2).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        limiter.take(&1).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        limiter.sweep();
+        limiter.take_at(&2, at(0)).unwrap();
+        limiter.take_at(&1, at(10)).unwrap();
+        limiter.sweep_at(at(20));
         assert!(limiter.is_empty());
     }
 }

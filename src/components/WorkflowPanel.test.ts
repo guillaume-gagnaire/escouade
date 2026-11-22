@@ -10,6 +10,10 @@ import { agent, fakeBackend, project, resetApp, ticket } from '../test/ipc';
 import { getByTip } from '../test/tip';
 import { GSD_ID, gsd, paginationUsers, passage, ralph, scanOf, track } from '../test/workflows';
 import SidePanel from './SidePanel.svelte';
+// The Diagram view is loaded at its first showing (`import()` in WorkflowPanel): loaded with this file, what is tested
+// is the switch and the drawing, not how long a loaded machine takes to transform that module (more than the 5 s of
+// `findBy` in a full run, ESC-545).
+import './WorkflowDiagram.svelte';
 
 const AGENTS = [
   agent({ id: 'a1', name: 'pagination-users', status: 'running' }),

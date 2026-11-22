@@ -52,13 +52,19 @@ pub enum Limit {
 }
 
 impl Limit {
-    pub fn duration(self) -> Duration {
+    /// How long the git command `args` may take.
+    pub fn duration(self, args: &[&str]) -> Duration {
+        // Only a test's shorter limits look at the command.
+        #[cfg(not(any(test, feature = "testing")))]
+        let _ = args;
         #[cfg(any(test, feature = "testing"))]
-        if let Some((reads, hooks)) = SHORT_LIMITS.with(std::cell::Cell::get) {
-            return match self {
-                Limit::Reads => reads,
-                Limit::Hooks => hooks,
-            };
+        if let Some(short) = SHORT_LIMITS.with(std::cell::Cell::get) {
+            if short.only.is_none_or(|only| subcommand(args) == Some(only)) {
+                return match self {
+                    Limit::Reads => short.reads,
+                    Limit::Hooks => short.hooks,
+                };
+            }
         }
         match self {
             Limit::Reads => GIT_TIMEOUT,
@@ -69,9 +75,19 @@ impl Limit {
 
 #[cfg(any(test, feature = "testing"))]
 thread_local! {
-    /// Shorter limits (reads, hooks) for the test running on this thread: nobody waits minutes.
-    pub static SHORT_LIMITS: std::cell::Cell<Option<(Duration, Duration)>> =
+    /// Shorter limits for the test running on this thread: nobody waits minutes.
+    pub static SHORT_LIMITS: std::cell::Cell<Option<TestLimits>> =
         const { std::cell::Cell::new(None) };
+}
+
+/// The limits of `SHORT_LIMITS`: of the reads, of the commands that run hooks, and for the git command `only` names
+/// alone when it does (the one a test is about: the reads around it keep theirs, which a loaded machine may need).
+#[cfg(any(test, feature = "testing"))]
+#[derive(Clone, Copy)]
+pub struct TestLimits {
+    pub reads: Duration,
+    pub hooks: Duration,
+    pub only: Option<&'static str>,
 }
 
 /// What `cmd` (a git command that reads) prints, within `GIT_TIMEOUT` and without waiting for
@@ -85,7 +101,7 @@ pub async fn output_within(
     args: &[&str],
     limit: Limit,
 ) -> Result<std::process::Output> {
-    let limit = limit.duration();
+    let limit = limit.duration(args);
     match crate::proc::output_within(cmd, limit).await {
         Ok(out) => Ok(out),
         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Err(stopped(args, limit)),

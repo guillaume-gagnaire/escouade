@@ -21,6 +21,11 @@ const workbench = vi.hoisted(() => ({
   useExtensions: vi.fn(async () => {}),
 }));
 vi.mock('./lib/vscode/workbench', () => workbench);
+// Its French texts (lib/vscode/load.ts), loaded before it at its first opening: not looked at here, as in VscodeView.test.ts.
+// Loaded for real, the language pack (1.4 MB of texts, and VS Code's API behind it) outlasted the 15 s of a test on a loaded
+// machine (ESC-545).
+vi.mock('@codingame/monaco-vscode-language-pack-fr/translations/main.i18n.json.js', () => ({ default: [] }));
+vi.mock('@codingame/monaco-vscode-language-pack-fr', () => ({}));
 
 const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
 --- a/src/auth.ts

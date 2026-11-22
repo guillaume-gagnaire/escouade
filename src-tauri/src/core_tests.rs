@@ -6637,6 +6637,10 @@ async fn renaming_a_project_renames_the_remote_sessions_of_the_agents_linked_to_
 #[tokio::test]
 async fn a_setting_starts_three_processes_at_most_at_once() {
     let h = harness("remote-throttle");
+    // The idle agents never stop here: the harness stops them after a minute, which a loaded machine spends creating six
+    // and warming them up; the first ones were then idle, wanted no process (`remote_wants_process`) and the setting
+    // started none for them (ESC-545). What is tested is how many start at once, not the idle ones.
+    h.set_settings(|s| s.idle_stop_minutes = 0);
     let (p, _) = h.project(true).await;
     let mut ids = Vec::new();
     for _ in 0..6 {

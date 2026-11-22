@@ -2354,7 +2354,7 @@ async fn run_input(
         drop(stdin);
         written
     };
-    let limit = limit.duration();
+    let limit = limit.duration(args);
     // The timeout drops the child, which `kill_on_drop` kills.
     let joined = tokio::time::timeout(limit, async {
         tokio::join!(write, crate::proc::wait_output(child))
@@ -4477,7 +4477,16 @@ sleep {seconds}
 
     impl ShortLimits {
         fn new(reads: Duration, hooks: Duration) -> Self {
-            SHORT_LIMITS.with(|l| l.set(Some((reads, hooks))));
+            Self::set(reads, hooks, None)
+        }
+
+        /// For the git command `only` alone: the reads around it keep theirs.
+        fn only(only: &'static str, reads: Duration, hooks: Duration) -> Self {
+            Self::set(reads, hooks, Some(only))
+        }
+
+        fn set(reads: Duration, hooks: Duration, only: Option<&'static str>) -> Self {
+            SHORT_LIMITS.with(|l| l.set(Some(TestLimits { reads, hooks, only })));
             ShortLimits
         }
     }
@@ -4556,7 +4565,9 @@ sleep {seconds}
 
     #[tokio::test]
     async fn a_command_that_runs_hooks_is_not_cut_at_the_limit_of_the_reads() {
-        let _short = ShortLimits::new(Duration::from_secs(1), Duration::from_secs(60));
+        // The commit alone has the short limit of the reads: `commit_paths` reads the status first, a read that a loaded
+        // machine took more than 1 s to do (ESC-545); what is tested is the commit, not cut at that limit.
+        let _short = ShortLimits::only("commit", Duration::from_secs(1), Duration::from_secs(60));
         // The hook outlasts the reads' limit: every path that runs hooks waits for it.
         let r = repo_with_a_slow_hook("git-limit-hooks-run");
         run_hooks(&r, &["commit", "-qm", "slow"]).await.unwrap();

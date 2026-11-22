@@ -2,6 +2,10 @@ import { screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorText, missingAccountOf, missingAccountProjectOf } from './refusal';
 import { app } from './state.svelte';
+// « Partager à nouveau » loads the accounts' module at its first use (`import()` in `refused`): loaded with this file, what
+// is tested is the share, not how long a loaded machine takes to transform that module (more than the 1 s of
+// `vi.waitFor` in a full run, ESC-545).
+import './accounts';
 import { fakeBackend, project, resetApp } from '../test/ipc';
 
 // ESC-128: a refusal for want of an account of a harness comes marked (`commands::err`): the window says it with
