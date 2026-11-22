@@ -1,0 +1,51 @@
+/*
+ * The phone's tokens (MO-1, docs/MOBILE.md § 6 and § 11), over the app's (src/app.css: the same surfaces, inks and
+ * states in both themes): the scale of a finger. A body of 15 px; what a finger touches is 44 px at least under iOS,
+ * 48 under Android, with 8 between two; larger radii than the desktop's; the system's safe areas (the status bar, the
+ * notch or the island, the gesture bar), from `env()` under iOS and from Capacitor's variables under Android
+ * (`SystemBars`, `insetsHandling: css`).
+ */
+
+:root {
+  --body: 15px;
+  --small: 13px;
+  --target: 44px;
+  --gap-target: 8px;
+  --gut: 16px;
+  --r-m: 12px;
+  --r-l: 16px;
+  --tabbar: 58px;
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
+}
+
+:root[data-platform='android'] {
+  --target: 48px;
+}
+
+:root[data-platform='ios'] {
+  --gut: 18px;
+}
+
+html,
+body {
+  font-size: var(--body);
+  line-height: 1.4;
+  background: var(--panel);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  touch-action: manipulation;
+}
+
+/* Android tablets (M10): the phone's page, centred, 600 px at most. */
+#app {
+  max-width: 600px;
+  margin: 0 auto;
+}

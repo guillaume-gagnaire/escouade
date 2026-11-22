@@ -51,6 +51,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The phone's app (apps/mobile, MO-1): its Capacitor packages, which its types and its Vitest tests read.
+      - name: Install the phone app's dependencies
+        run: npm ci --prefix apps/mobile --no-audit --no-fund
+
       - name: Format (Prettier)
         run: npm run format:check
 
@@ -204,6 +208,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       mobile: ${{ steps.filter.outputs.mobile }}
+      app: ${{ steps.filter.outputs.app }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -217,6 +222,12 @@ jobs:
               - 'scripts/mobile-android.sh'
               - 'scripts/mobile-ios.sh'
               - 'deny.toml'
+              - '.github/workflows/ci.yml'
+            app:
+              - 'apps/mobile/**'
+              - 'src/**'
+              - 'package.json'
+              - 'package-lock.json'
               - '.github/workflows/ci.yml'
 
   mobile-android:
@@ -328,6 +339,112 @@ jobs:
           path: |
             apps/mobile-plugin/ios/escouade_mobileFFI.xcframework
             apps/mobile-plugin/ios/Sources/EscouadeMobileCore
+          retention-days: 7
+
+  # The phone's app (apps/mobile, MO-1, docs/MOBILE.md): Capacitor 8 around the app's Svelte interface (src/, shared),
+  # built when it or the shared interface changes. Linux builds the APK and the AAB (release, R8, unsigned); a Mac
+  # builds the app for the simulator (unsigned). No key, no account: the artifacts are there to be looked at, never
+  # published (MO-8 signs and publishes). Its e2e (apps/mobile/e2e, at 360 × 780 and 430 × 932 against an
+  # escouade-server) and its Vitest tests run with the app's (the frontend job; the e2e on the machine of the ticket).
+  mobile-app-android:
+    name: Mobile app (APK and AAB, unsigned)
+    needs: mobile-changes
+    if: needs.mobile-changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+
+      # Svelte, Vite and the fonts are the repository's; Capacitor's packages the app's own.
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix apps/mobile --no-audit --no-fund
+
+      # Java 21 (Capacitor 8's), the runner's Android SDK; the Gradle wrapper checks its distribution's SHA-256.
+      - name: The page, then the Android project
+        working-directory: apps/mobile
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          node ../../node_modules/vite/bin/vite.js build
+          npx cap sync android
+
+      - name: APK and AAB (release, R8, unsigned)
+        working-directory: apps/mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain assembleRelease bundleRelease
+          mkdir -p "$RUNNER_TEMP/out"
+          cp app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/out/escouade-mobile-unsigned.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/out/escouade-mobile-unsigned.aab"
+          # Unsigned: no signature in either (`!` would not fail the step under `bash -e`: an `if`).
+          for f in "$RUNNER_TEMP"/out/*; do
+            if unzip -l "$f" | grep -qE 'META-INF/.*\.(RSA|EC|DSA)$'; then echo "signed: $f"; exit 1; fi
+          done
+          ls -l "$RUNNER_TEMP/out"
+
+      - name: Upload the APK and the AAB
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-app-android
+          path: ${{ runner.temp }}/out/
+          retention-days: 7
+
+  mobile-app-ios:
+    name: Mobile app (iOS simulator, unsigned)
+    needs: mobile-changes
+    # Not for Dependabot's pull requests (see the rule above `jobs:`).
+    if: needs.mobile-changes.outputs.app == 'true' && github.actor != 'dependabot[bot]'
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix apps/mobile --no-audit --no-fund
+
+      - name: The page, then the iOS project
+        working-directory: apps/mobile
+        run: |
+          node ../../node_modules/vite/bin/vite.js build
+          npx cap sync ios
+
+      # Capacitor by SwiftPM (no CocoaPods); for the simulator, without signing.
+      - name: The app for the simulator (unsigned)
+        working-directory: apps/mobile/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build -quiet
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name 'App.app' -path '*Release-iphonesimulator*' | head -1)
+          test -n "$APP"
+          mkdir -p "$RUNNER_TEMP/out"
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/out/escouade-mobile-simulator.zip"
+          ls -l "$RUNNER_TEMP/out"
+
+      - name: Upload the app for the simulator
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-app-ios-simulator
+          path: ${{ runner.temp }}/out/
           retention-days: 7
 
   # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS-DESIGN.md §5): built once for wasm32-wasip1 with the

@@ -107,11 +107,7 @@ export function nth(n: number): string {
   return `${n}${suffix}`;
 }
 
-/** The space's plate: its first letter (a screen stands for this computer). */
-export function plateOf(name: string): string {
-  const letter = [...name.trim()].find((c) => /\p{L}|\p{N}/u.test(c));
-  return (letter ?? '?').toLocaleUpperCase();
-}
+export { plateOf } from './plate';
 
 /** The name the window says of the machine it is on. */
 export function machineName(): string {

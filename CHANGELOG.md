@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- L’app mobile d’Escouade prend forme, pas encore publiée : sur Android et iPhone, trois onglets (À toi, Agents, Kanban) et une puce par espace montrent ce qui attend sur ton poste et tes serveurs, chacun suivi par sa propre connexion, dans le thème et la langue du téléphone.
 - Sécurité : un poste géré ou une équipe peut interdire de réserver un compte à un projet, ou imposer qu’un projet privé ne parte que sur un compte réservé à lui seul. Le geste refusé est grisé sous cadenas, dans la fenêtre comme depuis un client distant, et un agent sur un compte partagé s’arrête entre deux tours. Un poste géré impose aussi un réglage simple d’un plugin dans chaque projet, jamais un secret ni un profil.
 - Kanban : « En parallèle » monte jusqu’à 16 tickets à la fois sur ton poste, et jusqu’à 64 sur un serveur. Au-delà de 6, un avertissement dit ce que ta machine tient et que le quota part plus vite, sans rien refuser ; un poste géré ou une équipe peut fixer un plafond.
 - Choisis tes fonctionnalités, une par écran, avec une capture de l’app et un grand interrupteur « Activer » : au premier lancement juste après ton premier agent, et à la mise à jour, où ce que tu utilises déjà reste allumé. « Passer » ne garde que l’essentiel, et Réglages › Fonctionnalités te les remontre.

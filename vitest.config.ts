@@ -1,9 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import { configDefaults, defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { svelteTesting } from '@testing-library/svelte/vite';
 
 export default defineConfig({
   plugins: [svelte(), svelteTesting()],
+  // The phone's app (apps/mobile, MO-1) imports the app's interface where it is, as `$shared`.
+  resolve: { alias: { $shared: fileURLToPath(new URL('./src', import.meta.url)) } },
   test: {
     environment: 'jsdom',
     include: [
@@ -13,6 +16,7 @@ export default defineConfig({
       'sdk/**/*.test.ts',
       'tests/e2e/**/*.test.ts',
       'apps/mobile-plugin/test/**/*.test.ts',
+      'apps/mobile/src/**/*.test.ts',
     ],
     // A plugin's template runs its own tests, with node --test, once written (sdk/scripts/template-ci.mjs).
     exclude: [...configDefaults.exclude, 'sdk/create-escouade-plugin/templates/**'],

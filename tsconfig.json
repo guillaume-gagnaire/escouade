@@ -12,7 +12,8 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    "paths": { "$shared/*": ["./src/*"] }
   },
   "include": [
     "src/**/*.ts",
@@ -21,6 +22,11 @@
     "vitest.config.ts",
     "tests/**/*.ts",
     "playwright.config.ts",
-    "apps/mobile-plugin/test/**/*.ts"
+    "apps/mobile-plugin/test/**/*.ts",
+    "apps/mobile/src/**/*.ts",
+    "apps/mobile/src/**/*.svelte",
+    "apps/mobile/vite.config.ts",
+    "apps/mobile/e2e/**/*.ts",
+    "apps/mobile/scripts/**/*.ts"
   ]
 }

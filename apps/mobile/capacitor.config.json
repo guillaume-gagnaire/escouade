@@ -1,0 +1,12 @@
+{
+  "appId": "dev.escouade.mobile",
+  "appName": "Escouade",
+  "webDir": "dist",
+  "loggingBehavior": "debug",
+  "server": { "androidScheme": "https", "iosScheme": "capacitor", "hostname": "localhost" },
+  "android": { "allowMixedContent": false, "captureInput": false, "webContentsDebuggingEnabled": false },
+  "ios": { "contentInset": "never", "limitsNavigationsToAppBoundDomains": false },
+  "plugins": {
+    "SystemBars": { "insetsHandling": "css", "style": "DEFAULT" }
+  }
+}

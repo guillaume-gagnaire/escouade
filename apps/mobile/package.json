@@ -1,0 +1,24 @@
+{
+  "name": "@escouade/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Escouade's mobile app (MO-1, docs/MOBILE.md): Capacitor 8 around the app's Svelte interface (src/, shared, never copied), direction B « le fil »",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node scripts/dev-server.mjs",
+    "build": "vite build",
+    "sync": "vite build && cap sync",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}

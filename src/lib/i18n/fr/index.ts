@@ -45,6 +45,7 @@ import remote from './remote';
 import servers from './servers';
 import phone from './phone';
 import spaces from './spaces';
+import mobile from './mobile';
 import moves from './moves';
 import teamProjects from './teamProjects';
 import teamDocs from './teamDocs';
@@ -107,6 +108,7 @@ export const fr = {
   servers,
   phone,
   spaces,
+  mobile,
   moves,
   teamProjects,
   teamDocs,

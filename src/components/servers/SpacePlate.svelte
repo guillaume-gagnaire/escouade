@@ -1,7 +1,7 @@
 <script lang="ts">
   // The plate of a space (ESC-537, S6): a screen for this computer, a letter for a server; neutral, the colour stays the
   // projects'. Amber while its connection is cut.
-  import { plateOf } from '../../lib/servers.svelte';
+  import { plateOf } from '../../lib/plate';
   import Icon from '../Icon.svelte';
 
   let { name, here = false, cut = false, size = 20 }: { name: string; here?: boolean; cut?: boolean; size?: number } = $props();
