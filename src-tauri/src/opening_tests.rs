@@ -7,6 +7,13 @@ use crate::opening::allow;
 use crate::paths::test_dir;
 use std::path::{Path, PathBuf};
 
+/// `path` canonical, as a refusal names it: its long names (`C:\Users\RUNNER~1` is `runneradmin` on the CI), links
+/// resolved, without the verbatim prefix of Windows.
+fn real(path: &Path) -> String {
+    let p = std::fs::canonicalize(path).unwrap().display().to_string();
+    p.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(p)
+}
+
 /// A link to the folder `target` at `link`: a junction under Windows (it needs no privilege), a symbolic link
 /// elsewhere. It goes when it is dropped, and only it.
 struct DirLink(PathBuf);
@@ -131,10 +138,7 @@ fn dot_dot_is_judged_where_it_leads() {
     let out = g.project.join("..").join("elsewhere").join("notes.txt");
     let e = g.refusal(&out, false);
     assert!(e.contains("mène à"), "{e}");
-    assert!(
-        e.contains(&g.outside.join("notes.txt").display().to_string()),
-        "{e}"
-    );
+    assert!(e.contains(&real(&g.outside.join("notes.txt"))), "{e}");
     assert!(!g.allowed(&g.project.join(".."), false));
     assert!(!g.allowed(&g.project.join("sub").join("..").join(".."), false));
     // In and back in by `..`: let through.
@@ -156,7 +160,7 @@ fn a_link_of_a_project_to_elsewhere_is_not_opened_but_shown_as_the_link() {
     let _link = dir_link(&g.project.join("out"), &g.outside);
     let e = g.refusal(&g.project.join("out"), false);
     assert!(e.contains("mène à"), "{e}");
-    assert!(e.contains(&g.outside.display().to_string()), "{e}");
+    assert!(e.contains(&real(&g.outside)), "{e}");
     let e = g.refusal(&g.project.join("out").join("notes.txt"), false);
     assert!(e.contains("mène à"), "{e}");
     // Shown, the link itself is selected in the project's folder: it is not followed.
