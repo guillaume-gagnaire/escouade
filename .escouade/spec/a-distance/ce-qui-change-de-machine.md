@@ -1,9 +1,9 @@
 ---
 title: "Ce qui change de machine"
 subject: "a-distance"
-sources: ["docs/REMOTE.md, « Ce qui change de machine », « Ce qui change de machine, MS-4 (ESC-538) »","docs/SERVER-UX.md, § 4, § 7 (S12, S13), § 9, § 10","design/server-2-3/ (captures x-fichier, x-compte, x-notifs, *-projet)","src-tauri/src/serverfolders.rs, src-tauri/src/servers/received.rs, src-tauri/src/servers/mod.rs (relay)","src/lib/server-moves.svelte.ts, src/lib/server-browse.ts, src/components/servers/"]
-tickets: ["ESC-538"]
-decisions: [217]
+sources: ["docs/REMOTE.md, « Ce qui change de machine », « Ce qui change de machine, MS-4 (ESC-538) »","docs/SERVER-UX.md, § 4, § 7 (S12, S13), § 9, § 10","design/server-2-3/ (captures x-fichier, x-compte, x-notifs, *-projet)","src-tauri/src/serverfolders.rs, src-tauri/src/servers/received.rs, src-tauri/src/servers/mod.rs (relay)","src/lib/server-moves.svelte.ts, src/lib/server-browse.ts, src/components/servers/","Revue de sécurité de la 2.3 (ESC-624), constat SR1-06 (rapport privé, hors du dépôt)"]
+tickets: ["ESC-538","ESC-629"]
+decisions: [217,284]
 compared: null
 ---
 
@@ -33,16 +33,29 @@ La règle commune : **rien de ce que le serveur envoie ne s'ouvre ni ne s'exécu
 
 ## Les fichiers des agents, reçus sur le poste
 
-Ce qu'un agent envoie (l'outil `SendUserFile` de Claude Code, une image qu'un message montre par son chemin) est sur le serveur. Dans la conversation :
+Ce qu'un agent envoie (l'outil `SendUserFile` de Claude Code, une image qu'un message montre par son chemin, un fichier d'une demande de la boîte « À toi ») est sur le serveur. Un serveur, ou un agent du serveur égaré par le contenu d'un dépôt, d'une issue ou d'un plugin, peut envoyer n'importe quel fichier : le poste n'ouvre donc **que ce qui est sur une liste**, jamais d'après une liste de ce qui serait dangereux.
 
-- **« Ouvrir »** télécharge le fichier sur le poste **au moment où on l'ouvre** (jamais d'avance), dans **`Téléchargements/Escouade/<espace>`**, puis ouvre la copie. La carte dit alors « envoyé depuis Travail · copié sur ce poste dans … », un badge « Téléchargé », et propose « Ouvrir la copie » et « Afficher sur ce poste ». Une seconde ouverture rouvre la copie, sans la télécharger de nouveau.
-- **Un programme ou un script ne s'ouvre jamais** : « un script ne s'ouvre pas d'Escouade : il se télécharge seulement ». Son seul bouton est « Télécharger sur ce poste » : la copie est faite, puis montrée dans son dossier. Est un programme ou un script :
-  - ce que disent ses octets (un exécutable Windows, Linux ou macOS, un `#!`), quel que soit son nom ;
-  - ce que dit son nom (`.exe`, `.ps1`, `.sh`, `.bat`, `.msi`, `.app`, `.desktop`…), quels que soient ses octets.
+**Ce qui s'ouvre** (le nom et les octets disent le même type) :
+
+| Type | Comment il s'ouvre |
+| --- | --- |
+| Image PNG, JPEG, GIF, WebP | La copie du poste, avec ce qui lit les images sur le poste |
+| PDF | La copie du poste, avec le lecteur de PDF du poste |
+| Texte brut, Markdown, CSV, JSON (`.txt`, `.md`, `.markdown`, `.csv`, `.json`, des octets de texte) | Dans l'éditeur d'Escouade, sur le serveur ; jamais confié au système du poste (un tableur calculerait les formules d'un CSV) |
+
+**Tout le reste ne s'ouvre jamais d'Escouade** : programmes et scripts d'abord, mais aussi consoles, aides, images disque, bibliothèques et recherches de l'Explorateur, installeurs, compléments, pages web et SVG, raccourcis et liens de tous les systèmes, documents bureautiques, archives, fichiers sans extension. Leur seul bouton est « Télécharger sur ce poste » : la copie est faite puis montrée dans son dossier (« Afficher dans le dossier »), et la carte dit pourquoi : « Escouade n'ouvre que les images, les PDF et les textes : ce fichier s'affiche dans son dossier » ; pour un programme ou un script : « un script ne s'ouvre pas d'Escouade : il se télécharge seulement ». Le message qui suit la copie le redit avec son dossier. Est un programme ou un script :
+
+- ce que disent ses octets (un exécutable Windows, Linux ou macOS, un `#!`), quel que soit son nom ;
+- ce que dit son nom (`.exe`, `.ps1`, `.sh`, `.bat`, `.msi`, `.app`, `.desktop`…), quels que soient ses octets.
+
+Un nom de la liste dont les octets disent autre chose (un « texte » qui contient un programme ou un octet nul, un « PDF » qui n'en est pas un) n'est pas sur la liste. Le cœur du poste en décide sur les octets de la copie, à chaque ouverture, quoi que la fenêtre ait montré avant le téléchargement.
+
+- **« Ouvrir »** (une image, un PDF) télécharge le fichier sur le poste **au moment où on l'ouvre** (jamais d'avance), dans **`Téléchargements/Escouade/<espace>`**, puis ouvre la copie. La carte dit alors « envoyé depuis Travail · copié sur ce poste dans … », un badge « Téléchargé », et propose « Ouvrir la copie » et « Afficher sur ce poste ». Une seconde ouverture rouvre la copie, sans la télécharger de nouveau.
+- **« Ouvrir dans l'éditeur »** (un texte) ouvre le fichier du serveur dans l'éditeur d'Escouade ; « Télécharger sur ce poste » en fait une copie, montrée dans son dossier.
 - **Le type lu dans le contenu** : une image ou un PDF garde le type que disent ses octets ; un nom qui en dit un autre, ou aucun, reçoit la bonne extension (`capture` → `capture.png`), pour que le système l'ouvre avec ce qui lit ce type.
-- La copie n'est jamais rendue exécutable ; sous Windows, elle est marquée comme venue d'ailleurs (comme un téléchargement du web : le système demande avant de la lancer). Un nom ou un espace ne mène jamais hors de `Téléchargements/Escouade`. Un fichier de plus de 512 Mo reste sur le serveur, et c'est dit.
+- **La copie est marquée comme venue d'ailleurs**, comme un téléchargement du web : sous Windows son `Zone.Identifier` (zone Internet), sous macOS l'attribut de quarantaine (Gatekeeper demande avant que quoi que ce soit la lance). Elle n'est jamais exécutable (sous macOS et Linux, sans droit d'exécution, quel que soit l'umask) ; Linux n'a pas d'autre marque. Un nom ou un espace ne mène jamais hors de `Téléchargements/Escouade`. Un fichier de plus de 512 Mo reste sur le serveur, et c'est dit.
 - **« Voir sur le serveur »** montre le fichier dans le panneau Fichiers (l'éditeur), sur le serveur.
-- La visionneuse d'images fait de même : « Ouvrir » et « Afficher dans le dossier » agissent sur la copie du poste.
+- La visionneuse d'images et les fichiers d'une demande de la boîte « À toi » suivent la même liste : « Ouvrir » et « Afficher dans le dossier » agissent sur la copie du poste ; un fichier hors de la liste (un `.docx` joint à une demande) est seulement montré dans son dossier, et un message dit pourquoi.
 
 ## « Afficher dans l'Explorateur »
 

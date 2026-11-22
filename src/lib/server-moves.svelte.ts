@@ -4,7 +4,8 @@
  *
  * - **The files of the agents** (S12): downloaded when the user opens one, never ahead, into
  *   `Téléchargements/Escouade/<espace>` by this computer's core (`received_save`), which reads their kind from their
- *   bytes and never opens a program or a script: it only downloads it, and shows it in its folder.
+ *   bytes and opens only an image or a PDF (ESC-629); plain text, Markdown, CSV and JSON open in Escouade's editor,
+ *   anything else is only downloaded, and shown in its folder, with why.
  * - **The ports of the server** (a test server of an agent, the return of a sign-in on `localhost`, S13): relayed to
  *   this computer's 127.0.0.1 through the SSH tunnel's host (`server_relay`); the address the window opens is the one
  *   of this computer.
@@ -33,7 +34,27 @@ export interface Received {
   name: string;
   kind: 'program' | 'script' | 'image' | 'pdf' | 'file';
   runnable: boolean;
+  /**
+   * How Escouade opens it (ESC-629): `system` (an image, a PDF: with what reads that type), `editor` (plain text,
+   * Markdown, CSV, JSON: in Escouade's editor), `folder` (anything else: only shown in its folder).
+   */
+  opens: Opening;
   opened: boolean;
+}
+
+/** How a file received from a server opens on this computer (`servers::received::Opening`). */
+export type Opening = 'system' | 'editor' | 'folder';
+
+const SYSTEM = new Set(['png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'pdf']);
+const EDITOR = new Set(['txt', 'md', 'markdown', 'csv', 'json']);
+
+/**
+ * How a file of the server named `name` would open, before it is downloaded (the list Escouade opens, ESC-629): the core
+ * decides again on its bytes once it is here.
+ */
+export function openingOf(name: string): Opening {
+  const ext = /\.([^./\\]+)$/.exec(name.trim().replace(/[. ]+$/, ''))?.[1]?.toLowerCase() ?? '';
+  return SYSTEM.has(ext) ? 'system' : EDITOR.has(ext) ? 'editor' : 'folder';
 }
 
 /** The copies made here, by what they are a copy of (`<agent>|<item>|<index>`, `local|<agent>|<src>`). */
@@ -69,16 +90,18 @@ export async function receive(
   }
 }
 
-/** A copy made before, opened again (never a program nor a script) or shown in its folder. */
+/** A copy made before, opened again (only an image or a PDF) or shown in its folder. */
 export function showReceived(r: Received, reveal: boolean): Promise<void> {
-  return local<void>('received_show', { path: r.path, reveal });
+  return local<void>('received_show', { path: r.path, reveal: reveal || r.opens !== 'system' });
 }
 
-/** What the window says of a copy made: where it went, and that a script was only downloaded. */
+/** What the window says of a copy made: where it went, and why it was only shown in its folder. */
 export function receivedText(r: Received): string {
-  return r.runnable
-    ? t('moves.files.scriptSaved', { name: r.name, folder: r.folder })
-    : t('moves.files.saved', { name: r.name, folder: r.folder });
+  const words = { name: r.name, folder: r.folder };
+  if (r.runnable) return t('moves.files.scriptSaved', words);
+  if (r.opens === 'editor') return t('moves.files.editorSaved', words);
+  if (r.opens === 'folder') return t('moves.files.typeSaved', words);
+  return t('moves.files.saved', words);
 }
 
 // ---------- the ports relayed ----------

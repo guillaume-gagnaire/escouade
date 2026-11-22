@@ -14,10 +14,14 @@ import {
   isLoopback,
   loginLink,
   onThisComputer,
+  openingOf,
   posteVoice,
   receive,
   received,
+  receivedText,
   showHostEvent,
+  showReceived,
+  type Received,
   withPosteVoice,
 } from './server-moves.svelte';
 import { openPath, openUrl } from './opener';
@@ -137,6 +141,7 @@ describe('the files received (S12)', () => {
       name: 'rapport.pdf',
       kind: 'pdf',
       runnable: false,
+      opens: 'system',
       opened: true,
     };
     fakeBackend({ received_save: () => answer });
@@ -155,6 +160,51 @@ describe('the files received (S12)', () => {
       'x-name': 'rejouer.sh',
       'x-reveal': '1',
     });
+  });
+
+  it('open only an image, a PDF or a text of the list; anything else is shown in its folder, with why (ESC-629)', async () => {
+    for (const n of ['capture.png', 'photo.JPG', 'photo.jpeg', 'anim.gif', 'image.webp', 'rapport.pdf'])
+      expect(openingOf(n), n).toBe('system');
+    for (const n of ['notes.txt', 'lisez-moi.md', 'journal.markdown', 'export.csv', 'donnees.json']) expect(openingOf(n), n).toBe('editor');
+    for (const n of [
+      'rapport.msc',
+      'ouvrir.terminal',
+      'lien.webloc',
+      'app.appinstaller',
+      'disque.iso',
+      'page.html',
+      'image.svg',
+      'etude.docx',
+      'rejouer.sh',
+      'sans-extension',
+      'pdf',
+    ])
+      expect(openingOf(n), n).toBe('folder');
+    const copy = (over: Partial<Received>): Received => ({
+      path: 'C:/Dl/Escouade/Travail/x',
+      folder: 'C:/Dl/Escouade/Travail',
+      name: 'x',
+      kind: 'file',
+      runnable: false,
+      opens: 'folder',
+      opened: false,
+      ...over,
+    });
+    expect(receivedText(copy({ name: 'rapport.msc' }))).toBe(
+      '« rapport.msc » n’est pas d’un type qu’Escouade ouvre (images, PDF, texte, Markdown, CSV, JSON) : téléchargé dans C:/Dl/Escouade/Travail et affiché dans son dossier.',
+    );
+    expect(receivedText(copy({ name: 'export.csv', opens: 'editor' }))).toContain('se lit dans l’éditeur d’Escouade');
+    expect(receivedText(copy({ name: 'rejouer.sh', runnable: true }))).toContain('est un programme ou un script');
+    // Opened again: only a copy of the list asks to be opened; any other is shown in its folder.
+    const backend = fakeBackend({ received_show: () => null });
+    await showReceived(copy({ path: 'C:/Dl/a.msc' }), false);
+    await showReceived(copy({ path: 'C:/Dl/a.csv', opens: 'editor' }), false);
+    await showReceived(copy({ path: 'C:/Dl/a.pdf', opens: 'system' }), false);
+    expect(backend.called('received_show').map((c) => c.args)).toEqual([
+      { path: 'C:/Dl/a.msc', reveal: true },
+      { path: 'C:/Dl/a.csv', reveal: true },
+      { path: 'C:/Dl/a.pdf', reveal: false },
+    ]);
   });
 });
 

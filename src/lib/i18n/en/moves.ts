@@ -47,6 +47,10 @@ export default defineZone('moves', {
     downloading: 'Downloading…',
     saved: '“{name}” copied to this computer in {folder}',
     scriptSaved: '“{name}” is a program or a script: downloaded to {folder}, never opened from here.',
+    notOpened: 'Escouade only opens images, PDFs and texts: this file is shown in its folder',
+    typeSaved:
+      '“{name}” is not of a type Escouade opens (images, PDF, text, Markdown, CSV, JSON): downloaded to {folder} and shown in its folder.',
+    editorSaved: '“{name}” reads in Escouade’s editor: downloaded to {folder} and shown in its folder.',
   },
   launch: {
     relayed: 'Port {remote} of {name} is relayed to this computer: {address}',

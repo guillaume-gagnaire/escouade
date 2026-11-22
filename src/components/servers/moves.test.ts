@@ -143,6 +143,7 @@ describe('the files an agent sent, on a server (S12)', () => {
         name: 'rapport.pdf',
         kind: 'pdf',
         runnable: false,
+        opens: 'system',
         opened: true,
       }),
     });
@@ -166,6 +167,49 @@ describe('the files an agent sent, on a server (S12)', () => {
     await userEvent.click(within(screen.getAllByTestId('sent-acts')[0]).getByRole('button', { name: 'Ouvrir rapport.pdf' }));
     expect(backend.called('received_show').at(-1)?.args).toEqual({ path: 'C:/Dl/Escouade/Travail/rapport.pdf', reveal: false });
     expect(backend.called('sent_file_bytes')).toHaveLength(1);
+  });
+
+  it('offers « Ouvrir » only for a type of the list: a text in the editor, anything else downloaded with why (ESC-629)', async () => {
+    const odd = { ...item, input: { files: ['out/console.msc', 'out/export.csv'] } };
+    const backend = fakeBackend({
+      sent_files: () => [
+        { name: 'console.msc', kind: 'file', state: 'ok', size: 900 },
+        { name: 'export.csv', kind: 'file', state: 'ok', size: 900 },
+      ],
+      sent_file_bytes: () => new Uint8Array([60]).buffer,
+      received_save: () => ({
+        path: 'C:/Dl/Escouade/Travail/console.msc',
+        folder: 'C:/Dl/Escouade/Travail',
+        name: 'console.msc',
+        kind: 'file',
+        runnable: false,
+        opens: 'folder',
+        opened: false,
+      }),
+    });
+    app.agents.a1 = { id: 'a1', projectId: 'p1', cwd: '/home/escouade/projets/facturation' } as any;
+    const asked: unknown[] = [];
+    const openEditor = app.openEditor.bind(app);
+    app.openEditor = (req) => {
+      asked.push(req);
+      return Promise.resolve();
+    };
+    try {
+      render(SentFiles, { props: { item: odd, agentId: 'a1' } });
+      const rows = await screen.findAllByTestId('sent-acts');
+      // The console: no « Ouvrir », only downloaded and shown in its folder, and the card says why.
+      expect(within(rows[0]).queryByRole('button', { name: /Ouvrir/ })).toBeNull();
+      expect(screen.getByTestId('sent-not-opened').textContent).toContain('Escouade n’ouvre que les images, les PDF et les textes');
+      await userEvent.click(within(rows[0]).getByRole('button', { name: /Télécharger sur ce poste/ }));
+      expect(backend.called('received_save')).toHaveLength(1);
+      await waitFor(() => expect(app.toasts.map((t) => t.text).join()).toContain('« console.msc » n’est pas d’un type qu’Escouade ouvre'));
+      // The CSV: opened in Escouade's editor, on the server; never handed to this computer's system.
+      await userEvent.click(within(rows[1]).getByRole('button', { name: 'Ouvrir export.csv' }));
+      expect(asked).toEqual([{ projectId: 'p1', source: 'a1', abs: '/home/escouade/projets/facturation/out/export.csv' }]);
+      expect(backend.called('received_save')).toHaveLength(1);
+    } finally {
+      app.openEditor = openEditor;
+    }
   });
 
   it('« Voir sur le serveur » shows the file in the panel of the files', async () => {
@@ -199,16 +243,17 @@ describe('the files an agent sent, on a server (S12)', () => {
 });
 
 describe('the files of a request of the box « À toi », on a server (ESC-540)', () => {
-  it('downloads a file to this computer to open it, then opens the copy; nothing is opened on the server', async () => {
+  it('downloads a file to this computer; one Escouade does not open is only shown in its folder, with why (ESC-629)', async () => {
     const backend = fakeBackend({
       inbox_file_bytes: () => new Uint8Array([1, 2]).buffer,
       received_save: () => ({
         path: 'C:/Dl/Escouade/Travail/etude.docx',
         folder: 'C:/Dl/Escouade/Travail',
         name: 'etude.docx',
-        kind: 'other',
+        kind: 'file',
         runnable: false,
-        opened: true,
+        opens: 'folder',
+        opened: false,
       }),
     });
     const word = askFile({ file: 'w1/etude.docx', name: 'etude.docx', kind: 'word', mediaType: 'application/zip', size: 48_000 });
@@ -217,10 +262,11 @@ describe('the files of a request of the box « À toi », on a server (ESC-540)'
     await waitFor(() => expect(backend.called('received_save')).toHaveLength(1));
     expect(backend.called('inbox_file_bytes')[0].args).toEqual({ id: 'a-1', file: 'w1/etude.docx' });
     expect(backend.called('inbox_open_file')).toHaveLength(0);
-    // Opened again: the copy, not a new download.
+    await waitFor(() => expect(app.toasts.map((t) => t.text).join()).toContain('« etude.docx » n’est pas d’un type qu’Escouade ouvre'));
+    // Opened again: the copy, not a new download, and only shown in its folder.
     await userEvent.click(screen.getByTestId('ask-open'));
     await waitFor(() =>
-      expect(backend.called('received_show').at(-1)?.args).toEqual({ path: 'C:/Dl/Escouade/Travail/etude.docx', reveal: false }),
+      expect(backend.called('received_show').at(-1)?.args).toEqual({ path: 'C:/Dl/Escouade/Travail/etude.docx', reveal: true }),
     );
     expect(backend.called('inbox_file_bytes')).toHaveLength(1);
   });

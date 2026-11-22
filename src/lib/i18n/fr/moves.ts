@@ -49,6 +49,10 @@ export default {
     downloading: 'Téléchargement…',
     saved: '« {name} » copié sur ce poste dans {folder}',
     scriptSaved: '« {name} » est un programme ou un script : téléchargé dans {folder}, jamais ouvert d’ici.',
+    notOpened: 'Escouade n’ouvre que les images, les PDF et les textes : ce fichier s’affiche dans son dossier',
+    typeSaved:
+      '« {name} » n’est pas d’un type qu’Escouade ouvre (images, PDF, texte, Markdown, CSV, JSON) : téléchargé dans {folder} et affiché dans son dossier.',
+    editorSaved: '« {name} » se lit dans l’éditeur d’Escouade : téléchargé dans {folder} et affiché dans son dossier.',
   },
   launch: {
     relayed: 'Le port {remote} de {name} est relayé sur ce poste : {address}',

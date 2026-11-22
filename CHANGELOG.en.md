@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: a file a server sends you opens on a click only when it is an image, a PDF or a text (Markdown, CSV and JSON included, read in Escouade’s editor). Anything else is only downloaded and shown in its folder, and the window says why; under macOS, the copy is put in quarantine like a download of the web.
 - Escouade’s mobile app takes shape, not published yet: on Android and iPhone, three tabs (Your turn, Agents, Kanban) and a chip per space show what waits on your computer and your servers, each followed by its own connection, in the phone’s theme and language.
 - Security: a managed device or a team can forbid reserving an account to a project, or require a private project to go only on an account reserved to it alone. The refused gesture is greyed under a padlock, in the window as from a remote client, and an agent on a shared account stops between two turns. A managed device can also impose a plugin’s simple setting in each project, never a secret nor a profile.
 - Kanban: “In parallel” now goes up to 16 tickets at once on your computer, and up to 64 on a server. Beyond 6, a warning says what your machine holds and that the quota goes faster, refusing nothing; a managed device or a team can set a ceiling.

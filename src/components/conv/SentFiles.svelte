@@ -4,7 +4,7 @@
   import { fList, fSize } from '../../lib/format';
   import { connection } from '../../lib/connection.svelte';
   import { copyKey, galleryOf } from '../../lib/gallery';
-  import { downloading, receive, received, receivedText, showReceived } from '../../lib/server-moves.svelte';
+  import { downloading, openingOf, receive, received, receivedText, showReceived } from '../../lib/server-moves.svelte';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -63,18 +63,22 @@
 
   const act = (index: number, reveal: boolean) => app.run(api.sentFileOpen(agentId, item.id, index, reveal));
 
-  // On a server (ESC-538, S12): the files are the server's. « Ouvrir » downloads it to this computer
-  // (Téléchargements/Escouade/<espace>) and opens the copy; a program or a script is only downloaded and shown in its
-  // folder; « Voir sur le serveur » shows it in the panel of the files, on the server.
+  // On a server (ESC-538, S12): the files are the server's. « Ouvrir » downloads an image or a PDF to this computer
+  // (Téléchargements/Escouade/<espace>) and opens the copy; plain text, Markdown, CSV and JSON open in Escouade's editor,
+  // on the server; anything else (ESC-629), a program or a script first, is only downloaded and shown in its folder,
+  // with why; « Voir sur le serveur » shows it in the panel of the files, on the server.
   const server = $derived(connection.server);
   const keyOf = (index: number) => copyKey({ kind: 'sent', agent: agentId, item: item.id, index });
   async function download(index: number, name: string, mode: 'open' | 'reveal') {
     const key = keyOf(index);
     const had = received[key];
-    if (had) return void app.run(showReceived(had, mode === 'reveal' || had.runnable));
+    if (had) return void app.run(showReceived(had, mode === 'reveal'));
     const got = await app.run(receive(key, name, () => api.sentFileBytes(agentId, item.id, index), mode));
-    if (got && (got.runnable || !got.opened)) app.toast(receivedText(got), 'ok');
+    if (got && !got.opened) app.toast(receivedText(got), 'ok');
   }
+  /** How a file of the server opens here: never a program nor a script; else what its copy said, or its name. */
+  const openingAt = (index: number, name: string, runnable?: boolean) =>
+    runnable ? 'folder' : (received[keyOf(index)]?.opens ?? openingOf(name));
   /** « Voir sur le serveur »: the file in the panel of the files of the agent's folder. */
   function seeOnServer(index: number) {
     const agent = app.agents[agentId];
@@ -153,12 +157,17 @@
                 {#if v.big}<span>· {t('conv.sent.big')}</span>{/if}
                 {#if server}
                   {@const copy = received[keyOf(f.index)]}
-                  {#if copy && !copy.runnable}
+                  {@const opens = openingAt(f.index, f.name, v.runnable)}
+                  {#if copy && opens === 'system'}
                     <span class="where" data-testid="sent-copied"
                       >· {t('moves.files.sentFrom', { name: server.name })} · {t('moves.files.copiedTo', { folder: copy.folder })}</span
                     >
                   {:else if v.runnable || copy?.runnable}
                     <span class="where">· {t('moves.files.onServer', { name: server.name })} · {t('moves.files.runnable')}</span>
+                  {:else if opens === 'folder'}
+                    <span class="where" data-testid="sent-not-opened"
+                      >· {t('moves.files.onServer', { name: server.name })} · {t('moves.files.notOpened')}</span
+                    >
                   {:else}
                     <span class="where">· {t('moves.files.onServer', { name: server.name })}</span>
                   {/if}
@@ -169,10 +178,20 @@
           {#if there && server}
             {@const copy = received[keyOf(f.index)]}
             {@const busy = downloading[keyOf(f.index)]}
+            {@const opens = openingAt(f.index, f.name, v.runnable)}
             <span class="acts" data-testid="sent-acts">
               {#if copy && !copy.runnable}<span class="got"><Icon name="check" size={11} />{t('moves.files.downloaded')}</span>{/if}
-              {#if v.runnable || copy?.runnable}
-                <!-- A program or a script: downloaded only, shown in its folder; never opened from here. -->
+              {#if opens === 'folder'}
+                <!-- Not an image, a PDF nor a text (ESC-629), a program or a script first: downloaded only, shown in its
+                     folder; never opened from here. -->
+                <button class="act" disabled={busy} onclick={() => download(f.index, f.name, 'reveal')}
+                  ><Icon name="download" size={13} /><span class="lbl">{t('moves.files.download')}</span></button
+                >
+              {:else if opens === 'editor'}
+                <!-- Plain text, Markdown, CSV, JSON: read in Escouade's editor, on the server; its copy only shown. -->
+                <button class="act" aria-label={t('conv.sent.openName', { name: f.name })} onclick={() => seeOnServer(f.index)}
+                  ><Icon name="ext" size={13} /><span class="lbl">{t('common.openInEditor')}</span></button
+                >
                 <button class="act" disabled={busy} onclick={() => download(f.index, f.name, 'reveal')}
                   ><Icon name="download" size={13} /><span class="lbl">{t('moves.files.download')}</span></button
                 >

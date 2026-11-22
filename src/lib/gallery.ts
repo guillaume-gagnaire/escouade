@@ -1,7 +1,7 @@
 import { onServer } from './connection.svelte';
 import { api } from './ipc';
 import { openUrl } from './opener';
-import { receive, received, showReceived } from './server-moves.svelte';
+import { receive, received, showReceived, type Received } from './server-moves.svelte';
 
 /** Where an image the viewer shows comes from: what « Ouvrir » and « Afficher dans le dossier » act on. */
 export type ImageSource =
@@ -71,17 +71,20 @@ function bytesOf(s: Exclude<ImageSource, { kind: 'remote' }>, name: string): [()
 
 /**
  * The image's file opened with its application or shown in its folder (`reveal`); one of the web, in the browser. On a
- * server (ESC-538, S12): the file is the server's, downloaded to this computer, its copy opened or shown there.
+ * server (ESC-538, S12): the file is the server's, downloaded to this computer, its copy opened or shown there; only an
+ * image or a PDF is opened (ESC-629), anything else shown in its folder. The copy, when one is made or shown.
  */
-export async function openSource(s: ImageSource, reveal: boolean, name = ''): Promise<void> {
+export async function openSource(s: ImageSource, reveal: boolean, name = ''): Promise<Received | void> {
   if (onServer() && s.kind !== 'remote') {
     const key = copyKey(s);
     const had = received[key];
-    if (had) return showReceived(had, reveal);
+    if (had) {
+      await showReceived(had, reveal);
+      return had;
+    }
     // A file of the box too (ESC-540): its request's bytes (`inbox_file_bytes`), its copy opened or shown here.
     const [bytes, named] = bytesOf(s, name);
-    await receive(key, named, bytes, reveal ? 'reveal' : 'open');
-    return;
+    return receive(key, named, bytes, reveal ? 'reveal' : 'open');
   }
   if (s.kind === 'sent') return api.sentFileOpen(s.agent, s.item, s.index, reveal);
   if (s.kind === 'local') return api.agentLocalOpen(s.agent, s.src, reveal);

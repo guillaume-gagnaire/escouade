@@ -174,6 +174,14 @@ test('what changes machines on a server: its folders, the files sent and receive
   await expect.poll(() => fs.existsSync(path.join(downloads, 'rejouer.sh')), { timeout: 20_000 }).toBe(true);
   await expect.poll(() => opened(app.root)).toContain(`reveal ${path.join(downloads, 'rejouer.sh')}`);
   expect(opened(app.root)).not.toContain(`path ${path.join(downloads, 'rejouer.sh')}`);
+  // A file of no type Escouade opens (ESC-629): no « Ouvrir », the card says why; downloaded, shown in its folder only.
+  const other = card.locator('.row').filter({ hasText: 'ouvrir.terminal' });
+  await expect(other).toContainText('Escouade n’ouvre que les images, les PDF et les textes');
+  await expect(other.getByRole('button', { name: /Ouvrir/ })).toHaveCount(0);
+  await other.getByRole('button', { name: 'Télécharger sur ce poste' }).click();
+  await expect.poll(() => fs.existsSync(path.join(downloads, 'ouvrir.terminal')), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => opened(app.root)).toContain(`reveal ${path.join(downloads, 'ouvrir.terminal')}`);
+  expect(opened(app.root)).not.toContain(`path ${path.join(downloads, 'ouvrir.terminal')}`);
   await shot(page, 'fichier');
 
   // ---------- a test server of the server, relayed to this computer ----------

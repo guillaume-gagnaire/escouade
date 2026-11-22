@@ -1,8 +1,8 @@
 //! What changes machines in server mode (ESC-538, `docs/REMOTE.md` « Ce qui change de machine », `docs/SERVER-UX.md`
 //! § 4, S12, S13): the folders of the server for « Nouveau projet » (a repository and its branch, a project already, the
 //! room left), « Cloner un dépôt » (https or ssh only), a logo sent as bytes, the files of the agents received on this
-//! computer (their kind read from their bytes, a script never opened), the notifications whose click a client asks, and
-//! the events a client missed during a cut.
+//! computer (their kind read from their bytes, only an image, a PDF or a text opened, ESC-629), the notifications
+//! whose click a client asks, and the events a client missed during a cut.
 
 use crate::host::{HeadlessHost, Host, HostEvent, KEPT_CLICKS};
 use crate::serverfolders::{self, branch_of, folder_of, same_folder};
@@ -377,4 +377,150 @@ fn a_session_taken_again_says_how_many_events_its_client_missed() {
     let (again, resumed) = sessions.open("dev1", Some(&id), now);
     assert!(resumed && again == id);
     assert_eq!(sessions.missed(&id, 52), Some(12));
+}
+
+/// What a file received from a server becomes, type by type (ESC-629): only an image or a PDF is opened by the system,
+/// a plain text, Markdown, CSV or JSON is read in Escouade's editor, anything else is only shown in its folder, and
+/// the refusal says why.
+#[test]
+fn a_file_received_from_a_server_opens_only_when_its_type_is_on_the_list() {
+    use received::Opening::{Editor, Folder, System};
+    let downloads = crate::paths::test_dir("moves-received-list");
+    let gif: &[u8] = b"GIF89a\x01\0\x01\0";
+    let jpeg: &[u8] = b"\xFF\xD8\xFF\xE0\0\x10JFIF";
+    let webp: &[u8] = b"RIFF\x24\0\0\0WEBPVP8 ";
+    let xml: &[u8] = b"<?xml version=\"1.0\"?><x/>";
+    // Opened with what reads its type: its bytes and its name agree.
+    for (name, bytes) in [
+        ("capture.png", PNG),
+        ("photo.jpg", jpeg),
+        ("photo.jpeg", jpeg),
+        ("anim.gif", gif),
+        ("image.webp", webp),
+        ("rapport.pdf", PDF),
+        ("RAPPORT.PDF", PDF),
+    ] {
+        let r = received::save(&downloads, "Travail", name, bytes).unwrap();
+        assert_eq!(received::opening(&r.name, bytes), System, "{name}");
+        assert_eq!(r.opens, "system", "{name}");
+        assert!(
+            received::shown(&downloads, Path::new(&r.path), false).is_ok(),
+            "{name}"
+        );
+    }
+    // Read in Escouade's editor, never handed to the system (a spreadsheet would compute a CSV).
+    for (name, bytes) in [
+        ("notes.txt", &b"bonjour\n"[..]),
+        ("lisez-moi.md", &b"# Titre\n"[..]),
+        ("journal.markdown", &b"*x*"[..]),
+        ("export.csv", &b"a;b\n=1+1;2\n"[..]),
+        ("donnees.json", &b"{\"a\": 1}"[..]),
+        ("accents.txt", "étés et « guillemets »".as_bytes()),
+    ] {
+        let r = received::save(&downloads, "Travail", name, bytes).unwrap();
+        assert_eq!(r.opens, "editor", "{name}");
+        let e = received::shown(&downloads, Path::new(&r.path), false).unwrap_err();
+        assert!(e.to_string().contains("éditeur d’Escouade"), "{name}: {e}");
+        assert!(received::shown(&downloads, Path::new(&r.path), true).is_ok());
+    }
+    // Anything else: only shown in its folder, with why. Consoles, help files, disk images, libraries and searches,
+    // installers, add-ins, pages and drawings of the web, shortcuts and links of every system, scripts and workflows.
+    for (name, bytes) in [
+        ("rapport.msc", xml),
+        ("aide.chm", &b"ITSF\x03\0\0\0"[..]),
+        ("disque.iso", &b"\0\0\0\0CD001"[..]),
+        ("disque.vhdx", &b"vhdxfile"[..]),
+        ("disque.img", &b"\0\0"[..]),
+        ("dossier.library-ms", xml),
+        ("recherche.search-ms", xml),
+        ("app.appinstaller", xml),
+        ("paquet.msix", &b"PK\x03\x04"[..]),
+        ("addin.xll", &b"PK\x03\x04"[..]),
+        ("page.html", &b"<html><script>x</script>"[..]),
+        ("page.htm", &b"<html>"[..]),
+        (
+            "image.svg",
+            &b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"[..],
+        ),
+        ("explorer.scf", &b"[Shell]\r\nCommand=2\r\n"[..]),
+        ("module.psm1", &b"Get-Date"[..]),
+        ("ouvrir.terminal", xml),
+        ("lien.webloc", xml),
+        ("lien.fileloc", xml),
+        ("script.scpt", &b"FasdUAS"[..]),
+        ("flux.workflow", &b"x"[..]),
+        ("etude.docx", &b"PK\x03\x04"[..]),
+        ("tableau.xlsm", &b"PK\x03\x04"[..]),
+        ("archive.zip", &b"PK\x03\x04"[..]),
+        ("sans-extension", &b"bonjour"[..]),
+        ("deploy.ps1", &b"Remove-Item"[..]),
+        ("rejouer.sh", &b"#!/bin/sh\n"[..]),
+        ("programme.exe", &b"MZ\x90\0"[..]),
+    ] {
+        let r = received::save(&downloads, "Travail", name, bytes).unwrap();
+        assert_eq!(r.opens, "folder", "{name}");
+        let e = received::shown(&downloads, Path::new(&r.path), false).unwrap_err();
+        let why = e.to_string();
+        assert!(
+            why.contains("programme ou un script")
+                || why.contains("pas d’un type qu’Escouade ouvre"),
+            "{name}: {why}"
+        );
+        assert!(received::shown(&downloads, Path::new(&r.path), true).is_ok());
+    }
+    // A name of the list whose bytes say another thing is not on it: a text that holds a program, a « PDF » of XML.
+    assert_eq!(received::opening("notes.txt", b"MZ\x90\0"), Folder);
+    assert_eq!(received::opening("notes.txt", b"#!/bin/sh\n"), Folder);
+    assert_eq!(received::opening("notes.txt", b"a\0b"), Folder);
+    assert_eq!(received::opening("notes.txt", b"\xFF\xFE\xFD"), Folder);
+    assert_eq!(received::opening("rapport.pdf", xml), Folder);
+    assert_eq!(received::opening("capture.png", xml), Folder);
+    // A text cut in the middle of a character (its start only is read) stays a text; a name ending in dots too.
+    assert_eq!(
+        received::opening("notes.txt", &"été".as_bytes()[..3]),
+        Editor
+    );
+    assert_eq!(received::opening("notes.txt. ", b"x"), Editor);
+    // The extension of the type its bytes say makes a renamed image one again, opened as such.
+    let r = received::save(&downloads, "Travail", "ouvrir.terminal", PNG).unwrap();
+    assert_eq!(
+        (r.name.as_str(), r.opens),
+        ("ouvrir.terminal.png", "system")
+    );
+}
+
+/// The copy is marked as come from elsewhere, and never executable (ESC-629): `Zone.Identifier` under Windows,
+/// `com.apple.quarantine` under macOS, no right to run under macOS and Linux.
+#[test]
+fn a_file_received_from_a_server_is_marked_as_downloaded_and_never_runs() {
+    let downloads = crate::paths::test_dir("moves-received-marks");
+    let r = received::save(&downloads, "Travail", "ouvrir.terminal", b"<?xml?>").unwrap();
+    #[cfg(windows)]
+    {
+        let zone = std::fs::read_to_string(format!("{}:Zone.Identifier", r.path)).unwrap();
+        assert!(zone.contains("ZoneId=3"), "{zone}");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&r.path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0, "{mode:o}");
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let out = Command::new("xattr")
+            .args(["-p", "com.apple.quarantine", &r.path])
+            .output()
+            .unwrap();
+        let value = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "no quarantine on {}", r.path);
+        assert!(
+            value.starts_with("0081;") && value.contains(";Escouade;"),
+            "{value}"
+        );
+    }
+    // The value is the one macOS gives a download: its flags, the time in hexadecimal, the app.
+    let at = std::time::UNIX_EPOCH + std::time::Duration::from_secs(0x6740_0000);
+    assert_eq!(received::quarantine_value(at), "0081;67400000;Escouade;");
+    let _ = r;
 }

@@ -6976,8 +6976,8 @@ pub fn phone_remove(core: CoreState, id: String) -> Res<bool> {
 // relayed, its notifications shown. Always this computer's (`desk`).
 
 /// A file of a server's agent received on this computer (S12): its bytes, raw, kept in `Téléchargements/Escouade/<espace>`
-/// (headers `x-space`, `x-name`), then opened (`x-open: 1`) unless it is a program or a script, or shown in its folder
-/// (`x-reveal: 1`). What it became.
+/// (headers `x-space`, `x-name`), then opened (`x-open: 1`) when it is an image or a PDF (ESC-629), else shown in its
+/// folder (as with `x-reveal: 1`). What it became.
 #[cfg(feature = "desktop")]
 #[tauri::command(async)]
 pub fn received_save(
@@ -6995,7 +6995,10 @@ pub fn received_save(
     let downloads = crate::servers::received::downloads();
     let mut got = crate::servers::received::save(&downloads, &space, &name, bytes).map_err(err)?;
     let path = std::path::PathBuf::from(&got.path);
-    if request.header("x-open") == Some("1") && !got.runnable {
+    // Opened only when it is on the list of what Escouade opens by the system (ESC-629): an image or a PDF.
+    if request.header("x-open") == Some("1")
+        && got.opens == crate::servers::received::Opening::System.as_str()
+    {
         core.host
             .open(crate::host::Opened::Path(path))
             .map_err(err)?;
@@ -7008,8 +7011,8 @@ pub fn received_save(
     Ok(got)
 }
 
-/// A copy received before, opened again or shown in its folder: only one of Escouade's downloads, never a program or a
-/// script opened.
+/// A copy received before, opened again or shown in its folder: only one of Escouade's downloads, only an image or a PDF
+/// opened (ESC-629).
 #[cfg(feature = "desktop")]
 #[tauri::command(async)]
 pub fn received_show(core: CoreState, path: String, reveal: bool) -> Res<()> {

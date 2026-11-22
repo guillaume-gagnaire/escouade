@@ -1,14 +1,16 @@
 //! The files a server's agents send, received on this computer (ESC-538, S12, `docs/SERVER-UX.md` § 4): downloaded when
-//! the user opens one (never ahead), into `Téléchargements/Escouade/<espace>`, then opened from there — never a program
-//! or a script, which is only downloaded and shown in its folder.
+//! the user opens one (never ahead), into `Téléchargements/Escouade/<espace>`, then opened from there — only what is on
+//! the list of what Escouade opens (ESC-629, [`opening`]): an image or a PDF with what reads that type on this computer,
+//! plain text, Markdown, CSV or JSON in Escouade's editor; anything else (a program, a script, a console, a link, a disk
+//! image, a page of the web…) is only downloaded and shown in its folder, and the window says why.
 //!
 //! What the server sends is not trusted to say what it is:
 //! - its kind is read from its bytes: a program (PE, ELF, Mach-O) or a script (`#!`) is one whatever its name; a name
 //!   of a program or a script (`sentfiles::runnable_name`) is one whatever its bytes;
 //! - an image or a PDF keeps the type its bytes say: a name that says another (or none) gets the right extension, so
 //!   that the system opens it with what reads that type;
-//! - the copy is never made executable, and under Windows it is marked as come from elsewhere (`Zone.Identifier`,
-//!   zone 3: the system asks before running it, as for a file of the web);
+//! - the copy is never made executable, and it is marked as come from elsewhere: under Windows `Zone.Identifier`
+//!   (zone 3, as a download of the web), under macOS `com.apple.quarantine` (Gatekeeper asks before anything runs it);
 //! - nothing is written out of the folder of the space, and nothing is opened without the user's gesture.
 
 use anyhow::{bail, Result};
@@ -29,6 +31,8 @@ pub struct Received {
     pub kind: &'static str,
     /// A program or a script: never opened from Escouade.
     pub runnable: bool,
+    /// How it opens here ([`Opening`]): `system`, `editor` or `folder`.
+    pub opens: &'static str,
     /// It was opened (asked, and no program).
     pub opened: bool,
 }
@@ -135,6 +139,64 @@ pub fn runnable(name: &str, bytes: &[u8]) -> bool {
     matches!(kind_of(bytes), "program" | "script") || crate::sentfiles::runnable_name(name)
 }
 
+/// How a file received from a server opens on this computer (ESC-629): a list of what opens, everything else shown in
+/// its folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opening {
+    /// An image (PNG, JPEG, GIF, WebP) or a PDF, its bytes and its name agreeing: opened with what reads that type.
+    System,
+    /// Plain text, Markdown, CSV or JSON (`.txt`, `.md`, `.markdown`, `.csv`, `.json`), its bytes text: read in
+    /// Escouade's editor, never handed to the system (a spreadsheet would compute a CSV's formulas).
+    Editor,
+    /// Anything else: only shown in its folder.
+    Folder,
+}
+
+impl Opening {
+    /// Its name for the window.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Opening::System => "system",
+            Opening::Editor => "editor",
+            Opening::Folder => "folder",
+        }
+    }
+}
+
+/// The extensions of the texts read in Escouade's editor.
+const TEXTS: &[&str] = &["txt", "md", "markdown", "csv", "json"];
+
+/// How the file `name` (its name kept here), of the bytes `bytes` (its start is enough), opens: on the list only when
+/// its name and its bytes say the same type, never a program or a script.
+pub fn opening(name: &str, bytes: &[u8]) -> Opening {
+    if runnable(name, bytes) {
+        return Opening::Folder;
+    }
+    let name = name.trim().trim_end_matches(['.', ' ']);
+    let ext = name
+        .rsplit_once('.')
+        .map(|(_, e)| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    if matches!(kind_of(bytes), "image" | "pdf") && extensions_of(bytes).contains(&ext.as_str()) {
+        return Opening::System;
+    }
+    if TEXTS.contains(&ext.as_str()) && is_text(bytes) {
+        return Opening::Editor;
+    }
+    Opening::Folder
+}
+
+/// Whether `bytes` read as UTF-8 text (a character cut at their end allowed: they may be a file's start), with no NUL.
+fn is_text(bytes: &[u8]) -> bool {
+    if bytes.contains(&0) {
+        return false;
+    }
+    match std::str::from_utf8(bytes) {
+        Ok(_) => true,
+        Err(e) => e.error_len().is_none(),
+    }
+}
+
 /// The bytes `bytes` of the file `name` sent from the space `space`, kept in its folder of `downloads`.
 pub fn save(downloads: &Path, space: &str, name: &str, bytes: &[u8]) -> Result<Received> {
     if space.trim().is_empty() {
@@ -145,6 +207,7 @@ pub fn save(downloads: &Path, space: &str, name: &str, bytes: &[u8]) -> Result<R
     let kept = kept_name(name, bytes);
     let path = free_path(&dir, &kept);
     std::fs::write(&path, bytes)?;
+    never_runnable(&path);
     mark_from_elsewhere(&path);
     let name = path
         .file_name()
@@ -152,6 +215,7 @@ pub fn save(downloads: &Path, space: &str, name: &str, bytes: &[u8]) -> Result<R
         .unwrap_or(kept);
     Ok(Received {
         runnable: runnable(&name, bytes),
+        opens: opening(&name, bytes).as_str(),
         kind: kind_of(bytes),
         folder: dir.to_string_lossy().to_string(),
         path: path.to_string_lossy().to_string(),
@@ -160,8 +224,57 @@ pub fn save(downloads: &Path, space: &str, name: &str, bytes: &[u8]) -> Result<R
     })
 }
 
-/// Under Windows, the copy marked as come from another machine (zone 3, as a download of the web): the system asks
-/// before it runs it. Nothing elsewhere: the copy is written without the right to run.
+/// Under macOS and Linux, the copy without the right to run (`rw-r--r--`), whatever the umask said.
+fn never_runnable(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644)) {
+            log::debug!("received: the copy's rights not set: {e}");
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
+
+/// The value of `com.apple.quarantine` macOS gives a download: its flags (`0081`: downloaded, the user asked before it
+/// opens), the time in hexadecimal seconds, the app that downloaded it.
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn quarantine_value(now: std::time::SystemTime) -> String {
+    let secs = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("0081;{secs:08x};Escouade;")
+}
+
+/// The attribute `com.apple.quarantine` set on `path`.
+#[cfg(target_os = "macos")]
+fn quarantine(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let c_path = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    let value = quarantine_value(std::time::SystemTime::now());
+    // SAFETY: both strings end with their NUL and live past the call; the value is read for its length only.
+    let r = unsafe {
+        libc::setxattr(
+            c_path.as_ptr(),
+            c"com.apple.quarantine".as_ptr(),
+            value.as_ptr().cast(),
+            value.len(),
+            0,
+            0,
+        )
+    };
+    if r == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+/// The copy marked as come from another machine, as a download of the web: under Windows its `Zone.Identifier` (zone
+/// 3), under macOS its `com.apple.quarantine` (Gatekeeper asks before anything runs it, Terminal included). Linux has
+/// no such mark: the copy is only never executable.
 fn mark_from_elsewhere(path: &Path) {
     #[cfg(windows)]
     {
@@ -170,12 +283,16 @@ fn mark_from_elsewhere(path: &Path) {
             log::debug!("received: the copy not marked as downloaded: {e}");
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    if let Err(e) = quarantine(path) {
+        log::debug!("received: the copy not put in quarantine: {e}");
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     let _ = path;
 }
 
 /// The copy `path` (one of `downloads`' folder of Escouade, never another file) to open or show in its folder: refused
-/// out of it, or to open when it is a program or a script.
+/// out of it, or to open by the system when it is not an image or a PDF ([`Opening::System`]), with why.
 pub fn shown(downloads: &Path, path: &Path, reveal: bool) -> Result<PathBuf> {
     let lang = crate::i18n::ui();
     let root = downloads.join("Escouade");
@@ -201,6 +318,19 @@ pub fn shown(downloads: &Path, path: &Path, reveal: bool) -> Result<PathBuf> {
                 "« {name} » est un programme ou un script : Escouade ne l’ouvre pas, elle l’affiche dans son dossier.",
                 "“{name}” is a program or a script: Escouade doesn’t open it, it shows it in its folder."
             ));
+        }
+        match opening(&name, &head) {
+            Opening::System => {}
+            Opening::Editor => bail!(tr_in!(
+                lang,
+                "« {name} » se lit dans l’éditeur d’Escouade : le système ne l’ouvre pas, elle l’affiche dans son dossier.",
+                "“{name}” reads in Escouade’s editor: the system doesn’t open it, it is shown in its folder."
+            )),
+            Opening::Folder => bail!(tr_in!(
+                lang,
+                "« {name} » n’est pas d’un type qu’Escouade ouvre (images, PDF, texte, Markdown, CSV, JSON) : elle l’affiche dans son dossier.",
+                "“{name}” is not of a type Escouade opens (images, PDF, text, Markdown, CSV, JSON): it shows it in its folder."
+            )),
         }
     }
     Ok(file)

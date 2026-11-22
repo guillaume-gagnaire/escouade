@@ -2,6 +2,7 @@
   import { fileCategory } from '../../lib/attachments';
   import { fSize } from '../../lib/format';
   import { openSource, type ViewedImage } from '../../lib/gallery';
+  import { receivedText } from '../../lib/server-moves.svelte';
   import { t } from '../../lib/i18n';
   import type { IconName } from '../../lib/icons';
   import { inbox } from '../../lib/inbox/inbox.svelte';
@@ -79,8 +80,11 @@
   }
   function open(f: AskFile, reveal: boolean) {
     if (!reveal) void looked(f);
-    // On a server (ESC-538, ESC-540), the file is downloaded to this computer, its copy opened or shown there.
-    void app.run(openSource({ kind: 'ask', id: ask.id, file: f.file }, reveal, f.name));
+    // On a server (ESC-538, ESC-540), the file is downloaded to this computer, its copy opened or shown there; what
+    // Escouade does not open (ESC-629) is shown in its folder, and the window says why.
+    void app.run(openSource({ kind: 'ask', id: ask.id, file: f.file }, reveal, f.name)).then((got) => {
+      if (got && !reveal && got.opens !== 'system') app.toast(receivedText(got), 'ok');
+    });
   }
 </script>
 
