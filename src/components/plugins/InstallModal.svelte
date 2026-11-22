@@ -121,7 +121,18 @@
             {p.unverified ? t('plugins.install.sealWithdrawn', { reason: p.unverified }) : t('plugins.install.storeUnverifiedBody')}</span
           >
         </p>
-      {:else if !dev && !store}
+      {:else if p.matchesStore}
+        <!-- « N'installer que des versions vérifiées » on (SEC-01, ESC-589): this folder or repository is the store's
+             verified version, file for file. -->
+        <p class="notice ok" data-testid="matches-store">
+          <Icon name="check" size={14} /><span>{t('plugins.install.matchesStore', { version: p.matchesStore })}</span>
+        </p>
+      {:else if dev}
+        <!-- Development mode is a gesture of its own, which the setting does not cover (SEC-01, ESC-589). -->
+        <p class="notice" data-testid="dev-apart">
+          <Icon name="info" size={14} /><span>{t('plugins.install.devApart')}</span>
+        </p>
+      {:else if !store}
         <p class="notice">
           <Icon name="info" size={14} /><span><b>{t('plugins.install.unverified')}</b> {t('plugins.install.unverifiedBody')}</span>
         </p>
@@ -255,6 +266,9 @@
   .notice b {
     color: var(--text);
     font-weight: 600;
+  }
+  .notice.ok :global(.icon) {
+    color: var(--teal-ink);
   }
   .same {
     margin: 0;

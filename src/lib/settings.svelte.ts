@@ -672,6 +672,8 @@ class SettingsForm {
               app.enginesFound = found.enginesFound ?? (found.claudeFound ? ['claude'] : []);
             }
           }
+          // « Harness des plugins tiers » (SEC-01): its agents say at once whether they ask or are refused.
+          if ('thirdPartyHarnesses' in diff) void app.refreshHarnessLaunches();
         } else ok = false;
       }
       for (const id of Object.keys(this.projects)) {

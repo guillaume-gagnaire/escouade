@@ -194,6 +194,16 @@ pub struct Settings {
     /// as it was (the field's own default), and the user's choice stays.
     #[serde(default)]
     pub plugins_verified_only: bool,
+    /// « N'installer que des versions vérifiées » settled once (audit SEC-01, ESC-589): an installation updated from a
+    /// version before it, that has no plugin of a third party installed, has it turned on at its first start
+    /// (`Core::settle_verified_only`); one that has one keeps its choice. A new installation has it settled already.
+    #[serde(default)]
+    pub plugins_verified_settled: bool,
+    /// « Harness des plugins tiers » (Réglages › Plugins, SEC-01, ESC-589): a harness a plugin of a third party
+    /// describes runs a program of this machine out of the sandbox; it asks the user at its first launch, its whole
+    /// command said (`Ask`), or none of them runs (`Refuse`, what the policy of a managed device will impose).
+    #[serde(default)]
+    pub third_party_harnesses: ThirdPartyHarnesses,
     /// « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the whole window's, as the WebView's
     /// zoom (text, spacing and icons together); Ctrl+= / Ctrl+- / Ctrl+0 change it too.
     pub ui_zoom: u32,
@@ -228,6 +238,17 @@ pub struct Settings {
     pub user_id: String,
     /// The first launch's window asking the name was shown (answered or put off).
     pub name_asked: bool,
+}
+
+/// « Harness des plugins tiers » (`Settings::third_party_harnesses`, ESC-589).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ThirdPartyHarnesses {
+    /// Asked at its first launch, its whole command said, and again when the command changes.
+    #[default]
+    Ask,
+    /// None runs: its agents do not start, said.
+    Refuse,
 }
 
 /// The widths the projects' rail is dragged to (ESC-168): its tiles alone, up to a list of names.
@@ -969,6 +990,8 @@ impl Default for Settings {
             theme: ThemeChoice::System,
             plugin_theme: String::new(),
             plugins_verified_only: true,
+            plugins_verified_settled: true,
+            third_party_harnesses: ThirdPartyHarnesses::Ask,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
@@ -3561,6 +3584,27 @@ mod tests {
             let v = serde_json::to_value(&s).unwrap();
             assert_eq!(v["pluginsVerifiedOnly"], json!(choice));
         }
+        // ESC-589: a new installation has it settled; settings saved before it are settled once, at the next start.
+        assert!(Settings::default().plugins_verified_settled);
+        let s: Settings = serde_json::from_value(json!({ "pluginsVerifiedOnly": false })).unwrap();
+        assert!(!s.plugins_verified_settled);
+    }
+
+    #[test]
+    fn third_party_harnesses_ask_unless_refused() {
+        assert_eq!(
+            Settings::default().third_party_harnesses,
+            ThirdPartyHarnesses::Ask
+        );
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert_eq!(s.third_party_harnesses, ThirdPartyHarnesses::Ask);
+        let s: Settings =
+            serde_json::from_value(json!({ "thirdPartyHarnesses": "refuse" })).unwrap();
+        assert_eq!(s.third_party_harnesses, ThirdPartyHarnesses::Refuse);
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["thirdPartyHarnesses"],
+            json!("refuse")
+        );
     }
 
     #[test]

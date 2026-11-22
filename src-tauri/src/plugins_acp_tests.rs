@@ -80,10 +80,18 @@ pub(crate) fn runtime(name: &str) -> (Arc<Runtime>, Arc<Plugins>, DataDir) {
     (rt, plugins, data)
 }
 
-/// The harness the plugin `owner` describes by `decl`, served by the generic ACP plugin.
+/// The harness the plugin `owner` describes by `decl`, served by the generic ACP plugin. A third party's has its command
+/// on the fake programs agreed to (SEC-01, ESC-589): its agreement is `third_party` tests'.
 fn described(rt: &Arc<Runtime>, owner: &str, decl: Value) -> &'static ProcessEngine {
     let decl: proto::HarnessDecl = serde_json::from_value(decl).unwrap();
-    Box::leak(Box::new(ProcessEngine::described(rt.clone(), owner, decl)))
+    let engine: &'static ProcessEngine =
+        Box::leak(Box::new(ProcessEngine::described(rt.clone(), owner, decl)));
+    for program in [fake_acp(), fake_unharnessed()] {
+        if let Some(line) = engine.third_party_line(&program) {
+            crate::plugins::consent::agree(&line);
+        }
+    }
+    engine
 }
 
 /// The fake ACP agent's harness, from its manifest alone.
@@ -262,6 +270,12 @@ impl Target for FakeCursor {
 async fn the_fake_cursor_replayed_by_the_generic_client_passes_the_bench() {
     let (rt, _, _) = runtime("cursor-bench");
     let engine = described(&rt, "dev.example.cursor-acp", cursor_decl());
+    // A third party's description: its command on the fake Cursor agreed to (SEC-01, ESC-589).
+    crate::plugins::consent::agree(
+        &engine
+            .third_party_line(&FakeCursor(engine).program())
+            .unwrap(),
+    );
     let played = run(&FakeCursor(engine), &bench_dir("plg6-cursor-bench-run")).await;
     assert_eq!(
         played,
@@ -1882,6 +1896,91 @@ fn a_third_party_harness_on_bash_is_refused() {
         let engine = described(&rt, OWNER, v["contributes"]["harnesses"][0].clone());
         assert!(engine.locate("", "").is_none(), "{name} was found to run");
     }
+    rt.shutdown();
+}
+
+/// SEC-01 (ESC-589): a third party's harness on `npx un-paquet` passes its manifest (no shell nor interpreter is named),
+/// and its program does not run without the user's agreement to its whole command: neither an agent nor a question of
+/// one shot. Agreed, its line runs; a line an update changes asks again; « Refuser » runs none. Escouade's own hand asks
+/// nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn npx_un_paquet_does_not_start_without_the_users_agreement() {
+    use crate::plugins::consent::{self, Held};
+    let (rt, _, _) = runtime("sec01-npx");
+    let mut v = fake_manifest();
+    v["contributes"]["harnesses"][0]["locate"]["names"] = json!(["npx"]);
+    v["contributes"]["harnesses"][0]["acp"]["args"] = json!(["un-paquet"]);
+    let read = crate::plugins::manifest::check(&v, crate::plugins::manifest::Hand::Third);
+    assert!(read.manifest.is_ok(), "{:?}", read.manifest.err());
+    let decl = |v: &Value| -> proto::HarnessDecl {
+        serde_json::from_value(v["contributes"]["harnesses"][0].clone()).unwrap()
+    };
+    let engine: &'static ProcessEngine = Box::leak(Box::new(ProcessEngine::described(
+        rt.clone(),
+        OWNER,
+        decl(&v),
+    )));
+    let npx = Program::Native(bench_dir("sec01-npx-bin").join("npx.cmd"));
+    let line = engine.launch_line(&npx).expect("a third party's line");
+    assert_eq!(line.program, npx.describe());
+    assert_eq!(line.args, ["un-paquet"]);
+    assert_eq!(line.plugin, OWNER);
+    assert_eq!(line.escouade_env, ["FAKE_ACP_HOME"]);
+    consent::set(false, std::collections::HashMap::new());
+    let dir = bench_dir("sec01-npx-run");
+    let meta = AgentMeta {
+        id: crate::model::new_id(),
+        cwd: dir.to_string_lossy().into_owned(),
+        ..Default::default()
+    };
+    let spawned = engine.spawn(
+        Spawn::of(&meta, npx.clone(), Vec::new()),
+        Box::new(|_| {}),
+        Box::new(|_, _| {}),
+    );
+    let err = match spawned {
+        Ok(_) => panic!("npx un-paquet started without the user's agreement"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("attend ton accord"), "{err}");
+    let ask = crate::engine::OneShot {
+        program: npx.clone(),
+        env: Vec::new(),
+        weight: crate::engine::Weight::Light,
+        cwd: &dir,
+        system: "Réponds court.",
+        prompt: "bonjour",
+        limit: Duration::from_secs(30),
+        model: String::new(),
+    };
+    let err = engine.one_shot(ask).await.unwrap_err().to_string();
+    assert!(err.contains("attend ton accord"), "{err}");
+    // Agreed: that line runs; the line of an update that adds an argument asks again.
+    consent::agree(&line);
+    assert_eq!(consent::check(&line), Ok(()));
+    let mut updated = v.clone();
+    updated["contributes"]["harnesses"][0]["acp"]["args"] = json!(["un-paquet", "--encore"]);
+    let next: &'static ProcessEngine = Box::leak(Box::new(ProcessEngine::described(
+        rt.clone(),
+        OWNER,
+        decl(&updated),
+    )));
+    let changed = next.launch_line(&npx).unwrap();
+    assert_ne!(changed.fingerprint, line.fingerprint);
+    assert_eq!(consent::check(&changed), Err(Held::Asks));
+    // « Refuser »: none runs, agreed or not.
+    consent::set(
+        true,
+        std::collections::HashMap::from([(line.engine, vec![line.fingerprint.clone()])]),
+    );
+    assert_eq!(consent::check(&line), Err(Held::Refused));
+    // Escouade's own hand: no line to agree to.
+    let own: &'static ProcessEngine = Box::leak(Box::new(ProcessEngine::described(
+        rt.clone(),
+        "dev.escouade.goose",
+        decl(&v),
+    )));
+    assert!(own.launch_line(&npx).is_none());
     rt.shutdown();
 }
 

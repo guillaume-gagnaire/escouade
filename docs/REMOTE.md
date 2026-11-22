@@ -69,6 +69,7 @@ C'est faisable, et c'est la même fondation que le téléphone. Rien n'est prêt
    - `hub.rs` accepte plusieurs abonnés.
    - L'état de l'interface (`UiState` : projet actif, vue, agent choisi, disposition) est gardé par client.
    - Une réponse donnée par un client (autorisation, question) se ferme chez les autres, comme une réponse venue de claude.ai.
+   - L'accord au harness d'un plugin tiers (audit SEC-01, ESC-589) se demande **au client qui lance** : son démarrage refusé le dit, le client lit la ligne entière (`harness_launch_ask`) et l'accepte ou la refuse (`harness_agree`, avec l'empreinte lue) ; `harness_launches` dit les harness qui attendent. Ce sont des commandes de la liste unique : rien de propre au transport.
 4. **Reprendre après une coupure.**
    - À la reconnexion, le client reçoit l'état entier (`InitialState`), puis les événements.
    - Chaque terminal et chaque lancement garde un tampon de sortie, comme les interfaces d'agent, pour retrouver l'écran.

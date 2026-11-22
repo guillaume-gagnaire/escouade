@@ -181,7 +181,7 @@
 {/if}
 
 <Group title={t('plugins.settingsPage.security')} aria-label={t('plugins.settingsPage.security')}>
-  <Row label={t('plugins.installed.verifiedOnly')} desc={revocations}>
+  <Row label={t('plugins.installed.verifiedOnly')} desc={`${t('plugins.installed.verifiedOnlyScope')} ${revocations}`}>
     <button
       class="switch"
       class:on={!!settingsForm.settings.pluginsVerifiedOnly}
@@ -190,6 +190,18 @@
       aria-label={t('plugins.installed.verifiedOnly')}
       onclick={() => (settingsForm.settings.pluginsVerifiedOnly = !settingsForm.settings.pluginsVerifiedOnly)}
     ></button>
+  </Row>
+  <!-- « Harness des plugins tiers » (SEC-01, ESC-589): asked at the first launch, its whole command said, or none runs. -->
+  <Row label={t('plugins.installed.thirdPartyHarnesses')} desc={t('plugins.installed.thirdPartyHarnessesDesc')}>
+    <select
+      class="field"
+      aria-label={t('plugins.installed.thirdPartyHarnesses')}
+      value={settingsForm.settings.thirdPartyHarnesses ?? 'ask'}
+      onchange={(e) => (settingsForm.settings.thirdPartyHarnesses = (e.currentTarget as HTMLSelectElement).value as 'ask' | 'refuse')}
+    >
+      <option value="ask">{t('plugins.installed.thirdAsk')}</option>
+      <option value="refuse">{t('plugins.installed.thirdRefuse')}</option>
+    </select>
   </Row>
 </Group>
 

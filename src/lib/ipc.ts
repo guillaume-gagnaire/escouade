@@ -128,6 +128,8 @@ import type {
   DocsImported,
   DocsMoved,
   DeleteLoss,
+  LaunchAsk,
+  LaunchHeld,
 } from './types';
 
 /**
@@ -237,6 +239,13 @@ export const api = {
   harnessEnableIn: (project: string, engine: EngineId) => invoke<void>('harness_enable_in', { project, engine }),
   /** The plugin the harness `engine` goes through, null for none. */
   harnessPluginOf: (engine: EngineId) => invoke<string | null>('harness_plugin_of', { engine }),
+  /** The whole command of a harness of a third party (SEC-01), for the agent `agent` or the harness's own program; null for one that asks nothing. */
+  harnessLaunchAsk: (engine: EngineId, agent: string | null) => invoke<LaunchAsk | null>('harness_launch_ask', { engine, agent }),
+  /** « Autoriser » (`allow`) or « Refuser » the command of `engine` whose fingerprint was read: the user's gesture alone. */
+  harnessAgree: (engine: EngineId, agent: string | null, fingerprint: string, allow: boolean) =>
+    invoke<void>('harness_agree', { engine, agent, fingerprint, allow }),
+  /** The harnesses of a third party whose command does not run now: awaiting the agreement, or refused by the setting. */
+  harnessLaunches: () => invoke<Partial<Record<EngineId, LaunchHeld>>>('harness_launches'),
   /** The registry of now: the harnesses the plugins describe come and go with them (PLG-6). */
   enginesDeclared: () => invoke<EngineDecl[]>('engines_declared'),
   /** The items of Principal's folder a new account may share (those it has), files first. */

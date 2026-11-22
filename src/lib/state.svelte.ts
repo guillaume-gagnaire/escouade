@@ -69,6 +69,7 @@ import type {
   EngineDecl,
   EngineId,
   HarnessScope,
+  LaunchHeld,
   PageEvent,
   AgentReview,
   Project,
@@ -182,6 +183,11 @@ export type Modal =
    * of an agent or a ticket whose harness is off there. `onEnabled` once its plugin is on for the project.
    */
   | { kind: 'harnessConsent'; projectId: string; engine: EngineId; onEnabled: () => void | Promise<void>; onCancel?: () => void }
+  /**
+   * The agreement to the whole command of a harness a plugin of a third party describes (SEC-01, ESC-589): at its first
+   * launch, for the agent `agentId` (its account's program), or again once its line changed.
+   */
+  | { kind: 'harnessLaunch'; engine: EngineId; agentId: string | null }
   /**
    * « Nouvelle discussion » of the Docs tab (ESC-261), its role and subject given by a gesture of the spec (« Mettre la spec
    * à jour », « Écrire une première spec ») with the first message it sends.
@@ -384,6 +390,8 @@ class AppState {
   enginesOff = $state.raw<EngineId[]>([]);
   /** The harnesses not on for a project, by project (ESC-404): left out of its menus, or asked for first. */
   harnessScope = $state.raw<Record<string, HarnessScope>>({});
+  /** The harnesses of a third party whose command does not run now (SEC-01, ESC-589): awaiting the agreement, or refused. */
+  harnessLaunches = $state.raw<Partial<Record<EngineId, LaunchHeld>>>({});
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
@@ -830,6 +838,7 @@ class AppState {
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.enginesOff = s.enginesOff ?? [];
     this.harnessScope = s.harnessScope ?? {};
+    this.harnessLaunches = s.harnessLaunches ?? {};
     if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
@@ -1161,6 +1170,18 @@ class AppState {
     if (off && off.join() !== this.enginesOff.join()) this.enginesOff = off;
     // Project by project (ESC-404): one turned on or off for a project since.
     await this.refreshHarnessScope();
+    await this.refreshHarnessLaunches();
+  }
+
+  /** The harnesses of a third party whose command does not run now, read again (SEC-01). Nothing said when it fails. */
+  async refreshHarnessLaunches(): Promise<void> {
+    const launches = await api.harnessLaunches().catch(() => null);
+    if (launches && JSON.stringify(launches) !== JSON.stringify(this.harnessLaunches)) this.harnessLaunches = launches;
+  }
+
+  /** « Voir la commande… » (SEC-01, ESC-589): the whole command of `engine` for the agent `agentId`, to agree to or refuse. */
+  askHarnessLaunch(engine: EngineId, agentId: string | null) {
+    this.modal = { kind: 'harnessLaunch', engine, agentId };
   }
 
   markSeen() {
@@ -2067,6 +2088,11 @@ class AppState {
       // Its composer is what a new agent is for: closed first, the editor keeps the source it was on.
       this.closeEditor(projectId);
       this.selectAgent(a.id);
+      // A harness of a third party whose command was never agreed to (SEC-01, ESC-589): asked at once, its whole command
+      // said; refused, the agent does not start, and its conversation says so. Read again first: a plugin installed since
+      // the last reading has its harness's command not agreed to yet.
+      await this.refreshHarnessLaunches();
+      if (this.harnessLaunches[a.engine ?? 'claude'] === 'asks') this.askHarnessLaunch(a.engine ?? 'claude', a.id);
     } catch (e) {
       this.refused(e);
     }

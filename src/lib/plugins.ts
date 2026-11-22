@@ -181,6 +181,11 @@ export interface PluginPreview {
   verified: boolean;
   /** Why the revocation list took its seal off. */
   unverified: string | null;
+  /**
+   * A folder or a repository read under « N'installer que des versions vérifiées » (SEC-01, ESC-589): the store's verified
+   * version whose files are its own.
+   */
+  matchesStore?: string;
 }
 
 /** Why a plugin was not installed. */

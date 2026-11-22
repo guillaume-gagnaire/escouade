@@ -6,6 +6,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: “Install verified versions only” now holds for folders and git repositories too, which are accepted only when they are a verified version of the store; development mode stays a gesture of its own. It turns on with this update when you have no third-party plugin installed.
+- Security: a harness described by a third-party plugin asks for your agreement at its first launch, its whole command said, and again when an update changes it; refused, its agent does not start. Settings › Plugins can refuse them all.
 - “Your turn” box: a filter by type at the top of the list (permissions, questions, go-aheads, tickets, decisions…), each with its number; choose several at once, your choice is kept, and “Clear” brings everything back. What it hides is said in a quiet line, and the tile’s count still says all that waits for you.
 - Going back from the 2.3 beta to 2.2 keeps your data: a state where a review remark was published on its own reads whole, instead of being set aside at start with the app starting empty.
 - Git: the automatic fetch can be set, for every project or for one: on or not, its interval and its time limit. The Git panel says when the repository was fetched and, without alerting, why the last automatic fetch failed; it now goes through on a big repository, also with the stalling ssh of Git for Windows 2.47.0.

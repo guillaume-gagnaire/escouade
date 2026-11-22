@@ -124,6 +124,13 @@ export default defineZone('plugins', {
     category: 'Category: {name}',
     categoryEmpty: 'No plugin installed in this category.',
     verifiedOnly: 'Install verified versions only',
+    verifiedOnlyScope:
+      'Holds for the store, folders and git repositories: a folder or a repository is accepted only if it is the verified version of the store, with the same files. Development mode is a gesture of its own, which it does not cover.',
+    thirdPartyHarnesses: 'Third-party harnesses',
+    thirdPartyHarnessesDesc:
+      'A harness a third-party plugin describes runs a program of this machine out of the sandbox. “Ask” says its whole command at its first launch, and at each change; “Refuse” launches none.',
+    thirdAsk: 'Ask',
+    thirdRefuse: 'Refuse',
     revocations: 'Revocation list read at {time} · no. {serial}, signed, read again every 6 hours',
     revocationsNone: 'Revocation list: none read yet; read again every 6 hours',
     readAgain: 'Read again now',
@@ -299,6 +306,26 @@ export default defineZone('plugins', {
     cardOff: '{name} is off for this project: this agent does not start and gets nothing.',
     ticketWhy: 'Its harness, {name}, is not turned on for this project.',
     commandFrom: 'A command given by the plugin {plugin}, not by Escouade: read it before running it.',
+    // The agreement to a harness of a third party at its first launch, its whole command said (SEC-01, ESC-589).
+    launchTitle: 'Launch {name}?',
+    launchBody:
+      '{name} comes from the third-party plugin {plugin}, which nobody at Escouade has reviewed. It runs a program of your machine, out of the sandbox, with your rights. Here is its whole command: read it before you allow it.',
+    launchRefusedBody: '“Third-party harnesses” is set to “Refuse” (Settings › Plugins): no harness of a third-party plugin is launched.',
+    program: 'Program',
+    args: 'Arguments',
+    resumeArgs: 'To resume a session',
+    versionArgs: 'To read its version',
+    env: 'Variables it adds',
+    removeEnv: 'Variables it removes',
+    escouadeEnv: 'Variables Escouade sets',
+    none: 'none',
+    launchAfter: 'Your agreement is kept for this exact command: an update of the plugin that changes it asks you again.',
+    allow: 'Allow and launch',
+    refuse: 'Refuse',
+    cardAsks:
+      '{name} comes from a third-party plugin: it awaits your agreement to launch its command, and this agent does not start until then.',
+    cardRefused: '{name} comes from a third-party plugin, and “Third-party harnesses” is set to “Refuse”: this agent does not start.',
+    seeCommand: 'See the command…',
   },
 
   settings: {
@@ -429,6 +456,9 @@ export default defineZone('plugins', {
     storeUnverified: 'Nobody has reviewed this version.',
     storeUnverifiedBody: 'It comes from the store, its archive is the one its author published, but nothing says what its program does.',
     sealWithdrawn: 'Its seal was withdrawn by Escouade: {reason}',
+    matchesStore: 'The same as the verified v{version} of the store: its files are those Escouade reviewed.',
+    devApart:
+      'Development mode is a gesture of its own: “Install verified versions only” does not cover it. The folder is loaded as it is, without a review, and read again at each change.',
     unverifiedBody:
       'It comes from a folder or a git repository, outside the store: nothing tells what its program does. Install it if you trust its author.',
     declarative: 'No program: nothing of it runs, its contributions are read.',

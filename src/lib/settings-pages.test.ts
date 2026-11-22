@@ -79,6 +79,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   theme: true,
   pluginTheme: true,
   pluginsVerifiedOnly: true,
+  thirdPartyHarnesses: true,
   uiZoom: true,
   terminalFontSize: true,
   quotaProjection: true,

@@ -11,6 +11,8 @@ pub use escouade_plugins::*;
 // code hosts they serve to the tests, a source on a code host's instances: in `escouade-forge`, with the hosts and the sources.
 pub use escouade_forge::plugins::{accounts, adapters, builtin, hosted};
 
+// The agreement to a harness of a third party, its whole command said (audit SEC-01, ESC-589).
+pub mod consent;
 // The facts handed to the plugins, their webhooks and their commands (PLG-5).
 pub mod events;
 /// The adapter of a harness in process (INT-9).

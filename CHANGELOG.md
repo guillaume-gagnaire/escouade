@@ -6,6 +6,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : « N’installer que des versions vérifiées » vaut aussi pour les dossiers et les dépôts git, acceptés seulement s’ils sont une version vérifiée du store ; le mode développement reste un geste à part. Il s’allume avec cette mise à jour si tu n’as aucun plugin tiers installé.
+- Sécurité : un harness décrit par un plugin tiers demande ton accord à son premier lancement, sa commande entière redite, et de nouveau quand une mise à jour la change ; refusé, son agent ne démarre pas. Réglages › Plugins peut tous les refuser.
 - Boîte « À toi » : un filtre par type, en haut de la liste (autorisations, questions, feux verts, tickets, décisions…), chacun avec son nombre ; tu en choisis plusieurs à la fois, ton choix est gardé, et « Effacer » remet tout. Ce qu’il cache se dit d’une ligne discrète, et le compte de la tuile dit toujours tout ce qui t’attend.
 - Revenir de la bêta de la 2.3 à la 2.2 garde tes données : un état où une remarque de relecture a été publiée seule se relit en entier, au lieu d’être mis de côté au démarrage, l’app repartant vide.
 - Git : le fetch automatique se règle, pour tous les projets ou pour un seul : activé ou non, son intervalle et son délai d’attente. Le panneau Git dit quand le dépôt a été récupéré et, sans alerter, pourquoi le dernier fetch automatique a échoué ; il aboutit enfin sur un gros dépôt, y compris avec le ssh de Git for Windows 2.47.0 qui calait.

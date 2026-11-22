@@ -2397,6 +2397,10 @@ impl<R: Runtime> Core<R> {
         core.migrate_private_harnesses();
         // Once (SEC-09): « Autoriser le mode Bypass » on for an installation that already uses it.
         core.settle_bypass();
+        // Once (SEC-01, ESC-589): « N'installer que des versions vérifiées » on for an installation without a plugin of a
+        // third party; then what was agreed of the harnesses of third parties, handed to what runs them.
+        core.settle_verified_only();
+        core.sync_consents();
         // The pinned Javy of the run.js plugins downloads through Réglages › Avancé › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {
@@ -2888,6 +2892,8 @@ impl<R: Runtime> Core<R> {
         let writing = self.settings_writing.lock();
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
+        // Settled once by the backend (`settle_verified_only`, ESC-589): a window that does not know it does not undo it.
+        s.plugins_verified_settled |= self.settings.read().plugins_verified_settled;
         // The user's id is the backend's too (`ensure_identity`): a window's copy may be older.
         if s.user_id.is_empty() {
             s.user_id = self.settings.read().user_id.clone();
@@ -2916,6 +2922,8 @@ impl<R: Runtime> Core<R> {
             self.settle_agents();
         }
         self.need_settings_plugins(&before_settings);
+        // « Harness des plugins tiers » may have changed (SEC-01, ESC-589).
+        self.sync_consents();
         if self_update && !before_settings.claude_self_update {
             // « Mettre à jour Claude Code automatiquement » turned on: run when due, at once.
             crate::selfupdate::poke();
@@ -3910,6 +3918,9 @@ impl<R: Runtime> Core<R> {
         }
         let program = accounts::program(&account, &settings)
             .ok_or_else(|| anyhow!(engine::missing_line(harness.id(), i18n::ui())))?;
+        // A harness of a third party: its whole command agreed to by the user first, else it does not start, said
+        // (audit SEC-01, ESC-589). Nothing of it runs before, not even its version.
+        self.check_harness_consent(harness, &program)?;
         // Starting an agent is the gesture by which a harness described by anyone's plugin may be asked its version.
         engine::registry::gesture(harness.id());
         // A version older than the tested ones is refused, with its reason.

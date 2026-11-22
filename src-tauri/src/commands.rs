@@ -90,6 +90,8 @@ pub struct InitialState {
     engines_off: Vec<crate::model::EngineId>,
     /// The harnesses not on for a project (ESC-404), by project.
     harness_scope: BTreeMap<String, crate::harness_scope::HarnessScope>,
+    /// The harnesses of a third party whose command does not run now (SEC-01, ESC-589).
+    harness_launches: BTreeMap<crate::model::EngineId, crate::third_party::LaunchHeld>,
     sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
@@ -178,6 +180,7 @@ pub fn subscribe(
         engines_found: core.engines_found(),
         engines_off: core.engines_unplugged(),
         harness_scope: core.harness_scope(),
+        harness_launches: core.harness_launches(),
         sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
@@ -317,14 +320,18 @@ pub fn plugins_list(core: CoreState) -> Vec<crate::plugins::PluginView> {
 }
 
 /// What installing the plugin of a local folder would do (the install window, PLG-4): its copy
-/// set aside until `plugin_install` or `plugin_discard`.
+/// set aside until `plugin_install` or `plugin_discard`. « N'installer que des versions vérifiées » on, kept only when it
+/// is the store's verified version of its id, the same files (SEC-01, ESC-589).
 #[tauri::command(async)]
-pub fn plugin_inspect_folder(
-    core: CoreState,
+pub async fn plugin_inspect_folder(
+    core: CoreState<'_>,
     path: String,
 ) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
-    core.plugins
-        .inspect_folder(std::path::Path::new(path.trim()), crate::i18n::ui())
+    let lang = crate::i18n::ui();
+    let preview = core
+        .plugins
+        .inspect_folder(std::path::Path::new(path.trim()), lang)?;
+    core.held_to_store(preview, lang).await
 }
 
 /// The store as last read (STORE-9): its catalogue kept on this machine, when it was read, the
@@ -449,19 +456,21 @@ pub fn plugin_seed_offers(core: CoreState) -> Vec<crate::plugins::seed::Offer> {
     core.plugins.seed_offers(crate::i18n::ui())
 }
 
-/// What installing the plugin of a git repository at a tag would do: cloned and set aside.
+/// What installing the plugin of a git repository at a tag would do: cloned and set aside. « N'installer que des versions
+/// vérifiées » holds it as a folder (SEC-01, ESC-589).
 #[tauri::command(async)]
 pub async fn plugin_inspect_git(
     core: CoreState<'_>,
     url: String,
     tag: String,
 ) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
-    core.plugins
-        .inspect_git(&url, &tag, crate::i18n::ui())
-        .await
+    let lang = crate::i18n::ui();
+    let preview = core.plugins.inspect_git(&url, &tag, lang).await?;
+    core.held_to_store(preview, lang).await
 }
 
-/// What loading a plugin's folder in development in place would do.
+/// What loading a plugin's folder in development in place would do. A gesture of its own, said as such in the window:
+/// « N'installer que des versions vérifiées » does not hold it (SEC-01, ESC-589).
 #[tauri::command(async)]
 pub fn plugin_inspect_dev(
     core: CoreState,
@@ -577,6 +586,45 @@ pub fn harness_enable_in(core: CoreState, project: String, engine: EngineId) -> 
 #[tauri::command(async)]
 pub fn harness_plugin_of(engine: EngineId) -> Option<String> {
     crate::plugins::harness::plugin_of(engine)
+}
+
+/// The whole command of a harness a plugin of a third party describes (audit SEC-01, ESC-589), for the agent `agent`
+/// (its account's program) or the harness's own program: what the window of the agreement shows, and whether it runs
+/// now. None for a harness that asks nothing (the app's, Escouade's own plugins').
+#[tauri::command(async)]
+pub fn harness_launch_ask(
+    core: CoreState,
+    engine: EngineId,
+    agent: Option<String>,
+) -> Res<Option<crate::third_party::LaunchAsk>> {
+    core.sync_harnesses();
+    core.launch_ask(engine, agent.as_deref()).map_err(err)
+}
+
+/// « Autoriser » or « Refuser » the command of a harness of a third party (the user's gesture, never a tool's): agreed,
+/// the line whose fingerprint was read is kept and the agent starts; refused, nothing is kept and its conversation says
+/// it does not start. The client that launches asks it (the window, or a client of the remote API).
+#[tauri::command(async)]
+pub fn harness_agree(
+    core: CoreState,
+    engine: EngineId,
+    agent: Option<String>,
+    fingerprint: String,
+    allow: bool,
+) -> Res<()> {
+    core.agree_to_harness(engine, agent.as_deref(), &fingerprint, allow)
+        .map_err(err)
+}
+
+/// The harnesses of a third party whose command does not run now (SEC-01): waiting for the user's agreement, or
+/// refused by « Harness des plugins tiers ».
+#[tauri::command(async)]
+pub fn harness_launches(
+    core: CoreState,
+) -> std::collections::BTreeMap<EngineId, crate::third_party::LaunchHeld> {
+    // A plugin installed or updated since: its harness in the registry first, as `engines_declared` does.
+    core.sync_harnesses();
+    core.harness_launches()
 }
 
 /// The harnesses that are not on, project by project (ESC-404): `off`, not offered; `asks`, offered behind the

@@ -270,6 +270,7 @@ mod terminal_tests;
 mod test_tmp;
 mod testlaunch;
 mod text;
+mod third_party;
 #[cfg(test)]
 mod ticket_accounts_tests;
 mod ticketfiles;
@@ -728,6 +729,9 @@ pub fn run() {
                 commands::plugin_set_project,
                 commands::harness_enable_in,
                 commands::harness_scope,
+                commands::harness_launch_ask,
+                commands::harness_agree,
+                commands::harness_launches,
                 commands::harness_plugin_of,
                 commands::plugin_set_permission,
                 commands::plugin_set_setting,

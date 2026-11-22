@@ -2,8 +2,8 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-499","ESC-530","ESC-561"]
-decisions: [118,119,120,121,123,124,126,145,147,255]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-499","ESC-530","ESC-561","ESC-589"]
+decisions: [118,119,120,121,123,124,126,145,147,255,"verifiees-seulement-couvre-les-dossiers"]
 compared: null
 ---
 
@@ -200,3 +200,8 @@ Sur la page Plugins, entre « Proposés par Escouade » et « Sécurité », seu
 - La page Git et worktrees d'un projet a, après « Commit », « Récupérer automatiquement (git fetch) » (« Comme le réglage général », « Toujours », « Jamais »), avec un intervalle et un délai propres au projet, et « Réglage général… », qui ouvre Tous les projets sans fermer la fenêtre.
 - **Un nombre borné** se tape librement ou se prend parmi des valeurs proposées, en pastilles à côté du champ (celle qui vaut la valeur est enfoncée). Tapé hors de ses bornes, il est ramené à la plus proche quand le champ est quitté ou validé (Entrée), et la fenêtre le dit sous le champ, sans alerte (« 5000 est hors des bornes (1 min à 24 h) : ramené à 24 h. »). Vidé, ou qui n'est pas un nombre, il reprend sa valeur ; dans le champ d'un projet, vide veut dire « celui du réglage général », montré dans le champ.
 - Le détail : voir *Fetch automatique*.
+
+## Plugins › Sécurité, après ESC-589 (audit SEC-01)
+
+- **« N'installer que des versions vérifiées »** dit sa portée sous son nom, avant l'état de la liste de révocation : il vaut pour le store, les dossiers et les dépôts git (un dossier ou un dépôt n'est accepté que s'il est la version vérifiée du store, aux mêmes fichiers) ; le mode développement est un geste à part, qu'il ne couvre pas. Voir *Le store dans l'app*.
+- **« Harness des plugins tiers »** (`thirdPartyHarnesses`), sous lui : « Demander » (le défaut) ou « Refuser ». Un harness décrit par un plugin tiers lance un programme de ce poste hors du bac à sable : « Demander » redit sa commande entière à son premier lancement, et à chaque changement ; « Refuser » n'en lance aucun. Changé, les agents de ces harness le disent aussitôt. Voir *Les harness ACP décrits*. La recherche des réglages trouve les deux lignes.

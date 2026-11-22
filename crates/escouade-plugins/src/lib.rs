@@ -320,6 +320,11 @@ pub struct Choices {
     /// keychain listing nothing by prefix (§2.3).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub secret_names: Vec<String>,
+    /// The commands of its harnesses the user agreed to (audit SEC-01, ESC-589): by the harness's id in its manifest, the
+    /// fingerprints of the lines agreed (`consent::LaunchLine`, the latest first, a few kept). A harness of a third party
+    /// whose line is not among them asks again before it runs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub harnesses_approved: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Choices {
@@ -333,6 +338,7 @@ impl Default for Choices {
             project_settings: BTreeMap::new(),
             profiles: BTreeMap::new(),
             secret_names: Vec::new(),
+            harnesses_approved: BTreeMap::new(),
         }
     }
 }
@@ -818,6 +824,10 @@ pub struct Preview {
     pub verified: bool,
     /// Why the revocation list took its seal off, if it did.
     pub unverified: Option<String>,
+    /// A folder or a repository read under « N'installer que des versions vérifiées » (SEC-01, ESC-589): the version of
+    /// the store, verified, whose files are the same as its own (`hold_to_store`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matches_store: Option<String>,
 }
 
 /// The installed version an inspection would replace.
@@ -1541,6 +1551,7 @@ impl Plugins {
             manifest: m,
             verified,
             unverified,
+            matches_store: None,
         };
         let mut staged = self.staged.lock();
         // What was set aside for this plugin and never answered goes: one inspection per plugin at a time is enough.
@@ -2449,6 +2460,62 @@ impl Plugins {
         Some((id, update))
     }
 
+    /// « N'installer que des versions vérifiées » for a folder or a git repository (audit SEC-01, ESC-589): what the
+    /// inspection `preview` set aside is kept only when `store` is the store's version of the same id and the same
+    /// version, its seal holding, and its files are the same as those set aside (the same fingerprint, `digest`). Else
+    /// what was set aside goes, and the refusal says why and the gesture that installs it anyway. A folder in
+    /// development is another gesture, never held here.
+    pub fn hold_to_store(
+        &self,
+        mut preview: Preview,
+        store: Result<store::Fetched, String>,
+        lang: Lang,
+    ) -> Result<Preview, Refusal> {
+        let (name, version) = (preview.name.clone(), preview.version.clone());
+        let held = (|| -> Result<String, String> {
+            let f = store?;
+            if f.id != preview.id || f.version != preview.version || f.minisig.is_none() {
+                return Err(tr_in!(
+                    lang,
+                    "le store n'a pas de version vérifiée {} v{}",
+                    "the store has no verified version {} v{}",
+                    preview.id,
+                    preview.version
+                ));
+            }
+            let dir = self
+                .staged
+                .lock()
+                .get(&preview.token)
+                .and_then(|s| s.dir.clone())
+                .ok_or_else(|| "nothing set aside".to_string())?;
+            let here = digest(&dir).map_err(|e| e.to_string())?;
+            if here != digest_of_files(&f.files) {
+                return Err(tr_in!(
+                    lang,
+                    "ses fichiers ne sont pas ceux de la version v{} vérifiée du store",
+                    "its files are not those of the verified version v{} of the store",
+                    f.version
+                ));
+            }
+            Ok(f.version)
+        })();
+        match held {
+            Ok(v) => {
+                preview.matches_store = Some(v);
+                Ok(preview)
+            }
+            Err(why) => {
+                self.discard(&preview.token);
+                Err(Refusal::other(tr_in!(
+                    lang,
+                    "{name} v{version} n'est pas installé : {why}. « N'installer que des versions vérifiées » est allumé (Plugins › Installés) ; coupe-le pour installer ce plugin quand même depuis un dossier ou un dépôt git.",
+                    "{name} v{version} is not installed: {why}. “Install verified versions only” is on (Plugins › Installed); turn it off to install this plugin from a folder or a git repository anyway."
+                )))
+            }
+        }
+    }
+
     /// Puts `installed` in the list in place of its id's, read from its folder, the list saved.
     fn put(&self, installed: Installed, lang: Lang) -> Result<PluginView, Refusal> {
         let id = installed.id.clone();
@@ -2709,6 +2776,27 @@ fn stamp(dir: &Path) -> std::io::Result<String> {
 }
 
 /// The SHA-256 of a folder's files: their paths and their contents, in the order of their paths.
+/// `digest` of files read elsewhere (an archive of the store), by their path in the plugin: the same fingerprint as the
+/// folder that holds them (`.git` left out as `files_of` leaves it).
+pub fn digest_of_files(files: &[(String, Vec<u8>)]) -> String {
+    let mut files: Vec<&(String, Vec<u8>)> = files
+        .iter()
+        .filter(|(rel, _)| !rel.split('/').any(|c| c == ".git"))
+        .collect();
+    files.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut h = Sha256::new();
+    for (rel, bytes) in files {
+        h.update(rel.as_bytes());
+        h.update([0]);
+        h.update((bytes.len() as u64).to_le_bytes());
+        h.update(bytes);
+    }
+    h.finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
+}
+
 pub fn digest(dir: &Path) -> std::io::Result<String> {
     let mut files = Vec::new();
     files_of(dir, "", &mut files)?;

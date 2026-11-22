@@ -433,6 +433,12 @@ pub trait Engine: Send + Sync {
     fn version_waits_gesture(&self) -> bool {
         false
     }
+    /// The whole command it runs with `program`, when it is a harness a plugin of a third party describes: what the user
+    /// agrees to before its first launch (`plugins::consent`, audit SEC-01, ESC-589). None for the others, which ask
+    /// nothing.
+    fn launch_line(&self, _program: &Program) -> Option<crate::plugins::consent::LaunchLine> {
+        None
+    }
     /// What it can do, as the interface reads it (`registry::EngineCaps`).
     fn caps(&self) -> registry::EngineCaps;
     /// Whether it declares its modes (ESC-489): a harness of a plugin whose manifest declares none Escouade knows is

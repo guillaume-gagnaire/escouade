@@ -25,7 +25,7 @@ Escouade est une application de bureau (Windows, macOS, Linux) qui pilote des ag
 
 Il relève 18 constats. Les trois de gravité moyenne tiennent à ce que l'application laisse faire à l'utilisateur, ou à la façon dont l'éditeur travaille, pas à une faille à exploiter :
 
-1. **Plugins tiers** (SEC-01). « N'installer que des versions vérifiées » n'est allumé que pour une installation neuve, et ne juge que le store. Un plugin tiers peut décrire un harness, donc faire lancer un programme du poste hors du bac à sable ; la fenêtre d'installation montre la ligne de commande.
+1. **Plugins tiers** (SEC-01). « N'installer que des versions vérifiées » n'est allumé que pour une installation neuve, et ne juge que le store. Un plugin tiers peut décrire un harness, donc faire lancer un programme du poste hors du bac à sable ; la fenêtre d'installation montre la ligne de commande. **Corrigé dans la 2.2.6** : le réglage vaut aussi pour les dossiers et les dépôts, s'allume à la mise à jour d'une installation sans plugin tiers, et le harness d'un tiers demande l'accord à son premier lancement, sa commande entière redite.
 2. **Projets privés** (SEC-02). Marquer un projet « privé » le cache aux agents des autres projets ; côté fichiers, c'est une consigne donnée aux harness, pas un cloisonnement du système. L'interface le dit.
 3. **Sceau « Vérifié par Escouade »** (SEC-03). Une seule clé, gardée sans mot de passe sur le poste de l'éditeur, et une revue faite par un agent. L'éditeur connaît ce point et garde ce fonctionnement.
 
@@ -301,7 +301,7 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 
 | Id | Titre | Gravité | État |
 | --- | --- | --- | --- |
-| SEC-01 | Plugins tiers : installables sans revue hors du store, et capables de faire lancer un programme | Moyenne | Démontré |
+| SEC-01 | Plugins tiers : installables sans revue hors du store, et capables de faire lancer un programme | Moyenne | Démontré ; corrigé dans la 2.2.6 |
 | SEC-02 | « Projet privé » est une consigne, pas un cloisonnement | Moyenne | Démontré |
 | SEC-03 | Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent | Moyenne | Probable |
 | SEC-04 | Dépendances : des avis ouverts hors de l'application, sans délai de correction | Faible | Démontré |
@@ -328,6 +328,7 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 | État | Démontré pour la portée du réglage (essai B-15) et pour la liste de refus (test W-25) ; probable pour le reste (lu) |
 | Composant | Installation des plugins ; harness décrits par un manifeste |
 | Effort de correction | Moyen |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Trois faits, à lire ensemble.
 
@@ -342,6 +343,14 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 **Ce qui atténue.** Rien ne s'installe sans le geste de l'utilisateur, et la fenêtre montre la ligne. La commande qui lit la version d'un harness décrit ne tourne ni à l'installation ni à chaque liste des harness : elle attend le démarrage d'un agent ou d'un terminal de ce harness (`src-tauri/src/plugins/harness.rs:1446`, `src-tauri/src/engine/registry.rs:413-430`). Un harness tiers n'entre dans un projet privé qu'activé par l'utilisateur pour ce projet (SEC-02). Les plugins de l'éditeur, livrés avec l'application, sont signés.
 
 **Recommandation.** Pour un poste d'entreprise : allumer « N'installer que des versions vérifiées », et n'installer aucun plugin tiers, d'aucune provenance. Pour le produit : étendre le réglage aux dossiers et aux dépôts, ou dire sa portée dans son libellé ; l'allumer à la mise à jour d'une installation qui n'a aucun plugin tiers ; pour un harness décrit par un tiers, remplacer la liste de refus par un accord demandé au premier lancement, qui redise la ligne de commande.
+
+**Correction (Escouade 2.2.6).** Les trois points de la recommandation sont faits.
+
+1. « N'installer que des versions vérifiées » vaut aussi pour un dossier et un dépôt git : réglage allumé, l'un d'eux n'est accepté que s'il est une version vérifiée du store, de même identifiant, de même version et aux mêmes fichiers ; sinon il est refusé, avec sa raison et le geste qui l'autorise. Le chargement « en développement » reste un geste à part, dit comme tel dans sa fenêtre.
+2. La mise à jour allume le réglage pour une installation qui n'a aucun plugin tiers installé, une fois ; une installation qui en a un garde son choix.
+3. Le harness qu'un plugin tiers décrit demande l'accord de l'utilisateur à son premier lancement, sa ligne de commande entière redite : programme trouvé, arguments, variables ajoutées et retirées. L'accord est gardé par l'empreinte de cette ligne : une mise à jour qui la change le redemande, et un lancement que le plugin décrirait autrement est refusé. Refusé, l'agent ne démarre pas. Un réglage « Harness des plugins tiers : Refuser » n'en lance aucun. La liste de refus reste un premier filtre du manifeste.
+
+Le scénario `npx un-paquet` ne lance plus rien sans cet accord : c'est un test du projet.
 
 ## SEC-02 — « Projet privé » est une consigne, pas un cloisonnement
 

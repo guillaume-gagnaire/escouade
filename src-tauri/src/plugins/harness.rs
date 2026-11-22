@@ -213,6 +213,17 @@ pub fn sync_described(
     have.iter().map(|(id, _, _)| *id).collect()
 }
 
+/// The harnesses in the registry that a plugin of a third party describes (SEC-01, ESC-589): those whose command the user
+/// agrees to first.
+pub fn described_of_third_parties() -> Vec<EngineId> {
+    DESCRIBED
+        .lock()
+        .iter()
+        .filter(|(_, owner, _)| !super::builtin::first_hand(owner))
+        .map(|(id, _, _)| *id)
+        .collect()
+}
+
 /// `sync_described` from the plugins installed: those that loaded and are on for the app.
 pub fn sync(rt: &Arc<Runtime>, plugins: &super::Plugins) -> Vec<EngineId> {
     let on = |v: &super::PluginView| v.state == super::State::Ready && v.choices.enabled;
@@ -703,6 +714,48 @@ impl ProcessEngine {
         &self.owner
     }
 
+    /// The whole command it runs with `program`, when a plugin of a third party describes it (audit SEC-01, ESC-589):
+    /// what the user agrees to first (`consent`).
+    pub fn third_party_line(&self, program: &Program) -> Option<super::consent::LaunchLine> {
+        if !self.described || self.first_hand {
+            return None;
+        }
+        let acp = self.decl.acp.clone().unwrap_or_default();
+        let escouade_env = std::iter::once(self.account_var.to_string())
+            .chain(self.key_var.map(str::to_string))
+            .collect();
+        Some(super::consent::LaunchLine::new(
+            self.id,
+            self.name,
+            &self.owner,
+            program.describe(),
+            acp.args,
+            acp.resume.map(|r| r.args).unwrap_or_default(),
+            self.decl.version_args.clone(),
+            &acp.env,
+            acp.remove_env,
+            escouade_env,
+        ))
+    }
+
+    /// `third_party_line` checked: agreed to, and not refused by « Harness des plugins tiers » (`consent::check`).
+    fn agreed(&self, program: &Program) -> Result<Option<super::consent::LaunchLine>> {
+        match self.third_party_line(program) {
+            Some(line) => match super::consent::check(&line) {
+                Ok(()) => Ok(Some(line)),
+                Err(held) => {
+                    log::warn!(
+                        "{}: its command is not run, {held:?} ({})",
+                        self.name,
+                        line.program
+                    );
+                    bail!(super::consent::refusal(&line, &held))
+                }
+            },
+            None => Ok(None),
+        }
+    }
+
     /// What the plugin is told of the harness with each agent: its description, for the generic ACP plugin.
     fn description(&self) -> Option<proto::HarnessDecl> {
         self.described.then(|| self.decl.clone())
@@ -747,7 +800,19 @@ impl ProcessEngine {
                 .map(|(k, _)| k.clone())
                 .collect(),
         };
+        // A harness of a third party runs its command once it is agreed to, the one agreed (SEC-01, ESC-589).
+        let line = self.agreed(&ask.program)?;
         let mut launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
+        if let Some(line) = &line {
+            let env: Vec<(String, String)> = launch
+                .env
+                .iter()
+                .map(|v| (v.name.clone(), v.value.clone()))
+                .collect();
+            if !line.covers(&launch.args, &env, &launch.remove_env) {
+                bail!(not_the_line(self.name));
+            }
+        }
         let vars = self.vars();
         check_env(self.name, &vars, &launch.env).map_err(|e| anyhow!(e))?;
         vars.hold_removed(self.name, &mut launch.remove_env);
@@ -1287,6 +1352,14 @@ fn refused_var(name: &str, var: &str) -> String {
     )
 }
 
+/// The launch a plugin describes for a harness of a third party is not the command the user agreed to (SEC-01, ESC-589).
+fn not_the_line(name: &str) -> String {
+    tr!(
+        "Le plugin de {name} décrit un lancement qui n’est pas la commande que tu as acceptée : rien n’est lancé.",
+        "The plugin of {name} describes a launch that is not the command you agreed to: nothing is launched."
+    )
+}
+
 /// A file a plugin wants written: in the agent's own folder alone.
 fn check_file(name: &str, home: Option<&str>, file: &str) -> std::result::Result<(), String> {
     let path = Path::new(file);
@@ -1492,6 +1565,9 @@ impl Engine for ProcessEngine {
         // Its `versionArgs` are a manifest's of anyone's: run after a gesture of the user's alone (ESC-424).
         self.described && !self.first_hand
     }
+    fn launch_line(&self, program: &Program) -> Option<super::consent::LaunchLine> {
+        self.third_party_line(program)
+    }
     fn caps(&self) -> EngineCaps {
         let mut caps = self.caps.clone();
         // The meanings in the app's language of now.
@@ -1558,6 +1634,8 @@ impl Engine for ProcessEngine {
         if let Some(var) = named.find(refused) {
             bail!(refused_var(self.name, var));
         }
+        // A harness of a third party: its command agreed to first, and held to it (SEC-01, ESC-589).
+        let line = self.agreed(&spawn.program)?;
         let key = format!("{}-{}", self.id, uuid::Uuid::new_v4().simple());
         let session = match &spawn.start {
             Start::Resume { session } => Some(session.clone()),
@@ -1599,6 +1677,7 @@ impl Engine for ProcessEngine {
             prepare: self.prepare,
             plugin: self.plugin.clone(),
             vars: self.vars(),
+            line,
             name: self.name,
             account_var: self.account_var,
             key,
@@ -1728,6 +1807,8 @@ pub struct ProcessEngineProcess {
     plugin: String,
     /// What variables its launches may set (`ProcessEngine::vars`).
     vars: Vars,
+    /// The command agreed to, for a harness of a third party (SEC-01, ESC-589): each launch held to it.
+    line: Option<super::consent::LaunchLine>,
     name: &'static str,
     /// The variable that gives the agent its own folder (`HarnessDecl::account_var`): where its launch may write.
     account_var: &'static str,
@@ -2323,6 +2404,7 @@ impl ProcessEngineProcess {
         )
         .map_err(|e| anyhow!(e))?;
         check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
+        self.hold_to_line(&launch)?;
         self.vars.hold_removed(self.name, &mut launch.remove_env);
         {
             let mut a = self.attach.lock();
@@ -2353,6 +2435,30 @@ impl ProcessEngineProcess {
             self.write(w);
         }
         Ok(Launched::Child(child, job))
+    }
+
+    /// The launch the plugin described, for a harness of a third party: the command agreed to, read again as it is about
+    /// to run (SEC-01, ESC-589). The variables the core names itself (the account's folder, its key) are its own.
+    fn hold_to_line(&self, launch: &proto::Launch) -> Result<()> {
+        let Some(line) = &self.line else {
+            return Ok(());
+        };
+        let env: Vec<(String, String)> = launch
+            .env
+            .iter()
+            .filter(|v| !line.escouade_env.contains(&v.name))
+            .map(|v| (v.name.clone(), v.value.clone()))
+            .collect();
+        if line.covers(&launch.args, &env, &launch.remove_env) {
+            Ok(())
+        } else {
+            log::warn!(
+                "{}: its launch is not the command agreed to: {}",
+                self.name,
+                args_for_log(&launch.args)
+            );
+            bail!(not_the_line(self.name))
+        }
     }
 
     /// Starts its program from `launch`, `added` to its arguments.
@@ -2407,6 +2513,7 @@ impl ProcessEngineProcess {
             launch,
         )
         .map_err(|e| anyhow!(e))?;
+        self.hold_to_line(launch)?;
         // Its next program no more than its first: nothing opens the mode of no question without the setting (SEC-09).
         let launch = next_launch(self.name, &self.vars, launch, spawn.bypass)?;
         write_files(&launch)?;

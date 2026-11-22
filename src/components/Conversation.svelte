@@ -659,6 +659,27 @@
       >
     </div>
   {/if}
+  <!-- A harness of a third party whose command is not agreed to, or refused by « Harness des plugins tiers » (SEC-01,
+       ESC-589): it does not start; « Voir la commande… » says it whole, to agree to or refuse. -->
+  {#if !agent.archived && app.harnessLaunches[agent.engine ?? 'claude']}
+    {@const held = app.harnessLaunches[agent.engine ?? 'claude']}
+    <div
+      class="banner held"
+      class:top={harnessView}
+      role="region"
+      aria-label={t('plugins.harness.seeCommand')}
+      data-testid="harness-launch-held"
+    >
+      <span
+        >{held === 'refused'
+          ? t('plugins.harness.cardRefused', { name: engineName(agent.engine) })
+          : t('plugins.harness.cardAsks', { name: engineName(agent.engine) })}</span
+      >
+      <button class="btn primary" onclick={() => app.askHarnessLaunch(agent.engine ?? 'claude', agent.id)}
+        >{t('plugins.harness.seeCommand')}</button
+      >
+    </div>
+  {/if}
 {/snippet}
 
 <!-- Above a request a subagent made: which one, and the way to its conversation, where it is answered too. -->

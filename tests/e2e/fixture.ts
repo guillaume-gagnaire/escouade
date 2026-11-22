@@ -446,6 +446,9 @@ export const test = base.extend<{
         autoUpdate: false,
         // A message sent during a turn goes at once, as the tests expect.
         midTurnDelaySecs: 0,
+        // « N'installer que des versions vérifiées » settled already (ESC-589): off, as the tests that install a folder
+        // expect, not turned on by the update a settings file without the key reads as. A test of it says otherwise.
+        pluginsVerifiedSettled: true,
         ...given,
         accounts: accountsFor(given, appEnv),
       }),

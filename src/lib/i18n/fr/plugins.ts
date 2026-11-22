@@ -124,6 +124,13 @@ export default {
     category: 'Catégorie : {name}',
     categoryEmpty: 'Aucun plugin installé dans cette catégorie.',
     verifiedOnly: 'N’installer que des versions vérifiées',
+    verifiedOnlyScope:
+      'Vaut pour le store, les dossiers et les dépôts git : un dossier ou un dépôt n’est accepté que s’il est la version vérifiée du store, aux mêmes fichiers. Le mode développement est un geste à part, qu’il ne couvre pas.',
+    thirdPartyHarnesses: 'Harness des plugins tiers',
+    thirdPartyHarnessesDesc:
+      'Un harness décrit par un plugin tiers lance un programme de ce poste hors du bac à sable. « Demander » redit sa commande entière à son premier lancement, et à chaque changement ; « Refuser » n’en lance aucun.',
+    thirdAsk: 'Demander',
+    thirdRefuse: 'Refuser',
     revocations: 'Liste de révocation lue à {time} · nº {serial}, signée, relue toutes les 6 heures',
     revocationsNone: 'Liste de révocation : aucune lue encore ; relue toutes les 6 heures',
     readAgain: 'Relire maintenant',
@@ -299,6 +306,26 @@ export default {
     cardOff: '{name} est coupé pour ce projet : cet agent ne démarre pas et ne reçoit rien.',
     ticketWhy: 'Son harness, {name}, n’est pas activé pour ce projet.',
     commandFrom: 'Commande donnée par le plugin {plugin}, pas par Escouade : lis-la avant de la lancer.',
+    // The agreement to a harness of a third party at its first launch, its whole command said (SEC-01, ESC-589).
+    launchTitle: 'Lancer {name} ?',
+    launchBody:
+      '{name} vient du plugin tiers {plugin}, que personne chez Escouade n’a relu. Il lance un programme de ton poste, hors du bac à sable, avec tes droits. Voici sa commande entière : lis-la avant de l’autoriser.',
+    launchRefusedBody:
+      '« Harness des plugins tiers » est sur « Refuser » (Réglages › Plugins) : aucun harness d’un plugin tiers ne se lance.',
+    program: 'Programme',
+    args: 'Arguments',
+    resumeArgs: 'Pour reprendre une session',
+    versionArgs: 'Pour lire sa version',
+    env: 'Variables qu’il ajoute',
+    removeEnv: 'Variables qu’il retire',
+    escouadeEnv: 'Variables qu’Escouade pose',
+    none: 'aucun',
+    launchAfter: 'Ton accord est gardé pour cette commande exacte : une mise à jour du plugin qui la change te la redemande.',
+    allow: 'Autoriser et lancer',
+    refuse: 'Refuser',
+    cardAsks: '{name} vient d’un plugin tiers : il attend ton accord pour lancer sa commande, et cet agent ne démarre pas d’ici là.',
+    cardRefused: '{name} vient d’un plugin tiers, et « Harness des plugins tiers » est sur « Refuser » : cet agent ne démarre pas.',
+    seeCommand: 'Voir la commande…',
   },
 
   settings: {
@@ -430,6 +457,9 @@ export default {
     storeUnverifiedBody:
       'Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme.',
     sealWithdrawn: 'Son sceau a été retiré par Escouade : {reason}',
+    matchesStore: 'Identique à la v{version} vérifiée du store : ses fichiers sont ceux qu’Escouade a relus.',
+    devApart:
+      'Le mode développement est un geste à part : « N’installer que des versions vérifiées » ne le couvre pas. Le dossier est chargé tel quel, sans revue, et relu à chaque changement.',
     unverifiedBody:
       'Il vient d’un dossier ou d’un dépôt git, hors du store : rien ne dit ce que fait son programme. Installe-le si tu as confiance en son auteur.',
     declarative: 'Sans programme : rien de lui ne s’exécute, ses contributions sont lues.',

@@ -2642,6 +2642,8 @@ impl<R: Runtime> Core<R> {
     pub fn sync_harnesses(&self) -> bool {
         let before: Vec<_> = engine::registry::all().iter().map(|e| e.id()).collect();
         crate::plugins::harness::sync(&self.plugin_runtime, &self.plugins);
+        // A plugin installed, updated or removed: what was agreed of its harness's command, read again (SEC-01).
+        self.sync_consents();
         let now: Vec<_> = engine::registry::all().iter().map(|e| e.id()).collect();
         before != now
     }
@@ -2676,6 +2678,8 @@ impl<R: Runtime> Core<R> {
         let program = program(&account, &settings).ok_or_else(|| {
             anyhow::anyhow!(engine::missing_line(account.engine, crate::i18n::ui()))
         })?;
+        // A harness of a third party: its command agreed to first, as before its first agent (SEC-01, ESC-589).
+        self.check_harness_consent(engine::by_id(account.engine), &program)?;
         // Its own command of sign-in (`codex login`), else the program itself (Claude Code asks).
         let args: Vec<String> = store(account.engine)
             .login

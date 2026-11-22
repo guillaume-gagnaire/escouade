@@ -116,6 +116,11 @@ export interface Settings {
   pluginTheme?: string;
   /** « N'installer que des versions vérifiées » (STORE-9): a version of the store without the seal is refused. */
   pluginsVerifiedOnly?: boolean;
+  /**
+   * « Harness des plugins tiers » (SEC-01, ESC-589): `ask`, a harness a third party describes asks at its first launch,
+   * its whole command said; `refuse`, none runs.
+   */
+  thirdPartyHarnesses?: 'ask' | 'refuse';
   /** « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the WebView's zoom, text, spacing and icons together. */
   uiZoom: number;
   /** « Taille du texte des terminaux », in CSS pixels before the zoom. */
@@ -2883,6 +2888,8 @@ export interface InitialState {
   enginesOff?: EngineId[];
   /** The harnesses not on for a project, by project (absent before ESC-404: none). */
   harnessScope?: Record<string, HarnessScope>;
+  /** The harnesses of a third party whose command does not run now (SEC-01, ESC-589). */
+  harnessLaunches?: Partial<Record<EngineId, LaunchHeld>>;
   /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
   sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
@@ -3593,6 +3600,30 @@ export interface CacheHeat {
 export interface HarnessScope {
   off: EngineId[];
   asks: EngineId[];
+}
+
+/** Why the command of a harness of a third party does not run now (SEC-01, ESC-589). */
+export type LaunchHeld = 'asks' | 'refused';
+
+/**
+ * The whole command of a harness a plugin of a third party describes (SEC-01, ESC-589), as the window of the agreement
+ * shows it: the program found, its arguments, those it resumes a session with and those that read its version, the
+ * variables it adds and takes off, those Escouade sets; `fingerprint` is what the agreement keeps.
+ */
+export interface LaunchAsk {
+  engine: EngineId;
+  harness: string;
+  plugin: string;
+  pluginName: string;
+  program: string;
+  args: string[];
+  resumeArgs: string[];
+  versionArgs: string[];
+  env: { name: string; value: string }[];
+  removeEnv: string[];
+  escouadeEnv: string[];
+  fingerprint: string;
+  held: LaunchHeld | null;
 }
 
 /** A deletion an agent asks of the user (`Agent.deleteAsk`): who asks (an agent's id), since when, and for its worktree. */
