@@ -224,6 +224,18 @@ pub struct ViewSnoozes {
     pub marks: BTreeMap<String, ViewMark>,
 }
 
+impl ViewSnoozes {
+    /// A ticket moved (its column, a conflict): the marks on its views fall, whether the box was read between or not.
+    /// Called by the move itself, under the tickets' lock (`Core::edit_ticket_with`), never by its fact: the bus
+    /// hands a fact to its sinks later, on its own thread, and the fact of the move into « À tester » would drop the
+    /// mark the squad lead left after it (ESC-621). Whether one fell.
+    pub fn forget_ticket(&mut self, ticket_id: &str) -> bool {
+        let ticket = self.marks.remove(&format!("ticket:{ticket_id}")).is_some();
+        let blocked = self.marks.remove(&format!("blocked:{ticket_id}")).is_some();
+        ticket || blocked
+    }
+}
+
 /// The longest note of a mark, in characters.
 pub const MARK_NOTE_MAX: usize = 200;
 
@@ -803,24 +815,6 @@ impl<R: Runtime> Core<R> {
         self.inbox_view_told(&v.project_id);
     }
 
-    /// A ticket moved (its column, a conflict): the marks on its views fall at once, whether the box was read between
-    /// or not.
-    pub(crate) fn inbox_marks_ticket_moved(&self, ticket_id: &str) {
-        let keys = [
-            format!("ticket:{ticket_id}"),
-            format!("blocked:{ticket_id}"),
-        ];
-        let gone = {
-            let mut s = self.inbox_snoozes.lock();
-            // Both removed, whichever was there.
-            let removed: Vec<bool> = keys.iter().map(|k| s.marks.remove(k).is_some()).collect();
-            removed.contains(&true)
-        };
-        if gone {
-            self.request_save();
-        }
-    }
-
     /// The window reads the box again: a view of this project changed.
     pub(crate) fn inbox_view_told(&self, project_id: &str) {
         self.hub.emit(UiEvent::Inbox {
@@ -875,13 +869,9 @@ impl<R: Runtime> crate::facts::Sink for ViewsSink<R> {
         let Some(project) = fact.project.as_ref().filter(|_| moves) else {
             return;
         };
+        // What the squad lead said of a ticket's views falls with its move itself (`ViewSnoozes::forget_ticket`), not
+        // here: this fact comes later, and may come after a mark left on the view the move made (ESC-621).
         if let Some(core) = self.core.upgrade() {
-            // A ticket that moved: what the squad lead said of its views no longer holds (ESC-557).
-            if matches!(fact.body, B::TicketColumn { .. } | B::TicketConflict { .. }) {
-                if let Some(t) = fact.ticket.as_ref() {
-                    core.inbox_marks_ticket_moved(&t.id);
-                }
-            }
             if core.inbox_enabled() {
                 core.inbox_view_told(&project.id);
             }

@@ -519,6 +519,8 @@ async fn the_lead_takes_a_ticket_to_test_in_hand_it_no_longer_waits_and_falls_on
     assert_eq!(mark.note, "vérification en cours, chaîne de tests");
     assert_eq!(mark.by_name, "overseer-fable");
     // No longer waiting for the user, still there to read, with its note; its source untouched.
+    // The facts of its way to « À tester » handed to the box first, whenever the bus does it.
+    h.core.facts.flush();
     let v = views(&h).await;
     assert_eq!(v.total, 0);
     let still = view_of(&h, &key).await;
@@ -578,7 +580,8 @@ async fn the_lead_takes_a_ticket_to_test_in_hand_it_no_longer_waits_and_falls_on
         .unwrap();
     assert!(!keys(&h).await.contains(&key));
     assert!(h.core.inbox_snoozes.lock().marks.is_empty());
-    // A move told by its fact drops it at once, before any read.
+    // Back « À tester », taken in hand after: the fact of that move, handed to the box later by
+    // the bus, leaves the mark alone (ESC-621: it dropped it, the view waiting again at once).
     h.core
         .edit_ticket(&t.id, |x| {
             x.column = Column::Review;
@@ -589,7 +592,16 @@ async fn the_lead_takes_a_ticket_to_test_in_hand_it_no_longer_waits_and_falls_on
         .inbox_view_claim(&key, &lead(), "je regarde")
         .await
         .unwrap();
-    h.core.inbox_marks_ticket_moved(&t.id);
+    h.core.facts.flush();
+    assert!(h.core.inbox_snoozes.lock().marks.contains_key(&key));
+    assert_eq!(views(&h).await.total, 0);
+    // A move drops it at once, before any read.
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.column = Column::Doing;
+            Ok(())
+        })
+        .unwrap();
     assert!(h.core.inbox_snoozes.lock().marks.is_empty());
 }
 

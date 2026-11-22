@@ -59,6 +59,9 @@ async function installAndOpen(page: Page, repo: string) {
   await addProject(page, repo);
   await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
   await page.getByRole('menuitemradio', { name: /Unharnessed/ }).click();
+  // A harness of a third party: its whole command agreed to at its first launch (SEC-01, ESC-589).
+  await page.getByRole('dialog', { name: 'Lancer Unharnessed ?' }).getByRole('button', { name: 'Autoriser et lancer' }).click();
+  await expect(page.getByRole('dialog', { name: 'Lancer Unharnessed ?' })).toHaveCount(0);
   await expect(page.locator('main.conv header.head')).toContainText('Unharnessed');
 }
 
