@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.8] — 2026-11-23
 
 - Security: a cloned or pulled repository can no longer use a link or a booby-trapped file to make the app read, write or copy a file outside the project, nor freeze or flood it; the proxy password kept outside the keychain no longer reaches the window. Thanks to OshOEz, who had the code audited and offered these fixes.
 
