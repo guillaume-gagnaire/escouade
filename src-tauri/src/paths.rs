@@ -5,6 +5,31 @@ pub use escouade_model::paths::*;
 #[cfg(test)]
 use std::path::{Path, PathBuf};
 
+/// The bytes of a regular file of at most `max` bytes, the one way a file of a project tree is
+/// read inline on an async worker (fsedit, git's untracked files). A FIFO, socket or device
+/// planted there (by an agent) would block that worker at open: opened non-blocking, its type
+/// checked on the handle itself (no swap after a check), and its read capped whatever it grew to.
+pub fn read_regular(path: &std::path::Path, max: u64) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.custom_flags(libc::O_NONBLOCK);
+    }
+    let file = opts.open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    let mut bytes = Vec::new();
+    file.take(max.saturating_add(1)).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max {
+        return Err(std::io::Error::other("file too large"));
+    }
+    Ok(bytes)
+}
+
 /// Cargo puts in the `PATH` of a test every folder a build script gives the linker, and that of
 /// whisper-rs-sys gives each folder of whisper.cpp's cmake tree (46 of them): the `PATH` then
 /// passes the 8191 characters cmd.exe reads, and the fake `claude.cmd` no longer finds `node`.

@@ -197,7 +197,7 @@ fn count_lines(path: &Path) -> u32 {
     if meta.len() > 2_000_000 {
         return 0;
     }
-    match std::fs::read(path) {
+    match crate::paths::read_regular(path, 2_000_000) {
         Ok(bytes) if !bytes.contains(&0) => {
             let n = bytes.iter().filter(|&&b| b == b'\n').count();
             (n + usize::from(!bytes.is_empty() && !bytes.ends_with(b"\n"))) as u32
@@ -426,7 +426,7 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
             out.push_str(&flagged(&new_file_header(&path)));
             continue;
         }
-        let Ok(bytes) = std::fs::read(&full) else {
+        let Ok(bytes) = crate::paths::read_regular(&full, MAX_FILE_DIFF as u64) else {
             continue;
         };
         if bytes.contains(&0) {

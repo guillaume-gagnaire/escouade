@@ -3,7 +3,7 @@
 
 use crate::git;
 use crate::i18n::{self, Lang};
-use crate::paths::{contained, outside};
+use crate::paths::{contained, outside, read_regular};
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
@@ -184,7 +184,7 @@ pub fn read(root: &Path, rel: &str) -> Result<FileText> {
             bom: false,
         });
     }
-    Ok(decode(&std::fs::read(&path)?))
+    Ok(decode(&read_regular(&path, MAX_EDIT_BYTES)?))
 }
 
 /// Writes `text` back with the file's line endings and BOM, through a temporary file renamed
@@ -217,7 +217,8 @@ pub fn write(
     }
 
     if let Some(exp) = expected {
-        match std::fs::read(&path) {
+        // Capped like read(): a file past it was never opened in the editor, so `expected` is not its hash.
+        match read_regular(&path, MAX_EDIT_BYTES) {
             // The version found named (`changed:<hash>`): « Garder ma version » writes over that one only.
             Ok(bytes) if hash(&bytes) != exp => bail!("{CHANGED}:{}", hash(&bytes)),
             Ok(_) => {}
@@ -1212,6 +1213,26 @@ mod tests {
         let missing = read(&dir, "missing.ts").unwrap_err().to_string();
         assert!(missing.contains("introuvable"), "{missing}");
         assert!(read(&dir, "../x").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn never_blocks_on_a_fifo_planted_in_the_tree_and_caps_what_it_reads() {
+        use std::os::unix::ffi::OsStrExt;
+        let dir = test_dir("fsedit-read-fifo");
+        let fifo = dir.join("p.md");
+        let c = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        // No writer: opened blocking, each of these calls would hang here.
+        assert!(read(&dir, "p.md").is_err());
+        let err = write(&dir, "p.md", "x", "lf", false, Some("h"), &[]).unwrap_err();
+        assert!(err.to_string().contains("not a regular file"), "{err}");
+        assert!(read_regular(&fifo, 10).is_err());
+        // The cap holds on the bytes read, not on a size taken before.
+        let big = dir.join("big.bin");
+        std::fs::write(&big, [b'a'; 11]).unwrap();
+        assert!(read_regular(&big, 10).is_err());
+        assert_eq!(read_regular(&big, 11).unwrap().len(), 11);
     }
 
     #[test]
