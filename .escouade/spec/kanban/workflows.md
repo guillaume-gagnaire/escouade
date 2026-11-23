@@ -2,8 +2,8 @@
 title: "Workflows"
 subject: "Kanban"
 sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309","docs/PLUGINS-DESIGN.md §4.5, choix 158 de design/app-redesign/UX-NOTES.md","Demande de l'utilisateur du 2026-11-10 (ticket ESC-406) et son choix sur aperçu : direction A de design/workflow-path/index.html"]
-tickets: ["ESC-195","ESC-309","ESC-200","ESC-245","ESC-406"]
-decisions: [143]
+tickets: ["ESC-195","ESC-309","ESC-200","ESC-245","ESC-406","ESC-653"]
+decisions: [143,"ce-qu-un-depot-apporte-est-lu-sans-lien"]
 compared: "2026-10-31T10:04:30+01:00"
 gaps: [{"text":"La page dit que rien d'une machine ni aucune empreinte n'entre dans le fichier. Quand un workflow a été affiné, le code écrit dans `workflow.refined` l'empreinte de la lecture d'origine, et cette empreinte est versionnée dans le dépôt.","code":["src-tauri/src/workflowfiles.rs","src-tauri/src/workflow.rs"]}]
 ---
@@ -114,3 +114,7 @@ Seul l'agent lu a son chemin. Les autres agents du workflow restent des pastille
 
 - Le chemin se lit aussi dans une liste ordonnée pour un lecteur d'écran, « Chemin de <agent>, dans l'ordre », dans la colonne comme en grand : « Planifier, entrée par /gsd:plan-phase », « Planifier, tour de boucle : <raison>, 2e passage », « Planifier, retour depuis Vérifier : <raison>, 3e passage », « Exécuter, 2e passage, en cours ».
 - La colonne et la vue agrandie suivent la même logique ; à 1024 px de large, rien ne déborde du panneau (340 px) ni de la vue agrandie.
+
+## Un fichier d'état venu du dépôt (ESC-653)
+
+- Le fichier d'état que nomme un workflow (son `path`) n'est lu que s'il est dans le projet : un chemin relatif, sans `..` ni lettre de lecteur, jamais à travers un lien (une jonction sous Windows en est un), un fichier ordinaire de 2 Mo au plus. Sinon il compte comme absent.

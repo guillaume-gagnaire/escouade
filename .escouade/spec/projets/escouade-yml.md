@@ -2,8 +2,8 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-530","ESC-560","ESC-561"]
-decisions: [255,"une-commande-de-lancement-ouvre-son-adre"]
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-530","ESC-560","ESC-561","ESC-653"]
+decisions: [255,"une-commande-de-lancement-ouvre-son-adre","ce-qu-un-depot-apporte-est-lu-sans-lien"]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 
@@ -152,3 +152,9 @@ Trois clés de plus dans le groupe `git`, après `git.conventional_commits` (voi
 
 - Un nombre entier, écrit nu ou entre guillemets. Hors de ses bornes, il est ramené à la plus proche et le fichier le dit (« git.fetch_every : 5000 est hors des bornes (1 à 1440), ramené à 1440 ») ; ce qui n'est pas un nombre entier est refusé et laissé de côté, comme toute valeur invalide.
 - Le schéma (`schemas/escouade.schema.json`) les dit : un entier entre les bornes, ou `0`.
+
+## Un fichier venu du dépôt (ESC-653)
+
+- `.escouade.yml` n'est lu que s'il est un fichier ordinaire de 1 Mio au plus : un lien (une jonction sous Windows en est un), un tube nommé ou un fichier plus gros n'est pas lu, et le journal le dit. Un lien mis à sa place pendant la lecture n'est pas suivi non plus, sous Windows comme ailleurs.
+- Il n'est jamais écrit à travers un lien, ni par-dessus un fichier qu'il ne lit pas (trop gros) : l'export et « Écrire dans .escouade.yml » le refusent.
+- Sa lecture prend un temps proportionnel à sa taille : un gros fichier ne fige plus l'app.

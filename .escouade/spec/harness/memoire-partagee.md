@@ -2,8 +2,8 @@
 title: "Mémoire partagée"
 subject: "Harness"
 sources: ["website/content/docs/fr/shared-memory.md","docs/FACTORY.md","src-tauri/src/memory.rs","src-tauri/src/mcp/memory.rs","src-tauri/src/core.rs","src/lib/i18n/fr/memory.ts"]
-tickets: ["ESC-255","ESC-310"]
-decisions: []
+tickets: ["ESC-255","ESC-310","ESC-653"]
+decisions: ["ce-qu-un-depot-apporte-est-lu-sans-lien"]
 compared: "2026-10-31T16:10:35+01:00"
 ---
 
@@ -50,3 +50,5 @@ Réglages › Projets, groupe « Mémoire partagée » : les souvenirs du projet
 ## Limites
 
 - Les réglages lisent et oublient un souvenir, sans en écrire : ce sont les agents qui l'écrivent.
+
+- Un dossier de mémoire est lu dans ses 500 premiers fichiers (par nom) et 8 Mio au plus en tout : un dépôt cloné décide de leur nombre et de leur taille (ESC-653).

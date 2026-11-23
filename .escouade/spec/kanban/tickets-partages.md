@@ -2,8 +2,8 @@
 title: "Tickets partagés"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-190","ESC-243"]
-decisions: []
+tickets: ["ESC-190","ESC-243","ESC-653"]
+decisions: ["ce-qu-un-depot-apporte-est-lu-sans-lien"]
 compared: null
 ---
 
@@ -87,3 +87,13 @@ Un ticket partagé garde la clé de son auteur. Si elle existe déjà ici, le ti
 - « Ton nom » : Réglages › Application › Équipe.
 - « Ton nom dans ce projet » : Réglages › Projets › Kanban partagé.
 - « Partager chaque nouveau ticket » : réglage du projet.
+
+## Un dossier venu du dépôt (ESC-653)
+
+Le dossier des tickets arrive avec un clone ou un pull : n'importe quel collaborateur du dépôt peut y avoir mis un lien ou un fichier piégé.
+
+- Le fichier d'un ticket de plus de 64 Kio n'est pas lu : la carte « Ticket partagé illisible » dit qu'il est trop gros. Un dossier de plus de 2 000 fichiers n'est pas suivi du tout (le journal le dit) : rien n'y est lu, rien du Kanban n'en part.
+- Les images et fichiers d'un ticket reçu ne sont copiés que s'ils sont des fichiers ordinaires du dossier de ce ticket, sans lien (une jonction sous Windows en est un) ni sur eux ni sur le chemin, et jusqu'à 5 Mo.
+- Ceux d'un ticket à soi ne s'écrivent que là où rien n'est encore, sans lien au dossier du ticket ni en chemin.
+- Supprimer un ticket partagé n'efface rien à travers un dossier lié, ni hors du projet.
+- « Prendre le sien » lit le fichier en conflit sans suivre un lien, et jusqu'à 256 Kio.
