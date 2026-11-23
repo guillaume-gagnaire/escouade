@@ -3,7 +3,7 @@ title: "Ce qui change de machine"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « Ce qui change de machine », « Ce qui change de machine, MS-4 (ESC-538) »","docs/SERVER-UX.md, § 4, § 7 (S12, S13), § 9, § 10","design/server-2-3/ (captures x-fichier, x-compte, x-notifs, *-projet)","src-tauri/src/serverfolders.rs, src-tauri/src/servers/received.rs, src-tauri/src/servers/mod.rs (relay)","src/lib/server-moves.svelte.ts, src/lib/server-browse.ts, src/components/servers/","Revue de sécurité de la 2.3 (ESC-624), constat SR1-06 (rapport privé, hors du dépôt)"]
 tickets: ["ESC-538","ESC-629","ESC-651"]
-decisions: [217,284,299,"la-2-2-6-a-la-2-2-8-reversees-dans-la-2"]
+decisions: [217,284,299,309]
 compared: null
 ---
 

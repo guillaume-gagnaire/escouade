@@ -1,9 +1,9 @@
 ---
-number: null
+number: 309
 id: "la-2-2-6-a-la-2-2-8-reversees-dans-la-2"
 title: "La 2.2.6 à la 2.2.8 reversées dans la 2.3 : l'ouverture bornée jugée par l'hôte, « Mode hors ligne » dans la liste des stratégies"
 date: "2026-11-23"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-651"
 pages: ["a-distance/ce-qui-change-de-machine","fenetre/reglages-imposes","kanban/tickets-partages"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"a-distance/ce-qui-change-de-machine","added":6,"removed":0},{"page":"fenetre/reglages-imposes","added":7,"removed":0},{"page":"kanban/tickets-partages","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-24T00:58:23+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

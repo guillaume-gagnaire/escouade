@@ -3,7 +3,7 @@ title: "Tickets partagés"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-190","ESC-243","ESC-493","ESC-653","ESC-651"]
-decisions: [194,308,"la-2-2-6-a-la-2-2-8-reversees-dans-la-2"]
+decisions: [194,308,309]
 compared: null
 ---
 
