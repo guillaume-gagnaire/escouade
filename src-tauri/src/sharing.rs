@@ -9,7 +9,8 @@
 //! last read or written (`Shared::seen`): a file that changed outside Escouade is read, one that did
 //! not is written again when its ticket says something else.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::io::Read as _;
 use std::str::FromStr;
 
 use serde_json::{json, Map, Value};
@@ -28,6 +29,12 @@ pub const VERSION: u32 = 1;
 pub const SCHEMA_URL: &str = "https://escouade.dev/schemas/escouade-ticket.schema.json";
 /// A joined file above this size stays on its machine (choice 107); images always go.
 pub const MAX_SHARED_FILE: u64 = 5 * 1024 * 1024;
+/// A ticket's file above this size is not read (one is a few KiB): it shows as invalid.
+pub const MAX_TICKET_FILE: u64 = 64 * 1024;
+/// A folder with more tickets' files than this is not synced at all (a part of them would look removed).
+pub const MAX_TICKET_FILES: usize = 2000;
+/// What `read_dir` keeps for a file above `MAX_TICKET_FILE`, in place of its text.
+const TOO_LARGE: &str = "\0too large\0";
 /// The letters of the ids: lower case and digits, without 0/o nor 1/l.
 const ALPHABET: &[u8] = b"23456789abcdefghijkmnpqrstuvwxyz";
 
@@ -412,6 +419,15 @@ pub fn has_conflict(text: &str) -> bool {
 
 /// Reads a file: what it says, or why it cannot be read. A key it does not know is left out.
 pub fn read(text: &str) -> Read {
+    if text == TOO_LARGE {
+        return invalid(
+            None,
+            tr!(
+                "le fichier est trop gros (64 Kio au plus)",
+                "the file is too large (64 KiB at most)"
+            ),
+        );
+    }
     if has_conflict(text) {
         return Read::Conflict;
     }
@@ -951,12 +967,9 @@ pub fn apply(
 }
 
 /// The board of another one's ticket: its key, with `@author` after it when this project already has a
-/// ticket of that key.
-fn key_for(f: &TicketDoc, tickets: &[Ticket], project_id: &str) -> String {
-    let taken = tickets
-        .iter()
-        .any(|t| t.project_id == project_id && t.key == f.key);
-    if !taken {
+/// ticket of that key (`keys`: the keys of the project's tickets).
+fn key_for(f: &TicketDoc, keys: &HashSet<String>) -> String {
+    if !keys.contains(&f.key) {
         return f.key.clone();
     }
     let who: String = f
@@ -996,7 +1009,6 @@ pub fn reconcile(
     lang: Lang,
 ) -> Outcome {
     let mut out = Outcome::default();
-    let snapshot: Vec<Ticket> = tickets.clone();
     // File id → ticket id, for « Après ».
     let mut ids: BTreeMap<String, String> = tickets
         .iter()
@@ -1005,19 +1017,37 @@ pub fn reconcile(
         .collect();
     // The files no ticket has yet: new tickets, made first so that « Après » finds them.
     let known: HashSet<String> = ids.keys().cloned().collect();
+    // Built once, kept up to date below: one pass per new file over all tickets would be O(N²).
+    let mut keys: HashSet<String> = tickets
+        .iter()
+        .filter(|t| t.project_id == project_id)
+        .map(|t| t.key.clone())
+        .collect();
+    let snapshot_keys = keys.clone();
+    let mut rank = tickets
+        .iter()
+        .filter(|t| t.project_id == project_id)
+        .map(|t| t.rank)
+        .max()
+        .unwrap_or(0);
+    // The imports not started, by outside ticket: the first one last, for `pop`.
+    let mut twins: HashMap<(String, String), Vec<usize>> = HashMap::new();
+    for (i, t) in tickets.iter().enumerate().rev() {
+        if t.project_id == project_id && t.shared.is_none() && t.started_at.is_none() {
+            if let Some(e) = external_of(t) {
+                twins.entry((e.source, e.key)).or_default().push(i);
+            }
+        }
+    }
     for (sid, text) in files.iter().filter(|(sid, _)| !known.contains(*sid)) {
         let seen = fingerprint(text);
         let read = read(text);
         if let Read::Ok(f, _) = &read {
             // An import of the same outside ticket, not started: it becomes the shared one.
             if let Some(ext) = &f.external {
-                let twin = tickets.iter().position(|t| {
-                    t.project_id == project_id
-                        && t.shared.is_none()
-                        && t.started_at.is_none()
-                        && external_of(t)
-                            .is_some_and(|e| e.source == ext.source && e.key == ext.key)
-                });
+                let twin = twins
+                    .get_mut(&(ext.source.clone(), ext.key.clone()))
+                    .and_then(|v| v.pop());
                 if let Some(i) = twin {
                     tickets[i].shared = Some(Shared {
                         id: sid.clone(),
@@ -1034,13 +1064,10 @@ pub fn reconcile(
             project_id: project_id.to_string(),
             created_at: now_ms(),
             max_loops: 5,
-            rank: tickets
-                .iter()
-                .filter(|t| t.project_id == project_id)
-                .map(|t| t.rank)
-                .max()
-                .unwrap_or(0)
-                + 1,
+            rank: {
+                rank += 1;
+                rank
+            },
             shared: Some(Shared {
                 id: sid.clone(),
                 seen: String::new(),
@@ -1050,7 +1077,7 @@ pub fn reconcile(
         };
         match &read {
             Read::Ok(f, _) => {
-                t.key = key_for(f, tickets, project_id);
+                t.key = key_for(f, &keys);
                 out.media.push((t.id.clone(), sid.clone()));
             }
             _ => {
@@ -1059,6 +1086,7 @@ pub fn reconcile(
             }
         }
         let _ = seen;
+        keys.insert(t.key.clone());
         ids.insert(sid.clone(), t.id.clone());
         out.changed.push(t.id.clone());
         tickets.push(t);
@@ -1122,7 +1150,7 @@ pub fn reconcile(
                 let was = t.clone();
                 apply(t, &f, newer, &ids, me);
                 if t.key.is_empty() || t.key == s.id {
-                    t.key = key_for(&f, &snapshot, project_id);
+                    t.key = key_for(&f, &snapshot_keys);
                 }
                 let sh = t.shared.as_mut().unwrap();
                 sh.seen = h;
@@ -1251,14 +1279,15 @@ pub fn dir_of(project: &Project) -> PathBuf {
     base.join(DIR)
 }
 
-/// The files of the folder: id → text. None of them when the folder is not there.
-fn read_dir(dir: &Path) -> BTreeMap<String, String> {
+/// The files of the folder: id → text. None of them when the folder is not there; `None` when it
+/// holds more than `MAX_TICKET_FILES` of them. A file above `MAX_TICKET_FILE` is kept as `TOO_LARGE`.
+fn read_dir(dir: &Path) -> Option<BTreeMap<String, String>> {
     let mut out = BTreeMap::new();
     if crate::workflowfiles::unsafe_dir(dir).is_some() {
-        return out;
+        return Some(out);
     }
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return out;
+        return Some(out);
     };
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
@@ -1269,11 +1298,31 @@ fn read_dir(dir: &Path) -> BTreeMap<String, String> {
         if !e.file_type().is_ok_and(|t| t.is_file()) {
             continue;
         }
-        if let Ok(text) = std::fs::read_to_string(e.path()) {
-            out.insert(id.to_string(), text);
+        if out.len() >= MAX_TICKET_FILES {
+            return None;
         }
+        let Ok(file) = std::fs::File::open(e.path()) else {
+            continue;
+        };
+        // The handle's own kind and size: the name may have changed since `file_type`.
+        if !file.metadata().is_ok_and(|m| m.is_file()) {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        if file.take(MAX_TICKET_FILE + 1).read_to_end(&mut bytes).is_err() {
+            continue;
+        }
+        let text = if bytes.len() as u64 > MAX_TICKET_FILE {
+            TOO_LARGE.to_string()
+        } else {
+            let Ok(text) = String::from_utf8(bytes) else {
+                continue;
+            };
+            text
+        };
+        out.insert(id.to_string(), text);
     }
-    out
+    Some(out)
 }
 
 /// `git config user.name` in `path`, empty when git has none (or no git): `Core::me_in` is called
@@ -1408,7 +1457,13 @@ impl<R: Runtime> Core<R> {
             log::warn!("shared tickets of {}: {why}", project.name);
             return;
         }
-        let files = read_dir(&dir);
+        let Some(files) = read_dir(&dir) else {
+            log::warn!(
+                "shared tickets of {}: more than {MAX_TICKET_FILES} files, not synced",
+                project.name
+            );
+            return;
+        };
         let me = self.me_in(&project);
         let now = iso(now_ms());
         let lang = crate::i18n::ui();
@@ -1434,7 +1489,10 @@ impl<R: Runtime> Core<R> {
             }
         }
         for (tid, sid) in &out.media {
-            self.import_media(&dir, sid, tid);
+            // The text read_dir read (bounded), not the file again: it may have grown since.
+            if let Some(text) = files.get(sid) {
+                self.import_media(&dir, sid, tid, text);
+            }
         }
         let any = !out.changed.is_empty() || !out.removed.is_empty();
         for id in &out.removed {
@@ -1498,11 +1556,8 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The images and files of another one's ticket, copied from the folder into the ticket's own.
-    fn import_media(&self, dir: &Path, sid: &str, tid: &str) {
-        let Ok(text) = std::fs::read_to_string(dir.join(format!("{sid}.yml"))) else {
-            return;
-        };
-        let Read::Ok(f, _) = read(&text) else { return };
+    fn import_media(&self, dir: &Path, sid: &str, tid: &str, text: &str) {
+        let Read::Ok(f, _) = read(text) else { return };
         let from = dir.join(sid);
         let to = self.data.ticket_dir(tid);
         let mut images = Vec::new();
