@@ -1605,3 +1605,14 @@ fn writing_the_file_again_takes_the_key_of_the_retired_index_away() {
     let all = pf::export_values(&project());
     assert!(all.iter().all(|(k, _)| !k.contains("index")));
 }
+
+#[test]
+fn node_lines_count_crlf_and_lf_breaks() {
+    let t = pf::tree("version: 1\r\nmarker: x\r\nworktrees:\n  per_agent: true\n").unwrap();
+    let N::Map(e) = &t.v else { panic!() };
+    let lines: Vec<u32> = e.iter().map(|(_, l, _)| *l).collect();
+    assert_eq!(lines, [1, 2, 3]);
+    let N::Map(w) = &e[2].2.v else { panic!() };
+    assert_eq!((w[0].1, w[0].2.line), (4, 4));
+    assert_eq!(t.line, 1);
+}

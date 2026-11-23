@@ -355,18 +355,36 @@ impl Node {
     }
 }
 
-fn line_at(text: &str, node: &YamlNode) -> u32 {
-    let pos = match node {
-        YamlNode::Scalar(s) => s.start_position(text),
-        YamlNode::Mapping(m) => m.start_position(text),
-        YamlNode::Sequence(s) => s.start_position(text),
+/// Where each line of `text` starts: `\n`, `\r` and `\r\n` end a line, as in yaml-edit.
+fn line_starts(text: &str) -> Vec<usize> {
+    let b = text.as_bytes();
+    let mut starts = vec![0];
+    for (i, &c) in b.iter().enumerate() {
+        if c == b'\n' || (c == b'\r' && b.get(i + 1) != Some(&b'\n')) {
+            starts.push(i + 1);
+        }
+    }
+    starts
+}
+
+/// The 1-based line `node` starts on. Not yaml-edit's `start_position`: it rebuilds the line table
+/// of the whole text at every call, which made reading a file quadratic in its size.
+fn line_at(starts: &[usize], node: &YamlNode) -> u32 {
+    let at = match node {
+        YamlNode::Scalar(s) => s.byte_range().start,
+        YamlNode::Mapping(m) => m.byte_range().start,
+        YamlNode::Sequence(s) => s.byte_range().start,
         _ => return 0,
-    };
-    pos.line as u32
+    } as usize;
+    starts.partition_point(|&s| s <= at) as u32
 }
 
 pub(crate) fn node_of(text: &str, node: &YamlNode) -> Node {
-    let line = line_at(text, node);
+    walk(&line_starts(text), node)
+}
+
+fn walk(starts: &[usize], node: &YamlNode) -> Node {
+    let line = line_at(starts, node);
     let v = match node {
         YamlNode::Scalar(s) => N::Scalar {
             text: s.as_string(),
@@ -377,11 +395,11 @@ pub(crate) fn node_of(text: &str, node: &YamlNode) -> Node {
             m.iter()
                 .map(|(k, v)| {
                     let name = k.as_scalar().map(|s| s.as_string()).unwrap_or_default();
-                    (name, line_at(text, &k), node_of(text, &v))
+                    (name, line_at(starts, &k), walk(starts, &v))
                 })
                 .collect(),
         ),
-        YamlNode::Sequence(s) => N::Seq(s.values().map(|v| node_of(text, &v)).collect()),
+        YamlNode::Sequence(s) => N::Seq(s.values().map(|v| walk(starts, &v)).collect()),
         _ => N::Other,
     };
     Node { line, v }
@@ -1669,10 +1687,7 @@ fn regular_text(file: &std::path::Path) -> std::io::Result<String> {
     open.read(true);
     // Swapped for a link or a pipe since the check: refused at open, never waited on.
     #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::custom_flags(
-        &mut open,
-        libc::O_NOFOLLOW | libc::O_NONBLOCK,
-    );
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut open, libc::O_NOFOLLOW | libc::O_NONBLOCK);
     let f = open.open(file)?;
     if !f.metadata()?.is_file() {
         return Err(Error::new(ErrorKind::InvalidInput, "not a regular file"));
@@ -1680,7 +1695,10 @@ fn regular_text(file: &std::path::Path) -> std::io::Result<String> {
     let mut text = String::new();
     f.take(MAX_FILE + 1).read_to_string(&mut text)?;
     if text.len() as u64 > MAX_FILE {
-        return Err(Error::new(ErrorKind::InvalidData, format!("over {MAX_FILE} bytes")));
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("over {MAX_FILE} bytes"),
+        ));
     }
     Ok(text)
 }
