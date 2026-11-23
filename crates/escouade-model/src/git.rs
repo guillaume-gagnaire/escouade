@@ -39,6 +39,22 @@ pub async fn run_within(cwd: &str, args: &[&str], limit: Limit) -> Result<Vec<u8
     checked(out, args)
 }
 
+/// `run`, keeping at most `max` bytes of what git prints: past them git is killed, and `true`
+/// says the output was cut there (a diff of a hostile repository can run to gigabytes).
+pub async fn run_capped(cwd: &str, args: &[&str], max: usize) -> Result<(Vec<u8>, bool)> {
+    let limit = Limit::Reads.duration();
+    let mut out = match crate::proc::output_capped(command(cwd, args), limit, max).await {
+        Ok(out) => out,
+        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => return Err(stopped(args, limit)),
+        Err(e) => return Err(e.into()),
+    };
+    if out.stdout.len() > max {
+        out.stdout.truncate(max);
+        return Ok((out.stdout, true));
+    }
+    Ok((checked(out, args)?, false))
+}
+
 /// Time limit of the git commands that read.
 pub const GIT_TIMEOUT: Duration = Duration::from_secs(120);
 /// Time limit of the git commands that run the user's hooks.

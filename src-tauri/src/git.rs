@@ -256,6 +256,22 @@ fn command_line_chunks(paths: &[String]) -> Vec<&[String]> {
 /// The most diff text one file sends to the interface; past it the file is only flagged.
 const MAX_FILE_DIFF: usize = 4_000_000;
 
+/// The most diff text read from git: a few files at their cap. Past it git is killed (see `read_diff`).
+const MAX_DIFF_READ: usize = 16 * MAX_FILE_DIFF;
+
+/// The diff git prints for `args`, read up to `MAX_DIFF_READ`: a hostile repository's commit can
+/// print gigabytes. Cut there, the file it was printing is `flagged`.
+// shortcut: the files after the cut are left out unnamed, list them (--raw) if a user misses them.
+pub async fn read_diff(repo: &str, args: &[&str]) -> Result<String> {
+    let (out, cut) = run_capped(repo, args, MAX_DIFF_READ).await?;
+    let text = String::from_utf8_lossy(&out);
+    if !cut {
+        return Ok(text.into_owned());
+    }
+    let last = text.rfind("\ndiff --git ").map_or(0, |at| at + 1);
+    Ok(format!("{}{}", &text[..last], flagged(&text[last..])))
+}
+
 /// The line that stands, in a file's header, for the diff that was not sent. The interface shows
 /// « Diff trop volumineux pour être affiché. » for a file carrying it (`TOO_LARGE` in `diff.ts`).
 const TOO_LARGE: &str = "Diff too large";
@@ -575,7 +591,7 @@ pub async fn show(repo: &str, hash: &str) -> Result<String> {
     if hash.len() < 4 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
         bail!(tr!("commit invalide : {hash}", "invalid commit: {hash}"));
     }
-    let out = run(
+    let out = read_diff(
         repo,
         &[
             "show",
@@ -588,7 +604,7 @@ pub async fn show(repo: &str, hash: &str) -> Result<String> {
         ],
     )
     .await?;
-    Ok(cap_file_diffs(&String::from_utf8_lossy(&out), MAX_FILE_DIFF).into_owned())
+    Ok(cap_file_diffs(&out, MAX_FILE_DIFF).into_owned())
 }
 
 pub async fn list_files(cwd: &str) -> Result<Vec<String>> {
@@ -2117,7 +2133,7 @@ pub async fn unique_commits(repo: &str, refs: &[String]) -> Result<u32> {
 /// capped as a commit's is, and the whole kept within `DIFF_BUDGET`.
 pub async fn diff_refs(repo: &str, a: &str, b: &str) -> Result<String> {
     let (from, to) = (commit_of(repo, a).await?, commit_of(repo, b).await?);
-    let out = run(
+    let out = read_diff(
         repo,
         &[
             "diff",
@@ -2130,7 +2146,7 @@ pub async fn diff_refs(repo: &str, a: &str, b: &str) -> Result<String> {
         ],
     )
     .await?;
-    Ok(cap_diff(&String::from_utf8_lossy(&out), MAX_FILE_DIFF, DIFF_BUDGET).into_owned())
+    Ok(cap_diff(&out, MAX_FILE_DIFF, DIFF_BUDGET).into_owned())
 }
 
 /// Of `paths`, those that `branch` changed since it left `base` (`base...branch`), whatever
