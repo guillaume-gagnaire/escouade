@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.9] — 2026-11-23
 
 - La fenêtre « Pages » d’une commande de lancement montre de nouveau ses icônes (retour, avancer, recharger, largeurs, devtools, navigateur) : ses boutons étaient vides.
 - Sous macOS et Linux, la mémoire et le CPU d’un agent comptent aussi ce qu’il lance à part (dans sa propre session), et l’arrêter l’arrête aussi ; sous macOS, sa mémoire est celle que montre le Moniteur d’activité.
