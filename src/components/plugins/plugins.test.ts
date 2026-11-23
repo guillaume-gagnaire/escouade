@@ -76,6 +76,7 @@ function view(over: Partial<PluginView> = {}): PluginView {
     manifest: MANIFEST,
     installedAt: '2026-10-29T10:00:00Z',
     verified: false,
+    seal: null,
     withdrawn: null,
     inStore: null,
     choices: { enabled: true, projects: {}, revoked: [], settings: {} },
@@ -153,6 +154,24 @@ describe('the install window', () => {
     ]);
     expect(dialog.querySelector('.asks li.red')?.textContent).toContain('Décide des autorisations');
     expect(d.getByRole('button', { name: 'Installer quand même' })).toBeTruthy();
+  });
+
+  it('says the module a run.wasm plugin of a folder will run, covered by its fingerprint (ESC-652)', () => {
+    const folder = { kind: 'folder' as const, path: 'C:/dev/mon-plugin' };
+    plugins.install = {
+      kind: 'preview',
+      preview: preview({ origin: folder, fingerprint: 'sha256:9a1b', module: 'packs/dev.exemple.slack-1.2.0.wasm' }),
+      busy: false,
+      error: null,
+    };
+    render(InstallModal, { step: plugins.install });
+    expect(screen.getByTestId('module').textContent).toBe('packs/dev.exemple.slack-1.2.0.wasm · compris dans l’empreinte');
+  });
+
+  it('shows no module for a plugin that has none to choose', () => {
+    plugins.install = { kind: 'preview', preview: preview(), busy: false, error: null };
+    render(InstallModal, { step: plugins.install });
+    expect(screen.queryByTestId('module')).toBeNull();
   });
 
   it('says a JS/TS plugin runs inside Escouade, isolated, and that its hosts are enforced (ESC-320)', () => {
@@ -691,6 +710,27 @@ describe('« Rechercher des mises à jour » (ESC-405)', () => {
     render(PluginPage, { plugin: view(), tab: 'versions' });
     await userEvent.click(screen.getByRole('button', { name: 'Chercher une mise à jour' }));
     expect((await screen.findByRole('status')).textContent).toBe('Store lu le 09/11 10:42');
+  });
+});
+
+describe('the key of a seal (ESC-592)', () => {
+  it('says on a plugin’s page which key signed it, and how it was reviewed', () => {
+    fakeBackend({});
+    const sealed = view({ verified: true, seal: { id: 'E0516468FFDCBDD5', role: 'first-hand' } });
+    const { unmount } = render(PluginPage, { plugin: sealed, tab: 'overview' });
+    const line = screen.getByText('Signé par la clé des plugins d’Escouade · E0516468FFDCBDD5');
+    expect(line.getAttribute('aria-description')).toBe(
+      'La revue est faite par un agent d’IA d’Escouade, puis la version est signée par la clé des plugins d’Escouade (E0516468FFDCBDD5) ; l’app la revérifie ici avec ses clés.',
+    );
+    unmount();
+    render(PluginPage, { plugin: view({ verified: true, seal: { id: '0123456789ABCDEF', role: 'third-party' } }), tab: 'overview' });
+    expect(screen.getByText('Signé par la clé des plugins tiers · 0123456789ABCDEF')).toBeTruthy();
+  });
+
+  it('says nothing of a key without a seal', () => {
+    fakeBackend({});
+    render(PluginPage, { plugin: view({ verified: false, seal: null }), tab: 'overview' });
+    expect(screen.queryByText(/^Signé par/)).toBeNull();
   });
 });
 

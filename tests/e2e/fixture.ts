@@ -77,7 +77,7 @@ export interface App {
   data: string;
   /** The test's folder: the app's data (`data`), the repository and Principal's Claude Code folder (`claude`) are in it. */
   root: string;
-  /** Principal's `.claude.json`: where the fake `claude mcp add` declares Escouade's server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
+  /** Principal's `.claude.json`: where Escouade declares its server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
   claudeJson: string;
   /** Principal's `config.toml` of Codex: where « Les agents peuvent piloter Escouade » declares the server (`CODEX_HOME` is a test folder). */
   codexToml: string;
@@ -217,6 +217,29 @@ function startApp(env: NodeJS.ProcessEnv, stderr: string, args: string[] = [], p
   });
   child.on('error', (e) => (instance.stopped = `could not start: ${e.message}`));
   return instance;
+}
+
+/**
+ * The keychain's entries of the sandboxed runs (ESC-584), through the debug build (`--sandbox-keychain …`, which touches only
+ * names ending with `.escouade.sandbox` that carry a run's tag): `sweep` takes back what dead runs left (their data folder
+ * gone, or older than a day), `clean <dir>…` what the runs on these folders wrote, `list <dir>…` names them. Windows only.
+ */
+export function sandboxKeychain(...args: string[]): string {
+  if (process.platform !== 'win32') return '';
+  return execFileSync(EXE, ['--sandbox-keychain', ...args], {
+    encoding: 'utf8',
+    timeout: 30_000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
+/** `sandboxKeychain`, a failure only warned of: the keychain's trouble never fails a test that passed. */
+function tidyKeychain(...args: string[]) {
+  try {
+    sandboxKeychain(...args);
+  } catch (e) {
+    console.warn(`the sandbox's keychain entries (${args[0]}): ${(e as Error).message}`);
+  }
 }
 
 /**
@@ -640,6 +663,8 @@ export const test = base.extend<{
           `something still listens on port ${port} after 30 s: the app of the test before is not gone (${await listenersOn(port)})`,
         );
       }
+      // What runs that died left in the keychain (ESC-584): never an entry of a run still on, here or in another worktree.
+      tidyKeychain('sweep');
       const root = testRoot();
       const data = path.join(root, 'data');
       fs.mkdirSync(data);
@@ -667,6 +692,9 @@ export const test = base.extend<{
           autoUpdate: false,
           // A message sent during a turn goes at once, as the tests expect.
           midTurnDelaySecs: 0,
+          // « N'installer que des versions vérifiées » settled already (ESC-589): off, as the tests that install a folder
+          // expect, not turned on by the update a settings file without the key reads as. A test of it says otherwise.
+          pluginsVerifiedSettled: true,
           // Every feature on, as a user who switched them all (F-2, ESC-559: a new installation has them off until its
           // assistant, an update off but what it uses), and the assistant of the update not opened. `features: null`
           // makes the installation one of before the switches.
@@ -1055,6 +1083,8 @@ export const test = base.extend<{
         // starts; a test that passed does not fail for it).
         if (!(await waitForPortToClose(port)))
           console.warn(`port ${port} is still taken 30 s after the app was killed: ${await listenersOn(port)}`);
+        // What the test's apps wrote in the keychain goes, whatever the outcome (ESC-584): they are all stopped now.
+        tidyKeychain('clean', ...datas);
         // Windows releases the handles of killed processes (a terminal's shell sits in the repo)
         // with a delay: a temporary folder left behind must not fail the test.
         try {
@@ -1171,7 +1201,10 @@ export const settingsNav = (where: Page | Locator) => where.getByRole('dialog', 
 /** An entry of the bar of the settings: a page by its name (« À propos », « Comptes et harness »), or a project. */
 export function settingsEntry(where: Page | Locator, name: string | RegExp) {
   const nav = 'goto' in where ? settingsNav(where) : where.getByRole('navigation');
-  return nav.getByRole('button', typeof name === 'string' ? { name, exact: true } : { name });
+  const entry = nav.getByRole('button', typeof name === 'string' ? { name, exact: true } : { name });
+  // A project's page can bear the name of a page for all (« Plugins » of a project, once a plugin has settings by
+  // project, ESC-553): a name that is not a project's page is the page for all, never a project's (`.sub`).
+  return typeof name === 'string' && PROJECT_PAGES.has(name) ? entry : entry.and(nav.locator('button:not(.sub)'));
 }
 
 /**

@@ -520,9 +520,15 @@ impl Core {
             let checked = check(&tickets)?;
             let t = &mut tickets[i];
             let before = t.external.is_some().then(|| t.clone());
-            let column = t.column;
+            let (column, conflict) = (t.column, t.conflict);
             let out = f(t, checked)?;
             let change = before.and_then(|b| integrations::sync::change_of(&b, t));
+            // Moved (its column, a conflict): the squad lead's marks on its views fall now, under this lock, so that
+            // one left on the view this move makes holds (ESC-557, ESC-621). The box's lock is never held while
+            // the tickets' is taken.
+            if t.column != column || t.conflict != conflict {
+                self.inbox_snoozes.lock().forget_ticket(&t.id);
+            }
             (out, t.clone(), change, column)
         };
         if ticket.column != column {

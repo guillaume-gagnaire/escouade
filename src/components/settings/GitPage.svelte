@@ -7,7 +7,19 @@
   import { settingsForm, worktreesProblems } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { repoLabel } from '../../lib/repos';
-  import type { CommitMode, LeftoverReport, Project, WorktreeStep } from '../../lib/types';
+  import type { CommitMode, LeftoverReport, Project, ProjectFetch, WorktreeStep } from '../../lib/types';
+  import {
+    DEFAULT_FETCH,
+    EVERY_MAX,
+    EVERY_MIN,
+    EVERY_PRESETS,
+    TIMEOUT_MAX,
+    TIMEOUT_MIN,
+    TIMEOUT_PRESETS,
+    fMinutes,
+    fSeconds,
+  } from '../../lib/fetch';
+  import BoundedField from './BoundedField.svelte';
   import { DEFAULT_WORKTREES, worktreesRoot, type WorktreesProblem } from '../../lib/worktrees';
   import Chips from './Chips.svelte';
   import DocsBranchField from './DocsBranchField.svelte';
@@ -67,6 +79,12 @@
   const COMMIT_MODES = $derived<{ value: CommitMode; label: string }[]>(
     (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),
   );
+
+  /** « Récupérer automatiquement » of the project (ESC-561), and the general setting it may follow. */
+  const FETCH_MODES = $derived<{ value: ProjectFetch['mode']; label: string }[]>(
+    (['default', 'always', 'never'] as const).map((value) => ({ value, label: t(`fetch.settings.modes.${value}`) })),
+  );
+  const general = $derived(settingsForm.settings.gitFetch ?? DEFAULT_FETCH);
 
   // What Claude proposed, read here in full before it replaces anything of the draft.
   const proposal = $derived(settingsForm.proposal[project.id]);
@@ -169,6 +187,62 @@
   <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')} shared="git.commit_mode">
     <Chips label={t('settings.project.commit')} options={COMMIT_MODES} bind:value={draft.commitMode} />
   </Row>
+  <Row
+    label={t('fetch.settings.project')}
+    desc={t('fetch.settings.projectDesc')}
+    wide
+    shared={['git.auto_fetch', 'git.fetch_every', 'git.fetch_timeout']}
+  >
+    {#snippet extra()}
+      <span class="d general">
+        {general.auto
+          ? t('fetch.settings.generalOn', { every: fMinutes(general.everyMin), timeout: fSeconds(general.timeoutSecs) })
+          : t('fetch.settings.generalOff')}
+        <button class="link" onclick={() => (settingsForm.page = 'allProjects')}>{t('fetch.settings.openGeneral')}</button>
+      </span>
+    {/snippet}
+    <Chips label={t('fetch.settings.project')} options={FETCH_MODES} bind:value={draft.gitFetch.mode} />
+  </Row>
+  {#if draft.gitFetch.mode !== 'never'}
+    <Row
+      label={t('fetch.settings.projectEvery')}
+      desc={t('fetch.settings.projectEveryDesc', { every: fMinutes(general.everyMin) })}
+      wide
+      shared="git.fetch_every"
+    >
+      <BoundedField
+        id="project-fetch-every"
+        label={t('fetch.settings.projectEvery')}
+        bind:value={draft.gitFetch.everyMin}
+        min={EVERY_MIN}
+        max={EVERY_MAX}
+        presets={EVERY_PRESETS}
+        format={fMinutes}
+        unit={t('fetch.settings.unitMin')}
+        empty={0}
+        placeholder={String(general.everyMin)}
+      />
+    </Row>
+    <Row
+      label={t('fetch.settings.projectTimeout')}
+      desc={t('fetch.settings.projectTimeoutDesc', { timeout: fSeconds(general.timeoutSecs) })}
+      wide
+      shared="git.fetch_timeout"
+    >
+      <BoundedField
+        id="project-fetch-timeout"
+        label={t('fetch.settings.projectTimeout')}
+        bind:value={draft.gitFetch.timeoutSecs}
+        min={TIMEOUT_MIN}
+        max={TIMEOUT_MAX}
+        presets={TIMEOUT_PRESETS}
+        format={fSeconds}
+        unit={t('fetch.settings.unitSec')}
+        empty={0}
+        placeholder={String(general.timeoutSecs)}
+      />
+    </Row>
+  {/if}
   {#if !(live.team && app.teamDocsOn[live.id]) && app.feature('docs')}
     <!-- On the team server (TS-9), the docs follow no branch; the Docs space off, neither (F-1). -->
     <Row label={t('docs.branch.label')} desc={t('docs.branch.desc')} wide>
@@ -375,6 +449,18 @@
   .repo-row.gone :global(svg),
   .repo-row.gone .rb {
     color: var(--del);
+  }
+  .general .link {
+    margin-left: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--p-ink);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .general .link:hover {
+    text-decoration: underline;
   }
   .repo-row .link {
     color: var(--p-ink);

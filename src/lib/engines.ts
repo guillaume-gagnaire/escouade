@@ -97,9 +97,9 @@ export function found(): EngineDecl[] {
 
 /**
  * Why a harness cannot be used (ESC-391): its program not found, its plugin off or not installed, no account of its own;
- * in a project, its plugin turned off for it (ESC-404).
+ * in a project, its plugin turned off for it (ESC-404), or a third party’s while a private project exists (SEC-02).
  */
-export type Unusable = 'notFound' | 'pluginOff' | 'noAccount' | 'projectOff';
+export type Unusable = 'notFound' | 'pluginOff' | 'noAccount' | 'projectOff' | 'thirdParty';
 
 /**
  * Why `engine` cannot be used, null when it can: its program found, its plugin on, and an account of its own in Escouade
@@ -111,12 +111,22 @@ export function unusable(engine: EngineId, projectId?: string | null): Unusable 
   if (app.enginesOff.includes(engine)) return 'pluginOff';
   if (!(app.settings.accounts ?? []).some((a) => (a.engine ?? 'claude') === engine)) return 'noAccount';
   if (projectId && app.harnessScope[projectId]?.off.includes(engine)) return 'projectOff';
+  if (harnessThirdParty(projectId, engine)) return 'thirdParty';
   return null;
 }
 
 /** Whether `engine` waits for the user's agreement in the private project `projectId` (ESC-404): asked once, at its first agent. */
 export function harnessAsks(projectId: string | null | undefined, engine: EngineId | null | undefined): boolean {
   return !!projectId && !!engine && !!app.harnessScope[projectId]?.asks.includes(engine);
+}
+
+/**
+ * Whether `engine` is a third party’s harness refused in the project `projectId` while a private project exists on the
+ * machine (SEC-02, ESC-590; SEC-02b, ESC-623): launched in no project then,
+ * whatever its switch; nothing turns it on.
+ */
+export function harnessThirdParty(projectId: string | null | undefined, engine: EngineId | null | undefined): boolean {
+  return !!projectId && !!engine && !!app.harnessScope[projectId]?.thirdParty?.includes(engine);
 }
 
 /** Whether the agents of `engine` do not run in the project `projectId` (ESC-404): turned off there, or not turned on yet. */

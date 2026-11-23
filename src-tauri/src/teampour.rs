@@ -187,7 +187,8 @@ impl Core {
     ) -> Result<PourPreview> {
         let (project, teams, team_id, pid) = self.team_board_of(project_id)?;
         let shared = teams.team(&team_id).map_err(|e| anyhow!(e))?;
-        let files = sharing::read_dir(&sharing::dir_of(&project));
+        let files = sharing::read_dir(&sharing::dir_of(&project))
+            .ok_or_else(|| anyhow!(sharing::too_many_files()))?;
         let mut in_journal = BTreeMap::new();
         {
             let mut team = shared.lock().await;
@@ -322,7 +323,7 @@ impl Core {
         let shared = teams.team(&team_id).map_err(|e| anyhow!(e))?;
         let dir = sharing::dir_of(&project);
         let texts = if files {
-            sharing::read_dir(&dir)
+            sharing::read_dir(&dir).ok_or_else(|| anyhow!(sharing::too_many_files()))?
         } else {
             BTreeMap::new()
         };

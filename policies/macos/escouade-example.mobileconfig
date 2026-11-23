@@ -62,6 +62,8 @@
       <string>high</string>
       <key>mcp.externalClients</key>
       <string>readOnly</string>
+      <key>network.offline</key>
+      <true/>
       <key>permissions.allowBypass</key>
       <false/>
       <key>permissions.defaultMode</key>

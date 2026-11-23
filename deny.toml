@@ -4,7 +4,8 @@
 # (docs/security/audit-2026-11/tools/deny.toml, SEC-02).
 #
 # An advisory is closed by updating the crate. When no compatible update closes it, it is ignored below with the
-# reason, and the ignore leaves with the dependency that carries it: a new advisory fails the job.
+# reason, and the ignore leaves with the dependency that carries it: a new advisory fails the job. How soon an advisory
+# must be closed (7 days for a high one) is in docs/SECURITY-DEPENDENCIES.md (SEC-04 of the security audit).
 
 [graph]
 all-features = false
@@ -12,15 +13,16 @@ all-features = false
 [advisories]
 yanked = "warn"
 ignore = [
-    # zip 4.6.1: the app's own zip is 9 (docsextract.rs); zip 4 comes only from tauri-plugin-updater 2.13.1, the
+    # zip 4.6.1 (reasons written again after SEC-04 of the security audit, which found the first ones described the app's
+    # own zip rather than the one that carries the advisories): the app's own zip is 9 (docsextract.rs); zip 4 comes only from tauri-plugin-updater 2.13.1, the
     # latest 2.x (`zip = "4"`, Windows only, without default features). It opens an archive only after the update's
     # minisign signature was checked against the app's key (updater.rs:837, before `install`), and only if that signed
     # file is a zip: the Windows update is the NSIS setup.exe (createUpdaterArtifacts = true), never a zip
     # (docs/SECURITY-DEPENDENCIES.md). They leave with the updater's move to zip >= 9.0.5.
-    { id = "RUSTSEC-2026-0367", reason = "zip 4 (tauri-plugin-updater, Windows): ZipArchive::extract runs only on a zip signed with the app's key, and the Windows update is a setup.exe; no updater 2.x on zip 9" },
-    { id = "RUSTSEC-2026-0368", reason = "zip 4 (tauri-plugin-updater, Windows): ZipArchive::extract runs only on a zip signed with the app's key, and the Windows update is a setup.exe; no updater 2.x on zip 9" },
-    { id = "RUSTSEC-2026-0369", reason = "zip 4 (tauri-plugin-updater, Windows): ZipArchive::extract runs only on a zip signed with the app's key, and the Windows update is a setup.exe; no updater 2.x on zip 9" },
-    { id = "RUSTSEC-2026-0429", reason = "zip 4 (tauri-plugin-updater, Windows): ZipArchive::extract runs only on a zip signed with the app's key, and the Windows update is a setup.exe; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0367", reason = "zip 4.6.1 comes only from tauri-plugin-updater 2.13.1 (Windows; the app's own zip is 9): its ZipArchive::extract runs only on an update that is a zip and signed with the app's key, and the Windows update is the NSIS setup.exe; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0368", reason = "zip 4.6.1 comes only from tauri-plugin-updater 2.13.1 (Windows; the app's own zip is 9): its ZipArchive::extract runs only on an update that is a zip and signed with the app's key, and the Windows update is the NSIS setup.exe; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0369", reason = "zip 4.6.1 comes only from tauri-plugin-updater 2.13.1 (Windows; the app's own zip is 9): its ZipArchive::extract runs only on an update that is a zip and signed with the app's key, and the Windows update is the NSIS setup.exe; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0429", reason = "zip 4.6.1 comes only from tauri-plugin-updater 2.13.1 (Windows; the app's own zip is 9): its ZipArchive::extract runs only on an update that is a zip and signed with the app's key, and the Windows update is the NSIS setup.exe; no updater 2.x on zip 9" },
     { id = "RUSTSEC-2026-0545", reason = "zip 4 (tauri-plugin-updater) is built without aes-crypto (default-features = false): no AES entry can be read; no updater 2.x on zip 9" },
     { id = "RUSTSEC-2026-0548", reason = "zip 4 (tauri-plugin-updater) never uses ZipStreamReader, only ZipArchive (updater.rs:1074), on a zip signed with the app's key; no updater 2.x on zip 9.0.5" },
     # chrono: an "unmaintained" notice, no known flaw, no fixed version. It is in the app, five of our crates (two

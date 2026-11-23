@@ -9,7 +9,8 @@
 //! last read or written (`Shared::seen`): a file that changed outside Escouade is read, one that did
 //! not is written again when its ticket says something else.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::io::Read as _;
 use std::str::FromStr;
 
 use serde_json::{json, Map, Value};
@@ -28,6 +29,12 @@ pub const VERSION: u32 = 1;
 pub const SCHEMA_URL: &str = "https://escouade.dev/schemas/escouade-ticket.schema.json";
 /// A joined file above this size stays on its machine (choice 107); images always go.
 pub const MAX_SHARED_FILE: u64 = 5 * 1024 * 1024;
+/// A ticket's file above this size is not read (one is a few KiB): it shows as invalid.
+pub const MAX_TICKET_FILE: u64 = 64 * 1024;
+/// A folder with more tickets' files than this is not synced at all (a part of them would look removed).
+pub const MAX_TICKET_FILES: usize = 2000;
+/// What `read_dir` keeps for a file above `MAX_TICKET_FILE`, in place of its text.
+const TOO_LARGE: &str = "\0too large\0";
 /// The letters of the ids: lower case and digits, without 0/o nor 1/l.
 const ALPHABET: &[u8] = b"23456789abcdefghijkmnpqrstuvwxyz";
 
@@ -282,6 +289,56 @@ pub fn plain_media(file: &str) -> bool {
         })
 }
 
+/// The image or file `file` (a plain name, or `<uniq>/<name>`) of a shared ticket's folder `from`,
+/// opened, with its size: a plain file, no link at it nor on the way from `from` down, no heavier
+/// than `MAX_SHARED_FILE`. The folder comes from the repository, where a teammate's commit may put
+/// links to anywhere on this machine (ESC-199); the folder of tickets itself is `unsafe_dir`'s.
+pub(crate) fn shared_media(from: &Path, file: &str) -> Option<(std::fs::File, u64)> {
+    let src = from.join(file);
+    // Neither a link nor a pipe, a device… (opening one may block): a plain file only.
+    if !std::fs::symlink_metadata(&src).ok()?.is_file() {
+        return None;
+    }
+    let mut at = src.parent()?;
+    while at.starts_with(from) {
+        if std::fs::symlink_metadata(at).ok()?.file_type().is_symlink() {
+            return None;
+        }
+        at = at.parent()?;
+    }
+    let f = std::fs::File::open(&src).ok()?;
+    let meta = f.metadata().ok()?;
+    (meta.is_file() && meta.len() <= MAX_SHARED_FILE).then_some((f, meta.len()))
+}
+
+/// Whether a media of ours may be written at `dst`, in the shared ticket's folder `to`: nothing
+/// there yet (not even a link, which `exists` would follow or miss when it leads nowhere), and no
+/// link at `to` nor on the way down to `dst` (a junction under Windows is one too). The folder
+/// comes from the repository, as `shared_media` reads it.
+pub(crate) fn media_target_free(to: &Path, dst: &Path) -> bool {
+    if !dst.starts_with(to) || std::fs::symlink_metadata(dst).is_ok() {
+        return false;
+    }
+    let mut at = dst.parent();
+    while let Some(d) = at.filter(|d| d.starts_with(to)) {
+        match std::fs::symlink_metadata(d) {
+            Ok(m) if m.file_type().is_symlink() || !m.is_dir() => return false,
+            _ => {}
+        }
+        at = d.parent();
+    }
+    true
+}
+
+/// Copies a media opened by `shared_media` to `dst`, never more than `MAX_SHARED_FILE` bytes
+/// (the file may grow after it was measured).
+fn copy_media(f: std::fs::File, dst: &Path) -> std::io::Result<u64> {
+    std::io::copy(
+        &mut std::io::Read::take(f, MAX_SHARED_FILE),
+        &mut std::fs::File::create(dst)?,
+    )
+}
+
 // ---------- reading ----------
 
 fn invalid(line: Option<u32>, text: String) -> Read {
@@ -412,6 +469,15 @@ pub fn has_conflict(text: &str) -> bool {
 
 /// Reads a file: what it says, or why it cannot be read. A key it does not know is left out.
 pub fn read(text: &str) -> Read {
+    if text == TOO_LARGE {
+        return invalid(
+            None,
+            tr!(
+                "le fichier est trop gros (64 Kio au plus)",
+                "the file is too large (64 KiB at most)"
+            ),
+        );
+    }
     if has_conflict(text) {
         return Read::Conflict;
     }
@@ -951,12 +1017,9 @@ pub fn apply(
 }
 
 /// The board of another one's ticket: its key, with `@author` after it when this project already has a
-/// ticket of that key.
-fn key_for(f: &TicketDoc, tickets: &[Ticket], project_id: &str) -> String {
-    let taken = tickets
-        .iter()
-        .any(|t| t.project_id == project_id && t.key == f.key);
-    if !taken {
+/// ticket of that key (`keys`: the keys of the project's tickets).
+fn key_for(f: &TicketDoc, keys: &HashSet<String>) -> String {
+    if !keys.contains(&f.key) {
         return f.key.clone();
     }
     let who: String = f
@@ -996,7 +1059,6 @@ pub fn reconcile(
     lang: Lang,
 ) -> Outcome {
     let mut out = Outcome::default();
-    let snapshot: Vec<Ticket> = tickets.clone();
     // File id → ticket id, for « Après ».
     let mut ids: BTreeMap<String, String> = tickets
         .iter()
@@ -1005,19 +1067,37 @@ pub fn reconcile(
         .collect();
     // The files no ticket has yet: new tickets, made first so that « Après » finds them.
     let known: HashSet<String> = ids.keys().cloned().collect();
+    // Built once, kept up to date below: one pass per new file over all tickets would be O(N²).
+    let mut keys: HashSet<String> = tickets
+        .iter()
+        .filter(|t| t.project_id == project_id)
+        .map(|t| t.key.clone())
+        .collect();
+    let snapshot_keys = keys.clone();
+    let mut rank = tickets
+        .iter()
+        .filter(|t| t.project_id == project_id)
+        .map(|t| t.rank)
+        .max()
+        .unwrap_or(0);
+    // The imports not started, by outside ticket: the first one last, for `pop`.
+    let mut twins: HashMap<(String, String), Vec<usize>> = HashMap::new();
+    for (i, t) in tickets.iter().enumerate().rev() {
+        if t.project_id == project_id && t.shared.is_none() && t.started_at.is_none() {
+            if let Some(e) = external_of(t) {
+                twins.entry((e.source, e.key)).or_default().push(i);
+            }
+        }
+    }
     for (sid, text) in files.iter().filter(|(sid, _)| !known.contains(*sid)) {
         let seen = fingerprint(text);
         let read = read(text);
         if let Read::Ok(f, _) = &read {
             // An import of the same outside ticket, not started: it becomes the shared one.
             if let Some(ext) = &f.external {
-                let twin = tickets.iter().position(|t| {
-                    t.project_id == project_id
-                        && t.shared.is_none()
-                        && t.started_at.is_none()
-                        && external_of(t)
-                            .is_some_and(|e| e.source == ext.source && e.key == ext.key)
-                });
+                let twin = twins
+                    .get_mut(&(ext.source.clone(), ext.key.clone()))
+                    .and_then(|v| v.pop());
                 if let Some(i) = twin {
                     tickets[i].shared = Some(Shared {
                         id: sid.clone(),
@@ -1034,13 +1114,10 @@ pub fn reconcile(
             project_id: project_id.to_string(),
             created_at: now_ms(),
             max_loops: 5,
-            rank: tickets
-                .iter()
-                .filter(|t| t.project_id == project_id)
-                .map(|t| t.rank)
-                .max()
-                .unwrap_or(0)
-                + 1,
+            rank: {
+                rank += 1;
+                rank
+            },
             shared: Some(Shared {
                 id: sid.clone(),
                 seen: String::new(),
@@ -1050,7 +1127,7 @@ pub fn reconcile(
         };
         match &read {
             Read::Ok(f, _) => {
-                t.key = key_for(f, tickets, project_id);
+                t.key = key_for(f, &keys);
                 out.media.push((t.id.clone(), sid.clone()));
             }
             _ => {
@@ -1059,6 +1136,7 @@ pub fn reconcile(
             }
         }
         let _ = seen;
+        keys.insert(t.key.clone());
         ids.insert(sid.clone(), t.id.clone());
         out.changed.push(t.id.clone());
         tickets.push(t);
@@ -1122,7 +1200,7 @@ pub fn reconcile(
                 let was = t.clone();
                 apply(t, &f, newer, &ids, me);
                 if t.key.is_empty() || t.key == s.id {
-                    t.key = key_for(&f, &snapshot, project_id);
+                    t.key = key_for(&f, &snapshot_keys);
                 }
                 let sh = t.shared.as_mut().unwrap();
                 sh.seen = h;
@@ -1261,17 +1339,28 @@ pub fn is_frozen(text: &str) -> bool {
 }
 
 /// Puts `FROZEN` at the head of every file of the folder that lacks it (never through a link, nor out of the project):
-/// the names of all the files of the folder, frozen now or before. Nothing is removed nor committed.
+/// the names of all the files of the folder, frozen now or before. Nothing is removed nor committed. A file `read_dir`
+/// did not read (past `MAX_TICKET_FILE`, ESC-653) is left as it is; a folder past `MAX_TICKET_FILES`, all of it.
 pub fn freeze(dir: &Path) -> Vec<String> {
     let mut names = Vec::new();
     if crate::workflowfiles::unsafe_dir(dir).is_some() {
         return names;
     }
-    for (id, text) in read_dir(dir) {
+    let Some(files) = read_dir(dir) else {
+        return names;
+    };
+    for (id, text) in files {
+        if text == TOO_LARGE {
+            continue;
+        }
         let name = format!("{id}.yml");
         if !is_frozen(&text) {
             let path = dir.join(&name);
-            if let Err(e) = std::fs::write(&path, format!("{FROZEN}\n{text}")) {
+            // Never through a link put there since it was read (ESC-653).
+            let written = crate::paths::create_no_follow(&path).and_then(|mut f| {
+                std::io::Write::write_all(&mut f, format!("{FROZEN}\n{text}").as_bytes())
+            });
+            if let Err(e) = written {
                 log::warn!("shared ticket {id}: not frozen: {e}");
                 continue;
             }
@@ -1281,14 +1370,23 @@ pub fn freeze(dir: &Path) -> Vec<String> {
     names
 }
 
-/// The files of the folder: id → text. None of them when the folder is not there.
-pub(crate) fn read_dir(dir: &Path) -> BTreeMap<String, String> {
+/// Why the files of a folder past `MAX_TICKET_FILES` are not poured into a team (`teampour`).
+pub(crate) fn too_many_files() -> String {
+    tr!(
+        "Le dossier des tickets partagés a plus de {MAX_TICKET_FILES} fichiers : Escouade ne le lit pas.",
+        "The folder of the shared tickets has more than {MAX_TICKET_FILES} files: Escouade doesn’t read it."
+    )
+}
+
+/// The files of the folder: id → text. None of them when the folder is not there; `None` when it
+/// holds more than `MAX_TICKET_FILES` of them. A file above `MAX_TICKET_FILE` is kept as `TOO_LARGE`.
+pub(crate) fn read_dir(dir: &Path) -> Option<BTreeMap<String, String>> {
     let mut out = BTreeMap::new();
     if crate::workflowfiles::unsafe_dir(dir).is_some() {
-        return out;
+        return Some(out);
     }
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return out;
+        return Some(out);
     };
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
@@ -1299,11 +1397,35 @@ pub(crate) fn read_dir(dir: &Path) -> BTreeMap<String, String> {
         if !e.file_type().is_ok_and(|t| t.is_file()) {
             continue;
         }
-        if let Ok(text) = std::fs::read_to_string(e.path()) {
-            out.insert(id.to_string(), text);
+        if out.len() >= MAX_TICKET_FILES {
+            return None;
         }
+        let Ok(file) = std::fs::File::open(e.path()) else {
+            continue;
+        };
+        // The handle's own kind and size: the name may have changed since `file_type`.
+        if !file.metadata().is_ok_and(|m| m.is_file()) {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        if file
+            .take(MAX_TICKET_FILE + 1)
+            .read_to_end(&mut bytes)
+            .is_err()
+        {
+            continue;
+        }
+        let text = if bytes.len() as u64 > MAX_TICKET_FILE {
+            TOO_LARGE.to_string()
+        } else {
+            let Ok(text) = String::from_utf8(bytes) else {
+                continue;
+            };
+            text
+        };
+        out.insert(id.to_string(), text);
     }
-    out
+    Some(out)
 }
 
 /// `git config user.name` in `path`, empty when git has none (or no git): `Core::me_in` is called
@@ -1442,7 +1564,13 @@ impl Core {
             log::warn!("shared tickets of {}: {why}", project.name);
             return;
         }
-        let files = read_dir(&dir);
+        let Some(files) = read_dir(&dir) else {
+            log::warn!(
+                "shared tickets of {}: more than {MAX_TICKET_FILES} files, not synced",
+                project.name
+            );
+            return;
+        };
         let me = self.me_in(&project);
         let now = iso(now_ms());
         let lang = crate::i18n::ui();
@@ -1468,7 +1596,10 @@ impl Core {
             }
         }
         for (tid, sid) in &out.media {
-            self.import_media(&dir, sid, tid);
+            // The text read_dir read (bounded), not the file again: it may have grown since.
+            if let Some(text) = files.get(sid) {
+                self.import_media(&dir, sid, tid, text);
+            }
         }
         let any = !out.changed.is_empty() || !out.removed.is_empty();
         for id in &out.removed {
@@ -1520,23 +1651,25 @@ impl Core {
                 }),
         );
         for (src, dst) in &wanted {
-            if dst.exists() || !src.is_file() {
+            // The ticket's folder in the repository: a teammate's commit may put a link at it, or
+            // at one of its files (to anywhere on this machine): never written through (ESC-653).
+            if !media_target_free(&to, dst) || !src.is_file() {
                 continue;
             }
             if let Some(parent) = dst.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::copy(src, dst)?;
+            std::io::copy(
+                &mut std::fs::File::open(src)?,
+                &mut crate::paths::create_no_follow(dst)?,
+            )?;
         }
         Ok(())
     }
 
     /// The images and files of another one's ticket, copied from the folder into the ticket's own.
-    fn import_media(&self, dir: &Path, sid: &str, tid: &str) {
-        let Ok(text) = std::fs::read_to_string(dir.join(format!("{sid}.yml"))) else {
-            return;
-        };
-        let Read::Ok(f, _) = read(&text) else { return };
+    fn import_media(&self, dir: &Path, sid: &str, tid: &str, text: &str) {
+        let Read::Ok(f, _) = read(text) else { return };
         let from = dir.join(sid);
         let to = self.data.ticket_dir(tid);
         let mut images = Vec::new();
@@ -1545,12 +1678,13 @@ impl Core {
             .iter()
             .filter(|m| plain_media(&m.file) && !m.file.contains('/'))
         {
-            let src = from.join(&m.file);
             let dst = to.join(&m.file);
-            if src.is_file() && !dst.exists() {
-                let _ = std::fs::create_dir_all(&to);
-                if let Err(e) = std::fs::copy(&src, &dst) {
-                    log::warn!("shared ticket {sid}: image {} not copied: {e}", m.file);
+            if !dst.exists() {
+                if let Some((src, _)) = shared_media(&from, &m.file) {
+                    let _ = std::fs::create_dir_all(&to);
+                    if let Err(e) = copy_media(src, &dst) {
+                        log::warn!("shared ticket {sid}: image {} not copied: {e}", m.file);
+                    }
                 }
             }
             let ext = m.file.rsplit('.').next().unwrap_or_default().to_lowercase();
@@ -1572,16 +1706,16 @@ impl Core {
             .iter()
             .filter(|m| crate::ticketfiles::valid_file(&m.file).is_some())
         {
-            let src = from.join(&m.file);
             let Some(dst) = crate::ticketfiles::path_of(&to, &m.file) else {
                 continue;
             };
-            let size = std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0);
-            if src.is_file() && !dst.exists() {
+            let src = shared_media(&from, &m.file);
+            let size = src.as_ref().map(|s| s.1).unwrap_or(0);
+            if let Some((src, _)) = src.filter(|_| !dst.exists()) {
                 if let Some(parent) = dst.parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
-                if let Err(e) = std::fs::copy(&src, &dst) {
+                if let Err(e) = copy_media(src, &dst) {
                     log::warn!("shared ticket {sid}: file {} not copied: {e}", m.file);
                 }
             }
@@ -1694,7 +1828,10 @@ impl Core {
                 Ok(())
             })?;
         } else {
-            let text = std::fs::read_to_string(&path)?;
+            // The file as git merged it, both sides in it: no link followed, no pipe waited on,
+            // and capped as `read_dir` caps a ticket's file, with room for its two sides (ESC-653).
+            let bytes = crate::paths::read_no_follow(&path, 4 * MAX_TICKET_FILE)?;
+            let text = String::from_utf8(bytes)?;
             crate::paths::write_atomic(&path, conflict_side(&text, false).as_bytes())?;
         }
         self.sync_shared(&project.id);
@@ -1707,8 +1844,17 @@ pub(crate) fn remove_file_of(dir: &Path, sid: &str) {
     if !plain_id(sid) {
         return;
     }
+    // Never through a link, nor out of the project (ESC-199), as every other writer of the folder.
+    if let Some(why) = crate::workflowfiles::unsafe_dir(dir) {
+        log::warn!("shared ticket {sid} not removed: {why}");
+        return;
+    }
     let _ = std::fs::remove_file(dir.join(format!("{sid}.yml")));
-    let _ = std::fs::remove_dir_all(dir.join(sid));
+    let folder = dir.join(sid);
+    // Only a plain folder: a link there is left as it is.
+    if std::fs::symlink_metadata(&folder).is_ok_and(|m| m.is_dir()) {
+        let _ = std::fs::remove_dir_all(folder);
+    }
 }
 
 fn not_shared() -> anyhow::Error {

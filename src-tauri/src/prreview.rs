@@ -678,7 +678,7 @@ pub(crate) async fn git_diff(
             .unwrap_or_else(|_| base.clone());
         // The repository's and the user's own settings do not reach what is parsed: no external
         // diff, no conversion, a prefix of a/ and b/.
-        let bytes = git::run(
+        let text = git::read_diff(
             root,
             &[
                 "-c",
@@ -694,7 +694,7 @@ pub(crate) async fn git_diff(
             ],
         )
         .await?;
-        Ok::<_, anyhow::Error>((sha, String::from_utf8_lossy(&bytes).into_owned()))
+        Ok::<_, anyhow::Error>((sha, text))
     }
     .await;
     for r in [&tip, &base] {

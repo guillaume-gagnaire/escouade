@@ -36,8 +36,8 @@ pub use escouade_policy::list::{
     Def as LockKey, Form, Sort, ACCOUNT_RESERVATION, AGGREGATE_VIEW, ALLOW_BYPASS, AUTHORITIES,
     AUTO_UPDATE, CHANNEL, CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION,
     EXTENSIONS_ALLOWED, FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MAX_OFFLINE_HOURS, MAX_PARALLEL,
-    MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER, PERSONAL_SPACE, PHONE, PLUGINS_ALLOWED,
-    PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, PLUGIN_PROJECT_SETTINGS, POLICIES as KEYS,
+    MCP_EXTERNAL, MODELS, MODES_KEY, OFFLINE, ONLY_THIS_SERVER, PERSONAL_SPACE, PHONE,
+    PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, PLUGIN_PROJECT_SETTINGS, POLICIES as KEYS,
     PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS, TEAM_FINGERPRINT,
     TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
 };
@@ -1281,6 +1281,11 @@ impl Locks {
         if self.on(DENY_INSECURE_TLS) && s.insecure_tls {
             s.insecure_tls = false;
             changed.push(DENY_INSECURE_TLS);
+        }
+        // « Mode hors ligne » (ESC-596): the flows stop as soon as the settings say so (`offline::set_chosen`).
+        if self.on(OFFLINE) && !s.offline {
+            s.offline = true;
+            changed.push(OFFLINE);
         }
         if self.on(VERIFIED_ONLY) && !s.plugins_verified_only {
             s.plugins_verified_only = true;

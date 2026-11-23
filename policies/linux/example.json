@@ -26,6 +26,7 @@
   },
   "harnesses.maxEffort": "high",
   "mcp.externalClients": "readOnly",
+  "network.offline": true,
   "permissions.allowBypass": false,
   "permissions.defaultMode": "default",
   "permissions.modes": [

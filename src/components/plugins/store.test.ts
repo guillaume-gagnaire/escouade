@@ -126,6 +126,7 @@ function installed(over: Partial<PluginView> = {}): PluginView {
     commands: [],
     commandsApproved: true,
     verified: true,
+    seal: null,
     withdrawn: null,
     inStore: null,
     ...over,
@@ -323,6 +324,17 @@ describe('the installed ones, from the store', () => {
     expect(band.textContent).toContain('Règles de l’équipe v1.0.0 a été retiré par Escouade le 2026-10-30.');
     expect(band.textContent).toContain('ses réglages et ses secrets sont encore là');
     expect(screen.getByText(/Liste de révocation lue à \d\d:\d\d · nº 18/)).toBeTruthy();
+    expect(screen.queryByTestId('revocations-stale')).toBeNull();
+  });
+
+  it('says beside the revocation list that it is more than 7 days old (audit SEC-15)', async () => {
+    plugins.page = { kind: 'installed' };
+    const old = store();
+    old.revocations = { ...old.revocations!, holdsSince: '2026-10-30T10:42:00Z', stale: true };
+    fakeBackend({ store_view: () => old, plugins_list: () => [installed()] });
+    render(PluginsView);
+    const warn = await screen.findByTestId('revocations-stale');
+    expect(warn.textContent).toMatch(/^Elle vaut depuis le .*30.* : plus de 7 jours sans liste neuve/);
   });
 
   it('keeps « N’installer que des versions vérifiées » with the settings', async () => {

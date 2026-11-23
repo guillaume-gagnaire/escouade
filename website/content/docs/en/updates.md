@@ -101,7 +101,7 @@ When a company proxy that identifies itself refuses the installer, the message n
 
 When the proxy refuses the request (403, 407, refused tunnel), Escouade doesn’t make it again without the proxy: it gets around no rule of your company, and the message explains the refusal. For a 407, it says the proxy asks for authentication: put the username and password in the proxy’s address, in Settings › Advanced › Network (for example `http://user:password@proxy:3128`).
 
-Only a proxy that can’t be reached (set but switched off, or a computer outside the company network) leads to a second try, without the proxy. [The app’s log](troubleshooting#where-the-app-s-log-is) then says whether direct access worked, and if both tries fail, the failure message gives both.
+Only a proxy that can’t be reached (set but switched off, or a computer outside the company network) can lead to a second try, without the proxy, and only if you turned “Never go out without the proxy” off (on as soon as a proxy is set: see [the network](settings-network#never-go-out-without-the-proxy)). [The app’s log](troubleshooting#where-the-app-s-log-is) then says whether direct access worked, and if both tries fail, the failure message gives both.
 
 ### Download in the browser
 

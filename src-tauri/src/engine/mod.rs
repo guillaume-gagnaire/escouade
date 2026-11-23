@@ -185,6 +185,9 @@ pub struct Spawn {
     /// The paths its tools are refused (« Projet privé », `fence`): each harness is told them its
     /// way.
     pub fence: crate::fence::Fence,
+    /// A project of the machine is private (« Projet privé »): a third party’s harness refuses to start, in any project
+    /// (SEC-02, ESC-590; SEC-02b, ESC-623).
+    pub private: bool,
     /// A settings file of its own (Claude Code: `--settings`, `Engine::fence_settings`), written
     /// for its fence: it holds the refusal of Escouade's server too, Claude Code reading one only.
     pub settings: Option<PathBuf>,
@@ -223,6 +226,7 @@ impl Spawn {
             read_dirs: Vec::new(),
             escouade: Escouade::Denied { file: None },
             fence: crate::fence::Fence::default(),
+            private: false,
             settings: None,
             label: format!("agent {}", meta.id),
             account: meta.account.clone(),
@@ -433,6 +437,12 @@ pub trait Engine: Send + Sync {
     /// describes, whose `versionArgs` the user did not write (ESC-424).
     fn version_waits_gesture(&self) -> bool {
         false
+    }
+    /// The whole command it runs with `program`, when it is a harness a plugin of a third party describes: what the user
+    /// agrees to before its first launch (`plugins::consent`, audit SEC-01, ESC-589). None for the others, which ask
+    /// nothing.
+    fn launch_line(&self, _program: &Program) -> Option<crate::plugins::consent::LaunchLine> {
+        None
     }
     /// What it can do, as the interface reads it (`registry::EngineCaps`).
     fn caps(&self) -> registry::EngineCaps;

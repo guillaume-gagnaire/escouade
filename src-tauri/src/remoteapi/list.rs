@@ -42,6 +42,8 @@ escouade_command::commands! {
         commands::save_settings,
         commands::claude_update_status,
         commands::data_dir,
+        // « Mode hors ligne » (ESC-596): the core's, whose flows stop, and the policy of its machine.
+        commands::offline_state,
         commands::plugins_list,
         commands::plugin_inspect_git,
         commands::plugin_install,
@@ -127,6 +129,10 @@ escouade_command::commands! {
         commands::harness_enable_in,
         commands::harness_scope,
         commands::harness_plugin_of,
+        // The command of a harness of a third party agreed to (SEC-01, ESC-589): read and agreed on the core that launches it.
+        commands::harness_launch_ask,
+        commands::harness_agree,
+        commands::harness_launches,
         commands::plugin_set_permission,
         commands::plugin_set_setting,
         commands::plugin_secrets,
@@ -386,6 +392,8 @@ escouade_command::commands! {
         commands::inbox_views,
         commands::inbox_view_act,
         commands::inbox_view_snooze,
+        // « Remettre dans la boîte » (ESC-557): a mark of the squad lead taken off, on the core's state.
+        commands::inbox_view_reopen,
         commands::inbox_track,
         commands::ticket_update,
         commands::ticket_delete,

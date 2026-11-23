@@ -1,0 +1,23 @@
+{
+  "about": "Attestations of freshness of the revocation list (audit SEC-15, ESC-596), made by store/server/utils/revocation-fresh.ts with two keys of the tests, never the store's: listKey signs the list, freshKey the attestations. byListKey: an attestation by the key of the lists; other: one of another list; serial4: one of another serial.",
+  "listKey": "RWQgYztVMCxj/j4k6WpWekz0950hcfyXBnZ/V8D7qexOCIowN8cSUG9B",
+  "freshKey": "RWT6mwHcmWdBibWF3r/c5Uw7bueVH4lnN/zyUqiFM6DP500ZjoPhbT+y",
+  "list": "{\n  \"serial\": 3,\n  \"issued_at\": \"2026-11-02T10:00:00Z\",\n  \"entries\": []\n}\n",
+  "listSig": "untrusted comment: escouade freshness attestation\nRUQgYztVMCxj/ngpHnKbWETueEpa9VcnYmbsVmczFjvaQvpq7X74R4ckydk+ACR8IznORJu2KtEC2c/NN2X3kiAbH87e9gWnwg0=\ntrusted comment: escouade-revocations-v1 3 2026-11-02T10:00:00Z\nQRDsYa6T+Iohg09PS/81/PcVze4dj1VH4/7i0VdCu/x77J8Y2jAilcT1zOvCM2P8Gz+LN58zhdiaIeMbhsVgAg==\n",
+  "good": {
+    "json": "{\n  \"serial\": 3,\n  \"sha256\": \"1afe2348facb4121d37c4d287260348601fe9cf754f08448f58174f5d6547884\",\n  \"valid_at\": \"2026-11-16T06:00:00Z\"\n}\n",
+    "minisig": "untrusted comment: escouade freshness attestation\nRUT6mwHcmWdBicbKY6VKf/ZIrWdVLacocwRreCykKAe5ibo/ZMlPwkkDyWhiEgB+6WizlryOSWfZ7ybYqOy4drkI0Cw65hO1sQ4=\ntrusted comment: escouade-revocations-fresh-v1 3 2026-11-16T06:00:00Z\n2FNPFFuowYLdW5gPjgL2T97AKw23WwhsV877kQB3JSWlbDfcceczzk2UlbznuJYVf+i8RtQuN8pkqrrETQ0QBA==\n"
+  },
+  "byListKey": {
+    "json": "{\n  \"serial\": 3,\n  \"sha256\": \"1afe2348facb4121d37c4d287260348601fe9cf754f08448f58174f5d6547884\",\n  \"valid_at\": \"2026-11-16T06:00:00Z\"\n}\n",
+    "minisig": "untrusted comment: escouade freshness attestation\nRUQgYztVMCxj/s2jir3yIKOJ0vq7iOeKF9iAW2JbWD2NMkIMHslLFeK9ME0JaN2CARG92VLT3I9DV8kn/5eznw/2m3Fnmc6bEQ8=\ntrusted comment: escouade-revocations-fresh-v1 3 2026-11-16T06:00:00Z\nGyLqLPOxuApx20naKfzp5Pw9zoyL0XO1n7l99av19nR08Ilhe3Bpl6YGDl/oTgfPii/2OCeWQVFSSPp1sMoYDg==\n"
+  },
+  "other": {
+    "json": "{\n  \"serial\": 3,\n  \"sha256\": \"e4e888b95d2654961a9335a051ffd715f3ab7f532e6b945a0fd3f77c0b752366\",\n  \"valid_at\": \"2026-11-16T06:00:00Z\"\n}\n",
+    "minisig": "untrusted comment: escouade freshness attestation\nRUT6mwHcmWdBibgyoUVj3qxgAW+hFDimnFJ68A9jqZ3BHRSwu6rZhqNaECtGVc0Sm0xgdtflB/vki1wqhF/e5tAiNn6Mn7vgXAQ=\ntrusted comment: escouade-revocations-fresh-v1 3 2026-11-16T06:00:00Z\nJ6G2uQpH9Q8uCi5xR7EZ08+Qn2LXmJzWeubwUjXCCpEnCxpBEpmCPkMU5OkYT8Dyq9U6I8EZeXKPud8KMuHMCA==\n"
+  },
+  "serial4": {
+    "json": "{\n  \"serial\": 4,\n  \"sha256\": \"1afe2348facb4121d37c4d287260348601fe9cf754f08448f58174f5d6547884\",\n  \"valid_at\": \"2026-11-16T06:00:00Z\"\n}\n",
+    "minisig": "untrusted comment: escouade freshness attestation\nRUT6mwHcmWdBiaI+iDuZZmIV5jChv0zJux0t3bazpTrWlTDuc4yLoKqvKxaKBhGtwzo4lCbTI8wHv8EtJ6ibg7P5uWMSmPkWmgA=\ntrusted comment: escouade-revocations-fresh-v1 4 2026-11-16T06:00:00Z\nE9QRGBbHI4VkPoDsUhDKCdsh3aXDWgogOCzODrOq8adN4CcY/W+J/8ktOVCz1lIJJgQ0gabavZ07dJmZrSxtDg==\n"
+  }
+}

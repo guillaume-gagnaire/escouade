@@ -6478,3 +6478,33 @@ async fn the_tickets_in_parallel_go_to_sixteen_on_a_desktop_sixty_four_on_a_serv
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
+
+/// SEC-02b (ESC-623): a ticket of a project that is not private, on a third party's harness, another project private on
+/// the machine: start_ticket refuses it, with the same why as the window and the Kanban, and starts nothing.
+#[tokio::test]
+async fn start_ticket_refuses_a_third_party_harness_while_a_private_project_exists() {
+    let h = harness("mcp-act-start-third-party");
+    let p = project(&h).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let client = other_project(&h, "client").await;
+    make_private(&h, &client);
+    let t = made(&h, &p, "Tiers [ok]").await;
+    let tiers = EngineId::new("plugin:com.exemple.tiers:outil");
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.engine = Some(tiers);
+            Ok(())
+        })
+        .unwrap();
+    let c = external(&h).await;
+    let why = refused(&c, "start_ticket", json!({ "ticket": t.key })).await;
+    assert!(
+        why.starts_with("Un projet privé existe sur ce poste : un harness d’un plugin tiers"),
+        "{why}"
+    );
+    assert_eq!(why, h.core.harness_refusal(tiers, &p.id).unwrap());
+    assert_eq!(stored(&h, &t.id).column, Column::Todo);
+    assert!(h.core.project_agents(&p.id).is_empty());
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}

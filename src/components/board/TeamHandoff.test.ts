@@ -217,6 +217,7 @@ describe('passing an agent (TS-17)', () => {
     const v: InboxItem = {
       key: 'handoff:t41',
       source: 'handoff',
+      mark: null,
       group: 'today',
       projectId: 'p1',
       projectName: 'demo',

@@ -188,6 +188,7 @@ async function copyRepo() {
         </div>
         <div v-if="signature" class="review-note signed">
           <b>{{ words.plugin.reviewedOn(words.date(signature.signedAt)) }}</b>
+          <p class="how">{{ words.plugin.reviewedHow(signature.role, signature.keyId) }}</p>
           <ul v-if="summary.length">
             <li v-for="(l, i) in summary" :key="i">{{ l }}</li>
           </ul>
@@ -242,8 +243,9 @@ async function copyRepo() {
               ><span
                 ><span class="k">{{ words.plugin.signature }}</span
                 ><span class="v" :title="signature ? words.plugin.signedKey(signature.keyId) : undefined">{{
-                  signature ? words.plugin.signed : words.plugin.unsigned
-                }}</span></span
+                  signature ? words.plugin.signedBy(signature.role) : words.plugin.unsigned
+                }}</span
+                ><span v-if="signature" class="v key">{{ signature.keyId }}</span></span
               >
             </li>
           </ol>
@@ -687,6 +689,12 @@ table.t .r {
   font-family: var(--font);
   font-size: 13px;
   font-weight: 560;
+}
+.chain li.signed .v.key {
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
 }
 .facts {
   display: grid;

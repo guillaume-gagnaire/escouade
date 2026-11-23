@@ -1,6 +1,7 @@
 //! The accounts' secrets (API keys and tokens) in the system's keychain: Windows' Credential
-//! Manager, macOS' Keychain. `integrations.json` keeps the rest of the accounts, and the secrets
-//! the keychain refuses stay there, readable by their owner only.
+//! Manager, macOS' Keychain, the desktop's Secret Service under Linux when there is one (SEC-10).
+//! `integrations.json` keeps the rest of the accounts, and the secrets the keychain refuses stay
+//! there, readable by their owner only.
 
 use super::{source, Account, Accounts, VIA_GH};
 use crate::model::Service;
@@ -15,7 +16,6 @@ pub use escouade_plugins::secrets::{Chunked, SecretStore};
 
 /// The keychain's service of the app's entries, its identifier; a sandboxed run's (end-to-end
 /// tests, demos) are apart, so that its accounts never take the place of the user's.
-#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 pub fn keychain_service(sandboxed: bool) -> String {
     if sandboxed {
         format!("{}.sandbox", paths::IDENTIFIER)
@@ -51,33 +51,71 @@ impl Secrets {
     }
 }
 
-/// The system's keychain: Windows' Credential Manager, macOS' Keychain (the user's), an entry per
-/// integration under `service`.
+/// The system's keychain: Windows' Credential Manager, macOS' Keychain (the user's), the desktop's Secret Service under
+/// Linux (its default collection, the login keyring), an entry per integration under `service`.
 /// Built in tests too, for the trial on the real keychain (`the_real_keychain_keeps_a_long_secret_in_pieces`, ignored by
 /// default), which never touches the app's entries.
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 #[cfg_attr(feature = "testing", allow(dead_code))]
 struct Keychain {
     service: String,
+    /// A sandboxed run's, on Windows: its entries under names of its own, taken back at its end (ESC-584).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    run: Option<super::sandbox_keychain::Run>,
 }
 
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 #[cfg_attr(feature = "testing", allow(dead_code))]
 impl Keychain {
     /// The entry `name`, in the platform's own store: never the in-memory one `keyring` falls
     /// back to without it, which would lose the secrets at the next start.
     fn entry(&self, name: &str) -> keyring::Result<keyring::Entry> {
         #[cfg(windows)]
-        let credential =
-            keyring::windows::WinCredential::new_with_target(None, &self.service, name)?;
+        let credential = match &self.run {
+            Some(run) => keyring::windows::WinCredential {
+                username: name.to_string(),
+                target_name: run.target(&self.service, name),
+                target_alias: String::new(),
+                comment: run.comment(),
+            },
+            None => keyring::windows::WinCredential::new_with_target(None, &self.service, name)?,
+        };
         #[cfg(target_os = "macos")]
         let credential = keyring::macos::MacCredential::new_with_target(None, &self.service, name)?;
+        #[cfg(target_os = "linux")]
+        let credential =
+            keyring::secret_service::SsCredential::new_with_target(None, &self.service, name)?;
         Ok(keyring::Entry::new_with_credential(Box::new(credential)))
     }
 }
 
+/// How long the start waits for the desktop's Secret Service to answer (Linux): a session bus with no service on it may
+/// try to start one, and D-Bus' own wait is 25 seconds.
+#[cfg(target_os = "linux")]
+#[cfg_attr(any(test, feature = "testing"), allow(dead_code))]
+const SECRET_SERVICE_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Whether the desktop's Secret Service answers (Linux): an entry that is not there read within `SECRET_SERVICE_WAIT`.
+/// No session bus (WSL, a server, a CI runner), no service on it, or a locked keyring that is not opened: none, and the
+/// secrets stay where they are without one (`Absent`), as the window says.
+#[cfg(target_os = "linux")]
+#[cfg_attr(any(test, feature = "testing"), allow(dead_code))]
+fn secret_service_answers(service: &str) -> bool {
+    let service = service.to_string();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let keychain = Keychain { service, run: None };
+        let _ = tx.send(keychain.get("escouade-probe").is_ok());
+    });
+    let answered = rx.recv_timeout(SECRET_SERVICE_WAIT).unwrap_or(false);
+    if !answered {
+        log::info!("no Secret Service on this desktop: the secrets stay in their files");
+    }
+    answered
+}
+
 // Its errors say what failed (the platform's code, the attribute too long), never the secret.
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 impl SecretStore for Keychain {
     fn get(&self, name: &str) -> Result<Option<String>> {
         match self.entry(name)?.get_password() {
@@ -99,7 +137,17 @@ impl SecretStore for Keychain {
     }
 }
 
-/// No keychain the app knows of (Linux, WSL): nothing is kept there (`NoKeychain`, which the window says), the
+/// The keychain of a sandboxed run on the data folder `dir` (the tests of the real keychain, ESC-584): its entries under
+/// names of their own, which `sandbox_keychain::clean` takes back.
+#[cfg(all(test, windows))]
+pub(crate) fn sandbox_store_of(dir: &std::path::Path) -> impl SecretStore {
+    Keychain {
+        service: keychain_service(true),
+        run: Some(super::sandbox_keychain::Run::of(dir)),
+    }
+}
+
+/// No keychain (Linux without a Secret Service, WSL): nothing is kept there (`NoKeychain`, which the window says), the
 /// accounts' secrets stay in their file, a plugin's go to `kept`'s file once the user chose it (ESC-499).
 #[cfg(not(any(test, feature = "testing")))]
 struct Absent;
@@ -141,14 +189,27 @@ pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     if sandbox_without_keychain() {
         return Arc::new(Chunked::new(Arc::new(Absent)));
     }
+    let sandbox = paths::sandbox_dir();
     Arc::new(Chunked::new(Arc::new(Keychain {
-        service: keychain_service(paths::sandbox_dir().is_some()),
+        service: keychain_service(sandbox.is_some()),
+        run: sandbox.map(|d| super::sandbox_keychain::Run::of(&d)),
     })))
+}
+
+/// Linux: the desktop's Secret Service when it answers at the start (`secret_service_answers`), a sandboxed run's
+/// service apart; none otherwise, as before (SEC-10).
+#[cfg(all(not(any(test, feature = "testing")), target_os = "linux"))]
+pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
+    let service = keychain_service(paths::sandbox_dir().is_some());
+    if sandbox_without_keychain() || !secret_service_answers(&service) {
+        return Arc::new(Chunked::new(Arc::new(Absent)));
+    }
+    Arc::new(Chunked::new(Arc::new(Keychain { service, run: None })))
 }
 
 #[cfg(all(
     not(any(test, feature = "testing")),
-    not(any(windows, target_os = "macos"))
+    not(any(windows, target_os = "macos", target_os = "linux"))
 ))]
 pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     let _ = sandbox_without_keychain();
@@ -1043,12 +1104,13 @@ mod tests {
 }
 
 /// The trial on the real keychain (ESC-527), never run by itself: `cargo test -p escouade-forge --lib real_keychain --
-/// --ignored`. It works under a service of its own, apart from the app's (and a sandbox's), reads and writes no other
-/// entry, and leaves none.
+/// --ignored`. It works as a sandboxed run of its own on Windows (under a service of its own on macOS), reads and writes
+/// no other entry, and leaves none; a trial cut short leaves entries the next sweep takes back (ESC-584).
 #[cfg(all(test, any(windows, target_os = "macos")))]
 mod real_keychain {
     use super::*;
 
+    #[cfg(target_os = "macos")]
     const SERVICE: &str = "dev.gagnaire.escouade.trial-esc527";
     const NAME: &str = "plugin:dev.test.trial:config";
 
@@ -1075,8 +1137,17 @@ mod real_keychain {
     #[test]
     #[ignore = "the real keychain of this machine: run by hand"]
     fn the_real_keychain_keeps_a_long_secret_in_pieces() {
+        #[cfg(windows)]
+        let raw = Arc::new(Keychain {
+            service: keychain_service(true),
+            run: Some(super::super::sandbox_keychain::Run::of(
+                &crate::paths::test_dir("real-keychain-trial"),
+            )),
+        });
+        #[cfg(target_os = "macos")]
         let raw = Arc::new(Keychain {
             service: SERVICE.to_string(),
+            run: None,
         });
         let clean = Clean(raw.clone());
         for n in names() {

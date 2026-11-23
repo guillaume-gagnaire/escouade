@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-claude"
-version = "2.2.7"
+version = "2.2.8"
 dependencies = [
  "escouade-plugin-protocol",
  "serde",

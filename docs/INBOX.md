@@ -165,7 +165,18 @@ Ce sont des **vues sur l'état réel**, pas des copies. Une chose réglée aille
 | Invitation d'équipe reçue                             | « Invitation »                                                      | « Rejoindre », « Plus tard »                                                                                            | Aujourd'hui                                |
 
 - « Plus tard » marche aussi sur une vue (sauf une bloquante, qui attend l'agent) : elle quitte la boîte jusqu'à l'heure dite, sans rien changer à sa source.
-- Les vues ne passent pas par le MCP (Escouade les sait) mais n'existent qu'avec la boîte, donc qu'avec le serveur allumé (§ 6).
+- Les vues ne passent pas par le MCP (Escouade les sait ; seul le chef d'escouade y pose une marque, § 5.1) mais n'existent qu'avec la boîte, donc qu'avec le serveur allumé (§ 6).
+
+### 5.1 Ce que le chef d'escouade en dit (ESC-557)
+
+Demandé le 2026-11-20 : « Pour le "à toi", faudrait que quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans "à toi", afin d'être toujours à jour. » Le même jour, l'utilisateur a validé depuis la boîte trois tickets que le chef vérifiait encore. Une vue reste lue à sa source ; le chef y pose une **marque**, gardée dans l'état durable (`PersistedState::inbox_marks`, par la clé de la vue) avec l'état de sa source quand il l'a posée (`sign`).
+
+- **« Je m'en occupe »** (`claim_inbox_view`) : le chef prend en charge une vue qu'il est en train de traiter (un ticket « À tester » qu'il vérifie, un ticket bloqué, les demandes d'un agent arrêté, une décision proposée), avec une note courte (« vérification en cours, chaîne de tests », 200 caractères, une ligne, jamais un secret). Elle quitte « Tes agents se sont arrêtés », « Aujourd'hui » et « Plus tôt », ne compte plus dans le nombre de la tuile (un agent dont le chef a pris toutes les demandes non plus), et se lit dans un groupe « Le chef s'en occupe », avec la note et l'heure. L'utilisateur peut toujours agir dessus : le geste demande d'abord « <chef> est en train de la vérifier · Sa note : « … ». La régler toi-même quand même ? ». « Remettre dans la boîte » la lui rend.
+- **« Réglé »** (`settle_inbox_view`) : le chef coche comme réglée une vue qu'il a réglée par un autre chemin, avec une note qui dit comment (« fusionné à la main sur main en 79fe7aec ») : un ticket à valider ou bloqué, la décision proposée d'un ticket. La vue sort de la boîte et passe dans sa trace, dans « Répondu récemment » : « Réglé par overseer-fable : … » ; ouverte, elle n'a plus ses gestes, seulement « Remettre dans la boîte » (`inbox_view_reopen`). Sa source n'est pas touchée : le ticket reste « À tester » jusqu'à ce que sa carte soit fermée, et la vue part alors avec lui.
+- **Jamais ce qui reste le geste de l'utilisateur** : partager les docs (« Partager les docs reste le geste de l'utilisateur (ou share_docs)… »), une relecture que l'hébergeur lui demande, un feu vert (`gate`), une tâche ; ni coche sur une demande où un agent s'est arrêté (« Un agent arrêté attend une réponse, pas une coche… »), ni sur une décision qui ne vient d'aucun ticket ; ni sur son propre ticket ou ses propres demandes. Chaque refus dit sa raison.
+- **Elle tombe d'elle-même** quand sa source change : le ticket quitte « À tester » puis y revient (une autre heure « À tester »), son blocage change, la décision est révisée, une nouvelle demande arrive (une autre vue) ; les faits d'une colonne ou d'un conflit d'un ticket la font tomber aussitôt, même sans lecture de la boîte entre-temps. Une prise en charge tombe aussi quand le chef la rend (`release: true`). Une vue réglée revient de même si sa source change encore.
+- **Qui** : le même réglage que les réponses (« Les agents peuvent répondre aux demandes des autres agents », `delegation.rs`) : « Personne » refuse tout agent, « Seulement le chef d'escouade » le chef du projet de la vue seul, « Tous les agents » chacun ; Claude hors Escouade, comme pour `answer_permission`.
+- Serveur éteint, rien ne se marque ; les marques gardées reviennent avec lui.
 
 ## 6. La boîte repose sur le serveur MCP
 
@@ -300,7 +311,7 @@ Refus (FR / EN), sans rien laisser (ni demande ni fichier) :
 
 ### `withdraw_ask` — la retirer
 
-`{ "ask": "a-12", "reason": "La direction a été choisie dans la conversation." }`. Seulement par son auteur. La raison s'affiche une fois.
+`{ "ask": "a-12", "reason": "tranché dans la conversation du chef : B" }`. Seulement par son auteur. La raison est une note que l'utilisateur lit dans la trace de la demande (« Retirée par chef-atlas : tranché dans la conversation du chef : B », dans « Répondu récemment » et dans son panneau ; sans raison, « Retirée par chef-atlas ») ; jamais un secret (ESC-557).
 
 ### `list_asks` — lister
 
@@ -321,6 +332,14 @@ Refus (FR / EN), sans rien laisser (ni demande ni fichier) :
 ### `answer_ask` — répondre, par délégation seulement
 
 `{ "ask": "a-12", "options"?: […], "yes"?, "text"?, "steps"?, "note"? }`. Refusé à tout appelant, sauf : l'agent (ou l'Overseer) à qui **l'utilisateur** a laissé cette demande, si « Les agents peuvent répondre aux demandes des autres agents » le permet encore au moment de répondre. **Jamais sur sa propre demande**, jamais un feu vert, jamais une tâche. Le refus dit la raison et où changer le réglage ; « Claude hors Escouade » n'y répond pas non plus (c'est la fenêtre qui répond, pas un client). Le mot « accepter » n'est dans aucun nom d'outil.
+
+### `claim_inbox_view` — « Je m'en occupe » (ESC-557)
+
+`{ "ticket": "DEM-12" | "agent": "dev" | "decision": "<id>", "project"?, "note": "vérification en cours, chaîne de tests", "release"?: true }` : une ligne, une seule (aussi `ask`, `docs`, `pullRequest` pour s'entendre dire pourquoi c'est refusé). Rend les lignes (`key`, `source`, `title`, `project`, `ticket`, `mark` : `kind`, `note`, `by`, `at`) et `waiting`, ce qui attend encore l'utilisateur. Voir § 5.1.
+
+### `settle_inbox_view` — « Réglé » (ESC-557)
+
+`{ "ticket": "DEM-12" | "decision": "<id>", "project"?, "note": "fusionné à la main sur main en 79fe7aec" }` : seulement un ticket à valider ou bloqué, la décision d'un ticket. Une demande de la boîte se règle par son auteur (`withdraw_ask`, avec une note) ; un feu vert, une tâche, les docs, une relecture, une demande bloquante sont refusés avec la raison. Voir § 5.1.
 
 ### Les commandes de la fenêtre et de l'API distante
 
@@ -351,6 +370,29 @@ Les maquettes : [`design/inbox-2-3/`](../design/inbox-2-3/README.md). Les textes
 | Sortes  | « Choix » · « Oui ou non » · « Réponse » · « Tâche » · « Autorisation » · « Question » · « Plan » · « Ticket à valider » · « Ticket bloqué » · « Décision proposée » · « Docs à partager » · « Relecture » · « Invitation » | “Choice” · “Yes or no” · “Answer” · “Task” · “Permission” · “Question” · “Plan” · “Ticket to approve” · “Blocked ticket” · “Proposed decision” · “Docs to share” · “Review” · “Invitation” |
 | Ligne   | titre ; projet, auteur, ticket ; « 6 images » ; depuis (« 40 min ») ; « aujourd'hui » ; « jusqu'à demain 9:00 » ; « revenue de Plus tard »                                                                                  | —                                                                                                                                                                                          |
 | Répondu | « C · Une seule page · toi · 10:42 · lue par design-form » ; « chef-atlas, délégué » ; « périmée » ; « retirée par design-tableau »                                                                                         | “C · One page · you · 10:42 · read by design-form”; “chef-atlas, delegated”; “expired”; “withdrawn by design-tableau”                                                                      |
+
+#### Le filtre par type (ESC-578)
+
+Sous le compteur des traitées, en haut de la liste : « Tout », puis un bouton par type qui attend, avec son nombre (« Autorisations 3 », « Feux verts 1 »), dans un ordre fixe. Un type sans rien qui attende n'apparaît pas, sauf s'il est choisi (il reste à 0 pour qu'on puisse l'ôter). Le filtre ne s'offre pas quand un seul type attend et que rien n'est choisi.
+
+| Type | Ce qu'il réunit | Pourquoi |
+| --- | --- | --- |
+| « Autorisations » / “Permissions” | l'autorisation d'un agent arrêté ; la suppression qu'un agent demande | un oui ou non sur ce que l'agent ferait |
+| « Questions » / “Questions” | la question d'un agent arrêté ; une demande `answer` ; un `confirm` sans `gate` | ce que l'agent demande, quelle que soit la forme de la réponse |
+| « Plans » / “Plans” | un plan à approuver | — |
+| « Choix » / “Choices” | une demande `choice` | — |
+| « Feux verts » / “Go-aheads” | un `confirm` avec `gate` | à part : toi seul y réponds (publier, signer, dépenser) |
+| « Tâches » / “Tasks” | une demande `task` | — |
+| « Tickets » / “Tickets” | un ticket à valider ; un ticket bloqué | les deux se règlent sur le ticket, au Kanban |
+| « Décisions » / “Decisions” | une décision proposée | — |
+| « Relectures » / “Reviews” | une relecture de PR | — |
+| « Docs » / “Docs” | les docs à partager | — |
+
+- **Plusieurs à la fois** ; « Tout » (ou « Effacer », ou « Tout montrer ») ôte le filtre d'un geste. Le choix se garde sur ce poste (`localStorage`, `escouade.inbox.filter`), d'une ouverture à l'autre et d'un lancement à l'autre ; le téléphone garde le sien.
+- **Ce qu'il change** : les groupes et leur ordre restent, seules les lignes des types choisis y restent (« Plus tard », « Le chef s'en occupe » et « Répondu récemment » compris) ; J, K et « 2 sur 5 » parcourent les lignes montrées. Le compte de la tuile, celui de l'en-tête et « il en reste 9 » disent toujours tout ce qui attend. La demande ouverte, cachée par le filtre, laisse la place à la première montrée.
+- **Ce qu'il cache** se dit d'une ligne discrète sous lui, « 2 autres demandes masquées par le filtre · Tout montrer » (“2 more requests hidden by the filter · Show all”), lue par un lecteur d'écran quand une demande d'un type caché arrive (`role="status"`). Le filtre cache tout ce qui attend : « Rien de ce type ne t'attend » ; « 3 autres demandes attendent, masquées par le filtre. » ; « Effacer le filtre » — jamais « Rien ne t'attend ».
+- **Clavier et lecteur d'écran** : une barre d'outils « Filtrer par type » ; chaque bouton dit son état (`aria-pressed`) ; Tab y entre, ←, →, Début et Fin vont d'un bouton à l'autre, Espace ou Entrée choisit.
+- **Partagé** : les types, leurs regroupements, les nombres, ce qui est gardé et caché vivent dans `src/lib/inbox/filter.ts`, sans état de la fenêtre, pour l'app mobile (MO-5, ESC-571). Rien ne passe par le cœur : l'API distante n'a rien de neuf à servir.
 
 ### 10.3 Une demande
 
@@ -413,7 +455,9 @@ Réglages › Données : « Boîte « À toi » · 212 Mo », « Vider les fichi
 
 Le texte de présentation du serveur MCP (les instructions qu'il donne à chaque harness), et une mémoire du projet Escouade, disent quand déposer une demande :
 
-> Quand tu attends quelque chose de l'utilisateur sans être bloqué — un choix entre des options que tu as rendues (des maquettes, des directions), les choix à trancher d'une étude, un feu vert (publier, signer, supprimer, dépenser), un essai que seul l'utilisateur peut faire (un vrai compte, un téléphone), un fichier à supprimer à la main — dépose-le avec `ask_user` au lieu de l'écrire seulement dans ton bilan, puis continue ton travail. Joins tes rendus à leurs options (clair et sombre), dis ta recommandation et ce que la réponse débloque. Retire la demande (`withdraw_ask`) si elle n'a plus lieu d'être. Une question qui te bloque reste une question (`AskUserQuestion`). Jamais de secret dans une demande.
+> Quand tu attends quelque chose de l'utilisateur sans être bloqué — un choix entre des options que tu as rendues (des maquettes, des directions), les choix à trancher d'une étude, un feu vert (publier, signer, supprimer, dépenser), un essai que seul l'utilisateur peut faire (un vrai compte, un téléphone), un fichier à supprimer à la main — dépose-le avec `ask_user` au lieu de l'écrire seulement dans ton bilan, puis continue ton travail. Joins tes rendus à leurs options (clair et sombre), dis ta recommandation et ce que la réponse débloque. Retire la demande (`withdraw_ask`) si elle n'a plus lieu d'être, avec une note qui dit comment elle a été tranchée. Une question qui te bloque reste une question (`AskUserQuestion`). Jamais de secret dans une demande.
+>
+> Chef d'escouade d'un projet, tiens la boîte de l'utilisateur à jour (ESC-557) : prends en charge un ticket « À tester » que tu vérifies (`claim_inbox_view`, avec ce que tu fais : « vérification en cours, chaîne de tests »), et coche comme réglé ce que tu as réglé par un autre chemin (`settle_inbox_view`, avec comment : « fusionné à la main sur main en 79fe7aec »), jamais ce qui reste son geste.
 
 ## 14. Accord avec l'onboarding (ESC-503)
 
@@ -508,12 +552,13 @@ IN-1 (ESC-509), IN-2 (ESC-510) et IN-3 (ESC-513) sortent dans une 2.2.x, depuis 
 - **IN-2** : l'écran (direction B), sa tuile dans la barre des projets et son compteur, `Ctrl+Maj+J`, la comparaison en grand, le lecteur de PDF, la réponse au clavier, « Plus tard », la trace, ses réglages (`inboxKeepDays`).
 - **IN-3** : les vues du § 5 que `main` sait (les demandes bloquantes, permission, question et plan ; les tickets à valider et bloqués ; les décisions proposées ; les docs à partager ; les relectures que l'hébergeur demande à l'utilisateur, d'après la dernière liste lue des PR), synchronisées dans les deux sens (`inbox_views`, `inbox_view_act` sur la vue lue, refusé quand elle a été réglée ailleurs ; « Plus tard » sur une vue par `inbox_view_snooze`, gardé dans l'état, jamais sur une bloquante) ; le résumé des notifications du § 11 et son réglage « Résumé de la boîte « À toi » » (30 min, 1 h, jamais) dans Réglages › Notifications ; une seule règle de délégation pour les demandes de la boîte et les demandes bloquantes (`delegation.rs`) ; la consigne du § 13 dans les instructions du serveur MCP et la mémoire partagée (`deposer-une-demande-a-toi`).
 - **Les vues dans l'écran** : la file d'IN-2 (`InboxQueue`) montre les lignes d'IN-3 (`InboxViewRow`) dans ses groupes : les demandes bloquantes dans « Tes agents se sont arrêtés », les tickets et les relectures dans « Aujourd'hui », les décisions et les docs dans « Plus tôt », celles qu'on a reportées dans « Plus tard ». Une vue ouverte se lit dans le panneau de l'écran (`InboxViewPane`), et `J`, `K` passent de l'une à l'autre comme d'une demande à l'autre. Un agent arrêté sans vue (une suppression qu'il demande, ESC-511 ; un agent de la vue Claude Code) garde la ligne d'IN-2, qui mène à sa conversation. Le compteur de la tuile reste celui d'IN-2, augmenté des vues non bloquantes non reportées : les agents arrêtés y comptent comme dans « N en attente », jamais une demande bloquante deux fois. Un clic sur le résumé ouvre la boîte (`inboxOpen`), sur le projet quand le résumé n'en disait qu'un.
+- **Les marques du chef d'escouade** (ESC-557, § 5.1, une 2.2.x après la 2.2.5) : `claim_inbox_view` et `settle_inbox_view`, la marque dans `inbox_views` (`mark`), le groupe « Le chef s'en occupe », la trace « Réglé par … », la confirmation d'un geste sur une vue prise en charge, `inbox_view_reopen` ; la note d'un retrait (`withdraw_ask`) dans la trace ; la consigne du § 13 complétée. Au reversement, l'Overseer (`delegation::may_answer`) les reçoit avec la délégation.
 
 ### Laissé au reversement dans `release/2.3`
 
 - **L'aperçu PDF** : sur `main`, il vit hors de toute vue, dans `src/lib/previews/pdf.ts` (le cœur de pdf.js seul, une page dessinée sur un canevas, la recherche par le texte des pages), lu par `PdfReader.svelte` de la boîte ; `pdfjs-dist` est à la version de `release/2.3` (6.4.299). Sur `release/2.3`, la vue VS Code a le sien (`src/lib/vscode/previews/pdf.ts`, le lecteur à défilement de pdf.js) : le reversement garde les deux fichiers ou fait lire au second le premier, et réunit `package.json` et `package-lock.json` (la même version, rien à choisir). La politique de la fenêtre n'a pas changé sur `main` (le worker est un script de l'app, `script-src 'self'`) ; celle de `release/2.3`, plus stricte et plus longue (`worker-src 'self' blob:`, `object-src 'none'`…), l'emporte. Fait par ESC-540 : les deux fichiers gardés, `pdfjs-dist` le même des deux côtés, la politique de `release/2.3` intacte.
 - **Word, CSV et l'aperçu Markdown de l'éditeur** : `mammoth` et les aperçus de la vue VS Code n'existent que sur `release/2.3`. Sur `main`, un `.docx` et un CSV sont des « autres fichiers » (nom, taille, « Ouvrir », « Enregistrer sous… ») et un Markdown joint passe par le rendu assaini de la conversation. Le reversement peut les montrer par les aperçus de l'éditeur (§ 4.3).
-- **L'API distante** (`remoteapi`, `docs/REMOTE.md`) : fait par ESC-520 pour IN-1 et par ESC-540 pour IN-2 et IN-3 (voir § 16, « Ce que la 2.2 ne livre pas »). `inbox_save_file` et `inbox_open_file` y changent de machine (refusées à distance) plutôt que d'être `desk`, et `inbox_track` est servie. Le push du téléphone portera le même résumé.
+- **L'API distante** (`remoteapi`, `docs/REMOTE.md`) : fait par ESC-520 pour IN-1 et par ESC-540 pour IN-2 et IN-3 (voir § 16, « Ce que la 2.2 ne livre pas »), par ESC-651 pour ESC-557 (`inbox_view_reopen`, servie : le téléphone remet une vue dans la boîte ; les marques du chef viennent dans `inbox_views`, `mark`, sans commande de plus). `inbox_save_file` et `inbox_open_file` y changent de machine (refusées à distance) plutôt que d'être `desk`, et `inbox_track` est servie. Le push du téléphone portera le même résumé.
 - **Les réglages imposés** (équipe, poste) : rien n'impose la boîte ni ses réglages (`inboxKeepDays`, `inboxSummary`) ; voir au reversement si `locks.rs` doit les connaître.
 - **L'Overseer** (`main` ne l'a pas) : compter la boîte dans ses nouvelles (« 3 choses t'attendent dans À toi »), son arc « ce qui attend l'utilisateur », la lecture de la boîte à la voix, et sa délégation (il répond aux demandes que l'utilisateur lui laisse, sa garde des consignes s'applique). Au reversement, `delegation::may_answer` doit aussi dire l'Overseer.
 - **Le serveur d'équipe** : rien de la boîte n'y va (I12) ; la vue « Invitation » (« Rejoindre », « Plus tard ») n'existe pas sur `main`.

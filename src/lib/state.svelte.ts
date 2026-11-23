@@ -28,7 +28,7 @@ import { conversation } from './conversation.svelte';
 import { overseerVoice } from './overseer-voice.svelte';
 import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
-import { errorText, missingAccountOf, missingAccountProjectOf } from './refusal';
+import { errorText, missingAccountOf, missingAccountProjectOf, notOpened } from './refusal';
 import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
 import type { IconName } from './icons';
 import type { SettingsPage } from './settings-pages';
@@ -85,6 +85,7 @@ import type {
   EngineDecl,
   EngineId,
   HarnessScope,
+  LaunchHeld,
   PageEvent,
   AgentReview,
   Project,
@@ -223,6 +224,11 @@ export type Modal =
    * of an agent or a ticket whose harness is off there. `onEnabled` once its plugin is on for the project.
    */
   | { kind: 'harnessConsent'; projectId: string; engine: EngineId; onEnabled: () => void | Promise<void>; onCancel?: () => void }
+  /**
+   * The agreement to the whole command of a harness a plugin of a third party describes (SEC-01, ESC-589): at its first
+   * launch, for the agent `agentId` (its account's program), or again once its line changed.
+   */
+  | { kind: 'harnessLaunch'; engine: EngineId; agentId: string | null }
   /**
    * « Nouvelle discussion » of the Docs tab (ESC-261), its role and subject given by a gesture of the spec (« Mettre la spec
    * à jour », « Écrire une première spec ») with the first message it sends.
@@ -457,6 +463,8 @@ class AppState {
   enginesOff = $state.raw<EngineId[]>([]);
   /** The harnesses not on for a project, by project (ESC-404): left out of its menus, or asked for first. */
   harnessScope = $state.raw<Record<string, HarnessScope>>({});
+  /** The harnesses of a third party whose command does not run now (SEC-01, ESC-589): awaiting the agreement, or refused. */
+  harnessLaunches = $state.raw<Partial<Record<EngineId, LaunchHeld>>>({});
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
@@ -510,6 +518,13 @@ class AppState {
   /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
   vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
+  /** « Mode hors ligne » (ESC-596), as the core holds it: on, and imposed by a policy of this device. */
+  offline = $state<{ on: boolean; imposed: boolean }>({ on: false, imposed: false });
+  /** Reads the mode again from the core (at the start, after a save of the settings). */
+  async loadOffline() {
+    const s = await api.offlineState().catch(() => null);
+    if (s) this.offline = s;
+  }
   /** When the automatic restart for the update comes (the backend warned of it), if one is planned. */
   restartAt = $state<number | null>(null);
   /** A version that did not install at the last try: told of once it is downloaded again. */
@@ -951,6 +966,9 @@ class AppState {
     this.projectPauses = s.projectPauses ?? {};
     this.accounts = s.accounts ?? [];
     this.settings = withPosteVoice(s.settings);
+    // « Mode hors ligne » (ESC-596): as chosen, until the core says whether a policy imposes it.
+    this.offline = { on: !!s.settings.offline, imposed: false };
+    void this.loadOffline();
     this.usage = s.usage;
     this.git = s.git;
     this.shells = s.shells;
@@ -965,6 +983,7 @@ class AppState {
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.enginesOff = s.enginesOff ?? [];
     this.harnessScope = s.harnessScope ?? {};
+    this.harnessLaunches = s.harnessLaunches ?? {};
     if (s.sources) setSources(s.sources);
   }
 
@@ -1349,6 +1368,18 @@ class AppState {
     if (off && off.join() !== this.enginesOff.join()) this.enginesOff = off;
     // Project by project (ESC-404): one turned on or off for a project since.
     await this.refreshHarnessScope();
+    await this.refreshHarnessLaunches();
+  }
+
+  /** The harnesses of a third party whose command does not run now, read again (SEC-01). Nothing said when it fails. */
+  async refreshHarnessLaunches(): Promise<void> {
+    const launches = await api.harnessLaunches().catch(() => null);
+    if (launches && JSON.stringify(launches) !== JSON.stringify(this.harnessLaunches)) this.harnessLaunches = launches;
+  }
+
+  /** « Voir la commande… » (SEC-01, ESC-589): the whole command of `engine` for the agent `agentId`, to agree to or refuse. */
+  askHarnessLaunch(engine: EngineId, agentId: string | null) {
+    this.modal = { kind: 'harnessLaunch', engine, agentId };
   }
 
   markSeen() {
@@ -2251,6 +2282,8 @@ class AppState {
   /** Forgets a project the backend removed, with its editor (unsaved files included: the close was confirmed). */
   forgetProject(id: string) {
     this.projects = this.projects.filter((x) => x.id !== id);
+    // The last private project gone (SEC-02b): a third party’s harness is permitted again elsewhere, read again.
+    void this.refreshHarnessScope();
     if (this.ui.activeProject === id) this.ui.activeProject = this.projects[0]?.id ?? null;
     delete this.editor[id];
     delete this.board[id];
@@ -2338,6 +2371,11 @@ class AppState {
       // Its composer is what a new agent is for: closed first, the editor keeps the source it was on.
       this.closeEditor(projectId);
       this.selectAgent(a.id);
+      // A harness of a third party whose command was never agreed to (SEC-01, ESC-589): asked at once, its whole command
+      // said; refused, the agent does not start, and its conversation says so. Read again first: a plugin installed since
+      // the last reading has its harness's command not agreed to yet.
+      await this.refreshHarnessLaunches();
+      if (this.harnessLaunches[a.engine ?? 'claude'] === 'asks') this.askHarnessLaunch(a.engine ?? 'claude', a.id);
     } catch (e) {
       this.refused(e);
     }
@@ -2455,6 +2493,19 @@ class AppState {
     } catch (e) {
       this.refused(e);
       return undefined;
+    }
+  }
+
+  /**
+   * « Ouvrir » of a file (`open`): a refusal to hand it to the system (a program, an installer, a disk, a shortcut, a page) says
+   * why, with « Afficher dans le dossier » (`reveal`) on its toast; any other refusal is told as usual.
+   */
+  async openFile(open: Promise<void>, reveal: () => Promise<void>): Promise<void> {
+    try {
+      await open;
+    } catch (e) {
+      if (!notOpened(e)) return this.refused(e);
+      this.toast(errorText(e), 'error', { label: t('conv.sent.reveal'), onClick: () => void this.run(reveal()) });
     }
   }
 

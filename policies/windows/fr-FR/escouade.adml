@@ -157,6 +157,12 @@ Clé : proxy.denyInsecureTls (booléen, true (1)). Sorte : restreindre. « Dés
 Sur le poste : Réglages › Avancé › Réseau › « Autorités de certification supplémentaires », grisé.
 
 Clé : proxy.authorities (chaîne). Sorte : sensible.</string>
+      <string id="network_offline">Mode hors ligne</string>
+      <string id="network_offline_Explain">Les mises à jour, le store, la liste de révocation et les statistiques ne sont plus contactés. Seule la valeur true (1) s’impose.
+
+Sur le poste : Réglages › Avancé › Réseau › « Mode hors ligne », allumé et grisé.
+
+Clé : network.offline (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
       <string id="telemetry_enabled">Éteindre les statistiques d’usage</string>
       <string id="telemetry_enabled_Explain">Les statistiques anonymes ne partent plus. Seule la valeur false (0) s’impose.
 

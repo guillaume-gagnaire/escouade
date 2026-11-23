@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.8
+
+- `escouade.min` 2.2.5: the settings of each project are served from that version on. Its experimental features reach the terminal view from the Escouade that passes the settings to `terminal/launch` (ESC-553); on 2.2.5 they show and pass nothing.
+- « Fonctionnalités expérimentales » / “Experimental features”: Code Mode (`CLAUDE_CODE_EXPERIMENTAL_CODE_MODE`), Agent Teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`) and other names of `CLAUDE_CODE_EXPERIMENTAL_*`, for every project then by project (`scope: "project"`), never from `.escouade.yml`. They go in the `env` of the private settings of the terminal view alone (`terminal/launch`), never to the stream. Code Mode is not passed, and the warning says why, with Remote Control, an account routed through a gateway or a cloud provider, a version too old or a model that does not take it; a session started in Code Mode (`terminalOnly`) always resumes with it. What the core tells beyond protocol 0.1.2 (`settings`, `version`, `gateway`, `terminalOnly`) is read from the raw parameters: the plugin still builds on the published protocol, and an Escouade of before passes nothing (ESC-553).
+
 ## 2.2.7
 
 - The quota of an account without an agent is read by a process of the account given no turn and no session (`account/read` of `quota`: `initialize`, then `get_usage`), its `rate_limits` given as Claude Code tells them. Claude Code reads its own sign-in: Escouade no longer asks Anthropic’s usage endpoint itself, nor reads the token (ESC-441).

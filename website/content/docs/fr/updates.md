@@ -101,7 +101,7 @@ Quand un proxy d’entreprise qui se fait connaître refuse l’installateur, le
 
 Quand le proxy refuse la requête (403, 407, tunnel refusé), Escouade ne la refait pas sans lui : elle ne contourne aucune règle de ton entreprise, et le message explique le refus. Pour un 407, il dit que le proxy demande une authentification : mets l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Avancé › Réseau (par exemple `http://utilisateur:motdepasse@proxy:3128`).
 
-Seul un proxy injoignable (réglé mais arrêté, ou poste hors du réseau de l’entreprise) entraîne un second essai, sans proxy. [Le journal de l’app](troubleshooting#ou-est-le-journal-de-l-app) dit alors si l’accès direct a marché, et si les deux essais échouent, le message d’échec les dit.
+Seul un proxy injoignable (réglé mais arrêté, ou poste hors du réseau de l’entreprise) peut entraîner un second essai, sans proxy, et seulement si tu as éteint « Ne jamais sortir sans le proxy » (activé dès qu’un proxy est configuré : voir [le réseau](settings-network#ne-jamais-sortir-sans-le-proxy)). [Le journal de l’app](troubleshooting#ou-est-le-journal-de-l-app) dit alors si l’accès direct a marché, et si les deux essais échouent, le message d’échec les dit.
 
 ### Télécharger dans le navigateur
 

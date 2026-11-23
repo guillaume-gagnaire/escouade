@@ -108,7 +108,7 @@ Publishing a version changes nothing for those who have the plugin: Escouade **o
 
 ## Preparing for the review
 
-The “Verified by Escouade” review is done by hand, version by version, on the Escouade team’s machine: it downloads the archive the store keeps, checks its fingerprints, reads the code against the declared permissions and runs the [conformance bench](plugins/testing) in a container without network. It then signs `version.json` with a key that never leaves that machine: neither the store nor the CI has it. What makes it quick:
+The “Verified by Escouade” review is made by an AI agent, version by version, on the Escouade team’s machine: it downloads the archive the store keeps, checks its fingerprints, reads the code against the declared permissions and runs the [conformance bench](plugins/testing) in a container without network. The publisher then signs `version.json` with the key of third-party plugins, behind a password, which never leaves that machine: neither the store nor the CI has it ([the keys of the seal](plugins/security#the-keys-of-the-seal)). What makes it quick:
 
 - **exact permissions**: every host reached in `permissions.network`, every secret in `contributes.secrets`, nothing more;
 - **readable code**: a compiled file (`dist/`) has its source in the repository and rebuilds from it; no minified code without its source, no text encoded in base64;

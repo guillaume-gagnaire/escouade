@@ -61,6 +61,13 @@ export default defineZone('conv', {
     keepsTitle: 'Escouade keeps the thread',
   },
 
+  codeMode: {
+    title: 'In Code Mode: this agent resumes in its terminal',
+    text: 'Its session started in Code Mode: Claude Code resumes it in its interface alone, never in Escouade’s conversation, by the automatic resume nor by a ticket.',
+    open: 'Open the terminal',
+    noRich: 'In Code Mode: this agent resumes in its terminal',
+  },
+
   escouadeNext: {
     title: 'Escouade’s tools at the next start',
     text: 'Its process started without Escouade’s tools, which “Agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays.',

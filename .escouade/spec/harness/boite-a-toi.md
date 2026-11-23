@@ -1,9 +1,9 @@
 ---
 title: "La boîte « À toi »"
 subject: "harness"
-sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 16 et § 18 pour le reversement)","design/inbox-2-3/README.md (direction B, captures b-)","docs/REMOTE.md (Le classement des commandes)"]
-tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552","ESC-585"]
-decisions: [210,204,240,242,222,227,263]
+sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 16 et § 18 pour le reversement)","design/inbox-2-3/README.md (direction B, captures b-)","docs/REMOTE.md (Le classement des commandes)","docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 5.1 pour ESC-557 ; § 10.2 pour le filtre d'ESC-578 ; § 18)","Demande de l'utilisateur du 2026-11-20 (ESC-557) : « quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans \"à toi\", afin d'être toujours à jour »","Demande de l'utilisateur du 2026-11-21 (ESC-578) : « Dans le \"À toi\", ajoute le fait de pouvoir filtrer par type de demande. »"]
+tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552","ESC-585","ESC-557","ESC-578","ESC-628"]
+decisions: [210,204,240,242,222,227,263,290,296]
 compared: null
 ---
 
@@ -199,3 +199,71 @@ Reversés dans la 2.3 avec la 2.2.4, l'écran (IN-2) et les vues (IN-3) sont ser
 - Une vue « Ticket à valider » ou « Ticket bloqué » d'un ticket qui a sa propre cible, autre que celle du Kanban, le dit sur sa ligne, après sa sorte : « vers main » (`InboxItem::target`).
 - « Valider » depuis la boîte suit la même garde que la carte (voir *Validation*) : une branche qui ne part pas de sa cible arrête la validation avant toute fusion, et le ticket devient une vue « Ticket bloqué ».
 - Cette vue (`otherLine`, la branche d'où part celle du ticket) a un geste : « Viser main » (`inbox_view_act` `retarget`, avec la branche), qui donne cette cible au ticket et lève l'arrêt ; il redevient « Ticket à valider », « vers main » sur sa ligne. Ni « L'agent résout » ni « Annuler » : il n'y a pas de conflit.
+
+## Le chef d'escouade tient la boîte à jour (ESC-557)
+
+Une vue reste lue à sa source ; le chef d'escouade y pose une **marque**, gardée dans l'état durable par la clé de la vue, avec l'état de sa source quand il l'a posée. Demandé le 2026-11-20, après que l'utilisateur a validé depuis la boîte trois tickets que le chef vérifiait encore.
+
+### « Je m'en occupe » (`claim_inbox_view`)
+
+- Le chef prend en charge une vue qu'il est en train de traiter : un ticket « À tester » qu'il vérifie, un ticket bloqué, les demandes d'un agent arrêté (celles de maintenant ; une nouvelle arrive dans la boîte), une décision proposée. Avec une **note** courte (« vérification en cours, chaîne de tests ») : une ligne, 200 caractères au plus, jamais un secret.
+- La vue **ne compte plus comme t'attendant** : elle quitte « Tes agents se sont arrêtés », « Aujourd'hui » et « Plus tôt », et le nombre de la tuile, de l'en-tête et de « il en reste » ; un agent arrêté dont le chef a pris toutes les demandes n'y compte plus non plus (« N en attente » de la barre d'état, qui dit les agents arrêtés, ne change pas).
+- Elle **reste lisible** dans un groupe « Le chef s'en occupe » de la file, après « Plus tôt » : son titre, le nom du chef, sa note, depuis quand. Ouverte, le panneau dit « overseer-fable s'en occupe · 15:02 », la note entre guillemets, « Ça ne compte plus comme t'attendant. Tu peux toujours la régler toi-même. », et « Remettre dans la boîte ».
+- **L'utilisateur peut toujours agir dessus** (valider, refuser, renvoyer…) : son geste demande d'abord « overseer-fable est en train de la vérifier · Sa note : « … ». La régler toi-même quand même ? », avec le geste pour bouton.
+- Elle **tombe d'elle-même** quand sa source change (le ticket quitte « À tester » puis y revient, son blocage change, la décision est révisée), ou quand le chef la rend (`release: true`).
+
+### « Réglé » (`settle_inbox_view`)
+
+- Le chef coche comme réglée une vue qu'il a réglée **par un autre chemin**, avec une note qui dit comment (« fusionné à la main sur main en 79fe7aec ») : un ticket à valider ou bloqué (par exemple un ticket de la ligne 2.2 fusionné à la main, qui reste « À tester » jusqu'à ce que sa carte soit fermée), ou la décision proposée d'un ticket.
+- La vue **sort de la boîte et passe dans sa trace**, dans « Répondu récemment » : « Réglé par overseer-fable : fusionné à la main sur main en 79fe7aec ». Ouverte, elle n'a plus ses gestes : « Réglé par overseer-fable · 15:10 », sa note, « Elle est sortie de ta boîte ; elle y revient d'elle-même si sa source change encore. », et **« Remettre dans la boîte »** (`inbox_view_reopen`), qui la rend à l'utilisateur. Sa source n'est pas touchée ; quand elle part (la carte fermée), la ligne part avec elle.
+- Une vue réglée **revient d'elle-même** si sa source change encore (le ticket revient « À tester »).
+- **Jamais ce qui reste le geste de l'utilisateur**, chaque refus dit pourquoi : partager les docs ; une relecture que l'hébergeur lui demande ; un feu vert (`gate`) ; une tâche ; une demande où un agent s'est arrêté (elle attend une réponse, pas une coche) ; une décision qui ne vient d'aucun ticket (l'utilisateur l'accepte). Une demande de la boîte se règle par son auteur (`withdraw_ask`, avec une note) ou par `answer_ask` quand l'utilisateur l'a laissée.
+
+### Qui
+
+- Le même réglage que les réponses, « Les agents peuvent répondre aux demandes des autres agents » (une seule règle, `delegation.rs`) : « Personne » refuse tout agent ; « Seulement le chef d'escouade », le chef du projet de la vue seul ; « Tous les agents », chacun. Claude hors Escouade, comme pour les permissions et les questions. Jamais un agent sur son propre ticket ni sur ses propres demandes.
+- Serveur MCP éteint, rien ne se marque ; les marques gardées reviennent avec lui.
+- `app.log` dit « inbox view ticketReview claimed », « settled », « released », « put back », jamais la note ; l'activité du serveur MCP garde le ticket nommé, jamais la note.
+
+### Le retrait d'une demande
+
+`withdraw_ask` prend sa raison comme **une note visible** de l'utilisateur dans la trace : « Retirée par chef-atlas : tranché dans la conversation du chef : B », dans « Répondu récemment » et dans le panneau de la demande ; sans raison, « Retirée par chef-atlas ». Une raison qui ressemble à un secret est refusée.
+
+### La consigne aux agents
+
+Les instructions du serveur MCP ajoutent : retirer une demande avec une note qui dit comment elle a été tranchée ; chef d'escouade d'un projet, tenir la boîte à jour : prendre en charge un ticket « À tester » qu'on vérifie (`claim_inbox_view`, avec ce qu'on fait), cocher comme réglé ce qu'on a réglé par un autre chemin (`settle_inbox_view`, avec comment), jamais ce qui reste le geste de l'utilisateur.
+
+### Les commandes de la fenêtre
+
+`inbox_views` rend la marque de chaque vue (`mark` : `kind` `claimed` ou `settled`, `note`, `byName`, `at`) et ne compte pas les vues marquées dans `total` ; `inbox_view_reopen` remet une vue marquée dans la boîte. Sur la 2.2, l'API distante n'existe pas encore : au reversement dans la 2.3, `inbox_view_reopen` y est servie avec les autres commandes de la boîte (`docs/INBOX.md` § 18).
+
+## Le filtre par type (ESC-578)
+
+Demandé le 2026-11-21 : « Dans le "À toi", ajoute le fait de pouvoir filtrer par type de demande. »
+
+### Ce qu'il offre
+
+- En haut de la file, sous « 3 traitées aujourd'hui · il en reste 9 » : un groupe « Filtrer par type » (“Filter by type”), « Tout » (“All”), puis un bouton par type qui attend dans la portée, avec son nombre (« Autorisations 3 », « Feux verts 1 »), dans un ordre fixe : Autorisations, Questions, Plans, Choix, Feux verts, Tâches, Tickets, Décisions, Relectures, Docs (“Permissions”, “Questions”, “Plans”, “Choices”, “Go-aheads”, “Tasks”, “Tickets”, “Decisions”, “Reviews”, “Docs”). Les boutons passent à la ligne dans la largeur de la file (300 px, 236 sous 1100 px).
+- Un type sans rien qui attende n'apparaît pas, sauf s'il est choisi : il reste à 0 pour qu'on puisse l'ôter. Le filtre ne s'offre pas quand un seul type attend et que rien n'est choisi.
+- **Les regroupements** : « Autorisations » réunit l'autorisation d'un agent arrêté et la suppression qu'un agent demande (un oui ou non sur ce que l'agent ferait) ; « Questions », la question d'un agent arrêté, une demande `answer` et un `confirm` sans `gate` (ce que l'agent demande, quelle que soit la forme de la réponse) ; « Tickets », un ticket à valider et un ticket bloqué (les deux se règlent sur le ticket). « Feux verts » (`confirm` avec `gate`) reste à part : toi seul y réponds.
+- **Plusieurs à la fois** : chaque bouton s'allume ou s'éteint ; « Tout », « Effacer » (au bout des boutons, filtre actif) ou « Tout montrer » ôtent le filtre d'un geste.
+- **Gardé sur ce poste**, d'une ouverture à l'autre et d'un lancement à l'autre (le stockage local de la fenêtre) ; le téléphone garde le sien.
+
+### Ce qu'il change
+
+- Les groupes et leur ordre restent ; seules les lignes des types choisis y restent, « Plus tard », « Le chef s'en occupe » et « Répondu récemment » compris ; un groupe vidé par le filtre se tait. `J`, `K` et « 2 sur 5 » parcourent les lignes montrées. La demande ouverte, cachée par le filtre, laisse la place à la première montrée.
+- **Les comptes ne changent pas** : la tuile « À toi », le titre de la file, la jauge et « il en reste 9 » disent toujours tout ce qui attend.
+- **Ce qu'il cache se dit discrètement**, sous lui : « 2 autres demandes masquées par le filtre · Tout montrer » (“2 more requests hidden by the filter · Show all”) ; une demande d'un type caché qui arrive y ajoute un, et un lecteur d'écran l'entend (région `status`). Quand le filtre cache tout ce qui attend, le panneau dit « Rien de ce type ne t'attend » ; « 3 autres demandes attendent, masquées par le filtre. » ; « Effacer le filtre » — jamais « Rien ne t'attend ».
+
+### Clavier et lecteur d'écran
+
+- Chaque bouton dit son état (`aria-pressed`), le groupe son nom ; `Tab` y entre, `←`, `→`, `Début`, `Fin` vont d'un bouton à l'autre, `Espace` ou `Entrée` choisit. Aux deux tailles de fenêtre (1440 × 900, 1024 × 728), rien ne déborde.
+
+### Partagé avec l'app mobile
+
+- Les types, leurs regroupements, les nombres, ce qui est gardé et caché vivent dans un module de la fenêtre sans son état (`src/lib/inbox/filter.ts`), que l'app mobile reprend (MO-5, ESC-571). Le filtre ne passe pas par le cœur : rien de neuf à servir par l'API distante.
+
+## Ouvrir une pièce jointe sans rien lancer (ESC-628)
+
+- « Ouvrir » d'une pièce jointe suit la règle de la fenêtre (voir *Fenêtre › Sécurité de la fenêtre*) : jamais un fichier que le système lancerait, installerait, monterait ou suivrait en l'ouvrant (un programme, un script, un installeur, une image de disque, un raccourci), ni une page ou un SVG. Ceux que la fenêtre reconnaît à leur nom n'ont que « Afficher dans le dossier » ; ceux que le cœur refuse (marqué exécutable, par exemple) le disent dans un toast, avec la raison et le bouton « Afficher dans le dossier ». La liste de la fenêtre (`src/lib/runnable.ts`) est celle du cœur : un test les tient égales.
+- **Sous macOS**, chaque copie d'une pièce jointe (`<données>/asks/<id>/files/…`, celles d'un agent comme celles de la réponse) porte l'attribut `com.apple.quarantine` : Gatekeeper la juge à son ouverture. Sous Windows, une copie faite d'un fichier qui porte la marque du web (`Zone.Identifier`) la garde.

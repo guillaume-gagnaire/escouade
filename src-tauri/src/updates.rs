@@ -265,7 +265,7 @@ impl<R: Runtime> PluginRelease<R> {
         // The link comes from latest.json: the browser is sent to its release only on the origins
         // that file is known to be served from (`net::release_page`).
         failure.trusted = self.checker.endpoints.clone();
-        if matches!(net.via(self.route), Via::Proxy(_)) && failure.proxy_unreachable() {
+        if net.goes_direct_after(self.route, &mut failure) {
             update.proxy = None;
             update.no_proxy = true;
             match update.download(|_, _| {}, || {}).await {
@@ -893,7 +893,7 @@ impl<R: Runtime> Checker<R> {
             Ok(failure) => failure,
             Err(other) => return Err(other),
         };
-        if matches!(self.net.via(route), Via::Proxy(_)) && failure.proxy_unreachable() {
+        if self.net.goes_direct_after(route, &mut failure) {
             match self.once(Route::Direct).await {
                 Ok(found) => {
                     log::warn!("update check through the proxy failed ({failure}), direct worked");
@@ -2436,6 +2436,7 @@ mod tests {
             stuck: None,
             trusted: Vec::new(),
             direct: None,
+            kept_to_proxy: false,
         };
         let told = u.download_failed(&anyhow::Error::new(failure), true, 1);
         assert_eq!(
@@ -2470,6 +2471,7 @@ mod tests {
             stuck: None,
             trusted: Vec::new(),
             direct: None,
+            kept_to_proxy: false,
         }
     }
 

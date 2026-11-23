@@ -52,6 +52,9 @@ async function installAndAsk(page: Page, repo: string) {
 /** `installAndAsk`, and its new agent open. */
 async function installAndOpen(page: Page, repo: string) {
   await installAndAsk(page, repo);
+  // A harness of a third party: its whole command agreed to at its first launch (SEC-01, ESC-589).
+  await page.getByRole('dialog', { name: 'Lancer Unharnessed ?' }).getByRole('button', { name: 'Autoriser et lancer' }).click();
+  await expect(page.getByRole('dialog', { name: 'Lancer Unharnessed ?' })).toHaveCount(0);
   await expect(page.locator('main.conv header.head')).toContainText('Unharnessed');
   // Its real mode, not « Demander ».
   await expect(page.getByRole('button', { name: /^Mode/ })).toContainText('Bypass');

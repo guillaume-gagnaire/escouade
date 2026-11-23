@@ -185,3 +185,35 @@ fn the_last_changes_of_the_spec_are_read_from_git_log() {
     );
     assert_eq!(m[1].when, 1761600000);
 }
+
+/// ESC-653: a spec file over a page's cap (2 MiB) is not read, nor a folder whose files pass
+/// 32 MiB together, nor a folder reached through a link (a junction under Windows).
+#[test]
+fn an_import_is_read_within_its_caps_and_never_through_a_linked_folder() {
+    let (s, root) = space("import-caps");
+    std::fs::write(root.join("SPEC.md"), vec![b'a'; MAX_TEXT as usize + 1]).unwrap();
+    let err = s.import_plan("SPEC.md").unwrap_err().to_string();
+    assert!(err.contains("SPEC.md"), "{err}");
+    std::fs::write(root.join("SPEC.md"), SPEC).unwrap();
+    assert_eq!(s.import_plan("SPEC.md").unwrap().len(), 5);
+    // 17 files at the cap of a page each: past the cap of an import.
+    let specs = root.join("specs");
+    std::fs::create_dir_all(&specs).unwrap();
+    let page = [b"# T\n\n".as_slice(), &vec![b'a'; MAX_TEXT as usize - 5]].concat();
+    for i in 0..17 {
+        std::fs::write(specs.join(format!("p{i:02}.md")), &page).unwrap();
+    }
+    assert!(s.import_plan("specs").is_err());
+    for i in 1..17 {
+        std::fs::remove_file(specs.join(format!("p{i:02}.md"))).unwrap();
+    }
+    assert_eq!(s.import_plan("specs").unwrap().len(), 1);
+    // A folder linked from the spec's folder is not walked.
+    let outside = test_dir("import-caps-outside");
+    std::fs::write(outside.join("secret.md"), "# Secret\n\nsecret\n").unwrap();
+    assert!(crate::paths::make_dir_link(&outside, &specs.join("out")));
+    let plan = s.import_plan("specs").unwrap();
+    assert!(plan.iter().all(|d| !d.body.contains("secret")), "{plan:?}");
+    #[cfg(windows)]
+    std::fs::remove_dir(specs.join("out")).unwrap();
+}

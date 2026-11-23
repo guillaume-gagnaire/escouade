@@ -140,6 +140,8 @@ class PluginsStore {
     if (!s) return '';
     const at = s.readAt ? Date.parse(s.readAt) : null;
     const when = at === null ? '' : t('plugins.updates.when', { date: fDayMonth(at), time: fTime(at) });
+    // « Mode hors ligne » (ESC-596): not read, by choice; the offers kept are those of when it was read last.
+    if (app.offline.on) return at === null ? t('plugins.updates.offlineNone') : t('plugins.updates.offline', { when });
     if (s.error) return at === null ? t('plugins.updates.unreachableNone') : t('plugins.updates.unreachable', { when });
     return at === null ? '' : t('plugins.updates.read', { when });
   }

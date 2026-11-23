@@ -8698,6 +8698,7 @@ fn launch_command(id: &str, name: &str, cwd: &str) -> RunCommand {
         command: "npm run dev".into(),
         shell: String::new(),
         cwd: cwd.into(),
+        ..Default::default()
     }
 }
 

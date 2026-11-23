@@ -24,14 +24,24 @@ const EOF_GRACE: Duration = Duration::from_secs(2);
 /// Runs `cmd` (nothing to read on its input, its two outputs in pipes) and gives what it printed.
 /// Past `limit` it is killed and the error is `TimedOut`. A pipe a descendant keeps open after the
 /// process ended does not hold it back (see `wait_output`).
-pub async fn output_within(mut cmd: Command, limit: Duration) -> io::Result<Output> {
+pub async fn output_within(cmd: Command, limit: Duration) -> io::Result<Output> {
+    output_capped(cmd, limit, usize::MAX).await
+}
+
+/// `output_within`, reading no more than about `max_stdout` bytes of stdout: past them the process
+/// is killed and its stdout is longer than `max_stdout` (what it printed past them is not read).
+pub async fn output_capped(
+    mut cmd: Command,
+    limit: Duration,
+    max_stdout: usize,
+) -> io::Result<Output> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     let child = cmd.spawn()?;
     // The timeout drops the future and with it the child, which `kill_on_drop` kills.
-    match timeout(limit, wait_output(child)).await {
+    match timeout(limit, wait_output_capped(child, max_stdout)).await {
         Ok(out) => out,
         Err(_) => Err(io::Error::new(
             io::ErrorKind::TimedOut,
@@ -78,7 +88,13 @@ pub fn no_inherited_fds(cmd: &mut Command) {
 /// without waiting for the end of the pipes once it has: they are then given `EOF_GRACE` to end,
 /// counted from the last data they delivered, so that all of a big output is read, and a pipe
 /// that stays open without a word is let go.
-pub async fn wait_output(mut child: Child) -> io::Result<Output> {
+pub async fn wait_output(child: Child) -> io::Result<Output> {
+    wait_output_capped(child, usize::MAX).await
+}
+
+/// `wait_output`, killing the child once its stdout passes `max_stdout` bytes: a program whose
+/// output a repository decides (a diff) could otherwise fill the memory before it ends.
+pub async fn wait_output_capped(mut child: Child, max_stdout: usize) -> io::Result<Output> {
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
     let (mut out, mut err) = (Vec::new(), Vec::new());
@@ -99,6 +115,10 @@ pub async fn wait_output(mut child: Child) -> io::Result<Output> {
             n = fill(&mut stdout, &mut out), if stdout.is_some() => {
                 if n == 0 {
                     stdout = None;
+                } else if out.len() > max_stdout {
+                    // Fails once the process has ended on its own: its status is kept then.
+                    let _ = child.start_kill();
+                    break child.wait().await?;
                 } else {
                     renew(&mut ended);
                 }
@@ -287,6 +307,51 @@ mod tests {
         assert_eq!(out.status.code(), Some(3));
         assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "out");
         assert_eq!(String::from_utf8_lossy(&out.stderr).trim(), "err");
+    }
+
+    /// An endless output is cut a little past the cap and the process killed, well within its limit.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_output_past_its_cap_is_cut_and_the_process_killed() {
+        let start = Instant::now();
+        let out = output_capped(command("yes", &[]), Duration::from_secs(60), 1_000_000)
+            .await
+            .unwrap();
+        assert!(!out.status.success());
+        assert!(out.stdout.len() > 1_000_000, "{}", out.stdout.len());
+        assert!(out.stdout.len() < 3_000_000, "{}", out.stdout.len());
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "{:?}",
+            start.elapsed()
+        );
+    }
+
+    /// ESC-653: the same under Windows, where the process is ended by `TerminateProcess`. No `yes`
+    /// there: `cmd` prints a line of 64 characters again and again.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn an_output_past_its_cap_is_cut_and_the_process_killed_under_windows() {
+        let start = Instant::now();
+        let line = "y".repeat(64);
+        let out = output_capped(
+            command(
+                "cmd",
+                &["/d", "/c", &format!("for /l %i in () do @echo {line}")],
+            ),
+            Duration::from_secs(60),
+            200_000,
+        )
+        .await
+        .unwrap();
+        assert!(!out.status.success());
+        assert!(out.stdout.len() > 200_000, "{}", out.stdout.len());
+        assert!(out.stdout.len() < 2_000_000, "{}", out.stdout.len());
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "{:?}",
+            start.elapsed()
+        );
     }
 
     #[tokio::test]

@@ -49,7 +49,7 @@ export default {
     copyEntry: 'Copier l’entrée',
     copiedEntry: 'Entrée copiée',
     copyFailed: 'Copie impossible : {error}',
-    note: 'Escouade déclare son serveur dans la config de chaque compte actif de chaque harness installé : ~/.claude.json (Claude Code, par claude mcp add), ~/.codex/config.toml (Codex), ~/.config/opencode/opencode.json (OpenCode), ~/.copilot/mcp-config.json (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Le jeton y est écrit en clair. Désactiver change le jeton, puis retire l’entrée partout. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt.',
+    note: 'Escouade écrit elle-même son serveur dans la config de chaque compte actif de chaque harness installé : ~/.claude.json (Claude Code), ~/.codex/config.toml (Codex), ~/.config/opencode/opencode.json (OpenCode), ~/.copilot/mcp-config.json (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Aucune commande n’est lancée : le jeton ne passe sur aucune ligne de commande. Il est écrit en clair dans ces fichiers, lisibles de ton seul compte : tout programme qui les lit peut piloter Escouade. Désactiver change le jeton, puis retire l’entrée partout. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt.',
   },
   activity: {
     title: 'Activité MCP',
@@ -125,6 +125,8 @@ export default {
     waitAsk: 'Attendre une réponse',
     getAskFile: 'Lire un fichier d’une demande',
     answerAsk: 'Répondre à une demande laissée',
+    claimInboxView: 'Prendre en charge une ligne d’« À toi »',
+    settleInboxView: 'Cocher une ligne d’« À toi » comme réglée',
   },
   progress: {
     /** What a status line an agent reported (`report_progress`) is, for assistive technologies; the line is the agent's own words. */

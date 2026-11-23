@@ -21,7 +21,6 @@ use super::{BoxFuture, Engine, Message, OneShot, Process, Spawn, StartLost, Weig
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL, MB};
 use crate::i18n::{self, Lang};
-use crate::mcp::install::{Entry, Standing, Target};
 #[cfg(test)]
 use crate::model::AgentMeta;
 use anyhow::{bail, Result};
@@ -673,10 +672,6 @@ impl Engine for Claude {
         true
     }
 
-    fn declares_by_program(&self) -> bool {
-        true
-    }
-
     fn principal_sessions(&self) -> bool {
         true
     }
@@ -729,36 +724,10 @@ impl Engine for Claude {
         Some(v)
     }
 
-    fn declared(&self, config: &std::path::Path) -> Standing {
-        mcp::declared(config)
-    }
-
-    fn add_declaration<'a>(
-        &'a self,
-        target: &'a Target,
-        entry: &'a Entry,
-        secrets: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<()>> {
-        Box::pin(mcp::add(target, entry, secrets))
-    }
-
-    fn remove_declaration<'a>(
-        &'a self,
-        target: &'a Target,
-        secrets: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<()>> {
-        Box::pin(mcp::remove(target, secrets))
-    }
-
-    fn manual_declaration(
-        &self,
-        windows: bool,
-        program: &str,
-        config_dir: Option<&str>,
-        entry: &Entry,
-        replace: bool,
-    ) -> String {
-        mcp::manual_declaration(windows, program, config_dir, entry, replace)
+    /// Its `.claude.json`, which Escouade writes the server's entry in itself (SEC-07): never `claude mcp add`, whose
+    /// `--header` put the token on a command line.
+    fn user_config(&self) -> Option<&'static crate::engine::userconfig::UserConfig> {
+        Some(&mcp::USER_CONFIG)
     }
 }
 

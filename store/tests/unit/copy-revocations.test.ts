@@ -11,9 +11,11 @@ import { testKey } from '../fake/minisign.mjs';
 
 // The copy of the revocation list on escouade.dev (scripts/copy-revocations.ts), run as the workflow runs it, against
 // a store faked here: copied only signed and above the copy's serial, byte for byte with its signature; the store
-// down leaves the copy as it is.
+// down leaves the copy as it is. The list is signed by the key of the third parties and of the list
+// (`third-party.pub`); the key of the first hand signs none (ESC-592).
 const run = promisify(execFile);
 const key = testKey();
+const first = testKey();
 const list = (serial: number) => {
   const json = JSON.stringify({ serial, issued_at: '2026-10-29T10:00:00Z', entries: [] });
   return { json, minisig: key.sign(json, `${REVOCATIONS_COMMENT} ${serial} 2026-10-29T10:00:00Z`) };
@@ -56,7 +58,8 @@ describe('the copy of the revocation list', () => {
     dir = await mkdtemp(join(tmpdir(), 'revocations-copy-'));
     await mkdir(join(dir, 'out'));
     await mkdir(join(dir, 'keys'));
-    await writeFile(join(dir, 'keys', 'store.pub'), key.pub);
+    await writeFile(join(dir, 'keys', 'third-party.pub'), key.pub);
+    await writeFile(join(dir, 'keys', 'store.pub'), first.pub);
   });
   afterAll(async () => {
     server?.close();
@@ -86,6 +89,12 @@ describe('the copy of the revocation list', () => {
     const forged = await copy();
     expect(forged.code).toBe(1);
     expect(forged.out).toContain('not signed by a key of the store');
+    // Signed by the key of the first hand, a key of the store that signs no list.
+    const json10 = JSON.stringify({ serial: 10, issued_at: '2026-10-29T10:00:00Z', entries: [] });
+    served = { json: json10, minisig: first.sign(json10, `${REVOCATIONS_COMMENT} 10`) };
+    const firstHand = await copy();
+    expect(firstHand.code).toBe(1);
+    expect(firstHand.out).toContain('signs no revocation list');
     expect(JSON.parse((await copied())!).serial).toBe(5);
   }, 60_000);
 

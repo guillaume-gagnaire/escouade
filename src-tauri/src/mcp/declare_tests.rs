@@ -1,5 +1,6 @@
 //! « Les agents peuvent piloter Escouade » (ESC-119): the one switch declares the server in every
-//! harness installed, in each of its active accounts: Claude Code by `claude mcp add`, Codex in
+//! harness installed, in each of its active accounts, written by Escouade: Claude Code in its `.claude.json` (SEC-07,
+//! never `claude mcp add` and its token on a command line), Codex in
 //! its `config.toml` (ESC-50), OpenCode in its `opencode.json`, Copilot CLI in its
 //! `mcp-config.json`, kept in step with the settings.
 
@@ -166,9 +167,10 @@ async fn the_one_switch_declares_the_server_in_every_harness_installed_and_each_
     let declared = h.core.mcp.declared();
     let by = |account: &str| declared.iter().find(|d| d.account == account).unwrap();
     assert_eq!(by("principal").file, claude_json(&h).to_string_lossy());
-    assert!(!by("principal").paste);
+    assert!(by("principal").paste);
     assert!(
-        by("principal").command.contains("claude"),
+        by("principal").command.contains("\"type\": \"http\"")
+            && !by("principal").command.contains("mcp add"),
         "{}",
         by("principal").command
     );
@@ -192,7 +194,12 @@ async fn the_one_switch_declares_the_server_in_every_harness_installed_and_each_
         "a token went to the window"
     );
     // « Copier » gives the real one.
-    for account in ["codex-pro", "principal-opencode", "principal-copilot"] {
+    for account in [
+        "principal",
+        "codex-pro",
+        "principal-opencode",
+        "principal-copilot",
+    ] {
         let real = h.core.mcp_manual_command(account).unwrap();
         assert!(real.contains(&format!("Bearer {}", want.token)), "{real}");
     }

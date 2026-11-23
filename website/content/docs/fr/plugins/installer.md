@@ -18,7 +18,7 @@ Sa barre latérale :
 
 Deux boutons en tête de la vue :
 
-- **Depuis un dossier…** : le dossier du plugin, celui de son `escouade-plugin.json`. Escouade le copie dans ses données (`~/.escouade/plugins/<id>`), sans son historique git, et le fixe par l’empreinte SHA-256 de ses fichiers : une copie modifiée ensuite se charge désactivée, et le dit.
+- **Depuis un dossier…** : le dossier du plugin, celui de son `escouade-plugin.json`. Escouade n’en copie que le plugin dans ses données (`~/.escouade/plugins/<id>`) : ni son historique git, ni `target/`, ni `node_modules/`, ni ce qu’ignore Git quand le dossier est dans un dépôt, et de `packs/` le seul module de la version du manifeste (`packs/<id>-<version>.wasm`), celui sur lequel tourne un plugin en Rust, sinon son `plugin.wasm`. Un lien n’est jamais suivi. La copie est fixée par l’empreinte SHA-256 de ses fichiers, son module compris, que la fenêtre d’installation montre : une copie modifiée ensuite se charge désactivée, et le dit. Un plugin en Rust sans module construit est refusé, et le refus dit quoi faire.
 - **Depuis un dépôt git…** : l’adresse du dépôt et une étiquette (`v1.2.0`). Escouade le clone à cette étiquette seule et le fixe par son commit.
 
 Rien n’est installé tout de suite : le plugin est lu, mis de côté, et la fenêtre d’installation s’ouvre.
@@ -38,7 +38,9 @@ Escouade propose **la dernière version qu’il peut faire tourner** : une versi
 
 La fenêtre d’installation dit alors « Vérifié par Escouade » et « Signature : vérifiée ici, par l’app » ; pour une version non vérifiée, une bande : « Personne n’a relu cette version. Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme », et le bouton « Installer quand même ».
 
-**N’installer que des versions vérifiées**, en tête des installés (allumé pour une nouvelle installation ; une installation d’avant la 2.2 garde son choix), refuse toute version du store sans sceau, à l’installation comme à la mise à jour.
+**N’installer que des versions vérifiées**, en tête des installés et dans Réglages › Plugins › Sécurité, refuse toute version du store sans sceau, à l’installation comme à la mise à jour. Il vaut aussi pour **les dossiers et les dépôts git** : l’un d’eux n’est accepté que s’il est une version vérifiée du store, le même id, la même version et les mêmes fichiers ; la fenêtre d’installation le dit (« Identique à la v… vérifiée du store »). Sinon, le refus dit pourquoi : coupe le réglage pour l’installer quand même. Le **mode développement** est un geste à part, que le réglage ne couvre pas, et sa fenêtre le dit. Le réglage est allumé pour une nouvelle installation ; la mise à jour vers la 2.2.6 l’allume si aucun plugin tiers n’est installé, et garde ton choix sinon.
+
+**Harness des plugins tiers**, dans Réglages › Plugins › Sécurité : un harness qu’un plugin tiers décrit lance un programme de ton poste hors du bac à sable. Sur « Demander » (le défaut), son premier lancement ouvre une fenêtre qui redit sa commande entière : le programme trouvé, ses arguments, ceux de la reprise et de la version, les variables qu’il ajoute et retire. « Autoriser et lancer » garde ton accord pour cette commande exacte ; une mise à jour du plugin qui la change te la redemande. « Refuser » laisse l’agent arrêté, et sa conversation le dit. Sur « Refuser », aucun harness d’un plugin tiers ne se lance. Les harness des plugins d’Escouade ne demandent rien.
 
 Un plugin installé depuis un dossier ou un dépôt git dont l’id est au store le dit sur sa page, avec « Passer à la v… du store » : la même fenêtre, tes choix gardés.
 
@@ -153,4 +155,4 @@ Le sceau d’un plugin installé est revérifié sur ta machine, avec le `versio
 
 ## Le mode développeur
 
-En développement, « Charger un dossier… » lit le dossier d’un plugin où il est, sans copie ni empreinte, et le relit dès qu’un fichier change. Un plugin en Rust y tourne sur le dernier module que `escouade-plugin build` a écrit pour la version de son manifeste (`packs/<id>-<version>.wasm`), un plugin en JS/TS sur son bundle (`npm run build`) ; un dossier pas encore construit est refusé, et le refus dit quoi lancer. Son journal se lit en direct dans l’onglet Journal. Voir [le manifeste](plugins/manifest) et [le protocole](plugins/api) pour l’écrire.
+En développement, « Charger un dossier… » lit le dossier d’un plugin où il est, sans copie ni empreinte, et le relit dès qu’un fichier change. Un plugin en Rust y tourne sur le dernier module que `escouade-plugin build` a écrit pour la version de son manifeste (`packs/<id>-<version>.wasm`), un plugin en JS/TS sur son bundle (`npm run build`) ; un dossier pas encore construit est refusé, et le refus dit quoi lancer. Son journal se lit en direct dans l’onglet Journal, et nomme le fichier chargé à chaque démarrage. C’est la différence avec « Depuis un dossier… », qui installe une copie figée, fixée par son empreinte : reconstruire le dossier ne la change pas, il faut l’installer de nouveau. « Charger un dossier… » suit le dossier lui-même, pour l’écrire. Voir [le manifeste](plugins/manifest) et [le protocole](plugins/api) pour l’écrire.

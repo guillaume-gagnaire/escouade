@@ -1367,7 +1367,7 @@ pub struct WithdrawAskArgs {
     #[schemars(description = "The request: its id, like a-12.")]
     pub ask: String,
     #[schemars(
-        description = "Why it no longer applies, in one sentence (300 characters at most): the user reads it once."
+        description = "Why it no longer applies or how it was settled, in one sentence (300 characters at most): the note the user reads in its trace (« tranché dans la conversation du chef : B »)."
     )]
     pub reason: Option<String>,
 }
@@ -1443,4 +1443,72 @@ pub struct AnswerAskArgs {
     pub text: Option<String>,
     #[schemars(description = "A word for the author (2,000 characters at most).")]
     pub note: Option<String>,
+}
+
+/// What a line of the box « À toi » is about, for `claim_inbox_view` and `settle_inbox_view`
+/// (ESC-557): one of `ticket`, `agent`, `decision`, `ask`, `docs` or `pull_request`.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ClaimInboxViewArgs {
+    #[schemars(
+        description = "A ticket « À tester » or blocked: its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: Option<String>,
+    #[schemars(
+        description = "An agent stopped on a request (permission, question, plan): its id or its name. Its requests of now are taken in hand; a new one comes in the box."
+    )]
+    pub agent: Option<String>,
+    #[schemars(
+        description = "A decision proposed: its id, as list_decisions gives it (with project)."
+    )]
+    pub decision: Option<String>,
+    #[schemars(description = "A request of the box: its id, like a-12.")]
+    pub ask: Option<String>,
+    #[schemars(description = "true: the docs to share of project.")]
+    pub docs: Option<bool>,
+    #[schemars(
+        description = "A review the code host asks of the user: its number (with project)."
+    )]
+    #[serde(rename = "pullRequest")]
+    pub pull_request: Option<u64>,
+    #[schemars(
+        description = "The project of a decision, of the docs or of a pull request: its id or its name. Your own by default."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "What you are doing, in one sentence (200 characters at most), the user reads it: « vérification en cours, chaîne de tests »."
+    )]
+    pub note: Option<String>,
+    #[schemars(description = "true: give it back, it waits for the user again (no note needed).")]
+    pub release: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SettleInboxViewArgs {
+    #[schemars(
+        description = "A ticket « À tester » or blocked you settled another way (merged by hand): its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: Option<String>,
+    #[schemars(
+        description = "A decision proposed by a ticket you merged: its id, as list_decisions gives it (with project)."
+    )]
+    pub decision: Option<String>,
+    #[schemars(description = "A request of the box: its id, like a-12.")]
+    pub ask: Option<String>,
+    #[schemars(description = "An agent stopped on a request: its id or its name.")]
+    pub agent: Option<String>,
+    #[schemars(description = "true: the docs to share of project.")]
+    pub docs: Option<bool>,
+    #[schemars(
+        description = "A review the code host asks of the user: its number (with project)."
+    )]
+    #[serde(rename = "pullRequest")]
+    pub pull_request: Option<u64>,
+    #[schemars(
+        description = "The project of a decision, of the docs or of a pull request: its id or its name. Your own by default."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "How it was settled, in one sentence (200 characters at most), the user reads it in the trace: « fusionné à la main sur main en 79fe7aec »."
+    )]
+    pub note: String,
 }

@@ -160,6 +160,87 @@ pub async fn http_ready(url: &str) -> bool {
     client.get(url).send().await.is_ok()
 }
 
+// ---------- the address a launch command opens (ESC-560) ----------
+
+/// The variables the address of a launch command may name: the ports a worktree gives its
+/// launches (`port_env`).
+pub const URL_VARS: [&str; 2] = ["ESCOUADE_PORT_BASE", "ESCOUADE_PORT_END"];
+
+/// `url` with each `${NAME}` and `${NAME:-value}` it holds replaced as a shell does: from `env`,
+/// else by its value after `:-`. A name other than `URL_VARS`, one that has no value where it
+/// runs, a `${` left open: an error that says which.
+pub fn expand_url(url: &str, env: &[(String, String)], lang: Lang) -> Result<String> {
+    let mut out = String::new();
+    let mut rest = url;
+    while let Some(at) = rest.find("${") {
+        out.push_str(&rest[..at]);
+        let inner = &rest[at + 2..];
+        let Some(end) = inner.find('}') else {
+            bail!(tr_in!(
+                lang,
+                "« ${{ » sans « }} » dans l'adresse.",
+                "“${{” without “}}” in the address."
+            ));
+        };
+        let (name, default) = match inner[..end].split_once(":-") {
+            Some((n, d)) => (n, Some(d)),
+            None => (&inner[..end], None),
+        };
+        if !URL_VARS.contains(&name) {
+            let list = URL_VARS.join(", ");
+            bail!(tr_in!(
+                lang,
+                "« {name} » n'est pas une variable de l'adresse : seulement {list}.",
+                "“{name}” isn’t a variable of the address: only {list}."
+            ));
+        }
+        match env.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str()).or(default) {
+            Some(v) => out.push_str(v),
+            None => bail!(tr_in!(
+                lang,
+                "l'adresse nomme {name}, qu'un lancement dans le projet n'a pas : donnez-lui une valeur pour le projet (${{{name}:-3000}}).",
+                "the address names {name}, which a launch in the project doesn’t have: give it a value for the project (${{{name}:-3000}})."
+            )),
+        }
+        rest = &inner[end + 1..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+/// The address of a launch command can be saved: none, or an http or https address with a host,
+/// once its variables are given the ports of a worktree.
+pub fn check_run_url(url: &str, lang: Lang) -> Result<()> {
+    let url = url.trim();
+    if url.is_empty() {
+        return Ok(());
+    }
+    let sample = port_env(Some(4100));
+    let expanded = expand_url(url, &sample, lang)?;
+    let parsed = reqwest::Url::parse(&expanded).map_err(|_| {
+        anyhow!(tr_in!(
+            lang,
+            "« {url} » n'est pas une adresse (http://localhost:3000, par exemple).",
+            "“{url}” isn’t an address (http://localhost:3000, for example)."
+        ))
+    })?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        bail!(tr_in!(
+            lang,
+            "« {url} » : seule une adresse http:// ou https:// s'ouvre.",
+            "“{url}”: only an http:// or https:// address opens."
+        ));
+    }
+    if parsed.host_str().is_none_or(str::is_empty) {
+        bail!(tr_in!(
+            lang,
+            "« {url} » n'a pas d'hôte (http://localhost:3000, par exemple).",
+            "“{url}” has no host (http://localhost:3000, for example)."
+        ));
+    }
+    Ok(())
+}
+
 // ---------- tests before a validation ----------
 
 /// What the tests run before a validation (or any command run without a window) gave.
@@ -788,6 +869,85 @@ mod tests {
         assert!(!http_ready("file:///C:/Windows/win.ini").await);
     }
 
+    #[tokio::test]
+    async fn a_server_that_never_answers_is_not_ready_and_its_probe_is_bounded() {
+        // It takes the connection and says nothing: the probe gives up after its 2 s.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let held: Vec<_> = listener.incoming().take(1).collect();
+            std::thread::sleep(Duration::from_secs(10));
+            drop(held);
+        });
+        let started = std::time::Instant::now();
+        assert!(!http_ready(&format!("http://127.0.0.1:{port}/")).await);
+        let took = started.elapsed();
+        assert!(took >= Duration::from_millis(1500), "{took:?}");
+        assert!(took < Duration::from_secs(8), "{took:?}");
+    }
+
+    #[test]
+    fn a_launch_address_follows_the_ports_of_its_worktree_or_takes_its_value_for_the_project() {
+        let wt = port_env(Some(4120));
+        let url = "http://localhost:${ESCOUADE_PORT_BASE:-3000}/admin?to=${ESCOUADE_PORT_END}";
+        assert_eq!(
+            expand_url(url, &wt, Lang::Fr).unwrap(),
+            "http://localhost:4120/admin?to=4129"
+        );
+        assert_eq!(
+            expand_url(
+                "http://localhost:${ESCOUADE_PORT_BASE:-3000}/",
+                &[],
+                Lang::Fr
+            )
+            .unwrap(),
+            "http://localhost:3000/"
+        );
+        assert_eq!(
+            expand_url("http://localhost:5173/", &[], Lang::Fr).unwrap(),
+            "http://localhost:5173/"
+        );
+        // In the project, a port without a value for it: said, with how to give it one.
+        let why = expand_url("http://localhost:${ESCOUADE_PORT_BASE}/", &[], Lang::En)
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("${ESCOUADE_PORT_BASE:-3000}"), "{why}");
+        // Only the ports: nothing else of the machine goes into an address.
+        let why = expand_url("http://${HOME}/", &wt, Lang::En)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            why.contains("only ESCOUADE_PORT_BASE, ESCOUADE_PORT_END"),
+            "{why}"
+        );
+        assert!(expand_url("http://localhost:${ESCOUADE_PORT_BASE", &wt, Lang::En).is_err());
+    }
+
+    #[test]
+    fn only_an_http_or_https_address_with_a_host_is_kept_for_a_launch_command() {
+        for ok in [
+            "",
+            "  ",
+            "http://localhost:3000",
+            "HTTPS://app.test/connexion",
+            "http://127.0.0.1:${ESCOUADE_PORT_BASE:-8080}/",
+            "http://localhost:${ESCOUADE_PORT_BASE}/",
+        ] {
+            assert!(check_run_url(ok, Lang::Fr).is_ok(), "{ok}");
+        }
+        for (bad, says) in [
+            ("file:///C:/Windows/win.ini", "http://"),
+            ("javascript:alert(1)", "http://"),
+            ("ftp://localhost/", "http://"),
+            ("localhost:3000", "http://"),
+            ("pas une adresse", "isn’t an address"),
+            ("http://${PATH}/", "only"),
+        ] {
+            let why = check_run_url(bad, Lang::En).unwrap_err().to_string();
+            assert!(why.contains(says), "{bad}: {why}");
+        }
+    }
+
     fn default_shell() -> Option<ShellInfo> {
         pty::detect_shells(&Settings::default()).into_iter().next()
     }
@@ -1283,6 +1443,7 @@ mod worktree_run_tests {
             command: "npm run dev".into(),
             shell: "pwsh".into(),
             cwd: cwd.into(),
+            ..Default::default()
         }
     }
 

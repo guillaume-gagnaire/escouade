@@ -388,7 +388,11 @@
             </p>
           {/if}
         {:else if ask.state === 'withdrawn'}
-          <p>{t('inbox.sent.withdrawn', { agent: agentName, reason: ask.reason ?? '' })}</p>
+          <p data-testid="ask-withdrawn">
+            {ask.reason
+              ? t('inbox.sent.withdrawn', { agent: agentName, reason: ask.reason })
+              : t('inbox.sent.withdrawnBare', { agent: agentName })}
+          </p>
         {:else if ask.state === 'expired'}
           <p>{t('inbox.sent.expired', { date: fDate(ask.closedAt ?? ask.expiresAt) })}</p>
         {:else if ask.state === 'retired'}

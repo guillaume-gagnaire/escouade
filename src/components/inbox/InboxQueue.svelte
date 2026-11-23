@@ -41,13 +41,13 @@
 
   let laterOpen = $state(false);
   const g = $derived(inbox.groups);
-  const left = $derived(inbox.rows.length);
+  const left = $derived(inbox.allRows.length);
   const done = $derived(inbox.doneToday);
   /** The meter: one cell per row handled today and per row left, 24 at most. */
   const cells = $derived.by(() => {
     const out: ('d' | 'w' | 'c' | '')[] = [];
     for (let i = 0; i < done; i++) out.push('d');
-    for (const r of inbox.rows)
+    for (const r of inbox.allRows)
       out.push(itemKey(r) === inbox.selected ? 'c' : r.kind === 'stopped' || (r.kind === 'view' && r.view.group === 'stopped') ? 'w' : '');
     return out.slice(Math.max(0, out.length - 24));
   });
@@ -77,7 +77,10 @@
   /** A closed request's line: its answer, who, when, read or not. */
   function answerLine(a: WindowAsk): string {
     const ans = a.answer;
-    if (a.state === 'withdrawn') return t('inbox.sent.withdrawn', { agent: a.author.name, reason: a.reason ?? '' });
+    if (a.state === 'withdrawn')
+      return a.reason
+        ? t('inbox.sent.withdrawn', { agent: a.author.name, reason: a.reason })
+        : t('inbox.sent.withdrawnBare', { agent: a.author.name });
     if (a.state === 'expired') return t('inbox.sent.expired', { date: fDate(a.closedAt ?? a.expiresAt) });
     if (a.state === 'retired') return t('inbox.sent.retired', { reason: a.reason ?? '' });
     if (!ans) return '';
@@ -99,6 +102,23 @@
     return a.state === 'read' ? `${line} · ${t('inbox.sent.readSuffix', { agent: a.author.name })}` : line;
   }
 
+  /** The filter by type (ESC-578): ←, →, Début and Fin go from one of its buttons to another. */
+  function filterKey(e: KeyboardEvent) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const buttons = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button')];
+    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const to =
+      e.key === 'Home'
+        ? 0
+        : e.key === 'End'
+          ? buttons.length - 1
+          : (i + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[to].focus();
+  }
+
   function onKey(e: KeyboardEvent) {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const buttons = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button.row-ask')];
@@ -116,20 +136,31 @@
   <!-- A view of what waits elsewhere (ESC-513): its source, what, who, since when; its gestures in the panel. -->
   <button
     class="row-ask"
-    class:wt={v.group === 'stopped'}
+    class:wt={v.group === 'stopped' && !v.mark}
+    class:done={v.mark?.kind === 'settled'}
+    class:lead={v.mark?.kind === 'claimed'}
     class:on={inbox.selected === key}
     aria-current={inbox.selected === key}
     onclick={() => inbox.select(key)}
     data-testid="ivw-row"
     data-key={v.key}
     data-source={v.source}
+    data-mark={v.mark?.kind ?? null}
   >
-    <span class="ic"><Icon name={VIEW_ICON[v.source]} /></span>
+    <span class="ic"><Icon name={v.mark?.kind === 'settled' ? 'check' : VIEW_ICON[v.source]} /></span>
     <span class="t ell">{viewTitle(v)}</span>
-    <span class="tm">{v.snoozedUntil ? '' : v.since ? fSince(v.since, now) : ''}</span>
+    <span class="tm">{v.mark ? fSince(v.mark.at, now) : v.snoozedUntil ? '' : v.since ? fSince(v.since, now) : ''}</span>
     <span class="s">
       <span class="pdot" style:background={colorOf(v.projectId)}></span>
-      {#if v.snoozedUntil}
+      {#if v.mark?.kind === 'settled'}
+        <span class="ell" data-testid="ivw-settled-line"
+          >{t('inboxViews.mark.settledLine', { name: v.mark.byName, note: v.mark.note })}</span
+        >
+      {:else if v.mark}
+        <span class="ell nm">{v.mark.byName}</span>
+        <span aria-hidden="true">·</span>
+        <span class="ell" data-testid="ivw-claim-note">{v.mark.note}</span>
+      {:else if v.snoozedUntil}
         <Icon name="clock" size={11} />
         <span class="ell">{t('inbox.queue.until', { when: fLater(v.snoozedUntil, now) })}</span>
       {:else}
@@ -228,6 +259,35 @@
   <p class="left">
     {t('inbox.queue.done', { count: done })}{#if left}{' · '}{t('inbox.queue.left', { count: left })}{/if}
   </p>
+  {#if inbox.types.length > 1 || inbox.filter.length}
+    <!-- The filter by type (ESC-578): « Tout », then each type that waits and its number; several at once, kept on this machine. -->
+    <div class="tf" role="toolbar" tabindex="-1" aria-label={t('inbox.filter.label')} data-testid="inbox-filter" onkeydown={filterKey}>
+      <button
+        class="chip"
+        class:on={!inbox.filter.length}
+        aria-pressed={!inbox.filter.length}
+        onclick={() => inbox.setFilter([])}
+        data-type="all">{t('inbox.filter.all')}</button
+      >
+      {#each inbox.types as c (c.type)}
+        <button class="chip" class:on={c.on} aria-pressed={c.on} onclick={() => inbox.toggleType(c.type)} data-type={c.type}
+          >{t(`inbox.filter.types.${c.type}`)}{' '}<span class="c">{c.count}</span></button
+        >
+      {/each}
+      {#if inbox.filter.length}
+        <button class="clr" aria-label={t('inbox.filter.clearAria')} onclick={() => inbox.setFilter([])} data-testid="inbox-filter-clear"
+          ><Icon name="close" size={11} />{t('inbox.filter.clear')}</button
+        >
+      {/if}
+    </div>
+  {/if}
+  <!-- What waits and the filter hides, said quietly, and to a screen reader when one more arrives. -->
+  <p class="hid" role="status" data-testid="inbox-filter-hidden">
+    {#if inbox.hidden}<Icon name="sliders" size={11} /><span class="hw">{t('inbox.filter.hidden', { count: inbox.hidden })}</span><button
+        class="lnk"
+        onclick={() => inbox.setFilter([])}>{t('inbox.filter.showAll')}</button
+      >{/if}
+  </p>
   <div class="scroll" role="presentation" onkeydown={onKey}>
     {#if g.stopped.length}
       <h2 class="grp wt"><Icon name="shield" size={12} />{t('inbox.queue.stopped')} <span class="c">{g.stopped.length}</span></h2>
@@ -245,6 +305,15 @@
       <h2 class="grp">{t('inbox.queue.earlier')} <span class="c">{g.earlier.length}</span></h2>
       <div class="list">
         {#each g.earlier as it (itemKey(it))}{@render row(it)}{/each}
+      </div>
+    {/if}
+    {#if g.claimed.length}
+      <!-- What the squad lead took in hand (ESC-557): out of the counts, still there to read and to act on. -->
+      <h2 class="grp" data-testid="ivw-claimed-group">
+        <Icon name="agents" size={12} />{t('inboxViews.mark.group')} <span class="c">{g.claimed.length}</span>
+      </h2>
+      <div class="list">
+        {#each g.claimed as v (v.key)}{@render viewRow(v, `view:${v.key}`)}{/each}
       </div>
     {/if}
     {#if g.later.length || g.laterViews.length}
@@ -278,9 +347,11 @@
         </div>
       {/if}
     {/if}
-    {#if g.recent.length}
+    {#if g.recent.length || g.settled.length}
       <h2 class="grp"><Icon name="check" size={12} />{t('inbox.queue.recent')}</h2>
       <div class="list" data-testid="inbox-recent">
+        <!-- The views the squad lead ticked as settled (ESC-557): their trace, whence the user puts them back. -->
+        {#each g.settled as v (v.key)}{@render viewRow(v, `view:${v.key}`)}{/each}
         {#each g.recent as a (a.id)}
           <button
             class="row-ask done"
@@ -391,6 +462,91 @@
     color: var(--muted);
     font-size: 12px;
     flex: none;
+  }
+  .tf {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 8px 6px;
+    flex: none;
+  }
+  .chip,
+  .clr {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 7px;
+    background: none;
+    color: var(--muted);
+    font: 550 12px/1 var(--font);
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .chip .c {
+    color: var(--dim);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .chip:hover,
+  .clr:hover {
+    color: var(--text);
+  }
+  .chip.on {
+    background: var(--raise);
+    color: var(--text);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 1px 2px rgba(0, 0, 0, calc(0.18 * var(--shade, 1)));
+  }
+  .chip.on .c {
+    color: var(--muted);
+  }
+  .clr {
+    box-shadow: none;
+    padding: 0 6px;
+  }
+  .chip:focus-visible,
+  .clr:focus-visible,
+  .lnk:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1.5px var(--p-ink);
+  }
+  .hid {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin: 0;
+    padding: 0 8px;
+    color: var(--dim);
+    font-size: 11.5px;
+    flex: none;
+  }
+  .hid .hw {
+    min-width: 0;
+    line-height: 1.35;
+  }
+  .hid:not(:empty) {
+    padding-bottom: 4px;
+  }
+  .lnk {
+    flex: none;
+    margin-left: auto;
+    padding: 1px 3px;
+    border: none;
+    border-radius: 5px;
+    background: none;
+    color: var(--muted);
+    font: 550 11.5px/1.3 var(--font);
+    cursor: pointer;
+  }
+  .lnk:hover {
+    color: var(--text);
+    text-decoration: underline;
   }
   .scroll {
     flex: 1;
@@ -534,6 +690,9 @@
   }
   .row-ask.done .ic {
     color: var(--run);
+  }
+  .row-ask.lead .ic {
+    color: var(--teal-ink);
   }
   .pdot {
     width: 8px;

@@ -2,8 +2,8 @@
 title: "La page du lancement"
 subject: "kanban"
 sources: ["design/browser/INVENTAIRE.md","design/browser/a-onglet.png","design/browser/a-tablette.png","design/browser/a-mobile.png","design/browser/a-retreci.png","design/browser/etats.png","design/split-view/index.html","website/content/docs/fr/browser.md"]
-tickets: ["ESC-311","ESC-419"]
-decisions: [26,149]
+tickets: ["ESC-311","ESC-419","ESC-560"]
+decisions: [26,149,294]
 compared: "2026-10-31T19:02:21+01:00"
 gaps: [{"text":"La spec dit que la fenêtre « Pages » a « la même barre » que la vue de l'agent, avec ses états (chargement avec point ambre et filet, « Le lancement démarre… », « <hôte> ne répond pas » avec Recharger et Voir les logs, « Le lancement s'est arrêté » avec Relancer et Voir les logs). Le code de PagesWindow.svelte ne gère aucun de ces états. Il n'y a ni phase de chargement, ni délai de 20 s, ni message d'arrêt, ni bouton Relancer ou Voir les logs. Ces états n'existent que dans DevPage.svelte.","code":["src/components/PagesWindow.svelte","src/components/DevPage.svelte"]},{"text":"La spec dit qu'en vue étroite Avancer, le propriétaire, les largeurs, la fenêtre à part et le navigateur du système passent dans « … ». Seule la barre de DevPage.svelte a ce repli (container query et menu « … »). La barre de la fenêtre « Pages » n'a ni menu « … » ni repli : elle garde tous ses boutons en ligne.","code":["src/components/PagesWindow.svelte"]}]
 ---
@@ -59,3 +59,10 @@ Quand le lancement de test d'un agent est prêt, la page de l'app développée s
 ### Vérifié par système
 
 - `devpage_probe` (vraie webview) en CI sous Linux (Xvfb) et macOS, et à la main sous Windows et Linux (WSLg) ; les e2e `devpage.spec.ts` et `devpage-pane.spec.ts` (la page dans un volet, à 1024 × 728) sous Windows.
+
+## La page d'une commande de lancement (ESC-560)
+
+- Une commande de lancement du projet qui a « Ouvrir à son lancement » ouvre aussi sa page, une fois son adresse répondue (voir *Barre latérale*, « Lancement : ouvrir une adresse quand l'app répond »).
+- Lancée dans le worktree d'un agent : la page de cet agent, comme « ▶ Tester » (une page par agent, rechargée), son onglet « <agent> · <commande> ».
+- Lancée dans le projet, sans agent : un onglet de la fenêtre « <projet> · Pages » du projet (clé `run:<projet>:<commande>`, un onglet par commande, rechargé à chaque lancement), même quand le projet met ses pages « Dans l'agent ». Elle a la même barre et la même isolation (stockage du projet, son origine seule), mais pas « Remettre dans l'agent » : elle n'a pas d'agent, et le cœur refuse de la rattacher.
+- « Navigateur » pour la commande, ou « Dans le navigateur du système » pour le projet : le navigateur du système, pas de page.

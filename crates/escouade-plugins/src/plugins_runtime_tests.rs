@@ -383,6 +383,70 @@ async fn while_it_restarts_messages_wait_and_what_was_attached_is_given_again() 
     assert_eq!(state["attached"], json!(["agent-1", "agent-2"]));
 }
 
+/// A plugin forgotten (updated, its language changed, a permission given again) whose next instance is started by another
+/// caller first (another agent, a reading of the quota): the agents attached before are given to it all the same
+/// (ESC-562: the agents of a plugin that started anew were « not attached » for good, but the first to call).
+#[tokio::test(flavor = "multi_thread")]
+async fn what_was_attached_is_given_to_the_next_instance_after_a_forget_whoever_starts_it() {
+    let f = fake("forget-attached", &[], quick());
+    for agent in ["agent-1", "agent-2"] {
+        f.rt.attach(ID, agent, "attach", json!({ "key": agent }))
+            .await
+            .unwrap();
+    }
+    f.rt.detach(ID, "agent-2");
+    let before = instance(&f.rt).await;
+    f.rt.forget(ID);
+    assert_eq!(f.rt.status(ID).phase, PhaseName::Idle);
+    // Someone else's call starts it: not the agent's.
+    assert_eq!(f.rt.call(ID, "echo", json!(1)).await, Ok(json!(1)));
+    let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
+    assert_ne!(state["instance"].as_str().unwrap(), before);
+    assert_eq!(state["attached"], json!(["agent-1"]));
+    // Detached while it was forgotten: not given again.
+    f.rt.forget(ID);
+    f.rt.detach(ID, "agent-1");
+    let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
+    assert_eq!(state["attached"], json!([]));
+}
+
+/// An attach the next instance refuses, after a crash, is told to who listens (the core tells its agent), not only
+/// written on the journal; the others are given again.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_attach_refused_at_a_restart_is_told_to_who_listens() {
+    let f = fake("attach-refused-again", &[], quick());
+    let told = Arc::new(parking_lot::Mutex::new(
+        Vec::<(String, String, String)>::new(),
+    ));
+    let sink = told.clone();
+    f.rt.on_attach_refused(move |id, key, e| {
+        sink.lock()
+            .push((id.to_string(), key.to_string(), e.to_string()));
+    });
+    f.rt.attach(ID, "agent-1", "attach", json!({ "key": "agent-1" }))
+        .await
+        .unwrap();
+    // Refused at once: the caller hears it, nobody else.
+    assert!(matches!(
+        f.rt.attach(ID, "refused-1", "attach", json!({ "key": "refused-1" }))
+            .await,
+        Err(CallError::Remote { code: -32010, .. })
+    ));
+    assert!(told.lock().is_empty());
+    assert_eq!(
+        f.rt.call(ID, "test/do", behave("crash")).await,
+        Err(CallError::Crashed)
+    );
+    let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
+    assert_eq!(state["attached"], json!(["agent-1"]));
+    until("the refusal told", || !told.lock().is_empty()).await;
+    let told = told.lock().clone();
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!((told[0].0.as_str(), told[0].1.as_str()), (ID, "refused-1"));
+    assert!(told[0].2.contains("refused-1 is refused"), "{told:?}");
+    assert!(journal_has(&f.rt, Kind::Refused, "given again"));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_loop_takes_the_default_and_its_turn_past_its_time_restarts_it() {
     let f = fake("loop", &[], quick());

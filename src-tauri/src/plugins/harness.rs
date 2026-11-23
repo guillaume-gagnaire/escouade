@@ -91,6 +91,43 @@ const SESSION_WITHIN: Duration = Duration::from_secs(180);
 /// How many times a call is given again to a plugin that crashed before it answered.
 const RETRIES: usize = 8;
 
+/// What every harness plugin of the first hand answers for an agent it does not know: `-32602` and
+/// `no agent <key>: it was not attached` (ESC-562). The core gives it the agent again, then the same call.
+const NOT_ATTACHED: &str = "it was not attached";
+
+/// The plugin answered that it does not know the agent (`NOT_ATTACHED`).
+fn forgotten(e: &CallError) -> bool {
+    matches!(e, CallError::Remote { code: -32602, message } if message.contains(NOT_ATTACHED))
+}
+
+/// Why a call of an agent did not go through.
+enum Lost {
+    /// Its plugin is stopped (or switched off, uninstalled, the app quitting).
+    Stopped(CallError),
+    /// Its plugin forgot it and did not take it back (ESC-562).
+    Forgot(CallError),
+    /// Another error of the call.
+    Failed(CallError),
+}
+
+impl Lost {
+    /// What a rejoin that failed means.
+    fn of_rejoin(e: CallError) -> Self {
+        match e {
+            CallError::Stopped(_) | CallError::Unavailable(_) => Lost::Stopped(e),
+            e => Lost::Forgot(e),
+        }
+    }
+}
+
+/// What the agent's conversation says once when its plugin forgot it and did not take it back (ESC-562).
+fn forgot_line(name: &str, e: &CallError) -> String {
+    tr!(
+        "Le plugin de {name} a oublié cet agent et ne l’a pas repris ({e}) : l’agent s’arrête, sa session est gardée. Envoie-lui un message pour le relancer ; si ça recommence, relance le plugin dans Réglages › Plugins.",
+        "The plugin of {name} forgot this agent and did not take it back ({e}): the agent stops, its session kept. Send it a message to start it again; if it happens again, start the plugin again in Settings › Plugins."
+    )
+}
+
 // What a manifest declares of its harnesses, in `escouade-plugins`.
 pub use escouade_plugins::described::harnesses_of;
 
@@ -174,6 +211,17 @@ pub fn sync_described(
         have.push((id, owner, decl));
     }
     have.iter().map(|(id, _, _)| *id).collect()
+}
+
+/// The harnesses in the registry that a plugin of a third party describes (SEC-01, ESC-589): those whose command the user
+/// agrees to first.
+pub fn described_of_third_parties() -> Vec<EngineId> {
+    DESCRIBED
+        .lock()
+        .iter()
+        .filter(|(_, owner, _)| !super::builtin::first_hand(owner))
+        .map(|(id, _, _)| *id)
+        .collect()
 }
 
 /// `sync_described` from the plugins installed: those that loaded and are on for the app.
@@ -666,6 +714,48 @@ impl ProcessEngine {
         &self.owner
     }
 
+    /// The whole command it runs with `program`, when a plugin of a third party describes it (audit SEC-01, ESC-589):
+    /// what the user agrees to first (`consent`).
+    pub fn third_party_line(&self, program: &Program) -> Option<super::consent::LaunchLine> {
+        if !self.described || self.first_hand {
+            return None;
+        }
+        let acp = self.decl.acp.clone().unwrap_or_default();
+        let escouade_env = std::iter::once(self.account_var.to_string())
+            .chain(self.key_var.map(str::to_string))
+            .collect();
+        Some(super::consent::LaunchLine::new(
+            self.id,
+            self.name,
+            &self.owner,
+            program.describe(),
+            acp.args,
+            acp.resume.map(|r| r.args).unwrap_or_default(),
+            self.decl.version_args.clone(),
+            &acp.env,
+            acp.remove_env,
+            escouade_env,
+        ))
+    }
+
+    /// `third_party_line` checked: agreed to, and not refused by « Harness des plugins tiers » (`consent::check`).
+    fn agreed(&self, program: &Program) -> Result<Option<super::consent::LaunchLine>> {
+        match self.third_party_line(program) {
+            Some(line) => match super::consent::check(&line) {
+                Ok(()) => Ok(Some(line)),
+                Err(held) => {
+                    log::warn!(
+                        "{}: its command is not run, {held:?} ({})",
+                        self.name,
+                        line.program
+                    );
+                    bail!(super::consent::refusal(&line, &held))
+                }
+            },
+            None => Ok(None),
+        }
+    }
+
     /// What the plugin is told of the harness with each agent: its description, for the generic ACP plugin.
     fn description(&self) -> Option<proto::HarnessDecl> {
         self.described.then(|| self.decl.clone())
@@ -710,7 +800,19 @@ impl ProcessEngine {
                 .map(|(k, _)| k.clone())
                 .collect(),
         };
+        // A harness of a third party runs its command once it is agreed to, the one agreed (SEC-01, ESC-589).
+        let line = self.agreed(&ask.program)?;
         let mut launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
+        if let Some(line) = &line {
+            let env: Vec<(String, String)> = launch
+                .env
+                .iter()
+                .map(|v| (v.name.clone(), v.value.clone()))
+                .collect();
+            if !line.covers(&launch.args, &env, &launch.remove_env) {
+                bail!(not_the_line(self.name));
+            }
+        }
         let vars = self.vars();
         check_env(self.name, &vars, &launch.env).map_err(|e| anyhow!(e))?;
         vars.hold_removed(self.name, &mut launch.remove_env);
@@ -769,6 +871,11 @@ impl ProcessEngine {
         fence_by_core: bool,
         bypass: bool,
     ) -> Result<proto::TerminalLaunch> {
+        let mut params = params;
+        // Its settings for the agent's project (ESC-553): a module cannot ask for them during its turn.
+        if let Value::Object(s) = self.rt.settings_of(&self.plugin, Some(&place.project)) {
+            params.settings = s;
+        }
         // Where its `fs/*` reach for the time of the call: no agent is attached, the interface is not the plugin's.
         let _ = self.rt.place_agent(&self.plugin, &params.agent, place);
         let told = self.call(method::TERMINAL_LAUNCH, &params).await;
@@ -1068,6 +1175,16 @@ fn down(name: &str, e: CallError) -> anyhow::Error {
     }
 }
 
+/// A harness of a third party (`first_hand` false: neither its plugin nor the one describing it is `dev.escouade.*`)
+/// does not start while a private project is on the machine (SEC-02, ESC-590; SEC-02b, ESC-623): its launch can say it
+/// applies the fence, the core could only find the fence's paths as words of it (audit test W-04).
+pub fn check_private(name: &str, first_hand: bool, private: bool) -> Result<()> {
+    if private && !first_hand {
+        bail!(crate::harness_scope::third_party_refusal(name));
+    }
+    Ok(())
+}
+
 /// The checks of a launch's description (`engine/launch`, `terminal/launch`): what the core guarantees whatever the
 /// plugin. Answers why it is refused. `first_hand`: the plugin is of Escouade's own hand (`dev.escouade.*`, which installs
 /// signed alone), the only one whose word that it holds the fence itself (`fence_by_client`, the generic ACP plugin) is
@@ -1243,6 +1360,14 @@ fn refused_var(name: &str, var: &str) -> String {
     tr!(
         "Le plugin de {name} veut poser la variable {var}, qu’Escouade refuse à un plugin parce qu’elle changerait ce que lance le harness ou toucherait à Escouade : l’agent ne démarre pas.",
         "The plugin of {name} wants to set the variable {var}, which Escouade refuses a plugin because it would change what the harness runs or touch Escouade: the agent doesn’t start."
+    )
+}
+
+/// The launch a plugin describes for a harness of a third party is not the command the user agreed to (SEC-01, ESC-589).
+fn not_the_line(name: &str) -> String {
+    tr!(
+        "Le plugin de {name} décrit un lancement qui n’est pas la commande que tu as acceptée : rien n’est lancé.",
+        "The plugin of {name} describes a launch that is not the command you agreed to: nothing is launched."
     )
 }
 
@@ -1590,6 +1715,9 @@ impl Engine for ProcessEngine {
         // Its `versionArgs` are a manifest's of anyone's: run after a gesture of the user's alone (ESC-424).
         self.described && !self.first_hand
     }
+    fn launch_line(&self, program: &Program) -> Option<super::consent::LaunchLine> {
+        self.third_party_line(program)
+    }
     fn caps(&self) -> EngineCaps {
         let mut caps = self.caps.clone();
         // The meanings in the app's language of now.
@@ -1646,6 +1774,9 @@ impl Engine for ProcessEngine {
     }
 
     fn spawn(&self, spawn: Spawn, on_frame: OnFrame, on_exit: OnExit) -> Result<Process> {
+        // A third party’s harness in a private project: nothing proves it holds the fence, which its launch could only
+        // spell as words found anywhere (SEC-02, ESC-590). The core refuses it before (`harness_in`); here too.
+        check_private(self.name, self.first_hand, spawn.private)?;
         // Those the core sets itself, on its manifest's word.
         let mut named = self.decl.account_var.iter().chain(&self.decl.key_var);
         let refused = |v: &&String| {
@@ -1656,6 +1787,8 @@ impl Engine for ProcessEngine {
         if let Some(var) = named.find(refused) {
             bail!(refused_var(self.name, var));
         }
+        // A harness of a third party: its command agreed to first, and held to it (SEC-01, ESC-589).
+        let line = self.agreed(&spawn.program)?;
         let key = format!("{}-{}", self.id, uuid::Uuid::new_v4().simple());
         let session = match &spawn.start {
             Start::Resume { session } => Some(session.clone()),
@@ -1689,6 +1822,7 @@ impl Engine for ProcessEngine {
             paused: AtomicBool::new(false),
             opened: watch::channel(None).0,
             refused: Mutex::new(None),
+            forgot: AtomicBool::new(false),
             compacting: Mutex::new(None),
             reading: Mutex::new(None),
             me: std::sync::OnceLock::new(),
@@ -1696,6 +1830,7 @@ impl Engine for ProcessEngine {
             prepare: self.prepare,
             plugin: self.plugin.clone(),
             vars: self.vars(),
+            line,
             name: self.name,
             account_var: self.account_var,
             key,
@@ -1807,8 +1942,10 @@ pub struct ProcessEngineProcess {
     paused: AtomicBool,
     /// What `Item::Ready` said (the models of the account), or why it will not come.
     opened: watch::Sender<Option<std::result::Result<Value, String>>>,
-    /// Why its plugin stopped its harness (`Item::Stop`).
+    /// Why its plugin stopped its harness (`Item::Stop`), or why the core did (its plugin forgot it, ESC-562).
     refused: Mutex<Option<String>>,
+    /// Its plugin forgot it and did not take it back: said once (ESC-562).
+    forgot: AtomicBool,
     /// Who waits for the end of a compaction (`Item::Compacted`), and for the quota it asked (`Item::Usage`).
     compacting: Mutex<Option<oneshot::Sender<Result<bool>>>>,
     reading: Mutex<Option<oneshot::Sender<Value>>>,
@@ -1823,6 +1960,8 @@ pub struct ProcessEngineProcess {
     plugin: String,
     /// What variables its launches may set (`ProcessEngine::vars`).
     vars: Vars,
+    /// The command agreed to, for a harness of a third party (SEC-01, ESC-589): each launch held to it.
+    line: Option<super::consent::LaunchLine>,
     name: &'static str,
     /// The variable that gives the agent its own folder (`HarnessDecl::account_var`): where its launch may write.
     account_var: &'static str,
@@ -1957,6 +2096,33 @@ fn told(params: &Value) {
     if let Some(on_frame) = on_frame {
         p.deliver(items.clone(), &on_frame);
     }
+}
+
+/// Its plugin refused the agent `key` when it was given it again, after a restart (ESC-562): the agent tries once more,
+/// and says why it stops if that fails too.
+fn refused_again(key: &str, why: &CallError) {
+    let p = TOLD
+        .lock()
+        .iter()
+        .find(|(k, _)| k == key)
+        .and_then(|(_, p)| p.upgrade());
+    let (Some(p), Ok(rt)) = (p, tokio::runtime::Handle::try_current()) else {
+        return;
+    };
+    let why = why.clone();
+    rt.spawn(async move {
+        match p.rejoin().await {
+            Ok(()) => log::info!(
+                "{}: refused when given again ({why}), taken at the next try",
+                p.key
+            ),
+            // Its plugin stopped: its stop says why.
+            Err(CallError::Stopped(_) | CallError::Unavailable(_)) => {}
+            Err(e) => {
+                p.lost(&e);
+            }
+        }
+    });
 }
 
 /// Where its conversation starts from, in the contract's words.
@@ -2134,9 +2300,86 @@ impl ProcessEngineProcess {
         }
     }
 
-    /// Calls `method`, given again after a crash; writes its `writes` to the harness.
+    /// Gives the agent again to a plugin that forgot it (ESC-562), once it is up: Err when it does not take it, why.
+    async fn rejoin(&self) -> std::result::Result<(), CallError> {
+        log::info!("{}: its plugin does not know it: given again", self.key);
+        for _ in 0..RETRIES {
+            match self
+                .rt
+                .attach(
+                    &self.plugin,
+                    &self.key,
+                    method::ATTACH,
+                    self.attach_params(),
+                )
+                .await
+            {
+                Ok(_) => return Ok(()),
+                Err(CallError::Crashed | CallError::Dropped) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Err(CallError::Crashed)
+    }
+
+    /// Its plugin forgot it and did not take it back (ESC-562): said once in its conversation, with why and what to do,
+    /// and its harness stopped, its session kept; the next message starts it anew, given to its plugin again. The line.
+    fn lost(&self, e: &CallError) -> String {
+        let line = forgot_line(self.name, e);
+        if !self.forgot.swap(true, Ordering::AcqRel) {
+            log::warn!(
+                "{}: its plugin forgot it and did not take it back: {e}",
+                self.key
+            );
+            let told = self.told.lock().clone();
+            if let Some(on_frame) = told {
+                on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": line }] }));
+            }
+            // What its end says: the line already said, not twice (`AgentRt::on_exit`).
+            *self.refused.lock() = Some(line.clone());
+            self.kill();
+        }
+        line
+    }
+
+    /// The error a caller sees of a call that did not go through.
+    fn told_lost(&self, l: Lost) -> anyhow::Error {
+        match l {
+            Lost::Forgot(e) => anyhow!(self.lost(&e)),
+            Lost::Stopped(e) | Lost::Failed(e) => down(self.name, e),
+        }
+    }
+
+    /// Calls `method` within `within`; a plugin that forgot the agent is given it again, then the call once more.
+    async fn call_again(
+        &self,
+        method: &str,
+        params: Value,
+        within: Duration,
+    ) -> std::result::Result<Value, Lost> {
+        let mut rejoined = false;
+        loop {
+            match self
+                .rt
+                .call_within(&self.plugin, method, params.clone(), within)
+                .await
+            {
+                Ok(v) => return Ok(v),
+                Err(e) if forgotten(&e) && !rejoined => {
+                    rejoined = true;
+                    self.rejoin().await.map_err(Lost::of_rejoin)?;
+                }
+                Err(e) if forgotten(&e) => return Err(Lost::Forgot(e)),
+                Err(e) => return Err(Lost::Failed(e)),
+            }
+        }
+    }
+
+    /// Calls `method`, given again after a crash, and once more to a plugin that forgot the agent once it is given it
+    /// again (ESC-562); writes its `writes` to the harness.
     async fn call_writing(&self, method: &str, params: Value) -> Result<Called> {
         self.known().await.map_err(|e| down(self.name, e))?;
+        let mut rejoined = false;
         for _ in 0..RETRIES {
             match self.rt.call(&self.plugin, method, params.clone()).await {
                 Ok(v) => {
@@ -2151,6 +2394,13 @@ impl ProcessEngineProcess {
                 Err(CallError::Crashed | CallError::Dropped) => {
                     self.reattach().await.map_err(|e| down(self.name, e))?;
                 }
+                Err(e) if forgotten(&e) && !rejoined => {
+                    rejoined = true;
+                    if let Err(e) = self.rejoin().await {
+                        return Err(self.told_lost(Lost::of_rejoin(e)));
+                    }
+                }
+                Err(e) if forgotten(&e) => return Err(self.told_lost(Lost::Forgot(e))),
                 Err(e) => return Err(down(self.name, e)),
             }
         }
@@ -2307,6 +2557,7 @@ impl ProcessEngineProcess {
         )
         .map_err(|e| anyhow!(e))?;
         check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
+        self.hold_to_line(&launch)?;
         self.vars.hold_removed(self.name, &mut launch.remove_env);
         {
             let mut a = self.attach.lock();
@@ -2337,6 +2588,30 @@ impl ProcessEngineProcess {
             self.write(w);
         }
         Ok(Launched::Child(child, job))
+    }
+
+    /// The launch the plugin described, for a harness of a third party: the command agreed to, read again as it is about
+    /// to run (SEC-01, ESC-589). The variables the core names itself (the account's folder, its key) are its own.
+    fn hold_to_line(&self, launch: &proto::Launch) -> Result<()> {
+        let Some(line) = &self.line else {
+            return Ok(());
+        };
+        let env: Vec<(String, String)> = launch
+            .env
+            .iter()
+            .filter(|v| !line.escouade_env.contains(&v.name))
+            .map(|v| (v.name.clone(), v.value.clone()))
+            .collect();
+        if line.covers(&launch.args, &env, &launch.remove_env) {
+            Ok(())
+        } else {
+            log::warn!(
+                "{}: its launch is not the command agreed to: {}",
+                self.name,
+                args_for_log(&launch.args)
+            );
+            bail!(not_the_line(self.name))
+        }
     }
 
     /// Starts its program from `launch`, `added` to its arguments.
@@ -2391,6 +2666,7 @@ impl ProcessEngineProcess {
             launch,
         )
         .map_err(|e| anyhow!(e))?;
+        self.hold_to_line(launch)?;
         // Its next program no more than its first: nothing opens the mode of no question without the setting (SEC-09).
         let launch = next_launch(self.name, &self.vars, launch, spawn.bypass)?;
         write_files(&launch)?;
@@ -2406,6 +2682,8 @@ impl ProcessEngineProcess {
                 told(&params);
             }
         });
+        self.rt
+            .on_attach_refused(|_, key, why| refused_again(key, why));
     }
 
     /// Its launch failed: why.
@@ -2567,7 +2845,7 @@ impl ProcessEngineProcess {
                     if let Some(why) = off(&self) {
                         break (None, why);
                     }
-                    break (Some(0), String::new());
+                    break (Some(0), self.refused.lock().take().unwrap_or_default());
                 }
                 _ = watch.tick() => {
                     let status = self.rt.status(&self.plugin);
@@ -2980,35 +3258,41 @@ impl ProcessEngineProcess {
             if stopped.is_some() {
                 continue;
             }
-            if let Err(e) = self.translate_batch(batch, on_frame).await {
-                let why = stop_told(self.name, &e);
-                if let Some(why) = &why {
-                    on_frame(
-                        json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }),
-                    );
+            match self.translate_batch(batch, on_frame).await {
+                Ok(()) => {}
+                // Said once, its harness stopped (`lost`).
+                Err(Lost::Forgot(e)) => stopped = Some(self.lost(&e)),
+                Err(Lost::Stopped(e) | Lost::Failed(e)) => {
+                    let why = stop_told(self.name, &e);
+                    if let Some(why) = &why {
+                        on_frame(
+                            json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }),
+                        );
+                    }
+                    self.kill();
+                    stopped = Some(why.unwrap_or_default());
                 }
-                self.kill();
-                stopped = Some(why.unwrap_or_default());
             }
         }
         stopped
     }
 
-    /// One batch, given to the plugin until it answers (again after a crash); its items applied. Err: why the plugin
-    /// is stopped.
+    /// One batch, given to the plugin until it answers (again after a crash, and once more to a plugin that forgot the
+    /// agent once it is given it again, ESC-562); its items applied. Err: why the agent stops.
     async fn translate_batch(
         &self,
         batch: Vec<String>,
         on_frame: &OnFrame,
-    ) -> std::result::Result<(), CallError> {
+    ) -> std::result::Result<(), Lost> {
         let params = serde_json::value::to_raw_value(&proto::Frames {
             agent: self.key.clone(),
             frames: batch,
         })
-        .map_err(|e| CallError::Unavailable(e.to_string()))?;
+        .map_err(|e| Lost::Failed(CallError::Invalid(e.to_string())))?;
         let name = self.name;
         let mut told = false;
-        self.known().await?;
+        let mut rejoined = false;
+        self.known().await.map_err(Lost::Stopped)?;
         for _ in 0..RETRIES {
             match self
                 .rt
@@ -3034,9 +3318,15 @@ impl ProcessEngineProcess {
                             json!({ "items": [{ "op": "notice", "level": "warning", "text": text }] }),
                         );
                     }
-                    self.reattach().await?;
+                    self.reattach().await.map_err(Lost::Stopped)?;
                 }
-                Err(e @ CallError::Stopped(_)) => return Err(e),
+                Err(e @ CallError::Stopped(_)) => return Err(Lost::Stopped(e)),
+                // It does not know the agent any more: given it again, then the same batch once more.
+                Err(e) if forgotten(&e) && !rejoined => {
+                    rejoined = true;
+                    self.rejoin().await.map_err(Lost::of_rejoin)?;
+                }
+                Err(e) if forgotten(&e) => return Err(Lost::Forgot(e)),
                 Err(e) => {
                     let n = params.get().len();
                     log::warn!("{}: a batch of {n} bytes left untranslated: {e}", self.key);
@@ -3051,7 +3341,7 @@ impl ProcessEngineProcess {
                 }
             }
         }
-        Err(CallError::Crashed)
+        Err(Lost::Stopped(CallError::Crashed))
     }
 
     /// The items of a batch: its writes to the harness, what the plugin is to be told again after a restart, the rest
@@ -3552,14 +3842,13 @@ impl EngineProcess for ProcessEngineProcess {
             *self.reading.lock() = Some(tx);
             self.known().await.map_err(|e| down(self.name, e))?;
             let v = self
-                .rt
-                .call(
-                    &self.plugin,
+                .call_again(
                     method::READ_USAGE,
                     json!({ "agent": self.key }),
+                    super::runtime::timeout_of(method::READ_USAGE),
                 )
                 .await
-                .map_err(|e| down(self.name, e))?;
+                .map_err(|l| self.told_lost(l))?;
             // To be asked of the harness (`UsageAsked`): what it says comes back with its frames.
             if let Ok(asked) = serde_json::from_value::<proto::UsageAsked>(v.clone()) {
                 if !asked.writes.is_empty() {
@@ -3586,13 +3875,7 @@ impl EngineProcess for ProcessEngineProcess {
             };
             self.known().await.map_err(|e| down(self.name, e))?;
             match self
-                .rt
-                .call_within(
-                    &self.plugin,
-                    method::RENAME,
-                    serde_json::to_value(v)?,
-                    REQUEST_WITHIN,
-                )
+                .call_again(method::RENAME, serde_json::to_value(v)?, REQUEST_WITHIN)
                 .await
             {
                 // A harness told through its input (`Writes`), or by the plugin itself (none).
@@ -3600,10 +3883,12 @@ impl EngineProcess for ProcessEngineProcess {
                     Called::Asked(rx) => answer_of(rx, RENAME_WITHIN).await.map(drop),
                     Called::Over(_) => Ok(()),
                 },
-                Err(CallError::Remote { code, .. }) if code == super::runtime::METHOD_NOT_FOUND => {
+                Err(Lost::Failed(CallError::Remote { code, .. }))
+                    if code == super::runtime::METHOD_NOT_FOUND =>
+                {
                     Ok(())
                 }
-                Err(e) => Err(down(self.name, e)),
+                Err(l) => Err(self.told_lost(l)),
             }
         })
     }
@@ -3705,15 +3990,13 @@ impl EngineProcess for ProcessEngineProcess {
             };
             self.known().await.map_err(|e| down(self.name, e))?;
             let v = self
-                .rt
-                .call_within(
-                    &self.plugin,
+                .call_again(
                     method::CONTROL,
                     serde_json::to_value(c)?,
                     timeout + Duration::from_secs(1),
                 )
                 .await
-                .map_err(|e| down(self.name, e))?;
+                .map_err(|l| self.told_lost(l))?;
             match self.asking(v) {
                 Called::Asked(rx) => answer_of(rx, timeout).await,
                 Called::Over(v) => Ok(v),

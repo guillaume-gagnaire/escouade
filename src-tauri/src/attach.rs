@@ -157,6 +157,7 @@ impl Core {
                 crate::i18n::ui()
             ))
         })?;
+        crate::proxysecret::refuse_without_password(&settings)?;
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();
         env.extend(attach.env.iter().cloned());
         crate::tui::no_proxy(&mut env);

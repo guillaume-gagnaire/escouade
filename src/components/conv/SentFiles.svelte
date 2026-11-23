@@ -61,7 +61,10 @@
     if (img) shown = galleryOf(img);
   };
 
-  const act = (index: number, reveal: boolean) => app.run(api.sentFileOpen(agentId, item.id, index, reveal));
+  const act = (index: number, reveal: boolean) =>
+    reveal
+      ? app.run(api.sentFileOpen(agentId, item.id, index, true))
+      : app.openFile(api.sentFileOpen(agentId, item.id, index, false), () => api.sentFileOpen(agentId, item.id, index, true));
 
   // On a server (ESC-538, S12): the files are the server's. « Ouvrir » downloads an image or a PDF to this computer
   // (Téléchargements/Escouade/<espace>) and opens the copy; plain text, Markdown, CSV and JSON open in Escouade's editor,

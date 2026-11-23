@@ -257,11 +257,14 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('pluginsInstalled', 'plugins', 'plugins.installed.title'),
   row('pluginsSeed', 'plugins', 'plugins.installed.seedTitle'),
   row('pluginsVerifiedOnly', 'plugins', 'plugins.installed.verifiedOnly', s('pluginsVerifiedOnly')),
+  row('thirdPartyHarnesses', 'plugins', 'plugins.installed.thirdPartyHarnesses', s('thirdPartyHarnesses')),
 
   // Avancé › Réseau, Terminaux, Pièces jointes, Recherche par le sens, Données locales.
   row('proxyUrl', 'advanced', 'settings.network.proxyUrl', s('proxyUrl')),
   row('noProxy', 'advanced', 'settings.network.exclusions', s('noProxy')),
+  row('proxyNeverDirect', 'advanced', 'settings.network.neverDirect', s('proxyNeverDirect')),
   row('proxyTerminals', 'advanced', 'settings.network.proxyTerminals', s('proxyTerminals')),
+  row('offline', 'advanced', 'settings.network.offline', s('offline')),
   row('extraCaFile', 'advanced', 'settings.network.extraCa', s('extraCaFile')),
   row('insecureTls', 'advanced', 'settings.network.insecureTls', s('insecureTls')),
   row('pwshPath', 'advanced', { raw: 'PowerShell 7' }, s('pwshPath')),
@@ -322,6 +325,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('ticketPrefix', 'git', 'settings.project.ticketPrefix', { project: ['ticketBranchPrefix'] }),
   row('copy', 'git', 'settings.project.copy', { project: ['copy'] }),
   row('commit', 'git', 'settings.project.commit', { project: ['commitMode'] }),
+  row('autoFetchProject', 'git', 'fetch.settings.project', { project: ['gitFetch'] }),
   row('docsBranch', 'git', 'docs.branch.label', { project: ['docsBranch'] }),
   row('worktreeSetup', 'git', 'settings.project.setupTitle', { project: ['worktreeSetup'] }),
   row('worktreeTeardown', 'git', 'settings.project.teardownTitle', { project: ['worktreeTeardown'] }),
@@ -378,6 +382,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
 
   // Tous les projets › Nouveaux projets, Projets fermés.
   row('privateProjects', 'allProjects', 'settings.newProjects.private', s('privateProjects')),
+  row('autoFetch', 'allProjects', 'fetch.settings.auto', s('gitFetch')),
   row('closedProjects', 'allProjects', 'settings.closed.title'),
 ];
 

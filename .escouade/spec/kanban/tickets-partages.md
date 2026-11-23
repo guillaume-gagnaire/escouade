@@ -2,8 +2,8 @@
 title: "Tickets partagés"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-190","ESC-243","ESC-493"]
-decisions: [194]
+tickets: ["ESC-190","ESC-243","ESC-493","ESC-653","ESC-651"]
+decisions: [194,308,"la-2-2-6-a-la-2-2-8-reversees-dans-la-2"]
 compared: null
 ---
 
@@ -96,3 +96,20 @@ Le partage par fichiers reste pour les projets hors équipe. Il n'y a pas de pas
 - Cette ligne est un commentaire YAML : une version d'avant lit le fichier sans erreur (vérifié par un test du lecteur), et les retardataires voient que le projet a migré. Une version d'avant qui réécrit un fichier enlève la ligne ; le poste à jour ne le relit pas pour autant.
 - **« Verser à l'équipe »** (page « Le Kanban d'équipe ») importe les tickets des fichiers dans le Kanban de l'équipe, **leurs ids gardés** : verser deux fois, ou depuis deux postes, ne fait jamais de doublon. Leur clé `DEM-12` (ou `DEM-12@alice` ici) devient une clé commune de l'équipe, l'ancienne restant trouvable.
 - Escouade **propose** ensuite de retirer les fichiers et dit lesquels (`git rm -r .escouade/tickets`) ; il ne supprime ni ne commite rien.
+
+## Un dossier venu du dépôt (ESC-653)
+
+Le dossier des tickets arrive avec un clone ou un pull : n'importe quel collaborateur du dépôt peut y avoir mis un lien ou un fichier piégé.
+
+- Le fichier d'un ticket de plus de 64 Kio n'est pas lu : la carte « Ticket partagé illisible » dit qu'il est trop gros. Un dossier de plus de 2 000 fichiers n'est pas suivi du tout (le journal le dit) : rien n'y est lu, rien du Kanban n'en part.
+- Les images et fichiers d'un ticket reçu ne sont copiés que s'ils sont des fichiers ordinaires du dossier de ce ticket, sans lien (une jonction sous Windows en est un) ni sur eux ni sur le chemin, et jusqu'à 5 Mo.
+- Ceux d'un ticket à soi ne s'écrivent que là où rien n'est encore, sans lien au dossier du ticket ni en chemin.
+- Supprimer un ticket partagé n'efface rien à travers un dossier lié, ni hors du projet.
+- « Prendre le sien » lit le fichier en conflit sans suivre un lien, et jusqu'à 256 Kio.
+
+## Les fichiers figés et versés, avec les bornes d'ESC-653 (ESC-651)
+
+Le reversement de la 2.2.8 dans la 2.3 applique au serveur d'équipe (TS-7) les bornes d'*Un dossier venu du dépôt* :
+
+- **Figer** n'écrit la ligne `# Frozen: …` qu'à travers aucun lien posé depuis la lecture, et ne touche pas un fichier de plus de 64 Kio : non lu, il reste tel quel. Un dossier de plus de 2 000 fichiers n'est pas figé du tout.
+- **« Verser à l'équipe »** refuse un dossier de plus de 2 000 fichiers, l'aperçu comme le versement : « Le dossier des tickets partagés a plus de 2000 fichiers : Escouade ne le lit pas. » Un fichier trop gros y arrive comme un ticket illisible, comme sur le Kanban.

@@ -773,7 +773,8 @@ impl Core {
             .await
             .map(|s| s.lines().filter(|l| !l.trim().is_empty()).count())
             .unwrap_or(0);
-        let diff = git::text(&cwd, &["diff", &format!("{}...{}", t.base, t.branch)])
+        // Capped (ESC-653): the branch can carry a commit pulled from anyone.
+        let diff = git::read_diff(&cwd, &["diff", &format!("{}...{}", t.base, t.branch)])
             .await
             .unwrap_or_default();
         let lang = self.lang().claude;
@@ -1302,7 +1303,7 @@ impl Core {
                 .await
                 .map(|s| s.lines().filter(|l| !l.trim().is_empty()).count())
                 .unwrap_or(0);
-            let d = git::text(&t.path, &["diff", &format!("{}...{}", t.base, t.branch)])
+            let d = git::read_diff(&t.path, &["diff", &format!("{}...{}", t.base, t.branch)])
                 .await
                 .unwrap_or_default();
             diff.push_str(&crate::repos::prefix_diff(&d, repo));

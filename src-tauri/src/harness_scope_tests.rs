@@ -462,27 +462,312 @@ fn install_tiers(plugins: &crate::plugins::Plugins, name: &str) {
     plugins.install_folder(&src, crate::i18n::Lang::Fr).unwrap();
 }
 
-/// Its harness reaches a private project only once the user turned it on there (« Activer »): not before, whatever
-/// it says of its fence.
+/// SEC-02 (ESC-590): its harness is never launched in a private project, whatever its switch there: not before
+/// « Activer », not after; « Activer » itself says why. The same project not private, it goes. Claude Code, of Escouade's
+/// own hand, keeps its place there once turned on.
 #[tokio::test]
-async fn a_third_party_harness_is_not_launched_in_a_private_project_until_turned_on_there() {
-    let h = harness("sec08-tiers");
+async fn a_third_party_harness_is_never_launched_in_a_private_project() {
+    let h = harness("sec02-tiers");
     let (p, _) = h.project(false).await;
-    install_tiers(&h.core.plugins, "sec08-tiers-plugin");
+    install_tiers(&h.core.plugins, "sec02-tiers-plugin");
     let engine = tiers_engine();
     assert!(!crate::plugins::builtin::first_hand(TIERS));
     assert_eq!(h.core.harness_in(engine, &p.id), InProject::On);
     make_private(&h, &p);
-    assert_eq!(h.core.harness_in(engine, &p.id), InProject::Asks);
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::ThirdParty);
     let refused = h
         .core
         .check_harness_in(engine, &p.id)
         .unwrap_err()
         .to_string();
-    assert!(refused.contains("privé"), "{refused}");
-    h.core.enable_harness_in(&p.id, engine).unwrap();
+    assert!(refused.starts_with(THIRD_PARTY), "{refused}");
+    assert!(refused.contains("retire « Projet privé »"), "{refused}");
+    // « Activer » refuses, with why, and sets nothing.
+    let why = h
+        .core
+        .enable_harness_in(&p.id, engine)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(why, refused);
+    assert_eq!(
+        h.core.plugins.choices(TIERS).unwrap().projects.get(&p.id),
+        None
+    );
+    // Turned on by hand in Réglages › Plugins all the same: still refused.
+    h.core
+        .plugins
+        .choose(TIERS, |c| {
+            c.projects.insert(p.id.clone(), true);
+        })
+        .unwrap();
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::ThirdParty);
+    assert!(h.core.check_harness_in(engine, &p.id).is_err());
+    // The first hand keeps its place: Claude Code asks, then is on there.
+    assert_eq!(h.core.harness_in(EngineId::CLAUDE, &p.id), InProject::Asks);
+    h.core.enable_harness_in(&p.id, EngineId::CLAUDE).unwrap();
+    assert_eq!(h.core.harness_in(EngineId::CLAUDE, &p.id), InProject::On);
+    // The project no longer private: the third party's goes there again.
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p.id)
+        .unwrap()
+        .private = false;
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::On);
+}
+
+/// The agent `id` made one of a third party's harness, its process kept: what the agent of an installed third party's
+/// harness would be, the fake Claude standing for its program (`harness_in` reads the harness's plugin from its id).
+fn as_third_party(h: &Harness, id: &str) {
+    h.core.agent(id).unwrap().lock().meta.engine = tiers_engine();
+}
+
+const THIRD_PARTY: &str =
+    "Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture";
+
+/// An agent of the project, its first turn over, its process left running.
+async fn agent_at_rest(h: &Harness, p: &Project) -> AgentMeta {
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.core
+        .send_message(&a.id, "Bonjour".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("its process", |h| h.alive(&a.id)).await;
+    h.wait("its turn done", |h| !h.agent(&a.id).status.is_active())
+        .await;
+    a
+}
+
+/// The project made private by the user (`update_project`, the window's gesture).
+fn made_private(h: &Harness, p: &Project) {
+    let mut private = h.core.project(&p.id).unwrap();
+    private.private = true;
+    h.core.update_project(private).unwrap();
+}
+
+/// SEC-02 (ESC-590): an agent of a third party's harness at rest, its process running, when its project is made
+/// private: it stops at once, said in its conversation; nothing starts it again.
+#[tokio::test]
+async fn a_third_party_agent_at_rest_stops_at_once_when_its_project_is_made_private() {
+    let h = harness("sec02-at-rest");
+    let (p, _) = h.project(false).await;
+    let a = agent_at_rest(&h, &p).await;
+    as_third_party(&h, &a.id);
+    made_private(&h, &p);
+    assert!(!h.alive(&a.id), "stopped at once");
+    let said = notices(&h, &a.id);
+    assert!(
+        said.iter()
+            .any(|n| n.starts_with(THIRD_PARTY) && n.ends_with("L’agent s’arrête.")),
+        "{said:?}"
+    );
+    // Nothing reaches it, nor starts it again.
+    let sent = h
+        .core
+        .send_message(&a.id, "Encore".into(), Vec::new())
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(sent.starts_with(THIRD_PARTY), "{sent}");
+    assert!(h.core.ensure_process(&a.id).await.is_err());
+    assert!(!h.alive(&a.id));
+}
+
+/// The same agent at work: its turn is not cut, then, its turn over (`turn_ended`), its process stops, said.
+#[tokio::test]
+async fn a_third_party_agent_at_work_stops_at_the_end_of_its_turn() {
+    let h = harness("sec02-at-work");
+    let (p, _) = h.project(false).await;
+    let a = agent_at_rest(&h, &p).await;
+    as_third_party(&h, &a.id);
+    // At work: settled at the end of its turn.
+    h.core.agent(&a.id).unwrap().lock().meta.status = AgentStatus::Running;
+    made_private(&h, &p);
+    assert!(h.alive(&a.id), "not cut during its turn");
+    assert!(!notices(&h, &a.id)
+        .iter()
+        .any(|n| n.starts_with(THIRD_PARTY)));
+    h.core.agent(&a.id).unwrap().lock().meta.status = AgentStatus::Idle;
+    h.core
+        .turn_ended(&a.id, crate::board::TurnEnd::Finished("Fini".into()))
+        .await;
+    assert!(!h.alive(&a.id));
+    let said = notices(&h, &a.id);
+    assert!(
+        said.iter()
+            .any(|n| n.starts_with(THIRD_PARTY)
+                && n.ends_with("L’agent s’arrête à la fin de son tour.")),
+        "{said:?}"
+    );
+    assert!(h.core.ensure_process(&a.id).await.is_err());
+    assert!(!h.alive(&a.id));
+}
+
+/// An agent of Escouade's own harness turned on for the private project: its turn over, it goes on, nothing said.
+#[tokio::test]
+async fn a_first_hand_agent_of_a_private_project_goes_on() {
+    let h = harness("sec02-first-hand");
+    let (p, _) = h.project(false).await;
+    made_private(&h, &p);
+    h.core.enable_harness_in(&p.id, EngineId::CLAUDE).unwrap();
+    let a = agent_at_rest(&h, &p).await;
+    assert!(h.core.run_refusal(&a.id).is_none());
+    h.core
+        .turn_ended(&a.id, crate::board::TurnEnd::Finished("Fini".into()))
+        .await;
+    assert!(h.alive(&a.id));
+    assert!(!notices(&h, &a.id)
+        .iter()
+        .any(|n| n.starts_with(THIRD_PARTY)));
+}
+
+// ---------- SEC-02b (ESC-623): a private project anywhere on the machine ----------
+
+/// A second project beside `p`, not private, its folder of its own: the client's that the user may make private.
+fn other_project(h: &Harness, p: &Project) -> Project {
+    let dir = test_dir(&format!("{}-client", p.id));
+    let mut client = p.clone();
+    client.id = format!("{}-client", p.id);
+    client.name = "client".into();
+    client.path = dir.to_string_lossy().to_string();
+    client.private = false;
+    h.core.projects.write().push(client.clone());
+    client
+}
+
+/// SEC-02b (ESC-623): a project that is not private, another one private on the machine: a third party's harness is
+/// refused there too, with why (fr and en), « Activer » too; Escouade's own goes on. No private project left (made
+/// public, or removed): permitted again.
+#[tokio::test]
+async fn a_third_party_harness_is_refused_everywhere_while_a_private_project_exists() {
+    let h = harness("sec02b-everywhere");
+    let (p, _) = h.project(false).await;
+    install_tiers(&h.core.plugins, "sec02b-everywhere-plugin");
+    let engine = tiers_engine();
+    let client = other_project(&h, &p);
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::On);
+    made_private(&h, &client);
+    // Refused in the project that is not private, and in the private one.
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::ThirdParty);
+    assert_eq!(h.core.harness_in(engine, &client.id), InProject::ThirdParty);
+    let refused = h
+        .core
+        .check_harness_in(engine, &p.id)
+        .unwrap_err()
+        .to_string();
+    assert!(refused.starts_with(THIRD_PARTY), "{refused}");
+    assert!(
+        refused.contains("n’est lancé dans aucun projet"),
+        "{refused}"
+    );
+    assert!(
+        refused.contains("retire « Projet privé » de tes projets"),
+        "{refused}"
+    );
+    let en = crate::harness_scope::third_party_refusal_in(crate::i18n::Lang::En, "Outil");
+    assert!(
+        en.starts_with("A private project exists on this machine")
+            && en.contains("Outil isn’t launched in any project"),
+        "{en}"
+    );
+    // Turned on by hand for the project: still refused; « Activer » says why.
+    h.core
+        .plugins
+        .choose(TIERS, |c| {
+            c.projects.insert(p.id.clone(), true);
+        })
+        .unwrap();
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::ThirdParty);
+    assert_eq!(
+        h.core
+            .enable_harness_in(&p.id, engine)
+            .unwrap_err()
+            .to_string(),
+        refused
+    );
+    // Escouade's own harness is not touched in the project that is not private.
+    assert_eq!(h.core.harness_in(EngineId::CLAUDE, &p.id), InProject::On);
+    // No longer private: permitted again, in both.
+    let mut public = h.core.project(&client.id).unwrap();
+    public.private = false;
+    h.core.update_project(public).unwrap();
     assert_eq!(h.core.harness_in(engine, &p.id), InProject::On);
     assert!(h.core.check_harness_in(engine, &p.id).is_ok());
+    // Private again, then removed: permitted again too.
+    made_private(&h, &client);
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::ThirdParty);
+    h.core.projects.write().retain(|x| x.id != client.id);
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::On);
+}
+
+/// SEC-02b (ESC-623): an agent of a third party's harness at rest in a project that is not private, when another
+/// project is made private: it stops at once, said in its conversation; nothing starts it again. The other project made
+/// public again: nothing starts by itself, a message starts it.
+#[tokio::test]
+async fn making_another_project_private_stops_a_third_party_agent() {
+    let h = harness("sec02b-other");
+    let (p, _) = h.project(false).await;
+    let a = agent_at_rest(&h, &p).await;
+    as_third_party(&h, &a.id);
+    let client = other_project(&h, &p);
+    made_private(&h, &client);
+    assert!(!h.alive(&a.id), "stopped at once");
+    let said = notices(&h, &a.id);
+    assert!(
+        said.iter()
+            .any(|n| n.starts_with(THIRD_PARTY) && n.ends_with("L’agent s’arrête.")),
+        "{said:?}"
+    );
+    let sent = h
+        .core
+        .send_message(&a.id, "Encore".into(), Vec::new())
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(sent.starts_with(THIRD_PARTY), "{sent}");
+    assert!(h.core.ensure_process(&a.id).await.is_err());
+    assert_eq!(h.core.run_refusal(&a.id).as_deref(), Some(sent.as_str()));
+    // Public again: permitted, nothing started by itself.
+    let mut public = h.core.project(&client.id).unwrap();
+    public.private = false;
+    h.core.update_project(public).unwrap();
+    assert!(!h.alive(&a.id));
+    assert!(h.core.run_refusal(&a.id).is_none());
+}
+
+/// SEC-02b (ESC-623): an agent of a third party's harness at work in a project that is not private, when another is
+/// made private: its turn is not cut, then it stops at the end of its turn, said.
+#[tokio::test]
+async fn a_third_party_agent_at_work_elsewhere_stops_at_the_end_of_its_turn() {
+    let h = harness("sec02b-at-work");
+    let (p, _) = h.project(false).await;
+    let a = agent_at_rest(&h, &p).await;
+    as_third_party(&h, &a.id);
+    h.core.agent(&a.id).unwrap().lock().meta.status = AgentStatus::Running;
+    let client = other_project(&h, &p);
+    made_private(&h, &client);
+    assert!(h.alive(&a.id), "not cut during its turn");
+    h.core.agent(&a.id).unwrap().lock().meta.status = AgentStatus::Idle;
+    h.core
+        .turn_ended(&a.id, crate::board::TurnEnd::Finished("Fini".into()))
+        .await;
+    assert!(!h.alive(&a.id));
+    assert!(notices(&h, &a.id).iter().any(
+        |n| n.starts_with(THIRD_PARTY) && n.ends_with("L’agent s’arrête à la fin de son tour.")
+    ));
+}
+
+/// An agent of Escouade's own harness in a project that is not private goes on when another is made private.
+#[tokio::test]
+async fn a_first_hand_agent_elsewhere_goes_on_when_a_project_is_made_private() {
+    let h = harness("sec02b-first-hand");
+    let (p, _) = h.project(false).await;
+    let a = agent_at_rest(&h, &p).await;
+    let client = other_project(&h, &p);
+    made_private(&h, &client);
+    assert!(h.alive(&a.id));
+    assert!(h.core.run_refusal(&a.id).is_none());
 }
 
 /// The update that turns on, once, the harnesses a private project already uses turns on Escouade's own alone: one of
@@ -514,9 +799,42 @@ async fn the_update_never_turns_on_a_third_party_harness_for_a_private_project()
     std::fs::write(data.state_file(), state.to_string()).unwrap();
     let core = load(&data);
     assert_eq!(core.harness_in(EngineId::CLAUDE, "client"), InProject::On);
-    assert_eq!(core.harness_in(tiers_engine(), "client"), InProject::Asks);
+    assert_eq!(
+        core.harness_in(tiers_engine(), "client"),
+        InProject::ThirdParty
+    );
     assert_eq!(
         core.plugins.choices(TIERS).unwrap().projects.get("client"),
         None
     );
+}
+
+/// SEC-02b (ESC-623): the Kanban of a project that is not private, another one private: a ticket on a third party's
+/// harness is blocked, with why, and no agent made; the other project public again, « Reprendre » goes past the harness.
+#[tokio::test]
+async fn the_kanban_blocks_a_third_party_ticket_while_a_private_project_exists() {
+    let h = harness("sec02b-kanban");
+    let (p, _) = h.project(false).await;
+    let client = other_project(&h, &p);
+    made_private(&h, &client);
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Tiers [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.engine = Some(tiers_engine());
+            Ok(())
+        })
+        .unwrap();
+    h.set_board(&p.id, |s| s.autopilot = true);
+    h.wait_ticket(&t.id, "blocked", |t| t.blocked.is_some())
+        .await;
+    let blocked = h.ticket(&t.id);
+    assert!(blocked.agent_id.is_none(), "{blocked:?}");
+    let why = blocked.blocked.unwrap();
+    assert!(why.contains(THIRD_PARTY), "{why}");
+    assert!(h.core.project_agents(&p.id).is_empty());
 }

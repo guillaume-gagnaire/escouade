@@ -558,6 +558,11 @@ jobs:
         working-directory: src-tauri
         run: cargo fmt --check
 
+      # No crate of a normal build has the `testing` feature on: it enters only through dev-dependencies (SEC-18 of the
+      # security audit, ESC-594). The release checks it again on the tag.
+      - name: No test code in a normal build
+        run: node scripts/no-testing.mjs
+
       - name: Clippy
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings

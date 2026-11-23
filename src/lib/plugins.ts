@@ -146,9 +146,24 @@ export interface PluginView {
   commandsApproved: boolean;
   /** « Vérifié par Escouade »: a version of the store whose signature holds here, now. */
   verified: boolean;
+  /** The key that made that seal, and the role it sealed in (ESC-592). */
+  seal: SealKey | null;
   withdrawn: Withdrawn | null;
   /** Not from the store, but the store has its id: the version it would install in its place. */
   inStore: { version: string; verified: boolean } | null;
+}
+
+/** What a key of the store signs (crates/escouade-plugins/src/store_keys.rs, `Role`). */
+export type KeyRole = 'first-hand' | 'third-party' | 'revocation' | 'backup';
+
+/** The i18n key of a role's name (`plugins.seal.role.*`, in camelCase). */
+export const roleKey = (role: KeyRole) =>
+  (({ 'first-hand': 'firstHand', 'third-party': 'thirdParty', revocation: 'revocation', backup: 'backup' }) as const)[role];
+
+/** The key that made a seal: its minisign id and its role. */
+export interface SealKey {
+  id: string;
+  role: KeyRole;
 }
 
 /** A plugin of the app's seed that is not installed (ESC-338): uninstalled by the user, or refused by the seed. */
@@ -183,6 +198,16 @@ export interface PluginPreview {
   verified: boolean;
   /** Why the revocation list took its seal off. */
   unverified: string | null;
+  /**
+   * A folder or a repository read under « N'installer que des versions vérifiées » (SEC-01, ESC-589): the store's verified
+   * version whose files are its own.
+   */
+  matchesStore?: string;
+  /**
+   * The module a `run.wasm` plugin of a folder will run, by its path in the folder: `packs/<id>-<version>.wasm` or
+   * `plugin.wasm` (issue #43, ESC-652). The fingerprint covers it.
+   */
+  module?: string;
 }
 
 /** Why a plugin was not installed. */

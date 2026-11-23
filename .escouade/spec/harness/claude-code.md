@@ -1,9 +1,9 @@
 ---
 title: "Pilotage de Claude Code"
 subject: "Harness"
-sources: ["docs/SPEC.md","tests/fixtures/claude-artifacts"]
-tickets: ["ESC-106","ESC-133","ESC-400"]
-decisions: [136]
+sources: ["docs/SPEC.md","tests/fixtures/claude-artifacts","https://code.claude.com/docs/en/code-mode (lue le 2026-11-20)","https://code.claude.com/docs/en/agent-teams (lue le 2026-11-20)","Essais réels d'ESC-553 sur Claude Code 2.1.329 (bilan du ticket)"]
+tickets: ["ESC-106","ESC-133","ESC-400","ESC-553"]
+decisions: [136,292]
 compared: null
 ---
 
@@ -25,6 +25,7 @@ Escouade pilote Claude Code dans un chat natif : chaque agent est un process `cl
 - Il reçoit toujours `CLAUDE_CODE_ARTIFACT=1`, discussion comprise : ses artefacts, comme dans un terminal. En stream-json, Claude Code se tient pour une session de l'Agent SDK (`CLAUDE_CODE_ENTRYPOINT=sdk-cli`) et coupe ses artefacts sans cette variable : ni outil `Artifact`, ni skill `artifact-design` (« Unknown skill: artifact-design »). Ce qui les coupe pour l'utilisateur les coupe toujours : `CLAUDE_CODE_DISABLE_ARTIFACT`, ses réglages de Claude Code, son organisation. Supprimer un artefact demande son accord, sur une carte de permission. La vue Claude Code, interactive, les a d'elle-même.
 - Il lit sans demander le dossier de ses fichiers joints : `--add-dir=<données>/attachments/<agent>` à chaque lancement, en chat comme en vue Claude Code. L'agent d'un ticket qui a des fichiers reçoit en plus `--add-dir=<dossier du ticket>/files`. Sans fichier, pas d'argument, et le dossier n'est pas créé (voir *Conversation*, « Fichiers joints »).
 - Ce qu'Escouade dit aux agents et fait écrire à Claude suit « Langue des textes rédigés par Claude » (voir *Langues*).
+- Il ne reçoit jamais les fonctionnalités expérimentales du réglage du plugin (voir *Fonctionnalités expérimentales*).
 
 ### Vue Claude Code
 
@@ -46,6 +47,46 @@ Claude Code quitte aussitôt sur une session qu'il ne trouve pas (« No conversa
 - Aussitôt, avec « No conversation found » dans ses premiers Ko de sortie : la session est abandonnée comme ci-dessus, avec le même avertissement, et la vue relance l'interface d'elle-même, une seule fois, sur la nouvelle session, sous la note « Session Claude introuvable : l'interface repart en nouvelle session. » (6 s une fois l'interface lancée).
 - Aussitôt pour une autre raison, ou une deuxième fois de suite : aucune relance. « Claude Code s'est arrêté dès son lancement (code N). Regarde sa sortie ci-dessus, puis relance-le. » (sans « (code N) » si le process a été tué) et « Relancer » ; la sortie reste lisible dans le terminal.
 - « Relancer » est un lancement manuel : il passe toujours et remet à zéro le compte des sorties aussitôt. Ce compte refuse aussi un lancement automatique à la deuxième sortie de suite : « Claude Code s'arrête dès son lancement (2 fois de suite) : regarde sa sortie, puis clique sur « Relancer ». » Changer de vue le remet à zéro.
+
+### Fonctionnalités expérimentales
+
+Le plugin Claude Code (`dev.escouade.claude-code`, 2.2.8) a un groupe de réglages « Fonctionnalités expérimentales » : les drapeaux `CLAUDE_CODE_EXPERIMENTAL_*` de Claude Code, que la vue Claude Code reçoit **seule**.
+
+**Les drapeaux.**
+
+| Réglage | Variable | Version | Où il marche |
+| --- | --- | --- | --- |
+| Code Mode | `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE` | 2.1.323 (2.1.326 avec les Agent Teams) | une session `claude` interactive dans un terminal ; un abonnement Claude ou un compte Console ; Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2 |
+| Agent Teams | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 2.1.32 | une session interactive (`-p` ne forme pas d'équipe) |
+| Autres drapeaux | des noms de `CLAUDE_CODE_EXPERIMENTAL_*`, séparés par des espaces ou des virgules, chacun à `1` | — | ce que Claude Code en fait |
+
+- **Les autres** ne prennent que des noms `CLAUDE_CODE_EXPERIMENTAL_` suivis de majuscules, chiffres et `_` : jamais une autre variable, jamais une valeur, ni le Code Mode ou les Agent Teams, qui ont leur interrupteur (et ses refus). Ce qui n'est pas pris est dit à l'ouverture de l'interface : « Pas passés à l'interface : PATH (seuls des noms de CLAUDE_CODE_EXPERIMENTAL_* le sont, et le Code Mode et les Agent Teams ont leur interrupteur). »
+- **Pour tous les projets, puis par projet.** Les trois réglages de la page du plugin valent pour tous les projets. La page Plugins d'un projet les règle autrement : Code Mode et Agent Teams « Comme pour tous les projets » (par défaut), « Activé » ou « Désactivé » ; « Autres drapeaux » remplace la liste de tous les projets (vide : celle de tous les projets ; « aucun » : aucun). Les six réglages sont gardés sur la machine : le `.escouade.yml` d'un dépôt ne les donne jamais (`repo: false`), comme Claude Code ignore le Code Mode dans les réglages d'un projet.
+- **Où ils vont.** Dans le bloc `env` du fichier de réglages privé de l'interface (`--settings <fichier>`), que Claude Code lit comme les réglages de l'utilisateur ; un `0` posé par l'utilisateur lui-même l'emporte toujours. Jamais une variable du process, jamais un argument ; jamais le lancement de la conversation, d'une discussion ni d'un agent de ticket.
+
+**Le Code Mode n'est pas passé**, et la conversation le dit en ouvrant l'interface (« Code Mode non passé à l'interface : <raison>. »), quand :
+
+- le remote control est demandé pour cet agent (« le remote control est demandé pour cet agent, et Claude Code ne prend pas les deux ») ;
+- le compte passe par une passerelle ou un fournisseur cloud : `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`, `_VERTEX`, `_FOUNDRY`, `_MANTLE`, `_ANTHROPIC_AWS`, `_ANTHROPIC_GOOGLE_CLOUD`, dans les variables du compte, celles d'Escouade ou le `env` du `settings.json` du compte, ou un `apiKeyHelper` (« le compte passe par <nom> (une passerelle ou un fournisseur cloud), et le Code Mode ne marche qu'avec l'API d'Anthropic ») : son nom seul est dit, jamais sa valeur ;
+- la version lue de Claude Code est trop ancienne (« Claude Code 2.1.301 est trop ancien (il faut la 2.1.323 au moins) : mets-le à jour ») ; une version inconnue laisse Claude Code juger ;
+- le modèle ne le prend pas (« le modèle claude-opus-4-8 ne le prend pas (Opus 5.5, Sonnet 5.5, Haiku 5.5 ou Fable 5.2) ») : un alias (`opus`, `sonnet`…) suit le plus récent de sa famille, un nom inconnu est laissé à Claude Code ;
+- l'agent est une discussion.
+
+Les Agent Teams ne sont pas passées avec une version plus ancienne que la 2.1.32, et c'est dit de même.
+
+**Un agent en Code Mode reste dans son terminal.**
+
+- Claude Code écrit `{"type":"repl-mode","replMode":true}` dans le transcript d'une session commencée en Code Mode (avant le premier message, puis après chaque tour). Escouade le lit en suivant la vue, ou dans le premier Mio du transcript d'une session qu'il va reprendre ou copier : l'agent est marqué pour de bon (`codeMode`), et sa conversation le dit une fois : « En Code Mode : cet agent se reprend dans son terminal. Claude Code ne reprend une session commencée en Code Mode que dans son interface, jamais dans la conversation d'Escouade. »
+- Au-dessus de son terminal, une bande le redit (« En Code Mode : cet agent se reprend dans son terminal ») ; au-dessus de sa conversation, la même bande offre « Ouvrir le terminal ». « Vue Escouade » est grisé dans l'en-tête et dans le menu de sa carte, avec la même phrase.
+- Escouade ne démarre jamais son process stream-json : ni la reprise automatique, ni un ticket, ni un message, ni le retour à la vue d'Escouade (refusé, avec la même phrase). Claude Code le refuserait : « Failed to resume session: This session was started in Code Mode (experimental), which isn't available because for now it only works in the interactive terminal, so it can't be resumed here. »
+- Son interface reprend la session avec le Code Mode, même si le réglage est éteint depuis : sans lui, Claude Code quitte (« This session was started in Code Mode (experimental), which is off, so it can't be resumed. »). Jamais avec le remote control, que Claude Code ne prend pas en Code Mode ; la conversation dit : « Le remote control n'est pas lancé : Claude Code ne le prend pas en Code Mode, et la session de cet agent en a besoin. »
+- Une session commencée sans le Code Mode se reprend sans lui, la variable posée ou pas : l'agent n'est pas marqué.
+
+**Les permissions et la clôture.** En Code Mode, Claude écrit du JavaScript que l'outil `REPL` lance, et chaque appel d'outil fait par le code passe par les règles `deny` et `ask` et par les hooks `PreToolUse` et `PermissionRequest` sous son nom habituel (`Bash`, `Read`, un outil MCP…) :
+
+- Les hooks de la vue Claude Code reçoivent l'appel `REPL` avec son code (`tool_input.code`, et `description`), puis chaque appel qu'il fait. La notification d'une permission demandée dit « Autoriser Bash : mkdir e-made ? » pour un appel du code, et « Lancer du code : <description> ? » pour le code lui-même, quand une règle `ask` le demande. Le serveur des hooks répond toujours `{}` aussitôt : il ne décide rien et ne fait jamais échouer un appel du code.
+- La clôture d'un projet privé, faite de règles `deny` (`Read(…)`, `Edit(…)`), tient pour le code : `file(…).text()` et un `cat` d'un chemin clôturé sont refusés, mode bypass compris.
+- Ce qu'Escouade refuse à une discussion et l'outil `mcp__escouade` sans « Les agents peuvent piloter Escouade » restent refusés : le Code Mode n'est jamais passé à une discussion, et une règle `deny` vaut pour les appels du code.
 
 ### Mise à jour de Claude Code
 
@@ -69,8 +110,12 @@ Dans Réglages › Harness :
 
 « Les agents tiennent une liste de tâches » est actif par défaut.
 
+Dans Plugins › Claude Code › Réglages, le groupe « Fonctionnalités expérimentales » : « Code Mode » et « Agent Teams » (éteints par défaut), « Autres drapeaux » (vide). Dans la page Plugins d'un projet : les mêmes, pour ce projet (voir *Fonctionnalités expérimentales*).
+
 ## Limites
 
 - La vue Claude Code n'est jamais proposée pour un agent de ticket.
 - Une session ne se reprend que du même côté, Windows ou WSL.
 - Un artefact ne se supprime pas sans l'accord de l'utilisateur ; un agent en stream-json ne suit pas les nouvelles versions d'un artefact publiées ailleurs (Claude Code le réserve à une session interactive).
+- Le Code Mode et les Agent Teams ne marchent que dans la vue Claude Code : la conversation d'Escouade (stream-json) les ignore, et un agent en Code Mode ne revient jamais dans la conversation d'Escouade. Ce que fait le code n'est lu que par les appels qu'il fait (hooks, transcript) : le JavaScript lui-même n'est jamais montré comme une commande.
+- La première session en Code Mode d'un compte demande une confirmation dans le terminal (« Yes, turn on Code Mode ») : l'utilisateur y répond lui-même.

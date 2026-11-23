@@ -3,7 +3,7 @@
 
 use crate::git;
 use crate::i18n::{self, Lang};
-use crate::paths::{contained, outside};
+use crate::paths::{contained, outside, read_regular};
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
@@ -184,7 +184,7 @@ pub fn read(root: &Path, rel: &str) -> Result<FileText> {
             bom: false,
         });
     }
-    Ok(decode(&std::fs::read(&path)?))
+    Ok(decode(&read_regular(&path, MAX_EDIT_BYTES)?))
 }
 
 /// Writes `text` back with the file's line endings and BOM, through a temporary file renamed
@@ -349,8 +349,9 @@ fn put(
 
     match check {
         Expect::Any => {}
-        // The version found named (`changed:<hash>`): « Garder ma version » writes over that one only.
-        Expect::Hash(exp) => match std::fs::read(&path) {
+        // The version found named (`changed:<hash>`): « Garder ma version » writes over that one only. Capped like read(): a
+        // file past it was never opened in the editor, so `exp` is not its hash.
+        Expect::Hash(exp) => match read_regular(&path, MAX_EDIT_BYTES) {
             Ok(found) if hash(&found) != exp => bail!("{CHANGED}:{}", hash(&found)),
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(DELETED),
@@ -681,19 +682,21 @@ pub fn reveal_folder(dir: PathBuf) -> Result<Reveal> {
 
 /// Shows `what` in the system's file manager: the Explorer, the Finder, or the desktop's on Linux
 /// (asked through D-Bus). On a thread of its own, as the trash: Windows' shell wants COM set up its
-/// way on the thread that calls it.
-pub fn reveal(what: Reveal) -> Result<()> {
+/// way on the thread that calls it. Only inside `roots`, the folders of the projects, their
+/// worktrees and the data folder (`opening`, audit SEC-12).
+pub fn reveal(what: Reveal, roots: Vec<PathBuf>) -> Result<()> {
     std::thread::spawn(move || {
         reveal_with(
             &what,
             |path| {
+                let allowed = crate::opening::allow(&roots, path, true)?;
                 select_and_again(
                     path,
-                    |p| crate::outside::open(crate::outside::What::Reveal(p)),
+                    |_| allowed.open(),
                     || std::thread::sleep(std::time::Duration::from_secs(1)),
                 )
             },
-            |dir| crate::outside::open(crate::outside::What::Path(dir)),
+            |dir| crate::opening::allow(&roots, dir, false)?.open(),
         )
         .inspect_err(|e| log::warn!("reveal {what:?}: {e:#}"))
     })
@@ -1189,10 +1192,13 @@ pub async fn base(root: &str, base_branch: Option<&str>, rel: &str) -> Result<Op
         None => head(),
     };
     let spec = format!("{rev}:./{}", rel.replace('\\', "/"));
-    let text = match git::run(root, &["cat-file", "blob", &spec]).await {
-        Ok(bytes) => decode(&bytes).text,
-        Err(_) => None,
-    };
+    // Capped as the file itself is (ESC-653): a blob of the history can be gigabytes. Past the
+    // cap, no base to compare with, as for a file too big to open.
+    let text =
+        match git::run_capped(root, &["cat-file", "blob", &spec], MAX_EDIT_BYTES as usize).await {
+            Ok((bytes, false)) => decode(&bytes).text,
+            _ => None,
+        };
     Ok(Some(Base { reference, text }))
 }
 
@@ -1355,6 +1361,26 @@ mod tests {
         let missing = read(&dir, "missing.ts").unwrap_err().to_string();
         assert!(missing.contains("introuvable"), "{missing}");
         assert!(read(&dir, "../x").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn never_blocks_on_a_fifo_planted_in_the_tree_and_caps_what_it_reads() {
+        use std::os::unix::ffi::OsStrExt;
+        let dir = test_dir("fsedit-read-fifo");
+        let fifo = dir.join("p.md");
+        let c = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        // No writer: opened blocking, each of these calls would hang here.
+        assert!(read(&dir, "p.md").is_err());
+        let err = write(&dir, "p.md", "x", "lf", false, Some("h"), &[]).unwrap_err();
+        assert!(err.to_string().contains("not a regular file"), "{err}");
+        assert!(read_regular(&fifo, 10).is_err());
+        // The cap holds on the bytes read, not on a size taken before.
+        let big = dir.join("big.bin");
+        std::fs::write(&big, [b'a'; 11]).unwrap();
+        assert!(read_regular(&big, 10).is_err());
+        assert_eq!(read_regular(&big, 11).unwrap().len(), 11);
     }
 
     #[test]
@@ -2493,6 +2519,25 @@ mod tests {
             tree(&d.to_string_lossy(), &[], "").await.files,
             vec!["a.txt"]
         );
+    }
+
+    /// ESC-653: a blob of the history is read up to the editor's cap: past it there is no base,
+    /// as a file past it is not opened.
+    #[tokio::test]
+    async fn a_base_past_the_editors_cap_is_none() {
+        let r = repo("fsedit-base-cap");
+        let root = r.to_string_lossy().to_string();
+        let mut big = "x\n".repeat(MAX_EDIT_BYTES as usize / 2);
+        big.push('x');
+        std::fs::write(r.join("big.txt"), &big).unwrap();
+        git(&r, &["add", "big.txt"]);
+        git(&r, &["commit", "-qm", "big"]);
+        let b = base(&root, None, "big.txt").await.unwrap().unwrap();
+        assert_eq!(b.text, None);
+        std::fs::write(r.join("big.txt"), &big[1..]).unwrap();
+        git(&r, &["commit", "-qam", "at the cap"]);
+        let b = base(&root, None, "big.txt").await.unwrap().unwrap();
+        assert_eq!(b.text.map(|t| t.len()), Some(MAX_EDIT_BYTES as usize));
     }
 
     #[tokio::test]

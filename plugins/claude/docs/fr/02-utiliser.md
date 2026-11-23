@@ -35,6 +35,18 @@ Une carte de permission a « Autoriser », « Refuser » et, quand Claude Code p
 
 La vue Claude Code fait tourner l’agent dans l’interface de Claude Code elle-même, dans un terminal de la fenêtre, sur la même conversation : Escouade arrête l’une et reprend la session dans l’autre. Ses permissions s’y répondent dans cette interface. Un agent de ticket reste dans la vue d’Escouade.
 
+## Les fonctionnalités expérimentales
+
+Dans la page du plugin, onglet Réglages, le groupe « Fonctionnalités expérimentales » allume des drapeaux de Claude Code pour tous les projets ; la page Plugins d’un projet les règle autrement pour lui (« Comme pour tous les projets », « Activé », « Désactivé »). Le `.escouade.yml` d’un dépôt ne les allume jamais.
+
+- **Code Mode** (`CLAUDE_CODE_EXPERIMENTAL_CODE_MODE`, Claude Code 2.1.323 ou plus, 2.1.326 avec les Agent Teams) : Claude écrit du JavaScript qui fait ses appels d’outils (l’outil `REPL`). Il faut un abonnement Claude ou un compte Console, et Opus 5.5, Sonnet 5.5, Haiku 5.5 ou Fable 5.2.
+- **Agent Teams** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, 2.1.32 ou plus) : une session mène des coéquipiers.
+- **Autres drapeaux** : des noms de `CLAUDE_CODE_EXPERIMENTAL_*` seulement, chacun posé à 1. Tout autre nom est laissé de côté, et la conversation le dit.
+
+Ils ne vont qu’à la vue Claude Code, dans le fichier de réglages privé de son interface : jamais à la conversation d’Escouade, à une discussion ni à un agent de ticket, que Claude Code lance en stream-json, où ces drapeaux ne font rien. Le Code Mode n’est pas passé, et la conversation dit pourquoi, avec le remote control, un compte qui passe par une passerelle ou un fournisseur cloud, un Claude Code trop ancien ou un modèle qui ne le prend pas. La première fois, Claude Code demande dans le terminal de confirmer (« Yes, turn on Code Mode »).
+
+Un agent dont la session commence en Code Mode le garde : Claude Code ne reprend une telle session que dans son interface. Sa conversation le dit (« En Code Mode : cet agent se reprend dans son terminal »), « Vue Escouade » reste grisé, et Escouade ne le relance jamais en stream-json, ni à la reprise automatique ni par un ticket. Son interface le reprend avec le Code Mode, même éteint depuis, et sans le remote control.
+
 ## Une discussion de l’onglet Docs
 
 Une discussion ne change rien : Claude Code y est lancé sans ses outils qui écrivent ou lancent une commande (`Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Bash`, `PowerShell`, `Monitor`, `EnterWorktree`), quel que soit le mode.

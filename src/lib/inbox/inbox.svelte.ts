@@ -10,7 +10,21 @@ import { intlLocale, t } from '../i18n';
 import { api } from '../ipc';
 import { app, asksUser } from '../state.svelte';
 import type { Agent, AskFile, WindowAsk } from '../types';
-import type { InboxItem } from './views';
+import {
+  hiddenCount,
+  keep,
+  shows,
+  typeOf,
+  keepAsks,
+  keepViews,
+  readFilter,
+  stoppedWhat,
+  toggle,
+  typeCounts,
+  writeFilter,
+  type InboxType,
+} from './filter';
+import { waitsForUser, type InboxItem } from './views';
 import { inboxViews } from './views.svelte';
 
 /** A closed request stays in « Répondu récemment » that long, and so many at most (§ 3.4). */
@@ -33,7 +47,11 @@ export interface QueueGroups {
   later: WindowAsk[];
   /** The views put off (« Plus tard »), drawn with the requests put off. */
   laterViews: InboxItem[];
+  /** « Le chef s'en occupe » (ESC-557): the views the squad lead took in hand, the oldest first. */
+  claimed: InboxItem[];
   recent: WindowAsk[];
+  /** The views the squad lead ticked as settled (ESC-557), in the trace with the requests answered: the last first. */
+  settled: InboxItem[];
 }
 
 /** The key of a row: what `selected` holds. */
@@ -65,9 +83,10 @@ export const closedAt = (a: WindowAsk) => a.answer?.at ?? a.closedAt ?? a.update
  * none keeps its row); the others after the requests of their group; those put off with the requests put off.
  */
 export function groups(asks: WindowAsk[], stopped: Agent[], now = Date.now(), views: InboxItem[] = []): QueueGroups {
-  const waiting = views.filter((v) => !v.snoozedUntil);
+  const waiting = views.filter(waitsForUser);
   const blocking = waiting.filter((v) => v.group === 'stopped').sort((a, b) => a.since - b.since);
-  const withView = new Set(blocking.map((v) => v.agentId));
+  // An agent whose request the squad lead took in hand has no row of its own either: the view says it (ESC-557).
+  const withView = new Set(views.filter((v) => v.group === 'stopped').map((v) => v.agentId));
   const asView = (v: InboxItem): QueueItem => ({ kind: 'view', view: v });
   const bySince = (a: InboxItem, b: InboxItem) => a.since - b.since;
   const open = asks.filter(isOpen);
@@ -98,11 +117,13 @@ export function groups(asks: WindowAsk[], stopped: Agent[], now = Date.now(), vi
         .map(asView),
     ],
     later: asks.filter((a) => a.state === 'snoozed').sort((a, b) => (a.snoozedUntil ?? 0) - (b.snoozedUntil ?? 0)),
-    laterViews: views.filter((v) => v.snoozedUntil).sort((a, b) => (a.snoozedUntil ?? 0) - (b.snoozedUntil ?? 0)),
+    laterViews: views.filter((v) => v.snoozedUntil && !v.mark).sort((a, b) => (a.snoozedUntil ?? 0) - (b.snoozedUntil ?? 0)),
+    claimed: views.filter((v) => v.mark?.kind === 'claimed').sort((a, b) => (a.mark?.at ?? 0) - (b.mark?.at ?? 0)),
     recent: asks
       .filter((a) => isClosed(a) && now - closedAt(a) <= RECENT_MS)
       .sort((a, b) => closedAt(b) - closedAt(a))
       .slice(0, RECENT_MAX),
+    settled: views.filter((v) => v.mark?.kind === 'settled').sort((a, b) => (b.mark?.at ?? 0) - (a.mark?.at ?? 0)),
   };
 }
 
@@ -113,7 +134,8 @@ export const actionable = (g: QueueGroups): QueueItem[] => [...g.stopped, ...g.t
  * What the count of the rail says (§ 10.1): what waits for the user in the box, every project — the requests open, the
  * agents stopped, the latter being the same agents as « N en attente » of the status bar (`asksUser`): never two
  * numbers that disagree; and the views of what waits elsewhere (ESC-513) that are no blocking request (those are their
- * agents', counted once). A request or a view put off for later does not count until it comes back.
+ * agents', counted once). A request or a view put off for later does not count until it comes back; nor what the squad
+ * lead took in hand or ticked as settled (ESC-557): an agent whose requests it all took in hand neither.
  */
 export function inboxCount(
   asks: WindowAsk[],
@@ -121,21 +143,51 @@ export function inboxCount(
   views: InboxItem[] = [],
 ): { asks: number; stopped: number; views: number; total: number } {
   const n = asks.filter(isOpen).length;
-  const v = views.filter((x) => !x.snoozedUntil && x.group !== 'stopped').length;
-  return { asks: n, stopped: stopped.length, views: v, total: n + stopped.length + v };
+  const v = views.filter((x) => waitsForUser(x) && x.group !== 'stopped').length;
+  const handled = leadsAgents(views);
+  const s = stopped.filter((a) => !handled.has(a.id)).length;
+  return { asks: n, stopped: s, views: v, total: n + s + v };
+}
+
+/** The agents stopped whose every blocking request the squad lead took in hand (ESC-557). */
+function leadsAgents(views: InboxItem[]): Set<string> {
+  const blocking = views.filter((v) => v.group === 'stopped' && v.agentId);
+  return new Set(blocking.filter((v) => blocking.every((w) => w.agentId !== v.agentId || w.mark)).map((v) => v.agentId as string));
 }
 
 /** The agents stopped on a request (permission, question, plan, a deletion asked), as the status bar counts them. */
 export const stoppedAgents = (agents: Record<string, Agent>, projectId?: string | null) =>
   Object.values(agents).filter((a) => !a.archived && asksUser(a) && (!projectId || a.projectId === projectId));
 
-/** What a blocking request waits for, for its row. */
-export function stoppedWhat(a: Agent): 'permission' | 'question' | 'plan' | 'delete' {
-  const r = a.requests?.[0];
-  if (!r) return a.deleteAsk ? 'delete' : 'permission';
-  if (r.kind === 'question') return 'question';
-  return r.tool === 'ExitPlanMode' ? 'plan' : 'permission';
+/** What a blocking request waits for, for its row (in `filter.ts`, which types the rows). */
+export { stoppedWhat };
+
+/**
+ * The groups under a filter by type (ESC-578): the same groups in the same order, only the rows of the types chosen
+ * left in each; none chosen, the groups as they are.
+ */
+export function filtered(g: QueueGroups, chosen: readonly InboxType[]): QueueGroups {
+  if (!chosen.length) return g;
+  return {
+    stopped: keep(g.stopped, chosen),
+    today: keep(g.today, chosen),
+    earlier: keep(g.earlier, chosen),
+    later: keepAsks(g.later, chosen),
+    laterViews: keepViews(g.laterViews, chosen),
+    claimed: keepViews(g.claimed, chosen),
+    recent: keepAsks(g.recent, chosen),
+    settled: keepViews(g.settled, chosen),
+  };
 }
+
+/** The window's own store, when it has one (the tests and the phone may have none). */
+const local = (): Storage | null => {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+};
 
 /** What a stopped agent's row says it waits for: its question, or the tool and what it acts on. */
 export function stoppedTitle(a: Agent): string {
@@ -206,7 +258,19 @@ class Inbox {
   /** What Escouade puts in the box of its own (ESC-513), every project, then in the scope. */
   views = $derived(this.enabled ? inboxViews.data.views : []);
   scopedViews = $derived(this.scope === 'project' ? this.views.filter((v) => v.projectId === app.ui.activeProject) : this.views);
-  groups = $derived(groups(this.scoped, this.stopped, Date.now(), this.scopedViews));
+  /** The groups in the scope, whatever the filter. */
+  allGroups = $derived(groups(this.scoped, this.stopped, Date.now(), this.scopedViews));
+  /** The rows that wait in the scope, whatever the filter: the meter and « il en reste 9 ». */
+  allRows = $derived(actionable(this.allGroups));
+  /** The types chosen in the filter (ESC-578), kept on this machine; none: « Tout ». */
+  filter = $state<InboxType[]>(readFilter(local()));
+  /** The types offered, each with what waits of it in the scope. */
+  types = $derived(typeCounts(this.allRows, this.filter));
+  /** What waits and the filter hides. */
+  hidden = $derived(hiddenCount(this.allRows, this.filter));
+  /** The groups the queue shows, under the filter. */
+  groups = $derived(filtered(this.allGroups, this.filter));
+  /** The rows one goes through (J, K, « 3 sur 9 »): those the filter shows. */
   rows = $derived(actionable(this.groups));
   /** The rail's count: every project, whatever the scope. */
   count = $derived(inboxCount(this.asks, stoppedAgents(app.agents), this.views));
@@ -230,6 +294,19 @@ class Inbox {
     const ask = this.asks.find((a) => a.id === key);
     return ask ? { kind: 'ask', ask } : null;
   });
+
+  /** Chooses the types to show (none: « Tout »), keeps the choice, and opens a row shown if the one open is hidden. */
+  setFilter(chosen: InboxType[]) {
+    this.filter = chosen;
+    writeFilter(local(), chosen);
+    const cur = this.current;
+    if (cur && !shows(chosen, typeOf(cur))) this.select(null, false);
+  }
+
+  /** A type put in the filter, or taken out. */
+  toggleType(type: InboxType) {
+    this.setFilter(toggle(this.filter, type));
+  }
 
   /** Reads the box again: what the core holds now. */
   async load() {
@@ -276,6 +353,7 @@ class Inbox {
     this.clear();
     this.loaded = false;
     this.scope = 'all';
+    this.filter = [];
     this.announce = null;
     this.known.clear();
   }

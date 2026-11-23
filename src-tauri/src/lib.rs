@@ -118,6 +118,8 @@ mod features;
 mod fence;
 #[cfg(test)]
 mod fence_tests;
+#[cfg(test)]
+mod fetch_tests;
 mod fileorigin;
 #[cfg(test)]
 mod fileorigin_tests;
@@ -129,6 +131,8 @@ mod folders;
 #[cfg(test)]
 mod folders_tests;
 mod forge;
+#[cfg(test)]
+mod forgotten_tests;
 mod fsedit;
 #[cfg(test)]
 mod gemini_tui_tests;
@@ -183,6 +187,9 @@ mod offers;
 mod onboarding;
 #[cfg(test)]
 mod opencode_tests;
+mod opening;
+#[cfg(test)]
+mod opening_tests;
 mod outside;
 mod overseer;
 mod overseer_core;
@@ -265,6 +272,7 @@ mod plugins_wasm_hosts_parity_tests;
 mod plugins_wasm_parity_tests;
 #[cfg(test)]
 use escouade_plugins::plugins_wasm_tests;
+mod offline;
 mod pragent;
 #[cfg(test)]
 mod pragent_tests;
@@ -277,6 +285,9 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod proxysecret;
+#[cfg(test)]
+mod proxysecret_tests;
 mod prread;
 #[cfg(test)]
 mod prread_tests;
@@ -288,6 +299,7 @@ mod prwrite;
 #[cfg(test)]
 mod prwrite_tests;
 mod pty;
+mod quarantine;
 mod repos;
 #[cfg(test)]
 mod repos_tests;
@@ -361,6 +373,7 @@ mod test_tmp;
 mod test_vars_tests;
 mod testlaunch;
 mod text;
+mod third_party;
 #[cfg(test)]
 mod ticket_accounts_tests;
 #[cfg(test)]
@@ -604,6 +617,15 @@ pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
 
 #[cfg(feature = "desktop")]
 pub fn run() {
+    // A debug build told `--sandbox-keychain …` takes back the keychain's entries of sandboxed runs, then stops: the
+    // end-to-end fixture's, at its start and its end (ESC-584). Before anything, which would touch the user's folders.
+    #[cfg(debug_assertions)]
+    if let Some((out, code)) = escouade_forge::integrations::sandbox_keychain::command(
+        &std::env::args().skip(1).collect::<Vec<_>>(),
+    ) {
+        println!("{out}");
+        std::process::exit(code);
+    }
     // Before GTK starts: the window's app_id and WM_CLASS, which find its icon (ESC-239).
     #[cfg(target_os = "linux")]
     desktop::name_the_program();

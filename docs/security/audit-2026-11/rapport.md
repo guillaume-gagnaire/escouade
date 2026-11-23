@@ -25,11 +25,11 @@ Escouade est une application de bureau (Windows, macOS, Linux) qui pilote des ag
 
 Il relève 18 constats. Les trois de gravité moyenne tiennent à ce que l'application laisse faire à l'utilisateur, ou à la façon dont l'éditeur travaille, pas à une faille à exploiter :
 
-1. **Plugins tiers** (SEC-01). « N'installer que des versions vérifiées » n'est allumé que pour une installation neuve, et ne juge que le store. Un plugin tiers peut décrire un harness, donc faire lancer un programme du poste hors du bac à sable ; la fenêtre d'installation montre la ligne de commande.
-2. **Projets privés** (SEC-02). Marquer un projet « privé » le cache aux agents des autres projets ; côté fichiers, c'est une consigne donnée aux harness, pas un cloisonnement du système. L'interface le dit.
-3. **Sceau « Vérifié par Escouade »** (SEC-03). Une seule clé, gardée sans mot de passe sur le poste de l'éditeur, et une revue faite par un agent. L'éditeur connaît ce point et garde ce fonctionnement.
+1. **Plugins tiers** (SEC-01). « N'installer que des versions vérifiées » n'est allumé que pour une installation neuve, et ne juge que le store. Un plugin tiers peut décrire un harness, donc faire lancer un programme du poste hors du bac à sable ; la fenêtre d'installation montre la ligne de commande. **Corrigé dans la 2.2.6** : le réglage vaut aussi pour les dossiers et les dépôts, s'allume à la mise à jour d'une installation sans plugin tiers, et le harness d'un tiers demande l'accord à son premier lancement, sa commande entière redite.
+2. **Projets privés** (SEC-02). Marquer un projet « privé » le cache aux agents des autres projets ; côté fichiers, c'est une consigne donnée aux harness, pas un cloisonnement du système. L'interface le dit. **Le point démontré (W-04) est fermé dans la 2.2.6** : tant qu'un projet privé existe sur le poste, le harness d'un plugin tiers n'est lancé dans aucun projet.
+3. **Sceau « Vérifié par Escouade »** (SEC-03). Une seule clé, gardée sans mot de passe sur le poste de l'éditeur, et une revue faite par un agent. **Corrigé dans Escouade 2.2.6** : les clés sont séparées par rôle, la clé sans mot de passe ne scelle plus que les plugins de l'éditeur, les tiers et la liste de révocation demandent une clé à mot de passe, et chaque sceau dit sa clé.
 
-Les quatorze constats faibles sont de la défense en profondeur : des gardes qui tiennent mais dont un bord reste ouvert, ou des plafonds qui manquent. Le dernier constat réunit des observations sans impact direct.
+Les quatorze constats faibles sont de la défense en profondeur : des gardes qui tiennent mais dont un bord reste ouvert, ou des plafonds qui manquent. Le dernier constat réunit des observations sans impact direct. **Corrigés dans la 2.2.6** : le jeton du serveur MCP ne passe plus sur une ligne de commande (SEC-07) ; le dossier de données est privé sous Unix, le service de secrets du bureau garde les secrets sous Linux, et le mot de passe du proxy va au trousseau (SEC-10) ; « Ne jamais sortir sans le proxy », allumé dès qu'un proxy est configuré, empêche les mises à jour de le contourner (SEC-14) ; les bords du réseau des plugins (SEC-09), la liste de révocation sans péremption (SEC-15) et, des observations (SEC-18), les noms réservés de Windows, les images du réseau local, un mode hors ligne et les points de la chaîne de publication.
 
 Une réserve : cet audit est interne, mené par un agent d'IA pour l'éditeur (section 2, « Limites »). Il dit l'état d'une version à une date ; il ne vaut pas pour les versions suivantes.
 
@@ -270,7 +270,7 @@ L'inventaire vient du code : toutes les adresses écrites dans les sources Rust 
 
 **Ce qui part par défaut**, sans geste : R1 (contrôle de mise à jour), R2 (catalogue du store), puis, dès qu'un projet et un compte existent, R3 (git fetch), R4 (quotas, par Claude Code), R5 (les harness) et R6. Aucun de ces flux ne porte de code vers l'éditeur d'Escouade. Le code de l'application ne nomme aucune adresse d'Anthropic : R4, R5, R6 et R15 sont des connexions de Claude Code.
 
-**Le proxy.** Réglages › Avancé › Réseau prend une adresse de proxy, une liste d'exclusions, un fichier d'autorités de certification, et l'option « Ignorer la vérification des certificats TLS ». Le proxy s'applique aux requêtes de l'application et aux harness (variables `HTTPS_PROXY`). Deux points à connaître : si le proxy configuré ne répond pas, le contrôle de mise à jour tente une fois une connexion directe (SEC-14) ; l'option sur les certificats, déconseillée, ne vaut que pour une connexion qui passe par le proxy (section 6.1).
+**Le proxy.** Réglages › Avancé › Réseau prend une adresse de proxy, une liste d'exclusions, un fichier d'autorités de certification, et l'option « Ignorer la vérification des certificats TLS ». Le proxy s'applique aux requêtes de l'application et aux harness (variables `HTTPS_PROXY`). Deux points à connaître : si le proxy configuré ne répond pas, le contrôle de mise à jour tente une fois une connexion directe (SEC-14, corrigé dans la 2.2.6 : plus jamais tant que « Ne jamais sortir sans le proxy » est allumé, ce qu'il est d'office avec un proxy) ; l'option sur les certificats, déconseillée, ne vaut que pour une connexion qui passe par le proxy (section 6.1).
 
 **Ce qui écoute.** Rien sur le réseau. Sur `127.0.0.1` : le serveur MCP (port entre 47000 et 47999, seulement si « Les agents peuvent piloter Escouade » est allumé) et le serveur de hooks (port libre, seulement quand une vue terminal d'un harness est ouverte).
 
@@ -297,28 +297,28 @@ Escouade ne chiffre pas ses données au repos : elle s'en remet au chiffrement d
 
 # 5. Les constats
 
-Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité et sa raison, l'état de la preuve, le composant et l'effort de correction, puis la description, la preuve, un scénario réaliste et la recommandation. Un constat que l'éditeur connaît et laisse en l'état le dit dans sa fiche (SEC-03).
+Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité et sa raison, l'état de la preuve, le composant et l'effort de correction, puis la description, la preuve, un scénario réaliste et la recommandation. Un constat corrigé depuis la version auditée le dit dans sa fiche, avec la version qui le corrige (SEC-01 et SEC-03, corrigés dans la 2.2.6).
 
 | Id | Titre | Gravité | État |
 | --- | --- | --- | --- |
-| SEC-01 | Plugins tiers : installables sans revue hors du store, et capables de faire lancer un programme | Moyenne | Démontré |
-| SEC-02 | « Projet privé » est une consigne, pas un cloisonnement | Moyenne | Démontré |
-| SEC-03 | Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent | Moyenne | Probable |
-| SEC-04 | Dépendances : des avis ouverts hors de l'application, sans délai de correction | Faible | Démontré |
-| SEC-05 | Politique de contenu : styles en ligne autorisés, directives manquantes | Faible | Démontré |
+| SEC-01 | Plugins tiers : installables sans revue hors du store, et capables de faire lancer un programme | Moyenne | Démontré ; corrigé dans la 2.2.6 |
+| SEC-02 | « Projet privé » est une consigne, pas un cloisonnement | Moyenne | Démontré ; W-04 fermé dans la 2.2.6, Windows natif à étudier |
+| SEC-03 | Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent | Moyenne | Probable · corrigé dans la 2.2.6 |
+| SEC-04 | Dépendances : des avis ouverts hors de l'application, sans délai de correction | Faible | Démontré ; corrigé dans la 2.2.6 |
+| SEC-05 | Politique de contenu : styles en ligne autorisés, directives manquantes | Faible | Démontré ; corrigé dans la 2.2.6 |
 | SEC-06 | Lancement décrit par un plugin : un fichier écrit à travers un lien | Faible | Démontré |
-| SEC-07 | Le jeton du serveur MCP passe en argument et reste en clair chez les harness | Faible | Probable |
+| SEC-07 | Le jeton du serveur MCP passe en argument et reste en clair chez les harness | Faible | Probable ; corrigé dans la 2.2.6 |
 | SEC-08 | Flux d'un harness : une longueur annoncée suffit à arrêter l'application | Faible | Démontré |
-| SEC-09 | Réseau des plugins : trois angles morts | Faible | Démontré |
-| SEC-10 | Données au repos : pas de trousseau sous Linux, dossier lisible sous Unix | Faible | Probable |
+| SEC-09 | Réseau des plugins : trois angles morts | Faible | Démontré ; corrigé dans la 2.2.6 |
+| SEC-10 | Données au repos : pas de trousseau sous Linux, dossier lisible sous Unix | Faible | Probable ; corrigé dans la 2.2.6 |
 | SEC-11 | La sortie d'un plugin n'est pas plafonnée pendant un tour | Faible | Démontré |
-| SEC-12 | Fenêtre principale : des droits très larges si un script y entrait | Faible | Probable |
+| SEC-12 | Fenêtre principale : des droits très larges si un script y entrait | Faible | Probable ; ouverture bornée dans la 2.2.6, commandes à découper |
 | SEC-13 | Des variables d'environnement de test restent actives en version publiée | Faible | Probable |
-| SEC-14 | Mises à jour : le proxy est contourné s'il ne répond pas | Faible | Probable |
-| SEC-15 | Liste de révocation des plugins : pas de date de péremption | Faible | Théorique |
-| SEC-16 | Site de l'éditeur sans en-têtes de sécurité | Faible | Démontré |
+| SEC-14 | Mises à jour : le proxy est contourné s'il ne répond pas | Faible | Probable ; corrigé dans la 2.2.6 |
+| SEC-15 | Liste de révocation des plugins : pas de date de péremption | Faible | Théorique ; corrigé dans la 2.2.6 |
+| SEC-16 | Site de l'éditeur sans en-têtes de sécurité | Faible | Démontré ; empreintes des installateurs publiées dans la 2.2.6 |
 | SEC-17 | Serveurs locaux : un programme du poste peut les ralentir | Faible | Démontré |
-| SEC-18 | Observations diverses | Info | Observé |
+| SEC-18 | Observations diverses | Info | Observé ; en partie corrigé dans la 2.2.6 |
 
 ## SEC-01 — Plugins tiers : installables sans revue hors du store, et capables de faire lancer un programme
 
@@ -328,6 +328,7 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 | État | Démontré pour la portée du réglage (essai B-15) et pour la liste de refus (test W-25) ; probable pour le reste (lu) |
 | Composant | Installation des plugins ; harness décrits par un manifeste |
 | Effort de correction | Moyen |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Trois faits, à lire ensemble.
 
@@ -339,9 +340,17 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 
 **Scénario.** Un collègue ou une page web recommande un plugin « harness pour l'outil X », à installer depuis son dépôt. Son manifeste déclare le programme `npx` et, comme arguments, un paquet à télécharger et à exécuter. L'utilisateur voit la ligne, ne la lit pas, accepte. Le paquet tourne avec ses droits au premier agent lancé sur ce harness.
 
-**Ce qui atténue.** Rien ne s'installe sans le geste de l'utilisateur, et la fenêtre montre la ligne. La commande qui lit la version d'un harness décrit ne tourne ni à l'installation ni à chaque liste des harness : elle attend le démarrage d'un agent ou d'un terminal de ce harness (`src-tauri/src/plugins/harness.rs:1446`, `src-tauri/src/engine/registry.rs:413-430`). Un harness tiers n'entre dans un projet privé qu'activé par l'utilisateur pour ce projet (SEC-02). Les plugins de l'éditeur, livrés avec l'application, sont signés.
+**Ce qui atténue.** Rien ne s'installe sans le geste de l'utilisateur, et la fenêtre montre la ligne. La commande qui lit la version d'un harness décrit ne tourne ni à l'installation ni à chaque liste des harness : elle attend le démarrage d'un agent ou d'un terminal de ce harness (`src-tauri/src/plugins/harness.rs:1446`, `src-tauri/src/engine/registry.rs:413-430`). Un harness tiers n'entre dans un projet privé qu'activé par l'utilisateur pour ce projet (SEC-02) ; depuis la 2.2.6, il n'est lancé dans aucun projet tant qu'un projet privé existe. Les plugins de l'éditeur, livrés avec l'application, sont signés.
 
 **Recommandation.** Pour un poste d'entreprise : allumer « N'installer que des versions vérifiées », et n'installer aucun plugin tiers, d'aucune provenance. Pour le produit : étendre le réglage aux dossiers et aux dépôts, ou dire sa portée dans son libellé ; l'allumer à la mise à jour d'une installation qui n'a aucun plugin tiers ; pour un harness décrit par un tiers, remplacer la liste de refus par un accord demandé au premier lancement, qui redise la ligne de commande.
+
+**Correction (Escouade 2.2.6).** Les trois points de la recommandation sont faits.
+
+1. « N'installer que des versions vérifiées » vaut aussi pour un dossier et un dépôt git : réglage allumé, l'un d'eux n'est accepté que s'il est une version vérifiée du store, de même identifiant, de même version et aux mêmes fichiers ; sinon il est refusé, avec sa raison et le geste qui l'autorise. Le chargement « en développement » reste un geste à part, dit comme tel dans sa fenêtre.
+2. La mise à jour allume le réglage pour une installation qui n'a aucun plugin tiers installé, une fois ; une installation qui en a un garde son choix.
+3. Le harness qu'un plugin tiers décrit demande l'accord de l'utilisateur à son premier lancement, sa ligne de commande entière redite : programme trouvé, arguments, variables ajoutées et retirées. L'accord est gardé par l'empreinte de cette ligne : une mise à jour qui la change le redemande, et un lancement que le plugin décrirait autrement est refusé. Refusé, l'agent ne démarre pas. Un réglage « Harness des plugins tiers : Refuser » n'en lance aucun. La liste de refus reste un premier filtre du manifeste.
+
+Le scénario `npx un-paquet` ne lance plus rien sans cet accord : c'est un test du projet.
 
 ## SEC-02 — « Projet privé » est une consigne, pas un cloisonnement
 
@@ -351,6 +360,7 @@ Dix-huit constats, du plus grave au moins grave. Chaque fiche donne la gravité 
 | État | Démontré pour le contrôle des lancements (test W-04) ; probable pour le reste (lu) |
 | Composant | `src-tauri/src/fence.rs`, `src-tauri/src/plugins/harness.rs` |
 | Effort de correction | Élevé pour un vrai cloisonnement |
+| Correction | **En partie dans Escouade 2.2.6** — le point 2 (W-04), fermé pour tous les projets (voir « Correction » en fin de fiche) |
 
 **Description.** Marquer un projet « privé » cache ce projet aux agents des autres projets. Côté serveur MCP, c'est tenu par le cœur. Côté fichiers, la « clôture » est une liste de chemins passée au harness comme règles de refus. Trois limites :
 
@@ -376,6 +386,8 @@ Test W-04 : un lancement qui pose le chemin protégé dans une variable sans eff
 
 **Recommandation.** Pour un poste d'entreprise : un poste, ou un compte du système, par ensemble de projets à séparer. Pour le produit : pour un plugin tiers, remplacer la recherche d'une sous-chaîne par une preuve vérifiable, ou refuser le lancement dans un projet privé ; à terme, un bac à sable du système sous Windows.
 
+**Correction (Escouade 2.2.6), en partie.** Le harness d'un plugin tiers (ni le plugin qui le sert ni celui qui le décrit n'est `dev.escouade.*`) n'est plus lancé dans un projet privé, qu'il y soit activé ou non : le cœur le refuse pour le projet, puis au lancement même, avant de lire sa description, et le dit (« Un harness d'un plugin tiers ne peut pas garantir la clôture d'un projet privé »). Un agent tiers déjà actif quand son projet devient privé s'arrête, au repos aussitôt, au travail à la fin de son tour. Le lancement de W-04 ne démarre donc plus un agent d'un projet privé. Puis, toujours dans la 2.2.6, pour un agent d'un projet **non** privé : tant qu'un projet privé existe sur le poste, le harness d'un plugin tiers n'est lancé dans **aucun** projet, puisque sa clôture, qui tient les dossiers des projets privés hors de sa portée, ne se jugeait que par la recherche d'une sous-chaîne. Le refus le dit (« Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture, … n’est lancé dans aucun projet »). Rendre un projet privé, ou en ajouter un, arrête les agents tiers de tous les projets ; quand plus aucun projet n'est privé, ces harness redeviennent permis. Le lancement de W-04 ne démarre donc plus pour aucun agent tant qu'il y a une clôture à tenir : **W-04 est fermé**. Restent ouverts : le point 1 (Windows natif, dont un vrai cloisonnement fait l’objet d’une étude à part) et le point 3. Les harness de première main gardent leur clôture telle que décrite plus haut.
+
 ## SEC-03 — Sceau « Vérifié par Escouade » : une seule clé, sans mot de passe, et une revue par un agent
 
 | | |
@@ -384,7 +396,7 @@ Test W-04 : un lancement qui pose le chemin protégé dans une variable sans eff
 | État | Probable — la pratique est lue dans la documentation et l'outillage du dépôt, et précisée par l'éditeur ; la portée de la clé est vérifiée dans le code ; le dossier des clés n'a pas été lu, par consigne |
 | Composant | Revue et signature des plugins du store |
 | Effort de correction | Moyen |
-| Position de l'éditeur | **Accepté** — l'éditeur connaît ce point, garde ce fonctionnement et le dit |
+| Position de l'éditeur | **Corrigé dans Escouade 2.2.6** — accepté à la date de l'audit, puis corrigé : voir « La correction », en fin de fiche |
 
 **Description.** Une version de plugin « vérifiée » porte une signature minisign que l'application contrôle avec deux clés publiques embarquées : la clé de tous les jours et une clé de secours. Le modèle de menace du store décrit la clé secrète comme « chiffrée par mot de passe, hors ligne en dehors des signatures ». En pratique, la clé de tous les jours est gardée sans mot de passe sur le poste de l'éditeur, pour qu'un agent automatisé signe seul les plugins de première main. La revue qui précède cette signature est faite, elle aussi, par un agent d'IA.
 
@@ -434,6 +446,15 @@ Et une raison de ne pas la monter : l'exploitation demande toujours trois condit
 
 **Recommandation.** Rendre l'engagement vérifiable : une clé distincte et protégée pour les tiers, la clé de la première main limitée par le code à `dev.escouade.*`, la liste de révocation signée par une clé protégée. Tenir toute clé hors de portée des agents qui lisent du contenu tiers. Faire relire par un humain toute version avant signature, ou dire sur la page du plugin que la revue est automatisée. Aligner `docs/STORE.md` (§4.5 et §7) sur la pratique. Pour un poste d'entreprise : s'en tenir aux plugins de première main livrés avec l'application.
 
+**La correction (Escouade 2.2.6).** Ce qui était annoncé est devenu un contrôle, dans le code, et se vérifie aux trois points que la fiche donnait :
+
+1. **Une clé par rôle, la première main bornée par le code.** L'application connaît ses clés publiques par leur rôle (`STORE_KEYS`, `crates/escouade-plugins/src/store_keys.rs`) : la clé de la première main (la clé de tous les jours d'avant, E0516468FFDCBDD5) ne scelle que `dev.escouade.*` ; une clé distincte, à mot de passe, scelle les plugins tiers et signe la liste de révocation ; la clé de secours vaut pour tout. Un sceau hors de son rôle est refusé, avec sa raison, à l'installation, à la mise à jour, à l'amorce et à chaque lecture d'un plugin installé ; des tests le montrent (`store_keys_tests.rs`). Le store et l'outillage appliquent les mêmes rôles, tirés du nom des fichiers de `store/keys/`, et refusent de prendre ou d'envoyer une signature hors de son rôle.
+2. **La liste de révocation** ne se signe plus par la clé sans mot de passe : seule la liste qu'elle avait signée avant (nº 1, vide), désignée par l'empreinte de ses octets, tient encore. Les 119 sceaux publiés à la date de la correction, tous `dev.escouade.*`, restent valides.
+3. **Chaque sceau dit sa clé** : son identifiant et son rôle sont au catalogue du store, sur la page du plugin (qui dit aussi que la revue est faite par un agent d'IA, puis signée) et dans la vue Plugins de l'application.
+4. **L'outillage** choisit la clé selon l'identifiant ou le rôle, refuse une clé des tiers ou de la révocation sans mot de passe, et laisse minisign demander ce mot de passe à chaque signature, sans le lire ni le garder. `docs/STORE.md` (§4.5, §4.6, §7) dit la pratique réelle : qui revoit, qui signe, avec quelle clé.
+
+Ce qui reste : la clé de la première main est toujours sans mot de passe, sur le poste de l'éditeur, pour que le chef d'escouade signe seul ses propres plugins après sa revue ; le pire cas d'un vol, une version forgée de la première main, demande toujours de la faire servir et un clic de mise à jour. La clé des tiers et de la révocation est créée par l'éditeur sur son poste ; tant qu'elle n'est pas embarquée, un plugin tiers et une nouvelle liste ne se signent que par la clé de secours. Une application antérieure à la 2.2.6 ne connaît pas ces rôles.
+
 ## SEC-04 — Dépendances : des avis ouverts hors de l'application, sans délai de correction
 
 | | |
@@ -442,6 +463,7 @@ Et une raison de ne pas la monter : l'exploitation demande toujours trois condit
 | État | Démontré — outils lancés pendant l'audit, sorties en annexes A et B |
 | Composant | `deny.toml`, `.github/workflows/advisories.yml`, dépendances du store et du site |
 | Effort de correction | Faible |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Les avis de sécurité des dépendances sont contrôlés en CI : `cargo deny check advisories` (application, plugins) et `npm audit --omit=dev` (application, store, site), à chaque pull request, à chaque poussée sur `main` et sur les branches de publication, et chaque nuit (`.github/workflows/advisories.yml:13`, `:47`, `:76`). Dependabot propose les mises à jour, groupées, chaque mois (`.github/dependabot.yml:7-87`). Pour l'application, le contrôle est bloquant, et aucun avis n'y est atteignable. Trois points restent.
 
@@ -464,6 +486,12 @@ Et une raison de ne pas la monter : l'exploitation demande toujours trois condit
 
 **Recommandation.** Récrire la raison des quatre avis écartés. Écrire un délai cible de correction (7 jours pour un avis élevé), et rendre bloquants en CI les avis élevés du store et du site.
 
+**Correction (Escouade 2.2.6).** Les trois points de la recommandation sont faits.
+
+1. La raison des quatre avis `zip` écartés dit ce qui porte la version visée : `zip` 4.6.1 ne vient que du module de mise à jour, sous Windows, qui n'ouvre une archive qu'une fois sa signature vérifiée, et la mise à jour de Windows est un installateur ; le code de l'application emploie `zip` 9 (`deny.toml`, `docs/SECURITY-DEPENDENCIES.md`). Il n'y a pas de pendant npm : aucun avis npm n'est écarté.
+2. Le délai cible est écrit (`docs/SECURITY-DEPENDENCIES.md`, « Délais de correction ») : 7 jours pour un avis élevé ou critique, partout. Pour l'application, tout avis rend la CI rouge jusqu'à ce qu'il soit corrigé ou écarté avec sa raison ; pour le store et le site, un avis moyen part avec la mise à jour mensuelle qui le ferme.
+3. `npm audit` du store et du site échoue sur un avis élevé ou critique (`--audit-level=high`) ; les avis faibles et moyens restent dits dans le run. Celui de l'application échoue sur tout avis, comme avant. Essayé sur une branche locale : un avis élevé ajouté au store fait échouer la commande du job, les seuls avis moyens d'aujourd'hui la laissent passer.
+
 ## SEC-05 — Politique de contenu : styles en ligne autorisés, directives manquantes
 
 | | |
@@ -472,6 +500,7 @@ Et une raison de ne pas la monter : l'exploitation demande toujours trois condit
 | État | Démontré — essai B-07 |
 | Composant | `src-tauri/tauri.conf.json:32` |
 | Effort de correction | Moyen (les styles en ligne viennent de l'interface elle-même) |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** La politique de contenu de la fenêtre bloque les scripts en ligne, `eval`, les scripts et les connexions vers l'extérieur, les images et cadres distants : quinze tentatives bloquées à l'essai. Elle autorise en revanche les styles en ligne (`style-src 'unsafe-inline'`), et ne fixe ni `form-action`, ni `base-uri`, ni `frame-ancestors`.
 
@@ -488,6 +517,13 @@ Essai B-07 : les quinze tentatives de script, de connexion et de chargement sont
 **Scénario.** Si un contenu tiers parvenait à injecter du HTML, il ne pourrait pas exécuter de script, mais pourrait redessiner l'interface : recouvrir un bouton « Refuser » par un faux « Autoriser », par exemple.
 
 **Recommandation.** Ajouter `form-action 'none'`, `base-uri 'none'`, `object-src 'none'`, `frame-ancestors 'none'`. Viser la suppression de `'unsafe-inline'` pour les styles (styles par classes, ou empreintes).
+
+**Correction (Escouade 2.2.6).** Les deux points de la recommandation sont faits.
+
+1. La politique fixe `object-src 'none'`, `base-uri 'none'`, `form-action 'none'` et `frame-ancestors 'none'`.
+2. Une balise `<style>` ne s'applique plus qu'avec le nonce que Tauri donne à la page à chaque chargement : `style-src 'self' 'nonce-…'`, sans `'unsafe-inline'`. Les balises que l'interface crée elle-même (celles du terminal, de l'éditeur, du thème d'un plugin) reçoivent ce nonce à leur création. Une balise qu'un texte injecté apporterait n'en a pas, et ne s'applique pas. Les attributs `style`, qu'écrit le framework de l'interface, restent permis par `style-src-attr 'unsafe-inline'`.
+
+Cela vaut pour la fenêtre principale et pour la barre des fenêtres « Pages », qui est la même page. La vue d'un plugin est dessinée dans la fenêtre principale. La page d'un lancement est celle de l'application développée, sous sa propre politique. Un test de bout en bout lit la politique réelle de la fenêtre et vérifie qu'une balise `<style>` injectée sans nonce ne s'applique pas. Le scénario « recouvrir un bouton Refuser » ne passe plus par une balise de style. Il ne passe pas non plus par un attribut : l'assainissement retire déjà l'attribut `style` des messages.
 
 ## SEC-06 — Lancement décrit par un plugin : un fichier écrit à travers un lien
 
@@ -514,6 +550,7 @@ Essai B-07 : les quinze tentatives de script, de connexion et de chargement sont
 | État | Probable — lu dans le code ; un test du projet affirme la ligne de commande |
 | Composant | Déclaration du serveur MCP dans les harness |
 | Effort de correction | Moyen (dépend de ce que chaque harness accepte) |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Pour que Claude Code, dans un terminal, pilote Escouade, l'application déclare son serveur dans la configuration du harness. Elle le fait par la commande `claude mcp add … --header "Authorization: Bearer <jeton>"` : le jeton est un argument de processus, lisible par les autres programmes de l'utilisateur et, sous Unix, par tous les comptes de la machine pendant l'exécution. Il est ensuite écrit en clair dans le fichier de configuration du harness, alors que l'application le garde elle-même au trousseau.
 
@@ -524,6 +561,14 @@ Essai B-07 : les quinze tentatives de script, de connexion et de chargement sont
 **Ce qui atténue.** Le serveur est éteint par défaut. Éteindre l'option change le jeton à l'instant (`src-tauri/src/mcp/mod.rs:267-280`). Les jetons des agents, eux, ne passent ni par un argument ni par un fichier durable : celui d'un agent est retiré des fichiers de son interface quand elle se ferme (`src-tauri/src/tui.rs:782-810`). Copilot CLI reçoit le jeton par un fichier privé, pas dans une variable d'environnement dont ses commandes hériteraient (`plugins/copilot/src/terminal.rs:230-236`).
 
 **Recommandation.** Écrire l'entrée directement dans le fichier de configuration du harness plutôt que par la ligne de commande. Quand le harness le permet, référencer une variable d'environnement plutôt que le jeton. Documenter que tout programme du poste qui lit ce fichier pilote Escouade.
+
+**Correction (Escouade 2.2.6).**
+
+1. Escouade écrit elle-même l'entrée de Claude Code dans le `.claude.json` du compte, comme `claude mcp add --scope user --transport http` l'écrirait, en JSON strict et le reste du fichier gardé, comme elle le faisait déjà pour Codex, OpenCode et Copilot CLI. Aucun programme n'est plus lancé pour déclarer le serveur : le jeton n'est l'argument d'aucun process. La déclaration à la main est l'entrée à coller, plus une commande.
+2. Une variable d'environnement : chaque harness de la première main sait en nommer une (Claude Code `${VAR}` dans un en-tête, Codex `bearer_token_env_var`, OpenCode `{env:VAR}`, Copilot CLI `${VAR}`). Escouade s'en sert pour ce qu'elle lance : les hooks de la vue Claude Code, le terminal d'un agent Codex ; ses agents reçoivent leur jeton par un fichier privé effacé à leur arrêt. L'entrée de l'utilisateur, elle, sert un harness lancé hors d'Escouade, où aucune variable d'Escouade n'est posée : une variable n'y ouvrirait rien, le jeton y reste écrit, dans un fichier lisible de son seul propriétaire.
+3. La note de « Les agents peuvent piloter Escouade » dit que le jeton est écrit en clair dans ces fichiers et que tout programme qui les lit peut piloter Escouade.
+
+L'entrée écrite sans process lancé est un test du projet.
 
 ## SEC-08 — Flux d'un harness : une longueur annoncée suffit à arrêter l'application
 
@@ -560,6 +605,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Démontré — tests W-11 et W-12 ; un test du projet pour le proxy |
 | Composant | `crates/escouade-plugins/src/wasm.rs` (`net/fetch`, `net/stream`, sockets) |
 | Effort de correction | Faible à moyen |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Un plugin ne joint que les hôtes de sa permission `network`, en https, sans adresse écrite, sans redirection suivie, et jamais une adresse de la machine ou du réseau local : c'est jugé sur les adresses que le nom résout, à la connexion même, ce qui tient contre le DNS rebinding (essais W-09 et W-10). Trois angles morts :
 
@@ -573,6 +619,14 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 
 **Recommandation.** Refuser à la lecture du manifeste un hôte sans point ou un suffixe public. Derrière un proxy, dire à l'installation que les adresses ne sont plus contrôlées, ou résoudre le nom localement en plus pour refuser les adresses privées.
 
+**Correction (Escouade 2.2.6).** Les trois angles morts sont fermés.
+
+1. Les deux lecteurs du manifeste (l'application et le store) refusent un hôte de `permissions.network` sans point, ou qui est un suffixe public de la section ICANN de la liste des suffixes publics, embarquée (`com`, `co.uk`), seul ou après `*.`. Un suffixe de la section privée, qui appartient à une seule entreprise, reste permis. L'hôte de l'application ne couvre aucun de ces mots, même d'un manifeste lu avant.
+2. Derrière un proxy, le nom est aussi résolu sur le poste, pour `net/fetch`, `net/stream` et les sockets : une adresse de la machine ou du réseau local refuse l'appel avant que le proxy soit sollicité. Un nom que le poste ne résout pas reste jugé par le seul proxy, et le journal le dit.
+3. Une adresse 6to4 est jugée par l'IPv4 qu'elle porte, une adresse Teredo par celles de son serveur et de l'hôte qu'elle désigne.
+
+Les tests W-11 et W-12 de l'annexe constatent maintenant ces refus ; des tests du projet couvrent le proxy.
+
 ## SEC-10 — Données au repos : pas de trousseau sous Linux, dossier lisible sous Unix
 
 | | |
@@ -581,6 +635,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Probable — lu dans le code ; Linux et macOS n'ont pas été essayés |
 | Composant | `crates/escouade-forge/src/integrations/secrets.rs`, `src-tauri/src/paths.rs` |
 | Effort de correction | Moyen |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Sous Windows et macOS, les jetons vont au trousseau du système. Sous Linux, l'application n'utilise aucun trousseau : les jetons restent dans un fichier du dossier de données, lisible par son propriétaire seul. Par ailleurs, seuls les fichiers qui tiennent un secret sont créés en mode privé. Le dossier de données et les conversations suivent le masque par défaut du système : sur une machine Unix partagée, un autre compte peut lire les conversations, donc des extraits du code des projets. Enfin, l'adresse du proxy, mot de passe compris si l'utilisateur l'y a mis, est écrite en clair dans les réglages et passée en variable aux agents.
 
@@ -589,6 +644,14 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Scénario.** Sur une machine de développement Linux partagée, un autre utilisateur parcourt le dossier de données de la victime et lit les conversations de ses agents.
 
 **Recommandation.** Créer le dossier de données en mode 0700. Sous Linux, utiliser le service de secrets du bureau quand il existe. Garder le mot de passe du proxy au trousseau.
+
+**Correction (Escouade 2.2.6).** Les trois points de la recommandation sont faits.
+
+1. Sous Unix, le dossier de données et ses conversations sont créés en mode 0700, et le dossier est remis en 0700 à chaque démarrage : celui qu'une version d'avant a créé selon le masque du système est réparé.
+2. Sous Linux, les secrets vont au service de secrets du bureau (GNOME Keyring, KWallet) quand il répond au démarrage, par D-Bus. Sans lui (WSL, un serveur, pas de bus de session), le repli d'avant, que la fenêtre dit : un fichier lisible de son seul propriétaire.
+3. Le mot de passe du proxy va au trousseau. Les réglages et la fenêtre n'ont plus que l'adresse sans lui ; il n'est remis dans l'adresse qu'en mémoire, pour les connexions et les variables des agents. Au démarrage, une adresse écrite avec son mot de passe par une version d'avant le donne au trousseau, et le fichier est réécrit sans lui. Sans trousseau, il reste dans le fichier des réglages, à part de l'adresse.
+
+Les trois sont des tests du projet (le mode 0700 sous Unix, joué par la CI Linux et macOS).
 
 ## SEC-11 — La sortie d'un plugin n'est pas plafonnée pendant un tour
 
@@ -615,6 +678,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Probable — lu dans la configuration |
 | Composant | `src-tauri/capabilities/default.json`, `src-tauri/src/lib.rs:650-999` |
 | Effort de correction | Moyen |
+| Correction | **Ouverture par le système bornée dans Escouade 2.2.6** ; le découpage des commandes reste à faire (voir « Correction » en fin de fiche) |
 
 **Description.** La fenêtre principale peut appeler 348 commandes du cœur, sans découpage : terminaux, fichiers, git, plugins, réglages. Elle peut aussi demander au système d'ouvrir n'importe quel chemin du disque avec son programme par défaut. C'est normal pour l'interface d'un outil de développement, mais cela veut dire qu'une seule exécution de script dans la fenêtre vaudrait un contrôle complet du poste. Toute la sécurité de cette frontière repose sur l'assainissement du contenu et la politique de contenu.
 
@@ -631,6 +695,11 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Ce qui tient.** La page de l'application en cours de développement s'affiche dans une webview à part, à laquelle aucune commande ne répond (`src-tauri/src/windowthread.rs:224-231`, et la capacité ne nomme que la fenêtre principale). Les outils de développement de la fenêtre sont fermés dans une version publiée (`src-tauri/src/lib.rs:412`).
 
 **Recommandation.** Restreindre `opener:allow-open-path` aux dossiers des projets et au dossier de données. Activer le mode d'isolation de Tauri, ou découper les commandes par capacité, pour qu'un script injecté n'ait pas tout d'un coup.
+
+**Correction (Escouade 2.2.6).** Le premier point est fait ; le second reste ouvert.
+
+1. La fenêtre n'a plus la permission `opener:allow-open-path` : elle ne peut plus demander au système d'ouvrir un chemin sans passer par le cœur. Chaque ouverture d'un chemin par le système passe par une seule garde du cœur : un fichier dans son programme, un dossier dans le gestionnaire de fichiers, un élément montré dans son dossier. La garde ne laisse passer que ce qui est dans le dossier de données, le dossier d'un projet, le dossier de ses nouveaux worktrees, ou le dossier et le worktree de l'un de ses agents. Elle juge le chemin là où il mène vraiment : un lien, une jonction, `..` et un chemin `\\?\…` sont résolus avant. Un chemin réseau hors de ces dossiers est refusé sans que le disque soit interrogé, et un périphérique de Windows n'est jamais ouvert. Hors de ces dossiers, le refus est dit à l'utilisateur, avec sa raison. La fenêtre ne fait jamais ouvrir un programme ou un script, pas même dans un projet : l'exécutable déposé par un agent du scénario n'est plus ouvert. Ce sont des tests du projet.
+2. **Les commandes restent d'un bloc.** La fenêtre principale peut toujours appeler toutes les commandes du cœur, dont celle qui ouvre un terminal. Leur découpage par capacité est à reprendre avec l'application mobile, qui appellera les mêmes commandes. Ce découpage reste la défense à poser ; d'ici là, cette frontière repose toujours sur l'assainissement et sur la politique de contenu (SEC-05, corrigé).
 
 ## SEC-13 — Des variables d'environnement de test restent actives en version publiée
 
@@ -657,6 +726,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Probable — lu dans le code |
 | Composant | `src-tauri/src/updates.rs:858-883`, `crates/escouade-updates/src/net.rs:9-12` |
 | Effort de correction | Faible |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** Si le proxy des réglages est injoignable (connexion refusée, délai, nom inconnu), le contrôle de mise à jour et le téléchargement tentent une fois une connexion directe. Un proxy qui **répond** par un refus n'est jamais contourné : le code le dit et s'y tient. Dans une entreprise où toute sortie doit passer par le proxy, la tentative directe est un écart, même si le pare-feu la bloquera.
 
@@ -668,6 +738,8 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 
 **Recommandation.** Un réglage « ne jamais sortir sans le proxy », allumé d'office quand un proxy est configuré.
 
+**Correction (Escouade 2.2.6).** Réglages › Avancé › Réseau a « Ne jamais sortir sans le proxy », allumé d'office dès qu'un proxy est configuré, tant que l'utilisateur ne l'éteint pas. Allumé, un contrôle ou un téléchargement de mise à jour dont le proxy ne répond pas échoue avec sa raison (« rien n'est tenté sans le proxy : « Ne jamais sortir sans le proxy » est allumé »), sans tentative directe. C'est une clé simple des réglages, qu'un poste géré pourra imposer avec la liste des politiques de la 2.3. Le scénario d'un proxy injoignable, au contrôle comme au téléchargement, est un test du projet : rien n'atteint le serveur en direct.
+
 ## SEC-15 — Liste de révocation des plugins : pas de date de péremption
 
 | | |
@@ -676,6 +748,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Théorique — lu dans le code |
 | Composant | `crates/escouade-plugins/src/store.rs:308-335` |
 | Effort de correction | Faible |
+| Correction | **Corrigé dans Escouade 2.2.6** (voir « Correction » en fin de fiche) |
 
 **Description.** La liste qui retire un plugin ou une clé est signée et numérotée : une liste plus ancienne est refusée, une liste non signée aussi (essais W-13, W-20). Mais elle n'a pas de date limite. Qui peut empêcher l'application de recevoir la nouvelle liste (le store compromis, ou un attaquant sur le réseau) maintient l'ancienne en vigueur sans limite de temps, et l'application ne le signale pas.
 
@@ -687,6 +760,14 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 
 **Recommandation.** Dater la liste, la republier régulièrement même inchangée, et avertir quand la dernière liste reçue a plus de quelques jours.
 
+**Correction (Escouade 2.2.6).**
+
+1. La liste est datée, et sa date est dans ce qui est signé, avec son numéro.
+2. Chaque semaine, le workflow qui copie la liste sur le site de l'éditeur la republie même inchangée : une clé de fraîcheur, à part, signe « la liste nº N, d'empreinte X, vaut encore à telle date ». Cette clé ne signe jamais une liste : volée, elle ne peut que prolonger une liste que l'éditeur a signée, jamais retirer ni rétablir un plugin. L'application refuse une attestation qui nomme une autre liste que celle qu'elle tient.
+3. Quand la liste tenue vaut depuis plus de 7 jours, l'application le dit, discrètement, à côté de l'état de la liste.
+
+Tant que l'éditeur n'a pas créé la clé de fraîcheur, l'application prend une liste sans attestation comme avant, et l'avertissement porte sur l'âge de la dernière lecture réussie : il dit alors un store injoignable depuis plus de 7 jours, pas une ancienne liste resservie.
+
 ## SEC-16 — Site de l'éditeur sans en-têtes de sécurité
 
 | | |
@@ -695,6 +776,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Démontré — requêtes en lecture seule, annexe D (N-01 à N-06) |
 | Composant | `website/nginx.conf`, hébergement du site |
 | Effort de correction | Faible |
+| Correction | **En partie dans Escouade 2.2.6** — les empreintes des installateurs (voir « Correction » en fin de fiche) |
 
 **Description.** Le store de plugins répond avec un jeu complet d'en-têtes : politique de contenu à nonce, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, politiques d'origine croisée, aucun en-tête CORS pour une origine étrangère, TLS 1.0 et 1.1 refusés. Le site de l'éditeur, lui, n'envoie **aucun** de ces en-têtes et annonce la version de son serveur. Sans HSTS, une première visite en `http` peut être détournée avant la redirection. Le store annonce aussi son cadriciel (`X-Powered-By`).
 
@@ -703,6 +785,8 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Scénario.** Sur un réseau hostile, un utilisateur qui tape l'adresse du site sans `https://` est redirigé vers une copie qui propose un installateur piégé. La signature du système d'exploitation est alors le dernier rempart.
 
 **Recommandation.** Ajouter HSTS, une politique de contenu, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, et masquer la version du serveur. Publier les empreintes des installateurs.
+
+**Correction (Escouade 2.2.6), en partie.** Chaque release publie `SHA256SUMS.txt`, l'empreinte SHA-256 de chaque installateur et de chaque paquet, calculée sur les fichiers de la release une fois les trois constructions faites, avant sa publication, et relue par `sha256sum -c` dans le même job (`.github/workflows/release.yml`, « SHA-256 of the installers »). Les notes de la release et la page Installation du site (« Vérifier le téléchargement ») disent comment comparer l'empreinte d'un fichier, système par système, et rappellent l'attestation de provenance. Les en-têtes du site restent à poser.
 
 ## SEC-17 — Serveurs locaux : un programme du poste peut les ralentir
 
@@ -729,6 +813,7 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 | État | Observé pendant les essais |
 | Composant | Divers |
 | Effort de correction | Faible, au cas par cas |
+| Correction | **En partie dans Escouade 2.2.6** — les noms réservés de Windows, les images du réseau local, un mode hors ligne, la fonction `testing`, le cache des modules précompilés, les secrets Apple et trois variables lues par une version publiée (voir « Correction » en fin de fiche) |
 
 - **Noms réservés de Windows.** Par `fs/write`, un plugin peut créer dans le dossier de son agent un fichier nommé `NUL`, `CON` ou `COM1`. Le fichier reste dans le dossier permis, mais les outils courants de Windows ne savent ni l'ouvrir ni le supprimer (test W-08).
 - **Image d'un chemin local.** Un message d'agent peut faire afficher une image située hors du projet, si l'utilisateur peut la lire. Seules les images sont lues, et rien ne sort du poste (essai B-08).
@@ -746,6 +831,18 @@ La même faiblesse a un second endroit, lu dans le code : quand un plugin lit un
 **Scénario.** Aucun scénario d'attaque direct : ce sont des points de comportement à connaître avant de régler un pare-feu et des postes.
 
 **Recommandation.** Écarter les noms réservés de Windows dans `fs/*` et dans le lecteur d'archives. Refuser les adresses du réseau local au téléchargement d'une image distante. Ajouter un réglage « mode hors ligne » qui coupe d'un geste les quatre flux périodiques. Contrôler en CI que la fonction `testing` n'est sur aucune crate d'une construction de publication. Garder l'empreinte de chaque module précompilé avec celle du module, et recompiler quand elle ne concorde pas. Donner les secrets Apple à la seule étape qui signe, comme les autres.
+
+**Correction (Escouade 2.2.6), en partie.** Chaque point de la recommandation est fait ; trois observations restent en l'état, faute de correction à faire.
+
+- **Les noms réservés de Windows** (`CON`, `PRN`, `AUX`, `NUL`, `COM1` à `COM9`, `LPT1` à `LPT9`, en toute casse, avec ou sans extension) sont refusés par les méthodes `fs/*` des plugins et par la lecture de leur dossier, sous tous les systèmes. Le lecteur d'archives refuse un tel nom, et un nom contenant `:`.
+- **L'image distante au clic** : une image distante n'est jamais téléchargée depuis la machine ni le réseau local : adresse écrite, nom de la machine, ou nom que le poste résout vers une telle adresse, même derrière un proxy ; chaque redirection est jugée de même.
+- **Un mode hors ligne** : un réglage « Mode hors ligne » coupe d'un geste les mises à jour, le catalogue du store, la liste de révocation et les statistiques ; c'est le cœur de l'application qui les refuse. La barre d'état le dit pendant qu'il dure, et un poste géré peut l'imposer par une stratégie (`network.offline` : registre `Policies` sous Windows, préférences gérées sous macOS, `/etc/escouade/policies` sous Linux). `git fetch` et la lecture des quotas, que la fiche cite aussi, ne sont pas de ces quatre flux : le premier a ses réglages, la seconde est faite par Claude Code.
+- **La fonction `testing`** est contrôlée : `scripts/no-testing.mjs` lit `cargo tree` de l'espace de travail de l'application (ses trois binaires), pour toutes les cibles, sans les dépendances de développement, et échoue si une crate y a `testing`. La CI le lance à chaque poussée, la publication avant la construction. Essayé : `testing` ajouté à une dépendance ordinaire, le contrôle échoue en la nommant.
+- **Le cache des modules précompilés** : chaque copie précompilée a son empreinte SHA-256 dans un fichier à côté d'elle (`<clé>-<version>.cwasm.sha256`), écrit par l'application avec elle. Une copie dont l'empreinte ne concorde pas, ou qui n'en a pas, n'est jamais chargée : elle est précompilée à nouveau depuis le module, et les deux fichiers sont récrits (test du projet). Un programme qui écrit les deux fichiers a déjà les droits de l'utilisateur ; ce contrôle arrête une copie changée ou déposée seule.
+- **Les secrets Apple** ne sont plus posés dans l'environnement du job : seule l'étape qui construit et signe l'application macOS les reçoit, comme la clé des mises à jour et les secrets Azure. Le job ne sait que s'il y a un certificat (`true` ou `false`), pour choisir entre la construction signée par Developer ID et la construction signée sur place. Un test du projet le vérifie dans le workflow.
+- **Trois variables lues par une version publiée.** `ESCOUADE_TERM_TRACE` (les temps des terminaux au journal) n'est plus lue que par une construction de développement. `ESCOUADE_ORT_DYLIB` (une autre bibliothèque ONNX Runtime) ne l'est plus que par une construction qui a la fonction `ort-dynamic`, faite pour essayer ce chemin ; l'application publiée ne l'a pas. `ESCOUADE_JAVY` (une autre Javy pour compiler les plugins JS/TS) reste lue : l'image du store, sans réseau, nomme ainsi la sienne. Elle est documentée : la Javy qu'elle nomme tourne sans contrôle d'empreinte, et seul celui qui règle l'environnement de l'application, qui a déjà les droits de l'utilisateur, peut en nommer une. Tests du projet pour les deux premières.
+
+Restent en l'état, sans correction demandée : l'image d'un chemin local (seules les images sont lues, rien ne sort du poste), le socket UDP de la webview (le comportement du moteur Chromium, pas un service d'Escouade), et la limite de programmes en parallèle, couverte par un test du projet sans avoir pu être observée en boîte noire. `ESCOUADE_JAVY` reste lue par une version publiée, documentée comme dit plus haut.
 
 # 6. Les contrôles en place
 
@@ -849,7 +946,7 @@ Ce chapitre montre ce qui est en place, partie par partie, avec la preuve dans l
 | Le SDK des plugins est publié avec une identité de workflow (`id-token`), sans jeton durable | `.github/workflows/sdk-publish.yml:33-35` | — |
 | Peu de code `unsafe` de première main, concentré dans les appels au système (processus, pseudo-terminaux, WSL) | `crates/escouade-model/src/job.rs`, `pty.rs`, `proc.rs`, `wsl.rs` | `cargo geiger` (annexe C) |
 | Les avis de sécurité des dépendances sont contrôlés à chaque pull request, à chaque poussée et chaque nuit, de façon bloquante pour l'application : aucun n'y est atteignable. Dependabot propose les mises à jour chaque mois | `.github/workflows/advisories.yml:13`, `:47`, `:76` ; `.github/dependabot.yml:7-87` | `cargo audit`, `cargo deny`, `npm audit` relancés (annexes A et B) ; ce qui reste ouvert hors de l'application : SEC-04 |
-| Les actions de la CI sont figées par l'empreinte de leur commit (83 références dans sept workflows, aucune étiquette). Le workflow de publication est en lecture seule par défaut, et les secrets de signature sont donnés à l'étape qui signe ; ceux d'Apple, à partir de la dernière étape avant la construction (SEC-18) | `.github/workflows/release.yml:17-18`, `:234-236`, `:281-287`, `:539-542` | Lu ; `semgrep` ne relève aucune action référencée par une étiquette (annexe C) |
+| Les actions de la CI sont figées par l'empreinte de leur commit (83 références dans sept workflows, aucune étiquette). Le workflow de publication est en lecture seule par défaut, et les secrets de signature sont donnés à l'étape qui signe ; ceux d'Apple aussi depuis la 2.2.6 (SEC-18) | `.github/workflows/release.yml:17-18`, `:234-236`, `:281-287`, `:539-542` | Lu ; `semgrep` ne relève aucune action référencée par une étiquette (annexe C) |
 | Chaque binaire publié porte une attestation de provenance, que le workflow vérifie lui-même comme un utilisateur le ferait | `.github/workflows/release.yml:549-592` | P-04 : vérifiée pour les cinq binaires de la 2.2.0 (section 6.11) |
 | Le code qui ne sert qu'aux tests n'entre pas dans une construction normale de l'application | `src-tauri/Cargo.toml:240-253` | `cargo tree -e no-dev` : la fonction `testing` n'est sur aucune crate (SEC-18) |
 
@@ -1062,15 +1159,15 @@ Fichier `poc/whitebox/audit_2_2_0.rs`, 38 tests, compilés avec les tests de l'a
 | W-01 | Lancement décrit par un plugin : fichier hors du dossier de l'agent par `..`, chemin relatif, UNC, préfixe `\\?\`, autre casse, lecteur relatif (14 chemins) | Tient |
 | W-02 | Même fichier à travers une jonction du dossier de l'agent | **Constat** SEC-06 |
 | W-03 | Fichier écrit « à côté » du fichier privé d'une interface : autre dossier, `..`, autre nom | Tient ; un nom de script de même radical passe (`settings.cmd`) : SEC-06 |
-| W-04 | Clôture d'un projet privé déclarée par un lancement tiers sans être appliquée | **Constat** SEC-02 |
+| W-04 | Clôture d'un projet privé déclarée par un lancement tiers sans être appliquée | **Constat** SEC-02 ; fermé dans la 2.2.6 (aucun harness tiers lancé tant qu'un projet privé existe) |
 | W-05 | Jeton d'Escouade placé dans un argument de harness | Tient |
 | W-06 | Variables d'environnement : 17 propres à Escouade, au chargeur ou au `PATH` ; puis 30 par lesquelles une commande en devient une autre | Tient : toutes refusées non déclarées ; déclarées, 28 refusées, 2 admises (`CLAUDE_CONFIG_DIR`, `ANTHROPIC_BASE_URL`), qui ne sont d'aucune famille refusée |
 | W-07 | `proc/spawn` : programme ou argument non déclaré, shell, chemin, dossier libre (11 cas) ; puis `git status` avec une configuration par variables | Tient : refusé, déclaré ou non, en majuscules ou en minuscules ; rien ne s'exécute |
-| W-08 | `fs/*` : `..`, chemin absolu, UNC, `\\?\`, `~`, flux NTFS, jonction sortante, dossier clôturé, autre casse, noms réservés de Windows | Tient (noms réservés : SEC-18) |
+| W-08 | `fs/*` : `..`, chemin absolu, UNC, `\\?\`, `~`, flux NTFS, jonction sortante, dossier clôturé, autre casse, noms réservés de Windows | Tient (noms réservés : SEC-18, refusés depuis la 2.2.6) |
 | W-09 | `net/fetch` : 24 adresses piégées (schémas, sous-domaines trompeurs, identifiants dans l'adresse, adresses IP en toutes écritures) ; hôte déclaré qui résout vers la machine | Tient |
 | W-10 | 26 adresses de la machine ou du réseau local, IPv4 et IPv6 ; réponse DNS mêlant adresses publiques et locales | Tient |
-| W-11 | Adresse IPv4 portée dans une adresse 6to4 ou Teredo | **Constat** SEC-09 (sans effet pratique connu) |
-| W-12 | Domaine de premier niveau entier déclaré comme hôte | **Constat** SEC-09 |
+| W-11 | Adresse IPv4 portée dans une adresse 6to4 ou Teredo | **Constat** SEC-09 (sans effet pratique connu) ; refusée depuis la 2.2.6 |
+| W-12 | Domaine de premier niveau entier déclaré comme hôte | **Constat** SEC-09 ; refusé depuis la 2.2.6 |
 | W-13 | Sceau : 1 721 altérations d'un bit ou d'un caractère ; autre plugin, autre version ; clé révoquée ; liste non signée ; `version.json` altéré ou d'une autre version | Tient |
 | W-14 | Trame de harness : 256 Mio alloués sur la foi d'un en-tête de 29 octets | **Constat** SEC-08 |
 | W-15 | Trame de harness : longueur supérieure à la mémoire | **Constat** SEC-08 : le processus s'arrête (`0xC0000409`) |

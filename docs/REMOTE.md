@@ -69,6 +69,7 @@ C'est faisable, et c'est la même fondation que le téléphone. Rien n'est prêt
    - `hub.rs` accepte plusieurs abonnés.
    - L'état de l'interface (`UiState` : projet actif, vue, agent choisi, disposition) est gardé par client.
    - Une réponse donnée par un client (autorisation, question) se ferme chez les autres, comme une réponse venue de claude.ai.
+   - L'accord au harness d'un plugin tiers (audit SEC-01, ESC-589) se demande **au client qui lance** : son démarrage refusé le dit, le client lit la ligne entière (`harness_launch_ask`) et l'accepte ou la refuse (`harness_agree`, avec l'empreinte lue) ; `harness_launches` dit les harness qui attendent. Ce sont des commandes de la liste unique : rien de propre au transport.
 4. **Reprendre après une coupure.**
    - À la reconnexion, le client reçoit l'état entier (`InitialState`), puis les événements.
    - Chaque terminal et chaque lancement garde un tampon de sortie, comme les interfaces d'agent, pour retrouver l'écran.
@@ -362,7 +363,10 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `git_push`
 - `git_show`
 - `git_user_name`
+- `harness_agree` : « Autoriser » ou « Refuser » la commande d’un harness d’un plugin tiers (SEC-01, ESC-589) : le geste de l’utilisateur, depuis le client qui lance
 - `harness_enable_in`
+- `harness_launch_ask` : la commande entière d’un harness d’un plugin tiers (SEC-01, ESC-589), lue sur le cœur qui la lancerait
+- `harness_launches` : les harness tiers qui attendent l’accord ou que « Harness des plugins tiers » refuse, sur le cœur
 - `harness_plugin_of`
 - `harness_scope`
 - `host_notification_click`
@@ -380,6 +384,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `inbox_snooze` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
 - `inbox_track` : la boîte « À toi » (ESC-510) : ce que la fenêtre seule voit de la boîte (ouverte, « Comparer en grand », un fichier regardé), compté sur le cœur dont c’est la boîte
 - `inbox_view_act` : la boîte « À toi » (ESC-513) : le geste d’une vue est celui de sa source (permission, ticket, décision, docs), sur l’état du cœur
+- `inbox_view_reopen` : la boîte « À toi » (ESC-557) : « Remettre dans la boîte » une vue que le chef a prise en charge ou cochée réglée, sur l’état du cœur
 - `inbox_view_snooze` : la boîte « À toi » (ESC-513) : « Plus tard » sur une vue, gardé dans l’état durable du cœur
 - `inbox_views` : la boîte « À toi » (ESC-513) : ce qu’Escouade y verse de lui-même, lu dans l’état du cœur à chaque lecture
 - `inbox_weight` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
@@ -407,6 +412,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `merge_agent`
 - `merge_agent_repos`
 - `message_subagent`
+- `offline_state` : « Mode hors ligne » (ESC-596) : celui du cœur, dont les flux s’arrêtent, et la stratégie de sa machine
 - `onboarding_act`
 - `onboarding_need`
 - `onboarding_offers`

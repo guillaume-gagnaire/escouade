@@ -912,6 +912,41 @@ pub fn move_all(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The text of a state file a workflow file names, `path` relative to the project. That file comes
+/// with a cloned repository, so only a regular file inside the project is read (no absolute path,
+/// no `..`, no link, no device or pipe), and none over `MAX_FILE`.
+fn state_text(root: &Path, path: &str) -> Option<String> {
+    use std::io::Read;
+    use std::path::Component;
+    let rel = Path::new(path);
+    if !rel
+        .components()
+        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
+    {
+        return None;
+    }
+    let file = root.join(rel);
+    let meta = std::fs::symlink_metadata(&file).ok()?;
+    if !meta.file_type().is_file() || meta.len() > MAX_FILE {
+        return None;
+    }
+    // A link among the folders of the path can still lead out: the real path must stay inside.
+    let real = file.canonicalize().ok()?;
+    if !real.starts_with(root.canonicalize().ok()?) {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(&real)
+        .ok()?
+        .take(MAX_FILE + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() as u64 > MAX_FILE {
+        return None;
+    }
+    String::from_utf8(bytes).ok()
+}
+
 /// The workflows of the folder, as the project shows and follows them: the definitions of the
 /// files, the state of their files read on this machine, beside what `local` (this machine's
 /// reading) says of the rest.
@@ -930,10 +965,7 @@ pub fn scan_of(
         .collect();
     workflows.sort_by(|a, b| a.id.cmp(&b.id));
     for w in &mut workflows {
-        let state = |path: &str| {
-            let file = root.join(path);
-            std::fs::read_to_string(&file).ok()
-        };
+        let state = |path: &str| state_text(root, path);
         for s in &mut w.state_files {
             let text = state(&s.path);
             s.exists = text.is_some();
@@ -1048,4 +1080,60 @@ pub fn schema() -> Value {
         },
         "required": ["version", "workflow"],
     })
+}
+
+#[cfg(test)]
+mod state_text_tests {
+    use super::{state_text, MAX_FILE};
+
+    #[test]
+    fn a_state_file_is_read_only_inside_the_project_and_capped() {
+        let root = crate::paths::test_dir("wf-state-text");
+        std::fs::write(root.join("STATE.md"), "status: ok\n").unwrap();
+        assert_eq!(
+            state_text(&root, "STATE.md").as_deref(),
+            Some("status: ok\n")
+        );
+        assert_eq!(
+            state_text(&root, "./STATE.md").as_deref(),
+            Some("status: ok\n")
+        );
+        // An absolute path or `..` is refused, even when it lands inside the project.
+        let abs = root.join("STATE.md");
+        assert_eq!(state_text(&root, abs.to_str().unwrap()), None);
+        let name = root.file_name().unwrap().to_str().unwrap();
+        assert_eq!(state_text(&root, &format!("../{name}/STATE.md")), None);
+        // A folder, a missing file and a file over the cap are not read.
+        assert_eq!(state_text(&root, ""), None);
+        assert_eq!(state_text(&root, "missing.md"), None);
+        std::fs::write(root.join("big.md"), vec![b'a'; MAX_FILE as usize + 1]).unwrap();
+        assert_eq!(state_text(&root, "big.md"), None);
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(root.join("STATE.md"), root.join("link.md")).unwrap();
+            assert_eq!(state_text(&root, "link.md"), None);
+            std::os::unix::fs::symlink("/etc", root.join("out")).unwrap();
+            assert_eq!(state_text(&root, "out/hosts"), None);
+        }
+    }
+
+    /// ESC-653: under Windows a junction (no privilege needed) on the way, or as the state file,
+    /// leads out of the project as a link does under Unix: refused the same.
+    #[test]
+    fn a_state_file_is_never_read_through_a_linked_folder() {
+        let root = crate::paths::test_dir("wf-state-text-link");
+        let project = root.join("project");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.md"), "token\n").unwrap();
+        assert!(crate::paths::make_dir_link(&outside, &project.join("out")));
+        assert_eq!(state_text(&project, "out/secret.md"), None);
+        assert_eq!(state_text(&project, "out"), None);
+        if crate::paths::make_file_link(&outside.join("secret.md"), &project.join("s.md")) {
+            assert_eq!(state_text(&project, "s.md"), None);
+        }
+        #[cfg(windows)]
+        std::fs::remove_dir(project.join("out")).unwrap();
+    }
 }

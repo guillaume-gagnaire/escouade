@@ -1,9 +1,9 @@
 ---
 title: "La revue « Vérifié par Escouade » : la file, la signature, la révocation"
 subject: "store"
-sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","store/scripts/plugins-publish/","docs/PLUGINS-DESIGN.md §5.6","docs/PLUGINS-DESIGN.md §8.5.5, §8.20","docs/PLUGINS-DESIGN.md §8.6.2","Consignes du chef au lancement d'ESC-324 (2026-11-01)"]
-tickets: ["ESC-235","ESC-295","ESC-302","ESC-324","ESC-343","ESC-337","ESC-353"]
-decisions: [46,76,89,103]
+sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","store/scripts/plugins-publish/","docs/PLUGINS-DESIGN.md §5.6","docs/PLUGINS-DESIGN.md §8.5.5, §8.20","docs/PLUGINS-DESIGN.md §8.6.2","Consignes du chef au lancement d'ESC-324 (2026-11-01)","docs/security/audit-2026-11/rapport.md, fiche SEC-03","crates/escouade-plugins/src/store_keys.rs","store/server/utils/minisign.ts","Choix de l'utilisateur du 2026-11-21 (a-5) : « A · Séparer les clés, la première main bornée »"]
+tickets: ["ESC-235","ESC-295","ESC-302","ESC-324","ESC-343","ESC-337","ESC-353","ESC-592"]
+decisions: [46,76,89,103,301]
 compared: "2026-10-30T03:23:39+01:00"
 ---
 
@@ -29,13 +29,26 @@ Détail et procédure : `docs/STORE.md` §4.1, §4.2, §4.5, §4.6 (il fait foi)
 - La lecture (`/review-plugin`) part du bundle (ce qui tourne), puis `src/`, et vérifie que le bundle est le build de `src/` quand le plugin dit comment le faire. Les programmes lancés, `net` et les `import` autres que `node:fs` et `node:readline` ne sont plus à chercher (la compilation les refuse) ; restent les hôtes appelés, comparés à `permissions.network`, et ce que le code fait de ses secrets.
 
 ## La signature
-- Deux paires minisign créées par l'utilisateur seul (tous les jours + secours), chiffrées, sauvegardées hors ligne ; les deux clés publiques dans `store/keys/` et dans l'app. Sans elles, l'app refuse tout badge et le store ne prend aucune signature.
-- `npm run plugin-review -- sign <id>@<version>` signe le `version.json` relu (commentaire `escouade-verified-v1 <id>@<version> <date>`), vérifie localement, dépose avec le résumé public fr/en.
+- **Qui revoit, qui signe.** La revue est faite par un agent d'IA (`/review-plugin`), pas par un humain. Pour la première main (`dev.escouade.*`), ce même agent, le chef d'escouade, signe ensuite. Pour un tiers, la signature est le geste de l'utilisateur, qui tape le mot de passe de la clé des tiers.
+- **Les clés par rôle (ESC-592, audit SEC-03).** Chaque clé minisign a ses rôles, écrits dans le code de l'app (`STORE_KEYS`) et, pour le store et ses outils, par le nom de son fichier dans `store/keys/` ; un test compare les deux :
+
+  | Clé | Ce qu'elle signe | Mot de passe |
+  | --- | --- | --- |
+  | Première main (`store.pub`, E0516468FFDCBDD5, la clé de tous les jours d'avant) | les plugins `dev.escouade.*` **seulement** | non : le chef signe seul après sa revue |
+  | Tiers et révocation (`third-party.pub`, créée par l'utilisateur) | tout autre plugin, et la liste de révocation | oui, demandé par minisign à chaque signature, jamais gardé |
+  | Secours (`backup.pub`, hors ligne) | tout | oui |
+
+- **Un sceau hors de son rôle est refusé, avec sa raison**, par l'app (installation, mise à jour, amorce, chaque lecture d'un plugin installé : « … signée par la clé … de la première main d'Escouade, qui ne scelle que les plugins dev.escouade.* : rien n'est installé »), par le store (au dépôt de la signature) et par l'outillage (avant tout envoi). La clé des tiers ne scelle pas non plus `dev.escouade.*`.
+- **Les sceaux d'avant restent valides** : la clé actuelle est devenue celle de la première main, et ses 119 sceaux publiés sont tous `dev.escouade.*`.
+- **Tant que la clé des tiers n'est pas créée et embarquée**, un tiers ne se scelle que par la clé de secours. Elle se crée sur le poste de l'utilisateur par `npm run plugin-review -- create-key third-party` (minisign demande deux fois le mot de passe ; la secrète dans `~/.escouade-signing/third-party.key`, la publique dans `store/keys/third-party.pub` ; une clé déjà là n'est jamais remplacée, une clé sans mot de passe est retirée), puis le chef commite le `.pub` et sa ligne de `STORE_KEYS`.
+- `npm run plugin-review -- sign <id>@<version>` choisit la clé par l'identifiant (`store.key` pour `dev.escouade.*`, `third-party.key` sinon), refuse une clé des tiers sans mot de passe avant de lancer minisign, signe le `version.json` relu (commentaire `escouade-verified-v1 <id>@<version> <date>`), vérifie localement avec les clés et leurs rôles, dépose avec le résumé public fr/en. Le mot de passe va du terminal à minisign : le script ne le lit ni ne le garde.
 - `sign` refuse une version dont la revue a relevé un bloqueur ; pour un plugin `run.js`, une recompilation qui n'a pas été faite ou n'a pas donné la même empreinte en est un. `sign` relit aussi le `wasm` du `version.json` servi et refuse si la revue n'a pas recompilé ce module-là : la signature couvre `version.json`, donc le module.
-- Le store vérifie avec ses clés publiques avant d'accepter ; refuse une version avec un binaire non attesté ou désactivée. La version devient `verified` au catalogue, sa page montre « Relu par Escouade le … » et le résumé, l'auteur est prévenu.
+- Le store vérifie avec ses clés publiques et leurs rôles avant d'accepter ; refuse une version avec un binaire non attesté ou désactivée. La version devient `verified` au catalogue, sa page montre « Relu par Escouade le … », « La revue est faite par un agent d'IA d'Escouade, puis la version est signée par la clé … (son id) » et le résumé, l'auteur est prévenu.
+- **Chaque sceau dit sa clé** : son `.minisig` la nomme ; le catalogue la donne (`review.key` : `id` et `role`) ; la page du plugin sur le store (« Signée par la clé des plugins d'Escouade » et l'id) et la vue Plugins de l'app l'écrivent.
 
 ## La révocation et le retrait d'urgence
-- `npm run plugin-review -- revoke|lift|revoke-key` : liste signée sur le poste, `serial` + 1, vérifiée avant dépôt.
+- `npm run plugin-review -- revoke|lift|revoke-key` : liste signée sur le poste par la clé des tiers et de la révocation (minisign demande son mot de passe ; `revoke-key` par la clé de secours), `serial` + 1, vérifiée avant dépôt.
+- **La clé de la première main ne signe plus de liste** (ESC-592) : l'app, le store et la copie sur escouade.dev refusent une liste d'elle, sauf la seule qu'elle a signée avant (nº 1 du 2026-11-07, vide), désignée par l'empreinte de ses octets. Une app d'avant la 2.2.6 ne croit que la première main et le secours : un retrait d'urgence qui doit l'atteindre se signe par la clé de secours.
 - `disable` sort la version du catalogue (fichiers en 410) ; `unverify` retire le sceau ; l'auteur est prévenu par e-mail sauf `--quiet`.
 - **`--quiet` ne coupe que l'e-mail à l'auteur** (quand le prévenir aiderait un attaquant) : l'entrée part quand même dans le salon des admins et dans le salon public fr et en (ESC-302). La liste de révocation est publique de toute façon (`/api/v1/revocations.json`).
 
@@ -66,7 +79,7 @@ Ceci précise « ni publier ni supprimer » du jeton d'administration : il ouvre
 
 - `npm run plugins:publish -- [--changed] [<court>…]` fait passer les plugins `dev.escouade.*` de `plugins/` au store, l'un après l'autre. C'est le chef qui la lance, jamais l'agent d'un ticket. `--changed` prend tout dossier dont la version n'est pas signée au store, sauf une version `0.0.0`, pas encore portée ; en nommer une est refusé.
 - **Avant tout** : un arbre sale, ou un commit qui n'est pas sur `origin/main`, est refusé, et rien n'est fait (code 2).
-- **Pour chaque plugin, dans l'ordre** : l'étiquette `plugins/<court>/vX.Y.Z` sur ce commit, poussée ; la soumission ; les contrôles ; la publication, non vérifiée, en demandant la revue, avec les `store.categories` du manifeste pour une première version ; la revue locale ; puis `report` et `sign`.
+- **Pour chaque plugin, dans l'ordre** : l'étiquette `plugins/<court>/vX.Y.Z` sur ce commit, poussée ; la soumission ; les contrôles ; la publication, non vérifiée, en demandant la revue, avec les `store.categories` du manifeste pour une première version ; la revue locale ; puis `report` et `sign` (par la clé de la première main, la seule que ces identifiants prennent).
 - **La publication vient avant la revue**, comme pour tout plugin : le store ne sert à la revue et ne signe qu'une version publiée. L'app ne prend aucun `dev.escouade.*` sans signature. Une version publiée et pas encore signée se voit au store avec « En revue », et ne s'installe pas.
 - **Elle s'arrête** (code 1, avec sa raison et ce qu'il reste à faire) au premier contrôle rouge, à une version retenue, à la limite de soumissions, à un rapport sans la ligne `**Verdict final : Vérifier**`, ou à un autre verdict. Dans ces deux derniers cas, rien n'est déposé ni signé. La commande n'écrit jamais ce verdict : c'est celui de la lecture (`/review-plugin`). Une proposition du script n'en tient pas lieu.
 - **Elle reprend là** sans rien garder à elle : ce qui est au catalogue n'est ni étiqueté ni soumis de nouveau, un rapport présent n'est pas récrit, une version signée n'est pas refaite.

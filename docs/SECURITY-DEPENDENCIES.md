@@ -5,6 +5,21 @@ se ferme en mettant la dépendance à jour ; quand aucune mise à jour compatibl
 `deny.toml` avec sa raison, et l'ignore part avec la dépendance. Cette page garde ce qui ne tient pas en une ligne de
 `deny.toml`.
 
+## Délais de correction (ESC-594, audit SEC-04)
+
+`.github/workflows/advisories.yml` tourne à chaque pull request, à chaque poussée sur `main` et sur `release/**`, et
+chaque nuit. Ce qui le fait échouer, et le délai cible pour fermer un avis, compté depuis le premier run qui le signale :
+
+| Où | Échoue sur | Critique ou élevé | Moyen | Faible |
+| --- | --- | --- | --- | --- |
+| Application (Rust : `src-tauri`, `plugins` ; npm : la racine) | tout avis | 7 jours | avant la fusion suivante (la CI est rouge d'ici là) : corrigé, ou écarté avec sa raison | de même |
+| Store (`store/`) et site (`website/`), npm | un avis élevé ou critique (`--audit-level=high`) | 7 jours | la mise à jour mensuelle de Dependabot qui le ferme | à la prochaine mise à jour |
+
+Un avis élevé que rien ne ferme dans le délai (aucune version corrigée) est soit écarté avec sa raison (`deny.toml`),
+soit contourné (dépendance retirée ou remplacée, `overrides` npm), dans les mêmes 7 jours. Une correction de
+l'application qui touche un poste part dans une version de correctif (2.2.x) ; celle du store ou du site est déployée
+dès sa fusion.
+
 ## zip 4.6.1, par tauri-plugin-updater (ESC-517, 2026-11-17)
 
 Avis : RUSTSEC-2026-0367, 0368, 0369, 0429 (`ZipArchive::extract`), 0545 (entrées AES), 0548 (`ZipStreamReader`). Tous

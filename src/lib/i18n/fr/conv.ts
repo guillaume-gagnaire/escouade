@@ -78,6 +78,15 @@ export default {
     keepsTitle: 'Escouade garde le fil',
   },
 
+  /** An agent whose session started in Claude Code’s Code Mode (ESC-553): resumed in its terminal alone. */
+  codeMode: {
+    title: 'En Code Mode : cet agent se reprend dans son terminal',
+    text: 'Sa session a commencé en Code Mode : Claude Code ne la reprend que dans son interface, jamais dans la conversation d’Escouade, ni par la reprise automatique ni par un ticket.',
+    open: 'Ouvrir le terminal',
+    /** The « Escouade » button of the header, held. */
+    noRich: 'En Code Mode : cet agent se reprend dans son terminal',
+  },
+
   /** An agent whose process started without Escouade’s tools, which its next start gives (ESC-91). */
   escouadeNext: {
     title: 'Outils d’Escouade au prochain démarrage',

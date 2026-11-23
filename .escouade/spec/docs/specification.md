@@ -2,8 +2,8 @@
 title: "Spécification"
 subject: "Docs"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-256","ESC-258","ESC-261","ESC-262","ESC-263","ESC-301","ESC-303"]
-decisions: []
+tickets: ["ESC-256","ESC-258","ESC-261","ESC-262","ESC-263","ESC-301","ESC-303","ESC-653"]
+decisions: [308]
 compared: "2026-10-30T05:31:17+01:00"
 ---
 
@@ -60,3 +60,7 @@ Tout ce que les agents écrivent dans la spec passe par ces outils. Ils écriven
 
 - « Ouvrir dans l'éditeur » n'existe que si la branche des docs est la branche courante.
 - Un import prend 500 pages au plus.
+
+## Un import venu du dépôt (ESC-653)
+
+- L'import lit un fichier de 2 Mio au plus (la taille d'une page), et 32 Mio au plus pour tout un dossier : au-delà, il est refusé (« « specs » est trop gros pour être importé »). Seul un fichier ordinaire est lu, jamais un dossier lié (une jonction sous Windows en est un).

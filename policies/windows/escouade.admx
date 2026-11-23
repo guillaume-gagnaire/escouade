@@ -258,6 +258,13 @@
         <text id="proxy_authorities" valueName="proxy.authorities" required="true" maxLength="1024" />
       </elements>
     </policy>
+    <policy name="network_offline" class="Both" displayName="$(string.network_offline)" explainText="$(string.network_offline_Explain)" key="Software\Policies\Escouade" valueName="network.offline">
+      <parentCategory ref="network" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+    </policy>
     <policy name="telemetry_enabled" class="Both" displayName="$(string.telemetry_enabled)" explainText="$(string.telemetry_enabled_Explain)" key="Software\Policies\Escouade" valueName="telemetry.enabled">
       <parentCategory ref="privacy" />
       <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />

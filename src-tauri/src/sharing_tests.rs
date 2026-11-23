@@ -807,3 +807,183 @@ fn a_folder_of_tickets_that_is_a_link_is_neither_read_nor_written() {
     }
     assert!(crate::workflowfiles::unsafe_dir(&dir).is_some());
 }
+
+#[cfg(unix)]
+#[test]
+fn a_shared_media_is_a_plain_file_of_the_folder_never_a_link_nor_too_heavy() {
+    use std::os::unix::fs::symlink;
+    let root = crate::paths::test_dir("sh-link-media");
+    let secret = root.join("secret.json");
+    std::fs::write(&secret, b"token").unwrap();
+    let from = root.join("tickets").join("t1");
+    std::fs::create_dir_all(from.join("u1")).unwrap();
+    std::fs::write(from.join("a.png"), b"png").unwrap();
+    std::fs::write(from.join("u1").join("k.txt"), b"txt").unwrap();
+    symlink(&secret, from.join("b.png")).unwrap();
+    symlink(&root, from.join("u2")).unwrap();
+    std::fs::File::create(from.join("big.png"))
+        .unwrap()
+        .set_len(sh::MAX_SHARED_FILE + 1)
+        .unwrap();
+    assert_eq!(sh::shared_media(&from, "a.png").map(|m| m.1), Some(3));
+    assert_eq!(sh::shared_media(&from, "u1/k.txt").map(|m| m.1), Some(3));
+    assert!(sh::shared_media(&from, "b.png").is_none());
+    assert!(sh::shared_media(&from, "u2/secret.json").is_none());
+    assert!(sh::shared_media(&from, "big.png").is_none());
+    // The ticket's own folder as a link is refused too.
+    let linked = root.join("tickets").join("t2");
+    symlink(&from, &linked).unwrap();
+    assert!(sh::shared_media(&linked, "a.png").is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn removing_a_shared_ticket_never_goes_through_a_link() {
+    let root = crate::paths::test_dir("sh-link-remove");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(outside.join("claude")).unwrap();
+    std::fs::write(outside.join("claude.yml"), "x").unwrap();
+    std::fs::write(outside.join("claude/keep"), "x").unwrap();
+    let project = root.join("project");
+    std::fs::create_dir_all(project.join(".escouade")).unwrap();
+    let dir = project.join(sh::DIR);
+    std::os::unix::fs::symlink(&outside, &dir).unwrap();
+    sh::remove_file_of(&dir, "claude");
+    assert!(outside.join("claude.yml").exists());
+    assert!(outside.join("claude/keep").exists());
+    // A plain folder of tickets whose <sid> entry is a link: the target is kept.
+    std::fs::remove_file(&dir).unwrap();
+    std::fs::create_dir_all(&dir).unwrap();
+    std::os::unix::fs::symlink(outside.join("claude"), dir.join("claude")).unwrap();
+    sh::remove_file_of(&dir, "claude");
+    assert!(outside.join("claude/keep").exists());
+}
+
+/// ESC-653: a ticket's file past 64 KiB is a card that says it cannot be read (its text never
+/// taken in), and a folder of more than 2,000 files is not synced at all.
+#[tokio::test]
+async fn a_folder_of_tickets_is_read_within_its_caps() {
+    let h = harness("share-caps");
+    set_me(&h, &bob());
+    let (p, repo) = h.project(false).await;
+    let dir = repo.join(sh::DIR);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mine = |h: &crate::core_tests::Harness| -> Vec<Ticket> {
+        h.core
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| t.project_id == p.id)
+            .cloned()
+            .collect()
+    };
+    let mut big = b"version: 1\nid: big\ntitle: Gros\n".to_vec();
+    big.resize(sh::MAX_TICKET_FILE as usize + 1, b'#');
+    std::fs::write(dir.join("big.yml"), &big).unwrap();
+    h.core.sync_shared(&p.id);
+    let seen = mine(&h);
+    assert_eq!(seen.len(), 1);
+    let problem = seen[0].shared.as_ref().unwrap().problem.clone();
+    assert!(problem.is_some_and(|w| w.contains("64")), "{seen:?}");
+    assert_ne!(seen[0].title, "Gros");
+    // Past the number of files: nothing read, nothing taken away.
+    for i in 0..sh::MAX_TICKET_FILES {
+        std::fs::write(
+            dir.join(format!("t{i:05}.yml")),
+            format!("version: 1\nid: t{i:05}\ntitle: T{i}\n"),
+        )
+        .unwrap();
+    }
+    h.core.sync_shared(&p.id);
+    assert_eq!(mine(&h).len(), 1);
+}
+
+/// ESC-653: under Windows a junction (no privilege needed) is the link a teammate's folder can
+/// bring: a media through one, or a ticket's folder that is one, is never copied.
+#[cfg(windows)]
+#[test]
+fn a_shared_media_is_never_copied_through_a_junction() {
+    let root = crate::paths::test_dir("sh-junction-media");
+    let secret = root.join("secret.json");
+    std::fs::write(&secret, b"token").unwrap();
+    let from = root.join("tickets").join("t1");
+    std::fs::create_dir_all(from.join("u1")).unwrap();
+    std::fs::write(from.join("a.png"), b"png").unwrap();
+    std::fs::write(from.join("u1").join("k.txt"), b"txt").unwrap();
+    assert!(crate::paths::make_dir_link(&root, &from.join("u2")));
+    assert_eq!(sh::shared_media(&from, "a.png").map(|m| m.1), Some(3));
+    assert_eq!(sh::shared_media(&from, "u1/k.txt").map(|m| m.1), Some(3));
+    assert!(sh::shared_media(&from, "u2/secret.json").is_none());
+    // A file link where the system allows one.
+    if crate::paths::make_file_link(&secret, &from.join("b.png")) {
+        assert!(sh::shared_media(&from, "b.png").is_none());
+    }
+    let linked = root.join("tickets").join("t2");
+    assert!(crate::paths::make_dir_link(&from, &linked));
+    assert!(sh::shared_media(&linked, "a.png").is_none());
+    std::fs::remove_dir(from.join("u2")).unwrap();
+    std::fs::remove_dir(&linked).unwrap();
+}
+
+/// ESC-653: the same under Windows with junctions: the folder of tickets as one, or a ticket's
+/// own folder as one, and nothing is removed where it leads.
+#[cfg(windows)]
+#[test]
+fn removing_a_shared_ticket_never_goes_through_a_junction() {
+    let root = crate::paths::test_dir("sh-junction-remove");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(outside.join("claude")).unwrap();
+    std::fs::write(outside.join("claude.yml"), "x").unwrap();
+    std::fs::write(outside.join("claude/keep"), "x").unwrap();
+    let project = root.join("project");
+    std::fs::create_dir_all(project.join(".escouade")).unwrap();
+    let dir = project.join(sh::DIR);
+    assert!(crate::paths::make_dir_link(&outside, &dir));
+    sh::remove_file_of(&dir, "claude");
+    assert!(outside.join("claude.yml").exists());
+    assert!(outside.join("claude/keep").exists());
+    std::fs::remove_dir(&dir).unwrap();
+    std::fs::create_dir_all(&dir).unwrap();
+    assert!(crate::paths::make_dir_link(
+        &outside.join("claude"),
+        &dir.join("claude")
+    ));
+    sh::remove_file_of(&dir, "claude");
+    assert!(outside.join("claude/keep").exists());
+    let _ = std::fs::remove_dir(dir.join("claude"));
+}
+
+/// ESC-653: our media are written in a shared ticket's folder only where nothing is yet and no
+/// link (a junction under Windows) is at the folder or on the way: a teammate's commit can put
+/// one there, to anywhere on this machine.
+#[test]
+fn our_media_are_never_written_through_a_link_in_the_shared_folder() {
+    let root = crate::paths::test_dir("sh-media-target");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let tickets = root.join("tickets");
+    let to = tickets.join("t1");
+    // Nothing there yet: free, its folders to be made.
+    assert!(sh::media_target_free(&to, &to.join("a.png")));
+    assert!(sh::media_target_free(&to, &to.join("u1/k.txt")));
+    std::fs::create_dir_all(to.join("u1")).unwrap();
+    std::fs::write(to.join("a.png"), b"png").unwrap();
+    // A file there already, or a path out of the folder.
+    assert!(!sh::media_target_free(&to, &to.join("a.png")));
+    assert!(!sh::media_target_free(&to, &root.join("x.png")));
+    // A folder of the ticket's that is a link, and the ticket's folder itself as one.
+    assert!(crate::paths::make_dir_link(&outside, &to.join("u2")));
+    assert!(!sh::media_target_free(&to, &to.join("u2/k.txt")));
+    let linked = tickets.join("t2");
+    assert!(crate::paths::make_dir_link(&outside, &linked));
+    assert!(!sh::media_target_free(&linked, &linked.join("a.png")));
+    // A link at the file itself, even one that leads nowhere.
+    if crate::paths::make_file_link(&outside.join("gone.png"), &to.join("b.png")) {
+        assert!(!sh::media_target_free(&to, &to.join("b.png")));
+    }
+    #[cfg(windows)]
+    {
+        std::fs::remove_dir(to.join("u2")).unwrap();
+        std::fs::remove_dir(&linked).unwrap();
+    }
+}

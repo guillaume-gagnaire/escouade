@@ -46,7 +46,7 @@ mod vibe_tui;
 mod view;
 
 pub use crate::text::strip_ansi;
-pub use transcript::HookOutcome;
+pub use transcript::{code_mode_line, HookOutcome};
 // What a notification is about, which the settings name: in `escouade-model` (docs/CRATES.md).
 pub use escouade_model::notify::NotifyKind;
 
@@ -1413,6 +1413,12 @@ impl AgentRt {
         if gen != self.gen {
             return;
         }
+        // What its process says on its way out is the last line of its conversation, word for word (a plugin that
+        // forgot it and did not take it back, ESC-562): said once, not again by its end.
+        let said_already = !stderr.trim().is_empty()
+            && self.conv.last_where(|_| true).is_some_and(|v| {
+                v["kind"] == "notice" && v["text"].as_str().map(str::trim) == Some(stderr.trim())
+            });
         self.proc = None;
         self.live.clear();
         self.remote_state = None;
@@ -1481,6 +1487,9 @@ impl AgentRt {
                     "error": said, "limited": false, "engine": self.meta.engine,
                 });
                 self.append(turn, fx);
+            } else if said_already {
+                // Its why is the line before: the turn ends on it.
+                reason = stderr.trim().to_string();
             } else {
                 self.notice("error", format!("{reason}.{detail}"), fx);
             }

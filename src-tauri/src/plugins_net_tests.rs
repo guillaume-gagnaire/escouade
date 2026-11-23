@@ -34,6 +34,16 @@ fn to_machine() -> Option<Dns> {
     Some(Arc::new(|_| vec!["127.0.0.1".parse().unwrap()]))
 }
 
+/// A resolver of the tests: `name` to its addresses, every other name to a public address, none to nothing.
+fn resolving(names: &'static [(&'static str, &'static [&'static str])]) -> Option<Dns> {
+    Some(Arc::new(move |name: &str| {
+        match names.iter().find(|(n, _)| *n == name) {
+            Some((_, addrs)) => addrs.iter().map(|a| a.parse().unwrap()).collect(),
+            None => vec!["93.184.215.14".parse().unwrap()],
+        }
+    }))
+}
+
 /// A fake server: `serve` gets the first line of each request, its body, and the connection.
 fn server(serve: impl Fn(String, Vec<u8>, TcpStream) + Send + Sync + 'static) -> u16 {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -232,6 +242,7 @@ async fn a_call_goes_through_the_proxy_of_the_settings_and_the_journal_says_its_
 ) {
     let (port, seen) = fake_proxy(OK);
     let mut net = proxied(&format!("127.0.0.1:{port}"), "");
+    net.dns = resolving(&[]);
     net.accounts = Some(hosts(&["git.acme.test".to_string()]));
     let f = Fetcher::new(ID, &words(&["{account}", "api.exemple.dev"]), &net);
     let r = f.fetch(&get("http://git.acme.test/x")).await.unwrap();
@@ -250,7 +261,48 @@ async fn a_call_goes_through_the_proxy_of_the_settings_and_the_journal_says_its_
     let said = f.describe(&get("https://api.exemple.dev/?key=s3cret"), "GET");
     assert_eq!(
         said,
-        "GET api.exemple.dev (by the proxy: its name judged, not its addresses)"
+        "GET api.exemple.dev (by the proxy: its addresses judged as this machine resolves them)"
+    );
+}
+
+/// Audit SEC-09: through a proxy, the name is resolved here as well, and refused when it gives an address of the machine or
+/// of the local network, by `net/fetch`, `net/stream` and `ws/open` alike; one this machine cannot resolve is the proxy's.
+#[tokio::test(flavor = "multi_thread")]
+async fn through_a_proxy_a_name_of_the_local_network_is_refused_all_the_same() {
+    let (port, seen) = fake_proxy(OK);
+    let mut net = proxied(&format!("127.0.0.1:{port}"), "");
+    net.dns = resolving(&[
+        ("intranet.exemple.dev", &["93.184.215.14", "10.0.0.5"]),
+        ("v6.exemple.dev", &["2002:c0a8:101::1"]),
+        ("unknown.exemple.dev", &[]),
+    ]);
+    let f = Fetcher::new(ID, &words(&["*.exemple.dev"]), &net);
+    let p = Probe::new(Fetcher::new(ID, &words(&["*.exemple.dev"]), &net));
+    for host in ["intranet.exemple.dev", "v6.exemple.dev"] {
+        let url = format!("https://{host}/");
+        let (code, why) = f.fetch(&get(&url)).await.unwrap_err();
+        assert_eq!(code, REFUSED, "{why}");
+        assert!(why.contains("local network"), "{why}");
+        let a = p.ask("net/stream", json!({ "url": url }));
+        assert_eq!(a["error"]["code"], REFUSED, "{a}");
+        let a = p.ask("ws/open", json!({ "url": format!("wss://{host}/") }));
+        assert_eq!(a["error"]["code"], REFUSED, "{a}");
+    }
+    assert!(seen.lock().unwrap().is_empty(), "the proxy was asked");
+    // A public name, and a name this machine does not know, go to the proxy.
+    for host in ["api.exemple.dev", "unknown.exemple.dev"] {
+        let (code, why) = f
+            .fetch(&get(&format!("https://{host}/")))
+            .await
+            .unwrap_err();
+        assert_eq!(code, FAILED, "{why}");
+    }
+    assert_eq!(
+        *seen.lock().unwrap(),
+        [
+            "CONNECT api.exemple.dev:443 HTTP/1.1",
+            "CONNECT unknown.exemple.dev:443 HTTP/1.1"
+        ]
     );
 }
 
@@ -272,7 +324,7 @@ async fn the_hosts_no_proxy_names_go_straight_and_their_addresses_are_judged() {
 async fn a_proxy_of_the_local_network_is_reached_by_its_name_but_never_lets_localhost_through() {
     let (port, seen) = fake_proxy(OK);
     let mut net = proxied(&format!("http://proxy.corp.test:{port}"), "");
-    net.dns = to_machine();
+    net.dns = resolving(&[("proxy.corp.test", &["127.0.0.1"])]);
     let f = Fetcher::new(ID, &words(&["{account}", "exemple.dev", "localhost"]), &net);
     let (code, why) = f.fetch(&get("https://api.exemple.dev/")).await.unwrap_err();
     assert_eq!(code, FAILED, "{why}");

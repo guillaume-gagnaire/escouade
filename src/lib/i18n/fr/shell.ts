@@ -186,6 +186,11 @@ export default {
     /** After the count, in bold: « 4 actifs ». */
     activeWord: { one: 'actif', other: 'actifs' },
     waitingWord: 'en attente',
+    /** « Mode hors ligne » (ESC-596), while it lasts. */
+    offline: 'Hors ligne',
+    offlineTip: 'Mode hors ligne : ni mises à jour, ni store, ni liste de révocation, ni statistiques. Cliquer pour le réglage.',
+    offlineImposedTip:
+      'Mode hors ligne, imposé par la stratégie de ce poste : ni mises à jour, ni store, ni liste de révocation, ni statistiques.',
     doneWord: { one: 'terminé', other: 'terminés' },
     /** A group of quota gauges, as its tooltip and a screen reader name it; with several accounts, the account shown. */
     harnessAccount: '{harness}, {account}',

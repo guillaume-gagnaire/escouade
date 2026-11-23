@@ -17,6 +17,19 @@ describe('PrivacyPage', () => {
     app.modal = { kind: 'settings' };
   });
 
+  // SEC-02 (ESC-590): made private, its harnesses are read again: a third party's refused there is said at once.
+  it('reads the harnesses of the project again once « Projet privé » is saved', async () => {
+    const backend = fakeBackend({ harness_scope: () => ({ p1: { off: [], asks: [], thirdParty: ['codex'] } }) });
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    const before = backend.called('harness_scope').length;
+    await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', private: true });
+    expect(backend.called('harness_scope').length).toBeGreaterThan(before);
+    await new Promise((r) => setTimeout(r));
+    expect(app.harnessScope.p1?.thirdParty).toEqual(['codex']);
+  });
+
   describe('remote control', () => {
     const LABEL = 'Remote control pour les agents de ce projet';
     const REASON = 'Activé pour tous les projets dans Réglages › Agents';

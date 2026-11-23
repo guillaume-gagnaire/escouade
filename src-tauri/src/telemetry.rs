@@ -555,6 +555,10 @@ impl Telemetry {
         if self.inner.lock().install_id.is_none() {
             return;
         }
+        // « Mode hors ligne » (ESC-596): nothing is kept to leave later either.
+        if !crate::offline::allows(crate::offline::Flow::Statistics) {
+            return;
+        }
         // Out of the lock: the first time, it reads the system.
         let system = self.system().props();
         let mut inner = self.inner.lock();
@@ -611,6 +615,11 @@ impl Telemetry {
 
     /// Everything queued, posted; what fails waits for the next time.
     pub async fn flush(&self, http: &reqwest::Client) {
+        if !crate::offline::allows(crate::offline::Flow::Statistics) {
+            // « Mode hors ligne » (ESC-596): what was queued before goes, unsent.
+            self.inner.lock().queue.clear();
+            return;
+        }
         loop {
             let batch = self.take_batch();
             if batch.events.is_empty() {
@@ -1257,6 +1266,28 @@ mod tests {
         let mut t = Telemetry::with(d.join("telemetry-id"), system(), Some(true), true);
         t.endpoint = url;
         t
+    }
+
+    /// « Mode hors ligne » (ESC-596): nothing is kept nor posted while it lasts, what was queued before goes unsent, and
+    /// the statistics leave again once it is off. Its own process (nextest): the mode is the process's.
+    #[tokio::test]
+    async fn the_offline_mode_sends_no_statistics_and_keeps_none() {
+        let (url, seen) = server(vec![]).await;
+        let t = sending_to(url, "offline");
+        crate::offline::set_chosen(false);
+        t.track(Event::MessageSent);
+        crate::offline::set_chosen(true);
+        t.track(Event::TicketCreated);
+        t.flush(&reqwest::Client::new()).await;
+        assert!(t.pending().is_empty());
+        assert!(seen.lock().is_empty(), "a statistic left");
+        crate::offline::set_chosen(false);
+        t.track(Event::Committed);
+        t.flush(&reqwest::Client::new()).await;
+        let seen = seen.lock();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].1.as_array().unwrap().len(), 1);
+        assert_eq!(seen[0].1[0]["eventName"], "committed");
     }
 
     #[tokio::test]

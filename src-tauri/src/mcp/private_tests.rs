@@ -253,6 +253,16 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
         ("start_ticket", Names::Ticket, json!({ "ticket": "{}" })),
         ("approve_ticket", Names::Ticket, json!({ "ticket": "{}" })),
         (
+            "claim_inbox_view",
+            Names::Ticket,
+            json!({ "ticket": "{}", "note": "x" }),
+        ),
+        (
+            "settle_inbox_view",
+            Names::Ticket,
+            json!({ "ticket": "{}", "note": "x" }),
+        ),
+        (
             "reject_ticket",
             Names::Ticket,
             json!({ "ticket": "{}", "comment": "Non" }),

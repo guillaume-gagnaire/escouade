@@ -84,6 +84,7 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | Proxy exclusions | `proxy.exclusions` · list · sensitive | The hosts reached without the proxy (NO_PROXY), one per line. | Settings › Advanced › Network, the exclusions grayed. |
 | Deny skipping the TLS check | `proxy.denyInsecureTls` · Boolean `true` (`1`) · restrict | “Skip TLS certificate verification” is off and can no longer be turned on. Only the value true (1) is imposed. | Settings › Advanced › Network › “Skip TLS certificate verification”, off and grayed. |
 | Certificate authorities file | `proxy.authorities` · string · sensitive | The path of a .pem file of authorities trusted besides the system’s store (a corporate proxy’s root). | Settings › Advanced › Network › “Extra certificate authorities”, grayed. |
+| Offline mode | `network.offline` · Boolean `true` (`1`) · restrict | The updates, the store, the revocation list and the statistics are no longer contacted. Only the value true (1) is imposed. | Settings › Advanced › Network › “Offline mode”, on and grayed. |
 
 ### Telemetry and voice
 

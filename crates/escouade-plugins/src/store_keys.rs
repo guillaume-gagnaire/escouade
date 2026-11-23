@@ -1,24 +1,160 @@
 //! The seal « Vérifié par Escouade » of a plugin's version from the store (docs/STORE.md §4.5):
 //! the review signs the version's `version.json` with minisign on the user's machine, its trusted
 //! comment `escouade-verified-v1 <id>@<version> <date>`; the app checks it with the public keys it
-//! embeds, the store's key and its backup, the same as `store/keys/*.pub`. The store cannot make a
-//! seal: it has neither key.
+//! embeds, the same as `store/keys/*.pub`. The store cannot make a seal: it has no secret key.
 //!
-//! The two keys were made by the user on their machine on 2026-10-30 (the procedure of
-//! docs/STORE.md §4.5); their secret halves never left it.
+//! Each key has its roles, here in the code (audit SEC-03, ESC-592): the key of the first hand
+//! seals `dev.escouade.*` alone, the key of the third parties seals every other id and signs the
+//! revocation list, the backup does all of it. A seal of a key whose role does not cover the id is
+//! refused, its reason said: no key without a password can seal a plugin of another author, nor a
+//! revocation list, whoever holds it.
+//!
+//! The key of the first hand and the backup were made by the user on their machine on 2026-10-30
+//! (docs/STORE.md §4.5); the key of the third parties is made by the user too, with its password
+//! (`npm run plugin-review -- create-key third-party`), then embedded here. Their secret halves
+//! never leave the user's machine.
 
 use minisign_verify::{PublicKey, Signature};
+use serde::Serialize;
+use sha2::{Digest, Sha256};
 
-/// The public keys of the store's signatures, as the second line of their `.pub` files: the key
-/// of every day (`store.pub`, id E0516468FFDCBDD5), then the backup key (`backup.pub`, id
-/// 177096D57E2EC0C8).
-pub const STORE_PUBLIC_KEYS: &[&str] = &[
-    "RWTVvdz/aGRR4MBGtNPfgdhYoq0ihwxZLK1lkK+ymqmoITBDaYuddpCW",
-    "RWTIwC5+1ZZwFzhOKuS2/h00baOvCuqL7L15MIfpP2QIcaOl3JCDe75S",
+/// What a key of the store may sign.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Role {
+    /// The plugins of Escouade's own hand, `dev.escouade.*` only: the key the chief signs with
+    /// after his review, kept without a password.
+    FirstHand,
+    /// The plugins of other authors, never `dev.escouade.*`: a key with a password.
+    ThirdParty,
+    /// The revocation list: a key with a password (the third parties' holds it).
+    Revocation,
+    /// The backup, kept offline: every role of the store's keys, to go on when another key is lost or revoked.
+    Backup,
+    /// The attestation that a revocation list still holds (audit SEC-15, ESC-596): « the list n° N, of fingerprint X,
+    /// still holds on <date> », signed every week by the workflow `revocations.yml`. It never seals a plugin nor signs
+    /// a list, and no other role attests: stolen, it can only prolong a list the revocation key signed.
+    Freshness,
+}
+
+impl Role {
+    /// Whether a seal of this role makes the plugin `id` verified.
+    pub fn seals(self, id: &str) -> bool {
+        match self {
+            Role::FirstHand => crate::builtin::first_hand(id),
+            Role::ThirdParty => !crate::builtin::first_hand(id),
+            Role::Revocation | Role::Freshness => false,
+            Role::Backup => true,
+        }
+    }
+
+    /// Whether an attestation of freshness signed by this role holds: the freshness key's alone.
+    pub fn attests(self) -> bool {
+        matches!(self, Role::Freshness)
+    }
+
+    /// Whether a revocation list signed by this role holds.
+    pub fn signs_revocations(self) -> bool {
+        matches!(self, Role::Revocation | Role::Backup)
+    }
+}
+
+/// A public key the app embeds: its file in `store/keys/`, its base64 line, its roles.
+#[derive(Debug)]
+pub struct EmbeddedKey {
+    pub file: &'static str,
+    pub public: &'static str,
+    pub roles: &'static [Role],
+}
+
+/// The roles of a key of `store/keys/` by its file's name, the same in the store and its tools
+/// (`store/server/utils/minisign.ts`, `ROLES_BY_FILE`).
+pub fn roles_of_file(file: &str) -> Option<&'static [Role]> {
+    match file {
+        "store.pub" => Some(&[Role::FirstHand]),
+        "third-party.pub" => Some(&[Role::ThirdParty, Role::Revocation]),
+        "backup.pub" => Some(&[Role::Backup]),
+        _ => None,
+    }
+}
+
+/// The public keys of the store's signatures, as the second line of their `.pub` files: the key of
+/// the first hand (`store.pub`, id E0516468FFDCBDD5, the store's one key until ESC-592: it keeps
+/// every seal it made, all of `dev.escouade.*`), then the backup (`backup.pub`, id
+/// 177096D57E2EC0C8). The key of the third parties (`third-party.pub`) comes here once the user
+/// made it; until then a plugin of another author is sealed by the backup alone.
+pub const STORE_KEYS: &[EmbeddedKey] = &[
+    EmbeddedKey {
+        file: "store.pub",
+        public: "RWTVvdz/aGRR4MBGtNPfgdhYoq0ihwxZLK1lkK+ymqmoITBDaYuddpCW",
+        roles: &[Role::FirstHand],
+    },
+    EmbeddedKey {
+        file: "backup.pub",
+        public: "RWTIwC5+1ZZwFzhOKuS2/h00baOvCuqL7L15MIfpP2QIcaOl3JCDe75S",
+        roles: &[Role::Backup],
+    },
 ];
+
+/// The revocation lists the key of the first hand signed before ESC-592, by the SHA-256 of their
+/// bytes: they hold still (an app that kept one reads it again), and no other list of that key
+/// does. The one: serial 1 of 2026-11-07, empty (`website/public/revocations.json`).
+pub const LEGACY_REVOCATION_LISTS: &[&str] =
+    &["0a9a3c2f9b497a487a1fd95d4ae943d5eee329267a3ab2733e9b1fcb82f300b9"];
 
 /// What the trusted comment of a version's signature starts with.
 pub const VERIFIED_COMMENT: &str = "escouade-verified-v1";
+
+/// A key a seal or a list is checked with, and its roles. A bare key (a `&str`, a `String`: a
+/// test's) holds every role, as the backup does.
+pub trait TrustedKey {
+    fn public(&self) -> &str;
+    fn roles(&self) -> &[Role];
+}
+
+const EVERY_ROLE: &[Role] = &[Role::Backup];
+
+impl TrustedKey for &str {
+    fn public(&self) -> &str {
+        self
+    }
+    fn roles(&self) -> &[Role] {
+        EVERY_ROLE
+    }
+}
+
+impl TrustedKey for String {
+    fn public(&self) -> &str {
+        self
+    }
+    fn roles(&self) -> &[Role] {
+        EVERY_ROLE
+    }
+}
+
+/// A key of the app, with its roles.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Key {
+    pub public: String,
+    pub roles: Vec<Role>,
+}
+
+impl TrustedKey for Key {
+    fn public(&self) -> &str {
+        &self.public
+    }
+    fn roles(&self) -> &[Role] {
+        &self.roles
+    }
+}
+
+/// The key that made a seal hold, as the window says it: its id, and the role it sealed in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SealKey {
+    pub id: String,
+    pub role: Role,
+}
 
 /// Why a seal is refused.
 #[derive(Debug, PartialEq, Eq)]
@@ -31,28 +167,41 @@ pub enum Refused {
     NotSigned,
     /// Signed, but for another plugin or another version.
     OtherVersion,
+    /// Signed by a key of the app whose roles do not cover it: the key of the first hand on an id
+    /// out of `dev.escouade.*`, the third parties' on `dev.escouade.*`, a list signed by a key
+    /// that signs no list. `key`: its id.
+    OutOfRole { key: String },
 }
 
 /// The keys a seal or a revocation list is checked with: the embedded ones; in a debug build, also
-/// the key of `ESCOUADE_STORE_TEST_KEY` (the fake store of the end-to-end tests). A release build
-/// never reads it: no variable of the environment can make a seal there.
-pub fn keys() -> Vec<String> {
-    let mut keys: Vec<String> = STORE_PUBLIC_KEYS.iter().map(|k| k.to_string()).collect();
+/// the key of `ESCOUADE_STORE_TEST_KEY` (the fake store of the end-to-end tests), with every role.
+/// A release build never reads it: no variable of the environment can make a seal there.
+pub fn keys() -> Vec<Key> {
+    let mut keys: Vec<Key> = STORE_KEYS
+        .iter()
+        .map(|k| Key {
+            public: k.public.to_string(),
+            roles: k.roles.to_vec(),
+        })
+        .collect();
     if cfg!(debug_assertions) {
         if let Some(k) = std::env::var("ESCOUADE_STORE_TEST_KEY")
             .ok()
             .map(|k| k.trim().to_string())
             .filter(|k| !k.is_empty())
         {
-            keys.push(k);
+            keys.push(Key {
+                public: k,
+                roles: vec![Role::Backup],
+            });
         }
     }
     keys
 }
 
 /// Whether `minisig` makes version `version` of plugin `id` verified: the bytes of its
-/// `version.json` signed by one of the app's keys (`keys`), the comment naming this id and this
-/// number.
+/// `version.json` signed by one of the app's keys (`keys`) whose role covers this id, the comment
+/// naming this id and this number.
 #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
 pub fn verified(
     version_json: &[u8],
@@ -60,19 +209,26 @@ pub fn verified(
     id: &str,
     version: &str,
 ) -> Result<(), Refused> {
-    let keys = keys();
-    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
-    verified_with(&keys, version_json, minisig, id, version)
+    verified_with(&keys(), version_json, minisig, id, version)
 }
 
 /// What the trusted comment of a revocation list starts with, followed by its serial.
 pub const REVOCATIONS_COMMENT: &str = "escouade-revocations-v1";
 
+/// The key of `keys` that signed `bytes` with `sig`.
+fn signer<'k, K: TrustedKey>(keys: &'k [K], bytes: &[u8], sig: &Signature) -> Option<&'k K> {
+    keys.iter().find(|k| {
+        PublicKey::from_base64(k.public()).is_ok_and(|pk| pk.verify(bytes, sig, false).is_ok())
+    })
+}
+
 /// Whether `minisig` signs the revocation list `json` of serial `serial`, with `keys`: the bytes
-/// signed by one of them, the comment `escouade-revocations-v1 <serial> …`. Gives the id of the
-/// key that signed (a list that revokes its own signer is refused by the caller).
-pub fn revocations_signed(
-    keys: &[&str],
+/// signed by one of them, the comment `escouade-revocations-v1 <serial> …`, by a key that signs
+/// lists (the third parties', the backup), or by the key of the first hand for a list it signed
+/// before ESC-592 (`LEGACY_REVOCATION_LISTS`). Gives the id of the key that signed (a list that
+/// revokes its own signer is refused by the caller).
+pub fn revocations_signed<K: TrustedKey>(
+    keys: &[K],
     json: &[u8],
     minisig: &str,
     serial: u64,
@@ -81,18 +237,95 @@ pub fn revocations_signed(
         return Err(Refused::NoKey);
     }
     let sig = Signature::decode(minisig).map_err(|_| Refused::Unreadable)?;
-    let signer = keys.iter().find_map(|k| {
-        let pk = PublicKey::from_base64(k).ok()?;
-        pk.verify(json, &sig, false).ok()?;
-        Some(key_id(k))
-    });
-    let Some(signer) = signer else {
+    let Some(key) = signer(keys, json, &sig) else {
         return Err(Refused::NotSigned);
     };
     let mut words = sig.trusted_comment().split_whitespace();
     match (words.next(), words.next()) {
-        (Some(REVOCATIONS_COMMENT), Some(s)) if s == serial.to_string() => Ok(signer),
-        _ => Err(Refused::OtherVersion),
+        (Some(REVOCATIONS_COMMENT), Some(s)) if s == serial.to_string() => {}
+        _ => return Err(Refused::OtherVersion),
+    }
+    let id = key_id(key.public());
+    let legacy = key.roles().contains(&Role::FirstHand)
+        && LEGACY_REVOCATION_LISTS.contains(&hex_sha256(json).as_str());
+    if key.roles().iter().any(|r| r.signs_revocations()) || legacy {
+        Ok(id)
+    } else {
+        Err(Refused::OutOfRole { key: id })
+    }
+}
+
+fn hex_sha256(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// The keys of the attestations of freshness of the revocation list (audit SEC-15, ESC-596), as `store/freshness/*.pub`
+/// (not `store/keys/`, whose keys all sign seals or lists): a key of the workflow `revocations.yml`, role
+/// `Freshness` alone, that signs every week « the list n° N of fingerprint X still holds on <date> », never a list.
+/// Empty until the user makes it (`store/scripts/create-freshness-key.ts`): then a list is taken without an
+/// attestation, as before, and its age is that of its last reading.
+pub const FRESHNESS_KEYS: &[EmbeddedKey] = &[];
+
+/// What the trusted comment of an attestation of freshness starts with, followed by the list's serial and its date.
+pub const FRESH_COMMENT: &str = "escouade-revocations-fresh-v1";
+
+/// The keys an attestation of freshness is checked with: the embedded ones; in a debug build, also the key of
+/// `ESCOUADE_FRESHNESS_TEST_KEY` (the tests'), role `Freshness` alone. A release build never reads it.
+pub fn freshness_keys() -> Vec<Key> {
+    let mut keys: Vec<Key> = FRESHNESS_KEYS
+        .iter()
+        .map(|k| Key {
+            public: k.public.to_string(),
+            roles: k.roles.to_vec(),
+        })
+        .collect();
+    if cfg!(debug_assertions) {
+        if let Some(k) = std::env::var("ESCOUADE_FRESHNESS_TEST_KEY")
+            .ok()
+            .map(|k| k.trim().to_string())
+            .filter(|k| !k.is_empty())
+        {
+            keys.push(Key {
+                public: k,
+                roles: vec![Role::Freshness],
+            });
+        }
+    }
+    keys
+}
+
+/// Whether `minisig` signs the attestation `json` with one of `keys` whose role attests (`Freshness`): the bytes
+/// signed, the comment `escouade-revocations-fresh-v1 <serial> <date>`, its serial and its date given back as written.
+/// The revocation key, the backup or a bare key do not attest.
+pub fn freshness_signed<K: TrustedKey>(
+    keys: &[K],
+    json: &[u8],
+    minisig: &str,
+) -> Result<(u64, String), Refused> {
+    if keys.is_empty() {
+        return Err(Refused::NoKey);
+    }
+    let sig = Signature::decode(minisig).map_err(|_| Refused::Unreadable)?;
+    let Some(key) = signer(keys, json, &sig) else {
+        return Err(Refused::NotSigned);
+    };
+    let mut words = sig.trusted_comment().split(' ');
+    let said = match (words.next(), words.next(), words.next(), words.next()) {
+        (Some(FRESH_COMMENT), Some(serial), Some(date), None) => serial
+            .parse()
+            .map(|n| (n, date.to_string()))
+            .map_err(|_| Refused::OtherVersion)?,
+        _ => return Err(Refused::OtherVersion),
+    };
+    if key.roles().iter().any(|r| r.attests()) {
+        Ok(said)
+    } else {
+        Err(Refused::OutOfRole {
+            key: key_id(key.public()),
+        })
     }
 }
 
@@ -109,126 +342,48 @@ pub fn key_id(key: &str) -> String {
 }
 
 /// `verified` with the keys given (the tests' own).
-pub fn verified_with(
-    keys: &[&str],
+pub fn verified_with<K: TrustedKey>(
+    keys: &[K],
     version_json: &[u8],
     minisig: &str,
     id: &str,
     version: &str,
 ) -> Result<(), Refused> {
+    seal_of(keys, version_json, minisig, id, version).map(|_| ())
+}
+
+/// The seal of version `version` of plugin `id` with `keys`, as `verified` checks it: the key that
+/// signed and the role it sealed in.
+pub fn seal_of<K: TrustedKey>(
+    keys: &[K],
+    version_json: &[u8],
+    minisig: &str,
+    id: &str,
+    version: &str,
+) -> Result<SealKey, Refused> {
     if keys.is_empty() {
         return Err(Refused::NoKey);
     }
     let sig = Signature::decode(minisig).map_err(|_| Refused::Unreadable)?;
-    let signed = keys.iter().any(|k| {
-        PublicKey::from_base64(k).is_ok_and(|pk| pk.verify(version_json, &sig, false).is_ok())
-    });
-    if !signed {
+    let Some(key) = signer(keys, version_json, &sig) else {
         return Err(Refused::NotSigned);
-    }
+    };
     let mut words = sig.trusted_comment().split(' ');
     let target = format!("{id}@{version}");
     match (words.next(), words.next(), words.next(), words.next()) {
-        (Some(VERIFIED_COMMENT), Some(t), Some(_date), None) if t == target => Ok(()),
-        _ => Err(Refused::OtherVersion),
+        (Some(VERIFIED_COMMENT), Some(t), Some(_date), None) if t == target => {}
+        _ => return Err(Refused::OtherVersion),
+    }
+    let kid = key_id(key.public());
+    match key.roles().iter().find(|r| r.seals(id)) {
+        Some(role) => Ok(SealKey {
+            id: kid,
+            role: *role,
+        }),
+        None => Err(Refused::OutOfRole { key: kid }),
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Made by store/tests/fake/minisign.mjs (a key of a test, never the store's), as the store's
-    // review signs: the app and the store read the same signatures.
-    const KEY: &str = "RWSdD12p0w147Es0or2M3l5uzT4vcBno4LQIrfq7geBz2SWuUFka1+MD";
-    const JSON: &str = r#"{"format":1,"id":"dev.exemple.slack","version":"1.2.0"}"#;
-    const GOOD: &str = "untrusted comment: signature from minisign secret key\nRUSdD12p0w147Bgh0ETL38EK152D4z9+O8rxLdMPtAIFnqKKT9dil/krYuno8cC1zRL7VNJ+ACvVdZBfX1ItjS0KKPBCimtTywQ=\ntrusted comment: escouade-verified-v1 dev.exemple.slack@1.2.0 2026-10-29\nI5M6mYLq/SLrR885/61tWzWk1oQc5hO5wZxNVwiXsTonCGw5DbV8Tg3m/jtBT5DitE82TMqgHeR6Q/tnNp0zBQ==\n";
-    const OTHER: &str = "untrusted comment: signature from minisign secret key\nRUSdD12p0w147Bgh0ETL38EK152D4z9+O8rxLdMPtAIFnqKKT9dil/krYuno8cC1zRL7VNJ+ACvVdZBfX1ItjS0KKPBCimtTywQ=\ntrusted comment: escouade-verified-v1 dev.exemple.slack@1.3.0 2026-10-29\nLz9OPaP/5HWqMXFV6AKBFLDA4VFSQ6dCNDZVj3rfb7k1cc3PG/e37GOiO/6nNCajLW30/A2X8nsZnp7iA9QXAg==\n";
-
-    #[test]
-    fn a_seal_is_refused_while_the_app_embeds_no_key() {
-        assert!(STORE_PUBLIC_KEYS.is_empty() || STORE_PUBLIC_KEYS.len() == 2);
-        if STORE_PUBLIC_KEYS.is_empty() {
-            assert_eq!(
-                verified(JSON.as_bytes(), GOOD, "dev.exemple.slack", "1.2.0"),
-                Err(Refused::NoKey)
-            );
-        }
-    }
-
-    #[test]
-    fn the_store_signature_of_this_version_passes_and_nothing_else() {
-        let keys = [KEY];
-        assert_eq!(
-            verified_with(&keys, JSON.as_bytes(), GOOD, "dev.exemple.slack", "1.2.0"),
-            Ok(())
-        );
-        let changed = JSON.replace("1.2.0", "1.2.1");
-        assert_eq!(
-            verified_with(
-                &keys,
-                changed.as_bytes(),
-                GOOD,
-                "dev.exemple.slack",
-                "1.2.0"
-            ),
-            Err(Refused::NotSigned)
-        );
-        assert_eq!(
-            verified_with(&keys, JSON.as_bytes(), GOOD, "dev.exemple.slack", "1.3.0"),
-            Err(Refused::OtherVersion)
-        );
-        assert_eq!(
-            verified_with(&keys, JSON.as_bytes(), GOOD, "dev.exemple.slak", "1.2.0"),
-            Err(Refused::OtherVersion)
-        );
-        assert_eq!(
-            verified_with(&keys, JSON.as_bytes(), OTHER, "dev.exemple.slack", "1.2.0"),
-            Err(Refused::OtherVersion)
-        );
-        assert_eq!(
-            verified_with(&keys, JSON.as_bytes(), "nope", "dev.exemple.slack", "1.2.0"),
-            Err(Refused::Unreadable)
-        );
-        let stranger = ["RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3"];
-        assert_eq!(
-            verified_with(
-                &stranger,
-                JSON.as_bytes(),
-                GOOD,
-                "dev.exemple.slack",
-                "1.2.0"
-            ),
-            Err(Refused::NotSigned)
-        );
-    }
-
-    #[test]
-    fn the_embedded_keys_are_those_of_the_store() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../store/keys");
-        let mut names: Vec<_> = std::fs::read_dir(&dir)
-            .unwrap()
-            .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
-            .filter(|n| n.ends_with(".pub"))
-            .collect();
-        names.sort();
-        let mut found: Vec<String> = names
-            .iter()
-            .map(|n| {
-                let text = std::fs::read_to_string(dir.join(n)).unwrap();
-                text.lines()
-                    .map(str::trim)
-                    .find(|l| !l.is_empty() && !l.starts_with("untrusted comment:"))
-                    .unwrap_or_default()
-                    .to_string()
-            })
-            .collect();
-        found.sort();
-        let mut embedded: Vec<String> = STORE_PUBLIC_KEYS.iter().map(|k| k.to_string()).collect();
-        embedded.sort();
-        assert_eq!(
-            embedded, found,
-            "STORE_PUBLIC_KEYS must hold the keys of store/keys/*.pub"
-        );
-    }
-}
+#[path = "store_keys_tests.rs"]
+mod tests;

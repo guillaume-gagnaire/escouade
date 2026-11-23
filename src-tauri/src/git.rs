@@ -197,7 +197,7 @@ fn count_lines(path: &Path) -> u32 {
     if meta.len() > 2_000_000 {
         return 0;
     }
-    match std::fs::read(path) {
+    match crate::paths::read_regular(path, 2_000_000) {
         Ok(bytes) if !bytes.contains(&0) => {
             let n = bytes.iter().filter(|&&b| b == b'\n').count();
             (n + usize::from(!bytes.is_empty() && !bytes.ends_with(b"\n"))) as u32
@@ -255,6 +255,22 @@ fn command_line_chunks(paths: &[String]) -> Vec<&[String]> {
 
 /// The most diff text one file sends to the interface; past it the file is only flagged.
 const MAX_FILE_DIFF: usize = 4_000_000;
+
+/// The most diff text read from git: a few files at their cap. Past it git is killed (see `read_diff`).
+const MAX_DIFF_READ: usize = 16 * MAX_FILE_DIFF;
+
+/// The diff git prints for `args`, read up to `MAX_DIFF_READ`: a hostile repository's commit can
+/// print gigabytes. Cut there, the file it was printing is `flagged`.
+// shortcut: the files after the cut are left out unnamed, list them (--raw) if a user misses them.
+pub async fn read_diff(repo: &str, args: &[&str]) -> Result<String> {
+    let (out, cut) = run_capped(repo, args, MAX_DIFF_READ).await?;
+    let text = String::from_utf8_lossy(&out);
+    if !cut {
+        return Ok(text.into_owned());
+    }
+    let last = text.rfind("\ndiff --git ").map_or(0, |at| at + 1);
+    Ok(format!("{}{}", &text[..last], flagged(&text[last..])))
+}
 
 /// The line that stands, in a file's header, for the diff that was not sent. The interface shows
 /// « Diff trop volumineux pour être affiché. » for a file carrying it (`TOO_LARGE` in `diff.ts`).
@@ -391,8 +407,9 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
             "--",
         ];
         args.extend(run_paths.iter().map(String::as_str));
-        if let Ok(o) = run(root, &args).await {
-            out.push_str(&cap_file_diffs(&String::from_utf8_lossy(&o), MAX_FILE_DIFF));
+        // Capped (ESC-653): a file of the checkout can be gigabytes.
+        if let Ok(o) = read_diff(root, &args).await {
+            out.push_str(&cap_file_diffs(&o, MAX_FILE_DIFF));
         }
     }
     // The new files git's own diff already shows (those in the index). Git ends the `+++` line of
@@ -426,7 +443,7 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
             out.push_str(&flagged(&new_file_header(&path)));
             continue;
         }
-        let Ok(bytes) = std::fs::read(&full) else {
+        let Ok(bytes) = crate::paths::read_regular(&full, MAX_FILE_DIFF as u64) else {
             continue;
         };
         if bytes.contains(&0) {
@@ -575,7 +592,7 @@ pub async fn show(repo: &str, hash: &str) -> Result<String> {
     if hash.len() < 4 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
         bail!(tr!("commit invalide : {hash}", "invalid commit: {hash}"));
     }
-    let out = run(
+    let out = read_diff(
         repo,
         &[
             "show",
@@ -588,7 +605,7 @@ pub async fn show(repo: &str, hash: &str) -> Result<String> {
         ],
     )
     .await?;
-    Ok(cap_file_diffs(&String::from_utf8_lossy(&out), MAX_FILE_DIFF).into_owned())
+    Ok(cap_file_diffs(&out, MAX_FILE_DIFF).into_owned())
 }
 
 pub async fn list_files(cwd: &str) -> Result<Vec<String>> {
@@ -2209,7 +2226,7 @@ pub async fn unique_commits(repo: &str, refs: &[String]) -> Result<u32> {
 /// capped as a commit's is, and the whole kept within `DIFF_BUDGET`.
 pub async fn diff_refs(repo: &str, a: &str, b: &str) -> Result<String> {
     let (from, to) = (commit_of(repo, a).await?, commit_of(repo, b).await?);
-    let out = run(
+    let out = read_diff(
         repo,
         &[
             "diff",
@@ -2222,7 +2239,7 @@ pub async fn diff_refs(repo: &str, a: &str, b: &str) -> Result<String> {
         ],
     )
     .await?;
-    Ok(cap_diff(&String::from_utf8_lossy(&out), MAX_FILE_DIFF, DIFF_BUDGET).into_owned())
+    Ok(cap_diff(&out, MAX_FILE_DIFF, DIFF_BUDGET).into_owned())
 }
 
 /// Of `paths`, those that `branch` changed since it left `base` (`base...branch`), whatever
@@ -2805,6 +2822,207 @@ pub async fn fetch(repo: &str, background: bool) -> Result<()> {
     run_net(repo, &args, background).await.map(|_| ())
 }
 
+/// How a background fetch ended (ESC-561).
+#[derive(Debug)]
+pub struct BackgroundFetch {
+    pub result: Result<()>,
+    /// Not run: `still` said no, at the last moment (a setting turned off meanwhile).
+    pub skipped: bool,
+    /// It still ran past its time limit.
+    pub timed_out: bool,
+    /// It went through Windows' ssh, this Git for Windows' own stalling (`ssh_stalls`).
+    pub windows_ssh: bool,
+}
+
+/// The background fetch of `repo` (ESC-561): as `fetch(repo, true)`, within `limit`, with the
+/// user's configuration of git as it is (their proxy, their certificates, their `insteadOf`, their
+/// ssh): nothing is added to it. Only when their Git for Windows is the one whose ssh stalls on a
+/// big fetch (`ssh_stalls`), the remote talks ssh and they chose no ssh of their own, does the
+/// fetch go through Windows' (`windows_ssh_command`), for this process alone. `still` is asked
+/// just before git starts: a setting turned off while it got ready runs nothing.
+pub async fn fetch_background(
+    repo: &str,
+    limit: Duration,
+    still: impl FnOnce() -> bool,
+) -> BackgroundFetch {
+    let (st, remotes) = tokio::join!(status(repo), remotes(repo));
+    if remotes.is_empty() {
+        return BackgroundFetch {
+            result: Err(anyhow::anyhow!(no_remote(crate::i18n::ui()))),
+            skipped: false,
+            timed_out: false,
+            windows_ssh: false,
+        };
+    }
+    let upstream = st.ok().and_then(|s| s.upstream);
+    let target = sync_remote(&remotes, upstream.as_deref()).unwrap_or("--all");
+    let args = [
+        "fetch",
+        "--quiet",
+        "--prune",
+        "--no-auto-maintenance",
+        target,
+    ];
+    let mut cmd = command(repo, &args);
+    let ssh = background_ssh(repo, target, &remotes).await;
+    if let Some(ssh) = &ssh {
+        cmd.env("GIT_SSH_COMMAND", ssh);
+    }
+    if !still() {
+        return BackgroundFetch {
+            result: Ok(()),
+            skipped: true,
+            timed_out: false,
+            windows_ssh: false,
+        };
+    }
+    let start = Instant::now();
+    let result = run_net_command_within(cmd, &args, true, limit)
+        .await
+        .map(|_| ());
+    BackgroundFetch {
+        timed_out: result.is_err() && start.elapsed() >= limit,
+        result,
+        skipped: false,
+        windows_ssh: ssh.is_some(),
+    }
+}
+
+/// The Git for Windows builds whose ssh stalls on a big fetch: OpenSSH 9.9p1 of 2.47.0(1) waits
+/// forever after a few KB, the server ending it after 10 min (git-for-windows/git#5199, fixed in
+/// 2.47.0(2)). Measured on this repository eight days behind: no byte in 150 s with its ssh, 5 to
+/// 10 s with Windows' (`OpenSSH_for_Windows_9.5p2`).
+const STALLING_SSH: &[&str] = &["git version 2.47.0.windows.1"];
+
+/// `git --version` says a Git for Windows whose ssh stalls.
+pub fn ssh_stalls(version: &str) -> bool {
+    STALLING_SSH.contains(&version.trim())
+}
+
+/// A remote's address that git reaches by ssh: `ssh://…`, `git+ssh://…`, or the short form
+/// `[user@]host:path` (not a Windows drive, `C:\…`, nor a local path).
+pub fn is_ssh_url(url: &str) -> bool {
+    let url = url.trim();
+    if url.starts_with("ssh://") || url.starts_with("git+ssh://") || url.starts_with("ssh+git://") {
+        return true;
+    }
+    if url.contains("://") || url.starts_with('/') || url.starts_with('.') {
+        return false;
+    }
+    match url.split_once(':') {
+        // `C:\x` or `C:/x`: a drive.
+        Some((host, _)) => host.len() > 1 && !host.contains('/') && !host.contains('\\'),
+        None => false,
+    }
+}
+
+/// What `GIT_SSH_COMMAND` the background fetch takes, if any: Windows' ssh, never asking
+/// anything (`BatchMode`), when `ssh_stalls(version)`, a remote it fetches talks ssh, the user
+/// set no ssh of their own (`GIT_SSH`, `GIT_SSH_COMMAND`, `core.sshCommand`) and Windows has its
+/// ssh (`windows_ssh`).
+pub fn windows_ssh_command(
+    version: &str,
+    own_ssh: bool,
+    urls: &[String],
+    windows_ssh: Option<&Path>,
+) -> Option<String> {
+    if !ssh_stalls(version) || own_ssh || !urls.iter().any(|u| is_ssh_url(u)) {
+        return None;
+    }
+    let ssh = windows_ssh?.to_string_lossy().replace('\\', "/");
+    Some(format!("\"{ssh}\" -o BatchMode=yes"))
+}
+
+/// Windows' own ssh (`%SystemRoot%\System32\OpenSSH\ssh.exe`), when it is there.
+fn windows_ssh() -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let root = std::env::var_os("SystemRoot")?;
+    let ssh = Path::new(&root)
+        .join("System32")
+        .join("OpenSSH")
+        .join("ssh.exe");
+    ssh.is_file().then_some(ssh)
+}
+
+/// `windows_ssh_command` for the remote `target` of `repo` (`--all`: each one).
+async fn background_ssh(repo: &str, target: &str, remotes: &[String]) -> Option<String> {
+    let windows = windows_ssh()?;
+    let version = text(repo, &["--version"]).await.unwrap_or_default();
+    if !ssh_stalls(&version) {
+        return None;
+    }
+    let own = ["GIT_SSH", "GIT_SSH_COMMAND"]
+        .iter()
+        .any(|v| std::env::var_os(v).is_some_and(|s| !s.is_empty()))
+        || !text(repo, &["config", "--get", "core.sshCommand"])
+            .await
+            .unwrap_or_default()
+            .is_empty();
+    let names: Vec<&str> = if target == "--all" {
+        remotes.iter().map(String::as_str).collect()
+    } else {
+        vec![target]
+    };
+    let mut urls = Vec::new();
+    for name in names {
+        if let Ok(url) = text(repo, &["remote", "get-url", name]).await {
+            urls.push(url);
+        }
+    }
+    windows_ssh_command(&version, own, &urls, Some(&windows))
+}
+
+/// What a background fetch's failure is (ESC-561), from git's words and whether it ran out of
+/// time.
+pub fn fetch_failure_kind(message: &str, timed_out: bool) -> crate::model::FetchFailureKind {
+    use crate::model::FetchFailureKind as K;
+    if timed_out {
+        return K::Timeout;
+    }
+    let m = message.to_lowercase();
+    const CREDENTIALS: &[&str] = &[
+        "permission denied (publickey",
+        "cannot prompt because user interactivity has been disabled",
+        "terminal prompts disabled",
+        "could not read username",
+        "could not read password",
+        "authentication failed",
+        "invalid username or password",
+        "host key verification failed",
+        "enter passphrase",
+        "askpass",
+        "permission denied, please try again",
+    ];
+    const NETWORK: &[&str] = &[
+        "could not resolve host",
+        "could not resolve hostname",
+        "connection timed out",
+        "operation timed out",
+        "failed to connect",
+        "could not connect",
+        "connection refused",
+        "network is unreachable",
+        "no route to host",
+        "connection reset",
+        "connection closed by remote host",
+        "unexpected disconnect",
+        "early eof",
+        "unable to access",
+        "proxy",
+        "ssl",
+        "tls",
+    ];
+    if CREDENTIALS.iter().any(|c| m.contains(c)) {
+        K::Credentials
+    } else if NETWORK.iter().any(|n| m.contains(n)) {
+        K::Network
+    } else {
+        K::Other
+    }
+}
+
 /// Fetches `refspec` from `from` (a remote's name, or an address), as the user would: their
 /// credentials may be asked (« Lancer un agent sur cette PR », ESC-65).
 pub async fn fetch_ref(repo: &str, from: &str, refspec: &str) -> Result<()> {
@@ -3004,7 +3222,11 @@ pub async fn lines_at(
     if rev.is_empty() || rev.starts_with('-') || path.is_empty() || line == 0 {
         return None;
     }
-    let bytes = run(repo, &["show", &format!("{rev}:{path}")]).await.ok()?;
+    // A blob of the repository: read up to `MAX_FILE_DIFF` (a hostile commit's can run to
+    // gigabytes, ESC-653); a line past the cut is not there.
+    let (bytes, _) = run_capped(repo, &["show", &format!("{rev}:{path}")], MAX_FILE_DIFF)
+        .await
+        .ok()?;
     let text = String::from_utf8_lossy(&bytes);
     let from = line.saturating_sub(before).max(1) as usize;
     let to = line.saturating_add(after) as usize;
@@ -6603,4 +6825,47 @@ pub async fn diff_counts(repo: &str, base: &str, branch: &str) -> (u32, u32) {
     parse_numstat(&out)
         .values()
         .fold((0, 0), |(a, d), (x, y)| (a + x, d + y))
+}
+
+#[cfg(test)]
+mod lines_at_cap_tests {
+    use super::*;
+    use std::process::Command;
+
+    /// ESC-653: `lines_at` reads a blob up to `MAX_FILE_DIFF` (a hostile commit's can run to
+    /// gigabytes): the lines before the cut are given, those past it are not there.
+    #[tokio::test]
+    async fn lines_at_reads_a_blob_up_to_its_cap() {
+        let dir = crate::paths::test_dir("git-lines-at-cap");
+        let line = format!("{}\n", "y".repeat(99));
+        std::fs::write(dir.join("big.txt"), line.repeat(50_000)).unwrap();
+        for args in [
+            &["init", "-q", "-b", "main"][..],
+            &["config", "user.email", "t@t"],
+            &["config", "user.name", "t"],
+            &["add", "big.txt"],
+            &["commit", "-qm", "big"],
+        ] {
+            assert!(Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let r = dir.to_string_lossy().to_string();
+        let first = lines_at(&r, "HEAD", "big.txt", 2, 1, 0).await.unwrap();
+        assert!(first.starts_with("    1 y"), "{first}");
+        let past = MAX_FILE_DIFF / line.len() + 10;
+        assert_eq!(
+            lines_at(&r, "HEAD", "big.txt", past as u32, 0, 0).await,
+            None
+        );
+        // Within the cut, a line is there.
+        let near = MAX_FILE_DIFF / line.len() - 10;
+        assert!(lines_at(&r, "HEAD", "big.txt", near as u32, 0, 0)
+            .await
+            .is_some());
+    }
 }

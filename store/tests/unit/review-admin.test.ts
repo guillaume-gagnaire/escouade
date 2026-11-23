@@ -1,11 +1,16 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  createKey,
+  keyFor,
   keychain,
   keysIn,
+  locked,
+  roleFor,
   readToken,
   reportVerdict,
   revoke,
@@ -19,7 +24,7 @@ import { containerCompiler } from '../../scripts/plugin-review/container';
 import { parseTarget } from '../../scripts/plugin-review/download';
 import { review } from '../../scripts/plugin-review/review';
 import { sandboxedCompiler } from '../../server/utils/compile';
-import { readPublicKey } from '../../server/utils/minisign';
+import { readKeyFile, readPublicKey, readSignature, verifySigned } from '../../server/utils/minisign';
 import { checkRevocations, type RevocationList } from '../../server/utils/revocation-list';
 import { checkVersionSignature } from '../../server/utils/signature';
 import { sha256 } from '../../server/utils/versions';
@@ -28,32 +33,45 @@ import { FAKE_ADMIN_TOKEN, hasRustFixture, startReviewStore } from '../fake/revi
 
 // What the review sends to the store from the user's machine (scripts/plugin-review/admin.ts, docs/STORE.md §4.3, §4.5,
 // §4.6): the report, the signature of a version, the revocation lists. Signed by a stand-in for minisign
-// (tests/fake/fake-minisign.mjs) with keys made for the test in a temporary folder, never the store's.
+// (tests/fake/fake-minisign.mjs) with keys made for the test in a temporary folder, never the store's, one for each
+// role (ESC-592): the first hand's (store.key, without a password), the third parties' and the list's
+// (third-party.key, locked), the backup (locked). When the real minisign is on the machine, a key is made and tried
+// with it too, its password piped in.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(here, '../../..');
 const MINISIGN = join(here, '../fake/fake-minisign.mjs');
 const FAKE_CLI = join(here, '../fake/fake-escouade-plugin.mjs');
 const ENGINE = join(here, '../fake/fake-engine.mjs');
+const TSX = resolve(here, '../../node_modules/tsx/dist/cli.mjs');
 
 let root: string;
+let signing: string;
 let store: Awaited<ReturnType<typeof startReviewStore>>;
+/** The key of the third parties and of the revocation list. */
 const key = testKey();
+const first = testKey();
 const backup = testKey();
 const stranger = testKey();
-const keys = [readPublicKey(key.pub)!, readPublicKey(backup.pub)!];
+const keys = [readKeyFile('store.pub', first.pub)!, readKeyFile('third-party.pub', key.pub)!, readKeyFile('backup.pub', backup.pub)!];
 
 beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), 'review-admin-test-'));
+  signing = join(root, 'signing');
+  mkdirSync(signing);
   store = await startReviewStore();
-  for (const [name, k] of [
-    ['store.key', key],
-    ['backup.key', backup],
-    ['stranger.key', stranger],
+  for (const [name, text] of [
+    ['store.key', first.open],
+    ['third-party.key', key.locked],
+    ['backup.key', backup.locked],
+    ['stranger.key', stranger.locked],
+    ['first-locked.key', first.locked],
+    ['third-open.key', key.open],
   ] as const)
-    writeFileSync(join(root, name), k.secret);
+    writeFileSync(join(signing, name), text);
   // The run.js plugin compiled again by the fake escouade-plugin: the same module (1.0.0), another compiler (1.0.2).
   for (const t of [
+    'dev.escouade.discord@1.1.0',
     'dev.exemple.team-rules@1.0.0',
     'io.github.q7x.slak-notify@0.0.1',
     'dev.exemple.rules-js@1.0.0',
@@ -90,8 +108,9 @@ const admin = (over: Partial<Admin> = {}): Admin => ({
   token: FAKE_ADMIN_TOKEN,
   reports: join(root, 'reports'),
   keys,
-  minisign: { cmd: MINISIGN, key: join(root, 'store.key') },
+  minisign: { cmd: MINISIGN, dir: signing },
   work: join(root, 'work'),
+  log: () => {},
   ...over,
 });
 const last = (route: string) => [...store.received].reverse().find((r) => r.route === route)?.body;
@@ -127,7 +146,7 @@ describe('the signature of a version', () => {
 
   it('signs with the backup key as well', async () => {
     const done = await signVersion(
-      admin({ minisign: { cmd: MINISIGN, key: join(root, 'backup.key') } }),
+      admin({ minisign: { cmd: MINISIGN, dir: signing, key: join(signing, 'backup.key') } }),
       'dev.exemple.team-rules',
       '1.0.0',
     );
@@ -139,10 +158,18 @@ describe('the signature of a version', () => {
     await expect(signVersion(admin(), 'io.github.q7x.slak-notify', '0.0.1')).rejects.toThrow(/empêche « Vérifier »/);
     await expect(signVersion(admin({ keys: [] }), 'dev.exemple.team-rules', '1.0.0')).rejects.toThrow(/aucune clé publique/);
     await expect(
-      signVersion(admin({ minisign: { cmd: MINISIGN, key: join(root, 'stranger.key') } }), 'dev.exemple.team-rules', '1.0.0'),
+      signVersion(
+        admin({ minisign: { cmd: MINISIGN, dir: signing, key: join(signing, 'stranger.key') } }),
+        'dev.exemple.team-rules',
+        '1.0.0',
+      ),
     ).rejects.toThrow(/ne passe pas avec les clés publiques/);
     await expect(
-      signVersion(admin({ minisign: { cmd: MINISIGN, key: join(root, 'nowhere.key') } }), 'dev.exemple.team-rules', '1.0.0'),
+      signVersion(
+        admin({ minisign: { cmd: MINISIGN, dir: signing, key: join(signing, 'nowhere.key') } }),
+        'dev.exemple.team-rules',
+        '1.0.0',
+      ),
     ).rejects.toThrow(/pas de clé de signature/);
     await expect(signVersion(admin(), 'dev.exemple.high-contrast', '1.0.0')).rejects.toThrow(/lance d’abord npm run plugin-review/);
     process.env.FAKE_MINISIGN_FAIL = '1';
@@ -219,6 +246,128 @@ describe('the signature of a version', () => {
   });
 });
 
+describe('the key of each role (ESC-592)', () => {
+  it('signs dev.escouade.* with the key of the first hand, without a password, and the others with the third parties’', async () => {
+    expect(roleFor('dev.escouade.discord')).toBe('first-hand');
+    expect(roleFor('dev.exemple.team-rules')).toBe('third-party');
+    expect(roleFor('dev.escouadex.trap')).toBe('third-party');
+    expect(keyFor(admin(), 'first-hand')).toBe(join(signing, 'store.key'));
+    expect(keyFor(admin(), 'third-party')).toBe(join(signing, 'third-party.key'));
+    expect(keyFor(admin(), 'revocation')).toBe(join(signing, 'third-party.key'));
+    const said: string[] = [];
+    const first = await signVersion(admin({ log: (l) => said.push(l) }), 'dev.escouade.discord', '1.1.0');
+    expect(first).toMatchObject({ keyId: keys[0]!.id, role: 'first-hand' });
+    expect(said.join('\n')).toContain('la clé de la première main');
+    expect(said.join('\n')).not.toContain('mot de passe');
+    said.length = 0;
+    const third = await signVersion(admin({ log: (l) => said.push(l) }), 'dev.exemple.team-rules', '1.0.0');
+    expect(third).toMatchObject({ keyId: key.id, role: 'third-party' });
+    expect(said.join('\n')).toContain('la clé des tiers :');
+    expect(said.join('\n')).toContain('minisign demande son mot de passe');
+  });
+
+  it('never seals a third party with the key of the first hand, even locked and given by hand', async () => {
+    const before = sent();
+    const forced = admin({ minisign: { cmd: MINISIGN, dir: signing, key: join(signing, 'first-locked.key') } });
+    await expect(signVersion(forced, 'dev.exemple.team-rules', '1.0.0')).rejects.toThrow(
+      /ne passe pas .*of the first hand, which seals dev\.escouade\.\* plugins only/,
+    );
+    // Nor the first hand with the third parties’.
+    const other = admin({ minisign: { cmd: MINISIGN, dir: signing, key: join(signing, 'third-party.key') } });
+    await expect(signVersion(other, 'dev.escouade.discord', '1.1.0')).rejects.toThrow(/does not seal Escouade's plugins/);
+    // Nor the revocation list with the first hand’s.
+    await expect(
+      revoke(forced, { id: 'x.y', versions: '*', action: 'disable', reason: { fr: 'a', en: 'b' }, notify: false }),
+    ).rejects.toThrow(/ne passe pas .*signs no revocation list/);
+    expect(sent()).toBe(before);
+  });
+
+  it('refuses a key of the third parties, of the list or the backup without a password, before minisign runs', async () => {
+    const before = sent();
+    const open = admin({ minisign: { cmd: MINISIGN, dir: signing, key: join(signing, 'third-open.key') } });
+    await expect(signVersion(open, 'dev.exemple.team-rules', '1.0.0')).rejects.toThrow(/n’a pas de mot de passe/);
+    await expect(
+      revoke(open, { id: 'x.y', versions: '*', action: 'disable', reason: { fr: 'a', en: 'b' }, notify: false }),
+    ).rejects.toThrow(/n’a pas de mot de passe/);
+    const dir = mkdtempSync(join(root, 'open-'));
+    writeFileSync(join(dir, 'third-party.key'), key.open);
+    await expect(signVersion(admin({ minisign: { cmd: MINISIGN, dir } }), 'dev.exemple.team-rules', '1.0.0')).rejects.toThrow(
+      /la clé des tiers doit en avoir un/,
+    );
+    await expect(
+      signVersion(admin({ minisign: { cmd: MINISIGN, dir: join(root, 'none') } }), 'dev.exemple.team-rules', '1.0.0'),
+    ).rejects.toThrow(/create-key third-party/);
+    writeFileSync(join(dir, 'third-party.key'), 'not a key');
+    expect(() => keyFor(admin({ minisign: { cmd: MINISIGN, dir } }), 'third-party')).toThrow(/ne se lit pas/);
+    expect(sent()).toBe(before);
+    expect(locked(key.locked)).toBe(true);
+    expect(locked(key.open)).toBe(false);
+    expect(locked(key.secret)).toBeNull();
+  });
+
+  it('makes the key of the third parties with a password, beside nothing it would replace', () => {
+    const dir = mkdtempSync(join(root, 'create-'));
+    const o = { cmd: MINISIGN, dir: join(dir, 'signing'), keys: join(dir, 'keys') };
+    const made = createKey(o);
+    expect(made.secret).toBe(join(dir, 'signing', 'third-party.key'));
+    expect(made.pub).toBe(join(dir, 'keys', 'third-party.pub'));
+    expect(locked(readFileSync(made.secret, 'utf8'))).toBe(true);
+    const pub = readKeyFile('third-party.pub', readFileSync(made.pub, 'utf8'))!;
+    expect(pub).toMatchObject({ id: made.id, roles: ['third-party', 'revocation'] });
+    expect(readPublicKey(made.line)!.id).toBe(made.id);
+    // Never replaced.
+    expect(() => createKey(o)).toThrow(/existe déjà/);
+    // A key made without a password is taken off.
+    const bare = { ...o, dir: join(dir, 'bare'), keys: join(dir, 'bare-keys') };
+    process.env.FAKE_MINISIGN_OPEN = '1';
+    try {
+      expect(() => createKey(bare)).toThrow(/sans mot de passe/);
+    } finally {
+      delete process.env.FAKE_MINISIGN_OPEN;
+    }
+    expect(existsSync(join(bare.dir, 'third-party.key'))).toBe(false);
+    expect(existsSync(join(bare.keys, 'third-party.pub'))).toBe(false);
+  });
+
+  // The command the user runs, with the real minisign when the machine has it: the password goes to minisign by its
+  // input (as typed in a terminal), the key is locked, it signs with that password and not with another.
+  const real = spawnSync('minisign', ['-v'], { encoding: 'utf8' });
+  it.skipIf(real.status !== 0)('makes a real key with create-key third-party, which signs with its password only', () => {
+    const dir = mkdtempSync(join(root, 'real-'));
+    const env = { ...process.env, ESCOUADE_SIGNING_DIR: join(dir, 'signing'), STORE_KEYS_DIR: join(dir, 'keys') };
+    delete env.ESCOUADE_MINISIGN;
+    const made = spawnSync(process.execPath, [TSX, join(here, '../../scripts/plugin-review/index.ts'), 'create-key', 'third-party'], {
+      input: 'a test password\na test password\n',
+      encoding: 'utf8',
+      env,
+    });
+    expect(made.status, made.stderr).toBe(0);
+    expect(made.stdout).toContain('La clé des tiers et de la révocation est créée');
+    expect(made.stdout).toContain('roles: &[Role::ThirdParty, Role::Revocation]');
+    const secret = join(dir, 'signing', 'third-party.key');
+    expect(locked(readFileSync(secret, 'utf8'))).toBe(true);
+    const pub = readKeyFile('third-party.pub', readFileSync(join(dir, 'keys', 'third-party.pub'), 'utf8'))!;
+    const file = join(dir, 'version.json');
+    writeFileSync(file, '{"format":1,"id":"dev.exemple.slack","version":"1.2.0"}');
+    const comment = 'escouade-verified-v1 dev.exemple.slack@1.2.0 2026-11-22';
+    const wrong = spawnSync('minisign', ['-S', '-s', secret, '-m', file, '-t', comment], { input: 'another one\n', encoding: 'utf8' });
+    expect(wrong.status).not.toBe(0);
+    const signed = spawnSync('minisign', ['-S', '-s', secret, '-m', file, '-t', comment], { input: 'a test password\n', encoding: 'utf8' });
+    expect(signed.status, signed.stderr).toBe(0);
+    const minisig = readFileSync(`${file}.minisig`, 'utf8');
+    expect(verifySigned(readFileSync(file), readSignature(minisig)!, [pub])?.id).toBe(pub.id);
+    expect(checkVersionSignature(readFileSync(file), minisig, [pub], 'dev.exemple.slack', '1.2.0')).toMatchObject({ role: 'third-party' });
+    // A second run replaces nothing.
+    const again = spawnSync(process.execPath, [TSX, join(here, '../../scripts/plugin-review/index.ts'), 'create-key', 'third-party'], {
+      input: 'x\nx\n',
+      encoding: 'utf8',
+      env,
+    });
+    expect(again.status).not.toBe(0);
+    expect(again.stderr).toContain('existe déjà');
+  });
+});
+
 describe('the report', () => {
   it('goes to the queue with the verdict the reader settled, else the proposed one', async () => {
     expect(await sendReport(admin(), 'dev.exemple.team-rules', '1.0.0')).toEqual({ verdict: null });
@@ -264,7 +413,7 @@ describe('the revocation list', () => {
     const three = checkRevocations(String(body.json), String(body.minisig), keys, 2) as { list: RevocationList };
     expect(three.list.entries.map((e) => e.id)).toEqual(['io.github.q7x.slak-notify']);
     // A key revoked, signed by the backup key: the list keeps it from then on.
-    const b = admin({ minisign: { cmd: MINISIGN, key: join(root, 'backup.key') } });
+    const b = admin({ minisign: { cmd: MINISIGN, dir: signing, key: join(signing, 'backup.key') } });
     expect(
       await revoke(b, {
         id: '',
@@ -322,10 +471,17 @@ describe('the token and the keys', () => {
   it('reads the public keys of a folder, and the summary’s lines', () => {
     const dir = join(root, 'keys');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'store.pub'), key.pub);
+    writeFileSync(join(dir, 'store.pub'), first.pub);
     writeFileSync(join(dir, 'backup.pub'), backup.pub);
+    writeFileSync(join(dir, 'third-party.pub'), key.pub);
+    writeFileSync(join(dir, 'other.pub'), stranger.pub);
     writeFileSync(join(dir, 'README.md'), '# not a key');
-    expect(keysIn(dir).map((k) => k.id)).toEqual([backup.id, key.id]);
+    // Each key with the roles of its file's name; a file of no role is left out.
+    expect(keysIn(dir).map((k) => [k.id, k.roles])).toEqual([
+      [backup.id, ['backup']],
+      [first.id, ['first-hand']],
+      [key.id, ['third-party', 'revocation']],
+    ]);
     expect(keysIn(join(root, 'none'))).toEqual([]);
     expect(keysIn(resolve(here, '../../keys'))).toEqual(keysIn(resolve(here, '../../keys')));
     expect(summaryLines('# t\n\nRelu le x.\n\n- a\n- b\n')).toBe('- a\n- b');

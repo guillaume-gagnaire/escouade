@@ -23,6 +23,9 @@ pub enum Format {
     /// JSON with comments and trailing commas (OpenCode's `opencode.json`, Copilot CLI's
     /// `mcp-config.json`), edited in its text (`jsonc`).
     Jsonc,
+    /// Strict JSON (Claude Code's `.claude.json`, which `JSON.parse` reads): edited as `Jsonc`, but never with a
+    /// trailing comma.
+    Json,
 }
 
 /// Where and how a harness's user config holds an MCP server reached over HTTP with a header.
@@ -66,7 +69,7 @@ impl UserConfig {
         };
         match self.format {
             Format::Toml => self.declared_toml(&text),
-            Format::Jsonc => self.declared_json(&text),
+            Format::Jsonc | Format::Json => self.declared_json(&text),
         }
     }
 
@@ -132,7 +135,7 @@ impl UserConfig {
                     .insert(SERVER, Item::Table(self.table(entry)));
                 toml_text(&doc, crlf)
             }
-            Format::Jsonc => self.add_json(config, &text, entry)?,
+            Format::Jsonc | Format::Json => self.add_json(config, &text, entry)?,
         };
         self.write(config, &written)
     }
@@ -155,7 +158,7 @@ impl UserConfig {
                 }
                 self.write(config, &toml_text(&doc, crlf))
             }
-            Format::Jsonc => {
+            Format::Jsonc | Format::Json => {
                 let root = self.parse_json(config, &text)?;
                 let Some(left) = self.remove_json(&text, &root) else {
                     return Ok(());
@@ -178,7 +181,7 @@ impl UserConfig {
     /// What to add to the file by hand: the entry alone, as `add` writes it (JSON: in the objects
     /// that hold it, as a file of its own would have it).
     pub fn snippet(&self, entry: &Entry) -> String {
-        if self.format == Format::Jsonc {
+        if self.format != Format::Toml {
             return self.fresh(entry).trim().to_string();
         }
         let mut doc = DocumentMut::new();
@@ -397,9 +400,14 @@ impl UserConfig {
                 let indent = format!("{outer}{unit}");
                 let member = self.member_text(rest, entry, &indent, &unit, nl);
                 let (open, close) = (at.start + 1, at.end - 1);
-                // A comma after it (both harnesses take one): an object of the user's, emptied
-                // again by `remove_json`, is not one `add` made, which goes with the entry.
-                if text[open..close].trim().is_empty() {
+                // A comma after it (OpenCode and Copilot CLI take one): an object of the user's, emptied
+                // again by `remove_json`, is not one `add` made, which goes with the entry. Strict JSON takes
+                // none: the object's closing brace stays on the entry's last line instead, which tells it apart the
+                // same way, and `remove_json` leaves it `{}` again.
+                if self.format == Format::Json {
+                    let (head, tail) = (&text[..open], &text[close..]);
+                    format!("{head}{nl}{indent}{member} {tail}")
+                } else if text[open..close].trim().is_empty() {
                     let (head, tail) = (&text[..open], &text[close..]);
                     format!("{head}{nl}{indent}{member},{nl}{outer}{tail}")
                 } else {

@@ -2,7 +2,7 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readPublicKey, type PublicKey } from '../../server/utils/minisign';
+import { FIRST_HAND_PREFIX, readKeyFile, readPublicKey, type PublicKey } from '../../server/utils/minisign';
 import {
   checkRevocations,
   parseRevocations,
@@ -17,9 +17,12 @@ import { blockers, type ReviewData } from './report';
 
 // What the review sends to the store from the user's machine (docs/STORE.md §4.3, §4.5, §4.6): the report, the
 // signature of a version the user decided to verify, and the revocation list. The signature is made here by minisign
-// with the store's key (`~/.escouade-signing/store.key`, its password asked in the terminal by minisign itself); the
-// key never leaves the machine, the store gets the `.minisig` alone and checks it with the public keys before taking
-// it in. Nothing is sent before the same check passes here: a mistake is not published. The administration token
+// with the key of its role (ESC-592, audit SEC-03): `~/.escouade-signing/store.key`, the key of the first hand, for
+// `dev.escouade.*` alone; `~/.escouade-signing/third-party.key`, with a password, for every other plugin and for the
+// revocation list. A key of the third parties or of the list without a password is refused before minisign runs; its
+// password is asked in the terminal by minisign itself at each signature, and never passes through this script. The
+// key never leaves the machine, the store gets the `.minisig` alone and checks it with the public keys (and their
+// roles) before taking it in. Nothing is sent before the same check passes here: a mistake is not published. The administration token
 // comes from ESCOUADE_STORE_TOKEN or the system's keychain, never from a file of the repository nor an argument.
 
 export interface Admin {
@@ -30,27 +33,94 @@ export interface Admin {
   reports: string;
   /** The public keys the app embeds (`store/keys/*.pub`). */
   keys: PublicKey[];
-  /** How minisign is run: its command (a `.mjs` runs with node, for the tests) and the secret key. */
-  minisign: { cmd: string; key: string };
+  /**
+   * How minisign is run: its command (a `.mjs` runs with node, for the tests), the folder of the secret keys
+   * (`~/.escouade-signing`, where each role has its file) and, given, the one key to sign with whatever the role (the
+   * backup, ESCOUADE_SIGNING_KEY).
+   */
+  minisign: { cmd: string; dir: string; key?: string };
   /** Where the version.json and the lists to sign are written, out of the repository. */
   work: string;
   log?: (line: string) => void;
 }
 
-/** The public keys of `dir` (`*.pub`). */
+/** The public keys of `dir` (`*.pub`), each with the roles of its name (`ROLES_BY_FILE`). */
 export function keysIn(dir: string): PublicKey[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((n) => n.endsWith('.pub'))
     .sort()
     .flatMap((n) => {
-      const k = readPublicKey(readFileSync(join(dir, n), 'utf8'));
+      const k = readKeyFile(n, readFileSync(join(dir, n), 'utf8'));
       return k ? [k] : [];
     });
 }
 
-/** Where the store's secret key is: ESCOUADE_SIGNING_KEY, else `~/.escouade-signing/store.key` (docs/STORE.md §4.5). */
-export const signingKey = (env: NodeJS.ProcessEnv) => env.ESCOUADE_SIGNING_KEY ?? join(homedir(), '.escouade-signing', 'store.key');
+/** The folder of the secret keys: ESCOUADE_SIGNING_DIR, else `~/.escouade-signing` (docs/STORE.md §4.5). */
+export const signingDir = (env: NodeJS.ProcessEnv) => env.ESCOUADE_SIGNING_DIR ?? join(homedir(), '.escouade-signing');
+
+/** What a signature is for: a plugin of the first hand, a third party's, or the revocation list. */
+export type SigningRole = 'first-hand' | 'third-party' | 'revocation';
+
+/** The role a seal of plugin `id` is signed in: the first hand for `dev.escouade.*`, the third parties' otherwise. */
+export const roleFor = (id: string): SigningRole => (id.startsWith(FIRST_HAND_PREFIX) ? 'first-hand' : 'third-party');
+
+/** The secret key's file of each role in the folder of the keys: the third parties' signs the list as well. */
+export const KEY_FILES: Readonly<Record<SigningRole, string>> = {
+  'first-hand': 'store.key',
+  'third-party': 'third-party.key',
+  revocation: 'third-party.key',
+};
+
+/** The key's name, for a person. */
+const KEY_NAMES: Readonly<Record<SigningRole, string>> = {
+  'first-hand': 'la clé de la première main',
+  'third-party': 'la clé des tiers',
+  revocation: 'la clé des tiers et de la révocation',
+};
+
+/**
+ * Whether the minisign secret key `text` is locked by a password: its second line, in base64, starts with the
+ * algorithm (`Ed`) then the one that derives the key from the password (`Sc`, scrypt; two zero bytes without one).
+ * Nothing else of the key is read. Null when it does not read as a key of minisign.
+ */
+export function locked(text: string): boolean | null {
+  const line = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)[1];
+  if (!line || !/^[A-Za-z0-9+/]+={0,2}$/.test(line)) return null;
+  const head = Buffer.from(line.slice(0, 8), 'base64').subarray(0, 4);
+  if (head.toString('latin1', 0, 2) !== 'Ed') return null;
+  if (head.toString('latin1', 2, 4) === 'Sc') return true;
+  if (head[2] === 0 && head[3] === 0) return false;
+  return null;
+}
+
+/**
+ * The secret key that signs in `role`: the one given (ESCOUADE_SIGNING_KEY, the backup) or the role's file. Every key but
+ * the first hand's must have a password (the third parties', the list's, the backup): one without is refused, nothing
+ * is signed.
+ */
+export function keyFor(a: Admin, role: SigningRole): string {
+  const path = a.minisign.key ?? join(a.minisign.dir, KEY_FILES[role]);
+  if (!existsSync(path))
+    throw new Error(
+      role === 'first-hand' || a.minisign.key
+        ? `pas de clé de signature à ${path} : la procédure de docs/STORE.md §4.5 la crée (ESCOUADE_SIGNING_KEY pour une autre)`
+        : `pas de ${KEY_NAMES[role]} à ${path} : crée-la sur ton poste par npm run plugin-review -- create-key third-party (docs/STORE.md §4.5)`,
+    );
+  if (role !== 'first-hand' || a.minisign.key) {
+    const l = locked(readFileSync(path, 'utf8'));
+    if (l !== true)
+      throw new Error(
+        l === false
+          ? `${path} n’a pas de mot de passe : ${a.minisign.key ? 'la clé donnée' : KEY_NAMES[role]} doit en avoir un (minisign -C -s ${path} lui en donne un) ; rien n’est signé`
+          : `${path} ne se lit pas comme une clé secrète de minisign : rien n’est signé`,
+      );
+  }
+  return path;
+}
 
 // ---- The token, in the keychain ----
 
@@ -146,20 +216,60 @@ async function send(a: Admin, path: string, body: unknown): Promise<unknown> {
   return JSON.parse(text);
 }
 
-/** Runs minisign to sign `file` with the store's key and `trusted` as its comment; gives the `.minisig`. */
-export function minisignSign(a: Admin, file: string, trusted: string): string {
-  if (!existsSync(a.minisign.key))
-    throw new Error(
-      `pas de clé de signature à ${a.minisign.key} : la procédure de docs/STORE.md §4.5 la crée (ESCOUADE_SIGNING_KEY pour une autre)`,
-    );
+/**
+ * Runs minisign to sign `file` with the key of `role` and `trusted` as its comment; gives the `.minisig`. For a key with
+ * a password, minisign asks it in this terminal, each time: nothing of it passes through the script, nothing keeps it.
+ */
+export function minisignSign(a: Admin, file: string, trusted: string, role: SigningRole): string {
+  const key = keyFor(a, role);
+  (a.log ?? ((l: string) => process.stderr.write(`${l}\n`)))(
+    `Signature avec ${a.minisign.key ? 'la clé donnée par ESCOUADE_SIGNING_KEY' : KEY_NAMES[role]}${
+      role === 'first-hand' && !a.minisign.key ? '' : ' : minisign demande son mot de passe'
+    }.`,
+  );
   const sig = `${file}.minisig`;
-  const args = ['-S', '-s', a.minisign.key, '-m', file, '-x', sig, '-t', trusted];
+  const args = ['-S', '-s', key, '-m', file, '-x', sig, '-t', trusted];
   const js = /\.[cm]?js$/.test(a.minisign.cmd);
   // stdio inherited: minisign asks the key's password in this terminal; nothing of it passes through the script.
   const r = spawnSync(js ? process.execPath : a.minisign.cmd, js ? [a.minisign.cmd, ...args] : args, { stdio: 'inherit' });
   if (r.error) throw new Error(`minisign ne se lance pas (${a.minisign.cmd}) : ${r.error.message} ; installe-le (docs/STORE.md §4.5)`);
   if (r.status !== 0) throw new Error(`minisign a échoué (code ${r.status}) : rien n’est envoyé`);
   return readFileSync(sig, 'utf8');
+}
+
+/**
+ * Makes the key of the third parties and of the revocation list on the user's machine (ESC-592): minisign makes the
+ * pair, its password asked twice in this terminal (never `-W`, never an argument, never seen by this script); the
+ * secret key goes to `<dir>/third-party.key`, the public one to `<keys>/third-party.pub` (`store/keys/`: public, it is
+ * committed and the app embeds it). A key already there is never replaced; one minisign made without a password is
+ * taken off. Gives its id and its public line, for the app's `STORE_KEYS`.
+ */
+export function createKey(o: { cmd: string; dir: string; keys: string }): { id: string; line: string; secret: string; pub: string } {
+  const secret = join(o.dir, KEY_FILES['third-party']);
+  const pub = join(o.keys, 'third-party.pub');
+  for (const p of [secret, pub])
+    if (existsSync(p)) throw new Error(`${p} existe déjà : rien n’est créé, une clé ne se remplace pas (docs/STORE.md §7)`);
+  mkdirSync(o.dir, { recursive: true, mode: 0o700 });
+  mkdirSync(o.keys, { recursive: true });
+  const args = ['-G', '-p', pub, '-s', secret];
+  const js = /\.[cm]?js$/.test(o.cmd);
+  // stdio inherited: minisign asks the password twice in this terminal.
+  const r = spawnSync(js ? process.execPath : o.cmd, js ? [o.cmd, ...args] : args, { stdio: 'inherit' });
+  if (r.error) throw new Error(`minisign ne se lance pas (${o.cmd}) : ${r.error.message} ; installe-le (docs/STORE.md §4.5)`);
+  if (r.status !== 0 || !existsSync(secret) || !existsSync(pub)) throw new Error(`minisign a échoué (code ${r.status}) : aucune clé créée`);
+  if (locked(readFileSync(secret, 'utf8')) !== true) {
+    rmSync(secret, { force: true });
+    rmSync(pub, { force: true });
+    throw new Error('minisign a fait une clé sans mot de passe : elle est retirée ; relance et tape un mot de passe');
+  }
+  const text = readFileSync(pub, 'utf8');
+  const key = readPublicKey(text);
+  if (!key) throw new Error(`${pub} ne se lit pas comme une clé publique de minisign`);
+  const line = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('untrusted comment:'))[0]!;
+  return { id: key.id, line, secret, pub };
 }
 
 /** The lines of a public summary (`- …`), without its title. */
@@ -186,7 +296,12 @@ function reviewed(a: Admin, id: string, version: string): ReviewData {
  * `escouade-verified-v1 <id>@<version> <date>`; the signature is checked here with the public keys, then sent with the
  * public summary, and kept beside the report.
  */
-export async function signVersion(a: Admin, id: string, version: string, now = new Date()): Promise<{ keyId: string; minisig: string }> {
+export async function signVersion(
+  a: Admin,
+  id: string,
+  version: string,
+  now = new Date(),
+): Promise<{ keyId: string; role: string; minisig: string }> {
   const data = reviewed(a, id, version);
   const stop = blockers(data);
   if (stop.length) throw new Error(`la revue a relevé ce qui empêche « Vérifier » : ${stop.join(' ; ')}`);
@@ -219,13 +334,13 @@ export async function signVersion(a: Admin, id: string, version: string, now = n
   try {
     const file = join(dir, 'version.json');
     writeFileSync(file, json);
-    const minisig = minisignSign(a, file, verifiedComment(id, version, now.toISOString().slice(0, 10)));
+    const minisig = minisignSign(a, file, verifiedComment(id, version, now.toISOString().slice(0, 10)), roleFor(id));
     const checked = checkVersionSignature(json, minisig, a.keys, id, version);
     if ('error' in checked)
       throw new Error(`la signature ne passe pas avec les clés publiques de store/keys/ (${checked.error}) : rien n’est envoyé`);
     await send(a, 'signature', { id, version, minisig, summary });
     writeFileSync(join(a.reports, id, `${version}.minisig`), minisig);
-    return { keyId: checked.key.id, minisig };
+    return { keyId: checked.key.id, role: checked.role, minisig };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -323,7 +438,7 @@ export async function revoke(a: Admin, r: Revoke, now = new Date()): Promise<{ s
   try {
     const file = join(dir, 'revocations.json');
     writeFileSync(file, json);
-    const minisig = minisignSign(a, file, `${REVOCATIONS_COMMENT} ${serial} ${now.toISOString()}`);
+    const minisig = minisignSign(a, file, `${REVOCATIONS_COMMENT} ${serial} ${now.toISOString()}`, 'revocation');
     const checked = checkRevocations(json, minisig, a.keys, list?.serial ?? 0);
     if ('error' in checked) throw new Error(`la liste signée ne passe pas (${checked.error}) : rien n’est envoyé`);
     await send(a, 'revocations', { json, minisig, notify: r.notify });

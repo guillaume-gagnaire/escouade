@@ -101,7 +101,7 @@ describe.runIf(runnable)('npm run plugins:publish', () => {
             ESCOUADE_REVIEW_WORK: join(root, 'work'),
             ESCOUADE_REVIEW_ENGINE: 'none',
             ESCOUADE_MINISIGN: MINISIGN,
-            ESCOUADE_SIGNING_KEY: join(root, 'store.key'),
+            ESCOUADE_SIGNING_DIR: root,
             STORE_KEYS_DIR: join(root, 'keys'),
             ESCOUADE_PUBLISH_REPO: app,
             ESCOUADE_PUBLISH_POLL_MS: '10',

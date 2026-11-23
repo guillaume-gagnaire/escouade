@@ -39,7 +39,7 @@ export default defineZone('mcp', {
     copyEntry: 'Copy the entry',
     copiedEntry: 'Entry copied',
     copyFailed: 'Copy failed: {error}',
-    note: 'Escouade declares its server in the config of each active account of every harness installed: ~/.claude.json (Claude Code, through claude mcp add), ~/.codex/config.toml (Codex), ~/.config/opencode/opencode.json (OpenCode), ~/.copilot/mcp-config.json (Copilot CLI) for the Main account, the rest of the file and its comments kept. The token is written there in plain text. Turning it off changes the token, then takes the entry out everywhere. A harness installed or an account added later is declared at once.',
+    note: 'Escouade writes its server itself in the config of each active account of every harness installed: ~/.claude.json (Claude Code), ~/.codex/config.toml (Codex), ~/.config/opencode/opencode.json (OpenCode), ~/.copilot/mcp-config.json (Copilot CLI) for the Main account, the rest of the file and its comments kept. No command is run: the token is on no command line. It is written in plain text in those files, readable by your account alone: any program that reads them can drive Escouade. Turning it off changes the token, then takes the entry out everywhere. A harness installed or an account added later is declared at once.',
   },
   activity: {
     title: 'MCP activity',
@@ -112,6 +112,8 @@ export default defineZone('mcp', {
     waitAsk: 'Wait for an answer',
     getAskFile: 'Read a file of a request',
     answerAsk: 'Answer a request left to you',
+    claimInboxView: 'Take a line of “Your turn” in hand',
+    settleInboxView: 'Tick a line of “Your turn” as settled',
   },
   progress: {
     label: 'What the agent says it is doing',

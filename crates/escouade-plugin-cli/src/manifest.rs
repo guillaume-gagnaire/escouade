@@ -206,6 +206,9 @@ pub enum Code {
     Small,
     /// A webhook to a host `permissions.network` does not cover (`host_covered`).
     Network,
+    /// A host of `permissions.network` too wide to declare (`network_word_refused`, audit SEC-09): no dot, or a public
+    /// suffix (`com`, `co.uk`).
+    Host,
     /// Two of `run.command`, `run.js` and `run.wasm`: a program is one of them (ESC-320, ESC-331).
     Exclusive,
     /// A `run.wasm` that names no `Cargo.toml`: a module is built, never brought (ESC-331).
@@ -354,6 +357,11 @@ impl Problem {
                 lang,
                 "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
                 "goes to a host `permissions.network` does not declare: the user would not see it."
+            ),
+            Code::Host => tr_in!(
+                lang,
+                "n'est pas un hôte qu'un plugin peut déclarer : un nom à un point au moins, plus étroit qu'un suffixe public (`com`, `co.uk`), seul ou après `*.`.",
+                "is no host a plugin may declare: a name with a dot at least, narrower than a public suffix (`com`, `co.uk`), alone or after `*.`."
             ),
             Code::Command if expected.starts_with("program:") => {
                 let w = &expected["program:".len()..];
@@ -1170,6 +1178,26 @@ fn is_extension(s: &str) -> bool {
         })
 }
 
+/// Whether a word of `permissions.network` is a host too wide to declare (audit SEC-09, ESC-596): a name without a dot
+/// (`com`, `intranet`, `localhost`), or a public suffix of the ICANN section of the public suffix list (`co.uk`, the
+/// list the crate `psl` carries), alone or behind `*.`. A suffix of its private section (`*.blob.core.windows.net`)
+/// is one company's: it holds. `{account}` and `local:shared` are no hosts. The store's reader says the same with
+/// schemas/public-suffixes.mjs.
+pub fn network_word_refused(word: &str) -> bool {
+    let w = word.trim();
+    if w == "{account}" || w == "local:shared" {
+        return false;
+    }
+    let d = w.trim_end_matches('.').to_ascii_lowercase();
+    let d = d.strip_prefix("*.").unwrap_or(&d);
+    if d.is_empty() {
+        return false;
+    }
+    !d.contains('.')
+        || psl::suffix(d.as_bytes())
+            .is_some_and(|s| s.typ() == Some(psl::Type::Icann) && s.as_bytes() == d.as_bytes())
+}
+
 /// Whether `permissions.network` covers `host`, without regard to case: a host written alone
 /// covers itself; `*.exemple.dev` covers its subdomains, at any depth (`hooks.exemple.dev`,
 /// `a.b.exemple.dev`), but not `exemple.dev` itself (as a TLS certificate's), which is
@@ -1883,6 +1911,15 @@ impl Checker {
         ] {
             if let Some(v) = o.get(key) {
                 *list = self.words(v, &join("permissions", key));
+            }
+        }
+        for (i, word) in p.network.iter().enumerate() {
+            if network_word_refused(word) {
+                self.problems.push(Problem {
+                    path: format!("permissions.network[{i}]"),
+                    code: Code::Host,
+                    expected: None,
+                });
             }
         }
         for (i, command) in p.commands.clone().iter().enumerate() {

@@ -87,6 +87,8 @@ COPY schemas schemas
 COPY plugins plugins
 COPY website/app/assets/main.css website/app/assets/
 COPY README.md LICENSE ./
+# The vectors of the freshness attestation, shared with the app's tests (audit SEC-15): its test runs here too.
+COPY tests/fixtures/plugins/revocations-fresh.json tests/fixtures/plugins/
 WORKDIR /repo/store
 # A failing test fails the deployment: the store online stays the last one that passed.
 RUN npm ci && npm run build && env -u DATABASE_URL -u TEST_DATABASE_URL npm test && mkdir -p /out/archives

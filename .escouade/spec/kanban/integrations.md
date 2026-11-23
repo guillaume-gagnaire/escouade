@@ -2,8 +2,8 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
-tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344","ESC-380","ESC-383","ESC-397"]
-decisions: [121,138]
+tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344","ESC-380","ESC-383","ESC-397","ESC-584"]
+decisions: [121,138,295]
 compared: null
 ---
 
@@ -226,3 +226,7 @@ Ce que les sections ci-dessus disent d'« un compte par service » et des source
 ### La migration
 
 - Rien à refaire : le compte unique d'une 2.1.5 ou d'une 2.2.0-beta.4 est le premier compte de sa liste, et les sources liées et les tickets importés sans compte le désignent.
+
+## Les exécutions isolées et le trousseau (ESC-584)
+
+- Sous Windows, où tournent les e2e, chaque exécution écrit sous un nom à elle, `<entrée>.run-<étiquette>.dev.gagnaire.escouade.sandbox`, l'étiquette tirée de son dossier de données, le dossier écrit dans le commentaire de l'entrée. Le même dossier retrouve ses secrets après un redémarrage ; deux exécutions (deux worktrees) ne lisent ni n'effacent jamais celles de l'autre. Une build de debug lancée avec `--sandbox-keychain clean <dossier>…` reprend ce qu'ont écrit les exécutions de ces dossiers, `--sandbox-keychain sweep` ce qu'ont laissé les exécutions mortes (leur dossier disparu, ou une entrée de plus de 24 h), `--sandbox-keychain list <dossier>…` les nomme, puis elle s'arrête. La fixture des e2e balaie au début de chaque test et reprend à sa fin, réussi ou non, ce que ses apps ont écrit. Rien d'autre n'est touché : seulement les entrées dont le nom finit par `.escouade.sandbox` et porte l'étiquette d'une exécution, jamais celles de l'utilisateur, ni celles qu'écrivaient les exécutions d'avant ESC-584 (sous `<entrée>.dev.gagnaire.escouade.sandbox`, à effacer par l'utilisateur). Sous macOS, une exécution isolée garde le service commun d'avant.

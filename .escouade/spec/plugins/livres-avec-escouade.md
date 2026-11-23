@@ -2,8 +2,8 @@
 title: "Les plugins d'Escouade (la première main)"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §8.7, §8.8, §8.10, §8.33","src-tauri/src/plugins/builtin.rs","src-tauri/src/plugins/mod.rs","src-tauri/src/plugins/runtime.rs","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_wasm_tests.rs","plugins/seed.json","tests/fixtures/plugins/minimal/README.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiche SEC-27"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354","ESC-394","ESC-404","ESC-355","ESC-435"]
-decisions: [80,92,110,113,117,142,214]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354","ESC-394","ESC-404","ESC-355","ESC-435","ESC-592"]
+decisions: [80,92,110,113,117,142,214,301]
 compared: null
 ---
 
@@ -82,3 +82,10 @@ Le README d'un dossier de `plugins/` peut être un par langue (`README.fr.md` et
 ## Le compte des installations de l'amorce (ESC-394)
 
 Les plugins que l'amorce installe comptent au store comme une installation, avec l'accord aux statistiques ; hors ligne, le compte attend ; il est oublié sur un refus ; une version ne compte qu'une fois. Une amorce de build de développement ne compte rien. Le détail est dans *Le store dans l'app*.
+
+## La clé de la première main (ESC-592, audit SEC-03)
+
+- **Un plugin de la première main est scellé par la clé de la première main** (`store.pub`, E0516468FFDCBDD5), gardée sans mot de passe sur le poste de l'utilisateur pour que le chef d'escouade signe seul, après sa revue, tout `dev.escouade.*` qu'il publie. La clé de secours le scelle aussi ; la clé des tiers, jamais.
+- **Cette clé ne scelle rien d'autre**, par le code de l'app : un sceau d'elle sur un identifiant hors de `dev.escouade.*` est refusé, avec sa raison (« … signée par la clé … de la première main d'Escouade, qui ne scelle que les plugins dev.escouade.* : rien n'est installé »), et elle ne signe plus la liste de révocation. Un poste compromis ou un agent détourné qui la lit ne peut donc sceller ni un plugin d'un autre auteur, ni une liste ; le pire cas restant, une version forgée de la première main, demande encore de la faire servir et un clic de mise à jour.
+- **Ses sceaux d'avant restent valides** : ils sont tous `dev.escouade.*`. L'amorce de chaque release est vérifiée avec les mêmes rôles (`store/scripts/seed.ts`).
+- La page d'un plugin de la première main dans la vue Plugins dit sa clé : « Signé par la clé des plugins d'Escouade · E0516468FFDCBDD5 », et au survol que la revue est faite par un agent d'IA, puis signée. Voir *La revue « Vérifié par Escouade »*.

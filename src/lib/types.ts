@@ -37,9 +37,14 @@ export interface Settings {
   pwshPath: string;
   bashPath: string;
   wslDistro: string;
+  /** The proxy's address, without its password: the keychain keeps it, the backend puts it back (SEC-10). */
   proxyUrl: string;
+  /** « Ne jamais sortir sans le proxy » (SEC-14): null until the user sets it, on with a proxy (`neverDirect`). */
+  proxyNeverDirect: boolean | null;
   noProxy: string;
   proxyTerminals: boolean;
+  /** « Mode hors ligne » (ESC-596): the updates, the store, the revocation list and the statistics stop. */
+  offline?: boolean;
   /** « Ignorer la vérification des certificats TLS »: through the proxy alone, nothing without one (SEC-07). */
   insecureTls: boolean;
   /** « Autorités de certification supplémentaires »: a `.pem` file trusted as well as the system's store; empty, none. */
@@ -70,6 +75,8 @@ export interface Settings {
   telemetry: boolean | null;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
   integrations: IntegrationSettings;
+  /** « Récupérer automatiquement (git fetch) » (ESC-561): for every project, each one may say its own (`Project.gitFetch`). */
+  gitFetch: GitFetchSettings;
   /** « Langue de l’interface »: the system's (French when it is, English otherwise), or a language of its own. */
   language: 'system' | Lang;
   /** « Langue des textes rédigés par Claude »: the interface's, or a language of its own. */
@@ -114,6 +121,11 @@ export interface Settings {
   pluginTheme?: string;
   /** « N'installer que des versions vérifiées » (STORE-9): a version of the store without the seal is refused. */
   pluginsVerifiedOnly?: boolean;
+  /**
+   * « Harness des plugins tiers » (SEC-01, ESC-589): `ask`, a harness a third party describes asks at its first launch,
+   * its whole command said; `refuse`, none runs.
+   */
+  thirdPartyHarnesses?: 'ask' | 'refuse';
   /** « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the WebView's zoom, text, spacing and icons together. */
   uiZoom: number;
   /** « Taille du texte des terminaux », in CSS pixels before the zoom. */
@@ -897,6 +909,33 @@ export interface AgentFolder {
   folded?: boolean;
 }
 
+/** « Récupérer automatiquement (git fetch) » for every project (ESC-561). */
+export interface GitFetchSettings {
+  auto: boolean;
+  /** Minutes between two fetches, 1 to 1440. */
+  everyMin: number;
+  /** Seconds a background fetch may take, 30 to 1800. */
+  timeoutSecs: number;
+}
+
+/** A project's: as the general setting, always or never; its own interval and time limit (0: the general one's). */
+export interface ProjectFetch {
+  mode: 'default' | 'always' | 'never';
+  everyMin: number;
+  timeoutSecs: number;
+}
+
+/** Why a background fetch failed (ESC-561). */
+export interface FetchFailure {
+  kind: 'credentials' | 'timeout' | 'network' | 'other';
+  /** git's words. */
+  message: string;
+  /** ms epoch. */
+  at: number;
+  /** The time limit it ran within, in seconds. */
+  timeoutSecs: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -936,6 +975,8 @@ export interface Project {
   worktreeTeardown: WorktreeStep[];
   /** The external ticket systems its tickets come from, and what moving them does there. */
   integrations: ProjectIntegrations;
+  /** « Récupérer automatiquement » of this project (ESC-561); absent from a project saved before it. */
+  gitFetch?: ProjectFetch;
   /** « Commit »: who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   commitMode: CommitMode;
   /** « Ouvrir les pages des lancements » (ESC-311): where a launch's page opens once it answers. Kept on this machine. */
@@ -1119,6 +1160,8 @@ export interface PageView {
   detached: boolean;
   /** The width it is shown at: the whole room, a tablet's, a phone's. */
   mode?: 'full' | 'tablet' | 'mobile';
+  /** The page of a launch command run in its project (ESC-560): no agent's view to go back to. */
+  agentless?: boolean;
 }
 
 /** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
@@ -1150,7 +1193,16 @@ export interface RunCommand {
   shell: string;
   /** Folder relative to the project's, empty for the project itself. */
   cwd: string;
+  /**
+   * « Ouvrir à son lancement » (ESC-560): an http(s) address opened once it answers, empty for none. It may name the
+   * ports of a worktree, `${ESCOUADE_PORT_BASE:-3000}` (`run-url.ts`).
+   */
+  url?: string;
+  /** Where `url` opens: the page of a launch, or the system's browser (the page when absent). */
+  openIn?: RunOpen;
 }
+
+export type RunOpen = 'page' | 'browser';
 
 /** The launch commands Claude suggests for a project, and how many it gave that were refused (not one plain line, or too long). */
 export interface RunSuggestion {
@@ -2002,6 +2054,11 @@ export interface Agent {
   /** « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal, not in Escouade's conversation view. */
   terminal: boolean;
   /**
+   * Its session started in Claude Code's Code Mode (ESC-553): it is resumed in its terminal alone, never in the
+   * conversation's stream. Absent when it did not.
+   */
+  codeMode?: boolean;
+  /**
    * « Vue OpenCode »: its harness's interface, in a terminal, joined to the process Escouade drives, which goes on (the
    * conversation keeps up with what is done there). Never with `terminal`.
    */
@@ -2377,6 +2434,10 @@ export interface GitInfo {
   hasRemote: boolean;
   /** When the repository was last fetched (ms epoch). */
   lastFetch: number | null;
+  /** Why its last background fetch failed, since its last success (ESC-561). */
+  fetchFailure?: FetchFailure | null;
+  /** The background fetch goes through Windows' ssh, the one of this Git for Windows stalling on a big fetch: update Git. */
+  fetchSshNote?: boolean;
   modified: number;
   added: number;
   deleted: number;
@@ -3165,6 +3226,8 @@ export interface InitialState {
   enginesOff?: EngineId[];
   /** The harnesses not on for a project, by project (absent before ESC-404: none). */
   harnessScope?: Record<string, HarnessScope>;
+  /** The harnesses of a third party whose command does not run now (SEC-01, ESC-589). */
+  harnessLaunches?: Partial<Record<EngineId, LaunchHeld>>;
   /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
   sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
@@ -4166,6 +4229,32 @@ export interface CacheHeat {
 export interface HarnessScope {
   off: EngineId[];
   asks: EngineId[];
+  /** A third party’s harnesses, in a private project: never launched there (SEC-02, ESC-590). */
+  thirdParty?: EngineId[];
+}
+
+/** Why the command of a harness of a third party does not run now (SEC-01, ESC-589). */
+export type LaunchHeld = 'asks' | 'refused';
+
+/**
+ * The whole command of a harness a plugin of a third party describes (SEC-01, ESC-589), as the window of the agreement
+ * shows it: the program found, its arguments, those it resumes a session with and those that read its version, the
+ * variables it adds and takes off, those Escouade sets; `fingerprint` is what the agreement keeps.
+ */
+export interface LaunchAsk {
+  engine: EngineId;
+  harness: string;
+  plugin: string;
+  pluginName: string;
+  program: string;
+  args: string[];
+  resumeArgs: string[];
+  versionArgs: string[];
+  env: { name: string; value: string }[];
+  removeEnv: string[];
+  escouadeEnv: string[];
+  fingerprint: string;
+  held: LaunchHeld | null;
 }
 
 // ---------- the Overseer (ESC-462) ----------

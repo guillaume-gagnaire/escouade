@@ -14,7 +14,8 @@ The app says so under the group’s title: “Claude Code processes, quota reads
 
 | Setting | Effect | Default |
 |---|---|---|
-| “HTTP(S) proxy” | The proxy’s address, for example `http://user:password@proxy:3128`. Empty (“none”), connections are direct. | Empty |
+| “HTTP(S) proxy” | The proxy’s address, for example `http://user:password@proxy:3128`. Empty (“none”), connections are direct. The password goes to the system keychain: see [“The proxy’s password”](#the-proxy-s-password). | Empty |
+| “Never go out without the proxy” | When the proxy doesn’t answer, an update or a download fails with its reason instead of going out directly. Grayed with no proxy. | On as soon as a proxy is set |
 | “Exclusions” | The hosts that don’t go through the proxy, separated by commas (the `NO_PROXY` list). | `localhost,127.0.0.1` |
 | “Also apply the proxy to the built-in terminals” | Terminals also get the proxy variables. | Off |
 
@@ -22,10 +23,20 @@ The app says so under the group’s title: “Claude Code processes, quota reads
 
 - **Claude Code processes**: agents, and the other calls to Claude Code that Escouade makes (naming an agent, commit messages, signing in to an account). They get `HTTPS_PROXY`, `HTTP_PROXY`, their lowercase variants, and `NO_PROXY` (with `no_proxy`) if “Exclusions” isn’t empty. An agent only sees them the next time its process (re)starts: an agent already running keeps its settings until then.
 - **Quota reads and integrations** (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, Azure Boards): the app’s requests go through the proxy and respect “Exclusions”.
-- **Updates**: checking and downloading go through the proxy. An invalid proxy address makes the check fail, with the message “invalid proxy address”. When the proxy itself doesn’t answer (switched off, or a computer outside the company network), Escouade tries once without the proxy and the failure message gives both tries; when the proxy refuses the request, it isn’t made again without the proxy. See [“Behind a company proxy”](updates#behind-a-company-proxy).
+- **Updates**: checking and downloading go through the proxy. An invalid proxy address makes the check fail, with the message “invalid proxy address”. When the proxy itself doesn’t answer (switched off, or a computer outside the company network), the update fails and says so, as long as “Never go out without the proxy” is on; off, Escouade tries once without the proxy and the failure message gives both tries. When the proxy refuses the request, it is never made again without the proxy. See [“Behind a company proxy”](updates#behind-a-company-proxy).
 - **Built-in terminals**: only if “Also apply the proxy to the built-in terminals” is on. The same variables are then added to terminals, launch commands, and worktree commands. See [terminals](terminals).
 
 Without a proxy address, Escouade adds no proxy variable: processes keep your session’s environment.
+
+### The proxy’s password
+
+Type the address with your username and password, as before. Escouade keeps the password in the system keychain (Windows Credential Manager, the macOS Keychain, the desktop’s secret service on Linux), never in `settings.json`: from the next start, the field shows the address without it (`http://user@proxy:3128`), and says so below. Agents and the app’s connections still get the whole address. To change the password, type the address with the new one; another username, or an address with no username, takes it out of the keychain.
+
+A password an earlier version wrote in `settings.json` is taken out of it at the first start, and goes to the keychain. Without a keychain (Linux without a secret service, WSL), it stays in `settings.json`, apart from the address, readable by you alone.
+
+### Never go out without the proxy
+
+On as soon as a proxy is set, until you turn it off. When the proxy doesn’t answer, checking for or downloading an update fails with its reason, for example “couldn’t reach github.com through the proxy 127.0.0.1:9000 (…); nothing is tried without the proxy: “Never go out without the proxy” is on (Settings › Advanced › Network)”. Nothing goes out directly, which a company where every connection goes through the proxy expects. Likewise, if the proxy’s password is no longer in the keychain at start, agents don’t start and say so, until you type the address again with its password. Turn it off for Escouade to try once without the proxy when yours can’t be reached (a laptop outside the company network, for example); what it downloads stays checked by its signature.
 
 ## Certificates
 
@@ -57,3 +68,32 @@ Behind Zscaler or another proxy that inspects TLS:
 4. Restart the running agents (or wait for their next start): they take the file then.
 
 If a connection still fails with “UnknownIssuer”, the proxy shows another certificate than the one chosen: take the one the browser shows for the same site.
+
+## Offline mode
+
+“Offline mode”, at the bottom of the “Network” group, stops in one gesture the four flows Escouade starts by itself: what to know before you set a firewall.
+
+| Flow stopped | What it does otherwise |
+|---|---|
+| The updates | The search for a new version of the app, every 5 minutes, and for the installed plugins’, at the start. |
+| The store | The reading of store.escouade.dev’s catalog, at the start then every 6 hours. |
+| The revocation list | Read with the catalog, with its copy and its attestation on escouade.dev. |
+| The statistics | The anonymous usage statistics (if you accepted them), every minute, and the count of the store’s installs. While the mode lasts, nothing is kept to leave later. |
+
+While it is on, the status bar says “Offline”; a click opens the setting. “Check for updates” and “Check now” say so instead of searching: “Offline mode: offers of dd/mm hh:mm”. The catalog and the revocation list kept on the machine still apply.
+
+What you ask for by a gesture is not stopped: installing a plugin, showing an image of a message. Nor is the agents’ work, `git fetch` or the reading of the quotas.
+
+### Imposed by the device
+
+A managed device may impose it with the policy `network.offline` (true). The setting is then on and greyed out, with “Imposed by the policy of this device.”, whatever the setting says. Escouade reads it:
+
+- on Windows, in `HKLM\SOFTWARE\Policies\Escouade` then `HKCU\SOFTWARE\Policies\Escouade`: a `REG_DWORD` value named `network.offline`, set to 1;
+- on macOS, in the managed preferences of the domain `dev.gagnaire.escouade` that a configuration profile installs (`/Library/Managed Preferences/`): the key `network.offline`, a Boolean;
+- on Linux, in `/etc/escouade/policies/*.json`: `{"network.offline": true}`, the folder and the files owned and written by root alone.
+
+A policy put while the app runs applies within the minute.
+
+## Remote images
+
+An image of a message that comes from the web shows only on a click, and never from your machine or your local network: an address such as `127.0.0.1`, `192.168.…` or `10.…`, `localhost`, or a name that leads there, even behind a proxy. The message says so: “An image of this machine or of the local network is not shown”.

@@ -26,6 +26,7 @@ fn refused() -> Failure {
         stuck: None,
         trusted: Vec::new(),
         direct: None,
+        kept_to_proxy: false,
     }
 }
 
@@ -43,6 +44,7 @@ fn unreachable_host() -> Failure {
         stuck: Some(Stuck::ProxyDown),
         trusted: Vec::new(),
         direct: None,
+        kept_to_proxy: false,
     }
 }
 
@@ -57,6 +59,7 @@ fn net(proxy: Option<&Server>) -> Network {
         proxy: proxy.map(|p| url(&format!("http://{}", p.address()))),
         system_proxy: false,
         insecure_tls: false,
+        never_direct: false,
     }
 }
 
@@ -1401,4 +1404,48 @@ fn authorities(server: &crate::integrations::fake::FakeServer) -> String {
     let path = dir.join("root.pem");
     std::fs::write(&path, &server.cert_pem).unwrap();
     path.to_string_lossy().into_owned()
+}
+
+/// SEC-14: a proxy of the settings that is not there is gone around only while « Ne jamais sortir sans le proxy » is
+/// off; on, the failure says why nothing was tried without it. A proxy that answered is never gone around.
+#[test]
+fn never_direct_keeps_a_request_to_the_proxy_and_says_so() {
+    let proxied = Network {
+        proxy: Some(url("http://127.0.0.1:9000")),
+        ..Network::default()
+    };
+    let mut f = unreachable_host();
+    assert!(proxied.goes_direct_after(Route::Proxy, &mut f));
+    assert!(!f.kept_to_proxy);
+    assert!(!proxied.goes_direct_after(Route::Direct, &mut f));
+    let kept = Network {
+        never_direct: true,
+        ..proxied.clone()
+    };
+    assert!(!kept.goes_direct_after(Route::Proxy, &mut f));
+    assert!(f.kept_to_proxy);
+    assert_eq!(
+        f.describe(Fr),
+        "connexion impossible à github.com par le proxy 127.0.0.1:9000 (tcp connect error: refused) ; rien n'est tenté sans le proxy : « Ne jamais sortir sans le proxy » est allumé (Réglages › Avancé › Réseau)"
+    );
+    assert!(f
+        .describe(En)
+        .ends_with("; nothing is tried without the proxy: “Never go out without the proxy” is on (Settings › Advanced › Network)"));
+    let mut answered = refused();
+    assert!(!proxied.goes_direct_after(Route::Proxy, &mut answered));
+    assert!(!kept.goes_direct_after(Route::Proxy, &mut answered));
+    assert!(
+        !answered.kept_to_proxy,
+        "a proxy that answered says its own words"
+    );
+}
+
+#[test]
+fn never_direct_follows_the_settings() {
+    let mut s = Settings::default();
+    assert!(!Network::from_settings(&s).unwrap().never_direct);
+    s.proxy_url = "http://127.0.0.1:9000".into();
+    assert!(Network::from_settings(&s).unwrap().never_direct);
+    s.proxy_never_direct = Some(false);
+    assert!(!Network::from_settings(&s).unwrap().never_direct);
 }

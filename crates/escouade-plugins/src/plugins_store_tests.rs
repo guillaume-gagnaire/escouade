@@ -213,9 +213,9 @@ async fn a_verified_version_installs_with_its_seal_checked_here_and_again_offlin
 
 #[tokio::test]
 async fn without_the_store_key_a_verified_version_installs_without_a_seal() {
-    // No ESCOUADE_STORE_TEST_KEY: as a release before the user gives the keys (STORE_PUBLIC_KEYS empty).
+    // No ESCOUADE_STORE_TEST_KEY: as a release before the user gives the keys (STORE_KEYS empty).
     let fake = Fake::start();
-    if !crate::store_keys::STORE_PUBLIC_KEYS.is_empty() {
+    if !crate::store_keys::STORE_KEYS.is_empty() {
         return;
     }
     let (_, store, plugins) = ready(&fake, "nokey").await;
@@ -559,6 +559,93 @@ async fn a_plugin_from_a_folder_is_offered_the_store_version_of_its_id() {
     assert!(matches!(moved.origin, Origin::Store { .. }));
     assert!(moved.in_store.is_none());
     assert_eq!(plugins.list(Lang::Fr).len(), 1);
+}
+
+/// SEC-01 (ESC-589): « N'installer que des versions vérifiées » holds a folder (and a repository, read as one) to the
+/// store: kept when the store has the same id and the same version verified, of the same files; a byte changed, or a
+/// version the store did not verify, is refused with why and the gesture that installs it anyway, nothing left aside.
+#[tokio::test]
+async fn a_folder_is_held_to_the_verified_version_of_the_store_with_the_same_files() {
+    let fake = Fake::start().trusted();
+    let (_, store, plugins) = ready(&fake, "sec01").await;
+    const ID: &str = "dev.exemple.high-contrast";
+    let verified = store
+        .fetch(&http(), ID, Some("1.0.0"), true, Lang::Fr)
+        .await
+        .unwrap();
+    let src = temp_dir("sec01-src").join("high-contrast");
+    for (rel, bytes) in &verified.files {
+        let to = src.join(rel);
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::write(&to, bytes).unwrap();
+    }
+    let client = http();
+    let fetch = |v: &'static str| store.fetch(&client, ID, Some(v), true, Lang::Fr);
+    // The same files as the verified 1.0.0: kept, and said so.
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    assert!(!p.verified, "a folder has no seal of its own");
+    let held = plugins
+        .hold_to_store(p, fetch("1.0.0").await, Lang::Fr)
+        .unwrap();
+    assert_eq!(held.matches_store.as_deref(), Some("1.0.0"));
+    let view = plugins.install(&held.token, Lang::Fr).unwrap();
+    assert!(matches!(view.origin, Origin::Folder { .. }));
+    // A byte changed: refused, what was set aside gone.
+    let manifest = src.join("escouade-plugin.json");
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    std::fs::write(&manifest, format!("{text}\n")).unwrap();
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    let token = p.token.clone();
+    let e = plugins
+        .hold_to_store(p, fetch("1.0.0").await, Lang::Fr)
+        .unwrap_err();
+    assert!(
+        e.message
+            .contains("ne sont pas ceux de la version v1.0.0 vérifiée du store"),
+        "{}",
+        e.message
+    );
+    assert!(
+        e.message
+            .contains("« N'installer que des versions vérifiées » est allumé")
+            && e.message.contains("coupe-le"),
+        "{}",
+        e.message
+    );
+    assert!(plugins.staged(&token).is_none(), "nothing left aside");
+    // A version the store did not verify (1.1.0): refused.
+    let mut m: Value = serde_json::from_str(&text).unwrap();
+    m["version"] = json!("1.1.0");
+    std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    let e = plugins
+        .hold_to_store(p, fetch("1.1.0").await, Lang::Fr)
+        .unwrap_err();
+    assert!(
+        e.message.contains("v1.1.0 n'est pas installé"),
+        "{}",
+        e.message
+    );
+    // An id the store does not have: refused.
+    m["id"] = json!("dev.exemple.inconnu");
+    m["version"] = json!("1.0.0");
+    std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    let fetched = store
+        .fetch(
+            &http(),
+            "dev.exemple.inconnu",
+            Some("1.0.0"),
+            true,
+            Lang::Fr,
+        )
+        .await;
+    assert!(plugins.hold_to_store(p, fetched, Lang::Fr).is_err());
+    // The store's own version of another id, handed for this one: refused.
+    let p = plugins.inspect_folder(&src, Lang::Fr).unwrap();
+    assert!(plugins
+        .hold_to_store(p, fetch("1.0.0").await, Lang::Fr)
+        .is_err());
 }
 
 #[tokio::test]

@@ -67,7 +67,7 @@ A guard is a rule of the harness, which a command can get around; a barrier hold
 > [!WARNING]
 > On Windows, an agent’s fence is an instruction given to its harness, not a partition of the system: Claude Code has no sandbox there, and a command that builds its path another way reads the folder. The page says so under “Private project”. To keep two clients apart, use one Windows account (or one computer) per client.
 
-A harness served by a third-party plugin (one whose id doesn’t start with `dev.escouade.`) runs in a private project only once you turn it on for that project: its first agent there asks you first (“Turn on”), and the update that turns on, once, the harnesses a private project already used turns on Escouade’s own alone.
+A harness from a third-party plugin (one whose id doesn’t start with `dev.escouade.`, whether it serves or describes it) can’t guarantee the fence of a private project: while a private project exists on your machine, it isn’t launched in any project, even turned on. The “Harness” menu says so, an agent on one doesn’t start, and making a project private stops the third-party agents of all your projects, at once at rest, at the end of their turn at work. It comes back once no project is private. Escouade’s own harnesses ask you first in a private project (“Turn on”), then keep their fence.
 
 ## Workflow
 
@@ -129,6 +129,16 @@ This choice concerns the “Commit…” and “Commit all…” buttons of the 
 
 - “Written by the agent”: the agent is asked to commit its changes.
 - “Direct, with a suggested message”: Escouade suggests a message, you review it, and you commit yourself.
+
+### Fetch automatically (git fetch)
+
+This project’s background fetch (see [Branches](branches)), for a heavy repository or one behind a VPN:
+
+- “As the general setting” (the default) follows [Every project](#every-project); the general setting is recalled under it, with “General setting…” to open it.
+- “Always” fetches it even when the general setting is off; “Never” never fetches it in the background (“Fetch” stays by hand).
+- “The project’s own interval” and “The project’s own time limit”: empty, the general setting’s; the same bounds and offered values as it.
+
+These three settings are shared in [.escouade.yml](escouade-yml) (`git.auto_fetch`, `git.fetch_every`, `git.fetch_timeout`). A repository of several projects is fetched as soon as one of them wants it, at the shortest of their intervals and the longest of their time limits.
 
 ## Worktrees
 
@@ -204,6 +214,9 @@ Closing is refused while an approval of one of the project’s tickets is runnin
 
 | Setting | Effect | Default |
 | --- | --- | --- |
+| “Fetch automatically (git fetch)” | In the background, Escouade fetches every repository that has a remote, one at a time, never asking for credentials: the commits to pull show up by themselves. Each project may say its own. | On |
+| “Interval” | Between two fetches of a repository. A free value in minutes, 1 min to 24 h, or an offered one (2, 5, 15, 30 min, 1 h). Out of its bounds, it is brought back to the nearest, and the window says so. | 5 min |
+| “Time limit” | Past it, the background fetch is given up, and tried again at the next interval. In seconds, 30 s to 30 min. A “Fetch” by hand keeps its 3 min. | 5 min |
 | “Search by meaning” | Downloads the vectors’ model, one for every project of this machine: the [shared memory](shared-memory) and the [docs](docs-space) are then searched by meaning besides the words. Its progress shows, **Cancel** keeps what came (**Resume** goes on), **Delete** removes it. Nothing leaves the machine. | Not downloaded |
 
 ## New projects

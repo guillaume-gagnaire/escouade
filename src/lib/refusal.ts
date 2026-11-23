@@ -8,9 +8,17 @@ import type { EngineId } from './types';
  */
 const NO_ACCOUNT = /^no-account:([a-z0-9._-]+)(?:@([^|]+))?\|/;
 
-/** What a refusal says, without the mark of a missing account. */
+/** A file the backend does not hand to the system (a program, an installer, a disk, a shortcut, a page: `sentfiles::NotOpened`), `not-opened|<text>`. */
+const NOT_OPENED = /^not-opened\|/;
+
+/** What a refusal says, without the mark of a missing account nor of a file not opened. */
 export function errorText(e: unknown): string {
-  return String(e).replace(NO_ACCOUNT, '');
+  return String(e).replace(NO_ACCOUNT, '').replace(NOT_OPENED, '');
+}
+
+/** Whether a refusal is one to open a file the system would run, install, mount or follow: its folder is offered instead. */
+export function notOpened(e: unknown): boolean {
+  return NOT_OPENED.test(String(e));
 }
 
 /** The harness a refusal wants an account of (ESC-128), if it is one for want of an account. */

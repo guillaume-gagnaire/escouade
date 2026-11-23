@@ -73,6 +73,24 @@ Le [remote control](remote-control) suit les mêmes règles que dans la vue Esco
 
 Dans Réglages › Comptes et harness, groupe « Processus », le choix « Vue des nouveaux agents », « Escouade » (par défaut) ou « Terminal du harness », fait démarrer chaque nouvel agent dans la conversation d’Escouade ou dans cette vue. Chaque agent peut ensuite changer de vue depuis son en-tête. Les agents de ticket restent toujours dans la vue d’Escouade, comme ceux d’un harness qui n’a pas de vue terminal. Voir [les réglages des harness](settings-claude-code).
 
+## Les fonctionnalités expérimentales
+
+Le plugin Claude Code a, dans sa page (Plugins › Claude Code › Réglages), un groupe « Fonctionnalités expérimentales » : des drapeaux de Claude Code que seule cette vue reçoit, jamais la conversation d’Escouade, une discussion ni un agent de ticket, que Claude Code lance en stream-json, où ils ne font rien.
+
+| Réglage | Ce qu’il fait | Il faut |
+| --- | --- | --- |
+| Code Mode | Claude écrit du JavaScript qui fait ses appels d’outils (l’outil `REPL`), plusieurs en un pas. | Claude Code 2.1.323 ou plus (2.1.326 avec les Agent Teams), un abonnement Claude ou un compte Console, Opus 5.5, Sonnet 5.5, Haiku 5.5 ou Fable 5.2 |
+| Agent Teams | Une session mène des coéquipiers, qui partagent une liste de tâches et s’écrivent. | Claude Code 2.1.32 ou plus |
+| Autres drapeaux | Des noms de `CLAUDE_CODE_EXPERIMENTAL_*`, séparés par des espaces ou des virgules, chacun posé à 1. Tout autre nom est laissé de côté, et la conversation le dit. | — |
+
+Ils valent pour tous les projets ; la page Plugins d’un projet (Réglages › le projet › Plugins) les règle autrement pour lui : « Comme pour tous les projets », « Activé » ou « Désactivé », et une liste d’autres drapeaux qui remplace celle de tous les projets (« aucun » : aucun). Ils sont gardés sur ta machine : le `.escouade.yml` d’un dépôt ne les allume jamais. Escouade les met dans le fichier de réglages privé de l’interface : ton `~/.claude/settings.json` n’est pas touché, et un `0` que tu y as mis l’emporte.
+
+La première fois, Claude Code demande dans le terminal de confirmer le Code Mode (« Yes, turn on Code Mode ») ; puis il dit en haut de la session « Code Mode (experimental) is on ». Escouade ne le passe pas, et la conversation dit pourquoi, quand le remote control est demandé pour l’agent (Claude Code ne prend pas les deux), quand le compte passe par une passerelle ou un fournisseur cloud (`ANTHROPIC_BASE_URL`, Bedrock, Vertex…, un `apiKeyHelper`), quand Claude Code est trop ancien ou quand le modèle ne le prend pas.
+
+**Un agent en Code Mode reste dans son terminal.** Claude Code ne reprend une session commencée en Code Mode que dans son interface. Escouade le lit dans le transcript de la session : la conversation le dit (« En Code Mode : cet agent se reprend dans son terminal »), « Escouade » est grisé dans l’en-tête et le menu de sa carte, et Escouade ne le relance jamais dans sa conversation, ni à la reprise automatique ni par un ticket. Son interface le reprend avec le Code Mode, même si tu l’as éteint depuis, et sans le remote control. Une session commencée sans le Code Mode se reprend sans lui.
+
+**Les permissions.** Chaque appel que fait le code arrive aux règles de Claude Code et aux hooks d’Escouade sous son nom habituel : une commande demandée se voit comme sans le Code Mode (« Autoriser Bash : mkdir build ? »), et la clôture d’un [projet privé](mcp#les-projets-prives) tient pour lui, en Bypass aussi.
+
 ## La confiance du dossier
 
 La première fois que l’interface de Claude Code se lance dans un dossier, elle demande si tu lui fais confiance. Escouade ne répond jamais à ta place. Les worktrees créés dans le dossier des worktrees par défaut du projet (`.claude/worktrees`) héritent de la réponse donnée pour le projet. Un « Dossier des worktrees » hors du projet n’en hérite pas : l’interface pose la question au premier lancement de chaque worktree (voir [les worktrees](worktrees)).

@@ -336,6 +336,16 @@
       {/if}
     </div>
     <div class="end">
+      {#if app.offline.on}
+        <!-- « Mode hors ligne » (ESC-596): said while it lasts; a click opens its setting. -->
+        <button
+          class="it link"
+          data-testid="status-offline"
+          use:tip={app.offline.imposed ? t('shell.status.offlineImposedTip') : t('shell.status.offlineTip')}
+          onclick={() => (app.modal = { kind: 'settings', page: 'advanced', at: 'network' })}
+          ><Icon name="globe" size={14} /><span>{t('shell.status.offline')}</span></button
+        >
+      {/if}
       {#if restartIn !== null}
         <span class="it"><b>{t('shell.status.restartIn', { seconds: restartIn })}</b></span>
         <button class="small" onclick={postponeRestart}>{t('common.later')}</button>

@@ -83,7 +83,9 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
     assert!(def("plugins.projectSettings").is_some());
     // The ceiling of the tickets in parallel (ESC-620).
     assert!(def("projects.maxParallel").is_some());
-    assert_eq!(POLICIES.len(), 47);
+    // « Mode hors ligne » of the 2.2.6 (ESC-596), reversed into the 2.3 (ESC-651).
+    assert!(def("network.offline").is_some());
+    assert_eq!(POLICIES.len(), 48);
 }
 
 #[test]

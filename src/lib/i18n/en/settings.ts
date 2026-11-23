@@ -46,7 +46,7 @@ export default defineZone('settings', {
     },
     team: { label: 'Team', desc: 'The shared Kanban, the shared settings (.escouade.yml) and the shared memory' },
     privacy: { label: 'Privacy', desc: 'What this project keeps to itself: its files, its accounts, its plugins' },
-    allProjects: { label: 'All projects', desc: 'What a new project starts with, and the closed projects' },
+    allProjects: { label: 'All projects', desc: 'What a new project starts with, the automatic fetch and the closed projects' },
   },
 
   nav: {
@@ -174,6 +174,7 @@ export default defineZone('settings', {
     pluginOff: '{name} (plugin off)',
     noAccount: '{name} (no account)',
     projectOff: '{name} (off for this project)',
+    thirdParty: '{name} (third-party plugin: a private project exists)',
   },
   permissions: {
     title: 'Permissions',
@@ -354,9 +355,19 @@ export default defineZone('settings', {
     proxyUrl: 'HTTP(S) proxy',
     proxyUrlHint: 'e.g. http://user:password@proxy:3128',
     proxyUrlNone: 'none',
+    proxyPasswordNote:
+      'The address’s password is kept in the system keychain, never in the settings: the address shows without it. To change it, type the address with the new one.',
+    neverDirect: 'Never go out without the proxy',
+    neverDirectDesc:
+      'On by default with a proxy. If the proxy doesn’t answer, an update or a download fails with its reason instead of going out directly.',
+    neverDirectNoProxy: 'With no proxy set, there is nothing to enforce: every connection is direct.',
     exclusions: 'Exclusions',
     exclusionsHint: 'NO_PROXY, separated by commas',
     proxyTerminals: 'Also apply the proxy to the built-in terminals',
+    offline: 'Offline mode',
+    offlineDesc:
+      'Escouade no longer contacts by itself the updates, the store, the revocation list or the statistics. What you ask for by a gesture (installing a plugin, showing an image) and the agents’ work do not change.',
+    offlineImposed: 'Imposed by the policy of this device.',
     certificates: 'Certificates',
     certificatesNote:
       'Escouade trusts recognized certificates, those installed on this system and those of the authorities file. Agents get the file the next time their process starts.',
@@ -450,7 +461,9 @@ export default defineZone('settings', {
     privateDesc:
       'The agents of the other projects do not see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything.',
     privateWindows:
-      'On Windows, an agent’s fence is an instruction given to its harness, not a partition of the system: a command can get around it. To keep two clients apart, one Windows account per client. A third-party plugin runs there only once you turn it on for this project.',
+      'On Windows, an agent’s fence is an instruction given to its harness, not a partition of the system: a command can get around it. To keep two clients apart, one Windows account per client.',
+    privateThirdParty:
+      'A harness from a third-party plugin can’t guarantee the fence of a private project: while one exists on this machine, it isn’t launched in any project, and an agent on one stops.',
     fenceTitle: 'Its files',
     fenceDesc:
       'The agents of the other projects neither read nor write its folder, its worktrees, its data in Escouade’s folder or its harness sessions. Its own read none of these for the other projects, nor the rest of Escouade’s folder. A guard is a rule of the harness, which a command can get around; a barrier holds for all its commands.',
@@ -560,6 +573,14 @@ export default defineZone('settings', {
     namePlaceholder: 'e.g. Front',
     commandPlaceholder: 'e.g. npm run dev',
     subfolderHint: '(blank = project folder)',
+    /** “Open on launch” of a launch command (ESC-560). `{example}`: an address that follows a worktree's ports. */
+    openOnLaunch: 'Open on launch',
+    openUrl: 'Address to open',
+    openUrlPlaceholder: 'http://localhost:3000',
+    openUrlHint:
+      'Opened as soon as it answers, as “▶ Test” does; nothing opens if the command stops first. In an agent’s worktree, the command gets its ports: {example} follows its ESCOUADE_PORT_BASE (ESCOUADE_PORT_END too), 3000 in the project.',
+    openIn: 'Where to open it',
+    openIns: { page: 'Launch page', browser: 'Browser' },
     subfolderPlaceholder: 'e.g. apps/web',
     noCommandsYet: 'No commands yet.',
     close: 'Close the project',

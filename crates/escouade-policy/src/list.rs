@@ -274,6 +274,8 @@ pub const PROXY_URL: &str = "proxy.url";
 pub const PROXY_EXCLUSIONS: &str = "proxy.exclusions";
 pub const DENY_INSECURE_TLS: &str = "proxy.denyInsecureTls";
 pub const AUTHORITIES: &str = "proxy.authorities";
+/// « Mode hors ligne » (ESC-596, the 2.2.6): read too by `offline` of the app, where these policies are read.
+pub const OFFLINE: &str = "network.offline";
 pub const TELEMETRY: &str = "telemetry.enabled";
 pub const VOICE_ONLINE: &str = "voice.onlineAllowed";
 pub const DICTATION: &str = "voice.dictation";
@@ -752,6 +754,26 @@ pub const POLICIES: &[Def] = &[
             title: "Certificate authorities file",
             help: "The path of a .pem file of authorities trusted besides the system’s store (a corporate proxy’s root).",
             locks: "Settings › Advanced › Network › “Extra certificate authorities”, grayed.",
+        },
+    },
+    Def {
+        key: OFFLINE,
+        sort: Sort::Restrict,
+        form: on(),
+        rows: &["offline"],
+        within: None,
+        category: Category::Network,
+        later: false,
+        example: "true",
+        fr: Text {
+            title: "Mode hors ligne",
+            help: "Les mises à jour, le store, la liste de révocation et les statistiques ne sont plus contactés. Seule la valeur true (1) s’impose.",
+            locks: "Réglages › Avancé › Réseau › « Mode hors ligne », allumé et grisé.",
+        },
+        en: Text {
+            title: "Offline mode",
+            help: "The updates, the store, the revocation list and the statistics are no longer contacted. Only the value true (1) is imposed.",
+            locks: "Settings › Advanced › Network › “Offline mode”, on and grayed.",
         },
     },
     // ---------- privacy ----------

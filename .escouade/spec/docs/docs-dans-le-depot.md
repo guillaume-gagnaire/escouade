@@ -2,7 +2,7 @@
 title: "Docs du projet"
 subject: "Docs"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-256","ESC-257","ESC-258","ESC-482","ESC-534","ESC-563"]
+tickets: ["ESC-256","ESC-257","ESC-258","ESC-482","ESC-534","ESC-563","ESC-643"]
 decisions: [245]
 compared: "2026-10-30T05:35:38+01:00"
 gaps: [{"text":"La page dit que « Partager » est dans la barre d'état de l'onglet Docs, et que les autres onglets ne l'affichent que tant que les docs ont des changements ou un conflit. Dans le code, le bouton « Partager » n'apparaît que si le compte est supérieur à 0, y compris sur l'onglet Docs. Il y est donc absent quand il n'y a rien à partager.","code":["src/components/docs/DocsShareItem.svelte"]}]
@@ -78,6 +78,8 @@ Elles se disent en phrase simple, jamais la sortie de git en tête : identifiant
 ### Sécurité
 
 - Aucun chemin des docs ne sort du projet : ni `.escouade` ni son dossier ne peuvent être des liens, aucun lien symbolique sur le chemin d'une page ou d'un document, ni `..`, ni lettre de lecteur, ni chemin absolu.
+- Cette garde tient seule, quel que soit l'appelant, au plus près de l'accès aux fichiers. Avant de toucher au disque, elle refuse tout segment vide, `.` ou `..`, absolu, avec un lecteur (`C:`), un préfixe UNC ou de périphérique, un `\`, un `:` (lecteur ou flux NTFS), un caractère de contrôle, une fin en point ou en espace (que Windows retire), ou un nom réservé de Windows (`CON`, `NUL`, `COM1`…, quelle que soit l'extension). Le refus dit « chemin hors du dossier » et sa raison.
+- Le chemin est ensuite vérifié sous le dossier, lexicalement en entier, et sur le disque pour la partie qui existe déjà : un dossier pas encore créé ne saute aucun contrôle. Après la création des dossiers, l'écriture vérifie de nouveau qu'aucun n'est un lien et que le fichier reste sous `.escouade`.
 - Un projet privé ne dit rien de ses docs aux agents des autres projets (voir *Serveur MCP*).
 - Le texte d'une page ou d'un document n'entre jamais dans le journal d'activité.
 

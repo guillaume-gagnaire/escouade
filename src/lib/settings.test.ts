@@ -167,7 +167,9 @@ describe('settingsForm', () => {
     expect(await settingsForm.save()).toBe(true);
 
     const saved = backend.called('update_project')[0].args.project;
-    expect(saved.runCommands).toEqual([{ id: added.id, name: 'API', command: 'cargo run', shell: 'pwsh', cwd: 'back' }]);
+    expect(saved.runCommands).toEqual([
+      { id: added.id, name: 'API', command: 'cargo run', shell: 'pwsh', cwd: 'back', url: '', openIn: 'page' },
+    ]);
     expect(saved.worktreeCopy).toEqual(['.env*', '**/.env.local']);
     expect(app.projects[0].runCommands).toEqual(saved.runCommands);
     expect(backend.called('term_kill')[0].args).toEqual({ id: 't1' });

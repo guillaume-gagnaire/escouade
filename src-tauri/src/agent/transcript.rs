@@ -9,6 +9,14 @@
 
 use super::*;
 
+/// What the conversation of an agent in Code Mode says (ESC-553), and why its stream is refused.
+pub fn code_mode_line() -> String {
+    tr!(
+        "En Code Mode : cet agent se reprend dans son terminal. Claude Code ne reprend une session commencée en Code Mode que dans son interface, jamais dans la conversation d’Escouade.",
+        "In Code Mode: this agent resumes in its terminal. Claude Code resumes a session started in Code Mode in its interface alone, never in Escouade’s conversation."
+    )
+}
+
 /// What the core does after a hook (`AgentRt::on_hook`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct HookOutcome {
@@ -21,6 +29,18 @@ pub struct HookOutcome {
 }
 
 impl AgentRt {
+    /// Its session is in Claude Code's Code Mode (ESC-553): marked for good, and told once. Claude Code resumes it in its
+    /// interface alone; the agent stays in « Vue Claude Code ».
+    pub fn mark_code_mode(&mut self, fx: &mut Effects) {
+        if self.meta.code_mode {
+            return;
+        }
+        self.meta.code_mode = true;
+        self.notice("info", code_mode_line(), fx);
+        fx.save = true;
+        fx.agent_changed = true;
+    }
+
     /// Its Claude Code interface starts: what was counted of the one before is gone with it.
     pub fn start_tui(&mut self) {
         self.meta.last_activity = now_ms();

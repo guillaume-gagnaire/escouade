@@ -229,7 +229,7 @@ The whole case, from the manifest to the program: [credentials per project](plug
 Escouade installs a plugin in four ways:
 
 - **From the store**: the version is downloaded from store.escouade.dev and checked (its fingerprint, its signature when Escouade verified it) before it is copied to the same place (see [installing a plugin](plugins/installer#from-the-store)).
-- **From a folder**: the folder is copied to `~/.escouade/plugins/<id>/`, without its git history, and pinned by the SHA-256 fingerprint of its files.
+- **From a folder**: the plugin alone is copied to `~/.escouade/plugins/<id>/`, without its git history, `target/`, `node_modules/` or what Git ignores, with of `packs/` the module of its version, and pinned by the SHA-256 fingerprint of its files.
 - **From a git repository and a tag** (`v1.2.0`): Escouade clones that tag alone, copies it to the same place, and pins it by its commit. A plugin is always pinned to a version; installing another tag replaces the previous one.
 - **A folder in development**: loaded where it is, without a copy, and read again as soon as one of its files changes. This is the mode for plugin authors.
 

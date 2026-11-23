@@ -9,7 +9,8 @@ import { renderDocs, type Docs } from './readme';
 import { CATEGORIES, keepImage } from './submissions';
 import { parseRevocations, revoked, type RevocationList } from './revocation-list';
 import { lastRevocations } from './revocations';
-import { signatureIndex, verifiedBy, type SignatureIndex } from './signatures';
+import { sealKey, signatureIndex, verifiedBy, type SignatureIndex } from './signatures';
+import { service } from './service';
 import { readArchive } from './tar';
 import { fold, words } from '../../shared/search';
 import { hueOf, markOf, type Icon } from '../../shared/tile';
@@ -455,8 +456,16 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
       })),
       docs: docs ?? { readme: {}, pages: [], images: [] },
       reports: open?.n ?? 0,
-      // The review's signature of this version (STORE-8): when, by which key, and its public summary.
-      signature: sig ? { signedAt: sig.signedAt.toISOString(), keyId: sig.keyId, summary: sig.summary } : null,
+      // The review's signature of this version (STORE-8): when, by which key and in which role (ESC-592), and its public
+      // summary.
+      signature: sig
+        ? {
+            signedAt: sig.signedAt.toISOString(),
+            keyId: sig.keyId,
+            role: sealKey(service.keys, sig.keyId, plugin.id).role,
+            summary: sig.summary,
+          }
+        : null,
     },
   };
 }

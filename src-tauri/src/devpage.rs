@@ -27,6 +27,9 @@ use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, WebviewUr
 
 /// The labels of the pages' webviews: `devpage-<agent>`.
 pub const PAGE_PREFIX: &str = "devpage-";
+/// The key of the page of a launch command run in its project, not in a worktree (ESC-560):
+/// `run:<project>:<command>`. It has no agent: it opens in the project's « Pages » window alone.
+pub const RUN_PREFIX: &str = "run:";
 /// The labels of the « Pages » windows: `pages-<project>`.
 pub const WINDOW_PREFIX: &str = "pages-";
 /// The labels of the bars of the « Pages » windows (Escouade's own interface): `pagesbar-<project>`.
@@ -213,6 +216,8 @@ pub struct PageView {
     pub detached: bool,
     /// The width it is shown at.
     pub mode: PageMode,
+    /// The page of a launch command run in its project (`RUN_PREFIX`): no agent's view to go back to.
+    pub agentless: bool,
 }
 
 /// What happened to a page, for the window (`UiEvent::DevPage`) and the « Pages » windows.
@@ -368,6 +373,7 @@ pub fn open<R: Runtime>(
         url: url.to_string(),
         detached: o.detached,
         mode: PageMode::Full,
+        agentless: o.agent_id.starts_with(RUN_PREFIX),
     };
     if o.detached {
         let window = pages_window(app, pages, o.project_id)?;
@@ -561,11 +567,16 @@ fn pages_window<R: Runtime>(
         .min_inner_size(480.0, 320.0)
         .build()
         .map_err(|e| e.to_string())?;
-    let bar = WebviewBuilder::new(
+    let mut bar = WebviewBuilder::new(
         bar_label(project_id),
         WebviewUrl::App(format!("index.html?pages={}", clean(project_id)).into()),
     )
     .devtools(cfg!(debug_assertions));
+    // The WebView2 folder of the main window's (a sandboxed run's, an end-to-end test's, ESC-496): one environment for
+    // the app's windows. Without it, the first « Pages » window of such a run was refused by WebView2 (0x8007139F).
+    if let Some(dir) = crate::paths::webview_dir() {
+        bar = bar.data_directory(dir);
+    }
     window
         .add_child(
             bar,
@@ -937,6 +948,9 @@ pub fn detach<R: Runtime>(
     detached: bool,
 ) -> Result<PageView, String> {
     let page = pages.get(agent_id).ok_or("no page for this agent")?;
+    if page.agentless && !detached {
+        return Err("the page of a launch in the project has no agent to go back to".into());
+    }
     let webview = app
         .get_webview(&page_label(agent_id))
         .ok_or("no page for this agent")?;

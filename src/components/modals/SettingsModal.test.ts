@@ -161,7 +161,8 @@ describe('SettingsModal', () => {
     await userEvent.click(tab('site'));
     expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
-    expect(entries().slice(12, 23)).toEqual([
+    // « Plugins »: the settings of each project of the plugin Claude Code (its experimental features, ESC-553).
+    expect(entries().slice(12, 24)).toEqual([
       'demo-api',
       'site',
       'Projet',
@@ -169,6 +170,7 @@ describe('SettingsModal', () => {
       'Lancement',
       'Kanban',
       'Tickets importés',
+      'Plugins',
       'Équipe',
       'Confidentialité',
       'Tous les projets',
@@ -305,6 +307,41 @@ describe('SettingsModal', () => {
     view.unmount();
     await waitFor(() => expect(backend.called('save_settings')).toHaveLength(1));
     expect(app.settings.proxyUrl).toBe('http://proxy:3128');
+  });
+
+  it('« Ne jamais sortir sans le proxy » is on as soon as a proxy is set, and can be turned off (SEC-14)', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    render(SettingsModal);
+    await userEvent.click(tab('Avancé'));
+    const never = () => screen.getByRole('switch', { name: 'Ne jamais sortir sans le proxy' });
+    // No proxy: nothing to enforce, the switch off and grayed.
+    expect(never()).toHaveAttribute('aria-checked', 'false');
+    expect(never()).toBeDisabled();
+    expect(screen.getByText(/Sans proxy configuré, rien à imposer/)).toBeInTheDocument();
+    await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://127.0.0.1:9000');
+    // A proxy: on by default, the setting left unanswered (null) until the user turns it.
+    expect(never()).toHaveAttribute('aria-checked', 'true');
+    expect(never()).toBeEnabled();
+    expect(screen.getByText(/une mise à jour ou un téléchargement échoue avec sa raison/)).toBeInTheDocument();
+    await userEvent.click(never());
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({
+      proxyUrl: 'http://127.0.0.1:9000',
+      proxyNeverDirect: false,
+    });
+    expect(never()).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(never());
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.proxyNeverDirect).toBe(true);
+  });
+
+  it('says the proxy’s password is in the keychain when the address has a user’s name (SEC-10)', async () => {
+    fakeBackend({ save_settings: () => [] });
+    app.settings.proxyUrl = 'http://ada@127.0.0.1:9000';
+    render(SettingsModal);
+    await userEvent.click(tab('Avancé'));
+    expect(screen.getByDisplayValue('http://ada@127.0.0.1:9000')).toBeInTheDocument();
+    expect(screen.getByText(/Le mot de passe de l’adresse est gardé dans le trousseau du système/)).toBeInTheDocument();
   });
 
   it('turns TLS verification off for a proxy with a certificate of its own', async () => {
@@ -905,8 +942,56 @@ describe('SettingsModal', () => {
     await afterGesture();
 
     const saved = backend.called('update_project').at(-1)!.args.project.runCommands;
-    expect(saved).toEqual([FRONT, { id: expect.any(String), name: 'API', command: 'cargo run', shell: 'bash', cwd: '' }]);
+    expect(saved).toEqual([
+      FRONT,
+      { id: expect.any(String), name: 'API', command: 'cargo run', shell: 'bash', cwd: '', url: '', openIn: 'page' },
+    ]);
     expect(app.projects[0].runCommands).toEqual(saved);
+  });
+
+  it('opens a command’s address on its launch, checked as it is typed, in a launch page or the browser (ESC-560)', async () => {
+    const backend = backendSaving();
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
+    const front = within(screen.getByRole('group', { name: 'Commande 1' }));
+    // Off by default: no address to type.
+    const tick = front.getByRole('checkbox', { name: 'Ouvrir à son lancement' });
+    expect(tick).not.toBeChecked();
+    expect(front.queryByLabelText('Adresse à ouvrir')).toBeNull();
+    await userEvent.click(tick);
+    await afterGesture();
+    const saves = backend.called('update_project').length;
+    const url = front.getByLabelText('Adresse à ouvrir');
+    // Its help says how it follows the ports of a worktree.
+    expect(url).toHaveAccessibleDescription(/\$\{ESCOUADE_PORT_BASE:-3000\} suit son ESCOUADE_PORT_BASE/);
+    const where = within(front.getByRole('group', { name: 'Où l’ouvrir' }));
+    expect(where.getByRole('button', { name: 'Page de lancement' })).toHaveAttribute('aria-pressed', 'true');
+
+    // Another scheme: said on the field, and nothing of the commands saved.
+    await fireEvent.input(url, { target: { value: 'file:///C:/Windows/win.ini' } });
+    await afterGesture();
+    expect(url).toHaveAttribute('aria-invalid', 'true');
+    expect(url).toHaveAccessibleDescription('Seule une adresse http:// ou https:// s’ouvre.');
+    expect(backend.called('update_project')).toHaveLength(saves);
+    await fireEvent.input(url, { target: { value: 'http://localhost:${HOME}/' } });
+    expect(url).toHaveAccessibleDescription(
+      '« HOME » n’est pas une variable de l’adresse : seulement ESCOUADE_PORT_BASE, ESCOUADE_PORT_END.',
+    );
+
+    // An http address, in the browser: saved with the command.
+    await fireEvent.input(url, { target: { value: 'http://localhost:${ESCOUADE_PORT_BASE:-5173}/' } });
+    await userEvent.click(where.getByRole('button', { name: 'Navigateur' }));
+    await afterGesture();
+    expect(url).toHaveAttribute('aria-invalid', 'false');
+    expect(backend.called('update_project').at(-1)!.args.project.runCommands[0]).toEqual({
+      ...FRONT,
+      url: 'http://localhost:${ESCOUADE_PORT_BASE:-5173}/',
+      openIn: 'browser',
+    });
+    // Unticked: no address any more.
+    await userEvent.click(tick);
+    await afterGesture();
+    expect(front.queryByLabelText('Adresse à ouvrir')).toBeNull();
+    expect(backend.called('update_project').at(-1)!.args.project.runCommands[0].url).toBe('');
   });
 
   it('says on its row a command without a name or a line, and a project without a name, and saves neither (ESC-380)', async () => {
@@ -1353,7 +1438,7 @@ describe('SettingsModal', () => {
       size: 5 * 1024,
     };
 
-    it('lists them in « Tous les projets », after what a new project starts with', async () => {
+    it('lists them in « Tous les projets », after what a new project starts with and the automatic fetch (ESC-561)', async () => {
       const backend = fakeBackend({ closed_projects: () => [OLD] });
       render(SettingsModal, { page: 'allProjects', projectId: 'p2' });
       await screen.findByRole('heading', { name: 'Projets fermés' });
@@ -1362,7 +1447,7 @@ describe('SettingsModal', () => {
       const headings = within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent);
-      expect(headings.slice(-2)).toEqual(['Nouveaux projets', 'Projets fermés']);
+      expect(headings.slice(-3)).toEqual(['Nouveaux projets', 'Git', 'Projets fermés']);
       // A page of a project does not carry them.
       await userEvent.click(tab('site'));
       expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();

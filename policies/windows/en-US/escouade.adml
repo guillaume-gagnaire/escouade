@@ -157,6 +157,12 @@ Key: proxy.denyInsecureTls (Boolean, true (1)). Sort: restrict. “Disabled” r
 On the device: Settings › Advanced › Network › “Extra certificate authorities”, grayed.
 
 Key: proxy.authorities (string). Sort: sensitive.</string>
+      <string id="network_offline">Offline mode</string>
+      <string id="network_offline_Explain">The updates, the store, the revocation list and the statistics are no longer contacted. Only the value true (1) is imposed.
+
+On the device: Settings › Advanced › Network › “Offline mode”, on and grayed.
+
+Key: network.offline (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
       <string id="telemetry_enabled">Turn the usage statistics off</string>
       <string id="telemetry_enabled_Explain">The anonymous statistics are no longer sent. Only the value false (0) is imposed.
 

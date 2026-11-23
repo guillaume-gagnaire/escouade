@@ -2,7 +2,7 @@
 name = "escouade-plugin-cli"
 # Always the app's own (scripts/version.mjs keeps them together): `escouade-plugin --version` says it, and the store's
 # `version.json` names it (`compiler.prelude`), which the local review compares with the machine's.
-version = "2.2.5"
+version = "2.2.8"
 description = "L'outil des auteurs de plugins d'Escouade sans l'app : lire le manifeste et compiler un plugin run.js ou run.wasm en WASM"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
@@ -38,6 +38,8 @@ tar = "0.4"
 # The download of the pinned Javy, by the app's own client where it has one (Réglages › Réseau's proxy).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 tokio = { version = "1", features = ["rt", "time", "net"] }
+# The public suffixes a host of `permissions.network` may not be (audit SEC-09), the list carried in the crate.
+psl = "2"
 
 # The write-through replacement of a file (`paths::write_atomic`, ESC-469).
 [target.'cfg(windows)'.dependencies]

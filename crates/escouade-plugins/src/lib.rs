@@ -138,6 +138,11 @@ pub mod plugins_reactor_tests;
 pub mod plugins_runtime_tests;
 // The jokers of `permissions.commands` and their hostile cases (ESC-528).
 #[cfg(test)]
+mod plugins_fresh_tests;
+// « Depuis un dossier… » on a plugin's folder as its author has it (issue #43, ESC-652).
+#[cfg(test)]
+mod plugins_folder_tests;
+#[cfg(test)]
 mod plugins_jokers_tests;
 #[cfg(test)]
 mod plugins_rust_build_tests;
@@ -346,6 +351,11 @@ pub struct Choices {
     /// keychain listing nothing by prefix (§2.3).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub secret_names: Vec<String>,
+    /// The commands of its harnesses the user agreed to (audit SEC-01, ESC-589): by the harness's id in its manifest, the
+    /// fingerprints of the lines agreed (`consent::LaunchLine`, the latest first, a few kept). A harness of a third party
+    /// whose line is not among them asks again before it runs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub harnesses_approved: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Choices {
@@ -359,6 +369,7 @@ impl Default for Choices {
             project_settings: BTreeMap::new(),
             profiles: BTreeMap::new(),
             secret_names: Vec::new(),
+            harnesses_approved: BTreeMap::new(),
         }
     }
 }
@@ -730,6 +741,8 @@ pub struct PluginView {
     /// « Vérifié par Escouade »: a version of the store whose signature holds here, now, with the
     /// app's keys against the `version.json` kept (offline too).
     pub verified: bool,
+    /// The key that made that seal and the role it sealed in (ESC-592): what the plugin's page says.
+    pub seal: Option<store_keys::SealKey>,
     /// What the revocation list says of this version, if anything.
     pub withdrawn: Option<Withdrawn>,
     /// A plugin not installed from the store whose id the store has (from a git repository, a
@@ -849,6 +862,14 @@ pub struct Preview {
     pub verified: bool,
     /// Why the revocation list took its seal off, if it did.
     pub unverified: Option<String>,
+    /// A folder or a repository read under « N'installer que des versions vérifiées » (SEC-01, ESC-589): the version of
+    /// the store, verified, whose files are the same as its own (`hold_to_store`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matches_store: Option<String>,
+    /// The module a `run.wasm` plugin of a folder will run, by its path in what was set aside (or in the folder in
+    /// development): `packs/<id>-<version>.wasm` or `plugin.wasm` (issue #43, ESC-652). The fingerprint covers it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
 }
 
 /// The installed version an inspection would replace.
@@ -1167,6 +1188,7 @@ impl Plugins {
 
     fn view(&self, l: &Loaded, lang: Lang) -> PluginView {
         let i = &l.installed;
+        let seal = self.sealed(l);
         let (manifest, ignored, state) = match &l.read {
             Err(Fault::Missing) => (
                 None,
@@ -1274,7 +1296,8 @@ impl Plugins {
             asks: manifest.as_ref().map(asks).unwrap_or_default(),
             secret_keys: manifest.as_ref().map(secret_keys).unwrap_or_default(),
             update: self.updates.read().get(&i.id).cloned(),
-            verified: self.sealed(l),
+            verified: seal.is_some(),
+            seal,
             withdrawn: self.withdrawn_in(l, lang),
             in_store: (!matches!(
                 i.origin,
@@ -1377,7 +1400,23 @@ impl Plugins {
     /// `discard`.
     pub fn inspect_folder(&self, src: &Path, lang: Lang) -> Result<Preview, Refusal> {
         let m = Self::checked(src, manifest::Hand::Third, lang)?;
-        let (dir, digest) = self.set_aside(src, lang)?;
+        let (dir, digest) = self.set_aside(src, &m, lang)?;
+        // Issue #43: a Rust module is built by its author; what was set aside must hold it, as it is what will run.
+        let copied = Origin::Folder {
+            path: String::new(),
+        };
+        if wasm::Built::of_folder(&copied, &m).is_some_and(|b| b.module(&dir).is_none()) {
+            remove_dir(&dir);
+            return Err(Refusal::other(tr_in!(
+                lang,
+                "Ce dossier n'a pas de module construit : lance `escouade-plugin build`, ou charge-le depuis En développement › Charger un dossier… (Escouade y cherche {}/{}-{}.wasm, puis {})",
+                "This folder has no built module: run `escouade-plugin build`, or load it from In development › Load a folder… (Escouade looks there for {}/{}-{}.wasm, then {})",
+                wasm::PACKS,
+                m.id,
+                m.version,
+                wasm::MODULE_FILE
+            )));
+        }
         let path = std::path::absolute(src)
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| src.display().to_string());
@@ -1449,7 +1488,7 @@ impl Plugins {
                 .await
                 .map_err(|e| Refusal::other(e.to_string()))?;
             let m = Self::checked(&clone, manifest::Hand::Third, lang)?;
-            let (dir, digest) = self.set_aside(&clone, lang)?;
+            let (dir, digest) = self.set_aside(&clone, &m, lang)?;
             Ok(self.stage(
                 Installed {
                     id: m.id.clone(),
@@ -1557,6 +1596,13 @@ impl Plugins {
             .map(|p| grown(&wanted, &p.asks))
             .unwrap_or_default();
         let read_from = dir.clone().unwrap_or_else(|| self.folder_of(&installed));
+        let module = wasm::Built::of_folder(&installed.origin, &m)
+            .and_then(|b| b.module(&read_from))
+            .and_then(|f| {
+                f.strip_prefix(&read_from)
+                    .ok()
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+            });
         let preview = Preview {
             icon: m.icon.as_deref().and_then(|r| icon_data(&read_from, r)),
             token: token.clone(),
@@ -1578,6 +1624,8 @@ impl Plugins {
             manifest: m,
             verified,
             unverified,
+            matches_store: None,
+            module,
         };
         let mut staged = self.staged.lock();
         // What was set aside for this plugin and never answered goes: one inspection per plugin at a time is enough.
@@ -1717,9 +1765,14 @@ impl Plugins {
         Ok(view)
     }
 
-    /// Sets aside a copy of the folder `src`: its history (`.git`) and its links left out. Gives
-    /// the copy and the SHA-256 of its files.
-    fn set_aside(&self, src: &Path, lang: Lang) -> Result<(PathBuf, String), Refusal> {
+    /// Sets aside a copy of the folder `src` of the plugin `m`: what is not the plugin and its links left out
+    /// ([`Sift`], issue #43). Gives the copy and the SHA-256 of its files.
+    fn set_aside(
+        &self,
+        src: &Path,
+        m: &Manifest,
+        lang: Lang,
+    ) -> Result<(PathBuf, String), Refusal> {
         let root = self.data.plugins_dir();
         let fail = |e: std::io::Error| {
             Refusal::other(tr_in!(
@@ -1731,7 +1784,8 @@ impl Plugins {
         };
         std::fs::create_dir_all(&root).map_err(fail)?;
         let incoming = root.join(format!(".incoming-{}", uuid::Uuid::new_v4().simple()));
-        match copy_tree(src, &incoming).and_then(|_| digest(&incoming)) {
+        let sift = Sift::of(src, m);
+        match copy_tree(src, &incoming, "", &sift, false).and_then(|_| digest(&incoming)) {
             Ok(d) => Ok((incoming, d)),
             Err(e) => {
                 remove_dir(&incoming);
@@ -1913,36 +1967,36 @@ impl Plugins {
         self.data.plugins_dir().join(".store").join(id)
     }
 
-    /// Whether the seal of a plugin of the store holds, here and now: its `version.json` kept is
+    /// The seal of a plugin of the store when it holds, here and now: its `version.json` kept is
     /// the one it was installed by, its signature holds with the app's keys (less those the list
-    /// revokes) for this id and this version, and the list does not take it off.
-    fn sealed(&self, l: &Loaded) -> bool {
+    /// revokes) whose role covers this id, for this version, and the list does not take it off.
+    /// Gives the key that made it.
+    fn sealed(&self, l: &Loaded) -> Option<store_keys::SealKey> {
         let Origin::Store {
             version, sha256, ..
         } = &l.installed.origin
         else {
-            return false;
+            return None;
         };
         let Some(Proof {
             json,
             minisig: Some(sig),
         }) = &l.proof
         else {
-            return false;
+            return None;
         };
         if store::sha256(json) != *sha256 {
-            return false;
+            return None;
         }
         let list = self.revocations.read();
         if list
             .as_ref()
             .is_some_and(|li| li.find(&l.installed.id, version, "unverify").is_some())
         {
-            return false;
+            return None;
         }
         let keys = store::trusted_keys(list.as_ref());
-        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
-        store_keys::verified_with(&keys, json, sig, &l.installed.id, version).is_ok()
+        store_keys::seal_of(&keys, json, sig, &l.installed.id, version).ok()
     }
 
     /// The version a plugin runs, as the revocation list names it.
@@ -2668,6 +2722,62 @@ impl Plugins {
         Some((id, update))
     }
 
+    /// « N'installer que des versions vérifiées » for a folder or a git repository (audit SEC-01, ESC-589): what the
+    /// inspection `preview` set aside is kept only when `store` is the store's version of the same id and the same
+    /// version, its seal holding, and its files are the same as those set aside (the same fingerprint, `digest`). Else
+    /// what was set aside goes, and the refusal says why and the gesture that installs it anyway. A folder in
+    /// development is another gesture, never held here.
+    pub fn hold_to_store(
+        &self,
+        mut preview: Preview,
+        store: Result<store::Fetched, String>,
+        lang: Lang,
+    ) -> Result<Preview, Refusal> {
+        let (name, version) = (preview.name.clone(), preview.version.clone());
+        let held = (|| -> Result<String, String> {
+            let f = store?;
+            if f.id != preview.id || f.version != preview.version || f.minisig.is_none() {
+                return Err(tr_in!(
+                    lang,
+                    "le store n'a pas de version vérifiée {} v{}",
+                    "the store has no verified version {} v{}",
+                    preview.id,
+                    preview.version
+                ));
+            }
+            let dir = self
+                .staged
+                .lock()
+                .get(&preview.token)
+                .and_then(|s| s.dir.clone())
+                .ok_or_else(|| "nothing set aside".to_string())?;
+            let here = digest(&dir).map_err(|e| e.to_string())?;
+            if here != digest_of_files(&f.files) {
+                return Err(tr_in!(
+                    lang,
+                    "ses fichiers ne sont pas ceux de la version v{} vérifiée du store",
+                    "its files are not those of the verified version v{} of the store",
+                    f.version
+                ));
+            }
+            Ok(f.version)
+        })();
+        match held {
+            Ok(v) => {
+                preview.matches_store = Some(v);
+                Ok(preview)
+            }
+            Err(why) => {
+                self.discard(&preview.token);
+                Err(Refusal::other(tr_in!(
+                    lang,
+                    "{name} v{version} n'est pas installé : {why}. « N'installer que des versions vérifiées » est allumé (Plugins › Installés) ; coupe-le pour installer ce plugin quand même depuis un dossier ou un dépôt git.",
+                    "{name} v{version} is not installed: {why}. “Install verified versions only” is on (Plugins › Installed); turn it off to install this plugin from a folder or a git repository anyway."
+                )))
+            }
+        }
+    }
+
     /// Puts `installed` in the list in place of its id's, read from its folder, the list saved.
     fn put(&self, installed: Installed, lang: Lang) -> Result<PluginView, Refusal> {
         let id = installed.id.clone();
@@ -2864,19 +2974,149 @@ fn left_out(name: &std::ffi::OsStr) -> bool {
     name == ".git"
 }
 
-/// Copies the folder `src` to `to` (made), its history and its links left out.
-fn copy_tree(src: &Path, to: &Path) -> std::io::Result<()> {
+/// The folders that are never the plugin, wherever they are in its folder (issue #43): its git history, Rust's
+/// compilation, npm's packages.
+const NOT_THE_PLUGIN: &[&str] = &[".git", "target", "node_modules"];
+
+/// What the copy of a plugin's folder keeps (issue #43, ESC-652): neither [`NOT_THE_PLUGIN`], nor what Git ignores when
+/// the folder is in a repository, nor of `packs/` (what `escouade-plugin build` writes) anything but the module of the
+/// manifest's version; but what the manifest names (its icon, its bundle, its program…) and its module, wherever they
+/// are (`.git` aside). What is left out is not in the copy, which is all that runs and all the fingerprint covers.
+struct Sift {
+    /// What Git ignores there, by path in the folder (`/` between folders, no `/` at the end).
+    ignored: std::collections::HashSet<String>,
+    /// The files of the folder kept wherever they are.
+    named: std::collections::HashSet<String>,
+}
+
+impl Sift {
+    fn of(src: &Path, m: &Manifest) -> Self {
+        let mut named: std::collections::HashSet<String> = [
+            manifest::FILE.to_string(),
+            wasm::MODULE_FILE.to_string(),
+            format!(
+                "{}/{}",
+                wasm::PACKS,
+                wasm::Built::of(&m.id, &m.version).name
+            ),
+        ]
+        .into();
+        // Every string of the manifest that names a file of the folder: `icon`, `run.js`, `run.command`, its args…
+        let read = std::fs::read(src.join(manifest::FILE)).ok();
+        if let Some(v) = read.and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok()) {
+            let mut texts = Vec::new();
+            strings(&v, &mut texts);
+            for t in texts {
+                let rel = manifest::icon_path(t);
+                let inside = !rel.is_empty()
+                    && !rel.starts_with('/')
+                    && !rel.contains(':')
+                    && !rel.split('/').any(|c| c == ".." || c.is_empty());
+                if inside && src.join(&rel).is_file() {
+                    named.insert(rel);
+                }
+            }
+        }
+        Self {
+            ignored: ignored_by_git(src),
+            named,
+        }
+    }
+
+    /// Whether the entry `rel` of the folder (its `name`) is left out, what it holds with it.
+    fn leaves_out(&self, rel: &str, name: &str) -> bool {
+        NOT_THE_PLUGIN.contains(&name) || rel == wasm::PACKS || self.ignored.contains(rel)
+    }
+
+    /// Whether the folder `rel`, left out, holds a file kept wherever it is.
+    fn holds_named(&self, rel: &str) -> bool {
+        let at = format!("{rel}/");
+        self.named.iter().any(|n| n.starts_with(&at))
+    }
+}
+
+/// The strings of a JSON value, wherever they are.
+fn strings<'a>(v: &'a serde_json::Value, out: &mut Vec<&'a str>) {
+    match v {
+        serde_json::Value::String(s) => out.push(s),
+        serde_json::Value::Array(a) => a.iter().for_each(|v| strings(v, out)),
+        serde_json::Value::Object(o) => o.values().for_each(|v| strings(v, out)),
+        _ => {}
+    }
+}
+
+/// What Git ignores in the folder `dir` (`git ls-files --others --ignored --exclude-standard --directory`), by path in
+/// it; nothing when it is in no repository, or git is not there. The folder is a third party's: its config may not run
+/// anything here (`core.fsmonitor` off). The command runs on a thread of its own, whoever calls it.
+fn ignored_by_git(dir: &Path) -> std::collections::HashSet<String> {
+    let cwd = dir.display().to_string();
+    let listed = std::thread::scope(|s| {
+        s.spawn(|| {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .ok()?;
+            rt.block_on(crate::git::run(
+                &cwd,
+                &[
+                    "-c",
+                    "core.fsmonitor=false",
+                    "ls-files",
+                    "-z",
+                    "--others",
+                    "--ignored",
+                    "--exclude-standard",
+                    "--directory",
+                ],
+            ))
+            .ok()
+        })
+        .join()
+        .ok()
+        .flatten()
+    });
+    let Some(out) = listed else {
+        return Default::default();
+    };
+    let ignored: std::collections::HashSet<String> = out
+        .split(|b| *b == 0)
+        .map(|p| String::from_utf8_lossy(p).trim_end_matches('/').to_string())
+        .filter(|p| !p.is_empty())
+        .collect();
+    // The folder itself ignored (it is in a folder its repository ignores): those rules say nothing of its own files.
+    if ignored.contains(".") || ignored.iter().any(|p| p.starts_with("../")) {
+        return Default::default();
+    }
+    ignored
+}
+
+/// Copies the folder `src` (at `at` in the plugin's folder) to `to` (made), sifted by `sift`, its links left out
+/// (never followed); `named_only`: in a folder left out, the files kept wherever they are alone.
+fn copy_tree(
+    src: &Path,
+    to: &Path,
+    at: &str,
+    sift: &Sift,
+    named_only: bool,
+) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
-        if left_out(&entry.file_name()) {
+        let name = entry.file_name();
+        if left_out(&name) {
             continue;
         }
+        let rel = format!("{at}{}", name.to_string_lossy());
         let kind = entry.file_type()?;
-        let dest = to.join(entry.file_name());
+        let out = named_only || sift.leaves_out(&rel, &name.to_string_lossy());
+        let dest = to.join(&name);
         if kind.is_dir() {
-            copy_tree(&entry.path(), &dest)?;
-        } else if kind.is_file() {
+            if !out {
+                copy_tree(&entry.path(), &dest, &format!("{rel}/"), sift, false)?;
+            } else if sift.holds_named(&rel) {
+                copy_tree(&entry.path(), &dest, &format!("{rel}/"), sift, true)?;
+            }
+        } else if kind.is_file() && (!out || sift.named.contains(&rel)) {
             std::fs::copy(entry.path(), &dest)?;
         }
     }
@@ -2928,6 +3168,27 @@ fn stamp(dir: &Path) -> std::io::Result<String> {
 }
 
 /// The SHA-256 of a folder's files: their paths and their contents, in the order of their paths.
+/// `digest` of files read elsewhere (an archive of the store), by their path in the plugin: the same fingerprint as the
+/// folder that holds them (`.git` left out as `files_of` leaves it).
+pub fn digest_of_files(files: &[(String, Vec<u8>)]) -> String {
+    let mut files: Vec<&(String, Vec<u8>)> = files
+        .iter()
+        .filter(|(rel, _)| !rel.split('/').any(|c| c == ".git"))
+        .collect();
+    files.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut h = Sha256::new();
+    for (rel, bytes) in files {
+        h.update(rel.as_bytes());
+        h.update([0]);
+        h.update((bytes.len() as u64).to_le_bytes());
+        h.update(bytes);
+    }
+    h.finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
+}
+
 pub fn digest(dir: &Path) -> std::io::Result<String> {
     let mut files = Vec::new();
     files_of(dir, "", &mut files)?;

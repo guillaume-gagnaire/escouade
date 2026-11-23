@@ -803,6 +803,71 @@ async fn an_agent_whose_branch_cannot_be_renamed_is_named_all_the_same() {
     );
 }
 
+/// ESC-560: the address a launch command opens is kept and read back with the project, where it
+/// opens too; one that is not http(s) is refused and the commands saved before stay.
+#[tokio::test]
+async fn a_launch_command_keeps_its_address_and_another_scheme_is_refused() {
+    let h = harness("launch-url");
+    let (p, _) = h.project(false).await;
+    let cmd = RunCommand {
+        id: "web".into(),
+        name: "web".into(),
+        command: "npm run dev".into(),
+        url: "http://localhost:${ESCOUADE_PORT_BASE:-5173}/".into(),
+        open_in: crate::model::RunOpen::Browser,
+        ..Default::default()
+    };
+    h.core
+        .update_project(Project {
+            run_commands: vec![cmd.clone()],
+            ..p.clone()
+        })
+        .unwrap();
+    assert_eq!(
+        h.core.project(&p.id).unwrap().run_commands,
+        std::slice::from_ref(&cmd)
+    );
+    // Read back from what is saved, as the window gets it.
+    let saved = serde_json::to_value(h.core.project(&p.id).unwrap()).unwrap();
+    assert_eq!(
+        saved["runCommands"][0]["url"],
+        "http://localhost:${ESCOUADE_PORT_BASE:-5173}/"
+    );
+    assert_eq!(saved["runCommands"][0]["openIn"], "browser");
+    let back: Project = serde_json::from_value(saved).unwrap();
+    assert_eq!(back.run_commands, std::slice::from_ref(&cmd));
+    // A project saved before has none, and opens in a page.
+    let old: RunCommand =
+        serde_json::from_str(r#"{"id":"a","name":"a","command":"x","shell":"pwsh","cwd":""}"#)
+            .unwrap();
+    assert_eq!(
+        (old.url.as_str(), old.open_in),
+        ("", crate::model::RunOpen::Page)
+    );
+    for bad in [
+        "file:///C:/Windows/win.ini",
+        "javascript:alert(1)",
+        "ftp://localhost/",
+    ] {
+        let why = h
+            .core
+            .update_project(Project {
+                run_commands: vec![RunCommand {
+                    url: bad.into(),
+                    ..cmd.clone()
+                }],
+                ..h.core.project(&p.id).unwrap()
+            })
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("http"), "{bad}: {why}");
+        assert_eq!(
+            h.core.project(&p.id).unwrap().run_commands,
+            std::slice::from_ref(&cmd)
+        );
+    }
+}
+
 #[tokio::test]
 async fn an_agent_of_a_project_that_sets_its_worktrees_folder_and_prefix_works_there() {
     let h = harness("own-worktrees-folder");
@@ -6747,6 +6812,7 @@ async fn launch_commands_are_saved_with_the_project() {
         command: "npm run dev".into(),
         shell: "pwsh".into(),
         cwd: "web".into(),
+        ..Default::default()
     };
     h.core
         .update_project(Project {

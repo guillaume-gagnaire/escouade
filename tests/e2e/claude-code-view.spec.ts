@@ -173,3 +173,73 @@ test('« Vue des nouveaux agents » set to the harness’s terminal opens a new 
   await expect(page.locator('main [data-pastes="images"] .xterm')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('button', { name: 'Vue Escouade' })).toBeVisible();
 });
+
+const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
+
+/** Each theme's capture of the window, named with its width (`ESCOUADE_E2E_SHOTS`). */
+async function shoot(page: Page, name: string) {
+  if (!SHOTS) return;
+  fs.mkdirSync(SHOTS, { recursive: true });
+  const width = await page.evaluate(() => window.innerWidth);
+  for (const t of ['light', 'dark'] as const) {
+    await page.evaluate((t) => {
+      document.documentElement.dataset.theme = t;
+      document.documentElement.style.colorScheme = t;
+    }, t);
+    await page.mouse.move(2, 400);
+    await page.screenshot({ path: path.join(SHOTS, `code-mode-${name}-${width}-${t}.png`) });
+  }
+}
+
+test.describe('Code Mode (ESC-553)', () => {
+  // A Claude Code that has it: the fake's default, the newest tested, is older.
+  test.use({ appEnv: { FAKE_CLAUDE_VERSION: '2.1.329' } });
+
+  test('turned on in the plugin Claude Code, it goes to the terminal view alone; its agent says so and stays in its terminal', async ({
+    app,
+  }) => {
+    test.setTimeout(180_000);
+    const { page } = app;
+    await addProject(page, app.repo);
+    const name = (await page.locator('main.conv h1').textContent())!.trim();
+    // « Fonctionnalités expérimentales » of the plugin's page: Code Mode, for every project.
+    await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+    await page
+      .getByRole('table', { name: 'Du dépôt' })
+      .getByRole('button', { name: /^Claude Code/ })
+      .click();
+    await page.getByRole('tab', { name: /^Réglages/ }).click();
+    const group = page.getByRole('tabpanel', { name: 'Réglages' }).getByRole('region', { name: 'Fonctionnalités expérimentales' });
+    await expect(group).toContainText('Claude Code 2.1.323 ou plus (2.1.326 avec les Agent Teams)');
+    const code = group.getByRole('switch', { name: 'Code Mode' });
+    await code.click();
+    await expect(code).toHaveAttribute('aria-checked', 'true');
+    await group.scrollIntoViewIfNeeded();
+    await shoot(page, 'setting');
+
+    // Back to the agent: its stream started without it, its interface with it, in the `env` of its private settings.
+    await page.getByRole('tab', { name: /^demo-api/ }).click();
+    await page.locator('.card', { hasText: name }).first().click();
+    const field = await openInterface(page);
+    await expect.poll(() => interfaces(app).length, { timeout: 20_000 }).toBe(1);
+    const [launch] = interfaces(app);
+    const file = launch.argv[launch.argv.indexOf('--settings') + 1];
+    const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+    expect(settings.env).toEqual({ CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '1' });
+    expect(streams(app).every((l) => !l.argv.some((a) => a.includes('EXPERIMENTAL')))).toBe(true);
+
+    // Its session starts in Code Mode: marked, said, and the way back to Escouade's view held.
+    await say(field, 'Bonjour');
+    const band = page.getByRole('region', { name: 'En Code Mode : cet agent se reprend dans son terminal' });
+    await expect(band).toBeVisible({ timeout: 20_000 });
+    await expect(band).toContainText('jamais dans la conversation d’Escouade');
+    const back = page.getByRole('button', { name: 'Vue Escouade' });
+    await expect(back).toBeDisabled();
+    const before = streams(app).length;
+    await back.click({ force: true });
+    await page.waitForTimeout(1500);
+    expect(streams(app)).toHaveLength(before);
+    await expect(page.locator('main .tui')).toBeVisible();
+    await shoot(page, 'agent');
+  });
+});

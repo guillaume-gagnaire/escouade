@@ -9,7 +9,7 @@ import type { IconName } from '../icons';
 import { openUrl } from '../opener';
 import { app } from '../state.svelte';
 import { stopTests } from '../test-launch.svelte';
-import { actOnView, snoozeView, type Gesture, type InboxItem, type ViewAct } from './views';
+import { actOnView, reopenView, snoozeView, type Gesture, type InboxItem, type ViewAct } from './views';
 import { inboxViews } from './views.svelte';
 import { takeHandoff } from '../handoff';
 
@@ -132,4 +132,11 @@ export function run(v: InboxItem, g: Gesture): Promise<boolean> {
 export async function later(v: InboxItem, until: number | null): Promise<void> {
   await app.run(snoozeView(v.key, until));
   await inboxViews.load();
+}
+
+/** « Remettre dans la boîte » (ESC-557): what the squad lead took in hand or ticked as settled waits for the user again. */
+export async function putBack(v: InboxItem): Promise<boolean> {
+  const done = await app.run(reopenView(v.key).then(() => true));
+  await inboxViews.load();
+  return !!done;
 }

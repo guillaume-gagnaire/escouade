@@ -44,10 +44,18 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["ring",
 # The integrations' secrets in the Credential Manager. Its own store only: neither the fallback
 # that keeps them in memory (lost at the next start) nor Linux's secret-service.
 keyring = { version = "3.6", features = ["windows-native"] }
+# The sandboxed runs' entries listed and taken back (`integrations::sandbox_keychain`, ESC-584).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # The integrations' secrets in the Keychain.
 keyring = { version = "3.6", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# The integrations' secrets in the desktop's Secret Service (GNOME Keyring, KWallet), when it is there (SEC-10,
+# ESC-595): over D-Bus by zbus, in Rust alone (no libdbus to build against), its own executor (`async-io`), so that a
+# call from a thread of tokio's does not need tokio's.
+keyring = { version = "3.6", features = ["async-secret-service", "async-io", "crypto-rust"] }
 
 [dev-dependencies]
 escouade-base = { path = "../escouade-base", features = ["testing"] }

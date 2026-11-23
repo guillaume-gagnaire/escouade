@@ -1,12 +1,14 @@
 <script lang="ts">
   import { fileCategory } from '../../lib/attachments';
   import { fSize } from '../../lib/format';
+  import { onServer } from '../../lib/connection.svelte';
   import { openSource, type ViewedImage } from '../../lib/gallery';
   import { receivedText } from '../../lib/server-moves.svelte';
   import { t } from '../../lib/i18n';
   import type { IconName } from '../../lib/icons';
   import { inbox } from '../../lib/inbox/inbox.svelte';
   import { api } from '../../lib/ipc';
+  import { opensOutside } from '../../lib/runnable';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
   import type { AskFile, WindowAsk } from '../../lib/types';
@@ -24,9 +26,7 @@
   let { ask, files, reading = $bindable<string | null>(null) }: { ask: WindowAsk; files: AskFile[]; reading?: string | null } = $props();
 
   /** What « Ouvrir » would hand to a program: the core refuses it, the line offers the folder instead. */
-  const RUNS =
-    /\.(exe|msi|bat|cmd|ps1|psm1|sh|bash|zsh|app|command|js|mjs|cjs|vbs|vbe|wsf|jar|lnk|scr|com|pif|html?|xhtml|svg|mht|mhtml|hta|reg|py|pl|rb|apk|deb|rpm|dmg|pkg)$/i;
-  const runs = (f: AskFile) => RUNS.test(f.name);
+  const runs = (f: AskFile) => opensOutside(f.name);
 
   const ICON: Record<string, IconName> = { archive: 'archive', sheet: 'sheet', document: 'file', code: 'code', generic: 'file' };
   const iconOf = (f: AskFile): IconName => (f.kind === 'pdf' ? 'file' : (ICON[fileCategory(f.name)] ?? 'file'));
@@ -80,6 +80,9 @@
   }
   function open(f: AskFile, reveal: boolean) {
     if (!reveal) void looked(f);
+    // Here, a file Escouade does not open (a program, a script: ESC-593) offers « Afficher dans le dossier ».
+    if (!reveal && !onServer())
+      return void app.openFile(api.inboxOpenFile(ask.id, f.file, false), () => api.inboxOpenFile(ask.id, f.file, true));
     // On a server (ESC-538, ESC-540), the file is downloaded to this computer, its copy opened or shown there; what
     // Escouade does not open (ESC-629) is shown in its folder, and the window says why.
     void app.run(openSource({ kind: 'ask', id: ask.id, file: f.file }, reveal, f.name)).then((got) => {

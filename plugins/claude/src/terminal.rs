@@ -10,6 +10,7 @@
 use crate::client::{
     initialize_line, initialized, supports_effort, usage_line, BASE_ARGS, ESCOUADE_TOOLS,
 };
+use crate::experimental::{self, Context};
 use escouade_plugin_protocol::engine::{
     AccountLines, AccountRead, AccountStep, FileToWrite, Launch, TerminalLaunch, TerminalParams,
 };
@@ -87,6 +88,12 @@ pub fn args(p: &TerminalParams) -> Vec<String> {
 /// Its interface's launch: its arguments, the folders it reads without asking, Escouade's server (`--mcp-config` of the
 /// file the core wrote, or its tools refused), its settings in its private file.
 pub fn launch(p: &TerminalParams) -> TerminalLaunch {
+    launch_with(p, &Context::default())
+}
+
+/// `launch`, with what the core tells beyond the published protocol (ESC-553): its experimental features in the `env` of
+/// its private settings, and what is not passed said in the conversation.
+pub fn launch_with(p: &TerminalParams, c: &Context) -> TerminalLaunch {
     let mut a = args(p);
     a.extend(p.read_dirs.iter().map(|d| format!("--add-dir={d}")));
     match (&p.escouade, &p.escouade_file) {
@@ -94,8 +101,12 @@ pub fn launch(p: &TerminalParams) -> TerminalLaunch {
         (Some(_), None) => {}
         (None, _) => a.extend(["--disallowedTools".into(), ESCOUADE_TOOLS.into()]),
     }
-    let text =
-        serde_json::to_string_pretty(&settings(&p.hook_url, &p.hook_token_var)).unwrap_or_default();
+    let judged = experimental::judge(p, c);
+    let mut own = settings(&p.hook_url, &p.hook_token_var);
+    if let (Some(env), Some(o)) = (experimental::env_block(&judged.env), own.as_object_mut()) {
+        o.insert("env".into(), env);
+    }
+    let text = serde_json::to_string_pretty(&own).unwrap_or_default();
     TerminalLaunch {
         launch: Launch {
             args: a,
@@ -108,6 +119,7 @@ pub fn launch(p: &TerminalParams) -> TerminalLaunch {
             read_only: p.read_only,
             ..Launch::default()
         },
+        warn: (!judged.warns.is_empty()).then(|| judged.warns.join(" ")),
         ..TerminalLaunch::default()
     }
 }

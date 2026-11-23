@@ -52,6 +52,10 @@ The fence is in the launch of `claude`, not in the plugin: if the plugin starts 
 
 What the fence doesn’t hold: a script that opens a file by itself, where Claude Code’s sandbox doesn’t run (Windows without WSL) or isn’t on.
 
+## In Code Mode
+
+Each call Claude’s code makes goes through Claude Code’s rules and Escouade’s hooks under its usual name (`Bash`, `Read`, an MCP tool): a command asked is asked as without Code Mode (“Allow Bash: mkdir e-made?”), and the deny rules of the fence hold for it, in Bypass too. The code itself reaches the hooks as a `REPL` call, with its text; an `ask` rule on `REPL` has it asked (“Run code: <what it does>?”). Code Mode is never passed to a discussion.
+
 ## What it cannot do
 
 - launch `claude` or any other program;

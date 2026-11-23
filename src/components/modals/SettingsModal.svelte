@@ -21,6 +21,7 @@
   import GeneralPage from '../settings/GeneralPage.svelte';
   import LaunchPage from '../settings/LaunchPage.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
+  import FetchSettings from '../settings/FetchSettings.svelte';
   import NotificationsPage from '../settings/NotificationsPage.svelte';
   import OverseerPage from '../settings/OverseerPage.svelte';
   import PluginsPage from '../settings/PluginsPage.svelte';
@@ -232,6 +233,7 @@
             <AdvancedPage />
           {:else if info.id === 'allProjects'}
             <NewProjects />
+            <FetchSettings />
             <ClosedProjects />
           {:else}
             <AboutPage />

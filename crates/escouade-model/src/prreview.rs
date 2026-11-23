@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 
 /// What the user decided of a remark: still open, kept to publish with the others, dropped (its thread resolved, folded,
 /// kept), or published on the host (its thread is then the host's).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+///
+/// Read leniently (ESC-586, from main): a value this version does not know would make the whole state unreadable, set
+/// aside at the start, the app starting empty; it reads as `Open` (it waits for the user).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NoteChoice {
     #[default]
@@ -48,6 +51,17 @@ impl Severity {
             "spec" | "specification" | "spécification" => Self::Spec,
             _ => Self::Detail,
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for NoteChoice {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(d)?.as_str() {
+            "kept" => Self::Kept,
+            "dropped" => Self::Dropped,
+            "published" => Self::Published,
+            _ => Self::Open,
+        })
     }
 }
 

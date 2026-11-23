@@ -73,6 +73,24 @@ A message sent to the agent from elsewhere, for example through the [MCP server]
 
 In Settings › Agents, group “New agents”, the “New agents’ view” choice, “Escouade” (the default) or “Harness terminal”, makes each new agent start in Escouade’s conversation or in this view. Each agent can then switch views from its header. Ticket agents always stay in Escouade’s view, and so do the agents of a harness that has no terminal view. See [the harness settings](settings-claude-code).
 
+## Experimental features
+
+The Claude Code plugin has, on its page (Plugins › Claude Code › Settings), an “Experimental features” group: flags of Claude Code that this view alone gets, never Escouade’s conversation, a discussion nor a ticket’s agent, which Claude Code runs in stream-json, where they do nothing.
+
+| Setting | What it does | It takes |
+| --- | --- | --- |
+| Code Mode | Claude writes JavaScript that makes its tool calls (the `REPL` tool), several in one step. | Claude Code 2.1.323 or later (2.1.326 with the Agent Teams), a Claude subscription or a Console account, Opus 5.5, Sonnet 5.5, Haiku 5.5 or Fable 5.2 |
+| Agent Teams | A session leads teammates, who share a task list and write to each other. | Claude Code 2.1.32 or later |
+| Other flags | Names of `CLAUDE_CODE_EXPERIMENTAL_*`, separated by spaces or commas, each set to 1. Any other name is left out, and the conversation says so. | — |
+
+They hold for every project; a project’s Plugins page (Settings › the project › Plugins) sets them otherwise for it: “As for every project”, “On” or “Off”, and a list of other flags that replaces every project’s (“none”: none). They are kept on your machine: a repository’s `.escouade.yml` never turns them on. Escouade puts them in the interface’s private settings file: your `~/.claude/settings.json` is not touched, and a `0` you put there wins.
+
+The first time, Claude Code asks in the terminal to confirm Code Mode (“Yes, turn on Code Mode”); then it says at the top of the session “Code Mode (experimental) is on”. Escouade does not pass it, and the conversation says why, when Remote Control is asked for the agent (Claude Code does not take both), when the account goes through a gateway or a cloud provider (`ANTHROPIC_BASE_URL`, Bedrock, Vertex…, an `apiKeyHelper`), when Claude Code is too old or when the model does not take it.
+
+**An agent in Code Mode stays in its terminal.** Claude Code resumes a session started in Code Mode in its interface alone. Escouade reads it in the session’s transcript: the conversation says so (“In Code Mode: this agent resumes in its terminal”), “Escouade” is greyed out in the header and in its card’s menu, and Escouade never starts it again in its conversation, by the automatic resume nor by a ticket. Its interface resumes it with Code Mode, even if you turned it off since, and without Remote Control. A session started without Code Mode resumes without it.
+
+**Permissions.** Each call the code makes reaches Claude Code’s rules and Escouade’s hooks under its usual name: a command asked shows as without Code Mode (“Allow Bash: mkdir build?”), and the fence of a [private project](mcp#private-projects) holds for it, in Bypass too.
+
 ## Folder trust
 
 The first time Claude Code’s interface launches in a folder, it asks whether you trust it. Escouade never answers for you. Worktrees created in the project’s default worktrees folder (`.claude/worktrees`) inherit the answer given for the project. A “Worktrees folder” outside the project doesn’t inherit it: the interface asks the question the first time each worktree is launched (see [worktrees](worktrees)).

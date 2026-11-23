@@ -52,6 +52,10 @@ La clôture est dans le lancement de `claude`, pas dans le plugin : si le plugin
 
 Ce que la clôture ne tient pas : un script qui ouvre un fichier lui-même, là où le bac à sable de Claude Code ne tourne pas (Windows sans WSL) ou n’est pas allumé.
 
+## En Code Mode
+
+Chaque appel que fait le code de Claude passe par les règles de Claude Code et par les hooks d’Escouade sous son nom habituel (`Bash`, `Read`, un outil MCP) : une commande demandée l’est comme sans le Code Mode (« Autoriser Bash : mkdir e-made ? »), et les règles de refus de la clôture tiennent pour lui, en Bypass aussi. Le code lui-même arrive aux hooks comme un appel `REPL`, avec son texte ; une règle `ask` sur `REPL` le fait demander (« Lancer du code : <ce qu’il fait> ? »). Le Code Mode n’est jamais passé à une discussion.
+
 ## Ce qu’il ne peut pas faire
 
 - lancer `claude` ou tout autre programme ;

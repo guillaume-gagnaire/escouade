@@ -45,6 +45,7 @@ function view(m: Manifest, over: Partial<PluginView> = {}): PluginView {
     manifest: m,
     installedAt: '2026-11-08T10:00:00Z',
     verified: true,
+    seal: null,
     withdrawn: null,
     inStore: null,
     choices: { enabled: true, projects: {}, revoked: [], settings: {} },
@@ -217,6 +218,19 @@ describe('Réglages › Plugins', () => {
     await expect.poll(() => b.called('save_settings').length).toBe(1);
     expect(b.called('save_settings')[0].args.settings).toMatchObject({ pluginsVerifiedOnly: true });
     expect(app.settings.pluginsVerifiedOnly).toBe(true);
+  });
+
+  it('says discreetly that the revocation list is more than 7 days old, and nothing while it is fresh (audit SEC-15)', async () => {
+    fakeBackend({ plugins_list: () => [], plugin_seed_offers: () => [] });
+    plugins.store = { ...STORE, revocations: { ...STORE.revocations!, holdsSince: '2026-11-08T13:02:00Z', stale: false } };
+    const { unmount } = render(SettingsModal, { page: 'plugins' });
+    expect(screen.getByRole('region', { name: 'Sécurité' })).not.toHaveTextContent(/plus de 7 jours/);
+    unmount();
+    plugins.store = { ...STORE, revocations: { ...STORE.revocations!, holdsSince: '2026-11-08T13:02:00Z', stale: true } };
+    render(SettingsModal, { page: 'plugins' });
+    expect(screen.getByRole('region', { name: 'Sécurité' })).toHaveTextContent(
+      /Elle vaut depuis le .*8.* : plus de 7 jours sans liste neuve, un retrait récent peut ne pas être arrivé ici\./,
+    );
   });
 
   it('shows the file of the plugins’ secrets the user chose on this machine, and takes it back, with what it holds', async () => {

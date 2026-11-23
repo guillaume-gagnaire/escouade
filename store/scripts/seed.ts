@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readPublicKey, readSignature, verifySigned, type PublicKey } from '../server/utils/minisign';
+import { readKeyFile, readSignature, sealRole, verifySigned, type PublicKey } from '../server/utils/minisign';
 import { checkRevocations, revoked, type RevocationList } from '../server/utils/revocation-list';
 import { tarball } from '../tests/fake/plugins.mjs';
 
@@ -110,7 +110,9 @@ export async function fetchSeed({ entries, to, store, mirror, keys, app }: Fetch
     if (!v.files.signature) throw new Error(`${name} is not signed`);
     const minisig = await need(url(v.files.signature), `${name}: version.json.minisig`);
     const sig = readSignature(minisig.toString('utf8'));
-    if (!sig || !verifySigned(json, sig, keys)) throw new Error(`${name}: its signature does not hold with the store's keys`);
+    const signer = sig && verifySigned(json, sig, keys);
+    if (!signer) throw new Error(`${name}: its signature does not hold with the store's keys`);
+    if (!sealRole(signer, e.id)) throw new Error(`${name}: signed by the key ${signer.id}, whose role does not seal ${e.id}`);
     if (sig.trustedComment.split(/\s+/).slice(0, 2).join(' ') !== `escouade-verified-v1 ${e.id}@${e.version}`)
       throw new Error(`${name}: signed for another version (${sig.trustedComment})`);
     const file = JSON.parse(json.toString('utf8')) as {
@@ -191,10 +193,10 @@ export async function devSeed(folders: string[], to: string): Promise<Entry[]> {
   return entries;
 }
 
-/** The public keys of the `.pub` files of `dir`. */
+/** The public keys of the `.pub` files of `dir`, each with the roles of its name. */
 export async function keysOf(dir: string): Promise<PublicKey[]> {
   const names = (await readdir(dir)).filter((n) => n.endsWith('.pub'));
-  const read = await Promise.all(names.map(async (n) => readPublicKey(await readFile(join(dir, n), 'utf8'))));
+  const read = await Promise.all(names.map(async (n) => readKeyFile(n, await readFile(join(dir, n), 'utf8'))));
   return read.filter((k): k is PublicKey => !!k);
 }
 

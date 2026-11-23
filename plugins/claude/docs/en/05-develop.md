@@ -28,6 +28,7 @@ What stays in the core: Claude Code’s place in the registry, the accounts and 
 | `src/client.rs` | The client of `claude`, a state machine without a process |
 | `src/translate.rs` | Its lines as items of the conversation |
 | `src/view.rs` | The transcript read for the “Claude Code view” |
+| `src/experimental.rs` | The experimental features of the Claude Code view: what the settings ask, what is passed, what is refused and why |
 | `src/localcmd.rs` | What it writes of a local command (`/compact`, `! ls`) |
 | `src/words.rs` | What is said in the app’s language, its quota’s windows |
 | `src/tests.rs` | The client and the translation on their own |

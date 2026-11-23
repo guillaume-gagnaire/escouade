@@ -46,6 +46,7 @@
   import DeleteFolderModal from './components/modals/DeleteFolderModal.svelte';
   import DeleteAgentModal from './components/modals/DeleteAgentModal.svelte';
   import HarnessConsentModal from './components/plugins/HarnessConsentModal.svelte';
+  import HarnessLaunchModal from './components/plugins/HarnessLaunchModal.svelte';
   import MergeReposModal from './components/modals/MergeReposModal.svelte';
   import CommitReposModal from './components/modals/CommitReposModal.svelte';
   import { isMulti } from './lib/repos';
@@ -508,6 +509,10 @@
 {:else if app.modal?.kind === 'harnessConsent'}
   {#key app.modal}
     <HarnessConsentModal {...app.modal} />
+  {/key}
+{:else if app.modal?.kind === 'harnessLaunch'}
+  {#key app.modal}
+    <HarnessLaunchModal engine={app.modal.engine} agentId={app.modal.agentId} />
   {/key}
 {:else if app.modal?.kind === 'newDiscussion'}
   <NewDiscussionModal projectId={app.modal.projectId} preset={app.modal.preset} />

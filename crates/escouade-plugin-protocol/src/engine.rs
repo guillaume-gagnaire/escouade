@@ -1288,6 +1288,20 @@ pub struct TerminalParams {
     /// The language of the app (`fr`, `en`).
     #[serde(default)]
     pub lang: String,
+    /// The plugin's settings for the agent's project, as `settings/get` gives them (ESC-553): what a module, which
+    /// cannot ask for them during a turn, launches its interface with. Empty from a core of before.
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub settings: serde_json::Map<String, Value>,
+    /// The version of its harness the core read (`versionArgs`), when it read one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// What sends the account's requests elsewhere than its vendor's own API (a gateway, a cloud provider): the name of
+    /// the variable or of the setting, as the core found it in the account's environment or settings. Never a value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gateway: Option<String>,
+    /// The agent's session can be resumed by its interface alone (Claude Code's Code Mode): its stream never takes it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub terminal_only: bool,
 }
 
 /// What `terminal/launch` answers: the launch, and what the core reads by a process of the account before it starts

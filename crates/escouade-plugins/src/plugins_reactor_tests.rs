@@ -539,7 +539,14 @@ async fn a_module_is_precompiled_once_by_its_sha256_and_again_for_a_new_version_
         w.rt.prepare(ID).unwrap().join().unwrap(),
         Ok(Made::Precompiled)
     );
-    assert_eq!(names(), vec![format!("{sum}-2.2.0.cwasm")]);
+    // The precompiled module, and its SHA-256 beside it (SEC-18).
+    assert_eq!(
+        names(),
+        vec![
+            format!("{sum}-2.2.0.cwasm"),
+            format!("{sum}-2.2.0.cwasm.sha256")
+        ]
+    );
     assert_eq!(w.rt.prepare(ID).unwrap().join().unwrap(), Ok(Made::Cache));
     w.rt.call(ID, "probe/turns", json!({})).await.unwrap();
     assert!(journal_has(
@@ -558,7 +565,13 @@ async fn a_module_is_precompiled_once_by_its_sha256_and_again_for_a_new_version_
         Limits::default(),
     );
     rt.prepare_all();
-    assert_eq!(names(), vec![format!("{sum}-2.2.1.cwasm")]);
+    assert_eq!(
+        names(),
+        vec![
+            format!("{sum}-2.2.1.cwasm"),
+            format!("{sum}-2.2.1.cwasm.sha256")
+        ]
+    );
     // Another module is another key.
     let mut bytes = std::fs::read(w.folder.join(wasm::MODULE_FILE)).unwrap();
     bytes.extend_from_slice(&[0, 3, 1, b'x', 0]); // A custom section: the same code, other bytes.
@@ -567,7 +580,58 @@ async fn a_module_is_precompiled_once_by_its_sha256_and_again_for_a_new_version_
         rt.prepare(ID).unwrap().join().unwrap(),
         Ok(Made::Precompiled)
     );
-    assert_eq!(names().len(), 2);
+    assert_eq!(names().len(), 4);
+}
+
+/// A precompiled module is native code, loaded outside the sandbox (SEC-18 of the security audit, ESC-594): one whose
+/// bytes changed since the app wrote it, or that has no SHA-256 beside it, is never loaded. It is precompiled again
+/// from the plugin's module, and the two files are written again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_precompiled_module_changed_on_the_disk_or_without_its_sha256_is_never_loaded() {
+    let w = loaded("tampered", Limits::default());
+    let bytes = std::fs::read(w.folder.join(wasm::MODULE_FILE)).unwrap();
+    let native =
+        w.rt.modules()
+            .dir()
+            .join(format!("{}-2.2.0.cwasm", wasm::sha256(&bytes)));
+    let sum = wasm::sum_of(&native);
+    assert_eq!(
+        w.rt.prepare(ID).unwrap().join().unwrap(),
+        Ok(Made::Precompiled)
+    );
+    let good = std::fs::read(&native).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&sum).unwrap(),
+        wasm::sha256(&good),
+        "its SHA-256 is kept beside it"
+    );
+
+    // Changed on the disk, its SHA-256 left as it was: one byte of its code flipped.
+    let mut changed = good.clone();
+    let at = changed.len() / 2;
+    changed[at] ^= 0x55;
+    std::fs::write(&native, &changed).unwrap();
+    assert_eq!(
+        w.rt.prepare(ID).unwrap().join().unwrap(),
+        Ok(Made::Precompiled),
+        "not loaded: precompiled again"
+    );
+    assert_eq!(std::fs::read(&native).unwrap(), good, "written again");
+    assert_eq!(std::fs::read_to_string(&sum).unwrap(), wasm::sha256(&good));
+    assert_eq!(w.rt.prepare(ID).unwrap().join().unwrap(), Ok(Made::Cache));
+
+    // Its SHA-256 gone: not loaded either.
+    std::fs::remove_file(&sum).unwrap();
+    assert_eq!(
+        w.rt.prepare(ID).unwrap().join().unwrap(),
+        Ok(Made::Precompiled)
+    );
+    assert!(sum.is_file());
+
+    // The plugin still runs, from the module precompiled again. (A program that writes both files has the user's
+    // rights already: the check stops a precompiled module changed or dropped alone.)
+    w.rt.call(ID, "probe/turns", json!({})).await.unwrap();
+    w.rt.shutdown();
 }
 
 /// A module precompiled by another wasmtime, under the same version of the app (ESC-542: 50.0.1 before 50.0.2, a build
@@ -614,6 +678,8 @@ async fn a_module_precompiled_by_another_version_of_wasmtime_is_never_loaded_and
                 .join(format!("{}-2.2.0.cwasm", wasm::sha256(&bytes)));
         std::fs::create_dir_all(native.parent().unwrap()).unwrap();
         std::fs::write(&native, &pre).unwrap();
+        // Its SHA-256 beside it, as the app before would have kept it: what refuses it is wasmtime's version.
+        std::fs::write(wasm::sum_of(&native), wasm::sha256(&pre)).unwrap();
         assert_eq!(
             w.rt.prepare(ID).unwrap().join().unwrap(),
             Ok(Made::Precompiled),

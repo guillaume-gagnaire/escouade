@@ -62,6 +62,7 @@ function view(over: Partial<InboxItem> = {}): InboxItem {
     number: null,
     url: null,
     word: null,
+    mark: null,
     ...over,
   };
 }
@@ -114,6 +115,7 @@ beforeEach(() => {
     inbox_views: () => views,
     inbox_view_act: () => null,
     inbox_view_snooze: () => null,
+    inbox_view_reopen: () => null,
   });
 });
 
@@ -397,5 +399,116 @@ describe('the MCP server off', () => {
     inboxViews.take({ type: 'agent', agent: a });
     await new Promise((r) => setTimeout(r, 200));
     expect(n()).toBe(at + 2);
+  });
+});
+
+describe('what the squad lead said of a view (ESC-557)', () => {
+  const claimed = (over: Partial<InboxItem> = {}) =>
+    ticketView({
+      mark: {
+        kind: 'claimed',
+        note: 'vérification en cours, chaîne de tests',
+        by: 'a-chef',
+        byName: 'overseer-fable',
+        at: NOW - 5 * MIN,
+        sign: 'review:1',
+      },
+      ...over,
+    });
+  const settled = () =>
+    ticketView({
+      mark: {
+        kind: 'settled',
+        note: 'fusionné à la main sur main en 79fe7aec',
+        by: 'a-chef',
+        byName: 'overseer-fable',
+        at: NOW - 2 * MIN,
+        sign: 'review:1',
+      },
+    });
+
+  it('takes a line out of the count and shows it in « Le chef s’en occupe », with its note', async () => {
+    await show([claimed(), decisionView()]);
+    expect(headings()).toEqual(['Plus tôt', 'Le chef s’en occupe']);
+    const lead = rows().find((r) => r.dataset.mark === 'claimed');
+    expect(lead).toHaveTextContent('Le formulaire d’adhésion');
+    expect(lead).toHaveTextContent('overseer-fable');
+    expect(lead).toHaveTextContent('vérification en cours, chaîne de tests');
+    // The tile counts the decision alone; the header, and « il en reste », too.
+    expect(inbox.count.total).toBe(1);
+    expect(screen.getByTestId('inbox-scoped-count')).toHaveTextContent('1');
+    expect(inbox.rows.map((r) => (r.kind === 'view' ? r.view.key : ''))).toEqual(['decision:p1:trois-echeances']);
+  });
+
+  it('asks the user before they act on a line the lead is checking, its note said', async () => {
+    app.tickets = { t1: ticket({ id: 't1', projectId: 'p1', column: 'review' }) };
+    render(InboxViewPane, { view: claimed() });
+    expect(screen.getByTestId('ivw-mark')).toHaveTextContent('overseer-fable s’en occupe');
+    expect(screen.getByTestId('ivw-mark')).toHaveTextContent('« vérification en cours, chaîne de tests »');
+    await userEvent.click(within(pane()).getByRole('button', { name: 'Valider' }));
+    expect(acts()).toEqual([]);
+    const m = app.modal;
+    expect(m?.kind).toBe('confirm');
+    if (m?.kind !== 'confirm') return;
+    expect(m.title).toBe('overseer-fable est en train de la vérifier');
+    expect(m.body).toContain('vérification en cours, chaîne de tests');
+    expect(m.confirm).toBe('Valider');
+    await m.onConfirm(false);
+    await waitFor(() => expect(acts()).toEqual([['ticket:t1', { act: 'approve' }]]));
+  });
+
+  it('shows a line settled in the trace « Réglé par … », without its gestures, and the user puts it back', async () => {
+    await show([settled()]);
+    expect(headings()).toEqual(['Répondu récemment']);
+    const line = within(queue()).getByTestId('ivw-settled-line');
+    expect(line).toHaveTextContent('Réglé par overseer-fable : fusionné à la main sur main en 79fe7aec');
+    expect(inbox.count.total).toBe(0);
+    await userEvent.click(rows()[0]);
+    await waitFor(() => expect(screen.getByTestId('ivw-mark').dataset.mark).toBe('settled'));
+    expect(within(pane()).queryByRole('button', { name: 'Valider' })).toBeNull();
+    await userEvent.click(within(pane()).getByRole('button', { name: 'Remettre dans la boîte' }));
+    await waitFor(() => expect(backend.called('inbox_view_reopen').map((c) => c.args.key)).toEqual(['ticket:t1']));
+  });
+
+  it('counts no more an agent whose every request the lead took in hand, and gives it no row of its own', () => {
+    const stopped = [agent({ id: 'a1', status: 'waiting' })];
+    const taken = view({ mark: claimed().mark });
+    expect(inboxCount([], stopped, [taken])).toEqual({ asks: 0, stopped: 0, views: 0, total: 0 });
+    // One request of the two taken: the agent still waits for the user.
+    expect(inboxCount([], stopped, [taken, view({ key: 'req:a1:req_2' })]).total).toBe(1);
+    const g = groups([], stopped, NOW, [taken]);
+    expect(g.stopped).toEqual([]);
+    expect(g.claimed.map((v) => v.key)).toEqual(['req:a1:req_perm']);
+  });
+
+  it('speaks English', async () => {
+    setLang('en');
+    await show([settled()]);
+    expect(within(queue()).getByTestId('ivw-settled-line')).toHaveTextContent(
+      'Settled by overseer-fable: fusionné à la main sur main en 79fe7aec',
+    );
+  });
+});
+
+describe('a request withdrawn by its author (ESC-557)', () => {
+  it('says in its trace the note it was withdrawn with, and nothing dangling without one', async () => {
+    const at = NOW - 3 * MIN;
+    await show(
+      [],
+      [
+        windowAsk({
+          id: 'a-1',
+          title: 'Quelle direction ?',
+          state: 'withdrawn',
+          closedAt: at,
+          updatedAt: at,
+          reason: 'tranché dans la conversation du chef : B',
+        }),
+        windowAsk({ id: 'a-2', title: 'Publier ?', state: 'withdrawn', closedAt: at - MIN, updatedAt: at - MIN, reason: null }),
+      ],
+    );
+    const recent = within(queue()).getAllByTestId('inbox-recent-row');
+    expect(recent[0]).toHaveTextContent('Retirée par design-tableau : tranché dans la conversation du chef : B');
+    expect(recent[1].textContent?.trim().endsWith('Retirée par design-tableau')).toBe(true);
   });
 });

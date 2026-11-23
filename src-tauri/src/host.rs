@@ -61,8 +61,11 @@ pub trait Host: Send + Sync + 'static {
     fn show_waiting(&self, waiting: usize, lang: Lang);
     /// The native menus (the tray's, macOS' app menu) written again in `lang`.
     fn relabel(&self, lang: Lang, waiting: usize);
-    /// `what` opened outside Escouade. Blocking: called off the async runtime's threads.
-    fn open(&self, what: Opened) -> anyhow::Result<()>;
+    /// `what` opened outside Escouade. Blocking: called off the async runtime's threads. A path is opened or shown only
+    /// inside `roots` (the folders of the projects, their worktrees and the data folder: `Core::open_roots`; Escouade's
+    /// downloads for a file received from a server), where it really is (`opening::allow`, audit SEC-12); a link
+    /// ignores them.
+    fn open(&self, what: Opened, roots: &[PathBuf]) -> anyhow::Result<()>;
     /// The image on the clipboard, as PNG; empty without one.
     fn clipboard_image(&self) -> HostFuture<'_, anyhow::Result<Vec<u8>>>;
     /// The devices the app holds (the microphone) let go of, as the core stops.
@@ -197,15 +200,20 @@ impl<R: Runtime> Host for TauriHost<R> {
         crate::menus::relabel(&self.app, lang, waiting);
     }
 
-    fn open(&self, what: Opened) -> anyhow::Result<()> {
-        use crate::outside::{open, What};
+    fn open(&self, what: Opened, roots: &[PathBuf]) -> anyhow::Result<()> {
         match &what {
-            Opened::Url(url) => open(What::Url(url)),
-            Opened::Path(path) => open(What::Path(path)),
-            Opened::Reveal(path) => match crate::outside::logged(&What::Reveal(path)) {
-                Some(done) => done,
-                None => crate::fsedit::reveal(crate::fsedit::Reveal::Select(path.clone())),
-            },
+            Opened::Url(url) => crate::outside::open_url(url),
+            Opened::Path(path) => crate::opening::allow(roots, path, false)?.open(),
+            Opened::Reveal(path) => {
+                let allowed = crate::opening::allow(roots, path, true)?;
+                match crate::outside::logged(&allowed.what()) {
+                    Some(done) => done,
+                    None => crate::fsedit::reveal(
+                        crate::fsedit::Reveal::Select(path.clone()),
+                        roots.to_vec(),
+                    ),
+                }
+            }
         }
     }
 
@@ -359,7 +367,13 @@ impl Host for HeadlessHost {
 
     fn relabel(&self, _lang: Lang, _waiting: usize) {}
 
-    fn open(&self, what: Opened) -> anyhow::Result<()> {
+    /// A path is judged on this machine, where it is, before a client is told of it.
+    fn open(&self, what: Opened, roots: &[PathBuf]) -> anyhow::Result<()> {
+        match &what {
+            Opened::Url(_) => {}
+            Opened::Path(path) => drop(crate::opening::allow(roots, path, false)?),
+            Opened::Reveal(path) => drop(crate::opening::allow(roots, path, true)?),
+        }
         self.publish(HostEvent::Open(what));
         Ok(())
     }

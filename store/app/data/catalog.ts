@@ -4,6 +4,24 @@ import type { Lang } from './language';
 // page, its report form, an author's page. The words of a plugin's permissions come from the server
 // (server/utils/catalog.ts), as do its category names below, which the search also reads.
 
+/** The key that signed a version, by its role (server/utils/minisign.ts, `Role`; ESC-592). */
+export type KeyRole = 'first-hand' | 'third-party' | 'revocation' | 'backup';
+
+const KEY_FR: Record<KeyRole | 'unknown', string> = {
+  'first-hand': 'la clé des plugins d’Escouade',
+  'third-party': 'la clé des plugins tiers',
+  revocation: 'la clé de la révocation',
+  backup: 'la clé de secours',
+  unknown: 'une clé d’Escouade',
+};
+const KEY_EN: Record<KeyRole | 'unknown', string> = {
+  'first-hand': 'the key of Escouade’s plugins',
+  'third-party': 'the key of third-party plugins',
+  revocation: 'the revocation key',
+  backup: 'the backup key',
+  unknown: 'a key of Escouade',
+};
+
 export type Category = 'harness' | 'ticket-sources' | 'forges' | 'themes' | 'notifications' | 'permissions' | 'tools' | 'languages';
 
 export const CATEGORY_ORDER: Category[] = [
@@ -106,7 +124,10 @@ const fr = {
     unsigned: 'Pas encore signée',
     signed: 'Signée par Escouade, à vérifier par l’app avec sa clé',
     signedKey: (id: string) => `Clé minisign ${id}`,
+    signedBy: (role: KeyRole | null) => `Signée par ${KEY_FR[role ?? 'unknown']}`,
     reviewedOn: (d: string) => `Relu par Escouade le ${d}`,
+    reviewedHow: (role: KeyRole | null, id: string) =>
+      `La revue est faite par un agent d’IA d’Escouade, puis la version est signée par ${KEY_FR[role ?? 'unknown']} (${id}).`,
     disabled: 'Retirée',
     disabledTitle: 'Retirée par la liste de révocation d’Escouade : elle ne s’installe plus',
     moved: 'Étiquette déplacée sur le dépôt après la publication : la version reste celle du commit figé',
@@ -252,7 +273,10 @@ const en: CatalogText = {
     unsigned: 'Not signed yet',
     signed: 'Signed by Escouade, for the app to check with its key',
     signedKey: (id: string) => `Minisign key ${id}`,
+    signedBy: (role: KeyRole | null) => `Signed with ${KEY_EN[role ?? 'unknown']}`,
     reviewedOn: (d: string) => `Reviewed by Escouade on ${d}`,
+    reviewedHow: (role: KeyRole | null, id: string) =>
+      `The review is made by an AI agent of Escouade, then the version is signed with ${KEY_EN[role ?? 'unknown']} (${id}).`,
     disabled: 'Withdrawn',
     disabledTitle: 'Withdrawn by Escouade’s revocation list: it no longer installs',
     moved: 'Tag moved on the repository after publication: the version stays that of the frozen commit',

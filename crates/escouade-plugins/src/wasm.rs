@@ -24,7 +24,9 @@
 //!   connection itself uses ([`forbidden`]). Two things open this (ESC-332): `{account}`, the host the user typed for one
 //!   of its accounts and that host alone, in http or on the local network; and `local:shared`, in http, the port the core
 //!   read in the output of the process it started for the plugin, while it lives. The proxy and the TLS of Réglages ›
-//!   Réseau are followed: through a proxy only the name is judged, and the journal says so.
+//!   Réseau are followed: through a proxy, the name is resolved here as well and refused when it gives an address of the
+//!   machine or of the local network (audit SEC-09); a name the machine cannot resolve is left to the proxy, and the
+//!   journal says so.
 //! - **Its thread** ([`serve`]) waits on one channel, whatever comes: a line of the core, the end of a fetch, a piece of
 //!   a stream, a timer. It writes all that came on the module's input, runs one turn, then serves what the module wrote.
 //!   What lasts runs beside it ([`Beside`]), on the host's runtime ([`net`]), and comes back on the channel: a slow call
@@ -267,7 +269,7 @@ impl Modules {
             crate::paths::write_cache(&wasm, &bytes).map_err(|e| e.to_string())?;
         }
         let pre = w(module.serialize())?;
-        crate::paths::write_cache(&native, &pre).map_err(|e| e.to_string())?;
+        keep_precompiled(&native, &pre).map_err(|e| e.to_string())?;
         Ok((module, made))
     }
 
@@ -297,18 +299,30 @@ impl Modules {
         match shared {
             // Another process may be writing the same bytes: it is only a cache.
             Some(_) => {
-                let _ = crate::paths::write_cache(&native, &pre);
+                let _ = keep_precompiled(&native, &pre);
             }
             None => {
                 std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
-                crate::paths::write_cache(&native, &pre).map_err(|e| e.to_string())?;
+                keep_precompiled(&native, &pre).map_err(|e| e.to_string())?;
             }
         }
         Ok((module, Made::Precompiled))
     }
 
+    /// The file the module of the program `run` of the plugin of `folder` is made of, as [`Modules::of`] reads it: its
+    /// bundle, the module `built` names, or its `plugin.wasm` (what its journal names, ESC-652).
+    pub fn source(folder: &Path, run: &super::manifest::Run, built: Option<&Built>) -> PathBuf {
+        match &run.js {
+            Some(js) => folder.join(super::manifest::icon_path(js)),
+            None => built
+                .and_then(|b| b.module(folder))
+                .unwrap_or_else(|| folder.join(MODULE_FILE)),
+        }
+    }
+
     /// The module of the program `run` of the plugin of `folder`, whichever of the two it is; a process has none.
-    /// `built`: the folder is one in development (`Origin::Dev`), whose `run.wasm` module is the last one built.
+    /// `built`: the folder is one in development or copied ([`Built::of_folder`]), whose `run.wasm` module is the last one
+    /// built.
     pub fn of(
         &self,
         folder: &Path,
@@ -340,7 +354,7 @@ impl Modules {
         if let Ok(dir) = std::fs::read_dir(&self.cache) {
             for e in dir.flatten() {
                 let name = e.file_name().to_string_lossy().to_string();
-                if name.starts_with(&format!("{key}-")) && name.ends_with(".cwasm") {
+                if name.starts_with(&format!("{key}-")) && is_precompiled(&name) {
                     let _ = std::fs::remove_file(e.path());
                 }
             }
@@ -362,9 +376,10 @@ impl Modules {
             return;
         };
         let own = format!("-{}.cwasm", self.app_version);
+        let own_sum = format!("{own}{SUM}");
         for e in dir.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
-            if name.ends_with(".cwasm") && !name.ends_with(&own) {
+            if is_precompiled(&name) && !name.ends_with(&own) && !name.ends_with(&own_sum) {
                 let _ = std::fs::remove_file(e.path());
             }
         }
@@ -378,7 +393,8 @@ impl Modules {
 /// The module of a `run.wasm` folder in development (issue #43): the last one `escouade-plugin build` wrote for the
 /// version of its manifest, `packs/<id>-<version>.wasm`, else the `plugin.wasm` its author put beside the manifest.
 /// Nothing is taken from outside the folder, and nothing is compiled when it is loaded: without either, it says what to
-/// run. An installed plugin (the store, the seed, a copy) has its `plugin.wasm` alone.
+/// run. A folder copied by « Depuis un dossier… » looks there the same way, its copy holding of `packs/` that module alone
+/// (ESC-652); a plugin of the store, the seed or a repository has its `plugin.wasm` alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Built {
     /// `<id>-<version>.wasm`, the file of `packs/`.
@@ -393,6 +409,21 @@ impl Built {
         Self {
             name: format!("{id}-{version}.wasm"),
         }
+    }
+
+    /// Where the module of the `run.wasm` plugin `m` of `origin` is looked for, when it is a folder: in development
+    /// (issue #43), or copied by « Depuis un dossier… », whose copy kept of `packs/` the module of its version alone
+    /// (ESC-652). None for another program, or a plugin of the store, the seed or a repository (its `plugin.wasm`).
+    pub fn of_folder(origin: &crate::Origin, m: &super::manifest::Manifest) -> Option<Self> {
+        let folder = matches!(
+            origin,
+            crate::Origin::Dev { .. } | crate::Origin::Folder { .. }
+        );
+        let rust = m
+            .run
+            .as_ref()
+            .is_some_and(|r| r.js.is_none() && r.wasm.is_some());
+        (folder && rust).then(|| Self::of(&m.id, &m.version))
     }
 
     /// The module there is in `folder`: the one built for this version first.
@@ -428,11 +459,47 @@ fn of_the_build(folder: &Path) -> Option<&Path> {
     (cfg!(any(debug_assertions, test)) && built).then_some(folder)
 }
 
+/// What follows the name of a precompiled module for the file that keeps its SHA-256 (SEC-18 of the security audit,
+/// ESC-594): `<key>-<version>.cwasm.sha256`, beside it.
+pub const SUM: &str = ".sha256";
+
+/// The file that keeps the SHA-256 of the precompiled module `native`.
+pub fn sum_of(native: &Path) -> PathBuf {
+    let mut s = native.as_os_str().to_owned();
+    s.push(SUM);
+    PathBuf::from(s)
+}
+
+/// Whether `name` is a precompiled module of the cache, or the file of its SHA-256.
+fn is_precompiled(name: &str) -> bool {
+    name.ends_with(".cwasm") || name.ends_with(&format!(".cwasm{SUM}"))
+}
+
+/// Keeps the precompiled module `pre` at `native`, then its SHA-256 beside it: [`precompiled`] loads it only while the
+/// two agree.
+fn keep_precompiled(native: &Path, pre: &[u8]) -> std::io::Result<()> {
+    crate::paths::write_cache(native, pre)?;
+    crate::paths::write_cache(&sum_of(native), sha256(pre).as_bytes())
+}
+
+/// The precompiled module of `path`, in the cache, when its bytes are those whose SHA-256 was kept beside it when this
+/// app wrote it (SEC-18 of the security audit, ESC-594), and wasmtime can load it. A precompiled module is native code,
+/// loaded outside the sandbox: one changed since it was written, or without its SHA-256, is never loaded; it is
+/// precompiled again from its module, and both are written again.
 fn precompiled(path: &Path) -> Option<Module> {
     // Read whole, not mapped: under Windows a mapped file could be neither replaced nor taken out of the cache.
     let pre = std::fs::read(path).ok()?;
-    // SAFETY: a file this app wrote itself (`Module::serialize`) into its own cache, never one received;
-    // wasmtime checks it was made by this same version ([`module_version`]) and configuration.
+    let kept = std::fs::read_to_string(sum_of(path)).unwrap_or_default();
+    if kept.trim() != sha256(&pre) {
+        log::warn!(
+            "{}: not the precompiled module this app wrote (its SHA-256 is not the one kept beside it); precompiled again",
+            path.display()
+        );
+        return None;
+    }
+    // SAFETY: a file this app wrote itself (`Module::serialize`) into its own cache, never one received, whose bytes are
+    // still the ones it wrote (their SHA-256, above); wasmtime checks it was made by this same version
+    // ([`module_version`]) and configuration.
     match unsafe { Module::deserialize(engine(), &pre) } {
         Ok(m) => Some(m),
         Err(e) => {
@@ -935,6 +1002,22 @@ pub fn forbidden(ip: IpAddr) -> bool {
                 let [c, d] = s[7].to_be_bytes();
                 return forbidden_v4(Ipv4Addr::new(a, b, c, d));
             }
+            let v4_of = |hi: u16, lo: u16| {
+                let [a, b] = hi.to_be_bytes();
+                let [c, d] = lo.to_be_bytes();
+                Ipv4Addr::new(a, b, c, d)
+            };
+            // 6to4 (2002::/16): the IPv4 of its relay in its next 32 bits (audit SEC-09).
+            if s[0] == 0x2002 && forbidden_v4(v4_of(s[1], s[2])) {
+                return true;
+            }
+            // Teredo (2001::/32): its server's IPv4 in the next 32 bits, its client's in the last 32, each bit flipped.
+            if s[0] == 0x2001
+                && s[1] == 0
+                && (forbidden_v4(v4_of(s[2], s[3])) || forbidden_v4(v4_of(!s[6], !s[7])))
+            {
+                return true;
+            }
             v6.is_loopback()
                 || v6.is_unspecified()
                 || v6.is_multicast()
@@ -1169,6 +1252,10 @@ impl Fetcher {
         let h = host.trim_end_matches('.').to_ascii_lowercase();
         !h.is_empty()
             && self.network.iter().any(|w| {
+                // A host too wide (no dot, a public suffix, audit SEC-09) covers nothing, read before or not.
+                if crate::manifest::network_word_refused(w) {
+                    return false;
+                }
                 let p = w.trim().trim_end_matches('.').to_ascii_lowercase();
                 match p.strip_prefix("*.") {
                     Some(d) => !d.is_empty() && h.ends_with(&format!(".{d}")),
@@ -1300,6 +1387,35 @@ impl Fetcher {
         })
     }
 
+    /// Through the proxy, which resolves the name itself, the name resolved here as well (audit SEC-09): refused when one
+    /// of its addresses is of the machine or of the local network. A name this machine cannot resolve is the proxy's to
+    /// judge (the journal says so); a host of its accounts, or a call that does not go by the proxy, is not looked at.
+    async fn judged_by_proxy(&self, judged: &Judged) -> Result<(), (i64, String)> {
+        if judged.direct || !self.proxied(&judged.name) || (self.open())(&judged.name) {
+            return Ok(());
+        }
+        let name = judged.name.trim_matches(['[', ']']);
+        let all: Vec<IpAddr> = match &self.dns {
+            Some(f) => f(name),
+            None => match tokio::net::lookup_host((name, 0)).await {
+                Ok(addrs) => addrs.map(|a| a.ip()).collect(),
+                Err(_) => Vec::new(),
+            },
+        };
+        let bad: Vec<IpAddr> = all.into_iter().filter(|ip| forbidden(*ip)).collect();
+        if bad.is_empty() {
+            return Ok(());
+        }
+        Err((
+            REFUSED,
+            Forbidden {
+                host: judged.name.clone(),
+                addrs: bad,
+            }
+            .to_string(),
+        ))
+    }
+
     /// Whether a call to `name` goes through the proxy of the settings.
     fn proxied(&self, name: &str) -> bool {
         super::socket::proxy_for(&self.live.read(), name).is_some()
@@ -1317,7 +1433,7 @@ impl Fetcher {
         let direct =
             self.routes.contains_key(&host) || parsed.as_ref().is_some_and(|u| self.is_local(u));
         let by = if !direct && self.proxied(&host) {
-            " (by the proxy: its name judged, not its addresses)"
+            " (by the proxy: its addresses judged as this machine resolves them)"
         } else {
             ""
         };
@@ -1437,6 +1553,7 @@ impl Fetcher {
     pub async fn fetch(&self, params: &Value) -> Result<Value, (i64, String)> {
         let url = params.get("url").and_then(Value::as_str).unwrap_or("");
         let judged = self.judge(url, Way::Http)?;
+        self.judged_by_proxy(&judged).await?;
         let name = judged.name.clone();
         let req = self.request(&judged, params)?.timeout(self.seconds);
         let _turn = self
@@ -1480,6 +1597,7 @@ impl Fetcher {
     ) -> Result<reqwest::Response, (i64, String)> {
         let url = params.get("url").and_then(Value::as_str).unwrap_or("");
         let judged = self.judge(url, Way::Http)?;
+        self.judged_by_proxy(&judged).await?;
         let req = self.request(&judged, params)?;
         match tokio::time::timeout(self.seconds, req.send()).await {
             Ok(r) => r.map_err(|e| refusal_of(&judged.name, e, self.seconds)),
@@ -1507,6 +1625,7 @@ impl Fetcher {
         }
         let settings = self.live.read().clone();
         if let Some(proxy) = super::socket::proxy_for(&settings, &host) {
+            self.judged_by_proxy(judged).await?;
             return super::socket::tunnel(&proxy, &host, port)
                 .await
                 .map_err(failed);

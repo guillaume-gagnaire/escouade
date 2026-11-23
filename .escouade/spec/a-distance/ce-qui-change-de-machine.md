@@ -2,8 +2,8 @@
 title: "Ce qui change de machine"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « Ce qui change de machine », « Ce qui change de machine, MS-4 (ESC-538) »","docs/SERVER-UX.md, § 4, § 7 (S12, S13), § 9, § 10","design/server-2-3/ (captures x-fichier, x-compte, x-notifs, *-projet)","src-tauri/src/serverfolders.rs, src-tauri/src/servers/received.rs, src-tauri/src/servers/mod.rs (relay)","src/lib/server-moves.svelte.ts, src/lib/server-browse.ts, src/components/servers/","Revue de sécurité de la 2.3 (ESC-624), constat SR1-06 (rapport privé, hors du dépôt)"]
-tickets: ["ESC-538","ESC-629"]
-decisions: [217,284]
+tickets: ["ESC-538","ESC-629","ESC-651"]
+decisions: [217,284,299,"la-2-2-6-a-la-2-2-8-reversees-dans-la-2"]
 compared: null
 ---
 
@@ -113,3 +113,12 @@ Là où un secret se donne (la clé de Cursor ou de Mistral Vibe, les jetons des
 - **WSL** est sans objet sur un serveur Linux : ses réglages n'y apparaissent pas.
 - **La mise à jour** : le client et le serveur, chacun la sienne. Le serveur a sa mise à jour signée (`escouade-server update`, ou une nouvelle image Docker), et la poignée de main dit comment le mettre à la version du client (voir *Le mode serveur*) ; l'écran « Mettre à jour le serveur » du client reste à faire.
 - **Les serveurs de langage de l'éditeur** sont encore refusés à distance.
+
+## L'ouverture bornée, sur le poste comme sur un serveur (ESC-651)
+
+Ce qui suit réunit l'ouverture bornée de la 2.2.6 (audit SEC-12, *L'ouverture par le système*) et les hôtes de la 2.3.
+
+- **Le cœur nomme les dossiers permis, l'hôte juge** : chaque chemin qu'Escouade fait ouvrir ou montrer (« Ouvrir », « Afficher dans le dossier », un fichier envoyé par un agent, l'image d'un message, un fichier d'une demande de la boîte « À toi ») part avec les dossiers où il peut être : ceux des projets, de leurs worktrees, des agents, et le dossier de données. Le chemin est jugé là où il est vraiment (liens, jonctions, `..` résolus) avant que rien ne s'ouvre.
+- **Sur le poste**, l'app l'ouvre ensuite. **Sur un serveur**, le serveur le juge sur sa machine avant d'en dire quoi que ce soit au client : un chemin hors de ces dossiers est refusé avec sa raison, et le client n'en apprend rien.
+- **Les copies reçues d'un serveur** ne s'ouvrent ou ne se montrent que dans `Téléchargements/Escouade` : c'est le seul dossier permis pour elles. La copie reçue est marquée en quarantaine sous macOS dès qu'elle est écrite, comme un fichier qu'un agent envoie.
+- **Les octets** qu'un client télécharge d'un serveur (un fichier envoyé, une image d'un message) sont lus comme un fichier ordinaire seulement : jamais un tube nommé ni un périphérique, et 512 Mo au plus.

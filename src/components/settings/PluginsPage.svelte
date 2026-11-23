@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fTime } from '../../lib/format';
+  import { fDate, fTime } from '../../lib/format';
   import { locale, t } from '../../lib/i18n';
   import { keyLockedBy, lockLine, SECRETS_FILE_KEY } from '../../lib/locks.svelte';
   import { markOf, pluginsApi, type PluginView, type SecretsFile, type SeedOffer } from '../../lib/plugins';
@@ -86,6 +86,10 @@
     list?.serial
       ? t('plugins.installed.revocations', { time: list.readAt ? fTime(Date.parse(list.readAt)) : '—', serial: String(list.serial) })
       : t('plugins.installed.revocationsNone'),
+  );
+  // More than 7 days without a new list (audit SEC-15): said beside it, discreetly.
+  const stale = $derived(
+    list?.stale && list.holdsSince ? t('plugins.installed.revocationsStale', { date: fDate(Date.parse(list.holdsSince)) }) : '',
   );
 </script>
 
@@ -189,7 +193,11 @@
 {/if}
 
 <Group title={t('plugins.settingsPage.security')} aria-label={t('plugins.settingsPage.security')}>
-  <Row label={t('plugins.installed.verifiedOnly')} desc={revocations} row="pluginsVerifiedOnly">
+  <Row
+    label={t('plugins.installed.verifiedOnly')}
+    desc={`${t('plugins.installed.verifiedOnlyScope')} ${revocations}${stale ? ` ${stale}` : ''}`}
+    row="pluginsVerifiedOnly"
+  >
     <button
       class="switch"
       class:on={!!settingsForm.settings.pluginsVerifiedOnly}
@@ -198,6 +206,18 @@
       aria-label={t('plugins.installed.verifiedOnly')}
       onclick={() => (settingsForm.settings.pluginsVerifiedOnly = !settingsForm.settings.pluginsVerifiedOnly)}
     ></button>
+  </Row>
+  <!-- « Harness des plugins tiers » (SEC-01, ESC-589): asked at the first launch, its whole command said, or none runs. -->
+  <Row label={t('plugins.installed.thirdPartyHarnesses')} desc={t('plugins.installed.thirdPartyHarnessesDesc')}>
+    <select
+      class="field"
+      aria-label={t('plugins.installed.thirdPartyHarnesses')}
+      value={settingsForm.settings.thirdPartyHarnesses ?? 'ask'}
+      onchange={(e) => (settingsForm.settings.thirdPartyHarnesses = (e.currentTarget as HTMLSelectElement).value as 'ask' | 'refuse')}
+    >
+      <option value="ask">{t('plugins.installed.thirdAsk')}</option>
+      <option value="refuse">{t('plugins.installed.thirdRefuse')}</option>
+    </select>
   </Row>
 </Group>
 

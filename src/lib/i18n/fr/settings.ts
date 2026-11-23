@@ -50,7 +50,7 @@ export default {
     },
     team: { label: 'Équipe', desc: 'Le Kanban partagé, les réglages partagés (.escouade.yml) et la mémoire partagée' },
     privacy: { label: 'Confidentialité', desc: 'Ce que ce projet garde pour lui : ses fichiers, ses comptes, ses plugins' },
-    allProjects: { label: 'Tous les projets', desc: 'Ce que reçoit un nouveau projet, et les projets fermés' },
+    allProjects: { label: 'Tous les projets', desc: 'Ce que reçoit un nouveau projet, le fetch automatique et les projets fermés' },
   },
 
   // The bar of the window: the search (R8), Escouade's pages, the projects with the one chosen unfolded on its pages.
@@ -205,6 +205,7 @@ export default {
     pluginOff: '{name} (plugin coupé)',
     noAccount: '{name} (aucun compte)',
     projectOff: '{name} (coupé pour ce projet)',
+    thirdParty: '{name} (plugin tiers : un projet privé existe)',
   },
   /** Réglages › Agents › Permissions, and the question of the first start (SEC-09). */
   permissions: {
@@ -403,9 +404,20 @@ export default {
     proxyUrl: 'Proxy HTTP(S)',
     proxyUrlHint: 'ex. http://utilisateur:motdepasse@proxy:3128',
     proxyUrlNone: 'aucun',
+    /** Under the address: where its password went (SEC-10). */
+    proxyPasswordNote:
+      'Le mot de passe de l’adresse est gardé dans le trousseau du système, jamais dans les réglages : l’adresse s’affiche sans lui. Pour le changer, écris l’adresse avec le nouveau.',
+    neverDirect: 'Ne jamais sortir sans le proxy',
+    neverDirectDesc:
+      'Allumé d’office avec un proxy. Si le proxy ne répond pas, une mise à jour ou un téléchargement échoue avec sa raison au lieu de partir en connexion directe.',
+    neverDirectNoProxy: 'Sans proxy configuré, rien à imposer : toutes les connexions sont directes.',
     exclusions: 'Exclusions',
     exclusionsHint: 'NO_PROXY, séparées par des virgules',
     proxyTerminals: 'Appliquer aussi le proxy aux terminaux intégrés',
+    offline: 'Mode hors ligne',
+    offlineDesc:
+      "Escouade ne contacte plus de lui-même ni les mises à jour, ni le store, ni la liste de révocation, ni les statistiques. Ce que vous demandez d'un geste (installer un plugin, afficher une image) et le travail des agents ne changent pas.",
+    offlineImposed: 'Imposé par la stratégie de ce poste.',
     certificates: 'Certificats',
     certificatesNote:
       "Escouade fait confiance aux certificats reconnus, à ceux installés sur ce système et à ceux du fichier d'autorités. Les agents reçoivent ce fichier au prochain démarrage de leur processus.",
@@ -511,7 +523,10 @@ export default {
       'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
     /** Under « Projet privé » on Windows (SEC-08): what the fence is there, and is not. */
     privateWindows:
-      'Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client. Un plugin tiers n’y est lancé qu’une fois activé par toi pour ce projet.',
+      'Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client.',
+    /** Under « Projet privé » (SEC-02, ESC-590): a third party’s harness is not launched there. */
+    privateThirdParty:
+      'Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : tant qu’il en existe un sur ce poste, il n’est lancé dans aucun projet, et un agent qui en a un s’arrête.',
     /** Under « Projet privé »: what keeps its files from the other projects' agents, harness by harness (ESC-140). */
     fenceTitle: 'Ses fichiers',
     fenceDesc:
@@ -631,6 +646,14 @@ export default {
     namePlaceholder: 'ex. Front',
     commandPlaceholder: 'ex. npm run dev',
     subfolderHint: '(vide = dossier du projet)',
+    /** « Ouvrir à son lancement » of a launch command (ESC-560). `{example}`: an address that follows a worktree's ports. */
+    openOnLaunch: 'Ouvrir à son lancement',
+    openUrl: 'Adresse à ouvrir',
+    openUrlPlaceholder: 'http://localhost:3000',
+    openUrlHint:
+      'Ouverte dès qu’elle répond, comme « ▶ Tester » ; rien ne s’ouvre si la commande s’arrête avant. Dans le worktree d’un agent, la commande reçoit ses ports : {example} suit son ESCOUADE_PORT_BASE (ESCOUADE_PORT_END aussi), 3000 dans le projet.',
+    openIn: 'Où l’ouvrir',
+    openIns: { page: 'Page de lancement', browser: 'Navigateur' },
     subfolderPlaceholder: 'ex. apps/web',
     noCommandsYet: "Aucune commande pour l'instant.",
     close: 'Fermer le projet',

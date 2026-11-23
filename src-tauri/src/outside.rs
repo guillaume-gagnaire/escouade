@@ -111,6 +111,16 @@ fn spawn(launch: &Launch) -> Result<()> {
     Ok(())
 }
 
+/// Opens the link `url` outside Escouade (see the module's comment).
+pub fn open_url(url: &str) -> Result<()> {
+    open(What::Url(url))
+}
+
+/// Opens the path `allowed` outside Escouade: only one the fence let through (`opening::allow`, audit SEC-12).
+pub fn open_allowed(allowed: &crate::opening::Allowed) -> Result<()> {
+    open(allowed.what())
+}
+
 /// Opens `what` outside Escouade (see the module's comment).
 /// The e2e (a build of development, `ESCOUADE_OPEN_LOG`): what would be opened written to that file, nothing opened
 /// for real (ESC-538). None otherwise.
@@ -135,7 +145,7 @@ pub fn logged(what: &What) -> Option<Result<()>> {
     })())
 }
 
-pub fn open(what: What) -> Result<()> {
+fn open(what: What) -> Result<()> {
     if let Some(done) = logged(&what) {
         return done;
     }

@@ -1,3 +1,5 @@
+// First: the `<style>` elements created from now on carry the page's nonce (lib/style-nonce.ts).
+import './lib/style-nonce-boot';
 import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';

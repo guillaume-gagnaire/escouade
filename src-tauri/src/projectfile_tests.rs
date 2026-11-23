@@ -43,6 +43,9 @@ git:
   agent_branch_prefix: agent/
   ticket_branch_prefix: tickets/
   commit_mode: direct
+  auto_fetch: always
+  fetch_every: 30
+  fetch_timeout: 900
   conventional_commits: false
 board:
   on_approve: pr
@@ -117,6 +120,9 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("git.ticket_branch_prefix"), json!("tickets/"));
     assert_eq!(v("git.commit_mode"), json!("direct"));
     assert_eq!(v("git.conventional_commits"), json!(false));
+    assert_eq!(v("git.auto_fetch"), json!("always"));
+    assert_eq!(v("git.fetch_every"), json!(30));
+    assert_eq!(v("git.fetch_timeout"), json!(900));
     assert_eq!(v("board.on_approve"), json!("pr"));
     assert_eq!(v("board.target_branch"), json!("develop"));
     assert_eq!(v("board.merge_strategy"), json!("rebase"));
@@ -637,6 +643,7 @@ fn commands_the_project_has_already_need_no_trust() {
         command: "npm run dev".into(),
         shell: "pwsh".into(),
         cwd: "web".into(),
+        ..Default::default()
     }];
     let r = read("version: 1\nlaunch:\n  - name: web\n    command: npm run dev\n    shell: pwsh\n    cwd: web\n");
     pf::apply(&mut p, &r);
@@ -648,6 +655,72 @@ fn commands_the_project_has_already_need_no_trust() {
     pf::apply(&mut p, &r);
     assert!(p.shared.file.as_ref().unwrap().pending.is_some());
     assert_eq!(p.run_commands[0].shell, "pwsh");
+}
+
+/// ESC-560: a proposed launch command carries the address it opens and where, applied with the
+/// command once trusted, written back the same; an address that is not http(s) is told and the
+/// command left out.
+#[test]
+fn a_launch_command_proposes_its_address_and_where_it_opens() {
+    let text = "version: 1\nlaunch:\n  - name: web\n    command: npm run dev\n    url: http://localhost:${ESCOUADE_PORT_BASE:-5173}/\n    open_in: browser\n  - name: api\n    command: cargo run\n    url: http://localhost:8080\n";
+    let r = read(text);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let mut p = project();
+    pf::apply(&mut p, &r);
+    // Not applied before the user trusts it, as the rest of the commands.
+    assert!(p.run_commands.is_empty());
+    let hash = p
+        .shared
+        .file
+        .as_ref()
+        .unwrap()
+        .pending
+        .as_ref()
+        .unwrap()
+        .hash
+        .clone();
+    p.shared.trusted = hash;
+    pf::apply(&mut p, &r);
+    assert_eq!(p.run_commands.len(), 2);
+    assert_eq!(
+        p.run_commands[0].url,
+        "http://localhost:${ESCOUADE_PORT_BASE:-5173}/"
+    );
+    assert_eq!(p.run_commands[0].open_in, crate::model::RunOpen::Browser);
+    assert_eq!(p.run_commands[1].url, "http://localhost:8080");
+    assert_eq!(p.run_commands[1].open_in, crate::model::RunOpen::Page);
+    // Written back: the address and the browser, nothing for the page (the default).
+    let out = pf::write(None, &pf::export_values(&p)).unwrap();
+    assert!(
+        out.contains("url: http://localhost:${ESCOUADE_PORT_BASE:-5173}/"),
+        "{out}"
+    );
+    assert_eq!(out.matches("open_in").count(), 1, "{out}");
+    let again = read(&out);
+    assert_eq!(again.values["launch"], r.values["launch"]);
+
+    // Another scheme, or a variable other than the ports: told on its line, the command left out.
+    for bad in [
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "http://${HOME}/",
+    ] {
+        let r = read(&format!(
+            "version: 1\nlaunch:\n  - name: web\n    command: npm run dev\n    url: \"{bad}\"\n"
+        ));
+        assert_eq!(r.values["launch"], json!([]), "{bad}");
+        assert_eq!(r.warnings.len(), 1, "{bad}");
+        assert_eq!(r.warnings[0].line, Some(5), "{bad}");
+    }
+    let r =
+        read("version: 1\nlaunch:\n  - name: web\n    command: npm run dev\n    open_in: tab\n");
+    assert_eq!(r.values["launch"], json!([]));
+    assert!(r.warnings[0].text.contains("browser"), "{:?}", r.warnings);
+    // The schema says both.
+    let s = pf::schema();
+    let item = &s["properties"]["launch"]["oneOf"][0]["items"]["properties"];
+    assert_eq!(item["open_in"]["enum"], json!(["page", "browser"]));
+    assert_eq!(item["url"]["type"], "string");
 }
 
 #[test]
@@ -1411,6 +1484,7 @@ async fn exported_the_project_s_settings_make_its_file_its_commands_trusted() {
                 command: "npm run dev".into(),
                 shell: String::new(),
                 cwd: String::new(),
+                ..Default::default()
             }],
             ..h.core.project(&p.id).unwrap()
         })
@@ -1728,4 +1802,54 @@ fn the_key_team_is_written_over_the_file_and_taken_out() {
     let text = pf::write_team(None, Some(&key)).unwrap();
     assert!(text.contains("version: 1"));
     assert!(hint_of(&text).0.is_some());
+}
+
+#[test]
+fn node_lines_count_crlf_and_lf_breaks() {
+    let t = pf::tree("version: 1\r\nmarker: x\r\nworktrees:\n  per_agent: true\n").unwrap();
+    let N::Map(e) = &t.v else { panic!() };
+    let lines: Vec<u32> = e.iter().map(|(_, l, _)| *l).collect();
+    assert_eq!(lines, [1, 2, 3]);
+    let N::Map(w) = &e[2].2.v else { panic!() };
+    assert_eq!((w[0].1, w[0].2.line), (4, 4));
+    assert_eq!(t.line, 1);
+}
+
+/// ESC-653: `.escouade.yml` comes with the repository, so is a link there (a junction under
+/// Windows, which needs no privilege) neither read nor written through, and nothing past 1 MiB.
+#[test]
+fn the_project_file_is_neither_read_nor_written_through_a_link_nor_past_its_cap() {
+    let root = crate::paths::test_dir("pf-file-link");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let project = root.join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let path = project.to_string_lossy().to_string();
+    let file = project.join(pf::FILE);
+    // A plain file is read and written.
+    std::fs::write(&file, "version: 1\n").unwrap();
+    assert_eq!(pf::file_text(&path).as_deref(), Some("version: 1\n"));
+    assert_eq!(pf::file_to_write(&path).unwrap(), file);
+    // Past the cap: neither read nor written again from nothing.
+    std::fs::write(&file, vec![b'#'; (1 << 20) + 1]).unwrap();
+    assert_eq!(pf::file_text(&path), None);
+    assert!(pf::file_to_write(&path).is_err());
+    std::fs::remove_file(&file).unwrap();
+    // A link to a folder (a junction under Windows).
+    assert!(crate::paths::make_dir_link(&outside, &file));
+    assert_eq!(pf::file_text(&path), None);
+    assert!(pf::file_to_write(&path).is_err());
+    #[cfg(windows)]
+    std::fs::remove_dir(&file).unwrap();
+    #[cfg(unix)]
+    std::fs::remove_file(&file).unwrap();
+    // A link to a file elsewhere (under Windows only with the privilege of symbolic links).
+    let secret = outside.join("secret.yml");
+    std::fs::write(&secret, "version: 1\n").unwrap();
+    if crate::paths::make_file_link(&secret, &file) {
+        assert_eq!(pf::file_text(&path), None);
+        assert!(pf::file_to_write(&path).is_err());
+    } else {
+        eprintln!("no symbolic link to a file allowed here: that part skipped");
+    }
 }

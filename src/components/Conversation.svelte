@@ -35,7 +35,7 @@
   import { workflows } from '../lib/workflows.svelte';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import HeatFigure from './HeatFigure.svelte';
-  import { capsOf, engineName, harnessHeld, showsCost, speakerOf } from '../lib/engines';
+  import { capsOf, engineName, harnessHeld, harnessThirdParty, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { localCommandViews } from '../lib/localcmd';
   import { subagentInfo } from '../lib/subagents';
@@ -624,10 +624,39 @@
   {/if}
 {/snippet}
 
+<!-- Its session in Claude Code's Code Mode (ESC-553): resumed in its terminal alone. Over its terminal it says so; over the
+     conversation it opens the terminal. -->
+{#snippet codeModeBand()}
+  {#if agent.codeMode}
+    <div class="banner code-mode" class:top={harnessView} role="region" aria-label={t('conv.codeMode.title')} data-testid="code-mode">
+      <div class="what">
+        <strong>{t('conv.codeMode.title')}</strong>
+        <span>{t('conv.codeMode.text')}</span>
+      </div>
+      {#if !harnessView && !agent.archived}
+        <button class="btn primary" onclick={() => app.run(api.setAgentView(agent.id, true))}
+          ><Icon name="term" size={14} />{t('conv.codeMode.open')}</button
+        >
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
 <!-- Its harness off for its project (ESC-404): it does not start nor get anything until « Activer », the same agreement as
      before a first agent. -->
 {#snippet harnessCard()}
-  {#if !agent.archived && harnessHeld(agent.projectId, agent.engine ?? 'claude')}
+  <!-- A third party’s harness in a private project (SEC-02, ESC-590): said, and nothing to turn on. -->
+  {#if !agent.archived && harnessThirdParty(agent.projectId, agent.engine ?? 'claude')}
+    <div
+      class="banner held"
+      class:top={harnessView}
+      role="region"
+      aria-label={t('settings.project.private')}
+      data-testid="harness-third-party"
+    >
+      <span>{t('plugins.harness.cardThirdParty', { name: engineName(agent.engine) })}</span>
+    </div>
+  {:else if !agent.archived && harnessHeld(agent.projectId, agent.engine ?? 'claude')}
     {@const project = app.projects.find((p) => p.id === agent.projectId)}
     {@const off = !!app.harnessScope[agent.projectId]?.off.includes(agent.engine ?? 'claude')}
     <div class="banner held" class:top={harnessView} role="region" aria-label={t('plugins.harness.enable')} data-testid="harness-held">
@@ -638,6 +667,27 @@
       >
       <button class="btn primary" onclick={() => app.enableHarness(agent.projectId, agent.engine ?? 'claude')}
         >{t('plugins.harness.enable')}</button
+      >
+    </div>
+  {/if}
+  <!-- A harness of a third party whose command is not agreed to, or refused by « Harness des plugins tiers » (SEC-01,
+       ESC-589): it does not start; « Voir la commande… » says it whole, to agree to or refuse. -->
+  {#if !agent.archived && app.harnessLaunches[agent.engine ?? 'claude']}
+    {@const held = app.harnessLaunches[agent.engine ?? 'claude']}
+    <div
+      class="banner held"
+      class:top={harnessView}
+      role="region"
+      aria-label={t('plugins.harness.seeCommand')}
+      data-testid="harness-launch-held"
+    >
+      <span
+        >{held === 'refused'
+          ? t('plugins.harness.cardRefused', { name: engineName(agent.engine) })
+          : t('plugins.harness.cardAsks', { name: engineName(agent.engine) })}</span
+      >
+      <button class="btn primary" onclick={() => app.askHarnessLaunch(agent.engine ?? 'claude', agent.id)}
+        >{t('plugins.harness.seeCommand')}</button
       >
     </div>
   {/if}
@@ -778,7 +828,8 @@
           <button
             aria-pressed={!harnessView && !pageView}
             aria-label={t('conv.header.toRich')}
-            use:tip={harnessView ? t('conv.header.toRichHint') : undefined}
+            disabled={harnessView && !!agent.codeMode}
+            use:tip={harnessView ? t(agent.codeMode ? 'conv.codeMode.noRich' : 'conv.header.toRichHint') : undefined}
             onclick={() => {
               showPage(agent.id, false);
               if (harnessView) switchView(agent);
@@ -844,6 +895,7 @@
     <DevPage {agent} />
   {:else if harnessView && !agent.archived}
     {@render harnessCard()}
+    {@render codeModeBand()}
     {@render nextStart()}
     <AgentTerminal {agent} />
   {:else}
@@ -1022,6 +1074,7 @@
         </div>
       {/if}
       {@render harnessCard()}
+      {@render codeModeBand()}
       {@render nextStart()}
       <Composer {agent} />
     {/if}
@@ -1671,20 +1724,23 @@
   .banner.held {
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--warn, var(--p)) 45%, transparent);
   }
-  .banner.next {
+  .banner.next,
+  .banner.code-mode {
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent);
   }
   /* Above the terminal of the Claude Code view rather than above the composer. */
   .banner.top {
     margin-top: 10px;
   }
-  .next .what {
+  .next .what,
+  .code-mode .what {
     display: flex;
     flex-direction: column;
     gap: 3px;
     min-width: 0;
   }
-  .next strong {
+  .next strong,
+  .code-mode strong {
     color: var(--text);
     font-weight: 600;
   }

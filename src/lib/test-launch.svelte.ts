@@ -13,10 +13,9 @@ import { crashedLabel, startLaunch, stopAgentTests, stopLaunch } from './launch-
 import { isolaApproved, isolaCommand, openAddress, parseTestId, recipeApproved, recipeCommands } from './recipe';
 import { app } from './state.svelte';
 import type { Agent, IsolaService, LaunchState, PagesOpen, Project, RunCommand } from './types';
+import { POLL_MS, waitUntilUp } from './wait-ready';
 
-/** How often a server is asked whether it is up, and for how long at most. */
-export const POLL_MS = 500;
-export const READY_LIMIT_MS = 3 * 60_000;
+export { POLL_MS, READY_LIMIT_MS } from './wait-ready';
 
 export interface FlowLine {
   id: string;
@@ -336,23 +335,18 @@ async function launchTest(agent: Agent, project: Project) {
         }
         line.state = 'waiting';
         line.detail = t('runs.flow.waitingFor', { host: host(probe) });
-        for (;;) {
-          if (over()) return false;
-          const up = await api.httpReady(probe, agent.id).catch(() => false);
-          if (over()) return false;
-          if (up) {
-            line.state = 'ready';
-            line.detail = t('runs.flow.readyIn', { seconds: seconds(Date.now() - started) });
-            return true;
-          }
-          if (Date.now() - started >= READY_LIMIT_MS) {
-            line.state = 'failed';
-            line.detail = t('runs.flow.noAnswer', { url: probe });
-            fail(line.detail);
-            return false;
-          }
-          await sleep(POLL_MS);
+        const wait = await waitUntilUp(probe, { since: started, over, agentId: agent.id });
+        if (wait === 'up') {
+          line.state = 'ready';
+          line.detail = t('runs.flow.readyIn', { seconds: seconds(Date.now() - started) });
+          return true;
         }
+        if (wait === 'late') {
+          line.state = 'failed';
+          line.detail = t('runs.flow.noAnswer', { url: probe });
+          fail(line.detail);
+        }
+        return false;
       }),
     );
     if (over() || !ready.every(Boolean)) return;
@@ -417,28 +411,24 @@ async function launchTest(agent: Agent, project: Project) {
       }
       line.state = 'waiting';
       line.detail = t('runs.flow.waitingFor', { host: host(url) });
-      for (;;) {
-        if (over()) return false;
-        const run = app.launches[cmd.id];
-        if (run?.status !== 'running') {
-          exited(line, cmd, run);
-          return false;
-        }
-        const up = await api.httpReady(url, agent.id).catch(() => false);
-        if (over()) return false;
-        if (up) {
-          line.state = 'ready';
-          line.detail = t('runs.flow.readyIn', { seconds: seconds(Date.now() - started) });
-          return true;
-        }
-        if (Date.now() - started >= READY_LIMIT_MS) {
-          line.state = 'failed';
-          line.detail = t('runs.flow.noAnswer', { url });
-          fail(line.detail);
-          return false;
-        }
-        await sleep(POLL_MS);
+      const wait = await waitUntilUp(url, {
+        since: started,
+        over,
+        running: () => app.launches[cmd.id]?.status === 'running',
+        agentId: agent.id,
+      });
+      if (wait === 'up') {
+        line.state = 'ready';
+        line.detail = t('runs.flow.readyIn', { seconds: seconds(Date.now() - started) });
+        return true;
       }
+      if (wait === 'ended') exited(line, cmd, app.launches[cmd.id]);
+      if (wait === 'late') {
+        line.state = 'failed';
+        line.detail = t('runs.flow.noAnswer', { url });
+        fail(line.detail);
+      }
+      return false;
     }),
   );
   if (over() || !ready.every(Boolean)) return;

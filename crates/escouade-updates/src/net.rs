@@ -62,6 +62,9 @@ pub struct Network {
     pub insecure_tls: bool,
     /// The settings' file of extra authorities (`crate::tls`); empty, none.
     pub extra_ca: String,
+    /// « Ne jamais sortir sans le proxy » (SEC-14, `Settings::never_direct`): the proxy of the settings not there, a
+    /// request fails with its reason instead of going without it.
+    pub never_direct: bool,
 }
 
 impl Network {
@@ -83,7 +86,22 @@ impl Network {
             system_proxy: true,
             insecure_tls: settings.insecure_tls,
             extra_ca: settings.extra_ca_file.trim().to_string(),
+            never_direct: settings.never_direct(),
         })
+    }
+
+    /// Whether a request that went `route` and failed as `failure` says is tried again without the proxy: the proxy of
+    /// the settings was not there (`Failure::proxy_unreachable`), and « Ne jamais sortir sans le proxy » is off. On,
+    /// `failure` is told so (`Failure::kept_to_proxy`) and nothing goes directly (SEC-14).
+    pub fn goes_direct_after(&self, route: Route, failure: &mut Failure) -> bool {
+        if !matches!(self.via(route), Via::Proxy(_)) || !failure.proxy_unreachable() {
+            return false;
+        }
+        if self.never_direct {
+            failure.kept_to_proxy = true;
+            return false;
+        }
+        true
     }
 
     /// What a request that goes `route` goes through.
@@ -179,6 +197,9 @@ pub struct Failure {
     pub trusted: Vec<Url>,
     /// The same request without the proxy, tried and failed too.
     pub direct: Option<Box<Failure>>,
+    /// The proxy was not there, and « Ne jamais sortir sans le proxy » kept the request from going without it
+    /// (SEC-14): said after the cause.
+    pub kept_to_proxy: bool,
 }
 
 impl Failure {
@@ -216,6 +237,13 @@ impl Failure {
     /// The cause, in `lang`: the window puts what was being done before it.
     pub fn describe(&self, lang: Lang) -> String {
         let cause = self.cause(lang);
+        if self.kept_to_proxy {
+            return tr_in!(
+                lang,
+                "{cause} ; rien n'est tenté sans le proxy : « Ne jamais sortir sans le proxy » est allumé (Réglages › Avancé › Réseau)",
+                "{cause}; nothing is tried without the proxy: “Never go out without the proxy” is on (Settings › Advanced › Network)"
+            );
+        }
         match &self.direct {
             Some(direct) => {
                 let direct = direct.describe(lang);
@@ -670,6 +698,7 @@ pub async fn probe(
         stuck: None,
         trusted: Vec::new(),
         direct: None,
+        kept_to_proxy: false,
     };
     let sent = match client(net, route) {
         Ok(client) => client.get(url.clone()).header(ACCEPT, accept).send().await,

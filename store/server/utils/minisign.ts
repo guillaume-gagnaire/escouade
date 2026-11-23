@@ -10,6 +10,58 @@ export interface PublicKey {
   /** The key's id, 8 bytes, as minisign prints it (hexadecimal, little-endian). */
   id: string;
   key: KeyObject;
+  /** What it may sign (audit SEC-03, ESC-592): from its file's name in `store/keys/` (`ROLES_BY_FILE`). Absent for a
+   *  key given as it is (a test's): every role, as the backup. */
+  roles?: readonly Role[];
+}
+
+/**
+ * What a key of the store may sign, as the app knows it (`crates/escouade-plugins/src/store_keys.rs`, `Role`): the key
+ * of the first hand seals `dev.escouade.*` alone (kept without a password, the chief signs with it after his review);
+ * the third parties' seals every other id and signs the revocation list (with a password); the backup, offline, does
+ * all of it.
+ */
+export type Role = 'first-hand' | 'third-party' | 'revocation' | 'backup';
+
+/** The roles of a key of `store/keys/` by its file's name, the same as the app's `roles_of_file`. */
+export const ROLES_BY_FILE: Readonly<Record<string, readonly Role[]>> = {
+  'store.pub': ['first-hand'],
+  'third-party.pub': ['third-party', 'revocation'],
+  'backup.pub': ['backup'],
+};
+
+/** The ids of Escouade's own hand: what the key of the first hand seals, and the third parties' never. */
+export const FIRST_HAND_PREFIX = 'dev.escouade.';
+
+/**
+ * The revocation lists the key of the first hand signed before ESC-592, by the SHA-256 of their bytes (the app's
+ * `LEGACY_REVOCATION_LISTS`): they hold still, and no other list of that key does.
+ */
+export const LEGACY_REVOCATION_LISTS: readonly string[] = ['0a9a3c2f9b497a487a1fd95d4ae943d5eee329267a3ab2733e9b1fcb82f300b9'];
+
+const rolesOf = (k: PublicKey): readonly Role[] => k.roles ?? ['backup'];
+
+/** The role in which `key` seals the plugin `id`, or null when none of its roles covers that id. */
+export function sealRole(key: PublicKey, id: string): Role | null {
+  const first = id.startsWith(FIRST_HAND_PREFIX);
+  return rolesOf(key).find((r) => r === 'backup' || (r === 'first-hand' && first) || (r === 'third-party' && !first)) ?? null;
+}
+
+/** Whether a revocation list `json` signed by `key` holds: a key that signs lists, or the first hand's on a list it signed before. */
+export function signsList(key: PublicKey, json: string | Buffer): boolean {
+  const roles = rolesOf(key);
+  if (roles.includes('revocation') || roles.includes('backup')) return true;
+  return roles.includes('first-hand') && LEGACY_REVOCATION_LISTS.includes(createHash('sha256').update(Buffer.from(json)).digest('hex'));
+}
+
+/** The role a key is named by, for a person: its first. */
+export const roleOf = (k: PublicKey): Role => rolesOf(k)[0]!;
+
+/** A `.pub` file of `store/keys/`, its roles from its name; null if it does not read or its name has no role. */
+export function readKeyFile(name: string, text: string): PublicKey | null {
+  const roles = ROLES_BY_FILE[name];
+  const key = roles ? readPublicKey(text) : null;
+  return key ? { ...key, roles } : null;
 }
 
 export interface Signature {

@@ -2,8 +2,8 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)","src-tauri/src/locks.rs (accounts.reservation, ESC-564)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-546","ESC-550","ESC-567","ESC-564","ESC-620"]
-decisions: [169,175,183,189,198,197,204,201,218,282,281]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-546","ESC-550","ESC-567","ESC-564","ESC-620","ESC-651"]
+decisions: [169,175,183,189,198,197,204,201,218,282,281,"la-2-2-6-a-la-2-2-8-reversees-dans-la-2"]
 compared: null
 ---
 
@@ -229,3 +229,14 @@ La 2.2.5 apporte les réglages d'un plugin dans chaque projet et le profil chois
 - Entre le poste géré et l'équipe, **le plus bas tient** (comme `harnesses.maxEffort`), le poste géré à égalité. Celui de l'équipe ne vaut que pour ses projets ; celui du poste pour tous, et pour l'assistant « Nouveau projet ».
 - Une valeur hors de 1 à 64, ou qui n'est pas un nombre, est ignorée et dite ; une chaîne d'un nombre (un `REG_SZ`) est prise.
 - Une ligne de plus dans l'ADMX, les ADML, les profils de macOS, le schéma de `/etc` et la page du site, dans la catégorie des projets.
+
+## Le « Mode hors ligne » (ESC-651)
+
+La 2.2.6 apporte « Mode hors ligne » (Réglages › Avancé › Réseau, ESC-596) et sa stratégie, `network.offline`, lue aux mêmes emplacements que les stratégies du poste. Reversée dans la 2.3, la clé entre dans la liste unique : elle n'est plus dite inconnue dans « Stratégies de ce poste », et une équipe peut l'imposer aussi.
+
+| Clé | Sorte | Ce qu'elle verrouille ou refuse |
+| --- | --- | --- |
+| `network.offline` | restreindre (allumé seulement) | Réglages › Avancé › Réseau › « Mode hors ligne », allumé et grisé : les mises à jour, le store, la liste de révocation et les statistiques ne sont plus contactés |
+
+- Le poste géré la fait tenir par deux chemins : le mode lit lui-même la stratégie du système, et les réglages sont ramenés à « allumé » comme pour toute clé qui restreint. Une équipe l'impose par les réglages ramenés : c'est une clé de l'app, qui vaut tant que le poste est dans l'équipe.
+- Une ligne de plus dans l'ADMX, les ADML, les profils de macOS, le schéma de `/etc` et la page du site, dans la catégorie « Proxy et certificats ».

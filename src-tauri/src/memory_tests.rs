@@ -404,3 +404,13 @@ fn the_addresses_of_a_memory_are_its_hosts_each_once() {
             && known.contains("localhost")
     );
 }
+
+#[test]
+fn a_cloned_folder_is_read_within_bounds() {
+    let dir = memory_dir("memory-bounds");
+    write(&dir, draft("a", "a", "a")).unwrap();
+    for i in 0..MAX_FILES + 10 {
+        std::fs::write(dir.join(format!("n{i:04}.md")), "x").unwrap();
+    }
+    assert_eq!(list(&dir).unwrap().len(), MAX_FILES);
+}

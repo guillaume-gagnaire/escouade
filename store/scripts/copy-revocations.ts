@@ -15,7 +15,7 @@
 
 import { appendFile, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { readPublicKey, type PublicKey } from '../server/utils/minisign';
+import { readKeyFile, type PublicKey } from '../server/utils/minisign';
 import { checkRevocations, parseRevocations } from '../server/utils/revocation-list';
 
 const arg = (name: string, fallback: string) => {
@@ -34,7 +34,7 @@ async function say(changed: boolean, line: string) {
 
 async function keys(): Promise<PublicKey[]> {
   const names = (await readdir(keysDir).catch(() => [] as string[])).filter((n) => n.endsWith('.pub'));
-  const read = await Promise.all(names.map(async (n) => readPublicKey(await readFile(join(keysDir, n), 'utf8'))));
+  const read = await Promise.all(names.map(async (n) => readKeyFile(n, await readFile(join(keysDir, n), 'utf8'))));
   return read.filter((k): k is PublicKey => !!k);
 }
 

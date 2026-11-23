@@ -2138,7 +2138,7 @@
           "min": "2.2.0"
         },
         "permissions": {
-          "commands": ["isola\ufeff{int}", "isola\u0085{int}", "isola\u00a0ls\u2003{name}"]
+          "commands": ["isola﻿{int}", "isola{int}", "isola ls {name}"]
         }
       },
       "errors": ["permissions.commands[0] command"],
@@ -2949,13 +2949,56 @@
           "min": "2.2.0"
         },
         "limits": {
-          "processes": 8.0,
+          "processes": 8,
           "reason": {
             "en": "Two tunnels."
           }
         }
       },
       "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a host of permissions.network narrower than a public suffix, with a dot (audit SEC-09)",
+      "manifest": {
+        "id": "dev.exemple.reseau",
+        "name": "Réseau",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "network": [
+            "com",
+            "*.co.uk",
+            "intranet",
+            "localhost",
+            "Exemple.Com.",
+            "x.kawasaki.jp",
+            "city.kawasaki.jp",
+            "*.blob.core.windows.net",
+            "api.slack.com",
+            "*.atlassian.net",
+            "local:shared"
+          ]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": [
+        "permissions.network[0] host",
+        "permissions.network[1] host",
+        "permissions.network[2] host",
+        "permissions.network[3] host",
+        "permissions.network[5] host"
+      ],
       "ignored": []
     }
   ],

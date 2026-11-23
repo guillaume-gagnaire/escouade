@@ -23,12 +23,12 @@ Escouade then starts the server and declares it in each active account of each h
 
 | Harness | File (Main account) | How |
 | --- | --- | --- |
-| Claude Code | `~/.claude.json` | `claude mcp add --scope user --transport http escouade <address> --header "Authorization: Bearer <token>"`, run as the account runs Claude Code (its program, its configuration folder) |
+| Claude Code | `~/.claude.json` | written by Escouade, `mcpServers.escouade`, as `claude mcp add --scope user --transport http` would write it |
 | Codex | `~/.codex/config.toml` | written by Escouade, `[mcp_servers.escouade]` |
 | OpenCode | `~/.config/opencode/opencode.json` (under `$XDG_CONFIG_HOME` when it is set; the `opencode.jsonc` there, if there is one) | written by Escouade, `mcp.escouade` |
 | Copilot CLI | `~/.copilot/mcp-config.json` | written by Escouade, `mcpServers.escouade` |
 
-Another account has the same file in its folder. For Codex, OpenCode and Copilot CLI, whose command line cannot declare a server with its header, Escouade writes the entry itself and keeps all the rest of the file as it was, comments, order and line endings included; a file linked to the Main account’s stays a link. The entries:
+Another account has the same file in its folder. Escouade writes the entry itself, without running any command: the token goes on no command line, where the other programs of the computer could read it in the list of processes. It keeps all the rest of the file as it was and keeps all the rest of the file as it was, comments, order and line endings included; a file linked to the Main account’s stays a link. The entries:
 
 ```toml
 # Codex
@@ -46,7 +46,7 @@ http_headers = { Authorization = "Bearer <token>" }
     "headers": { "Authorization": "Bearer <token>" }
   }
 }
-// Copilot CLI
+// Claude Code (.claude.json) and Copilot CLI
 "mcpServers": {
   "escouade": {
     "type": "http",
@@ -56,12 +56,12 @@ http_headers = { Authorization = "Bearer <token>" }
 }
 ```
 
-The token is written **in plain text** in each of these files, which the group’s note says.
+The token is written **in plain text** in each of these files, readable by your account alone: any program that reads them can drive Escouade, which the group’s note says. The entry does not name an environment variable instead of the token: it serves a harness launched outside Escouade, in your terminal, where no variable of Escouade’s is set. The processes Escouade launches itself get their token through a variable or a private file, never on their command line.
 
 Under the switch, the tab lists each declaration: the harness and the account (“Codex · Main account”), the file, and its state, “Declared” or “Not declared”.
 
 - An entry already up to date is left as it is. A different entry (another port, another token) is replaced. An account added or switched back on later gets the declaration, and so does a harness installed later: when you come back to Escouade’s window, or as soon as it shows the “Agents” page or the list of harnesses in Settings › Accounts and harnesses.
-- If it fails for an account, the tab says why (“Not declared for the Pro account: …”) and what to do by hand: for Claude Code, the command to run (“Run it by hand in PowerShell:”), written for PowerShell on Windows and for `sh` elsewhere; for the others, the entry to add to the file (“Add it by hand to …:”). The token is masked on screen; “Copy the command” or “Copy the entry” copies the real one. A file that is not valid TOML or JSON is left alone.
+- If it fails for an account, the tab says why (“Not declared for the Pro account: …”) and what to do by hand: the entry to add to the file (“Add it by hand to …:”), Claude Code included. The token is masked on screen; “Copy the entry” copies the real one. A file that is not valid TOML or JSON is left alone.
 - Turning the switch off changes the token at once (the old one opens nothing any more), then takes the entry out of each account of each harness: each file is back to what it was, byte for byte; a file Escouade had made is deleted. Agents already running lose the tools at once too (their tokens are forgotten): turned back on, the switch gives them back at their process’s next start (“Restart”). Removing an account takes its entry out.
 - If the server does not start, the tab says so (“The server did not start: …”).
 
@@ -181,12 +181,14 @@ What an agent waits for from you without stopping its work (a choice between ren
 |---|---|---|
 | `ask_user` | `kind` (`choice`, `confirm`, `answer` or `task`), `title`, `body`, `options` (2 to 6, each with its `files`), `multi`, `steps`, `recommend` (`option` or `text`, and `why`), `unblocks`, `tickets`, `urgency` (`normal` or `today`), `expiresInDays` (14 by default, 1 to 30), `decision`, `wake`, `yesLabel`, `noLabel`, `gate`, `files`, `project`, `ticket` (optional but `kind` and `title`) | Leaves a request. Its files (PNG, JPEG, GIF, WebP, AVIF images; PDF; Markdown, Word, CSV; any other file) go with the request or with an option, by their content in base64 (`data`, with `name`) or by their path (`path`): an Escouade agent only gives a file of its working folder, by a path relative to it or a full one. Their type is read from their content: a file that says it is an image and is none is refused. 12 files at most, options included, 25 MB each, 64 MB together, 1 GB for the whole box. They are copied into Escouade’s data folder: they outlive the agent’s worktree, and are erased 30 days after the request ends. The tickets of `tickets` wait for the answer: the autopilot leaves them until then, and they are blocked if the request is withdrawn or expires. Returns `id` (like `a-12`), `state`, `files` and `expiresAt`. Refused, nothing is kept. |
 | `update_ask` | `ask`, the fields that change, `addFiles`, `removeFiles` | Changes an open or snoozed request, by its author alone: a field left out keeps its value, an option that goes takes its files with it. |
-| `withdraw_ask` | `ask`, `reason` | Takes back a request that no longer applies, by its author alone; you read the reason once. |
+| `withdraw_ask` | `ask`, `reason` | Takes back a request that no longer applies, by its author alone; the reason is a note you read in its trace (“settled in the lead’s conversation: B”). |
 | `list_asks` | `project`, `mine` (true by default), `state` (`open` by default, `answered` or `all`), `delegated` (optional) | The requests: `id`, `kind`, `title`, `state`, `project`, `ticket`, `author`, `since`, `answeredAt`, `readAt`, `snoozedUntil`, `delegatedTo`, `expiresAt`. With `delegated`, the ones you left to the caller. |
 | `get_ask` | `ask` | The whole request, its files (`index`, `file`, `name`, `type`, `mediaType`, `size`, `option`, `byUser`) and your answer (`options`, `yes`, `text`, `done`, `steps`, `note`, `by`, `at`, `via`, `pending` while you can still take it back). Read by its author once answered, the answer is marked read. |
 | `wait_ask` | `ask`, `timeoutSeconds` (120 by default, 240 at most) | Waits until the request changes, then answers as `get_ask` does, with `changed`. |
 | `get_ask_file` | `ask`, `file` or `index`, `offset`, `bytes` (optional) | An image as an image; another file in parts (text, else base64), as `get_ticket_file` does. The files you join to your answer are read here too. |
 | `answer_ask` | `ask`, `options`, `yes`, `text`, `note` | Answers a request that **you** left to this agent (“Let … decide”, one at a time), while “Agents can answer the other agents’ requests” still allows it. Never on its own request, never a go-ahead (`gate`) nor a task, never by Claude outside Escouade: refused otherwise, with the reason. |
+| `claim_inbox_view` | `ticket`, `agent` or `decision` (with `project`), `note`, `release` | The squad lead takes in hand a line of your box it is dealing with (a ticket “To test” it is checking, a blocked ticket, the requests of a stopped agent, a decision proposed), with a note (“checking, test chain running”): it no longer counts as waiting for you and reads in “The lead is on it”, with its note and the time; you can still settle it yourself. It falls by itself once its source changes (the ticket leaves “To test” and comes back, a new request comes), or when the lead gives it back (`release`). |
+| `settle_inbox_view` | `ticket` or `decision` (with `project`), `note` | The lead ticks as settled a line it settled another way (a ticket merged by hand, the decision of such a ticket), with a note that says how (“merged by hand on main in 79fe7aec”): it leaves your box for its trace (“Settled by …”), whence you put it back; its source is untouched, and it comes back by itself if its source changes again. Never what stays your gesture: sharing the docs, a review the code host asks of you, a go-ahead, a task, nor a request an agent stopped for (it answers it). |
 
 Your answer goes 10 seconds after your gesture (the time to take it back), then wakes the agent at rest or reaches it during its turn, as a typed message does; with `wake: false`, it reads it with `get_ask`. Claude outside Escouade reads it with `get_ask` or `wait_ask`. The limits: 10 open requests per agent, 40 per project, 200 in all, 20 per agent per hour. A text that looks like a secret (a key, a token) is refused. A request’s texts and files come from an agent: read by another agent, they are marked as data, never instructions. A private project’s request is only found by its own agents. The app’s log keeps neither a request’s text nor an answer’s.
 
@@ -272,7 +274,7 @@ Also refused, and logged: a request without a token (“Request refused: no toke
 ## Token and network
 
 - The server only listens on `127.0.0.1`, on a free port between 47000 and 47999, chosen at the first start and then kept (it only changes when its own is taken, and the declaration is then redone in every account).
-- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; when it refuses it, and on Linux, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in the config of each harness installed the switch declares it in (`~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.copilot/mcp-config.json` for “Main”). An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
+- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; on Linux, the desktop’s secret service when there is one; when the keychain refuses it, or there is none, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in the config of each harness installed the switch declares it in (`~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.copilot/mcp-config.json` for “Main”). An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
 - A request sent by a web page (`Origin` header) or addressed to a name other than `127.0.0.1` or `localhost` is refused, even with a token: a site you visit cannot call the server.
 - Another MCP client connects to `http://127.0.0.1:<port>/mcp` with the same header. The address and the token can be read in the account’s `.claude.json`, in the `escouade` entry, or in the command the tab offers when the declaration fails.
 

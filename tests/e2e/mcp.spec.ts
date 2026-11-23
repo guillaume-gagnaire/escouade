@@ -13,13 +13,14 @@ import {
   closeSettings,
 } from './fixture';
 
-// Escouade's MCP server, declared in Claude Code by the fake `claude mcp add` (in the .claude.json of a folder of the test's),
-// and called as Claude Code calls it: JSON-RPC over HTTP, with the token it was declared with.
+// Escouade's MCP server, declared in Claude Code by Escouade itself (in the .claude.json of a folder of the test's, never by
+// `claude mcp add` and its token on a command line, SEC-07), and called as Claude Code calls it: JSON-RPC over HTTP, with the
+// token it was declared with.
 
 // The one switch (ESC-91, ESC-119): every agent of Escouade, and every harness installed outside Escouade.
 const SWITCH = 'Les agents peuvent piloter Escouade';
 
-/** What the fake `claude mcp add` wrote of the server in Principal's .claude.json, if it did. */
+/** What Escouade wrote of the server in Principal's .claude.json, if it did. */
 function declared(app: App): { url: string; token: string } | null {
   if (!fs.existsSync(app.claudeJson)) return null;
   const entry = JSON.parse(fs.readFileSync(app.claudeJson, 'utf8')).mcpServers?.escouade;
@@ -65,12 +66,11 @@ test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban
   expect(server).not.toBeNull();
   expect(server!.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
   expect(server!.token.length).toBeGreaterThan(30);
-  // `claude mcp add` ran once, in the data folder, as Claude Code is told: user scope, HTTP, the header last.
-  const adds = app.launches().filter((l) => l.argv[0] === 'mcp');
-  expect(adds).toHaveLength(1);
-  expect(adds[0].argv.slice(1, 8)).toEqual(['add', '--scope', 'user', '--transport', 'http', 'escouade', server!.url]);
-  expect(adds[0].argv.slice(8)).toEqual(['--header', `Authorization: Bearer ${server!.token}`]);
-  expect(adds[0].cwd.toLowerCase()).toBe(app.data.toLowerCase());
+  // SEC-07: written by Escouade as `claude mcp add --scope user --transport http` would, and nothing run: the token is on
+  // no command line. The file stays strict JSON, as Claude Code reads it.
+  expect(app.launches().filter((l) => l.argv[0] === 'mcp')).toEqual([]);
+  expect(app.launches().some((l) => l.argv.some((a) => a.includes(server!.token)))).toBe(false);
+  expect(JSON.parse(fs.readFileSync(app.claudeJson, 'utf8')).mcpServers.escouade.type).toBe('http');
 
   // Nobody without the token comes in.
   const refused = await fetch(server!.url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
@@ -218,8 +218,8 @@ test('turning Claude’s control of Escouade off takes it out of Claude Code and
   await expect(dialog.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'false');
   await expect(dialog.getByRole('list', { name: 'Déclarations dans les harness' })).toBeHidden();
   await expect.poll(() => declared(app)).toBeNull();
-  const removes = app.launches().filter((l) => l.argv[0] === 'mcp' && l.argv[1] === 'remove');
-  expect(removes.map((l) => l.argv.slice(1))).toEqual([['remove', 'escouade', '--scope', 'user']]);
+  // Taken out of the file by Escouade too: nothing run.
+  expect(app.launches().filter((l) => l.argv[0] === 'mcp')).toEqual([]);
   // The server is stopped with it: the old token opens nothing.
   await expect(async () => {
     const res = await fetch(before.url, { method: 'POST', headers: { authorization: `Bearer ${before.token}` }, body: '{}' }).catch(
@@ -466,7 +466,7 @@ test.describe('« Les agents peuvent piloter Escouade » in every harness instal
     // One switch, no harness of its own; the token in plain text, said beside it.
     await expect(dialog.getByRole('switch', { name: /piloter Escouade/ })).toHaveCount(1);
     await expect(
-      dialog.getByText(/Le jeton y est écrit en clair\. Désactiver change le jeton, puis retire l’entrée partout/),
+      dialog.getByText(/tout programme qui les lit peut piloter Escouade\. Désactiver change le jeton, puis retire l’entrée partout/),
     ).toBeVisible();
     await dialog.getByRole('switch', { name: SWITCH }).click();
 

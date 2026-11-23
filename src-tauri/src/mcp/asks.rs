@@ -12,8 +12,8 @@ use super::images::{open_within, working_folder};
 use super::resolve::{self, Sight};
 use super::tools::{
     AnswerAskArgs, AskFileArg, AskKindArg, AskOptionArg, AskRecommendArg, AskStateArg, AskUserArgs,
-    GetAskArgs, GetAskFileArgs, ListAsksArgs, ToolError, UpdateAskArgs, UrgencyArg, WaitAskArgs,
-    WithdrawAskArgs,
+    ClaimInboxViewArgs, GetAskArgs, GetAskFileArgs, ListAsksArgs, SettleInboxViewArgs, ToolError,
+    UpdateAskArgs, UrgencyArg, WaitAskArgs, WithdrawAskArgs,
 };
 use super::Caller;
 use crate::asks::{
@@ -172,6 +172,7 @@ async fn one_file(
                 _ => path,
             };
             let w = within.map(Path::to_path_buf);
+            let origin = std::path::PathBuf::from(&full);
             let (file, length) =
                 tokio::task::spawn_blocking(move || open_within(&full, w.as_deref()))
                     .await
@@ -183,7 +184,7 @@ async fn one_file(
                 name,
                 declared: f.media_type,
                 option,
-                source: Source::File(file, length),
+                source: Source::File(file, length, Some(origin)),
             })
         }
     }
@@ -723,4 +724,266 @@ pub(super) fn answer_ask(
         .ask_answer(&found.id, ans, Some((me.clone(), name)), Vec::new())
         .map_err(refused)?;
     Ok(json!({ "id": done.id, "state": done.state.as_str() }).to_string())
+}
+
+// ---------- the squad lead's marks on the box (ESC-557) ----------
+
+/// The one thing a mark names, as `claim_inbox_view` and `settle_inbox_view` take it.
+struct MarkTarget<'a> {
+    ticket: Option<&'a str>,
+    agent: Option<&'a str>,
+    decision: Option<&'a str>,
+    ask: Option<&'a str>,
+    docs: bool,
+    pull_request: Option<u64>,
+    project: Option<&'a str>,
+}
+
+/// The lines of the box `t` names (one, or an agent's requests of now), among what the caller sees and may act
+/// on; what stays the user's own is refused with why.
+async fn marked_lines(
+    core: &Arc<Core>,
+    caller: &Caller,
+    t: MarkTarget<'_>,
+    settle: bool,
+) -> Result<Vec<String>, ToolError> {
+    use crate::inboxviews::{not_markable, ViewSource};
+    let given = [
+        t.ticket.is_some(),
+        t.agent.is_some(),
+        t.decision.is_some(),
+        t.ask.is_some(),
+        t.docs,
+        t.pull_request.is_some(),
+    ]
+    .iter()
+    .filter(|g| **g)
+    .count();
+    if given != 1 {
+        return Err(failed(tr!(
+            "Nomme une ligne de la boîte, une seule : ticket, agent, decision, ask, docs ou pullRequest.",
+            "Name one line of the box, one only: ticket, agent, decision, ask, docs or pullRequest."
+        )));
+    }
+    let user_gesture = |source: ViewSource| {
+        ToolError::Refused(not_markable(source, false, settle).unwrap_or_default())
+    };
+    if let Some(asked) = t.ask {
+        let a = find(core, caller, asked)?;
+        return Err(ToolError::Refused(if a.gate {
+            tr!(
+                "Un feu vert est le geste de l’utilisateur seul : un agent ne le prend pas en charge et ne le coche pas.",
+                "A go-ahead is the user’s gesture alone: an agent neither takes it in hand nor ticks it."
+            )
+        } else if a.kind == AskKind::Task {
+            tr!(
+                "Une tâche est ce que l’utilisateur seul peut faire : un agent ne la prend pas en charge et ne la coche pas.",
+                "A task is what the user alone can do: an agent neither takes it in hand nor ticks it."
+            )
+        } else {
+            tr!(
+                "Une demande de la boîte se règle par son auteur (withdraw_ask, avec une note qui dit comment), ou par answer_ask quand l’utilisateur te l’a laissée.",
+                "A request of the box is settled by its author (withdraw_ask, with a note that says how), or by answer_ask when the user left it to you."
+            )
+        }));
+    }
+    if let Some(asked) = t.ticket {
+        let found = resolve::ticket(core, caller, asked)?;
+        may_act_on(core, caller, &found.project_id)?;
+        super::act::not_own_ticket(
+            core,
+            caller,
+            &found,
+            tr!(
+                "Un agent ne prend pas en charge ni ne coche son propre ticket : il attend l’utilisateur ou le chef.",
+                "An agent neither takes in hand nor ticks its own ticket: it waits for the user or the lead."
+            ),
+        )?;
+        let key = if found.blocked.is_some() {
+            format!("blocked:{}", found.id)
+        } else if found.column == crate::model::Column::Review {
+            format!("ticket:{}", found.id)
+        } else {
+            return Err(failed(tr!(
+                "Le ticket {key} n’attend pas l’utilisateur dans sa boîte : ni « À tester », ni bloqué.",
+                "The ticket {key} does not wait for the user in their box: neither « À tester » nor blocked.",
+                key = found.key
+            )));
+        };
+        return Ok(vec![key]);
+    }
+    if let Some(asked) = t.agent {
+        let found = resolve::agent(core, caller, asked, None)?;
+        may_act_on(core, caller, &found.project_id)?;
+        if matches!(caller, Caller::Agent(id) if *id == found.id) {
+            return Err(ToolError::Refused(tr!(
+                "Un agent ne prend pas en charge ses propres demandes : elles attendent l’utilisateur ou le chef.",
+                "An agent does not take its own requests in hand: they wait for the user or the lead."
+            )));
+        }
+        if settle {
+            return Err(user_gesture(ViewSource::Permission));
+        }
+        let keys: Vec<String> = core
+            .inbox_view_items()
+            .await
+            .into_iter()
+            .filter(|v| v.blocking() && v.agent_id.as_deref() == Some(found.id.as_str()))
+            .map(|v| v.key)
+            .collect();
+        if keys.is_empty() {
+            return Err(failed(tr!(
+                "L’agent {name} n’est arrêté sur aucune demande : rien n’attend l’utilisateur de lui.",
+                "The agent {name} is stopped on no request: nothing of it waits for the user.",
+                name = found.name
+            )));
+        }
+        return Ok(keys);
+    }
+    let project = resolve::project_or_own(core, caller, t.project)?;
+    may_act_on(core, caller, &project.id)?;
+    if t.docs {
+        return Err(user_gesture(ViewSource::Docs));
+    }
+    if t.pull_request.is_some() {
+        return Err(user_gesture(ViewSource::Review));
+    }
+    let id = t.decision.unwrap_or_default().trim();
+    let key = format!("decision:{}:{id}", project.id);
+    if !core.inbox_view_items().await.iter().any(|v| v.key == key) {
+        return Err(failed(tr!(
+            "Aucune décision proposée « {id} » dans {project} : list_decisions donne leurs id.",
+            "No decision proposed “{id}” in {project}: list_decisions gives their ids.",
+            id = id.chars().take(60).collect::<String>(),
+            project = project.name
+        )));
+    }
+    Ok(vec![key])
+}
+
+/// « Les agents peuvent répondre aux demandes des autres agents », the one rule (`delegation.rs`): who marks the
+/// lines of a project's box.
+fn may_mark(core: &Core, caller: &Caller, project_id: &str) -> Result<(), ToolError> {
+    let Caller::Agent(id) = caller else {
+        return Ok(());
+    };
+    let chef = core.project(project_id).ok().and_then(|p| p.chef);
+    let setting = core.settings.read().agents_answer;
+    match crate::delegation::may_answer(setting, chef.as_deref(), id) {
+        Ok(()) => Ok(()),
+        Err(crate::delegation::Refusal::NotTheChef) => Err(ToolError::Refused(tr!(
+            "Seul le chef d’escouade que l’utilisateur a choisi pour ce projet prend en charge ou coche les lignes de sa boîte « À toi », et ce n’est pas toi. Le chef se choisit dans Réglages › Projets › Équipe (« Chef d’escouade »).",
+            "Only the squad lead the user chose for this project takes in hand or ticks the lines of their box « À toi », and it is not you. The lead is chosen in Settings › Projects › Team (“Squad lead”)."
+        ))),
+        Err(crate::delegation::Refusal::Nobody) => Err(ToolError::Refused(tr!(
+            "Aucun agent ne prend en charge ni ne coche les lignes de la boîte « À toi » : seul l’utilisateur peut le permettre, dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux demandes des autres agents »).",
+            "No agent takes in hand or ticks the lines of the box « À toi »: only the user can allow it, in Settings › Agents › Drive Escouade (“Agents can answer the other agents’ requests”)."
+        ))),
+    }
+}
+
+fn marker(core: &Core, caller: &Caller) -> crate::inboxviews::Marker {
+    match caller {
+        Caller::Agent(id) => crate::inboxviews::Marker {
+            agent: Some(id.clone()),
+            name: core
+                .agent(id)
+                .map(|h| h.lock().meta.name.clone())
+                .unwrap_or_else(|_| id.clone()),
+        },
+        Caller::External => crate::inboxviews::Marker {
+            agent: None,
+            name: tr!("Claude · client MCP", "Claude · MCP client"),
+        },
+    }
+}
+
+/// What a mark answers of a line.
+fn line(v: &crate::inboxviews::InboxItem) -> Value {
+    json!({
+        "key": v.key,
+        "source": v.source_name(),
+        "title": v.title,
+        "project": v.project_name,
+        "ticket": v.ticket_key,
+        "mark": v.mark.as_ref().map(|m| json!({
+            "kind": m.kind,
+            "note": m.note,
+            "by": m.by_name,
+            "at": iso(m.at),
+        })),
+    })
+}
+
+/// How a mark is left on each line named.
+enum MarkHow<'a> {
+    Claim(&'a str),
+    Release,
+    Settle(&'a str),
+}
+
+async fn mark_lines(
+    core: &Arc<Core>,
+    caller: &Caller,
+    keys: Vec<String>,
+    how: MarkHow<'_>,
+) -> Result<String, ToolError> {
+    let by = marker(core, caller);
+    let mut lines = Vec::new();
+    for key in &keys {
+        let v = core.inbox_view(key).await.map_err(refused)?;
+        may_mark(core, caller, &v.project_id)?;
+        let done = match how {
+            MarkHow::Claim(note) => core.inbox_view_claim(key, &by, note).await,
+            MarkHow::Release => core.inbox_view_release(key).await,
+            MarkHow::Settle(note) => core.inbox_view_settle(key, &by, note).await,
+        }
+        .map_err(refused)?;
+        lines.push(line(&done));
+    }
+    let waiting = core.inbox_views(None).await.total;
+    Ok(json!({ "lines": lines, "waiting": waiting }).to_string())
+}
+
+/// `claim_inbox_view` (ESC-557): « Je m'en occupe » on a line of the box, or given back (`release`).
+pub(super) async fn claim_inbox_view(
+    core: &Arc<Core>,
+    caller: &Caller,
+    a: ClaimInboxViewArgs,
+) -> Result<String, ToolError> {
+    let target = MarkTarget {
+        ticket: a.ticket.as_deref(),
+        agent: a.agent.as_deref(),
+        decision: a.decision.as_deref(),
+        ask: a.ask.as_deref(),
+        docs: a.docs.unwrap_or(false),
+        pull_request: a.pull_request,
+        project: a.project.as_deref(),
+    };
+    let keys = marked_lines(core, caller, target, false).await?;
+    let how = if a.release.unwrap_or(false) {
+        MarkHow::Release
+    } else {
+        MarkHow::Claim(a.note.as_deref().unwrap_or_default())
+    };
+    mark_lines(core, caller, keys, how).await
+}
+
+/// `settle_inbox_view` (ESC-557): « Réglé » on a line the caller settled another way, with how.
+pub(super) async fn settle_inbox_view(
+    core: &Arc<Core>,
+    caller: &Caller,
+    a: SettleInboxViewArgs,
+) -> Result<String, ToolError> {
+    let target = MarkTarget {
+        ticket: a.ticket.as_deref(),
+        agent: a.agent.as_deref(),
+        decision: a.decision.as_deref(),
+        ask: a.ask.as_deref(),
+        docs: a.docs.unwrap_or(false),
+        pull_request: a.pull_request,
+        project: a.project.as_deref(),
+    };
+    let keys = marked_lines(core, caller, target, true).await?;
+    mark_lines(core, caller, keys, MarkHow::Settle(&a.note)).await
 }

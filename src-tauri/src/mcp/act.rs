@@ -1185,7 +1185,12 @@ pub(super) async fn set_board(
 
 /// An agent does not act on its own ticket: the one it works on (its ticket names it, or its own
 /// record names the ticket). `why` says it, in the words of the tool.
-fn not_own_ticket(core: &Core, caller: &Caller, t: &Ticket, why: String) -> Result<(), ToolError> {
+pub(super) fn not_own_ticket(
+    core: &Core,
+    caller: &Caller,
+    t: &Ticket,
+    why: String,
+) -> Result<(), ToolError> {
     let Caller::Agent(id) = caller else {
         return Ok(());
     };

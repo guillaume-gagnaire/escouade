@@ -16,7 +16,7 @@ In the status bar, at the bottom of the window, the branch button shows the bran
 
 The sync indications only appear if the repository has a remote. The tooltip writes them out in full (“Tracking origin/main: 5 to pull, 2 to push”) and adds the time of the last fetch (“Last fetch: 3 min ago”).
 
-Escouade itself fetches every project that has a remote every 5 minutes, without ever asking for credentials, so that the numbers stay up to date.
+Escouade itself fetches every project that has a remote every 5 minutes, without ever asking for credentials, so that the numbers stay up to date. This automatic fetch can be switched off, and its interval and time limit set, for every project or for one: see [a project’s settings](settings-projects#fetch-automatically-git-fetch).
 
 ## The branch picker
 
@@ -47,6 +47,17 @@ These buttons only appear if the repository has a remote. They apply to the proj
 | “Push” | Pushes the branch. It is greyed out when the branch isn’t ahead. If the remote has commits you don’t have, it refuses and tells you to get them first. |
 | “Publish” | Replaces “Push” when the branch has no remote branch, or when its own was deleted. It publishes to the remote the branch was tracking, otherwise to `origin`, otherwise to the only remote, and makes the branch track the published one. With several remotes and none called `origin`, it refuses: publish by hand. |
 | “Fetch” (“now”) | Fetches the remote without bringing anything in, and says what there is to pull (“Fetch done: 3 commits to pull”). |
+
+Under these buttons, a line says when the repository was last fetched (“Fetched 3 min ago”, the exact time on hover). If the last automatic fetch failed, it says so too, quietly, with its reason and what to do:
+
+| What it says | What to do |
+|---|---|
+| “it asks for credentials” | Click “Fetch” once: git asks you for them. The automatic fetch does not try again in a loop: it waits for that fetch to succeed, then goes on. |
+| “not done within 5 min” | The repository is heavy or the network slow: give it a longer time limit (“Settings” opens the right one). |
+| “the network or the remote cannot be reached” | Check your connection, your VPN or your proxy. It tries again at the next interval. |
+| “git refused” | git’s reason is on hover. |
+
+On Windows, Git for Windows 2.47.0(1) has an ssh that stalls on big fetches. With it, and only if you did not choose an ssh of your own (`core.sshCommand`, `GIT_SSH` or `GIT_SSH_COMMAND`), the automatic fetch goes through Windows’ own ssh. The line then tells you to update Git (2.47.0(2) or later). Otherwise it goes through your configuration of git as it is (proxy, certificates, `insteadOf`): Escouade adds nothing to it.
 
 ## Switching branches
 

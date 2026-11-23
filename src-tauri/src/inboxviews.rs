@@ -11,11 +11,12 @@
 //! request is never put off (its agent waits). Like the box, the views exist only while the MCP
 //! server is on: off, nothing of them shows, and every source keeps its place of today.
 
+use crate::asks::{MarkKind, ViewMark};
 use crate::core::Core;
 use crate::model::{now_ms, Column, PendingView, UiEvent};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Weak};
 
 /// Where a view comes from.
@@ -99,6 +100,12 @@ pub struct InboxItem {
     pub by: Option<String>,
     pub engine: Option<String>,
     pub branch: Option<String>,
+    /// What the squad lead said of it (ESC-557): « Le chef s'en occupe » (`claimed`) or « Réglé
+    /// par … » (`settled`), with its note. Marked, it no longer counts as waiting for the user.
+    pub mark: Option<ViewMark>,
+    /// The state of its source, that a mark holds (`ViewMark::sign`): changed, the mark falls.
+    #[serde(skip)]
+    pub(crate) sign: String,
 }
 
 impl InboxItem {
@@ -132,11 +139,18 @@ impl InboxItem {
             by: None,
             engine: None,
             branch: None,
+            mark: None,
+            sign: String::new(),
         }
     }
 
     pub fn blocking(&self) -> bool {
         self.group == ViewGroup::Stopped
+    }
+
+    /// It waits for the user: not put off, not marked by the squad lead.
+    pub fn waiting(&self) -> bool {
+        self.snoozed_until.is_none() && self.mark.is_none()
     }
 }
 
@@ -229,10 +243,81 @@ impl ViewAct {
     }
 }
 
-/// What the box keeps of its views: their « Plus tard ».
+/// What the box keeps of its views: their « Plus tard », and the squad lead's marks (ESC-557).
 #[derive(Debug, Default)]
 pub struct ViewSnoozes {
     pub until: BTreeMap<String, i64>,
+    pub marks: BTreeMap<String, ViewMark>,
+}
+
+impl ViewSnoozes {
+    /// A ticket moved (its column, a conflict): the marks on its views fall, whether the box was read between or not.
+    /// Called by the move itself, under the tickets' lock (`Core::edit_ticket_with`), never by its fact: the bus
+    /// hands a fact to its sinks later, on its own thread, and the fact of the move into « À tester » would drop the
+    /// mark the squad lead left after it (ESC-621). Whether one fell.
+    pub fn forget_ticket(&mut self, ticket_id: &str) -> bool {
+        let ticket = self.marks.remove(&format!("ticket:{ticket_id}")).is_some();
+        let blocked = self.marks.remove(&format!("blocked:{ticket_id}")).is_some();
+        ticket || blocked
+    }
+}
+
+/// The longest note of a mark, in characters.
+pub const MARK_NOTE_MAX: usize = 200;
+
+/// Who leaves a mark on a view: an agent of Escouade (its id), or Claude outside Escouade.
+#[derive(Debug, Clone)]
+pub struct Marker {
+    pub agent: Option<String>,
+    pub name: String,
+}
+
+/// Why the squad lead does not settle a view itself (`settle_inbox_view`), or does not take it in
+/// hand (`claim_inbox_view`): what stays the user's gesture, or what is answered, not ticked.
+pub(crate) fn not_markable(source: ViewSource, from_ticket: bool, settle: bool) -> Option<String> {
+    match source {
+        ViewSource::Docs => Some(tr!(
+            "Partager les docs reste le geste de l’utilisateur (ou share_docs) : cette ligne ne se coche pas à sa place.",
+            "Sharing the docs stays the user’s gesture (or share_docs): this line is not ticked for them."
+        )),
+        ViewSource::Review => Some(tr!(
+            "Cette relecture, l’hébergeur la demande à l’utilisateur : elle reste la sienne, ni prise en charge ni cochée par un agent.",
+            "The code host asks this review of the user: it stays theirs, neither taken in hand nor ticked by an agent."
+        )),
+        ViewSource::Permission | ViewSource::Question | ViewSource::Plan if settle => Some(tr!(
+            "Un agent arrêté attend une réponse, pas une coche : réponds-y (answer_permission, answer_question) ou laisse-la à l’utilisateur.",
+            "A stopped agent waits for an answer, not a tick: answer it (answer_permission, answer_question) or leave it to the user."
+        )),
+        ViewSource::Decision if settle && !from_ticket => Some(tr!(
+            "Seule la décision d’un ticket que tu as fusionné se coche comme réglée : celle-ci ne vient d’aucun ticket, l’utilisateur l’accepte.",
+            "Only the decision of a ticket you merged is ticked as settled: this one comes from no ticket, the user accepts it."
+        )),
+        _ => None,
+    }
+}
+
+/// A mark's note, checked: one line, said, short, no secret.
+fn mark_note(note: &str) -> Result<String> {
+    let note = crate::asks::one_line(note);
+    if note.is_empty() {
+        bail!(tr!(
+            "Dis en une phrase ce que tu fais ou comment c’est réglé (note) : l’utilisateur la lit dans sa boîte.",
+            "Say in one sentence what you are doing or how it was settled (note): the user reads it in their box."
+        ));
+    }
+    if note.chars().count() > MARK_NOTE_MAX {
+        bail!(tr!(
+            "La note tient en {MARK_NOTE_MAX} caractères.",
+            "The note fits in {MARK_NOTE_MAX} characters."
+        ));
+    }
+    if crate::asks::looks_secret(&note) {
+        bail!(tr!(
+            "Ce texte ressemble à un secret (une clé ou un jeton) : ne le mets pas dans la boîte.",
+            "This text looks like a secret (a key or a token): don’t put it in the box."
+        ));
+    }
+    Ok(note)
 }
 
 /// The day of a decision (`YYYY-MM-DD`), as epoch ms at midnight UTC; 0 when it says none.
@@ -274,12 +359,20 @@ fn same_login(a: &str, b: &str) -> bool {
 /// The order of the list: the blocking first, then the others, the oldest first; put off last.
 fn ordered(views: &mut [InboxItem]) {
     views.sort_by(|a, b| {
-        (a.snoozed_until.is_some(), !a.blocking(), a.since, &a.key).cmp(&(
-            b.snoozed_until.is_some(),
-            !b.blocking(),
-            b.since,
-            &b.key,
-        ))
+        (
+            a.snoozed_until.is_some(),
+            a.mark.is_some(),
+            !a.blocking(),
+            a.since,
+            &a.key,
+        )
+            .cmp(&(
+                b.snoozed_until.is_some(),
+                b.mark.is_some(),
+                !b.blocking(),
+                b.since,
+                &b.key,
+            ))
     });
 }
 
@@ -407,6 +500,17 @@ impl Core {
             v.target = Some(t.target.trim().to_string())
                 .filter(|own| !own.is_empty() && Some(own.as_str()) != board_of(&t.project_id));
             v.other_line = t.other_line.clone();
+            // What a mark holds of it: its time « À tester » (it comes back with another), or its
+            // block as it is.
+            v.sign = match source {
+                ViewSource::TicketReview => format!("review:{}", t.review_at.unwrap_or(0)),
+                _ => format!(
+                    "blocked:{:?}:{}:{}",
+                    t.column,
+                    t.conflict,
+                    t.blocked.as_deref().unwrap_or_default()
+                ),
+            };
             if let Some(a) = t.agent_id.as_deref().and_then(|a| self.agent(a).ok()) {
                 let rt = a.lock();
                 v.agent_id = Some(rt.meta.id.clone());
@@ -433,6 +537,7 @@ impl Core {
                 v.title = first_line(&d.title);
                 v.since = day_ms(&d.date);
                 v.decision = Some(d.id.clone());
+                v.sign = format!("decision:{}:{}", d.date, d.title);
                 if d.origin == "ticket" && !d.origin_ref.is_empty() {
                     v.ticket_key = Some(d.origin_ref.clone());
                     v.ticket_id = tickets
@@ -501,16 +606,26 @@ impl Core {
         }
 
         // « Plus tard »: those whose time came back return; those whose view went are forgotten.
+        // The squad lead's marks (ESC-557) fall with their view, or once its source changed.
         let now = now_ms();
         let present: HashSet<String> = views.iter().map(|v| v.key.clone()).collect();
+        let signs: HashMap<String, String> = views
+            .iter()
+            .map(|v| (v.key.clone(), v.sign.clone()))
+            .collect();
         let changed = {
             let mut s = self.inbox_snoozes.lock();
-            let before = s.until.len();
+            let before = (s.until.len(), s.marks.len());
             s.until.retain(|k, t| *t > now && present.contains(k));
-            for v in views.iter_mut().filter(|v| !v.blocking()) {
-                v.snoozed_until = s.until.get(&v.key).copied();
+            s.marks
+                .retain(|k, m| signs.get(k).is_some_and(|sign| *sign == m.sign));
+            for v in views.iter_mut() {
+                if !v.blocking() {
+                    v.snoozed_until = s.until.get(&v.key).copied();
+                }
+                v.mark = s.marks.get(&v.key).cloned();
             }
-            before != s.until.len()
+            before != (s.until.len(), s.marks.len())
         };
         if changed {
             self.request_save();
@@ -539,7 +654,7 @@ impl Core {
             .iter()
             .filter(|a| a.state == crate::asks::AskState::Open)
             .count();
-        let total = asks + all.iter().filter(|v| v.snoozed_until.is_none()).count();
+        let total = asks + all.iter().filter(|v| v.waiting()).count();
         InboxViews {
             enabled: true,
             views: all
@@ -552,7 +667,7 @@ impl Core {
     }
 
     /// The view `key` as it is now; an error that says it was settled elsewhere when it is gone.
-    async fn inbox_view(self: &Arc<Self>, key: &str) -> Result<InboxItem> {
+    pub(crate) async fn inbox_view(self: &Arc<Self>, key: &str) -> Result<InboxItem> {
         if !self.inbox_enabled() {
             bail!(tr!(
                 "La boîte « À toi » est fermée avec le serveur MCP : allume-le dans Réglages › Agents › Piloter Escouade.",
@@ -669,6 +784,109 @@ impl Core {
         Ok(())
     }
 
+    /// `claim_inbox_view` (ESC-557): the squad lead takes the view in hand, with what it does (« vérification en
+    /// cours, chaîne de tests »). It no longer counts as waiting for the user and shows apart, its note and its time;
+    /// the user may still act on it. It falls once its source changes, or given back (`inbox_view_release`).
+    pub async fn inbox_view_claim(
+        self: &Arc<Self>,
+        key: &str,
+        by: &Marker,
+        note: &str,
+    ) -> Result<InboxItem> {
+        let v = self.inbox_view(key).await?;
+        if let Some(why) = not_markable(v.source, v.ticket_key.is_some(), false) {
+            bail!(why);
+        }
+        if v.mark.as_ref().is_some_and(|m| m.kind == MarkKind::Settled) {
+            bail!(tr!(
+                "Cette ligne est déjà cochée comme réglée : elle n’attend plus personne.",
+                "This line is already ticked as settled: it no longer waits for anyone."
+            ));
+        }
+        self.inbox_mark(v, by, note, MarkKind::Claimed)
+    }
+
+    /// `settle_inbox_view` (ESC-557): the squad lead ticks as settled a view it settled another way (a ticket merged by
+    /// hand, the decision of such a ticket), with how. Out of the box, into its trace, whence the user puts it back
+    /// (`inbox_view_reopen`); its source untouched. Never what stays the user's gesture.
+    pub async fn inbox_view_settle(
+        self: &Arc<Self>,
+        key: &str,
+        by: &Marker,
+        note: &str,
+    ) -> Result<InboxItem> {
+        let v = self.inbox_view(key).await?;
+        if let Some(why) = not_markable(v.source, v.ticket_key.is_some(), true) {
+            bail!(why);
+        }
+        self.inbox_mark(v, by, note, MarkKind::Settled)
+    }
+
+    fn inbox_mark(
+        self: &Arc<Self>,
+        mut v: InboxItem,
+        by: &Marker,
+        note: &str,
+        kind: MarkKind,
+    ) -> Result<InboxItem> {
+        let mark = ViewMark {
+            kind,
+            note: mark_note(note)?,
+            by: by.agent.clone(),
+            by_name: by.name.clone(),
+            at: now_ms(),
+            sign: v.sign.clone(),
+        };
+        self.inbox_snoozes
+            .lock()
+            .marks
+            .insert(v.key.clone(), mark.clone());
+        v.mark = Some(mark);
+        self.request_save();
+        log::info!(
+            "inbox view {} {}",
+            v.source_name(),
+            match kind {
+                MarkKind::Claimed => "claimed",
+                MarkKind::Settled => "settled",
+            }
+        );
+        self.inbox_view_told(&v.project_id);
+        Ok(v)
+    }
+
+    /// The squad lead gives back a view it took in hand: it waits for the user again.
+    pub async fn inbox_view_release(self: &Arc<Self>, key: &str) -> Result<InboxItem> {
+        let mut v = self.inbox_view(key).await?;
+        if v.mark.as_ref().is_none_or(|m| m.kind != MarkKind::Claimed) {
+            bail!(tr!(
+                "Personne ne s’occupe de cette ligne : il n’y a rien à rendre.",
+                "Nobody is on this line: there is nothing to give back."
+            ));
+        }
+        self.inbox_unmark(&v);
+        v.mark = None;
+        log::info!("inbox view {} released", v.source_name());
+        Ok(v)
+    }
+
+    /// `inbox_view_reopen`: the user puts back in the box a view the squad lead marked (« Remettre dans la boîte »).
+    pub async fn inbox_view_reopen(self: &Arc<Self>, key: &str) -> Result<()> {
+        let v = self.inbox_view(key).await?;
+        if v.mark.is_none() {
+            return Ok(());
+        }
+        self.inbox_unmark(&v);
+        log::info!("inbox view {} put back", v.source_name());
+        Ok(())
+    }
+
+    fn inbox_unmark(&self, v: &InboxItem) {
+        self.inbox_snoozes.lock().marks.remove(&v.key);
+        self.request_save();
+        self.inbox_view_told(&v.project_id);
+    }
+
     /// The window reads the box again: a view of this project changed.
     pub(crate) fn inbox_view_told(&self, project_id: &str) {
         self.hub.emit(UiEvent::Inbox {
@@ -724,6 +942,8 @@ impl crate::facts::Sink for ViewsSink {
         let Some(project) = fact.project.as_ref().filter(|_| moves) else {
             return;
         };
+        // What the squad lead said of a ticket's views falls with its move itself (`ViewSnoozes::forget_ticket`), not
+        // here: this fact comes later, and may come after a mark left on the view the move made (ESC-621).
         if let Some(core) = self.core.upgrade() {
             if core.inbox_enabled() {
                 core.inbox_view_told(&project.id);

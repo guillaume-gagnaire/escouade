@@ -807,8 +807,36 @@ const NAMING_LIMIT: Duration = Duration::from_secs(15);
 /// `git` commands in the folder.
 const GIT_IDLE: Duration = Duration::from_secs(10);
 
-/// How often every repository with a remote is fetched in the background.
-const FETCH_EVERY: Duration = Duration::from_secs(5 * 60);
+/// How often the background fetch looks at which repository is due (ESC-561): its settings are
+/// read again at each look, so that a change holds without a restart.
+const FETCH_LOOK: Duration = Duration::from_secs(15);
+
+/// A minute of the background fetch's interval: one second for the end-to-end tests of a debug
+/// build that ask it (`ESCOUADE_E2E_FETCH_MINUTE_MS`), so that they need not wait minutes.
+fn fetch_minute() -> Duration {
+    #[cfg(debug_assertions)]
+    if let Some(ms) = std::env::var("ESCOUADE_E2E_FETCH_MINUTE_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+    {
+        return Duration::from_millis(ms.max(1));
+    }
+    Duration::from_secs(60)
+}
+
+/// The background fetch of a repository (ESC-561).
+#[derive(Debug, Default, Clone)]
+pub(crate) struct RootFetch {
+    /// When it last began.
+    pub last_try: Option<std::time::Instant>,
+    /// Its last failure, since its last success.
+    pub failure: Option<crate::model::FetchFailure>,
+    /// It asked for credentials: no other background fetch until a fetch, a pull or a push of the
+    /// user's goes through.
+    pub waits_user: bool,
+    /// It went through Windows' ssh (`git::fetch_background`).
+    pub windows_ssh: bool,
+}
 
 /// How many processes and interfaces a Remote Control setting (or the app's start) starts at once:
 /// a setting turned on for every agent would otherwise start them all together.
@@ -1040,6 +1068,9 @@ pub struct Core {
     /// The download of the vectors' model under way (ESC-254), by its flag to call it off.
     pub(crate) vectors_download: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
+    /// The background fetch of each repository (by its root, ESC-561): when it last ran, and its
+    /// last failure since its last success.
+    pub(crate) fetches: Mutex<HashMap<String, RootFetch>>,
     pub pty: PtyManager,
     spawn_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Held while an interface of the agent quits, which what starts a process or an interface of
@@ -1295,6 +1326,9 @@ pub struct Core {
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
+    /// The hooks its interfaces called, as they came (tests only: the real runs read them, ESC-553).
+    #[cfg(test)]
+    pub(crate) tui_hooks: Mutex<Vec<Value>>,
     /// The languages the native menus were written again in (tests only: they have none).
     #[cfg(test)]
     pub(crate) relabels: Mutex<Vec<i18n::Lang>>,
@@ -1840,6 +1874,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         claude_memory_asked: false,
         workflow_fixes: Vec::new(),
         workflows_auto_read: true,
+        git_fetch: Default::default(),
         workflows_enabled: true,
         workflows_in_repo: true,
         memory_review_off: false,
@@ -1967,9 +2002,15 @@ impl Core {
     /// hands them to the plugins: a version withdrawn stops, the updates of the store are offered.
     pub async fn refresh_store(&self) {
         let settings = self.settings.read().clone();
-        match crate::plugins::store::client(&settings) {
-            Ok(http) => self.store.refresh(&http, crate::i18n::ui()).await,
-            Err(e) => log::warn!("the store's client: {e}"),
+        use crate::offline::{allows, Flow};
+        if !(allows(Flow::Store) && allows(Flow::Revocations)) {
+            // « Mode hors ligne » (ESC-596): the catalogue and the list kept apply, nothing is asked.
+            self.store.say(crate::offline::refusal(crate::i18n::ui()));
+        } else {
+            match crate::plugins::store::client(&settings) {
+                Ok(http) => self.store.refresh(&http, crate::i18n::ui()).await,
+                Err(e) => log::warn!("the store's client: {e}"),
+            }
         }
         self.plugins
             .apply_store(self.store.revocations(), self.store.offers());
@@ -1980,6 +2021,15 @@ impl Core {
     /// is), then the updates looked for, the Git tags, the folders, the store and the seed.
     pub async fn look_for_updates(&self) -> crate::plugins::StoreRead {
         let settings = self.settings.read().clone();
+        if !crate::offline::allows(crate::offline::Flow::Updates) {
+            // « Mode hors ligne » (ESC-596): said, nothing asked.
+            let why = crate::offline::refusal(crate::i18n::ui());
+            self.store.say(why.clone());
+            return crate::plugins::StoreRead {
+                read_at: self.store.view().read_at,
+                error: Some(why),
+            };
+        }
         let http = crate::plugins::store::client(&settings).map_err(|e| e.to_string());
         self.plugins
             .look_for_updates(
@@ -1994,6 +2044,10 @@ impl Core {
     /// The installs of the seed not counted yet sent to the store with the user's consent to the statistics, forgotten on
     /// a refusal, kept until they answer (ESC-394, docs/STORE.md §5.4).
     pub async fn send_seed_counts(&self) {
+        if !crate::offline::allows(crate::offline::Flow::Statistics) {
+            // Kept for when the mode is off (ESC-596).
+            return;
+        }
         let settings = self.settings.read().clone();
         match crate::plugins::store::client(&settings) {
             Ok(http) => {
@@ -2090,6 +2144,7 @@ impl Core {
         };
         let inbox_snoozes = crate::inboxviews::ViewSnoozes {
             until: std::mem::take(&mut state.inbox_snoozes),
+            marks: std::mem::take(&mut state.inbox_marks),
         };
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
@@ -2174,6 +2229,18 @@ impl Core {
         // Denied by this device's policy from the start (ESC-520): no plugin reads the file (`apply_locks` after).
         kept.deny(locks.check_secrets_file().err().map(|e| e.to_string()));
         let secrets: Arc<dyn integrations::secrets::SecretStore> = kept.clone();
+        // The proxy's password in the keychain, never in the file (SEC-10): one an earlier version wrote in the address
+        // moves there now, and the file is written again without it.
+        if crate::proxysecret::on_load(&mut settings, &*secrets) {
+            match serde_json::to_vec_pretty(&settings) {
+                Ok(bytes) => {
+                    if let Err(e) = paths::write_atomic(&data.settings_file(), &bytes) {
+                        log::warn!("proxy: the settings could not be written again: {e}");
+                    }
+                }
+                Err(e) => log::warn!("proxy: the settings could not be written again: {e}"),
+            }
+        }
         let accounts = integrations::secrets::load_accounts(
             &data,
             &*secrets,
@@ -2202,6 +2269,8 @@ impl Core {
         };
         let usage = UsageSnapshot::restored(&saved, &settings, ongoing, now);
         let (git, rx) = GitService::new();
+        // « Mode hors ligne » (ESC-596): what the user chose, before any flow starts.
+        crate::offline::set_chosen(settings.offline);
         let telemetry = Arc::new(Telemetry::new(
             data.telemetry_id_file(),
             host.version(),
@@ -2317,6 +2386,7 @@ impl Core {
             vectors_download: Mutex::default(),
             git,
             git_cache: RwLock::default(),
+            fetches: Mutex::default(),
             pty: PtyManager::default(),
             spawn_locks: Mutex::default(),
             quit_locks: Mutex::default(),
@@ -2433,6 +2503,8 @@ impl Core {
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
+            tui_hooks: Mutex::default(),
+            #[cfg(test)]
             relabels: Mutex::default(),
             #[cfg(test)]
             start_hold: Mutex::default(),
@@ -2494,6 +2566,10 @@ impl Core {
             core.write_settings_file();
         }
         core.settle_locks();
+        // Once (SEC-01, ESC-589): « N'installer que des versions vérifiées » on for an installation without a plugin of a
+        // third party; then what was agreed of the harnesses of third parties, handed to what runs them.
+        core.settle_verified_only();
+        core.sync_consents();
         // The pinned Javy of the run.js plugins downloads through Réglages › Avancé › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {
@@ -2737,7 +2813,9 @@ impl Core {
         // the view Plugins, never installed by themselves.
         if !cfg!(test) {
             let plugins = self.plugins.clone();
-            tauri::async_runtime::spawn(async move { plugins.check_updates().await });
+            if crate::offline::allows(crate::offline::Flow::Updates) {
+                tauri::async_runtime::spawn(async move { plugins.check_updates().await });
+            }
             // The store's catalogue and revocation list (STORE-9): at the start, then every 6 hours.
             let c = self.clone();
             tauri::async_runtime::spawn(async move {
@@ -2853,7 +2931,7 @@ impl Core {
             tokio::time::sleep(Duration::from_secs(15)).await;
             loop {
                 c.fetch_all().await;
-                tokio::time::sleep(FETCH_EVERY).await;
+                tokio::time::sleep(FETCH_LOOK.min(fetch_minute())).await;
             }
         });
         let c = self.clone();
@@ -2915,7 +2993,10 @@ impl Core {
             let b = self.asks.lock();
             (b.list.clone(), b.seq)
         };
-        let inbox_snoozes = self.inbox_snoozes.lock().until.clone();
+        let (inbox_snoozes, inbox_marks) = {
+            let s = self.inbox_snoozes.lock();
+            (s.until.clone(), s.marks.clone())
+        };
         PersistedState {
             projects,
             agents,
@@ -2933,6 +3014,7 @@ impl Core {
             asks,
             ask_seq,
             inbox_snoozes,
+            inbox_marks,
         }
     }
 
@@ -3079,6 +3161,8 @@ impl Core {
         // The projects trusted with their own language servers are the backend's (`lsp_trust`, ESC-446): a window does not
         // trust one by saving its settings.
         s.language_servers_trusted = self.settings.read().language_servers_trusted.clone();
+        // Settled once by the backend (`settle_verified_only`, ESC-589): a window that does not know it does not undo it.
+        s.plugins_verified_settled |= self.settings.read().plugins_verified_settled;
         // The user's id is the backend's too (`ensure_identity`): a window's copy may be older.
         if s.user_id.is_empty() {
             s.user_id = self.settings.read().user_id.clone();
@@ -3092,6 +3176,8 @@ impl Core {
         s.normalize_attachments();
         s.normalize_mid_turn_delay();
         s.normalize_display();
+        // ESC-561: within its bounds (the window says it brought a value back to its bound).
+        s.git_fetch = s.git_fetch.clamped();
         accounts::normalize(&mut s);
         accounts::check(&s)?;
         // What the policies lock is not the window's to change (TS-11): refused, and said.
@@ -3100,11 +3186,14 @@ impl Core {
         let before_accounts = self.settings.read().accounts.clone();
         self.check_reservations(&before_accounts, &s.accounts)?;
         accounts::keep_remote_refusals(&self.settings.read().accounts, &mut s.accounts);
+        // The window's address has no password (SEC-10): the one kept goes back in it, a new one to the keychain.
+        crate::proxysecret::on_save(&self.settings.read(), &mut s, &*self.secrets);
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
         let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
         let telemetry = s.telemetry;
+        crate::offline::set_chosen(s.offline);
         let remote_all = s.remote_control_all;
         let self_update = s.claude_self_update;
         let before_settings = std::mem::replace(&mut *self.settings.write(), s);
@@ -3116,6 +3205,8 @@ impl Core {
             self.settle_agents();
         }
         self.need_settings_plugins(&before_settings);
+        // « Harness des plugins tiers » may have changed (SEC-01, ESC-589).
+        self.sync_consents();
         if self_update && !before_settings.claude_self_update {
             // « Mettre à jour Claude Code automatiquement » turned on: run when due, at once.
             crate::selfupdate::poke();
@@ -4127,6 +4218,11 @@ impl Core {
             locks.check_model(engine.as_str(), &model)?;
             locks.check_effort(&effort)?;
         }
+        // Its session in Claude Code's Code Mode (ESC-553): resumed in its interface alone, whatever its view, whatever
+        // starts it (the automatic resume, a ticket, a message).
+        if h.lock().meta.code_mode {
+            bail!(crate::agent::code_mode_line());
+        }
         // In the Claude Code view, its interface has the session (`tui`).
         if h.lock().meta.terminal {
             bail!(tr!(
@@ -4147,8 +4243,25 @@ impl Core {
         let account = self.agent_account(h)?;
         // A Cursor account without its key would run as the machine's sign-in (ESC-43).
         accounts::key_ready(&account)?;
+        // A session it resumes or copies that its transcript says in Code Mode (started in a terminal before it was
+        // marked, or the original of a copy): marked, and refused as above (ESC-553).
+        if self.code_mode_session_of(h, &account, &settings) {
+            let mut fx = Effects::default();
+            let (pid, name, view) = {
+                let mut rt = h.lock();
+                rt.mark_code_mode(&mut fx);
+                (rt.meta.project_id.clone(), rt.meta.name.clone(), rt.view())
+            };
+            self.apply(id, &pid, &name, fx, Some(view));
+            bail!(crate::agent::code_mode_line());
+        }
         let program = accounts::program(&account, &settings)
             .ok_or_else(|| anyhow!(engine::missing_line(harness.id(), i18n::ui())))?;
+        // A harness of a third party: its whole command agreed to by the user first, else it does not start, said
+        // (audit SEC-01, ESC-589). Nothing of it runs before, not even its version.
+        self.check_harness_consent(harness, &program)?;
+        // Its network first (SEC-14): never out without the proxy's password when it must go through the proxy.
+        crate::proxysecret::refuse_without_password(&settings)?;
         // Starting an agent is the gesture by which a harness described by anyone's plugin may be asked its version.
         engine::registry::gesture(harness.id());
         // A version older than the tested ones is refused, with its reason.
@@ -4215,6 +4328,8 @@ impl Core {
         // harness that reads them so. Not written, it does not start: it would read them.
         let privacy = self.agent_privacy(id);
         spawn.fence = self.agent_fence(id);
+        // A private project on the machine (SEC-02b, ESC-623): a third party's harness starts in none.
+        spawn.private = !privacy.private.is_empty();
         if !spawn.fence.is_empty() {
             let refused = matches!(spawn.escouade, Escouade::Denied { .. });
             if let Some(v) = engine.fence_settings(refused, &spawn.fence, &spawn.program) {
@@ -9588,6 +9703,11 @@ impl Core {
         let project = self.project(&project.id).unwrap_or(project);
         self.watch_project(&project);
         self.need_project_plugins(&project);
+        // A private project on the machine now (« Nouveaux projets privés », its history or its file): what runs of the
+        // agents on a third party's harness stops, said (SEC-02b, ESC-623).
+        if project.private {
+            self.settle_third_party();
+        }
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
             // reachable again as they are when the app starts.
@@ -9662,6 +9782,12 @@ impl Core {
                 String::new()
             }
         };
+        // The address a launch command opens is http or https (ESC-560): another is refused, the
+        // window having held it back already.
+        for c in &p.run_commands {
+            crate::testlaunch::check_run_url(&c.url, crate::i18n::ui())
+                .map_err(|e| anyhow::anyhow!("« {} » : {e}", c.name.trim()))?;
+        }
         let mut projects = self.projects.write();
         let cur = projects
             .iter_mut()
@@ -9682,6 +9808,7 @@ impl Core {
         cur.worktree_per_agent = p.worktree_per_agent;
         cur.worktree_at_first_message = p.worktree_at_first_message;
         cur.worktree_base = p.worktree_base;
+        cur.git_fetch = p.git_fetch.clamped();
         cur.run_commands = p.run_commands;
         cur.worktree_copy = p.worktree_copy;
         cur.worktree_setup = p.worktree_setup;
@@ -9757,6 +9884,10 @@ impl Core {
         // Their sessions on claude.ai are called « projet · agent ».
         if renamed {
             self.rename_remote_sessions(&updated.id);
+        }
+        // Made private: what runs of the agents of every project on a third party's harness stops, said (SEC-02b).
+        if updated.private && !before.private {
+            self.settle_third_party();
         }
         Ok(())
     }
@@ -10239,6 +10370,7 @@ impl Core {
                     last_fetch: git::last_fetch(&root),
                     ..Default::default()
                 };
+                (info.fetch_failure, info.fetch_ssh_note) = self.fetch_view(&root);
                 let tally = |c: char, info: &mut GitInfo| match c {
                     'A' => info.added += 1,
                     'D' => info.deleted += 1,
@@ -11052,32 +11184,140 @@ impl Core {
         }
     }
 
-    /// Fetches every project's repository that has a remote, one at a time and without ever
-    /// asking for credentials, so that the commits to pull show up.
-    pub(crate) async fn fetch_all(self: &Arc<Self>) {
-        let ids: Vec<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
-        let mut roots: Vec<String> = Vec::new();
-        for id in ids {
+    /// What the background fetch does with each repository (ESC-561), by its root: the plans of
+    /// the projects in it merged (`FetchPlan::merge`), None when none wants it fetched. The
+    /// settings are read here, at each look: a change holds without a restart.
+    pub(crate) async fn fetch_plans(&self) -> Vec<(String, Option<crate::model::FetchPlan>)> {
+        let general = self.settings.read().git_fetch.clone();
+        let projects: Vec<(String, crate::model::FetchPlan)> = self
+            .projects
+            .read()
+            .iter()
+            .map(|p| (p.id.clone(), p.git_fetch.plan(&general)))
+            .collect();
+        let mut roots: Vec<(String, Vec<crate::model::FetchPlan>)> = Vec::new();
+        for (id, plan) in projects {
             for root in self.project_roots_of(&id).await {
-                if !roots.contains(&root) {
-                    roots.push(root);
+                match roots.iter_mut().find(|(r, _)| *r == root) {
+                    Some((_, plans)) => plans.push(plan),
+                    None => roots.push((root, vec![plan])),
                 }
             }
         }
-        for root in roots {
-            if git::remotes(&root).await.is_empty() {
-                continue;
-            }
-            let lock = self.sync_lock(&root);
-            // The user's own fetch, pull or push is running: no need for another one.
-            let Ok(_guard) = lock.try_lock() else {
+        roots
+            .into_iter()
+            .map(|(root, plans)| (root, crate::model::FetchPlan::merge(plans)))
+            .collect()
+    }
+
+    /// Fetches each project's repository with a remote that is due (its interval past since its
+    /// last fetch, or never fetched), one at a time and without ever asking for credentials, so
+    /// that the commits to pull show up. A repository whose projects all say no is never
+    /// fetched; one that asked for credentials waits for a fetch of the user's.
+    pub(crate) async fn fetch_all(self: &Arc<Self>) {
+        for (root, plan) in self.fetch_plans().await {
+            let Some(plan) = plan else {
                 continue;
             };
-            match git::fetch(&root, true).await {
-                Ok(()) => self.refresh_repo(&root).await,
-                Err(e) => log::info!("background fetch of {root} failed: {e:#}"),
+            let every = fetch_minute() * plan.every_min;
+            let due =
+                self.fetches.lock().get(&root).is_none_or(|f| {
+                    !f.waits_user && f.last_try.is_none_or(|t| t.elapsed() >= every)
+                });
+            if !due || git::remotes(&root).await.is_empty() {
+                continue;
+            }
+            self.fetch_root(&root, plan.timeout_secs).await;
+        }
+    }
+
+    /// Whether a project of the repository at `root` still wants it fetched in the background, by
+    /// the settings as they are now (without its git roots read again: those of the last look).
+    fn fetch_wanted(&self, root: &str) -> bool {
+        let general = self.settings.read().git_fetch.clone();
+        let ids: Vec<String> = self
+            .projects
+            .read()
+            .iter()
+            .filter(|p| p.git_fetch.plan(&general).on)
+            .map(|p| p.id.clone())
+            .collect();
+        let toplevels = self.toplevels.lock();
+        let projects = self.projects.read();
+        projects.iter().filter(|p| ids.contains(&p.id)).any(|p| {
+            p.checkouts().iter().any(|c| {
+                toplevels
+                    .get(&c.dir)
+                    .or_else(|| toplevels.get(&p.path))
+                    .is_some_and(|t| t.as_deref() == Some(root))
+            })
+        })
+    }
+
+    /// One background fetch of the repository at `root`, within `timeout_secs`, its outcome kept
+    /// for the Git panel.
+    pub(crate) async fn fetch_root(self: &Arc<Self>, root: &str, timeout_secs: u32) {
+        let lock = self.sync_lock(root);
+        // The user's own fetch, pull or push is running: no need for another one.
+        let Ok(_guard) = lock.try_lock() else {
+            return;
+        };
+        self.fetches
+            .lock()
+            .entry(root.to_string())
+            .or_default()
+            .last_try = Some(std::time::Instant::now());
+        let limit = Duration::from_secs(u64::from(timeout_secs));
+        // Asked again at the last moment: a setting turned off while it got ready runs nothing.
+        let core = self.clone();
+        let at = root.to_string();
+        let still = move || core.fetch_wanted(&at);
+        let run = git::fetch_background(root, limit, still).await;
+        if run.skipped {
+            return;
+        }
+        {
+            let mut fetches = self.fetches.lock();
+            let f = fetches.entry(root.to_string()).or_default();
+            f.windows_ssh = run.windows_ssh;
+            match &run.result {
+                Ok(()) => {
+                    f.failure = None;
+                    f.waits_user = false;
+                }
+                Err(e) => {
+                    let message = format!("{e:#}");
+                    let kind = git::fetch_failure_kind(&message, run.timed_out);
+                    log::info!("background fetch of {root} failed ({kind:?}): {message}");
+                    f.waits_user = kind == crate::model::FetchFailureKind::Credentials;
+                    f.failure = Some(crate::model::FetchFailure {
+                        kind,
+                        message,
+                        at: crate::model::now_ms(),
+                        timeout_secs,
+                    });
+                }
             }
         }
+        self.refresh_repo(root).await;
+    }
+
+    /// A fetch, a pull or a push of the user's reached the remote of `root`: the background fetch
+    /// forgets its failure, and one that waited for credentials goes on (ESC-561).
+    pub(crate) fn fetch_by_user(&self, root: &str) {
+        if let Some(f) = self.fetches.lock().get_mut(root) {
+            f.failure = None;
+            f.waits_user = false;
+        }
+    }
+
+    /// The background fetch's state of `root`, for its `GitInfo`.
+    pub(crate) fn fetch_view(&self, root: &str) -> (Option<crate::model::FetchFailure>, bool) {
+        self.fetches
+            .lock()
+            .get(root)
+            .map(|f| (f.failure.clone(), f.windows_ssh))
+            .unwrap_or_default()
     }
 
     /// Fetch, pull or push of the project's main checkout, asked by the user (so credentials
@@ -11109,6 +11349,9 @@ impl Core {
                 SyncOp::Push => git::push(&root).await,
             }
         };
+        if out.is_ok() {
+            self.fetch_by_user(&root);
+        }
         // Even after a failure: a pull that could not fast-forward has fetched.
         self.refresh_repo(&root).await;
         out

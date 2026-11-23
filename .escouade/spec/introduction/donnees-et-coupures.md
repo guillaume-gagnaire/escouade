@@ -1,9 +1,9 @@
 ---
 title: "Données locales et coupures"
 subject: "introduction"
-sources: ["Ticket ESC-469 (perte de state.json le 2026-11-15)","Ticket ESC-487 (l'écran des copies, après la reconstruction à la main du Kanban le 2026-11-15)","crates/escouade-plugin-cli/src/paths.rs","crates/escouade-model/src/backups.rs","crates/escouade-model/src/backup_view.rs","src-tauri/src/copies.rs","src-tauri/src/mcp/read.rs","src-tauri/src/conv.rs","src-tauri/src/core.rs","src/components/RecoveryBanner.svelte","src/components/settings/BackupsSection.svelte","website/content/docs/fr/data.md","website/content/docs/fr/troubleshooting.md","Ticket ESC-535 (app.log du poste de l'utilisateur, « cannot save state … os error 2 » à la sortie pour une mise à jour, 2026-11-17 et 2026-11-18)","src-tauri/src/save_tests.rs"]
-tickets: ["ESC-469","ESC-487","ESC-499","ESC-535"]
-decisions: [180,191,243]
+sources: ["Ticket ESC-469 (perte de state.json le 2026-11-15)","Ticket ESC-487 (l'écran des copies, après la reconstruction à la main du Kanban le 2026-11-15)","crates/escouade-plugin-cli/src/paths.rs","crates/escouade-model/src/backups.rs","crates/escouade-model/src/backup_view.rs","src-tauri/src/copies.rs","src-tauri/src/mcp/read.rs","src-tauri/src/conv.rs","src-tauri/src/core.rs","src/components/RecoveryBanner.svelte","src/components/settings/BackupsSection.svelte","website/content/docs/fr/data.md","website/content/docs/fr/troubleshooting.md","Ticket ESC-535 (app.log du poste de l'utilisateur, « cannot save state … os error 2 » à la sortie pour une mise à jour, 2026-11-17 et 2026-11-18)","src-tauri/src/save_tests.rs","docs/security/audit-2026-11/rapport.md, fiche SEC-10 (ESC-595)","crates/escouade-forge/src/integrations/secrets.rs"]
+tickets: ["ESC-469","ESC-487","ESC-499","ESC-535","ESC-595"]
+decisions: [180,191,243,302]
 compared: null
 ---
 
@@ -109,3 +109,10 @@ Aucun : l'écriture forcée, les copies et la reprise ne se coupent pas.
 - Un `<nom>.tmp` laissé par une version d'avant la 2.2.4 (nom unique pour toutes les écritures) n'est pas effacé : seuls les temporaires au nom propre à une écriture le sont.
 
 - **`plugin-secrets.json`** (ESC-499) : les secrets des plugins que l'utilisateur a choisi de garder dans un fichier, sur un poste sans trousseau. Il est écrit par le même chemin atomique, lisible de son seul propriétaire dès sa création, et n'est jamais dans les copies (`backups::FILES` ne le liste pas). S'il est illisible au démarrage, il est mis de côté (`plugin-secrets.unreadable.json`, droits gardés), et le choix est à refaire.
+
+## Les données au repos (ESC-595, audit SEC-10)
+
+- **Le dossier de données est privé sous Unix** (Linux, macOS) : créé en mode `0700`, ses conversations aussi, et remis en `0700` à chaque démarrage (un dossier qu'une version d'avant a fait selon le masque du système, `umask`, est réparé). Un autre compte de la machine n'y lit ni les conversations, ni le reste. Les fichiers qui tiennent un secret restent écrits en `0600`. Sous Windows, le dossier du profil garde ses propres droits.
+- **Sous Linux, le service de secrets du bureau** (Secret Service : GNOME Keyring, KWallet) garde les secrets de l'app quand il répond au démarrage (sondé 3 secondes au plus, par D-Bus, sans bibliothèque du système) : jetons des comptes, secrets des plugins, clés de voix, jeton du serveur MCP, mot de passe du proxy, sous le service de l'app (`….escouade`, `….escouade.sandbox` pour une exécution isolée). Sans lui (pas de bus de session, pas de service, WSL, un serveur), le repli d'avant, que la fenêtre dit déjà : les jetons des comptes dans leur fichier lisible du seul propriétaire, les secrets d'un plugin dans un fichier choisi par l'utilisateur (voir *Les plugins : vue d'ensemble*). Un service apparu depuis : la ligne d'un secret de plugin propose « Déplacer vers le trousseau », rien n'est déplacé sans l'utilisateur.
+- **Le mot de passe du proxy** n'est plus dans `settings.json` : au trousseau, avec sa migration au démarrage (voir *Réseau : proxy et certificats*).
+- Escouade ne chiffre pas ses données au repos : elle s'en remet au chiffrement du disque du poste et aux droits du profil.

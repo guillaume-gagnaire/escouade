@@ -248,7 +248,9 @@ pub fn read_file(dir: &str, file: &str) -> Result<String> {
     if len > FILE_LIMIT {
         bail!(too_large(i18n::ui(), file, len));
     }
-    let bytes = std::fs::read(&path).map_err(unreadable)?;
+    // Committed with the repository: a link to `/dev/zero` or a FIFO is no regular file, and what
+    // is read stays capped if the file grew since its size was taken (ESC-653).
+    let bytes = crate::paths::read_regular(&path, FILE_LIMIT).map_err(unreadable)?;
     String::from_utf8(bytes)
         .map_err(|_| anyhow!(tr!("{file} n'est pas en UTF-8.", "{file} isn’t in UTF-8.")))
 }
@@ -286,6 +288,34 @@ pub(crate) mod tests {
             read_file(&dir, ".isola.toml").unwrap().len(),
             FILE_LIMIT as usize
         );
+    }
+
+    /// ESC-653: the file comes with the repository: a link to `/dev/zero` or a FIFO under Unix, a
+    /// junction under Windows, is no regular file and is refused at once.
+    #[test]
+    fn a_config_that_is_no_regular_file_is_refused_at_once() {
+        let d = test_dir("launchenv-read-link");
+        let dir = d.to_string_lossy().to_string();
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("/dev/zero", d.join(".isola.toml")).unwrap();
+            assert!(read_file(&dir, ".isola.toml").is_err());
+            std::fs::remove_file(d.join(".isola.toml")).unwrap();
+            use std::os::unix::ffi::OsStrExt;
+            let c = std::ffi::CString::new(d.join(".isola.toml").as_os_str().as_bytes()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+            assert!(read_file(&dir, ".isola.toml").is_err());
+        }
+        #[cfg(windows)]
+        {
+            let outside = test_dir("launchenv-read-link-outside");
+            assert!(crate::paths::make_dir_link(
+                &outside,
+                &d.join(".isola.toml")
+            ));
+            assert!(read_file(&dir, ".isola.toml").is_err());
+            std::fs::remove_dir(d.join(".isola.toml")).unwrap();
+        }
     }
 
     #[test]

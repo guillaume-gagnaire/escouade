@@ -166,11 +166,17 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 | `git.ticket_branch_prefix` | Préfixe de branche | Un début de nom de branche | `ticket/` | `ticket_branch_prefix: tickets/` |
 | `git.commit_mode` | Valeur parmi une liste | `agent`, `direct` | `agent` | `commit_mode: direct` |
 | `git.conventional_commits` | Booléen | `true`, `false` | `true` | `conventional_commits: false` |
+| `git.auto_fetch` | Valeur parmi une liste | `default`, `always`, `never` | `default` | `auto_fetch: always` |
+| `git.fetch_every` | Nombre entier | `0`, ou de `1` à `1440` | `0` | `fetch_every: 30` |
+| `git.fetch_timeout` | Nombre entier | `0`, ou de `30` à `1800` | `0` | `fetch_timeout: 900` |
 
 - `agent_branch_prefix` : la branche d’un nouvel agent s’appelle `<préfixe><nom>`. Vide (`''`), c’est son nom seul.
 - `ticket_branch_prefix` : la branche d’un ticket s’appelle `<préfixe><clé>` (`ticket/DEM-12`).
 - `commit_mode` : « Commit », qui écrit les commits demandés depuis le panneau des fichiers : `agent` (« Rédigé par l’agent ») ou `direct` (« Direct, avec un message proposé »).
-- `conventional_commits` : « Message de commit généré », les messages au format Conventional Commits.
+- `conventional_commits` : « Message de commit généré », les messages au format Conventional Commits.
+- `auto_fetch` : « Récupérer automatiquement (git fetch) » du projet : `default` (« Comme le réglage général » de chaque machine), `always` ou `never`.
+- `fetch_every` : les minutes entre deux fetch de fond du projet ; `0`, celles du réglage général de chaque machine.
+- `fetch_timeout` : les secondes qu’un fetch de fond du projet peut prendre ; `0`, celles du réglage général. Une valeur hors des bornes est ramenée à la borne, et le fichier le dit.
 
 ### board
 
@@ -310,6 +316,10 @@ launch:
 | `command` | oui | La ligne de commande. |
 | `shell` | non | Le shell qui la lance. Absent : le shell par défaut du système. |
 | `cwd` | non | Un sous-dossier du projet, relatif. Absent : la racine du projet. |
+| `url` | non | L’adresse `http://` ou `https://` qu’Escouade ouvre dès qu’elle répond (voir [le lancement](launch#ouvrir-une-adresse-au-lancement)). Elle peut nommer `${ESCOUADE_PORT_BASE}` et `${ESCOUADE_PORT_END}`, avec une valeur pour le projet après `:-`. Une autre adresse est signalée et la commande ignorée. |
+| `open_in` | non | Où l’ouvrir : `page` (une page de lancement d’Escouade, par défaut) ou `browser` (le navigateur du système). |
+
+L’adresse fait partie de la commande : changée dans le fichier, elle redemande ton accord, et elle n’est appliquée qu’avec la commande.
 
 Contrairement aux étapes, une commande de lancement n’a pas de forme courte : un texte seul est signalé comme valeur invalide. Une commande seule peut s’écrire sans liste (`launch:` suivi directement de `name:` et `command:` en retrait) : elle vaut une liste d’une commande.
 

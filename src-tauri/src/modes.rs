@@ -311,9 +311,10 @@ pub fn stopped(lang: Lang, why: &str) -> String {
 }
 
 impl Core {
-    /// Why the agent `id`, as it runs now, may not run on (its harness not on for its project, `refusal_of`): what the
-    /// hot changes of the policies, of « Autoriser le mode Bypass » and of « Projet privé » look at, what the end of a
-    /// turn judges again, and what a start does not take a live process over with.
+    /// Why the agent `id`, as it runs now, may not run on (its harness not on for its project, a third party's harness
+    /// while a private project exists, `refusal_of`): what the hot changes of the policies, of « Autoriser le mode Bypass »
+    /// and of « Projet privé » look at, what the end of a turn judges again, and what a start does not take a live
+    /// process over with.
     pub(crate) fn run_refusal(&self, id: &str) -> Option<String> {
         let h = self.agent(id).ok()?;
         let (engine, project_id) = {
@@ -329,6 +330,12 @@ impl Core {
         let locks = self.locks_for(&project_id);
         let bypass = self.bypass_allowed();
         let meta = h.lock().meta.clone();
+        // A third party's harness in a private project (SEC-02, ESC-590): read apart, never under the agent's lock.
+        if self.harness_in(meta.engine, &meta.project_id)
+            == crate::harness_scope::InProject::ThirdParty
+        {
+            return self.harness_refusal(meta.engine, &meta.project_id);
+        }
         refusal_of(&meta, &locks, bypass, crate::i18n::ui()).or_else(|| {
             // On a shared account while its private project is to go only on its own (ESC-564).
             let account = crate::accounts::get(&self.settings.read(), &meta.account).id;

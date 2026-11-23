@@ -1,9 +1,9 @@
 ---
 title: "Projets privés"
 subject: "Projets"
-sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)","src-tauri/src/harness_scope.rs (settle_harnesses_in)","src-tauri/src/modes.rs (run_refusal)","CI de release/2.3, run 44893172996 (macOS)","src/lib/settings.svelte.ts (#saveProject)","CI de release/2.3, run 44936350320 (Windows)"]
-tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556","ESC-582","ESC-619"]
-decisions: [154,257,259,279]
+sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)","src-tauri/src/harness_scope.rs (settle_harnesses_in)","src-tauri/src/modes.rs (run_refusal)","CI de release/2.3, run 44893172996 (macOS)","src/lib/settings.svelte.ts (#saveProject)","CI de release/2.3, run 44936350320 (Windows)","docs/security/audit-2026-11/rapport.md (SEC-02, test W-04)","src-tauri/src/harness_scope.rs","Choix de l'utilisateur, demande a-4 (2026-11-21)","Choix a-28 (option b), tranché le 2026-11-22 sur délégation de l'utilisateur"]
+tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556","ESC-582","ESC-619","ESC-590","ESC-623"]
+decisions: [154,257,259,279,298,303]
 compared: null
 ---
 
@@ -58,6 +58,8 @@ Dans un projet privé, chaque harness est coupé d'office tant que l'utilisateur
 - **Un process qui tourne est jugé comme un démarrage** : avant de lui donner un message, Escouade vérifie que son harness est allumé pour son projet, comme au lancement d'un process. C'est vrai aussi pour un process lancé pendant le passage en privé (un démarrage anticipé jugé juste avant, son process vivant juste après) : refusé, il s'arrête et c'est dit.
 - Ensuite, l'agent ne redémarre pas et ne reçoit rien tant que l'utilisateur n'a pas cliqué « Activer » (*Les plugins : vue d'ensemble*, un agent existant). Un harness déjà allumé pour ce projet ne s'arrête pas : seule la clôture relance son process, entre deux tours.
 
+Seule exception : quand un projet devient privé (par la fenêtre ou par le `.escouade.yml`), ou qu'un projet privé arrive sur le poste (nouveau, rouvert avec son historique), les agents sur le harness d'un plugin tiers s'arrêtent, **dans tous les projets** (voir plus bas, « Les harness des plugins tiers »).
+
 ### Ce qu'Escouade fait passer d'un projet à l'autre
 
 - **Copier les réglages** (assistant « Nouveau projet ») : un projet privé n'est jamais proposé comme source, et l'assistant le dit (voir *Nouveau projet*). Copier un projet non privé dans un projet privé reste possible : rien du privé n'en sort.
@@ -68,15 +70,16 @@ Dans un projet privé, chaque harness est coupé d'office tant que l'utilisateur
 
 ## Réglages
 
-- Réglages › Projets, groupe « Confidentialité » : « Projet privé », éteint par défaut, enregistré avec le projet. Sous le réglage, « Ses fichiers » dit, harness par harness, « Garde-fou » ou « Barrière », avec ce qui n'est pas garanti. Un projet rouvert avec son historique garde son propre réglage.
+- Réglages › Projets, groupe « Confidentialité » : « Projet privé », éteint par défaut, enregistré avec le projet. Sous le réglage, pour un projet privé, une ligne dit la limite des plugins tiers (voir plus bas), puis « Ses fichiers » dit, harness par harness, « Garde-fou » ou « Barrière », avec ce qui n'est pas garanti. Un projet rouvert avec son historique garde son propre réglage.
 - Groupe « Nouveaux projets » (sous les réglages du projet, même sans projet ouvert) : « Nouveaux projets privés », éteint par défaut.
 - La rangée « Comptes » dit, comme une information, ce que ses sessions gardent sur un compte partagé et ce qui reste commun ; un compte réservé sépare tout, en plus (voir *Comptes*, « Un compte réservé au projet privé »).
 
 ## Limites
 
-- Le cloisonnement des fichiers est un « garde-fou » ou une « barrière » selon le harness, jamais une vraie barrière pour tous : un compte système par projet n'est pas proposé, les harness, leurs comptes et les outils de l'utilisateur n'y suivraient pas.
+- Le cloisonnement des fichiers est un « garde-fou » ou une « barrière » selon le harness, jamais une vraie barrière pour tous : un compte système par projet n'est pas proposé, les harness, leurs comptes et les outils de l'utilisateur n'y suivraient pas. Un vrai cloisonnement sous Windows natif (AppContainer, un compte du système par ensemble de projets, le bac à sable de Windows) est à chiffrer dans une étude à part avant d'être promis.
 - Entre projets qui ne sont pas privés, rien n'est cloisonné.
 - Sur un compte partagé, ce que le harness tient lui-même pour tous les projets (l'historique des prompts que Claude Code rappelle, sa mémoire globale, ses réglages) reste commun : la clôture ne vaut que pour les outils des agents.
+- Un projet privé sur le poste prive tous les projets des harness des plugins tiers (voir plus bas) : c'est le prix de la clôture, tant que le contrat des plugins ne permet pas à un tiers de la prouver.
 
 ## Sous clôture, sur OpenCode (ESC-364)
 
@@ -92,10 +95,21 @@ Dans un projet privé, chaque harness est coupé d'office tant que l'utilisateur
 - « Toujours » n'est pas offert : ce qu'il couvrirait ne serait plus jugé.
 - Pour une commande, la clôture reste une garde sur son texte : celle qui atteint un chemin sans le nommer passe.
 
-## Ce que l'interface en dit, et les plugins tiers (SEC-08, ESC-425)
+## Ce que l'interface en dit (SEC-08, ESC-425)
 
-- **Sous Windows**, la description de « Projet privé » ajoute : « Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client. Un plugin tiers n’y est lancé qu’une fois activé par toi pour ce projet. » La doc du site (Réglages › Projets) le dit aussi.
-- **Un harness d'un plugin tiers** (dont l'id ne commence pas par `dev.escouade.`) n'est lancé dans un projet privé qu'une fois allumé pour ce projet par l'utilisateur (« Activer », ou le bouton du projet dans la page du plugin) : avant, son état est « demande » et tout démarrage est refusé (voir *Harness*, un harness coupé pour un projet). La migration unique qui allume, pour un projet privé, les harness que ses agents utilisaient déjà (ESC-404) n'allume que ceux d'Escouade : un harness tiers y demande l'accord.
+- **Sous Windows**, la description de « Projet privé » ajoute : « Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client. » La doc du site (Réglages › Projets) le dit aussi.
+
+## Les harness des plugins tiers (SEC-02, ESC-590 ; SEC-02b, ESC-623)
+
+Un harness d'un plugin tiers (dont l'id ne commence pas par `dev.escouade.` : le plugin qui le sert, ou celui qui le décrit pour le client ACP) **n'est lancé dans aucun projet tant qu'un projet privé existe sur le poste**, qu'il y soit activé ou non, que le projet de l'agent soit privé ou non. Le cœur ne pouvait vérifier sa clôture qu'en cherchant chaque chemin comme un mot de son lancement : un chemin posé dans une variable que personne ne lit, ou dans un argument qui l'autorise, suffisait (test W-04 de l'audit de la 2.2.0). Or cette clôture est aussi ce qui tient les dossiers d'un projet privé hors de portée d'un agent d'un autre projet : un agent tiers d'un projet public, détourné, aurait pu lire le projet privé. Le contrat des plugins ne permet pas aujourd'hui de prouver la clôture autrement : c'est donc un refus, partout.
+
+Un projet privé « existe » quand il est ouvert dans Escouade (un projet retiré n'en est plus un ; un projet rouvert avec son historique l'est de nouveau s'il était privé).
+
+- **Le refus se dit, avec sa raison et le geste possible** : « Un projet privé existe sur ce poste : un harness d’un plugin tiers ne peut pas garantir sa clôture, <harness> n’est lancé dans aucun projet. Prends un harness d’Escouade, ou retire « Projet privé » de tes projets. » (en anglais : « A private project exists on this machine: a harness from a third-party plugin can’t guarantee its fence, so <harness> isn’t launched in any project. Pick one of Escouade’s harnesses, or turn “Private project” off for your projects. »). C'est la réponse d'un nouvel agent, d'un message, d'une reprise, d'un démarrage anticipé, de la vue terminal, d'un ticket (bloqué par le Kanban avec cette raison, refusé par `start_ticket` du serveur MCP), des commandes de l'API distante, et de « Activer », qui n'allume rien. Le cœur le refuse aussi au lancement même du harness, avant que son programme tourne.
+- **La fenêtre** : le menu « Harness » de chaque projet ne le propose plus (celui d'un ticket ou du projet qui l'a déjà le garde, avec « (plugin tiers : un projet privé existe) ») ; la conversation d'un de ses agents le dit dans une bande, sans bouton ; sous « Projet privé », les réglages du projet disent : « Un harness d’un plugin tiers ne peut pas garantir la clôture d’un projet privé : tant qu’il en existe un sur ce poste, il n’est lancé dans aucun projet, et un agent qui en a un s’arrête. » La fenêtre relit ce jugement quand un projet devient privé ou ne l'est plus, quand un projet arrive et quand un projet est retiré.
+- **Un agent déjà là** : quand un projet devient privé, ou qu'un projet privé arrive, chaque agent sur un harness tiers, **de tous les projets**, dont le process ou l'interface tourne s'arrête aussitôt s'il est au repos ; au travail, il finit son tour, puis s'arrête. Sa conversation le dit : la raison, puis « L’agent s’arrête. » ou « L’agent s’arrête à la fin de son tour. ». Sa session est gardée ; rien ne le relance tant qu'un projet privé existe.
+- **Plus aucun projet privé** (le dernier redevenu public, ou retiré) : les harness tiers retrouvent leur place, dans chaque projet selon son bouton. Rien ne repart tout seul : un message, un ticket ou « Reprendre » les relance.
+- **Les harness d'Escouade** (`dev.escouade.*`, signés) gardent leur clôture comme avant : allumés pour le projet privé par l'utilisateur (« Activer »), ils y tournent, chaque chemin refusé dit à leur harness ; dans les autres projets, rien ne change pour eux. La migration unique qui allume, pour un projet privé, les harness que ses agents utilisaient déjà (ESC-404) n'allume que ceux d'Escouade.
 
 ## Quand le projet devient privé par la fenêtre (ESC-619)
 

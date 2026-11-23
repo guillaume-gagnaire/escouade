@@ -15,11 +15,12 @@
 use crate::accounts;
 use crate::agent::{AgentHandle, Effects, TuiRun};
 use crate::core::Core;
+use crate::engine::claude_terminal;
 pub use crate::engine::claude_terminal::find_transcript;
+#[cfg(test)]
+use crate::engine::Engine;
 use crate::engine::Escouade;
 use crate::engine::TerminalView;
-#[cfg(test)]
-use crate::engine::{claude_terminal, Engine};
 use crate::handover::{self, Relay};
 use crate::model::*;
 use crate::pty::{PtyManager, TermInfo};
@@ -842,11 +843,46 @@ fn before(e: &Value, since: i64) -> bool {
 /// with something in it).
 pub(crate) fn take_relay_away(view: &dyn TerminalView, meta: &mut AgentMeta) {
     if let Some(path) = view.relay_path(Path::new(&meta.cwd)) {
-        let _ = std::fs::remove_file(path);
+        remove_relay(Path::new(&meta.cwd), &path);
     }
     for dir in std::mem::take(&mut meta.relay_made).iter().rev() {
         let _ = std::fs::remove_dir(dir);
     }
+}
+
+/// Whether `path`, or a folder above it under `cwd`, is a link: a repository can commit one at
+/// `.cursor`, `.cursor/rules` or the rule itself, and a relay is never written or taken away
+/// through it.
+fn relay_through_link(cwd: &Path, path: &Path) -> bool {
+    path.ancestors()
+        .take_while(|d| d.starts_with(cwd) && *d != cwd)
+        .any(|d| std::fs::symlink_metadata(d).is_ok_and(|m| m.file_type().is_symlink()))
+}
+
+/// The relay at `path` removed, only when it is a plain file reached through no link.
+fn remove_relay(cwd: &Path, path: &Path) {
+    let plain = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file());
+    if plain && !relay_through_link(cwd, path) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// `bytes` written at `path` under `cwd`: its folders made, then checked again for a link, and
+/// the file opened without following one (`O_NOFOLLOW`), so a link put there is refused.
+fn write_relay(cwd: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    // Before its folders are made too: none is made through a link.
+    if relay_through_link(cwd, path) {
+        return Err(std::io::Error::other("a link on its way, not followed"));
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    if relay_through_link(cwd, path) {
+        return Err(std::io::Error::other("a link on its way, not followed"));
+    }
+    // Not followed under Windows either, where `O_NOFOLLOW` does not exist (`create_no_follow`).
+    crate::paths::create_no_follow(path)?.write_all(bytes)
 }
 
 /// The files of `files` whose text holds `token`.
@@ -974,7 +1010,52 @@ pub(crate) fn ticket_refusal() -> anyhow::Error {
     ))
 }
 
+/// What sends the requests of an account of Claude Code elsewhere than Anthropic's API (ESC-553): its launch's variables
+/// `env`, the app's environment (not in the tests), the `env` and `apiKeyHelper` of its `settings.json` (read, never
+/// written).
+fn claude_gateway(env: &[(String, String)], config_dir: &Path) -> Option<String> {
+    let settings_json = std::fs::read_to_string(config_dir.join("settings.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok());
+    let var = |name: &str| {
+        env.iter()
+            .rev()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.clone())
+            .or_else(|| (!cfg!(test)).then(|| std::env::var(name).ok()).flatten())
+    };
+    claude_terminal::gateway(&var, settings_json.as_ref())
+}
+
+/// Why the agent `m` may not go back to Escouade's conversation: its session is in Claude Code's Code Mode (ESC-553).
+pub(crate) fn code_mode_refusal() -> anyhow::Error {
+    anyhow!(crate::agent::code_mode_line())
+}
+
 impl Core {
+    /// Whether the session the agent `h` resumes or copies is in Claude Code's Code Mode, by its transcript in its
+    /// account's folder (ESC-553): Claude Code resumes it in its interface alone.
+    pub(crate) fn code_mode_session_of(
+        &self,
+        h: &AgentHandle,
+        account: &Account,
+        settings: &Settings,
+    ) -> bool {
+        let (engine, session) = {
+            let rt = h.lock();
+            let m = &rt.meta;
+            (m.engine, m.session_id.clone().or_else(|| m.fork_of.clone()))
+        };
+        if engine != EngineId::CLAUDE {
+            return false;
+        }
+        let Some(session) = session else {
+            return false;
+        };
+        let dir = accounts::config_dir(account, settings);
+        find_transcript(&dir, &session).is_some_and(|p| claude_terminal::code_mode_session(&p))
+    }
+
     /// The port of the hooks' server, once started.
     #[cfg(test)]
     pub(crate) fn hooks_port(&self) -> Option<u16> {
@@ -1014,6 +1095,10 @@ impl Core {
             }
             if terminal && rt.meta.ticket_id.is_some() {
                 return Err(ticket_refusal());
+            }
+            // Its stream would not resume its session (ESC-553).
+            if !terminal && rt.meta.code_mode {
+                return Err(code_mode_refusal());
             }
             if terminal {
                 view_of(&rt.meta)?;
@@ -1125,9 +1210,13 @@ impl Core {
             return;
         };
         let Some(text) = text else {
-            let _ = std::fs::remove_file(&path);
+            remove_relay(Path::new(&cwd), &path);
             return;
         };
+        if relay_through_link(Path::new(&cwd), &path) {
+            log::warn!("{}: relay not written: a link on its way", path.display());
+            return;
+        }
         // The folders made for it (not there before), kept to be taken away with it.
         let made: Vec<String> = path
             .ancestors()
@@ -1147,10 +1236,7 @@ impl Core {
                 }
             }
         }
-        let written = path
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::write(&path, view.relay_file(&text)));
+        let written = write_relay(Path::new(&cwd), &path, &view.relay_file(&text));
         if let Err(e) = written {
             log::warn!("{}: relay not written: {e}", path.display());
             return;
@@ -1553,16 +1639,27 @@ impl Core {
         if harness.models_by_alias() {
             self.fit_claude_model(h);
         }
+        // A session it resumes that its transcript says in Code Mode, started before it was marked (ESC-553).
+        if !h.lock().meta.code_mode && self.code_mode_session_of(h, &account, &settings) {
+            let _ = self.with_agent(id, |rt, fx| {
+                rt.mark_code_mode(fx);
+                Ok(())
+            });
+        }
         let started = now_ms();
-        let (meta, new_session, remote, cwd, name, gen, transcript, since) = {
+        let (meta, new_session, remote, no_remote, cwd, name, gen, transcript, since) = {
             let mut rt = h.lock();
             // A session of its own from the start, when the harness takes its name: its log is
             // known before any hook.
             let new_session = (rt.meta.session_id.is_none() && view.names_its_session())
                 .then(|| uuid::Uuid::new_v4().to_string());
-            // Without the option once an interface closed right after starting with it.
-            let remote =
-                (rt.meta.remote_control && !rt.remote_fallback).then(|| self.remote_name(&rt.meta));
+            // Without the option once an interface closed right after starting with it; never in Code Mode, which
+            // Claude Code does not start with it (« Code Mode (experimental) isn't available: for now it doesn't
+            // work in background jobs, in teammates' panes or with Remote Control. », 2.1.329), and which its
+            // session needs (ESC-553).
+            let no_remote = rt.meta.remote_control && rt.meta.code_mode;
+            let remote = (rt.meta.remote_control && !rt.remote_fallback && !rt.meta.code_mode)
+                .then(|| self.remote_name(&rt.meta));
             // As it was before the new session is its: what the interface is started from.
             let meta = rt.meta.clone();
             if let Some(s) = new_session.clone() {
@@ -1596,6 +1693,7 @@ impl Core {
                 meta,
                 new_session,
                 remote,
+                no_remote,
                 rt.meta.cwd.clone(),
                 rt.meta.name.clone(),
                 rt.gen,
@@ -1620,6 +1718,8 @@ impl Core {
         // Its plugin describes the launch (`terminal/launch`), which the core checks; switched off or uninstalled, the
         // interface does not start, and the window says why.
         let plugin = crate::plugins::harness::plugged_for(harness.id(), harness_name, true)?;
+        // Never out without the proxy's password when it must go through the proxy (SEC-14).
+        crate::proxysecret::refuse_without_password(&settings)?;
         let token = self.hooks.grant(id);
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();
         let env_names: Vec<String> = env
@@ -1718,6 +1818,13 @@ impl Core {
             env_names,
             path: std::env::var_os("PATH").map(|p| p.to_string_lossy().into_owned()),
             lang: crate::i18n::ui().tag().to_string(),
+            // Its plugin's settings come with the call (`terminal_launch`).
+            settings: serde_json::Map::new(),
+            version: crate::engine::registry::version(harness, &program).await,
+            gateway: (harness.id() == EngineId::CLAUDE)
+                .then(|| claude_gateway(&env, &config_dir))
+                .flatten(),
+            terminal_only: h.lock().meta.code_mode,
         };
         let place = crate::plugins::files::AgentPlace {
             cwd: PathBuf::from(&cwd),
@@ -1775,6 +1882,15 @@ impl Core {
         env.extend(launch.env.drain(..).map(|v| (v.name, v.value)));
         env.extend(launch.remove_env.drain(..).map(|k| (k, String::new())));
         no_proxy(&mut env);
+        if no_remote {
+            let _ = self.with_agent(id, |rt, fx| {
+                rt.notice("warn", tr!(
+                    "Le remote control n’est pas lancé : Claude Code ne le prend pas en Code Mode, et la session de cet agent en a besoin.",
+                    "Remote Control is not started: Claude Code does not take it in Code Mode, which this agent’s session needs."
+                ), fx);
+                Ok(())
+            });
+        }
         if let Some(text) = told.warn {
             log::warn!("agent {id}: {harness_name}'s interface: {text}");
             let _ = self.with_agent(id, |rt, fx| {
@@ -2310,6 +2426,8 @@ impl Core {
 
     /// A hook of the agent's interface: what it tells, after what its transcript said before.
     pub(crate) fn on_tui_hook(self: &Arc<Self>, id: &str, hook: Value) {
+        #[cfg(test)]
+        self.tui_hooks.lock().push(hook.clone());
         self.read_transcript(id);
         let Ok(h) = self.agent(id) else { return };
         // A `claude` of WSL tells its transcript by its Linux path.
@@ -3842,5 +3960,56 @@ mod tests {
         let in_wsl = other_accounts(&settings, &own, |a| a.id == "own" || a.id == "b");
         let names: Vec<&str> = in_wsl.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names, ["B (WSL)"], "{names:?}");
+    }
+
+    /// ESC-653: Cursor's relay rule is written and taken away in the worktree only, never through
+    /// a link at `.cursor` (a junction under Windows, which needs no privilege) nor at the rule
+    /// itself, and a file is emptied only once known to be a plain one.
+    #[test]
+    fn the_relay_is_neither_written_nor_taken_away_through_a_link() {
+        let root = crate::paths::test_dir("tui-relay-link");
+        let cwd = root.join("wt");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&cwd).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let path = cwd.join(".cursor").join("rules").join("relay.mdc");
+        write_relay(&cwd, &path, b"long text").unwrap();
+        write_relay(&cwd, &path, b"short").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "short");
+        remove_relay(&cwd, &path);
+        assert!(!path.exists());
+        // `.cursor` a link out of the worktree: nothing made, written or removed there.
+        std::fs::remove_dir_all(cwd.join(".cursor")).unwrap();
+        assert!(crate::paths::make_dir_link(&outside, &cwd.join(".cursor")));
+        assert!(relay_through_link(&cwd, &path));
+        assert!(write_relay(&cwd, &path, b"x").is_err());
+        assert!(!outside.join("rules").exists());
+        std::fs::create_dir_all(outside.join("rules")).unwrap();
+        std::fs::write(outside.join("rules").join("relay.mdc"), "theirs").unwrap();
+        remove_relay(&cwd, &path);
+        assert!(outside.join("rules").join("relay.mdc").exists());
+        #[cfg(windows)]
+        std::fs::remove_dir(cwd.join(".cursor")).unwrap();
+        #[cfg(unix)]
+        std::fs::remove_file(cwd.join(".cursor")).unwrap();
+        // The rule itself a folder link, or a file link where the system allows one.
+        std::fs::create_dir_all(cwd.join(".cursor").join("rules")).unwrap();
+        assert!(crate::paths::make_dir_link(&outside, &path));
+        assert!(write_relay(&cwd, &path, b"x").is_err());
+        assert!(crate::paths::create_no_follow(&path).is_err());
+        #[cfg(windows)]
+        std::fs::remove_dir(&path).unwrap();
+        #[cfg(unix)]
+        std::fs::remove_file(&path).unwrap();
+        let secret = outside.join("secret.txt");
+        std::fs::write(&secret, "token").unwrap();
+        if crate::paths::make_file_link(&secret, &path) {
+            assert!(write_relay(&cwd, &path, b"x").is_err());
+            assert!(crate::paths::create_no_follow(&path).is_err());
+            remove_relay(&cwd, &path);
+            assert_eq!(std::fs::read_to_string(&secret).unwrap(), "token");
+        } else {
+            eprintln!("no symbolic link to a file allowed here: that part skipped");
+        }
     }
 }

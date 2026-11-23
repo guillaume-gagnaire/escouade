@@ -10,6 +10,8 @@
 // Its `icon` is a file of the plugin's folder: given `options.file` (a path of the folder → its bytes, or null), the
 // library reads its header (a PNG, square, 256 px a side at least, 1 MB at most); without it, only the field.
 
+import { isPublicSuffix } from './public-suffixes.mjs';
+
 /** The major version of the plugins' protocol Escouade serves (`escouade.api`). */
 export const API = 1;
 /** The ids of Escouade's own plugins, which only the app gives. */
@@ -281,6 +283,21 @@ export function interpreter(program) {
 }
 
 /**
+ * Whether a word of `permissions.network` is a host too wide to declare (audit SEC-09, ESC-596): a name without a dot
+ * (`com`, `intranet`, `localhost`), or a public suffix of the ICANN section of the public suffix list (`co.uk`), alone
+ * or behind `*.`. A suffix of its private section (`*.blob.core.windows.net`) is one company's: it holds.
+ * `{account}` and `local:shared` are no hosts.
+ */
+export function networkWordRefused(word) {
+  const w = String(word).trim();
+  if (w === '{account}' || w === 'local:shared') return false;
+  let d = w.replace(/\.+$/, '').toLowerCase();
+  if (d.startsWith('*.')) d = d.slice(2);
+  if (!d) return false;
+  return !d.includes('.') || isPublicSuffix(d);
+}
+
+/**
  * Whether `permissions.network` covers `host`, without regard to case: a host written alone covers itself; `*.exemple.dev`
  * covers its subdomains at any depth, not `exemple.dev` itself (as a TLS certificate's); nothing else covers anything.
  */
@@ -504,7 +521,12 @@ export function validate(manifest, options = {}) {
           if (typeof c === 'string' && c.trim() && !commandHolds(c)) problem(`permissions.commands[${i}]`, 'command', commandFault(c));
         });
       if ('files' in p) files(p.files);
-      if (Array.isArray(p.network)) network = p.network.filter((w) => typeof w === 'string');
+      if (Array.isArray(p.network)) {
+        network = p.network.filter((w) => typeof w === 'string');
+        p.network.forEach((w, i) => {
+          if (typeof w === 'string' && networkWordRefused(w)) problem(`permissions.network[${i}]`, 'host');
+        });
+      }
       if ('decide' in p && typeof p.decide !== 'boolean') problem('permissions.decide', 'type', 'boolean');
     }
   }
@@ -845,6 +867,8 @@ const WHAT = {
     png: () => "n'est pas un PNG (ni SVG, ni JPEG : un PNG carré de 256 px au moins).",
     heavy: () => 'pèse plus de 1 Mo.',
     network: () => "va vers un hôte que `permissions.network` ne déclare pas : l'utilisateur ne le verrait pas.",
+    host: () =>
+      "n'est pas un hôte qu'un plugin peut déclarer : un nom à un point au moins, plus étroit qu'un suffixe public (`com`, `co.uk`), seul ou après `*.`.",
     exclusive: () =>
       'ne va pas avec `run.command`, `run.js` ou `run.wasm` : un programme est une commande, un bundle JS/TS ou un module Rust, un seul des trois.',
     cargo: () => 'doit nommer le `Cargo.toml` du plugin, jamais un binaire.',
@@ -890,6 +914,8 @@ const WHAT = {
     png: () => 'is no PNG (no SVG nor JPEG: a square PNG of 256 px at least).',
     heavy: () => 'weighs over 1 MB.',
     network: () => 'goes to a host `permissions.network` does not declare: the user would not see it.',
+    host: () =>
+      'is no host a plugin may declare: a name with a dot at least, narrower than a public suffix (`com`, `co.uk`), alone or after `*.`.',
     exclusive: () =>
       'does not go with `run.command`, `run.js` or `run.wasm`: a program is a command, a JS/TS bundle or a Rust module, one of the three.',
     cargo: () => "must name the plugin's `Cargo.toml`, never a binary.",

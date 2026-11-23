@@ -36,12 +36,34 @@ pub struct Settings {
     pub pwsh_path: String,
     pub bash_path: String,
     pub wsl_distro: String,
-    /// HTTP(S) proxy URL, e.g. `http://user:pass@proxy:3128`. Empty = direct connection.
+    /// HTTP(S) proxy URL, e.g. `http://user:pass@proxy:3128`. Empty = direct connection. Its password is in memory
+    /// alone: the file and the window get the address without it (SEC-10, `crate::proxy`), the keychain keeps it.
+    #[serde(serialize_with = "crate::proxy::serialize_without_password")]
     pub proxy_url: String,
+    /// The proxy's password, on a machine whose keychain refused it (Linux without a Secret Service, WSL): kept in the
+    /// settings' file, readable by its owner only, apart from the address. Empty when the keychain keeps it.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub proxy_password_in_file: String,
+    /// The proxy's password went to the keychain: a start that does not find it there knows it is lost, rather than
+    /// that the address never had one (a proxy with a user's name alone).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub proxy_password_kept: bool,
+    /// Kept in the keychain, and not found there at this start: the address is in memory without its password. Never
+    /// written; with « Ne jamais sortir sans le proxy », no agent starts (`proxy_held_back`).
+    #[serde(skip)]
+    pub proxy_password_missing: bool,
+    /// « Ne jamais sortir sans le proxy » (SEC-14, ESC-595): with a proxy in the settings, an update or a download that
+    /// cannot go through it fails with its reason, never tried directly. None until the user sets it: on
+    /// (`never_direct`).
+    pub proxy_never_direct: Option<bool>,
     /// Comma-separated hosts that bypass the proxy (NO_PROXY).
     pub no_proxy: String,
     /// Also export the proxy variables in integrated terminals.
     pub proxy_terminals: bool,
+    /// « Mode hors ligne » (audit SEC-18, ESC-596): the four flows the app starts by itself stop at once, the updates
+    /// of the app and of the plugins, the store's catalogue, the revocation list and the usage statistics. A managed
+    /// device may impose it (the policy `network.offline`, `offline.rs` of the app), whatever this says.
+    pub offline: bool,
     /// « Ignorer la vérification des certificats TLS » (a proxy that decrypts the traffic with a
     /// certificate of its own): kept for the installations that have it, it holds for the
     /// connections through `proxy_url` alone, and does nothing with no proxy (`crate::tls`).
@@ -81,6 +103,10 @@ pub struct Settings {
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
+    /// « Récupérer automatiquement (git fetch) » (ESC-561): the background fetch of every project
+    /// with a remote, its interval and its time limit; each project may say its own
+    /// (`Project::git_fetch`).
+    pub git_fetch: GitFetchSettings,
     /// "Langue de l'interface": "system" (French when the system is, English otherwise), "fr" or
     /// "en" (`i18n::resolve`).
     pub language: String,
@@ -190,6 +216,16 @@ pub struct Settings {
     /// as it was (the field's own default), and the user's choice stays.
     #[serde(default)]
     pub plugins_verified_only: bool,
+    /// « N'installer que des versions vérifiées » settled once (audit SEC-01, ESC-589): an installation updated from a
+    /// version before it, that has no plugin of a third party installed, has it turned on at its first start
+    /// (`Core::settle_verified_only`); one that has one keeps its choice. A new installation has it settled already.
+    #[serde(default)]
+    pub plugins_verified_settled: bool,
+    /// « Harness des plugins tiers » (Réglages › Plugins, SEC-01, ESC-589): a harness a plugin of a third party
+    /// describes runs a program of this machine out of the sandbox; it asks the user at its first launch, its whole
+    /// command said (`Ask`), or none of them runs (`Refuse`, what the policy of a managed device will impose).
+    #[serde(default)]
+    pub third_party_harnesses: ThirdPartyHarnesses,
     /// « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the whole window's, as the WebView's
     /// zoom (text, spacing and icons together); Ctrl+= / Ctrl+- / Ctrl+0 change it too.
     pub ui_zoom: u32,
@@ -294,6 +330,17 @@ impl Default for OverseerSettings {
             shortcut: default_overseer_shortcut(),
         }
     }
+}
+
+/// « Harness des plugins tiers » (`Settings::third_party_harnesses`, ESC-589).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ThirdPartyHarnesses {
+    /// Asked at its first launch, its whole command said, and again when the command changes.
+    #[default]
+    Ask,
+    /// None runs: its agents do not start, said.
+    Refuse,
 }
 
 /// The widths the projects' rail is dragged to (ESC-168): its tiles alone, up to a list of names.
@@ -681,6 +728,194 @@ impl Default for IntegrationSettings {
     }
 }
 
+/// The bounds of the background fetch's interval, in minutes (1 min to 24 h), and of its time
+/// limit, in seconds (30 s to 30 min) (ESC-561).
+pub const FETCH_EVERY_MIN: u32 = 1;
+pub const FETCH_EVERY_MAX: u32 = 24 * 60;
+pub const FETCH_TIMEOUT_MIN: u32 = 30;
+pub const FETCH_TIMEOUT_MAX: u32 = 30 * 60;
+/// The interval of before ESC-561, still the default.
+pub const DEFAULT_FETCH_EVERY: u32 = 5;
+/// The time limit of a background fetch, in seconds: 5 min. This repository eight days behind
+/// (9 700 objects, 120 MB) is fetched in 5 to 10 s when its transport does not stall; 5 min
+/// leaves a slow or far link (0.5 MB/s) the time to bring as much, where the 60 s of before
+/// killed it and began it again from nothing at each interval. A gesture keeps its 3 min.
+pub const DEFAULT_FETCH_TIMEOUT: u32 = 5 * 60;
+
+/// « Récupérer automatiquement (git fetch) » for every project (ESC-561).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GitFetchSettings {
+    /// On by default, as the background fetch always was.
+    pub auto: bool,
+    /// Minutes between two fetches of a repository (`FETCH_EVERY_MIN` to `FETCH_EVERY_MAX`).
+    pub every_min: u32,
+    /// Seconds a background fetch may take before it is stopped (`FETCH_TIMEOUT_MIN` to
+    /// `FETCH_TIMEOUT_MAX`).
+    pub timeout_secs: u32,
+}
+
+impl Default for GitFetchSettings {
+    fn default() -> Self {
+        Self {
+            auto: true,
+            every_min: DEFAULT_FETCH_EVERY,
+            timeout_secs: DEFAULT_FETCH_TIMEOUT,
+        }
+    }
+}
+
+impl GitFetchSettings {
+    /// Its values brought within their bounds.
+    pub fn clamped(&self) -> Self {
+        Self {
+            auto: self.auto,
+            every_min: fetch_every_clamped(self.every_min),
+            timeout_secs: fetch_timeout_clamped(self.timeout_secs),
+        }
+    }
+}
+
+/// An interval brought within its bounds (0 included: the lowest).
+pub fn fetch_every_clamped(min: u32) -> u32 {
+    min.clamp(FETCH_EVERY_MIN, FETCH_EVERY_MAX)
+}
+
+/// A time limit brought within its bounds.
+pub fn fetch_timeout_clamped(secs: u32) -> u32 {
+    secs.clamp(FETCH_TIMEOUT_MIN, FETCH_TIMEOUT_MAX)
+}
+
+/// A project's « Récupérer automatiquement » (ESC-561).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum FetchMode {
+    /// « Comme le réglage général ».
+    #[default]
+    Default,
+    /// « Toujours », even with the general setting off.
+    Always,
+    /// « Jamais ».
+    Never,
+}
+
+impl FetchMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FetchMode::Default => "default",
+            FetchMode::Always => "always",
+            FetchMode::Never => "never",
+        }
+    }
+
+    pub fn from_text(s: &str) -> Self {
+        match s {
+            "always" => FetchMode::Always,
+            "never" => FetchMode::Never,
+            _ => FetchMode::Default,
+        }
+    }
+}
+
+/// A project's own fetch: on or not, and an interval and a time limit of its own (0: the general
+/// one's), for a heavy repository or one behind a VPN.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ProjectFetch {
+    pub mode: FetchMode,
+    pub every_min: u32,
+    pub timeout_secs: u32,
+}
+
+/// What the background fetch does with a repository, from the general setting and its project's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FetchPlan {
+    pub on: bool,
+    pub every_min: u32,
+    pub timeout_secs: u32,
+}
+
+impl ProjectFetch {
+    /// Its own values brought within their bounds (0 stays 0: the general one's).
+    pub fn clamped(&self) -> Self {
+        Self {
+            mode: self.mode,
+            every_min: if self.every_min == 0 {
+                0
+            } else {
+                fetch_every_clamped(self.every_min)
+            },
+            timeout_secs: if self.timeout_secs == 0 {
+                0
+            } else {
+                fetch_timeout_clamped(self.timeout_secs)
+            },
+        }
+    }
+
+    /// The project's own over the general setting, each value within its bounds.
+    pub fn plan(&self, general: &GitFetchSettings) -> FetchPlan {
+        let on = match self.mode {
+            FetchMode::Default => general.auto,
+            FetchMode::Always => true,
+            FetchMode::Never => false,
+        };
+        let every = if self.every_min == 0 {
+            general.every_min
+        } else {
+            self.every_min
+        };
+        let timeout = if self.timeout_secs == 0 {
+            general.timeout_secs
+        } else {
+            self.timeout_secs
+        };
+        FetchPlan {
+            on,
+            every_min: fetch_every_clamped(every),
+            timeout_secs: fetch_timeout_clamped(timeout),
+        }
+    }
+}
+
+impl FetchPlan {
+    /// The plan of a repository several projects share: fetched when one of them wants it, as
+    /// often as the most eager, given as long as the most patient. None: none wants it.
+    pub fn merge(plans: impl IntoIterator<Item = FetchPlan>) -> Option<FetchPlan> {
+        plans.into_iter().filter(|p| p.on).reduce(|a, b| FetchPlan {
+            on: true,
+            every_min: a.every_min.min(b.every_min),
+            timeout_secs: a.timeout_secs.max(b.timeout_secs),
+        })
+    }
+}
+
+/// Why the last background fetch of a repository failed (ESC-561), told in the Git panel.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FetchFailureKind {
+    /// It asks for credentials (a password, a key's passphrase, a key not loaded): never asked in
+    /// the background, it waits for a fetch of the user's.
+    Credentials,
+    /// Still not done within its time limit.
+    Timeout,
+    /// The network or the remote cannot be reached.
+    Network,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FetchFailure {
+    pub kind: FetchFailureKind,
+    /// git's words, for the tooltip.
+    pub message: String,
+    /// When, ms since epoch.
+    pub at: i64,
+    /// The time limit it ran within, in seconds.
+    pub timeout_secs: u32,
+}
+
 /// The steps of « Délai avant l'envoi pendant un tour », in seconds (0: off).
 pub const MID_TURN_DELAYS: [u32; 5] = [0, 5, 10, 20, 30];
 const DEFAULT_MID_TURN_DELAY: u32 = 5;
@@ -776,6 +1011,19 @@ impl Settings {
         env
     }
 
+    /// Whether nothing goes out without the proxy (« Ne jamais sortir sans le proxy », SEC-14): a proxy is in the
+    /// settings and the setting is on, as it is until the user turns it off. Without a proxy, nothing to go through.
+    pub fn never_direct(&self) -> bool {
+        !self.proxy_url.trim().is_empty() && self.proxy_never_direct.unwrap_or(true)
+    }
+
+    /// Whether no agent may start (SEC-14): « Ne jamais sortir sans le proxy » is on and the proxy's password, kept in
+    /// the keychain, was not found there at this start. Its process would go out with an address the proxy refuses, or
+    /// around it.
+    pub fn proxy_held_back(&self) -> bool {
+        self.never_direct() && self.proxy_password_missing
+    }
+
     /// Environment variables to inject into child processes for the configured proxy.
     pub fn proxy_env(&self) -> Vec<(String, String)> {
         let url = self.proxy_url.trim();
@@ -816,8 +1064,13 @@ impl Default for Settings {
             bash_path: String::new(),
             wsl_distro: String::new(),
             proxy_url: String::new(),
+            proxy_password_in_file: String::new(),
+            proxy_password_kept: false,
+            proxy_password_missing: false,
+            proxy_never_direct: None,
             no_proxy: "localhost,127.0.0.1".into(),
             proxy_terminals: false,
+            offline: false,
             insecure_tls: false,
             extra_ca_file: String::new(),
             allow_bypass: None,
@@ -828,6 +1081,7 @@ impl Default for Settings {
             auto_update: true,
             beta_updates: false,
             integrations: IntegrationSettings::default(),
+            git_fetch: GitFetchSettings::default(),
             language: "system".into(),
             claude_language: "ui".into(),
             writer_engine: None,
@@ -858,6 +1112,8 @@ impl Default for Settings {
             theme: ThemeChoice::System,
             plugin_theme: String::new(),
             plugins_verified_only: true,
+            plugins_verified_settled: true,
+            third_party_harnesses: ThirdPartyHarnesses::Ask,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
@@ -1041,6 +1297,11 @@ pub struct Project {
     /// turn it off, or impose it (its `.escouade.yml`, `memory.review`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub memory_review_off: bool,
+    /// « Récupérer automatiquement » of this project (ESC-561): as the general setting, always or
+    /// never, with an interval and a time limit of its own. In its `.escouade.yml` when shared
+    /// (`git.auto_fetch`, `git.fetch_every`, `git.fetch_timeout`).
+    #[serde(default)]
+    pub git_fetch: ProjectFetch,
     /// Its agent folders (`folders`): groups of agents in the sidebar, with a principal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agent_folders: Vec<AgentFolder>,
@@ -1417,6 +1678,24 @@ pub struct RunCommand {
     pub shell: String,
     /// Folder relative to the project's, empty for the project itself.
     pub cwd: String,
+    /// « Ouvrir à son lancement » (ESC-560): an http or https address opened once it answers,
+    /// empty for none. It may name the ports a worktree gives its launches, as a shell does:
+    /// `${ESCOUADE_PORT_BASE}`, `${ESCOUADE_PORT_END}`, with a value for the project after `:-`.
+    pub url: String,
+    /// Where `url` opens: the page of a launch inside Escouade, or the system's browser.
+    pub open_in: RunOpen,
+}
+
+/// Where the address of a launch command opens (ESC-560).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RunOpen {
+    /// The page of a launch, as « ▶ Tester » opens it (where the project's « Ouvrir les pages
+    /// des lancements » says).
+    #[default]
+    Page,
+    /// The system's browser.
+    Browser,
 }
 
 /// A command run in a worktree once it is made (its setup) or before it is removed (its
@@ -2521,6 +2800,11 @@ pub struct AgentMeta {
     /// « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal (`tui`), not
     /// over the stream that Escouade's conversation view drives. Never a ticket's agent.
     pub terminal: bool,
+    /// Its session started in Claude Code's Code Mode (ESC-553, its transcript's `repl-mode`): Claude Code resumes it in
+    /// its interface alone, the variable set, and refuses it in stream-json. It stays in « Vue Claude Code » for good, and
+    /// Escouade never starts its stream, by the automatic resume nor by a ticket.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub code_mode: bool,
     /// « Vue <harness> » of a harness whose interface joins the agent's process
     /// (`Engine::attaches`, OpenCode): the interface shows in a terminal (`AgentRt::attach`), while
     /// the process goes on as in Escouade's view. Never with `terminal`, nor for a ticket's agent.
@@ -2905,6 +3189,9 @@ pub struct PersistedState {
     /// « Plus tard » on a view of the box (ESC-513): until when (epoch ms), by the view's key. Its
     /// source is not touched.
     pub inbox_snoozes: BTreeMap<String, i64>,
+    /// What the squad lead said of a view of the box (ESC-557): « Le chef s'en occupe », or
+    /// « Réglé par … », by the view's key. It falls once its source changes.
+    pub inbox_marks: BTreeMap<String, crate::asks::ViewMark>,
 }
 
 /// A station of the first launch's journey (ESC-504, `docs/ONBOARDING.md` § 4), in its order.
@@ -3087,6 +3374,12 @@ pub struct GitInfo {
     pub has_remote: bool,
     /// When the repository was last fetched, ms since epoch.
     pub last_fetch: Option<i64>,
+    /// Why its last background fetch failed, since its last success (ESC-561); None when it
+    /// went well, or never ran.
+    pub fetch_failure: Option<FetchFailure>,
+    /// The background fetch goes through Windows' ssh, the one of this Git for Windows stalling
+    /// on a big fetch (`git::ssh_stalls`): the panel says to update Git.
+    pub fetch_ssh_note: bool,
     pub modified: u32,
     pub added: u32,
     pub deleted: u32,
@@ -3811,6 +4104,27 @@ mod tests {
             let v = serde_json::to_value(&s).unwrap();
             assert_eq!(v["pluginsVerifiedOnly"], json!(choice));
         }
+        // ESC-589: a new installation has it settled; settings saved before it are settled once, at the next start.
+        assert!(Settings::default().plugins_verified_settled);
+        let s: Settings = serde_json::from_value(json!({ "pluginsVerifiedOnly": false })).unwrap();
+        assert!(!s.plugins_verified_settled);
+    }
+
+    #[test]
+    fn third_party_harnesses_ask_unless_refused() {
+        assert_eq!(
+            Settings::default().third_party_harnesses,
+            ThirdPartyHarnesses::Ask
+        );
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert_eq!(s.third_party_harnesses, ThirdPartyHarnesses::Ask);
+        let s: Settings =
+            serde_json::from_value(json!({ "thirdPartyHarnesses": "refuse" })).unwrap();
+        assert_eq!(s.third_party_harnesses, ThirdPartyHarnesses::Refuse);
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["thirdPartyHarnesses"],
+            json!("refuse")
+        );
     }
 
     #[test]
@@ -4212,6 +4526,43 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&s).unwrap()["insecureTls"],
             json!(true)
+        );
+    }
+
+    /// SEC-14: « Ne jamais sortir sans le proxy » is on as soon as a proxy is in the settings, until the user turns it
+    /// off; without a proxy there is nothing to go through.
+    #[test]
+    fn never_direct_is_on_by_default_with_a_proxy_and_off_without_one() {
+        let mut s = Settings::default();
+        assert_eq!(s.proxy_never_direct, None);
+        assert!(!s.never_direct());
+        s.proxy_url = " http://proxy:3128 ".into();
+        assert!(s.never_direct());
+        s.proxy_never_direct = Some(false);
+        assert!(!s.never_direct());
+        s.proxy_never_direct = Some(true);
+        s.proxy_url = "  ".into();
+        assert!(!s.never_direct());
+        let read: Settings = serde_json::from_value(json!({ "proxyNeverDirect": false })).unwrap();
+        assert_eq!(read.proxy_never_direct, Some(false));
+    }
+
+    /// SEC-10: the settings serialized (their file, the window) hold the proxy's address without its password, and the
+    /// password apart only while the keychain refuses it.
+    #[test]
+    fn the_settings_serialized_never_hold_the_proxys_password_in_its_address() {
+        let mut s = Settings {
+            proxy_url: "http://ada:secret@proxy:3128".into(),
+            ..Default::default()
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["proxyUrl"], json!("http://ada@proxy:3128"));
+        assert!(v.get("proxyPasswordInFile").is_none());
+        assert!(!v.to_string().contains("secret"));
+        s.proxy_password_in_file = "secret".into();
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["proxyPasswordInFile"],
+            json!("secret")
         );
     }
 
@@ -4930,10 +5281,11 @@ mod run_command_tests {
             "runCommands": [{ "id": "c1", "name": "Front", "command": "npm run dev", "shell": "pwsh", "cwd": "web" }] });
         let p: Project = serde_json::from_value(with.clone()).unwrap();
         assert_eq!(p.run_commands[0].cwd, "web");
-        assert_eq!(
-            serde_json::to_value(&p).unwrap()["runCommands"],
-            with["runCommands"]
-        );
+        // Saved again with no address to open, in a page (ESC-560).
+        let mut again = with["runCommands"].clone();
+        again[0]["url"] = json!("");
+        again[0]["openIn"] = json!("page");
+        assert_eq!(serde_json::to_value(&p).unwrap()["runCommands"], again);
     }
 
     // ----- INT-3: an open harness id, kept as it was -----

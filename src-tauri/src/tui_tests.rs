@@ -3167,6 +3167,14 @@ async fn the_end_of_a_turn_ends_the_background_subagents_the_user_stopped_in_the
 async fn real_interface(
     name: &str,
 ) -> (Harness, String, TermInfo, Arc<parking_lot::Mutex<String>>) {
+    real_interface_with(name, |_| {}).await
+}
+
+/// `real_interface`, `prepare` done once its settings are, before the agent is made (ESC-553).
+async fn real_interface_with(
+    name: &str,
+    prepare: impl FnOnce(&Harness),
+) -> (Harness, String, TermInfo, Arc<parking_lot::Mutex<String>>) {
     use std::time::{Duration, Instant};
     let program = std::env::var("ESCOUADE_REAL_CLAUDE").expect("ESCOUADE_REAL_CLAUDE");
     let home = std::env::var("ESCOUADE_TEST_REAL_HOME").expect("ESCOUADE_TEST_REAL_HOME");
@@ -3179,6 +3187,7 @@ async fn real_interface(
     s.claude_path = program;
     s.mcp_enabled = false;
     h.core.save_settings(s).unwrap();
+    prepare(&h);
     let id = h
         .core
         .create_agent_with(
@@ -3205,7 +3214,7 @@ async fn real_interface(
         .unwrap();
     // Its first screen: the box about the folder (answered as the user would), then its prompt.
     let start = Instant::now();
-    let (mut answered, mut trusted) = (false, false);
+    let (mut answered, mut trusted, mut added) = (false, false, false);
     let session = h.agent(&id).session_id.unwrap();
     let registered = || {
         std::fs::read_dir(home.join("sessions"))
@@ -3228,6 +3237,14 @@ async fn real_interface(
             tokio::time::sleep(Duration::from_millis(300)).await;
             h.core.pty.write(&info.id, b"\r").unwrap();
             trusted = true;
+        }
+        // Claude Code 2.1.329 asks too for the folder of its files (`--add-dir`): « No, exit », then « Yes, add it ».
+        if trusted && !added && text.contains("Yes,addit") {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            h.core.pty.write(&info.id, b"\x1b[B").unwrap();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            h.core.pty.write(&info.id, b"\r").unwrap();
+            added = true;
         }
         assert!(start.elapsed() < Duration::from_secs(60), "{text}");
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -3593,7 +3610,7 @@ async fn real_claude_models() {
             .flatten()
             .any(|f| std::fs::read_to_string(f.path()).is_ok_and(|c| c.contains(&session)))
     };
-    let (mut answered, mut trusted) = (false, false);
+    let (mut answered, mut trusted, mut added) = (false, false, false);
     let start = Instant::now();
     while !registered() {
         let text = plain_text(&screen.lock());
@@ -3607,6 +3624,14 @@ async fn real_claude_models() {
             tokio::time::sleep(Duration::from_millis(300)).await;
             h.core.pty.write(&info.id, b"\r").unwrap();
             trusted = true;
+        }
+        // Claude Code 2.1.329 asks too for the folder of its files (`--add-dir`): « No, exit », then « Yes, add it ».
+        if trusted && !added && text.contains("Yes,addit") {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            h.core.pty.write(&info.id, b"\x1b[B").unwrap();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            h.core.pty.write(&info.id, b"\r").unwrap();
+            added = true;
         }
         assert!(start.elapsed() < Duration::from_secs(60), "{text}");
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -3786,4 +3811,317 @@ async fn an_interface_kept_up_in_bypass_stops_when_bypass_is_turned_off_and_noth
     nothing_starts_it_again(&h, &id, &r, (launched, exits), "the warm-up").await;
     h.core.start_remote_agents();
     nothing_starts_it_again(&h, &id, &r, (launched, exits), "the start with the app").await;
+}
+
+/// The settings of the plugin Claude Code turn Code Mode on, for every project (ESC-553).
+fn code_mode_on(h: &Harness) {
+    h.core
+        .plugins
+        .choose(crate::plugins::builtin::CLAUDE, |c| {
+            c.settings
+                .insert("experimental.codeMode".into(), json!(true));
+        })
+        .unwrap();
+}
+
+/// The fake `claude` says a version that has Code Mode (2.1.329): its default, the newest tested, has none. Each test
+/// runs in a process of its own (nextest): its processes alone get it.
+fn claude_with_code_mode() {
+    std::env::set_var("FAKE_CLAUDE_VERSION", "2.1.329");
+}
+
+/// A session in Code Mode written where the fake keeps the second account's, as Claude Code 2.1.329 writes it.
+fn code_mode_transcript(h: &Harness, session: &str) {
+    let dir = h.dir.join("claude-pro").join("projects").join("x");
+    std::fs::create_dir_all(&dir).unwrap();
+    let lines = [
+        json!({ "type": "permission-mode", "permissionMode": "default", "sessionId": session }),
+        json!({ "type": "repl-mode", "replMode": true, "sessionId": session }),
+    ];
+    let text: String = lines.iter().map(|l| format!("{l}\n")).collect();
+    std::fs::write(dir.join(format!("{session}.jsonl")), text).unwrap();
+}
+
+/// ESC-553: Code Mode, turned on in the plugin's settings, goes to the launch of the interface alone, in the `env` of
+/// its private settings; the session it starts is marked from its transcript, said in the conversation, and the agent
+/// never goes back to the stream, nor is its stream started.
+#[tokio::test(flavor = "multi_thread")]
+async fn code_mode_goes_to_the_interface_alone_and_its_agent_stays_in_its_terminal() {
+    claude_with_code_mode();
+    let h = harness("tui-code-mode");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    code_mode_on(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let (_, screen) = open_interface(&h, &id).await;
+    up(&h, &id).await;
+    // Its stream warmed up at its creation, stopped by the view: none after.
+    let stream = |a: &Vec<String>| a.iter().any(|x| x == "stream-json");
+    let streams = h.launches(&r).iter().filter(|a| stream(a)).count();
+    let private = h.dir.join("data").join("tui").join(format!("{id}.json"));
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(&private).unwrap()).unwrap();
+    assert_eq!(
+        file["env"]["CLAUDE_CODE_EXPERIMENTAL_CODE_MODE"], "1",
+        "{file}"
+    );
+    assert!(file["hooks"]["PreToolUse"].is_array());
+    h.wait("its line of Code Mode", |_| {
+        plain_text(&screen.lock()).contains("Code-Mode-(experimental)-is-on")
+    })
+    .await;
+    // Not marked before its session says so.
+    assert!(!h.agent(&id).code_mode);
+    send_when_ready(&h, &id, "bonjour").await;
+    h.wait("the agent marked", |h| h.agent(&id).code_mode).await;
+    let told = texts(&h, &id, "notice");
+    assert_eq!(
+        told.iter()
+            .filter(|t| t.starts_with("En Code Mode : cet agent se reprend dans son terminal."))
+            .count(),
+        1,
+        "{told:?}"
+    );
+    // Never back to the stream, by the window nor by what starts its process.
+    let back = h.core.set_agent_view(&id, false).await.unwrap_err();
+    assert!(back.to_string().starts_with("En Code Mode"), "{back}");
+    assert!(h.agent(&id).terminal);
+    let start = h.core.ensure_process(&id).await.err().expect("refused");
+    assert!(start.to_string().starts_with("En Code Mode"), "{start}");
+    // No stream was started, and no launch got the variable in its arguments.
+    let launches = h.launches(&r);
+    assert_eq!(
+        launches.iter().filter(|a| stream(a)).count(),
+        streams,
+        "{launches:?}"
+    );
+    assert!(!launches
+        .iter()
+        .flatten()
+        .any(|x| x.contains("EXPERIMENTAL")));
+    // Kept with the agent, as its file says it.
+    let kept = serde_json::to_value(h.agent(&id)).unwrap();
+    assert_eq!(kept["codeMode"], true);
+}
+
+/// ESC-553: a session its transcript says in Code Mode (started in a terminal before Escouade marked it) is marked at the
+/// start of its stream, which is refused; its interface then resumes it with the variable, the setting off, and without
+/// Remote Control, said.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_in_code_mode_is_never_resumed_in_stream_json_and_its_interface_takes_no_remote_control(
+) {
+    claude_with_code_mode();
+    let h = harness("tui-code-mode-resume");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Its warmed-up stream stopped (by the view, which stops it), and then as an agent of the stream again.
+    h.core.set_agent_view(&id, true).await.unwrap();
+    code_mode_transcript(&h, "s-code");
+    {
+        let a = h.core.agent(&id).unwrap();
+        let mut rt = a.lock();
+        rt.meta.terminal = false;
+        rt.meta.session_id = Some("s-code".into());
+    }
+    let streams = h
+        .launches(&r)
+        .iter()
+        .filter(|a| a.iter().any(|x| x == "stream-json"))
+        .count();
+    let refused = h.core.ensure_process(&id).await.err().expect("refused");
+    assert!(refused.to_string().starts_with("En Code Mode"), "{refused}");
+    assert!(h.agent(&id).code_mode);
+    let after = h
+        .launches(&r)
+        .iter()
+        .filter(|a| a.iter().any(|x| x == "stream-json"))
+        .count();
+    assert_eq!(after, streams);
+    // Its terminal resumes it, Code Mode off in the settings: its session needs it.
+    hold_remote_control(&h, &id);
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let (_, screen) = open_interface(&h, &id).await;
+    let private = h.dir.join("data").join("tui").join(format!("{id}.json"));
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(&private).unwrap()).unwrap();
+    assert_eq!(
+        file["env"]["CLAUDE_CODE_EXPERIMENTAL_CODE_MODE"], "1",
+        "{file}"
+    );
+    let launch = interface_launches(&h, &r).pop().unwrap();
+    assert!(launch.iter().any(|a| a == "--resume=s-code"), "{launch:?}");
+    assert!(!asks_remote_control(&launch), "{launch:?}");
+    assert!(texts(&h, &id, "notice").iter().any(|t| t.starts_with(
+        "Le remote control n’est pas lancé : Claude Code ne le prend pas en Code Mode"
+    )));
+    h.wait("its line of Code Mode", |_| {
+        plain_text(&screen.lock()).contains("Code-Mode-(experimental)-is-on")
+    })
+    .await;
+}
+
+/// ESC-553: with Remote Control asked for, Code Mode is not passed, and the conversation says why; nothing of it in a
+/// stream's launch.
+#[tokio::test(flavor = "multi_thread")]
+async fn code_mode_is_not_passed_with_remote_control_and_the_conversation_says_why() {
+    claude_with_code_mode();
+    let h = harness("tui-code-mode-remote");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    code_mode_on(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    hold_remote_control(&h, &id);
+    h.core.set_agent_view(&id, true).await.unwrap();
+    open_interface(&h, &id).await;
+    let private = h.dir.join("data").join("tui").join(format!("{id}.json"));
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(&private).unwrap()).unwrap();
+    assert!(file.get("env").is_none(), "{file}");
+    assert!(asks_remote_control(
+        &interface_launches(&h, &r).pop().unwrap()
+    ));
+    assert!(texts(&h, &id, "notice").iter().any(|t| t
+        == "Code Mode non passé à l’interface : le remote control est demandé pour cet agent, et Claude Code ne prend pas les deux."));
+    assert!(!h.agent(&id).code_mode);
+}
+
+/// ESC-553: Claude Code too old for Code Mode (the fake's 2.1.301): not passed, and said.
+#[tokio::test(flavor = "multi_thread")]
+async fn code_mode_is_not_passed_to_a_claude_code_too_old_and_the_conversation_says_why() {
+    let h = harness("tui-code-mode-old");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    code_mode_on(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    open_interface(&h, &id).await;
+    let private = h.dir.join("data").join("tui").join(format!("{id}.json"));
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(&private).unwrap()).unwrap();
+    assert!(file.get("env").is_none(), "{file}");
+    assert!(texts(&h, &id, "notice").iter().any(|t| t
+        == "Code Mode non passé à l’interface : Claude Code 2.1.301 est trop ancien (il faut la 2.1.323 au moins) : mets-le à jour."));
+}
+
+/// Real run (ESC-553): « Vue Claude Code » with Code Mode on in the plugin's settings, the real `claude` of
+/// `ESCOUADE_REAL_CLAUDE` (2.1.323 or later, Code Mode already confirmed once on the account), on Principal, on Haiku,
+/// in the default mode: its line of Code Mode, a command run from its code asked to the user (answered in its terminal),
+/// what Escouade's hooks were told (`REPL` and its code, then `Bash` under its name), the agent marked and its stream
+/// refused. A cent or so. By hand only (`cargo test --lib real_claude_code_mode -- --ignored --nocapture`, out of any
+/// Claude Code session), as `real_claude_view`.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_claude_code_mode() {
+    use std::time::{Duration, Instant};
+    let (h, id, info, screen) =
+        real_interface_with("tui-claude-real-code-mode", code_mode_on).await;
+    let start = Instant::now();
+    while !plain_text(&screen.lock()).contains("CodeMode(experimental)ison") {
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "{}",
+            plain_text(&screen.lock())
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let private = h.dir.join("data").join("tui").join(format!("{id}.json"));
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(&private).unwrap()).unwrap();
+    println!("env of its settings: {}", file["env"]);
+    assert_eq!(file["env"]["CLAUDE_CODE_EXPERIMENTAL_CODE_MODE"], "1");
+    h.core
+        .send_message(
+            &id,
+            "Use your tools to run the shell command: mkdir e-made . Then reply just: done".into(),
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+    // The command its code runs is asked to the user, in its terminal: Escouade says the agent waits.
+    let start = Instant::now();
+    while h.agent(&id).status != AgentStatus::Waiting {
+        assert!(
+            start.elapsed() < Duration::from_secs(120),
+            "{}",
+            plain_text(&screen.lock())
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    println!("alerts: {:?}", h.alerts());
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    h.core.pty.write(&info.id, b"\r").unwrap();
+    let start = Instant::now();
+    while !h.items(&id).iter().any(|i| i["kind"] == "turn") {
+        assert!(
+            start.elapsed() < Duration::from_secs(120),
+            "{}",
+            plain_text(&screen.lock())
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let hooks = h.core.tui_hooks.lock().clone();
+    for k in &hooks {
+        println!(
+            "hook {} {} {}",
+            k["hook_event_name"].as_str().unwrap_or(""),
+            k["tool_name"].as_str().unwrap_or(""),
+            k["tool_input"]
+                .to_string()
+                .chars()
+                .take(160)
+                .collect::<String>()
+        );
+    }
+    let at = |event: &str, tool: &str| {
+        hooks
+            .iter()
+            .any(|k| k["hook_event_name"] == event && k["tool_name"] == tool)
+    };
+    assert!(at("PreToolUse", "REPL"));
+    assert!(hooks
+        .iter()
+        .any(|k| k["tool_name"] == "REPL" && k["tool_input"]["code"].is_string()));
+    assert!(at("PreToolUse", "Bash") && at("PermissionRequest", "Bash"));
+    assert!(h.agent(&id).code_mode, "{:#?}", h.items(&id));
+    let refused = h.core.set_agent_view(&id, false).await.unwrap_err();
+    println!("back to the conversation: {refused}");
+    println!("conversation: {:#?}", h.items(&id));
+    println!("cost {}", h.agent(&id).cost);
+}
+
+/// ESC-553: a project turns Code Mode off over what every project has, and its others are its own: the settings of the
+/// agent's project reach the plugin, by their ranks.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_project_sets_the_experimental_features_otherwise_than_every_project() {
+    claude_with_code_mode();
+    let h = harness("tui-code-mode-project");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    code_mode_on(&h);
+    h.core
+        .plugins
+        .choose(crate::plugins::builtin::CLAUDE, |c| {
+            c.settings.insert(
+                "experimental.others".into(),
+                json!("CLAUDE_CODE_EXPERIMENTAL_ALL"),
+            );
+            let here = json!({
+                "experimental.project.codeMode": "off",
+                "experimental.project.agentTeams": "on",
+                "experimental.project.others": "CLAUDE_CODE_EXPERIMENTAL_HERE PATH",
+            });
+            c.project_settings
+                .insert(p.id.clone(), here.as_object().cloned().unwrap());
+        })
+        .unwrap();
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    open_interface(&h, &id).await;
+    let private = h.dir.join("data").join("tui").join(format!("{id}.json"));
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(&private).unwrap()).unwrap();
+    assert_eq!(
+        file["env"],
+        json!({ "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1", "CLAUDE_CODE_EXPERIMENTAL_HERE": "1" }),
+        "{file}"
+    );
+    assert!(texts(&h, &id, "notice")
+        .iter()
+        .any(|t| t.starts_with("Pas passés à l’interface : PATH")));
 }

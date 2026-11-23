@@ -529,6 +529,61 @@ async fn a_proxy_that_has_gone_is_gone_around_for_the_download() {
     assert_eq!(rig.updates.ready().unwrap().version, NEW);
 }
 
+/// SEC-14: « Ne jamais sortir sans le proxy » on, a proxy that cannot be reached is never gone around: the check fails
+/// with its reason, and nothing reaches the origin directly.
+#[tokio::test]
+async fn never_direct_keeps_the_check_to_a_proxy_that_cannot_be_reached() {
+    let rig = Rig::new().await;
+    let mut checker = Arc::into_inner(rig.checker(None)).unwrap();
+    checker.net = Network {
+        proxy: Some(
+            format!("http://127.0.0.1:{}", closed_port())
+                .parse()
+                .unwrap(),
+        ),
+        never_direct: true,
+        ..Network::default()
+    };
+    let t = trouble(rig.check(&Arc::new(checker), true).await);
+    assert!(t.show);
+    assert!(
+        t.message.ends_with(
+            " ; rien n'est tenté sans le proxy : « Ne jamais sortir sans le proxy » est allumé (Réglages › Avancé › Réseau)"
+        ),
+        "{}",
+        t.message
+    );
+    assert!(
+        t.message
+            .starts_with("connexion impossible à 127.0.0.1 par le proxy 127.0.0.1:"),
+        "{}",
+        t.message
+    );
+    assert_eq!(rig.origin.hits(LATEST).len(), 0, "nothing went directly");
+}
+
+/// SEC-14: on, a proxy gone between the check and the download keeps the installer from being taken directly.
+#[tokio::test]
+async fn never_direct_keeps_the_download_to_a_proxy_that_has_gone() {
+    let rig = Rig::new().await;
+    let proxy = Server::start().await;
+    proxy.script(LATEST, vec![latest(&rig.origin.url(SETUP))]);
+    let mut checker = Arc::into_inner(rig.checker(Some(&proxy))).unwrap();
+    checker.net.never_direct = true;
+    let found = rig.found(&Arc::new(checker)).await;
+    proxy.stop().await;
+    let t = failed(rig.downloaded(&found, true).await);
+    assert!(
+        t.message.contains(
+            "rien n'est tenté sans le proxy : « Ne jamais sortir sans le proxy » est allumé"
+        ),
+        "{}",
+        t.message
+    );
+    assert_eq!(rig.origin.hits(SETUP).len(), 0, "nothing went directly");
+    assert!(rig.updates.ready().is_none());
+}
+
 #[tokio::test]
 async fn a_proxy_that_hangs_up_on_the_tunnel_and_a_direct_access_that_fails_are_both_told() {
     // Nothing answers over https on this port, neither the proxy's tunnel nor a direct connection.

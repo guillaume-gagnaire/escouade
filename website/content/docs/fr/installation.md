@@ -87,6 +87,22 @@ sudo apt install ./Escouade_*_amd64.deb
 
 Sous Linux, les jetons des intégrations (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) sont gardés dans `~/.escouade/integrations.json`, faute de trousseau du système pris en charge.
 
+### Vérifier le téléchargement
+
+Chaque release donne, parmi ses fichiers, `SHA256SUMS.txt` : l’empreinte SHA-256 de chaque installeur et de chaque paquet. Télécharge-le avec ton installeur, calcule l’empreinte de ton fichier et compare-la à sa ligne : si elles diffèrent, le fichier n’est pas celui que la release a publié, ne l’ouvre pas.
+
+| Système | Commande | Ce qu’elle dit |
+|---|---|---|
+| Windows (PowerShell) | `Get-FileHash .\Escouade_X.Y.Z_x64-setup.exe` | l’empreinte, en majuscules, à comparer à la ligne du fichier |
+| macOS | `shasum -a 256 Escouade_*.dmg` | l’empreinte, à comparer à la ligne du fichier |
+| Linux | `sha256sum -c SHA256SUMS.txt --ignore-missing` | `OK` pour chaque fichier présent dans le dossier |
+
+L’empreinte dit que le fichier est intact, pas qui l’a fait : la signature de l’installeur (Windows, macOS) et l’attestation de provenance le disent. Chaque fichier de la release porte une attestation de GitHub qui le relie au commit et au workflow qui l’ont construit ; avec la [CLI de GitHub](https://cli.github.com/) :
+
+```sh
+gh attestation verify <fichier téléchargé> --repo guillaume-gagnaire/escouade
+```
+
 ## Claude Code dans WSL
 
 Sous Windows, Escouade peut faire tourner un Claude Code installé dans WSL.

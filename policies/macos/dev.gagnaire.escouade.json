@@ -107,6 +107,14 @@
       "title": "Outside MCP clients",
       "type": "string"
     },
+    "network.offline": {
+      "description": "The updates, the store, the revocation list and the statistics are no longer contacted. Only the value true (1) is imposed. Settings › Advanced › Network › “Offline mode”, on and grayed.",
+      "enum": [
+        true
+      ],
+      "title": "Offline mode",
+      "type": "boolean"
+    },
     "permissions.allowBypass": {
       "description": "The mode where a harness asks nothing (bypassPermissions) is no longer allowed to any agent. Only the value false (0) is imposed. Settings › Agents › “Allow Bypass mode”, off and grayed; the Bypass mode refused everywhere.",
       "enum": [

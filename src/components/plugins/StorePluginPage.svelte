@@ -2,7 +2,7 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { fDate } from '../../lib/format';
   import { locale, t } from '../../lib/i18n';
-  import { asksOf, textOf } from '../../lib/plugins';
+  import { asksOf, roleKey, textOf } from '../../lib/plugins';
   import { plugins, type StoreTab } from '../../lib/plugins-view.svelte';
   import { bestOf, categoriesOfCatalog, count, sealed, type CatalogPlugin, type CatalogVersion } from '../../lib/store';
   import Icon from '../Icon.svelte';
@@ -62,6 +62,12 @@
           {#if p.license}<span>{p.license}</span>{/if}
           <span class="mono">{p.id}</span>
         </div>
+        {#if best && sealed(best) && best.review?.key?.role}
+          {@const role = t(`plugins.seal.role.${roleKey(best.review.key.role)}`)}
+          <p class="sealkey" use:tip={{ text: t('plugins.seal.keyTip', { role, id: best.review.key.id }) }}>
+            {t('plugins.seal.key', { role, id: best.review.key.id })}
+          </p>
+        {/if}
         <p class="desc">{textOf(p.description, lang) || t('plugins.page.noDescription')}</p>
       </div>
       <div class="act">
@@ -215,6 +221,11 @@
   }
   .meta .mono {
     font-size: 11px;
+  }
+  .sealkey {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 11.5px;
   }
   .desc {
     margin: 8px 0 0;

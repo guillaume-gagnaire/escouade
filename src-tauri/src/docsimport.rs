@@ -19,6 +19,9 @@ use crate::i18n::Lang;
 /// The most pages one import writes.
 const MAX_PAGES: usize = 500;
 
+/// The most bytes one folder import reads, all its files together.
+const MAX_IMPORT: usize = 16 * docs::MAX_TEXT as usize;
+
 /// Where the imports are kept, in `.escouade/spec/` (shared like the pages, which skip dot files).
 const IMPORTS: &str = ".imports.json";
 
@@ -304,8 +307,16 @@ impl Space {
             let text = self.read_found(path)?;
             drafts = cut(&text, path, None, &intro);
         } else {
+            let mut total = 0usize;
             for rel in self.found_files(path) {
                 let text = self.read_found(&rel)?;
+                total += text.len();
+                if total > MAX_IMPORT {
+                    bail!(tr!(
+                        "« {path} » est trop gros pour être importé",
+                        "“{path}” is too big to be imported"
+                    ));
+                }
                 let stem = rel
                     .rsplit('/')
                     .next()
@@ -482,7 +493,22 @@ impl Space {
         if !real.starts_with(&root) {
             return Err(refused(rel));
         }
-        let bytes = std::fs::read(&real)?;
+        // The same cap as a page (`docs::MAX_TEXT`); `take` holds it if the file grows meanwhile.
+        let meta = std::fs::metadata(&real)?;
+        if !meta.is_file() {
+            return Err(refused(rel));
+        }
+        if meta.len() > docs::MAX_TEXT {
+            bail!(tr!(
+                "« {rel} » est trop gros pour être importé",
+                "“{rel}” is too big to be imported"
+            ));
+        }
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(
+            &mut std::io::Read::take(std::fs::File::open(&real)?, docs::MAX_TEXT),
+            &mut bytes,
+        )?;
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 }

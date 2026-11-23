@@ -80,6 +80,8 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   wait_ask: 'mcp.tools.waitAsk',
   get_ask_file: 'mcp.tools.getAskFile',
   answer_ask: 'mcp.tools.answerAsk',
+  claim_inbox_view: 'mcp.tools.claimInboxView',
+  settle_inbox_view: 'mcp.tools.settleInboxView',
 };
 
 /**

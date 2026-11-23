@@ -131,7 +131,18 @@
             ><b>{t('plugins.install.teamSigned', { team: team.name })}</b> {t('plugins.install.teamSignedBody')}</span
           >
         </p>
-      {:else if !dev && !store}
+      {:else if p.matchesStore}
+        <!-- « N'installer que des versions vérifiées » on (SEC-01, ESC-589): this folder or repository is the store's
+             verified version, file for file. -->
+        <p class="notice ok" data-testid="matches-store">
+          <Icon name="check" size={14} /><span>{t('plugins.install.matchesStore', { version: p.matchesStore })}</span>
+        </p>
+      {:else if dev}
+        <!-- Development mode is a gesture of its own, which the setting does not cover (SEC-01, ESC-589). -->
+        <p class="notice" data-testid="dev-apart">
+          <Icon name="info" size={14} /><span>{t('plugins.install.devApart')}</span>
+        </p>
+      {:else if !store}
         <p class="notice">
           <Icon name="info" size={14} /><span><b>{t('plugins.install.unverified')}</b> {t('plugins.install.unverifiedBody')}</span>
         </p>
@@ -144,6 +155,12 @@
         <span class="k">{t('plugins.origin.fingerprint')}</span><span class="v mono" use:tip={{ text: p.fingerprint, aria: false }}
           >{print}</span
         >
+        {#if p.module}
+          <!-- The module a run.wasm plugin of a folder runs: its packs/ one or its plugin.wasm (issue #43, ESC-652). -->
+          <span class="k">{t('plugins.origin.module')}</span><span class="v mono" data-testid="module"
+            >{dev ? p.module : t('plugins.origin.moduleCovered', { path: p.module })}</span
+          >
+        {/if}
         <span class="k">{t('plugins.origin.signature')}</span>{#if p.verified}<span class="v ok">{t('plugins.origin.signedHere')}</span
           >{:else if team}<span class="v ok">{t('plugins.origin.teamSigned', { team: team.name })}</span>{:else if store}<span class="v no"
             >{t('plugins.origin.storeUnsigned')}</span
@@ -265,6 +282,9 @@
   .notice b {
     color: var(--text);
     font-weight: 600;
+  }
+  .notice.ok :global(.icon) {
+    color: var(--teal-ink);
   }
   .same {
     margin: 0;

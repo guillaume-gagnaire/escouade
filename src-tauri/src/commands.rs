@@ -57,6 +57,10 @@ type CoreState<'a> = State<'a, Arc<Core>>;
 /// that harness (`errorText`).
 fn err(e: anyhow::Error) -> String {
     let text = format!("{e:#}");
+    // A file not opened (a program, an installer, a disk, a shortcut): the window offers its folder.
+    if e.downcast_ref::<crate::sentfiles::NotOpened>().is_some() {
+        return format!("not-opened|{text}");
+    }
     crate::accounts::marked(&e, text)
 }
 
@@ -103,6 +107,8 @@ pub struct InitialState {
     engines_off: Vec<crate::model::EngineId>,
     /// The harnesses not on for a project (ESC-404), by project.
     harness_scope: BTreeMap<String, crate::harness_scope::HarnessScope>,
+    /// The harnesses of a third party whose command does not run now (SEC-01, ESC-589).
+    harness_launches: BTreeMap<crate::model::EngineId, crate::third_party::LaunchHeld>,
     sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
@@ -163,7 +169,10 @@ pub fn subscribe(
     let updates = updates.get().filter(|_| window);
     // One lock at a time, each guard ending with its statement: in a struct literal the guards
     // would live together (the lock order is projects before tickets, see `Core`).
-    let settings = core.settings.read().clone();
+    let mut settings = core.settings.read().clone();
+    // SEC-10: the proxy's password kept in the file apart (no keychain) never leaves the backend;
+    // `proxysecret::on_save` takes the backend's copy back anyway.
+    settings.proxy_password_in_file.clear();
     let projects = core.projects.read().clone();
     let tickets = core.tickets.read().clone();
     let agents = core.agent_views();
@@ -212,6 +221,7 @@ pub fn subscribe(
         engines_found: core.engines_found(),
         engines_off: core.engines_unplugged(),
         harness_scope: core.harness_scope(),
+        harness_launches: core.harness_launches(),
         sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
@@ -294,16 +304,38 @@ pub fn open_url(core: CoreState<'_>, url: String) -> Res<()> {
     if !["http", "https", "mailto", "tel"].contains(&scheme.as_str()) {
         return Err(err(anyhow::anyhow!("not a link Escouade opens: {scheme}:")));
     }
-    core.host.open(crate::host::Opened::Url(url)).map_err(err)
+    core.host
+        .open(crate::host::Opened::Url(url), &[])
+        .map_err(err)
 }
 
 /// A file or a folder the window opens outside (its program, the file manager; Windows' under
-/// WSLg, `outside`).
+/// WSLg, `outside`): only inside the folders of the projects, their worktrees and the data folder,
+/// where it really is (`opening`, audit SEC-12), and never a program or a script, as a file an agent
+/// sent (ESC-171).
 #[tauri::command(async)]
 pub fn open_path(core: CoreState<'_>, path: String) -> Res<()> {
+    open_path_in(&core, std::path::Path::new(&path)).map_err(err)
+}
+
+/// `open_path`.
+pub(crate) fn open_path_in(core: &Core, path: &std::path::Path) -> anyhow::Result<()> {
+    let roots = core.open_roots();
+    let allowed = crate::opening::allow(&roots, path, false)?;
+    if !allowed.real().is_dir() {
+        let why = crate::sentfiles::runnable_path_why(path)
+            .or_else(|| crate::sentfiles::runnable_path_why(allowed.real()));
+        if let Some(why) = why {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            return Err(crate::sentfiles::not_run(crate::i18n::ui(), &name, why));
+        }
+    }
+    // Opened by the host, which judges it again where it is (a server publishes it to its client).
     core.host
-        .open(crate::host::Opened::Path(path.into()))
-        .map_err(err)
+        .open(crate::host::Opened::Path(path.to_path_buf()), &roots)
 }
 
 #[tauri::command]
@@ -426,14 +458,18 @@ pub fn plugins_list(core: CoreState) -> Vec<crate::plugins::PluginView> {
 }
 
 /// What installing the plugin of a local folder would do (the install window, PLG-4): its copy
-/// set aside until `plugin_install` or `plugin_discard`.
+/// set aside until `plugin_install` or `plugin_discard`. « N'installer que des versions vérifiées » on, kept only when it
+/// is the store's verified version of its id, the same files (SEC-01, ESC-589).
 #[tauri::command(async)]
-pub fn plugin_inspect_folder(
-    core: CoreState,
+pub async fn plugin_inspect_folder(
+    core: CoreState<'_>,
     path: String,
 ) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
-    core.plugins
-        .inspect_folder(std::path::Path::new(path.trim()), crate::i18n::ui())
+    let lang = crate::i18n::ui();
+    let preview = core
+        .plugins
+        .inspect_folder(std::path::Path::new(path.trim()), lang)?;
+    core.held_to_store(preview, lang).await
 }
 
 /// The store as last read (STORE-9): its catalogue kept on this machine, when it was read, the
@@ -558,19 +594,21 @@ pub fn plugin_seed_offers(core: CoreState) -> Vec<crate::plugins::seed::Offer> {
     core.plugins.seed_offers(crate::i18n::ui())
 }
 
-/// What installing the plugin of a git repository at a tag would do: cloned and set aside.
+/// What installing the plugin of a git repository at a tag would do: cloned and set aside. « N'installer que des versions
+/// vérifiées » holds it as a folder (SEC-01, ESC-589).
 #[tauri::command(async)]
 pub async fn plugin_inspect_git(
     core: CoreState<'_>,
     url: String,
     tag: String,
 ) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
-    core.plugins
-        .inspect_git(&url, &tag, crate::i18n::ui())
-        .await
+    let lang = crate::i18n::ui();
+    let preview = core.plugins.inspect_git(&url, &tag, lang).await?;
+    core.held_to_store(preview, lang).await
 }
 
-/// What loading a plugin's folder in development in place would do.
+/// What loading a plugin's folder in development in place would do. A gesture of its own, said as such in the window:
+/// « N'installer que des versions vérifiées » does not hold it (SEC-01, ESC-589).
 #[tauri::command(async)]
 pub fn plugin_inspect_dev(
     core: CoreState,
@@ -608,7 +646,10 @@ pub fn plugin_install(
     // through the counts the seed keeps, once (ESC-394).
     if from_seed {
         core.spawn_seed_counts();
-    } else if from_store && core.settings.read().telemetry == Some(true) {
+    } else if from_store
+        && core.settings.read().telemetry == Some(true)
+        && crate::offline::allows(crate::offline::Flow::Statistics)
+    {
         let settings = core.settings.read().clone();
         let (store, id, version) = (core.store.clone(), view.id.clone(), view.version.clone());
         let update = staged.is_some_and(|(_, update)| update);
@@ -685,6 +726,45 @@ pub fn harness_enable_in(core: CoreState, project: String, engine: EngineId) -> 
 #[tauri::command(async)]
 pub fn harness_plugin_of(engine: EngineId) -> Option<String> {
     crate::plugins::harness::plugin_of(engine)
+}
+
+/// The whole command of a harness a plugin of a third party describes (audit SEC-01, ESC-589), for the agent `agent`
+/// (its account's program) or the harness's own program: what the window of the agreement shows, and whether it runs
+/// now. None for a harness that asks nothing (the app's, Escouade's own plugins').
+#[tauri::command(async)]
+pub fn harness_launch_ask(
+    core: CoreState,
+    engine: EngineId,
+    agent: Option<String>,
+) -> Res<Option<crate::third_party::LaunchAsk>> {
+    core.sync_harnesses();
+    core.launch_ask(engine, agent.as_deref()).map_err(err)
+}
+
+/// « Autoriser » or « Refuser » the command of a harness of a third party (the user's gesture, never a tool's): agreed,
+/// the line whose fingerprint was read is kept and the agent starts; refused, nothing is kept and its conversation says
+/// it does not start. The client that launches asks it (the window, or a client of the remote API).
+#[tauri::command(async)]
+pub fn harness_agree(
+    core: CoreState,
+    engine: EngineId,
+    agent: Option<String>,
+    fingerprint: String,
+    allow: bool,
+) -> Res<()> {
+    core.agree_to_harness(engine, agent.as_deref(), &fingerprint, allow)
+        .map_err(err)
+}
+
+/// The harnesses of a third party whose command does not run now (SEC-01): waiting for the user's agreement, or
+/// refused by « Harness des plugins tiers ».
+#[tauri::command(async)]
+pub fn harness_launches(
+    core: CoreState,
+) -> std::collections::BTreeMap<EngineId, crate::third_party::LaunchHeld> {
+    // A plugin installed or updated since: its harness in the registry first, as `engines_declared` does.
+    core.sync_harnesses();
+    core.harness_launches()
 }
 
 /// The harnesses that are not on, project by project (ESC-404): `off`, not offered; `asks`, offered behind the
@@ -3043,7 +3123,8 @@ pub async fn fs_reveal(
         .map_err(err)?;
     // The file manager can take a moment to answer (WSL's share starts its distribution, D-Bus
     // waits for the file manager): off the async workers.
-    tokio::task::spawn_blocking(move || fsedit::reveal(what))
+    let roots = core.open_roots();
+    tokio::task::spawn_blocking(move || fsedit::reveal(what, roots))
         .await
         .map_err(|e| e.to_string())?
         .map_err(err)
@@ -3999,8 +4080,25 @@ pub async fn update_check(
     updates: State<'_, crate::updates::Updates>,
     manual: bool,
 ) -> Res<crate::updates::Checked> {
+    if !crate::offline::allows(crate::offline::Flow::Updates) {
+        // « Mode hors ligne » (ESC-596): nothing asked; said to the user who asked alone.
+        return Ok(crate::updates::Checked::Failed {
+            trouble: crate::updates::Trouble {
+                message: crate::offline::refusal(crate::i18n::ui()),
+                show: manual,
+                page: None,
+            },
+        });
+    }
     let settings = core.settings.read().clone();
     Ok(crate::updates::check(&app, &settings, &updates, manual).await)
+}
+
+/// « Mode hors ligne » (ESC-596): whether the four flows are stopped, and whether by a policy of this device.
+#[tauri::command]
+pub fn offline_state() -> crate::offline::State {
+    crate::offline::read_again();
+    crate::offline::state()
 }
 
 /// Downloads the update found as `id`, its signature checked, and keeps it until it installs. A
@@ -5211,6 +5309,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_file_not_opened_is_marked_for_the_window_to_offer_its_folder() {
+        let e = crate::sentfiles::not_run(Lang::Fr, "a.msc", crate::sentfiles::Why::Program);
+        let text = err(e);
+        assert!(
+            text.starts_with("not-opened|« a.msc » est un programme"),
+            "{text}"
+        );
+        assert_eq!(err(anyhow::anyhow!("autre")), "autre");
+    }
+
+    #[test]
     fn the_refusals_of_a_terminal_read_in_english() {
         use crate::i18n::Lang::{En, Fr};
         assert_eq!(shell_not_found(En, "zsh"), "shell “zsh” not found");
@@ -6204,14 +6313,28 @@ pub fn devpage_open(
     url: String,
     detached: bool,
     bounds: Option<crate::devpage::Bounds>,
+    project_id: Option<String>,
 ) -> Res<crate::devpage::PageView> {
-    let project_id = core
-        .agent(&agent_id)
-        .map_err(err)?
-        .lock()
-        .meta
-        .project_id
-        .clone();
+    // A launch command run in its project (ESC-560): a page without an agent, keyed
+    // `run:<project>:<command>`, in the project's « Pages » window alone.
+    let (project_id, detached) = match project_id {
+        Some(p) => {
+            if !agent_id.starts_with(&format!("{}{p}:", crate::devpage::RUN_PREFIX)) {
+                return Err("not the page of a launch of this project".into());
+            }
+            core.project(&p).map_err(err)?;
+            (p, true)
+        }
+        None => (
+            core.agent(&agent_id)
+                .map_err(err)?
+                .lock()
+                .meta
+                .project_id
+                .clone(),
+            detached,
+        ),
+    };
     let own = own_of(&app);
     crate::devpage::open(
         &app,
@@ -6940,6 +7063,13 @@ pub async fn inbox_view_snooze(core: CoreState<'_>, key: String, until: Option<i
     core.inbox_view_snooze(&key, until).await.map_err(err)
 }
 
+/// « Remettre dans la boîte » (ESC-557): a view the squad lead took in hand or ticked as settled waits for the user
+/// again; its source is not touched.
+#[tauri::command]
+pub async fn inbox_view_reopen(core: CoreState<'_>, key: String) -> Res<()> {
+    core.inbox_view_reopen(&key).await.map_err(err)
+}
+
 /// « Enregistrer sous… » of a request's file (ESC-510): its copy written where the user picks in the system's dialog,
 /// which the core opens; the window never gives a path. False when the user cancels.
 #[cfg(feature = "desktop")]
@@ -7143,17 +7273,22 @@ pub fn received_save(
     let downloads = crate::servers::received::downloads();
     let mut got = crate::servers::received::save(&downloads, &space, &name, bytes).map_err(err)?;
     let path = std::path::PathBuf::from(&got.path);
+    // Come from another computer: Gatekeeper judges it as any download (macOS).
+    crate::quarantine::mark(&path);
     // Opened only when it is on the list of what Escouade opens by the system (ESC-629): an image or a PDF.
     if request.header("x-open") == Some("1")
         && got.opens == crate::servers::received::Opening::System.as_str()
     {
         core.host
-            .open(crate::host::Opened::Path(path))
+            .open(
+                crate::host::Opened::Path(path),
+                std::slice::from_ref(&downloads),
+            )
             .map_err(err)?;
         got.opened = true;
     } else if request.header("x-reveal") == Some("1") || request.header("x-open") == Some("1") {
         core.host
-            .open(crate::host::Opened::Reveal(path))
+            .open(crate::host::Opened::Reveal(path), &[downloads])
             .map_err(err)?;
     }
     Ok(got)
@@ -7168,11 +7303,14 @@ pub fn received_show(core: CoreState, path: String, reveal: bool) -> Res<()> {
     let file = crate::servers::received::shown(&downloads, std::path::Path::new(&path), reveal)
         .map_err(err)?;
     core.host
-        .open(if reveal {
-            crate::host::Opened::Reveal(file)
-        } else {
-            crate::host::Opened::Path(file)
-        })
+        .open(
+            if reveal {
+                crate::host::Opened::Reveal(file)
+            } else {
+                crate::host::Opened::Path(file)
+            },
+            &[downloads],
+        )
         .map_err(err)
 }
 

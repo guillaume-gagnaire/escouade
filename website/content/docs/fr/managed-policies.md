@@ -84,6 +84,7 @@ Chaque stratégie a une clé, le même nom partout : la valeur du registre, la c
 | Exclusions du proxy | `proxy.exclusions` · liste · sensible | Les hôtes joints sans le proxy (NO_PROXY), un par ligne. | Réglages › Avancé › Réseau, les exclusions grisées. |
 | Interdire d’ignorer la vérification TLS | `proxy.denyInsecureTls` · booléen `true` (`1`) · restreindre | « Ignorer la vérification des certificats TLS » est éteint et ne s’allume plus. Seule la valeur true (1) s’impose. | Réglages › Avancé › Réseau › « Ignorer la vérification des certificats TLS », éteint et grisé. |
 | Fichier d’autorités de certification | `proxy.authorities` · chaîne · sensible | Le chemin d’un fichier .pem d’autorités crues en plus du magasin du système (la racine d’un proxy d’entreprise). | Réglages › Avancé › Réseau › « Autorités de certification supplémentaires », grisé. |
+| Mode hors ligne | `network.offline` · booléen `true` (`1`) · restreindre | Les mises à jour, le store, la liste de révocation et les statistiques ne sont plus contactés. Seule la valeur true (1) s’impose. | Réglages › Avancé › Réseau › « Mode hors ligne », allumé et grisé. |
 
 ### Télémétrie et voix
 

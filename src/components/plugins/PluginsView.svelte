@@ -15,7 +15,7 @@
   import StorePluginPage from './StorePluginPage.svelte';
   import TeamStore from './TeamStore.svelte';
   import { app } from '../../lib/state.svelte';
-  import { fTime } from '../../lib/format';
+  import { fDate, fTime } from '../../lib/format';
 
   // The view Plugins (PLG-4; choices 213 to 218, design/plugins/): opened by its icon of the projects' rail, in place of a
   // project, its sidebar beside it (PluginsSide). Its pages on the work's panel; the install window over it.
@@ -193,6 +193,9 @@
                 })
               : t('plugins.installed.revocationsNone')}
             {#if list?.error}<span class="warn">{list.error}</span>{/if}
+            {#if list?.stale && list.holdsSince}<span class="warn" data-testid="revocations-stale"
+                >{t('plugins.installed.revocationsStale', { date: fDate(Date.parse(list.holdsSince)) })}</span
+              >{/if}
             <button class="lnk" disabled={plugins.storeBusy} onclick={() => plugins.refreshStore()}
               >{plugins.storeBusy ? t('plugins.store.reading') : t('plugins.installed.readAgain')}</button
             >

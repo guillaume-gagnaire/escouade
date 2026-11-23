@@ -28,6 +28,7 @@ Reste au cœur : la place de Claude Code au registre, les comptes et leur connex
 | `src/client.rs` | Le client de `claude`, une machine à états sans process |
 | `src/translate.rs` | Ses lignes en éléments de la conversation |
 | `src/view.rs` | Le journal lu pour la « Vue Claude Code » |
+| `src/experimental.rs` | Les fonctionnalités expérimentales de la vue Claude Code : ce que les réglages demandent, ce qui est passé, ce qui est refusé et pourquoi |
 | `src/localcmd.rs` | Ce qu’il écrit d’une commande locale (`/compact`, `! ls`) |
 | `src/words.rs` | Ce qui se dit dans la langue de l’app, les fenêtres de son quota |
 | `src/tests.rs` | Le client et la traduction seuls |

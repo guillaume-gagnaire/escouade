@@ -321,6 +321,39 @@ describe('the box « À toi »', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('protégé par un mot de passe');
     });
 
+    it('a file the core will not open says why, with « Afficher dans le dossier » on its toast; one the window knows offers only that', async () => {
+      const ipc = await show(
+        [
+          windowAsk({
+            kind: 'confirm',
+            options: [],
+            files: [
+              askFile({ file: 'w1/outil', name: 'outil', kind: 'other', mediaType: 'application/octet-stream', size: 10 }),
+              askFile({ file: 'w2/rapport.terminal', name: 'rapport.terminal', kind: 'other', mediaType: 'text/xml', size: 10 }),
+            ],
+          }),
+        ],
+        {
+          inbox_open_file: (a: { reveal: boolean }) => {
+            if (!a.reveal) throw 'not-opened|« outil » est un programme ou un script : l’ouvrir le lancerait.';
+            return null;
+          },
+        },
+      );
+      const files = screen.getByTestId('ask-files');
+      // Marked executable, its name says nothing: the core refuses it, the toast says why and offers its folder.
+      await userEvent.click(within(within(files).getByText('outil').closest('li')!).getByTestId('ask-open'));
+      await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('« outil » est un programme ou un script : l’ouvrir le lancerait.'));
+      const toast = app.toasts.at(-1)!;
+      expect(toast.action?.label).toBe('Afficher dans le dossier');
+      toast.action!.onClick();
+      await waitFor(() => expect(ipc.called('inbox_open_file').map((c) => c.args.reveal)).toEqual([false, true]));
+      // Terminal settings run their command: never « Ouvrir », its folder only.
+      const terminal = within(files).getByText('rapport.terminal').closest('li')!;
+      expect(within(terminal).queryByTestId('ask-open')).toBeNull();
+      expect(within(terminal).getByRole('button', { name: 'Afficher dans le dossier' })).toBeInTheDocument();
+    });
+
     it('opens an image in the viewer, draws a Markdown file, offers « Ouvrir » and « Enregistrer sous… » for the rest', async () => {
       const ipc = await show(
         [

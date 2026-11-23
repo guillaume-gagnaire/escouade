@@ -91,3 +91,56 @@ test('a folder in Rust loads with the module escouade-plugin build wrote, and on
   await fits(page);
   expect(fs.existsSync(path.join(built, 'plugin.wasm'))).toBe(false);
 });
+
+// ESC-652 (issue #43): « Installés › Depuis un dossier… » on the same folder as its author has it, with Rust's
+// compilation, npm's packages and the module of an older version beside its own: the copy holds the plugin and the module
+// of its version alone, the window says which module runs under the fingerprint, and the journal names that file.
+test('a folder in Rust installs from a folder on its module of packs/, its copy the plugin alone', async ({ app }) => {
+  test.setTimeout(120_000);
+  const { page } = app;
+  await addProject(page, app.repo);
+  await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+
+  // Not built: refused, with what to do; nothing set aside.
+  const bare = path.join(app.root, 'plugin-a-copier-nu');
+  rustPlugin(bare, false);
+  await pickAnswers(page, bare);
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  const alert = page.locator('.plugins-work').getByRole('alert');
+  await expect(alert).toContainText(
+    "Ce dossier n'a pas de module construit : lance `escouade-plugin build`, ou charge-le depuis En développement › Charger un dossier…",
+  );
+  await expect(alert).not.toContainText('No such file');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await fits(page);
+
+  // Built, with what is not the plugin around it.
+  const src = path.join(app.root, 'plugin-a-copier');
+  rustPlugin(src, true);
+  fs.copyFileSync(path.join(FIXTURE, 'plugin.wasm'), path.join(src, 'packs', 'dev.test.reactor-0.9.0.wasm'));
+  fs.mkdirSync(path.join(src, 'target', 'release'), { recursive: true });
+  fs.writeFileSync(path.join(src, 'target', 'release', 'big.rlib'), Buffer.alloc(4 << 20));
+  fs.mkdirSync(path.join(src, 'node_modules', 'x'), { recursive: true });
+  fs.writeFileSync(path.join(src, 'node_modules', 'x', 'index.js'), '1');
+  await pickAnswers(page, src);
+  await page.getByRole('button', { name: 'Depuis un dossier…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Installer Reactor ?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId('module')).toHaveText('packs/dev.test.reactor-1.0.0.wasm · compris dans l’empreinte');
+  await fits(page);
+  await dialog.getByRole('button', { name: 'Installer quand même' }).click();
+  await expect(dialog).toBeHidden();
+  const copy = path.join(app.data, 'plugins', 'dev.test.reactor');
+  expect(fs.readdirSync(copy).sort()).toEqual(['Cargo.lock', 'Cargo.toml', 'escouade-plugin.json', 'packs']);
+  expect(fs.readdirSync(path.join(copy, 'packs'))).toEqual(['dev.test.reactor-1.0.0.wasm']);
+
+  // It starts, and its journal names the module it loaded.
+  await expect(page.getByRole('heading', { name: /Reactor/ })).toBeVisible();
+  await page.getByRole('tab', { name: 'Journal' }).click();
+  const journal = page.getByRole('tabpanel', { name: 'Journal' });
+  await journal.getByRole('button', { name: 'Démarrer' }).click();
+  await expect(journal).toContainText('En marche', { timeout: 60_000 });
+  await expect(journal).toContainText(path.join(copy, BUILT));
+  await expect(journal).not.toContainText('plugin.wasm');
+  await fits(page);
+});

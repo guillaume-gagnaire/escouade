@@ -77,6 +77,19 @@ export default {
   /** An agent a teammate passes (TS-17). */
   handoffTitle: '{name} te passe {key} · {title}',
   settled: 'Réglé ailleurs : la boîte s’est mise à jour.',
+  /** Ce que le chef d’escouade en a dit (ESC-557) : pris en charge, ou coché comme réglé. */
+  mark: {
+    group: 'Le chef s’en occupe',
+    claimed: '{name} s’en occupe · {when}',
+    settled: 'Réglé par {name} · {when}',
+    settledLine: 'Réglé par {name} : {note}',
+    note: '« {note} »',
+    reopen: 'Remettre dans la boîte',
+    claimedNote: 'Ça ne compte plus comme t’attendant. Tu peux toujours la régler toi-même.',
+    settledNote: 'Elle est sortie de ta boîte ; elle y revient d’elle-même si sa source change encore.',
+    confirmTitle: '{name} est en train de la vérifier',
+    confirmBody: 'Sa note : « {note} ». La régler toi-même quand même ?',
+  },
   /** Le réglage du résumé, dans Réglages › Notifications. */
   summary: {
     title: 'Boîte « À toi »',

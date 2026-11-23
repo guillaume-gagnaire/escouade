@@ -28,6 +28,9 @@ pub const STORE_URL: &str = "https://store.escouade.dev";
 pub const MIRROR_URL: &str = "https://escouade.dev";
 /// How often the revocation list (and the catalogue with it) is read again.
 pub const EVERY: Duration = Duration::from_secs(6 * 3600);
+/// The age past which the revocation list held is said to be old (audit SEC-15): a week without a list or an attestation
+/// of freshness, which the workflow `revocations.yml` signs every Monday.
+pub const STALE_AFTER: Duration = Duration::from_secs(7 * 24 * 3600);
 /// A reading of the store this recent is taken as it is by « Rechercher des mises à jour » (ESC-405): close clicks read once.
 pub const FRESH: Duration = Duration::from_secs(30);
 /// The archive as the store keeps it: 50 MB at most (as `store/server/utils/tar.ts`).
@@ -281,10 +284,10 @@ impl RevocationList {
     }
 
     /// The keys a seal is checked with under this list: `keys` less those it revokes.
-    pub fn trusted(&self, keys: &[String]) -> Vec<String> {
+    pub fn trusted<K: store_keys::TrustedKey + Clone>(&self, keys: &[K]) -> Vec<K> {
         let revoked = self.keys_revoked.clone().unwrap_or_default();
         keys.iter()
-            .filter(|k| !revoked.contains(&store_keys::key_id(k)))
+            .filter(|k| !revoked.contains(&store_keys::key_id(k.public())))
             .cloned()
             .collect()
     }
@@ -295,7 +298,7 @@ impl RevocationList {
 pub enum ListRefused {
     /// It does not read as a list.
     Malformed,
-    /// Not signed by a key of the app, or signed for another serial.
+    /// Not signed by a key of the app that signs lists, or signed for another serial.
     Signature(store_keys::Refused),
     /// Signed by a key the list itself revokes.
     RevokedSigner,
@@ -303,10 +306,11 @@ pub enum ListRefused {
     Older { serial: u64, seen: u64 },
 }
 
-/// Reads and checks a revocation list: signed by one of `keys` with its own serial, not by a key
-/// it revokes, and not below `seen` (the serial of the last list taken).
-pub fn check_list(
-    keys: &[String],
+/// Reads and checks a revocation list: signed by one of `keys` that signs lists
+/// (`store_keys::revocations_signed`) with its own serial, not by a key it revokes, and not below
+/// `seen` (the serial of the last list taken).
+pub fn check_list<K: store_keys::TrustedKey>(
+    keys: &[K],
     json: &[u8],
     minisig: &str,
     seen: u64,
@@ -315,8 +319,7 @@ pub fn check_list(
     if list.serial < 1 || list.entries.iter().any(|e| e.id.trim().is_empty()) {
         return Err(ListRefused::Malformed);
     }
-    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
-    let signer = store_keys::revocations_signed(&keys, json, minisig, list.serial)
+    let signer = store_keys::revocations_signed(keys, json, minisig, list.serial)
         .map_err(ListRefused::Signature)?;
     if list
         .keys_revoked
@@ -332,6 +335,72 @@ pub fn check_list(
         });
     }
     Ok(list)
+}
+
+// ---- The freshness of the list (audit SEC-15) ----
+
+/// An attestation of freshness: the list n° `serial`, of SHA-256 `sha256` (its bytes as served), still holds on
+/// `valid_at` (store/server/utils/revocation-fresh.ts). Signed by a freshness key, never one of the lists'.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Freshness {
+    pub serial: u64,
+    pub sha256: String,
+    pub valid_at: String,
+}
+
+/// The date an attestation gives the list `list_json` (serial `serial`), or why it is refused: signed by one of `keys`
+/// whose role attests (`Freshness`, never the revocation key nor the backup) with its comment, for this serial and this
+/// fingerprint; one that names another list is no attestation of this one.
+pub fn check_freshness(
+    keys: &[store_keys::Key],
+    list_json: &[u8],
+    serial: u64,
+    json: &[u8],
+    minisig: &str,
+) -> Result<String, String> {
+    let (signed_serial, date) = store_keys::freshness_signed(keys, json, minisig)
+        .map_err(|e| format!("not signed by a freshness key ({e:?})"))?;
+    let f: Freshness =
+        serde_json::from_slice(json).map_err(|_| "not an attestation".to_string())?;
+    if f.serial != signed_serial || f.valid_at != date {
+        return Err("its comment does not say what it holds".into());
+    }
+    if f.serial != serial {
+        return Err(format!("it attests list n° {}, not n° {serial}", f.serial));
+    }
+    if !f.sha256.eq_ignore_ascii_case(&sha256(list_json)) {
+        return Err("it attests another list (its fingerprint)".into());
+    }
+    chrono::DateTime::parse_from_rfc3339(&f.valid_at)
+        .map_err(|_| "valid_at: no date".to_string())?;
+    Ok(f.valid_at)
+}
+
+/// Whether the list held is older than `STALE_AFTER` on `now`, and since when it holds. With a freshness key embedded
+/// (`attested`), its date is the later of its `issued_at` and of the attestation taken; without, that of its last
+/// reading. No date at all (never read) is not said old: the store's error says it.
+pub fn list_age(
+    issued_at: Option<&str>,
+    attested_at: Option<&str>,
+    read_at: Option<&str>,
+    attested: bool,
+    now: chrono::DateTime<chrono::Utc>,
+) -> (bool, Option<String>) {
+    let parse = |d: Option<&str>| {
+        d.and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
+            .map(|d| d.with_timezone(&chrono::Utc))
+    };
+    let since = if attested {
+        parse(issued_at).max(parse(attested_at))
+    } else {
+        parse(read_at)
+    };
+    let stale = since.is_some_and(|d| {
+        now.signed_duration_since(d)
+            .to_std()
+            .is_ok_and(|age| age > STALE_AFTER)
+    });
+    (stale, since.map(|d| d.to_rfc3339()))
 }
 
 // ---- The cache ----
@@ -350,6 +419,8 @@ struct Cache {
     /// Where the list was read: `store` or `mirror`.
     revocations_from: Option<String>,
     revocations_error: Option<String>,
+    /// The date of the attestation of freshness taken for the list held (audit SEC-15).
+    revocations_attested_at: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -386,6 +457,9 @@ pub struct ListView {
     pub read_at: Option<String>,
     pub from: Option<String>,
     pub error: Option<String>,
+    /// Since when the list held is known to hold (`list_age`), and whether that is more than 7 days ago (audit SEC-15).
+    pub holds_since: Option<String>,
+    pub stale: bool,
 }
 
 /// A version the store offers for an installed plugin.
@@ -425,9 +499,25 @@ impl Store {
             std::fs::read(dir.join("revocations.json")),
             std::fs::read_to_string(dir.join("revocations.json.minisig")),
         ) {
-            (Ok(json), Ok(sig)) => check_list(&store_keys::keys(), &json, &sig, 0).ok(),
+            (Ok(json), Ok(sig)) => check_list(&store_keys::keys(), &json, &sig, 0)
+                .ok()
+                .map(|l| (json, l)),
             _ => None,
         };
+        // Its attestation kept, checked again against it.
+        let attested_at = revocations.as_ref().and_then(|(json, list)| {
+            let fresh = std::fs::read(dir.join("revocations-fresh.json")).ok()?;
+            let sig = std::fs::read_to_string(dir.join("revocations-fresh.json.minisig")).ok()?;
+            check_freshness(
+                &store_keys::freshness_keys(),
+                json,
+                list.serial,
+                &fresh,
+                &sig,
+            )
+            .ok()
+        });
+        let revocations = revocations.map(|(_, l)| l);
         Self {
             dir,
             base,
@@ -444,6 +534,7 @@ impl Store {
                 revocations,
                 revocations_read_at: meta.revocations_read_at,
                 revocations_from: meta.revocations_from,
+                revocations_attested_at: attested_at,
                 ..Cache::default()
             }),
             reading: tokio::sync::Mutex::new(()),
@@ -497,11 +588,22 @@ impl Store {
             read_at: c.read_at.clone(),
             error: c.error.clone(),
             best,
-            revocations: Some(ListView {
-                serial: c.revocations.as_ref().map(|l| l.serial),
-                read_at: c.revocations_read_at.clone(),
-                from: c.revocations_from.clone(),
-                error: c.revocations_error.clone(),
+            revocations: Some({
+                let (stale, holds_since) = list_age(
+                    c.revocations.as_ref().map(|l| l.issued_at.as_str()),
+                    c.revocations_attested_at.as_deref(),
+                    c.revocations_read_at.as_deref(),
+                    !store_keys::freshness_keys().is_empty(),
+                    chrono::Utc::now(),
+                );
+                ListView {
+                    serial: c.revocations.as_ref().map(|l| l.serial),
+                    read_at: c.revocations_read_at.clone(),
+                    from: c.revocations_from.clone(),
+                    error: c.revocations_error.clone(),
+                    holds_since,
+                    stale,
+                }
             }),
             platform: platform(),
         }
@@ -576,6 +678,11 @@ impl Store {
         }
         self.refresh_locked(http, lang).await;
         true
+    }
+
+    /// Says why the store was not read (« Mode hors ligne », ESC-596): the catalogue and the list kept stay.
+    pub fn say(&self, why: String) {
+        self.cache.write().error = Some(why);
     }
 
     /// Says the store could not be read (no client of Réglages › Avancé › Réseau): the catalogue kept stays.
@@ -695,12 +802,81 @@ impl Store {
                 c.revocations_read_at = Some(now());
                 c.revocations_from = Some(from.into());
                 c.revocations_error = None;
+                // Another list: the attestation of the one before is not its own.
+                c.revocations_attested_at = None;
             }
             Err(e) => {
                 self.cache.write().revocations_error = Some(list_error(&e, lang));
             }
         }
         self.save_meta();
+        self.refresh_freshness_locked(http).await;
+    }
+
+    /// The attestation of freshness of the list held (audit SEC-15), read beside the copy of the list: only when the app
+    /// embeds a freshness key, taken only for this list's serial and fingerprint, and later than the one held.
+    async fn refresh_freshness_locked(&self, http: &reqwest::Client) {
+        let keys = store_keys::freshness_keys();
+        if keys.is_empty() {
+            return;
+        }
+        let Some(serial) = self.cache.read().revocations.as_ref().map(|l| l.serial) else {
+            return;
+        };
+        let Ok(list_json) = std::fs::read(self.dir.join("revocations.json")) else {
+            return;
+        };
+        let url = format!("{}/revocations-fresh.json", self.mirror);
+        let got = async {
+            let res = http.get(&url).send().await.map_err(|e| e.to_string())?;
+            if !res.status().is_success() {
+                return Err(format!("HTTP {}", res.status()));
+            }
+            let json = bounded(res, SMALL_MAX).await?;
+            let sig = http
+                .get(format!("{url}.minisig"))
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+            if !sig.status().is_success() {
+                return Err(format!("HTTP {}", sig.status()));
+            }
+            let sig =
+                String::from_utf8(bounded(sig, SMALL_MAX).await?).map_err(|e| e.to_string())?;
+            let at = check_freshness(&keys, &list_json, serial, &json, &sig)?;
+            Ok((json, sig, at))
+        }
+        .await;
+        match got {
+            Ok((json, sig, at)) => {
+                let held = self.cache.read().revocations_attested_at.clone();
+                let later = held.as_deref().is_none_or(|h| {
+                    match (
+                        chrono::DateTime::parse_from_rfc3339(h),
+                        chrono::DateTime::parse_from_rfc3339(&at),
+                    ) {
+                        (Ok(h), Ok(a)) => a > h,
+                        _ => true,
+                    }
+                });
+                if !later {
+                    return;
+                }
+                let kept =
+                    crate::paths::write_atomic(&self.dir.join("revocations-fresh.json"), &json)
+                        .and_then(|_| {
+                            crate::paths::write_atomic(
+                                &self.dir.join("revocations-fresh.json.minisig"),
+                                sig.as_bytes(),
+                            )
+                        });
+                if let Err(e) = kept {
+                    log::warn!("the attestation of the revocation list is not kept: {e}");
+                }
+                self.cache.write().revocations_attested_at = Some(at);
+            }
+            Err(e) => log::info!("no attestation of freshness of the revocation list taken: {e}"),
+        }
     }
 
     /// Downloads version `version` of plugin `id` (the one this Escouade would install when None)
@@ -915,7 +1091,8 @@ pub(super) fn check_version_json(
 
 /// The seal of `json`, checked here with the app's keys less those `list` revokes, never taken from anyone's word: the
 /// signature when it holds, None for an app that embeds no key (it shows no seal, it does not refuse), a refusal for one
-/// that does not hold.
+/// that does not hold, or that a key made out of its role (the key of the first hand on an id out of `dev.escouade.*`,
+/// audit SEC-03), its reason said.
 pub(super) fn check_seal(
     json: &[u8],
     sig: String,
@@ -924,11 +1101,22 @@ pub(super) fn check_seal(
     list: Option<&RevocationList>,
     lang: Lang,
 ) -> Result<Option<String>, String> {
-    let keys = trusted_keys(list);
-    let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
-    match store_keys::verified_with(&refs, json, &sig, id, version) {
+    check_seal_with(&trusted_keys(list), json, sig, id, version, lang)
+}
+
+/// `check_seal` with the keys given (the tests' own, in their roles).
+pub(crate) fn check_seal_with<K: store_keys::TrustedKey>(
+    keys: &[K],
+    json: &[u8],
+    sig: String,
+    id: &str,
+    version: &str,
+    lang: Lang,
+) -> Result<Option<String>, String> {
+    match store_keys::verified_with(keys, json, &sig, id, version) {
         Ok(()) => Ok(Some(sig)),
         Err(store_keys::Refused::NoKey) => Ok(None),
+        Err(store_keys::Refused::OutOfRole { key }) => Err(out_of_role(&key, id, lang)),
         Err(_) => Err(tr_in!(
             lang,
             "La signature de cette version ne tient pas avec les clés d'Escouade : rien n'est installé.",
@@ -985,8 +1173,26 @@ pub(super) fn check_module(bytes: &[u8], w: &WasmRef, lang: Lang) -> Result<(), 
     Ok(())
 }
 
+/// Why a seal of a key of the app out of its role is refused: the key of the first hand seals `dev.escouade.*` alone,
+/// the third parties' never seals it.
+pub fn out_of_role(key: &str, id: &str, lang: Lang) -> String {
+    if crate::builtin::first_hand(id) {
+        tr_in!(
+            lang,
+            "Cette version est signée par la clé {key}, qui ne scelle pas les plugins d'Escouade (dev.escouade.*) : rien n'est installé.",
+            "This version is signed by the key {key}, which does not seal Escouade's plugins (dev.escouade.*): nothing is installed."
+        )
+    } else {
+        tr_in!(
+            lang,
+            "Cette version de {id} est signée par la clé {key} de la première main d'Escouade, qui ne scelle que les plugins dev.escouade.* : rien n'est installé.",
+            "This version of {id} is signed by the key {key} of Escouade's first hand, which seals dev.escouade.* plugins only: nothing is installed."
+        )
+    }
+}
+
 /// The app's keys less those the list revokes.
-pub fn trusted_keys(list: Option<&RevocationList>) -> Vec<String> {
+pub fn trusted_keys(list: Option<&RevocationList>) -> Vec<store_keys::Key> {
     let keys = store_keys::keys();
     match list {
         Some(l) => l.trusted(&keys),
@@ -999,7 +1205,7 @@ pub fn trusted_keys(list: Option<&RevocationList>) -> Vec<String> {
 async fn fetch_list(
     http: &reqwest::Client,
     url: &str,
-    keys: &[String],
+    keys: &[store_keys::Key],
     seen: u64,
 ) -> Result<Option<(Vec<u8>, String, RevocationList)>, FetchError> {
     let res = http
@@ -1053,6 +1259,11 @@ fn list_error(e: &FetchError, lang: Lang) -> String {
             lang,
             "Cette version d'Escouade n'embarque pas encore les clés du store : la liste de révocation n'est pas lue.",
             "This version of Escouade does not embed the store's keys yet: the revocation list is not read."
+        ),
+        FetchError::Refused(ListRefused::Signature(store_keys::Refused::OutOfRole { key })) => tr_in!(
+            lang,
+            "La liste de révocation reçue est signée par la clé {key}, qui ne signe pas les listes : elle a été refusée.",
+            "The revocation list received is signed by the key {key}, which signs no list: it was refused."
         ),
         FetchError::Refused(_) => tr_in!(
             lang,
@@ -1356,7 +1567,8 @@ pub fn read_archive(gz: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
 }
 
 /// A path of the archive inside the plugin: GitHub's top folder taken off; refused when it is
-/// absolute or climbs out.
+/// absolute or climbs out, or when a part holds a `:` (a drive, a stream of an NTFS file) or names a device of Windows
+/// (`NUL`, `con.txt`, audit SEC-18).
 fn inner_path(raw: &str) -> Result<String, String> {
     let p = raw.replace('\\', "/");
     let b = p.as_bytes();
@@ -1369,6 +1581,15 @@ fn inner_path(raw: &str) -> Result<String, String> {
         .collect();
     if parts.contains(&"..") {
         return Err(format!("path that climbs out {raw}"));
+    }
+    if parts.iter().any(|p| p.contains(':')) {
+        return Err(format!("path with a colon {raw}"));
+    }
+    if parts
+        .iter()
+        .any(|p| crate::files::windows_device(p.trim_end_matches([' ', '.'])))
+    {
+        return Err(format!("path that names a device of Windows {raw}"));
     }
     Ok(parts.iter().skip(1).copied().collect::<Vec<_>>().join("/"))
 }
@@ -1451,6 +1672,21 @@ mod tests {
             ),
             (("/etc/evil", b'0', &b"x"[..]), "absolute"),
             (("owner-repo-abc/fifo", b'6', &b""[..]), "special file"),
+            // Audit SEC-18: a stream of an NTFS file, a drive, a device of Windows.
+            (("owner-repo-abc/a.txt:hidden", b'0', &b"x"[..]), "colon"),
+            (("owner-repo-abc/NUL", b'0', &b"x"[..]), "device of Windows"),
+            (
+                ("owner-repo-abc/src/con.rs", b'0', &b"x"[..]),
+                "device of Windows",
+            ),
+            (
+                ("owner-repo-abc/COM1.txt", b'0', &b"x"[..]),
+                "device of Windows",
+            ),
+            (
+                ("owner-repo-abc/lpt9 .log", b'0', &b"x"[..]),
+                "device of Windows",
+            ),
         ] {
             let gz = tarball(&[("owner-repo-abc/escouade-plugin.json", b'0', b"{}"), bad]);
             let e = read_archive(&gz).unwrap_err();

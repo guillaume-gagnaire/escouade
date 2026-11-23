@@ -1,8 +1,13 @@
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { readPublicKey } from '../../server/utils/minisign';
+import { LEGACY_REVOCATION_LISTS, readKeyFile, readPublicKey } from '../../server/utils/minisign';
 import { checkRevocations, parseRevocations, revoked, REVOCATIONS_COMMENT } from '../../server/utils/revocation-list';
 import { testKey } from '../fake/minisign.mjs';
 
+const here = dirname(fileURLToPath(import.meta.url));
 const entry = {
   id: 'dev.x.ntfy',
   versions: ['1.2.0'],
@@ -54,6 +59,28 @@ describe('the revocation list', () => {
   it('is refused when it revokes the very key that signed it', () => {
     const json = list(6, { keys_revoked: [k.id] });
     expect(checkRevocations(json, signed(json, 6), [key])).toEqual({ error: 'signed by a key the list itself revokes' });
+  });
+
+  it('is signed by the key of the third parties and of the list, or the backup, not the first hand’s but for its list of before (ESC-592)', async () => {
+    const third = readKeyFile('third-party.pub', k.pub)!;
+    const backupKey = testKey();
+    const firstKey = testKey();
+    const json = list(2);
+    expect(checkRevocations(json, signed(json, 2), [third])).toMatchObject({ list: { serial: 2 } });
+    const backup = readKeyFile('backup.pub', backupKey.pub)!;
+    expect(checkRevocations(json, backupKey.sign(json, `${REVOCATIONS_COMMENT} 2`), [backup])).toMatchObject({ list: { serial: 2 } });
+    const first = readKeyFile('store.pub', firstKey.pub)!;
+    expect(checkRevocations(json, firstKey.sign(json, `${REVOCATIONS_COMMENT} 2`), [first])).toEqual({
+      error: `signed by the key ${firstKey.id} of the first hand, which signs no revocation list since ESC-592`,
+    });
+    // The list the real key of the first hand signed on 2026-11-07 holds still, with the keys of store/keys/ (in the
+    // repository: the store's image has neither the site nor, once a newer list is copied, that one).
+    const read = (p: string) => readFile(resolve(here, p), 'utf8').catch(() => null);
+    const legacy = await read('../../../website/public/revocations.json');
+    const legacySig = await read('../../../website/public/revocations.json.minisig');
+    const real = await read('../../keys/store.pub');
+    if (legacy && legacySig && real && createHash('sha256').update(legacy).digest('hex') === LEGACY_REVOCATION_LISTS[0])
+      expect(checkRevocations(legacy, legacySig, [readKeyFile('store.pub', real)!])).toMatchObject({ list: { serial: 1 } });
   });
 
   it('names the versions it disables or unverifies', () => {

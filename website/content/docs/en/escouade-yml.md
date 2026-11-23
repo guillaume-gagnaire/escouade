@@ -166,11 +166,17 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 | `git.ticket_branch_prefix` | Branch prefix | The start of a branch name | `ticket/` | `ticket_branch_prefix: tickets/` |
 | `git.commit_mode` | One of a list | `agent`, `direct` | `agent` | `commit_mode: direct` |
 | `git.conventional_commits` | Boolean | `true`, `false` | `true` | `conventional_commits: false` |
+| `git.auto_fetch` | One of a list | `default`, `always`, `never` | `default` | `auto_fetch: always` |
+| `git.fetch_every` | Whole number | `0`, or `1` to `1440` | `0` | `fetch_every: 30` |
+| `git.fetch_timeout` | Whole number | `0`, or `30` to `1800` | `0` | `fetch_timeout: 900` |
 
 - `agent_branch_prefix`: a new agent’s branch is `<prefix><name>`. Empty (`''`), it is its name alone.
 - `ticket_branch_prefix`: a ticket’s branch is `<prefix><key>` (`ticket/DEM-12`).
 - `commit_mode`: “Commit”, who writes the commits asked from the files panel: `agent` (“Written by the agent”) or `direct` (“Direct, with a suggested message”).
 - `conventional_commits`: “Generated commit message”, messages in the Conventional Commits form.
+- `auto_fetch`: the project’s “Fetch automatically (git fetch)”: `default` (“As the general setting” of each machine), `always` or `never`.
+- `fetch_every`: the minutes between two background fetches of the project; `0`, the general setting’s of each machine.
+- `fetch_timeout`: the seconds a background fetch of the project may take; `0`, the general setting’s. A value out of its bounds is brought back to the nearest, and the file is told so.
 
 ### board
 
@@ -310,6 +316,10 @@ launch:
 | `command` | yes | The command line. |
 | `shell` | no | The shell that runs it. Missing: the system’s default shell. |
 | `cwd` | no | A subfolder of the project, relative. Missing: the root of the project. |
+| `url` | no | The `http://` or `https://` address Escouade opens as soon as it answers (see [launch](launch#opening-an-address-on-launch)). It may name `${ESCOUADE_PORT_BASE}` and `${ESCOUADE_PORT_END}`, with a value for the project after `:-`. Any other address is told and the command ignored. |
+| `open_in` | no | Where to open it: `page` (a launch page of Escouade, the default) or `browser` (the system’s browser). |
+
+The address is part of the command: changed in the file, it asks for your approval again, and it only applies with the command.
 
 Unlike steps, a launch command has no short form: a text alone is told as an invalid value. A single command can be written without a list (`launch:` followed directly by `name:` and `command:`, indented): it is a list of one command.
 

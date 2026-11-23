@@ -7,7 +7,7 @@ import { sandboxedCompiler } from '../../server/utils/compile';
 import { firstPartyRepo } from '../../server/utils/config';
 import { engineFolder, engineHelp } from './engine';
 import { parseTarget, type Source } from './download';
-import { keysIn, readToken, revoke, saveToken, sendReport, signingKey, signVersion, workDir, type Admin } from './admin';
+import { createKey, keysIn, readToken, revoke, saveToken, sendReport, signingDir, signVersion, workDir, type Admin } from './admin';
 import { review } from './review';
 
 // `npm run plugin-review -- <id>@<version>` (from the repository's root or from store/): the local review of a version
@@ -27,8 +27,12 @@ import { review } from './review';
 //   ESCOUADE_REVIEW_GITHUB_API   GitHub's API, and GITHUB_TOKEN or GH_TOKEN for its limits
 // And for what is sent to the store (report, sign, revoke, lift, revoke-key):
 //   ESCOUADE_STORE_TOKEN         the administration token (else the system's keychain, saved by `token`)
-//   ESCOUADE_SIGNING_KEY         the store's secret key (~/.escouade-signing/store.key), used by minisign alone
+//   ESCOUADE_SIGNING_DIR         the folder of the secret keys (~/.escouade-signing), read by minisign alone: store.key
+//                                (the first hand, dev.escouade.*), third-party.key (the third parties and the revocation
+//                                list, with a password); create-key third-party writes there
+//   ESCOUADE_SIGNING_KEY         one secret key for every role (the backup's), with a password
 //   ESCOUADE_MINISIGN            the minisign command (minisign)
+//   STORE_KEYS_DIR               the public keys (store/keys)
 
 const USAGE = `npm run plugin-review -- <id>@<version> [--since <version>]
        npm run plugin-review -- report <id>@<version>
@@ -37,6 +41,7 @@ const USAGE = `npm run plugin-review -- <id>@<version> [--since <version>]
        npm run plugin-review -- lift <id>[@<version>] --disable|--unverify
        npm run plugin-review -- revoke-key <id de clé> --fr <raison> --en <reason>
        npm run plugin-review -- token
+       npm run plugin-review -- create-key third-party
 
   Télécharge la version depuis le store, vérifie ses empreintes (archive, binaires, module WASM), l'extrait hors du
   dépôt sans rien exécuter, recompile le bundle d'un plugin run.js ou les sources d'un plugin run.wasm (sur le poste pour
@@ -50,9 +55,14 @@ const USAGE = `npm run plugin-review -- <id>@<version> [--since <version>]
   version.json vérifiée) dans src-tauri/escouade-js/target/ ; reste \`cargo build\`.
 
   report : envoie le rapport à la file du store (les administrateurs seuls le lisent).
-  sign : après ta décision « Vérifier » (et, pour un plugin à module, une recompilation à la même empreinte), signe version.json avec la clé du store (minisign demande son mot de
-  passe), vérifie la signature avec les clés publiques de store/keys/, puis la dépose avec le résumé public.
-  revoke, lift, revoke-key : signent et déposent la liste de révocation suivante (serial + 1).
+  sign : après ta décision « Vérifier » (et, pour un plugin à module, une recompilation à la même empreinte), signe
+  version.json avec la clé de son rôle : la clé de la première main (store.key) pour dev.escouade.*, la clé des tiers
+  (third-party.key, minisign demande son mot de passe à chaque signature) pour tout autre plugin ; vérifie la signature
+  avec les clés publiques de store/keys/ et leurs rôles, puis la dépose avec le résumé public.
+  revoke, lift, revoke-key : signent et déposent la liste de révocation suivante (serial + 1), avec la clé des tiers et
+  de la révocation (minisign demande son mot de passe). revoke-key se signe avec la clé de secours (ESCOUADE_SIGNING_KEY).
+  create-key third-party : crée sur ton poste la clé des tiers et de la révocation, à mot de passe (minisign le demande
+  deux fois) : la clé secrète dans ~/.escouade-signing/third-party.key, la publique dans store/keys/third-party.pub.
   token : garde le jeton d’administration dans le trousseau du système (collé, jamais affiché).
 `;
 
@@ -61,6 +71,7 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(USAGE);
     return 0;
   }
+  if (argv[0] === 'create-key') return makeKey(argv);
   if (['report', 'sign', 'revoke', 'lift', 'revoke-key', 'token'].includes(argv[0] ?? '')) return admin(argv);
   const sinceAt = argv.indexOf('--since');
   const since = sinceAt >= 0 ? argv[sinceAt + 1] : undefined;
@@ -156,6 +167,35 @@ const flag = (argv: string[], name: string) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 
+/**
+ * create-key third-party: the key of the third parties and of the revocation list made on this machine (ESC-592), its
+ * password typed by the user to minisign; nothing is sent anywhere.
+ */
+function makeKey(argv: string[]): number {
+  if (argv[1] !== 'third-party') {
+    process.stderr.write(USAGE);
+    return 2;
+  }
+  const env = process.env;
+  const here = dirname(fileURLToPath(import.meta.url));
+  const done = createKey({
+    cmd: env.ESCOUADE_MINISIGN ?? 'minisign',
+    dir: signingDir(env),
+    keys: env.STORE_KEYS_DIR ?? resolve(here, '../../keys'),
+  });
+  process.stdout.write(
+    [
+      `La clé des tiers et de la révocation est créée (id ${done.id}).`,
+      `  secrète, à garder : ${done.secret} (et son mot de passe, dans ton gestionnaire de mots de passe)`,
+      `  publique, à commiter : ${done.pub}`,
+      `Pour l’app, dans STORE_KEYS (crates/escouade-plugins/src/store_keys.rs) :`,
+      `  EmbeddedKey { file: "third-party.pub", public: "${done.line}", roles: &[Role::ThirdParty, Role::Revocation] },`,
+      '',
+    ].join('\n'),
+  );
+  return 0;
+}
+
 /** report, sign, revoke, lift, revoke-key, token: what is sent to the store, with the administration token. */
 async function admin(argv: string[]): Promise<number> {
   const env = process.env;
@@ -190,7 +230,7 @@ async function admin(argv: string[]): Promise<number> {
     token,
     reports: resolve(env.ESCOUADE_REVIEW_HOME ?? join(homedir(), '.escouade-review')),
     keys: keysIn(env.STORE_KEYS_DIR ?? resolve(here, '../../keys')),
-    minisign: { cmd: env.ESCOUADE_MINISIGN ?? 'minisign', key: signingKey(env) },
+    minisign: { cmd: env.ESCOUADE_MINISIGN ?? 'minisign', dir: signingDir(env), key: env.ESCOUADE_SIGNING_KEY || undefined },
     work: resolve(workDir(env)),
   };
   if (command === 'revoke-key') {
@@ -225,7 +265,9 @@ async function admin(argv: string[]): Promise<number> {
   }
   if (command === 'sign') {
     const done = await signVersion(a, id, version!);
-    process.stdout.write(`${id}@${version} signée (clé ${done.keyId}) et déposée : elle porte le sceau « Vérifié par Escouade ».\n`);
+    process.stdout.write(
+      `${id}@${version} signée (clé ${done.keyId}, ${done.role}) et déposée : elle porte le sceau « Vérifié par Escouade ».\n`,
+    );
     return 0;
   }
   const action = argv.includes('--disable') ? 'disable' : argv.includes('--unverify') ? 'unverify' : null;
