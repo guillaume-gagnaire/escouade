@@ -773,11 +773,45 @@ fn before(e: &Value, since: i64) -> bool {
 /// with something in it).
 pub(crate) fn take_relay_away(view: &dyn TerminalView, meta: &mut AgentMeta) {
     if let Some(path) = view.relay_path(Path::new(&meta.cwd)) {
-        let _ = std::fs::remove_file(path);
+        remove_relay(Path::new(&meta.cwd), &path);
     }
     for dir in std::mem::take(&mut meta.relay_made).iter().rev() {
         let _ = std::fs::remove_dir(dir);
     }
+}
+
+/// Whether `path`, or a folder above it under `cwd`, is a link: a repository can commit one at
+/// `.cursor`, `.cursor/rules` or the rule itself, and a relay is never written or taken away
+/// through it.
+fn relay_through_link(cwd: &Path, path: &Path) -> bool {
+    path.ancestors()
+        .take_while(|d| d.starts_with(cwd) && *d != cwd)
+        .any(|d| std::fs::symlink_metadata(d).is_ok_and(|m| m.file_type().is_symlink()))
+}
+
+/// The relay at `path` removed, only when it is a plain file reached through no link.
+fn remove_relay(cwd: &Path, path: &Path) {
+    let plain = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file());
+    if plain && !relay_through_link(cwd, path) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// `bytes` written at `path` under `cwd`: its folders made, then checked again for a link, and
+/// the file opened without following one (`O_NOFOLLOW`), so a link put there is refused.
+fn write_relay(cwd: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    if relay_through_link(cwd, path) {
+        return Err(std::io::Error::other("a link on its way, not followed"));
+    }
+    let mut open = std::fs::OpenOptions::new();
+    open.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut open, libc::O_NOFOLLOW);
+    open.open(path)?.write_all(bytes)
 }
 
 /// The files of `files` whose text holds `token`.
@@ -1105,9 +1139,13 @@ impl<R: Runtime> Core<R> {
             return;
         };
         let Some(text) = text else {
-            let _ = std::fs::remove_file(&path);
+            remove_relay(Path::new(&cwd), &path);
             return;
         };
+        if relay_through_link(Path::new(&cwd), &path) {
+            log::warn!("{}: relay not written: a link on its way", path.display());
+            return;
+        }
         // The folders made for it (not there before), kept to be taken away with it.
         let made: Vec<String> = path
             .ancestors()
@@ -1127,10 +1165,7 @@ impl<R: Runtime> Core<R> {
                 }
             }
         }
-        let written = path
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::write(&path, view.relay_file(&text)));
+        let written = write_relay(Path::new(&cwd), &path, &view.relay_file(&text));
         if let Err(e) = written {
             log::warn!("{}: relay not written: {e}", path.display());
             return;
