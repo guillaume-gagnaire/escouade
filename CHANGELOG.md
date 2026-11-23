@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Sécurité : la crate `cookie` passe à 0.18.3 (RUSTSEC-2026-0594, des nonces de cookies privés pouvaient se répéter dans un process qui se divise).
+
 ## [2.2.9] — 2026-11-23
 
 - La fenêtre « Pages » d’une commande de lancement montre de nouveau ses icônes (retour, avancer, recharger, largeurs, devtools, navigateur) : ses boutons étaient vides.
