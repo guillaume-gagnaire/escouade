@@ -49,7 +49,7 @@ const MAX_DEPTH: usize = 4;
 /// The deepest a document's folder goes.
 const MAX_FOLDER_DEPTH: usize = 6;
 /// A text page, a decision: the most Escouade reads of one file.
-const MAX_TEXT: u64 = 2 * 1024 * 1024;
+pub(crate) const MAX_TEXT: u64 = 2 * 1024 * 1024;
 /// The most files a folder is listed with.
 const MAX_FILES: usize = 5000;
 /// What a joined file may weigh before the window warns (FACTORY.md: 50 MB).
