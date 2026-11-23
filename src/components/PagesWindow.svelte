@@ -22,6 +22,7 @@
   import type { PageView } from '../lib/types';
   import { tip } from '../lib/tip';
   import Icon from './Icon.svelte';
+  import IconSprite from './IconSprite.svelte';
 
   let { projectId }: { projectId: string } = $props();
 
@@ -79,6 +80,9 @@
     }
   }}
 />
+
+<!-- Its own window: the icons' symbols are in no other page it could use (App.svelte has them for the main one). -->
+<IconSprite />
 
 <div class="pw">
   <div class="tabs" role="tablist" aria-label={t('devpage.window.tabs')}>

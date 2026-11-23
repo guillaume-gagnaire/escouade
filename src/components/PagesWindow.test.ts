@@ -24,6 +24,18 @@ describe('the « Pages » window', () => {
     expect(screen.getByRole('radio', { name: 'Pleine largeur' }).classList).toContain('on');
   });
 
+  it('draws its icons: the window has their symbols, as the main one has (they were empty boxes)', async () => {
+    fakeBackend({ devpage_list: () => ({ pages: [PAGE], shown: 'a7' }) });
+    const { container } = render(PagesWindow, { projectId: 'p1' });
+    await screen.findByRole('textbox', { name: 'Adresse de la page' });
+    const uses = [...container.querySelectorAll('svg.icon use')];
+    expect(uses.length).toBeGreaterThan(5);
+    for (const u of uses) {
+      const id = (u.getAttribute('href') ?? '').slice(1);
+      expect(document.getElementById(id)?.tagName.toLowerCase(), id).toBe('symbol');
+    }
+  });
+
   it('asks the backend for its buttons, on the page shown', async () => {
     const b = fakeBackend({ devpage_list: () => ({ pages: [PAGE], shown: 'a7' }) });
     render(PagesWindow, { projectId: 'p1' });
