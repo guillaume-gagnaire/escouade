@@ -1340,7 +1340,11 @@ fn read_dir(dir: &Path) -> Option<BTreeMap<String, String>> {
             continue;
         }
         let mut bytes = Vec::new();
-        if file.take(MAX_TICKET_FILE + 1).read_to_end(&mut bytes).is_err() {
+        if file
+            .take(MAX_TICKET_FILE + 1)
+            .read_to_end(&mut bytes)
+            .is_err()
+        {
             continue;
         }
         let text = if bytes.len() as u64 > MAX_TICKET_FILE {
@@ -1760,8 +1764,17 @@ pub(crate) fn remove_file_of(dir: &Path, sid: &str) {
     if !plain_id(sid) {
         return;
     }
+    // Never through a link, nor out of the project (ESC-199), as every other writer of the folder.
+    if let Some(why) = crate::workflowfiles::unsafe_dir(dir) {
+        log::warn!("shared ticket {sid} not removed: {why}");
+        return;
+    }
     let _ = std::fs::remove_file(dir.join(format!("{sid}.yml")));
-    let _ = std::fs::remove_dir_all(dir.join(sid));
+    let folder = dir.join(sid);
+    // Only a plain folder: a link there is left as it is.
+    if std::fs::symlink_metadata(&folder).is_ok_and(|m| m.is_dir()) {
+        let _ = std::fs::remove_dir_all(folder);
+    }
 }
 
 fn not_shared() -> anyhow::Error {

@@ -835,3 +835,26 @@ fn a_shared_media_is_a_plain_file_of_the_folder_never_a_link_nor_too_heavy() {
     symlink(&from, &linked).unwrap();
     assert!(sh::shared_media(&linked, "a.png").is_none());
 }
+
+#[cfg(unix)]
+#[test]
+fn removing_a_shared_ticket_never_goes_through_a_link() {
+    let root = crate::paths::test_dir("sh-link-remove");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(outside.join("claude")).unwrap();
+    std::fs::write(outside.join("claude.yml"), "x").unwrap();
+    std::fs::write(outside.join("claude/keep"), "x").unwrap();
+    let project = root.join("project");
+    std::fs::create_dir_all(project.join(".escouade")).unwrap();
+    let dir = project.join(sh::DIR);
+    std::os::unix::fs::symlink(&outside, &dir).unwrap();
+    sh::remove_file_of(&dir, "claude");
+    assert!(outside.join("claude.yml").exists());
+    assert!(outside.join("claude/keep").exists());
+    // A plain folder of tickets whose <sid> entry is a link: the target is kept.
+    std::fs::remove_file(&dir).unwrap();
+    std::fs::create_dir_all(&dir).unwrap();
+    std::os::unix::fs::symlink(outside.join("claude"), dir.join("claude")).unwrap();
+    sh::remove_file_of(&dir, "claude");
+    assert!(outside.join("claude/keep").exists());
+}
