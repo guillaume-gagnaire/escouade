@@ -30,6 +30,10 @@ pub const INDEX: &str = "MEMORY.md";
 const MAX_FILE: u64 = 256 * 1024;
 /// The longest a memory's text may be, in characters.
 pub const MAX_BODY: usize = 20_000;
+/// The most memory files a folder is read with, as `docs::MAX_FILES` bounds a docs folder.
+const MAX_FILES: usize = 500;
+/// The most bytes of memory files `list` reads in all: a cloned repository decides their number and their size.
+const MAX_TOTAL: u64 = 8 * 1024 * 1024;
 /// The longest description, in characters (one line of the index).
 pub const MAX_DESCRIPTION: usize = 300;
 /// The longest name, in characters.
@@ -214,6 +218,8 @@ fn files(dir: &Path) -> Vec<(String, PathBuf)> {
         })
         .collect();
     out.sort();
+    // The rest is left unread, as `docs::walk` stops at its limit: a cloned repository decides how many there are.
+    out.truncate(MAX_FILES);
     out
 }
 
@@ -229,10 +235,16 @@ fn read_file(stem: &str, path: &Path) -> Option<Memory> {
 }
 
 /// The memories of `dir`, by name. None when it is not there; refused through a link or out of the project.
+/// At most `MAX_FILES` of them and `MAX_TOTAL` bytes read.
 pub fn list(dir: &Path) -> Result<Vec<Memory>> {
     refused(dir)?;
+    let mut total = 0u64;
     Ok(files(dir)
         .into_iter()
+        .take_while(|(_, path)| {
+            total += std::fs::metadata(path).map_or(0, |m| m.len().min(MAX_FILE));
+            total <= MAX_TOTAL
+        })
         .filter_map(|(stem, path)| read_file(&stem, &path))
         .collect())
 }
