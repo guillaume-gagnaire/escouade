@@ -1116,4 +1116,24 @@ mod state_text_tests {
             assert_eq!(state_text(&root, "out/hosts"), None);
         }
     }
+
+    /// ESC-653: under Windows a junction (no privilege needed) on the way, or as the state file,
+    /// leads out of the project as a link does under Unix: refused the same.
+    #[test]
+    fn a_state_file_is_never_read_through_a_linked_folder() {
+        let root = crate::paths::test_dir("wf-state-text-link");
+        let project = root.join("project");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.md"), "token\n").unwrap();
+        assert!(crate::paths::make_dir_link(&outside, &project.join("out")));
+        assert_eq!(state_text(&project, "out/secret.md"), None);
+        assert_eq!(state_text(&project, "out"), None);
+        if crate::paths::make_file_link(&outside.join("secret.md"), &project.join("s.md")) {
+            assert_eq!(state_text(&project, "s.md"), None);
+        }
+        #[cfg(windows)]
+        std::fs::remove_dir(project.join("out")).unwrap();
+    }
 }

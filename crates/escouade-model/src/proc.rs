@@ -327,6 +327,33 @@ mod tests {
         );
     }
 
+    /// ESC-653: the same under Windows, where the process is ended by `TerminateProcess`. No `yes`
+    /// there: `cmd` prints a line of 64 characters again and again.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn an_output_past_its_cap_is_cut_and_the_process_killed_under_windows() {
+        let start = Instant::now();
+        let line = "y".repeat(64);
+        let out = output_capped(
+            command(
+                "cmd",
+                &["/d", "/c", &format!("for /l %i in () do @echo {line}")],
+            ),
+            Duration::from_secs(60),
+            200_000,
+        )
+        .await
+        .unwrap();
+        assert!(!out.status.success());
+        assert!(out.stdout.len() > 200_000, "{}", out.stdout.len());
+        assert!(out.stdout.len() < 2_000_000, "{}", out.stdout.len());
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "{:?}",
+            start.elapsed()
+        );
+    }
+
     #[tokio::test]
     async fn the_exit_code_and_both_outputs_are_kept_apart() {
         #[cfg(unix)]
