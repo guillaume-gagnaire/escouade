@@ -1683,15 +1683,9 @@ fn regular_text(file: &std::path::Path) -> std::io::Result<String> {
     if !std::fs::symlink_metadata(file)?.file_type().is_file() {
         return Err(Error::new(ErrorKind::InvalidInput, "not a regular file"));
     }
-    let mut open = std::fs::OpenOptions::new();
-    open.read(true);
-    // Swapped for a link or a pipe since the check: refused at open, never waited on.
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut open, libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    let f = open.open(file)?;
-    if !f.metadata()?.is_file() {
-        return Err(Error::new(ErrorKind::InvalidInput, "not a regular file"));
-    }
+    // Swapped for a link or a pipe since the check: refused at open, never waited on (under
+    // Windows too, where `O_NOFOLLOW` does not exist: see `open_no_follow`).
+    let f = crate::paths::open_no_follow(file)?;
     let mut text = String::new();
     f.take(MAX_FILE + 1).read_to_string(&mut text)?;
     if text.len() as u64 > MAX_FILE {

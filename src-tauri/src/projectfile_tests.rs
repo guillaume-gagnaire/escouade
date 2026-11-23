@@ -1616,3 +1616,42 @@ fn node_lines_count_crlf_and_lf_breaks() {
     assert_eq!((w[0].1, w[0].2.line), (4, 4));
     assert_eq!(t.line, 1);
 }
+
+/// ESC-653: `.escouade.yml` comes with the repository, so is a link there (a junction under
+/// Windows, which needs no privilege) neither read nor written through, and nothing past 1 MiB.
+#[test]
+fn the_project_file_is_neither_read_nor_written_through_a_link_nor_past_its_cap() {
+    let root = crate::paths::test_dir("pf-file-link");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let project = root.join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let path = project.to_string_lossy().to_string();
+    let file = project.join(pf::FILE);
+    // A plain file is read and written.
+    std::fs::write(&file, "version: 1\n").unwrap();
+    assert_eq!(pf::file_text(&path).as_deref(), Some("version: 1\n"));
+    assert_eq!(pf::file_to_write(&path).unwrap(), file);
+    // Past the cap: neither read nor written again from nothing.
+    std::fs::write(&file, vec![b'#'; (1 << 20) + 1]).unwrap();
+    assert_eq!(pf::file_text(&path), None);
+    assert!(pf::file_to_write(&path).is_err());
+    std::fs::remove_file(&file).unwrap();
+    // A link to a folder (a junction under Windows).
+    assert!(crate::paths::make_dir_link(&outside, &file));
+    assert_eq!(pf::file_text(&path), None);
+    assert!(pf::file_to_write(&path).is_err());
+    #[cfg(windows)]
+    std::fs::remove_dir(&file).unwrap();
+    #[cfg(unix)]
+    std::fs::remove_file(&file).unwrap();
+    // A link to a file elsewhere (under Windows only with the privilege of symbolic links).
+    let secret = outside.join("secret.yml");
+    std::fs::write(&secret, "version: 1\n").unwrap();
+    if crate::paths::make_file_link(&secret, &file) {
+        assert_eq!(pf::file_text(&path), None);
+        assert!(pf::file_to_write(&path).is_err());
+    } else {
+        eprintln!("no symbolic link to a file allowed here: that part skipped");
+    }
+}
