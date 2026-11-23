@@ -340,8 +340,9 @@ impl<R: tauri::Runtime> Core<R> {
             .filter(|v| !v.is_null())
             .ok_or_else(|| format!("{key}: no value kept on this machine"))?;
         let p = self.project(project).map_err(|e| e.to_string())?;
-        let path = std::path::Path::new(&p.path).join(projectfile::FILE);
-        let existing = std::fs::read_to_string(&path).ok();
+        // Never through a link, never past the cap: `projectfile` checks both.
+        let path = projectfile::file_to_write(&p.path).map_err(|e| format!("{e:#}"))?;
+        let existing = projectfile::file_text(&p.path);
         let text = projectfile::write_plugin(existing.as_deref(), id, key, &value)
             .map_err(|e| format!("{e:#}"))?;
         std::fs::write(&path, text).map_err(|e| e.to_string())?;

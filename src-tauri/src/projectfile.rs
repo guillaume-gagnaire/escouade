@@ -1642,15 +1642,58 @@ use crate::model::UiEvent;
 use std::sync::Arc;
 use tauri::Runtime;
 
-/// The file of the project's folder: None when there is none (or it cannot be opened).
-fn file_text(path: &str) -> Option<String> {
-    match std::fs::read_to_string(std::path::Path::new(path).join(FILE)) {
+/// What the file may weigh: a repository can carry far more, or a link to /dev/zero.
+const MAX_FILE: u64 = 1 << 20;
+
+/// The file of the project's folder: None when there is none (or it cannot be opened). Never read
+/// through a link nor anything but a regular file (a repository can carry a link to anywhere, as
+/// `sharing.rs` refuses), and never past `MAX_FILE`.
+pub(crate) fn file_text(path: &str) -> Option<String> {
+    match regular_text(&std::path::Path::new(path).join(FILE)) {
         Ok(t) => Some(t),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => {
             log::warn!("{FILE} of {path} not read: {e}");
             None
         }
+    }
+}
+
+fn regular_text(file: &std::path::Path) -> std::io::Result<String> {
+    use std::io::{Error, ErrorKind, Read};
+    // `symlink_metadata` does not follow a link: one is never opened.
+    if !std::fs::symlink_metadata(file)?.file_type().is_file() {
+        return Err(Error::new(ErrorKind::InvalidInput, "not a regular file"));
+    }
+    let mut open = std::fs::OpenOptions::new();
+    open.read(true);
+    // Swapped for a link or a pipe since the check: refused at open, never waited on.
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(
+        &mut open,
+        libc::O_NOFOLLOW | libc::O_NONBLOCK,
+    );
+    let f = open.open(file)?;
+    if !f.metadata()?.is_file() {
+        return Err(Error::new(ErrorKind::InvalidInput, "not a regular file"));
+    }
+    let mut text = String::new();
+    f.take(MAX_FILE + 1).read_to_string(&mut text)?;
+    if text.len() as u64 > MAX_FILE {
+        return Err(Error::new(ErrorKind::InvalidData, format!("over {MAX_FILE} bytes")));
+    }
+    Ok(text)
+}
+
+/// Where to write the file: refused when what is there is a link (the write would go wherever it
+/// points) or a file `file_text` does not read (rewriting it from nothing would lose it).
+pub(crate) fn file_to_write(path: &str) -> Result<std::path::PathBuf> {
+    let file = std::path::Path::new(path).join(FILE);
+    match std::fs::symlink_metadata(&file) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(file),
+        Ok(m) if m.file_type().is_file() && m.len() <= MAX_FILE => Ok(file),
+        Ok(_) => bail!("{FILE} of {path} is a link or not a file read: not written"),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -1849,8 +1892,9 @@ impl<R: Runtime> Core<R> {
                 .filter(|(k, v)| writable(k, v))
                 .collect(),
         };
+        let file = file_to_write(&p.path)?;
         let text = write(file_text(&p.path).as_deref(), &values)?;
-        std::fs::write(std::path::Path::new(&p.path).join(FILE), text)?;
+        std::fs::write(file, text)?;
         self.forget_kept(project_id, |k| values.iter().any(|(w, _)| *w == k))
     }
 
