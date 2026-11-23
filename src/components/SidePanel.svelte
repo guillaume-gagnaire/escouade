@@ -13,6 +13,9 @@
   import { followers, ticketTracks } from '../lib/workflow-view';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
+  import { PANEL_MIN, panelRoom, panelShown, panelWidth, workGuess } from '../lib/panel-width.svelte';
+  import { observeWidth } from '../lib/resize';
+  import Splitter from './Splitter.svelte';
 
   // The agent's side panel: its uncommitted files, the repository history, the project's workflow (ESC-194), and the
   // pull request of its branch with its CI, reviews and deployments (ESC-305); without an agent, the project's open ones.
@@ -33,9 +36,31 @@
   const word = $derived(agent ? prWord(agent) : 'PR');
   /** The CI of the agent's pull request failed: the tab's dot. */
   const failed = $derived(ciFailed(agent));
+
+  // Its width (ESC-659): chosen by its left edge, held to the room its row (the work, or a pane) leaves the
+  // conversation; until the row is measured, what the window leaves beside the rail and the sidebar.
+  let measured = $state(0);
+  const room = $derived(measured || workGuess());
+  const chosen = $derived(panelWidth.chosen(docked));
+  const shown = $derived(panelShown(chosen, docked, room));
+  const roomOf = (node: HTMLElement) => observeWidth(node.parentElement ?? node, (w) => (measured = w));
 </script>
 
-<aside class="git-side" class:docked aria-label={t('common.files')}>
+<aside class="git-side" class:docked aria-label={t('common.files')} style:width="{shown}px" use:roomOf>
+  <!-- Its left edge sets its width (ESC-659), as the sidebar's right edge does. -->
+  <div class="edge">
+    <Splitter
+      edge="left"
+      value={Math.round(shown)}
+      min={PANEL_MIN}
+      max={panelRoom(room)}
+      onreset={() => panelWidth.reset(docked)}
+      label={t('nav.sidePanel.width')}
+      title={t('nav.sidePanel.widthTip')}
+      onresize={(w) => panelWidth.set(docked, w)}
+      oncommit={(w) => panelWidth.commit(docked, w)}
+    />
+  </div>
   <div class="utabs" role="tablist">
     <button role="tab" id="side-tab-files" aria-selected={tab === 'files'} onclick={() => (app.panelTab = 'files')}>
       {t('nav.sidePanel.uncommitted')} <span class="n">{count}</span>
@@ -84,8 +109,10 @@
 </aside>
 
 <style>
+  /* Its width is set where it is drawn (ESC-659): 340 px beside the conversation, 44 % of the work side by side,
+     until its left edge is dragged. */
   .git-side {
-    width: 340px;
+    position: relative;
     flex: none;
     display: flex;
     flex-direction: column;
@@ -93,10 +120,17 @@
     border-left: 1px solid var(--line);
     container: git-side / inline-size;
   }
-  /* Beside the conversation, as the preview lays it out: 44 % of the work, never under 340 pixels. */
-  .git-side.docked {
-    width: 44%;
-    min-width: 340px;
+  .edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    z-index: 2;
+    display: flex;
+  }
+  /* The panel's border draws the line. */
+  .edge :global(.splitter) {
+    background: transparent;
   }
   /* Tabs underlined in the project's colour. */
   .utabs {

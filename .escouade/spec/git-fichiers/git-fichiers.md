@@ -2,7 +2,7 @@
 title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
-tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-561"]
+tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-561","ESC-659"]
 decisions: ["le-fetch-automatique-se-regle-se-voit-et"]
 compared: "2026-10-31T16:24:52+01:00"
 order: 22
@@ -138,3 +138,10 @@ Réglages › Projets, groupe « Git ». Un dossier ou un préfixe refusé l'est
 - Le pull se fait en avance rapide seulement : des branches divergées se rebasent ou se mergent à la main.
 - Rien à synchroniser en HEAD détachée ni sans dépôt distant.
 - La fenêtre « Commit » dit « Haiku rédige le message… » quel que soit le harness des textes rédigés ; la fenêtre d'une pull request (« Rédaction du titre et de la description… ») et le commit d'un projet à plusieurs dépôts (« Message en cours de rédaction… ») ne nomment pas de modèle.
+
+### Largeur du panneau (ESC-659)
+
+- Le bord gauche du panneau se tire comme le bord droit de la barre latérale, à côté de la conversation comme côte à côte (« Largeur du panneau », infobulle « Tirer pour élargir · double clic : largeur par défaut ») : vers la gauche il s'élargit. Au clavier : ← l'élargit et → le rétrécit de 16 px, Début le met au plus étroit, Fin au plus large. Un double clic rend la largeur par défaut.
+- Par défaut : 340 px à côté de la conversation, 44 % de la zone de travail côte à côte. Jamais moins de 340 px (ses onglets tiennent) ; jamais au point de laisser moins de 356 px à la conversation (ce que lui laissait une fenêtre de 1 024 px), ni plus de 1 200 px.
+- Deux largeurs gardées, une par forme (à côté de la conversation, côte à côte), les mêmes pour toute l'app, d'un lancement à l'autre. Une fenêtre trop étroite dessine le panneau plus étroit sans oublier la largeur choisie, rendue quand la place revient.
+- Les onglets suivent sa largeur : sous 420 px ils se resserrent comme dit plus haut, au-delà « PR et CI » revient.

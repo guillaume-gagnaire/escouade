@@ -405,3 +405,65 @@ describe('Splitter on the vertical axis', () => {
     expect(onresize).not.toHaveBeenCalled();
   });
 });
+
+// On a column's left edge (ESC-659, the side panel's): the same handle, mirrored.
+describe('Splitter on a column’s left edge', () => {
+  beforeEach(() => {
+    Element.prototype.setPointerCapture = vi.fn();
+  });
+  const setupLeft = (over: Record<string, unknown> = {}) => setup({ edge: 'left', ...over });
+
+  it('is the same vertical separator, its size and bounds told', () => {
+    const { handle } = setupLeft();
+    expect(handle).toHaveAttribute('aria-orientation', 'vertical');
+    expect(handle).toHaveAttribute('aria-valuenow', '240');
+    expect(handle).toHaveClass('left');
+  });
+
+  it('dragged left, the column grows; dragged right, it narrows; held between its bounds', async () => {
+    const { handle, onresize, oncommit } = setupLeft();
+    await down(handle, 300);
+    await move(handle, 260);
+    expect(onresize).toHaveBeenLastCalledWith(280);
+    await move(handle, 340);
+    expect(onresize).toHaveBeenLastCalledWith(200);
+    await move(handle, 5000);
+    expect(onresize).toHaveBeenLastCalledWith(160);
+    await move(handle, -5000);
+    expect(onresize).toHaveBeenLastCalledWith(500);
+    await up(handle);
+    expect(oncommit).toHaveBeenCalledOnce();
+    expect(oncommit).toHaveBeenCalledWith(500);
+  });
+
+  it('the left arrow widens it, the right one narrows it, Home and End to its bounds', async () => {
+    const { handle, oncommit } = setupLeft();
+    handle.focus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(oncommit).toHaveBeenLastCalledWith(256);
+    await userEvent.keyboard('{ArrowRight}');
+    expect(oncommit).toHaveBeenLastCalledWith(224);
+    await userEvent.keyboard('{Home}');
+    expect(oncommit).toHaveBeenLastCalledWith(160);
+    await userEvent.keyboard('{End}');
+    expect(oncommit).toHaveBeenLastCalledWith(500);
+  });
+
+  it('a double click gives its usual width back', async () => {
+    const { handle, oncommit } = setupLeft({ value: 400 });
+    await fireEvent.dblClick(handle);
+    expect(oncommit).toHaveBeenCalledWith(240);
+  });
+
+  it('or its owner’s way of going back, when it has one', async () => {
+    const onreset = vi.fn();
+    const { handle } = setupLeft({ onreset, value: 400 });
+    await fireEvent.dblClick(handle);
+    expect(onreset).toHaveBeenCalledOnce();
+  });
+
+  it('leaves a column’s right edge as it was', () => {
+    const { handle } = setup();
+    expect(handle).not.toHaveClass('left');
+  });
+});

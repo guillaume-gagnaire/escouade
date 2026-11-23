@@ -336,7 +336,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
  * the bars, dragged), asked once (`nameAsked`), or fixed (`mcpPort`). « Rien d'autre ne quitte la fenêtre »: these
  * were already out of it.
  */
-export const SETTINGS_ELSEWHERE: (keyof Settings)[] = ['railWidth', 'sideWidth', 'nameAsked', 'mcpPort'];
+export const SETTINGS_ELSEWHERE: (keyof Settings)[] = ['railWidth', 'sideWidth', 'panelWidth', 'splitPanelWidth', 'nameAsked', 'mcpPort'];
 
 /** The keys of a board set by the app alone: the prefix and the number of its next ticket. */
 export const BOARD_ELSEWHERE: BoardKey[] = ['prefix', 'nextNumber'];

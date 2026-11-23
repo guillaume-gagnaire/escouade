@@ -368,7 +368,8 @@ test.describe('in English', () => {
               (el) =>
                 el.offsetParent &&
                 el.children.length === 0 &&
-                !el.closest('.caption, .fn, .ell, .subject, .ref, .who, .code, .graph svg') &&
+                // The grip of its left edge (ESC-659), wider than its line by design.
+                !el.closest('.edge, .caption, .fn, .ell, .subject, .ref, .who, .code, .graph svg') &&
                 (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1),
             )
             .map((el) => `${el.tagName.toLowerCase()}.${el.className} « ${el.textContent?.trim().slice(0, 40)} »`),

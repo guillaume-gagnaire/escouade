@@ -160,6 +160,8 @@ export const SETTINGS: Settings = {
   editorFontSize: 12.5,
   railWidth: 0,
   sideWidth: 0,
+  panelWidth: 0,
+  splitPanelWidth: 0,
   voice: {
     device: '',
     model: 'base',

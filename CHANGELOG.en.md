@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - Security: the `cookie` crate moves to 0.18.3 (RUSTSEC-2026-0594, private cookie nonces could repeat in a process that forks).
+- The right panel (files, history, workflow, PR and CI) is widened by its left edge like the other columns, with the mouse, the keyboard or a double click, and keeps its width, beside the conversation and side by side alike.
 
 ## [2.2.9] — 2026-11-23
 

@@ -234,6 +234,8 @@ export default defineZone('nav', {
     close: 'Close the panel',
     reopen: 'To open it again: “Files” in the header of the conversation',
     reopenSplit: 'To open it again: the side-by-side layout, at the top right of the conversation',
+    width: 'Panel width',
+    widthTip: 'Drag to widen · double click: usual width',
   },
 
   menu: { swatch: '{label} {n}' },

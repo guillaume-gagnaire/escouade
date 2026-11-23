@@ -144,6 +144,10 @@ export interface Settings {
   railWidth?: number;
   /** The width of the sidebar (agents, Kanban) chosen by its edge (ESC-204), in CSS pixels; 0 (or absent) is its usual width. */
   sideWidth?: number;
+  /** The width of the side panel (Git, history, workflow, PR and CI) beside the conversation, chosen by its left edge (ESC-659); 0 (or absent) is its usual width. */
+  panelWidth?: number;
+  /** The same docked side by side (ESC-659); 0 (or absent) is its usual share of the work. */
+  splitPanelWidth?: number;
   /** « Ton nom » (ESC-190): written in the tickets shared with the team. Absent from the window’s tests made before it. */
   userName?: string;
   /** The id beside the name: from the git e-mail, else drawn once. */

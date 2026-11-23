@@ -240,6 +240,12 @@ pub struct Settings {
     /// The width of the sidebar of the agents and the Kanban, in CSS pixels (ESC-204), its right
     /// edge dragged: `SIDE_WIDTH_RANGE`, the same for all projects; 0 is its usual width (276 px).
     pub side_width: u32,
+    /// The width of the side panel (Git, history, workflow, PR and CI) beside the conversation,
+    /// in CSS pixels (ESC-659), its left edge dragged: `PANEL_WIDTH_RANGE`, the same for all
+    /// projects; 0 is its usual width (340 px).
+    pub panel_width: u32,
+    /// The same, the panel docked side by side (ESC-659); 0 is its usual share of the work (44 %).
+    pub split_panel_width: u32,
     /// « Projection des quotas »: where each quota would end at the pace used so far (« → 64 % »),
     /// and the day's cost where it would end the day, in the status bar past 80 % or always, or
     /// nowhere (`QuotaProjection`).
@@ -278,6 +284,9 @@ pub const RAIL_WIDTH_RANGE: (u32, u32) = (52, 300);
 
 /// The widths the sidebar of the agents and the Kanban is dragged to (ESC-204).
 pub const SIDE_WIDTH_RANGE: (u32, u32) = (220, 480);
+
+/// The widths the side panel is dragged to (ESC-659): its tabs held, up to a wide screen's.
+pub const PANEL_WIDTH_RANGE: (u32, u32) = (340, 1200);
 
 /// « Projection des quotas »: where the status bar writes the projection of each quota (the
 /// panel of the accounts and the tooltips always do, unless `Off`). Read from the switch of
@@ -872,6 +881,11 @@ impl Settings {
                 .side_width
                 .clamp(SIDE_WIDTH_RANGE.0, SIDE_WIDTH_RANGE.1);
         }
+        for width in [&mut self.panel_width, &mut self.split_panel_width] {
+            if *width != 0 {
+                *width = (*width).clamp(PANEL_WIDTH_RANGE.0, PANEL_WIDTH_RANGE.1);
+            }
+        }
         let z = self.ui_zoom;
         self.ui_zoom = *ZOOM_LEVELS
             .iter()
@@ -1037,6 +1051,8 @@ impl Default for Settings {
             editor_font_size: DEFAULT_FONT_SIZE,
             rail_width: 0,
             side_width: 0,
+            panel_width: 0,
+            split_panel_width: 0,
             quota_projection: QuotaProjection::Alert,
             cache_savings_in_bar: false,
             voice: VoiceSettings::default(),
@@ -3829,6 +3845,20 @@ mod tests {
             s.normalize_display();
             assert_eq!(s.side_width, read);
         }
+        // The side panel’s, beside the conversation and docked (ESC-659): the same.
+        assert_eq!((s.panel_width, s.split_panel_width), (0, 0));
+        for (kept, read) in [(0, 0), (10, 340), (520, 520), (5000, 1200)] {
+            s.panel_width = kept;
+            s.split_panel_width = kept;
+            s.normalize_display();
+            assert_eq!((s.panel_width, s.split_panel_width), (read, read));
+        }
+        s.panel_width = 420;
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(
+            (v["panelWidth"].clone(), v["splitPanelWidth"].clone()),
+            (json!(420), json!(1200))
+        );
         s.rail_width = 180;
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(

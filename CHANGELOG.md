@@ -7,6 +7,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ## [Non publié]
 
 - Sécurité : la crate `cookie` passe à 0.18.3 (RUSTSEC-2026-0594, des nonces de cookies privés pouvaient se répéter dans un process qui se divise).
+- Le panneau de droite (fichiers, historique, workflow, PR et CI) s’élargit par son bord gauche comme les autres colonnes, à la souris, au clavier ou par un double clic, et garde sa largeur, à côté de la conversation comme côte à côte.
 
 ## [2.2.9] — 2026-11-23
 
