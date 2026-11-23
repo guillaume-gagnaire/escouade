@@ -807,3 +807,31 @@ fn a_folder_of_tickets_that_is_a_link_is_neither_read_nor_written() {
     }
     assert!(crate::workflowfiles::unsafe_dir(&dir).is_some());
 }
+
+#[cfg(unix)]
+#[test]
+fn a_shared_media_is_a_plain_file_of_the_folder_never_a_link_nor_too_heavy() {
+    use std::os::unix::fs::symlink;
+    let root = crate::paths::test_dir("sh-link-media");
+    let secret = root.join("secret.json");
+    std::fs::write(&secret, b"token").unwrap();
+    let from = root.join("tickets").join("t1");
+    std::fs::create_dir_all(from.join("u1")).unwrap();
+    std::fs::write(from.join("a.png"), b"png").unwrap();
+    std::fs::write(from.join("u1").join("k.txt"), b"txt").unwrap();
+    symlink(&secret, from.join("b.png")).unwrap();
+    symlink(&root, from.join("u2")).unwrap();
+    std::fs::File::create(from.join("big.png"))
+        .unwrap()
+        .set_len(sh::MAX_SHARED_FILE + 1)
+        .unwrap();
+    assert_eq!(sh::shared_media(&from, "a.png").map(|m| m.1), Some(3));
+    assert_eq!(sh::shared_media(&from, "u1/k.txt").map(|m| m.1), Some(3));
+    assert!(sh::shared_media(&from, "b.png").is_none());
+    assert!(sh::shared_media(&from, "u2/secret.json").is_none());
+    assert!(sh::shared_media(&from, "big.png").is_none());
+    // The ticket's own folder as a link is refused too.
+    let linked = root.join("tickets").join("t2");
+    symlink(&from, &linked).unwrap();
+    assert!(sh::shared_media(&linked, "a.png").is_none());
+}

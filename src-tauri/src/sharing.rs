@@ -289,6 +289,37 @@ pub fn plain_media(file: &str) -> bool {
         })
 }
 
+/// The image or file `file` (a plain name, or `<uniq>/<name>`) of a shared ticket's folder `from`,
+/// opened, with its size: a plain file, no link at it nor on the way from `from` down, no heavier
+/// than `MAX_SHARED_FILE`. The folder comes from the repository, where a teammate's commit may put
+/// links to anywhere on this machine (ESC-199); the folder of tickets itself is `unsafe_dir`'s.
+pub(crate) fn shared_media(from: &Path, file: &str) -> Option<(std::fs::File, u64)> {
+    let src = from.join(file);
+    // Neither a link nor a pipe, a device… (opening one may block): a plain file only.
+    if !std::fs::symlink_metadata(&src).ok()?.is_file() {
+        return None;
+    }
+    let mut at = src.parent()?;
+    while at.starts_with(from) {
+        if std::fs::symlink_metadata(at).ok()?.file_type().is_symlink() {
+            return None;
+        }
+        at = at.parent()?;
+    }
+    let f = std::fs::File::open(&src).ok()?;
+    let meta = f.metadata().ok()?;
+    (meta.is_file() && meta.len() <= MAX_SHARED_FILE).then_some((f, meta.len()))
+}
+
+/// Copies a media opened by `shared_media` to `dst`, never more than `MAX_SHARED_FILE` bytes
+/// (the file may grow after it was measured).
+fn copy_media(f: std::fs::File, dst: &Path) -> std::io::Result<u64> {
+    std::io::copy(
+        &mut std::io::Read::take(f, MAX_SHARED_FILE),
+        &mut std::fs::File::create(dst)?,
+    )
+}
+
 // ---------- reading ----------
 
 fn invalid(line: Option<u32>, text: String) -> Read {
@@ -1566,12 +1597,13 @@ impl<R: Runtime> Core<R> {
             .iter()
             .filter(|m| plain_media(&m.file) && !m.file.contains('/'))
         {
-            let src = from.join(&m.file);
             let dst = to.join(&m.file);
-            if src.is_file() && !dst.exists() {
-                let _ = std::fs::create_dir_all(&to);
-                if let Err(e) = std::fs::copy(&src, &dst) {
-                    log::warn!("shared ticket {sid}: image {} not copied: {e}", m.file);
+            if !dst.exists() {
+                if let Some((src, _)) = shared_media(&from, &m.file) {
+                    let _ = std::fs::create_dir_all(&to);
+                    if let Err(e) = copy_media(src, &dst) {
+                        log::warn!("shared ticket {sid}: image {} not copied: {e}", m.file);
+                    }
                 }
             }
             let ext = m.file.rsplit('.').next().unwrap_or_default().to_lowercase();
@@ -1593,16 +1625,16 @@ impl<R: Runtime> Core<R> {
             .iter()
             .filter(|m| crate::ticketfiles::valid_file(&m.file).is_some())
         {
-            let src = from.join(&m.file);
             let Some(dst) = crate::ticketfiles::path_of(&to, &m.file) else {
                 continue;
             };
-            let size = std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0);
-            if src.is_file() && !dst.exists() {
+            let src = shared_media(&from, &m.file);
+            let size = src.as_ref().map(|s| s.1).unwrap_or(0);
+            if let Some((src, _)) = src.filter(|_| !dst.exists()) {
                 if let Some(parent) = dst.parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
-                if let Err(e) = std::fs::copy(&src, &dst) {
+                if let Err(e) = copy_media(src, &dst) {
                     log::warn!("shared ticket {sid}: file {} not copied: {e}", m.file);
                 }
             }
