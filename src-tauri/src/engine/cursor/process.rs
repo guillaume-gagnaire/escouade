@@ -20,7 +20,7 @@ use crate::engine::{
     Start,
 };
 use crate::i18n::{self, Lang};
-use crate::job::{Job, JobUsage};
+use crate::job::{Job, JobUsage, Sample};
 use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::Mutex;
 use serde_json::{json, Value};
@@ -633,6 +633,10 @@ impl EngineProcess for CursorProcess {
 
     fn usage(&self) -> Option<JobUsage> {
         self.job.as_ref()?.usage()
+    }
+
+    fn usage_in(&self, sample: &Sample) -> Option<JobUsage> {
+        self.job.as_ref()?.usage_in(sample)
     }
 
     fn still_running(&self) -> u32 {

@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - The “Pages” window of a launch command shows its icons again (back, forward, reload, widths, devtools, browser): its buttons were empty.
+- On macOS and Linux, an agent’s memory and CPU also count what it starts apart (in a session of its own), and stopping it stops that too; on macOS, its memory is the one the Activity Monitor shows.
 
 ## [2.2.8] — 2026-11-23
 

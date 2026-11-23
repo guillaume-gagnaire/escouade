@@ -4,15 +4,19 @@
 //! On Windows, a Job Object created with KILL_ON_JOB_CLOSE, so the whole tree also dies if the
 //! app crashes or is killed (unless it is `release`d: an interactive terminal's, which leaves
 //! the windows its user opened alone and ends only what shows none, see `terminate_windowless`).
-//! On macOS (and other Unixes), the process group the child leads (see `isolate`): killed as a
-//! whole when the job is terminated or dropped. A browser that must outlive it starts out of it
-//! (`pty::open_browser_apart`).
+//! On macOS and Linux (and other Unixes), the process group the child leads (see `isolate`), and
+//! what its processes start apart from it, in a group or a session of its own (ESC-656): counted,
+//! and killed as a whole when the job is terminated or dropped. A browser that must outlive it
+//! starts out of it (`pty::open_browser_apart`). A sample of the agents' resources reads the
+//! machine's processes once for all of them (`Sample`, `Job::usage_in`).
 
 /// What the processes of a job use.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct JobUsage {
     pub cpu: std::time::Duration,
-    /// Working sets, in bytes.
+    /// In bytes, summed over the processes: their working sets on Windows, their physical
+    /// footprints on macOS (the Activity Monitor's « Memory »), their resident memory elsewhere,
+    /// which counts again in each process the pages of the libraries they share.
     pub memory: u64,
     pub processes: u32,
 }
@@ -52,6 +56,15 @@ mod imp {
     };
 
     pub struct Job(HANDLE);
+
+    /// Nothing to read once for every job: each Job Object tells its own (`Job::usage_in`).
+    pub struct Sample;
+
+    impl Sample {
+        pub fn read() -> Self {
+            Sample
+        }
+    }
 
     // SAFETY: a job handle is a kernel object handle, usable from any thread.
     unsafe impl Send for Job {}
@@ -260,6 +273,11 @@ mod imp {
             }
         }
 
+        /// `usage`: a job knows its own processes, the reading of the machine is not needed.
+        pub fn usage_in(&self, _sample: &Sample) -> Option<JobUsage> {
+            self.usage()
+        }
+
         /// The ids of the job's processes (the first thousand).
         pub fn pids(&self) -> Vec<u32> {
             const MAX: usize = 1024;
@@ -460,15 +478,77 @@ mod imp {
 #[cfg(unix)]
 mod imp {
     use super::JobUsage;
+    use parking_lot::Mutex;
+    use std::collections::{HashMap, HashSet};
     use std::time::Duration;
 
-    /// A process group, by the id of its leader; noted (`agentgroups`) when it is an agent's.
-    pub struct Job(i32, bool);
+    /// A process as one reading of `ps` tells it.
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub(super) struct Row {
+        pub pid: i32,
+        pub ppid: i32,
+        pub pgid: i32,
+        /// Resident memory, in KiB.
+        pub rss: u64,
+        pub cpu: Duration,
+    }
+
+    /// One reading of the machine's processes (`ps`), read once for all the jobs a sample of the
+    /// resources looks at (`Job::usage_in`). Those done but not yet reaped (zombies) are left out:
+    /// they use nothing, and their children already went to another parent.
+    pub struct Sample(Option<Vec<Row>>);
+
+    impl Sample {
+        pub fn read() -> Self {
+            let out = std::process::Command::new("ps")
+                .args(["-A", "-o", "pid=,ppid=,pgid=,stat=,rss=,time="])
+                .env("LC_ALL", "C")
+                .stderr(std::process::Stdio::null())
+                .output();
+            Sample(match out {
+                Ok(out) if out.status.success() => {
+                    Some(parse_ps(&String::from_utf8_lossy(&out.stdout)))
+                }
+                _ => None,
+            })
+        }
+    }
+
+    /// A process group, by the id of its leader, and what its leader started apart from it.
+    ///
+    /// An agent's tree is more than its group: what it starts in a session or a group of its own
+    /// (a detached Node `spawn`, a command of Claude Code's Bash tool, an MCP server) leaves it.
+    /// So the tree (`tree`) is its group, the descendants of its leader by their parent's id, the
+    /// groups these lead, and what was seen of it before and still runs (`seen`: a descendant
+    /// whose parent ended went to another parent, as on Windows it stays in the job). A process
+    /// is known by its id and its start (`start_of`): a pid another process took since is never
+    /// counted nor killed.
+    pub struct Job {
+        leader: i32,
+        /// When the leader started (`u64::MAX`: it was done already; None, a test's: whatever
+        /// process has its pid).
+        start: Option<u64>,
+        /// Noted (`agentgroups`) as an agent's.
+        agent: bool,
+        /// The processes of the tree seen at the last reading, and their start.
+        seen: Mutex<HashMap<i32, u64>>,
+    }
 
     impl Job {
+        fn new(leader: i32, agent: bool) -> Self {
+            Job {
+                leader,
+                // Done already (a zombie not yet reaped): a start no process will have, so that
+                // the pid, once reaped and taken by another, is never the job's.
+                start: Some(start_of(leader).unwrap_or(u64::MAX)),
+                agent,
+                seen: Mutex::new(HashMap::new()),
+            }
+        }
+
         /// A job holding `child`, started by tokio after `isolate`, and what it starts.
         pub fn for_child(child: &tokio::process::Child) -> Option<Self> {
-            Some(Job(child.id()?.try_into().ok()?, false))
+            Some(Job::new(child.id()?.try_into().ok()?, false))
         }
 
         /// `for_child`, of an agent's process: its group is noted, so that a launch after an app
@@ -476,20 +556,77 @@ mod imp {
         pub fn for_agent(child: &tokio::process::Child) -> Option<Self> {
             let pid: i32 = child.id()?.try_into().ok()?;
             crate::agentgroups::note(pid);
-            Some(Job(pid, true))
+            Some(Job::new(pid, true))
         }
 
         /// A job holding `child`, started in a pseudo-console: the session it leads is also its
         /// process group.
         pub fn for_pty(child: &dyn portable_pty::Child) -> Option<Self> {
-            Some(Job(child.process_id()?.try_into().ok()?, false))
+            Some(Job::new(child.process_id()?.try_into().ok()?, false))
         }
 
-        /// Kills every process of the group.
+        /// The job of `leader`, said to have started at `start` (a test's pid taken by another).
+        #[cfg(test)]
+        pub(super) fn claiming(leader: i32, start: Option<u64>) -> Self {
+            Job {
+                leader,
+                start,
+                agent: false,
+                seen: Mutex::new(HashMap::new()),
+            }
+        }
+
+        /// Kills every process of the tree (`tree`), read again just before, and the groups its
+        /// processes lead. What ends a process another one may have started meanwhile is read
+        /// again, a few times, until none is new.
         pub fn terminate(&self) {
-            // SAFETY: plain syscall; a group that is already gone only yields ESRCH.
-            unsafe {
-                libc::killpg(self.0, libc::SIGKILL);
+            let leader = start_of(self.leader);
+            let leader_runs = self.start.is_none() || (leader.is_some() && leader == self.start);
+            // The leader is gone, and nothing was seen out of its group: what it started apart
+            // went to another parent, out of reach. Its group alone, as before, unless its pid is
+            // another process's now.
+            if !leader_runs && self.seen.lock().is_empty() {
+                if leader.is_none() {
+                    kill_group(self.leader);
+                }
+                return;
+            }
+            let mut killed = HashSet::new();
+            for _ in 0..5 {
+                let Some(rows) = Sample::read().0 else {
+                    if leader.is_none() || leader == self.start {
+                        kill_group(self.leader);
+                    }
+                    return;
+                };
+                let tree = self.tree(&rows);
+                if tree.group {
+                    kill_group(self.leader);
+                }
+                let mut new = false;
+                for row in &tree.members {
+                    if !killed.insert(row.pid) {
+                        continue;
+                    }
+                    new = true;
+                    // Itself still, just before the signal.
+                    let Some(start) = tree.seen.get(&row.pid) else {
+                        continue;
+                    };
+                    if start_of(row.pid) != Some(*start) {
+                        continue;
+                    }
+                    if row.pgid == row.pid && row.pid != self.leader {
+                        kill_group(row.pid);
+                    }
+                    // SAFETY: plain syscall, on a process of the tree.
+                    unsafe {
+                        libc::kill(row.pid, libc::SIGKILL);
+                    }
+                }
+                if !new {
+                    break;
+                }
             }
         }
 
@@ -503,28 +640,45 @@ mod imp {
         /// shell may end leaving what its user detached has no job on Unix (see `pty`).
         pub fn release(&self) {}
 
-        /// What the group's running processes use (CPU time of those still running, resident
-        /// memory), read from `ps`.
+        /// What the tree's running processes use: CPU time of those still running, and their
+        /// memory (`memory`).
         pub fn usage(&self) -> Option<JobUsage> {
-            let out = std::process::Command::new("ps")
-                .args(["-A", "-o", "pgid=,rss=,time="])
-                .stderr(std::process::Stdio::null())
-                .output()
-                .ok()?;
-            out.status.success().then_some(())?;
-            Some(parse_ps(&String::from_utf8_lossy(&out.stdout), self.0))
+            self.usage_in(&Sample::read())
         }
 
-        /// The ids of the group's running processes, read from `ps`.
+        /// `usage`, from a reading of the machine shared with other jobs.
+        pub fn usage_in(&self, sample: &Sample) -> Option<JobUsage> {
+            let rows = sample.0.as_ref()?;
+            let mut u = JobUsage::default();
+            for row in self.tree(rows).members {
+                u.processes += 1;
+                u.memory += memory(&row);
+                u.cpu += row.cpu;
+            }
+            Some(u)
+        }
+
+        /// The ids of the tree's running processes.
         pub fn pids(&self) -> Vec<u32> {
-            let Ok(out) = std::process::Command::new("ps")
-                .args(["-A", "-o", "pgid=,pid="])
-                .stderr(std::process::Stdio::null())
-                .output()
-            else {
+            let Some(rows) = Sample::read().0 else {
                 return Vec::new();
             };
-            parse_pids(&String::from_utf8_lossy(&out.stdout), self.0)
+            let mut pids: Vec<u32> = self
+                .tree(&rows)
+                .members
+                .iter()
+                .filter_map(|r| r.pid.try_into().ok())
+                .collect();
+            pids.sort_unstable();
+            pids
+        }
+
+        /// The tree in `rows`, what it saw noted for the next reading.
+        fn tree(&self, rows: &[Row]) -> Tree {
+            let mut seen = self.seen.lock();
+            let tree = tree(rows, self.leader, self.start, &seen, start_of);
+            seen.clone_from(&tree.seen);
+            tree
         }
     }
 
@@ -532,39 +686,195 @@ mod imp {
         fn drop(&mut self) {
             // Like KILL_ON_JOB_CLOSE: whatever the leader left running goes with it.
             self.terminate();
-            if self.1 {
-                crate::agentgroups::forget(self.0);
+            if self.agent {
+                crate::agentgroups::forget(self.leader);
             }
         }
     }
 
-    /// Sums the `pgid rss time` lines of `ps` for group `pgid`.
-    pub(super) fn parse_ps(out: &str, pgid: i32) -> JobUsage {
-        let mut u = JobUsage::default();
-        for line in out.lines() {
-            let mut f = line.split_whitespace();
-            let (Some(g), Some(rss), Some(time)) = (f.next(), f.next(), f.next()) else {
-                continue;
-            };
-            if g.parse::<i32>().ok() != Some(pgid) {
-                continue;
-            }
-            u.processes += 1;
-            u.memory += rss.parse::<u64>().unwrap_or(0) * 1024;
-            u.cpu += parse_cpu_time(time).unwrap_or_default();
+    /// SIGKILL to the group `pgid`.
+    fn kill_group(pgid: i32) {
+        // SAFETY: plain syscall; a group that is already gone only yields ESRCH.
+        unsafe {
+            libc::killpg(pgid, libc::SIGKILL);
         }
-        u
     }
 
-    /// The ids of the `pgid pid` lines of `ps` for group `pgid`.
-    pub(super) fn parse_pids(out: &str, pgid: i32) -> Vec<u32> {
+    /// The processes of a job's tree in a reading.
+    #[derive(Debug, Default)]
+    pub(super) struct Tree {
+        pub members: Vec<Row>,
+        /// Whether the leader's group is the job's (its pid not another process's).
+        pub group: bool,
+        /// The members and their start, for the next reading (those whose start was told).
+        pub seen: HashMap<i32, u64>,
+    }
+
+    /// The tree of the job led by `leader`, started at `start`, in `rows`: its group, the
+    /// descendants of its processes by their parent's id, the groups these lead, and the
+    /// processes `seen` at the last reading still running with the same start. A leader whose
+    /// pid another process took is not the job's, nor is its group (a group's id is not given to
+    /// a process while the group lives); `start_of` tells when a process started (None: gone).
+    pub(super) fn tree(
+        rows: &[Row],
+        leader: i32,
+        start: Option<u64>,
+        seen: &HashMap<i32, u64>,
+        start_of: impl Fn(i32) -> Option<u64>,
+    ) -> Tree {
+        let mut children: HashMap<i32, Vec<usize>> = HashMap::new();
+        let mut groups: HashMap<i32, Vec<usize>> = HashMap::new();
+        let mut at: HashMap<i32, usize> = HashMap::new();
+        for (i, r) in rows.iter().enumerate() {
+            children.entry(r.ppid).or_default().push(i);
+            groups.entry(r.pgid).or_default().push(i);
+            at.insert(r.pid, i);
+        }
+        let mut starts = HashMap::new();
+        let mut queue: Vec<usize> = Vec::new();
+        let now = at.get(&leader).and_then(|_| start_of(leader));
+        let group = match (at.get(&leader), now) {
+            // The leader runs: itself, and through it its group and descendants.
+            (Some(&i), Some(s)) if start.is_none() || Some(s) == start => {
+                queue.push(i);
+                starts.insert(leader, s);
+                true
+            }
+            // Its pid is another process's: neither it nor its group are the job's.
+            (Some(_), Some(_)) => false,
+            // It is gone: what is left of its group.
+            _ => {
+                queue.extend(groups.get(&leader).into_iter().flatten());
+                true
+            }
+        };
+        for (&pid, &s) in seen {
+            if let Some(&i) = at.get(&pid) {
+                if pid != leader && start_of(pid) == Some(s) {
+                    starts.insert(pid, s);
+                    queue.push(i);
+                }
+            }
+        }
+        let mut members = HashSet::new();
+        while let Some(i) = queue.pop() {
+            if !members.insert(i) {
+                continue;
+            }
+            let pid = rows[i].pid;
+            // Its children, and the processes of the group it leads.
+            queue.extend(children.get(&pid).into_iter().flatten());
+            queue.extend(groups.get(&pid).into_iter().flatten());
+        }
+        let mut members: Vec<usize> = members.into_iter().collect();
+        members.sort_unstable();
+        let members: Vec<Row> = members.into_iter().map(|i| rows[i]).collect();
+        let seen = members
+            .iter()
+            .filter_map(|r| {
+                let s = match starts.get(&r.pid) {
+                    Some(&s) => s,
+                    None => start_of(r.pid)?,
+                };
+                Some((r.pid, s))
+            })
+            .collect();
+        Tree {
+            members,
+            group,
+            seen,
+        }
+    }
+
+    /// When `pid` started, as the system tells it; None when it is gone or done (a zombie).
+    #[cfg(target_os = "linux")]
+    pub(super) fn start_of(pid: i32) -> Option<u64> {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        // After the program's name, which may hold spaces and parentheses: the state (field 3),
+        // then the start (field 22, in clock ticks since boot).
+        let mut f = stat[stat.rfind(')')? + 1..].split_whitespace();
+        if matches!(f.next()?, "Z" | "X") {
+            return None;
+        }
+        f.nth(18)?.parse().ok()
+    }
+
+    /// When `pid` started, as the system tells it; None when it is gone or done (a zombie).
+    #[cfg(target_os = "macos")]
+    pub(super) fn start_of(pid: i32) -> Option<u64> {
+        // SAFETY: `info` is a plain C struct the call fills, of the size given.
+        unsafe {
+            let mut info: libc::proc_bsdinfo = std::mem::zeroed();
+            let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+            let n = libc::proc_pidinfo(
+                pid,
+                libc::PROC_PIDTBSDINFO,
+                0,
+                (&mut info as *mut libc::proc_bsdinfo).cast(),
+                size,
+            );
+            if n != size || info.pbi_status == libc::SZOMB {
+                return None;
+            }
+            Some(info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec)
+        }
+    }
+
+    /// Elsewhere the system is not asked: whether it runs, from the signal 0, and no start (a
+    /// pid taken by another process is then not told apart).
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    pub(super) fn start_of(pid: i32) -> Option<u64> {
+        // SAFETY: signal 0 only checks that the process exists.
+        (unsafe { libc::kill(pid, 0) } == 0).then_some(0)
+    }
+
+    /// The memory of a process: on macOS its physical footprint, as the Activity Monitor's
+    /// « Memory » column shows it (its own memory, compressed included, without the pages of
+    /// the libraries it shares with others); elsewhere, and when macOS does not tell it, its
+    /// resident memory (`rss`, which counts the shared pages in each process that maps them).
+    fn memory(row: &Row) -> u64 {
+        #[cfg(target_os = "macos")]
+        if let Some(bytes) = footprint(row.pid) {
+            return bytes;
+        }
+        row.rss * 1024
+    }
+
+    /// The physical footprint of `pid` (`proc_pid_rusage`, as `footprint(1)` reads it).
+    #[cfg(target_os = "macos")]
+    fn footprint(pid: i32) -> Option<u64> {
+        // SAFETY: `info` is a plain C struct of the flavor asked, which the call fills.
+        unsafe {
+            let mut info: libc::rusage_info_v2 = std::mem::zeroed();
+            let r = libc::proc_pid_rusage(
+                pid,
+                libc::RUSAGE_INFO_V2,
+                (&mut info as *mut libc::rusage_info_v2).cast(),
+            );
+            (r == 0).then_some(info.ri_phys_footprint)
+        }
+    }
+
+    /// The `pid ppid pgid stat rss time` lines of `ps`, zombies left out.
+    pub(super) fn parse_ps(out: &str) -> Vec<Row> {
         out.lines()
             .filter_map(|line| {
                 let mut f = line.split_whitespace();
-                let (g, pid) = (f.next()?, f.next()?);
-                (g.parse::<i32>().ok()? == pgid)
-                    .then(|| pid.parse::<u32>().ok())
-                    .flatten()
+                let pid = f.next()?.parse().ok()?;
+                let ppid = f.next()?.parse().ok()?;
+                let pgid = f.next()?.parse().ok()?;
+                if f.next()?.starts_with('Z') {
+                    return None;
+                }
+                let rss = f.next()?.parse().unwrap_or(0);
+                let cpu = f.next().and_then(parse_cpu_time).unwrap_or_default();
+                Some(Row {
+                    pid,
+                    ppid,
+                    pgid,
+                    rss,
+                    cpu,
+                })
             })
             .collect()
     }
@@ -587,6 +897,14 @@ mod imp {
 mod imp {
     pub struct Job;
 
+    pub struct Sample;
+
+    impl Sample {
+        pub fn read() -> Self {
+            Sample
+        }
+    }
+
     impl Job {
         pub fn for_child(_child: &tokio::process::Child) -> Option<Self> {
             None
@@ -601,6 +919,9 @@ mod imp {
         pub fn terminate_windowless(&self) {}
         pub fn release(&self) {}
         pub fn usage(&self) -> Option<super::JobUsage> {
+            None
+        }
+        pub fn usage_in(&self, _sample: &Sample) -> Option<super::JobUsage> {
             None
         }
         pub fn pids(&self) -> Vec<u32> {
@@ -618,7 +939,7 @@ pub fn isolate(cmd: &mut tokio::process::Command) {
     let _ = cmd;
 }
 
-pub use imp::Job;
+pub use imp::{Job, Sample};
 
 #[cfg(all(test, windows))]
 mod tests {
@@ -840,8 +1161,9 @@ mod tests {
 
 #[cfg(all(test, unix))]
 mod unix_tests {
-    use super::imp::{parse_cpu_time, parse_pids, parse_ps};
+    use super::imp::{parse_cpu_time, parse_ps, start_of, tree, Row};
     use super::*;
+    use std::collections::HashMap;
     use std::time::Duration;
 
     #[test]
@@ -858,21 +1180,104 @@ mod unix_tests {
         assert_eq!(parse_cpu_time("n/a"), None);
     }
 
-    #[test]
-    fn sums_the_processes_of_the_group() {
-        let out = " 42  1000 0:01.00\n 42  24 0:00.50\n 7 99999 9:00.00\n";
-        let u = parse_ps(out, 42);
-        assert_eq!(u.processes, 2);
-        assert_eq!(u.memory, 1024 * 1024);
-        assert_eq!(u.cpu, Duration::from_millis(1500));
+    /// A machine: init (1); the app (50); its agent (100) and the agent's child (101) in the
+    /// agent's group; a grandchild (102) that took a session of its own, a process (103) of that
+    /// session whose parent ended (now 1's), a child of 102 (104) that leads a group of its own,
+    /// and 104's child (105); a zombie of the agent's group (106); a stranger child of 1 (200) and
+    /// one of the app's (201), the agent's sibling.
+    const PS: &str = "\
+    1     0     1 Ss     100   0:01.00
+   50     1    50 Ss     200   0:03.00
+  100    50   100 S     1000   0:01.00
+  101   100   100 S+      24   0:00.50
+  102   101   102 Ss     500   0:02.00
+  103     1   102 S      300   0:00.25
+  104   102   104 Ss      10   0:00.00
+  105   104   104 S        5   1:00.00
+  106   100   100 Z        0   0:00.00
+  200     1   200 Ss   99999   9:00.00
+  201    50   201 S    99999   9:00.00
+ junk
+";
+
+    /// Every process of `PS` started at ten times its pid.
+    fn started(pid: i32) -> Option<u64> {
+        Some(pid as u64 * 10)
+    }
+
+    fn pids(rows: &[Row]) -> Vec<i32> {
+        rows.iter().map(|r| r.pid).collect()
     }
 
     #[test]
-    fn lists_the_pids_of_the_group() {
-        let out = " 42  100\n 42  101\n 7  102\n junk\n 42 x\n";
-        assert_eq!(parse_pids(out, 42), vec![100, 101]);
+    fn reads_the_processes_of_ps_without_the_zombies() {
+        let rows = parse_ps(PS);
+        assert_eq!(
+            pids(&rows),
+            vec![1, 50, 100, 101, 102, 103, 104, 105, 200, 201]
+        );
+        assert_eq!(
+            rows[3],
+            Row {
+                pid: 101,
+                ppid: 100,
+                pgid: 100,
+                rss: 24,
+                cpu: Duration::from_millis(500),
+            }
+        );
     }
 
+    #[test]
+    fn the_tree_is_the_group_the_descendants_and_the_groups_they_lead() {
+        let rows = parse_ps(PS);
+        let t = tree(&rows, 100, Some(1000), &HashMap::new(), started);
+        // Not init, the app, the zombie nor the strangers (one of the same parent as 103).
+        assert_eq!(pids(&t.members), vec![100, 101, 102, 103, 104, 105]);
+        assert!(t.group);
+        assert_eq!(t.seen.get(&103), Some(&1030));
+        let rss: u64 = t.members.iter().map(|r| r.rss).sum();
+        assert_eq!(rss, 1000 + 24 + 500 + 300 + 10 + 5);
+        let cpu: Duration = t.members.iter().map(|r| r.cpu).sum();
+        assert_eq!(cpu, Duration::from_millis(63_750));
+    }
+
+    #[test]
+    fn a_leader_whose_pid_another_process_took_is_not_the_jobs_nor_its_group() {
+        let rows = parse_ps(PS);
+        // The job's leader started at 7: 100 is another process now.
+        let t = tree(&rows, 100, Some(7), &HashMap::new(), started);
+        assert!(t.members.is_empty());
+        assert!(!t.group);
+    }
+
+    #[test]
+    fn a_leader_gone_leaves_its_group_and_what_descends_from_it() {
+        let rows: Vec<Row> = parse_ps(PS).into_iter().filter(|r| r.pid != 100).collect();
+        let t = tree(&rows, 100, Some(1000), &HashMap::new(), started);
+        assert_eq!(pids(&t.members), vec![101, 102, 103, 104, 105]);
+        assert!(t.group);
+    }
+
+    #[test]
+    fn what_was_seen_stays_in_the_tree_while_it_runs_as_it_was_seen() {
+        // 200 was seen in the tree (its parent ended since), 201 too but its pid went to
+        // another process since: it started at 1, not 2010.
+        let seen = HashMap::from([(200, 2000), (201, 1)]);
+        let t = tree(&parse_ps(PS), 100, Some(1000), &seen, started);
+        assert_eq!(pids(&t.members), vec![100, 101, 102, 103, 104, 105, 200]);
+        assert!(!t.seen.contains_key(&201));
+    }
+
+    #[test]
+    fn a_process_gone_meanwhile_is_not_noted() {
+        // 105 ended between the reading and its start's.
+        let t = tree(&parse_ps(PS), 100, Some(1000), &HashMap::new(), |pid| {
+            (pid != 105).then(|| pid as u64 * 10)
+        });
+        assert!(t.members.iter().any(|r| r.pid == 105));
+        assert!(!t.seen.contains_key(&105));
+    }
     #[tokio::test]
     async fn dropping_the_job_kills_the_whole_group() {
         let mut cmd = tokio::process::Command::new("sh");
@@ -899,5 +1304,158 @@ mod unix_tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         panic!("grandchild {grandchild} survived the job");
+    }
+
+    /// Whether `pid` runs (a zombie, done but not yet reaped, does not).
+    fn runs(pid: i32) -> bool {
+        let out = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        let stat = String::from_utf8_lossy(&out.stdout);
+        out.status.success() && !stat.trim().is_empty() && !stat.trim().starts_with('Z')
+    }
+
+    /// Waits, at most 5 s, until `pid` no longer runs.
+    fn ends(pid: i32) -> bool {
+        for _ in 0..250 {
+            if !runs(pid) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        false
+    }
+
+    /// Kills, when a test ends whatever its end, the processes it started that still run as
+    /// they started (a pid another process took since is left alone): one left would hold
+    /// nextest.
+    struct Reap(Vec<(i32, Option<u64>)>);
+    impl Reap {
+        fn new(pids: &[i32]) -> Self {
+            Reap(pids.iter().map(|&p| (p, start_of(p))).collect())
+        }
+    }
+    impl Drop for Reap {
+        fn drop(&mut self) {
+            for &(pid, start) in &self.0 {
+                if start.is_some() && start_of(pid) == start {
+                    // SAFETY: plain syscall, on a process this test started.
+                    unsafe {
+                        libc::kill(pid, libc::SIGKILL);
+                    }
+                }
+            }
+        }
+    }
+
+    /// An agent that starts, as a detached Node `spawn` or a command of Claude Code's Bash tool
+    /// does, a program in a session of its own (`setsid`, by perl: macOS has no `setsid`
+    /// command), which starts `sleep 60` and lives `lives` seconds: the pids of both, once the
+    /// first left the agent's group.
+    async fn agent_with_a_session_apart(lives: u32) -> (tokio::process::Child, Job, i32, i32) {
+        let mut cmd = tokio::process::Command::new("sh");
+        let apart = format!(
+            r#"perl -MPOSIX -e '$| = 1; POSIX::setsid() or die; my $k = fork(); if ($k == 0) {{ exec("sleep", "60") }} print "$$ $k\n"; sleep {lives}' </dev/null 2>/dev/null &
+wait"#
+        );
+        cmd.args(["-c", &apart])
+            .stdout(std::process::Stdio::piped());
+        isolate(&mut cmd);
+        let mut child = cmd.spawn().unwrap();
+        let job = Job::for_agent(&child).unwrap();
+        let mut out = tokio::io::BufReader::new(child.stdout.take().unwrap());
+        let mut line = String::new();
+        tokio::io::AsyncBufReadExt::read_line(&mut out, &mut line)
+            .await
+            .unwrap();
+        let mut pids = line.split_whitespace().map(|p| p.parse::<i32>().unwrap());
+        let (apart, its_child) = (pids.next().unwrap(), pids.next().unwrap());
+        (child, job, apart, its_child)
+    }
+
+    /// A stranger: `sleep 60`, child of the test as the agent is, in a group of its own.
+    fn stranger() -> std::process::Child {
+        let mut cmd = std::process::Command::new("sleep");
+        cmd.arg("60");
+        std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+        cmd.spawn().unwrap()
+    }
+
+    #[tokio::test]
+    async fn an_agent_counts_what_it_starts_in_a_session_apart() {
+        let (_child, job, apart, its_child) = agent_with_a_session_apart(60).await;
+        let _reap = Reap::new(&[apart, its_child]);
+        let mut other = stranger();
+        // SAFETY: plain syscall.
+        assert_eq!(
+            unsafe { libc::getpgid(apart) },
+            apart,
+            "perl leads its group"
+        );
+        let pids = job.pids();
+        assert!(
+            pids.contains(&(apart as u32)) && pids.contains(&(its_child as u32)),
+            "{pids:?} lacks {apart} or {its_child}"
+        );
+        assert!(!pids.contains(&other.id()), "{pids:?} holds the stranger");
+        // sh, perl and sleep, in one reading shared with other jobs: the stranger's has it alone.
+        let sample = Sample::read();
+        let u = job.usage_in(&sample).unwrap();
+        assert_eq!(u.processes, 3);
+        assert!(u.memory > 0);
+        let theirs = Job::claiming(other.id() as i32, start_of(other.id() as i32));
+        assert_eq!(theirs.usage_in(&sample).unwrap().processes, 1);
+        std::mem::forget(theirs);
+        assert_eq!(job.usage().unwrap().processes, 3);
+        other.kill().unwrap();
+        other.wait().unwrap();
+    }
+
+    #[tokio::test]
+    async fn stopping_an_agent_stops_what_it_started_in_a_session_apart_and_nothing_else() {
+        let (mut child, job, apart, its_child) = agent_with_a_session_apart(60).await;
+        let _reap = Reap::new(&[apart, its_child]);
+        let mut other = stranger();
+        job.terminate();
+        child.wait().await.unwrap();
+        assert!(ends(apart), "{apart} survived the agent");
+        assert!(ends(its_child), "{its_child} survived the agent");
+        assert!(runs(other.id() as i32), "the stranger was killed");
+        other.kill().unwrap();
+        other.wait().unwrap();
+    }
+
+    #[tokio::test]
+    async fn what_an_agent_started_apart_stays_its_own_once_its_parent_ended() {
+        // perl ends after 2 s: its `sleep` goes to another parent, out of the agent's descent.
+        let (mut child, job, apart, its_child) = agent_with_a_session_apart(2).await;
+        let _reap = Reap::new(&[apart, its_child]);
+        assert!(job.pids().contains(&(its_child as u32)));
+        assert!(ends(apart));
+        let pids = job.pids();
+        assert!(
+            pids.contains(&(its_child as u32)),
+            "{pids:?} lost {its_child}"
+        );
+        drop(job);
+        child.wait().await.unwrap();
+        assert!(ends(its_child), "{its_child} survived the agent");
+    }
+
+    #[test]
+    fn a_job_whose_pid_another_process_took_counts_and_kills_nothing() {
+        let mut other = stranger();
+        let pid = other.id() as i32;
+        // The job's leader started at another time: `other` took its pid since.
+        let job = Job::claiming(pid, start_of(pid).map(|s| s + 1));
+        assert_eq!(job.usage().unwrap().processes, 0);
+        assert!(job.pids().is_empty());
+        job.terminate();
+        drop(job);
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(runs(pid), "the stranger was killed");
+        other.kill().unwrap();
+        other.wait().unwrap();
     }
 }

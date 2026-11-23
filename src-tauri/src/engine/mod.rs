@@ -63,7 +63,7 @@ pub(crate) use claude::{all_tools as claude_all_tools, escaped_len, PROTOCOL_BUD
 
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
-use crate::job::JobUsage;
+use crate::job::{JobUsage, Sample};
 use crate::mcp::install::{Entry, Standing, Target};
 use crate::model::{AgentMeta, EngineId};
 use anyhow::Result;
@@ -897,6 +897,9 @@ pub trait EngineProcess: Send + Sync {
     fn is_alive(&self) -> bool;
     /// What the process and everything it started use.
     fn usage(&self) -> Option<JobUsage>;
+    /// `usage`, from a reading of the machine's processes shared with the other agents (one
+    /// `ps` for a sample of all, on macOS and Linux).
+    fn usage_in(&self, sample: &Sample) -> Option<JobUsage>;
     /// How many processes of its tree run (at least one while it has not been reaped).
     fn still_running(&self) -> u32;
     /// The ids of the processes of its tree.

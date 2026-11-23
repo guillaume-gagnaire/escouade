@@ -7,6 +7,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ## [Non publié]
 
 - La fenêtre « Pages » d’une commande de lancement montre de nouveau ses icônes (retour, avancer, recharger, largeurs, devtools, navigateur) : ses boutons étaient vides.
+- Sous macOS et Linux, la mémoire et le CPU d’un agent comptent aussi ce qu’il lance à part (dans sa propre session), et l’arrêter l’arrête aussi ; sous macOS, sa mémoire est celle que montre le Moniteur d’activité.
 
 ## [2.2.8] — 2026-11-23
 
