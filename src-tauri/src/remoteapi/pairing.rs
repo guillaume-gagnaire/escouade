@@ -3,7 +3,10 @@
 //! server answers a device token, kept by the client from then on (`devices`).
 //!
 //! - **Once and briefly**: one code waits at a time (a new `pair` takes the place of the one before), for
-//!   [`LIFETIME`]; the right code ends it, and so do [`MAX_TRIES`] wrong ones.
+//!   [`LIFETIME_MS`]; the right code ends it. A wrong one never does (ESC-654: five wrong codes from anyone who reached
+//!   the API once ended it, and so blocked the pairing at will): the server bounds the tries, by source and in all
+//!   (`server::Limits`), which keeps a guess out of reach: 120 wrong codes a minute in all, 1 200 in a code's 10
+//!   minutes, against 32⁸ = 2⁴⁰ codes, one chance in some 900 million.
 //! - **Written beside the data**: the code waits in `remote-pairing.json`, readable by its owner alone, so that `pair`
 //!   works whether the server runs or not (the server holds the data folder: `pair` writes beside it, under a lock of its
 //!   own, `headless::with_file_lock`). The file holds the code's hash, never the code.
@@ -25,9 +28,6 @@ pub const FILE: &str = "remote-pairing.json";
 /// How long a code waits for its device.
 pub const LIFETIME_MS: i64 = 10 * 60_000;
 
-/// The wrong codes a code takes before it ends.
-pub const MAX_TRIES: u32 = 5;
-
 /// The letters of a code: no 0, O, 1 nor I, which read alike. 32 of them: a random byte gives one, evenly.
 const ALPHABET: &[u8; 32] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -46,13 +46,13 @@ pub struct Code {
     pub expires_at: i64,
 }
 
-/// The code that waits, as its file keeps it: its hash, its end, the wrong codes it may still take.
+/// The code that waits, as its file keeps it: its hash, its end. (A file of before ESC-654 also says `triesLeft`,
+/// read and left aside.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Waiting {
     hash: String,
     expires_at: i64,
-    tries_left: u32,
     /// The device that asked for it (SR1-02): the device born of it is paired from it, and goes when it is revoked.
     /// None: the window or `escouade-server pair`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -66,10 +66,11 @@ pub enum Refusal {
     NoCode,
     /// The code waited too long.
     Expired,
-    /// Not the code that waits: `left` tries remain.
-    Wrong { left: u32 },
-    /// The last try was wrong: the code ended.
-    TooManyTries,
+    /// Not the code that waits; it waits on.
+    Wrong,
+    /// Not read: too many wrong tries in the minute, from where it comes or in all (the server's bounds); the code
+    /// waits on.
+    Wait,
 }
 
 impl Refusal {
@@ -83,24 +84,25 @@ impl Refusal {
                 "Ce code d’appairage a expiré : lance « escouade-server pair » de nouveau.",
                 "This pairing code has expired: run “escouade-server pair” again."
             ),
-            Refusal::Wrong { left } => tr!(
-                "Code d’appairage faux ({left} essais restants).",
-                "Wrong pairing code ({left} tries left)."
+            Refusal::Wrong => tr!(
+                "Code d’appairage faux.",
+                "Wrong pairing code."
             ),
-            Refusal::TooManyTries => tr!(
-                "Trop d’essais faux : ce code d’appairage ne vaut plus. Lance « escouade-server pair » de nouveau.",
-                "Too many wrong tries: this pairing code is void. Run “escouade-server pair” again."
+            Refusal::Wait => tr!(
+                "Trop d’essais faux en une minute : le code d’appairage vaut toujours, réessaie dans une minute.",
+                "Too many wrong tries in a minute: the pairing code still holds, try again in a minute."
             ),
         }
     }
 
-    /// Why, as the client reads it (`proto::ToClient::Refused::reason`, ESC-537): `none`, `expired`, `wrong`, `tries`.
+    /// Why, as the client reads it (`proto::ToClient::Refused::reason`, ESC-537): `none`, `expired`, `wrong`, `wait`
+    /// (a server of before ESC-654 also said `tries`, its code ended).
     pub fn code(&self) -> &'static str {
         match self {
             Refusal::NoCode => "none",
             Refusal::Expired => "expired",
-            Refusal::Wrong { .. } => "wrong",
-            Refusal::TooManyTries => "tries",
+            Refusal::Wrong => "wrong",
+            Refusal::Wait => "wait",
         }
     }
 
@@ -109,8 +111,8 @@ impl Refusal {
         match self {
             Refusal::NoCode => "no code waiting",
             Refusal::Expired => "code expired",
-            Refusal::Wrong { .. } => "wrong code",
-            Refusal::TooManyTries => "too many wrong codes: the code ended",
+            Refusal::Wrong => "wrong code",
+            Refusal::Wait => "too many wrong codes in the minute: not read",
         }
     }
 }
@@ -170,7 +172,6 @@ pub fn create_by(data: &DataDir, now: i64, by: Option<&str>) -> Result<Code> {
     let waiting = Waiting {
         hash: hash(&letters),
         expires_at: now + LIFETIME_MS,
-        tries_left: MAX_TRIES,
         by: by.map(str::to_string),
     };
     let path = file(data);
@@ -182,7 +183,7 @@ pub fn create_by(data: &DataDir, now: i64, by: Option<&str>) -> Result<Code> {
 }
 
 /// The code `presented` given for `data` at `now`: Ok once, when it is the one that waits and has not ended; it ends
-/// then. A wrong one costs a try.
+/// then. A wrong one is refused, and the code waits on.
 pub fn redeem(data: &DataDir, presented: &str, now: i64) -> std::result::Result<(), Refusal> {
     redeem_by(data, presented, now).map(|_| ())
 }
@@ -195,16 +196,12 @@ pub fn redeem_by(
 ) -> std::result::Result<Option<String>, Refusal> {
     let path = file(data);
     let outcome = with_file_lock(&path, || {
-        let Some(mut waiting) = read(&path) else {
+        let Some(waiting) = read(&path) else {
             return Ok(Err(Refusal::NoCode));
         };
         if now >= waiting.expires_at {
             remove(&path);
             return Ok(Err(Refusal::Expired));
-        }
-        if waiting.tries_left == 0 {
-            remove(&path);
-            return Ok(Err(Refusal::TooManyTries));
         }
         let code = normalized(presented);
         let right = code.len() == LENGTH && escouade_mcp::same_token(&hash(&code), &waiting.hash);
@@ -212,15 +209,8 @@ pub fn redeem_by(
             remove(&path);
             return Ok(Ok(waiting.by));
         }
-        waiting.tries_left -= 1;
-        if waiting.tries_left == 0 {
-            remove(&path);
-            return Ok(Err(Refusal::TooManyTries));
-        }
-        write(&path, &waiting)?;
-        Ok(Err(Refusal::Wrong {
-            left: waiting.tries_left,
-        }))
+        // Nothing written: a wrong code leaves the one that waits as it was (ESC-654).
+        Ok(Err(Refusal::Wrong))
     });
     match outcome {
         Ok(outcome) => outcome,
@@ -234,7 +224,7 @@ pub fn redeem_by(
 /// Whether a code waits for `data` at `now`, and when it ends (`escouade-server pair --status`, the tests).
 pub fn waiting_until(data: &DataDir, now: i64) -> Option<i64> {
     read(&file(data))
-        .filter(|w| now < w.expires_at && w.tries_left > 0)
+        .filter(|w| now < w.expires_at)
         .map(|w| w.expires_at)
 }
 

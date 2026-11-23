@@ -22,6 +22,8 @@ pub mod pairing;
 pub mod proto;
 pub mod server;
 pub mod sessions;
+#[cfg(test)]
+pub mod test_commands;
 #[cfg(feature = "desktop")]
 pub mod window;
 
@@ -76,7 +78,11 @@ pub fn refused_here(_call: Call) -> Reply {
 
 /// The command `name` of the list.
 pub fn find(name: &str) -> Option<&'static Command> {
-    list::COMMANDS.iter().find(|c| c.name == name)
+    let found = list::COMMANDS.iter().find(|c| c.name == name);
+    // The tests' own (calls that never end, ESC-654), after the list.
+    #[cfg(test)]
+    let found = found.or_else(|| test_commands::COMMANDS.iter().find(|c| c.name == name));
+    found
 }
 
 // ---------- the client of a call ----------

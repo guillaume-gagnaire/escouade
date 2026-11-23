@@ -10,7 +10,7 @@ use crate::headless_tests::data;
 use crate::integrations::secrets::SecretStore;
 use crate::paths::DataDir;
 use crate::remoteapi::devices::Devices;
-use crate::remoteapi::pairing::{self, Refusal, LIFETIME_MS, MAX_TRIES};
+use crate::remoteapi::pairing::{self, Refusal, LIFETIME_MS};
 use crate::remoteapi::proto::{self, ToClient, ToServer};
 use crate::remoteapi::server::{Limits, RemoteApi};
 use crate::server::{
@@ -187,9 +187,7 @@ fn a_pairing_code_expires_and_a_new_one_takes_the_place_of_the_one_before() {
     if first.text != second.text {
         assert_eq!(
             pairing::redeem(&data, &first.text, now + 1),
-            Err(Refusal::Wrong {
-                left: MAX_TRIES - 1
-            })
+            Err(Refusal::Wrong)
         );
     }
     assert_eq!(pairing::redeem(&data, &second.text, now + 1), Ok(()));
@@ -202,9 +200,11 @@ fn a_pairing_code_expires_and_a_new_one_takes_the_place_of_the_one_before() {
     );
 }
 
+/// ESC-654 (point 1 of the audit of OshOEz's server, SR1-04): a wrong code never ends the one that waits, however many
+/// come; the bound of the tries is the server's, by source (`remoteapi::server::Limits`).
 #[test]
-fn wrong_pairing_codes_cost_a_try_each_and_the_last_one_ends_the_code() {
-    let data = data_dir("pair-tries");
+fn wrong_pairing_codes_leave_the_code_waiting() {
+    let data = data_dir("pair-wrong-waits");
     let now = 1_700_000_000_000;
     let code = pairing::create(&data, now).unwrap();
     let wrong = if code.text.starts_with('A') {
@@ -212,51 +212,30 @@ fn wrong_pairing_codes_cost_a_try_each_and_the_last_one_ends_the_code() {
     } else {
         "AAAA-AAAA"
     };
-    for left in (1..MAX_TRIES).rev() {
-        assert_eq!(
-            pairing::redeem(&data, wrong, now),
-            Err(Refusal::Wrong { left })
-        );
+    for bad in [wrong; 12]
+        .into_iter()
+        .chain(["", "ABC", &"A".repeat(10_000)])
+    {
+        assert_eq!(pairing::redeem(&data, bad, now), Err(Refusal::Wrong));
     }
-    // Too short, too long, empty: wrong as well, never hashed whole.
-    let code2 = pairing::create(&data, now).unwrap();
-    for bad in ["", "ABC", &"A".repeat(10_000)] {
-        assert!(matches!(
-            pairing::redeem(&data, bad, now),
-            Err(Refusal::Wrong { .. })
-        ));
-    }
-    assert_eq!(pairing::redeem(&data, &code2.text, now), Ok(()));
-    // The fifth wrong try ends the code: the right one comes too late.
-    let code = pairing::create(&data, now).unwrap();
-    let wrong = if code.text.starts_with('A') {
-        "BBBB-BBBB"
-    } else {
-        "AAAA-AAAA"
-    };
-    for _ in 1..MAX_TRIES {
-        assert!(matches!(
-            pairing::redeem(&data, wrong, now),
-            Err(Refusal::Wrong { .. })
-        ));
-    }
-    assert_eq!(
-        pairing::redeem(&data, wrong, now),
-        Err(Refusal::TooManyTries)
-    );
+    assert!(pairing::waiting_until(&data, now).is_some());
+    // Typed in lower case, with spaces: the same code.
+    let typed = code.text.to_ascii_lowercase().replace('-', " ");
+    assert_eq!(pairing::redeem(&data, &typed, now), Ok(()));
     assert_eq!(
         pairing::redeem(&data, &code.text, now),
         Err(Refusal::NoCode)
     );
-    // Each refusal says what to do, in words.
-    for r in [
-        Refusal::NoCode,
-        Refusal::Expired,
-        Refusal::Wrong { left: 2 },
-        Refusal::TooManyTries,
+    // Each refusal says what to do, in words, and the client its reason.
+    for (r, reason) in [
+        (Refusal::NoCode, "none"),
+        (Refusal::Expired, "expired"),
+        (Refusal::Wrong, "wrong"),
+        (Refusal::Wait, "wait"),
     ] {
+        assert_eq!(r.code(), reason);
         assert!(
-            r.text().contains("pair") || r.text().contains('2'),
+            r.text().contains("pair") || r.text().contains("code"),
             "{}",
             r.text()
         );
@@ -517,11 +496,14 @@ async fn a_device_pairs_by_its_code_connects_with_its_token_and_the_log_says_nei
         "AAAA-AAAA"
     };
     let answer = pair(addr, wrong, "Portable").await;
-    let ToClient::Refused { code: c, error, .. } = &answer else {
+    let ToClient::Refused {
+        code: c, reason, ..
+    } = &answer
+    else {
         panic!("{answer:?}")
     };
     assert_eq!(c, "pairing");
-    assert!(error.contains(&(MAX_TRIES - 1).to_string()), "{error}");
+    assert_eq!(reason.as_deref(), Some("wrong"));
     let answer = pair(addr, &code.text, "Portable du bureau").await;
     let ToClient::Paired { device, token } = answer else {
         panic!("{answer:?}")

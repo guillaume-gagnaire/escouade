@@ -169,9 +169,11 @@
           codeError =
             reason === 'wrong'
               ? t('servers.dialog.code.wrong')
-              : reason === 'tries'
-                ? t('servers.dialog.code.tries')
-                : t('servers.dialog.code.expired');
+              : reason === 'wait'
+                ? t('servers.dialog.code.wait')
+                : reason === 'tries'
+                  ? t('servers.dialog.code.tries')
+                  : t('servers.dialog.code.expired');
           code = Array(LENGTH).fill('');
           await tick();
           cells[0]?.focus();

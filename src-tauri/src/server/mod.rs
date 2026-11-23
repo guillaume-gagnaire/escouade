@@ -400,11 +400,10 @@ fn pair(args: &Args) -> Result<()> {
     println!(
         "{}",
         tr!(
-            "Code d’appairage : {}\n\nValable une fois, {} minutes (jusqu’à {until}), {} essais faux au plus.\nDonne-le à Escouade sur le nouvel appareil (« Se connecter à un serveur »). Un nouveau « pair » remplace ce code.",
-            "Pairing code: {}\n\nGood once, for {} minutes (until {until}), {} wrong tries at most.\nGive it to Escouade on the new device (“Connect to a server”). A new “pair” replaces this code.",
+            "Code d’appairage : {}\n\nValable une fois, {} minutes (jusqu’à {until}) ; un code faux ne l’annule pas.\nDonne-le à Escouade sur le nouvel appareil (« Se connecter à un serveur »). Un nouveau « pair » remplace ce code.",
+            "Pairing code: {}\n\nGood once, for {} minutes (until {until}); a wrong code does not void it.\nGive it to Escouade on the new device (“Connect to a server”). A new “pair” replaces this code.",
             code.text,
-            pairing::LIFETIME_MS / 60_000,
-            pairing::MAX_TRIES
+            pairing::LIFETIME_MS / 60_000
         )
     );
     Ok(())

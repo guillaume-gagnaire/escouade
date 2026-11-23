@@ -61,6 +61,7 @@ export default defineZone('servers', {
       wrong: 'That code is wrong.',
       expired: 'That code has expired: run escouade-server pair again.',
       tries: 'Too many wrong tries: this code is void. Run escouade-server pair again.',
+      wait: 'Too many wrong tries in a minute: the code still holds, try again in a minute.',
     },
     space: {
       title: 'Opening {name}…',

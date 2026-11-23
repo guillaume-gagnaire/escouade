@@ -2,8 +2,8 @@
 title: "Se connecter à un serveur"
 subject: "a-distance"
 sources: ["docs/SERVER-UX.md (§ 2 le parcours, § 3 la connexion et ses états, § 4 dire sur quelle machine on est, § 7 S1, S4, S10, S11, S15, § 9, § 10, § 11)","design/server-2-3 (maquettes et captures : x-hote, b-connexion, b-erreur, b-coupure, x-etats, x-version, x-jeton, b-deux)","docs/REMOTE.md, « Le mode serveur », « Le tunnel : SSH d'abord », « Le client, MS-3 (ESC-537) »","src-tauri/src/servers (mod.rs, sshconfig.rs, tunnel.rs, client.rs)","src-tauri/src/remoteapi (proto.rs, server.rs, devices.rs, pairing.rs)","src/lib/transport.ts, src/lib/servers.svelte.ts, src/components/servers","tests/fixtures/fake-ssh.mjs, tests/e2e/server-connect.spec.ts, src-tauri/src/servers_tests.rs","crates/escouade-model/src/job.rs (le job des tunnels, ESC-541)"]
-tickets: ["ESC-537","ESC-539","ESC-541"]
-decisions: [212,218,220]
+tickets: ["ESC-537","ESC-539","ESC-541","ESC-654"]
+decisions: [212,218,220,289]
 compared: null
 ---
 
@@ -48,7 +48,7 @@ Chaque état dit **ce qui s'est passé**, **ce qui n'a pas changé** (« Rien n'
 | Clé d'hôte inconnue | « Escouade n'accepte pas de clé à ta place : connecte-toi une fois par `ssh <hôte>` » ; « Copier la commande » |
 | Clé d'hôte changée | La vérifier avec l'administrateur avant de la remplacer dans `known_hosts` |
 | Pas d'Escouade sur le serveur | « escouade-server ne répond pas sur le serveur : est-il installé et lancé ? » |
-| Code faux, ou expiré | Sous le code : « Ce code n'est pas le bon. » / « Ce code a expiré : relance escouade-server pair. » / trop d'essais ; le code se vide, le focus y revient |
+| Code faux, ou expiré | Sous le code : « Ce code n'est pas le bon. » / « Ce code a expiré : relance escouade-server pair. » / « Trop d'essais faux en une minute : le code vaut toujours, réessaie dans une minute. » (ESC-654 ; un serveur d'avant disait encore « trop d'essais : ce code ne vaut plus ») ; le code se vide, le focus y revient |
 | Version différente | Les deux versions et le côté à mettre à jour ; pour ce poste, « Mettre à jour Escouade » ; pour le serveur, la version à y installer (sa mise à jour depuis le client viendra) |
 | Coupure et reprise | Voir plus bas |
 | Jeton révoqué | L'espace entier : « Ce poste n'est plus appairé à Travail », quand et depuis quel appareil (ou « depuis le serveur ») ; « Appairer de nouveau », « Aller sur Ce poste », « Retirer Travail de ce poste » |
@@ -83,7 +83,7 @@ Dès qu'un serveur est connu :
 - Le message d'accueil de l'API porte la machine du serveur (son nom et le compte du service).
 - `ping` et sa réponse, aussitôt : la latence.
 - Le refus d'un jeton porte la version du serveur, et, pour un appareil révoqué, son nom, la date et qui l'a révoqué (le serveur garde une trace des 32 derniers appareils révoqués : nom, date, auteur et empreinte du jeton, jamais le jeton).
-- Le refus d'un code dit pourquoi : aucun code n'attend, expiré, faux, trop d'essais.
+- Le refus d'un code dit pourquoi : aucun code n'attend, expiré, faux, trop d'essais faux dans la minute (le code vaut toujours).
 - Un appareil peut demander sa propre révocation (« Retirer »).
 
 ## La sécurité

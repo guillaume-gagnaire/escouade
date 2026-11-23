@@ -7,15 +7,17 @@
 //! - **On the loopback alone**: it listens on 127.0.0.1, and is reached through a tunnel (SSH, WireGuard: the server
 //!   mode's). No TLS here.
 //! - **Before the WebSocket opens**: the path, a `Host` of the loopback (DNS rebinding), and no `Origin` but the one of
-//!   Escouade's own window (a web page of the machine is refused). Bounded ([`Limits`]): the handshakes under way, and
-//!   the failed ones in a minute (past them, a connection is closed as soon as it is accepted, for the rest of the
-//!   minute).
+//!   Escouade's own window (a web page of the machine is refused). Bounded ([`Limits`]): the handshakes under way (all
+//!   taken, the oldest is let go for the newest: connections that say nothing never hold the door, ESC-654), and the
+//!   failed ones of a minute, counted by source (its address, the tunnel's peer): past them, the pairing codes of that
+//!   source are refused unread for the rest of the minute; a right token always passes (SR1-04, ESC-654).
 //! - **The handshake**: the first message gives the device's token (compared in constant time, `devices`), the
 //!   client's version, which must be the server's (« Mettre à jour le serveur »), and the session it had before a cut
 //!   (`sessions`). Bounded: the connections of a device, and in all.
 //! - **Then** the calls, each on the lane of its command (`windowthread::lane_of`, as the IPC: a terminal's
 //!   keystrokes keep their order), as the client of this connection (`remoteapi::Client`), so many at once at most;
-//!   their raw bodies before them in binary frames; the channels and the events pushed on the same connection,
+//!   their raw bodies before them in binary frames; a call under way or waiting on its lane let go when its connection
+//!   ends (closed, its device revoked: ESC-654); the channels and the events pushed on the same connection,
 //!   through a bounded queue (`outbox`): a client that reads too slowly gets a re-read of the state and resumes its
 //!   terminals; one that reads nothing is closed. A message past `proto::MAX_MESSAGE` closes it.
 //! - **The log** (`app.log`) says each connection, its device's name, each refusal and why: never a token, a session
@@ -70,18 +72,27 @@ pub struct Limits {
     pub queue: Bounds,
     /// The connections of one device at once.
     pub per_device: usize,
-    /// The connections in all at once.
+    /// The connections in all at once (and `reserve` more, for a device's first).
     pub total: usize,
-    /// The connections whose handshake is under way at once.
+    /// The connections whose handshake is under way at once: past them, the oldest is let go.
     pub pending: usize,
-    /// The failed handshakes in a minute before the next connections are closed at once, for the rest of it.
+    /// The failed handshakes of one source (its address, the tunnel's peer) in a minute, past which its pairing codes
+    /// are refused unread for the rest of it.
     pub failures_per_minute: usize,
     /// The calls of one connection waiting for their answer at once.
     pub in_flight: usize,
     /// The raw bodies of one connection waiting for their call at once, and their bytes.
     pub bodies: usize,
     pub body_bytes: usize,
+    /// The wrong pairing codes of a minute, from all sources, past which any code is refused unread for the rest of it.
+    pub pairing_per_minute: usize,
+    /// The places beyond `total` kept for the first connection of a device: one that is not connected always gets in,
+    /// to revoke the device that took the others.
+    pub reserve: usize,
 }
+
+/// The sources whose failures are kept at most: past them, those whose last failure is the oldest are forgotten.
+const MAX_SOURCES: usize = 4096;
 
 impl Default for Limits {
     fn default() -> Self {
@@ -91,6 +102,8 @@ impl Default for Limits {
             total: 16,
             pending: 8,
             failures_per_minute: 20,
+            pairing_per_minute: 120,
+            reserve: 4,
             in_flight: 256,
             bodies: 8,
             body_bytes: proto::MAX_BODY + (8 << 20),
@@ -110,6 +123,8 @@ struct Conn {
     limit: usize,
     /// Told to end: its device revoked, the server stopped.
     kicked: Notify,
+    /// True once it ended: its calls under way are let go, those waiting on a lane never run (ESC-654).
+    ended: tokio::sync::watch::Sender<bool>,
 }
 
 impl Conn {
@@ -268,7 +283,7 @@ pub struct Counts {
     pub peak_queued: AtomicUsize,
     /// The connections closed because they read too slowly.
     pub closed_slow: AtomicU64,
-    /// The connections closed as soon as they were accepted (too many handshakes, or failed ones).
+    /// The handshakes let go for newer ones, all places of a handshake taken (ESC-654).
     pub turned_away: AtomicU64,
 }
 
@@ -280,9 +295,15 @@ pub struct RemoteApi {
     limits: Limits,
     addr: SocketAddr,
     next: AtomicU64,
+    /// The number of the next handshake (apart from the clients' numbers, which the clients are told).
+    handshakes: AtomicU64,
     live: Mutex<HashMap<u64, Arc<Conn>>>,
-    pending: AtomicUsize,
-    failures: Mutex<VecDeque<Instant>>,
+    /// The handshakes under way, oldest first: each its number and what lets it go.
+    pending: Mutex<VecDeque<(u64, Arc<Notify>)>>,
+    /// The failed handshakes of the last minute, by source.
+    failures: Mutex<HashMap<String, VecDeque<Instant>>>,
+    /// The wrong pairing codes of the last minute, from all sources.
+    wrong_codes: Mutex<VecDeque<Instant>>,
     counts: Counts,
     stopped: Notify,
     /// The names taken in a `Host` besides the loopback's (`escouade-server --allow-host`: a TLS proxy's).
@@ -377,9 +398,11 @@ impl RemoteApi {
             limits,
             addr,
             next: AtomicU64::new(1),
+            handshakes: AtomicU64::new(1),
             live: Mutex::new(HashMap::new()),
-            pending: AtomicUsize::new(0),
-            failures: Mutex::new(VecDeque::new()),
+            pending: Mutex::new(VecDeque::new()),
+            failures: Mutex::new(HashMap::new()),
+            wrong_codes: Mutex::new(VecDeque::new()),
             counts: Counts::default(),
             stopped: Notify::new(),
             hosts: Mutex::new(Arc::new(Vec::new())),
@@ -453,13 +476,15 @@ impl RemoteApi {
         }
     }
 
-    /// A new device paired by the code `code` (`pairing`), named `name`: it and its token, or the refusal's code and text.
-    /// A refused code counts as a failed handshake (the bound of a minute's failures); the log says neither the code
-    /// nor the token.
+    /// A new device paired by the code `code` (`pairing`), named `name`, from `source`: it and its token, or the
+    /// refusal's code and text. A refused code counts as a failed handshake of its source; past the failures of its
+    /// source, or the wrong codes of all, in the minute, the code is refused unread (`Wait`), the code waiting on
+    /// (ESC-654). The log says neither the code nor the token.
     fn pair(
         &self,
         code: &str,
         name: &str,
+        source: &str,
     ) -> std::result::Result<
         (super::devices::Device, String),
         (&'static str, String, Option<&'static str>),
@@ -468,19 +493,31 @@ impl RemoteApi {
         if let Err(e) = core.locks.read().check_remote_api() {
             return Err((codes::POLICY, e.to_string(), None));
         }
+        let now = Instant::now();
+        if self.failing(source, now) || self.codes_failing(now) {
+            log::warn!("remote API: pairing refused from {source}: too many wrong tries in the minute, the code not read");
+            let refusal = super::pairing::Refusal::Wait;
+            return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
+        }
         let data = core.data.clone();
         let paired_by = match super::pairing::redeem_by(&data, code, crate::model::now_ms()) {
             Ok(by) => by,
             Err(refusal) => {
-                self.failed();
-                log::warn!("remote API: pairing refused: {}", refusal.reason());
+                self.failed(source);
+                if refusal == super::pairing::Refusal::Wrong {
+                    self.wrong_code();
+                }
+                log::warn!(
+                    "remote API: pairing refused from {source}: {}",
+                    refusal.reason()
+                );
                 return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
             }
         };
         // A code asked by a device revoked since: no device is born of it (SR1-02).
         self.devices.refresh();
         if let Some(by) = paired_by.as_deref().filter(|by| !self.devices.holds(by)) {
-            self.failed();
+            self.failed(source);
             log::warn!("remote API: pairing refused: the code's device ({by}) was revoked");
             let refusal = super::pairing::Refusal::NoCode;
             return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
@@ -565,47 +602,123 @@ impl RemoteApi {
         }
     }
 
-    /// Too many failed handshakes in the last minute: connections are turned away.
-    fn failing(&self, now: Instant) -> bool {
+    /// Too many failed handshakes of `source` in the last minute: its pairing codes are refused unread.
+    fn failing(&self, source: &str, now: Instant) -> bool {
         let mut failures = self.failures.lock();
-        while failures
-            .front()
-            .is_some_and(|t| now.duration_since(*t) >= Duration::from_secs(60))
-        {
-            failures.pop_front();
+        let Some(times) = failures.get_mut(source) else {
+            return false;
+        };
+        within_a_minute(times, now);
+        if times.is_empty() {
+            failures.remove(source);
+            return false;
         }
-        failures.len() >= self.limits.failures_per_minute
+        times.len() >= self.limits.failures_per_minute
     }
 
-    fn failed(&self) {
+    /// A failed handshake of `source`.
+    fn failed(&self, source: &str) {
         let now = Instant::now();
         let mut failures = self.failures.lock();
-        failures.push_back(now);
-        if failures.len() == self.limits.failures_per_minute {
+        if !failures.contains_key(source) && failures.len() >= MAX_SOURCES {
+            // Too many sources kept: those of no failure in the minute go, then the one whose last failure is oldest.
+            failures.retain(|_, times| {
+                within_a_minute(times, now);
+                !times.is_empty()
+            });
+            if failures.len() >= MAX_SOURCES {
+                if let Some(oldest) = failures
+                    .iter()
+                    .min_by_key(|(_, times)| times.back().copied())
+                    .map(|(s, _)| s.clone())
+                {
+                    failures.remove(&oldest);
+                }
+            }
+        }
+        let times = failures.entry(source.to_string()).or_default();
+        within_a_minute(times, now);
+        times.push_back(now);
+        if times.len() == self.limits.failures_per_minute {
             log::warn!(
-                "remote API: {} failed handshakes in a minute: connections turned away for the rest of it",
-                failures.len()
+                "remote API: {} failed handshakes from {source} in a minute: its pairing codes refused unread for the rest of it",
+                times.len()
             );
         }
         // Never more kept than the bound needs.
-        while failures.len() > self.limits.failures_per_minute {
-            failures.pop_front();
+        while times.len() > self.limits.failures_per_minute {
+            times.pop_front();
         }
     }
 
-    /// A connection handed to it, from `via` (the phone's tunnel, Tailscale): served as one of its own socket's,
-    /// within the same bounds. False when it was turned away.
-    pub fn serve_stream(self: &Arc<Self>, stream: Box<dyn Io>, via: Via) -> bool {
-        if self.failing(Instant::now())
-            || self.pending.load(Ordering::Acquire) >= self.limits.pending
-        {
-            self.counts.turned_away.fetch_add(1, Ordering::Relaxed);
-            return false;
+    /// Too many wrong pairing codes of all sources in the last minute: any code is refused unread.
+    fn codes_failing(&self, now: Instant) -> bool {
+        let mut wrong = self.wrong_codes.lock();
+        within_a_minute(&mut wrong, now);
+        wrong.len() >= self.limits.pairing_per_minute
+    }
+
+    fn wrong_code(&self) {
+        let now = Instant::now();
+        let mut wrong = self.wrong_codes.lock();
+        within_a_minute(&mut wrong, now);
+        wrong.push_back(now);
+        if wrong.len() == self.limits.pairing_per_minute {
+            log::warn!(
+                "remote API: {} wrong pairing codes in a minute: any code refused unread for the rest of it",
+                wrong.len()
+            );
         }
-        self.pending.fetch_add(1, Ordering::AcqRel);
+        while wrong.len() > self.limits.pairing_per_minute {
+            wrong.pop_front();
+        }
+    }
+
+    /// A connection handed to it, from `via` (the phone's tunnel, Tailscale) and the address `from` (the other end's,
+    /// when it has one): served as one of its own socket's, within the same bounds. Always taken: all places of a
+    /// handshake taken, the oldest handshake is let go for it.
+    pub fn serve_stream_from(
+        self: &Arc<Self>,
+        stream: Box<dyn Io>,
+        via: Via,
+        from: Option<std::net::IpAddr>,
+    ) -> bool {
+        // Where its failures are counted: its address, the tunnel's peer (there, every phone has its own).
+        let source = match (&via, from) {
+            (Via::Tunnel(peer), _) => format!("peer {}", peer.label()),
+            (_, Some(ip)) => ip.to_string(),
+            (Via::Loopback, None) => Ipv4Addr::LOCALHOST.to_string(),
+            (Via::Tailscale(_), None) => "tailscale".to_string(),
+        };
+        let id = self.handshakes.fetch_add(1, Ordering::Relaxed);
+        let cancel = Arc::new(Notify::new());
+        {
+            let mut pending = self.pending.lock();
+            while pending.len() >= self.limits.pending.max(1) {
+                if let Some((_, oldest)) = pending.pop_front() {
+                    oldest.notify_one();
+                    self.counts.turned_away.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            pending.push_back((id, cancel.clone()));
+        }
         let me = self.clone();
-        tokio::spawn(async move { me.connection(stream, via).await });
+        tokio::spawn(async move {
+            // The handshake under way counts until it is over, whatever its end.
+            let _over = HandshakeOver(me.clone(), id);
+            me.connection(stream, via, source, id, cancel).await
+        });
         true
+    }
+
+    /// As `serve_stream_from`, with no address of the other end.
+    pub fn serve_stream(self: &Arc<Self>, stream: Box<dyn Io>, via: Via) -> bool {
+        self.serve_stream_from(stream, via, None)
+    }
+
+    /// The handshake `id` over: its place is free.
+    fn handshake_over(&self, id: u64) {
+        self.pending.lock().retain(|(n, _)| *n != id);
     }
 
     async fn accept(self: Arc<Self>, listener: Option<TcpListener>) {
@@ -621,8 +734,8 @@ impl RemoteApi {
                 _ = self.stopped.notified() => break,
                 _ = devices.tick() => self.sync_devices(),
                 accepted = accepting => match accepted {
-                    Ok((stream, _)) => {
-                        let _ = self.serve_stream(Box::new(stream), Via::Loopback);
+                    Ok((stream, from)) => {
+                        let _ = self.serve_stream_from(Box::new(stream), Via::Loopback, Some(from.ip()));
                     }
                     Err(e) => {
                         log::warn!("remote API: accept: {e}");
@@ -634,23 +747,17 @@ impl RemoteApi {
         log::info!("remote API: stopped");
     }
 
-    async fn connection(self: Arc<Self>, stream: Box<dyn Io>, via: Via) {
-        // The handshake under way counts until it is over, whatever its end.
-        struct Pending<'a>(&'a AtomicUsize, bool);
-        impl Pending<'_> {
-            fn over(&mut self) {
-                if !self.1 {
-                    self.1 = true;
-                    self.0.fetch_sub(1, Ordering::AcqRel);
-                }
-            }
-        }
-        impl Drop for Pending<'_> {
-            fn drop(&mut self) {
-                self.over();
-            }
-        }
-        let mut pending = Pending(&self.pending, false);
+    /// The connection `id` from `source`: its handshake, within [`proto::HELLO_WAIT`] in all (the WebSocket opened and
+    /// its first message) and until `cancel` lets it go for a newer one; then served.
+    async fn connection(
+        self: Arc<Self>,
+        stream: Box<dyn Io>,
+        via: Via,
+        source: String,
+        id: u64,
+        cancel: Arc<Notify>,
+    ) {
+        let deadline = tokio::time::Instant::now() + proto::HELLO_WAIT;
         let config = WebSocketConfig::default()
             .max_message_size(Some(proto::MAX_MESSAGE))
             .max_frame_size(Some(proto::MAX_MESSAGE));
@@ -671,15 +778,20 @@ impl RemoteApi {
                 Err(refused)
             }
         };
-        let opened = tokio::time::timeout(
-            proto::HELLO_WAIT,
-            tokio_tungstenite::accept_hdr_async_with_config(stream, guard, Some(config)),
-        )
-        .await;
+        let opened = tokio::select! {
+            opened = tokio::time::timeout_at(
+                deadline,
+                tokio_tungstenite::accept_hdr_async_with_config(stream, guard, Some(config)),
+            ) => opened,
+            _ = cancel.notified() => {
+                log::debug!("remote API: a handshake from {source} let go for a newer one");
+                return;
+            }
+        };
         let ws = match opened {
             Ok(Ok(ws)) => ws,
             Ok(Err(e)) => {
-                self.failed();
+                self.failed(&source);
                 if through {
                     // Said in the log of a server: what the trial in 4G looks for (a page opened in the tunnel).
                     log::info!("remote API: a connection through the phone's tunnel or Tailscale that is no WebSocket ({e})");
@@ -689,7 +801,7 @@ impl RemoteApi {
                 return;
             }
             Err(_) => {
-                self.failed();
+                self.failed(&source);
                 log::debug!("remote API: the WebSocket did not open in time");
                 return;
             }
@@ -732,7 +844,13 @@ impl RemoteApi {
         };
 
         // The handshake: the first message, in time.
-        let hello = tokio::time::timeout(proto::HELLO_WAIT, stream.next()).await;
+        let hello = tokio::select! {
+            hello = tokio::time::timeout_at(deadline, stream.next()) => hello,
+            _ = cancel.notified() => {
+                log::debug!("remote API: a handshake from {source} let go for a newer one");
+                return;
+            }
+        };
         let (version, token, asked) = match hello {
             Ok(Some(Ok(Message::Text(text)))) => match serde_json::from_str::<ToServer>(&text) {
                 Ok(ToServer::Hello {
@@ -742,7 +860,7 @@ impl RemoteApi {
                 }) => (version, token, session),
                 // A new device's code, in place of the handshake (ESC-514): its token, or why not; closed either way.
                 Ok(ToServer::Pair { code, name }) => {
-                    let messages = match self.pair(&code, &name) {
+                    let messages = match self.pair(&code, &name, &source) {
                         Ok((device, token)) => {
                             // Through the phone's tunnel: its peer belongs to this device from now on.
                             if let Via::Tunnel(peer) = &via {
@@ -782,7 +900,7 @@ impl RemoteApi {
                             out
                         }
                         None => {
-                            self.failed();
+                            self.failed(&source);
                             refuse(
                                 codes::TOKEN,
                                 tr!(
@@ -798,7 +916,7 @@ impl RemoteApi {
                     return;
                 }
                 _ => {
-                    self.failed();
+                    self.failed(&source);
                     send_all(
                         &mut sink,
                         refuse(codes::HANDSHAKE, handshake_text(), None, None),
@@ -808,7 +926,7 @@ impl RemoteApi {
                 }
             },
             _ => {
-                self.failed();
+                self.failed(&source);
                 send_all(
                     &mut sink,
                     refuse(codes::HANDSHAKE, handshake_text(), None, None),
@@ -848,7 +966,7 @@ impl RemoteApi {
                 _ => None,
             } {
                 // Through a peer of another device: its key and this token are not the same phone's.
-                self.failed();
+                self.failed(&source);
                 log::warn!(
                     "remote API: the token of « {} » through the tunnel's peer of another device ({bound})",
                     device.name
@@ -866,7 +984,7 @@ impl RemoteApi {
                 Ok(device)
             }
         } else {
-            self.failed();
+            self.failed(&source);
             // A device revoked says so, when and by whom (ESC-537): « Ce poste n'est plus appairé ».
             let revoked = self.devices.revoked(&token);
             // Its version said (ESC-537): a client not paired yet learns that Escouade answers, and which.
@@ -890,7 +1008,7 @@ impl RemoteApi {
                 return;
             }
         };
-        // Room for it: the device's connections, and all.
+        // Room for it: the device's connections, and all; a device's first has the places kept for it (ESC-654).
         let client = Client::Remote(self.next.fetch_add(1, Ordering::Relaxed));
         let n = match client {
             Client::Remote(n) => n,
@@ -899,7 +1017,12 @@ impl RemoteApi {
         let room = {
             let mut live = self.live.lock();
             let of_device = live.values().filter(|c| c.device == device.id).count();
-            if of_device >= self.limits.per_device || live.len() >= self.limits.total {
+            let total = if of_device == 0 {
+                self.limits.total + self.limits.reserve
+            } else {
+                self.limits.total
+            };
+            if of_device >= self.limits.per_device || live.len() >= total {
                 Err((of_device, live.len()))
             } else {
                 let (session, resumed) =
@@ -915,6 +1038,7 @@ impl RemoteApi {
                     in_flight: AtomicUsize::new(0),
                     limit: self.limits.in_flight,
                     kicked: Notify::new(),
+                    ended: tokio::sync::watch::channel(false).0,
                 });
                 live.insert(n, conn.clone());
                 Ok((conn, resumed))
@@ -922,7 +1046,11 @@ impl RemoteApi {
         };
         match room {
             Ok((conn, resumed)) => {
-                pending.over();
+                self.handshake_over(id);
+                // Revoked between its token read and its place taken: put out as the revocation puts the others.
+                if !self.devices.holds(&device.id) {
+                    conn.kicked.notify_one();
+                }
                 self.serve(conn, resumed, &device, sink, stream).await;
             }
             Err((of_device, all)) => {
@@ -1079,6 +1207,15 @@ impl RemoteApi {
             }
         }
 
+        // Its calls under way let go, those waiting on its lanes never run (ESC-654).
+        conn.ended.send_replace(true);
+        // Counted before it leaves the live ones: who sees it gone sees why.
+        self.counts
+            .peak_queued
+            .fetch_max(conn.outbox.peak(), Ordering::Relaxed);
+        if slow.is_some() {
+            self.counts.closed_slow.fetch_add(1, Ordering::Relaxed);
+        }
         if let Some(task) = host_events {
             task.abort();
         }
@@ -1087,13 +1224,9 @@ impl RemoteApi {
             .note_seen(&conn.session, core.hub.emitted().max(1));
         self.sessions.leave(&conn.session, Instant::now());
         core.forget_client(&client);
-        self.counts
-            .peak_queued
-            .fetch_max(conn.outbox.peak(), Ordering::Relaxed);
         if let Some(why) = slow {
             // It reads nothing: its queue is let go, the close said if it ever reads again, and the socket closed
             // whatever it does.
-            self.counts.closed_slow.fetch_add(1, Ordering::Relaxed);
             log::warn!(
                 "remote API: device « {} » closed ({}): {why} ({} bytes waiting)",
                 device.name,
@@ -1185,9 +1318,14 @@ impl RemoteApi {
                     format!("{name} is not served at a distance ({why})"),
                 )),
             ),
+            // A call waiting on its lane once its connection ended never runs; one under way goes to its end, its answer
+            // to no one (a thread is not stopped from outside) (ESC-654).
             Reply::Blocking(job) => conn.lanes.submit(
                 lane_of(name),
                 Box::new(move || {
+                    if *done.ended.borrow() {
+                        return;
+                    }
                     let out = std::panic::catch_unwind(AssertUnwindSafe(|| {
                         super::as_caller(client, device, job)
                     }))
@@ -1195,20 +1333,47 @@ impl RemoteApi {
                     done.answer(id, out);
                 }),
             ),
+            // A future is let go when its connection ends: closed, its device revoked (ESC-654).
             Reply::Future(future) => conn.lanes.submit(
                 lane_of(name),
                 Box::new(move || {
+                    let mut ended = done.ended.subscribe();
+                    if *ended.borrow() {
+                        return;
+                    }
                     // Started in its turn on its lane, as the IPC starts it; it runs on the runtime.
                     tokio::runtime::Handle::current().spawn(async move {
-                        let out = AssertUnwindSafe(super::scoped_caller(client, device, future))
-                            .catch_unwind()
-                            .await
-                            .unwrap_or_else(|_| panicked());
-                        done.answer(id, out);
+                        let call = AssertUnwindSafe(super::scoped_caller(client, device, future))
+                            .catch_unwind();
+                        tokio::select! {
+                            out = call => done.answer(id, out.unwrap_or_else(|_| panicked())),
+                            _ = ended.wait_for(|ended| *ended) => {
+                                log::info!("remote API: {name} let go, its connection ended");
+                            }
+                        }
                     });
                 }),
             ),
         }
+    }
+}
+
+/// The handshake of this number over, whatever its end: its place is free.
+struct HandshakeOver(Arc<RemoteApi>, u64);
+
+impl Drop for HandshakeOver {
+    fn drop(&mut self) {
+        self.0.handshake_over(self.1);
+    }
+}
+
+/// `times` keeps those of the last minute alone.
+fn within_a_minute(times: &mut VecDeque<Instant>, now: Instant) {
+    while times
+        .front()
+        .is_some_and(|t| now.duration_since(*t) >= Duration::from_secs(60))
+    {
+        times.pop_front();
     }
 }
 

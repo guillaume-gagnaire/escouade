@@ -1405,28 +1405,22 @@ async fn the_connections_of_a_device_and_in_all_are_bounded() {
     h.stop();
 }
 
+/// SR1-04, ESC-654: the failures of a minute once shut the door on everyone, the owner's right token with them (« 20
+/// wrong tokens from the tailnet: the owner's right token is turned away »). A token is 256 bits: nothing to guess, so a
+/// right one always passes; the failures only cost their source its pairing codes (below).
 #[tokio::test(flavor = "multi_thread")]
-async fn failed_handshakes_turn_the_next_connections_away_for_a_while() {
+async fn wrong_tokens_never_shut_the_door_on_a_right_one() {
     let limits = crate::remoteapi::server::Limits {
         failures_per_minute: 3,
         ..Default::default()
     };
     let (_dir, h, api, token) = served_within("remote-failures", limits).await;
-    for _ in 0..3 {
+    for _ in 0..5 {
         let (mut c, refused) = Client::hello(&api, VERSION, "not-a-token").await;
         assert_eq!(code_of(&refused), Some(codes::TOKEN));
         assert!(c.closed().await);
     }
-    // Now even the right token finds the door shut: closed as soon as accepted, before the WebSocket.
-    let opened = open(api.addr(), proto::PATH, None, None).await;
-    assert!(opened.is_err(), "the WebSocket opened");
-    assert!(
-        api.counts()
-            .turned_away
-            .load(std::sync::atomic::Ordering::Relaxed)
-            >= 1
-    );
-    let _ = token;
+    let _owner = Client::connect(&api, &token).await;
     h.stop();
 }
 
@@ -2096,5 +2090,292 @@ async fn the_window_s_revocation_is_signed_by_the_window_and_takes_the_devices_b
         api.devices().list().is_empty()
     })
     .await;
+    h.stop();
+}
+
+// ---------- what the audit of OshOEz's server found, in ours (ESC-654) ----------
+
+/// The server's answer to `Pair` with `code`, from the loopback.
+async fn pair_answer(api: &RemoteApi, code: &str) -> ToClient {
+    let ws = open(api.addr(), proto::PATH, None, None).await.unwrap();
+    let mut c = Client {
+        ws,
+        next: 1,
+        seen: Vec::new(),
+    };
+    c.send(&ToServer::Pair {
+        code: code.into(),
+        name: "Tablette".into(),
+    })
+    .await;
+    parse(&c.recv().await.expect("an answer to the pairing")).expect("a message of the protocol")
+}
+
+/// The server's answer to `Pair` with `code`, from the machine `from` of the tailnet (another source than the loopback).
+async fn pair_from(api: &Arc<RemoteApi>, from: std::net::IpAddr, code: &str) -> ToClient {
+    let host = "100.100.7.1";
+    let (near, far) = tokio::io::duplex(1 << 16);
+    assert!(api.serve_stream_from(
+        Box::new(far),
+        crate::remoteapi::server::Via::Tailscale(Arc::new(vec![host.to_string()])),
+        Some(from),
+    ));
+    let req = format!("ws://{host}{}", proto::PATH)
+        .into_client_request()
+        .unwrap();
+    let (mut ws, _) = tokio_tungstenite::client_async(req, near).await.unwrap();
+    ws.send(Message::text(
+        serde_json::to_string(&ToServer::Pair {
+            code: code.into(),
+            name: "Tablette".into(),
+        })
+        .unwrap(),
+    ))
+    .await
+    .unwrap();
+    loop {
+        match tokio::time::timeout(Duration::from_secs(30), ws.next()).await {
+            Ok(Some(Ok(m))) => {
+                if let Some(answer) = parse(&m) {
+                    return answer;
+                }
+            }
+            other => panic!("no answer to the pairing: {other:?}"),
+        }
+    }
+}
+
+fn reason_of(answer: &ToClient) -> Option<&str> {
+    match answer {
+        ToClient::Refused { reason, .. } => reason.as_deref(),
+        _ => None,
+    }
+}
+
+/// A code that is not the one that waits.
+fn wrong_for(code: &str) -> &'static str {
+    if code.starts_with('A') {
+        "BBBB-BBBB"
+    } else {
+        "AAAA-AAAA"
+    }
+}
+
+/// Point 1 of the audit (« Pairing cancelled by five wrong codes from any unauthenticated peer »): five wrong codes,
+/// from anyone who reaches the API, once ended the code that waited. A wrong code is refused, the code waits on.
+#[tokio::test(flavor = "multi_thread")]
+async fn wrong_pairing_codes_never_end_the_code_that_waits() {
+    let (_dir, h, api, _token) = served("remote-pair-wrong").await;
+    let code = remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    for _ in 0..8 {
+        let answer = pair_answer(&api, wrong_for(&code.text)).await;
+        assert_eq!(code_of(&answer), Some(codes::PAIRING), "{answer:?}");
+        assert_eq!(reason_of(&answer), Some("wrong"), "{answer:?}");
+    }
+    let answer = pair_answer(&api, &code.text).await;
+    assert!(matches!(answer, ToClient::Paired { .. }), "{answer:?}");
+    h.stop();
+}
+
+/// Past its failures of a minute, a source's codes are refused unread (no guessing from there), the code waiting on
+/// for another source; past the wrong codes of a minute in all, any code is refused unread, and still waits.
+#[tokio::test(flavor = "multi_thread")]
+async fn past_its_failures_a_source_s_codes_are_refused_unread_and_the_code_waits_on() {
+    let limits = crate::remoteapi::server::Limits {
+        failures_per_minute: 3,
+        ..Default::default()
+    };
+    let (_dir, h, api, _token) = served_within("remote-pair-source", limits).await;
+    let code = remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    for _ in 0..3 {
+        let answer = pair_answer(&api, wrong_for(&code.text)).await;
+        assert_eq!(reason_of(&answer), Some("wrong"), "{answer:?}");
+    }
+    // The right code, from the loopback: refused unread, « wait ».
+    let answer = pair_answer(&api, &code.text).await;
+    assert_eq!(code_of(&answer), Some(codes::PAIRING), "{answer:?}");
+    assert_eq!(reason_of(&answer), Some("wait"), "{answer:?}");
+    assert!(remoteapi::pairing::waiting_until(&h.core.data, crate::model::now_ms()).is_some());
+    // From a machine of the tailnet: its own count, the code paired.
+    let answer = pair_from(&api, "100.100.7.9".parse().unwrap(), &code.text).await;
+    assert!(matches!(answer, ToClient::Paired { .. }), "{answer:?}");
+    h.stop();
+
+    let limits = crate::remoteapi::server::Limits {
+        pairing_per_minute: 2,
+        ..Default::default()
+    };
+    let (_dir, h, api, _token) = served_within("remote-pair-all", limits).await;
+    let code = remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    for from in ["100.100.7.2", "100.100.7.3"] {
+        let answer = pair_from(&api, from.parse().unwrap(), wrong_for(&code.text)).await;
+        assert_eq!(reason_of(&answer), Some("wrong"), "{answer:?}");
+    }
+    let answer = pair_from(&api, "100.100.7.4".parse().unwrap(), &code.text).await;
+    assert_eq!(reason_of(&answer), Some("wait"), "{answer:?}");
+    assert!(remoteapi::pairing::waiting_until(&h.core.data, crate::model::now_ms()).is_some());
+    h.stop();
+}
+
+/// Point 2 (« connexions prises »), before the handshake: connections that say nothing once held every place of a
+/// handshake under way, for 20 s each and again, and turned the owner away (and a pairing, and a revocation from another
+/// device). The oldest is let go for the newest: one that says nothing never holds the door.
+#[tokio::test(flavor = "multi_thread")]
+async fn handshakes_that_say_nothing_never_keep_the_door_shut() {
+    let (_dir, h, api, token) = served("remote-silent").await;
+    let pending = crate::remoteapi::server::Limits::default().pending;
+    let mut silent = Vec::new();
+    for _ in 0..pending * 2 {
+        silent.push(tokio::net::TcpStream::connect(api.addr()).await.unwrap());
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let _owner = Client::connect(&api, &token).await;
+    assert!(
+        api.counts()
+            .turned_away
+            .load(std::sync::atomic::Ordering::Relaxed)
+            >= pending as u64,
+        "the silent ones were let go"
+    );
+    drop(silent);
+    h.stop();
+}
+
+/// Point 2, after the handshake: when every place is taken, a device that has no connection still finds one of the
+/// places kept for it, to revoke the device that took them; a second connection of its own has none.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_not_connected_finds_a_place_kept_for_it_and_revokes_the_one_that_took_them() {
+    let limits = crate::remoteapi::server::Limits {
+        per_device: 2,
+        total: 2,
+        ..Default::default()
+    };
+    let (_dir, h, api, token) = served_within("remote-reserve", limits).await;
+    let phone = id_of(&api, "Téléphone");
+    let mut a = Client::connect(&api, &token).await;
+    let mut b = Client::connect(&api, &token).await;
+    let (_, laptop) = api.devices().add("Portable").unwrap();
+    let mut owner = Client::connect(&api, &laptop).await;
+    let (mut second, refused) = Client::hello(&api, VERSION, &laptop).await;
+    assert_eq!(code_of(&refused), Some(codes::TOO_MANY), "{refused:?}");
+    assert!(second.closed().await);
+    assert_eq!(
+        owner
+            .ok("remote_device_revoke", json!({ "id": phone }))
+            .await,
+        json!(true)
+    );
+    assert!(a.closed().await);
+    assert!(b.closed().await);
+    h.stop();
+}
+
+/// The call `cmd` of `key` sent, its answer not awaited.
+async fn send_call(c: &mut Client, cmd: &str, key: &str) {
+    let id = c.next;
+    c.next += 1;
+    c.send(&ToServer::Call {
+        id,
+        cmd: cmd.into(),
+        args: json!({ "key": key }).as_object().unwrap().clone(),
+        body: None,
+        headers: Default::default(),
+    })
+    .await;
+}
+
+/// A call that never ends (`__test_hang`) and two blocking calls on one lane (`__test_hold`, the second waiting behind
+/// the first), started.
+async fn calls_that_never_end(c: &mut Client, key: &str) -> (String, String) {
+    use crate::remoteapi::test_commands::seen;
+    let (hang, hold) = (format!("{key}-hang"), format!("{key}-hold"));
+    send_call(c, "__test_hang", &hang).await;
+    send_call(c, "__test_hold", &hold).await;
+    send_call(c, "__test_hold", &hold).await;
+    wait("the calls started", || {
+        seen(&hang).hang_started == 1 && seen(&hold).hold_ran == 1
+    })
+    .await;
+    (hang, hold)
+}
+
+/// What became of them once their connection ended: the future let go, the call waiting behind the blocking one never
+/// run, even once the blocking one ends.
+async fn let_go(hang: &str, hold: &str) {
+    use crate::remoteapi::test_commands::{release, seen};
+    wait("the call that never ends let go", || {
+        seen(hang).hang_dropped == 1
+    })
+    .await;
+    release(hold);
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    assert_eq!(seen(hold).hold_ran, 1, "a call of a connection gone ran");
+}
+
+/// Point 3 (« A call that never returns keeps its global call permit and lane for good »): in ours, the places of the
+/// calls are the connection's and go with it, but a call that never ends ran on, and the calls that waited behind it on
+/// its lane ran once it ended, for a client gone. Let go when the connection closes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_call_that_never_ends_is_let_go_when_its_connection_closes() {
+    let (_dir, h, api, token) = served("remote-hang-close").await;
+    let mut c = Client::connect(&api, &token).await;
+    let (hang, hold) = calls_that_never_end(&mut c, "close").await;
+    c.ws.close(None).await.unwrap();
+    drop(c);
+    wait("the client gone", || api.clients() == 0).await;
+    let_go(&hang, &hold).await;
+    h.stop();
+}
+
+/// Point 4 (« Revoking a device does not cut its in-flight or queued file transfers »): in ours the transfers are calls
+/// of its connections (raw bodies, `fs_read_bytes`), closed with them; what they had under way and waiting is let go too.
+#[tokio::test(flavor = "multi_thread")]
+async fn revoking_a_device_lets_go_of_its_calls_under_way_and_waiting() {
+    let (_dir, h, api, token) = served("remote-hang-revoke").await;
+    let phone = id_of(&api, "Téléphone");
+    let mut c = Client::connect(&api, &token).await;
+    let mut idle = Client::connect(&api, &token).await;
+    let (hang, hold) = calls_that_never_end(&mut c, "revoke").await;
+    assert!(api.revoke(&phone).unwrap());
+    assert!(c.closed().await);
+    assert!(
+        idle.closed().await,
+        "an idle connection of the device revoked"
+    );
+    let_go(&hang, &hold).await;
+    h.stop();
+}
+
+/// Point 5 (« Proxy password kept in proxy_password_in_file is serialized to every paired device in InitialState »):
+/// the password of the proxy goes to a client at a distance in no field but the proxy's address, and there only while
+/// the settings themselves write it in the address (before SEC-10, ESC-595, the window edited the address whole).
+/// `proxyPasswordInFile` comes with ESC-595 (main): set by its name here, ignored before it, it must never be sent.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_state_a_remote_client_gets_never_holds_the_proxy_s_password_apart_from_its_address() {
+    let (_dir, h, api, token) = served("remote-proxy-secret").await;
+    let secret = "S3cr3t-Corp-Pw";
+    let url = format!("http://ada:{secret}@proxy.corp:3128");
+    let mut v = serde_json::to_value(&*h.core.settings.read()).unwrap();
+    v["proxyUrl"] = json!(url);
+    v["proxyPasswordInFile"] = json!(secret);
+    let settings = serde_json::from_value(v).unwrap();
+    *h.core.settings.write() = settings;
+    // What the settings write of their address, by themselves.
+    let written = serde_json::to_value(&*h.core.settings.read()).unwrap()["proxyUrl"]
+        .as_str()
+        .unwrap_or("")
+        .contains(secret);
+    let mut c = Client::connect(&api, &token).await;
+    let mut initial = c.ok("subscribe", json!({"channel": "__CHANNEL__:1"})).await;
+    let address = initial["settings"]["proxyUrl"].take();
+    assert_eq!(
+        address.as_str().unwrap_or("").contains(secret),
+        written,
+        "{address}"
+    );
+    assert!(
+        !initial.to_string().contains(secret),
+        "the proxy's password in the state of a client at a distance"
+    );
     h.stop();
 }

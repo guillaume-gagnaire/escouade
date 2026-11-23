@@ -2,7 +2,7 @@
 title: "Atteindre un réseau privé"
 subject: "a-distance"
 sources: ["docs/PRIVATE-NETWORK.md (ESC-551, l'étude RP-0 ; § 5 les choix R1 à R12, § 6 les tickets RP-1 à RP-9)","Réponse de l'utilisateur du 2026-11-21 (la demande a-22 de la boîte « À toi », ESC-587) : « A · Les recommandations : V0 guidée, V2 construite »","docs/REMOTE.md : « Le mode serveur », MS-1 (ESC-514, l'appairage), MS-3 (ESC-515), « Ce qui change de machine, MS-4 » (ESC-538), « Le téléphone », « Les agents sur le serveur, en auto-hébergé »","docs/SERVER-UX.md","docs/TEAM-SERVER.md § 13","docs/security/audit-2026-11/rapport.md, § 6.1 et SEC-02","src-tauri/src/fence.rs","crates/escouade-model/src/model.rs (proxy_env, network_env)","crates/escouade-plugins/src/procs.rs (variables refusées aux plugins)","Demande de l'utilisateur du 2026-11-20 (ESC-551) : des agents sur un serveur Escouade qui joignent un git et des services derrière le VPN d'une entreprise"]
-tickets: ["ESC-551","ESC-587","ESC-597","ESC-598","ESC-599","ESC-600","ESC-601","ESC-602","ESC-603","ESC-604","ESC-605"]
+tickets: ["ESC-551","ESC-587","ESC-597","ESC-598","ESC-599","ESC-600","ESC-601","ESC-602","ESC-603","ESC-604","ESC-605","ESC-654"]
 decisions: ["reseau-prive-r1-le-serveur-dans-l-entrep","reseau-prive-r2-le-connecteur-parle-par","reseau-prive-r3-une-entree-des-connecteu","reseau-prive-r4-un-plafond-au-connecteur","reseau-prive-r5-la-liste-d-un-projet-est","reseau-prive-r6-l-agent-emprunte-la-port"]
 compared: null
 ---
@@ -38,7 +38,7 @@ Des agents qui tournent sur un serveur Escouade (voir *Le mode serveur*) joignen
 ## Le connecteur
 
 - **Le tunnel** : une WebSocket sur TLS, sortante, vers l'entrée des connecteurs du serveur, à travers le proxy de l'entreprise s'il y en a un ; à l'intérieur, Noise, que le proxy ne peut ni lire ni imiter ; des flux « ouvre `hôte:port` ».
-- **L'appairage** : Réglages de l'espace › Réseau privé › « Ajouter un connecteur » (ou `escouade-server connector pair`) donne un code (8 lettres, 10 minutes, une fois, 5 essais) et l'adresse de l'entrée ; le service informatique lance `escouade-connector pair <adresse> <code>`. Ni le code ni une clé privée au journal. Retirer un connecteur, d'un côté ou de l'autre, ferme son canal.
+- **L'appairage** : Réglages de l'espace › Réseau privé › « Ajouter un connecteur » (ou `escouade-server connector pair`) donne un code (8 lettres, 10 minutes, une fois) et l'adresse de l'entrée ; comme celui d'un appareil, un code faux ne l'annule pas et les essais sont bornés par source et en tout (voir *L'API distante*, « Les bornes », ESC-654). Le service informatique lance `escouade-connector pair <adresse> <code>`. Ni le code ni une clé privée au journal. Retirer un connecteur, d'un côté ou de l'autre, ferme son canal.
 - **Deux listes** : le plafond, dans `connector.toml`, et la liste d'un projet, au serveur (R4, R5).
 - **Les contrôles** : nom et port dans le plafond après mise en forme ; adresse littérale refusée sauf écrite dans le plafond ; jamais la boucle, le lien local, les métadonnées d'un cloud ni la machine du connecteur ; 256 flux, 32 ouvertures par seconde, 10 minutes de silence.
 - **L'agent l'emprunte sans le savoir** (R6). Le reste d'Internet sort comme avant.

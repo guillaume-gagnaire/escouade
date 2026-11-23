@@ -140,6 +140,8 @@ async fn a_theme_is_installed_checked_and_its_files_served_with_their_type() {
         "application/json; charset=utf-8"
     );
     assert_eq!(r.headers()["x-content-type-options"], "nosniff");
+    // A page of an extension sends no Referer where it links to (ESC-654).
+    assert_eq!(r.headers()["referrer-policy"], "no-referrer");
     // Read again from the disk, the list holds.
     let again = Store::open(b.store.root());
     assert_eq!(again.get("acme.night").unwrap().version, "1.0.0");

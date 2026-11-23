@@ -63,6 +63,7 @@ export default {
       wrong: 'Ce code n’est pas le bon.',
       expired: 'Ce code a expiré : relance escouade-server pair.',
       tries: 'Trop d’essais faux : ce code ne vaut plus. Relance escouade-server pair.',
+      wait: 'Trop d’essais faux en une minute : le code vaut toujours, réessaie dans une minute.',
     },
     space: {
       title: 'Ouverture de {name}…',

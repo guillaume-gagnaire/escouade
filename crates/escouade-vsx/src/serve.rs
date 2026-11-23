@@ -102,6 +102,8 @@ pub fn respond(store: &Store, method: &str, path: &str) -> http::Response<Vec<u8
             .status(status)
             .header(http::header::CONTENT_TYPE, mime)
             .header("X-Content-Type-Options", "nosniff")
+            // A page of an extension sends no Referer where it links to or loads from (ESC-654).
+            .header(http::header::REFERRER_POLICY, "no-referrer")
             .header(http::header::CACHE_CONTROL, "no-cache")
             .body(body)
             .expect("a response of fixed headers")

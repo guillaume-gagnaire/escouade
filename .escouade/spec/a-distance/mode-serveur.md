@@ -2,8 +2,8 @@
 title: "Le mode serveur"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image)","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »"]
-tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620"]
-decisions: [202,216,281]
+tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620","ESC-654"]
+decisions: [202,216,281,289]
 compared: null
 ---
 
@@ -46,14 +46,14 @@ Chaque option a sa variable d'environnement, pour un conteneur ; l'option donné
 2. Dans le client, l'utilisateur donne ce code et un nom pour l'appareil (« Portable du bureau »).
 3. Le client l'envoie à l'API **à la place de la poignée de main**. Le serveur répond le **jeton d'appareil**, donné une seule fois, que le client garde et redonne à chaque connexion.
 
-Les refus, chacun avec sa raison pour le client (`none`, `expired`, `wrong`, `tries`) :
+Les refus, chacun avec sa raison pour le client (`none`, `expired`, `wrong`, `wait`) :
 
 - **expiré** : « Ce code d'appairage a expiré : lance « escouade-server pair » de nouveau. » ;
 - **déjà utilisé, ou jamais demandé** (un code redonné) : « Aucun code d'appairage n'attend… » ;
-- **faux** : « Code d'appairage faux (4 essais restants). » ;
-- **trop d'essais** : le cinquième code faux met fin au code (« Trop d'essais faux : ce code d'appairage ne vaut plus… »).
+- **faux** : « Code d'appairage faux. » ; **le code qui attend vaut toujours** : un code faux ne l'annule jamais (ESC-654 : cinq codes faux de n'importe qui le finissaient, et bloquaient l'appairage à volonté) ;
+- **trop d'essais dans la minute** : au-delà de 20 poignées de main ratées d'une même source (son adresse, ou le pair du tunnel du téléphone), ou de 120 codes faux de toutes les sources, dans la minute, le code n'est pas lu (« Trop d'essais faux en une minute : le code d'appairage vaut toujours, réessaie dans une minute. »). C'est ce qui tient la force brute : au plus 1 200 codes lus pendant les 10 minutes d'un code, sur 2⁴⁰, une chance sur 900 millions environ.
 
-Le code est comparé **en temps constant**. Un code refusé compte comme une poignée de main ratée (après 20 dans la minute, les connexions sont fermées dès qu'acceptées). Le fichier qui garde le code en attente ne contient que son empreinte, lisible du seul propriétaire. **Ni le code ni le jeton ne sont jamais écrits dans le journal** ; `pair` affiche le code sur sa seule sortie, pour l'utilisateur.
+Le code est comparé **en temps constant**. Un code refusé compte comme une poignée de main ratée de sa source ; un bon jeton, lui, passe toujours (voir *L'API distante*, « Les bornes »). Le fichier qui garde le code en attente ne contient que son empreinte, lisible du seul propriétaire. **Ni le code ni le jeton ne sont jamais écrits dans le journal** ; `pair` affiche le code sur sa seule sortie, pour l'utilisateur.
 
 ## Les appareils révoqués
 
@@ -93,7 +93,7 @@ Aucun exemple n'expose l'API sans TLS sur Internet.
 ## Les deux accès, et leurs risques
 
 - **Le tunnel SSH** (conseillé) : `ssh -N -L 46480:127.0.0.1:46480 <serveur>`. Rien de nouveau n'est ouvert sur le serveur. Risque : qui a un compte SSH sur le serveur, ou un processus de l'hôte, atteint le port et peut tenter de s'appairer ; l'accès vaut ce que vaut le SSH.
-- **Un proxy TLS devant** (Traefik de Coolify, Caddy, nginx) : le serveur écoute sur le réseau du conteneur et accepte le nom du domaine dans `Host` (`--allow-host`, `ESCOUADE_SERVER_ALLOW_HOSTS`), tout autre nom restant refusé. Risque : l'API est sur Internet ; qui atteint le domaine peut tenter un code (40 bits, 10 minutes, une fois, 5 essais) ou un jeton (256 bits), chaque essai journalisé et borné ; une faille du serveur serait exposée à tous. À réserver à un domaine filtré par adresse IP ou à un réseau privé, et jamais sans TLS. Le client se connecte aujourd'hui par le tunnel SSH qu'il ouvre (voir *Se connecter à un serveur*) ; une adresse `wss://` d'un domaine viendra plus tard.
+- **Un proxy TLS devant** (Traefik de Coolify, Caddy, nginx) : le serveur écoute sur le réseau du conteneur et accepte le nom du domaine dans `Host` (`--allow-host`, `ESCOUADE_SERVER_ALLOW_HOSTS`), tout autre nom restant refusé. Risque : l'API est sur Internet ; qui atteint le domaine peut tenter un code (40 bits, 10 minutes, une fois, 120 essais lus par minute au plus) ou un jeton (256 bits), chaque essai journalisé et borné ; derrière un proxy, toutes les connexions viennent de son adresse et comptent comme une seule source ; une faille du serveur serait exposée à tous. À réserver à un domaine filtré par adresse IP ou à un réseau privé, et jamais sans TLS. Le client se connecte aujourd'hui par le tunnel SSH qu'il ouvre (voir *Se connecter à un serveur*) ; une adresse `wss://` d'un domaine viendra plus tard.
 
 ## Le service systemd
 

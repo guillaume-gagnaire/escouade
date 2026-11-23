@@ -993,7 +993,12 @@ impl Phone {
                         if !tailscale::tailnet(from.ip()) {
                             continue;
                         }
-                        api.serve_stream(Box::new(stream), Via::Tailscale(names.clone()));
+                        // Its failures counted by its address (ESC-654).
+                        api.serve_stream_from(
+                            Box::new(stream),
+                            Via::Tailscale(names.clone()),
+                            Some(from.ip()),
+                        );
                     }
                     Err(e) => {
                         log::debug!("phone: Tailscale's accept: {e}");

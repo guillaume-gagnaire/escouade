@@ -180,7 +180,9 @@ describe('the dialog « Se connecter à un serveur »', () => {
         ? { outcome: 'problem', problem: { kind: 'code', reason: 'wrong', message: '' } }
         : tries === 2
           ? { outcome: 'problem', problem: { kind: 'code', reason: 'expired', message: '' } }
-          : { outcome: 'ok', value: 's1' };
+          : tries === 3
+            ? { outcome: 'problem', problem: { kind: 'code', reason: 'wait', message: '' } }
+            : { outcome: 'ok', value: 's1' };
     };
     render(ConnectServerModal);
     const dialog = await screen.findByRole('dialog');
@@ -206,6 +208,12 @@ describe('the dialog « Se connecter à un serveur »', () => {
     // Backspace goes back a cell.
     await userEvent.keyboard('{Enter}');
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Ce code a expiré : relance escouade-server pair.');
+    // Too many wrong tries in the minute (ESC-654): the code still holds, the user is told to wait, not to start over.
+    await userEvent.paste('ABCD-EFGH');
+    await userEvent.keyboard('{Enter}');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Trop d’essais faux en une minute : le code vaut toujours, réessaie dans une minute.',
+    );
   });
 
   it('fills the code « le lancer d’ici par SSH », then pairs and opens the space', async () => {
