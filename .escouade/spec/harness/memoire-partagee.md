@@ -3,7 +3,7 @@ title: "Mémoire partagée"
 subject: "Harness"
 sources: ["website/content/docs/fr/shared-memory.md","docs/FACTORY.md","src-tauri/src/memory.rs","src-tauri/src/mcp/memory.rs","src-tauri/src/core.rs","src/lib/i18n/fr/memory.ts"]
 tickets: ["ESC-255","ESC-310","ESC-653"]
-decisions: ["ce-qu-un-depot-apporte-est-lu-sans-lien"]
+decisions: [308]
 compared: "2026-10-31T16:10:35+01:00"
 ---
 

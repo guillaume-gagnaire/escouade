@@ -3,7 +3,7 @@ title: "Données locales et coupures"
 subject: "introduction"
 sources: ["Ticket ESC-469 (perte de state.json le 2026-11-15)","Ticket ESC-535 (app.log du poste de l'utilisateur, « cannot save state … os error 2 » à la sortie pour une mise à jour, 2026-11-17 et 2026-11-18)","crates/escouade-plugin-cli/src/paths.rs","crates/escouade-model/src/backups.rs","src-tauri/src/conv.rs","src-tauri/src/core.rs","src-tauri/src/save_tests.rs","src/components/RecoveryBanner.svelte","website/content/docs/fr/data.md","docs/security/audit-2026-11/rapport.md, fiche SEC-10 (ESC-595)","crates/escouade-forge/src/integrations/secrets.rs"]
 tickets: ["ESC-469","ESC-499","ESC-535","ESC-595"]
-decisions: [243,"audit-sec-07-10-et-14-le-jeton-du-mcp-ho"]
+decisions: [243,302]
 compared: null
 ---
 

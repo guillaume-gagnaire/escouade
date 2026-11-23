@@ -3,7 +3,7 @@ title: "Les plugins d'Escouade (la première main)"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §8.7, §8.8, §8.10, §8.33","src-tauri/src/plugins/builtin.rs","src-tauri/src/plugins/mod.rs","src-tauri/src/plugins/runtime.rs","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_wasm_tests.rs","plugins/seed.json","tests/fixtures/plugins/minimal/README.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiche SEC-27"]
 tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354","ESC-394","ESC-404","ESC-355","ESC-435","ESC-592"]
-decisions: [80,92,110,113,117,142,214,"les-cles-du-sceau-separees-par-role-la-p"]
+decisions: [80,92,110,113,117,142,214,301]
 compared: null
 ---
 

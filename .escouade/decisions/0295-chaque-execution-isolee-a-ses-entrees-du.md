@@ -1,9 +1,9 @@
 ---
-number: null
+number: 295
 id: "chaque-execution-isolee-a-ses-entrees-du"
 title: "Chaque exécution isolée a ses entrées du trousseau à elle, reprises à sa fin et balayées quand elle est morte"
 date: "2026-11-21"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-584"
 pages: ["kanban/integrations"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/integrations","added":3,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

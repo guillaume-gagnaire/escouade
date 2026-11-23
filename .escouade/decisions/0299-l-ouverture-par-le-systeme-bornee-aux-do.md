@@ -1,9 +1,9 @@
 ---
-number: null
+number: 299
 id: "l-ouverture-par-le-systeme-bornee-aux-do"
 title: "L'ouverture par le système bornée aux dossiers des projets et des données, les balises de style sans unsafe-inline"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-593"
 pages: ["fenetre/fenetre"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/fenetre","added":17,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

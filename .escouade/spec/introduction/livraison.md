@@ -3,7 +3,7 @@ title: "Livraison et mises à jour"
 subject: "Introduction"
 sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml",".github/workflows/advisories.yml","scripts/beta-channel.mjs","scripts/release-sums.mjs","scripts/no-testing.mjs","docs/SECURITY-DEPENDENCIES.md","docs/security/audit-2026-11/rapport.md (SEC-04, SEC-16, SEC-18)","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh","tests/e2e/fixture.ts","tests/e2e/update-guard.ts"]
 tickets: ["ESC-374","ESC-380","ESC-533","ESC-543","ESC-594"]
-decisions: [114,244,251,"chaine-de-publication-empreintes-des-ins"]
+decisions: [114,244,251,300]
 compared: null
 ---
 

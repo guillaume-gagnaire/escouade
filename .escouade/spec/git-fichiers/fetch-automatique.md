@@ -3,7 +3,7 @@ title: "Fetch automatique"
 subject: "git-fichiers"
 sources: ["Ticket ESC-561 (demandes de l'utilisateur du 2026-11-20 : « ajoute la possibilité d'activer le git fetch automatique », « pouvoir configurer le délai »)","~/.escouade/app.log de l'utilisateur (échecs du fetch de fond, 2026-09-29 au 2026-11-13)","git-for-windows/git#5199 (ssh d'OpenSSH 9.9p1 qui cale, corrigé dans 2.47.0(2))","src-tauri/src/core.rs (fetch_all, fetch_root, fetch_plans)","src-tauri/src/git.rs (fetch_background, windows_ssh_command, fetch_failure_kind)","crates/escouade-model/src/model.rs (GitFetchSettings, ProjectFetch, FetchPlan, FetchFailure)","src/components/settings/FetchSettings.svelte","src/components/settings/GitPage.svelte","src/components/branches/FetchLine.svelte","website/content/docs/fr/branches.md","website/content/docs/fr/settings-projects.md"]
 tickets: ["ESC-561"]
-decisions: ["le-fetch-automatique-se-regle-se-voit-et"]
+decisions: [293]
 compared: null
 ---
 

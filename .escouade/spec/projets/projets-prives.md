@@ -3,7 +3,7 @@ title: "Projets privés"
 subject: "Projets"
 sources: ["docs/SPEC.md","crates/escouade-model/src/fence.rs","binaire de Claude Code 2.1.3xx (nom des dossiers de projects/)","docs/security/audit-2026-11/rapport.md (SEC-02, test W-04)","src-tauri/src/harness_scope.rs","Choix de l'utilisateur, demande a-4 (2026-11-21)","Choix a-28 (option b), tranché le 2026-11-22 sur délégation de l'utilisateur"]
 tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425","ESC-556","ESC-590","ESC-623"]
-decisions: [154,257,"un-harness-d-un-plugin-tiers-n-est-jamai","un-harness-tiers-n-est-lance-nulle-part"]
+decisions: [154,257,298,303]
 compared: null
 ---
 

@@ -1,9 +1,9 @@
 ---
-number: null
+number: 304
 id: "escouade-n-ouvre-aucun-fichier-que-le-sy"
 title: "Escouade n'ouvre aucun fichier que le système lancerait, installerait, monterait ou suivrait, et met en quarantaine ce qu'elle copie sous macOS"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-628"
 pages: ["fenetre/fenetre","harness/boite-a-toi"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/fenetre","added":9,"removed":1},{"page":"harness/boite-a-toi","added":3,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

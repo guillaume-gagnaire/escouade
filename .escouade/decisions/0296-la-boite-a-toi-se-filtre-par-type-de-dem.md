@@ -1,9 +1,9 @@
 ---
-number: null
+number: 296
 id: "la-boite-a-toi-se-filtre-par-type-de-dem"
 title: "La boîte « À toi » se filtre par type de demande, sur ce poste, sans changer ses comptes"
 date: "2026-11-21"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-578"
 pages: ["harness/boite-a-toi"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/boite-a-toi","added":16,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

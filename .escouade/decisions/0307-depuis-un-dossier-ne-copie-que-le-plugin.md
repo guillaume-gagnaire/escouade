@@ -1,9 +1,9 @@
 ---
-number: null
+number: 307
 id: "depuis-un-dossier-ne-copie-que-le-plugin"
 title: "« Depuis un dossier… » ne copie que le plugin et prend le module construit de packs/"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-652"
 pages: ["plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":9,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

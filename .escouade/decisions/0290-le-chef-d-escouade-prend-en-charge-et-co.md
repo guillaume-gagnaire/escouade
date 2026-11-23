@@ -1,5 +1,5 @@
 ---
-number: 258
+number: 290
 id: "le-chef-d-escouade-prend-en-charge-et-co"
 title: "Le chef d'escouade prend en charge et coche comme réglé ce qu'il traite dans la boîte « À toi »"
 date: "2026-11-20"

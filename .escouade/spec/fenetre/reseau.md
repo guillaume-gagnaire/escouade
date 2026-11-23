@@ -3,7 +3,7 @@ title: "Réseau : proxy et certificats"
 subject: "fenetre"
 sources: ["docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiches SEC-07 et SEC-28","website/content/docs/fr/settings-network.md","crates/escouade-plugins/src/tls.rs","src-tauri/src/tls_tests.rs","docs/security/audit-2026-11/rapport.md, SEC-18 (recommandations appliquées, accord a-7 du 2026-11-21)","src-tauri/src/offline.rs","src-tauri/src/sentfiles.rs","docs/TEAM-SERVER.md §6.3 (branche release/2.3)","docs/security/audit-2026-11/rapport.md, fiches SEC-10 et SEC-14 (ESC-595)","src-tauri/src/proxysecret.rs","crates/escouade-updates/src/net.rs"]
 tickets: ["ESC-425","ESC-435","ESC-596","ESC-595"]
-decisions: [154,214,"audit-sec-09-15-et-18-hotes-trop-larges","audit-sec-07-10-et-14-le-jeton-du-mcp-ho"]
+decisions: [154,214,306,302]
 compared: null
 ---
 

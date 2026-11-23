@@ -1,9 +1,9 @@
 ---
-number: null
+number: 302
 id: "audit-sec-07-10-et-14-le-jeton-du-mcp-ho"
 title: "Audit SEC-07, 10 et 14 : le jeton du MCP hors des lignes de commande, les secrets au repos, les mises à jour jamais hors du proxy"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-595"
 pages: ["fenetre/reseau","harness/serveur-mcp","introduction/donnees-et-coupures"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reseau","added":23,"removed":4},{"page":"harness/serveur-mcp","added":14,"removed":7},{"page":"introduction/donnees-et-coupures","added":10,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

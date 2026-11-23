@@ -1,9 +1,9 @@
 ---
-number: null
+number: 298
 id: "un-harness-d-un-plugin-tiers-n-est-jamai"
 title: "Un harness d'un plugin tiers n'est jamais lancé dans un projet privé (SEC-02)"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-590"
 pages: ["projets/projets-prives","plugins/harness-en-process"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"projets/projets-prives","added":13,"removed":5},{"page":"plugins/harness-en-process","added":5,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

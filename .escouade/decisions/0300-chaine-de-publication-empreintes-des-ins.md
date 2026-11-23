@@ -1,9 +1,9 @@
 ---
-number: null
+number: 300
 id: "chaine-de-publication-empreintes-des-ins"
 title: "Chaîne de publication : empreintes des installateurs, contrôle de `testing`, secrets Apple à l'étape qui signe, précompilés vérifiés par leur empreinte"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-594"
 pages: ["introduction/livraison","plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"introduction/livraison","added":6,"removed":0},{"page":"plugins/programmes-js-ts-en-wasm","added":3,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

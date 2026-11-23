@@ -1,9 +1,9 @@
 ---
-number: null
+number: 294
 id: "une-commande-de-lancement-ouvre-son-adre"
 title: "Une commande de lancement ouvre son adresse quand elle répond, par l'attente de « ▶ Tester »"
 date: "2026-11-20"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-560"
 pages: ["fenetre/barre-laterale","kanban/page-du-lancement","projets/escouade-yml"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/barre-laterale","added":10,"removed":0},{"page":"kanban/page-du-lancement","added":5,"removed":0},{"page":"projets/escouade-yml","added":11,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

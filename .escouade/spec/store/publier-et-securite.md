@@ -3,7 +3,7 @@ title: "Publier sur le store, la sécurité des plugins et l'essai réel"
 subject: "store"
 sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/server/utils/folder.ts","store/shared/folder.ts","store/server/utils/submissions.ts","store/server/utils/builtin.ts","store/tests/unit/trial.test.ts","store/deploy/seccomp-bubblewrap.json","store/deploy/apparmor-bubblewrap","store/server/utils/readme.ts","store/app/components/StorePlugin.vue"]
 tickets: ["ESC-237","ESC-313","ESC-314","ESC-323","ESC-184","ESC-336","ESC-356","ESC-366","ESC-592"]
-decisions: [21,25,43,72,86,91,"les-cles-du-sceau-separees-par-role-la-p"]
+decisions: [21,25,43,72,86,91,301]
 compared: "2026-10-31T19:50:09+01:00"
 ---
 

@@ -3,7 +3,7 @@ title: "Fenêtre"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src/components/ContextMenu.svelte","docs/security/audit-2026-11/rapport.md","src-tauri/src/sentfiles.rs (RUNNABLE, ESC-628)","src-tauri/src/quarantine.rs (ESC-628)","Microsoft, Blocked attachments in Outlook (support.microsoft.com/outlook/blocked-attachments-in-outlook)"]
 tickets: ["ESC-71","ESC-109","ESC-101","ESC-380","ESC-593","ESC-628"]
-decisions: ["l-ouverture-par-le-systeme-bornee-aux-do"]
+decisions: [299]
 compared: null
 order: 5
 ---

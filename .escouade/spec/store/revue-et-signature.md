@@ -3,7 +3,7 @@ title: "La revue « Vérifié par Escouade » : la file, la signature, la révoc
 subject: "store"
 sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md","store/server/utils/review.ts","store/server/utils/discord.ts","store/scripts/plugin-review/","store/scripts/plugins-publish/","docs/PLUGINS-DESIGN.md §5.6","docs/PLUGINS-DESIGN.md §8.5.5, §8.20","docs/PLUGINS-DESIGN.md §8.6.2","Consignes du chef au lancement d'ESC-324 (2026-11-01)","docs/security/audit-2026-11/rapport.md, fiche SEC-03","crates/escouade-plugins/src/store_keys.rs","store/server/utils/minisign.ts","Choix de l'utilisateur du 2026-11-21 (a-5) : « A · Séparer les clés, la première main bornée »"]
 tickets: ["ESC-235","ESC-295","ESC-302","ESC-324","ESC-343","ESC-337","ESC-353","ESC-592"]
-decisions: [46,76,89,103,"les-cles-du-sceau-separees-par-role-la-p"]
+decisions: [46,76,89,103,301]
 compared: "2026-10-30T03:23:39+01:00"
 ---
 

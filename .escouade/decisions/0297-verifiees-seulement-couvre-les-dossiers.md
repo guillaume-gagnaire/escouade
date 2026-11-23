@@ -1,9 +1,9 @@
 ---
-number: null
+number: 297
 id: "verifiees-seulement-couvre-les-dossiers"
 title: "« Vérifiées seulement » couvre les dossiers et les dépôts, et le harness d'un tiers demande l'accord à son premier lancement"
 date: "2026-11-21"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-589"
 pages: ["plugins/harness-acp-decrits","store/store-dans-l-app","fenetre/reglages"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-acp-decrits","added":12,"removed":0},{"page":"store/store-dans-l-app","added":8,"removed":0},{"page":"fenetre/reglages","added":3,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -1,9 +1,9 @@
 ---
-number: null
+number: 305
 id: "la-garde-des-fichiers-des-docs-tient-seu"
 title: "La garde des fichiers des docs tient seule, avant tout accès au disque"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-643"
 pages: ["docs/docs-dans-le-depot"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: []
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

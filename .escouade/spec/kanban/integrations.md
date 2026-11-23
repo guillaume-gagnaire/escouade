@@ -3,7 +3,7 @@ title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
 tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344","ESC-380","ESC-383","ESC-397","ESC-584"]
-decisions: [121,138,"chaque-execution-isolee-a-ses-entrees-du"]
+decisions: [121,138,295]
 compared: null
 ---
 

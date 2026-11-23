@@ -3,7 +3,7 @@ title: "Tickets partagés"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-190","ESC-243","ESC-653"]
-decisions: ["ce-qu-un-depot-apporte-est-lu-sans-lien"]
+decisions: [308]
 compared: null
 ---
 

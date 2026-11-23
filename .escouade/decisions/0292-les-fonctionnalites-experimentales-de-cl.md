@@ -1,5 +1,5 @@
 ---
-number: 260
+number: 292
 id: "les-fonctionnalites-experimentales-de-cl"
 title: "Les fonctionnalités expérimentales de Claude Code passent à la vue terminal seule, et un agent en Code Mode reste dans son terminal"
 date: "2026-11-20"

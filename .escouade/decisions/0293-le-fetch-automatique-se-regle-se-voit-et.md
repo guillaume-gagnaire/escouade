@@ -1,9 +1,9 @@
 ---
-number: null
+number: 293
 id: "le-fetch-automatique-se-regle-se-voit-et"
 title: "Le fetch automatique se règle, se voit et aboutit sur un gros dépôt"
 date: "2026-11-20"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-561"
 pages: ["git-fichiers/fetch-automatique","git-fichiers/git-fichiers","fenetre/reglages","projets/escouade-yml"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/fetch-automatique","added":47,"removed":0},{"page":"git-fichiers/git-fichiers","added":3,"removed":2},{"page":"fenetre/reglages","added":5,"removed":0},{"page":"projets/escouade-yml","added":9,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

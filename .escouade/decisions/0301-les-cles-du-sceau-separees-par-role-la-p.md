@@ -1,9 +1,9 @@
 ---
-number: null
+number: 301
 id: "les-cles-du-sceau-separees-par-role-la-p"
 title: "Les clés du sceau séparées par rôle : la première main bornée à dev.escouade.* par le code, une clé à mot de passe pour les tiers et la révocation"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-592"
 pages: ["store/revue-et-signature","plugins/livres-avec-escouade","store/store-dans-l-app","store/publier-et-securite"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/revue-et-signature","added":16,"removed":5},{"page":"plugins/livres-avec-escouade","added":5,"removed":0},{"page":"store/store-dans-l-app","added":6,"removed":0},{"page":"store/publier-et-securite","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

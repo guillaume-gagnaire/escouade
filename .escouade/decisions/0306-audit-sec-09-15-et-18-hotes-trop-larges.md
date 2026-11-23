@@ -1,9 +1,9 @@
 ---
-number: null
+number: 306
 id: "audit-sec-09-15-et-18-hotes-trop-larges"
 title: "Audit SEC-09, 15 et 18 : hôtes trop larges refusés, liste de révocation attestée chaque semaine, mode hors ligne imposable"
 date: "2026-11-22"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-596"
 pages: ["fenetre/reseau","store/store-dans-l-app","plugins/programmes-js-ts-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reseau","added":8,"removed":0},{"page":"store/store-dans-l-app","added":9,"removed":0},{"page":"plugins/programmes-js-ts-en-wasm","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

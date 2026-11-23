@@ -1,5 +1,5 @@
 ---
-number: 259
+number: 291
 id: "un-agent-oublie-par-son-plugin-est-ratta"
 title: "Un agent oublié par son plugin est rattaché par le cœur, et un refus se dit une fois"
 date: "2026-11-20"

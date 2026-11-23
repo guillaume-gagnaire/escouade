@@ -3,7 +3,7 @@ title: "Spécification"
 subject: "Docs"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-256","ESC-258","ESC-261","ESC-262","ESC-263","ESC-301","ESC-303","ESC-653"]
-decisions: ["ce-qu-un-depot-apporte-est-lu-sans-lien"]
+decisions: [308]
 compared: "2026-10-30T05:31:17+01:00"
 ---
 

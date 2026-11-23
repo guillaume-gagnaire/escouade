@@ -3,7 +3,7 @@ title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
 tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-561","ESC-659"]
-decisions: ["le-fetch-automatique-se-regle-se-voit-et"]
+decisions: [293]
 compared: "2026-10-31T16:24:52+01:00"
 order: 22
 ---

@@ -1,9 +1,9 @@
 ---
-number: null
+number: 308
 id: "ce-qu-un-depot-apporte-est-lu-sans-lien"
 title: "Ce qu'un dépôt apporte est lu sans lien et avec un plafond, sous Windows comme ailleurs"
 date: "2026-11-23"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-653"
 pages: ["kanban/tickets-partages","projets/escouade-yml","harness/memoire-partagee","docs/specification","kanban/workflows"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/tickets-partages","added":7,"removed":0},{"page":"projets/escouade-yml","added":4,"removed":0},{"page":"harness/memoire-partagee","added":1,"removed":0},{"page":"docs/specification","added":2,"removed":0},{"page":"kanban/workflows","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-23T20:47:56+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
