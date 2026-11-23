@@ -38,6 +38,24 @@ pub fn read_regular(path: &std::path::Path, max: u64) -> std::io::Result<Vec<u8>
 pub fn open_no_follow(path: &std::path::Path) -> std::io::Result<std::fs::File> {
     let mut opts = std::fs::OpenOptions::new();
     opts.read(true);
+    regular_no_follow(opts, path)
+}
+
+/// `path` opened to be written whole, made when it is not there, as `open_no_follow` opens one to
+/// be read: a link put there (a symbolic link, a junction under Windows) or a pipe is refused
+/// before a byte is written. It is emptied only once known to be a regular file, never at open.
+pub fn create_no_follow(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true);
+    let file = regular_no_follow(opts, path)?;
+    file.set_len(0)?;
+    Ok(file)
+}
+
+fn regular_no_follow(
+    mut opts: std::fs::OpenOptions,
+    path: &std::path::Path,
+) -> std::io::Result<std::fs::File> {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::custom_flags(&mut opts, libc::O_NOFOLLOW | libc::O_NONBLOCK);
     #[cfg(windows)]
@@ -158,7 +176,16 @@ mod tests {
             let c = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
             assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
             assert!(open_no_follow(&fifo).is_err());
+            // No reader: opened blocking to be written, this would hang here.
+            assert!(create_no_follow(&fifo).is_err());
         }
+        // Written: made when missing, emptied once known to be a plain file, never through a link.
+        let made = root.join("made.txt");
+        std::io::Write::write_all(&mut create_no_follow(&made).unwrap(), b"long").unwrap();
+        std::io::Write::write_all(&mut create_no_follow(&made).unwrap(), b"ab").unwrap();
+        assert_eq!(std::fs::read_to_string(&made).unwrap(), "ab");
+        assert!(create_no_follow(&linked).is_err());
+        assert!(create_no_follow(&dir).is_err());
         #[cfg(windows)]
         let _ = std::fs::remove_dir(&linked);
     }

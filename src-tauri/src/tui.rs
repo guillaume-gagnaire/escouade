@@ -801,17 +801,18 @@ fn remove_relay(cwd: &Path, path: &Path) {
 /// the file opened without following one (`O_NOFOLLOW`), so a link put there is refused.
 fn write_relay(cwd: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
+    // Before its folders are made too: none is made through a link.
+    if relay_through_link(cwd, path) {
+        return Err(std::io::Error::other("a link on its way, not followed"));
+    }
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
     if relay_through_link(cwd, path) {
         return Err(std::io::Error::other("a link on its way, not followed"));
     }
-    let mut open = std::fs::OpenOptions::new();
-    open.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut open, libc::O_NOFOLLOW);
-    open.open(path)?.write_all(bytes)
+    // Not followed under Windows either, where `O_NOFOLLOW` does not exist (`create_no_follow`).
+    crate::paths::create_no_follow(path)?.write_all(bytes)
 }
 
 /// The files of `files` whose text holds `token`.
@@ -3865,5 +3866,56 @@ mod tests {
         let in_wsl = other_accounts(&settings, &own, |a| a.id == "own" || a.id == "b");
         let names: Vec<&str> = in_wsl.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names, ["B (WSL)"], "{names:?}");
+    }
+
+    /// ESC-653: Cursor's relay rule is written and taken away in the worktree only, never through
+    /// a link at `.cursor` (a junction under Windows, which needs no privilege) nor at the rule
+    /// itself, and a file is emptied only once known to be a plain one.
+    #[test]
+    fn the_relay_is_neither_written_nor_taken_away_through_a_link() {
+        let root = crate::paths::test_dir("tui-relay-link");
+        let cwd = root.join("wt");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&cwd).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let path = cwd.join(".cursor").join("rules").join("relay.mdc");
+        write_relay(&cwd, &path, b"long text").unwrap();
+        write_relay(&cwd, &path, b"short").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "short");
+        remove_relay(&cwd, &path);
+        assert!(!path.exists());
+        // `.cursor` a link out of the worktree: nothing made, written or removed there.
+        std::fs::remove_dir_all(cwd.join(".cursor")).unwrap();
+        assert!(crate::paths::make_dir_link(&outside, &cwd.join(".cursor")));
+        assert!(relay_through_link(&cwd, &path));
+        assert!(write_relay(&cwd, &path, b"x").is_err());
+        assert!(!outside.join("rules").exists());
+        std::fs::create_dir_all(outside.join("rules")).unwrap();
+        std::fs::write(outside.join("rules").join("relay.mdc"), "theirs").unwrap();
+        remove_relay(&cwd, &path);
+        assert!(outside.join("rules").join("relay.mdc").exists());
+        #[cfg(windows)]
+        std::fs::remove_dir(cwd.join(".cursor")).unwrap();
+        #[cfg(unix)]
+        std::fs::remove_file(cwd.join(".cursor")).unwrap();
+        // The rule itself a folder link, or a file link where the system allows one.
+        std::fs::create_dir_all(cwd.join(".cursor").join("rules")).unwrap();
+        assert!(crate::paths::make_dir_link(&outside, &path));
+        assert!(write_relay(&cwd, &path, b"x").is_err());
+        assert!(crate::paths::create_no_follow(&path).is_err());
+        #[cfg(windows)]
+        std::fs::remove_dir(&path).unwrap();
+        #[cfg(unix)]
+        std::fs::remove_file(&path).unwrap();
+        let secret = outside.join("secret.txt");
+        std::fs::write(&secret, "token").unwrap();
+        if crate::paths::make_file_link(&secret, &path) {
+            assert!(write_relay(&cwd, &path, b"x").is_err());
+            assert!(crate::paths::create_no_follow(&path).is_err());
+            remove_relay(&cwd, &path);
+            assert_eq!(std::fs::read_to_string(&secret).unwrap(), "token");
+        } else {
+            eprintln!("no symbolic link to a file allowed here: that part skipped");
+        }
     }
 }
