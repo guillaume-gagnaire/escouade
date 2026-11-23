@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.10] — 2026-11-24
 
 - Sécurité : la crate `cookie` passe à 0.18.3 (RUSTSEC-2026-0594, des nonces de cookies privés pouvaient se répéter dans un process qui se divise).
 - Le panneau de droite (fichiers, historique, workflow, PR et CI) s’élargit par son bord gauche comme les autres colonnes, à la souris, au clavier ou par un double clic, et garde sa largeur, à côté de la conversation comme côte à côte.

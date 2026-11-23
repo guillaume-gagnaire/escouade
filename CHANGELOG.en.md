@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.10] — 2026-11-24
 
 - Security: the `cookie` crate moves to 0.18.3 (RUSTSEC-2026-0594, private cookie nonces could repeat in a process that forks).
 - The right panel (files, history, workflow, PR and CI) is widened by its left edge like the other columns, with the mouse, the keyboard or a double click, and keeps its width, beside the conversation and side by side alike.
