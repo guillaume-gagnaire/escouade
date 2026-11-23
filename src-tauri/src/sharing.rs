@@ -311,6 +311,25 @@ pub(crate) fn shared_media(from: &Path, file: &str) -> Option<(std::fs::File, u6
     (meta.is_file() && meta.len() <= MAX_SHARED_FILE).then_some((f, meta.len()))
 }
 
+/// Whether a media of ours may be written at `dst`, in the shared ticket's folder `to`: nothing
+/// there yet (not even a link, which `exists` would follow or miss when it leads nowhere), and no
+/// link at `to` nor on the way down to `dst` (a junction under Windows is one too). The folder
+/// comes from the repository, as `shared_media` reads it.
+pub(crate) fn media_target_free(to: &Path, dst: &Path) -> bool {
+    if !dst.starts_with(to) || std::fs::symlink_metadata(dst).is_ok() {
+        return false;
+    }
+    let mut at = dst.parent();
+    while let Some(d) = at.filter(|d| d.starts_with(to)) {
+        match std::fs::symlink_metadata(d) {
+            Ok(m) if m.file_type().is_symlink() || !m.is_dir() => return false,
+            _ => {}
+        }
+        at = d.parent();
+    }
+    true
+}
+
 /// Copies a media opened by `shared_media` to `dst`, never more than `MAX_SHARED_FILE` bytes
 /// (the file may grow after it was measured).
 fn copy_media(f: std::fs::File, dst: &Path) -> std::io::Result<u64> {
@@ -1579,13 +1598,18 @@ impl<R: Runtime> Core<R> {
                 }),
         );
         for (src, dst) in &wanted {
-            if dst.exists() || !src.is_file() {
+            // The ticket's folder in the repository: a teammate's commit may put a link at it, or
+            // at one of its files (to anywhere on this machine): never written through (ESC-653).
+            if !media_target_free(&to, dst) || !src.is_file() {
                 continue;
             }
             if let Some(parent) = dst.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::copy(src, dst)?;
+            std::io::copy(
+                &mut std::fs::File::open(src)?,
+                &mut crate::paths::create_no_follow(dst)?,
+            )?;
         }
         Ok(())
     }
@@ -1751,7 +1775,10 @@ impl<R: Runtime> Core<R> {
                 Ok(())
             })?;
         } else {
-            let text = std::fs::read_to_string(&path)?;
+            // The file as git merged it, both sides in it: no link followed, no pipe waited on,
+            // and capped as `read_dir` caps a ticket's file, with room for its two sides (ESC-653).
+            let bytes = crate::paths::read_no_follow(&path, 4 * MAX_TICKET_FILE)?;
+            let text = String::from_utf8(bytes)?;
             crate::paths::write_atomic(&path, conflict_side(&text, false).as_bytes())?;
         }
         self.sync_shared(&project.id);

@@ -1047,10 +1047,13 @@ pub async fn base(root: &str, base_branch: Option<&str>, rel: &str) -> Result<Op
         None => head(),
     };
     let spec = format!("{rev}:./{}", rel.replace('\\', "/"));
-    let text = match git::run(root, &["cat-file", "blob", &spec]).await {
-        Ok(bytes) => decode(&bytes).text,
-        Err(_) => None,
-    };
+    // Capped as the file itself is (ESC-653): a blob of the history can be gigabytes. Past the
+    // cap, no base to compare with, as for a file too big to open.
+    let text =
+        match git::run_capped(root, &["cat-file", "blob", &spec], MAX_EDIT_BYTES as usize).await {
+            Ok((bytes, false)) => decode(&bytes).text,
+            _ => None,
+        };
     Ok(Some(Base { reference, text }))
 }
 
@@ -2243,6 +2246,25 @@ mod tests {
             tree(&d.to_string_lossy(), &[], "").await.files,
             vec!["a.txt"]
         );
+    }
+
+    /// ESC-653: a blob of the history is read up to the editor's cap: past it there is no base,
+    /// as a file past it is not opened.
+    #[tokio::test]
+    async fn a_base_past_the_editors_cap_is_none() {
+        let r = repo("fsedit-base-cap");
+        let root = r.to_string_lossy().to_string();
+        let mut big = "x\n".repeat(MAX_EDIT_BYTES as usize / 2);
+        big.push('x');
+        std::fs::write(r.join("big.txt"), &big).unwrap();
+        git(&r, &["add", "big.txt"]);
+        git(&r, &["commit", "-qm", "big"]);
+        let b = base(&root, None, "big.txt").await.unwrap().unwrap();
+        assert_eq!(b.text, None);
+        std::fs::write(r.join("big.txt"), &big[1..]).unwrap();
+        git(&r, &["commit", "-qam", "at the cap"]);
+        let b = base(&root, None, "big.txt").await.unwrap().unwrap();
+        assert_eq!(b.text.map(|t| t.len()), Some(MAX_EDIT_BYTES as usize));
     }
 
     #[tokio::test]

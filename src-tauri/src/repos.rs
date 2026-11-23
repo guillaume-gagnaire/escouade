@@ -20,6 +20,8 @@ const SKIPPED: [&str; 6] = [
 
 /// Under the root, the folders looked at: its children, and theirs (`services/billing`).
 const DEPTH: usize = 2;
+/// The most `.gitmodules` is read of: a repository with thousands of submodules says it in far less.
+const MAX_GITMODULES: u64 = 1 << 20;
 
 /// The name a repository goes by: its folder from the project's (`services/billing`), « racine »
 /// for the root's own.
@@ -60,9 +62,12 @@ fn is_repo(dir: &Path) -> bool {
 }
 
 /// The paths of the submodules of the repository at `root`, as its `.gitmodules` names them.
+/// The file comes with the repository: never read through a link (to `/dev/zero`, a FIFO…) nor past
+/// `MAX_GITMODULES` (ESC-653).
 fn submodules(root: &Path) -> HashSet<String> {
-    std::fs::read_to_string(root.join(".gitmodules"))
-        .unwrap_or_default()
+    let bytes =
+        crate::paths::read_no_follow(&root.join(".gitmodules"), MAX_GITMODULES).unwrap_or_default();
+    String::from_utf8_lossy(&bytes)
         .lines()
         .filter_map(|l| {
             let (k, v) = l.split_once('=')?;

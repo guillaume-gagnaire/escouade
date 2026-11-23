@@ -407,8 +407,9 @@ pub async fn diff(root: &str, paths: &[String]) -> Result<String> {
             "--",
         ];
         args.extend(run_paths.iter().map(String::as_str));
-        if let Ok(o) = run(root, &args).await {
-            out.push_str(&cap_file_diffs(&String::from_utf8_lossy(&o), MAX_FILE_DIFF));
+        // Capped (ESC-653): a file of the checkout can be gigabytes.
+        if let Ok(o) = read_diff(root, &args).await {
+            out.push_str(&cap_file_diffs(&o, MAX_FILE_DIFF));
         }
     }
     // The new files git's own diff already shows (those in the index). Git ends the `+++` line of
@@ -3129,7 +3130,11 @@ pub async fn lines_at(
     if rev.is_empty() || rev.starts_with('-') || path.is_empty() || line == 0 {
         return None;
     }
-    let bytes = run(repo, &["show", &format!("{rev}:{path}")]).await.ok()?;
+    // A blob of the repository: read up to `MAX_FILE_DIFF` (a hostile commit's can run to
+    // gigabytes, ESC-653); a line past the cut is not there.
+    let (bytes, _) = run_capped(repo, &["show", &format!("{rev}:{path}")], MAX_FILE_DIFF)
+        .await
+        .ok()?;
     let text = String::from_utf8_lossy(&bytes);
     let from = line.saturating_sub(before).max(1) as usize;
     let to = line.saturating_add(after) as usize;
@@ -6602,4 +6607,47 @@ pub async fn diff_counts(repo: &str, base: &str, branch: &str) -> (u32, u32) {
     parse_numstat(&out)
         .values()
         .fold((0, 0), |(a, d), (x, y)| (a + x, d + y))
+}
+
+#[cfg(test)]
+mod lines_at_cap_tests {
+    use super::*;
+    use std::process::Command;
+
+    /// ESC-653: `lines_at` reads a blob up to `MAX_FILE_DIFF` (a hostile commit's can run to
+    /// gigabytes): the lines before the cut are given, those past it are not there.
+    #[tokio::test]
+    async fn lines_at_reads_a_blob_up_to_its_cap() {
+        let dir = crate::paths::test_dir("git-lines-at-cap");
+        let line = format!("{}\n", "y".repeat(99));
+        std::fs::write(dir.join("big.txt"), line.repeat(50_000)).unwrap();
+        for args in [
+            &["init", "-q", "-b", "main"][..],
+            &["config", "user.email", "t@t"],
+            &["config", "user.name", "t"],
+            &["add", "big.txt"],
+            &["commit", "-qm", "big"],
+        ] {
+            assert!(Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let r = dir.to_string_lossy().to_string();
+        let first = lines_at(&r, "HEAD", "big.txt", 2, 1, 0).await.unwrap();
+        assert!(first.starts_with("    1 y"), "{first}");
+        let past = MAX_FILE_DIFF / line.len() + 10;
+        assert_eq!(
+            lines_at(&r, "HEAD", "big.txt", past as u32, 0, 0).await,
+            None
+        );
+        // Within the cut, a line is there.
+        let near = MAX_FILE_DIFF / line.len() - 10;
+        assert!(lines_at(&r, "HEAD", "big.txt", near as u32, 0, 0)
+            .await
+            .is_some());
+    }
 }

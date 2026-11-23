@@ -41,6 +41,20 @@ pub fn open_no_follow(path: &std::path::Path) -> std::io::Result<std::fs::File> 
     regular_no_follow(opts, path)
 }
 
+/// The bytes of the regular file `path`, opened by `open_no_follow` (no link at its last part, no
+/// pipe waited on), of at most `max` bytes: past them, an error. For a file a repository carries.
+pub fn read_no_follow(path: &std::path::Path, max: u64) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    open_no_follow(path)?
+        .take(max.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max {
+        return Err(std::io::Error::other("file too large"));
+    }
+    Ok(bytes)
+}
+
 /// `path` opened to be written whole, made when it is not there, as `open_no_follow` opens one to
 /// be read: a link put there (a symbolic link, a junction under Windows) or a pipe is refused
 /// before a byte is written. It is emptied only once known to be a regular file, never at open.
@@ -186,6 +200,10 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&made).unwrap(), "ab");
         assert!(create_no_follow(&linked).is_err());
         assert!(create_no_follow(&dir).is_err());
+        // Read whole up to its cap, never past it, never through a link.
+        assert_eq!(read_no_follow(&made, 2).unwrap(), b"ab");
+        assert!(read_no_follow(&made, 1).is_err());
+        assert!(read_no_follow(&linked, 10).is_err());
         #[cfg(windows)]
         let _ = std::fs::remove_dir(&linked);
     }

@@ -79,3 +79,33 @@ fn paths_go_to_their_repository_and_back() {
         Path::new("base").join("services").join("billing")
     );
 }
+
+/// ESC-653: `.gitmodules` comes with the repository: a link there (to `/dev/zero` under Unix, a
+/// junction under Windows) is not read, and the folder is found all the same.
+#[tokio::test]
+async fn a_gitmodules_that_is_a_link_is_not_read() {
+    let d = test_dir("repos-gitmodules-link");
+    init(&d);
+    init(&d.join("lib"));
+    let outside = test_dir("repos-gitmodules-outside");
+    std::fs::write(
+        outside.join("modules"),
+        "[submodule \"lib\"]\n\tpath = lib\n\turl = ../lib\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("/dev/zero", d.join(".gitmodules")).unwrap();
+    #[cfg(windows)]
+    assert!(crate::paths::make_dir_link(
+        &outside,
+        &d.join(".gitmodules")
+    ));
+    assert_eq!(detect(&d, &d.join("wt")).await, ["", "lib"]);
+    #[cfg(windows)]
+    std::fs::remove_dir(d.join(".gitmodules")).unwrap();
+    #[cfg(unix)]
+    std::fs::remove_file(d.join(".gitmodules")).unwrap();
+    if crate::paths::make_file_link(&outside.join("modules"), &d.join(".gitmodules")) {
+        assert_eq!(detect(&d, &d.join("wt")).await, ["", "lib"]);
+    }
+}

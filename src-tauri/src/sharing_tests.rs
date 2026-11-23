@@ -952,3 +952,38 @@ fn removing_a_shared_ticket_never_goes_through_a_junction() {
     assert!(outside.join("claude/keep").exists());
     let _ = std::fs::remove_dir(dir.join("claude"));
 }
+
+/// ESC-653: our media are written in a shared ticket's folder only where nothing is yet and no
+/// link (a junction under Windows) is at the folder or on the way: a teammate's commit can put
+/// one there, to anywhere on this machine.
+#[test]
+fn our_media_are_never_written_through_a_link_in_the_shared_folder() {
+    let root = crate::paths::test_dir("sh-media-target");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let tickets = root.join("tickets");
+    let to = tickets.join("t1");
+    // Nothing there yet: free, its folders to be made.
+    assert!(sh::media_target_free(&to, &to.join("a.png")));
+    assert!(sh::media_target_free(&to, &to.join("u1/k.txt")));
+    std::fs::create_dir_all(to.join("u1")).unwrap();
+    std::fs::write(to.join("a.png"), b"png").unwrap();
+    // A file there already, or a path out of the folder.
+    assert!(!sh::media_target_free(&to, &to.join("a.png")));
+    assert!(!sh::media_target_free(&to, &root.join("x.png")));
+    // A folder of the ticket's that is a link, and the ticket's folder itself as one.
+    assert!(crate::paths::make_dir_link(&outside, &to.join("u2")));
+    assert!(!sh::media_target_free(&to, &to.join("u2/k.txt")));
+    let linked = tickets.join("t2");
+    assert!(crate::paths::make_dir_link(&outside, &linked));
+    assert!(!sh::media_target_free(&linked, &linked.join("a.png")));
+    // A link at the file itself, even one that leads nowhere.
+    if crate::paths::make_file_link(&outside.join("gone.png"), &to.join("b.png")) {
+        assert!(!sh::media_target_free(&to, &to.join("b.png")));
+    }
+    #[cfg(windows)]
+    {
+        std::fs::remove_dir(to.join("u2")).unwrap();
+        std::fs::remove_dir(&linked).unwrap();
+    }
+}
