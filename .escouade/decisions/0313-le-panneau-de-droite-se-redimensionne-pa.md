@@ -1,9 +1,9 @@
 ---
-number: null
+number: 313
 id: "le-panneau-de-droite-se-redimensionne-pa"
 title: "Le panneau de droite se redimensionne par son bord gauche, sa largeur gardée par forme"
 date: "2026-11-23"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-659"
 pages: ["git-fichiers/git-fichiers"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/git-fichiers","added":5,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-24T04:18:06+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

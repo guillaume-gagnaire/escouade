@@ -1,9 +1,9 @@
 ---
-number: null
+number: 312
 id: "sous-macos-et-linux-l-arbre-d-un-agent-c"
 title: "Sous macOS et Linux, l'arbre d'un agent compte et s'arrête au-delà de son groupe de process"
 date: "2026-11-23"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-656"
 pages: ["harness/process-des-agents"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/process-des-agents","added":11,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-24T04:18:06+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

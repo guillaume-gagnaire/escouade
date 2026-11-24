@@ -3,7 +3,7 @@ title: "Process des agents"
 subject: "harness"
 sources: ["https://github.com/guillaume-gagnaire/escouade/issues/26","src-tauri/src/agentgroups.rs","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","crates/escouade-model/src/job.rs"]
 tickets: ["ESC-417","ESC-431","ESC-544","ESC-656"]
-decisions: [147,254,"sous-macos-et-linux-l-arbre-d-un-agent-c"]
+decisions: [147,254,312]
 compared: null
 ---
 
