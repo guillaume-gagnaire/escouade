@@ -75,6 +75,16 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un agent qui lit une PR de GitHub en a maintenant tout : sa description, ses commits, ses fichiers et ses fils de discussion avec leurs réponses et leur état. C’est la première pierre de la vue des PR dans Escouade.
 - Sécurité : sept constats faibles de l’audit de la 2.2.0 corrigés. Un plugin de harness n’écrit plus à travers un lien hors du dossier de l’agent ni un script à côté de ses réglages, un harness ne peut plus arrêter l’app par une longueur de message absurde, la sortie d’un plugin est plafonnée à sa mémoire par tour, les variables des tests ne sont plus lues par l’app publiée, les serveurs locaux coupent plus tôt une connexion muette, la fenêtre et le site ont des politiques de sécurité plus strictes.
 
+## [2.2.10] — 2026-11-24
+
+- Sécurité : la crate `cookie` passe à 0.18.3 (RUSTSEC-2026-0594, des nonces de cookies privés pouvaient se répéter dans un process qui se divise).
+- Le panneau de droite (fichiers, historique, workflow, PR et CI) s’élargit par son bord gauche comme les autres colonnes, à la souris, au clavier ou par un double clic, et garde sa largeur, à côté de la conversation comme côte à côte.
+
+## [2.2.9] — 2026-11-23
+
+- La fenêtre « Pages » d’une commande de lancement montre de nouveau ses icônes (retour, avancer, recharger, largeurs, devtools, navigateur) : ses boutons étaient vides.
+- Sous macOS et Linux, la mémoire et le CPU d’un agent comptent aussi ce qu’il lance à part (dans sa propre session), et l’arrêter l’arrête aussi ; sous macOS, sa mémoire est celle que montre le Moniteur d’activité.
+
 ## [2.2.8] — 2026-11-23
 
 - Sécurité : un dépôt cloné ou tiré ne peut plus, par un lien ou un fichier piégé, faire lire, écrire ou copier un fichier hors du projet, ni figer ou saturer l’app ; le mot de passe du proxy gardé hors trousseau ne va plus à la fenêtre. Merci à OshOEz, qui a fait auditer le code et proposé ces correctifs.

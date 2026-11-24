@@ -404,6 +404,8 @@ export const SETTINGS_ROWS: RowInfo[] = [
 export const SETTINGS_ELSEWHERE: (keyof Settings)[] = [
   'railWidth',
   'sideWidth',
+  'panelWidth',
+  'splitPanelWidth',
   'nameAsked',
   'mcpPort',
   // Trusted by the editor’s question (`lsp_trust`, ESC-446), never by a save of the window.

@@ -75,6 +75,16 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - An agent that reads a GitHub pull request now gets all of it: its description, its commits, its files and its discussion threads with their answers and their state. It is the first stone of the pull request view in Escouade.
 - Security: seven low findings of the 2.2.0 audit fixed. A harness’s plugin no longer writes through a link out of the agent’s folder nor a script beside its settings, a harness can no longer stop the app with an absurd message length, a plugin’s output is capped at its memory per turn, the tests’ variables are no longer read by the published app, the local servers cut a silent connection sooner, and the window and the website have stricter security policies.
 
+## [2.2.10] — 2026-11-24
+
+- Security: the `cookie` crate moves to 0.18.3 (RUSTSEC-2026-0594, private cookie nonces could repeat in a process that forks).
+- The right panel (files, history, workflow, PR and CI) is widened by its left edge like the other columns, with the mouse, the keyboard or a double click, and keeps its width, beside the conversation and side by side alike.
+
+## [2.2.9] — 2026-11-23
+
+- The “Pages” window of a launch command shows its icons again (back, forward, reload, widths, devtools, browser): its buttons were empty.
+- On macOS and Linux, an agent’s memory and CPU also count what it starts apart (in a session of its own), and stopping it stops that too; on macOS, its memory is the one the Activity Monitor shows.
+
 ## [2.2.8] — 2026-11-23
 
 - Security: a cloned or pulled repository can no longer use a link or a booby-trapped file to make the app read, write or copy a file outside the project, nor freeze or flood it; the proxy password kept outside the keychain no longer reaches the window. Thanks to OshOEz, who had the code audited and offered these fixes.

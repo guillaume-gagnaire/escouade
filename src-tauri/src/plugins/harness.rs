@@ -38,7 +38,7 @@ use crate::engine::{
     terminal, BoxFuture, Engine, EngineProcess, Escouade, Message, OnExit, OnFrame, OneShot,
     PermissionAnswer, Process, Program, Ready, Remote, Room, Spawn, Start, StartLost, Weight,
 };
-use crate::job::{Job, JobUsage};
+use crate::job::{Job, JobUsage, Sample};
 use crate::model::EngineId;
 use anyhow::{anyhow, bail, Context, Result};
 use escouade_plugin_protocol::engine::{self as proto, method};
@@ -3573,6 +3573,9 @@ impl EngineProcess for ProcessEngineProcess {
     }
     fn usage(&self) -> Option<JobUsage> {
         self.job.lock().as_ref().and_then(|j| j.usage())
+    }
+    fn usage_in(&self, sample: &Sample) -> Option<JobUsage> {
+        self.job.lock().as_ref().and_then(|j| j.usage_in(sample))
     }
     fn still_running(&self) -> u32 {
         let in_job = self.usage().map_or(0, |u| u.processes);

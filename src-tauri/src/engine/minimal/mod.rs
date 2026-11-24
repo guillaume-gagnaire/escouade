@@ -18,7 +18,7 @@ use super::{
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
-use crate::job::JobUsage;
+use crate::job::{JobUsage, Sample};
 use crate::mcp::install::{Entry, Standing};
 use crate::model::EngineId;
 use anyhow::{bail, Result};
@@ -297,6 +297,9 @@ impl EngineProcess for MinimalProcess {
         self.alive.load(Ordering::Acquire)
     }
     fn usage(&self) -> Option<JobUsage> {
+        None
+    }
+    fn usage_in(&self, _sample: &Sample) -> Option<JobUsage> {
         None
     }
     fn still_running(&self) -> u32 {

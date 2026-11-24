@@ -89,6 +89,8 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   editorFontSize: true,
   railWidth: true,
   sideWidth: true,
+  panelWidth: true,
+  splitPanelWidth: true,
   userName: true,
   userId: true,
   nameAsked: true,

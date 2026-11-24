@@ -5939,9 +5939,11 @@ impl Core {
             .filter_map(|(id, h)| Some((id.clone(), h.lock().proc.clone()?)))
             .filter(|(_, p)| p.is_alive())
             .collect();
+        // One reading of the machine's processes for all of them (ESC-656), none without any.
+        let sample = (!procs.is_empty()).then(crate::job::Sample::read);
         let mut usages: Vec<(String, JobUsage)> = procs
             .into_iter()
-            .filter_map(|(id, p)| Some((id, p.usage()?)))
+            .filter_map(|(id, p)| Some((id, p.usage_in(sample.as_ref()?)?)))
             .collect();
         usages.sort_by(|a, b| a.0.cmp(&b.0));
         let cores = std::thread::available_parallelism().map_or(1, |n| n.get());

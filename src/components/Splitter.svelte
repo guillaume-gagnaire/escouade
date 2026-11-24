@@ -5,7 +5,8 @@
   // The handle between a column and what follows it, on the column's right: dragged right, the column grows. It
   // only reports widths, the column's owner sets them and keeps the one chosen. `value` is the width shown, held
   // between `min` and `max` already. On the vertical axis (`axis: 'y'`) it is the handle under a block: dragged down,
-  // the block grows, and what it reports and keeps are heights.
+  // the block grows, and what it reports and keeps are heights. On a column's left edge (`edge: 'left'`, the side
+  // panel's, ESC-659) it is mirrored: dragged left, or moved by the left arrow, the column grows.
   let {
     value,
     min,
@@ -15,6 +16,7 @@
     label,
     title,
     axis = 'x',
+    edge = 'right',
     step = 16,
     onresize,
     oncommit,
@@ -31,6 +33,8 @@
     title?: string;
     /** 'x': the right edge of a column, sized in width. 'y': the bottom edge of a block, sized in height. */
     axis?: 'x' | 'y';
+    /** Across ('x'): the column's edge it is, its right one (the column on its left) or its left one (the column on its right). */
+    edge?: 'left' | 'right';
     /** What an arrow key moves by. */
     step?: number;
     /** The size the block has now, for every move of the handle. */
@@ -39,6 +43,8 @@
     oncommit: (size: number) => void;
   } = $props();
   const vertical = $derived(axis === 'y');
+  /** On the column's left edge: what moves left widens it. */
+  const mirrored = $derived(!vertical && edge === 'left');
 
   // The drag in progress: not reactive, a move must not cost more than the column's own width changing.
   let gesture: { id: number; at: number; from: number; last: number; moved: boolean } | null = null;
@@ -66,7 +72,8 @@
       return;
     }
     // Whole pixels: a scaled screen gives the pointer fractions.
-    const width = clamp(Math.round(gesture.from + (vertical ? e.clientY : e.clientX) - gesture.at), min, max);
+    const shift = (vertical ? e.clientY : e.clientX) - gesture.at;
+    const width = clamp(Math.round(gesture.from + (mirrored ? -shift : shift)), min, max);
     if (width === gesture.last) return;
     gesture.last = width;
     gesture.moved = true;
@@ -112,7 +119,9 @@
     }
     const keys: Record<string, number> = vertical
       ? { ArrowUp: value - step, ArrowDown: value + step, Home: min, End: max }
-      : { ArrowLeft: value - step, ArrowRight: value + step, Home: min, End: max };
+      : mirrored
+        ? { ArrowLeft: value + step, ArrowRight: value - step, Home: min, End: max }
+        : { ArrowLeft: value - step, ArrowRight: value + step, Home: min, End: max };
     const to = keys[e.key];
     if (to === undefined) return;
     e.preventDefault();
@@ -127,6 +136,7 @@
 <div
   class="splitter"
   class:row={vertical}
+  class:left={mirrored}
   class:dragging
   role="separator"
   aria-orientation={vertical ? 'horizontal' : 'vertical'}
@@ -175,6 +185,11 @@
     width: 3px;
     background: var(--p-ink);
     opacity: 0;
+  }
+  /* On a column's left edge, the grip leans on the column itself: what is left of it (the conversation) keeps its
+     scrollbar within reach. */
+  .splitter.left::before {
+    inset: 0 -6px 0 -1px;
   }
   .splitter:hover::after {
     opacity: 0.5;

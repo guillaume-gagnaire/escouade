@@ -279,6 +279,9 @@ export default {
     close: 'Fermer le panneau',
     reopen: 'Pour le rouvrir : « Fichiers » dans l’en-tête de la conversation',
     reopenSplit: 'Pour le rouvrir : la disposition côte à côte, en haut à droite de la conversation',
+    /** Its left edge (ESC-659), as the sidebar's right edge. */
+    width: 'Largeur du panneau',
+    widthTip: 'Tirer pour élargir · double clic : largeur par défaut',
   },
 
   // The context menu's row of colors: « Couleur 3 ».

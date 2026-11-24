@@ -2,7 +2,7 @@
 title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
-tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-522","ESC-561"]
+tickets: ["ESC-204","ESC-160","ESC-305","ESC-315","ESC-522","ESC-561","ESC-659"]
 decisions: [277,293]
 compared: "2026-10-31T16:24:52+01:00"
 order: 22
@@ -143,3 +143,10 @@ Réglages › Projets, groupe « Git ». Un dossier ou un préfixe refusé l'est
 
 - « Non commités », « Historique » et le diff d'un fichier se relisent à chaque changement du dépôt. Une réponse de git s'affiche dès qu'elle est plus récente que celle qui est à l'écran, même si une relecture plus récente est encore en route ; une réponse plus ancienne n'en remplace jamais une plus récente, ni ne s'affiche pour un autre projet, agent, dépôt ou fichier que celui qui est montré.
 - Origine : chaque réponse était jetée dès qu'une relecture plus récente était partie. Sur un poste chargé, où le dépôt change plus vite que git ne répond (un agent qui démarre, une compilation), l'historique restait sur « Chargement… » et la liste des fichiers gardait un fichier supprimé.
+
+### Largeur du panneau (ESC-659)
+
+- Le bord gauche du panneau se tire comme le bord droit de la barre latérale, à côté de la conversation comme côte à côte (« Largeur du panneau », infobulle « Tirer pour élargir · double clic : largeur par défaut ») : vers la gauche il s'élargit. Au clavier : ← l'élargit et → le rétrécit de 16 px, Début le met au plus étroit, Fin au plus large. Un double clic rend la largeur par défaut.
+- Par défaut : 340 px à côté de la conversation, 44 % de la zone de travail côte à côte. Jamais moins de 340 px (ses onglets tiennent) ; jamais au point de laisser moins de 356 px à la conversation (ce que lui laissait une fenêtre de 1 024 px), ni plus de 1 200 px.
+- Deux largeurs gardées, une par forme (à côté de la conversation, côte à côte), les mêmes pour toute l'app, d'un lancement à l'autre. Une fenêtre trop étroite dessine le panneau plus étroit sans oublier la largeur choisie, rendue quand la place revient.
+- Les onglets suivent sa largeur : sous 420 px ils se resserrent comme dit plus haut, au-delà « PR et CI » revient.
