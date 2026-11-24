@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Browsers in the sidebar, like terminals: one row per tab under “Terminals”, opened full screen or next to an agent, with tablet and mobile widths and the developer tools next to the address. You open one from “+”, and an agent’s test or a launch command opens its own; the “Pages” window is gone.
 - The “Offline mode” of 2.2.6 can be imposed by a team’s policies too, and a managed device finds it in its list of policies; on a server, nothing outside its folders is shown to the computer.
 - Security: whoever reaches a server can no longer block the pairing of a new device by typing wrong codes, nor shut your devices out with failed or silent connections; a device not connected yet always has room to revoke another, and a device revoked or disconnected loses its calls under way and waiting. Thanks to OshOEz, whose audit of their own server showed these flaws.
 - Security: on the team server, a member can no longer erase a project’s history or the administrators’ entries with a snapshot. The team’s own streams take none any more, and the operations a snapshot covers stay 30 days. A snapshot that does not open is put aside on the computer, which reads the journal instead, and the administrators see who posted it and remove it in one click.

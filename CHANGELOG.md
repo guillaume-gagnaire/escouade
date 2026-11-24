@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Des navigateurs dans la barre latérale, comme les terminaux : une ligne par onglet sous « Terminaux », ouverte en plein écran ou à côté d’un agent, avec les largeurs tablette et mobile et les outils de développement à côté de l’adresse. Tu en ouvres un par « + », et le test d’un agent ou une commande de lancement ouvre le sien ; la fenêtre « Pages » disparaît.
 - Le « Mode hors ligne » de la 2.2.6 s’impose aussi par les stratégies d’une équipe, et un poste géré le voit dans sa liste des stratégies ; sur un serveur, rien de ce qui est hors de ses dossiers n’est montré au poste.
 - Sécurité : qui joint un serveur ne peut plus bloquer l’appairage d’un nouvel appareil en tapant des codes faux, ni fermer la porte à tes appareils par des connexions ratées ou muettes ; un appareil qui n’est pas encore connecté a toujours une place pour en révoquer un autre, et un appareil révoqué ou déconnecté perd ses appels en cours et en attente. Merci à OshOEz, dont l’audit de son propre serveur a montré ces failles.
 - Sécurité : sur le serveur d’équipe, un membre ne peut plus effacer l’histoire d’un projet ni les entrées des administrateurs par un instantané. Les flux de l’équipe n’en prennent plus, et les opérations couvertes restent 30 jours. Un instantané qui ne s’ouvre pas est écarté sur le poste, qui lit le journal à la place, et les administrateurs voient qui l’a posé et le retirent d’un clic.

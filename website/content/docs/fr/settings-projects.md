@@ -179,7 +179,7 @@ Rien n’est pris avant « Remplacer ». Un message dit combien de commandes s
 
 Les commandes de lancement démarrent les serveurs, les observateurs et les services du projet. Chacune tourne dans son propre terminal, en lecture seule, lancée depuis la section Lancement de la barre latérale. L’engrenage de cette section (« Commandes de lancement… ») ouvre la page « Lancement » du projet. Quand la section est vide, ses liens « Configurer » et « ✦ Proposer des commandes » l’ouvrent aussi, le second lançant en plus le remplissage. Voir [le lancement](launch) et [les terminaux](terminals).
 
-« Ouvrir les pages des lancements » dit où s’ouvre la page d’un test prêt (voir [La page du lancement](browser)) : « Dans l’agent » (par défaut), « Dans une fenêtre à part » ou « Dans le navigateur du système ». Ce choix reste sur ta machine.
+« Ouvrir les pages des lancements » dit où s’ouvre la page d’un test prêt ou d’une commande de lancement (voir [Les navigateurs](browser)) : « Dans Escouade », sa ligne de la section « Navigateurs » (par défaut), ou « Dans le navigateur du système ». Un projet réglé avant sur « Dans une fenêtre à part » ouvre la ligne du navigateur : la fenêtre « Pages » n’existe plus. Ce choix reste sur ta machine.
 
 Sans commande, le groupe dit « Aucune commande pour l’instant. ». Chaque commande a quatre champs.
 

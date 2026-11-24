@@ -179,7 +179,7 @@ Nothing is taken before “Replace”. A message says how many commands are sugg
 
 Launch commands start the project’s servers, watchers, and services. Each one runs in its own terminal, read-only, started from the Launch section of the sidebar. That section’s gear (“Launch commands…”) opens the project’s “Launch” page. When the section is empty, its “Configure” and “✦ Suggest commands” links open it too, the second one also starting the fill-in. See [launch](launch) and [terminals](terminals).
 
-“Open the launches’ pages” says where the page of a ready test opens (see [The launch page](browser)): “In the agent” (default), “In a separate window” or “In the system browser”. This choice stays on your machine.
+“Open the launches’ pages” says where the page of a ready test or of a launch command opens (see [Browsers](browser)): “In Escouade”, its row of the “Browsers” section (default), or “In the system browser”. A project set before to “In a separate window” opens the browser’s row: the “Pages” window is gone. This choice stays on your machine.
 
 With no command, the group says “No commands yet.”. Each command has four fields.
 

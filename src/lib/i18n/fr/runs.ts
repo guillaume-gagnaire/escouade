@@ -104,8 +104,7 @@ export default {
   open: {
     waiting: 'Escouade ouvrira {url} dès que l’adresse répondra.',
     opened: {
-      page: 'Ouverte dans la page de l’agent : {url}',
-      window: 'Ouverte dans la fenêtre « Pages » du projet : {url}',
+      page: 'Ouverte dans sa ligne de Navigateurs : {url}',
       browser: 'Ouverte dans le navigateur : {url}',
     },
     ended: '« {name} » s’est arrêtée avant que {url} réponde : rien ne s’ouvre.',
@@ -130,8 +129,7 @@ export default {
     reopen: 'Rouvrir',
     /** `{address}`: the address opened, in code style. */
     opened: 'Ouvert dans le navigateur : {address}',
-    openedHere: 'Ouvert dans Escouade, vue « Page » de l’agent : {address}',
-    openedWindow: 'Ouvert dans la fenêtre « Pages » du projet : {address}',
+    openedHere: 'Ouvert dans Escouade, sa ligne de Navigateurs : {address}',
     reading: 'Lecture du .isola.toml…',
     changed: 'La recette vient de changer : relis-la avant de lancer.',
     /** `{name}`: the agent. */

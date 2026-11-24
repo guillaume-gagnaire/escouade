@@ -3,7 +3,6 @@ import './lib/style-nonce-boot';
 import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';
-import PagesWindow from './components/PagesWindow.svelte';
 import { earlyAppearance } from './lib/appearance';
 import { guardFileDrops } from './lib/attachments';
 import { guardLinks } from './lib/links';
@@ -31,7 +30,4 @@ earlyPluginTheme();
 // Under WebKit (Linux, macOS), what crashes its web process is turned off (app.css, `:root.webkit`).
 markWebKit();
 
-// A project's « Pages » window (ESC-311): its bar alone, above the launches' pages.
-const pages = new URLSearchParams(location.search).get('pages');
-if (pages) mount(PagesWindow, { target: document.getElementById('app')!, props: { projectId: pages } });
-else mount(App, { target: document.getElementById('app')! });
+mount(App, { target: document.getElementById('app')! });

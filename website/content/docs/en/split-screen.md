@@ -4,11 +4,11 @@ The work area splits into several panes, side by side or one above the other, to
 
 ## Open a pane
 
-What goes in a pane: an agent, a terminal, a launch log, the editor or an agent’s [launch page](browser). The board, the pull requests and Docs take the whole area, as before; leave them and your panes are back.
+What goes in a pane: an agent, a terminal, a launch log, the editor or a [browser](browser). The board, the pull requests and Docs take the whole area, as before; leave them and your panes are back.
 
 | To… | Do this |
 |---|---|
-| Open beside by dragging | Drag an agent’s card, a terminal’s or a launch’s row from the sidebar, or the title bar’s “Editor” button, onto the work area. A compass of five cells opens on the pane under the pointer: top, left, right and bottom open beside in that direction, the middle replaces. The cell under the pointer lights up and the place the pane will take is drawn. |
+| Open beside by dragging | Drag an agent’s card, a terminal’s, a launch’s or a browser’s row from the sidebar, or the title bar’s “Editor” button, onto the work area. A compass of five cells opens on the pane under the pointer: top, left, right and bottom open beside in that direction, the middle replaces. The cell under the pointer lights up and the place the pane will take is drawn. |
 | Cancel the gesture | `Esc`, or drop outside the work area. |
 | Open beside without dragging | `Ctrl+click` a card or a row; or right-click it, then “Open beside” or “Open below”. |
 | Split at once | `Ctrl+\`: what is shown and the next agent (or a terminal) side by side. The same shortcut goes back to one pane, the active one. |

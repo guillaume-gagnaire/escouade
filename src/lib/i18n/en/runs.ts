@@ -101,8 +101,7 @@ export default defineZone('runs', {
   open: {
     waiting: 'Escouade will open {url} as soon as it answers.',
     opened: {
-      page: 'Opened in the agent’s page: {url}',
-      window: 'Opened in the project’s “Pages” window: {url}',
+      page: 'Opened in its Browsers row: {url}',
       browser: 'Opened in the browser: {url}',
     },
     ended: '“{name}” stopped before {url} answered: nothing opens.',
@@ -127,8 +126,7 @@ export default defineZone('runs', {
     reopen: 'Reopen',
     /** `{address}`: the address opened, in code style. */
     opened: 'Opened in the browser: {address}',
-    openedHere: 'Opened in Escouade, in the agent’s “Page” view: {address}',
-    openedWindow: 'Opened in the project’s “Pages” window: {address}',
+    openedHere: 'Opened in Escouade, in its Browsers row: {address}',
     reading: 'Reading .isola.toml…',
     changed: 'The recipe just changed: read it again before running.',
     /** `{name}`: the agent. */

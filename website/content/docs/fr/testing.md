@@ -54,7 +54,7 @@ La fenêtre liste les étapes, chacune avec son état (✓ prêt, … en cours, 
 1. Les étapes de préparation tournent l’une après l’autre. Elles ne tournent qu’une fois par recette : tant qu’elle ne change pas et qu’Escouade reste ouverte, un nouveau test les saute. Une étape en échec arrête le test (« Préparation en échec (code 1) »).
 2. Chaque processus démarre dans son propre terminal, en lecture seule. Ils apparaissent dans la section « Lancement » de la barre latérale, avec leurs logs (voir [Les commandes de lancement](launch)).
 3. Pour chaque processus qui a une adresse, Escouade attend qu’elle réponde (n’importe quelle réponse HTTP compte, même une 404), pendant 3 minutes au plus : « en attente de localhost:4101… », puis « prêt · 2,4 s » ou « Pas de réponse de http://localhost:4101 après 3 min ».
-4. La page s’ouvre sur l’adresse à ouvrir, à défaut sur celle du premier processus : dans la vue « Page » de l’agent par défaut, dans la fenêtre « Pages » du projet ou dans le navigateur du système, selon Réglages › Projets › Lancement (voir [La page du lancement](browser)).
+4. La page s’ouvre sur l’adresse à ouvrir, à défaut sur celle du premier processus : dans la ligne de l’agent de la section « Navigateurs » par défaut, ou dans le navigateur du système, selon Réglages › Projets › Lancement (voir [Les navigateurs](browser)).
 
 Quand le test est prêt, la fenêtre propose « Rouvrir » (la page), « Voir les logs », « Tout arrêter » et « Fermer ». Une ligne en échec a son « Voir le log ». Un processus qui s’arrête pendant que le test est prêt met fin au test (« web s’est arrêté »).
 

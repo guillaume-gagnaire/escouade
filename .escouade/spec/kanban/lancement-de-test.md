@@ -2,7 +2,7 @@
 title: "Lancement de test"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-311","ESC-286","ESC-351"]
+tickets: ["ESC-311","ESC-286","ESC-351","ESC-657"]
 decisions: [26,92]
 compared: "2026-10-31T19:01:50+01:00"
 ---
@@ -32,7 +32,7 @@ Tout agent qui a un worktree peut lancer l'app de sa branche pour qu'on l'essaie
 ### Le lancement
 
 - Une fois la recette approuvée, Escouade prépare (une fois par recette), puis lance chaque processus dans un terminal en lecture seule, dans un groupe au nom de l'agent de la section « Lancement ».
-- Elle attend que chacun réponde en HTTP (toutes les 500 ms, 3 min au plus), puis ouvre la page de la fonctionnalité là où le projet le dit : dans la vue « Page » de l'agent (par défaut), dans la fenêtre « Pages » du projet, ou dans le navigateur du système (voir [La page du lancement](page-du-lancement)).
+- Elle attend que chacun réponde en HTTP (toutes les 500 ms, 3 min au plus), puis ouvre la page de la fonctionnalité là où le projet le dit : dans la ligne de l'agent de la section « Navigateurs » (par défaut, ESC-657), ou dans le navigateur du système (voir [Les navigateurs (la page du lancement)](page-du-lancement)).
 - Les lancements s'arrêtent à la validation, à l'archivage, à la suppression de l'agent, à la fermeture du projet, et quand l'agent donne une nouvelle recette, qui remplace l'ancienne.
 - Quand son ticket passe « Terminé », ses terminaux de test quittent la section « Lancement » avec leurs logs, la fenêtre « Tester » de l'agent se ferme, et sa page aussi.
 

@@ -65,8 +65,7 @@ const DEFAULTS: Record<string, (args: any) => unknown> = {
   // The plugins of the first hand that bring a source, a code host or a voice service, installed (ESC-407).
   plugins_list: () => firstHandPlugins(),
   // A launch's page (ESC-311): opened where it was asked.
-  devpage_open: (a) => ({ agentId: a.agentId, projectId: 'p1', title: a.title, url: a.url, detached: a.detached }),
-  devpage_detach: (a) => ({ agentId: a.agentId, projectId: 'p1', title: '', url: '', detached: a.detached }),
+  devpage_open: (a) => ({ agentId: a.agentId, projectId: a.projectId ?? 'p1', title: a.title, url: a.url }),
 };
 
 export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {}) {
@@ -473,6 +472,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.launches = {};
   app.selectedLaunch = {};
   app.selectedTerm = {};
+  app.selectedPage = {};
   app.filesOpen = false;
   app.planOpen = {};
   app.subView = {};

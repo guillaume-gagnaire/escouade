@@ -1,7 +1,7 @@
 // The page of a launch inside Escouade (ESC-311): its bar, its states, its « Pages » window.
 export default {
   view: 'Page',
-  viewHint: 'The page of its launch, inside Escouade',
+  viewHint: 'The page of its launch, in Browsers',
   back: 'Back',
   forward: 'Forward',
   reload: 'Reload',
@@ -15,8 +15,6 @@ export default {
   width: '{width} px',
   shrunkShort: 'Narrowed to {width} px',
   shrunk: 'The area is narrower than {device} px: the page is narrowed to {width} px.',
-  detach: 'Open in a separate window',
-  attach: 'Put back in the agent',
   system: 'Open in the system browser',
   /** The agent's menu (ESC-419): its page in a pane of the split screen. */
   openBeside: 'Open the page beside',
@@ -29,17 +27,34 @@ export default {
   waitingText: 'The page opens here as soon as its server answers.',
   stalled: '{host} is not answering',
   stalledText: 'The page did not finish loading in 20 s. The server may still be running: reload, or look at its logs.',
+  /** A browser opened alone (ESC-657): no launch, no logs. */
+  stalledAlone: 'The page didn’t finish loading in 20 s: its server may be slow or stopped. Reload once it answers.',
   stopped: 'The launch stopped',
   stoppedText: 'Launch again to get the page back at the same address.',
   relaunch: 'Launch again',
   viewLogs: 'View logs',
-  detached: 'The page is in the “Pages” window of {project}.',
-  showWindow: 'Go to the window',
   covered: 'The page comes back when what is over it closes.',
   outside: '{host} opened in your browser: only {page} shows here.',
   refused: 'The page tried to open {url}: refused.',
-  window: {
-    tabs: 'Project pages',
-    empty: 'No page open.',
+  devtoolsWhere: {
+    windows: 'In a window of their own: WebView2 doesn’t dock them in the page.',
+    mac: 'In a window of their own: docked in the page, WebKit’s inspector changes its width.',
+    linux: 'In the page, at the bottom: their buttons move them to the right or apart.',
+  },
+  browsers: {
+    title: 'Browsers',
+    new: 'New browser',
+    none: 'No browser open',
+    field: 'Address of the new browser',
+    placeholder: 'localhost:3000',
+    open: 'Open',
+    state: { loading: 'loading', ready: 'loaded', stalled: 'not answering' },
+    copy: 'Copy the address',
+    copied: 'Address copied',
+    close: 'Close the browser',
+    by: 'Launch of {name}',
+    empty: 'Type an address.',
+    notAnAddress: 'That isn’t an address (localhost:3000, for example).',
+    scheme: 'Only an http:// or https:// address opens in an Escouade browser.',
   },
 } as const;

@@ -6300,7 +6300,7 @@ fn tell_of(core: &Arc<Core>) -> crate::devpage::Tell {
 }
 
 /// Opens the page of agent `agent_id`'s launch at `url` (or loads it in the page already open):
-/// in the agent's view at `bounds`, or in its project's « Pages » window (`detached`).
+/// in the window at `bounds` (ESC-657: a browser's row; the « Pages » window is gone).
 #[cfg(feature = "desktop")]
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -6311,29 +6311,25 @@ pub fn devpage_open(
     agent_id: String,
     title: String,
     url: String,
-    detached: bool,
     bounds: Option<crate::devpage::Bounds>,
     project_id: Option<String>,
 ) -> Res<crate::devpage::PageView> {
-    // A launch command run in its project (ESC-560): a page without an agent, keyed
-    // `run:<project>:<command>`, in the project's « Pages » window alone.
-    let (project_id, detached) = match project_id {
+    // A page without an agent (ESC-657), in the window: a browser the user opened alone
+    // (`browser:<id>`), or the page of a launch command run in its project
+    // (`run:<project>:<command>`, ESC-560).
+    let project_id = match project_id {
         Some(p) => {
-            if !agent_id.starts_with(&format!("{}{p}:", crate::devpage::RUN_PREFIX)) {
-                return Err("not the page of a launch of this project".into());
-            }
+            crate::devpage::agentless_key(&agent_id, &p)?;
             core.project(&p).map_err(err)?;
-            (p, true)
+            p
         }
-        None => (
-            core.agent(&agent_id)
-                .map_err(err)?
-                .lock()
-                .meta
-                .project_id
-                .clone(),
-            detached,
-        ),
+        None => core
+            .agent(&agent_id)
+            .map_err(err)?
+            .lock()
+            .meta
+            .project_id
+            .clone(),
     };
     let own = own_of(&app);
     crate::devpage::open(
@@ -6344,7 +6340,6 @@ pub fn devpage_open(
             project_id: &project_id,
             title: &title,
             url: &url,
-            detached,
             bounds,
             data_root: core.data.root(),
             visible: bounds.is_some(),
@@ -6386,40 +6381,15 @@ pub fn devpage_devtools(app: tauri::AppHandle, agent_id: String) -> Res<()> {
     crate::devpage::devtools(&app, &agent_id)
 }
 
-/// Moves the page to its project's « Pages » window, or back to the agent's view.
-#[cfg(feature = "desktop")]
-#[tauri::command]
-pub fn devpage_detach(
-    app: tauri::AppHandle,
-    pages: State<Arc<crate::devpage::Pages>>,
-    agent_id: String,
-    detached: bool,
-) -> Res<crate::devpage::PageView> {
-    crate::devpage::detach(&app, &pages, &agent_id, detached)
-}
-
 /// Shows the page of agent `agent_id` at a width: `full`, `tablet` or `mobile`.
 #[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_mode(
-    app: tauri::AppHandle,
     pages: State<Arc<crate::devpage::Pages>>,
     agent_id: String,
     mode: crate::devpage::PageMode,
 ) -> Res<()> {
-    crate::devpage::set_mode(&app, &pages, &agent_id, mode)
-}
-
-/// The « Pages » window shows the page of agent `agent_id` (its tab clicked).
-#[cfg(feature = "desktop")]
-#[tauri::command]
-pub fn devpage_show(
-    app: tauri::AppHandle,
-    pages: State<Arc<crate::devpage::Pages>>,
-    agent_id: String,
-) -> Res<()> {
-    let page = pages.get(&agent_id).ok_or("no page for this agent")?;
-    crate::devpage::show_in_window(&app, &pages, &page.project_id, &agent_id)
+    crate::devpage::set_mode(&pages, &agent_id, mode)
 }
 
 /// Closes the page of agent `agent_id`.
@@ -6431,24 +6401,6 @@ pub fn devpage_close(
     agent_id: String,
 ) -> Res<()> {
     crate::devpage::close(&app, &pages, &agent_id)
-}
-
-/// The pages open: all of them, or those of project `project_id` (a « Pages » window's bar).
-#[tauri::command]
-pub fn devpage_list(
-    pages: State<Arc<crate::devpage::Pages>>,
-    project_id: Option<String>,
-) -> crate::devpage::PagesOf {
-    match project_id {
-        Some(p) => crate::devpage::PagesOf {
-            pages: pages.of_project(&p),
-            shown: pages.shown_in_window(&p),
-        },
-        None => crate::devpage::PagesOf {
-            pages: pages.all(),
-            shown: None,
-        },
-    }
 }
 
 // ---------- scheduled tasks (ESC-448) ----------

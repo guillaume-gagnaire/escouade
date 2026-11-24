@@ -13,7 +13,7 @@
   import type { Project } from '../../lib/types';
   import Conversation from '../Conversation.svelte';
   import DevPage from '../DevPage.svelte';
-  import { devpages } from '../../lib/devpage.svelte';
+  import { devpages, rowName } from '../../lib/devpage.svelte';
   import VscodeView from '../editor/VscodeView.svelte';
   import Icon from '../Icon.svelte';
   import RunView from '../RunView.svelte';
@@ -38,12 +38,10 @@
   const agent = $derived(item.kind === 'agent' ? app.agents[item.id] : undefined);
   const term = $derived(item.kind === 'term' ? app.terminals.find((x) => x.id === item.id) : undefined);
   const cmd = $derived(item.kind === 'launch' ? app.launchOf(project, item.id) : undefined);
-  /** The agent whose launch's page this pane shows. */
-  const pageOf = $derived(item.kind === 'page' ? app.agents[item.id] : undefined);
+  /** The browser this pane shows (ESC-657): an agent's launch's page, or one opened alone. */
+  const page = $derived(item.kind === 'page' ? devpages.pages[item.id] : undefined);
   const name = $derived(
-    pageOf
-      ? t('devpage.owner', { title: devpages.pages[pageOf.id]?.title ?? pageOf.name })
-      : (agent?.name ?? term?.name ?? cmd?.name ?? t('shell.panes.editor')),
+    page ? t('devpage.owner', { title: rowName(page) }) : (agent?.name ?? term?.name ?? cmd?.name ?? t('shell.panes.editor')),
   );
   const closeKey = keyLabel('Ctrl+Shift+W');
 </script>
@@ -79,8 +77,8 @@
     <TerminalView {term} {project} />
   {:else if cmd}
     <RunView {cmd} {project} />
-  {:else if pageOf}
-    <DevPage agent={pageOf} />
+  {:else if page && item.kind === 'page'}
+    <DevPage pageKey={item.id} />
   {:else if item.kind === 'editor'}
     <VscodeView {project} />
   {/if}

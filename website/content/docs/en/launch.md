@@ -69,7 +69,7 @@ A command can open the app it launches, by itself, as soon as it answers: no mor
 
 At each launch, Escouade asks the address every half second, as “▶ Test” does, until it answers (an error page counts: the server is up), 3 minutes at most. The command’s log says so: “Escouade will open http://localhost:5173/ as soon as it answers.”, then where it opened.
 
-- **Launch page**: a [launch page](browser) of Escouade. Run in an agent’s worktree, it is that agent’s page; run in the project, a tab of the project’s “Pages” window, one per command. Restarting reloads the same page, without opening another. If the project opens its pages “In the system browser”, it is the browser.
+- **Launch page**: an Escouade [browser](browser), a row of the “Browsers” section. Run in an agent’s worktree, it is that agent’s row; run in the project, a row of its own, one per command, shown if you were looking at its log. Restarting reloads the same page, without opening another. If the project opens its pages “In the system browser”, it is the browser.
 - **Browser**: the system’s browser.
 - If the command stops by itself (crashed, or done) before the address answers, nothing opens and the log says so: ““Front” stopped before http://localhost:5173/ answered: nothing opens.” After 3 minutes without an answer, nothing opens either. Stopped by you, nothing is said.
 

@@ -84,16 +84,60 @@ fn files_scripts_and_other_schemes_go_nowhere() {
 }
 
 #[test]
-fn the_devtools_shortcut_asks_for_the_devtools() {
+fn a_page_cannot_open_its_devtools_by_itself() {
+    // ESC-657: the devtools open on a gesture of the user alone. The address the page's shortcut went
+    // to before (`escouade-devtools://open/`) is now refused like any other scheme: a script of the
+    // page that goes there opens nothing.
     let home = url("http://localhost:41731/");
-    assert_eq!(judge(&url(DEVTOOLS_URL), &home, own), Verdict::Devtools);
-    // Its script sends F12, Cmd+Opt+I and Ctrl+Shift+I there, and nothing else is in it.
+    assert_eq!(
+        judge(&url("escouade-devtools://open/"), &home, own),
+        Verdict::Nowhere
+    );
+    // Its script holds the width's shortcut alone: no F12, no Ctrl+Shift+I, nothing of Tauri's.
     let script = shortcut_script();
-    assert!(script.contains("'F12'"));
-    assert!(script.contains("e.metaKey && e.altKey"));
-    assert!(script.contains("e.ctrlKey && e.shiftKey"));
-    assert!(script.contains(DEVTOOLS_URL));
+    assert!(!script.contains("F12"));
+    assert!(!script.contains("KeyI"));
+    assert!(!script.contains("escouade-devtools://open/"));
     assert!(!script.contains("__TAURI"));
+}
+
+#[test]
+fn a_page_without_an_agent_has_a_key_of_its_own() {
+    // A browser opened alone (ESC-657), and the page of a launch command of this project (ESC-560).
+    assert!(agentless_key("browser:b1", "p1").is_ok());
+    assert!(agentless_key("browser:k3x-9_a", "p1").is_ok());
+    assert!(agentless_key("run:p1:c1", "p1").is_ok());
+    for key in [
+        "",
+        "browser:",
+        "a1",
+        "browser:a/b",
+        "browser:a b",
+        "browser:é",
+        // Another project's command, or none.
+        "run:p2:c1",
+        "run:p1:",
+        "run:p1",
+        "devpage-a1",
+    ] {
+        assert!(agentless_key(key, "p1").is_err(), "{key:?}");
+    }
+    assert!(agentless_key(&format!("browser:{}", "x".repeat(41)), "p1").is_err());
+    // Its webview's label is a page's: no command answers it either.
+    assert!(refuses(&page_label("browser:b1")));
+    assert_eq!(page_label("browser:b1"), "devpage-browser_b1");
+}
+
+#[test]
+fn a_documents_title_is_one_clean_line() {
+    assert_eq!(
+        clip_title("  Utilisateurs \n — demo  "),
+        "Utilisateurs — demo"
+    );
+    assert_eq!(clip_title("a\u{200b}b\u{202e}c\u{feff}"), "abc");
+    assert_eq!(clip_title("\u{7}bell"), "bell");
+    assert_eq!(clip_title(&"é".repeat(200)).chars().count(), 120);
+    assert_eq!(clip_title(""), "");
 }
 
 #[test]
@@ -124,11 +168,9 @@ fn one_label_per_agent_and_no_command_answers_a_page() {
     assert_eq!(page_label("a/b c:é"), "devpage-a_b_c__");
     assert_ne!(page_label("a"), page_label("b"));
     assert!(refuses(&page_label("anything")));
-    for label in ["main", "pagesbar-p1", "pages-p1", ""] {
+    for label in ["main", "space-s1", ""] {
         assert!(!refuses(label), "{label}");
     }
-    assert_eq!(window_label("p1"), "pages-p1");
-    assert_eq!(bar_label("p1"), "pagesbar-p1");
 }
 
 #[test]
@@ -146,8 +188,9 @@ fn the_capability_names_the_windows_webviews_never_a_page() {
         .iter()
         .map(|v| v.as_str().unwrap().to_string())
         .collect();
-    // The spaces' own windows (ESC-539) are the app's too.
-    assert_eq!(webviews, ["main", "pagesbar-*", "space-*"]);
+    // The spaces' own windows (ESC-539) are the app's too; the « Pages » windows' bars are gone
+    // with them (ESC-657).
+    assert_eq!(webviews, ["main", "space-*"]);
     for w in &webviews {
         let pattern = glob::Pattern::new(w).unwrap();
         assert!(!pattern.matches(&page_label("a1")), "{w}");
@@ -179,9 +222,11 @@ fn the_window_never_has_devtools_in_a_release() {
     let page =
         std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/devpage.rs"))
             .unwrap();
+    // The « Pages » window and its bar, Escouade's own interface with devtools in a debug build,
+    // are gone (ESC-657): devpage.rs makes no webview of the app's own pages any more.
     assert!(
-        page.contains(".devtools(cfg!(debug_assertions))"),
-        "the bar of « Pages »"
+        !page.contains("WebviewUrl::App"),
+        "an app's page made in devpage.rs"
     );
 }
 
@@ -211,7 +256,6 @@ fn launching_again_keeps_one_page_per_agent() {
                 project_id: "p1",
                 title: "pagination-users · web",
                 url: u,
-                detached: false,
                 bounds: Some(Bounds {
                     x: 10.0,
                     y: 60.0,
@@ -228,7 +272,7 @@ fn launching_again_keeps_one_page_per_agent() {
     open_at("a1", "http://localhost:41731/").unwrap();
     open_at("a1", "http://localhost:41731/users").unwrap();
     open_at("a2", "http://localhost:41742/").unwrap();
-    assert_eq!(pages.of_project("p1").len(), 2);
+    assert!(pages.get("a1").is_some() && pages.get("a2").is_some());
     assert_eq!(pages.get("a1").unwrap().url, "http://localhost:41731/users");
     assert!(app.get_webview(&page_label("a1")).is_some());
     assert!(app.get_webview(&page_label("a2")).is_some());
@@ -237,20 +281,14 @@ fn launching_again_keeps_one_page_per_agent() {
     assert!(pages.get("a3").is_none());
     close(app.handle(), &pages, "a1").unwrap();
     assert!(pages.get("a1").is_none());
-    assert_eq!(pages.of_project("p1").len(), 1);
+    assert!(pages.get("a2").is_some());
 }
 
 #[test]
-fn a_tablet_or_a_phone_is_centred_and_narrowed_to_the_room() {
-    // The whole room.
-    assert_eq!(device_fit(PageMode::Full, 1100.0), (1100.0, 0.0));
-    // A tablet (768) and a phone (390), centred.
-    assert_eq!(device_fit(PageMode::Tablet, 1100.0), (768.0, 166.0));
-    assert_eq!(device_fit(PageMode::Mobile, 1100.0), (390.0, 355.0));
-    // A room narrower than the device: the page takes the room.
-    assert_eq!(device_fit(PageMode::Tablet, 600.0), (600.0, 0.0));
-    assert_eq!(device_fit(PageMode::Mobile, 300.0), (300.0, 0.0));
-    // Said to the window as it says them.
+fn the_widths_are_said_to_the_window_as_it_says_them() {
+    // The window places the page at its width (`deviceFit`, devpage-key.ts): the backend keeps the
+    // mode chosen, said as the window says it (the « Pages » window that laid it out itself is gone,
+    // ESC-657).
     assert_eq!(
         serde_json::to_string(&PageMode::Mobile).unwrap(),
         "\"mobile\""

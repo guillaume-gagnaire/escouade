@@ -69,7 +69,7 @@ Une commande peut ouvrir l’app qu’elle lance, toute seule, dès qu’elle r�
 
 À chaque lancement, Escouade demande l’adresse toutes les demi-secondes, comme « ▶ Tester », jusqu’à ce qu’elle réponde (une page d’erreur compte : le serveur est là), 3 minutes au plus. Le log de la commande le dit : « Escouade ouvrira http://localhost:5173/ dès que l’adresse répondra. », puis où elle s’est ouverte.
 
-- **Page de lancement** : une [page de lancement](browser) d’Escouade. Lancée dans le worktree d’un agent, c’est la page de cet agent ; lancée dans le projet, un onglet de la fenêtre « Pages » du projet, un par commande. Relancer recharge la même page, sans en ouvrir une autre. Si le projet ouvre ses pages « Dans le navigateur du système », c’est le navigateur.
+- **Page de lancement** : un [navigateur](browser) d’Escouade, une ligne de la section « Navigateurs ». Lancée dans le worktree d’un agent, c’est la ligne de cet agent ; lancée dans le projet, une ligne à elle, une par commande, affichée si tu regardais son log. Relancer recharge la même page, sans en ouvrir une autre. Si le projet ouvre ses pages « Dans le navigateur du système », c’est le navigateur.
 - **Navigateur** : le navigateur du système.
 - Si la commande s’arrête d’elle-même (plantée, ou finie) avant que l’adresse réponde, rien ne s’ouvre et le log le dit : « « Front » s’est arrêtée avant que http://localhost:5173/ réponde : rien ne s’ouvre. » Après 3 minutes sans réponse, rien ne s’ouvre non plus. Stoppée par toi, rien n’est dit.
 

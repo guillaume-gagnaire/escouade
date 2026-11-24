@@ -155,6 +155,8 @@ test('the sidebar looks as the preview draws it, in both themes, at both sizes',
         for (const [name, sel] of [
           ['Lancement', '.runs'],
           ['Terminaux', '.terms'],
+          // ESC-657: under the terminals, on their model.
+          ['Navigateurs', '.browsers'],
         ]) {
           const a = side.locator(`${sel} .sec-h`);
           const p = ps.locator(`section[aria-label="${name}"] .sec-h`);
@@ -164,6 +166,7 @@ test('the sidebar looks as the preview draws it, in both themes, at both sizes',
         if (size.height < 820) {
           await expect(side.locator('.runs .rows')).toBeHidden();
           await expect(side.locator('.terms .rows')).toBeHidden();
+          await expect(side.locator('.browsers .rows')).toBeHidden();
         } else {
           await expect(side.locator('.runs .rows')).toBeVisible();
         }

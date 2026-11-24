@@ -44,7 +44,6 @@
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import AgentTerminal from './AgentTerminal.svelte';
-  import DevPage from './DevPage.svelte';
   import { devpages, inPane as pageInPane, pageItem, showPage } from '../lib/devpage.svelte';
   import Composer from './Composer.svelte';
   import PlanBanner from './PlanBanner.svelte';
@@ -544,9 +543,8 @@
   const working = $derived(atWork || inBackground);
   /** Shown in its harness's own interface, which takes its process's place or joins it (OpenCode). */
   const harnessView = $derived(inHarnessView(agent));
-  /** Its launch's page is open in Escouade (ESC-311), and its view shows it: not when it is in a pane of its own (ESC-419). */
+  /** Its launch's page is open in Escouade (ESC-311): its browser's row (ESC-657), which its « Page » shows. */
   const hasPage = $derived(!!devpages.pages[agent.id]);
-  const pageView = $derived(hasPage && !!devpages.shown[agent.id] && !pageInPane(agent.id));
   /** What is said of the wait: a turn ends by itself; what goes on in the background needs to be stopped first. */
   const waits = $derived(atWork ? t('conv.escouadeNext.busy') : inBackground ? t('conv.escouadeNext.busyBackground') : '');
 
@@ -823,44 +821,38 @@
       {/if}
       <!-- « Escouade | <harness> »: never for a ticket's agent, which its board drives over the stream. The view shown is
            named, the other one an icon. -->
-      {#if canSwitchView(agent) || hasPage}
+      {#if canSwitchView(agent)}
         <div class="vseg" role="group" aria-label={t('conv.header.view')}>
           <button
-            aria-pressed={!harnessView && !pageView}
+            aria-pressed={!harnessView}
             aria-label={t('conv.header.toRich')}
             disabled={harnessView && !!agent.codeMode}
             use:tip={harnessView ? t(agent.codeMode ? 'conv.codeMode.noRich' : 'conv.header.toRichHint') : undefined}
-            onclick={() => {
-              showPage(agent.id, false);
-              if (harnessView) switchView(agent);
-            }}><Icon name="agents" size={14} /><span class="lbl">{t('conv.header.rich')}</span></button
+            onclick={() => harnessView && switchView(agent)}
+            ><Icon name="agents" size={14} /><span class="lbl">{t('conv.header.rich')}</span></button
           >
-          {#if canSwitchView(agent)}
-            <button
-              aria-pressed={harnessView && !pageView}
-              aria-label={t('conv.header.toTerminal', { engine: engineName(agent.engine) })}
-              use:tip={harnessView ? undefined : t('conv.header.toTerminalHint', { engine: engineName(agent.engine) })}
-              onclick={() => {
-                showPage(agent.id, false);
-                if (!harnessView) switchView(agent);
-              }}><Icon name="term" size={14} /><span class="lbl">{engineName(agent.engine)}</span></button
-            >
-          {/if}
-          {#if hasPage}
-            <button
-              aria-pressed={pageView}
-              aria-label={t('devpage.viewHint')}
-              use:tip={pageView ? undefined : t('devpage.viewHint')}
-              onclick={() => showPage(agent.id, true)}
-              onpointerdown={(e) => {
-                // Dragged onto the work area, the page goes into a pane, as a terminal's row (ESC-419).
-                const p = devpages.pages[agent.id];
-                if (p && !p.detached && !pageInPane(agent.id))
-                  paneDrag.press(e, pageItem(agent.id), t('devpage.owner', { title: p.title }));
-              }}><Icon name="page" size={14} /><span class="lbl">{t('devpage.view')}</span></button
-            >
-          {/if}
+          <button
+            aria-pressed={harnessView}
+            aria-label={t('conv.header.toTerminal', { engine: engineName(agent.engine) })}
+            use:tip={harnessView ? undefined : t('conv.header.toTerminalHint', { engine: engineName(agent.engine) })}
+            onclick={() => !harnessView && switchView(agent)}
+            ><Icon name="term" size={14} /><span class="lbl">{engineName(agent.engine)}</span></button
+          >
         </div>
+      {/if}
+      {#if hasPage}
+        <!-- Its launch's page (ESC-657): its browser's row in « Navigateurs », shown as a terminal is; dragged onto the
+             work area, it goes into a pane beside the conversation (ESC-419). -->
+        <button
+          class="btn page"
+          aria-label={t('devpage.viewHint')}
+          use:tip={t('devpage.viewHint')}
+          onclick={() => showPage(agent.id)}
+          onpointerdown={(e) => {
+            const p = devpages.pages[agent.id];
+            if (p && !pageInPane(agent.id)) paneDrag.press(e, pageItem(agent.id), t('devpage.owner', { title: p.title }));
+          }}><Icon name="page" size={14} /><span class="lbl">{t('devpage.view')}</span></button
+        >
       {/if}
       <!-- The agent's menu, the one of its card's right click (the sidebar draws it). -->
       <button
@@ -889,11 +881,9 @@
   </header>
 
   <!-- Where the agent is in its plan, when it follows one: it takes the room it needs, never the messages' last 160 px. -->
-  {#if !pageView}<PlanBanner {agent} />{/if}
+  <PlanBanner {agent} />
 
-  {#if pageView}
-    <DevPage {agent} />
-  {:else if harnessView && !agent.archived}
+  {#if harnessView && !agent.archived}
     {@render harnessCard()}
     {@render codeModeBand()}
     {@render nextStart()}

@@ -2,7 +2,8 @@
 //! devpage_probe`. The unit tests run on Tauri's mock runtime and the end-to-end test on Windows
 //! alone; this one runs the page as the app does, on WebView2, WKWebView or WebKitGTK, to say on
 //! each system what the page could reach of Escouade, where its storage went, whether its
-//! devtools opened, and the widths it saw, in the agent's view and in the « Pages » window.
+//! devtools opened, and the widths it saw, at a phone's and at a tablet's (ESC-657: a browser of the
+//! window; the « Pages » window is gone).
 //!
 //! A local server serves a page that tries Escouade's commands (the app's and a plugin's), keeps
 //! something in its storage and tells all of it back, then tells its width at each change. The
@@ -32,7 +33,7 @@ fetch('/width?w=' + innerWidth);
   };
   r.app = await tryCall('open_url', { url: location.origin + '/pwned' });
   r.plugin = await tryCall('plugin:opener|open_url', { url: location.origin + '/pwned' });
-  r.list = await tryCall('devpage_list', {});
+  r.mode = await tryCall('devpage_mode', { agentId: 'probe', mode: 'mobile' });
   localStorage.setItem('mark', 'esc-311');
   r.storage = localStorage.getItem('mark');
   await fetch('/report', { method: 'POST', body: JSON.stringify(r) });
@@ -106,8 +107,8 @@ struct Seen {
     width_in_agent: Option<u32>,
     /// The page was still at a phone's width a few seconds later (nothing laid it out again).
     width_in_agent_held: bool,
-    pages_window: bool,
-    width_in_window: Option<u32>,
+    /// At a tablet's width, as the window places it in a wider room.
+    width_as_tablet: Option<u32>,
     /// Every width the page told, in order.
     widths: Vec<u32>,
 }
@@ -123,15 +124,14 @@ impl Seen {
         };
         refused("app")
             && refused("plugin")
-            && refused("list")
+            && refused("mode")
             && !self.pwned
             && self.report.as_ref().and_then(|r| r.get("storage")) == Some(&"esc-311".into())
             && self.storage_dir != Some(false)
             && self.devtools_open != Some(false)
             && self.width_in_agent == Some(390)
             && self.width_in_agent_held
-            && self.pages_window
-            && self.width_in_window == Some(768)
+            && self.width_as_tablet == Some(768)
     }
 }
 
@@ -184,7 +184,7 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
         .manage(pages.clone())
         .invoke_handler(crate::windowthread::off_the_window(
             lanes,
-            tauri::generate_handler![crate::commands::open_url, crate::commands::devpage_list],
+            tauri::generate_handler![crate::commands::open_url, crate::commands::devpage_mode],
         ))
         .setup(move |app| {
             WebviewWindowBuilder::new(
@@ -208,7 +208,6 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                     project_id: "probe",
                     title: "probe · web",
                     url: &url,
-                    detached: false,
                     bounds: Some(Bounds {
                         x: 0.0,
                         y: 0.0,
@@ -270,11 +269,20 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                 let _ = wait(&rx, &mut seen, Duration::from_secs(3), |_| None::<()>);
                 seen.width_in_agent_held = seen.width_in_agent.is_some()
                     && seen.widths[before..].iter().all(|w| *w == 390);
-                // To the « Pages » window, a tablet's width there.
-                seen.pages_window = devpage::detach(&handle, &pages, "probe", true).is_ok()
-                    && handle.get_window(&devpage::window_label("probe")).is_some();
-                let _ = devpage::set_mode(&handle, &pages, "probe", PageMode::Tablet);
-                seen.width_in_window = wait(&rx, &mut seen, Duration::from_secs(15), |t| match t {
+                // A tablet's width, centred, as the window places it (its mode kept on the page).
+                let _ = devpage::set_mode(&pages, "probe", PageMode::Tablet);
+                let _ = devpage::place(
+                    &handle,
+                    &pages,
+                    "probe",
+                    Some(Bounds {
+                        x: 66.0,
+                        y: 0.0,
+                        width: 768.0,
+                        height: 600.0,
+                    }),
+                );
+                seen.width_as_tablet = wait(&rx, &mut seen, Duration::from_secs(15), |t| match t {
                     Told::Width(768) => Some(768),
                     _ => None,
                 });

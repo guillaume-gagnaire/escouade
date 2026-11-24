@@ -1,7 +1,7 @@
 // The content security policy the real window has (audit SEC-05, ESC-593): a `<style>` element applies only with the
 // nonce Tauri gives the page at each load, `style` attributes still apply, and none of the interface's own styles is
 // refused (its sheet, xterm's, the VS Code view's). The policy is read from the window itself (the violation it reports) and
-// from what Tauri serves for its pages: the main window's and the « Pages » windows' bar (`index.html?pages=`). A
+// from what Tauri serves for the main window (the « Pages » windows' bar is gone, ESC-657). A
 // launch's page is the developed app's, under its own policy; a plugin's view is drawn in the main window.
 
 import type { Page } from '@playwright/test';
@@ -106,10 +106,11 @@ test('the window applies a <style> only with its nonce, keeps style attributes, 
   expectStylePolicy(refused[0]!.policy, got.nonce);
 });
 
-test('Tauri serves the main window and the « Pages » windows’ bar each with a nonce of its own, on its <style>', async ({ app }) => {
+test('Tauri serves the main window with a nonce of its own, on its <style>', async ({ app }) => {
   const { page } = app;
   await expect(page.locator('#app')).not.toBeEmpty();
-  for (const address of ['/index.html', '/index.html?pages=p1']) {
+  // The « Pages » windows' bar, served with it before, is gone (ESC-657).
+  for (const address of ['/index.html']) {
     const served = await page.evaluate(async (address) => {
       const res = await fetch(address);
       return { policy: res.headers.get('content-security-policy'), html: await res.text() };

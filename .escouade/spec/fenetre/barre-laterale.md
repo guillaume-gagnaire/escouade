@@ -2,8 +2,8 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26","https://github.com/guillaume-gagnaire/escouade/pull/44","src-tauri/src/deleteask.rs","src/components/modals/DeleteAgentModal.svelte"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-448","ESC-511","ESC-522","ESC-544","ESC-560"]
-decisions: [129,133,147,211,263,254,294]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-448","ESC-511","ESC-522","ESC-544","ESC-560","ESC-657"]
+decisions: [129,133,147,211,263,254,294,310]
 compared: null
 ---
 
@@ -268,6 +268,14 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 - Le cœur ne renonce qu'au bout de 60 s, contre un git bloqué : « État du worktree inconnu : git n'a pas répondu à temps. », comme pour une erreur de git.
 - Origine : sur un poste chargé, git mettait plus de 3 s ; sa réponse était jetée, et la modale disait « inconnu » pour de bon alors que git répondait une seconde après (vu dans l'e2e de la suppression d'un agent à worktree).
 
+### Navigateurs (ESC-657)
+
+- Une section « Navigateurs » sous « Terminaux », sur son modèle exact : en tête le titre, le nombre de navigateurs et « + » (« Nouveau navigateur ») ; une ligne par navigateur (un onglet), dans l'ordre où ils se sont ouverts, avec son point d'état (ambre : charge, vert : chargée, rouge : ne répond pas), son nom (le titre de la page, sinon son hôte ; « agent · processus » pour la page d'un lancement, avec la marque du worktree), sa croix au survol ; « Aucun navigateur ouvert » sans navigateur. Repliée sur son titre dans une fenêtre basse, comme « Terminaux ».
+- Un clic affiche le navigateur seul dans la zone principale, comme un terminal (aucun agent n'est alors surligné) ; `Ctrl`+clic ou un glisser sur la zone de travail l'ouvre dans un volet (voir *Écran partagé*). Son menu : « Ouvrir à côté », « Ouvrir en dessous », « Recharger », « Copier l'adresse », « Ouvrir dans le navigateur du système », « Fermer le navigateur ».
+- « + » demande une adresse dans un champ en tête des lignes ; le navigateur s'ouvre et s'affiche. La page du test d'un agent et celle d'une commande de lancement y ont leur ligne d'elles-mêmes. Le détail : *Les navigateurs (la page du lancement)*.
+- Le menu d'un agent dont la page est ouverte garde « Ouvrir la page à côté », « Ouvrir la page en dessous ».
+- Les navigateurs ne survivent pas à un redémarrage d'Escouade, comme les terminaux.
+
 ## Lancement : ouvrir une adresse quand l'app répond (ESC-560)
 
 Complète *Lancement* ci-dessus.
@@ -275,8 +283,8 @@ Complète *Lancement* ci-dessus.
 - Chaque commande de lancement a, sous sa ligne, la case « Ouvrir à son lancement » (décochée par défaut). Cochée : le champ « Adresse à ouvrir » (`http://localhost:3000` en exemple) et « Où l'ouvrir » : « Page de lancement » (par défaut) ou « Navigateur ». La décocher retire l'adresse.
 - L'adresse est une adresse `http://` ou `https://` avec un hôte, vérifiée à la saisie : une autre (`file:`, `javascript:`, `ftp:`, `localhost:3000` sans schéma) est dite sous le champ (« Seule une adresse http:// ou https:// s'ouvre. ») et les commandes enregistrées restent celles d'avant tant qu'elle y est. Le cœur refuse de même une telle adresse à l'enregistrement.
 - Elle peut nommer les ports qu'un worktree donne à ses lancements, comme le fait un shell : `${ESCOUADE_PORT_BASE}` et `${ESCOUADE_PORT_END}`, avec une valeur pour le projet après `:-` (`http://localhost:${ESCOUADE_PORT_BASE:-3000}`). Aucune autre variable : « « HOME » n'est pas une variable de l'adresse : seulement ESCOUADE_PORT_BASE, ESCOUADE_PORT_END. » L'aide du champ le dit.
-- Quand l'ouvrir : à chaque lancement de la commande (▶, « Tout lancer », « Relancer », dans le projet ou un worktree), Escouade demande l'adresse comme « ▶ Tester » le fait pour les processus d'une recette, par le même code : une requête toutes les 500 ms, 2 s au plus chacune, 3 min au plus depuis le lancement ; jamais un délai fixe. Son log le dit : « Escouade ouvrira <adresse> dès que l'adresse répondra. », puis « Ouverte dans la page de l'agent : … », « Ouverte dans la fenêtre « Pages » du projet : … » ou « Ouverte dans le navigateur : … ».
+- Quand l'ouvrir : à chaque lancement de la commande (▶, « Tout lancer », « Relancer », dans le projet ou un worktree), Escouade demande l'adresse comme « ▶ Tester » le fait pour les processus d'une recette, par le même code : une requête toutes les 500 ms, 2 s au plus chacune, 3 min au plus depuis le lancement ; jamais un délai fixe. Son log le dit : « Escouade ouvrira <adresse> dès que l'adresse répondra. », puis « Ouverte dans sa ligne de Navigateurs : … » (ESC-657) ou « Ouverte dans le navigateur : … ».
 - Une commande qui s'arrête d'elle-même (plantée, ou terminée) avant que l'adresse réponde n'ouvre rien, et son log le dit : « « Front » s'est arrêtée avant que <adresse> réponde : rien ne s'ouvre. ». Arrêtée par l'utilisateur : rien n'est dit. Pas de réponse en 3 min : « Pas de réponse de <adresse> après 3 min : rien ne s'ouvre. ». Relancée, c'est le nouveau lancement qui attend.
-- Où : « Navigateur », ou un projet dont « Ouvrir les pages des lancements » est « Dans le navigateur du système » : le navigateur du système. Sinon une page de lancement (voir *La page du lancement*) : lancée dans le worktree d'un agent, la page de cet agent (« refacto-auth · Front »), là où le projet met ses pages ; lancée dans le projet, un onglet de la fenêtre « Pages » du projet, un par commande (« Front »). Une page déjà ouverte est rechargée, jamais doublée.
+- Où : « Navigateur », ou un projet dont « Ouvrir les pages des lancements » est « Dans le navigateur du système » : le navigateur du système. Sinon sa ligne de « Navigateurs » (ESC-657, voir *Les navigateurs (la page du lancement)*) : lancée dans le worktree d'un agent, la ligne de cet agent (« refacto-auth · Front ») ; lancée dans le projet, une ligne par commande (« Front »). Une page déjà ouverte est rechargée, jamais doublée ; la ligne s'affiche quand on regardait le log de la commande (ou l'agent), sinon elle attend.
 - Dans le worktree d'un agent, `${ESCOUADE_PORT_BASE}` prend le premier port de l'agent : `localhost:${ESCOUADE_PORT_BASE:-3000}` devient `localhost:4120`. Dans le projet, la valeur après `:-` ; sans elle, l'adresse ne s'ouvre pas et le log dit comment lui en donner une.
 - `.escouade.yml` peut porter l'adresse d'une commande (`url`, `open_in`, voir *.escouade.yml*) : elle n'est appliquée qu'avec la commande, une fois approuvée.

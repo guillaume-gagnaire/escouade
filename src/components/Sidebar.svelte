@@ -11,6 +11,7 @@
   import { keyLabel } from '../lib/platform';
   import { SIDE_MIN, sideWidth } from '../lib/side-width.svelte';
   import Splitter from './Splitter.svelte';
+  import BrowsersSection from './BrowsersSection.svelte';
   import DocsSidebar from './docs/DocsSidebar.svelte';
   import { readDocsPending } from '../lib/docs-share';
   import { t } from '../lib/i18n';
@@ -151,7 +152,7 @@
   const selectedAgentId = $derived(app.agent?.id);
   const termSelected = $derived(app.selectedTerm[project.id] ?? null);
   /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
-  const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn || app.docsOn || app.prsOn);
+  const otherView = $derived(!!termSelected || !!app.pageShown || !!app.runCommand || app.boardOn || app.docsOn || app.prsOn);
   /** The contents of the split screen's panes (ESC-392), when it is on screen: each is highlighted, the active one more. */
   const paneKeys = $derived(app.panesOn && app.panes ? new Set(leaves(app.panes.root).map(itemKey)) : null);
   const inPane = (key: string) => !!paneKeys?.has(key) && app.panes?.active !== key;
@@ -655,7 +656,7 @@
         : []),
       ...(a.archived ? [] : besideItems({ kind: 'agent', id: a.id })),
       // Its launch's page, in the window and not yet in a pane (ESC-419): beside, as a terminal.
-      ...(a.archived || !devpages.pages[a.id] || devpages.pages[a.id].detached || pageInPane(a.id)
+      ...(a.archived || !devpages.pages[a.id] || pageInPane(a.id)
         ? []
         : [
             { label: t('devpage.openBeside'), onClick: () => openPageBeside(a.id, 'right') },
@@ -1714,6 +1715,9 @@
         {/each}
       </div>
     </section>
+
+    <!-- « Navigateurs » (ESC-657), under the terminals and on their model: one row per browser. -->
+    <BrowsersSection {project} />
   {/if}
 
   <div class="side-foot">

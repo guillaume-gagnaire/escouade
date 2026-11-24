@@ -1,18 +1,22 @@
-// The page of a launch inside Escouade (ESC-311): where it opens by the project's setting, what its events change,
-// when it is hidden under the window's overlays, where it goes in the window, its devtools' shortcut.
+// The browsers of a project (ESC-657; the page of a launch before, ESC-311): where a launch's page opens by the project's
+// setting, a browser opened alone by « + », what their events change, when they are hidden under the window's overlays,
+// where they go in the window, the devtools' shortcut.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import {
   boundsOf,
+  browserAddress,
+  browsersOf,
   closePage,
   coveredAt,
-  detach,
   devpages,
   devtoolsKey,
   onPageEvent,
+  newBrowser,
   openLaunchPage,
   pagesOpenOf,
   pageTitle,
+  rowName,
   showPage,
   STALLED_MS,
 } from './devpage.svelte';
@@ -37,7 +41,6 @@ beforeEach(() => {
   A = agent({ id: 'a7', name: 'pagination-users', recipe: RECIPE });
   resetApp({ agents: [A] });
   devpages.pages = {};
-  devpages.shown = {};
   app.modal = null;
 });
 afterEach(() => vi.useRealTimers());
@@ -45,7 +48,9 @@ afterEach(() => vi.useRealTimers());
 describe('where a launch’s page opens', () => {
   it('in the agent by default, for a project saved before the setting too', () => {
     expect(pagesOpenOf(project())).toBe('agent');
-    expect(pagesOpenOf(project({ pagesOpen: 'window' }))).toBe('window');
+    // « Dans une fenêtre à part » of before: the « Pages » window is gone, the browser's row opens (ESC-657).
+    expect(pagesOpenOf(project({ pagesOpen: 'window' }))).toBe('agent');
+    expect(pagesOpenOf(project({ pagesOpen: 'system' }))).toBe('system');
     expect(pagesOpenOf(undefined)).toBe('agent');
   });
 
@@ -53,11 +58,17 @@ describe('where a launch’s page opens', () => {
     const b = fakeBackend();
     expect(await openLaunchPage(A, RECIPE.open)).toBe('agent');
     expect(b.called('devpage_open').map((c) => c.args)).toEqual([
-      { agentId: 'a7', title: 'pagination-users · web', url: RECIPE.open, detached: false, bounds: null },
+      { agentId: 'a7', title: 'pagination-users · web', url: RECIPE.open, bounds: null },
     ]);
     expect(b.called('open_url')).toHaveLength(0);
-    expect(devpages.pages.a7).toMatchObject({ phase: 'loading', detached: false, url: RECIPE.open });
-    expect(devpages.shown.a7).toBe(true);
+    expect(devpages.pages.a7).toMatchObject({
+      phase: 'loading',
+      url: RECIPE.open,
+      projectId: 'p1',
+      by: { kind: 'agent', id: 'a7' },
+    });
+    // Its browser's row, named after the worktree and the process (ESC-657).
+    expect(browsersOf('p1').map(([key, p]) => [key, rowName(p)])).toEqual([['a7', 'pagination-users · web']]);
   });
 
   it('takes the place of the test’s window, as the browser came to the front before', async () => {
@@ -65,8 +76,17 @@ describe('where a launch’s page opens', () => {
     app.modal = { kind: 'testLaunch', agentId: 'a7' };
     await openLaunchPage(A, RECIPE.open);
     expect(app.modal).toBeNull();
-    expect(app.ui.selectedAgent.p1).toBe('a7');
     expect(app.ui.view).toBe('project');
+    // Its browser's row is shown, as a terminal just opened is (ESC-657).
+    expect(app.selectedPage.p1).toBe('a7');
+    expect(app.pageShown).toBe('a7');
+  });
+
+  it('shows its row when the user was looking at the agent', async () => {
+    fakeBackend();
+    app.ui.selectedAgent.p1 = 'a7';
+    await openLaunchPage(A, RECIPE.open);
+    expect(app.pageShown).toBe('a7');
   });
 
   it('leaves the user where they are when they look elsewhere', async () => {
@@ -75,16 +95,17 @@ describe('where a launch’s page opens', () => {
     app.ui.selectedAgent.p1 = 'a8';
     await openLaunchPage(A, RECIPE.open);
     expect(app.ui.selectedAgent.p1).toBe('a8');
-    // Its view « Page » waits for them.
-    expect(devpages.shown.a7).toBe(true);
+    // Its row waits for them.
+    expect(app.pageShown).toBeNull();
+    expect(browsersOf('p1')).toHaveLength(1);
   });
 
-  it('in the project’s « Pages » window when the project says so', async () => {
+  it('in its row when the project said « Dans une fenêtre à part » before: the « Pages » window is gone', async () => {
     app.projects[0].pagesOpen = 'window';
     const b = fakeBackend();
-    expect(await openLaunchPage(A, RECIPE.open)).toBe('window');
-    expect(b.called('devpage_open')[0].args.detached).toBe(true);
-    expect(devpages.shown.a7).toBeUndefined();
+    expect(await openLaunchPage(A, RECIPE.open)).toBe('agent');
+    expect(b.called('devpage_open')[0].args).not.toHaveProperty('detached');
+    expect(browsersOf('p1').map(([k]) => k)).toEqual(['a7']);
   });
 
   it('in the system’s browser, as before, when the project says so', async () => {
@@ -128,28 +149,123 @@ describe('a page’s life', () => {
     expect(toast).toHaveBeenCalledWith('github.com s’est ouvert dans ton navigateur : ici, seul localhost:4111 s’affiche.', 'info');
   });
 
-  it('switches between the conversation and the page, and goes to its window and back', async () => {
-    showPage('a7', false);
-    expect(devpages.shown.a7).toBe(false);
-    showPage('a7', true);
-    expect(devpages.shown.a7).toBe(true);
-    await detach('a7', true);
-    expect(devpages.pages.a7.detached).toBe(true);
-    expect(devpages.shown.a7).toBe(false);
-    await detach('a7', false);
-    expect(devpages.pages.a7.detached).toBe(false);
-    expect(devpages.shown.a7).toBe(true);
+  it('is shown by its row', async () => {
+    app.selectAgent('a7');
+    showPage('a7');
+    expect(app.pageShown).toBe('a7');
+    // Its agent is no longer the one on screen: the browser is, as a terminal would be.
+    expect(app.agentShown).toBeNull();
   });
 
   it('closes with its agent, and with its ticket done', () => {
     const b = fakeBackend();
+    showPage('a7');
     closePage('a7');
     expect(devpages.pages.a7).toBeUndefined();
-    expect(devpages.shown.a7).toBeUndefined();
+    expect(app.selectedPage.p1).toBeNull();
     expect(b.called('devpage_close').map((c) => c.args.agentId)).toEqual(['a7']);
-    // A page no longer there: its view cannot show it.
-    showPage('a7', true);
-    expect(devpages.shown.a7).toBeUndefined();
+    // A page no longer there: nothing shows it.
+    showPage('a7');
+    expect(app.pageShown).toBeNull();
+  });
+});
+
+describe('a browser opened alone (ESC-657)', () => {
+  it('takes an http or https address, http:// when it has none, as the launches’ pages do', () => {
+    expect(browserAddress('localhost:3000')).toEqual({ url: 'http://localhost:3000/' });
+    expect(browserAddress(' localhost:3000/users?q=1 ')).toEqual({ url: 'http://localhost:3000/users?q=1' });
+    expect(browserAddress('https://app.localhost:8443/a')).toEqual({ url: 'https://app.localhost:8443/a' });
+    expect(browserAddress('example.org')).toEqual({ url: 'http://example.org/' });
+    for (const typed of ['javascript:alert(1)', 'file:///etc/passwd', 'mailto:a@b.c', 'data:text/html,x', 'tauri://localhost/'])
+      expect(browserAddress(typed), typed).toEqual({
+        error: 'Seule une adresse http:// ou https:// s’ouvre dans un navigateur d’Escouade.',
+      });
+    expect(browserAddress('  ')).toEqual({ error: 'Tape une adresse.' });
+    expect(browserAddress('http://')).toEqual({ error: 'Ce n’est pas une adresse (localhost:3000, par exemple).' });
+  });
+
+  it('opens a row of its own in the project, keyed apart from the agents, and shows it', async () => {
+    const b = fakeBackend();
+    const key = await newBrowser('p1', 'localhost:3000/admin');
+    expect(key).toMatch(/^browser:[a-z0-9]+$/);
+    expect(b.called('devpage_open').map((c) => c.args)).toEqual([
+      { agentId: key, title: 'localhost:3000', url: 'http://localhost:3000/admin', bounds: null, projectId: 'p1' },
+    ]);
+    expect(devpages.pages[key!]).toMatchObject({ projectId: 'p1', by: { kind: 'user' } });
+    expect(app.pageShown).toBe(key);
+    // Its row says its host until the page gives its title.
+    expect(rowName(devpages.pages[key!])).toBe('localhost:3000');
+    onPageEvent({ agentId: key!, phase: 'title', url: 'http://localhost:3000/admin', title: 'Admin — demo' });
+    expect(rowName(devpages.pages[key!])).toBe('Admin — demo');
+  });
+
+  it('does not answer when its first load lasts more than 20 s (its first « started » came before its row)', async () => {
+    vi.useFakeTimers();
+    fakeBackend();
+    const key = (await newBrowser('p1', 'localhost:3000/lent'))!;
+    vi.advanceTimersByTime(STALLED_MS - 1);
+    expect(devpages.pages[key].phase).toBe('loading');
+    vi.advanceTimersByTime(1);
+    expect(devpages.pages[key].phase).toBe('stalled');
+  });
+
+  it('takes what the page already is at its opening: its events may have come before its row', async () => {
+    fakeBackend({
+      devpage_open: (x) => ({
+        agentId: x.agentId,
+        projectId: 'p1',
+        title: x.title,
+        url: x.url,
+        loaded: true,
+        docTitle: 'Tableau — demo',
+      }),
+    });
+    const key = (await newBrowser('p1', 'localhost:3000'))!;
+    expect(devpages.pages[key]).toMatchObject({ phase: 'ready', docTitle: 'Tableau — demo' });
+    expect(rowName(devpages.pages[key])).toBe('Tableau — demo');
+  });
+
+  it('keeps what its page said before its row existed, and gives it to the row', async () => {
+    let key = '';
+    fakeBackend({
+      devpage_open: (x) => {
+        key = x.agentId;
+        // The page loads and names itself while the window waits for the answer.
+        onPageEvent({ agentId: key, phase: 'finished', url: x.url });
+        onPageEvent({ agentId: key, phase: 'title', url: x.url, title: 'Boutique — demo' });
+        // Something that opens or refuses is never done later.
+        onPageEvent({ agentId: key, phase: 'outside', url: 'https://ailleurs.example/' });
+        return { agentId: key, projectId: 'p1', title: x.title, url: x.url };
+      },
+    });
+    expect(await newBrowser('p1', 'localhost:3000')).toBe(key);
+    expect(devpages.pages[key]).toMatchObject({ phase: 'ready', docTitle: 'Boutique — demo' });
+  });
+
+  it('lists the rows of the project alone, the oldest first', async () => {
+    fakeBackend();
+    const one = await newBrowser('p1', 'localhost:3001');
+    await openLaunchPage(A, RECIPE.open);
+    const two = await newBrowser('p1', 'localhost:3002');
+    expect(browsersOf('p1').map(([k]) => k)).toEqual([one, 'a7', two]);
+    expect(browsersOf('p2')).toEqual([]);
+  });
+
+  it('opens nothing for an address it refuses, and says why', async () => {
+    const b = fakeBackend();
+    const toast = vi.spyOn(app, 'toast');
+    expect(await newBrowser('p1', 'javascript:alert(1)')).toBeNull();
+    expect(b.called('devpage_open')).toHaveLength(0);
+    expect(toast).toHaveBeenCalledWith('Seule une adresse http:// ou https:// s’ouvre dans un navigateur d’Escouade.', 'error');
+  });
+
+  it('closes by its row, its pane with it', async () => {
+    const b = fakeBackend();
+    const key = (await newBrowser('p1', 'localhost:3000'))!;
+    closePage(key);
+    expect(devpages.pages[key]).toBeUndefined();
+    expect(app.pageShown).toBeNull();
+    expect(b.called('devpage_close').map((c) => c.args.agentId)).toEqual([key]);
   });
 });
 

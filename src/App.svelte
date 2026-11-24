@@ -88,6 +88,7 @@
   import OverseerScreen from './components/overseer/OverseerScreen.svelte';
   import { overseer } from './lib/overseer.svelte';
   import TerminalView from './components/TerminalView.svelte';
+  import DevPage from './components/DevPage.svelte';
   import TitleBar from './components/TitleBar.svelte';
   import TlsBanner from './components/TlsBanner.svelte';
   import RecoveryBanner from './components/RecoveryBanner.svelte';
@@ -414,6 +415,11 @@
               <RunView cmd={app.runCommand} {project} />
             {:else if app.term}
               <TerminalView term={app.term} {project} />
+            {:else if app.pageShown}
+              <!-- A browser of the project (ESC-657), shown alone as a terminal is. -->
+              {#key app.pageShown}
+                <DevPage pageKey={app.pageShown} />
+              {/key}
             {:else if app.agent}
               {#key app.agent.id}
                 <!-- One of its subagents' conversation (ESC-13), or the view of one of its background tasks (ESC-14), in place of its own. -->
