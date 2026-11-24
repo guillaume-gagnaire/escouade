@@ -21,6 +21,8 @@ import SidePanel from './SidePanel.svelte';
 
 const edge = () => screen.getByRole('separator', { name: 'Largeur du panneau' });
 const panel = () => document.querySelector<HTMLElement>('aside.git-side')!;
+// The panel lists the uncommitted files: an empty list, not the fake backend's `null`, which the list cannot read.
+const NO_FILES = { git_files: () => [] };
 const saved = (backend: ReturnType<typeof fakeBackend>, key: 'panelWidth' | 'splitPanelWidth') =>
   backend.called('save_settings').at(-1)?.args.settings[key];
 
@@ -62,7 +64,7 @@ describe('the side panel’s left edge', () => {
   });
 
   it('is dragged left to widen, moved by the keyboard, kept, and a double click gives its usual width back', async () => {
-    const backend = fakeBackend();
+    const backend = fakeBackend(NO_FILES);
     render(SidePanel, { project: project(), agent: app.agents.a1 });
     const e = edge();
     // The work beside the rail (52) and the sidebar (276): 1 112 px, the conversation keeping its 356.
@@ -101,7 +103,7 @@ describe('the side panel’s left edge', () => {
   });
 
   it('docked side by side, has its own width, read back from the settings', async () => {
-    fakeBackend();
+    fakeBackend(NO_FILES);
     app.settings.panelWidth = 400;
     app.settings.splitPanelWidth = 600;
     const { unmount } = render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
