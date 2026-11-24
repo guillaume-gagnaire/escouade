@@ -2122,8 +2122,9 @@ function startSession() {
       ['contrat.pdf', Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n')],
       // « [script] » (ESC-538): a script too, which a window on a server only downloads, never opens.
       ...(text.includes('[script]') ? [['rejouer.sh', Buffer.from('#!/bin/sh\necho relance\n')]] : []),
-      // And a file of no type Escouade opens (ESC-629): only downloaded and shown in its folder, with why.
-      ...(text.includes('[script]') ? [['ouvrir.terminal', Buffer.from('<?xml version="1.0"?><plist></plist>\n')]] : []),
+      // And a file of no type Escouade opens (ESC-629), which runs nothing either (a `.terminal` is a script since
+      // ESC-628): only downloaded and shown in its folder, with why.
+      ...(text.includes('[script]') ? [['etude.docx', Buffer.from('PK\x03\x04\x14\x00\x00\x00')]] : []),
     ].map(([name, bytes]) => {
       const file = path.join(dir, name);
       fs.writeFileSync(file, bytes);

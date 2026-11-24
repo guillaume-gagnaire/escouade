@@ -251,6 +251,9 @@ test('the bar goes from page to page by the keyboard, and « Avancé » unfolds 
   await expect(dialog.getByRole('heading', { level: 1 })).toHaveText('demo-api');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
+  // « Parties du projet » (ESC-658) comes between « Projet » and « Git et worktrees ».
+  await expect(settingsEntry(dialog, 'Parties du projet')).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('ArrowDown');
   await expect(settingsEntry(dialog, 'Git et worktrees')).toHaveAttribute('aria-current', 'page');
   await expect(dialog.getByRole('heading', { level: 1 })).toHaveText('Git et worktrees');
   await page.keyboard.press('Home');

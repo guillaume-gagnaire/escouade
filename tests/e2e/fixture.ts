@@ -1189,6 +1189,7 @@ const PROJECT_PAGES = new Set([
   'Équipe',
   'Confidentialité',
   'Project',
+  'Project parts',
   'Git and worktrees',
   'Launch',
   'Imported tickets',
