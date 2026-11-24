@@ -543,8 +543,9 @@
   const working = $derived(atWork || inBackground);
   /** Shown in its harness's own interface, which takes its process's place or joins it (OpenCode). */
   const harnessView = $derived(inHarnessView(agent));
-  /** Its launch's page is open in Escouade (ESC-311): its browser's row (ESC-657), which its « Page » shows. */
-  const hasPage = $derived(!!devpages.pages[agent.id]);
+  /** Its launch's page is open in Escouade (ESC-311): its browser's row (ESC-657), which its « Page » shows; not while its
+   *  project's launch is off (ESC-658). */
+  const hasPage = $derived(!!devpages.pages[agent.id] && app.partOn(agent.projectId, 'launch'));
   /** What is said of the wait: a turn ends by itself; what goes on in the background needs to be stopped first. */
   const waits = $derived(atWork ? t('conv.escouadeNext.busy') : inBackground ? t('conv.escouadeNext.busyBackground') : '');
 

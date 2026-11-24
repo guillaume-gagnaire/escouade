@@ -197,6 +197,7 @@ mod overseer_core;
 mod overseer_tests;
 mod pace;
 mod pagecrash;
+mod parts;
 mod paths;
 pub mod phone;
 #[cfg(test)]

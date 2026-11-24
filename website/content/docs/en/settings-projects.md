@@ -2,7 +2,7 @@
 
 Each project has its settings pages, unfolded under its name in the bar, and “All projects” sets what holds for new projects and the closed ones.
 
-A project’s pages: “Project” (its name, color, tile, harness and account), “Git and worktrees” (its worktrees, branches, commits, setup and teardown commands, repositories), “Launch” (its launch commands), [“Kanban”](settings-board), [“Imported tickets”](settings-integrations), “Team” (the shared Kanban, the shared settings of `.escouade.yml`, the shared memory) and “Privacy” (private project, remote control, plugins in this project). “All projects”, under the list, sets what a new project starts with and keeps the closed projects.
+A project’s pages: “Project” (its name, color, tile, harness and account), [“Project parts”](#project-parts) (its Docs, shared memory, Kanban, launch and browsers), “Git and worktrees” (its worktrees, branches, commits, setup and teardown commands, repositories), “Launch” (its launch commands), [“Kanban”](settings-board), [“Imported tickets”](settings-integrations), “Team” (the shared Kanban, the shared settings of `.escouade.yml`, the shared memory) and “Privacy” (private project, remote control, plugins in this project). “All projects”, under the list, sets what a new project starts with and keeps the closed projects.
 
 ## Choosing the project
 
@@ -29,6 +29,29 @@ The logo is recognized by its content, whatever its extension. An image that is 
 The label stays on this machine too: it doesn’t go into `.escouade.yml`. Until you drag the edge of the projects’ rail, it goes from 52 to 72 px as soon as a project has its label on; see [the projects rail](interface#its-width). The same setting is in the “New project” assistant, under the letters and the logo.
 
 Accounts are described in [accounts](accounts) and set on the [“Accounts and harnesses”](settings-accounts) page. An account switched off after it was chosen stays shown with “(inactive)” as long as it is chosen, and is ignored in the meantime.
+
+## Project parts
+
+The “Project parts” page turns on or off, for this project alone, each of the parts of Escouade it takes. A part turned off disappears from this project: its views, its MCP tools, what its agents are told of it and its background work. **Nothing is deleted**: its files, its tickets and its memories stay, and turning it on again finds them as they were.
+
+| Part | Off, for this project |
+|---|---|
+| “Docs” | The Docs tab (specification, decisions, documents, discussions) and “Docs branch” disappear; the Docs tools are refused; its agents are no longer told of the spec nor the documents; the comparison to the code, “Plan tickets” and the discussions no longer start. |
+| “Shared memory” | The “Shared memory” section of the Team page disappears; `search_memory`, `read_memory`, `write_memory` and `forget_memory` are refused for this project; its agents are no longer told of the memory. The memories stay in `.escouade/memory/`. |
+| “Kanban” | The project has agents alone: the Kanban tab, the “Kanban” and “Imported tickets” pages, the scheduled tasks and the tickets’ tools disappear; none of its tickets starts, by the autopilot or by hand; its workflows are no longer followed; a brainstorm no longer proposes tickets. |
+| “Launch and browsers” | The “Launch” section, the “Launch” page, “Test” and “Prepare launch”, the launches’ pages and their probes disappear; its agents’ test launches stop; its tickets’ agents are no longer asked for their launch recipe. |
+
+Each row says what the part does, what turning it off changes, and who decides:
+
+- **This device**: your choice, kept on this machine, never in a file (“Chosen on this device”). “Back to the default” forgets it.
+- **The repository**: the project’s `.escouade.yml` may propose a default per part (`parts.docs`, `parts.memory`, `parts.kanban`, `parts.launch`, see [.escouade.yml](escouade-yml#parts)). It holds only while this device chose nothing, and the row says so: “Proposed by the repository (.escouade.yml): your choice here goes first.” Your choice holds even when the file changes later.
+- **Nobody**: everything is on, as before.
+- **The team**, for a team’s project: what it imposes (`enforced`) goes before your choice and greys the switch (“Imposed by the team Acme”); what it recommends (`defaults`) comes after the repository.
+
+A part turned off in [Settings › Features](settings-application) (the Kanban, the Docs space) is off in every project: its row is greyed and says so.
+
+> [!NOTE]
+> Turning a part on starts nothing by itself: its background work follows its own settings (the autopilot, the trust given to the commands of `.escouade.yml`…). A cloned repository therefore cannot, through this default, run anything more than what you already allowed, nor lift a protection: it can only propose to turn something off.
 
 ## Remote control
 

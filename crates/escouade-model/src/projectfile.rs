@@ -66,6 +66,10 @@ pub struct ProjectShared {
     /// page Plugins of the project marks them. Never saved: read again with the file.
     #[serde(skip_deserializing, skip_serializing_if = "Option::is_none")]
     pub team_plugins: Option<TeamPlugins>,
+    /// What the project's team says of its parts (ESC-658): the keys `parts.<id>` of its file, `enforced` before this
+    /// device, `defaults` after the repository (`crate::parts::state`). Never saved: read again with the file.
+    #[serde(skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub team_parts: Option<TeamPlugins>,
 }
 
 /// The keys `plugins.<id>.<key>` a team's file sets on its projects (TS-13, ESC-532), by their whole key: `defaults`

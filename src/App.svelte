@@ -18,6 +18,7 @@
   import { createWarmer } from './lib/warm';
   import { heatClock } from './lib/heat.svelte';
   import { offerClaudeMemory } from './lib/memory';
+  import { closePage, devpages } from './lib/devpage.svelte';
   import { hasTab } from './lib/code-host';
   import { WATCH_TICK_MS } from './lib/prnew';
   import Board from './components/board/Board.svelte';
@@ -169,6 +170,12 @@
   $effect(() => {
     if (app.ui.view === 'stats' && !app.feature('stats')) untrack(() => app.closeStats());
     if (overseer.open && !app.feature('overseer')) overseer.open = false;
+  });
+
+  // A project's launch switched off (ESC-658): its pages close (they open again with a new launch, once it is on).
+  $effect(() => {
+    // Each browser says its project (ESC-657): an agent's launch, a launch command's, or one opened alone.
+    for (const [id, page] of Object.entries(devpages.pages)) if (!app.partOn(page.projectId, 'launch')) untrack(() => closePage(id));
   });
 
   $effect(() => {

@@ -7,7 +7,8 @@ import { t, tIn, type Key, type Lang } from './i18n';
 import type { IconName } from './icons';
 import { lockedBy } from './locks.svelte';
 import { featureOn } from './features';
-import type { BoardSettings, Feature, LockedBy, Settings } from './types';
+import { partOn } from './parts';
+import type { BoardSettings, Feature, LockedBy, Part, Project, Settings } from './types';
 import type { ProjectDraft } from './settings.svelte';
 
 /** Who a page sets: Escouade, or the project chosen. */
@@ -36,6 +37,8 @@ export type SettingsPage =
   | 'about'
   // A project's, under its name.
   | 'project'
+  // Its parts switched on or off (ESC-658).
+  | 'parts'
   | 'git'
   | 'launch'
   | 'board'
@@ -87,6 +90,7 @@ export const SETTINGS_PAGES: PageInfo[] = [
   page('advanced', 'app', 'term'),
   page('about', 'app', 'info'),
   page('project', 'project', 'folder'),
+  page('parts', 'project', 'blocks'),
   page('git', 'project', 'branch'),
   page('launch', 'project', 'play'),
   page('board', 'project', 'kanban'),
@@ -314,6 +318,12 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('proposedPlugins', 'project', 'plugins.proposed.label'),
   row('closeProject', 'project', 'settings.project.close', { advanced: true }),
 
+  // Parties du projet (ESC-658): this device's choices, saved by their own command (`project_set_part`), not the draft.
+  row('partDocs', 'parts', 'parts.docs.name'),
+  row('partMemory', 'parts', 'parts.memory.name'),
+  row('partKanban', 'parts', 'parts.kanban.name'),
+  row('partLaunch', 'parts', 'parts.launch.name'),
+
   // Git et worktrees.
   row('worktreePerAgent', 'git', 'settings.project.worktreePerAgent', { project: ['worktreePerAgent'] }),
   row('worktreeAtFirstMessage', 'git', 'settings.project.worktreeAtFirstMessage', {
@@ -440,3 +450,28 @@ export const BOARD_ELSEWHERE: BoardKey[] = ['prefix', 'nextNumber'];
 
 /** The rows of a page, in their order. */
 export const rowsOf = (id: SettingsPage): RowInfo[] => SETTINGS_ROWS.filter((r) => r.page === id);
+
+/** The pages of a project a part takes with it (ESC-658): gone from its bar and its search while the part is off there. */
+export const PAGE_PARTS: Partial<Record<SettingsPage, Part>> = {
+  board: 'kanban',
+  tickets: 'kanban',
+  launch: 'launch',
+};
+
+/** The rows of a project's other pages a part takes with it (ESC-658). */
+export const ROW_PARTS: Record<string, Part> = {
+  docsBranch: 'docs',
+  memory: 'memory',
+};
+
+/** Whether the page `id` of the project `p` is there: its part on there (the feature of the app is `pageShown`'s). */
+export function pageOfPartShown(id: SettingsPage, p: Project | null | undefined): boolean {
+  const part = PAGE_PARTS[id];
+  return !part || partOn(p, part);
+}
+
+/** Whether the row `r` of the project `p` is there: its page's part and its own part on there. */
+export function rowOfPartShown(r: RowInfo, p: Project | null | undefined): boolean {
+  const part = ROW_PARTS[r.id];
+  return pageOfPartShown(r.page, p) && (!part || partOn(p, part));
+}

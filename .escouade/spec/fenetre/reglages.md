@@ -2,8 +2,8 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537","ESC-550","ESC-530","ESC-558","ESC-567","ESC-561","ESC-589"]
-decisions: [118,119,120,121,123,124,126,145,147,181,255,297]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499","ESC-537","ESC-550","ESC-530","ESC-558","ESC-567","ESC-561","ESC-589","ESC-658"]
+decisions: [118,119,120,121,123,124,126,145,147,181,255,297,311]
 compared: null
 ---
 
@@ -236,3 +236,10 @@ Une page de plus parmi celles d'Escouade, **Téléphone** (icône du téléphone
 
 - **« N'installer que des versions vérifiées »** dit sa portée sous son nom, avant l'état de la liste de révocation : il vaut pour le store, les dossiers et les dépôts git (un dossier ou un dépôt n'est accepté que s'il est la version vérifiée du store, aux mêmes fichiers) ; le mode développement est un geste à part, qu'il ne couvre pas. Voir *Le store dans l'app*.
 - **« Harness des plugins tiers »** (`thirdPartyHarnesses`), sous lui : « Demander » (le défaut) ou « Refuser ». Un harness décrit par un plugin tiers lance un programme de ce poste hors du bac à sable : « Demander » redit sa commande entière à son premier lancement, et à chaque changement ; « Refuser » n'en lance aucun. Changé, les agents de ces harness le disent aussitôt. Voir *Les harness ACP décrits*. La recherche des réglages trouve les deux lignes.
+
+## Parties du projet (ESC-658)
+
+Une page de chaque projet de plus, juste après « Projet » : **« Parties du projet »** (icône des blocs), « Ce que ce projet prend d'Escouade : ses Docs, sa mémoire partagée, son Kanban, son lancement et ses navigateurs ». Les pages d'un projet deviennent : Projet, Parties du projet, Git et worktrees, Lancement, Kanban, Tickets importés, Plugins, Équipe, Confidentialité. Son contenu, l'ordre de qui décide et ce que chaque partie emporte sont sur *Les parties d'un projet*.
+
+- Le registre a une rangée par partie (`partDocs`, `partMemory`, `partKanban`, `partLaunch`), qui ne règle aucune clé du brouillon du projet : chaque interrupteur passe par sa propre commande (`project_set_part`), au geste, comme l'interrupteur d'un plugin dans un projet.
+- **Une partie coupée dans un projet emporte ses pages et ses rangées de ce projet** : la barre et la recherche de ce projet n'ont plus Kanban ni Tickets importés (Kanban coupé), ni Lancement (lancement coupé) ; « Branche des docs » (Docs coupées) et « Mémoire partagée » de la page Équipe (mémoire coupée) partent. Les autres projets les gardent. Une page ouverte d'une partie qu'on coupe laisse la place à « Parties du projet ».

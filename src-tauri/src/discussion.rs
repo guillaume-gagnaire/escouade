@@ -113,8 +113,19 @@ pub fn refusal(lang: Lang) -> String {
 }
 
 /// The agent's instructions, for the project `project`, in `lang`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn instructions(lang: Lang, kind: Kind, project: &str) -> String {
+    instructions_of(lang, kind, project, true)
+}
+
+/// `instructions`, with the tickets to propose only while the project's Kanban is on (`kanban`, ESC-658).
+pub fn instructions_of(lang: Lang, kind: Kind, project: &str, kanban: bool) -> String {
     let role = match kind {
+        Kind::Brainstorm if !kanban => tr_in!(
+            lang,
+            "Tu es l’agent produit du projet « {project} », dans un brainstorm de l’onglet Docs d’Escouade, à la manière de BMAD (analyste et chef de produit). Fais mûrir l’idée avec l’utilisateur pour faire gagner le produit en fonctionnalités et en maturité : usages et parcours, découverte (pour qui, quel problème, comment le vérifier), conformité et RGPD (base légale, consentement, durée de conservation), accessibilité, et ce que font d’autres secteurs dans le même cas. Propose des fonctionnalités, des pages de spec (en brouillon, draft, tant que ce n’est pas tranché) et des décisions.",
+            "You are the product agent of the project “{project}”, in a brainstorm of Escouade’s Docs tab, in the manner of BMAD (analyst and product manager). Mature the idea with the user so the product gains features and maturity: uses and journeys, discovery (for whom, what problem, how to check it), compliance and GDPR (legal basis, consent, retention), accessibility, and what other trades do in the same case. Propose features, spec pages (as drafts until settled) and decisions."
+        ),
         Kind::Discussion => tr_in!(
             lang,
             "Tu es l’agent rédacteur de spec du projet « {project} », dans une discussion de l’onglet Docs d’Escouade. On t’interroge sur la spécification du produit, ou on te demande de la mettre à jour simplement. Réponds court et précis, en citant les pages, les décisions, les documents et le code d’où tu tiens ce que tu dis.",
@@ -211,6 +222,9 @@ impl Core {
                 "Give the discussion a subject."
             ));
         }
+        // Its Docs off (ESC-658): no discussion starts.
+        self.part_check(project_id, crate::parts::Part::Docs)
+            .map_err(anyhow::Error::msg)?;
         let project = self.project(project_id)?;
         let engine = start.engine.unwrap_or_else(|| project.engine());
         if !holds(engine) {
@@ -242,7 +256,12 @@ impl Core {
                     mode: Some(MODES[0].into()),
                     isolated: Some(false),
                     cwd: Some(dir),
-                    append_prompt: Some(instructions(lang, start.kind, &project.name)),
+                    append_prompt: Some(instructions_of(
+                        lang,
+                        start.kind,
+                        &project.name,
+                        self.part_on(project_id, crate::parts::Part::Kanban),
+                    )),
                     discussion: Some(Discussion {
                         kind: start.kind,
                         subject: start.subject.trim().to_string(),

@@ -1499,7 +1499,14 @@ pub fn spec_rule(lang: Lang) -> String {
     )
 }
 
-fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: bool) -> String {
+fn protocol(
+    lang: Lang,
+    t: &Ticket,
+    criteria: &str,
+    ports: Option<u16>,
+    isola: bool,
+    told: Told,
+) -> String {
     let mut p = tr_in!(
         lang,
         "Tu travailles en autonomie sur le ticket {key} « {title} » d'Escouade. \
@@ -1532,23 +1539,33 @@ fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: b
     );
     // The spec always up to date (ESC-263, docs/FACTORY.md): asked, never checked (nothing stops the
     // validation); the docs tools write where the docs live, the fixed branch at the validation.
-    p.push(' ');
-    p.push_str(&spec_rule(lang));
+    // Its project's Docs off (ESC-658): not a word of the spec.
+    if told.docs {
+        p.push(' ');
+        p.push_str(&spec_rule(lang));
+    }
     if let Some(base) = ports {
         let (end, web) = (base.saturating_add(9), base.saturating_add(1));
         p.push_str(&tr_in!(
             lang,
             " Ports réservés à ce worktree : {base} à {end} (ESCOUADE_PORT_BASE et ESCOUADE_PORT_END dans ses lancements de test) ; \
-             ne les écris pas dans des fichiers versionnés, passe-les en arguments ou en variables d'environnement. \
-             Au plus tard quand tous les critères sont atteints, ajoute au JSON une clé \"lancement\" qui dit comment lancer \
+             ne les écris pas dans des fichiers versionnés, passe-les en arguments ou en variables d'environnement.",
+            " Ports reserved for this worktree: {base} to {end} (ESCOUADE_PORT_BASE and ESCOUADE_PORT_END in its test launches); \
+             don’t write them in versioned files, pass them as arguments or environment variables."
+        ));
+        // Its project's launch off (ESC-658): no recipe asked, nothing would launch it.
+        if !told.launch {
+            return p;
+        }
+        p.push_str(&tr_in!(
+            lang,
+            " Au plus tard quand tous les critères sont atteints, ajoute au JSON une clé \"lancement\" qui dit comment lancer \
              ce worktree pour le tester, par exemple \"lancement\": {{\"preparation\": [{{\"commande\": \"npm install\", \"dossier\": \"web\"}}], \
              \"processus\": [{{\"nom\": \"web\", \"commande\": \"npm run dev -- --port {web}\", \"dossier\": \"web\", \
              \"env\": {{\"PORT\": \"{web}\"}}, \"url\": \"http://localhost:{web}\"}}], \"ouvrir\": \"http://localhost:{web}/page-de-la-fonctionnalite\"}} : \
              « dossier » est relatif au worktree, « url » répond quand le processus est prêt, « ouvrir » est l'adresse qui montre \
              directement la fonctionnalité développée (la page, l'écran, l'état précis à tester).",
-            " Ports reserved for this worktree: {base} to {end} (ESCOUADE_PORT_BASE and ESCOUADE_PORT_END in its test launches); \
-             don’t write them in versioned files, pass them as arguments or environment variables. \
-             At the latest when every criterion is met, add to the JSON a key \"lancement\" that says how to launch \
+            " At the latest when every criterion is met, add to the JSON a key \"lancement\" that says how to launch \
              this worktree to test it, for example \"lancement\": {{\"preparation\": [{{\"commande\": \"npm install\", \"dossier\": \"web\"}}], \
              \"processus\": [{{\"nom\": \"web\", \"commande\": \"npm run dev -- --port {web}\", \"dossier\": \"web\", \
              \"env\": {{\"PORT\": \"{web}\"}}, \"url\": \"http://localhost:{web}\"}}], \"ouvrir\": \"http://localhost:{web}/feature-page\"}}: \
@@ -1559,16 +1576,38 @@ fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: b
         p.push_str(&tr_in!(
             lang,
             " isola gère les services de ce worktree (.isola.toml) : « isola up » les lance sur leurs propres ports, \
-             « isola ls --json » donne leurs adresses, « isola down » les arrête ; ne choisis aucun port toi-même. \
-             Au plus tard quand tous les critères sont atteints, ajoute au JSON une clé \"lancement\": {{\"ouvrir\": \"<adresse>\"}} \
-             avec l'adresse isola qui montre directement la fonctionnalité développée (la page, l'écran, l'état précis à tester).",
+             « isola ls --json » donne leurs adresses, « isola down » les arrête ; ne choisis aucun port toi-même.",
             " isola runs the services of this worktree (.isola.toml): “isola up” starts them on their own ports, \
-             “isola ls --json” gives their addresses, “isola down” stops them; don’t pick any port yourself. \
-             At the latest when every criterion is met, add to the JSON a key \"lancement\": {{\"ouvrir\": \"<address>\"}} \
-             with the isola address that directly shows the feature developed (the page, the screen, the exact state to test)."
+             “isola ls --json” gives their addresses, “isola down” stops them; don’t pick any port yourself."
         ));
+        if told.launch {
+            p.push_str(&tr_in!(
+                lang,
+                " Au plus tard quand tous les critères sont atteints, ajoute au JSON une clé \"lancement\": {{\"ouvrir\": \"<adresse>\"}} \
+                 avec l'adresse isola qui montre directement la fonctionnalité développée (la page, l'écran, l'état précis à tester).",
+                " At the latest when every criterion is met, add to the JSON a key \"lancement\": {{\"ouvrir\": \"<address>\"}} \
+                 with the isola address that directly shows the feature developed (the page, the screen, the exact state to test)."
+            ));
+        }
     }
     p
+}
+
+/// What a ticket's agent is told of its project's parts (ESC-658): the spec's rule while its Docs are on, the recipe of
+/// its launch (`lancement`) while its launch is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Told {
+    pub docs: bool,
+    pub launch: bool,
+}
+
+impl Told {
+    /// Every part on.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub const ALL: Told = Told {
+        docs: true,
+        launch: true,
+    };
 }
 
 /// The ticket's protocol, the instructions added to its agent (`Spawn.append_prompt`), which its
@@ -1591,12 +1630,25 @@ pub fn protocol_prompt(t: &Ticket, ports: Option<u16>) -> String {
 
 /// `protocol_prompt` in `lang`, for a worktree whose services isola runs when `isola`, within
 /// `room` (none: all the criteria).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn protocol_prompt_for(
     lang: Lang,
     t: &Ticket,
     ports: Option<u16>,
     isola: bool,
     room: Option<crate::engine::Room>,
+) -> String {
+    protocol_prompt_told(lang, t, ports, isola, room, Told::ALL)
+}
+
+/// `protocol_prompt_for`, saying of the project's parts what `told` says (ESC-658).
+pub fn protocol_prompt_told(
+    lang: Lang,
+    t: &Ticket,
+    ports: Option<u16>,
+    isola: bool,
+    room: Option<crate::engine::Room>,
+    told: Told,
 ) -> String {
     let Some(crate::engine::Room { max, weigh }) = room else {
         let all = t
@@ -1606,10 +1658,10 @@ pub fn protocol_prompt_for(
             .map(|(i, c)| format!("{}) {}", i + 1, one_line(&c.text, 200)))
             .collect::<Vec<_>>()
             .join(between(lang));
-        return protocol(lang, t, &all, ports, isola);
+        return protocol(lang, t, &all, ports, isola, told);
     };
     let escaped_len = weigh;
-    let room = max.saturating_sub(escaped_len(&protocol(lang, t, "", ports, isola)));
+    let room = max.saturating_sub(escaped_len(&protocol(lang, t, "", ports, isola, told)));
     let mut criteria = String::new();
     let mut used = 0;
     for (i, c) in t.criteria.iter().enumerate() {
@@ -1633,7 +1685,7 @@ pub fn protocol_prompt_for(
         used += weight;
         criteria.push_str(&item);
     }
-    protocol(lang, t, &criteria, ports, isola)
+    protocol(lang, t, &criteria, ports, isola, told)
 }
 
 #[cfg(test)]

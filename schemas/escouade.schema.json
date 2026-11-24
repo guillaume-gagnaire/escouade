@@ -396,6 +396,28 @@
       },
       "type": "object"
     },
+    "parts": {
+      "additionalProperties": false,
+      "properties": {
+        "docs": {
+          "description": "The project's Docs (spec, decisions, documents, discussions): false proposes them off, true on (on when absent). A default alone: what a device chose in Settings › Project › Project parts goes first. Off, its tab, its MCP tools, what agents are told of it and its background work go for this project; its files stay. On, it starts no background work the user did not turn on.",
+          "type": "boolean"
+        },
+        "kanban": {
+          "description": "The project's Kanban (tickets, autopilot, workflows): false proposes it off, true on (on when absent). A default alone: what a device chose goes first. Off, the project has agents alone: its tab, its MCP tools, its autopilot and its workflows go; its tickets stay.",
+          "type": "boolean"
+        },
+        "launch": {
+          "description": "The project's launch and browsers (launch commands, their pages, the browsers): false proposes them off, true on (on when absent). A default alone: what a device chose goes first. Off, its launch buttons, pages and probes go for this project; the commands stay.",
+          "type": "boolean"
+        },
+        "memory": {
+          "description": "The project's shared memory: false proposes it off, true on (on when absent). A default alone: what a device chose goes first. Off, its MCP tools and what agents are told of it go for this project; .escouade/memory/ stays as it is.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
     "plugins": {
       "additionalProperties": false,
       "patternProperties": {

@@ -1181,6 +1181,7 @@ export async function unfoldSections(page: Page) {
 /** The pages of a project in the bar of the settings (ESC-379), shown under the project unfolded. */
 const PROJECT_PAGES = new Set([
   'Projet',
+  'Parties du projet',
   'Git et worktrees',
   'Lancement',
   'Kanban',

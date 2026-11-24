@@ -2114,7 +2114,7 @@ impl crate::core::Core {
     async fn refresh_workflows_now(&self, project_id: &str, force: bool) -> anyhow::Result<Scan> {
         let project = self.project(project_id)?;
         // « Pas de workflow pour ce projet » (ESC-309), or the feature Workflows off (F-1): neither read nor written.
-        if !project.workflows_enabled || !self.feature_on(crate::features::Feature::Workflows) {
+        if !project.workflows_on() || !self.feature_on(crate::features::Feature::Workflows) {
             return Ok(Scan::off());
         }
         let file = self.data.workflows_file(project_id);
@@ -2216,7 +2216,7 @@ impl crate::core::Core {
         let Ok(project) = self.project(project_id) else {
             return local;
         };
-        if !project.workflows_enabled || !self.feature_on(crate::features::Feature::Workflows) {
+        if !project.workflows_on() || !self.feature_on(crate::features::Feature::Workflows) {
             return Scan::off();
         }
         let folder =
@@ -2246,7 +2246,7 @@ impl crate::core::Core {
     /// The project's corrections written into the files of its workflows (saved in
     /// Réglages › Projets › Kanban › Workflow).
     pub(crate) fn write_workflow_fixes(&self, project: &crate::model::Project) {
-        if !project.workflows_enabled {
+        if !project.workflows_on() {
             return;
         }
         let places = crate::workflowfiles::places(project, &self.data);
@@ -2265,7 +2265,7 @@ impl crate::core::Core {
         let Ok(project) = self.project(project_id) else {
             return;
         };
-        if !project.workflows_enabled {
+        if !project.workflows_on() {
             return;
         }
         let folder =
@@ -2347,7 +2347,7 @@ impl crate::core::Core {
             .projects
             .read()
             .iter()
-            .filter(|p| p.workflows_auto_read && p.workflows_enabled)
+            .filter(|p| p.workflows_auto_read && p.workflows_on())
             .map(|p| p.id.clone())
             .collect();
         let core = self.clone();

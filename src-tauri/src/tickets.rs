@@ -1911,6 +1911,11 @@ impl Core {
             let Ok(p) = self.project(&project_id) else {
                 continue;
             };
+            // Its Kanban off (ESC-658): none of its tickets starts, the autopilot's nor one forced; they wait, as they
+            // are, for it to be on again.
+            if !crate::parts::on(&p, crate::parts::Part::Kanban) {
+                continue;
+            }
             // Without Claude Code (the one of the account it would go to) no agent can work:
             // rather than make every ticket's worktree and agent only to block it, none starts
             // until it is found (saving the settings looks again).
@@ -2434,12 +2439,14 @@ impl Core {
             max: r
                 .max
                 // The shared memory's line, added after it (`core::with_memory`).
-                .saturating_sub((r.weigh)(&crate::memory::instruction(lang)) + 1)
+                .saturating_sub(
+                    (r.weigh)(&crate::memory::instruction_of(lang, self.told_of(project))) + 1,
+                )
                 // And the spec in Escouade's (ESC-278), added before it.
                 .saturating_sub(follow.map_or(0, |f| (r.weigh)(f) + 1)),
             weigh: r.weigh,
         });
-        board::protocol_prompt_for(lang, t, ports, isola, room)
+        board::protocol_prompt_told(lang, t, ports, isola, room, self.ticket_told(project))
     }
 
     /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of

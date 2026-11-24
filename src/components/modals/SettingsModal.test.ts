@@ -162,10 +162,11 @@ describe('SettingsModal', () => {
     expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
     // « Plugins »: the settings of each project of the plugin Claude Code (its experimental features, ESC-553).
-    expect(entries().slice(12, 24)).toEqual([
+    expect(entries().slice(12, 25)).toEqual([
       'demo-api',
       'site',
       'Projet',
+      'Parties du projet',
       'Git et worktrees',
       'Lancement',
       'Kanban',
@@ -199,6 +200,8 @@ describe('SettingsModal', () => {
     expect(tab('Projet')).toHaveAttribute('aria-current', 'page');
     await expect.poll(() => document.activeElement).toBe(tab('demo-api'));
     await userEvent.keyboard('{ArrowDown}');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(tab('Parties du projet')).toHaveAttribute('aria-current', 'page');
     await userEvent.keyboard('{ArrowDown}');
     expect(tab('Git et worktrees')).toHaveAttribute('aria-current', 'page');
     await expect.poll(() => document.activeElement).toBe(tab('Git et worktrees'));

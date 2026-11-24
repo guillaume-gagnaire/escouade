@@ -36,6 +36,10 @@ export default defineZone('settings', {
     advanced: { label: 'Advanced', desc: 'Network, terminals, attachments, search by meaning and local data' },
     about: { label: 'About', desc: 'Version, credits and links' },
     project: { label: 'Project', desc: 'This project only: its name, its tile, its harness and its account' },
+    parts: {
+      label: 'Project parts',
+      desc: 'What this project takes of Escouade: its Docs, its shared memory, its Kanban, its launch and its browsers',
+    },
     git: { label: 'Git and worktrees', desc: 'Its agents’ worktrees, their branches, their commits and its repositories' },
     launch: { label: 'Launch', desc: 'The commands that launch this project, and where its pages open' },
     board: { label: 'Kanban', desc: 'Approved tickets, the autopilot, the tickets’ agents and the workflow' },

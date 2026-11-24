@@ -52,6 +52,8 @@ mod overseer;
 #[cfg(test)]
 mod overseer_tests;
 #[cfg(test)]
+mod parts_tests;
+#[cfg(test)]
 mod private_tests;
 mod prs;
 #[cfg(test)]

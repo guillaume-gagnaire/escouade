@@ -90,7 +90,10 @@
 <!-- « Réglages partagés », .escouade.yml under its title: its commands that wait are also said on the Kanban. -->
 <SharedSection {project} />
 
-<MemorySection {project} />
+<!-- Gone with the project's shared memory (ESC-658): its memories stay in .escouade/memory/. -->
+{#if app.partOn(project.id, 'memory')}
+  <MemorySection {project} />
+{/if}
 
 <style>
   .input {

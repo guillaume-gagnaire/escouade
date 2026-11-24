@@ -1627,12 +1627,25 @@ pub(crate) fn auto_resume(lang: i18n::Lang) -> String {
 
 /// The instructions of a new agent: those it is given (a ticket's protocol…), then what it is told of the project's
 /// shared memory (ESC-255), so that every harness reads and writes it.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn with_memory(lang: i18n::Lang, given: Option<String>) -> Option<String> {
-    let line = crate::memory::instruction(lang);
-    Some(match given.filter(|g| !g.trim().is_empty()) {
-        Some(g) => format!("{g} {line}"),
-        None => line,
-    })
+    with_memory_of(lang, given, crate::memory::Told::ALL)
+}
+
+/// `with_memory`, of what the project's parts say (ESC-658): its memory off, not a word of it; its Docs off, not a word
+/// of the documents. None when nothing is left to tell.
+pub(crate) fn with_memory_of(
+    lang: i18n::Lang,
+    given: Option<String>,
+    told: crate::memory::Told,
+) -> Option<String> {
+    let line = crate::memory::instruction_of(lang, told);
+    match (given.filter(|g| !g.trim().is_empty()), line.is_empty()) {
+        (Some(g), false) => Some(format!("{g} {line}")),
+        (Some(g), true) => Some(g),
+        (None, false) => Some(line),
+        (None, true) => None,
+    }
 }
 
 /// `given` with what the agent is told of a spec that lives in Escouade (ESC-278, `Space::follow_rule`) after it.
@@ -1878,6 +1891,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         workflows_enabled: true,
         workflows_in_repo: true,
         memory_review_off: false,
+        parts: Default::default(),
         agent_folders: Vec::new(),
         agent_order: Vec::new(),
     }
@@ -7342,9 +7356,10 @@ impl Core {
             remote_off: o.remote_off || o.copy_of.as_ref().is_some_and(|c| c.remote_off),
             ticket_id: o.ticket_id.clone(),
             // What every agent is told of the shared memory.
-            append_prompt: with_memory(
+            append_prompt: with_memory_of(
                 self.lang().claude,
                 with_follow(o.append_prompt, follow.as_deref()),
+                self.told_of(&project),
             ),
             port_base: o.port_base,
             discussion: o.discussion.clone(),
@@ -7603,7 +7618,7 @@ impl Core {
                         Some(wsl) => wsl.linux_path(p).unwrap_or_else(|| p.to_string()),
                         None => p.to_string(),
                     };
-                    meta.append_prompt = with_memory(
+                    meta.append_prompt = with_memory_of(
                         self.lang().claude,
                         with_follow(
                             Some(copied_conversation(
@@ -7613,6 +7628,7 @@ impl Core {
                             )),
                             follow.as_deref(),
                         ),
+                        self.told_of(&project),
                     );
                 }
                 meta.cwd = path.clone();

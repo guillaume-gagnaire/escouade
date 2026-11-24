@@ -107,7 +107,10 @@ function validating(agentId: string): boolean {
  * no validation under way.
  */
 export function canTest(agent: Agent): boolean {
-  return (!!agent.recipe || agent.isola) && !!agent.worktree && !agent.archived && !validating(agent.id);
+  // Its project's launch off (ESC-658): no test launch.
+  return (
+    (!!agent.recipe || agent.isola) && !!agent.worktree && !agent.archived && !validating(agent.id) && app.partOn(agent.projectId, 'launch')
+  );
 }
 
 /**
@@ -116,7 +119,7 @@ export function canTest(agent: Agent): boolean {
  * missing report).
  */
 export function canPrepare(agent: Agent): boolean {
-  return !!agent.worktree && !agent.isola && !agent.archived && !app.ticketDoing(agent.id);
+  return !!agent.worktree && !agent.isola && !agent.archived && !app.ticketDoing(agent.id) && app.partOn(agent.projectId, 'launch');
 }
 
 /** "Préparer le lancement". */

@@ -17,7 +17,8 @@ const asked = new Set<string>();
 export async function offerClaudeMemory(projectId: string | null): Promise<void> {
   if (!projectId || asked.has(projectId) || app.modal) return;
   const project = app.projects.find((p) => p.id === projectId);
-  if (!project || project.claudeMemoryAsked) return;
+  // Its shared memory off (ESC-658): nothing offered to it.
+  if (!project || project.claudeMemoryAsked || !app.partOn(projectId, 'memory')) return;
   asked.add(projectId);
   const offered = await api.claudeMemoryOffer(projectId).catch(() => []);
   if (!offered?.length) return;

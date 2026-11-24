@@ -310,6 +310,26 @@ pub const KEYS: &[Key] = &[
         "In a project of a team: a memory an agent writes is born proposed, read by the agents of its author alone, and becomes the team's once a human accepts it (true when absent). A team may impose it (enforced of its .escouade.yml).",
     ),
     file_key(
+        "parts.docs",
+        Kind::Bool,
+        "The project's Docs (spec, decisions, documents, discussions): false proposes them off, true on (on when absent). A default alone: what a device chose in Settings › Project › Project parts goes first. Off, its tab, its MCP tools, what agents are told of it and its background work go for this project; its files stay. On, it starts no background work the user did not turn on.",
+    ),
+    file_key(
+        "parts.memory",
+        Kind::Bool,
+        "The project's shared memory: false proposes it off, true on (on when absent). A default alone: what a device chose goes first. Off, its MCP tools and what agents are told of it go for this project; .escouade/memory/ stays as it is.",
+    ),
+    file_key(
+        "parts.kanban",
+        Kind::Bool,
+        "The project's Kanban (tickets, autopilot, workflows): false proposes it off, true on (on when absent). A default alone: what a device chose goes first. Off, the project has agents alone: its tab, its MCP tools, its autopilot and its workflows go; its tickets stay.",
+    ),
+    file_key(
+        "parts.launch",
+        Kind::Bool,
+        "The project's launch and browsers (launch commands, their pages, the browsers): false proposes them off, true on (on when absent). A default alone: what a device chose goes first. Off, its launch buttons, pages and probes go for this project; the commands stay.",
+    ),
+    file_key(
         "team.server",
         Kind::Text,
         "The address of the server of the project's team (https). Nothing secret: a device of the team attaches the project by its member's gesture; any other device is offered to ask for an invitation, and never reaches this address by itself.",
@@ -2006,6 +2026,26 @@ fn team_plugins(
     (!t.defaults.is_empty() || !t.enforced.is_empty()).then_some(t)
 }
 
+/// What the team `name` says of the parts of its project (`parts.<id>`, ESC-658): `enforced` before the device,
+/// `defaults` after the repository (`escouade_model::parts::state`). None when it says nothing of them.
+pub(crate) fn team_parts(
+    name: &str,
+    layers: &crate::team_settings::Layers,
+) -> Option<escouade_model::projectfile::TeamPlugins> {
+    let pick = |m: &BTreeMap<String, Value>| -> BTreeMap<String, Value> {
+        m.iter()
+            .filter(|(k, v)| k.starts_with("parts.") && v.is_boolean())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    };
+    let t = escouade_model::projectfile::TeamPlugins {
+        team: name.to_owned(),
+        defaults: pick(&layers.defaults),
+        enforced: pick(&layers.enforced),
+    };
+    (!t.defaults.is_empty() || !t.enforced.is_empty()).then_some(t)
+}
+
 /// What a team sets on its project: rank 2 where the repository's file and the device set nothing, rank 5 over all.
 fn apply_team(
     p: &mut Project,
@@ -2222,6 +2262,7 @@ impl Core {
             let before = p.clone();
             let applied = read_into(p, text.as_deref(), &locks, team.as_ref());
             p.shared.team_plugins = named.as_ref().and_then(|(n, l)| team_plugins(n, l));
+            p.shared.team_parts = named.as_ref().and_then(|(n, l)| team_parts(n, l));
             (before, p.clone(), applied)
         };
         let file = after.shared.file.as_ref();
@@ -2308,6 +2349,8 @@ impl Core {
         if before.workflows_enabled != after.workflows_enabled {
             self.workflow_fixes_changed(&after.id);
         }
+        // Its parts proposed otherwise by the file or its team (ESC-658), while this device chose nothing: followed.
+        self.parts_changed(&before, &after);
         // Made private by the file: what runs of its agents on a harness not turned on there stops, said (ESC-582), and of
         // every project’s agents on a third party’s harness (SEC-02b).
         if after.private && !before.private {

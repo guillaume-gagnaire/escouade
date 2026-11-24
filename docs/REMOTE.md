@@ -479,6 +479,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `project_logo`
 - `project_prs`
 - `project_prs_watch`
+- `project_set_part` : Réglages › Projets › Parties du projet (ESC-658) : le choix du poste pour une partie du projet, refusé quand son équipe l’impose
 - `project_set_team`
 - `project_team_hint_dismiss`
 - `project_team_pour`

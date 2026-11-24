@@ -1886,14 +1886,27 @@ impl ServerHandler for Tools {
         let supports_cache_hints = context
             .protocol_version()
             .is_some_and(|version| version >= rmcp::model::ProtocolVersion::V_2026_07_28);
-        let core = ToolCtx::of(&context).map(|c| c.core);
+        let ctx = ToolCtx::of(&context);
+        // An agent's own project: the tools of its parts switched off there go too (ESC-658).
+        let own = ctx.as_ref().and_then(|c| match &c.caller {
+            Caller::Agent(id) => c
+                .core
+                .agent(id)
+                .ok()
+                .map(|h| h.lock().meta.project_id.clone()),
+            Caller::External => None,
+        });
         let tools = self
             .router
             .list_all()
             .into_iter()
             .filter(|t| {
-                core.as_ref()
-                    .is_none_or(|c| c.tool_refusal(&t.name).is_none())
+                ctx.as_ref().is_none_or(|c| {
+                    c.core.tool_refusal(&t.name).is_none()
+                        && own
+                            .as_deref()
+                            .is_none_or(|p| c.core.tool_refusal_in(&t.name, p).is_none())
+                })
             })
             .collect();
         Ok(rmcp::model::ListToolsResult {
@@ -1919,7 +1932,14 @@ impl ServerHandler for Tools {
         // A tool of a feature switched off (F-1, ESC-550): refused with the reason, before it runs. A client that read
         // the list before the switch may still call it.
         if let Some(c) = ctx.as_ref() {
-            if let Some(why) = c.core.tool_refusal(&tool) {
+            // Or of a part switched off in the project the call is for (ESC-658): the one it names, its ticket's, else
+            // the calling agent's own.
+            let part_off = crate::parts::of_tool(&tool)
+                .and_then(|_| call_project(&c.core, &c.caller, request.arguments.as_ref()))
+                .and_then(|p| c.core.tool_refusal_in(&tool, &p));
+            let feature_off = c.core.tool_refusal(&tool);
+            let whole = feature_off.is_some();
+            if let Some(why) = feature_off.or(part_off) {
                 activity::record(
                     &c.core,
                     Some(&c.caller),
@@ -1928,8 +1948,8 @@ impl ServerHandler for Tools {
                     Outcome::Refused(why.clone()),
                 );
                 // Tickets made through the MCP server, the Kanban off: what a proposal at the right moment notices
-                // (F-3, ESC-558).
-                if tool == "create_ticket" {
+                // (F-3, ESC-558). Not a project's Kanban off: the feature is on.
+                if whole && tool == "create_ticket" {
                     c.core.offer_note(crate::offers::Signal::McpTickets);
                 }
                 return Ok(CallToolResult::error(vec![ContentBlock::text(why)]).into());
@@ -2003,6 +2023,37 @@ impl ServerHandler for Tools {
             Outcome::Error(message),
         );
         answer
+    }
+}
+
+/// The project a call is for, as far as its arguments say it before it runs (ESC-658): the project it names, else the
+/// ticket's (`ticket`, `key`), else the calling agent's own. None when nothing says one (or what it names is not found,
+/// which the tool says itself).
+pub(crate) fn call_project(
+    core: &Core,
+    caller: &Caller,
+    args: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> Option<String> {
+    let text = |k: &str| {
+        args.and_then(|a| a.get(k))
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    };
+    if let Some(p) = text("project") {
+        return super::resolve::project(core, caller, p).ok().map(|p| p.id);
+    }
+    if let Some(t) = text("ticket").or_else(|| text("key")) {
+        return super::resolve::ticket(core, caller, t)
+            .ok()
+            .map(|t| t.project_id);
+    }
+    match caller {
+        Caller::Agent(id) => core
+            .agent(id)
+            .ok()
+            .map(|h| h.lock().meta.project_id.clone()),
+        Caller::External => None,
     }
 }
 

@@ -599,7 +599,7 @@
       a.archived
         ? { label: t('nav.sidebar.menu.restore'), onClick: () => app.run(api.archiveAgent(a.id, false)) }
         : { label: t('nav.sidebar.menu.archive'), hint: t('nav.sidebar.menu.archiveHint'), onClick: () => confirmArchive(a) },
-      ...(a.worktree && !a.archived && project.runCommands.length
+      ...(a.worktree && !a.archived && project.runCommands.length && app.partOn(project.id, 'launch')
         ? [
             {
               label: t('nav.sidebar.menu.launch'),
@@ -1022,7 +1022,7 @@
       }}>{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
     >
     <!-- The Kanban and the Docs space each a feature (F-1): off, their tab goes. -->
-    {#if app.feature('kanban')}
+    {#if app.partOn(project.id, 'kanban')}
       <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
         >Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
       >
@@ -1039,7 +1039,7 @@
           >{/if}</button
       >
     {/if}
-    {#if app.feature('docs')}
+    {#if app.partOn(project.id, 'docs')}
       <!-- Its badge (ESC-534): the changes of the docs to share, a conflict marked apart; none when the docs are up to date. -->
       <button
         class:on={app.docsOn}
@@ -1655,10 +1655,13 @@
     </div>
 
     <!-- « Programmées » (ESC-448), above the launches (place A of programmees-barre.png); gone with its feature (F-1). -->
-    {#if app.feature('scheduled')}
+    <!-- The scheduled tasks' runs are tickets: they go with the project's Kanban too (ESC-658); the launches with its launch. -->
+    {#if app.feature('scheduled') && app.partOn(project.id, 'kanban')}
       <ScheduledSection {project} />
     {/if}
-    <RunsSection {project} />
+    {#if app.partOn(project.id, 'launch')}
+      <RunsSection {project} />
+    {/if}
 
     <section class="sec terms" class:folded={termsFolded} aria-label={t('nav.sidebar.terminals')}>
       <div class="sec-h">
@@ -1716,8 +1719,11 @@
       </div>
     </section>
 
-    <!-- « Navigateurs » (ESC-657), under the terminals and on their model: one row per browser. -->
-    <BrowsersSection {project} />
+    <!-- « Navigateurs » (ESC-657), under the terminals and on their model: one row per browser; gone with the project's
+         launch (ESC-658). -->
+    {#if app.partOn(project.id, 'launch')}
+      <BrowsersSection {project} />
+    {/if}
   {/if}
 
   <div class="side-foot">

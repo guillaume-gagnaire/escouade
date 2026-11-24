@@ -1302,6 +1302,11 @@ pub struct Project {
     /// (`git.auto_fetch`, `git.fetch_every`, `git.fetch_timeout`).
     #[serde(default)]
     pub git_fetch: ProjectFetch,
+    /// « Parties du projet » (ESC-658): what this device chose of its Docs, shared memory, Kanban, launch and browsers;
+    /// a part it chose nothing of follows the repository's `.escouade.yml` (`parts.<id>`), else is on
+    /// (`crate::parts::state`). Of this device: never in `.escouade.yml`.
+    #[serde(default, skip_serializing_if = "crate::parts::PartChoices::is_empty")]
+    pub parts: crate::parts::PartChoices,
     /// Its agent folders (`folders`): groups of agents in the sidebar, with a principal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agent_folders: Vec<AgentFolder>,

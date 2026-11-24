@@ -562,6 +562,11 @@ impl Core {
         project_id: &str,
         discussion: Option<&str>,
     ) -> Result<Plan> {
+        // Its Docs or its Kanban off (ESC-658): no planner, no ticket made.
+        for part in [crate::parts::Part::Docs, crate::parts::Part::Kanban] {
+            self.part_check(project_id, part)
+                .map_err(anyhow::Error::msg)?;
+        }
         let project = self.project(project_id)?;
         let planning_now = self.planning_of(project_id);
         let (mut pages, mut decisions) = (planning_now.pages, planning_now.decisions);

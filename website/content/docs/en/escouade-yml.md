@@ -221,6 +221,20 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 
 - `review`: “Review the agents’ memories” of a team’s project (Settings › Projects › Team › Shared memory). A memory an agent writes is born proposed and becomes the team’s once a human keeps it; `false` sends it to the team without review, always with its provenance. A team can impose it in its team `.escouade.yml` (`enforced`): see [the team’s data](team/data).
 
+### parts
+
+| Key | Type | Values | Missing | Example |
+|---|---|---|---|---|
+| `parts.docs` | Boolean | `true`, `false` | `true` | `docs: false` |
+| `parts.memory` | Boolean | `true`, `false` | `true` | `memory: false` |
+| `parts.kanban` | Boolean | `true`, `false` | `true` | `kanban: false` |
+| `parts.launch` | Boolean | `true`, `false` | `true` | `launch: false` |
+
+- The default the repository proposes for each part of the project: the Docs, the shared memory, the Kanban, the launch and the browsers (see [the project parts](settings-projects#project-parts)). `false` proposes it off.
+- **A default only**: what each device chooses in Settings › Projects › Project parts goes first, even when the file changes later; the page says “Proposed by the repository” while the device chose nothing. These keys are never written by the export, and the device’s choice never goes into the file.
+- A part turned off loses its views, its MCP tools, what its agents are told of it and its background work, deleting nothing. `true` starts nothing: a part’s background work follows its own settings. A repository therefore cannot run anything more than what the user already allowed, nor lift a protection (the trust of the commands, the private project, the permissions stay as they are).
+- A team may recommend them (`defaults`, after the repository) or impose them (`enforced`, before the device) in its team `.escouade.yml`.
+
 ### plugins
 
 | Key | Type | Values | Missing | Example |

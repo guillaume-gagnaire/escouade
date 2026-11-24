@@ -324,6 +324,9 @@ impl Core {
         project_id: &str,
         pages: Option<Vec<String>>,
     ) -> Result<Compared> {
+        // Its Docs off (ESC-658): nothing compared, its pages and what was found stay.
+        self.part_check(project_id, crate::parts::Part::Docs)
+            .map_err(anyhow::Error::msg)?;
         let project = self.project(project_id)?;
         let space = self.docs_space(project_id, None).await?;
         let mut all = space.pages();
@@ -462,6 +465,10 @@ impl Core {
         let (id, key) = (project_id.to_string(), key.to_string());
         tauri::async_runtime::spawn(async move {
             let Ok(project) = me.project(&id) else { return };
+            // Its Docs off (ESC-658): no comparison in the background.
+            if !me.part_on(&id, crate::parts::Part::Docs) {
+                return;
+            }
             let Ok(space) = me.docs_space(&id, None).await else {
                 return;
             };

@@ -28,6 +28,7 @@ pub mod model;
 pub mod myreview;
 pub mod notify;
 pub mod parallel;
+pub mod parts;
 pub mod paths;
 pub mod pricing;
 pub mod proc;

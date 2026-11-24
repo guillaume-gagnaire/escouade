@@ -191,6 +191,7 @@ describe('the register of the settings pages', () => {
     ]);
     expect(SETTINGS_PAGES.filter((p) => p.scope === 'project').map((p) => p.id)).toEqual([
       'project',
+      'parts',
       'git',
       'launch',
       'board',
@@ -227,6 +228,7 @@ describe('the register of the settings pages', () => {
       'Advanced',
       'About',
       'Project',
+      'Project parts',
       'Git and worktrees',
       'Launch',
       'Kanban',

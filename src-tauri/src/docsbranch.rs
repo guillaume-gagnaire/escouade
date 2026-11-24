@@ -67,6 +67,10 @@ impl Core {
 
     /// What an agent launched on `project` is told when its spec is in Escouade (ESC-278): None otherwise.
     pub(crate) async fn docs_follow(&self, project: &Project, lang: Lang) -> Option<String> {
+        // Its Docs off (ESC-658): not a word of the spec.
+        if !self.part_on(&project.id, crate::parts::Part::Docs) {
+            return None;
+        }
         self.docs_space(&project.id, None)
             .await
             .ok()?

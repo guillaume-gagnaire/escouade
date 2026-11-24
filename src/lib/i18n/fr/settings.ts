@@ -40,6 +40,10 @@ export default {
     advanced: { label: 'Avancé', desc: 'Réseau, terminaux, pièces jointes, recherche par le sens et données locales' },
     about: { label: 'À propos', desc: 'Version, crédits et liens' },
     project: { label: 'Projet', desc: 'Ce projet seulement : son nom, sa tuile, son harness et son compte' },
+    parts: {
+      label: 'Parties du projet',
+      desc: 'Ce que ce projet prend d’Escouade : ses Docs, sa mémoire partagée, son Kanban, son lancement et ses navigateurs',
+    },
     git: { label: 'Git et worktrees', desc: 'Les worktrees de ses agents, leurs branches, leurs commits et ses dépôts' },
     launch: { label: 'Lancement', desc: 'Les commandes qui lancent ce projet, et où s’ouvrent ses pages' },
     board: { label: 'Kanban', desc: 'Les tickets validés, le pilote auto, les agents des tickets et le workflow' },

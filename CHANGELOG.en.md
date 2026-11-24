@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Each project picks its parts in Settings › Projects › Project parts: turn off its Docs, its shared memory, its Kanban or its launch and browsers, and they disappear from that project, its agents’ tools included, deleting nothing. Its .escouade.yml can propose a default, but your choice always goes first.
 - Browsers in the sidebar, like terminals: one row per tab under “Terminals”, opened full screen or next to an agent, with tablet and mobile widths and the developer tools next to the address. You open one from “+”, and an agent’s test or a launch command opens its own; the “Pages” window is gone.
 - The “Offline mode” of 2.2.6 can be imposed by a team’s policies too, and a managed device finds it in its list of policies; on a server, nothing outside its folders is shown to the computer.
 - Security: whoever reaches a server can no longer block the pairing of a new device by typing wrong codes, nor shut your devices out with failed or silent connections; a device not connected yet always has room to revoke another, and a device revoked or disconnected loses its calls under way and waiting. Thanks to OshOEz, whose audit of their own server showed these flaws.

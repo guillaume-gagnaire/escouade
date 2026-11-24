@@ -2,7 +2,7 @@
 
 Chaque projet a ses pages de réglages, dépliées sous son nom dans la barre, et « Tous les projets » règle ce qui vaut pour les nouveaux et les projets fermés.
 
-Les pages d’un projet : « Projet » (son nom, sa couleur, sa tuile, son harness et son compte), « Git et worktrees » (ses worktrees, ses branches, ses commits, ses commandes de préparation et de démontage, ses dépôts), « Lancement » (ses commandes de lancement), [« Kanban »](settings-board), [« Tickets importés »](settings-integrations), « Équipe » (le Kanban partagé, les réglages partagés de `.escouade.yml`, la mémoire partagée) et « Confidentialité » (projet privé, remote control, plugins dans ce projet). « Tous les projets », sous la liste, règle ce que reçoit un nouveau projet et garde les projets fermés.
+Les pages d’un projet : « Projet » (son nom, sa couleur, sa tuile, son harness et son compte), [« Parties du projet »](#parties-du-projet) (ses Docs, sa mémoire partagée, son Kanban, son lancement et ses navigateurs), « Git et worktrees » (ses worktrees, ses branches, ses commits, ses commandes de préparation et de démontage, ses dépôts), « Lancement » (ses commandes de lancement), [« Kanban »](settings-board), [« Tickets importés »](settings-integrations), « Équipe » (le Kanban partagé, les réglages partagés de `.escouade.yml`, la mémoire partagée) et « Confidentialité » (projet privé, remote control, plugins dans ce projet). « Tous les projets », sous la liste, règle ce que reçoit un nouveau projet et garde les projets fermés.
 
 ## Choisir le projet
 
@@ -29,6 +29,29 @@ Le logo est reconnu par son contenu, quelle que soit son extension. Une image tr
 Le libellé reste sur ce poste lui aussi : il ne va pas dans `.escouade.yml`. Tant que tu n’as pas tiré le bord de la barre des projets, elle passe de 52 à 72 px dès qu’un projet a son libellé allumé ; voir [la barre des projets](interface#sa-largeur). Le même réglage est dans l’assistant « Nouveau projet », sous les lettres et le logo.
 
 Les comptes sont décrits dans [les comptes](accounts) et réglés dans la page [« Comptes et harness »](settings-accounts). Un compte désactivé depuis qu’il a été choisi reste affiché avec « (inactif) » tant qu’il est choisi, et il est ignoré en attendant.
+
+## Parties du projet
+
+La page « Parties du projet » allume ou coupe, pour ce projet seul, chacune des parties d’Escouade qu’il prend. Une partie coupée disparaît de ce projet : ses vues, ses outils MCP, ce que ses agents en entendent et son travail de fond. **Rien n’est effacé** : ses fichiers, ses tickets et ses souvenirs restent, et la rallumer les retrouve tels quels.
+
+| Partie | Coupée, pour ce projet |
+|---|---|
+| « Docs » | L’onglet Docs (spécification, décisions, documents, discussions) et « Branche des docs » disparaissent ; les outils des Docs sont refusés ; ses agents n’entendent plus parler de la spec ni des documents ; la comparaison au code, « Planifier » et les discussions ne partent plus. |
+| « Mémoire partagée » | La section « Mémoire partagée » de la page Équipe disparaît ; `search_memory`, `read_memory`, `write_memory` et `forget_memory` sont refusés pour ce projet ; ses agents n’entendent plus parler de la mémoire. Les souvenirs restent dans `.escouade/memory/`. |
+| « Kanban » | Le projet n’a plus que des agents : l’onglet Kanban, les pages « Kanban » et « Tickets importés », les tâches programmées et les outils des tickets disparaissent ; aucun de ses tickets ne démarre, ni par le pilote auto ni à la main ; ses workflows ne sont plus suivis ; un brainstorm ne propose plus de tickets. |
+| « Lancement et navigateurs » | La section « Lancement », la page « Lancement », « Tester » et « Préparer le lancement », les pages des lancements et leurs sondes disparaissent ; les lancements de test de ses agents s’arrêtent ; ses agents de ticket ne sont plus priés de donner leur recette de lancement. |
+
+Chaque rangée dit ce que fait la partie, ce que la couper change, et qui en décide :
+
+- **Ce poste** : ton choix, gardé sur cette machine, jamais dans un fichier (« Choisi sur ce poste »). « Reprendre le défaut » l’oublie.
+- **Le dépôt** : le `.escouade.yml` du projet peut proposer un défaut par partie (`parts.docs`, `parts.memory`, `parts.kanban`, `parts.launch`, voir [.escouade.yml](escouade-yml#parts)). Il ne vaut que tant que ce poste n’a rien choisi, et la rangée le dit : « Proposé par le dépôt (.escouade.yml) : ton choix ici passe devant. » Ton choix tient même quand le fichier change ensuite.
+- **Personne** : tout est allumé, comme avant.
+- **L’équipe**, pour un projet d’équipe : ce qu’elle impose (`enforced`) passe devant ton choix et grise l’interrupteur (« Imposé par l’équipe Acme ») ; ce qu’elle recommande (`defaults`) vient après le dépôt.
+
+Une partie coupée dans [Réglages › Fonctionnalités](settings-application) (le Kanban, l’Espace Docs) l’est dans tous les projets : sa rangée est grisée et le dit.
+
+> [!NOTE]
+> Allumer une partie ne lance rien d’elle-même : son travail de fond suit ses propres réglages (le pilote auto, la confiance accordée aux commandes de `.escouade.yml`…). Un dépôt cloné ne peut donc, par ce défaut, rien faire tourner de plus que ce que tu as déjà permis, ni lever une protection : il peut seulement proposer de couper.
 
 ## Remote control
 

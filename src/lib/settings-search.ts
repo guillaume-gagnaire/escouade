@@ -9,7 +9,17 @@ import { tIn, type Lang } from './i18n';
 import { harnessInstalled, installedEngines, installedOf } from './installed';
 import { SERVICE_IDS } from './integrations';
 import { app } from './state.svelte';
-import { pageInfo, pageShown, rowOfFeatureShown, SETTINGS_PAGES, SETTINGS_ROWS, type RowInfo, type SettingsPage } from './settings-pages';
+import {
+  pageInfo,
+  pageOfPartShown,
+  pageShown,
+  rowOfFeatureShown,
+  rowOfPartShown,
+  SETTINGS_PAGES,
+  SETTINGS_ROWS,
+  type RowInfo,
+  type SettingsPage,
+} from './settings-pages';
 
 const LANGS: Lang[] = ['fr', 'en'];
 
@@ -111,9 +121,12 @@ export function searchSettings(query: string, projects: { id: string }[], curren
     const id = d.row ? `row:${d.row.id}` : `page:${d.page}`;
     if (pageInfo(d.page).scope === 'app') found.push({ key: id, page: d.page, projectId: null, row: d.row, score: s, at });
     else
-      order.forEach((p, i) =>
-        found.push({ key: `${p.id}:${id}`, page: d.page, projectId: p.id, row: d.row, score: s, at: at + (i + 1) * 10_000 }),
-      );
+      order.forEach((p, i) => {
+        // A page or a row of a part switched off in that project is not found there (ESC-658).
+        const project = app.projects.find((x) => x.id === p.id);
+        if (d.row ? !rowOfPartShown(d.row, project) : !pageOfPartShown(d.page, project)) return;
+        found.push({ key: `${p.id}:${id}`, page: d.page, projectId: p.id, row: d.row, score: s, at: at + (i + 1) * 10_000 });
+      });
   });
   return found
     .sort((a, b) => a.score - b.score || a.at - b.at)

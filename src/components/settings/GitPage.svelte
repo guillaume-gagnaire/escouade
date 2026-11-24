@@ -243,7 +243,7 @@
       />
     </Row>
   {/if}
-  {#if !(live.team && app.teamDocsOn[live.id]) && app.feature('docs')}
+  {#if !(live.team && app.teamDocsOn[live.id]) && app.partOn(live.id, 'docs')}
     <!-- On the team server (TS-9), the docs follow no branch; the Docs space off, neither (F-1). -->
     <Row label={t('docs.branch.label')} desc={t('docs.branch.desc')} wide>
       <DocsBranchField bind:value={draft.docsBranch} />

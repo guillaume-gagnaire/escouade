@@ -63,6 +63,11 @@ workflows:
   enabled: false
 memory:
   review: false
+parts:
+  docs: false
+  memory: true
+  kanban: false
+  launch: true
 editor:
   extensions_allowed:
     \"*\": true

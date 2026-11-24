@@ -34,6 +34,7 @@ import type {
   Memory,
   VectorsModelInfo,
   OfferedMemory,
+  Part,
   WorkflowRefineOutcome,
   WorkflowRefinePlan,
   WorkflowScan,
@@ -457,6 +458,8 @@ export const api = {
   sharedWrite: (projectId: string, keys?: string[]) => invoke<Project>('shared_write', keys ? { projectId, keys } : { projectId }),
   /** « Reprendre la valeur du fichier »: a key kept on this machine follows the file again. */
   sharedUnkeep: (projectId: string, key: string) => invoke<Project>('shared_unkeep', { projectId, key }),
+  /** « Parties du projet » (ESC-658): this device's choice for a part (null: « Reprendre le défaut »). Refused when its team imposes it. */
+  projectSetPart: (projectId: string, part: Part, on: boolean | null) => invoke<Project>('project_set_part', { projectId, part, on }),
   /** The settings the `.escouade.yml` of a folder gives a new project, its commands left out; null without one. */
   sharedPreview: (path: string) => invoke<Project | null>('shared_preview', { path }),
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),

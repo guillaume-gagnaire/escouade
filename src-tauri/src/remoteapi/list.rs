@@ -119,6 +119,7 @@ escouade_command::commands! {
         commands::team_settings_seen,
         commands::team_settings_retry,
         commands::project_set_team,
+        commands::project_set_part,
         commands::store_refresh,
         commands::store_suggestions,
         commands::plugin_discard,

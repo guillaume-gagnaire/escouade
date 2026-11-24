@@ -38,8 +38,11 @@
   const agent = $derived(item.kind === 'agent' ? app.agents[item.id] : undefined);
   const term = $derived(item.kind === 'term' ? app.terminals.find((x) => x.id === item.id) : undefined);
   const cmd = $derived(item.kind === 'launch' ? app.launchOf(project, item.id) : undefined);
-  /** The browser this pane shows (ESC-657): an agent's launch's page, or one opened alone. */
-  const page = $derived(item.kind === 'page' ? devpages.pages[item.id] : undefined);
+  /** The browser this pane shows (ESC-657): an agent's launch's page, or one opened alone; none while its project's launch
+   *  is off (ESC-658). */
+  const page = $derived(
+    item.kind === 'page' && app.partOn(devpages.pages[item.id]?.projectId, 'launch') ? devpages.pages[item.id] : undefined,
+  );
   const name = $derived(
     page ? t('devpage.owner', { title: rowName(page) }) : (agent?.name ?? term?.name ?? cmd?.name ?? t('shell.panes.editor')),
   );

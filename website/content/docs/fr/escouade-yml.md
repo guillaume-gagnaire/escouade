@@ -221,6 +221,20 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 
 - `review` : « Valider les souvenirs des agents » d’un projet d’équipe (Réglages › Projets › Équipe › Mémoire partagée). Un souvenir écrit par un agent naît proposé et devient celui de l’équipe quand un humain le garde ; `false` l’envoie à l’équipe sans validation, toujours avec sa provenance. Une équipe peut l’imposer dans son `.escouade.yml` d’équipe (`enforced`) : voir [les données de l’équipe](team/data).
 
+### parts
+
+| Clé | Type | Valeurs | Absente | Exemple |
+|---|---|---|---|---|
+| `parts.docs` | Booléen | `true`, `false` | `true` | `docs: false` |
+| `parts.memory` | Booléen | `true`, `false` | `true` | `memory: false` |
+| `parts.kanban` | Booléen | `true`, `false` | `true` | `kanban: false` |
+| `parts.launch` | Booléen | `true`, `false` | `true` | `launch: false` |
+
+- Le défaut que le dépôt propose pour chaque partie du projet : les Docs, la mémoire partagée, le Kanban, le lancement et les navigateurs (voir [les parties du projet](settings-projects#parties-du-projet)). `false` la propose coupée.
+- **Un défaut seulement** : ce que chaque poste choisit dans Réglages › Projets › Parties du projet passe devant, même si le fichier change ensuite ; la page dit « Proposé par le dépôt » tant que le poste n’a rien choisi. Ces clés ne sont jamais écrites par l’export, et le choix du poste ne va jamais dans le fichier.
+- Une partie coupée perd ses vues, ses outils MCP, ce que ses agents en entendent et son travail de fond, sans rien effacer. `true` ne lance rien : le travail de fond d’une partie suit ses propres réglages. Un dépôt ne peut donc rien faire tourner de plus que ce que l’utilisateur a déjà permis, ni lever une protection (la confiance des commandes, le projet privé, les autorisations restent ce qu’ils sont).
+- Une équipe peut les recommander (`defaults`, après le dépôt) ou les imposer (`enforced`, avant le poste) dans son `.escouade.yml` d’équipe.
+
 ### plugins
 
 | Clé | Type | Valeurs | Absente | Exemple |

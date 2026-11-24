@@ -3,7 +3,7 @@
   import { t } from '../../lib/i18n';
   import { keyLabel, primaryKey } from '../../lib/platform';
   import { pageInfo, SETTINGS_PAGES, settingsForm, type SettingsPage } from '../../lib/settings.svelte';
-  import { pageShown } from '../../lib/settings-pages';
+  import { pageOfPartShown, pageShown } from '../../lib/settings-pages';
   import { settingsAlerts } from '../../lib/settings-alerts.svelte';
   import { searchSettings, type SearchHit } from '../../lib/settings-search';
   import { projectPlugins } from '../../lib/plugin-profiles';
@@ -48,7 +48,10 @@
   /** A project's pages: « Plugins » only while a plugin installed and on there declares a setting of each project (ESC-530). */
   const pagesOf = (id: string) => {
     const p = app.projects.find((x) => x.id === id);
-    return PROJECT.filter((x) => x.id !== 'projectPlugins' || (!!p && projectPlugins(plugins.list, p).length > 0));
+    // A page of a part switched off in the project goes with it (ESC-658): Kanban, Tickets importés, Lancement.
+    return PROJECT.filter(
+      (x) => (x.id !== 'projectPlugins' || (!!p && projectPlugins(plugins.list, p).length > 0)) && pageOfPartShown(x.id, p),
+    );
   };
 
   const scope = $derived(pageInfo(settingsForm.page).scope);

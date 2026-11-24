@@ -596,6 +596,7 @@ describe('settingsForm', () => {
       'Advanced',
       'About',
       'Project',
+      'Project parts',
       'Git and worktrees',
       'Launch',
       'Kanban',

@@ -1658,6 +1658,18 @@ pub fn shared_unkeep(core: CoreState, project_id: String, key: String) -> Res<Pr
     core.unkeep_shared(&project_id, &key).map_err(err)
 }
 
+/// « Parties du projet » (ESC-658): this device's choice for a part of the project (`on` none: « Reprendre le défaut »,
+/// the repository's or on). Refused when its team imposes it.
+#[tauri::command(async)]
+pub fn project_set_part(
+    core: CoreState,
+    project_id: String,
+    part: crate::parts::Part,
+    on: Option<bool>,
+) -> Res<Project> {
+    core.set_project_part(&project_id, part, on).map_err(err)
+}
+
 /// The settings the `.escouade.yml` of a folder gives a new project (the assistant's start).
 #[tauri::command(async)]
 pub fn shared_preview(path: String) -> Option<Project> {
@@ -3377,6 +3389,8 @@ pub fn run_start(
     cursor_row: Option<u16>,
     output: TermChannel,
 ) -> Res<TermInfo> {
+    // Its launch off (ESC-658): its commands stay, none runs.
+    core.part_check(&project_id, crate::parts::Part::Launch)?;
     let project = core.project(&project_id).map_err(err)?;
     let run = project
         .run_commands
@@ -3974,6 +3988,8 @@ pub fn test_run_start(
         .meta
         .project_id
         .clone();
+    // Its project's launch off (ESC-658): nothing runs.
+    core.part_check(&project_id, crate::parts::Part::Launch)?;
     let settings = core.settings.read().clone();
     let shells = pty::detect_shells(&settings);
     let sh = shells.first().ok_or_else(no_shell)?;
@@ -4149,6 +4165,16 @@ pub fn update_close(updates: State<crate::updates::Updates>, id: u32) {
 /// answer.
 #[tauri::command]
 pub async fn http_ready(core: CoreState<'_>, url: String, agent_id: Option<String>) -> Res<bool> {
+    // The probe of a launch of a project whose launch is off (ESC-658): none.
+    if let Some(p) = agent_id
+        .as_deref()
+        .and_then(|a| core.agent(a).ok())
+        .map(|h| h.lock().meta.project_id.clone())
+    {
+        if !core.part_on(&p, crate::parts::Part::Launch) {
+            return Ok(false);
+        }
+    }
     let up = crate::testlaunch::http_ready(&url).await;
     // An agent's test launch answers: said on the facts' bus (PLG-5).
     if let (true, Some(a)) = (up, agent_id) {
@@ -6331,6 +6357,8 @@ pub fn devpage_open(
             .project_id
             .clone(),
     };
+    // Its project's launch off (ESC-658): its pages do not open.
+    core.part_check(&project_id, crate::parts::Part::Launch)?;
     let own = own_of(&app);
     crate::devpage::open(
         &app,

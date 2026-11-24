@@ -7,6 +7,7 @@
   import { t } from '../../lib/i18n';
   import { tileText } from '../../lib/project-rail';
   import { pageInfo, SAVE_PAUSE_MS, settingsForm, type RowInfo, type SettingsPage } from '../../lib/settings.svelte';
+  import { pageOfPartShown } from '../../lib/settings-pages';
   import { rowElement } from '../../lib/settings-search';
   import { app } from '../../lib/state.svelte';
   import { applyTheme } from '../../lib/theme';
@@ -26,6 +27,7 @@
   import OverseerPage from '../settings/OverseerPage.svelte';
   import PluginsPage from '../settings/PluginsPage.svelte';
   import PrivacyPage from '../settings/PrivacyPage.svelte';
+  import PartsPage from '../settings/PartsPage.svelte';
   import ProjectPluginsPage from '../settings/ProjectPluginsPage.svelte';
   import ProjectPage from '../settings/ProjectPage.svelte';
   import ServicesPage from '../settings/ServicesPage.svelte';
@@ -68,6 +70,10 @@
   const draft = $derived(settingsForm.project);
   /** A page of a project shows that project: its tile beside the title, its colour on the window. */
   const ofProject = $derived(info.scope === 'project' && !!project && !!draft);
+  // A page of a part switched off in the project (ESC-658: Kanban, Tickets importés, Lancement) leaves for its parts.
+  $effect(() => {
+    if (info.scope === 'project' && project && !pageOfPartShown(info.id, project)) untrack(() => (settingsForm.page = 'parts'));
+  });
 
   // The tint follows the page: Escouade's teal on its pages, the project's colour (as in the draft) on the project's.
   // The app's own tint comes back when the window closes.
@@ -185,7 +191,9 @@
         <div class="inner">
           {#if info.scope === 'project'}
             {#if project && draft}
-              {#if info.id === 'git'}
+              {#if info.id === 'parts'}
+                <PartsPage {project} />
+              {:else if info.id === 'git'}
                 <GitPage {project} />
               {:else if info.id === 'launch'}
                 <LaunchPage {project} />

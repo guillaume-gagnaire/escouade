@@ -62,8 +62,10 @@ import {
   type PaneZone,
 } from './panes';
 import { featureOn } from './features';
+import { PART_FEATURE, partOn } from './parts';
 import type {
   Feature,
+  Part,
   DeleteAsk,
   AccountView,
   InitialState,
@@ -628,10 +630,26 @@ class AppState {
   feature(f: Feature): boolean {
     return featureOn(this.settings, f);
   }
-  /** The board of the project on screen is shown: never while the Kanban is off (F-1). */
-  boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id] && this.feature('kanban'));
-  /** The Docs tab of the project on screen is shown (ESC-258): never while the Docs space is off (F-1). */
-  docsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.boardOn && this.feature('docs'));
+  /**
+   * Whether the part `part` of the project `projectId` is on (ESC-658): the feature of the app it is of, and its own
+   * switch there (`lib/parts.ts`). A project unknown has every part the app has.
+   */
+  partOn(projectId: string | null | undefined, part: Part): boolean {
+    const f = PART_FEATURE[part];
+    if (f && !this.feature(f)) return false;
+    return partOn(
+      this.projects.find((p) => p.id === projectId),
+      part,
+    );
+  }
+  /** The board of the project on screen is shown: never while the Kanban is off (F-1), nor its project's (ESC-658). */
+  boardOn = $derived(
+    this.ui.view === 'project' && !!this.project && !!this.board[this.project.id] && this.partOn(this.project.id, 'kanban'),
+  );
+  /** The Docs tab of the project on screen is shown (ESC-258): never while the Docs space is off (F-1), nor its project's. */
+  docsOn = $derived(
+    this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.boardOn && this.partOn(this.project.id, 'docs'),
+  );
   /** The « Pull requests » view of the project on screen is shown (ESC-65). */
   prsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.prs[this.project.id] && !this.boardOn && !this.docsOn);
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
@@ -1884,7 +1902,7 @@ class AppState {
 
   /** Shows the board of a project in the main area, in place of the agents, a terminal, a launch log and the editor. */
   openBoard(projectId = this.ui.activeProject) {
-    if (!projectId || !this.feature('kanban')) return;
+    if (!projectId || !this.partOn(projectId, 'kanban')) return;
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = true;
@@ -1906,7 +1924,7 @@ class AppState {
    * the board, a terminal, a launch log and the editor.
    */
   openDocs(projectId = this.ui.activeProject, space?: DocsSpaceId, page?: string | null) {
-    if (!projectId || !this.feature('docs')) return;
+    if (!projectId || !this.partOn(projectId, 'docs')) return;
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = false;

@@ -1001,7 +1001,7 @@ impl crate::core::Core {
             return;
         };
         // « Pas de workflow pour ce projet » (ESC-309): nothing read.
-        if !p.workflows_enabled {
+        if !p.workflows_on() {
             return;
         }
         let scan = crate::workflow::read(

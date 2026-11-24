@@ -1020,6 +1020,8 @@ export interface Project {
   workflowsInRepo?: boolean;
   /** Off: « Pas de workflow pour ce projet » (ESC-309), nothing read nor written of its workflows; `workflows.enabled` of its .escouade.yml when shared. Absent: on. */
   workflowsEnabled?: boolean;
+  /** « Parties du projet » (ESC-658): what this device chose of each part; a part absent follows its .escouade.yml (`parts.<id>`), else is on (`partState`). */
+  parts?: Partial<Record<Part, boolean>>;
   /** Its agent folders; absent when it has none. */
   agentFolders?: AgentFolder[];
   /** The sidebar's order: the agents out of any folder and the folders. */
@@ -1119,7 +1121,12 @@ export interface ProjectShared {
   teamDismissed?: string | null;
   /** What the project's team sets on its plugins (TS-13, ESC-532): the keys `plugins.<id>.<key>` of its file, by part. */
   teamPlugins?: TeamPlugins | null;
+  /** What the project's team says of its parts (ESC-658): the keys `parts.<id>` of its file. */
+  teamParts?: TeamPlugins | null;
 }
+
+/** A part of a project that may be switched off (ESC-658, `escouade_model::parts::Part`). */
+export type Part = 'docs' | 'memory' | 'kanban' | 'launch';
 
 /** The keys `plugins.<id>.<key>` a team's file sets on its projects: `defaults` recommends (rank 2), `enforced` imposes
  *  (rank 5). Judged against each plugin's manifest where they are read (`teamRefusal`). */

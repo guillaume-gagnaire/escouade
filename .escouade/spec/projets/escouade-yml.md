@@ -2,8 +2,8 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446","ESC-481","ESC-493","ESC-530","ESC-560","ESC-561","ESC-653"]
-decisions: [165,201,194,255,294,308]
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446","ESC-481","ESC-493","ESC-530","ESC-560","ESC-561","ESC-653","ESC-658"]
+decisions: [165,201,194,255,294,308,311]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 
@@ -203,6 +203,27 @@ Trois clés de plus dans le groupe `git`, après `git.conventional_commits` (voi
 
 - Un nombre entier, écrit nu ou entre guillemets. Hors de ses bornes, il est ramené à la plus proche et le fichier le dit (« git.fetch_every : 5000 est hors des bornes (1 à 1440), ramené à 1440 ») ; ce qui n'est pas un nombre entier est refusé et laissé de côté, comme toute valeur invalide.
 - Le schéma (`schemas/escouade.schema.json`) les dit : un entier entre les bornes, ou `0`.
+
+### Les parties du projet (ESC-658)
+
+| Clé | Valeur |
+|---|---|
+| `parts.docs` | le défaut que le dépôt propose pour les Docs du projet : `false` coupées, `true` allumées ; allumées si absente |
+| `parts.memory` | le même pour la mémoire partagée |
+| `parts.kanban` | le même pour le Kanban (tickets, pilote auto, workflows, tâches programmées) |
+| `parts.launch` | le même pour le lancement et les navigateurs |
+
+```yaml
+parts:
+  docs: false
+  kanban: false
+```
+
+- **Un défaut seulement** (voir *Les parties d'un projet*) : le choix fait sur le poste, dans Réglages › Projets › Parties du projet, passe toujours devant, même quand le fichier change ensuite. La page dit « Proposé par le dépôt (.escouade.yml) » tant que le poste n'a rien choisi.
+- Comme `plugins.*`, ce sont des clés du fichier seul : jamais appliquées aux réglages du projet, jamais écrites par l'export, jamais marquées « Réglage local de cette machine » ; le choix du poste ne va jamais dans le fichier. Une valeur qui n'est pas un booléen est dite avec sa ligne et ignorée.
+- Elles ne font que retirer : `true` ne lance aucun travail de fond que l'utilisateur n'a pas allumé ailleurs, `false` ne lève aucune protection (les commandes attendent l'accord, le projet privé et les autorisations restent ce qu'ils sont).
+- Une équipe peut les recommander (`defaults`, après le dépôt) ou les imposer (`enforced`, devant le poste) dans son `.escouade.yml` d'équipe.
+- Le schéma les décrit, un booléen chacune.
 
 ## Un fichier venu du dépôt (ESC-653)
 
