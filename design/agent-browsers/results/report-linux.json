@@ -1,0 +1,44 @@
+{
+  "boundsWidth390": "390",
+  "captureDocument": {
+    "height": 2138,
+    "ok": true,
+    "width": 900
+  },
+  "captureViewport": {
+    "height": 700,
+    "ok": true,
+    "width": 900
+  },
+  "injectedHighlight": {
+    "capture": {
+      "height": 700,
+      "ok": true,
+      "width": 900
+    },
+    "pageSeesIt": "\"true\""
+  },
+  "isolatedClick": "tab&trusted=false",
+  "isolatedRead": "{\"width\":900,\"scrollY\":0,\"go\":true,\"panel\":\"État : avant\",\"name\":\"\",\"pw\":\"\",\"hiddenInText\":false,\"hiddenInContent\":true,\"cookie\":\"session=secret-cookie-663\",\"storage\":\"secret-storage-663\"}",
+  "isolatedReadAfterTyping": "{\"width\":900,\"scrollY\":0,\"go\":true,\"panel\":\"État : après\",\"name\":\"Ada\",\"pw\":\"s3cret-663\",\"hiddenInText\":false,\"hiddenInContent\":true,\"cookie\":\"session=secret-cookie-663\",\"storage\":\"secret-storage-663\"}",
+  "loaded": true,
+  "mobile": {
+    "capture": {
+      "height": 700,
+      "ok": true,
+      "width": 390
+    },
+    "innerWidth": "390"
+  },
+  "os": "linux",
+  "pageWorldClick": {
+    "clickByTag": "\"called\"",
+    "querySelector": "\"threw: null is not an object (evaluating 'document.querySelector('#t2').click')\"",
+    "silenced": true
+  },
+  "pageWorldDispatch": "go&trusted=false",
+  "pageWorldRead": "\"\\\"menteur\\\"\"",
+  "scroll": {
+    "afterScrollIntoView": "1189"
+  }
+}

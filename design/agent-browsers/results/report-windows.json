@@ -1,0 +1,90 @@
+{
+  "axNodes": 48,
+  "axShowsPassword": false,
+  "axTabs": [
+    "Avant",
+    "Après"
+  ],
+  "boundsWidth390": "390",
+  "captureDocument": 25984,
+  "captureElement": 667,
+  "captureViewport": 15782,
+  "console": [
+    {
+      "text": "probe-log-663",
+      "type": "log"
+    },
+    {
+      "text": "probe-error-663",
+      "type": "error"
+    }
+  ],
+  "cookiesReachable": true,
+  "emulatedWidth": {
+    "capture": 15574,
+    "innerWidth": 390,
+    "ok": true
+  },
+  "enable:Log.enable": true,
+  "enable:Network.enable": true,
+  "enable:Page.enable": true,
+  "enable:Runtime.enable": true,
+  "httpErrors": [
+    {
+      "status": 404,
+      "url": "http://127.0.0.1:50623/missing-663"
+    },
+    {
+      "status": 404,
+      "url": "http://127.0.0.1:50623/favicon.ico"
+    }
+  ],
+  "inputClick": {
+    "heard": "tab&trusted=true",
+    "sent": true
+  },
+  "insertText": true,
+  "isolatedRead": "{\"width\":900,\"scrollY\":0,\"go\":true,\"panel\":\"État : avant\",\"name\":\"\",\"pw\":\"\",\"hiddenInText\":false,\"hiddenInContent\":true,\"cookie\":\"session=secret-cookie-663\",\"storage\":\"secret-storage-663\"}",
+  "isolatedReadAfterTyping": "{\"width\":900,\"scrollY\":0,\"go\":true,\"panel\":\"État : après\",\"name\":\"Ada\",\"pw\":\"s3cret-663\",\"hiddenInText\":false,\"hiddenInContent\":true,\"cookie\":\"session=secret-cookie-663\",\"storage\":\"secret-storage-663\"}",
+  "isolatedWorld": 4,
+  "loaded": true,
+  "logEntries": [
+    {
+      "level": "error",
+      "text": "Failed to load resource: net::ERR_UNSAFE_PORT"
+    },
+    {
+      "level": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    },
+    {
+      "level": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    }
+  ],
+  "networkFailed": [
+    {
+      "error": "net::ERR_UNSAFE_PORT",
+      "type": "Fetch"
+    }
+  ],
+  "os": "windows",
+  "overlayHighlight": {
+    "capture": 24814,
+    "inDom": 0,
+    "ok": true
+  },
+  "pageWorldClick": {
+    "clickByTag": "\"called\"",
+    "querySelector": "\"threw: Cannot read properties of null (reading 'click')\"",
+    "silenced": true
+  },
+  "pageWorldDispatch": "go&trusted=false",
+  "pageWorldRead": "\"\\\"menteur\\\"\"",
+  "scroll": {
+    "afterScrollIntoView": 1197,
+    "afterWheel": 900,
+    "wheel": true
+  },
+  "storageReachable": "secret-storage-663"
+}
