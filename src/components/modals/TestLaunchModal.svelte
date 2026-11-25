@@ -125,12 +125,8 @@
     {#if flow.opened}
       <p class="opened done">
         <Icon name="ext" size={14} />
-        <Rich
-          k={flow.where === 'agent'
-            ? 'runs.testLaunch.openedHere'
-            : flow.where === 'window'
-              ? 'runs.testLaunch.openedWindow'
-              : 'runs.testLaunch.opened'}>{#snippet address()}<span class="mono">{flow.opened}</span>{/snippet}</Rich
+        <Rich k={flow.where === 'agent' || flow.where === 'window' ? 'runs.testLaunch.openedHere' : 'runs.testLaunch.opened'}
+          >{#snippet address()}<span class="mono">{flow.opened}</span>{/snippet}</Rich
         >
       </p>
     {/if}

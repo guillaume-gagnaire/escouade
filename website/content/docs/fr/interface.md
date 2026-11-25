@@ -136,7 +136,11 @@ La section « Lancement » liste les commandes de lancement du projet (serveur
 
 La section « Terminaux » liste les terminaux ouverts du projet. Le bouton `+` (« Nouveau terminal ») propose les shells détectés sur la machine, puis « Dans le worktree de… », qui liste les agents du projet ayant un worktree (pas les archivés) pour y ouvrir un terminal ; l’entrée n’existe pas quand aucun agent n’en a. `Ctrl+T` en ouvre un tout de suite. Un clic sur un terminal l’affiche dans la zone principale, « Fermer » au survol le ferme, et un terminal dont le shell s’est arrêté est marqué « terminé ». Voir [les terminaux](terminals).
 
-Dans une fenêtre de 820 pixels de haut ou moins, « Lancement » et « Terminaux » se replient sur leur titre pour laisser la place aux agents ; une commande plantée y reste dite (« 1 planté »).
+### Navigateurs
+
+La section « Navigateurs », sous « Terminaux », a une ligne par navigateur du projet : ceux que tu ouvres par son `+` (« Nouveau navigateur », une adresse comme `localhost:3000`), la page du test d’un agent et celle d’une commande de lancement. Le point de la ligne dit l’état de la page (ambre : elle charge, vert : chargée, rouge : elle ne répond pas). Un clic l’affiche en plein écran, `Ctrl`+clic à côté de ce qui est affiché, la croix au survol la ferme. Voir [les navigateurs](browser).
+
+Dans une fenêtre de 820 pixels de haut ou moins, « Lancement », « Terminaux » et « Navigateurs » se replient sur leur titre pour laisser la place aux agents ; une commande plantée y reste dite (« 1 planté »).
 
 ### Le pied de la barre
 

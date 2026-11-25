@@ -1,66 +1,71 @@
-# La page du lancement
+# Les navigateurs
 
-Quand « ▶ Tester » est prêt, la page de l’app que l’agent vient de développer s’ouvre toute seule dans Escouade, dans la vue « Page » de l’agent, avec ses outils de développement. Tu testes sans changer de fenêtre, et chaque page reste rattachée à son worktree.
+Escouade a des navigateurs comme il a des terminaux : une ligne par onglet dans la section « Navigateurs » de la barre latérale. Tu y ouvres l’app que tu développes à côté des agents qui la codent, avec ses devtools et trois largeurs, par « + » ou de lui-même pour un test ou une commande de lancement.
 
-![La vue « Page » de l’agent pagination-users : la barre d’adresse, le sélecteur de largeur, le bouton Devtools, et la page de l’app développée](/images/browser.jpg)
+![Un navigateur en plein écran : la barre (adresse, largeurs, Devtools) et la page de l’app développée ; à gauche, la section « Navigateurs » et ses trois lignes](/images/browser.jpg)
 
-## Où s’ouvre la page
+## La section « Navigateurs »
 
-Dès que les processus du test répondent (voir [Tester et valider](testing)), l’adresse qui montre la fonctionnalité s’ouvre là où le projet le dit, dans Réglages › Projets › Lancement, « Ouvrir les pages des lancements » :
+Comme celle des terminaux :
 
-- **Dans l’agent** (par défaut) : la page s’ouvre dans la vue « Page » de l’agent, à côté de « Escouade » et de la vue terminal dans l’en-tête de sa conversation. Si tu regardais cet agent ou sa fenêtre « Tester », Escouade te montre la page ; sinon elle t’attend, et la ligne du processus dans « Lancement » le dit.
-- **Dans une fenêtre à part** : la page s’ouvre dans la fenêtre « demo-api · Pages » du projet, un onglet par worktree, que tu peux mettre sur un second écran.
-- **Dans le navigateur du système** : comme avant, ton navigateur s’ouvre sur l’adresse.
+- **Une ligne par navigateur**, dans l’ordre où ils se sont ouverts, avec leur nombre en tête. La ligne dit le titre de la page (« Tableau — demo »), sinon son hôte ; celle d’un lancement dit l’agent et son processus (« pagination-users · web »), avec la marque de son worktree.
+- **Son point** dit l’état de la page : ambre pendant qu’elle charge, vert une fois chargée, rouge quand elle ne répond pas (un chargement qui ne finit pas en 20 s).
+- **Un clic** l’affiche dans la zone principale, en plein écran, comme un terminal ; `Ctrl`+clic (`⌘`+clic sous macOS) l’ouvre à côté de ce qui est affiché, en demi-écran ; tu peux aussi la glisser sur la zone de travail (voir [l’écran partagé](split-screen)).
+- **Son menu** (clic droit) : « Ouvrir à côté », « Ouvrir en dessous », « Recharger », « Copier l’adresse », « Ouvrir dans le navigateur du système », « Fermer le navigateur ».
+- **Sa croix** ferme le navigateur.
+- **« + »** demande une adresse, dans la section même : tape `localhost:3000` (sans `http://`, c’est `http://`) et `Entrée`. `Échap` renonce.
 
-Il y a une page par worktree : relancer le test recharge la même page, deux worktrees ont deux pages. Le réglage reste sur ta machine, il n’est jamais écrit dans le `.escouade.yml` du projet.
+Dans une fenêtre basse, la section se replie sur son titre, comme « Terminaux » ; un clic sur le titre la déplie.
 
-## La barre de la page
+Un navigateur vit tant qu’Escouade tourne, comme un terminal : ni l’un ni l’autre ne revient après un redémarrage. La largeur choisie, elle, est gardée pour la page.
+
+## Ce qui ouvre un navigateur
+
+- **Toi**, par le « + » de la section.
+- **Le test d’un agent** : dès que les processus de « ▶ Tester » répondent (voir [Tester et valider](testing)), l’adresse qui montre la fonctionnalité s’ouvre dans la ligne de l’agent. Si tu regardais l’agent ou sa fenêtre « Tester », Escouade te la montre ; sinon la ligne t’attend. Il y a une ligne par agent : relancer le test recharge la même page. Elle se ferme avec l’agent et quand son ticket passe « Terminé ».
+- **Une commande de lancement** qui a une adresse à ouvrir (voir [Lancer le projet](launch)) : sa page s’ouvre dans sa ligne, une par commande, rechargée à chaque lancement plutôt que doublée.
+
+Réglages › Projets › Lancement, « Ouvrir les pages des lancements », choisit entre les navigateurs d’Escouade (par défaut) et le navigateur du système. L’ancien choix « Dans une fenêtre à part » ouvre désormais la ligne du navigateur : la fenêtre « Pages » n’existe plus.
+
+Dans l’en-tête de la conversation d’un agent, « Page » montre la ligne de son lancement ; glissé sur la zone de travail, il la met à côté de la conversation.
+
+## La barre d’un navigateur
 
 | Bouton | Ce qu’il fait |
 |---|---|
 | Retour, Avancer, Recharger | Comme dans un navigateur. |
-| L’adresse | Modifiable : tape un chemin ou une adresse et `Entrée`. Sans `http://`, l’adresse garde celui de la page. |
-| `pagination-users · web` | À qui est la page : le worktree et le processus qui la sert. |
-| Pleine largeur, Tablette, Mobile | La largeur de la page (voir plus bas). |
+| L’adresse | Modifiable : tape un chemin ou une adresse et `Entrée`. Sans `http://`, l’adresse garde celui de la page. Le point devant dit l’état de la page. |
+| `pagination-users · web` | Pour la page d’un lancement : l’agent et le processus qui la sert. |
+| Pleine largeur, Tablette, Mobile | La largeur de la page (voir plus bas), à côté de l’adresse. |
 | Devtools | Les outils de développement de **cette page** : console, réseau, éléments. |
-| Ouvrir dans une fenêtre à part | La page passe dans la fenêtre « Pages » du projet, sans être rechargée. Le même bouton l’y reprend. |
 | Ouvrir dans le navigateur du système | La même adresse, dans ton navigateur. |
 
-« … » ouvre la page à côté de la conversation ou en dessous (voir plus bas). Quand la vue est étroite, Avancer, les largeurs, la fenêtre à part et le navigateur du système y passent aussi.
+« … » ouvre la page à côté ou en dessous de ce qui est affiché (à côté de la conversation de son agent quand c’est la page d’un lancement affichée seule) et copie son adresse. Quand la vue est étroite, Avancer et le navigateur du système y passent aussi, puis les largeurs quand elle l’est plus encore (un volet étroit).
 
-Le point devant l’adresse dit l’état de la page :
-
-- **ambre** : elle charge, ou le lancement redémarre (« Le lancement démarre… La page s’ouvre ici dès que son serveur répond. ») ;
-- **rouge** : elle ne répond pas (« localhost:4101 ne répond pas », après 20 s d’un chargement qui ne finit pas), avec « Recharger » et « Voir les logs » ; ou le lancement s’est arrêté (« Le lancement s’est arrêté »), avec « Relancer » et « Voir les logs » ;
-- **vert** : elle est chargée.
-
-Quand un menu, une liste, la palette ou une fenêtre d’Escouade passe sur la page, elle s’efface le temps qu’ils soient ouverts, puis revient.
-
-## La page à côté de la conversation
-
-La page peut aller dans un volet de l’[écran partagé](split-screen), à droite de la conversation de son agent (ou d’un autre) ou en dessous, comme un terminal :
-
-- « Ouvrir à côté » ou « Ouvrir en dessous » dans le menu « … » de la barre de la page ;
-- « Ouvrir la page à côté » ou « Ouvrir la page en dessous » dans le menu de l’agent (clic droit sur sa carte, ou « … » de l’en-tête de sa conversation) ;
-- ou en glissant le bouton « Page » de l’en-tête de la conversation (ou l’étiquette `pagination-users · web` de la barre) sur la zone de travail.
-
-Le volet se règle par sa poignée et se ferme par son ×, `Ctrl+Maj+W` ou « Fermer le volet » dans « … » ; la conversation reprend alors toute la zone. La page garde son adresse, sa largeur et ses outils de développement : elle n’est pas rechargée. Elle suit son volet quand il bouge ou change de taille, et s’efface le temps qu’on glisse un contenu sur la zone de travail. Avec deux pages à l’écran, `F12` et `Ctrl+Maj+M` vont à celle du volet actif. Une page passée dans la fenêtre « Pages » quitte son volet.
+La page d’un lancement dit aussi quand le lancement redémarre (« Le lancement démarre… ») ou s’est arrêté (« Le lancement s’est arrêté », avec « Relancer » et « Voir les logs »). Quand un menu, une liste, la palette ou une fenêtre d’Escouade passe sur la page, elle s’efface le temps qu’ils soient ouverts, puis revient.
 
 ## Les outils de développement
 
-Le bouton « Devtools », `F12` ou `Ctrl+Maj+I` (`⌥⌘I` sous macOS) ouvrent les outils de développement de la page, que le focus soit dans la page ou dans Escouade. Ce sont ceux de la webview du système : ceux d’Edge (WebView2) sous Windows et l’inspecteur de WebKit sous macOS, chacun dans sa propre fenêtre ; l’inspecteur de WebKit sous Linux, attaché à la page. Les outils de développement d’Escouade elle-même restent fermés.
+Le bouton « Devtools », ou `F12` et `Ctrl+Maj+I` (`⌥⌘I` sous macOS) quand le focus est dans Escouade, ouvrent les outils de développement de la page. Depuis la page elle-même, le clic droit « Inspecter » le fait partout, et `F12` sous Windows. Ils ne s’ouvrent que sur ton geste : la page ne peut pas les ouvrir d’elle-même. Ce sont ceux de la webview du système, et chacun se loge où il peut :
+
+| | Windows (WebView2) | macOS (WKWebView) | Linux (WebKitGTK) |
+|---|---|---|---|
+| Où ils s’ouvrent | Dans leur propre fenêtre | Dans leur propre fenêtre | Dans la page, en bas |
+| En bas ou à droite de la page | Non : WebView2 ne les loge pas dans l’app (il faudrait ouvrir un port de débogage à tout programme de la machine) | Non : logé dans la page, l’inspecteur de WebKit en change lui-même la largeur, et les largeurs Tablette et Mobile ne tiennent plus | Oui : en bas par défaut, à droite ou à part par les boutons de l’inspecteur |
+
+L’infobulle du bouton « Devtools » le dit pour ton système. Les outils de développement d’Escouade elle-même restent fermés.
 
 ## Pleine largeur, tablette, mobile
 
-Trois boutons, à côté de « Devtools », changent la largeur de la page :
+Trois boutons, à côté de l’adresse, changent la largeur de la page :
 
 - **Pleine largeur** : la page prend toute sa zone.
 - **Tablette** : 768 px, centrée sur un fond neutre, la hauteur de la zone.
 - **Mobile** : 390 px, de même.
 
-La largeur s’affiche à côté (« 768 px »). Si la zone est plus étroite, la page rétrécit à la zone et le dit (« Rétréci à 692 px »). `Ctrl+Maj+M` (`⇧⌘M` sous macOS) passe à la largeur suivante, depuis la page ou depuis Escouade. Le choix est gardé pour la page (le worktree et son processus) : une relance garde sa largeur, dans l’agent comme dans la fenêtre à part.
+La largeur s’affiche à côté (« 768 px »). Si la zone est plus étroite, la page rétrécit à la zone et le dit (« Rétréci à 692 px »). `Ctrl+Maj+M` (`⇧⌘M` sous macOS) passe à la largeur suivante, depuis la page ou depuis Escouade. Le choix est gardé pour la page : une relance garde sa largeur.
 
-Seule la largeur change : c’est elle qui déclenche les media queries de la page. Ce que le site voit d’autre ne bouge pas :
+Seule la largeur change : c’est elle qui déclenche les media queries de la page. Ce que le site voit d’autre ne bouge pas :
 
 | | Windows (WebView2) | macOS (WKWebView) | Linux (WebKitGTK) |
 |---|---|---|---|
@@ -72,12 +77,9 @@ Ce n’est pas encore fait : pour émuler un appareil complet, utilise le mode 
 
 ## Une page à part
 
-La page est l’app que tu développes : Escouade ne lui fait pas confiance, sans exception.
+La page est l’app que tu développes, ou un site que tu as tapé : Escouade ne lui fait pas confiance, sans exception.
 
 - Elle tourne dans une webview **à part**, qui n’a accès à **aucune** commande d’Escouade : un appel à `__TAURI__` ou `invoke` depuis la page est refusé.
 - Ses cookies et son stockage (localStorage, IndexedDB…) sont ceux du **projet**, jamais ceux de la fenêtre d’Escouade : un dossier `pages/<projet>` dans les données d’Escouade sous Windows et Linux, un magasin à part sous macOS 14 et plus (une session privée avant).
-- Elle reste sur l’origine de son lancement : un lien vers une autre origine (un autre port, `127.0.0.1` au lieu de `localhost`, un autre site) s’ouvre dans ton navigateur, et Escouade le dit (« github.com s’est ouvert dans ton navigateur : ici, seul localhost:4101 s’affiche. ») ; les adresses d’Escouade, les fichiers et les autres schémas ne s’ouvrent nulle part.
-
-## La fenêtre « Pages »
-
-La fenêtre « demo-api · Pages » d’un projet a un onglet par page détachée (« pagination-users · web », « refacto-auth · Front »…), et sous les onglets la même barre que dans l’agent. Fermer la fenêtre ferme ses pages ; « Remettre dans l’agent » reprend une page dans la vue de son agent sans la recharger.
+- Seule une adresse `http://` ou `https://` s’ouvre dans un navigateur, jamais une adresse d’Escouade, un fichier ou un autre schéma.
+- Elle reste sur l’origine de son adresse de départ : un lien vers une autre origine (un autre port, `127.0.0.1` au lieu de `localhost`, un autre site) s’ouvre dans ton navigateur, et Escouade le dit (« github.com s’est ouvert dans ton navigateur : ici, seul localhost:4101 s’affiche. ») ; les adresses d’Escouade, les fichiers et les autres schémas ne s’ouvrent nulle part.

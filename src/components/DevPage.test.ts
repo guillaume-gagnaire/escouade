@@ -1,9 +1,10 @@
-// The agent's view « Page » (ESC-311): its bar, what its buttons and its shortcut ask the backend, its states said in
-// French and in English, and the page hidden when it cannot show.
+// The view of a browser (ESC-657; the agent's view « Page » before, ESC-311): its bar, what its buttons and its shortcut
+// ask the backend, its states said in French and in English, and the page hidden when it cannot show; a browser opened
+// alone, without an agent; where the devtools go on this system.
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { closePage, detach, devpages, inPane, openPageBeside, showPage } from '../lib/devpage.svelte';
+import { closePage, devpages, inPane, newBrowser, openPageBeside, showPage } from '../lib/devpage.svelte';
 import { menu } from '../lib/menu.svelte';
 import { MODES_KEY } from '../lib/devpage-key';
 import { setLang } from '../lib/i18n';
@@ -42,17 +43,27 @@ beforeEach(() => {
   resetApp({ agents: [A] });
   app.launches = {};
   flows.all = {};
-  devpages.pages = { a7: { url: URL1, title: 'pagination-users · web', phase: 'ready', detached: false } };
-  devpages.shown = { a7: true };
+  devpages.pages = {
+    a7: {
+      url: URL1,
+      title: 'pagination-users · web',
+      phase: 'ready',
+      projectId: 'p1',
+      by: { kind: 'agent', id: 'a7' },
+      opened: 1,
+    },
+  };
 });
 
 describe('the bar of a launch’s page', () => {
-  it('has back, forward, reload, its address, whose page it is, devtools and two ways out', () => {
+  it('has back, forward, reload, its address, whose page it is, devtools and the system’s browser; no « Pages » window', () => {
     launch(true);
     fakeBackend();
-    render(DevPage, { agent: A });
-    for (const name of ['Retour', 'Avancer', 'Recharger', 'Ouvrir dans une fenêtre à part', 'Ouvrir dans le navigateur du système'])
+    render(DevPage, { pageKey: 'a7' });
+    for (const name of ['Retour', 'Avancer', 'Recharger', 'Ouvrir dans le navigateur du système'])
       expect(screen.getByRole('button', { name })).toBeTruthy();
+    // The « Pages » window is gone (ESC-657).
+    expect(screen.queryByRole('button', { name: 'Ouvrir dans une fenêtre à part' })).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Adresse de la page' })).toHaveProperty('value', URL1);
     expect(screen.getByText('pagination-users · web')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Outils de développement de cette page \(F12\)/ })).toBeTruthy();
@@ -61,13 +72,12 @@ describe('the bar of a launch’s page', () => {
   it('asks the backend for each action, on this agent’s page', async () => {
     launch(true);
     const b = fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     await fireEvent.click(screen.getByRole('button', { name: 'Retour' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Avancer' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Recharger' }));
     await fireEvent.click(screen.getByRole('button', { name: /Outils de développement/ }));
     await fireEvent.click(screen.getByRole('button', { name: 'Ouvrir dans le navigateur du système' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Ouvrir dans une fenêtre à part' }));
     expect(b.called('devpage_go').map((c) => [c.args.agentId, c.args.action])).toEqual([
       ['a7', 'back'],
       ['a7', 'forward'],
@@ -75,13 +85,12 @@ describe('the bar of a launch’s page', () => {
     ]);
     expect(b.called('devpage_devtools').map((c) => c.args.agentId)).toEqual(['a7']);
     expect(b.called('open_url').map((c) => c.args.url)).toEqual([URL1]);
-    expect(b.called('devpage_detach').map((c) => c.args)).toEqual([{ agentId: 'a7', detached: true }]);
   });
 
   it('goes to an address typed, its scheme taken from the page when left out', async () => {
     launch(true);
     const b = fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     const field = screen.getByRole('textbox', { name: 'Adresse de la page' });
     await fireEvent.input(field, { target: { value: 'localhost:41731/factures' } });
     await fireEvent.submit(field.closest('form')!);
@@ -91,7 +100,7 @@ describe('the bar of a launch’s page', () => {
   it('opens the devtools by F12 and Ctrl+Shift+I', async () => {
     launch(true);
     const b = fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     await fireEvent.keyDown(window, { key: 'F12' });
     await fireEvent.keyDown(window, { key: 'I', code: 'KeyI', ctrlKey: true, shiftKey: true });
     expect(b.called('devpage_devtools')).toHaveLength(2);
@@ -102,9 +111,9 @@ describe('the bar, drawn with the app’s controls (ESC-419)', () => {
   it('uses the icon buttons, buttons, segments and field of the rest of the app', () => {
     launch(true);
     fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     for (const name of ['Retour', 'Avancer', 'Recharger']) expect(screen.getByRole('button', { name }).classList).toContain('icon-btn');
-    for (const name of ['Ouvrir dans une fenêtre à part', 'Ouvrir dans le navigateur du système', 'Plus d’actions sur la page'])
+    for (const name of ['Ouvrir dans le navigateur du système', 'Plus d’actions sur la page'])
       expect([...screen.getByRole('button', { name }).classList]).toEqual(expect.arrayContaining(['btn', 'icon-only']));
     expect(screen.getByRole('button', { name: /Outils de développement/ }).classList).toContain('btn');
     expect(screen.getByRole('radiogroup', { name: 'Largeur de la page' }).classList).toContain('segmented');
@@ -122,7 +131,7 @@ describe('in a pane of the split screen (ESC-419)', () => {
   it('goes beside its conversation from « … », which shows its messages again; its pane closes back to one', async () => {
     launch(true);
     fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
     menu.open?.items.find((i) => i.label === 'Ouvrir à côté')?.onClick?.();
     expect(app.panes?.root).toEqual({
@@ -132,20 +141,19 @@ describe('in a pane of the split screen (ESC-419)', () => {
       b: { leaf: { kind: 'page', id: 'a7' } },
     });
     expect(app.panes?.active).toBe('page:a7');
-    expect(devpages.shown.a7).toBe(false);
     expect(inPane('a7')).toBe(true);
-    // Its view « Page » asked again: its pane becomes the active one, nothing else moves.
+    // Its row asked again: its pane becomes the active one, nothing else moves.
     app.activatePane('agent:a7');
-    showPage('a7', true);
+    showPage('a7');
     expect(app.panes?.active).toBe('page:a7');
-    expect(devpages.shown.a7).toBe(false);
+    expect(app.pageShown).toBe('a7');
     // Its pane closed: its conversation alone.
     app.closePaneOf('page:a7');
     expect(app.panes).toBeNull();
     expect(app.agent?.id).toBe('a7');
   });
 
-  it('goes below; dropped in the middle of its conversation, the two swap; alone, it is its view « Page »', () => {
+  it('goes below; dropped in the middle of its conversation, the two swap; alone, it fills the main area', () => {
     fakeBackend();
     openPageBeside('a7', 'bottom');
     expect(app.panes?.root).toMatchObject({ dir: 'col', b: { leaf: { kind: 'page', id: 'a7' } } });
@@ -153,20 +161,14 @@ describe('in a pane of the split screen (ESC-419)', () => {
     expect(app.panes?.root).toMatchObject({ a: { leaf: { kind: 'page', id: 'a7' } }, b: { leaf: { kind: 'agent', id: 'a7' } } });
     app.closePaneOf('page:a7');
     expect(app.panes).toBeNull();
-    // Its conversation alone: the page dropped in its place is its view « Page ».
+    // Its conversation alone: the page dropped in its place is shown alone, as a terminal would be.
     app.dropInPane({ kind: 'agent', id: 'a7' }, 'center', { kind: 'page', id: 'a7' });
     expect(app.panes).toBeNull();
-    expect(devpages.shown.a7).toBe(true);
+    expect(app.pageShown).toBe('a7');
   });
 
-  it('leaves its pane when it goes to the « Pages » window or closes', async () => {
-    fakeBackend({ devpage_detach: () => ({ detached: true, mode: null }) });
-    openPageBeside('a7', 'right');
-    expect(app.panes).not.toBeNull();
-    await detach('a7', true);
-    expect(app.panes).toBeNull();
-    expect(app.ui.panes?.p1).toBeUndefined();
-    devpages.pages.a7.detached = false;
+  it('leaves its pane when it closes', async () => {
+    fakeBackend();
     openPageBeside('a7', 'right');
     expect(app.panes).not.toBeNull();
     closePage('a7');
@@ -181,7 +183,7 @@ describe('in a pane of the split screen (ESC-419)', () => {
     expect(screen.getByRole('region', { name: 'Volet : Page de pagination-users · web' })).toBeTruthy();
     // « … » there closes its pane rather than opening it again.
     await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
-    expect(menu.open?.items.map((i) => i.label)).toEqual(['Fermer le volet']);
+    expect(menu.open?.items.map((i) => i.label)).toEqual(['Fermer le volet', '', 'Copier l’adresse']);
     await fireEvent.keyDown(window, { key: 'F12' });
     expect(b.called('devpage_devtools')).toHaveLength(1);
     app.activatePane('agent:a7');
@@ -196,7 +198,7 @@ describe('its states', () => {
     launch(true);
     devpages.pages.a7.phase = 'stalled';
     fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     expect(screen.getByText('localhost:41731 ne répond pas')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Recharger' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Voir les logs' })).toBeTruthy();
@@ -205,7 +207,7 @@ describe('its states', () => {
   it('says the launch stopped, with « Relancer », and hides the page', async () => {
     launch(false);
     const b = fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     expect(screen.getByText('Le lancement s’est arrêté')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Relancer' })).toBeTruthy();
     await tick();
@@ -217,24 +219,15 @@ describe('its states', () => {
     launch(true);
     flows.all.a7.phase = 'running';
     fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     expect(screen.getByText('Le lancement démarre…')).toBeTruthy();
-  });
-
-  it('says where the page went once in its window, with the way back', () => {
-    launch(true);
-    devpages.pages.a7.detached = true;
-    fakeBackend();
-    render(DevPage, { agent: A });
-    expect(screen.getByText('La page est dans la fenêtre « Pages » de demo-api.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Aller à la fenêtre' })).toBeTruthy();
   });
 
   it('in English too', () => {
     setLang('en');
     launch(false);
     fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     expect(screen.getByText('The launch stopped')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Launch again' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open in the system browser' })).toBeTruthy();
@@ -258,7 +251,7 @@ describe('its widths', () => {
   it('has a selector of three, full width at first, that places the page at a tablet’s width, centred', async () => {
     launch(true);
     const b = fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     room(1100);
     const widths = screen.getByRole('radiogroup', { name: 'Largeur de la page' });
     expect(screen.getByRole('radio', { name: 'Pleine largeur' })).toHaveAttribute('aria-checked', 'true');
@@ -276,7 +269,7 @@ describe('its widths', () => {
     launch(true);
     devpages.modes['pagination-users · web'] = 'mobile';
     const b = fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     room(320);
     window.dispatchEvent(new Event('resize'));
     await frame();
@@ -288,7 +281,7 @@ describe('its widths', () => {
   it('goes round the widths by Ctrl+Shift+M', async () => {
     launch(true);
     fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     await fireEvent.keyDown(window, { key: 'M', code: 'KeyM', ctrlKey: true, shiftKey: true });
     expect(screen.getByRole('radio', { name: 'Tablette' })).toHaveAttribute('aria-checked', 'true');
     await fireEvent.keyDown(window, { key: 'M', code: 'KeyM', ctrlKey: true, shiftKey: true });
@@ -298,9 +291,9 @@ describe('its widths', () => {
   it('in « … » when narrow, with the other secondary buttons', async () => {
     launch(true);
     const b = fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     // What the bar's container query folds when narrow (jsdom draws no container query).
-    for (const sel of ['.fwd', '.modes', '.detach', '.system']) (document.querySelector(sel) as HTMLElement).style.display = 'none';
+    for (const sel of ['.fwd', '.modes', '.system']) (document.querySelector(sel) as HTMLElement).style.display = 'none';
     await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
     const labels = menu.open?.items.filter((i) => !i.separator).map((i) => i.label);
     expect(labels).toEqual([
@@ -310,7 +303,7 @@ describe('its widths', () => {
       'Mobile',
       'Ouvrir à côté',
       'Ouvrir en dessous',
-      'Ouvrir dans une fenêtre à part',
+      'Copier l’adresse',
       'Ouvrir dans le navigateur du système',
     ]);
     expect(menu.open?.items.find((i) => i.label === 'Pleine largeur')?.checked).toBe(true);
@@ -321,9 +314,9 @@ describe('its widths', () => {
   it('in « … » when wide: only what the bar does not show', async () => {
     launch(true);
     fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
-    expect(menu.open?.items.map((i) => i.label)).toEqual(['Ouvrir à côté', 'Ouvrir en dessous']);
+    expect(menu.open?.items.map((i) => i.label)).toEqual(['Ouvrir à côté', 'Ouvrir en dessous', '', 'Copier l’adresse']);
   });
 
   it('in English too', () => {
@@ -331,8 +324,94 @@ describe('its widths', () => {
     launch(true);
     devpages.modes['pagination-users · web'] = 'tablet';
     fakeBackend();
-    render(DevPage, { agent: A });
+    render(DevPage, { pageKey: 'a7' });
     expect(screen.getByRole('radiogroup', { name: 'Page width' })).toBeTruthy();
     for (const name of ['Full width', 'Tablet', 'Mobile']) expect(screen.getByRole('radio', { name })).toBeTruthy();
+  });
+});
+
+describe('a browser opened alone (ESC-657)', () => {
+  const B = 'browser:k1';
+  beforeEach(() => {
+    devpages.pages[B] = {
+      url: 'http://localhost:3000/admin',
+      title: 'localhost:3000',
+      phase: 'ready',
+      projectId: 'p1',
+      by: { kind: 'user' },
+      opened: 2,
+    };
+  });
+
+  it('has the same bar, without an agent’s chip or its launch’s states', () => {
+    fakeBackend();
+    render(DevPage, { pageKey: B });
+    for (const name of ['Retour', 'Avancer', 'Recharger', 'Ouvrir dans le navigateur du système'])
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Adresse de la page' })).toHaveProperty('value', 'http://localhost:3000/admin');
+    expect(screen.getByRole('radiogroup', { name: 'Largeur de la page' })).toBeTruthy();
+    expect(screen.queryByText('localhost:3000')).toBeNull();
+    // No launch to wait for: never « Le lancement s’est arrêté ».
+    expect(screen.queryByText('Le lancement s’est arrêté')).toBeNull();
+  });
+
+  it('puts the widths and the devtools beside the address, then the system’s browser', () => {
+    fakeBackend();
+    render(DevPage, { pageKey: B });
+    const bar = document.querySelector('.bar')!;
+    const order = [...bar.querySelectorAll('input, [role="radiogroup"], button')].map(
+      (el) => el.getAttribute('aria-label') ?? el.getAttribute('role'),
+    );
+    const at = (name: string) => order.findIndex((x) => x?.startsWith(name));
+    expect(at('Adresse de la page')).toBeLessThan(at('Largeur de la page'));
+    expect(at('Largeur de la page')).toBeLessThan(at('Outils de développement'));
+    expect(at('Outils de développement')).toBeLessThan(at('Ouvrir dans le navigateur du système'));
+  });
+
+  it('says where its devtools open on this system, and opens them on the user’s gesture alone', async () => {
+    const b = fakeBackend();
+    render(DevPage, { pageKey: B });
+    const button = screen.getByRole('button', { name: /Outils de développement de cette page/ });
+    const where = document.getElementById(button.getAttribute('aria-describedby')!)!;
+    expect(where.textContent).toMatch(/^Dans (leur propre fenêtre|la page, en bas)/);
+    expect(b.called('devpage_devtools')).toHaveLength(0);
+    await fireEvent.click(button);
+    expect(b.called('devpage_devtools').map((c) => c.args.agentId)).toEqual([B]);
+  });
+
+  it('asks the backend for its own page, and goes beside what is on screen', async () => {
+    const b = fakeBackend();
+    app.ui.panes = {};
+    app.ui.selectedAgent = { p1: 'a7' };
+    render(DevPage, { pageKey: B });
+    await fireEvent.click(screen.getByRole('button', { name: 'Recharger' }));
+    expect(b.called('devpage_go').map((c) => c.args)).toEqual([{ agentId: B, action: 'reload', to: null }]);
+    openPageBeside(B, 'right');
+    expect(app.panes?.root).toMatchObject({ a: { leaf: { kind: 'agent', id: 'a7' } }, b: { leaf: { kind: 'page', id: B } } });
+  });
+
+  it('shown alone, offers nothing to go beside in « … »; an agent’s page goes beside its conversation', async () => {
+    fakeBackend();
+    app.ui.panes = {};
+    app.selectPage(B);
+    render(DevPage, { pageKey: B });
+    await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
+    expect(menu.open?.items.map((i) => i.label)).toEqual(['Copier l’adresse']);
+    // The page of a launch shown alone: beside its agent's conversation.
+    app.selectPage('a7');
+    openPageBeside('a7', 'bottom');
+    expect(app.panes?.root).toMatchObject({
+      dir: 'col',
+      a: { leaf: { kind: 'agent', id: 'a7' } },
+      b: { leaf: { kind: 'page', id: 'a7' } },
+    });
+  });
+
+  it('is made by « + » with its project, and shown alone', async () => {
+    const b = fakeBackend();
+    const key = await newBrowser('p1', 'localhost:5173');
+    expect(b.called('devpage_open')[0].args).toMatchObject({ projectId: 'p1', url: 'http://localhost:5173/' });
+    expect(app.pageShown).toBe(key);
+    expect(app.singleItem).toEqual({ kind: 'page', id: key });
   });
 });

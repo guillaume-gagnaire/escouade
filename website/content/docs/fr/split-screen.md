@@ -4,11 +4,11 @@ La zone de travail se partage en plusieurs volets, côte à côte ou l’un au-d
 
 ## Ouvrir un volet
 
-Ce qui va dans un volet : un agent, un terminal, le journal d’un lancement, l’éditeur ou la [page du lancement](browser) d’un agent. Le Kanban, les pull requests et les Docs prennent toute la zone, comme avant ; en les quittant, tu retrouves tes volets.
+Ce qui va dans un volet : un agent, un terminal, le journal d’un lancement, l’éditeur ou un [navigateur](browser). Le Kanban, les pull requests et les Docs prennent toute la zone, comme avant ; en les quittant, tu retrouves tes volets.
 
 | Pour… | Fais ceci |
 |---|---|
-| Ouvrir à côté en glissant | Glisse la carte d’un agent, la ligne d’un terminal ou d’un lancement depuis la barre latérale, ou le bouton « Éditeur » de la barre de titre, sur la zone de travail. Une boussole de cinq cases s’ouvre sur le volet survolé : haut, gauche, droite et bas ouvrent à côté dans ce sens, le milieu remplace. La case sous le pointeur s’allume et la place que prendra le volet se dessine. |
+| Ouvrir à côté en glissant | Glisse la carte d’un agent, la ligne d’un terminal, d’un lancement ou d’un navigateur depuis la barre latérale, ou le bouton « Éditeur » de la barre de titre, sur la zone de travail. Une boussole de cinq cases s’ouvre sur le volet survolé : haut, gauche, droite et bas ouvrent à côté dans ce sens, le milieu remplace. La case sous le pointeur s’allume et la place que prendra le volet se dessine. |
 | Annuler le geste | `Échap`, ou lâcher hors de la zone de travail. |
 | Ouvrir à côté sans glisser | `Ctrl+clic` sur une carte ou une ligne ; ou un clic droit, puis « Ouvrir à côté » ou « Ouvrir en dessous ». |
 | Partager d’un coup | `Ctrl+\` : ce qui est affiché et l’agent suivant (ou un terminal) côte à côte. Le même raccourci revient à un seul volet, celui qui est actif. |

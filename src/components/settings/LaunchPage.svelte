@@ -22,9 +22,9 @@
   /** What of its fields cannot be saved as typed (ESC-380), said on their row: what was saved stays. */
   const held = $derived(settingsForm.projectProblems(project.id));
 
-  /** « Ouvrir les pages des lancements » (ESC-311). */
+  /** « Ouvrir les pages des lancements » (ESC-311): in Escouade (a browser's row, ESC-657) or the system's browser. */
   const PAGES_OPEN = $derived<{ value: PagesOpen; label: string }[]>(
-    (['agent', 'window', 'system'] as const).map((value) => ({ value, label: t(`settings.project.pagesOpens.${value}`) })),
+    (['agent', 'system'] as const).map((value) => ({ value, label: t(`settings.project.pagesOpens.${value}`) })),
   );
 
   /** « Où l'ouvrir » of a launch command's address (ESC-560). */

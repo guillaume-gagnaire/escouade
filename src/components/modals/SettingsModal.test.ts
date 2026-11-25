@@ -1020,16 +1020,26 @@ describe('SettingsModal', () => {
     expect(app.projects[0].commitMode).toBe('direct');
   });
 
-  it('chooses where the launches’ pages open, in the agent by default (ESC-311)', async () => {
+  it('chooses where the launches’ pages open, in Escouade by default (ESC-311, ESC-657)', async () => {
     const backend = backendSaving();
     render(SettingsModal, { page: 'launch', projectId: 'p1' });
     const choice = screen.getByRole('group', { name: 'Ouvrir les pages des lancements' });
-    expect(within(choice).getByRole('button', { name: 'Dans l’agent' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(choice).getByRole('button', { name: 'Dans une fenêtre à part' })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(choice).getByRole('button', { name: 'Dans Escouade' })).toHaveAttribute('aria-pressed', 'true');
+    // The « Pages » window is gone: two choices.
+    expect(within(choice).queryByRole('button', { name: 'Dans une fenêtre à part' })).toBeNull();
+    expect(within(choice).getAllByRole('button')).toHaveLength(2);
     await userEvent.click(within(choice).getByRole('button', { name: 'Dans le navigateur du système' }));
     await afterGesture();
     expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', pagesOpen: 'system' });
     expect(app.projects[0].pagesOpen).toBe('system');
+  });
+
+  it('reads « Dans une fenêtre à part » of before as « Dans Escouade »: the « Pages » window is gone (ESC-657)', () => {
+    backendSaving();
+    app.projects[0].pagesOpen = 'window';
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
+    const choice = screen.getByRole('group', { name: 'Ouvrir les pages des lancements' });
+    expect(within(choice).getByRole('button', { name: 'Dans Escouade' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('offers no preferred account with a single account', () => {

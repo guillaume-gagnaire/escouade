@@ -14,7 +14,7 @@ import type { LaunchState, Project, RunCommand } from './types';
 import { waitUntilUp } from './wait-ready';
 
 /** What came of it: opened (where), nothing to open, or why nothing opened. */
-export type RunOpenOutcome = 'page' | 'window' | 'browser' | 'none' | 'invalid' | 'ended' | 'stopped' | 'late' | 'over';
+export type RunOpenOutcome = 'page' | 'browser' | 'none' | 'invalid' | 'ended' | 'stopped' | 'late' | 'over';
 
 const dim = (text: string) => `\r\n\x1b[2m${text}\x1b[0m\r\n`;
 const red = (text: string) => `\r\n\x1b[31m${text}\x1b[0m\r\n`;
@@ -72,8 +72,8 @@ export async function openWhenUp(project: Project, cmd: RunCommand, write: (text
   }
 }
 
-/** Opens `url` for `cmd`: its agent's page, its project's « Pages » window, or the browser. */
-async function openAt(project: Project, cmd: RunCommand, url: string): Promise<'page' | 'window' | 'browser'> {
+/** Opens `url` for `cmd`: its browser's row (its agent's, or its own in the project, ESC-657), or the system's browser. */
+async function openAt(project: Project, cmd: RunCommand, url: string): Promise<'page' | 'browser'> {
   if (cmd.openIn === 'browser' || project.pagesOpen === 'system') {
     await openUrl(url);
     return 'browser';
@@ -84,8 +84,7 @@ async function openAt(project: Project, cmd: RunCommand, url: string): Promise<'
   if (agent) {
     const own = project.runCommands.find((c) => c.id === w?.commandId)?.name ?? cmd.name;
     const where = await openLaunchPage(agent, url, `${agent.name} · ${own}`);
-    return where === 'window' ? 'window' : where === 'system' ? 'browser' : 'page';
+    return where === 'system' ? 'browser' : 'page';
   }
-  await openProjectPage(project, cmd.id, cmd.name, url);
-  return 'window';
+  return (await openProjectPage(project, cmd.id, cmd.name, url)) === 'system' ? 'browser' : 'page';
 }

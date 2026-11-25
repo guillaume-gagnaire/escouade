@@ -578,10 +578,9 @@ export default {
     commitDesc: 'Direct : Escouade propose un message, tu le relis et tu commites toi-même.',
     pagesOpen: 'Ouvrir les pages des lancements',
     pagesOpenDesc:
-      'Quand « ▶ Tester » est prêt, la page s’ouvre toute seule. Dans l’agent, elle tourne à part : ni les commandes d’Escouade, ni tes cookies.',
+      'Quand « ▶ Tester » ou une commande de lancement est prêt, la page s’ouvre toute seule. Dans Escouade, c’est sa ligne de la section « Navigateurs », à part : ni les commandes d’Escouade, ni tes cookies.',
     pagesOpens: {
-      agent: 'Dans l’agent',
-      window: 'Dans une fenêtre à part',
+      agent: 'Dans Escouade',
       system: 'Dans le navigateur du système',
     },
     commitModes: {

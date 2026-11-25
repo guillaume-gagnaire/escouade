@@ -24,6 +24,7 @@ async function show(projectId: string, shell: string | undefined, name: (shell: 
   if (!info) return;
   app.terminals.push(info);
   app.selectedTerm[projectId] = info.id;
+  app.selectedPage[projectId] = null;
   app.selectedLaunch[projectId] = null;
   app.closeEditor(projectId);
   app.closeBoard(projectId);

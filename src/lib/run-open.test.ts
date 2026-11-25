@@ -3,7 +3,7 @@
 // opens when the command ends first, and its log says so.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, fakeBackend, project } from '../test/ipc';
-import { devpages } from './devpage.svelte';
+import { browsersOf, devpages, rowName } from './devpage.svelte';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
 import type { InitialState, PageView, Project, RunCommand, UiEvent } from './types';
@@ -77,8 +77,6 @@ async function boot(p: Project, answersAt = 2) {
       projectId: a.projectId ?? 'p1',
       title: a.title,
       url: a.url,
-      detached: a.detached,
-      agentless: !!a.projectId,
     }),
     open_url: () => undefined,
   });
@@ -96,7 +94,7 @@ describe('a launch command that opens its address (ESC-560)', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('in the project: waits until it answers, then opens a tab of the project’s « Pages » window, once per command', async () => {
+  it('in the project: waits until it answers, then opens its browser’s row (ESC-657), one per command', async () => {
     const P = project({ runCommands: [FRONT, PLAIN] });
     const b = await boot(P);
     await startLaunch(P, FRONT);
@@ -106,9 +104,12 @@ describe('a launch command that opens its address (ESC-560)', () => {
     await vi.advanceTimersByTimeAsync(600);
     expect(b.called('http_ready').map((c) => c.args.url)).toEqual(['http://localhost:5173/', 'http://localhost:5173/']);
     expect(b.called('devpage_open').map((c) => c.args)).toEqual([
-      { agentId: 'run:p1:c1', title: 'Front', url: 'http://localhost:5173/', detached: true, bounds: null, projectId: 'p1' },
+      { agentId: 'run:p1:c1', title: 'Front', url: 'http://localhost:5173/', bounds: null, projectId: 'p1' },
     ]);
-    expect(logs.c1).toContain('Ouverte dans la fenêtre « Pages » du projet : http://localhost:5173/');
+    expect(logs.c1).toContain('Ouverte dans sa ligne de Navigateurs : http://localhost:5173/');
+    // Its row, named after the command; not shown, the user looking elsewhere.
+    expect(browsersOf('p1').map(([k, p]) => [k, rowName(p), p.by])).toEqual([['run:p1:c1', 'Front', { kind: 'command', id: 'c1' }]]);
+    expect(app.pageShown).toBeNull();
     expect(b.called('open_url')).toHaveLength(0);
     // A command without an address asks nothing.
     await startLaunch(P, PLAIN);
@@ -120,6 +121,7 @@ describe('a launch command that opens its address (ESC-560)', () => {
     await startLaunch(P, FRONT);
     await vi.advanceTimersByTimeAsync(600);
     expect(b.called('devpage_open').map((c) => c.args.agentId)).toEqual(['run:p1:c1', 'run:p1:c1']);
+    expect(browsersOf('p1')).toHaveLength(1);
   });
 
   it('in an agent’s worktree: the address follows its ports and opens in its page', async () => {
@@ -132,9 +134,10 @@ describe('a launch command that opens its address (ESC-560)', () => {
       { url: 'http://localhost:4120/', agentId: undefined },
     ]);
     expect(b.called('devpage_open').map((c) => c.args)).toEqual([
-      { agentId: 'a7', title: 'refacto-auth · Front', url: 'http://localhost:4120/', detached: false, bounds: null },
+      { agentId: 'a7', title: 'refacto-auth · Front', url: 'http://localhost:4120/', bounds: null },
     ]);
-    expect(logs['wt:a7:c1']).toContain('Ouverte dans la page de l’agent : http://localhost:4120/');
+    expect(logs['wt:a7:c1']).toContain('Ouverte dans sa ligne de Navigateurs : http://localhost:4120/');
+    expect(browsersOf('p1').map(([k, p]) => [k, p.by])).toEqual([['a7', { kind: 'agent', id: 'a7' }]]);
   });
 
   it('in the browser, when the command or the project says so', async () => {

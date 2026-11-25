@@ -136,7 +136,11 @@ The “Launch” section lists the project’s launch commands (development serv
 
 The “Terminals” section lists the project’s open terminals. The `+` button (“New terminal”) offers the shells detected on the machine, then “In the worktree of…”, which lists the project’s agents that have a worktree (not the archived ones) to open a terminal in it; the entry isn’t there when no agent has one. `Ctrl+T` opens one right away. A click on a terminal shows it in the main area, “Close” on hover closes it, and a terminal whose shell stopped is marked “exited”. See [terminals](terminals).
 
-In a window 820 pixels high or less, “Launch” and “Terminals” fold to their title to leave the room to the agents; a crashed command is still said there (“1 crashed”).
+### Browsers
+
+The “Browsers” section, under “Terminals”, has one row per browser of the project: those you open from its `+` (“New browser”, an address like `localhost:3000`), an agent’s test page and a launch command’s page. The row’s dot shows the page’s state (amber: loading, green: loaded, red: not answering). A click shows it full screen, `Ctrl`+click next to what’s shown, the cross on hover closes it. See [browsers](browser).
+
+In a window 820 pixels high or less, “Launch”, “Terminals” and “Browsers” fold to their title to leave the room to the agents; a crashed command is still said there (“1 crashed”).
 
 ### The foot of the sidebar
 

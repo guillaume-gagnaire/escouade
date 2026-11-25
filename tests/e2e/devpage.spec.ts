@@ -109,9 +109,10 @@ require('node:http').createServer((req, res) => {
   const dialog = page.getByRole('dialog', { name: 'Tester DEM-1' });
   await dialog.getByRole('button', { name: 'Lancer' }).click();
 
-  // Ready: the test's window gives way to the agent's view « Page », on the address of the feature.
+  // Ready: the test's window gives way to the agent's browser (ESC-657), its row of « Navigateurs » shown, on the address
+  // of the feature.
   await expect(dialog).toHaveCount(0, { timeout: 60_000 });
-  await expect(page.getByRole('button', { name: 'La page de son lancement, dans Escouade' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('region', { name: 'Navigateurs' }).locator('.row-item.browser[aria-current="true"]')).toHaveCount(1);
   const address = page.getByRole('textbox', { name: 'Adresse de la page' });
   await expect(address).toHaveValue(/^http:\/\/localhost:\d+\/fonction$/);
   const port = Number(new URL(await address.inputValue()).port);
@@ -166,9 +167,10 @@ require('node:http').createServer((req, res) => {
     .poll(() => Number(seen()), { timeout: 15_000 })
     .toBeGreaterThan((tablet === '768' ? 768 : Number(tablet) - 1) * scale - tolerance);
 
-  // Back to the conversation and to the page again: the same page, not loaded anew.
-  await page.getByRole('button', { name: 'Vue Escouade' }).click();
-  await page.getByRole('button', { name: 'La page de son lancement, dans Escouade' }).click();
+  // Back to the conversation and to the page again (its « Page »): the same page, not loaded anew.
+  await page.locator('.side .agent').first().click();
+  await expect(address).toHaveCount(0);
+  await page.getByRole('button', { name: 'La page de son lancement, dans Navigateurs' }).click();
   await expect(address).toHaveValue(`http://localhost:${port}/fonction`);
 
   // Its devtools, from its bar: a window of their own on this page, never on Escouade's. Last: on CI, where a

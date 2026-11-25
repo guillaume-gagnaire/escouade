@@ -507,10 +507,9 @@ export default defineZone('settings', {
     commitDesc: 'Direct: Escouade suggests a message, you review it, and you commit yourself.',
     pagesOpen: 'Open the launches’ pages',
     pagesOpenDesc:
-      'When “▶ Test” is ready, the page opens by itself. In the agent, it runs apart: neither Escouade’s commands nor your cookies.',
+      'When “▶ Test” or a launch command is ready, the page opens by itself. In Escouade, it’s its row of the “Browsers” section, apart: neither Escouade’s commands nor your cookies.',
     pagesOpens: {
-      agent: 'In the agent',
-      window: 'In a separate window',
+      agent: 'In Escouade',
       system: 'In the system browser',
     },
     commitModes: {

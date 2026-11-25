@@ -373,6 +373,8 @@ class AppState {
   launches = $state<Record<string, LaunchState>>({});
   selectedLaunch = $state<Record<string, string | null>>({});
   selectedTerm = $state<Record<string, string | null>>({});
+  /** The browser (ESC-657) whose page fills the main area, by project: its key (`devpage.svelte.ts`). */
+  selectedPage = $state<Record<string, string | null>>({});
   claudeFound = $state(true);
   /** The settings' own path to Claude Code leads to it (what its field's hint says, whatever the current account runs). */
   claudePathFound = $state(true);
@@ -468,9 +470,9 @@ class AppState {
    * the window and not in the « Pages » one (it can then go into a pane, ESC-419); `view`, its agent's view switched to
    * its page or back to its conversation.
    */
-  pages: { open: (agentId: string) => boolean; view: (agentId: string, on: boolean) => void } = {
+  pages: { open: (key: string) => boolean; projectOf: (key: string) => string | null } = {
     open: () => false,
-    view: () => {},
+    projectOf: () => null,
   };
   /** The card of the agents' list to give the focus to (Ctrl+J), `n` counting the asks: the sidebar focuses it. */
   cardFocus = $state<{ id: string; n: number }>({ id: '', n: 0 });
@@ -595,6 +597,14 @@ class AppState {
     return this.terminals.find((t) => t.id === id) ?? null;
   });
 
+  /** The browser whose page fills the main area (ESC-657), if any: its key, while it is open. */
+  pageShown = $derived.by(() => {
+    const p = this.project;
+    if (!p) return null;
+    const key = this.selectedPage[p.id];
+    return key && this.pages.open(key) && this.pages.projectOf(key) === p.id ? key : null;
+  });
+
   /** The launch command whose log fills the main area, if any: one of the project's, or a step of an agent's recipe. */
   runCommand = $derived.by(() => {
     const p = this.project;
@@ -631,6 +641,7 @@ class AppState {
     if (this.editorOn) return { kind: 'editor' };
     if (this.runCommand) return { kind: 'launch', id: this.selectedLaunch[p.id]! };
     if (this.term) return { kind: 'term', id: this.term.id };
+    if (this.pageShown) return { kind: 'page', id: this.pageShown };
     if (this.agent) return { kind: 'agent', id: this.agent.id };
     return null;
   });
@@ -652,7 +663,7 @@ class AppState {
       ? this.panes.active.startsWith('agent:')
         ? (this.agents[this.panes.active.slice(6)] ?? null)
         : null
-      : this.ui.view === 'project' && !this.term && !this.runCommand && !this.editorOn && !this.boardOn && !this.prsOn
+      : this.ui.view === 'project' && !this.term && !this.pageShown && !this.runCommand && !this.editorOn && !this.boardOn && !this.prsOn
         ? this.agent
         : null,
   );
@@ -1382,6 +1393,7 @@ class AppState {
     this.ui.view = 'project';
     this.ui.selectedAgent[a.projectId] = id;
     this.selectedTerm[a.projectId] = null;
+    this.selectedPage[a.projectId] = null;
     this.selectedLaunch[a.projectId] = null;
     this.board[a.projectId] = false;
     this.docs[a.projectId] = false;
@@ -1402,6 +1414,7 @@ class AppState {
     if (!p) return;
     this.selectedTerm[p.id] = id;
     if (id) {
+      this.selectedPage[p.id] = null;
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
@@ -1417,11 +1430,28 @@ class AppState {
     this.selectedLaunch[p.id] = commandId;
     if (commandId) {
       this.selectedTerm[p.id] = null;
+      this.selectedPage[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
       this.paneShow(p.id, { kind: 'launch', id: commandId });
+    }
+  }
+
+  /** Shows the browser `key` (ESC-657) in the main area, as a terminal is: alone, or in the active pane. */
+  selectPage(key: string | null) {
+    const p = this.project;
+    if (!p) return;
+    this.selectedPage[p.id] = key;
+    if (key) {
+      this.selectedTerm[p.id] = null;
+      this.selectedLaunch[p.id] = null;
+      this.board[p.id] = false;
+      this.docs[p.id] = false;
+      this.prs[p.id] = false;
+      this.closeEditor(p.id);
+      this.paneShow(p.id, { kind: 'page', id: key });
     }
   }
 
@@ -1432,7 +1462,7 @@ class AppState {
   paneExists(p: Project, x: PaneItem): boolean {
     if (x.kind === 'editor') return true;
     if (x.kind === 'agent') return this.agents[x.id]?.projectId === p.id && !this.agents[x.id].archived;
-    if (x.kind === 'page') return this.agents[x.id]?.projectId === p.id && !this.agents[x.id].archived && this.pages.open(x.id);
+    if (x.kind === 'page') return this.pages.open(x.id) && this.pages.projectOf(x.id) === p.id;
     if (x.kind === 'term') return this.terminals.some((t) => t.id === x.id && t.projectId === p.id);
     return !!this.launchOf(p, x.id);
   }
@@ -1473,10 +1503,9 @@ class AppState {
   /** `item` selected the classic way in the project `projectId`, on screen or not: alone, or the active pane's. */
   private selectIn(projectId: string, item: PaneItem) {
     this.selectedTerm[projectId] = item.kind === 'term' ? item.id : null;
+    this.selectedPage[projectId] = item.kind === 'page' ? item.id : null;
     this.selectedLaunch[projectId] = item.kind === 'launch' ? item.id : null;
-    if (item.kind === 'agent' || item.kind === 'page') this.ui.selectedAgent[projectId] = item.id;
-    // A page left alone: its agent, on its view « Page ».
-    if (item.kind === 'page' && !this.ui.panes?.[projectId]) this.pages.view(item.id, true);
+    if (item.kind === 'agent') this.ui.selectedAgent[projectId] = item.id;
     if (item.kind === 'editor') {
       this.editorReady(projectId);
       if (!this.ui.panes?.[projectId]) this.editor[projectId].on = true;
@@ -1513,17 +1542,15 @@ class AppState {
     if (item.kind === 'editor') {
       this.editorReady(p.id);
       this.selectedTerm[p.id] = null;
+      this.selectedPage[p.id] = null;
       this.selectedLaunch[p.id] = null;
       this.editor[p.id].on = true;
       return;
     }
     this.closeEditor(p.id);
     if (item.kind === 'agent') this.selectAgent(item.id);
-    else if (item.kind === 'page') {
-      // Its agent, on its view « Page ».
-      this.selectAgent(item.id);
-      this.pages.view(item.id, true);
-    } else if (item.kind === 'term') this.selectTerm(item.id);
+    else if (item.kind === 'page') this.selectPage(item.id);
+    else if (item.kind === 'term') this.selectTerm(item.id);
     else this.selectLaunch(item.id);
   }
 
@@ -1534,10 +1561,12 @@ class AppState {
     if (!p || !l) return;
     const item = leaves(l.root).find((x) => itemKey(x) === key);
     if (!item) return;
-    if (item.kind === 'agent' || item.kind === 'page') {
-      // Not `selectAgent`: a click in a conversation must not take the focus to its composer. A page's: its agent's.
+    if (item.kind === 'page') this.selectPage(item.id);
+    else if (item.kind === 'agent') {
+      // Not `selectAgent`: a click in a conversation must not take the focus to its composer.
       this.ui.selectedAgent[p.id] = item.id;
       this.selectedTerm[p.id] = null;
+      this.selectedPage[p.id] = null;
       this.selectedLaunch[p.id] = null;
       this.setPanes(p.id, { ...l, active: key });
     } else if (item.kind === 'term') this.selectTerm(item.id);
@@ -1545,6 +1574,7 @@ class AppState {
     else {
       this.editorReady(p.id);
       this.selectedTerm[p.id] = null;
+      this.selectedPage[p.id] = null;
       this.selectedLaunch[p.id] = null;
       this.setPanes(p.id, { ...l, active: key });
     }
@@ -1561,8 +1591,6 @@ class AppState {
     this.setPanes(p.id, next);
     if (!next) return this.showAlone(item);
     if (item.kind === 'editor') this.editorReady(p.id);
-    // The page in a pane of its own: its agent's view shows its conversation again.
-    if (item.kind === 'page') this.pages.view(item.id, false);
     this.activatePane(itemKey(item));
     if (item.kind === 'agent') this.focusComposer++;
     else this.paneFocus++;
@@ -1651,6 +1679,7 @@ class AppState {
     this.docs[projectId] = false;
     this.prs[projectId] = false;
     this.selectedTerm[projectId] = null;
+    this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
     this.persistUi();
@@ -1676,6 +1705,7 @@ class AppState {
     // A space chosen: the discussion open leaves the main area.
     if (space) this.docsDiscussion[projectId] = null;
     this.selectedTerm[projectId] = null;
+    this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
     this.persistUi();
@@ -1711,6 +1741,7 @@ class AppState {
     this.docs[projectId] = false;
     this.prs[projectId] = true;
     this.selectedTerm[projectId] = null;
+    this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
     this.persistUi();
@@ -1875,6 +1906,7 @@ class AppState {
     this.docs[projectId] = false;
     this.prs[projectId] = false;
     this.selectedTerm[projectId] = null;
+    this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
     // Always work through the stored `$state` proxies, not the raw objects the `??=` expressions return:
     // a write on a raw object is lost for whoever already read the proxy.

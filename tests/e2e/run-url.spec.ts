@@ -1,7 +1,7 @@
 // « Ouvrir à son lancement » (ESC-560): a launch command with an address opens it by itself once it answers, as « ▶ Tester »
-// does (the same bounded wait, no fixed delay): run in the project, in a tab of the project's « Pages » window; run in an
-// agent's worktree, the address follows the agent's ports and opens in its view « Page ». A command that crashes before
-// answering opens nothing.
+// does (the same bounded wait, no fixed delay), in its browser's row of « Navigateurs » (ESC-657; the « Pages » window is
+// gone): run in the project, a row of its own, shown when its log was on screen; run in an agent's worktree, the address
+// follows the agent's ports and opens in the agent's row. A command that crashes before answering opens nothing.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -32,19 +32,10 @@ setTimeout(() => {
 setInterval(() => {}, 1000);
 `;
 
-/** The pages open, as the backend keeps them (the window's own command). */
-const pagesOpen = (page: Page, projectId?: string) =>
-  page.evaluate(
-    (p) =>
-      (
-        window as unknown as {
-          __TAURI_INTERNALS__: {
-            invoke: (c: string, a: unknown) => Promise<{ pages: { agentId: string; url: string; title: string; agentless?: boolean }[] }>;
-          };
-        }
-      ).__TAURI_INTERNALS__.invoke('devpage_list', p ? { projectId: p } : {}),
-    projectId,
-  );
+/** The rows of « Navigateurs »: the browsers of the project, as the sidebar shows them (ESC-657). */
+const browsers = (page: Page) => page.getByRole('region', { name: 'Navigateurs' }).locator('.row-item.browser');
+/** Their names, in order. */
+const names = (page: Page) => browsers(page).locator('.nm').allTextContents();
 
 /** « Commande n » of the launch page of the settings, filled. */
 async function addCommand(page: Page, n: number, name: string, command: string, url: string) {
@@ -88,7 +79,7 @@ async function shots(page: Page, name: string) {
 
 const row = (page: Page, name: string) => page.locator('.run').filter({ has: page.locator('.name', { hasText: new RegExp(`^${name}$`) }) });
 
-test('a launch command in the project opens its address in the « Pages » window once it answers, and one that crashes opens nothing', async ({
+test('a launch command in the project opens its address in its browser’s row once it answers, and one that crashes opens nothing', async ({
   app,
 }) => {
   const { page } = app;
@@ -121,20 +112,26 @@ test('a launch command in the project opens its address in the « Pages » windo
   await page.locator('main.rv').getByRole('button', { name: 'Lancer', exact: true }).first().click();
   await expect(row(page, 'Casse')).toContainText('planté (code 3)', { timeout: 30_000 });
 
-  // The other: once it answers (it waits 1.5 s before serving), its page opens by itself in the project's window.
-  // From its log, whatever the width of the bar.
+  // Nothing opened for it.
+  await expect(browsers(page)).toHaveCount(0);
+
+  // The other: once it answers (it waits 1.5 s before serving), its page opens by itself in its row of « Navigateurs »,
+  // shown, its log having been on screen. From its log, whatever the width of the bar.
   await row(page, 'Site').locator('.name').click();
   await page.locator('main.rv').getByRole('button', { name: 'Lancer', exact: true }).first().click();
   await expect(row(page, 'Site')).toContainText('en cours');
-  await expect
-    .poll(async () => (await pagesOpen(page)).pages.map((p) => [p.title, p.url, !!p.agentless]), { timeout: 60_000 })
-    .toEqual([['Site', `http://localhost:${port}/accueil`, true]]);
+  await expect.poll(() => names(page), { timeout: 60_000 }).toEqual(['Site']);
+  await expect(browsers(page).first()).toHaveAttribute('aria-current', 'true');
+  await expect(page.getByRole('textbox', { name: 'Adresse de la page' })).toHaveValue(`http://localhost:${port}/accueil`);
 
-  // Started again: the same page, not a second one.
+  // Started again: the same row, not a second one.
   await row(page, 'Site').click();
   await page.locator('main.rv').getByRole('button', { name: 'Relancer' }).click();
   await expect(row(page, 'Site')).toContainText('en cours');
-  await expect.poll(async () => (await pagesOpen(page)).pages.length, { timeout: 30_000 }).toBe(1);
+  await expect(page.getByRole('textbox', { name: 'Adresse de la page' })).toHaveValue(`http://localhost:${port}/accueil`, {
+    timeout: 60_000,
+  });
+  expect(await names(page)).toEqual(['Site']);
 
   // The window, for the captures.
   await openSettingsPage(page, 'Lancement', { project: 'demo-api' });
@@ -142,7 +139,7 @@ test('a launch command in the project opens its address in the « Pages » windo
   await shots(page, 'launch-url');
 });
 
-test('a launch command in an agent’s worktree opens its address on the agent’s ports, in its view « Page »', async ({ app }) => {
+test('a launch command in an agent’s worktree opens its address on the agent’s ports, in the agent’s row', async ({ app }) => {
   const { page } = app;
   const fallback = await freePort();
   test.setTimeout(240_000);
@@ -163,11 +160,11 @@ test('a launch command in an agent’s worktree opens its address on the agent�
   await page.getByRole('menuitem', { name: `Dans le worktree de ${agentName}` }).click();
   await expect(page.locator('.run', { hasText: `Site · ${agentName}` })).toContainText('en cours');
 
-  // Its page opens by itself, in the agent, on the agent's first port (not the project's).
-  await expect
-    .poll(async () => (await pagesOpen(page)).pages.map((p) => [p.title, p.url]), { timeout: 60_000 })
-    .toEqual([[`${agentName} · Site`, expect.stringMatching(/^http:\/\/localhost:41\d0\/accueil$/)]]);
+  // Its page opens by itself, in the agent's row, on the agent's first port (not the project's).
+  await expect.poll(() => names(page), { timeout: 60_000 }).toEqual([`${agentName} · Site`]);
+  // The agent's « Page » shows it.
   await page.locator('.card').first().click();
-  await expect(page.getByRole('button', { name: 'La page de son lancement, dans Escouade' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'La page de son lancement, dans Navigateurs' }).click();
+  await expect(browsers(page).first()).toHaveAttribute('aria-current', 'true');
   await expect(page.getByRole('textbox', { name: 'Adresse de la page' })).toHaveValue(/^http:\/\/localhost:41\d0\/accueil$/);
 });

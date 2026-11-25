@@ -280,7 +280,7 @@ launch:
 | `shell` | non | Le shell qui la lance. Absent : le shell par défaut du système. |
 | `cwd` | non | Un sous-dossier du projet, relatif. Absent : la racine du projet. |
 | `url` | non | L’adresse `http://` ou `https://` qu’Escouade ouvre dès qu’elle répond (voir [le lancement](launch#ouvrir-une-adresse-au-lancement)). Elle peut nommer `${ESCOUADE_PORT_BASE}` et `${ESCOUADE_PORT_END}`, avec une valeur pour le projet après `:-`. Une autre adresse est signalée et la commande ignorée. |
-| `open_in` | non | Où l’ouvrir : `page` (une page de lancement d’Escouade, par défaut) ou `browser` (le navigateur du système). |
+| `open_in` | non | Où l’ouvrir : `page` (sa ligne de la section « Navigateurs » d’Escouade, voir [les navigateurs](browser), par défaut) ou `browser` (le navigateur du système). |
 
 L’adresse fait partie de la commande : changée dans le fichier, elle redemande ton accord, et elle n’est appliquée qu’avec la commande.
 

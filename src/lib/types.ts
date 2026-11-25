@@ -1034,6 +1034,10 @@ export interface ProjectShared {
 export type CommitMode = 'agent' | 'direct';
 
 /** Where a launch's page opens (ESC-311): the agent's view « Page », the project's « Pages » window, the system's browser. */
+/**
+ * « Ouvrir les pages des lancements »: in Escouade (`agent`: a browser's row, ESC-657) or in the system's browser.
+ * `window`, the « Pages » window of before, is read as `agent`.
+ */
 export type PagesOpen = 'agent' | 'window' | 'system';
 
 /** A launch's page, as the backend keeps it (ESC-311). */
@@ -1043,19 +1047,22 @@ export interface PageView {
   /** « pagination-users · web ». */
   title: string;
   url: string;
-  /** In the project's « Pages » window. */
-  detached: boolean;
   /** The width it is shown at: the whole room, a tablet's, a phone's. */
   mode?: 'full' | 'tablet' | 'mobile';
-  /** The page of a launch command run in its project (ESC-560): no agent's view to go back to. */
-  agentless?: boolean;
+  /** Its last load finished (ESC-657): its events may have come before the window knew it. */
+  loaded?: boolean;
+  /** Its document's title, once the page gave one. */
+  docTitle?: string;
 }
 
 /** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
 export interface PageEvent {
+  /** The page's key: its agent's id, or `browser:<id>` for a browser opened alone (ESC-657). */
   agentId: string;
-  phase: 'started' | 'finished' | 'outside' | 'refused' | 'devtools' | 'responsive';
+  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title';
   url: string;
+  /** Its document's title, with `title` (cleaned by the backend). */
+  title?: string;
 }
 
 /** Where a page goes in the window, in its logical pixels. */

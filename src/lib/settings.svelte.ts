@@ -200,8 +200,8 @@ function draftOf(p: Project): ProjectDraft {
     worktreeSetup,
     worktreeTeardown,
     commitMode,
-    // Absent from a project saved before ESC-311: in the agent.
-    pagesOpen: pagesOpen ?? 'agent',
+    // Absent from a project saved before ESC-311, or « Dans une fenêtre à part » of before (ESC-657): in Escouade.
+    pagesOpen: pagesOpen === 'system' ? 'system' : 'agent',
     account,
     worktreeDir,
     agentBranchPrefix,

@@ -110,8 +110,9 @@ require('node:http').createServer((req, res) => {
   const dialog = page.getByRole('dialog', { name: 'Tester DEM-1' });
   await dialog.getByRole('button', { name: 'Lancer' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 60_000 });
-  const pageView = page.getByRole('button', { name: 'La page de son lancement, dans Escouade' });
-  await expect(pageView).toHaveAttribute('aria-pressed', 'true');
+  // Its browser's row shown (ESC-657); its agent's « Page » shows it again from the conversation.
+  const pageView = page.getByRole('button', { name: 'La page de son lancement, dans Navigateurs' });
+  await expect(page.getByRole('region', { name: 'Navigateurs' }).locator('.row-item.browser[aria-current="true"]')).toHaveCount(1);
   const address = page.getByRole('textbox', { name: 'Adresse de la page' });
   await expect(address).toHaveValue(/^http:\/\/localhost:\d+\/fonction$/);
   const url = await address.inputValue();
@@ -187,12 +188,12 @@ require('node:http').createServer((req, res) => {
     }
   }
 
-  // Closed by its ×: its conversation alone, the page hidden, its view « Page » there again.
+  // Closed by its ×: its conversation alone, the page hidden, its « Page » there to show it again.
   await pane.hover();
   await pane.getByTestId('pane-close').click();
   await expect(page.getByTestId('pane')).toHaveCount(0);
   await expect.poll(placed).toBeNull();
-  await expect(pageView).toHaveAttribute('aria-pressed', 'false');
+  await expect(pageView).toBeVisible();
 
   // Back from the agent's menu: « Ouvrir la page à côté ».
   await page.getByRole('button', { name: 'Actions de l’agent' }).click();
@@ -205,9 +206,7 @@ require('node:http').createServer((req, res) => {
   await page.keyboard.press('Control+Shift+W');
   await expect(page.getByTestId('pane')).toHaveCount(0);
 
-  // Its view « Page » dragged onto the bottom of its conversation: one above the other.
-  await pageView.click();
-  await expect(address).toHaveValue(url);
+  // Its « Page », in the header of its conversation, dragged onto the bottom of it: one above the other.
   const chip = pageView;
   const work = page.locator('.work').first();
   const cb = (await chip.boundingBox())!;

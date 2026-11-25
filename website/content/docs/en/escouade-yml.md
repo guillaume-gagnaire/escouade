@@ -280,7 +280,7 @@ launch:
 | `shell` | no | The shell that runs it. Missing: the system’s default shell. |
 | `cwd` | no | A subfolder of the project, relative. Missing: the root of the project. |
 | `url` | no | The `http://` or `https://` address Escouade opens as soon as it answers (see [launch](launch#opening-an-address-on-launch)). It may name `${ESCOUADE_PORT_BASE}` and `${ESCOUADE_PORT_END}`, with a value for the project after `:-`. Any other address is told and the command ignored. |
-| `open_in` | no | Where to open it: `page` (a launch page of Escouade, the default) or `browser` (the system’s browser). |
+| `open_in` | no | Where to open it: `page` (its row of Escouade’s “Browsers” section, see [browsers](browser), the default) or `browser` (the system’s browser). |
 
 The address is part of the command: changed in the file, it asks for your approval again, and it only applies with the command.
 

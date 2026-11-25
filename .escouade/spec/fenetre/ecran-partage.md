@@ -2,8 +2,8 @@
 title: "Écran partagé"
 subject: "fenetre"
 sources: ["docs/SPLIT.md","design/split-view/index.html"]
-tickets: ["ESC-392","ESC-399","ESC-419"]
-decisions: [128,134,149]
+tickets: ["ESC-392","ESC-399","ESC-419","ESC-657"]
+decisions: [128,134,149,310]
 compared: null
 ---
 
@@ -17,9 +17,9 @@ La zone de travail d'un projet se partage en **volets**, côte à côte ou l'un 
 - Un **terminal**.
 - Le **journal d'un lancement**.
 - L'**éditeur** du projet.
-- La **page du lancement** d'un agent (ESC-419), dans un volet à elle, à côté de sa conversation (ou de celle d'un autre agent) ou en dessous : voir *La page du lancement*. Tant qu'elle est dans un volet, la conversation de son agent montre ses messages, et sa vue « Page » rend actif le volet de la page.
+- Un **navigateur** (ESC-657, la page du lancement d'un agent avant, ESC-419), comme un terminal : sa ligne de « Navigateurs » glissée, `Ctrl`+clic, ou « Ouvrir à côté » ; la page d'un lancement affichée seule va à côté de la conversation de son agent. Voir *Les navigateurs (la page du lancement)*. Le bouton « Page » de l'en-tête d'un agent rend actif le volet de sa page.
 - Le Kanban, les PR et les Docs n'y vont pas : les ouvrir prend toute la zone, sans défaire la disposition, qui revient quand on les quitte.
-- Un même contenu n'est jamais montré deux fois : lâché sur un autre volet, il y passe ; au milieu d'un volet, les deux volets échangent. La page lâchée au milieu de la conversation de son agent affichée seule redevient sa vue « Page ».
+- Un même contenu n'est jamais montré deux fois : lâché sur un autre volet, il y passe ; au milieu d'un volet, les deux volets échangent. Une page lâchée au milieu d'un contenu affiché seul s'affiche seule, comme un terminal.
 
 ## Ouvrir à côté
 
@@ -61,8 +61,8 @@ La disposition (l'arbre des volets, sens, parts, contenus, volet actif) est rete
 Un contenu qui s'en va ne défait pas la disposition (ESC-399) :
 
 - **Un agent archivé ou supprimé** — depuis son menu, le Kanban (ticket validé), le serveur MCP ou un autre écran, que son projet soit affiché ou non — : son volet prend l'agent que l'app montrerait seul à sa place, le premier agent non archivé du projet (par date de création) qui n'est pas déjà dans un volet, à la même place et avec la même part. Il devient actif si l'agent parti l'était.
-- **Sans autre agent à montrer**, ou pour **un terminal fermé**, **un lancement retiré** ou **une page fermée** (son agent parti, son ticket terminé) ou **passée dans la fenêtre « Pages »**, le volet se ferme : son voisin prend sa place (et le volet actif, s'il l'était). Les autres volets gardent leur place et leurs parts.
-- Le **dernier volet restant** occupe seul la zone de travail, et c'est lui qu'on voit (le terminal, par exemple), pas un écran vide ni l'agent archivé. Une page restée seule, c'est son agent sur sa vue « Page ».
+- **Sans autre agent à montrer**, ou pour **un terminal fermé**, **un lancement retiré** ou **une page fermée** (son agent parti, son ticket terminé), le volet se ferme : son voisin prend sa place (et le volet actif, s'il l'était). Les autres volets gardent leur place et leurs parts.
+- Le **dernier volet restant** occupe seul la zone de travail, et c'est lui qu'on voit (le terminal, par exemple), pas un écran vide ni l'agent archivé. Une page restée seule s'affiche seule, comme un terminal.
 - Seuls les contenus partis s'en vont : un terminal du projet reste quand un agent est archivé.
 
 ## Ailleurs

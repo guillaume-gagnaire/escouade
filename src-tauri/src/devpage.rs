@@ -1,7 +1,7 @@
-//! The page of a launch, inside Escouade (ESC-311). When an agent's test launch answers, its address
-//! opens in a webview of its own: in the agent's view (a child of the main window, placed over the
-//! spot the window keeps for it), or in the project's « Pages » window, one tab per worktree. One
-//! page per agent: launching again reloads the same page.
+//! The browsers of a project (ESC-657; the page of a launch before, ESC-311): each a webview of its
+//! own, a child of the main window placed over the spot the window keeps for it (alone in the main
+//! area, or in a pane). One page per agent's launch and per launch command: launching again reloads
+//! the same page. The « Pages » window of before is gone: every page is a row of « Navigateurs ».
 //!
 //! The page is the developed app, a content Escouade does not trust. It is kept apart, without
 //! exception:
@@ -12,7 +12,13 @@
 //!   (Windows, Linux), a data store per project (macOS 14 and later), a private session before;
 //! - it stays on its launch's origin (`judge`): Escouade's own addresses are refused, another
 //!   origin opens in the system's browser, anything else nowhere;
-//! - its devtools are its own (`open_devtools` on its webview); the window's stay off in a release.
+//! - its devtools are its own (`open_devtools` on its webview), opened by a gesture of the user
+//!   alone (ESC-657): its bar, a key while Escouade has the focus, the system's own keys and menu
+//!   in the page; never by an address the page could go to by itself. The window's stay off in a
+//!   release.
+//!
+//! A page is keyed by the agent whose launch opened it, by `run:<project>:<command>` for a launch
+//! command run in its project (ESC-560), or by `browser:<id>` for one the user opened alone.
 
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -24,18 +30,11 @@ use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, Webv
 
 /// The labels of the pages' webviews: `devpage-<agent>`.
 pub const PAGE_PREFIX: &str = "devpage-";
+/// The key of a browser the user opened alone, without an agent (ESC-657): `browser:<id>`.
+pub const BROWSER_PREFIX: &str = "browser:";
 /// The key of the page of a launch command run in its project, not in a worktree (ESC-560):
-/// `run:<project>:<command>`. It has no agent: it opens in the project's « Pages » window alone.
+/// `run:<project>:<command>`. It has no agent: a browser's row of its own (ESC-657).
 pub const RUN_PREFIX: &str = "run:";
-/// The labels of the « Pages » windows: `pages-<project>`.
-pub const WINDOW_PREFIX: &str = "pages-";
-/// The labels of the bars of the « Pages » windows (Escouade's own interface): `pagesbar-<project>`.
-pub const BAR_PREFIX: &str = "pagesbar-";
-/// The height of the bar of a « Pages » window: its tabs and the page's bar, in logical pixels.
-pub const BAR_HEIGHT: f64 = 84.0;
-/// The address a page goes to, by its shortcut (F12, Cmd+Opt+I, Ctrl+Shift+I), to ask for its
-/// devtools: refused, and the devtools open (`judge` → `Verdict::Devtools`).
-pub const DEVTOOLS_URL: &str = "escouade-devtools://open/";
 /// The address a page goes to, by its shortcut (Ctrl+Shift+M, Cmd+Shift+M), to be shown at the
 /// next width (`Verdict::Responsive`).
 pub const RESPONSIVE_URL: &str = "escouade-devtools://responsive/";
@@ -48,29 +47,6 @@ pub enum PageMode {
     Full,
     Tablet,
     Mobile,
-}
-
-impl PageMode {
-    /// Its width in logical pixels: an iPad in portrait, a recent iPhone; none for the whole room.
-    pub fn device_width(self) -> Option<f64> {
-        match self {
-            PageMode::Full => None,
-            PageMode::Tablet => Some(768.0),
-            PageMode::Mobile => Some(390.0),
-        }
-    }
-}
-
-/// Where a page shown at `mode` goes in a room `width` wide: its width and its left, centred;
-/// narrowed to the room when the room is narrower than the device.
-pub fn device_fit(mode: PageMode, width: f64) -> (f64, f64) {
-    match mode.device_width() {
-        None => (width, 0.0),
-        Some(device) => {
-            let w = device.min(width).max(1.0);
-            (w, ((width - w) / 2.0).round().max(0.0))
-        }
-    }
 }
 
 /// Keeps a label to what Tauri allows (letters, digits, `-`, `_`), every other character an `_`.
@@ -91,14 +67,33 @@ pub fn page_label(agent_id: &str) -> String {
     format!("{PAGE_PREFIX}{}", clean(agent_id))
 }
 
-/// The label of the « Pages » window of project `project_id`.
-pub fn window_label(project_id: &str) -> String {
-    format!("{WINDOW_PREFIX}{}", clean(project_id))
-}
-
-/// The label of the bar of the « Pages » window of project `project_id`.
-pub fn bar_label(project_id: &str) -> String {
-    format!("{BAR_PREFIX}{}", clean(project_id))
+/// Whether `key` may name a page without an agent in project `project_id` (ESC-657): a browser the
+/// user opened alone, `browser:` and an id of letters, digits, `-` and `_` (40 at most); or the
+/// page of a launch command run in this project (ESC-560), `run:<project>:<command>`.
+pub fn agentless_key(key: &str, project_id: &str) -> Result<(), String> {
+    if let Some(command) = key.strip_prefix(&format!("{RUN_PREFIX}{project_id}:")) {
+        return if command.is_empty() {
+            Err("not the page of a launch of this project".into())
+        } else {
+            Ok(())
+        };
+    }
+    if key.starts_with(RUN_PREFIX) {
+        return Err("not the page of a launch of this project".into());
+    }
+    let id = key
+        .strip_prefix(BROWSER_PREFIX)
+        .ok_or("not the key of a browser")?;
+    let fine = !id.is_empty()
+        && id.len() <= 40
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if fine {
+        Ok(())
+    } else {
+        Err("not the key of a browser".into())
+    }
 }
 
 /// A call from the webview `label` that no command answers: one of a page's.
@@ -113,8 +108,6 @@ pub enum Verdict {
     Here,
     /// Another web or mail address: refused, the system's browser or mail client opens it.
     Outside,
-    /// Its shortcut for its devtools: refused, and they open.
-    Devtools,
     /// Its shortcut for the next width: refused, and the window shows it so.
     Responsive,
     /// Escouade's own pages, a file, a script, another scheme: refused, opened nowhere.
@@ -125,9 +118,6 @@ pub enum Verdict {
 /// Escouade's own (`navigation::destination`): never loaded in a page, even when it is on the
 /// launch's origin (the dev server's, when the launch is Escouade itself).
 pub fn judge(url: &Url, home: &Url, own: impl Fn(&Url) -> bool) -> Verdict {
-    if url.as_str() == DEVTOOLS_URL {
-        return Verdict::Devtools;
-    }
     if url.as_str() == RESPONSIVE_URL {
         return Verdict::Responsive;
     }
@@ -173,17 +163,17 @@ pub fn store_id(project_id: &str) -> [u8; 16] {
     id
 }
 
-/// What the page's shortcuts run in it: F12, Cmd+Opt+I (macOS) and Ctrl+Shift+I ask for its
-/// devtools by `DEVTOOLS_URL`; Ctrl+Shift+M (Cmd+Shift+M) for the next width by `RESPONSIVE_URL`.
-/// Nothing else is added to the page.
+/// What the page's shortcut runs in it: Ctrl+Shift+M (Cmd+Shift+M) asks for the next width by
+/// `RESPONSIVE_URL`. Nothing else is added to the page. Its devtools have no such shortcut
+/// (ESC-657): an address the page's own script could go to, without a gesture of the user. In the
+/// page, the system's own keys open them where it has some (F12 and Ctrl+Shift+I in WebView2), and
+/// its menu everywhere (« Inspecter l'élément »).
 pub fn shortcut_script() -> String {
     format!(
         "window.addEventListener('keydown', function (e) {{\
            var k = (e.key || '').toLowerCase();\
-           var i = k === 'i' || e.code === 'KeyI', m = k === 'm' || e.code === 'KeyM';\
-           if (e.key === 'F12' || (i && ((e.metaKey && e.altKey) || (e.ctrlKey && e.shiftKey)))) {{\
-             e.preventDefault(); e.stopPropagation(); window.location.href = '{DEVTOOLS_URL}';\
-           }} else if (m && e.shiftKey && !e.altKey && (e.ctrlKey || e.metaKey)) {{\
+           var m = k === 'm' || e.code === 'KeyM';\
+           if (m && e.shiftKey && !e.altKey && (e.ctrlKey || e.metaKey)) {{\
              e.preventDefault(); e.stopPropagation(); window.location.href = '{RESPONSIVE_URL}';\
            }}\
          }}, true);"
@@ -209,23 +199,30 @@ pub struct PageView {
     pub title: String,
     /// Where it is now.
     pub url: String,
-    /// In the project's « Pages » window, not in the agent's view.
-    pub detached: bool,
     /// The width it is shown at.
     pub mode: PageMode,
-    /// The page of a launch command run in its project (`RUN_PREFIX`): no agent's view to go back to.
-    pub agentless: bool,
+    /// Its last load finished (ESC-657): what the window reads at its opening, whose events may
+    /// have come before it knew the page.
+    #[serde(default)]
+    pub loaded: bool,
+    /// Its document's title, once the page gave one (`clip_title`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub doc_title: String,
 }
 
-/// What happened to a page, for the window (`UiEvent::DevPage`) and the « Pages » windows.
+/// What happened to a page, for the window (`UiEvent::DevPage`).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PageEvent {
     pub agent_id: String,
     /// `started` and `finished` (a load, at `url`), `outside` (`url` opened in the system's
-    /// browser), `refused` (`url` opened nowhere), `devtools`, `attached`, `detached`, `closed`.
+    /// browser), `refused` (`url` opened nowhere), `responsive` (its width's shortcut), `title`
+    /// (its document's title changed, in `title`).
     pub phase: &'static str,
     pub url: String,
+    /// Its document's title (`title`), cleaned by `clip_title`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub title: String,
 }
 
 /// Tells a page's events.
@@ -235,30 +232,11 @@ pub type Tell = Arc<dyn Fn(PageEvent) + Send + Sync>;
 #[derive(Default)]
 pub struct Pages {
     pages: Mutex<HashMap<String, PageView>>,
-    /// The page each « Pages » window shows, by project.
-    shown: Mutex<HashMap<String, String>>,
 }
 
 impl Pages {
     pub fn get(&self, agent_id: &str) -> Option<PageView> {
         self.pages.lock().get(agent_id).cloned()
-    }
-
-    /// The pages of project `project_id` (its « Pages » window's tabs, detached or not).
-    pub fn of_project(&self, project_id: &str) -> Vec<PageView> {
-        let mut pages: Vec<_> = self
-            .pages
-            .lock()
-            .values()
-            .filter(|p| p.project_id == project_id)
-            .cloned()
-            .collect();
-        pages.sort_by(|a, b| a.title.cmp(&b.title));
-        pages
-    }
-
-    pub fn all(&self) -> Vec<PageView> {
-        self.pages.lock().values().cloned().collect()
     }
 
     fn put(&self, page: PageView) {
@@ -271,11 +249,16 @@ impl Pages {
         }
     }
 
-    fn set_detached(&self, agent_id: &str, detached: bool) -> Option<PageView> {
-        let mut pages = self.pages.lock();
-        let p = pages.get_mut(agent_id)?;
-        p.detached = detached;
-        Some(p.clone())
+    fn set_loaded(&self, agent_id: &str, loaded: bool) {
+        if let Some(p) = self.pages.lock().get_mut(agent_id) {
+            p.loaded = loaded;
+        }
+    }
+
+    fn set_doc_title(&self, agent_id: &str, title: &str) {
+        if let Some(p) = self.pages.lock().get_mut(agent_id) {
+            p.doc_title = title.to_string();
+        }
     }
 
     /// Shows the page of `agent_id` at `mode`. False when it is not open.
@@ -292,18 +275,6 @@ impl Pages {
     fn remove(&self, agent_id: &str) -> Option<PageView> {
         self.pages.lock().remove(agent_id)
     }
-
-    pub fn shown_in_window(&self, project_id: &str) -> Option<String> {
-        self.shown.lock().get(project_id).cloned()
-    }
-
-    fn show_in_window(&self, project_id: &str, agent_id: Option<&str>) {
-        let mut shown = self.shown.lock();
-        match agent_id {
-            Some(a) => shown.insert(project_id.to_string(), a.to_string()),
-            None => shown.remove(project_id),
-        };
-    }
 }
 
 /// What opening a page needs.
@@ -312,8 +283,6 @@ pub struct Open<'a> {
     pub project_id: &'a str,
     pub title: &'a str,
     pub url: &'a str,
-    /// In the « Pages » window of its project, rather than in the agent's view.
-    pub detached: bool,
     /// Where it goes in the main window, when it is there (hidden until placed otherwise).
     pub bounds: Option<Bounds>,
     /// Escouade's data folder (`data_dir`).
@@ -344,11 +313,7 @@ pub fn open<R: Runtime>(
             webview.navigate(url.clone()).map_err(|e| e.to_string())?;
         }
         pages.set_url(o.agent_id, url.as_str());
-        if let Some(p) = pages.get(o.agent_id) {
-            if p.detached {
-                show_in_window(app, pages, &p.project_id, o.agent_id)?;
-            }
-        }
+        pages.set_loaded(o.agent_id, false);
         return Ok(());
     }
     let builder = builder(
@@ -367,26 +332,10 @@ pub fn open<R: Runtime>(
         project_id: o.project_id.to_string(),
         title: o.title.to_string(),
         url: url.to_string(),
-        detached: o.detached,
         mode: PageMode::Full,
-        agentless: o.agent_id.starts_with(RUN_PREFIX),
+        loaded: false,
+        doc_title: String::new(),
     };
-    if o.detached {
-        let window = pages_window(app, pages, o.project_id)?;
-        let size = window.inner_size().map_err(|e| e.to_string())?;
-        let scale = window.scale_factor().unwrap_or(1.0);
-        let (w, h) = (size.width as f64 / scale, size.height as f64 / scale);
-        window
-            .add_child(
-                builder,
-                LogicalPosition::new(0.0, BAR_HEIGHT),
-                LogicalSize::new(w, (h - BAR_HEIGHT).max(0.0)),
-            )
-            .map_err(|e| e.to_string())?;
-        pages.put(page);
-        show_in_window(app, pages, o.project_id, o.agent_id)?;
-        return Ok(());
-    }
     let window = app.get_window("main").ok_or("no main window")?;
     let b = o.bounds.unwrap_or(Bounds {
         x: 0.0,
@@ -428,12 +377,12 @@ fn builder<R: Runtime>(
     b = with_store(b, data_root, project_id);
     // Every address it is asked to load.
     {
-        let (app, home, own, tell) = (app.clone(), home.clone(), own.clone(), tell.clone());
-        let (agent, label) = (agent_id.to_string(), label.to_string());
+        let (home, own, tell) = (home.clone(), own.clone(), tell.clone());
+        let agent = agent_id.to_string();
         b = b.on_navigation(move |to| {
             let verdict = judge(to, &home, |u| own(u));
             if verdict != Verdict::Here {
-                act(&app, &label, &agent, to, verdict, &tell);
+                act(&agent, to, verdict, &tell);
             }
             verdict == Verdict::Here
         });
@@ -449,21 +398,19 @@ fn builder<R: Runtime>(
                         let _ = w.navigate(to);
                     }
                 }
-                verdict => act(&app, &label, &agent, &to, verdict, &tell),
+                verdict => act(&agent, &to, verdict, &tell),
             }
             NewWindowResponse::Deny
         });
     }
     // Its loads, for its bar.
     {
-        let (app, pages, tell) = (app.clone(), pages.clone(), tell.clone());
-        let (agent, project) = (agent_id.to_string(), project_id.to_string());
+        let (pages, tell) = (pages.clone(), tell.clone());
+        let agent = agent_id.to_string();
         b = b.on_page_load(move |_, load| {
             let url = load.url().to_string();
             pages.set_url(&agent, &url);
-            if pages.get(&agent).is_some_and(|p| p.detached) {
-                tell_bar(&app, &project, &pages);
-            }
+            pages.set_loaded(&agent, matches!(load.event(), PageLoadEvent::Finished));
             tell(PageEvent {
                 agent_id: agent.clone(),
                 phase: match load.event() {
@@ -471,10 +418,43 @@ fn builder<R: Runtime>(
                     PageLoadEvent::Finished => "finished",
                 },
                 url,
+                title: String::new(),
+            });
+        });
+    }
+    // Its document's title, for its row in the sidebar (ESC-657).
+    {
+        let (pages, tell) = (pages.clone(), tell.clone());
+        let agent = agent_id.to_string();
+        b = b.on_document_title_changed(move |_, title| {
+            let url = pages.get(&agent).map(|p| p.url).unwrap_or_default();
+            let title = clip_title(&title);
+            pages.set_doc_title(&agent, &title);
+            tell(PageEvent {
+                agent_id: agent.clone(),
+                phase: "title",
+                url,
+                title,
             });
         });
     }
     b
+}
+
+/// A document's title as its row says it: one line, its control and invisible characters gone,
+/// 120 characters at most (the page chooses it: Escouade does not trust it).
+pub fn clip_title(title: &str) -> String {
+    let invisible = |c: char| {
+        c.is_control()
+            || matches!(c, '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' | '\u{feff}')
+    };
+    let one: String = title
+        .chars()
+        .map(|c| if c.is_whitespace() { ' ' } else { c })
+        .filter(|c| !invisible(*c))
+        .collect();
+    let words = one.split(' ').filter(|w| !w.is_empty()).collect::<Vec<_>>();
+    words.join(" ").chars().take(120).collect()
 }
 
 /// A page's storage, its project's: a folder (Windows, Linux), a data store (macOS 14 and later),
@@ -504,23 +484,10 @@ fn with_store<R: Runtime>(
 }
 
 /// What a refused address of a page does: told to the window, which opens it outside; its devtools; or nothing.
-fn act<R: Runtime>(
-    app: &AppHandle<R>,
-    label: &str,
-    agent: &str,
-    to: &Url,
-    verdict: Verdict,
-    tell: &Tell,
-) {
+fn act(agent: &str, to: &Url, verdict: Verdict, tell: &Tell) {
     let phase = match verdict {
         // The window opens it, as its own links (`open_url`).
         Verdict::Outside => "outside",
-        Verdict::Devtools => {
-            if let Some(w) = app.get_webview(label) {
-                open_devtools(&w);
-            }
-            "devtools"
-        }
         // The window knows the widths and keeps the one chosen (and lays out the page by it).
         Verdict::Responsive => "responsive",
         _ => {
@@ -535,72 +502,13 @@ fn act<R: Runtime>(
     tell(PageEvent {
         agent_id: agent.to_string(),
         phase,
-        url: if matches!(verdict, Verdict::Devtools | Verdict::Responsive) {
+        url: if verdict == Verdict::Responsive {
             String::new()
         } else {
             to.to_string()
         },
+        title: String::new(),
     });
-}
-
-/// The « Pages » window of project `project_id`, made with its bar when it is not there yet.
-fn pages_window<R: Runtime>(
-    app: &AppHandle<R>,
-    pages: &Arc<Pages>,
-    project_id: &str,
-) -> Result<tauri::Window<R>, String> {
-    let label = window_label(project_id);
-    if let Some(w) = app.get_window(&label) {
-        return Ok(w);
-    }
-    let window = tauri::window::WindowBuilder::new(app, &label)
-        .title(window_title(app, project_id))
-        .inner_size(1120.0, 760.0)
-        .min_inner_size(480.0, 320.0)
-        .build()
-        .map_err(|e| e.to_string())?;
-    let bar = WebviewBuilder::new(
-        bar_label(project_id),
-        WebviewUrl::App(format!("index.html?pages={}", clean(project_id)).into()),
-    )
-    .devtools(cfg!(debug_assertions));
-    window
-        .add_child(
-            bar,
-            LogicalPosition::new(0.0, 0.0),
-            LogicalSize::new(1120.0, BAR_HEIGHT),
-        )
-        .map_err(|e| e.to_string())?;
-    // Its bar across the top, its page under it, as the window is resized.
-    let (app2, pages2, project) = (app.clone(), pages.clone(), project_id.to_string());
-    window.on_window_event(move |e| match e {
-        tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
-            lay_out(&app2, &pages2, &project);
-        }
-        tauri::WindowEvent::Destroyed => {
-            // Closed: its pages are closed with it.
-            for p in pages2.of_project(&project) {
-                if p.detached {
-                    if let Some(w) = app2.get_webview(&page_label(&p.agent_id)) {
-                        let _ = w.close();
-                    }
-                    pages2.remove(&p.agent_id);
-                }
-            }
-            pages2.show_in_window(&project, None);
-        }
-        _ => {}
-    });
-    Ok(window)
-}
-
-/// What the title of a « Pages » window says: its project's name and « Pages ».
-fn window_title<R: Runtime>(app: &AppHandle<R>, project_id: &str) -> String {
-    let name = app
-        .try_state::<Arc<crate::core::Core<R>>>()
-        .and_then(|core| core.project(project_id).ok().map(|p| p.name))
-        .unwrap_or_else(|| project_id.to_string());
-    format!("{name} · Pages")
 }
 
 /// Where each webview was last placed, by label: what `open_devtools` gives it back on macOS.
@@ -686,103 +594,14 @@ fn gtk_layout_of(view: &gtk::Widget) -> Option<gtk::Layout> {
     Some(layout)
 }
 
-/// The bar and the page shown of the « Pages » window of project `project_id`, at its size.
-fn lay_out<R: Runtime>(app: &AppHandle<R>, pages: &Pages, project_id: &str) {
-    let Some(window) = app.get_window(&window_label(project_id)) else {
-        return;
-    };
-    let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) else {
-        return;
-    };
-    let (w, h) = (size.width as f64 / scale, size.height as f64 / scale);
-    if let Some(bar) = app.get_webview(&bar_label(project_id)) {
-        let _ = set_bounds(
-            &bar,
-            Bounds {
-                x: 0.0,
-                y: 0.0,
-                width: w,
-                height: BAR_HEIGHT,
-            },
-        );
-    }
-    let shown = pages.shown_in_window(project_id);
-    for p in pages
-        .of_project(project_id)
-        .into_iter()
-        .filter(|p| p.detached)
-    {
-        let Some(page) = app.get_webview(&page_label(&p.agent_id)) else {
-            continue;
-        };
-        if shown.as_deref() == Some(p.agent_id.as_str()) {
-            let (pw, left) = device_fit(p.mode, w);
-            let _ = set_bounds(
-                &page,
-                Bounds {
-                    x: left,
-                    y: BAR_HEIGHT,
-                    width: pw,
-                    height: (h - BAR_HEIGHT).max(1.0),
-                },
-            );
-            let _ = page.show();
-        } else {
-            let _ = page.hide();
-        }
-    }
-}
-
-/// The « Pages » window of the project shows the page of agent `agent_id`, and comes to the front.
-pub fn show_in_window<R: Runtime>(
-    app: &AppHandle<R>,
-    pages: &Arc<Pages>,
-    project_id: &str,
-    agent_id: &str,
-) -> Result<(), String> {
-    pages.show_in_window(project_id, Some(agent_id));
-    lay_out(app, pages, project_id);
-    if let Some(w) = app.get_window(&window_label(project_id)) {
-        let _ = w.show();
-        let _ = w.unminimize();
-        let _ = w.set_focus();
-    }
-    tell_bar(app, project_id, pages);
-    Ok(())
-}
-
-/// The pages of a « Pages » window and the one it shows.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PagesOf {
-    pub pages: Vec<PageView>,
-    pub shown: Option<String>,
-}
-
-/// The bar of the « Pages » window of the project reads its pages again.
-pub fn tell_bar<R: Runtime>(app: &AppHandle<R>, project_id: &str, pages: &Pages) {
-    use tauri::Emitter;
-    let _ = app.emit_to(
-        tauri::EventTarget::webview(bar_label(project_id)),
-        "devpages",
-        PagesOf {
-            pages: pages.of_project(project_id),
-            shown: pages.shown_in_window(project_id),
-        },
-    );
-}
-
-/// The page of agent `agent_id` in the agent's view: placed at `bounds` and shown, or hidden.
+/// The page `agent_id` in the window: placed at `bounds` and shown, or hidden.
 pub fn place<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Pages,
     agent_id: &str,
     bounds: Option<Bounds>,
 ) -> Result<(), String> {
-    let Some(page) = pages.get(agent_id) else {
-        return Ok(());
-    };
-    if page.detached {
+    if pages.get(agent_id).is_none() {
         return Ok(());
     }
     let Some(webview) = app.get_webview(&page_label(agent_id)) else {
@@ -820,22 +639,10 @@ pub fn go<R: Runtime>(
     }
 }
 
-/// Shows the page of agent `agent_id` at `mode`: in the « Pages » window, laid out again at once
-/// (in the agent's view, the window places it by its mode).
-pub fn set_mode<R: Runtime>(
-    app: &AppHandle<R>,
-    pages: &Pages,
-    agent_id: &str,
-    mode: PageMode,
-) -> Result<(), String> {
+/// Shows the page `agent_id` at `mode` (the window places it by its mode).
+pub fn set_mode(pages: &Pages, agent_id: &str, mode: PageMode) -> Result<(), String> {
     if !pages.set_mode(agent_id, mode) {
         return Err("no page for this agent".into());
-    }
-    if let Some(p) = pages.get(agent_id) {
-        if p.detached {
-            lay_out(app, pages, &p.project_id);
-            tell_bar(app, &p.project_id, pages);
-        }
     }
     Ok(())
 }
@@ -901,60 +708,6 @@ fn detach_inspector(view: *mut objc2::runtime::AnyObject) {
     }
 }
 
-/// The next page the « Pages » window of `project_id` shows, when the one it showed leaves it.
-fn next_shown(pages: &Pages, project_id: &str, leaving: &str) {
-    if pages.shown_in_window(project_id).as_deref() == Some(leaving) {
-        let next = pages
-            .of_project(project_id)
-            .into_iter()
-            .find(|p| p.detached && p.agent_id != leaving)
-            .map(|p| p.agent_id);
-        pages.show_in_window(project_id, next.as_deref());
-    }
-}
-
-/// Moves the page of agent `agent_id` to its project's « Pages » window (`detached`), or back to the
-/// agent's view (hidden until placed). The page keeps its state, it is not loaded again.
-pub fn detach<R: Runtime>(
-    app: &AppHandle<R>,
-    pages: &Arc<Pages>,
-    agent_id: &str,
-    detached: bool,
-) -> Result<PageView, String> {
-    let page = pages.get(agent_id).ok_or("no page for this agent")?;
-    if page.agentless && !detached {
-        return Err("the page of a launch in the project has no agent to go back to".into());
-    }
-    let webview = app
-        .get_webview(&page_label(agent_id))
-        .ok_or("no page for this agent")?;
-    if detached {
-        let window = pages_window(app, pages, &page.project_id)?;
-        webview.reparent(&window).map_err(|e| e.to_string())?;
-        let page = pages.set_detached(agent_id, true).ok_or("gone")?;
-        show_in_window(app, pages, &page.project_id, agent_id)?;
-        return Ok(page);
-    }
-    let main = app.get_window("main").ok_or("no main window")?;
-    let _ = webview.hide();
-    webview.reparent(&main).map_err(|e| e.to_string())?;
-    next_shown(pages, &page.project_id, agent_id);
-    let page = pages.set_detached(agent_id, false).ok_or("gone")?;
-    lay_out(app, pages, &page.project_id);
-    tell_bar(app, &page.project_id, pages);
-    // The window has no tab left: it closes.
-    if !pages
-        .of_project(&page.project_id)
-        .iter()
-        .any(|p| p.detached)
-    {
-        if let Some(w) = app.get_window(&window_label(&page.project_id)) {
-            let _ = w.close();
-        }
-    }
-    Ok(page)
-}
-
 /// Closes the page of agent `agent_id` (its agent gone, its ticket done).
 pub fn close<R: Runtime>(
     app: &AppHandle<R>,
@@ -964,15 +717,6 @@ pub fn close<R: Runtime>(
     if let Some(w) = app.get_webview(&page_label(agent_id)) {
         let _ = w.close();
     }
-    if let Some(page) = pages.get(agent_id) {
-        if page.detached {
-            next_shown(pages, &page.project_id, agent_id);
-        }
-        pages.remove(agent_id);
-        if page.detached {
-            lay_out(app, pages, &page.project_id);
-            tell_bar(app, &page.project_id, pages);
-        }
-    }
+    pages.remove(agent_id);
     Ok(())
 }
