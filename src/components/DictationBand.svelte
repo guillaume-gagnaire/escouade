@@ -43,6 +43,7 @@
       {#if live}<span class="live-tag"><i></i>{t('voice.panel.live', { service: service.label })}</span>{/if}
       {#if phase === 'listening'}
         <span class="hint">{t('voice.panel.keys', { key, escape: keyLabel('Esc') })}</span>
+        <span class="hint-short">{t('voice.panel.keysShort')}</span>
       {/if}
     {:else if phase === 'offer' && dictation.offer}
       <Icon name="mic" size={14} />
@@ -130,6 +131,15 @@
   .live-tag + .hint {
     margin-left: 0;
   }
+  /* The short form, for a narrow composer: the second click named all the same (ESC-664). */
+  .hint-short {
+    display: none;
+    flex: none;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
   /* The model to download, the first time: what it is, then its buttons or its gauge. */
   .dict.offer {
     display: grid;
@@ -163,10 +173,14 @@
   .dl .gauge .fill {
     background: var(--p-ink);
   }
-  /* A narrow composer keeps the level, the words and the time; the keys go (the microphone's tooltip says them). */
+  /* A narrow composer keeps the level, the words and the time; the keys go (the microphone's tooltip says them), not the
+     second click on the microphone, which a user did not guess (ESC-664). */
   @container conv (max-width: 760px) {
     .hint {
       display: none;
+    }
+    .hint-short {
+      display: inline;
     }
   }
 </style>

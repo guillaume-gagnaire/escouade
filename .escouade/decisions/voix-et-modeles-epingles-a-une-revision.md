@@ -11,7 +11,7 @@ tickets: ["ESC-664"]
 documents: []
 supersedes: []
 superseded_by: null
-changes: [{"page":"voix/dictee","added":5,"removed":2},{"page":"voix/conversation-vocale","added":4,"removed":0},{"page":"docs/recherche-par-le-sens","added":1,"removed":1}]
+changes: [{"page":"voix/dictee","added":7,"removed":2},{"page":"voix/conversation-vocale","added":4,"removed":0},{"page":"docs/recherche-par-le-sens","added":1,"removed":1}]
 accepted_at: ""
 accepted_by: ""
 ---

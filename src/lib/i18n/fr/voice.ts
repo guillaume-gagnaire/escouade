@@ -16,6 +16,8 @@ export default {
     /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape; the second click on
      * the microphone named, which a user did not guess (ESC-664). */
     keys: 'Reclique sur le micro ou {key} pour écrire ce que tu as dit · {escape} pour annuler',
+    /** Its short form, in a narrow composer (ESC-664). */
+    keysShort: 'Reclique sur le micro pour écrire ce que tu as dit',
     listening: 'À l’écoute',
     hint: 'Reclique sur le micro ou {key} pour écrire ce que tu as dit · Échap pour annuler',
     holdHint: 'Relâche pour finir · Échap pour annuler',

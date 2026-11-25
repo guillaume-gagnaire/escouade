@@ -14,6 +14,7 @@ export default defineZone('voice', {
     live: '{service} · live',
     /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape. */
     keys: 'Click the mic again or {key} to type what you said · {escape} to cancel',
+    keysShort: 'Click the mic again to type what you said',
     listening: 'Listening',
     hint: 'Click the mic again or {key} to type what you said · Esc to cancel',
     holdHint: 'Let go to end · Esc to cancel',

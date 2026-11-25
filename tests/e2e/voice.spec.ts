@@ -120,6 +120,11 @@ test.describe('dictation from a WAV file', () => {
       .poll(async () => Number(await page.getByRole('meter', { name: 'Niveau du micro' }).getAttribute('aria-valuenow')))
       .toBeGreaterThan(30);
     await expect(panel(page)).toContainText('0:01');
+    // It says how to end it: a second click on the microphone, which a user did not guess (ESC-664).
+    // Seen, at every width: the keys in a wide composer, the short form in a narrow one.
+    await expect(panel(page).locator('.hint, .hint-short').filter({ visible: true })).toContainText(
+      /^Reclique sur le micro (ou [^ ]+ )?pour écrire ce que tu as dit/,
+    );
     await mic(page).click();
     await expect(box).toHaveValue(`Merci, puis ${SAID}`);
     await expect(panel(page)).toHaveCount(0);
@@ -189,6 +194,8 @@ test.describe('dictation, the first time', () => {
     await expect.poll(async () => Number(await page.getByRole('progressbar').getAttribute('aria-valuenow'))).toBeGreaterThan(0);
     // The bytes were not the model's: refused, and nothing kept.
     await expect(page.getByText(/somme de contrôle différente/)).toBeVisible({ timeout: 30_000 });
+    // Said plainly: the file published may have changed, and it is for Escouade to update (ESC-664).
+    await expect(page.getByText(/c’est à Escouade de se mettre à jour/)).toBeVisible();
     expect(asked).toContain('/models/ggml-base.bin');
     const dir = path.join(app.data, 'voice', 'models');
     expect(fs.existsSync(dir) ? fs.readdirSync(dir) : []).toEqual([]);

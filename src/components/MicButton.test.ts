@@ -76,6 +76,8 @@ describe('MicButton in the composer', () => {
     await click(mic());
     await waitFor(() => expect(mic()).toHaveAttribute('aria-pressed', 'true'));
     expect(panel()).toHaveTextContent('Click the mic again or Ctrl+Shift+Space to type what you said · Esc to cancel');
+    // A narrow composer hides the keys, never the second click: its short form stays (the band's container query).
+    expect(panel()!.querySelector('.hint-short')).toHaveTextContent(/^Click the mic again to type what you said$/);
   });
 
   it('a click listens, shows the level and the time, a second puts the text at the cursor, unsent', async () => {

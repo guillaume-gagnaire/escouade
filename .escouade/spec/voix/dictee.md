@@ -122,3 +122,7 @@ Chacun des cinq services est un plugin en WASM (`dev.escouade.<service>`), qui n
 - **Un plugin qui ne démarre pas** se dit au premier appel, avec le même message que le réseau (« <service> ne répond pas : … »), et son journal dit pourquoi. Il n'y a pas de repli : le cœur n'a plus de code pour ces services. Tant qu'il n'a pas de plugin, un service reste visible dans Réglages › Voix et sa clé s'y enregistre. Coupé ou désinstallé, il n'y est plus.
 
 Un plugin a 4 flux en direct à la fois au plus : au-delà, le son part entier par requête, comme pour tout flux qui ne s'ouvre pas.
+
+## Comment finir, dans un compositeur étroit
+
+Ceci précise *Parler*. Dans un compositeur de moins de 760 px, la bande de la dictée cache les touches, mais jamais le second clic. Elle montre alors la forme courte : « Reclique sur le micro pour écrire ce que tu as dit » (« Click the mic again to type what you said »). Avant la 2.2.12, rien n'y disait comment finir.
