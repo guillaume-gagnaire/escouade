@@ -29,6 +29,7 @@ const TEAM: TeamView = {
   alarm: null,
   invitations: [],
   snapshotAlerts: [],
+  dropAlerts: [],
   lastError: null,
 };
 

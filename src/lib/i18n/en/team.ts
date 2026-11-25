@@ -88,6 +88,18 @@ export default defineZone('team', {
     remove: 'Remove the snapshot',
     dismiss: 'Hide',
   },
+  drops: {
+    title: 'Entries the server’s operator removed',
+    lead: 'The team server’s operator removed these entries, which blocked the team or a project. The devices read on; if nobody asked for it, ask the operator why.',
+    team: 'The team’s stream · entry {seq}',
+    item: '{project} · entry {seq}',
+    commit: 'A commit (epoch {epoch})',
+    message: 'A message',
+    writtenBy: 'Written on {date} by device {device}',
+    writtenByRole: 'Written on {date} by device {device} ({role})',
+    writtenByMe: 'Written on {date} by this device',
+    dropped: 'Removed on {date}',
+  },
   alarm: {
     title: 'The server shows two versions of the team: contact an administrator.',
     rollback: 'The server went back on what this device had already read.',

@@ -449,3 +449,79 @@ async fn the_session_renews_itself_and_comes_back_after_a_restart() {
     assert!(alice.get_file(object(9)).await.unwrap().is_none());
     let _ = DeviceKind::Device;
 }
+
+/// SR2-02, the operator's way out: a member's commit of bytes nobody reads freezes the whole team; the server's
+/// operator removes it (`drop-entry`); every device reads on past the hole, the administrator removes the member, and
+/// the administrators are told what went. The last entry a device read, removed, is no rollback either.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_operator_removes_the_commit_that_froze_the_team() {
+    use escouade_team_server::db::Stream;
+    let w = World::new().await;
+    let (pa, pb, pc) = (w.place(), w.place(), w.place());
+    let mut alice = w.create(&pa, member(1)).await;
+    let mut bob = w.join(&mut alice, &pb, member(2), Role::Member).await;
+    let mut carol = w.join(&mut alice, &pc, member(3), Role::Member).await;
+    bob.sync().await.unwrap();
+    carol.sync().await.unwrap();
+    let epoch = alice.epoch().unwrap();
+    let seq = bob.client().append_commit(epoch, b"garbage").await.unwrap();
+    assert!(alice.sync().await.is_err(), "the team is frozen");
+    assert!(carol.sync().await.is_err(), "the team is frozen");
+    assert!(alice.remove_member(member(2)).await.is_err());
+
+    let store = &w.server.server.app().store;
+    store
+        .drop_entry(alice.id(), Stream::Team, seq, "operator".into(), 42)
+        .await
+        .unwrap()
+        .unwrap();
+    alice.sync().await.unwrap();
+    carol.sync().await.unwrap();
+    alice.remove_member(member(2)).await.unwrap();
+    carol.sync().await.unwrap();
+    assert_eq!(carol.epoch().unwrap(), alice.epoch().unwrap());
+    assert_eq!(carol.roster().unwrap(), alice.roster().unwrap());
+    // The administrator is told; a member is not.
+    let served = alice.serve(NOW).await.unwrap();
+    assert_eq!(served.drop_alerts, 1);
+    let alerts = alice.drop_alerts();
+    assert_eq!(alerts.len(), 1);
+    assert_eq!(
+        (
+            alerts[0].project,
+            alerts[0].seq,
+            alerts[0].commit,
+            alerts[0].epoch
+        ),
+        (None, seq, true, Some(epoch))
+    );
+    assert_eq!(alerts[0].dropped_at, 42);
+    assert_eq!(
+        alice.serve(NOW + 1).await.unwrap().drop_alerts,
+        0,
+        "told once"
+    );
+    carol.serve(NOW).await.unwrap();
+    assert!(carol.drop_alerts().is_empty());
+
+    // The last entry Carol read, removed by the operator: a hole, not a rollback.
+    let m = alice
+        .client()
+        .append_message(b"not understood")
+        .await
+        .unwrap();
+    carol.sync().await.unwrap();
+    store
+        .drop_entry(alice.id(), Stream::Team, m, "operator".into(), 43)
+        .await
+        .unwrap()
+        .unwrap();
+    carol.sync().await.unwrap();
+    alice.rotate().await.unwrap();
+    carol.sync().await.unwrap();
+    assert_eq!(carol.epoch().unwrap(), alice.epoch().unwrap());
+    // Reading the list again (five minutes later), the administrator is told of the second one.
+    assert_eq!(alice.serve(NOW + 400).await.unwrap().drop_alerts, 1);
+    assert_eq!(alice.drop_alerts()[0].seq, m, "the newest first");
+    w.finish().await;
+}

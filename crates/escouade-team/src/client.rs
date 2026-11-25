@@ -1197,6 +1197,39 @@ impl ServerClient {
         Ok(ok_cbor::<UnreadableSnapshots>(reply)?.snapshots)
     }
 
+    /// The entries the server's operator removed from the team's streams (`drop-entry`, SR2-02), the oldest first. A
+    /// server that does not list them (before SR2-02) lists none.
+    pub async fn dropped(&self) -> Result<Vec<DroppedInfo>, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Get,
+                path: "/v1/dropped".into(),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        if reply.status == 404 {
+            return Ok(Vec::new());
+        }
+        Ok(ok_cbor::<DroppedEntries>(reply)?.dropped)
+    }
+
+    /// Whether the server's operator removed the entry `seq` of a stream (`project` None: the team's), the very one
+    /// this device read (its digest): a hole, said to the administrators, rather than a rollback (SR2-02).
+    pub async fn was_dropped(
+        &self,
+        project: Option<&[u8; 16]>,
+        seq: u64,
+        digest: &[u8; 32],
+    ) -> Result<bool, ClientError> {
+        Ok(self.dropped().await?.iter().any(|d| {
+            d.seq == seq
+                && d.project.as_deref() == project.map(|p| p.as_slice())
+                && d.digest == digest.as_slice()
+        }))
+    }
+
     /// Writes an encrypted file, once (refused if it exists).
     pub async fn put_file(&self, id: &[u8; 16], bytes: Vec<u8>) -> Result<(), ClientError> {
         let reply = self

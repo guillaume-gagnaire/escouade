@@ -5,7 +5,15 @@
   import { t } from '../../lib/i18n';
   import { fDateTime } from '../../lib/format';
   import { isOpen } from '../../lib/team-words';
-  import { errorText, teams, teamsApi, type InvitationView, type SnapshotAlertView, type TeamView } from '../../lib/teams.svelte';
+  import {
+    errorText,
+    teams,
+    teamsApi,
+    type DropAlertView,
+    type InvitationView,
+    type SnapshotAlertView,
+    type TeamView,
+  } from '../../lib/teams.svelte';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
   import ForkAlarm from './ForkAlarm.svelte';
@@ -54,6 +62,25 @@
     if (!a.postedByRole) return t('team.snapshots.postedBy', { date, device });
     const role = a.postedByRole === 'admin' ? t('team.card.admin') : t('team.card.member');
     return t('team.snapshots.postedByRole', { date, device, role });
+  }
+
+  /** A stream an entry was removed from (SR2-02): the team's, a Kanban of the team by its name, a stream of the team
+   * by its own name (`escouade/project`…), else the start of its id. */
+  function dropWhere(a: DropAlertView): string {
+    if (a.project === null) return t('team.drops.team', { seq: a.seq });
+    const name = app.projects.find((p) => p.teamProject === a.project)?.name;
+    const bytes = a.project.match(/../g)?.map((h) => parseInt(h, 16)) ?? [];
+    const own = bytes.every((b) => b >= 0x20 && b < 0x7f) ? String.fromCharCode(...bytes) : null;
+    return t('team.drops.item', { project: name ?? own ?? a.project.slice(0, 8), seq: a.seq });
+  }
+
+  function writtenBy(a: DropAlertView): string {
+    const date = fDateTime(a.writtenAt * 1000);
+    if (a.writtenByMe) return t('team.drops.writtenByMe', { date });
+    const device = a.writtenBy.slice(0, 8);
+    if (!a.writtenByRole) return t('team.drops.writtenBy', { date, device });
+    const role = a.writtenByRole === 'admin' ? t('team.card.admin') : t('team.card.member');
+    return t('team.drops.writtenByRole', { date, device, role });
   }
 
   const roleLabel = (team: TeamView) =>
@@ -130,6 +157,24 @@
                   >{t('team.snapshots.dismiss')}</button
                 >
               {/if}
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    {#if team.joined && !team.alarm && team.role === 'admin' && team.dropAlerts?.length}
+      <div class="snaps" role="alert" aria-label={t('team.drops.title')}>
+        <span class="lbl">{t('team.drops.title')}</span>
+        <p>{t('team.drops.lead')}</p>
+        <ul>
+          {#each team.dropAlerts as a ((a.project ?? 'team') + ':' + a.seq)}
+            <li>
+              <span class="what">{dropWhere(a)}</span>
+              <span class="st"
+                >{a.commit ? t('team.drops.commit', { epoch: a.epoch ?? '?' }) : t('team.drops.message')} · {writtenBy(a)}</span
+              >
+              <span class="st">{t('team.drops.dropped', { date: fDateTime(a.droppedAt * 1000) })}</span>
             </li>
           {/each}
         </ul>

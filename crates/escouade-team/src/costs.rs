@@ -384,6 +384,8 @@ async fn read_keys(team: &Team, state: &mut State) -> Result<(), Error> {
                     return Ok(());
                 }
             }
+            // The very entry removed by the server's operator (SR2-02): a hole, the reading goes on after it.
+            _ if client.was_dropped(Some(&KEY_STREAM.0), seq, &d).await? => state.key_last = None,
             _ => {
                 state.alarm = Some(Alarm::Rollback);
                 return Ok(());

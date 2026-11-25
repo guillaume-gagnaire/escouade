@@ -31,6 +31,7 @@ function team(over: Partial<TeamView> = {}): TeamView {
     alarm: null,
     invitations: [],
     snapshotAlerts: [],
+    dropAlerts: [],
     lastError: null,
     ...over,
   };
@@ -115,6 +116,38 @@ describe('the screens of the team server (TS-3)', () => {
     await userEvent.click(within(band).getByRole('button', { name: 'Retirer l’instantané' }));
     expect(backend.called('team_remove_snapshot')[0].args).toEqual({ team: team().id, project: alert.project, upto: 42 });
     expect(screen.queryByRole('alert', { name: 'Instantanés écartés' })).toBeNull();
+  });
+
+  it('tells an administrator the entries the server’s operator removed, never a member (SR2-02)', async () => {
+    const drop = (project: string | null, seq: number, commit: boolean) => ({
+      project,
+      seq,
+      commit,
+      epoch: commit ? 3 : null,
+      writtenBy: '0123456789abcdef0123456789abcdef',
+      writtenByRole: 'member' as const,
+      writtenByMe: false,
+      writtenAt: 1_800_000_000,
+      droppedAt: 1_800_000_100,
+    });
+    const catalog = Array.from(new TextEncoder().encode('escouade/project'), (b) => b.toString(16).padStart(2, '0')).join('');
+    const alerts = [drop(null, 12, true), drop('aa'.repeat(16), 5, false), drop(catalog, 2, false)];
+    app.projects = [project({ id: 'p1', name: 'Atlas', teamProject: 'aa'.repeat(16) })];
+    fakeBackend({ team_list: () => [team({ dropAlerts: alerts })] });
+    const { unmount } = render(TeamModal);
+    const band = await screen.findByRole('alert', { name: 'Entrées retirées par l’opérateur du serveur' });
+    expect(band).toHaveTextContent('Flux de l’équipe · entrée 12');
+    expect(band).toHaveTextContent('Un commit (époque 3)');
+    expect(band).toHaveTextContent(/par l’appareil 01234567 \(Membre\)/);
+    expect(band).toHaveTextContent('Atlas · entrée 5');
+    expect(band).toHaveTextContent('escouade/project · entrée 2');
+    unmount();
+    teams.list = [];
+    teams.loaded = false;
+    fakeBackend({ team_list: () => [team({ role: 'member', dropAlerts: alerts })] });
+    render(TeamModal);
+    await screen.findByRole('region', { name: 'ACME' });
+    expect(screen.queryByRole('alert', { name: 'Entrées retirées par l’opérateur du serveur' })).toBeNull();
   });
 
   it('lets a member hide a snapshot this device put aside (SR2-01)', async () => {

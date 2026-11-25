@@ -49,7 +49,7 @@ tar -xzf escouade-team-server-$v-linux-x64.tar.gz
 
 Pour le construire depuis le dépôt d’Escouade : `cd src-tauri && cargo build --release -p escouade-team-server` (le binaire : `src-tauri/target/release/escouade-team-server`).
 
-`escouade-team-server --help`, ou le programme lancé sans argument, liste les commandes ; `escouade-team-server init --help` (de même `serve --help`, `recovery-token --help`, ou `help serve`) donne les options d’une commande, leurs variables d’environnement et leurs valeurs par défaut, sans rien créer ni écouter. `--version` donne la version. Une option inconnue, ou qui n’est pas celle de la commande, est refusée (code de sortie 2).
+`escouade-team-server --help`, ou le programme lancé sans argument, liste les commandes ; `escouade-team-server init --help` (de même `serve --help`, `recovery-token --help`, `drop-entry --help`, ou `help serve`) donne les options d’une commande, leurs variables d’environnement et leurs valeurs par défaut, sans rien créer ni écouter. `--version` donne la version. Une option inconnue, ou qui n’est pas celle de la commande, est refusée (code de sortie 2).
 
 ## Les commandes
 
@@ -58,8 +58,9 @@ Pour le construire depuis le dépôt d’Escouade : `cd src-tauri && cargo build
 | `escouade-team-server init` | Crée la base si elle n’existe pas, puis affiche un jeton à usage unique qui crée une équipe. Relancée, elle donne un autre jeton, pour une autre équipe sur le même serveur. |
 | `escouade-team-server serve` | Sert, jusqu’à `Ctrl+C` ou l’arrêt du service. |
 | `escouade-team-server recovery-token --team <identifiant>` | Affiche un jeton à usage unique, valable 7 jours au plus, pour le détenteur de la clé de secours d’une équipe dont tous les administrateurs ont perdu leurs appareils (voir [Récupérer une équipe](#recuperer-une-equipe)). |
+| `escouade-team-server drop-entry --team <identifiant> --stream team --seq <n>` | Retire une entrée qui bloque l’équipe ou un projet (`--project <identifiant>`), après confirmation, et la note dans l’audit de la base (voir [Dégeler une équipe ou un projet](#degeler-une-equipe-ou-un-projet)). |
 
-Les trois prennent les mêmes options de base et de fichiers : passe à `init` et à `recovery-token` les mêmes que celles de `serve`.
+Toutes prennent les mêmes options de base et de fichiers : passe à `init`, `recovery-token` et `drop-entry` les mêmes que celles de `serve`.
 
 ## Les options
 
@@ -83,7 +84,7 @@ Chaque option a sa variable d’environnement ; l’option passe devant la varia
 | `--team-quota <octets>` | `ESCOUADE_TEAM_QUOTA` | `2147483648` (2 Gio) | Ce qu’une équipe garde en tout : ses flux et ses fichiers. |
 | aucune | `RUST_LOG` | `info` | Le niveau du journal. |
 
-`ESCOUADE_TEAM_TRUST_PROXY` vaut `1` ou `true`. `recovery-token` lit aussi l’identifiant de l’équipe dans `ESCOUADE_TEAM_ID`.
+`ESCOUADE_TEAM_TRUST_PROXY` vaut `1` ou `true`. `recovery-token` et `drop-entry` lisent aussi l’identifiant de l’équipe dans `ESCOUADE_TEAM_ID`.
 
 ## Avec Docker et Caddy
 
@@ -197,6 +198,23 @@ escouade-team-server recovery-token --team <identifiant> --data /var/lib/escouad
 L’identifiant de l’équipe (32 chiffres hexadécimaux) est montré dans Escouade, à la création de l’équipe et sur sa carte (« Identifiant de l’équipe »). Le jeton inscrit un appareil comme administrateur du serveur ; il ne donne aucune clé : les 24 mots les donnent. Le détenteur les tape dans « Récupérer une équipe », avec les six mots de l’équipe de la même feuille, l’adresse du serveur et le jeton.
 
 Avec Docker : `docker compose run --rm team-server recovery-token --team <identifiant>`.
+
+## Dégeler une équipe ou un projet
+
+Le serveur garde le premier commit d’une époque sans pouvoir le lire. Si ce commit ne s’ouvre pas sur les appareils (des octets quelconques, ou un commit contraire aux règles de l’équipe), l’équipe, ou le projet, est gelée : les apps des membres disent qu’elles ne lisent plus l’équipe, et l’administrateur ne peut ni retirer le membre en cause ni changer les clés. Quand un administrateur te le signale, avec le numéro de l’entrée en cause, retire-la :
+
+```sh
+escouade-team-server drop-entry --team <identifiant> --stream team --seq <n> --data /var/lib/escouade-team-server
+```
+
+Pour le flux d’un projet : `--project <identifiant du projet>` au lieu de `--stream team` ; pour un flux propre à l’équipe, son nom (`--stream escouade/setting`). La commande montre l’entrée (son genre, son époque, l’appareil qui l’a écrite, sa date, sa taille, son empreinte) et demande de taper `yes` ; `--yes` s’en passe, `--by <nom>` dit qui la retire (le nom du compte sinon). Sans `--team`, elle ne fait rien. Avec Docker : `docker compose run --rm team-server drop-entry --team <identifiant> --stream team --seq <n>`.
+
+- **Un commit doit être le dernier de son flux** : son époque redevient libre, et l’administrateur peut retirer le membre ou changer les clés. Si plusieurs commits illisibles se suivent, retire-les du plus récent au plus ancien.
+- **L’audit** reste dans la base (table `dropped_entries`) : qui, quand, quel flux, quel numéro, l’empreinte de l’entrée retirée, jamais son contenu. `drop-entry --team <identifiant> --list` le relit. Le journal du serveur n’en garde qu’une ligne, sans identifiant.
+- **Les appareils voient le trou** et lisent la suite ; les administrateurs le voient sur la carte de l’équipe (« Entrées retirées par l’opérateur du serveur »).
+
+> [!WARNING]
+> Ne retire que l’entrée qui bloque. Retirer un commit que des appareils ont lu leur montre une fourche ; retirer une opération valide d’un projet fait refuser les suivantes de son appareil ; retirer une entrée d’un administrateur (liste des projets, réglages imposés, store privé) l’efface pour tous. La commande ne lit ni ne rend une entrée : le serveur n’a que des octets chiffrés.
 
 ## Mettre à jour
 

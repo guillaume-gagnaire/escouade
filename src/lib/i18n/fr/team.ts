@@ -92,6 +92,18 @@ export default {
     remove: 'Retirer l’instantané',
     dismiss: 'Masquer',
   },
+  drops: {
+    title: 'Entrées retirées par l’opérateur du serveur',
+    lead: 'L’opérateur du serveur d’équipe a retiré ces entrées, qui bloquaient l’équipe ou un projet. Les appareils lisent la suite ; si personne ne le lui a demandé, demande-lui pourquoi.',
+    team: 'Flux de l’équipe · entrée {seq}',
+    item: '{project} · entrée {seq}',
+    commit: 'Un commit (époque {epoch})',
+    message: 'Un message',
+    writtenBy: 'Écrit le {date} par l’appareil {device}',
+    writtenByRole: 'Écrit le {date} par l’appareil {device} ({role})',
+    writtenByMe: 'Écrit le {date} par cet appareil',
+    dropped: 'Retiré le {date}',
+  },
   alarm: {
     title: 'Le serveur montre deux versions de l’équipe : contacte un administrateur.',
     rollback: 'Le serveur est revenu en arrière sur ce que cet appareil avait déjà lu.',

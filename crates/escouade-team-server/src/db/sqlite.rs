@@ -111,6 +111,20 @@ CREATE TABLE IF NOT EXISTS project_keys (
     n INTEGER NOT NULL,
     PRIMARY KEY (team_id, project_id)
 );
+CREATE TABLE IF NOT EXISTS dropped_entries (
+    team_id BLOB NOT NULL,
+    project_id BLOB,
+    seq INTEGER NOT NULL,
+    kind INTEGER NOT NULL,
+    epoch INTEGER,
+    device_id BLOB NOT NULL,
+    written_at INTEGER NOT NULL,
+    size INTEGER NOT NULL,
+    digest BLOB NOT NULL,
+    operator TEXT NOT NULL,
+    at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS dropped_team ON dropped_entries(team_id);
 ";
 
 const CLAIM_COLUMNS: &str =
@@ -768,6 +782,147 @@ impl Store for Sqlite {
                 read_entries(c, &team, stream, since, page, false)?,
                 page,
             ))
+        })
+        .await
+    }
+
+    async fn drop_entry(
+        &self,
+        team: Id,
+        stream: Stream,
+        seq: u64,
+        operator: String,
+        now: i64,
+    ) -> Result<Option<Dropped>> {
+        self.run(move |c| {
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let commits: Option<i64> = tx
+                .query_row("SELECT commits FROM teams WHERE id = ?1", [team.as_slice()], |r| r.get(0))
+                .optional()?;
+            let Some(team_commits) = commits else {
+                return Err(StoreError::Drop("the base holds no such team"));
+            };
+            let page = Page { entries: 1, bytes: usize::MAX };
+            let Some(entry) = read_entries(&tx, &team, stream, seq, page, true)?
+                .into_iter()
+                .next()
+                .filter(|e| e.seq == seq)
+            else {
+                return Ok(None);
+            };
+            let is_commit = entry.kind == Kind::Commit;
+            let project = match stream {
+                Stream::Team => None,
+                Stream::Project(p) => Some(p),
+            };
+            if is_commit {
+                let stream_commits = match project {
+                    None => team_commits,
+                    Some(p) => tx.query_row(
+                        "SELECT commits FROM projects WHERE team_id = ?1 AND id = ?2",
+                        params![team.as_slice(), p.as_slice()],
+                        |r| r.get(0),
+                    )?,
+                };
+                if entry.epoch.map(|e| e as i64 + 1) != Some(stream_commits) {
+                    return Err(StoreError::Drop(
+                        "a later commit follows this one: remove the later ones first",
+                    ));
+                }
+            }
+            let size = entry.payload.len() as i64;
+            match project {
+                None => {
+                    tx.execute(
+                        "DELETE FROM team_entries WHERE team_id = ?1 AND seq = ?2",
+                        params![team.as_slice(), seq as i64],
+                    )?;
+                    tx.execute(
+                        "UPDATE teams SET commits = commits - ?2 WHERE id = ?1",
+                        params![team.as_slice(), is_commit as i64],
+                    )?;
+                }
+                Some(p) => {
+                    tx.execute(
+                        "DELETE FROM project_entries WHERE team_id = ?1 AND project_id = ?2 AND seq = ?3",
+                        params![team.as_slice(), p.as_slice(), seq as i64],
+                    )?;
+                    tx.execute(
+                        "UPDATE projects SET commits = commits - ?3 WHERE team_id = ?1 AND id = ?2",
+                        params![team.as_slice(), p.as_slice(), is_commit as i64],
+                    )?;
+                }
+            }
+            tx.execute(
+                "UPDATE teams SET stored = MAX(stored - ?2, 0) WHERE id = ?1",
+                params![team.as_slice(), size],
+            )?;
+            let dropped = Dropped {
+                project,
+                seq,
+                kind: entry.kind,
+                epoch: entry.epoch,
+                device: id_of(entry.device.clone())?,
+                written_at: entry.at,
+                size: size as u64,
+                digest: entry_digest(&entry),
+                operator,
+                at: now,
+            };
+            tx.execute(
+                "INSERT INTO dropped_entries
+                 (team_id, project_id, seq, kind, epoch, device_id, written_at, size, digest, operator, at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    team.as_slice(),
+                    dropped.project.as_ref().map(|p| p.as_slice()),
+                    seq as i64,
+                    dropped.kind.code(),
+                    dropped.epoch.map(|e| e as i64),
+                    dropped.device.as_slice(),
+                    dropped.written_at,
+                    size,
+                    dropped.digest.as_slice(),
+                    dropped.operator,
+                    now
+                ],
+            )?;
+            tx.commit()?;
+            Ok(Some(dropped))
+        })
+        .await
+    }
+
+    async fn dropped(&self, team: Id) -> Result<Vec<Dropped>> {
+        self.run(move |c| {
+            let mut stmt = c.prepare_cached(
+                "SELECT project_id, seq, kind, epoch, device_id, written_at, size, digest, operator, at
+                 FROM dropped_entries WHERE team_id = ?1 ORDER BY at, rowid",
+            )?;
+            type Row = (Option<Vec<u8>>, i64, i64, Option<i64>, Vec<u8>, i64, i64, Vec<u8>, String, i64);
+            let rows = stmt.query_map([team.as_slice()], |r| -> rusqlite::Result<Row> {
+                Ok((
+                    r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?,
+                    r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?,
+                ))
+            })?;
+            let mut out = Vec::new();
+            for row in rows {
+                let (project, seq, kind, epoch, device, written_at, size, digest, operator, at) = row?;
+                out.push(Dropped {
+                    project: project.map(id_of).transpose()?,
+                    seq: seq as u64,
+                    kind: Kind::from_code(kind),
+                    epoch: epoch.map(|e| e as u64),
+                    device: id_of(device)?,
+                    written_at,
+                    size: size as u64,
+                    digest: digest.try_into().map_err(|_| backend("a digest of the wrong length"))?,
+                    operator,
+                    at,
+                });
+            }
+            Ok(out)
         })
         .await
     }

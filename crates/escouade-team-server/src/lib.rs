@@ -212,6 +212,7 @@ impl Server {
                 post(api::flag_snapshot),
             )
             .route("/v1/snapshots/unreadable", get(api::unreadable_snapshots))
+            .route("/v1/dropped", get(api::dropped))
             .route("/v1/files/usage", get(api::usage))
             .route(
                 "/v1/files/{file}",

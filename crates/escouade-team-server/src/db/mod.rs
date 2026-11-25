@@ -400,6 +400,35 @@ pub struct Unreadable {
     pub flagged_at: i64,
 }
 
+/// An entry the server's operator removed from a stream (`escouade-team-server drop-entry`, SR2-02): the line of the
+/// audit kept in the base (who, when, what, the digest of the entry removed, never its bytes), and what a device reads
+/// to tell a hole the operator made from a server that rolls back.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Dropped {
+    /// The project's stream it was removed from, None for the team's.
+    pub project: Option<Id>,
+    pub seq: u64,
+    pub kind: Kind,
+    pub epoch: Option<u64>,
+    /// The device that wrote it, when, and its size in bytes.
+    pub device: Id,
+    pub written_at: i64,
+    pub size: u64,
+    /// The SHA-256 of the entry as the server served it (its CBOR), the same a device keeps of the last one it read.
+    pub digest: [u8; 32],
+    /// Who removed it (the name the operator gave, or their account), and when.
+    pub operator: String,
+    pub at: i64,
+}
+
+/// The SHA-256 of an entry as the server serves it (its CBOR): a device keeps the same of the last entry it read.
+pub fn entry_digest(e: &Entry) -> [u8; 32] {
+    use sha2::Digest;
+    let mut out = Vec::new();
+    ciborium::into_writer(e, &mut out).expect("CBOR encodes into memory");
+    sha2::Sha256::digest(&out).into()
+}
+
 /// A token used again after its first use (a leaked invitation link): what an administrator is told.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TokenAlert {
@@ -433,6 +462,9 @@ pub enum StoreError {
     /// A snapshot older than the one kept, or beyond the stream.
     #[error("this snapshot is refused: {0}")]
     Snapshot(&'static str),
+    /// An entry the operator may not remove (`drop-entry`): no such team, or a commit some other commit follows.
+    #[error("this entry is not removed: {0}")]
+    Drop(&'static str),
     #[error("too many {0}")]
     TooMany(&'static str),
     #[error("it exists already")]
@@ -566,6 +598,22 @@ pub trait Store: Send + Sync {
     /// bytes given back to the quota (the commits stay: a device follows the project's group by them). Gives how many
     /// messages were forgotten.
     async fn prune_snapshots(&self, cut: i64) -> Result<u64>;
+
+    /// Removes the entry `seq` of a stream (the operator's `drop-entry`, SR2-02), in one transaction with the line of
+    /// the audit that says so. The stream keeps its numbering (the next entry is not renumbered: the hole shows); the
+    /// entry's bytes go back to the quota. A commit must be the stream's last one: its epoch is then free again, for a
+    /// commit that devices can read. None when the stream has no such entry; refused (`Drop`) for a team the base does
+    /// not hold, or a commit another commit follows.
+    async fn drop_entry(
+        &self,
+        team: Id,
+        stream: Stream,
+        seq: u64,
+        operator: String,
+        now: i64,
+    ) -> Result<Option<Dropped>>;
+    /// The entries removed from the team's streams by the operator, the oldest first.
+    async fn dropped(&self, team: Id) -> Result<Vec<Dropped>>;
 
     /// Reserves a file's place before its bytes are written.
     async fn reserve_file(

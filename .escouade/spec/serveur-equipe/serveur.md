@@ -2,8 +2,8 @@
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633"]
-decisions: [167,168,173,178,277,288,286]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636"]
+decisions: [167,168,173,178,277,288,286,314]
 compared: null
 ---
 
@@ -72,3 +72,16 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 - Le binaire est essayé dans un conteneur Debian nu avant tout envoi : sa version, `init` (son jeton jamais au journal), `/healthz` sur 127.0.0.1, un client sans la poignée de main refusé en 426, l'arrêt propre à SIGTERM.
 - L'image (Debian 12 slim) tourne sous son propre utilisateur (`escouade-team`), écrit dans `/data` seul (`ESCOUADE_TEAM_DATA`), écoute sur `0.0.0.0:8443` de son conteneur, et se construit depuis les sources ou depuis l'archive d'une version (`PROGRAM=archive`, celle du Release).
 - Les exemples tirent l'image publiée à l'étiquette de `ESCOUADE_TEAM_TAG` (`latest` par défaut ; `beta` ou une version pendant une bêta) : le compose derrière Caddy, qui tient TLS ; le compose de Coolify, derrière son Traefik (domaine de `SERVICE_FQDN_TEAM_8443`, `ESCOUADE_TEAM_TRUST_PROXY=1`, lecture seule, aucune capacité, aucun port publié). Leur mode d'emploi est dans la doc du site (Installer le serveur d'équipe), en français et en anglais.
+
+## Dégeler une équipe ou un projet (SR2-02)
+
+Le serveur garde le premier commit d'une époque sans pouvoir le lire, puis refuse tout autre commit de cette époque : un commit que les appareils ne lisent pas (des octets quelconques, ou un commit contraire aux règles de l'équipe) gèle l'équipe, ou le projet. En attendant que les appareils dépassent eux-mêmes un tel commit, **l'hébergeur le retire** par une commande, sans toucher à la base à la main.
+
+- `escouade-team-server drop-entry --team <id> --stream team --seq <n>` retire une entrée du flux de l'équipe ; `--project <id>` celle du flux d'un projet ; `--stream <nom>` celle d'un flux propre à l'équipe (`escouade/setting`…). En SQLite comme en PostgreSQL, dans une seule transaction.
+- **Confirmée** : la commande montre l'entrée (genre, époque, appareil qui l'a écrite, date, taille, empreinte) et attend `yes` ; `--yes` s'en passe. **Elle refuse sans l'id de l'équipe** (elle ne devine jamais l'équipe), sans flux ou avec deux, sans numéro, pour une entrée ou une équipe que la base n'a pas.
+- **Un commit doit être le dernier de son flux** : son époque redevient libre, et le commit suivant (celui de l'administrateur) la prend. Un commit que d'autres suivent est refusé : on retire les plus récents d'abord.
+- **Le flux garde sa numérotation** : le trou se voit ; les octets de l'entrée reviennent au quota.
+- **Journalisée sans contenu** : une ligne d'audit dans la base, dans la même transaction : l'équipe, le flux, le numéro, le genre et l'époque, l'appareil qui l'avait écrite et quand, sa taille, son empreinte (SHA-256 de l'entrée telle que servie), qui la retire (`--by`, ou le nom du compte) et quand. Jamais ses octets. Le journal du serveur n'en garde qu'une ligne sans identifiant, comme le reste. `drop-entry --team <id> --list` relit l'audit.
+- **Les appareils voient le trou.** Le serveur liste à chaque appareil de l'équipe les entrées retirées (`GET /v1/dropped`) : le flux (celles d'un projet aux seuls appareils qui y ont accès), le numéro, le genre et l'époque, l'appareil qui l'avait écrite et quand, l'empreinte, l'heure du retrait ; jamais qui l'a retirée. La dernière entrée qu'un appareil a lue, retirée, n'est pas un retour en arrière si son empreinte est celle qu'il en a gardée : il lit la suite. Une entrée cachée sans être listée reste un retour en arrière. Un appareil qui avait noté le commit retiré sans l'avoir pris (avant d'entrer) l'oublie, pour que le commit qui reprend l'époque ne soit pas une fourche.
+- **Les administrateurs sont prévenus** : leur appareil lit la liste au plus toutes les cinq minutes, aussitôt après un trou vu ; la carte de l'équipe montre « Entrées retirées par l'opérateur du serveur » pendant 30 jours (le flux, le numéro, commit ou message, qui l'avait écrite, quand elle a été retirée). Les membres ne le voient pas.
+- **Ce qu'elle ne permet pas** : lire une entrée ou la rendre, ni en retirer une en silence. Retirer autre chose que l'entrée qui bloque casse ce qui la suit : un commit lu par des appareils, remplacé, est une fourche pour eux ; une opération valide d'un projet fait refuser les suivantes de son appareil ; une entrée d'un administrateur (liste des projets, réglages imposés, store privé) disparaît pour tous.

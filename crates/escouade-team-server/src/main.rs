@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use escouade_team_server::config::{Config, DatabaseConfig, FilesConfig, S3Config};
+use escouade_team_server::db::{entry_digest, Kind, Page, Stream};
 use escouade_team_server::{transport, Server};
 
 macro_rules! storage_options {
@@ -55,6 +56,10 @@ USAGE:
                                            print a one-use token for the holder of a team's recovery key, the
                                            day every administrator lost their devices: it enrols one device as
                                            an administrator of the server (the 24 words give the keys, not it)
+    escouade-team-server drop-entry --team <ID> (--stream <NAME> | --project <ID>) --seq <N> [--yes]
+                                           remove one entry that blocks a team or a project (a commit the
+                                           devices cannot read past), after a confirmation; the base keeps the
+                                           line of the audit (who, when, what, its digest), never its bytes
     escouade-team-server help [COMMAND]    this help, or a command's
 
 `escouade-team-server <COMMAND> --help` lists the options of one command.
@@ -63,7 +68,7 @@ OPTIONS (and their environment variables):
 ",
     storage_options!(),
     serve_options!(),
-    "    --team <ID>               ESCOUADE_TEAM_ID              recovery-token only: the team's id\n",
+    "    --team <ID>               ESCOUADE_TEAM_ID              recovery-token, drop-entry: the team's id\n",
     tail_options!(),
 );
 
@@ -111,6 +116,36 @@ OPTIONS (and their environment variables):
     tail_options!(),
 );
 
+const HELP_DROP: &str = concat!(
+    "\
+escouade-team-server drop-entry: remove one entry of a team's stream or of a project's, the day an entry blocks it
+(a commit no device can read past: the team, or the project, no longer moves on). It shows the entry, asks for a
+confirmation (or --yes), removes it and keeps in the base the line of the audit: who (--by), when, which stream,
+which number, its kind and epoch, its digest (SHA-256), never its bytes. The stream keeps its numbering: the devices
+see the hole, tell their administrators, and read on. A commit must be the last of its stream (remove the later
+ones first): its epoch is then free again for a commit the devices can read. It neither reads an entry nor brings
+one back: the server holds only encrypted bytes. Never remove a commit the devices already read.
+
+USAGE:
+    escouade-team-server drop-entry --team <ID> --stream team --seq <N> [OPTIONS]
+    escouade-team-server drop-entry --team <ID> --project <ID> --seq <N> [OPTIONS]
+    escouade-team-server drop-entry --team <ID> --list [OPTIONS]
+
+OPTIONS (and their environment variables):
+    --team <ID>               ESCOUADE_TEAM_ID              the team's id (32 hexadecimal digits) [required]
+    --stream <NAME>                                         team (the team's stream), or one of the team's own
+                                                            streams (escouade/project, escouade/setting, ...)
+    --project <ID>                                          a project's stream (32 hexadecimal digits)
+    --seq <N>                                               the number of the entry to remove [required]
+    --by <NAME>               ESCOUADE_TEAM_OPERATOR        who removes it, for the audit [the account's name]
+    --yes                                                   remove it without asking
+    --list                                                  print the base's audit of what was removed from the
+                                                            team, and remove nothing
+",
+    storage_options!(),
+    tail_options!(),
+);
+
 struct Args {
     command: String,
     flags: Vec<(String, Option<String>)>,
@@ -142,6 +177,7 @@ fn command_help(command: &str) -> Option<&'static str> {
         "init" => Some(HELP_INIT),
         "serve" => Some(HELP_SERVE),
         "recovery-token" => Some(HELP_RECOVERY),
+        "drop-entry" => Some(HELP_DROP),
         _ => None,
     }
 }
@@ -156,6 +192,10 @@ fn command_options(command: &str) -> (Vec<&'static str>, &'static [&'static str]
             switches = &["--trust-proxy"];
         }
         "recovery-token" => valued.push("--team"),
+        "drop-entry" => {
+            valued.extend(["--team", "--stream", "--project", "--seq", "--by"]);
+            switches = &["--yes", "--list"];
+        }
         _ => {}
     }
     (valued, switches)
@@ -178,7 +218,7 @@ fn parse_from(argv: Vec<String>) -> Result<Action, String> {
                     Some(h) if it.next().is_none() => Ok(Action::Print(h.into())),
                     Some(_) => Err("help takes one command at most".into()),
                     None => Err(format!(
-                        "unknown command: {c} (init, serve, recovery-token)"
+                        "unknown command: {c} (init, serve, recovery-token, drop-entry)"
                     )),
                 },
             }
@@ -187,7 +227,7 @@ fn parse_from(argv: Vec<String>) -> Result<Action, String> {
     }
     let Some(help) = command_help(&command) else {
         return Err(format!(
-            "unknown command: {command} (init, serve, recovery-token, help)"
+            "unknown command: {command} (init, serve, recovery-token, drop-entry, help)"
         ));
     };
     let rest: Vec<String> = it.collect();
@@ -238,12 +278,19 @@ impl Args {
             .rev()
             .find(|(k, _)| k == flag)
             .and_then(|(_, v)| v.clone())
-            .or_else(|| std::env::var(env).ok().filter(|v| !v.is_empty()))
+            .or_else(|| {
+                // An option without its variable (`""`) reads none.
+                (!env.is_empty())
+                    .then(|| std::env::var(env).ok())
+                    .flatten()
+                    .filter(|v| !v.is_empty())
+            })
     }
 
     fn has(&self, flag: &str, env: &str) -> bool {
         self.flags.iter().any(|(k, _)| k == flag)
-            || std::env::var(env).is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            || !env.is_empty()
+                && std::env::var(env).is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
     }
 
     fn number(&self, flag: &str, env: &str) -> Result<Option<u64>, String> {
@@ -358,6 +405,7 @@ async fn run(args: Args) -> Result<(), String> {
             println!("Escouade asks for it with the server's address and the 24 words, in « Récupérer une équipe ».");
             Ok(())
         }
+        "drop-entry" => drop_entry(&args).await,
         "serve" => {
             let listen: SocketAddr = args
                 .get("--listen", "ESCOUADE_TEAM_LISTEN")
@@ -403,6 +451,197 @@ async fn run(args: Args) -> Result<(), String> {
         }
         other => Err(format!("unknown command: {other}")),
     }
+}
+
+/// The stream `drop-entry` names: the team's, one of the team's own (by its name), or a project's (by its id).
+fn dropped_stream(args: &Args) -> Result<(Stream, String), String> {
+    let names = || {
+        escouade_team_server::api::TEAM_STREAMS
+            .iter()
+            .map(|id| String::from_utf8_lossy(id).into_owned())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    match (args.get("--stream", ""), args.get("--project", "")) {
+        (Some(_), Some(_)) => {
+            Err("--stream and --project name one stream: give one of them only".into())
+        }
+        (None, None) => Err(
+            "drop-entry needs the stream: --stream team, --stream <name> or --project <ID>".into(),
+        ),
+        (None, Some(p)) => {
+            let id = escouade_team_server::util::id_from_hex(p.trim())
+                .ok_or("--project takes the project's id (32 hexadecimal digits)")?;
+            Ok((Stream::Project(id), format!("project {}", hex::encode(id))))
+        }
+        (Some(s), None) if s == "team" => Ok((Stream::Team, "team".into())),
+        (Some(s), None) => {
+            let own = escouade_team_server::api::TEAM_STREAMS
+                .iter()
+                .find(|id| id.as_slice() == s.as_bytes())
+                .ok_or_else(|| {
+                    format!(
+                        "--stream takes team or one of the team's own streams ({})",
+                        names()
+                    )
+                })?;
+            Ok((Stream::Project(*own), s))
+        }
+    }
+}
+
+/// Who removes an entry, for the audit: `--by`, else the account's name.
+fn operator(args: &Args) -> String {
+    args.get("--by", "ESCOUADE_TEAM_OPERATOR")
+        .or_else(|| std::env::var("USER").ok())
+        .or_else(|| std::env::var("USERNAME").ok())
+        .map(|n| {
+            n.trim()
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(80)
+                .collect::<String>()
+        })
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "unknown".into())
+}
+
+/// `drop-entry`: shows the entry, asks, removes it with its line of audit.
+async fn drop_entry(args: &Args) -> Result<(), String> {
+    let team = args
+        .get("--team", "ESCOUADE_TEAM_ID")
+        .and_then(|t| escouade_team_server::util::id_from_hex(t.trim()))
+        .ok_or(
+            "--team takes the team's id (32 hexadecimal digits, as Escouade shows it): drop-entry never guesses it",
+        )?;
+    if args.has("--list", "") {
+        return list_dropped(args, team).await;
+    }
+    let (stream, label) = dropped_stream(args)?;
+    let seq = args
+        .number("--seq", "")?
+        .filter(|n| *n > 0)
+        .ok_or("--seq takes the number of the entry to remove (1 or more)")?;
+    let by = operator(args);
+    let server = Server::open(args.config()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    let store = &server.app().store;
+    if store
+        .devices(team)
+        .await
+        .map_err(|e| e.to_string())?
+        .is_empty()
+    {
+        return Err(format!("the base holds no team {}", hex::encode(team)));
+    }
+    let page = Page {
+        entries: 1,
+        bytes: usize::MAX,
+    };
+    let (entries, _) = store
+        .read(team, stream, seq - 1, page)
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(entry) = entries.into_iter().next().filter(|e| e.seq == seq) else {
+        return Err(format!(
+            "the {label} stream of this team holds no entry {seq}: nothing removed"
+        ));
+    };
+    let what = match (entry.kind, entry.epoch) {
+        (Kind::Commit, Some(epoch)) => format!("a commit, for epoch {epoch}"),
+        (Kind::Commit, None) => "a commit".into(),
+        (Kind::Message, _) => "a message".into(),
+    };
+    println!(
+        "Team {}, {label} stream, entry {seq}: {what}.",
+        hex::encode(team)
+    );
+    println!(
+        "    written by the device {} at {} (seconds since 1970), {} bytes",
+        hex::encode(&entry.device),
+        entry.at,
+        entry.payload.len()
+    );
+    println!(
+        "    its digest (SHA-256) {}",
+        hex::encode(entry_digest(&entry))
+    );
+    println!();
+    if !args.has("--yes", "") {
+        use std::io::{BufRead, Write};
+        print!("Remove it? The devices will see the hole; nothing brings the entry back. Type yes to remove it: ");
+        let _ = std::io::stdout().flush();
+        let mut answer = String::new();
+        let _ = std::io::stdin().lock().read_line(&mut answer);
+        println!();
+        if answer.trim() != "yes" {
+            return Err("not confirmed: nothing removed".into());
+        }
+    }
+    let dropped = store
+        .drop_entry(
+            team,
+            stream,
+            seq,
+            by.clone(),
+            escouade_team_server::util::now(),
+        )
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("the entry went meanwhile: nothing removed")?;
+    // The log keeps no id (the guide says so); the base's audit holds the team, the stream and the digest.
+    tracing::info!(
+        target: "audit",
+        action = "drop-entry",
+        seq,
+        kind = ?dropped.kind,
+        by = %by,
+        "an entry removed by the operator"
+    );
+    println!("Removed, and noted in the base's audit (by {by}). The devices read on past it at their next reading.");
+    Ok(())
+}
+
+/// `drop-entry --list`: the base's audit of the entries removed from a team's streams, the oldest first.
+async fn list_dropped(args: &Args, team: escouade_team_server::util::Id) -> Result<(), String> {
+    let server = Server::open(args.config()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    let audit = server
+        .app()
+        .store
+        .dropped(team)
+        .await
+        .map_err(|e| e.to_string())?;
+    if audit.is_empty() {
+        println!("No entry of this team was removed.");
+    }
+    for d in audit {
+        let stream = match d.project {
+            None => "team".to_string(),
+            Some(p) if escouade_team_server::api::TEAM_STREAMS.contains(&p) => {
+                String::from_utf8_lossy(&p).into_owned()
+            }
+            Some(p) => format!("project {}", hex::encode(p)),
+        };
+        let what = match (d.kind, d.epoch) {
+            (Kind::Commit, Some(e)) => format!("commit, epoch {e}"),
+            (Kind::Commit, None) => "commit".into(),
+            (Kind::Message, _) => "message".into(),
+        };
+        println!(
+            "{} by {}: {stream} stream, entry {} ({what}, {} bytes, written by {} at {}), digest {}",
+            d.at,
+            d.operator,
+            d.seq,
+            d.size,
+            hex::encode(d.device),
+            d.written_at,
+            hex::encode(d.digest)
+        );
+    }
+    Ok(())
 }
 
 fn main() -> ExitCode {

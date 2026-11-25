@@ -324,6 +324,33 @@ pub mod wire {
         pub snapshots: Vec<UnreadableInfo>,
     }
 
+    /// An entry the server's operator removed from a stream (`drop-entry`, SR2-02), as the devices are told: what
+    /// tells the hole from a rollback. Never its bytes, nor who removed it (that stays in the server's audit).
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct DroppedInfo {
+        /// The project's stream, None for the team's.
+        #[serde(with = "serde_bytes", default, skip_serializing_if = "Option::is_none")]
+        pub project: Option<Vec<u8>>,
+        pub seq: u64,
+        pub kind: Kind,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub epoch: Option<u64>,
+        /// The device that wrote it, and when.
+        #[serde(with = "serde_bytes")]
+        pub device: Vec<u8>,
+        pub written_at: i64,
+        /// The SHA-256 of the entry as it was served (its CBOR).
+        #[serde(with = "serde_bytes")]
+        pub digest: Vec<u8>,
+        /// When the operator removed it.
+        pub at: i64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct DroppedEntries {
+        pub dropped: Vec<DroppedInfo>,
+    }
+
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Usage {
         pub used: u64,
@@ -372,6 +399,7 @@ fn store_problem(e: StoreError) -> Problem {
             "quota",
             "the team's quota is reached",
         ),
+        StoreError::Drop(why) => Problem::new(StatusCode::CONFLICT, "drop_refused", why),
         StoreError::TooMany(what) => Problem::new(
             StatusCode::FORBIDDEN,
             "too_many",
@@ -1462,6 +1490,41 @@ pub async fn remove_snapshot(
         return Err(Problem::not_found());
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// The entries the server's operator removed from the team's streams (`drop-entry`, SR2-02): every device of the team
+/// reads them, to take the hole for what it is rather than a rollback, and its administrators are told. A project's
+/// entries are listed to the devices that have access to it.
+pub async fn dropped(
+    State(app): State<Shared>,
+    authed: Authed,
+) -> Result<Cbor<DroppedEntries>, Problem> {
+    let team = authed.device.team;
+    let all = app.store.dropped(team).await.map_err(store_problem)?;
+    let mut dropped = Vec::with_capacity(all.len());
+    for d in all {
+        if let Some(project) = d.project {
+            let access = app
+                .store
+                .access(team, project)
+                .await
+                .map_err(store_problem)?;
+            if access.is_some_and(|a| !a.admits(&authed.device.id)) {
+                continue;
+            }
+        }
+        dropped.push(DroppedInfo {
+            project: d.project.map(|p| p.to_vec()),
+            seq: d.seq,
+            kind: d.kind,
+            epoch: d.epoch,
+            device: d.device.to_vec(),
+            written_at: d.written_at,
+            digest: d.digest.to_vec(),
+            at: d.at,
+        });
+    }
+    Ok(Cbor(DroppedEntries { dropped }))
 }
 
 /// The team's snapshots a device found unreadable, each with the device that posted it (SR2-01): for its

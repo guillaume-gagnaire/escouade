@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: whoever hosts a team server can unfreeze a team or a project blocked by an unreadable entry, with `escouade-team-server drop-entry`. They see the entry, confirm, and the database keeps who removed it, when and its digest, never its content; the devices read on instead of taking it for a rollback, and the administrators see it on the team’s card.
 - Each project picks its parts in Settings › Projects › Project parts: turn off its Docs, its shared memory, its Kanban or its launch and browsers, and they disappear from that project, its agents’ tools included, deleting nothing. Its .escouade.yml can propose a default, but your choice always goes first.
 - Browsers in the sidebar, like terminals: one row per tab under “Terminals”, opened full screen or next to an agent, with tablet and mobile widths and the developer tools next to the address. You open one from “+”, and an agent’s test or a launch command opens its own; the “Pages” window is gone.
 - The “Offline mode” of 2.2.6 can be imposed by a team’s policies too, and a managed device finds it in its list of policies; on a server, nothing outside its folders is shown to the computer.

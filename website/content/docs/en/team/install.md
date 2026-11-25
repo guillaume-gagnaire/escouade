@@ -49,7 +49,7 @@ tar -xzf escouade-team-server-$v-linux-x64.tar.gz
 
 To build it from Escouade’s repository: `cd src-tauri && cargo build --release -p escouade-team-server` (the binary: `src-tauri/target/release/escouade-team-server`).
 
-`escouade-team-server --help`, or the program run with no argument, lists the commands; `escouade-team-server init --help` (likewise `serve --help`, `recovery-token --help`, or `help serve`) gives a command’s options, their environment variables and their defaults, without creating or listening to anything. `--version` prints the version. An unknown option, or one that isn’t the command’s, is refused (exit code 2).
+`escouade-team-server --help`, or the program run with no argument, lists the commands; `escouade-team-server init --help` (likewise `serve --help`, `recovery-token --help`, `drop-entry --help`, or `help serve`) gives a command’s options, their environment variables and their defaults, without creating or listening to anything. `--version` prints the version. An unknown option, or one that isn’t the command’s, is refused (exit code 2).
 
 ## The commands
 
@@ -58,8 +58,9 @@ To build it from Escouade’s repository: `cd src-tauri && cargo build --release
 | `escouade-team-server init` | Creates the database if it doesn’t exist, then prints a one-use token that creates a team. Run again, it gives another token, for another team on the same server. |
 | `escouade-team-server serve` | Serves, until `Ctrl+C` or the service stops. |
 | `escouade-team-server recovery-token --team <id>` | Prints a one-use token, valid for 7 days at most, for the holder of the recovery key of a team whose administrators all lost their devices (see [Recover a team](#recover-a-team)). |
+| `escouade-team-server drop-entry --team <id> --stream team --seq <n>` | Removes an entry that blocks the team or a project (`--project <id>`), after a confirmation, and notes it in the database’s audit (see [Unfreeze a team or a project](#unfreeze-a-team-or-a-project)). |
 
-All three take the same database and file options: give `init` and `recovery-token` the same ones as `serve`.
+All of them take the same database and file options: give `init`, `recovery-token` and `drop-entry` the same ones as `serve`.
 
 ## The options
 
@@ -83,7 +84,7 @@ Each option has its environment variable; the option wins over the variable. An 
 | `--team-quota <bytes>` | `ESCOUADE_TEAM_QUOTA` | `2147483648` (2 GiB) | What a team keeps in all: its streams and its files. |
 | none | `RUST_LOG` | `info` | The log’s level. |
 
-`ESCOUADE_TEAM_TRUST_PROXY` takes `1` or `true`. `recovery-token` also reads the team’s id from `ESCOUADE_TEAM_ID`.
+`ESCOUADE_TEAM_TRUST_PROXY` takes `1` or `true`. `recovery-token` and `drop-entry` also read the team’s id from `ESCOUADE_TEAM_ID`.
 
 ## With Docker and Caddy
 
@@ -197,6 +198,23 @@ escouade-team-server recovery-token --team <id> --data /var/lib/escouade-team-se
 The team’s id (32 hexadecimal digits) is shown in Escouade, when the team is created and on its card (“Team id”). The token enrolls one device as an administrator of the server; it gives no key: the 24 words give them. The holder types them in “Recover a team”, with the team’s six words from the same sheet, the server’s address and the token.
 
 With Docker: `docker compose run --rm team-server recovery-token --team <id>`.
+
+## Unfreeze a team or a project
+
+The server keeps the first commit of an epoch without being able to read it. If that commit does not open on the devices (arbitrary bytes, or a commit against the team’s rules), the team, or the project, is frozen: the members’ apps say they no longer read the team, and the administrator can neither remove the member at fault nor change the keys. When an administrator tells you so, with the number of the entry at fault, remove it:
+
+```sh
+escouade-team-server drop-entry --team <id> --stream team --seq <n> --data /var/lib/escouade-team-server
+```
+
+For a project’s stream: `--project <project id>` instead of `--stream team`; for one of the team’s own streams, its name (`--stream escouade/setting`). The command shows the entry (its kind, its epoch, the device that wrote it, its date, its size, its digest) and asks you to type `yes`; `--yes` skips the question, `--by <name>` says who removes it (the account’s name otherwise). Without `--team`, it does nothing. With Docker: `docker compose run --rm team-server drop-entry --team <id> --stream team --seq <n>`.
+
+- **A commit must be the last of its stream**: its epoch is free again, and the administrator can remove the member or change the keys. If several unreadable commits follow each other, remove them from the newest to the oldest.
+- **The audit** stays in the database (table `dropped_entries`): who, when, which stream, which number, the digest of the entry removed, never its content. `drop-entry --team <id> --list` reads it again. The server’s log keeps a single line of it, without any id.
+- **The devices see the hole** and read on; the administrators see it on the team’s card (“Entries the server’s operator removed”).
+
+> [!WARNING]
+> Only remove the entry that blocks. Removing a commit that devices read shows them a fork; removing a valid operation of a project makes the next ones of its device refused; removing an administrator’s entry (the list of projects, the enforced settings, the private store) erases it for everyone. The command neither reads an entry nor brings one back: the server only holds encrypted bytes.
 
 ## Update
 

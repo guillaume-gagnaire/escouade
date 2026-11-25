@@ -40,6 +40,22 @@ export interface SnapshotAlertView {
   foundHere: boolean;
 }
 
+/** An entry the server's operator removed from a stream of the team (`drop-entry`, SR2-02), as an administrator is told. */
+export interface DropAlertView {
+  /** The project's stream, hex (`Project.teamProject` for a Kanban of the team); null for the team's own stream. */
+  project: string | null;
+  seq: number;
+  commit: boolean;
+  epoch: number | null;
+  /** The device that wrote it, hex, and its member's role when it is still in the team. */
+  writtenBy: string;
+  writtenByRole: 'admin' | 'member' | null;
+  writtenByMe: boolean;
+  /** Seconds since the epoch. */
+  writtenAt: number;
+  droppedAt: number;
+}
+
 export interface TeamView {
   id: string;
   name: string;
@@ -63,6 +79,7 @@ export interface TeamView {
   invitations: InvitationView[];
   /** The projects' snapshots put aside (SR2-01), the newest first. */
   snapshotAlerts: SnapshotAlertView[];
+  dropAlerts: DropAlertView[];
   lastError: string | null;
 }
 

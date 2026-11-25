@@ -26,6 +26,7 @@ both!(
     an_unreadable_snapshot_leaves_the_journal,
     the_copy_resumes_after_a_cut,
     an_invitation_gives_access_to_a_project,
+    the_operator_removes_an_entry_that_blocks_a_project,
 );
 
 type Crew = Vec<(Place, Team)>;
@@ -718,5 +719,87 @@ async fn an_invitation_gives_access_to_a_project(b: Backend) {
         c[1].1.sync_project(kept).await,
         Err(Error::NoAccess)
     ));
+    w.finish().await;
+}
+
+/// SR2-02: a member writes bytes nobody opens in a project's stream, and the project no longer reads on; the server's
+/// operator removes the entry (`drop-entry`), the devices read on past the hole and the administrator is told. The
+/// last entry a device read, removed, is no rollback.
+async fn the_operator_removes_an_entry_that_blocks_a_project(b: Backend) {
+    use escouade_team_server::db::Stream;
+    let w = World::on(&b).await;
+    let mut c = crew(&w, 2, |_| {}).await;
+    let p = c[0].1.create_project(None).await.unwrap();
+    c[0].1
+        .create_ticket(p, fields(&[("title", json!("T1"))]))
+        .unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    c[1].1.follow(p).unwrap();
+    c[1].1.sync_project(p).await.unwrap();
+    let seq = c[1]
+        .1
+        .client()
+        .append_project(&p.0, b"garbage")
+        .await
+        .unwrap();
+    assert!(
+        c[0].1.sync_project(p).await.is_err(),
+        "the project is blocked"
+    );
+    let store = &w.server.server.app().store;
+    let team = c[0].1.id();
+    store
+        .drop_entry(team, Stream::Project(p.0), seq, "operator".into(), 7)
+        .await
+        .unwrap()
+        .unwrap();
+    c[0].1
+        .create_ticket(p, fields(&[("title", json!("T2"))]))
+        .unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    c[1].1.sync_project(p).await.unwrap();
+    assert_eq!(state(&mut c[0].1, &p), state(&mut c[1].1, &p));
+    // The last entry the member read goes: a hole, not a rollback.
+    let last = c[1]
+        .1
+        .client()
+        .read_project(&p.0, 0, None)
+        .await
+        .unwrap()
+        .entries
+        .last()
+        .unwrap()
+        .seq;
+    let extra = c[0]
+        .1
+        .client()
+        .append_project(&p.0, b"more garbage")
+        .await
+        .unwrap();
+    assert!(extra > last);
+    store
+        .drop_entry(team, Stream::Project(p.0), extra, "operator".into(), 8)
+        .await
+        .unwrap()
+        .unwrap();
+    c[1].1.sync_project(p).await.unwrap();
+    // An operation the member read, then removed: the member's device reads on.
+    c[0].1
+        .create_ticket(p, fields(&[("title", json!("T3"))]))
+        .unwrap();
+    c[0].1.sync_project(p).await.unwrap();
+    c[1].1.sync_project(p).await.unwrap();
+    let read = c[1].1.client().read_project(&p.0, 0, None).await.unwrap();
+    let t3 = read.entries.last().unwrap().seq;
+    store
+        .drop_entry(team, Stream::Project(p.0), t3, "operator".into(), 9)
+        .await
+        .unwrap()
+        .unwrap();
+    c[1].1.sync_project(p).await.unwrap();
+    // The administrator is told of the three, at its next reading of the list (five minutes at most).
+    let served = c[0].1.serve(NOW + 400).await.unwrap();
+    assert_eq!(served.drop_alerts, 3);
+    assert!(c[0].1.drop_alerts().iter().all(|a| a.project == Some(p)));
     w.finish().await;
 }

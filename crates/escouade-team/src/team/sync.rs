@@ -779,6 +779,18 @@ impl Team {
             Some(e) if e.seq == seq && entry_digest(e) == digest => Ok(()),
             Some(e) if e.seq == seq => Err(Error::Rewritten { seq }),
             _ if page.snapshot.is_some_and(|upto| upto >= seq) => Ok(()),
+            // The very entry removed by the server's operator (SR2-02): a hole, the reading goes on after it.
+            _ if self
+                .client
+                .was_dropped(Some(&project.0), seq, &digest)
+                .await? =>
+            {
+                self.drops_at = None;
+                let r = self.open_replica(&project)?;
+                let mut meta = r.meta()?;
+                meta.last = None;
+                r.set_meta(&meta)
+            }
             _ => Err(Error::ServerRollback { seen: seq }),
         }
     }

@@ -112,6 +112,21 @@ CREATE TABLE IF NOT EXISTS project_keys (
     n BIGINT NOT NULL,
     PRIMARY KEY (team_id, project_id)
 );
+CREATE TABLE IF NOT EXISTS dropped_entries (
+    id BIGSERIAL PRIMARY KEY,
+    team_id BYTEA NOT NULL,
+    project_id BYTEA,
+    seq BIGINT NOT NULL,
+    kind BIGINT NOT NULL,
+    epoch BIGINT,
+    device_id BYTEA NOT NULL,
+    written_at BIGINT NOT NULL,
+    size BIGINT NOT NULL,
+    digest BYTEA NOT NULL,
+    operator TEXT NOT NULL,
+    at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS dropped_team ON dropped_entries(team_id);
 ";
 
 const CLAIM_COLUMNS: &str =
@@ -811,6 +826,161 @@ impl Store for Postgres {
         };
         tx.commit().await?;
         Ok(out)
+    }
+
+    async fn drop_entry(
+        &self,
+        team: Id,
+        stream: Stream,
+        seq: u64,
+        operator: String,
+        now: i64,
+    ) -> Result<Option<Dropped>> {
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await?;
+        let Some(team_commits) = tx
+            .query_opt(
+                "SELECT commits FROM teams WHERE id = $1 FOR UPDATE",
+                &[&team.as_slice()],
+            )
+            .await?
+            .map(|r| r.get::<_, i64>(0))
+        else {
+            return Err(StoreError::Drop("the base holds no such team"));
+        };
+        let page = Page {
+            entries: 1,
+            bytes: usize::MAX,
+        };
+        let Some(entry) = read_entries(&tx, &team, stream, seq, page, true)
+            .await?
+            .into_iter()
+            .next()
+            .filter(|e| e.seq == seq)
+        else {
+            return Ok(None);
+        };
+        let is_commit = entry.kind == Kind::Commit;
+        let project = match stream {
+            Stream::Team => None,
+            Stream::Project(p) => Some(p),
+        };
+        if is_commit {
+            let stream_commits = match project {
+                None => team_commits,
+                Some(p) => tx
+                    .query_one(
+                        "SELECT commits FROM projects WHERE team_id = $1 AND id = $2 FOR UPDATE",
+                        &[&team.as_slice(), &p.as_slice()],
+                    )
+                    .await?
+                    .get::<_, i64>(0),
+            };
+            if entry.epoch.map(|e| e as i64 + 1) != Some(stream_commits) {
+                return Err(StoreError::Drop(
+                    "a later commit follows this one: remove the later ones first",
+                ));
+            }
+        }
+        let size = entry.payload.len() as i64;
+        let commit = is_commit as i64;
+        match project {
+            None => {
+                tx.execute(
+                    "DELETE FROM team_entries WHERE team_id = $1 AND seq = $2",
+                    &[&team.as_slice(), &(seq as i64)],
+                )
+                .await?;
+                tx.execute(
+                    "UPDATE teams SET commits = commits - $2 WHERE id = $1",
+                    &[&team.as_slice(), &commit],
+                )
+                .await?;
+            }
+            Some(p) => {
+                tx.execute(
+                    "DELETE FROM project_entries WHERE team_id = $1 AND project_id = $2 AND seq = $3",
+                    &[&team.as_slice(), &p.as_slice(), &(seq as i64)],
+                )
+                .await?;
+                tx.execute(
+                    "UPDATE projects SET commits = commits - $3 WHERE team_id = $1 AND id = $2",
+                    &[&team.as_slice(), &p.as_slice(), &commit],
+                )
+                .await?;
+            }
+        }
+        tx.execute(
+            "UPDATE teams SET stored = GREATEST(stored - $2, 0) WHERE id = $1",
+            &[&team.as_slice(), &size],
+        )
+        .await?;
+        let dropped = Dropped {
+            project,
+            seq,
+            kind: entry.kind,
+            epoch: entry.epoch,
+            device: id_of(entry.device.clone())?,
+            written_at: entry.at,
+            size: size as u64,
+            digest: entry_digest(&entry),
+            operator,
+            at: now,
+        };
+        let project_bytes = dropped.project.map(|p| p.to_vec());
+        tx.execute(
+            "INSERT INTO dropped_entries
+             (team_id, project_id, seq, kind, epoch, device_id, written_at, size, digest, operator, at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+            &[
+                &team.as_slice(),
+                &project_bytes,
+                &(seq as i64),
+                &dropped.kind.code(),
+                &dropped.epoch.map(|e| e as i64),
+                &dropped.device.as_slice(),
+                &dropped.written_at,
+                &size,
+                &dropped.digest.as_slice(),
+                &dropped.operator,
+                &now,
+            ],
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(Some(dropped))
+    }
+
+    async fn dropped(&self, team: Id) -> Result<Vec<Dropped>> {
+        let rows = self
+            .client
+            .lock()
+            .await
+            .query(
+                "SELECT project_id, seq, kind, epoch, device_id, written_at, size, digest, operator, at
+                 FROM dropped_entries WHERE team_id = $1 ORDER BY at, id",
+                &[&team.as_slice()],
+            )
+            .await?;
+        rows.iter()
+            .map(|r| {
+                Ok(Dropped {
+                    project: r.get::<_, Option<Vec<u8>>>(0).map(id_of).transpose()?,
+                    seq: r.get::<_, i64>(1) as u64,
+                    kind: Kind::from_code(r.get(2)),
+                    epoch: r.get::<_, Option<i64>>(3).map(|e| e as u64),
+                    device: id_of(r.get(4))?,
+                    written_at: r.get(5),
+                    size: r.get::<_, i64>(6) as u64,
+                    digest: r
+                        .get::<_, Vec<u8>>(7)
+                        .try_into()
+                        .map_err(|_| backend("a digest of the wrong length"))?,
+                    operator: r.get(8),
+                    at: r.get(9),
+                })
+            })
+            .collect()
     }
 
     async fn put_snapshot(

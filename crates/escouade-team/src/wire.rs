@@ -333,6 +333,33 @@ pub struct UnreadableSnapshots {
     pub snapshots: Vec<UnreadableInfo>,
 }
 
+/// An entry the server's operator removed from a stream (`escouade-team-server drop-entry`, SR2-02): what tells the
+/// hole from a rollback.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DroppedInfo {
+    /// The project's stream, None for the team's.
+    #[serde(with = "serde_bytes", default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<Vec<u8>>,
+    pub seq: u64,
+    pub kind: Kind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch: Option<u64>,
+    /// The device that wrote it, and when.
+    #[serde(with = "serde_bytes")]
+    pub device: Vec<u8>,
+    pub written_at: i64,
+    /// The SHA-256 of the entry as it was served (its CBOR): the digest a device keeps of the last entry it read.
+    #[serde(with = "serde_bytes")]
+    pub digest: Vec<u8>,
+    /// When the operator removed it.
+    pub at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DroppedEntries {
+    pub dropped: Vec<DroppedInfo>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Usage {
     pub used: u64,

@@ -316,6 +316,29 @@ pub struct SnapshotAlertView {
     pub found_here: bool,
 }
 
+/// An entry the server's operator removed from a stream of the team (`drop-entry`, SR2-02), as an administrator is told:
+/// the devices read on past the hole. Shown for 30 days.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DropAlertView {
+    /// The project's stream, hex (`Project::team_project` for a Kanban of the team); None for the team's own stream.
+    pub project: Option<String>,
+    pub seq: u64,
+    /// A commit (and its epoch), or a message.
+    pub commit: bool,
+    pub epoch: Option<u64>,
+    /// The device that wrote it, hex; its member's role in the team, when it is still in.
+    pub written_by: String,
+    pub written_by_role: Option<String>,
+    pub written_by_me: bool,
+    /// Seconds since the epoch.
+    pub written_at: i64,
+    pub dropped_at: i64,
+}
+
+/// How long an entry the operator removed is shown to an administrator (SR2-02).
+const DROP_ALERTS_SHOWN: i64 = 30 * 24 * 3600;
+
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamView {
@@ -350,6 +373,8 @@ pub struct TeamView {
     pub invitations: Vec<InvitationView>,
     /// The projects' snapshots put aside (SR2-01), the newest first.
     pub snapshot_alerts: Vec<SnapshotAlertView>,
+    /// The entries the server's operator removed (SR2-02), an administrator's, the newest first.
+    pub drop_alerts: Vec<DropAlertView>,
     pub last_error: Option<String>,
 }
 
@@ -756,6 +781,7 @@ impl Teams {
             alarm: known.alarm.clone(),
             invitations: Vec::new(),
             snapshot_alerts: Vec::new(),
+            drop_alerts: Vec::new(),
             last_error: known.last_error.clone(),
         };
         let Some(team) = team.filter(|_| joined) else {
@@ -796,6 +822,26 @@ impl Teams {
                 posted_at: a.posted_at,
                 found_at: a.found_at,
                 found_here: a.found_here,
+            })
+            .collect();
+        let shown_after = now() as i64 - DROP_ALERTS_SHOWN;
+        view.drop_alerts = team
+            .drop_alerts()
+            .into_iter()
+            .filter(|a| a.dropped_at >= shown_after)
+            .map(|a| DropAlertView {
+                project: a.project.map(|p| hex::encode(p.0)),
+                seq: a.seq,
+                commit: a.commit,
+                epoch: a.epoch,
+                written_by: hex::encode(a.written_by.0),
+                written_by_role: members
+                    .iter()
+                    .find(|(_, _, devices)| devices.contains(&a.written_by))
+                    .map(|(_, role, _)| role_name(*role)),
+                written_by_me: a.written_by == me.device,
+                written_at: a.written_at,
+                dropped_at: a.dropped_at,
             })
             .collect();
         view

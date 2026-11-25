@@ -43,7 +43,7 @@ use crate::client::{ClientError, LiveFeed, ServerClient, Transport};
 use crate::keychain::{DeviceKeys, KeyPlace, Vault};
 use crate::pairing::{PairCode, PairState, Pairing};
 use crate::storage::{SqliteStorage, TeamProvider, STATE_FILE};
-use crate::wire::{self, Entry, Kind, TeamMessage};
+use crate::wire::{self, DroppedInfo, Entry, Kind, TeamMessage};
 use crate::{CryptoError, Error};
 
 pub(crate) mod claims;
@@ -152,6 +152,26 @@ pub struct Served {
     pub alerts: usize,
     /// The snapshots found unreadable the server told this administrator of, new since the last time (SR2-01).
     pub snapshot_alerts: usize,
+    /// The entries the server's operator removed, new since the last time (SR2-02).
+    pub drop_alerts: usize,
+}
+
+/// An entry the server's operator removed from a stream of the team (`escouade-team-server drop-entry`, SR2-02), as
+/// the server lists it to an administrator: the devices read on past the hole; the administrators are told, since
+/// only the operator of the server does it, the day an entry blocked the team or a project.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DropAlert {
+    /// The project's stream, None for the team's.
+    pub project: Option<ProjectId>,
+    pub seq: u64,
+    /// A commit (and its epoch), or a message.
+    pub commit: bool,
+    pub epoch: Option<u64>,
+    /// The device that wrote it, and when (seconds since the epoch, as the server says).
+    pub written_by: DeviceId,
+    pub written_at: i64,
+    /// When the operator removed it.
+    pub dropped_at: i64,
 }
 
 /// A project's snapshot found unreadable (SR2-01): put aside, the copy read from the journal instead. This device found
@@ -205,6 +225,8 @@ struct Meta {
     alerts: Vec<ReuseAlert>,
     /// The snapshots found unreadable (SR2-01): by this device, and for an administrator the ones the server lists.
     snapshot_alerts: Vec<SnapshotAlert>,
+    /// The entries the server's operator removed (SR2-02), as the server lists them to an administrator.
+    drop_alerts: Vec<DropAlert>,
     /// The epoch whose roster the server's roles were last put in step with.
     roles_epoch: Option<u64>,
     /// The administrators of each epoch this device lived through, as its roster said (TS-13: a version of the team's
@@ -322,10 +344,17 @@ pub struct Team {
     /// When an administrator's device last read the snapshots found unreadable (seconds, as `serve` was given it):
     /// once a minute at most, the server's rate is the team's.
     snapshot_alerts_at: Option<u64>,
+    /// When an administrator's device last read the entries the operator removed (SR2-02), as `serve` was given it;
+    /// None to read them at the next `serve` (a hole seen in the team's stream, the last entry read removed).
+    drops_at: Option<u64>,
 }
 
 /// Seconds between two readings of the snapshots found unreadable by an administrator's device (SR2-01).
 const SNAPSHOT_ALERTS_EVERY: u64 = 60;
+
+/// Seconds between two readings of the entries the operator removed, by an administrator's device (SR2-02): they
+/// are rare, and a hole seen reads them at once.
+const DROPS_EVERY: u64 = 300;
 
 impl Team {
     /// Creates a team on the server with the token of `escouade-team-server init`: this device enrols, makes its
@@ -573,6 +602,7 @@ impl Team {
             refused: Vec::new(),
             online: None,
             snapshot_alerts_at: None,
+            drops_at: None,
         }
     }
 
@@ -922,9 +952,23 @@ impl Team {
     pub async fn sync_at(&mut self, now: u64) -> Result<Synced, Error> {
         self.check_last().await?;
         let mut report = Synced::default();
+        // The entries the operator removed, read once a hole shows (SR2-02).
+        let mut dropped: Option<Vec<DroppedInfo>> = None;
         loop {
             let page = self.client.read_team(self.meta.cursor, None).await?;
             for entry in page.entries {
+                let from = self.meta.cursor;
+                if entry.seq > from + 1 {
+                    if dropped.is_none() {
+                        dropped = Some(self.client.dropped().await?);
+                        self.drops_at = None;
+                    }
+                    let list = dropped.as_deref().unwrap_or_default();
+                    self.step(|t| {
+                        t.forget_dropped_commits(list, from, entry.seq);
+                        Ok(())
+                    })?;
+                }
                 self.step(|t| t.take(entry, &mut report))?;
             }
             if !page.more {
@@ -944,8 +988,9 @@ impl Team {
     }
 
     /// The last entry this device read must still be there, the same: a server that hid it, or the ones before,
-    /// rolled back; one that changed it lies.
-    async fn check_last(&self) -> Result<(), Error> {
+    /// rolled back; one that changed it lies. Unless the server's operator removed that very entry (`drop-entry`,
+    /// SR2-02): a hole, said to the administrators, and the reading goes on after it.
+    async fn check_last(&mut self) -> Result<(), Error> {
         let Some((seq, digest)) = self.meta.last else {
             return Ok(());
         };
@@ -953,6 +998,13 @@ impl Team {
         match page.entries.first() {
             Some(e) if e.seq == seq && entry_digest(e) == digest => Ok(()),
             Some(e) if e.seq == seq => Err(Error::Rewritten { seq }),
+            _ if self.client.was_dropped(None, seq, &digest).await? => {
+                self.drops_at = None;
+                self.step(|t| {
+                    t.meta.last = None;
+                    Ok(())
+                })
+            }
             _ => Err(Error::ServerRollback { seen: seq }),
         }
     }
@@ -1471,6 +1523,7 @@ impl Team {
         self.grant_tokens(&mut served).await?;
         self.read_alerts(&mut served).await?;
         self.read_snapshot_alerts(now, &mut served).await?;
+        self.read_drops(now, &mut served).await?;
         self.roles_in_step(&mut served).await?;
         self.anchors_in_step()?;
         self.serve_projects(now).await?;
@@ -1718,6 +1771,74 @@ impl Team {
             })?;
         }
         Ok(())
+    }
+
+    /// An administrator's: the entries the server's operator removed (SR2-02), as the server lists them. Every five
+    /// minutes at most, at once after a hole seen in the team's stream.
+    async fn read_drops(&mut self, now: u64, served: &mut Served) -> Result<(), Error> {
+        if !self.device.is_admin()?
+            || self
+                .drops_at
+                .is_some_and(|at| now.saturating_sub(at) < DROPS_EVERY)
+        {
+            return Ok(());
+        }
+        self.drops_at = Some(now);
+        let mut alerts = Vec::new();
+        for d in self.client.dropped().await? {
+            let Ok(device) = <[u8; 16]>::try_from(d.device.as_slice()) else {
+                continue;
+            };
+            let project = match d.project.as_deref().map(<[u8; 16]>::try_from) {
+                None => None,
+                Some(Ok(p)) => Some(ProjectId(p)),
+                Some(Err(_)) => continue,
+            };
+            alerts.push(DropAlert {
+                project,
+                seq: d.seq,
+                commit: d.kind == Kind::Commit,
+                epoch: d.epoch,
+                written_by: DeviceId(device),
+                written_at: d.written_at,
+                dropped_at: d.at,
+            });
+        }
+        if alerts != self.meta.drop_alerts {
+            served.drop_alerts += alerts
+                .iter()
+                .filter(|a| !self.meta.drop_alerts.contains(a))
+                .count();
+            self.step(|t| {
+                t.meta.drop_alerts = alerts;
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
+    /// The entries the server's operator removed (SR2-02), the newest first: an administrator's.
+    pub fn drop_alerts(&self) -> Vec<DropAlert> {
+        let mut out = self.meta.drop_alerts.clone();
+        out.sort_by_key(|a| std::cmp::Reverse((a.dropped_at, a.seq)));
+        out
+    }
+
+    /// A hole in the team's stream, from `from` (the last number read) to `to` (the entry after it): the commits the
+    /// operator removed there that this device did not take (kept before it joined, or never read past) are forgotten,
+    /// so that the commit that takes their epoch again is not a fork (SR2-02).
+    fn forget_dropped_commits(&mut self, dropped: &[DroppedInfo], from: u64, to: u64) {
+        let current = self.device.epoch().ok();
+        for d in dropped {
+            if d.project.is_some() || d.kind != Kind::Commit || d.seq <= from || d.seq >= to {
+                continue;
+            }
+            let Some(epoch) = d.epoch else { continue };
+            if current.is_none_or(|c| c <= epoch) {
+                self.meta.commits.remove(&epoch);
+                self.meta.early.remove(&epoch);
+            }
+        }
     }
 
     /// The snapshots found unreadable (SR2-01), the newest first.

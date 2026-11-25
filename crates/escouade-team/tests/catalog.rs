@@ -448,3 +448,43 @@ both!(
     a_dangerous_address_is_refused_even_signed,
     a_clone_is_known_by_the_address_of_its_repository,
 );
+
+/// SR2-02: the server's operator removes the last entry of the list a member read (`drop-entry`): a hole, said to
+/// the administrators, not a rollback; the list reads on.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_entry_the_operator_removed_is_no_rollback() {
+    use escouade_team_server::db::Stream;
+    let w = World::new().await;
+    let (_pa, mut alice, _pb, mut bob) = two(&w).await;
+    put(&mut alice, None, api()).await;
+    put(&mut alice, None, platform()).await;
+    assert_eq!(sync(&mut bob).await.projects.len(), 2);
+    let last = alice
+        .client()
+        .read_project(&CATALOG_STREAM.0, 0, None)
+        .await
+        .unwrap()
+        .entries
+        .last()
+        .unwrap()
+        .seq;
+    w.server
+        .server
+        .app()
+        .store
+        .drop_entry(
+            alice.id(),
+            Stream::Project(CATALOG_STREAM.0),
+            last,
+            "operator".into(),
+            1,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let list = sync(&mut bob).await;
+    assert_eq!(list.alarm, None, "a hole the operator made is no rollback");
+    put(&mut alice, None, api()).await;
+    assert_eq!(sync(&mut bob).await.alarm, None);
+    assert_eq!(alice.serve(NOW + 400).await.unwrap().drop_alerts, 1);
+}
