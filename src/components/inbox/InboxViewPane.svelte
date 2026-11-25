@@ -88,6 +88,8 @@
         return t('inboxViews.note.review');
       case 'handoff':
         return t('inboxViews.note.handoff', { branch: view.branch ?? '' });
+      case 'teamAccept':
+        return t('inboxViews.note.teamAccept', { name: view.by ?? '' });
     }
   });
 

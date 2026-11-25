@@ -12,6 +12,7 @@ export default {
     docs: 'Docs à partager',
     review: 'Relecture',
     handoff: 'Agent passé',
+    teamAccept: 'Ticket à accepter',
   },
   /** Ce qu’une demande bloquante dit de son agent. */
   stopped: 'l’agent s’est arrêté',
@@ -71,11 +72,15 @@ export default {
     decision: 'Acceptée, elle prend son numéro dans le registre des décisions, comme depuis Docs.',
     docs: 'Partager publie les changements des docs, comme le bouton « Partager » de l’onglet Docs.',
     review: 'La relecture se fait chez l’hébergeur : Escouade l’a lue dans la dernière liste des PR.',
+    teamAccept:
+      'Son texte vient de {name} : accepté, le pilote auto peut le lancer avec tes droits et tes comptes. Lis-le d’abord dans le Kanban ; changé ensuite par un collègue, il revient ici.',
     handoff:
       'Escouade récupère la branche {branch}, fait un worktree, applique le travail en cours, puis l’agent repart ici sur ton harness et ton compte, avec un dossier de passation.',
   },
   /** An agent a teammate passes (TS-17). */
   handoffTitle: '{name} te passe {key} · {title}',
+  /** A ticket assigned to the user with a teammate's text (ESC-645). */
+  teamAcceptTitle: '{key} · {title} · texte de {name}',
   settled: 'Réglé ailleurs : la boîte s’est mise à jour.',
   /** Ce que le chef d’escouade en a dit (ESC-557) : pris en charge, ou coché comme réglé. */
   mark: {

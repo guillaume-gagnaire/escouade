@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: a ticket of a team Kanban that a teammate wrote and that is assigned to you waits for your go-ahead: neither the autopilot, the Overseer nor your agents start it before you accept it, on its card or in the “Your turn” box. The card says who wrote its text and who assigned it, and a text a teammate changes after your go-ahead asks again.
 - Security: whoever hosts a team server can unfreeze a team or a project blocked by an unreadable entry, with `escouade-team-server drop-entry`. They see the entry, confirm, and the database keeps who removed it, when and its digest, never its content; the devices read on instead of taking it for a rollback, and the administrators see it on the team’s card.
 - Each project picks its parts in Settings › Projects › Project parts: turn off its Docs, its shared memory, its Kanban or its launch and browsers, and they disappear from that project, its agents’ tools included, deleting nothing. Its .escouade.yml can propose a default, but your choice always goes first.
 - Browsers in the sidebar, like terminals: one row per tab under “Terminals”, opened full screen or next to an agent, with tablet and mobile widths and the developer tools next to the address. You open one from “+”, and an agent’s test or a launch command opens its own; the “Pages” window is gone.

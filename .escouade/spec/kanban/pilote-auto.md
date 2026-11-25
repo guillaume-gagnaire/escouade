@@ -2,8 +2,8 @@
 title: "Pilote auto"
 subject: "Kanban"
 sources: ["docs/SPEC.md","src-tauri/src/mcp/act_tests.rs","website/content/docs/fr/autopilot.md"]
-tickets: ["ESC-312","ESC-63","ESC-382","ESC-479","ESC-547"]
-decisions: [20,24,123,225]
+tickets: ["ESC-312","ESC-63","ESC-382","ESC-479","ESC-547","ESC-645"]
+decisions: [20,24,123,225,315]
 compared: "2026-10-31T17:27:51+01:00"
 gaps: [{"text":"La page dit que les cartes « À faire » en attente d'un autre ticket affichent « ⏸ après … » et que ce texte passe avant « En attente : pilote auto en pause ». Le code affiche « Après {keys} » (en anglais « After {keys} »), sans le symbole ⏸.","code":["src/lib/i18n/fr/boardSettings.ts","src/lib/board.ts"]}]
 ---
@@ -81,3 +81,7 @@ L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automat
 - Quand le fichier de l'équipe dit `costs.stopAutopilot: true` et qu'un budget du mois est dépassé (le projet, l'équipe, ou ce membre), le pilote auto ne démarre plus les tickets « À faire » des projets concernés. Une ligne sous l'en-tête le dit : « Pilote auto arrêté : Le projet api a dépensé 104 % de son budget du mois (imposé par l'équipe Acme). »
 - Un ticket lancé à la main part, après la question « Le projet api a dépensé 104 % de son budget du mois : le pilote auto de ce projet est arrêté par l'équipe Acme. Le lancer quand même ? ». La question vient dès 80 % d'un budget, sans arrêt.
 - Le budget de l'équipe ou de ce membre grise aussi l'interrupteur « Pilote auto » (le verrou, « Imposé par l'équipe Acme »). Voir *Les coûts et les quotas de l'équipe*.
+
+## Un ticket de l'équipe à accepter (ESC-645)
+
+- Un ticket de l'équipe assigné au membre de ce poste, dont le titre, la description ou les critères ont été écrits par un autre membre, attend « Accepter » (sa carte, ou sa demande dans « À toi ») : le pilote auto ne le prend pas, ni l'Overseer, ni `start_ticket` d'un agent, ni « Lancer ». Sa carte dit « À accepter : rien ne le lance avant ». Un texte changé par un autre après l'accord attend de nouveau. Voir *Le Kanban d'équipe*, « Un ticket qu'un collègue écrit et m'assigne ».

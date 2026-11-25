@@ -13,6 +13,8 @@ export function viewTitle(v: InboxItem): string {
       return t('inboxViews.prTitle', { word: v.word ?? 'PR', number: v.number ?? 0, title: v.title });
     case 'handoff':
       return t('inboxViews.handoffTitle', { name: v.by ?? '', key: v.ticketKey ?? '', title: v.title });
+    case 'teamAccept':
+      return t('inboxViews.teamAcceptTitle', { name: v.by ?? '', key: v.ticketKey ?? '', title: v.title });
     default:
       return v.title;
   }

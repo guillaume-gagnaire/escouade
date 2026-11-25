@@ -46,6 +46,8 @@ const VIEW_TYPE: Record<ViewSource, InboxType> = {
   review: 'review',
   // A ticket a teammate passed (TS-17): one of the tickets that wait for the user.
   handoff: 'tickets',
+  // A teammate's text assigned to me, to accept (ESC-645).
+  teamAccept: 'tickets',
 };
 
 /** The type of what Escouade puts in the box (a view). */

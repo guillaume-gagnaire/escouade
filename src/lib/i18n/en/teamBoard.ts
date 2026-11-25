@@ -12,6 +12,9 @@ export default defineZone('teamBoard', {
     reviewElsewhere: 'On the machine that took it: it is approved there.',
     assigned: 'Assigned to {name}',
     assignedMe: 'Assigned to me',
+    assignedMeBy: 'Assigned to me by {by}',
+    assignedBy: 'Assigned to {name} by {by}',
+    writtenBy: 'Text by {names}',
     localOnly: 'On this machine only',
     conflict: '{name} changed {field} at the same time',
     keepMineAgain: 'Put mine back',
@@ -33,6 +36,11 @@ export default defineZone('teamBoard', {
       iteration: 'the loop',
       assignee: 'the assignment',
     },
+  },
+  accept: {
+    band: 'Text written by {names}, and assigned to you: neither the autopilot, the Overseer nor your agents start it before you accept it. Read it first.',
+    button: 'Accept',
+    accepting: 'Accepting…',
   },
   handoff: {
     machine: 'the machine {name}',

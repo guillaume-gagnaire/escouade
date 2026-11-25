@@ -13,6 +13,9 @@ export default {
     reviewElsewhere: 'Sur le poste qui l’a pris : il se valide là-bas.',
     assigned: 'Assigné à {name}',
     assignedMe: 'Assigné à moi',
+    assignedMeBy: 'Assigné à moi par {by}',
+    assignedBy: 'Assigné à {name} par {by}',
+    writtenBy: 'Texte de {names}',
     localOnly: 'Sur ce poste seulement',
     conflict: '{name} a changé {field} en même temps',
     keepMineAgain: 'Reprendre le mien',
@@ -34,6 +37,12 @@ export default {
       iteration: 'la boucle',
       assignee: 'l’assignation',
     },
+  },
+  // Un ticket assigné à soi dont le texte vient d'un collègue (ESC-645) : rien ne le lance avant « Accepter ».
+  accept: {
+    band: 'Texte écrit par {names}, et il t’est assigné : ni le pilote auto, ni l’Overseer, ni tes agents ne le lancent avant que tu l’acceptes. Lis-le d’abord.',
+    button: 'Accepter',
+    accepting: 'Acceptation…',
   },
   handoff: {
     machine: 'la machine {name}',

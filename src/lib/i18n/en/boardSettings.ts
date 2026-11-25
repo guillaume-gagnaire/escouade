@@ -40,6 +40,7 @@ export default defineZone('boardSettings', {
     after: 'After {keys}',
     pause: 'Waiting: autopilot paused',
     redTarget: 'Waiting: the target’s CI is red',
+    toAccept: 'To accept: nothing starts it before',
     forced: 'Start requested…',
     autopilotOff: 'Autopilot is off',
     next: 'Picked up as soon as a slot is free',

@@ -29,6 +29,7 @@
     docs: 'file',
     review: 'pr',
     handoff: 'team',
+    teamAccept: 'team',
   };
   /** Who a view is about, on its line: its agent, else its ticket, else its project. */
   const whoOf = (v: InboxItem) => v.agentName ?? v.ticketKey ?? v.projectName;

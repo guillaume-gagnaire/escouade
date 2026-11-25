@@ -427,10 +427,13 @@ pub fn to_start(
     let waits = |t: &Ticket| t.after.iter().any(|a| unfinished.contains(a.as_str()));
     let theirs = crate::sharing::theirs;
     // A ticket of the team (TS-6, C11-A): the autopilot takes it when it is given it alone (assigned to this machine's
-    // member, or « À faire » taken by this board), never one a teammate holds or held (« interrompu »).
+    // member, or « À faire » taken by this board), never one a teammate holds or held (« interrompu »), nor one assigned
+    // with a teammate's text the user has not accepted (ESC-645, SR3-02).
     let given = |t: &Ticket| {
         t.team.as_ref().is_none_or(|x| {
-            x.holder.as_ref().is_none_or(|h| h.mine) && (x.assigned_me || s.team_take_todo)
+            x.holder.as_ref().is_none_or(|h| h.mine)
+                && !x.awaits_accept()
+                && (x.assigned_me || s.team_take_todo)
         })
     };
     let mut todo: Vec<&Ticket> = mine()

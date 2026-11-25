@@ -124,6 +124,8 @@ export function waitLabel(
   if (waiting.length && !ticket.forced) return t('boardSettings.wait.after', { keys: keyList(waiting) });
   if (pause) return t('boardSettings.wait.pause');
   if (ticket.forced) return t('boardSettings.wait.forced');
+  // A teammate's text assigned to me, not accepted (ESC-645): nothing starts it.
+  if (ticket.team?.toAccept) return t('boardSettings.wait.toAccept');
   // Another one's shared ticket (ESC-190): the autopilot never starts it.
   if (isTheirs(ticket)) return theirsLine(ticket) ?? t('boardSettings.wait.autopilotOff');
   if (!s.autopilot) return t('boardSettings.wait.autopilotOff');
@@ -193,6 +195,8 @@ export function canStart(
   // Another one's shared ticket (ESC-190) is launched by hand whatever the autopilot: it never starts it. One whose file
   // cannot be read never starts. Held by a red target (ESC-63), the autopilot starts none: « Lancer » does.
   if (ticket.shared?.problem) return false;
+  // A teammate's text assigned to me (ESC-645): « Accepter » first.
+  if (ticket.team?.toAccept) return false;
   // A ticket of the team the autopilot was not given (TS-6, C11-A: neither assigned to me nor « À faire » taken by this
   // board) is launched by hand too.
   const notGiven = !!ticket.team && !ticket.team.assignedMe && !s.teamTakeTodo;

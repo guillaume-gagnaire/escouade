@@ -50,6 +50,7 @@ export default {
     pause: 'En attente : pilote auto en pause',
     redTarget: 'En attente : CI de la cible rouge',
     forced: 'Lancement demandé…',
+    toAccept: 'À accepter : rien ne le lance avant',
     autopilotOff: 'Pilote auto désactivé',
     next: "Pris dès qu'une place se libère",
     place: "En attente d'une place ({busy}/{max})",

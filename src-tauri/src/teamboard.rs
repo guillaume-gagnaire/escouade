@@ -51,6 +51,10 @@ pub const SHARED_FIELDS: &[&str] = &[
     "formerKeys",
 ];
 
+/// The fields of a ticket that make its text, its agent's first message (ESC-645): written by another member, a ticket
+/// assigned to this machine's member waits for its « Accepter ». Its images and files never leave a machine.
+pub const TEXT_FIELDS: &[&str] = &["title", "description", "criteria"];
+
 /// How often the holder renews its lease (of 10 minutes on the server): 3 minutes, or
 /// `ESCOUADE_TEAM_RENEW_MS` in a build of development (the end-to-end tests).
 pub fn renew_every() -> Duration {
@@ -231,9 +235,41 @@ pub fn refusal(key: &str, e: &TeamError, holder: Option<&str>) -> String {
     }
 }
 
-/// What refuses at once the start of a ticket a teammate holds (its lease not run out): their name. The claim decides
-/// the rest at the start.
+/// A short print of a ticket's writes by other members (`TeamTicket::foreign`): what the box's view of its « Accepter »
+/// is named by, so that a text changed after it was read is a view gone, never accepted unread.
+pub fn text_print(foreign: &[String]) -> String {
+    use sha2::Digest as _;
+    let digest = sha2::Sha256::digest(foreign.join(",").as_bytes());
+    hex::encode(&digest[..8])
+}
+
+/// Why a ticket of the team waits for the user's « Accepter » (ESC-645, SR3-02): assigned to this machine's member, its
+/// text written by another member is a third party's instruction, that nothing runs with this machine's rights and
+/// accounts before the user read it. None when it does not wait.
+pub fn accept_refusal(t: &Ticket) -> Option<String> {
+    let tt = t.team.as_ref()?;
+    if !tt.awaits_accept() {
+        return None;
+    }
+    let who = if tt.written_by.is_empty() {
+        tr!("un collègue", "a teammate")
+    } else {
+        tt.written_by.join(", ")
+    };
+    Some(tr!(
+        "{key} t’est assigné avec un texte écrit par {who} : rien ne le lance avant que tu l’acceptes, dans sa carte ou dans « À toi ».",
+        "{key} is assigned to you with a text written by {who}: nothing starts it before you accept it, on its card or in the “Your turn” box.",
+        key = t.key,
+        who = who
+    ))
+}
+
+/// What refuses at once the start of a ticket a teammate holds (its lease not run out): their name; or one that waits
+/// for the user's « Accepter » (`accept_refusal`). The claim decides the rest at the start.
 pub fn start_refusal(t: &Ticket) -> Option<String> {
+    if let Some(why) = accept_refusal(t) {
+        return Some(why);
+    }
     let h = t.team.as_ref()?.holder.as_ref()?;
     if h.mine || h.interrupted {
         return None;
@@ -464,6 +500,16 @@ impl Core {
                 };
                 let before = t.clone();
                 let here = fields_of(t);
+                // Accepted here while it was read (ESC-645): kept, for the writes the reading still found.
+                let mut tt = tt;
+                if let Some(old) = t.team.as_ref() {
+                    for s in &old.accepted {
+                        if tt.foreign.contains(s) && !tt.accepted.contains(s) {
+                            tt.accepted.push(s.clone());
+                        }
+                    }
+                }
+                tt.to_accept = tt.awaits_accept();
                 t.team = Some(tt);
                 for (k, v) in &pulled {
                     // Changed here since: this machine's goes out next time.
@@ -547,6 +593,10 @@ impl Core {
         let Ok(t) = self.ticket(id) else {
             return Ok(());
         };
+        // A teammate's text assigned to this member, not accepted (ESC-645): whoever starts it, it does not start.
+        if let Some(why) = accept_refusal(&t) {
+            return Err(why);
+        }
         if t.team_local {
             return Ok(());
         }
@@ -787,6 +837,9 @@ impl Core {
                     "A teammate still holds it: it is taken up once their lease is over."
                 ));
             }
+            if let Some(why) = accept_refusal(t) {
+                bail!(why);
+            }
             t.column = Column::Todo;
             t.forced = true;
             t.started_at = None;
@@ -854,8 +907,47 @@ impl Core {
             tt.assignee = me.then(|| member.clone());
             tt.assignee_name = me.then(|| name.clone());
             tt.assigned_me = me;
+            tt.assigned_by = None;
+            // Assigned to oneself, a text of another member still waits for « Accepter » (ESC-645).
+            tt.to_accept = tt.awaits_accept();
             Ok(t.clone())
         })?;
+        self.hub.emit(UiEvent::Ticket { ticket: t.clone() });
+        self.request_save();
+        self.schedule();
+        Ok(t)
+    }
+
+    /// « Accepter » a ticket of the team assigned to this machine's member whose text another member wrote (ESC-645,
+    /// SR3-02): the writes `seen` (those its card showed, `TeamTicket::foreign`) are accepted, and the autopilot, the
+    /// Overseer, the MCP server and « Lancer » may start it. Refused when its text changed meanwhile: read again first.
+    pub(crate) fn team_accept(self: &Arc<Self>, id: &str, seen: &[String]) -> Result<Ticket> {
+        let t = self.edit_ticket(id, |t| {
+            let key = t.key.clone();
+            let Some(tt) = t.team.as_mut() else {
+                bail!(tr!(
+                    "Ce ticket n’est pas de l’équipe.",
+                    "This ticket is not the team’s."
+                ));
+            };
+            let same =
+                tt.foreign.len() == seen.len() && seen.iter().all(|s| tt.foreign.contains(s));
+            if !same {
+                bail!(tr!(
+                    "Le texte de {key} vient de changer : relis-le, puis accepte-le.",
+                    "The text of {key} just changed: read it again, then accept it.",
+                    key = key
+                ));
+            }
+            for s in seen {
+                if !tt.accepted.contains(s) {
+                    tt.accepted.push(s.clone());
+                }
+            }
+            tt.to_accept = tt.awaits_accept();
+            Ok(t.clone())
+        })?;
+        log::info!("ticket {}: its teammate's text accepted", t.key);
         self.hub.emit(UiEvent::Ticket { ticket: t.clone() });
         self.request_save();
         self.schedule();
@@ -1242,12 +1334,42 @@ async fn board_in_step(
             let m = object_of(a)?;
             members.get(&MemberId(m.0)).cloned()
         });
-        tt.teammate = ["title", "description", "criteria"].iter().any(|f| {
+        tt.teammate = TEXT_FIELDS.iter().any(|f| {
             team.field_stamp(&pid, &o.id, f)
                 .ok()
                 .flatten()
                 .is_some_and(|s| s.device != me)
         });
+        // Who wrote its text and its assignment (ESC-645, SR3-02): a member's by the devices the team's registry gives
+        // it (a stamp's device is its operation's signer), never by what a field says.
+        let member_name = |team: &mut escouade_team::Team, d: &DeviceId| -> Option<String> {
+            match team.member_of(d) {
+                Some(m) if m == my_member => None,
+                Some(m) => Some(members.get(&m).cloned().unwrap_or_else(|| name_of(d))),
+                None => Some(name_of(d)),
+            }
+        };
+        let mut foreign = Vec::new();
+        let mut written_by: Vec<String> = Vec::new();
+        for f in TEXT_FIELDS {
+            let Some(s) = team.field_stamp(&pid, &o.id, f).ok().flatten() else {
+                continue;
+            };
+            if let Some(name) = member_name(team, &s.device) {
+                foreign.push(hex::encode(s.to_bytes()));
+                if !written_by.contains(&name) {
+                    written_by.push(name);
+                }
+            }
+        }
+        tt.accepted.retain(|s| foreign.contains(s));
+        tt.foreign = foreign;
+        tt.written_by = written_by;
+        tt.assigned_by = match (&tt.assignee, team.field_stamp(&pid, &o.id, "assignee")) {
+            (Some(_), Ok(Some(s))) => member_name(team, &s.device),
+            _ => None,
+        };
+        tt.to_accept = tt.awaits_accept();
         // What a teammate changed: the fields that differ from what was seen.
         let pulled: BTreeMap<String, Value> = fields
             .iter()

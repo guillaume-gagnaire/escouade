@@ -528,6 +528,14 @@ pub(crate) struct TeamView {
     assignee: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     conflicts: Vec<String>,
+    /// The other members who wrote its text, and the one who assigned it (ESC-645).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    written_by: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    assigned_by: Option<String>,
+    /// Assigned to the user with a teammate's text not accepted: no tool starts it, the user accepts it in the window.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    to_accept: bool,
     /// A passage of its agent under way (TS-17): an agent never passes one, the user does, from the window.
     #[serde(skip_serializing_if = "Option::is_none")]
     handoff: Option<HandoffView>,
@@ -561,6 +569,9 @@ pub(crate) fn team_view(t: &Ticket) -> Option<TeamView> {
             .clone()
             .or_else(|| x.assignee.as_ref().map(|_| String::new())),
         conflicts: x.conflicts.iter().map(|c| c.field.clone()).collect(),
+        written_by: x.written_by.clone(),
+        assigned_by: x.assigned_by.clone(),
+        to_accept: x.awaits_accept(),
         handoff: x.handoff.as_ref().map(|h| HandoffView {
             from: h.from_name.clone(),
             to: h.to_name.clone(),

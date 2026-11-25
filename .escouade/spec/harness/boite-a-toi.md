@@ -2,8 +2,8 @@
 title: "La boîte « À toi »"
 subject: "harness"
 sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 16 et § 18 pour le reversement)","design/inbox-2-3/README.md (direction B, captures b-)","docs/REMOTE.md (Le classement des commandes)","docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 5.1 pour ESC-557 ; § 10.2 pour le filtre d'ESC-578 ; § 18)","Demande de l'utilisateur du 2026-11-20 (ESC-557) : « quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans \"à toi\", afin d'être toujours à jour »","Demande de l'utilisateur du 2026-11-21 (ESC-578) : « Dans le \"À toi\", ajoute le fait de pouvoir filtrer par type de demande. »"]
-tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552","ESC-585","ESC-557","ESC-578","ESC-628"]
-decisions: [210,204,240,242,222,227,263,290,296]
+tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552","ESC-585","ESC-557","ESC-578","ESC-628","ESC-645"]
+decisions: [210,204,240,242,222,227,263,290,296,315]
 compared: null
 ---
 
@@ -267,3 +267,10 @@ Demandé le 2026-11-21 : « Dans le "À toi", ajoute le fait de pouvoir filtrer 
 
 - « Ouvrir » d'une pièce jointe suit la règle de la fenêtre (voir *Fenêtre › Sécurité de la fenêtre*) : jamais un fichier que le système lancerait, installerait, monterait ou suivrait en l'ouvrant (un programme, un script, un installeur, une image de disque, un raccourci), ni une page ou un SVG. Ceux que la fenêtre reconnaît à leur nom n'ont que « Afficher dans le dossier » ; ceux que le cœur refuse (marqué exécutable, par exemple) le disent dans un toast, avec la raison et le bouton « Afficher dans le dossier ». La liste de la fenêtre (`src/lib/runnable.ts`) est celle du cœur : un test les tient égales.
 - **Sous macOS**, chaque copie d'une pièce jointe (`<données>/asks/<id>/files/…`, celles d'un agent comme celles de la réponse) porte l'attribut `com.apple.quarantine` : Gatekeeper la juge à son ouverture. Sous Windows, une copie faite d'un fichier qui porte la marque du web (`Zone.Identifier`) la garde.
+
+## Un ticket à accepter (ESC-645)
+
+- Une vue « Ticket à accepter » : un ticket « À faire » d'un Kanban d'équipe, assigné à l'utilisateur, dont le texte vient d'un autre membre et qu'il n'a pas accepté (voir *Le Kanban d'équipe*). Sa ligne : « DEM-4 · Nettoyer le cache · texte de Bob Durand », dans « Aujourd'hui », l'icône de l'équipe ; son type pour le filtre : « Tickets ».
+- Ses gestes : « Accepter » (comme la carte) et « Voir dans le Kanban ». Sous eux : « Son texte vient de Bob Durand : accepté, le pilote auto peut le lancer avec tes droits et tes comptes. Lis-le d'abord dans le Kanban ; changé ensuite par un collègue, il revient ici. »
+- **Sur la vue que l'utilisateur a lue** : sa clé porte l'empreinte des écritures du collègue ; un texte changé entre-temps fait une autre vue, et « Accepter » sur l'ancienne est refusé.
+- Le chef d'escouade ne la prend pas en charge et ne la coche pas : « Accepter le texte qu'un collègue a écrit reste le geste de l'utilisateur ».

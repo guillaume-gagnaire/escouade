@@ -4,7 +4,17 @@
   import { hueOf, initialOf } from '../../lib/sharing';
   import { app } from '../../lib/state.svelte';
   import { takeFromCard } from '../../lib/handoff';
-  import { assigneeLine, conflictLine, handoffLine, holderLine, localOnly, teamBoardApi } from '../../lib/teamboard';
+  import {
+    acceptLine,
+    assigneeLine,
+    conflictLine,
+    handoffLine,
+    holderLine,
+    localOnly,
+    teamBoardApi,
+    toAccept,
+    writtenLine,
+  } from '../../lib/teamboard';
   import type { Project, Ticket } from '../../lib/types';
 
   // A ticket of a team's Kanban (TS-6): who holds it and since when (« injoignable depuis 12 min » when their machine no
@@ -16,6 +26,21 @@
   // server handed, not who works on it.
   const holder = $derived(ticket.team?.handoff ? null : holderLine(ticket));
   const assignee = $derived(assigneeLine(ticket));
+  // Who wrote its text when another member did, and a ticket assigned to me with it, to accept (ESC-645).
+  const written = $derived(writtenLine(ticket));
+  // Only « À faire » starts: a ticket under way keeps its agent, its text changed or not.
+  const accepting = $derived(toAccept(ticket) && ticket.column === 'todo');
+  let sending = $state(false);
+
+  async function accept() {
+    if (sending) return;
+    sending = true;
+    try {
+      await app.run(teamBoardApi.accept(ticket.id, ticket.team?.foreign ?? []));
+    } finally {
+      sending = false;
+    }
+  }
   const conflicts = $derived(ticket.team?.conflicts ?? []);
   const local = $derived(localOnly(ticket, project));
   // A passage of its agent under way (TS-17): « Alice te passe DEM-41 · Prendre », « Passé à Bob · Annuler le passage ».
@@ -82,6 +107,18 @@
   <span class="assignee" data-team-former
     >{t('teamBoard.card.former', { count: ticket.formerKeys.length, keys: ticket.formerKeys.join(', ') })}</span
   >
+{/if}
+{#if accepting}
+  <div class="band accept" role="status" data-team-accept>
+    <Icon name="shield" size={14} /><span>{acceptLine(ticket)}</span>
+    <div class="row">
+      <button class="btn small primary" disabled={sending} data-testid="team-accept" onclick={(e) => act(e, accept)}
+        >{sending ? t('teamBoard.accept.accepting') : t('teamBoard.accept.button')}</button
+      >
+    </div>
+  </div>
+{:else if written}
+  <span class="assignee" data-team-written><Icon name="team" size={13} /><span>{written}</span></span>
 {/if}
 {#if assignee}
   <span class="assignee" data-team-assignee><Icon name="user" size={13} /><span>{assignee}</span></span>

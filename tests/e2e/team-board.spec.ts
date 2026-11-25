@@ -248,6 +248,31 @@ test('a ticket of the team taken on one client is seen taken on the other within
   await expect(alice.locator('.card', { hasText: 'Les clés communes (Bob)' })).toBeVisible({ timeout: 15_000 });
   await expect(bob.locator('[data-team-conflict]')).toHaveCount(0);
 
+  // ESC-645 (SR3-02): the title of « Les clés communes » is Bob's now. Alice assigns it to herself: her autopilot does
+  // not start it before she accepts it, and the card says whose text it is.
+  const bobs = alice.locator('.card', { hasText: 'Les clés communes (Bob)' });
+  await bobs.click({ button: 'right' });
+  await alice.getByRole('menuitem', { name: 'Me l’assigner' }).click();
+  const accept = bobs.locator('[data-team-accept]');
+  await expect(accept).toContainText('Texte écrit par Bob Durand, et il t’est assigné', { timeout: 15_000 });
+  await expect(bobs.locator('[data-team-assignee]')).toContainText('Assigné à moi');
+  await expect(bobs.getByRole('button', { name: 'Lancer' })).toHaveCount(0);
+  await expect(bobs).toContainText('À accepter : rien ne le lance avant');
+  await shoot(alice, 'kanban-equipe-a-accepter');
+  // Bob changes its description meanwhile: still to accept, his text read again.
+  await ipc(bob, 'ticket_update', { id: tb, draft: { ...draft('Les clés communes (Bob)'), description: 'Lire le compteur.' } });
+  await alice.waitForTimeout(3000);
+  await expect(alice.getByRole('region', { name: 'À faire' }).locator('.card', { hasText: 'Les clés communes (Bob)' })).toBeVisible();
+  await expect(accept).toBeVisible();
+  // « Accepter »: the autopilot takes it, and Bob sees it taken by her.
+  await accept.getByRole('button', { name: 'Accepter' }).click();
+  await expect(accept).toHaveCount(0, { timeout: 15_000 });
+  await expect(bobs.locator('[data-team-holder="here"]')).toBeVisible({ timeout: 30_000 });
+  await expect(bob.locator('.card', { hasText: 'Les clés communes (Bob)' }).locator('[data-team-holder="held"]')).toContainText(
+    'Pris par Alice Martin',
+    { timeout: 15_000 },
+  );
+
   for (const p of [alice, bob]) {
     await p.evaluate(async () => {
       const ipc = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a?: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;

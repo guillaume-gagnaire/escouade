@@ -415,6 +415,7 @@ escouade_command::commands! {
         commands::ticket_team_handoff_take,
         commands::ticket_team_settle,
         commands::ticket_team_assign,
+        commands::ticket_team_accept,
         commands::ticket_team_local,
         commands::ticket_hide,
         commands::shared_resolve,

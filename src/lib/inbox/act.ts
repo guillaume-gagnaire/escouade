@@ -38,6 +38,7 @@ export function goToSource(v: InboxItem) {
     case 'ticketReview':
     case 'ticketBlocked':
     case 'handoff':
+    case 'teamAccept':
       app.closeInbox();
       return app.openBoard(v.projectId);
     case 'decision':
@@ -61,6 +62,7 @@ export function placeOf(v: InboxItem): { label: string; icon: IconName } | null 
     case 'ticketReview':
     case 'ticketBlocked':
     case 'handoff':
+    case 'teamAccept':
       return { label: t('inboxViews.act.board'), icon: 'kanban' };
     case 'decision':
     case 'docs':

@@ -2202,6 +2202,18 @@ pub struct TeamTicket {
     /// Its title, description or criteria were last written on a teammate's machine: the tools of the MCP server give
     /// them as a third party's data.
     pub teammate: bool,
+    /// The names of the other members who last wrote its title, description or criteria (ESC-645): its text is theirs.
+    /// Empty when this machine's member wrote all of it.
+    pub written_by: Vec<String>,
+    /// The name of the other member who wrote its assignment; None when this machine's member did, or nobody.
+    pub assigned_by: Option<String>,
+    /// The stamps (hex) of the writes of its title, description or criteria by another member, as last read.
+    pub foreign: Vec<String>,
+    /// Those of them this machine's user accepted (« Accepter », ESC-645).
+    pub accepted: Vec<String>,
+    /// Assigned to this machine's member with a text of another member not accepted yet (`awaits_accept`): neither the
+    /// autopilot, the Overseer nor the MCP server starts it, nor « Lancer », before « Accepter ».
+    pub to_accept: bool,
     /// The writes of this machine that lost to a teammate's at the same moment, to show to it (§4.3).
     pub conflicts: Vec<TeamConflict>,
     /// The stamps of the conflicts set aside (« Garder le sien »): not shown again.
@@ -2210,6 +2222,15 @@ pub struct TeamTicket {
     pub refused: Option<String>,
     /// A passage of its agent under way (TS-17, §11): offered to this machine, or by it.
     pub handoff: Option<TeamHandoff>,
+}
+
+impl TeamTicket {
+    /// Assigned to this machine's member, with a write of another member in its text that the user has not accepted
+    /// (ESC-645, SR3-02): nothing starts it before « Accepter ». A text changed by another after the acceptance waits
+    /// again; one this member changes does not.
+    pub fn awaits_accept(&self) -> bool {
+        self.assigned_me && self.foreign.iter().any(|s| !self.accepted.contains(s))
+    }
 }
 
 /// A passage of a ticket's agent to a teammate or to the team's machine (TS-17), as the journal offers it.

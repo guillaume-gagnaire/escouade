@@ -1229,6 +1229,10 @@ impl Core {
     ) -> Result<()> {
         // A project no account serves starts nothing, nor later on its own once one does.
         let ticket = self.ticket(id)?;
+        // A teammate's text assigned to this member waits for its « Accepter » (ESC-645): « Lancer » included.
+        if let Some(why) = crate::teamboard::accept_refusal(&ticket) {
+            bail!(why);
+        }
         let project = ticket.project_id.clone();
         let engine = self.ticket_engine(&ticket);
         let account = match account {

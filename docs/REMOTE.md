@@ -626,6 +626,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `ticket_set_target`
 - `ticket_share`
 - `ticket_start`
+- `ticket_team_accept`
 - `ticket_team_assign`
 - `ticket_team_handoff`
 - `ticket_team_handoff_cancel`

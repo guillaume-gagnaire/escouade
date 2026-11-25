@@ -7,7 +7,8 @@ import { invoke } from '../transport';
 import type { Key } from '../i18n';
 import type { Column, EngineId, PendingRequest } from '../types';
 
-export type ViewSource = 'permission' | 'question' | 'plan' | 'ticketReview' | 'ticketBlocked' | 'decision' | 'docs' | 'review' | 'handoff';
+export type ViewSource =
+  'permission' | 'question' | 'plan' | 'ticketReview' | 'ticketBlocked' | 'decision' | 'docs' | 'review' | 'handoff' | 'teamAccept';
 export type ViewGroup = 'stopped' | 'today' | 'earlier';
 
 /**
@@ -161,6 +162,9 @@ export function gesturesOf(v: InboxItem): Gesture[] {
       return [{ id: 'openPr', label: 'inboxViews.act.openPr', primary: true, inBox: false }];
     case 'handoff':
       return [{ id: 'take', label: 'inboxViews.act.take', primary: true, inBox: true }];
+    // A teammate's text assigned to me (ESC-645): accepted as the box shows it, never by an agent.
+    case 'teamAccept':
+      return [{ id: 'accept', label: 'inboxViews.act.accept', primary: true, inBox: true }];
   }
 }
 

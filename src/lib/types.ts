@@ -1658,6 +1658,15 @@ export interface TeamTicket {
   assigneeName: string | null;
   assignedMe: boolean;
   teammate: boolean;
+  /** The other members who last wrote its title, description or criteria (ESC-645): its text is theirs. */
+  writtenBy?: string[];
+  /** The other member who wrote its assignment; null when I did, or nobody. */
+  assignedBy?: string | null;
+  /** The stamps of those writes, as last read, and those I accepted. */
+  foreign?: string[];
+  accepted?: string[];
+  /** Assigned to me with a teammate's text not accepted: nothing starts it before « Accepter ». */
+  toAccept?: boolean;
   conflicts: TeamConflict[];
   dismissed: string[];
   refused: string | null;

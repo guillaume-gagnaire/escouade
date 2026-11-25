@@ -59,6 +59,8 @@ export const teamBoardApi = {
   /** « Reprendre le mien » / « Garder le mien » (`keepMine`), « Garder le sien » / « Prendre le sien ». */
   settle: (id: string, field: string, keepMine: boolean) => invoke<Ticket>('ticket_team_settle', { id, field, keepMine }),
   assign: (id: string, me: boolean) => invoke<Ticket>('ticket_team_assign', { id, me }),
+  /** « Accepter » a ticket assigned to me whose text a teammate wrote (ESC-645): the writes its card showed. */
+  accept: (id: string, seen: string[]) => invoke<Ticket>('ticket_team_accept', { id, seen }),
   local: (id: string, local: boolean) => invoke<Ticket>('ticket_team_local', { id, local }),
   /** What « Verser à l'équipe » would pour (TS-7). */
   pourPreview: (project: string) => invoke<PourPreview>('project_team_pour_preview', { project }),
@@ -172,12 +174,32 @@ export function conflictLine(c: TeamConflict): { text: string; mine: string; the
   };
 }
 
-/** Whom the ticket is assigned to, as the card says it; null when to nobody. */
+/** Whom the ticket is assigned to, as the card says it, and by whom when another member did it (ESC-645); null when
+ * to nobody. */
 export function assigneeLine(ticket: Ticket): string | null {
   const x = ticket.team;
   if (!x?.assignee) return null;
-  if (x.assignedMe) return t('teamBoard.card.assignedMe');
-  return t('teamBoard.card.assigned', { name: x.assigneeName || t('teamBoard.card.someone') });
+  const by = x.assignedBy;
+  if (x.assignedMe) return by ? t('teamBoard.card.assignedMeBy', { by }) : t('teamBoard.card.assignedMe');
+  const name = x.assigneeName || t('teamBoard.card.someone');
+  return by ? t('teamBoard.card.assignedBy', { name, by }) : t('teamBoard.card.assigned', { name });
+}
+
+/** Who wrote its text when it is not me (ESC-645): « Texte de Bob Durand »; null when I wrote all of it. */
+export function writtenLine(ticket: Ticket): string | null {
+  const by = ticket.team?.writtenBy ?? [];
+  return by.length ? t('teamBoard.card.writtenBy', { names: by.join(', ') }) : null;
+}
+
+/** Assigned to me with a teammate's text not accepted (ESC-645): neither the autopilot nor « Lancer » starts it. */
+export function toAccept(ticket: Ticket): boolean {
+  return !!ticket.team?.toAccept;
+}
+
+/** What the band of a ticket to accept says. */
+export function acceptLine(ticket: Ticket): string {
+  const by = ticket.team?.writtenBy ?? [];
+  return t('teamBoard.accept.band', { names: by.length ? by.join(', ') : t('teamBoard.card.someone') });
 }
 
 /** Under way, to test or in review on another machine of the team: its agent and its branch are there. */

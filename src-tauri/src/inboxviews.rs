@@ -41,6 +41,8 @@ pub enum ViewSource {
     Review,
     /// An agent a teammate passes to this machine (TS-17): « Alice te passe DEM-41 · Prendre ».
     Handoff,
+    /// A ticket of the team assigned to the user with a teammate's text (ESC-645): « Bob t’assigne DEM-4 · Accepter ».
+    TeamAccept,
 }
 
 /// The group a view goes in (§ 10.2): « Tes agents se sont arrêtés », « Aujourd'hui », « Plus tôt ».
@@ -235,7 +237,7 @@ impl ViewAct {
             (Self::Resume, S::TicketBlocked) => v.column == Some(Column::Doing) && !v.conflict,
             (Self::Resolve | Self::Dismiss, S::TicketBlocked) => v.conflict,
             (Self::Retarget { .. }, S::TicketBlocked) => v.other_line.is_some(),
-            (Self::Accept, S::Decision) => true,
+            (Self::Accept, S::Decision | S::TeamAccept) => true,
             (Self::Share, S::Docs) => true,
             (Self::Take { .. }, S::Handoff) => true,
             _ => false,
@@ -279,6 +281,10 @@ pub(crate) fn not_markable(source: ViewSource, from_ticket: bool, settle: bool) 
         ViewSource::Docs => Some(tr!(
             "Partager les docs reste le geste de l’utilisateur (ou share_docs) : cette ligne ne se coche pas à sa place.",
             "Sharing the docs stays the user’s gesture (or share_docs): this line is not ticked for them."
+        )),
+        ViewSource::TeamAccept => Some(tr!(
+            "Accepter le texte qu’un collègue a écrit reste le geste de l’utilisateur : cette ligne n’est ni prise en charge ni cochée par un agent.",
+            "Accepting a text a teammate wrote stays the user’s gesture: this line is neither taken in hand nor ticked by an agent."
         )),
         ViewSource::Review => Some(tr!(
             "Cette relecture, l’hébergeur la demande à l’utilisateur : elle reste la sienne, ni prise en charge ni cochée par un agent.",
@@ -472,6 +478,43 @@ impl Core {
             v.by = Some(h.from_name.clone());
             v.engine = Some(h.engine.clone());
             v.branch = Some(h.branch.clone());
+            views.push(v);
+        }
+        // The tickets of the team assigned to the user with a teammate's text not accepted (ESC-645): its key names the
+        // writes read, so that one changed meanwhile is refused, never accepted unread.
+        for t in &tickets {
+            let Some(tt) = t
+                .team
+                .as_ref()
+                .filter(|x| t.column == Column::Todo && x.awaits_accept())
+            else {
+                continue;
+            };
+            let Some((pid, pname, private)) = of(&t.project_id) else {
+                continue;
+            };
+            let sign = tt.foreign.join(",");
+            let mut v = InboxItem::new(
+                format!(
+                    "accept:{}:{}",
+                    t.id,
+                    crate::teamboard::text_print(&tt.foreign)
+                ),
+                ViewSource::TeamAccept,
+                ViewGroup::Today,
+                (&pid, &pname, private),
+            );
+            v.title = first_line(&t.title);
+            v.since = t.created_at;
+            v.ticket_id = Some(t.id.clone());
+            v.ticket_key = Some(t.key.clone());
+            v.column = Some(t.column);
+            v.by = Some(if tt.written_by.is_empty() {
+                tr!("un collègue", "a teammate")
+            } else {
+                tt.written_by.join(", ")
+            });
+            v.sign = sign;
             views.push(v);
         }
         for t in &tickets {
@@ -735,6 +778,17 @@ impl Core {
             ViewAct::Retarget { target } => {
                 self.ticket_set_target(&ticket(), &target).await?;
             }
+            // A teammate's text accepted (ESC-645): the writes of this view, the ones the user read; changed since,
+            // its key changed too and this one was refused above.
+            ViewAct::Accept if v.source == ViewSource::TeamAccept => {
+                let seen: Vec<String> = v
+                    .sign
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                self.team_accept(&ticket(), &seen)?;
+            }
             ViewAct::Accept => {
                 let id = v.decision.clone().unwrap_or_default();
                 self.docs_accept_decision(&v.project_id, &crate::docs::Ref::Id(id))
@@ -908,6 +962,7 @@ impl InboxItem {
             ViewSource::Docs => "docs",
             ViewSource::Review => "review",
             ViewSource::Handoff => "handoff",
+            ViewSource::TeamAccept => "teamAccept",
         }
     }
 }

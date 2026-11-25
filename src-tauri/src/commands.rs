@@ -3749,6 +3749,13 @@ pub async fn ticket_team_assign(core: CoreState<'_>, id: String, me: bool) -> Re
     core.team_assign(&id, me).await.map_err(err)
 }
 
+/// « Accepter » a ticket of the team assigned to me whose text a teammate wrote (ESC-645): `seen`, the stamps of their
+/// writes as its card showed them.
+#[tauri::command(async)]
+pub fn ticket_team_accept(core: CoreState, id: String, seen: Vec<String>) -> Res<Ticket> {
+    core.team_accept(&id, &seen).map_err(err)
+}
+
 /// « Ne pas partager », « Partager avec l'équipe » of a ticket of a team's Kanban (TS-6).
 #[tauri::command(async)]
 pub fn ticket_team_local(core: CoreState, id: String, local: bool) -> Res<Ticket> {

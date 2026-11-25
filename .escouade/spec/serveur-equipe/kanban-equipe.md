@@ -1,9 +1,9 @@
 ---
 title: "Le Kanban d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md §2.7, §4.1, §4.2, §11, C5","crates/escouade-team/README.md","crates/escouade-team-server/README.md","src-tauri/src/teamboard.rs","src-tauri/src/teampour.rs","src-tauri/src/teamjoin.rs","src-tauri/src/teamhandoff.rs"]
-tickets: ["ESC-479","ESC-493","ESC-518","ESC-548"]
-decisions: [168,173,178,188,194]
+sources: ["docs/TEAM-SERVER.md §2.7, §4.1, §4.2, §11, C5","crates/escouade-team/README.md","crates/escouade-team-server/README.md","src-tauri/src/teamboard.rs","src-tauri/src/teampour.rs","src-tauri/src/teamjoin.rs","src-tauri/src/teamhandoff.rs","Revue de sécurité de la 2.3 (ESC-626), constat SR3-02"]
+tickets: ["ESC-479","ESC-493","ESC-518","ESC-548","ESC-645"]
+decisions: [168,173,178,188,194,315]
 compared: null
 ---
 
@@ -113,3 +113,21 @@ Des ids opaques (le projet, la prise de chaque ticket), des ids d'appareil, des 
   - sinon, pourquoi rien ne part : déjà sur le serveur d'équipe (ce poste les lit de là, rien de son dépôt ne part), gardées dans le dépôt par l'équipe, projet privé, ou aucune dans le dépôt.
   - Ce qui reste le dit aussi : les images, les fichiers joints, le compte, le modèle et le harness. La mémoire partagée (`.escouade/memory`) part avec les docs (voir « La mémoire d'équipe »).
 - **Verser les docs** les importe comme le réglage « Sur le serveur d'équipe » (ids et numéros gardés, une fois pour l'équipe) ; l'écran nomme ensuite les fichiers restés dans `.escouade/` (« Retirer du dépôt » de l'onglet Docs les retire ; Escouade ne commite rien).
+
+## Un ticket qu'un collègue écrit et m'assigne (ESC-645, SR3-02)
+
+Le texte d'un ticket (son titre, sa description, ses critères) est le premier message de son agent : écrit par un autre membre, c'est la consigne d'un tiers, que l'agent suivrait sur ce poste, avec ses droits, ses comptes et son mode de permissions. Un ticket assigné à moi dont le texte vient d'un autre membre **attend mon accord** avant tout lancement.
+
+- **Qui a écrit, qui a assigné** : le membre de chaque champ se lit par l'appareil qui a signé sa dernière écriture au journal (l'horodatage d'un champ porte son appareil, vérifié avec la signature de l'opération), puis par le registre des membres de l'équipe : jamais par ce que dit un champ. Mes autres appareils sont moi. Les images et les fichiers d'un ticket ne quittent pas un poste : ils n'en font pas partie.
+- **« À accepter »** : un ticket assigné au membre de ce poste (par moi, « Me l'assigner », ou par un autre) dont le titre, la description ou les critères ont été écrits en dernier par un autre membre, et que je n'ai pas accepté. **Ni le pilote auto, ni l'Overseer, ni `start_ticket` d'un de mes agents, ni « Lancer »** ne le lancent ; la prise du serveur non plus (« Reprendre » compris). Le refus dit pourquoi : « DEM-4 t'est assigné avec un texte écrit par Bob Durand : rien ne le lance avant que tu l'acceptes, dans sa carte ou dans « À toi ». »
+- **Accepter** : le geste « Accepter » de sa carte, ou de sa demande dans « À toi » ; jamais un outil du serveur MCP, ni le chef d'escouade (sa vue ne se prend pas en charge et ne se coche pas). L'accord porte sur les écritures que la carte ou la boîte montraient : si le texte a changé entre-temps, il est refusé (« Le texte de DEM-4 vient de changer : relis-le, puis accepte-le. »). L'accord est de ce poste, gardé avec le ticket.
+- **Un texte changé après l'accord** : une nouvelle écriture d'un autre membre sur le titre, la description ou les critères le remet « à accepter », et sa demande revient dans « À toi ». Une écriture de moi ne le remet pas.
+- **Un ticket dont je suis l'auteur du texte** assigné à moi par un autre membre n'attend rien : la consigne est la mienne.
+- **La carte** : une bande « Texte écrit par Bob Durand, et il t'est assigné : ni le pilote auto, ni l'Overseer, ni tes agents ne le lancent avant que tu l'acceptes. Lis-le d'abord. » avec « Accepter » ; la dernière ligne dit « À accepter : rien ne le lance avant », sans « Lancer ». Accepté, la carte garde « Texte de Bob Durand ». L'assignation dit qui l'a faite quand c'est un autre : « Assigné à moi par Bob Durand », « Assigné à Carol par Bob Durand ». Seuls les tickets « À faire » montrent la bande.
+- **Dans « À toi »** (serveur MCP allumé) : une vue « Ticket à accepter », « DEM-4 · Nettoyer le cache · texte de Bob Durand », dans « Aujourd'hui », avec « Accepter » et « Voir dans le Kanban ».
+- **Le serveur MCP** : `get_ticket` et `list_tickets` disent `team.writtenBy`, `team.assignedBy` et `team.toAccept` ; le texte reste entouré de `<third_party_data>`.
+- **« Prendre aussi « À faire » de l'équipe »** reste un accord donné d'avance, par ce réglage de ce poste : le pilote auto prend alors les tickets de l'équipe non assignés, quel qu'en soit l'auteur, comme avant.
+
+### Ce qui reste de confiance
+
+- Pendant qu'un agent travaille sur un ticket accepté, un collègue peut encore changer ses critères : leurs notes passent dans les messages des boucles suivantes. Seul le lancement attend l'accord.
