@@ -326,6 +326,45 @@ mod download {
         (0..300_000u32).map(|i| (i % 251) as u8).collect()
     }
 
+    #[test]
+    fn the_model_downloads_at_a_pinned_commit() {
+        use super::super::model::{MODEL_REVISION, MODEL_URL};
+        assert_eq!(MODEL_REVISION.len(), 40);
+        assert_eq!(
+            MODEL_URL,
+            format!("https://huggingface.co/Xenova/multilingual-e5-base/resolve/{MODEL_REVISION}")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_published_again_with_another_size_is_said_changed_and_not_kept() {
+        let b = body();
+        let (url, _) = serve(b.clone(), None, false).await;
+        let dir = crate::test_dir("vectors-changed");
+        let store = Store { dir: dir.clone() };
+        let mut s = spec(&b, false);
+        let files: &'static [File] = Box::leak(Box::new([File {
+            size: b.len() as u64 - 1000,
+            ..s.files[0].clone()
+        }]));
+        s.files = files;
+        let e = store
+            .download(
+                &reqwest::Client::new(),
+                &url,
+                &s,
+                &AtomicBool::new(false),
+                |_, _| {},
+            )
+            .await
+            .unwrap_err();
+        let c = e
+            .downcast_ref::<escouade_voice_local::models::FileChanged>()
+            .unwrap_or_else(|| panic!("{e:#}"));
+        assert_eq!((c.got, c.expected), (b.len() as u64, b.len() as u64 - 1000));
+        assert!(std::fs::read_dir(&dir).unwrap().next().is_none());
+    }
+
     #[tokio::test]
     async fn the_model_comes_with_its_progress_and_is_checked() {
         let body = body();

@@ -4,6 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- The conversation’s voices download again: they are taken at a fixed version of their repository, which its updates no longer break (a voice retrained upstream made its download fail). The models of the dictation and of the search by meaning are fixed the same way.
+- When a published file no longer matches the one Escouade expects, the message says so plainly and that Escouade has to be updated, instead of “6369 bytes and more, 4875 expected”.
+- While dictating, the band says to click the mic again (or the shortcut) to type what you said.
+
 ## [2.2.11] — 2026-11-25
 
 - Browsers in the sidebar, like terminals: one row per tab under “Terminals”, opened full screen or next to an agent, with tablet and mobile widths and the developer tools next to the address. You open one from “+”, and an agent’s test or a launch command opens its own; the “Pages” window is gone.

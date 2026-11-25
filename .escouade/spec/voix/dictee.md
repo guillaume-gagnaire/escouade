@@ -2,8 +2,8 @@
 title: "Dictée"
 subject: "Voix"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-16","ESC-96","ESC-110","ESC-132","ESC-134","ESC-135","ESC-136","ESC-350"]
-decisions: []
+tickets: ["ESC-16","ESC-96","ESC-110","ESC-132","ESC-134","ESC-135","ESC-136","ESC-350","ESC-664"]
+decisions: ["voix-et-modeles-epingles-a-une-revision"]
 compared: null
 ---
 
@@ -23,7 +23,7 @@ Dicter un message au lieu de le taper. Par défaut, tout se fait sur la machine 
 
 - Deux façons. Un clic bref (ou un appui bref du raccourci) commence, un second finit. Un appui maintenu 400 ms ou plus fait « appuyer pour parler » : relâcher finit. Relâché pendant que le micro s'ouvre encore, la dictée finit dès qu'il écoute ; la fenêtre quittée pendant l'appui compte comme relâché.
 - `Échap` annule : rien n'est écrit.
-- Pendant l'écoute, un panneau au-dessus du bouton (en dessous dans un ticket et dans le terminal) montre « À l'écoute », le niveau du son (une barre, et un halo autour du bouton, mis à jour toutes les 50 ms) et la durée. Puis « Transcription sur ta machine… », ou « Transcription par <service>… » en ligne.
+- Pendant l'écoute, un panneau au-dessus du bouton (en dessous dans un ticket et dans le terminal ; dans le compositeur, une bande au-dessus du texte) montre « À l'écoute », le niveau du son (une barre, et un halo autour du bouton, mis à jour toutes les 50 ms), la durée, et comment finir : « Reclique sur le micro ou <raccourci> pour écrire ce que tu as dit · Échap pour annuler » (« Click the mic again or <shortcut> to type what you said · Esc to cancel »). Un utilisateur qui voyait l'onde bouger n'avait pas deviné qu'un second clic sur le micro finit la dictée. Puis « Transcription sur ta machine… », ou « Transcription par <service>… » en ligne.
 - En transcription en direct, le texte partiel s'écrit dans ce panneau (ses dernières lignes) pendant qu'on parle.
 
 ### Le texte
@@ -43,7 +43,10 @@ La dictée finit à la fin de l'écoute ; après 10 minutes (ce qui a été dit 
 ### Transcription locale (Whisper)
 
 - Whisper (whisper.cpp) transcrit sur la machine, sans jamais bloquer l'interface. Chaque dictée est transcrite seule, sans le contexte de la précédente. Le modèle est chargé pendant que l'utilisateur parle, puis gardé chargé (un seul à la fois). Une annulation interrompt Whisper en cours.
-- **Le modèle** est téléchargé à la demande : au premier usage (le panneau propose « Télécharger le modèle de transcription ? », avec son nom et sa taille) ou depuis Réglages › Voix. La progression est affichée ; le téléchargement est annulable. Il vient de Hugging Face (`ggerganov/whisper.cpp`), par le proxy et le réglage TLS des réglages réseau (voir *Réglages*), sans limite de durée totale (60 s sans un octet : échec). Il n'est gardé qu'entier et de la bonne somme SHA-256 ; sinon « Le fichier téléchargé n'est pas le bon modèle (somme de contrôle différente) : il n'est pas gardé… », et rien ne reste. Il est rangé dans `~/.escouade/voice/models/ggml-<modèle>.bin`.
+- **Le modèle** est téléchargé à la demande : au premier usage (le panneau propose « Télécharger le modèle de transcription ? », avec son nom et sa taille) ou depuis Réglages › Voix. La progression est affichée ; le téléchargement est annulable. Il vient de Hugging Face (`ggerganov/whisper.cpp`), **à une révision fixée du dépôt** (un commit, jamais `main` : un modèle changé en amont ne casse pas le téléchargement ; changer de révision est une mise à jour du catalogue, tailles et SHA-256 revérifiées), par le proxy et le réglage TLS des réglages réseau (voir *Réglages*), sans limite de durée totale (60 s sans un octet : échec). Il est rangé dans `~/.escouade/voice/models/ggml-<modèle>.bin`.
+- Il n'est gardé qu'entier, de la bonne taille et de la bonne somme SHA-256 ; sinon rien ne reste, et le message dit en clair ce qui se passe (le même pour une voix et pour le modèle de la recherche par le sens) :
+  - une autre taille (annoncée par le serveur, ou dépassée en route) : « Le fichier publié pour ce modèle a changé (<taille> au lieu de <attendue> attendus) : cette version d'Escouade ne le reconnaît plus, il n'est pas gardé. Ce n'est pas de ton côté : c'est à Escouade de se mettre à jour. Installe la dernière version, ou signale-le si elle ne règle rien. » ;
+  - une autre somme : « Le fichier téléchargé pour ce modèle n'est pas celui qu'attend Escouade (somme de contrôle différente) : il n'est pas gardé. Soit le fichier publié a changé et c'est à Escouade de se mettre à jour (installe la dernière version, ou signale-le), soit un proxy le modifie en route : télécharge-le ailleurs. »
 - Modèles : tiny (78 Mo), **base** (148 Mo, par défaut), small (488 Mo), large-v3-turbo-q5_0 (574 Mo), medium (1,5 Go), large-v3-turbo (1,6 Go).
 
 ### Transcription en ligne

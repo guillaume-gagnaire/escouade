@@ -13,9 +13,9 @@ export default defineZone('voice', {
     /** Live transcription (ESC-136): the service, beside what it heard so far. */
     live: '{service} · live',
     /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape. */
-    keys: '{key} to finish · {escape} to cancel',
+    keys: 'Click the mic again or {key} to type what you said · {escape} to cancel',
     listening: 'Listening',
-    hint: 'Click or {key} to end · Esc to cancel',
+    hint: 'Click the mic again or {key} to type what you said · Esc to cancel',
     holdHint: 'Let go to end · Esc to cancel',
     level: 'Microphone level',
     transcribing: 'Transcribing on your machine…',

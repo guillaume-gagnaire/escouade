@@ -635,11 +635,7 @@ impl Voice {
         self.downloads.lock().remove(id);
         match r {
             Ok(_) => Ok(()),
-            Err(e) if e.is::<models::ChecksumMismatch>() => Err(anyhow::anyhow!(tr!(
-                "Le fichier téléchargé n’est pas le bon modèle (somme de contrôle différente) : il n’est pas gardé. Réessaie ; derrière un proxy qui modifie les fichiers, télécharge-le ailleurs.",
-                "The file downloaded is not the right model (checksum mismatch): it was not kept. Try again; behind a proxy that alters files, download it elsewhere."
-            ))),
-            Err(e) => Err(e),
+            Err(e) => Err(models::download_error(e, models::Downloaded::Model)),
         }
     }
 
@@ -721,11 +717,7 @@ impl Voice {
         self.downloads.lock().remove(&key);
         match r {
             Ok(()) => Ok(()),
-            Err(e) if e.is::<models::ChecksumMismatch>() => Err(anyhow::anyhow!(tr!(
-                "Le fichier téléchargé n’est pas la bonne voix (somme de contrôle différente) : il n’est pas gardé. Réessaie ; derrière un proxy qui modifie les fichiers, télécharge-la ailleurs.",
-                "The file downloaded is not the right voice (checksum mismatch): it was not kept. Try again; behind a proxy that alters files, download it elsewhere."
-            ))),
-            Err(e) => Err(e),
+            Err(e) => Err(models::download_error(e, models::Downloaded::Voice)),
         }
     }
 

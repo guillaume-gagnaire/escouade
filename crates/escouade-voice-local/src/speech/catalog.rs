@@ -79,6 +79,9 @@ pub struct Model {
     pub lang: String,
     pub quality: String,
     pub repo: String,
+    /// The commit of `repo` its files are taken at (ESC-664): `scripts/piper-voices.mjs` pins one per repository.
+    #[serde(default)]
+    pub revision: Option<String>,
     pub onnx: String,
     pub json: String,
     #[serde(default)]
@@ -322,6 +325,9 @@ pub struct VoiceInfo {
     #[serde(default)]
     pub sample_rate: u32,
     pub repo: String,
+    /// The commit of `repo` it is downloaded at (ESC-664), where its files have the sizes and SHA-256 below: a file
+    /// changed upstream (a voice retrained) never breaks its download.
+    pub revision: String,
     pub onnx: String,
     pub json: String,
     pub onnx_size: u64,
@@ -364,6 +370,7 @@ pub fn voice_info(m: &Model) -> Option<VoiceInfo> {
             speaker_names: m.speaker_names.clone(),
             sample_rate: m.sample_rate,
             repo: m.repo.clone(),
+            revision: m.revision.clone()?,
             onnx: m.onnx.clone(),
             json: m.json.clone(),
             onnx_size: onnx.size,
@@ -412,6 +419,7 @@ pub fn voice_info(m: &Model) -> Option<VoiceInfo> {
         speaker_names: m.speaker_names.clone(),
         sample_rate: m.sample_rate,
         repo: m.repo.clone(),
+        revision: m.revision.clone()?,
         onnx: m.onnx.clone(),
         json: m.json.clone(),
         onnx_size: onnx.size,
@@ -469,6 +477,167 @@ pub fn find(id: &str) -> Option<&'static VoiceInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_voice_downloads_at_the_commit_its_repository_is_pinned_to() {
+        // ESC-664: `main` of rhasspy/piper-voices was retrained (siwis's settings 6369 bytes, 4875 in the catalog).
+        let v = find("fr_FR-siwis-medium").unwrap();
+        assert_eq!(v.revision, "e7229f7d33a10e145e109b886d661984201ac3c4");
+        assert_eq!(
+            super::super::file_url("https://huggingface.co/", v, &v.json),
+            "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json"
+        );
+        for v in shipped() {
+            assert!(
+                v.revision.len() == 40 && v.revision.chars().all(|c| c.is_ascii_hexdigit()),
+                "{} is pinned to a commit, not {:?}",
+                v.id,
+                v.revision
+            );
+        }
+        // One commit per repository: the script that writes the catalog pins them so.
+        let mut by_repo = std::collections::HashMap::new();
+        for v in shipped() {
+            assert_eq!(
+                by_repo
+                    .entry(v.repo.as_str())
+                    .or_insert(v.revision.as_str()),
+                &v.revision.as_str(),
+                "{}",
+                v.repo
+            );
+        }
+    }
+
+    #[test]
+    fn whisper_s_models_download_at_a_pinned_commit() {
+        assert_eq!(crate::models::MODELS_REVISION.len(), 40);
+        assert_eq!(
+            crate::models::MODELS_URL,
+            format!(
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/{}",
+                crate::models::MODELS_REVISION
+            )
+        );
+    }
+
+    /// What Hugging Face says of `url` without downloading it: its size and, for a file in LFS, its SHA-256
+    /// (`X-Linked-Size`, `X-Linked-ETag`, `client` not following redirections); a small file not in LFS is downloaded and hashed.
+    pub(crate) async fn published(client: &reqwest::Client, url: &str) -> (u64, String) {
+        let r = client
+            .head(url)
+            .header("User-Agent", "escouade")
+            .send()
+            .await
+            .unwrap();
+        let h = |k: &str| {
+            r.headers()
+                .get(k)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.trim_matches('"').to_string())
+        };
+        if let (Some(size), Some(etag)) = (h("x-linked-size"), h("x-linked-etag")) {
+            if etag.len() == 64 {
+                return (size.parse().unwrap(), etag);
+            }
+        }
+        // The small file itself, its redirection followed.
+        let bytes = reqwest::Client::new()
+            .get(url)
+            .header("User-Agent", "escouade")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        use sha2::Digest;
+        let sha = sha2::Sha256::digest(&bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        (bytes.len() as u64, sha)
+    }
+
+    /// The French voice of a first conversation, really downloaded the way the app does it, at its pinned revision:
+    /// its settings are the 4875 bytes of the catalog, not the 6369 of the voice retrained on `main` (ESC-664).
+    /// Run by hand: `ESCOUADE_TEST_REAL_VOICE=<folder> cargo test -p escouade-voice-local --lib -- --ignored
+    /// a_real_french_voice` (63 MB).
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "downloads a real voice: ESCOUADE_TEST_REAL_VOICE=<folder>"]
+    async fn a_real_french_voice_downloads_at_its_revision() {
+        let Ok(dir) = std::env::var("ESCOUADE_TEST_REAL_VOICE") else {
+            return;
+        };
+        let store = super::super::VoiceStore { dir: dir.into() };
+        let v = find("fr_FR-siwis-medium").unwrap();
+        let _ = store.delete(&v.id);
+        let started = std::time::Instant::now();
+        store
+            .download(
+                &reqwest::Client::new(),
+                super::super::VOICES_URL,
+                v,
+                &std::sync::atomic::AtomicBool::new(false),
+                |_| {},
+            )
+            .await
+            .unwrap();
+        assert!(store.has(v));
+        assert_eq!(std::fs::metadata(store.config(&v.id)).unwrap().len(), 4875);
+        eprintln!(
+            "{} downloaded at {} in {:?}: {} + {} bytes, SHA-256 checked",
+            v.id,
+            v.revision,
+            started.elapsed(),
+            v.onnx_size,
+            v.json_size
+        );
+    }
+
+    /// Every file of `voices.json` and of whisper.cpp's `CATALOG`, at the commit it is pinned to, has the size and the
+    /// SHA-256 the app checks (ESC-664). Run by hand, on the network: `cargo test -p escouade-voice-local --lib --
+    /// --ignored the_pinned_files_are_the_catalog_s` (and `node scripts/piper-voices-check.mjs` does the same).
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "on the network: Hugging Face"]
+    async fn the_pinned_files_are_the_catalog_s() {
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+        let mut bad = Vec::new();
+        let all: Vec<VoiceInfo> = serde_json::from_str(include_str!("voices.json")).unwrap();
+        for v in &all {
+            for (file, size, sha) in [
+                (&v.onnx, v.onnx_size, &v.onnx_sha256),
+                (&v.json, v.json_size, &v.json_sha256),
+            ] {
+                let url = super::super::file_url(super::super::VOICES_URL, v, file);
+                let got = published(&client, &url).await;
+                if got != (size, sha.clone()) {
+                    bad.push(format!("{url}: {got:?}, ({size}, {sha}) expected"));
+                }
+            }
+        }
+        for m in crate::models::CATALOG {
+            let url = format!("{}/ggml-{}.bin", crate::models::MODELS_URL, m.id);
+            let got = published(&client, &url).await;
+            if got != (m.size, m.sha256.to_string()) {
+                bad.push(format!(
+                    "{url}: {got:?}, ({}, {}) expected",
+                    m.size, m.sha256
+                ));
+            }
+        }
+        eprintln!(
+            "{} voices and {} models checked",
+            all.len(),
+            crate::models::CATALOG.len()
+        );
+        assert!(bad.is_empty(), "{bad:#?}");
+    }
 
     fn excerpt() -> Vec<Model> {
         #[derive(Deserialize)]

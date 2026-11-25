@@ -2,8 +2,8 @@
 title: "Conversation vocale"
 subject: "Voix"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-97","ESC-110","ESC-114","ESC-115","ESC-131","ESC-132","ESC-134","ESC-136","ESC-137"]
-decisions: []
+tickets: ["ESC-97","ESC-110","ESC-114","ESC-115","ESC-131","ESC-132","ESC-134","ESC-136","ESC-137","ESC-664"]
+decisions: ["voix-et-modeles-epingles-a-une-revision"]
 compared: null
 ---
 
@@ -138,3 +138,10 @@ Réglages › Voix › Conversation (voir *Réglages*) :
 - Une transcription en ligne qui échoue n'est jamais refaite par Whisper : la phrase est perdue.
 - Groq lit en anglais seulement ; Orpheus, Aura et Flash v2 ne lisent pas le français (Piper le lit).
 - Une liste de choix d'un formulaire MCP ne prend pas de réponse libre à la voix.
+
+## Les voix, à une révision fixée de leur dépôt
+
+Ceci précise le **Téléchargement** d'une voix, plus haut. Chaque voix de la liste a, avec ses tailles et ses SHA-256, le commit de son dépôt Hugging Face d'où elle se télécharge (`<dépôt>/resolve/<commit>/<fichier>`), jamais `main`. Un dépôt a un seul commit pour toutes ses voix. `rhasspy/piper-voices` réentraîne ses voix sur place depuis le 2026-11-09 : sur `main`, les réglages de `fr_FR-siwis-medium` font 6 369 octets, la liste en attend 4 875, et le téléchargement échouait. Les voix officielles sont prises au commit `e7229f7d` (2026-11-02), le dernier où les 36 voix de la liste ont encore leurs tailles et leurs empreintes.
+
+- La liste et son commit changent ensemble, à une mise à jour de la liste, faite exprès. `node scripts/piper-voices-check.mjs` vérifie chaque fichier de chaque voix au commit indiqué (taille et empreinte LFS par les en-têtes, sans télécharger les modèles). Le test ignoré `the_pinned_files_are_the_catalog_s` vérifie la même chose, avec en plus les modèles de whisper.cpp.
+- Un fichier qui ne correspond pas n'est jamais gardé, et le message le dit en clair (« Le fichier publié pour cette voix a changé (…) : … c'est à Escouade de se mettre à jour », voir *Dictée*).

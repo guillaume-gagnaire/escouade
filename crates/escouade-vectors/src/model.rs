@@ -3,7 +3,7 @@
 
 use super::embed::{Onnx, Prefixes};
 use anyhow::{bail, Result};
-use escouade_voice_local::models::{Cancelled, ChecksumMismatch};
+use escouade_voice_local::models::{Cancelled, ChecksumMismatch, FileChanged};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -58,8 +58,20 @@ pub const MODEL: Spec = Spec {
     ],
 };
 
-/// Where the model is downloaded from: `<base>/<file.url>`.
-pub const MODEL_URL: &str = "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main";
+/// The commit of `Xenova/multilingual-e5-base` on Hugging Face the model is taken at (ESC-664), where its files have
+/// the sizes and SHA-256 of `MODEL` (checked 2026-11-25): a file changed upstream never breaks a download.
+macro_rules! model_revision {
+    () => {
+        "1ec9243030a27d1a115d5c340572074c125b58b2"
+    };
+}
+pub const MODEL_REVISION: &str = model_revision!();
+
+/// Where the model is downloaded from: `<base>/<file.url>`, at `MODEL_REVISION`.
+pub const MODEL_URL: &str = concat!(
+    "https://huggingface.co/Xenova/multilingual-e5-base/resolve/",
+    model_revision!()
+);
 
 impl Spec {
     pub fn size(&self) -> u64 {
@@ -218,6 +230,15 @@ async fn fetch(
     if have > 0 && res.status() != reqwest::StatusCode::PARTIAL_CONTENT {
         have = 0;
     }
+    // A server that says another size: the file published is no longer the one of the catalog (ESC-664).
+    if let Some(n) = res.content_length().filter(|&n| n != f.size - have) {
+        let _ = std::fs::remove_file(part);
+        bail!(FileChanged {
+            got: have + n,
+            expected: f.size,
+            more: false
+        });
+    }
     let mut hash = Sha256::new();
     let mut file = if have > 0 {
         let mut old = std::fs::File::open(part)?;
@@ -249,7 +270,11 @@ async fn fetch(
             hash.update(&chunk);
             done += chunk.len() as u64;
             if done > f.size {
-                bail!("{done} bytes and more, {} expected", f.size);
+                bail!(FileChanged {
+                    got: done,
+                    expected: f.size,
+                    more: true
+                });
             }
             if told.elapsed() >= Duration::from_millis(100) {
                 told = Instant::now();

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HOLD_MS } from '../lib/dictation';
@@ -64,6 +64,20 @@ describe('MicButton in the composer', () => {
     expect(mic()).toHaveClass('on');
   });
 
+  it('says while it listens that a second click on the microphone writes what was said, in French and in English (ESC-664)', async () => {
+    composer();
+    await click(mic());
+    await waitFor(() => expect(mic()).toHaveAttribute('aria-pressed', 'true'));
+    expect(panel()).toHaveTextContent('Reclique sur le micro ou Ctrl+Maj+Espace pour écrire ce que tu as dit · Échap pour annuler');
+    dictation.cancel();
+    cleanup();
+    setLang('en');
+    composer();
+    await click(mic());
+    await waitFor(() => expect(mic()).toHaveAttribute('aria-pressed', 'true'));
+    expect(panel()).toHaveTextContent('Click the mic again or Ctrl+Shift+Space to type what you said · Esc to cancel');
+  });
+
   it('a click listens, shows the level and the time, a second puts the text at the cursor, unsent', async () => {
     const { backend, textarea } = composer('les tests');
     await userEvent.type(textarea, 'Lance  puis commite');
@@ -75,7 +89,7 @@ describe('MicButton in the composer', () => {
     await waitFor(() => expect(screen.getByRole('meter', { name: 'Niveau du micro' })).toHaveAttribute('aria-valuenow', '42'));
     expect(panel()).toHaveTextContent('À l’écoute');
     expect(panel()).toHaveTextContent('0:03');
-    expect(panel()).toHaveTextContent('Ctrl+Maj+Espace pour finir');
+    expect(panel()).toHaveTextContent('Reclique sur le micro ou Ctrl+Maj+Espace pour écrire ce que tu as dit');
     await click(mic());
     await waitFor(() => expect(textarea.value).toBe('Lance les tests puis commite'));
     expect(textarea.selectionStart).toBe(15);

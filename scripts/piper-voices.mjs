@@ -5,7 +5,12 @@
 // repo), whether it is a character's, and its files' sizes and SHA-256.
 //   node scripts/piper-voices.mjs → scripts/piper-voices/snapshot.json
 // Then `cargo test -p escouade-voice-local -- --ignored write_the_voice_catalog` (in src-tauri) applies the rule (`speech::catalog::admit`) and
-// writes the list the app ships (crates/escouade-voice-local/src/speech/voices.json).
+// writes the list the app ships (crates/escouade-voice-local/src/speech/voices.json), and
+// `node scripts/piper-voices-check.mjs` checks every file of it at its revision.
+//
+// The files are read at the commit `REVISIONS` pins for their repository (ESC-664), never `main`: rhasspy/piper-voices
+// retrains its voices in place (from 2026-11-09), and the app downloads at the revision the catalog says. A new
+// snapshot changes a revision on purpose, here; a repository left out is refused, its commit on `main` told.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -15,6 +20,15 @@ import { fileURLToPath } from 'node:url';
 const HUB = 'https://raw.githubusercontent.com/fox3000foxy/piper-bank/main';
 const HF = 'https://huggingface.co';
 const LANGS = new Set(['fr', 'en']);
+
+/** The commit each repository is read at (ESC-664): the last of rhasspy/piper-voices before its retrainings, where
+ * every voice of the catalog has the sizes and SHA-256 of 2026-10-16. */
+export const REVISIONS = {
+  'rhasspy/piper-voices': 'e7229f7d33a10e145e109b886d661984201ac3c4',
+  'nardocolin/nardocolin-pipertts': 'd79eb4895749230ff0c4f3e1b22b91bd69b5aed3',
+  'DataCraftsmanAustralia/piper-en_AU-librivox-medium': '7f35faf19fe1789ece4b14233448f7c04e35a84f',
+  'fox3000foxy/piper-checkpoints-fuzeiii': 'b7e2dea383761d52e0ca66d9fa89b2a9c890a1e1',
+};
 
 async function get(url, as = 'json') {
   for (let attempt = 1; ; attempt++) {
@@ -43,8 +57,8 @@ export function readModelCard(text) {
   return { datasetUrl: url, datasetLicense: license, base };
 }
 
-async function files(repo, paths) {
-  const r = await fetch(`${HF}/api/models/${repo}/paths-info/main`, {
+async function files(repo, rev, paths) {
+  const r = await fetch(`${HF}/api/models/${repo}/paths-info/${rev}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'User-Agent': 'escouade-piper-voices' },
     body: JSON.stringify({ paths, expand: false }),
@@ -68,12 +82,19 @@ async function main() {
     if (dsRepo && !datasetCards.has(dsRepo)) datasetCards.set(dsRepo, cardLicense(await get(`${HF}/api/datasets/${dsRepo}`)));
     const card =
       m.repo === 'rhasspy/piper-voices'
-        ? readModelCard(await get(`${HF}/${m.repo}/raw/main/${path.posix.dirname(m.onnx)}/MODEL_CARD`, 'text'))
+        ? readModelCard(await get(`${HF}/${m.repo}/raw/${rev ?? 'main'}/${path.posix.dirname(m.onnx)}/MODEL_CARD`, 'text'))
         : null;
-    const info = await files(m.repo, [m.onnx, m.json]);
+    const rev = REVISIONS[m.repo];
+    if (!rev) {
+      // A voice of a repository not pinned: told, with the commit of its `main`, and kept out (no files, not admitted).
+      const head = await get(`${HF}/api/models/${m.repo}/revision/main`);
+      process.stderr.write(`${m.slug}: ${m.repo} has no revision in REVISIONS (its main: ${head?.sha ?? '?'})
+`);
+    }
+    const info = rev ? await files(m.repo, rev, [m.onnx, m.json]) : {};
     const onnx = info[m.onnx];
     let json = null;
-    const jsonBytes = info[m.json] ? await get(`${HF}/${m.repo}/resolve/main/${m.json}`, 'bytes') : null;
+    const jsonBytes = info[m.json] ? await get(`${HF}/${m.repo}/resolve/${rev}/${m.json}`, 'bytes') : null;
     if (jsonBytes) json = { size: jsonBytes.length, sha256: crypto.createHash('sha256').update(jsonBytes).digest('hex') };
     out.push({
       slug: m.slug,
@@ -81,6 +102,7 @@ async function main() {
       lang: m.lang,
       quality: m.quality,
       repo: m.repo,
+      revision: rev ?? null,
       onnx: m.onnx,
       json: m.json,
       speakers: m.voices,

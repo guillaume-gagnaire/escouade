@@ -13,10 +13,11 @@ export default {
     starting: 'Ouverture du micro…',
     /** Live transcription (ESC-136): the service, beside what it heard so far. */
     live: '{service} · en direct',
-    /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape. */
-    keys: '{key} pour finir · {escape} pour annuler',
+    /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape; the second click on
+     * the microphone named, which a user did not guess (ESC-664). */
+    keys: 'Reclique sur le micro ou {key} pour écrire ce que tu as dit · {escape} pour annuler',
     listening: 'À l’écoute',
-    hint: 'Clique ou {key} pour finir · Échap pour annuler',
+    hint: 'Reclique sur le micro ou {key} pour écrire ce que tu as dit · Échap pour annuler',
     holdHint: 'Relâche pour finir · Échap pour annuler',
     level: 'Niveau du micro',
     transcribing: 'Transcription sur ta machine…',
