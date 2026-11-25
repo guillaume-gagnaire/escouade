@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.11] — 2026-11-25
 
 - Des navigateurs dans la barre latérale, comme les terminaux : une ligne par onglet sous « Terminaux », ouverte en plein écran ou à côté d’un agent, avec les largeurs tablette et mobile et les outils de développement à côté de l’adresse. Tu en ouvres un par « + », et le test d’un agent ou une commande de lancement ouvre le sien ; la fenêtre « Pages » disparaît.
 
