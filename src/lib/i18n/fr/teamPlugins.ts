@@ -72,6 +72,8 @@ export default {
     other: 'un membre',
     sign: 'Contrôler à nouveau et signer',
     signHint: 'Les contrôles tournent une seconde fois ici ; la signature n’est posée que si les deux empreintes sont les mêmes.',
+    compileHere:
+      'Je sais que les contrôles compilent ici le plugin de qui l’a proposé : rustc, ses build.rs et macros de la liste fermée, et ce que son code lit du disque à la compilation (include_bytes!, env!). Ce poste peut le compiler.',
     signed: 'Signé : les deux empreintes sont les mêmes ({digest}).',
     dismiss: 'Écarter',
     waiting: 'Attend la signature d’un administrateur.',

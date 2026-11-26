@@ -10,6 +10,45 @@ use serde_json::Value;
 /// Open VSX.
 pub const OPEN_VSX: &str = "https://open-vsx.org";
 
+/// Where open-vsx.org redirects for the files of a version (its storage), read on 2026-11-26.
+pub const OPEN_VSX_STORAGE: &[&str] = &["openvsx.eclipsecontent.org"];
+
+/// The most redirections followed for one request.
+pub const MAX_REDIRECTIONS: usize = 5;
+
+/// Whether a redirection of the registry at `base` may lead to `to` (ESC-648, SR4-09): its own origin; for
+/// open-vsx.org, its storage too, over https on its usual port. Never elsewhere: not a local address, not `http`.
+pub fn redirect_allowed(base: &url::Url, to: &url::Url) -> bool {
+    if to.origin() == base.origin() {
+        return true;
+    }
+    let open_vsx = url::Url::parse(OPEN_VSX).is_ok_and(|o| o.origin() == base.origin());
+    open_vsx
+        && to.scheme() == "https"
+        && to.port().is_none()
+        && to.username().is_empty()
+        && to
+            .host_str()
+            .is_some_and(|h| OPEN_VSX_STORAGE.contains(&h.to_ascii_lowercase().as_str()))
+}
+
+/// The redirections the client asking the registry at `base` follows: `redirect_allowed`, at most `MAX_REDIRECTIONS`;
+/// any other is an error, never followed. A base that does not parse follows none.
+pub fn redirect_policy(base: &str) -> reqwest::redirect::Policy {
+    let Ok(base) = url::Url::parse(base) else {
+        return reqwest::redirect::Policy::none();
+    };
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() >= MAX_REDIRECTIONS {
+            attempt.error("too many redirections from the registry")
+        } else if redirect_allowed(&base, attempt.url()) {
+            attempt.follow()
+        } else {
+            attempt.error("a redirection out of the registry is not followed")
+        }
+    })
+}
+
 /// A result of a search.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -135,6 +174,14 @@ impl Registry {
 
     pub fn base(&self) -> &url::Url {
         &self.base
+    }
+
+    /// The key a signature of this registry is checked with, pinned: Open VSX's (`verify::OPEN_VSX_KEY`) for
+    /// open-vsx.org; none for another registry (the fake one of development), whose served key is read.
+    pub fn pinned_key(&self) -> Option<ed25519_dalek::VerifyingKey> {
+        url::Url::parse(OPEN_VSX)
+            .is_ok_and(|o| o.origin() == self.base.origin())
+            .then(crate::verify::open_vsx_key)
     }
 
     /// Whether `url` is on the registry's origin: the only addresses asked.

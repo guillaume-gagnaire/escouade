@@ -120,6 +120,8 @@ pub enum Code {
     Mismatch,
     /// A private project: nothing is asked of Open VSX from it.
     Private,
+    /// Turned off by the user: its files are not served (ESC-648).
+    Off,
     NotFound,
     Network,
     Io,

@@ -70,6 +70,8 @@ export default defineZone('teamPlugins', {
     other: 'a member',
     sign: 'Check again and sign',
     signHint: 'The checks run a second time here; the signature goes on only when both digests are the same.',
+    compileHere:
+      'I know the checks compile here the plugin of who proposed it: rustc, its build.rs and macros of the closed list, and what its code reads of the disk while compiled (include_bytes!, env!). This device may compile it.',
     signed: 'Signed: both digests are the same ({digest}).',
     dismiss: 'Set aside',
     waiting: 'Waits for an administrator’s signature.',

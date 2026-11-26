@@ -1,9 +1,9 @@
 ---
 title: "Serveurs de langage"
 subject: "editeur"
-sources: ["docs/EDITOR-STUDY.md","docs/TODO-2.3.md","docs/REMOTE.md"]
-tickets: ["ESC-446"]
-decisions: [165]
+sources: ["docs/EDITOR-STUDY.md","docs/TODO-2.3.md","docs/REMOTE.md","src-tauri/src/lsp/mod.rs, src-tauri/src/lsp/app.rs (ESC-648)"]
+tickets: ["ESC-446","ESC-648"]
+decisions: [165,334]
 compared: null
 ---
 
@@ -39,6 +39,16 @@ Les serveurs de langage que le cœur d'Escouade lance pour l'éditeur (voir *Éd
 - Les autres (pyright et basedpyright, JSON, CSS, HTML), pris sur le poste avec les arguments du catalogue ou de l'app, ou réglés à la main même dans le dossier du projet, se lancent sans rien demander.
 - La confiance est gardée dans les réglages de l'app, par le cœur seul : une sauvegarde des réglages par la fenêtre ne l'accorde ni ne la retire. Retirée, les serveurs du projet qui en dépendaient s'arrêtent.
 
+### Le worktree d'un agent (ESC-648)
+
+La confiance du projet vaut pour son dépôt, pas pour ce qu'écrit un agent : un agent qui peut écrire des fichiers sans lancer de commande (modes « par défaut », « accepter les modifications ») passerait sinon d'« écrire dans son dossier » à « exécuter sur le poste », par un `node_modules/.bin` (ignoré de git, jamais relu) ou un `build.rs` que le serveur exécute quand l'utilisateur ouvre ce worktree dans l'éditeur.
+
+- Dans le worktree d'un agent, **un programme trouvé dans ce worktree** (son `node_modules/.bin`, le `path` du `.escouade.yml` qui y mène) attend **la confiance de ce worktree**, jamais celle du projet. Le refus donne son chemin : « ce serveur de langage est un programme du worktree de l'agent (…), qu'il a pu écrire : la confiance du projet ne le couvre pas, confirme d'abord que tu fais confiance à ce worktree ».
+- **Un serveur qui exécute du code du projet** (rust-analyzer, typescript-language-server, gopls) attend lui aussi, dans le worktree d'un agent, la confiance de ce worktree : le code qu'il fait tourner (un `build.rs`, des macros) est celui que l'agent a pu écrire. « ce serveur exécute du code du worktree de l'agent (build.rs, macros), qu'il a pu écrire : la confiance du projet ne le couvre pas… ».
+- Un programme hors du worktree que le dépôt choisit (le `node_modules/.bin` du dossier du projet) attend la confiance du projet, comme dans le projet. Un programme du poste qui n'exécute rien du projet (JSON, CSS, HTML, pyright) se lance sans rien demander, worktree ou non.
+- La confiance d'un worktree est donnée par agent et par dossier (`lsp_trust_worktree`) : un autre agent, même dans le même dossier, est redemandé. Elle est **gardée le temps de l'app** seulement (pas dans les réglages) : après un redémarrage, elle se redemande. Retirée, les serveurs de ce worktree qui en dépendaient s'arrêtent.
+- Un agent qui travaille dans le dossier du projet (sans worktree) est le cas du projet : c'est sa confiance qui compte.
+
 ### Les lancer et les partager
 
 - Un serveur tourne dans le dossier du projet ou du worktree, dans un Job du cœur (un Job object sous Windows, un groupe de processus sous Linux et macOS) : ce qu'il lance meurt avec lui, et avec l'app, même tuée.
@@ -68,3 +78,8 @@ Les serveurs de langage que le cœur d'Escouade lance pour l'éditeur (voir *Éd
 - Dessous, les serveurs qui tournent, leur état, leur journal et, pour un serveur arrêté après trop de plantages, « Relancer ».
 - Un projet peut en imposer par `.escouade.yml` (`language_servers.<id>`, voir *.escouade.yml*) : `enabled` passe devant les réglages de l'app ; `path` et `args` attendent la confiance ; un chemin réglé à la main dans l'app passe devant `path`.
 - Un réglage changé vaut pour le prochain lancement du serveur.
+- L'état d'un serveur lu pour le worktree d'un agent (`lsp_servers` avec un agent) dit `worktree` et, dans `trusted`, si ce qu'il lancerait est couvert (la confiance du projet ou celle du worktree, selon le cas). La question de la confiance d'un worktree viendra avec les serveurs de langage dans la vue de l'éditeur ; la page des réglages, qui lit un projet, n'en a pas.
+
+## Limites
+
+- La confiance d'un worktree ne regarde pas ce qui y a changé depuis le dépôt : elle couvre ce que l'agent y écrira ensuite, jusqu'au redémarrage de l'app ou à son retrait.

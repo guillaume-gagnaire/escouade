@@ -161,8 +161,16 @@ async fn a_private_project_asks_nothing_of_open_vsx() {
         assert_eq!(r.map(|r| r.code), Some(Code::Private));
     }
     assert!(fake.asked().is_empty(), "{:?}", fake.asked());
-    // Without the private project, the search goes.
+    // A view that names no project of the device, while it holds a private one: refused as private too (ESC-648).
     let ctx = context(&h.core, &[]);
+    assert!(ctx.private.is_some());
+    let ctx = context(&h.core, &["no-such-project".to_owned()]);
+    assert!(ctx.private.is_some());
+    assert!(fake.asked().is_empty(), "{:?}", fake.asked());
+    // Without the private project in the view, the search goes.
+    let other = h.second_project().await;
+    let ctx = context(&h.core, std::slice::from_ref(&other.id));
+    assert!(ctx.private.is_none());
     assert_eq!(
         search(&ext, &h.core, &ctx, "night", 0)
             .await
@@ -225,7 +233,7 @@ async fn the_protocol_serves_an_installed_extension_and_nothing_else() {
             .uri(uri)
             .body(Vec::new())
             .unwrap();
-        protocol(Some(&ext), &req)
+        protocol(Some(&h.core), Some(&ext), &req)
     };
     // Windows' form and the others'.
     for uri in [
@@ -272,13 +280,13 @@ async fn the_protocol_serves_an_installed_extension_and_nothing_else() {
         404
     );
     // The page's listing and command go through the same guard.
-    let list = files(&ext, "acme.night").unwrap();
+    let list = files(&ext, &[], "acme.night").unwrap();
     assert!(list
         .iter()
         .any(|f| f.path == "themes/theme.json" && f.mime.starts_with("application/json")));
     assert!(escouade_vsx::serve::read(&ext.store, "acme.night", "../installed.json").is_err());
     assert_eq!(
-        protocol(None, &tauri::http::Request::new(Vec::new())).status(),
+        protocol(Some(&h.core), None, &tauri::http::Request::new(Vec::new())).status(),
         503
     );
 }
@@ -291,4 +299,114 @@ fn an_image_is_typed_by_its_bytes() {
         Some("image/svg+xml")
     );
     assert_eq!(image_type(b"<html><script>"), None);
+}
+
+// ---------- the policy judged by the core, an extension turned off not served (ESC-648) ----------
+
+/// `p` made a project of the team `acme`, whose policy imposes `allowed`.
+fn impose_by_team(core: &Core, p: &str, allowed: serde_json::Value) {
+    let team = crate::locks::TeamPolicies {
+        id: "acme".into(),
+        team: "Acme".into(),
+        signed: None,
+        recommended: Default::default(),
+        enforced: [(POLICY.to_owned(), allowed)].into_iter().collect(),
+    };
+    let locks = crate::locks::Locks::compute(crate::locks::KEYS, Some(&team), &Managed::default());
+    core.team_locks.write().insert("acme".into(), locks);
+    core.projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p)
+        .unwrap()
+        .team = Some("acme".into());
+}
+
+#[tokio::test]
+async fn a_team_list_holds_whatever_projects_the_page_names() {
+    let h = harness("vsx-team-any-view");
+    let (team_project, _) = h.project(false).await;
+    let own = h.second_project().await;
+    impose_by_team(&h.core, &team_project.id, json!({ "*": false }));
+    let fake = FakeOpenVsx::start().await;
+    fake.add(theme());
+    let dir = tempfile::tempdir().unwrap();
+    let ext = Extensions::at(dir.path(), &fake.url);
+    let id = ExtId::parse("acme.night").unwrap();
+    // The page names no project, or one outside of the team: the team's list is still imposed.
+    for projects in [Vec::new(), vec![own.id.clone()]] {
+        let ctx = context(&h.core, &projects);
+        assert!(
+            ctx.layers
+                .iter()
+                .any(|l| l.imposed && l.by.contains("Acme")),
+            "{projects:?}"
+        );
+        let r = install(&ext, &h.core, &ctx, "acme.night", None, true)
+            .await
+            .unwrap_err();
+        assert_eq!(r.code, Code::NotAllowed, "{projects:?}");
+        assert!(escouade_vsx::allowed::check(&ctx.layers, &id, None).is_err());
+    }
+    // Refused before Open VSX is asked for the archive.
+    assert!(
+        !fake.asked().iter().any(|a| a.path.contains(".vsix")),
+        "{:?}",
+        fake.asked()
+    );
+}
+
+#[tokio::test]
+async fn an_extension_turned_off_or_refused_is_no_longer_served() {
+    let h = harness("vsx-served");
+    let (p, _) = h.project(false).await;
+    let fake = FakeOpenVsx::start().await;
+    fake.add(theme());
+    let dir = tempfile::tempdir().unwrap();
+    let ext = Extensions::at(dir.path(), &fake.url);
+    let ctx = context(&h.core, std::slice::from_ref(&p.id));
+    install(&ext, &h.core, &ctx, "acme.night", None, true)
+        .await
+        .unwrap();
+    let get = || {
+        let req = tauri::http::Request::builder()
+            .method("GET")
+            .uri("http://escouade-ext.localhost/acme.night/package.json")
+            .body(Vec::new())
+            .unwrap();
+        protocol(Some(&h.core), Some(&ext), &req).status()
+    };
+    assert_eq!(get(), 200);
+    assert!(files(&ext, &served_layers(&h.core), "acme.night").is_ok());
+    // Turned off: neither the protocol, nor the page's listing and file.
+    ext.store.set_enabled("acme.night", false).unwrap();
+    assert_eq!(get(), 403);
+    assert_eq!(
+        files(&ext, &served_layers(&h.core), "acme.night")
+            .unwrap_err()
+            .code,
+        Code::Off
+    );
+    let r = escouade_vsx::serve::read_allowed(
+        &ext.store,
+        &served_layers(&h.core),
+        "acme.night",
+        "package.json",
+    )
+    .unwrap_err();
+    assert_eq!(r.code, Code::Off);
+    // On again, then refused by a team's list (of a project the page never names): not served either.
+    ext.store.set_enabled("acme.night", true).unwrap();
+    assert_eq!(get(), 200);
+    impose_by_team(&h.core, &p.id, json!({ "acme": false, "*": true }));
+    assert_eq!(get(), 403);
+    let r = escouade_vsx::serve::read_allowed(
+        &ext.store,
+        &served_layers(&h.core),
+        "acme.night",
+        "package.json",
+    )
+    .unwrap_err();
+    assert_eq!(r.code, Code::NotAllowed);
+    assert!(files(&ext, &served_layers(&h.core), "acme.night").is_err());
 }

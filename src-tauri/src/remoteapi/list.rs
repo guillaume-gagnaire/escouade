@@ -631,6 +631,7 @@ escouade_command::commands! {
         commands::lsp_running,
         commands::lsp_log,
         commands::lsp_trust,
+        commands::lsp_trust_worktree,
         commands::fs_reveal,
         commands::sent_file_open,
         commands::inbox_open_file,

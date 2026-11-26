@@ -42,6 +42,8 @@
   // « À signer » and « Retirer ».
   let signing = $state<ProposalRow | null>(null);
   let signPassword = $state('');
+  /** The administrator agreed that this device compiles the member's plugin (ESC-648): the core refuses to sign without. */
+  let compileHere = $state(false);
   let withdrawing = $state<TeamPluginRow | null>(null);
   let reason = $state('');
   let withdrawPassword = $state('');
@@ -113,13 +115,14 @@
     const id = signing.id;
     notice = '';
     const ok = await act(async () => {
-      const r = await teamPluginsApi.sign(teamId, id, signPassword);
+      const r = await teamPluginsApi.sign(teamId, id, signPassword, compileHere);
       notice = t('teamPlugins.proposed.signed', { digest: r.report.digest.slice(0, 12) });
       return r.view;
     });
     if (ok) {
       signing = null;
       signPassword = '';
+      compileHere = false;
     }
   }
 
@@ -347,6 +350,9 @@
                   }}
                 >
                   <p class="muted small">{t('teamPlugins.proposed.signHint')}</p>
+                  <label class="check small"
+                    ><input type="checkbox" bind:checked={compileHere} /><span>{t('teamPlugins.proposed.compileHere')}</span></label
+                  >
                   <label class="fld"
                     ><span>{t('teamPlugins.key.password')}</span><input
                       class="field input"
@@ -356,7 +362,9 @@
                     /></label
                   >
                   <div class="acts">
-                    <button class="btn primary" disabled={busy || !signPassword} aria-busy={busy}>{t('teamPlugins.proposed.sign')}</button>
+                    <button class="btn primary" disabled={busy || !signPassword || !compileHere} aria-busy={busy}
+                      >{t('teamPlugins.proposed.sign')}</button
+                    >
                     <button type="button" class="btn ghost" onclick={() => (signing = null)}>{t('teamPlugins.published.cancel')}</button>
                   </div>
                 </form>
@@ -548,6 +556,15 @@
     flex-direction: column;
     gap: 4px;
     min-width: 0;
+  }
+  .check {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: var(--soft);
+  }
+  .check input {
+    margin-top: 2px;
   }
   .fld > span:first-child {
     color: var(--soft);

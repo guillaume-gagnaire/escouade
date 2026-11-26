@@ -181,9 +181,18 @@ describe('« Plugins de l’équipe » (TS-14)', () => {
     const item = await screen.findByTestId('team-plugin-proposed');
     await userEvent.click(within(item).getByRole('button', { name: 'Contrôler à nouveau et signer' }));
     await userEvent.type(within(item).getByLabelText('Mot de passe'), 'un mot de passe long');
-    await userEvent.click(within(item).getByRole('button', { name: 'Contrôler à nouveau et signer' }));
+    // Signing compiles the member's plugin here: said, and agreed first (ESC-648).
+    const sign = within(item).getByRole('button', { name: 'Contrôler à nouveau et signer' });
+    expect(sign).toBeDisabled();
+    await userEvent.click(within(item).getByRole('checkbox', { name: /compilent ici le plugin de qui l’a proposé/ }));
+    await userEvent.click(sign);
     await waitFor(() =>
-      expect(be.called('team_plugin_sign')[0]?.args).toEqual({ team: 'acme', proposal: proposal.id, password: 'un mot de passe long' }),
+      expect(be.called('team_plugin_sign')[0]?.args).toEqual({
+        team: 'acme',
+        proposal: proposal.id,
+        password: 'un mot de passe long',
+        compileHere: true,
+      }),
     );
     expect(await screen.findByText(/Signé : les deux empreintes sont les mêmes/)).toBeInTheDocument();
     expect(screen.getByTestId('team-plugin-published')).toHaveTextContent('ACME · privé');

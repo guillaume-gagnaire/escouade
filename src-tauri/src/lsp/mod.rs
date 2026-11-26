@@ -126,14 +126,78 @@ pub struct Status {
     pub runs_project_code: bool,
     /// It waits for the project's trust to start in it: `of_project` or `runs_project_code`.
     pub needs_trust: bool,
-    /// The project is trusted with its own servers.
+    /// What it would run is trusted: the project with its own servers, or the agent's worktree it runs in.
+    pub trusted: bool,
+    /// It runs in an agent's worktree: the project's trust does not cover what the agent wrote there (ESC-648).
+    pub worktree: bool,
+}
+
+/// What the user trusts where a server runs (ESC-648, SR4-06).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Trust {
+    /// The project, for its repository: the programs it chose, the code its servers run.
+    pub project: bool,
+    /// The worktree of an agent the server runs in: what the agent wrote there (a `node_modules/.bin`, a `build.rs`)
+    /// waits for this worktree's own trust, never the project's.
+    pub worktree: Option<WorktreeTrust>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeTrust {
+    pub root: PathBuf,
     pub trusted: bool,
 }
 
-pub fn status(server: &'static Server, config: &Config, places: &Places, trusted: bool) -> Status {
+impl Trust {
+    /// Of the project alone: no agent's worktree.
+    pub fn project(trusted: bool) -> Self {
+        Trust {
+            project: trusted,
+            worktree: None,
+        }
+    }
+
+    /// `program` is in the agent's worktree: the agent may have written it.
+    pub fn wrote(&self, program: &std::path::Path) -> bool {
+        self.worktree
+            .as_ref()
+            .is_some_and(|w| !w.root.as_os_str().is_empty() && program.starts_with(&w.root))
+    }
+}
+
+/// The first trust `server` waits for and has not, when it runs `found`: a program of the agent's worktree first (its
+/// own trust), then what the repository chose (the project's), then the code it runs (the worktree's in a worktree).
+fn unmet(server: &Server, config: &Config, found: &Found, trust: &Trust) -> Option<TrustReason> {
+    let worktree = trust.worktree.as_ref();
+    let wrote = trust.wrote(&found.program);
+    if wrote && !worktree.is_some_and(|w| w.trusted) {
+        return Some(TrustReason::AgentProgram);
+    }
+    let chosen = (found.origin.of_project() && !wrote) || config.of_project();
+    if chosen && !trust.project {
+        return Some(TrustReason::Chosen);
+    }
+    if server.runs_project_code {
+        match worktree {
+            Some(w) if !w.trusted => return Some(TrustReason::AgentCode),
+            None if !trust.project => return Some(TrustReason::RunsProjectCode),
+            _ => {}
+        }
+    }
+    None
+}
+
+pub fn status(server: &'static Server, config: &Config, places: &Places, trust: &Trust) -> Status {
     let found = locate::find(server, &config.manual, config.file_path.as_deref(), places);
-    let of_project =
-        config.of_project() || found.as_ref().is_ok_and(|f: &Found| f.origin.of_project());
+    let of_project = config.of_project()
+        || found
+            .as_ref()
+            .is_ok_and(|f: &Found| f.origin.of_project() || trust.wrote(&f.program));
+    // Trusted: nothing it would run waits for a trust not given (the project's, or the agent's worktree's).
+    let trusted = match &found {
+        Ok(f) => unmet(server, config, f, trust).is_none(),
+        Err(_) => trust.worktree.as_ref().map_or(trust.project, |w| w.trusted),
+    };
     let (found, missing) = match found {
         Ok(f) => (Some(f), None),
         Err(m) => (None, Some(m)),
@@ -152,6 +216,7 @@ pub fn status(server: &'static Server, config: &Config, places: &Places, trusted
         runs_project_code: server.runs_project_code,
         needs_trust: of_project || server.runs_project_code,
         trusted,
+        worktree: trust.worktree.is_some(),
     }
 }
 
@@ -163,6 +228,12 @@ pub enum TrustReason {
     Chosen,
     /// It runs code of the project, wherever it comes from (`Server::runs_project_code`).
     RunsProjectCode,
+    /// Its program is in the worktree of an agent, which may have written it (ESC-648): the worktree's trust, asked with
+    /// the program's path, never the project's.
+    AgentProgram,
+    /// It runs code of the worktree of an agent, which the agent may have written (a `build.rs`): the worktree's trust,
+    /// never the project's.
+    AgentCode,
 }
 
 /// Why a server is not started: the window tells each one apart by its `code`.
@@ -239,6 +310,25 @@ impl std::fmt::Display for Refused {
                     "this server runs code of the project ({what}): confirm first that you trust the project"
                 ))
             }
+            Refused::NeedsTrust {
+                program,
+                reason: TrustReason::AgentProgram,
+                ..
+            } => write!(f, "{}", tr!(
+                "ce serveur de langage est un programme du worktree de l’agent ({program}), qu’il a pu écrire : la confiance du projet ne le couvre pas, confirme d’abord que tu fais confiance à ce worktree",
+                "this language server is a program of the agent’s worktree ({program}), which it may have written: the project’s trust does not cover it, confirm first that you trust this worktree"
+            )),
+            Refused::NeedsTrust {
+                server,
+                reason: TrustReason::AgentCode,
+                ..
+            } => {
+                let what = runs_what(server);
+                write!(f, "{}", tr!(
+                    "ce serveur exécute du code du worktree de l’agent ({what}), qu’il a pu écrire : la confiance du projet ne le couvre pas, confirme d’abord que tu fais confiance à ce worktree",
+                    "this server runs code of the agent’s worktree ({what}), which it may have written: the project’s trust does not cover it, confirm first that you trust this worktree"
+                ))
+            }
         }
     }
 }
@@ -259,12 +349,25 @@ pub fn runs_what(server: &str) -> String {
     }
 }
 
-/// What to run for `server` in `cwd`, when it may.
+/// What to run for `server` in `cwd`, when it may: `trusted`, the project's trust, in no agent's worktree.
+#[cfg(test)]
 pub fn launch_for(
     server: &Server,
     config: &Config,
     places: &Places,
     trusted: bool,
+    cwd: PathBuf,
+) -> Result<Launch, Refused> {
+    launch_with(server, config, places, &Trust::project(trusted), cwd)
+}
+
+/// What to run for `server` in `cwd`, when `trust` lets it: in an agent's worktree, what the agent may have written
+/// waits for the worktree's trust (ESC-648).
+pub fn launch_with(
+    server: &Server,
+    config: &Config,
+    places: &Places,
+    trust: &Trust,
     cwd: PathBuf,
 ) -> Result<Launch, Refused> {
     if !config.enabled {
@@ -274,16 +377,8 @@ pub fn launch_for(
     }
     let found = locate::find(server, &config.manual, config.file_path.as_deref(), places)
         .map_err(|missing| Refused::NotFound { missing })?;
-    let chosen = found.origin.of_project() || config.of_project();
-    // What the repository chose is said first: it is the bigger risk.
-    let reason = if chosen {
-        Some(TrustReason::Chosen)
-    } else if server.runs_project_code {
-        Some(TrustReason::RunsProjectCode)
-    } else {
-        None
-    };
-    if let (Some(reason), false) = (reason, trusted) {
+    // What the agent may have written is said first, then what the repository chose: the bigger risks.
+    if let Some(reason) = unmet(server, config, &found, trust) {
         return Err(Refused::NeedsTrust {
             server: server.id,
             program: found.program.display().to_string(),
@@ -291,8 +386,11 @@ pub fn launch_for(
             reason,
         });
     }
-    // It ran because the project is trusted: it stops when it no longer is.
-    let of_project = reason.is_some();
+    // It ran because the project (or the agent's worktree) is trusted: it stops when it no longer is.
+    let of_project = found.origin.of_project()
+        || config.of_project()
+        || trust.wrote(&found.program)
+        || server.runs_project_code;
     Ok(Launch {
         program: found.program,
         args: config.args.clone(),

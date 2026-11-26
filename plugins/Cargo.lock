@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-azure-devops"
-version = "2.2.5"
+version = "2.2.6"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-bitbucket"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gitea"
-version = "2.2.3"
+version = "2.2.4"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -294,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gitlab"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",

@@ -2,6 +2,8 @@
 
 ## 2.3.0
 
+- A name put in a route of the API (a branch’s, a repository’s) that is `.` or `..`, or their forms in `%2e`, is refused before anything is sent: the parser of addresses would have resolved it into another route (ESC-648: `forge/deleteBranch` with `../../../hooks/1` sent its DELETE to `/repos/o/r/hooks/1`).
+
 - The user's own review, on their click in Escouade 2.3 (« Ta relecture », ESC-494): its text, its verdict (comment, approve, request changes) and its comments on lines in one review (`forge/review`), each comment on its range and its side (a line removed), all on the commit read. GitHub's 422 says why (`Line could not be resolved`). It stands on escouade-plugin-kit 0.1.5.
 
 - Controlling a pull request, on the user's click in Escouade 2.3 (ESC-488): where it stands for its merge (`forge/control`), who may review and the repository's labels (`forge/candidates`), a draft made ready or back (`forge/setDraft`), reviewers and labels asked and taken back (`forge/requestReviewers`, `forge/removeReviewer`, `forge/addLabels`, `forge/removeLabel`), its branch updated by a merge or a rebase (`forge/updateBranch`), one job run again (`forge/rerunCheck`), auto-merge turned off (`forge/cancelAutoMerge`) and its branch deleted once merged (`forge/deleteBranch`). GraphQL's refusals say their status (403, 404, 422).

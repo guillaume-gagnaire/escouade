@@ -686,7 +686,12 @@ pub fn run() {
     let builder =
         builder.register_uri_scheme_protocol(escouade_vsx::serve::SCHEME, |ctx, request| {
             let ext = ctx.app_handle().try_state::<Arc<vsx::Extensions>>();
-            vsx::protocol(ext.as_deref().map(|e| e.as_ref()), &request)
+            let core = ctx.app_handle().try_state::<Arc<Core>>();
+            vsx::protocol(
+                core.as_deref().map(|c| c.as_ref()),
+                ext.as_deref().map(|e| e.as_ref()),
+                &request,
+            )
         });
     builder
         .setup(move |app| {

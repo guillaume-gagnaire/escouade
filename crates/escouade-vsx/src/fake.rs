@@ -293,6 +293,20 @@ fn answer(st: &Mutex<State>, base: &str, path: &str) -> Vec<u8> {
     let st = st.lock();
     let (path, query) = path.split_once('?').unwrap_or((path, ""));
     let json_of = |v: Value| respond(200, "application/json", &serde_json::to_vec(&v).unwrap());
+    // A redirection to `to` (ESC-648): what a registry's storage answers.
+    if path == "/redirect" {
+        let to = query
+            .split('&')
+            .find_map(|p| p.strip_prefix("to="))
+            .map(|t| {
+                percent_encoding::percent_decode_str(t)
+                    .decode_utf8_lossy()
+                    .into_owned()
+            })
+            .unwrap_or_default();
+        return format!("HTTP/1.1 302 Found\r\nLocation: {to}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .into_bytes();
+    }
     if path == "/api/-/public-key/fake" {
         return respond(200, "text/plain", public_pem().as_bytes());
     }

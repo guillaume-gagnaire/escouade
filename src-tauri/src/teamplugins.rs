@@ -539,7 +539,16 @@ impl Core {
         team: &str,
         proposal: &str,
         password: &str,
+        compile_here: bool,
     ) -> Result<(checks::Report, TeamPluginsView), String> {
+        // The checks compile a member's plugin on this machine (ESC-648, SR4-09): rustc, the closed list of build.rs and
+        // native macros, what `include_bytes!` and `env!` read of the disk. Said to the administrator, who agrees first.
+        if !compile_here {
+            return Err(tr!(
+                "Signer compile ici le plugin de qui l’a proposé : confirme d’abord que ce poste peut le compiler. Rien n’est signé.",
+                "Signing compiles here the plugin of who proposed it: confirm first that this device may compile it. Nothing is signed."
+            ));
+        }
         let teams = self.team_link_or()?;
         let lang = crate::i18n::ui();
         let of = teams.plugins_store(team).await?;

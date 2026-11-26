@@ -1027,6 +1027,9 @@ pub struct Core {
     pub team_layers: RwLock<BTreeMap<String, crate::team_settings::Layers>>,
     /// The teams' costs on this device (TS-16, `teamcosts`): their rules, the projects a budget stops.
     pub(crate) team_costs: Mutex<crate::teamcosts::TeamCosts>,
+    /// The agents' worktrees trusted with the language servers that run what their agent wrote (ESC-648, SR4-06): kept
+    /// for this run of the app alone, by agent and root (`lsp::app`); the project's trust never covers them.
+    pub(crate) lsp_worktrees_trusted: Mutex<HashSet<String>>,
     /// The usage statistics, once the user agreed to them (`telemetry`).
     pub telemetry: Arc<Telemetry>,
     pub projects: RwLock<Vec<Project>>,
@@ -2361,6 +2364,7 @@ impl Core {
             host,
             data,
             hub: Hub::default(),
+            lsp_worktrees_trusted: Mutex::new(HashSet::new()),
             settings: RwLock::new(settings),
             locks: RwLock::new(locks),
             managed: RwLock::new(managed),

@@ -73,8 +73,20 @@ pub async fn install(
     let sum = String::from_utf8_lossy(&registry.bytes(sum, 1024).await?).into_owned();
     let sha256 = verify::check_sum(&vsix, &sum)?;
     let sigzip = registry.bytes(signature, 64 << 10).await?;
-    let pem = String::from_utf8_lossy(&registry.bytes(key, 8 << 10).await?).into_owned();
-    verify::check_signature(&vsix, &sigzip, &verify::public_key(&pem)?)?;
+    // Open VSX's key pinned (SR4-09): the one it serves is read from the fake registry of development alone.
+    match registry.pinned_key() {
+        Some(pinned) => verify::check_signature(&vsix, &sigzip, &pinned).map_err(|r| {
+            if r.code == Code::BadSignature {
+                verify::not_the_pinned_key()
+            } else {
+                r
+            }
+        })?,
+        None => {
+            let pem = String::from_utf8_lossy(&registry.bytes(key, 8 << 10).await?).into_owned();
+            verify::check_signature(&vsix, &sigzip, &verify::public_key(&pem)?)?
+        }
+    }
 
     let scratch = store.scratch()?;
     let done = async {

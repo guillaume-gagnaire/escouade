@@ -6167,8 +6167,11 @@ pub async fn team_plugin_sign(
     team: String,
     proposal: String,
     password: String,
+    compile_here: bool,
 ) -> Res<TeamSigned> {
-    let (report, view) = core.team_plugin_sign(&team, &proposal, &password).await?;
+    let (report, view) = core
+        .team_plugin_sign(&team, &proposal, &password, compile_here)
+        .await?;
     Ok(TeamSigned { report, view })
 }
 
@@ -6614,6 +6617,27 @@ pub async fn lsp_trust(
     core.lsp_trust(&project_id, trusted).map_err(err)?;
     if !trusted {
         servers.stop_of_project(&project_id);
+    }
+    Ok(())
+}
+
+/// Trusts the worktree of an agent with the language servers that run what its agent wrote there (a program of its
+/// `node_modules/.bin`, its `build.rs`), or no longer (ESC-648): the project's trust never covers them. For this run of
+/// the app; those running there stop when no longer trusted.
+#[tauri::command]
+pub async fn lsp_trust_worktree(
+    core: CoreState<'_>,
+    servers: Servers<'_>,
+    project_id: String,
+    agent_id: String,
+    trusted: bool,
+) -> Res<()> {
+    let root = core
+        .lsp_trust_worktree(&project_id, &agent_id, trusted)
+        .await
+        .map_err(err)?;
+    if !trusted {
+        servers.stop_of_root(&project_id, &root.display().to_string());
     }
     Ok(())
 }

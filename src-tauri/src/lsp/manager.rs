@@ -374,6 +374,24 @@ impl Manager {
         }
     }
 
+    /// Stops the servers of `project` running in `root` that ran by a trust (ESC-648: an agent's worktree no longer
+    /// trusted).
+    pub fn stop_of_root(&self, project: &str, root: &str) {
+        let ids: Vec<u32> = self
+            .instances
+            .lock()
+            .values()
+            .filter(|i| {
+                let info = i.info.lock();
+                i.launch.of_project && info.project == project && info.root == root
+            })
+            .map(|i| i.id)
+            .collect();
+        for id in ids {
+            self.stop(id);
+        }
+    }
+
     /// Starts the server `id` again now, its crashes counted from zero: one `Failed` too.
     pub fn restart(self: &Arc<Self>, id: u32) -> Result<()> {
         let i = self.get(id)?;

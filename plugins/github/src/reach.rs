@@ -165,3 +165,61 @@ mod tests {
         assert!(en.ends_with("(Settings › Advanced › Network)."), "{en}");
     }
 }
+
+/// Whether a segment of a path is one an address resolves (`.`, `..`, and their forms in `%2e` the URL standard reads
+/// as dots): a name put in a route (a branch's, a repository's) would change the route (ESC-648, SR4-09).
+fn dot_segment(segment: &str) -> bool {
+    let s = segment.to_ascii_lowercase().replace("%2e", ".");
+    s == "." || s == ".."
+}
+
+/// `url` (an address or a path of the API) checked before it is asked: none of its segments is `.` nor `..`, which the
+/// parser of addresses would resolve into another route (`/git/refs/heads/../../hooks/1` on `/repos/o/r/hooks/1`).
+/// Refused as a 400, nothing sent.
+pub fn route(url: &str) -> Result<()> {
+    let path = url.split(['?', '#']).next().unwrap_or_default();
+    let path = path
+        .split_once("://")
+        .map_or(path, |(_, rest)| rest.find('/').map_or("", |i| &rest[i..]));
+    if path.split('/').any(dot_segment) {
+        return Err(HttpError {
+            status: 400,
+            message: tr!(
+                "une route de l’API aurait changé par un nom à « . » ou « .. » (une branche, un dépôt) : rien n’est envoyé",
+                "an API route would have changed through a name of “.” or “..” (a branch, a repository): nothing is sent"
+            ),
+        }
+        .into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod route_tests {
+    use super::route;
+
+    #[test]
+    fn a_dot_segment_never_changes_a_route() {
+        // ESC-648 (SR4-09): `..` in a branch's name led the request to another route of the API.
+        for bad in [
+            "/repos/o/r/git/refs/heads/../../../hooks/1",
+            "https://api.example.com/repos/o/r/git/refs/heads/../../..",
+            "/repos/o/r/branches/./x",
+            "/repos/o/r/branches/%2e%2e/x",
+            "/repos/o/r/branches/.%2E/x",
+            "/repos/o/r/branches/%2E./x?y=1",
+            "/repos/o/r/commits/..",
+        ] {
+            assert!(route(bad).is_err(), "{bad}");
+        }
+        for good in [
+            "/repos/o/r/git/refs/heads/ticket/esc-1",
+            "/repos/o/r/git/refs/heads/v1.2..rc",
+            "/repos/o/r/git/refs/heads/...",
+            "https://api.example.com/repos/o/r/pulls?head=o:..",
+            "/repos/o/r/compare/a...b",
+        ] {
+            assert!(route(good).is_ok(), "{good}");
+        }
+    }
+}

@@ -90,8 +90,8 @@ export const teamPluginsApi = {
     invoke<{ view: TeamPluginsView; backup: string }>('team_plugin_key_create', { team, namespace, password, backupDir }),
   importKey: (team: string, file: string, password: string) => invoke<TeamPluginsView>('team_plugin_key_import', { team, file, password }),
   submit: (team: string, folder: string, tag: string) => invoke<Submitted>('team_plugin_submit', { team, folder, tag }),
-  sign: (team: string, proposal: string, password: string) =>
-    invoke<{ report: Report; view: TeamPluginsView }>('team_plugin_sign', { team, proposal, password }),
+  sign: (team: string, proposal: string, password: string, compileHere: boolean) =>
+    invoke<{ report: Report; view: TeamPluginsView }>('team_plugin_sign', { team, proposal, password, compileHere }),
   revoke: (team: string, plugin: string, reason: string, password: string, versions: string[] | null = null) =>
     invoke<TeamPluginsView>('team_plugin_revoke', { team, plugin, versions, reason, password, revokeKey: null }),
   dismiss: (team: string, proposal: string) => invoke<TeamPluginsView>('team_plugin_dismiss', { team, proposal }),

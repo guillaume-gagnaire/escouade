@@ -46,6 +46,7 @@ impl Github {
         body: Option<&Value>,
     ) -> Result<(Value, HeaderMap)> {
         let url = format!("{}{path}", self.base);
+        crate::reach::route(&url)?;
         crate::reach::send_named(S, method, url, body, |method, url, own, body| {
             let mut rb = self
                 .http

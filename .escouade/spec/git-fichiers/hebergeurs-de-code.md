@@ -2,8 +2,8 @@
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","plugins/gitlab/README.fr.md","plugins/gitlab/docs/fr/","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.fr.md","plugins/gitea/docs/fr/","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs","design/pr-2-3/README.md","docs/TODO-2.3.md (Les PR dans Escouade)","src-tauri/src/prwrite.rs","plugins/github/src/pulls.rs"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383","ESC-452","ESC-474","ESC-488","ESC-494","ESC-536"]
-decisions: [104,166,187,196,221,252]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383","ESC-452","ESC-474","ESC-488","ESC-494","ESC-536","ESC-648"]
+decisions: [104,166,187,196,221,252,334]
 compared: null
 ---
 
@@ -187,3 +187,11 @@ Un appel qui n'atteint pas son service (nom inconnu du DNS, connexion refusée, 
 - **Son message**, dans la langue de l'interface : « Gitea injoignable : <cause>. Vérifie la connexion, l’adresse du compte ou le proxy (Réglages › Avancé › Réseau). » En anglais : « Gitea can’t be reached: <cause>. Check the connection, the account’s address or the proxy (Settings › Advanced › Network). » Pour Trello, Linear et ClickUp, dont l'adresse est fixe, le message ne parle pas de l'adresse du compte.
 - **Sans compte** (aucun jeton gardé), `account/me` et les autres appels sont refusés tout de suite par un 401 (« aucun jeton pour … »). Rien ne part sur le réseau.
 - **Le banc des plugins de la première main** (`node plugins/ci.mjs`) joue hors ligne, comme celui de la revue du store (`--offline`). Il ne dépend donc d'aucun service public : le 2026-11-18, codeberg.org, injoignable par le DNS du runner, avait fait échouer la CI de main. Chaque plugin teste lui-même l'hôte injoignable et l'absence de compte.
+
+## Un nom dans une route de l'API (ESC-648)
+
+Un nom mis dans une route de l'API d'un hébergeur (une branche, un dépôt, un ref, une étiquette) y est encodé segment par segment. Un segment `.` ou `..` reste pourtant un segment que le parseur d'adresses résout (la norme des URL lit aussi `%2e`, `.%2e`, `%2e.`, `%2e%2e` comme des points) : `forge/deleteBranch` avec la branche `../../../hooks/1` envoyait son `DELETE` sur `/repos/o/r/hooks/1`, et avec `../../..` sur le dépôt lui-même.
+
+- Les plugins livrés GitHub, GitLab, Gitea / Forgejo, Bitbucket Cloud et Azure DevOps vérifient chaque adresse là où elle part (après la base jointe, avant toute requête) : **une route dont un segment est `.` ou `..`, sous l'une de ces formes, est refusée** en 400, rien n'est envoyé : « une route de l'API aurait changé par un nom à « . » ou « .. » (une branche, un dépôt) : rien n'est envoyé ». Le reste de l'adresse (sa requête, après `?`) n'est pas concerné ; un nom qui contient des points sans en être fait (`v1.2..rc`, `...`, `a...b`) passe.
+- Git refuse déjà `..` dans un nom de branche, et la branche vient de l'hébergeur lui-même : c'est une défense, qu'aucun nom venu d'ailleurs ne contourne.
+- Versions : GitHub 2.3.0 (pas encore publiée), GitLab 2.2.5, Gitea 2.2.4, Bitbucket 2.2.5, Azure DevOps 2.2.6. Le plugin GitHub de la 2.2 (main) garde le point tel quel dans ses routes, mais n'y met un ref qu'en lecture (`/commits/<ref>/check-runs`, `/status`) et n'a pas `forge/deleteBranch`.

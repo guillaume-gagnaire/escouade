@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.6
+
+- A name put in a route of the API (a branch’s, a repository’s) that is `.` or `..`, or their forms in `%2e`, is refused before anything is sent: the parser of addresses would have resolved it into another route (ESC-648).
+
 ## 2.2.5
 
 - A service out of reach (a name the DNS does not know, no connection, a delay passed) has an error of its own, typed as a 503: Escouade asks again later, and the message says to check the connection, the account’s address or the proxy (ESC-536).

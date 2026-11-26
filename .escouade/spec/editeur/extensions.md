@@ -1,9 +1,9 @@
 ---
 title: "Extensions"
 subject: "editeur"
-sources: ["docs/EDITOR-STUDY.md","https://open-vsx.org (API publique : /api/-/search, /api/<espace>/<extension>, files.sha256, files.signature, files.publicKey, verified)"]
-tickets: ["ESC-481"]
-decisions: [201]
+sources: ["docs/EDITOR-STUDY.md","https://open-vsx.org (API publique : /api/-/search, /api/<espace>/<extension>, files.sha256, files.signature, files.publicKey, verified)","https://open-vsx.org/api/-/public-key/14ccb407-4e79-41ed-be5a-6d608325c45a (lue le 2026-11-26, vérifiée sur la signature de dracula-theme 2.25.1)","crates/escouade-vsx/src/serve.rs, registry.rs, verify.rs ; src-tauri/src/vsx.rs (ESC-648)"]
+tickets: ["ESC-481","ESC-648"]
+decisions: [201,334]
 compared: null
 ---
 
@@ -32,13 +32,13 @@ Chaque étape arrête les suivantes ; une installation refusée ne laisse rien s
 1. **La liste permise**, sur l'identifiant seul : une extension refusée n'est même pas demandée à Open VSX.
 2. **La fiche** de la version (la dernière, ou celle d'une mise à jour), puis la liste permise sur sa version (une liste de versions, `stable`).
 3. **La confiance dans l'éditeur** : la question de VS Code, gardée. Pour un éditeur pas encore approuvé : « Faites-vous confiance à l'éditeur « <éditeur> » ? », avec « Open VSX a vérifié son espace de noms « <espace> ». » ou « Open VSX n'a pas vérifié son espace de noms « <espace> » : n'importe qui a pu le prendre. », puis « Ses extensions pourront s'installer sans que la question revienne. Escouade vérifie toujours la somme et la signature de chacune. », « Faire confiance et installer », « Annuler ». Rien n'est téléchargé avant la réponse. La confiance est gardée par éditeur, sur ce poste.
-4. **Le téléchargement**, chacun dans une borne : le VSIX (200 Mo), sa somme (`.sha256`), sa signature (`.sigzip`) et la clé publique d'Open VSX. Toute adresse que donne Open VSX doit être sur son origine (son stockage peut répondre après une redirection).
-5. **La somme SHA-256**, puis **la signature** : Ed25519, de l'octet près du VSIX entier, avec la clé qu'Open VSX publie (`/api/-/public-key/<id>`, au format SPKI). Une version **sans signature n'est pas installée** : « La version <v> n'est pas signée par Open VSX : Escouade ne l'installe pas. »
+4. **Le téléchargement**, chacun dans une borne : le VSIX (200 Mo), sa somme (`.sha256`) et sa signature (`.sigzip`). Toute adresse que donne Open VSX doit être sur son origine. **Ses redirections sont gardées** (ESC-648) : le client ne suit que celles qui restent sur l'origine d'Open VSX ou mènent à son stockage (`openvsx.eclipsecontent.org`, en https sur son port habituel, sans nom d'utilisateur), 5 au plus ; une redirection ailleurs (une adresse locale, `http`, un autre hôte) est une erreur, jamais suivie.
+5. **La somme SHA-256**, puis **la signature** : Ed25519, de l'octet près du VSIX entier, avec **la clé d'Open VSX épinglée dans l'app** (ESC-648) : celle de `/api/-/public-key/14ccb407-4e79-41ed-be5a-6d608325c45a`, lue le 2026-11-26, la clé de toutes les versions d'open-vsx.org ce jour-là (de 2022 à ce jour), vérifiée sur une vraie signature. La clé qu'Open VSX sert n'est plus lue. Une signature qui ne tient pas avec elle est refusée : « La signature ne tient pas avec la clé d'Open VSX qu'Escouade connaît : l'archive n'est pas installée (si Open VSX a changé de clé, une mise à jour d'Escouade la connaîtra). » Seul le faux registre d'un build de développement est vérifié avec la clé qu'il sert. Une version **sans signature n'est pas installée** : « La version <v> n'est pas signée par Open VSX : Escouade ne l'installe pas. »
 6. **Le déballage**, dans un dossier temporaire du magasin : sa partie `extension/` seule, chaque entrée vérifiée avant que rien ne soit écrit. L'archive entière est refusée pour une entrée en `..`, un chemin absolu ou de lecteur (`C:`), une barre oblique inverse, un lien, un nom que Windows ne sait pas écrire (`con`, `a:b`, un point ou une espace finale), deux noms qui ne diffèrent que par la casse, plus de 20 000 fichiers, plus de 512 Mo décompressés (256 Mo par fichier) : les tailles annoncées par l'archive ne sont pas crues, chaque entrée est lue jusqu'à ce qui reste (une bombe de décompression s'arrête à la borne). Sans `extension/package.json` : refusée.
 7. **Son `package.json`** doit être l'extension et la version de la fiche ; sinon « L'archive n'est pas l'extension de la fiche ».
 8. **Le magasin** : `<données d'Escouade>/extensions/<éditeur.nom>-<version>/`, et `installed.json` (la liste, les éditeurs approuvés, le thème choisi), écrit de façon atomique. Une mise à jour remplace la version d'avant une fois la nouvelle vérifiée, et garde son état (coupée ou non).
 
-**Ce que la signature prouve** : les octets installés sont ceux qu'Open VSX a reçus et publiés, sans changement en route (son stockage, un miroir, un cache, un proxy qui servirait un autre fichier). **Ce qu'elle ne prouve pas** : que l'extension est inoffensive, ni que son auteur est qui il dit (c'est l'espace de noms vérifié, montré à part) ; ni rien contre Open VSX lui-même, dont la clé est lue chez lui, par TLS.
+**Ce que la signature prouve** : les octets installés sont ceux qu'Open VSX a reçus et publiés, sans changement en route (son stockage, un miroir, un cache, un proxy qui servirait un autre fichier), et, la clé étant épinglée, signés par la clé qu'Open VSX avait le 2026-11-26 : un Open VSX (ou qui se ferait passer pour lui) qui servirait une autre clé ne la fait pas accepter. **Ce qu'elle ne prouve pas** : que l'extension est inoffensive, ni que son auteur est qui il dit (c'est l'espace de noms vérifié, montré à part) ; ni rien contre ce qu'Open VSX signe lui-même avec sa clé.
 
 Les refus sont dits par le cœur, dans la langue de l'interface : « La somme SHA-256 de l'archive n'est pas celle qu'Open VSX donne : elle n'est pas installée. », « La signature d'Open VSX ne correspond pas à l'archive : elle n'est pas installée. », « L'archive est refusée : « extension/../../x » remonte hors du dossier de l'extension. Rien n'en est installé. », « L'extension « x.y » n'est pas permise par la stratégie de ce poste. »
 
@@ -55,7 +55,8 @@ Les refus sont dits par le cœur, dans la langue de l'interface : « La somme SH
 
 ### Les fichiers, servis par le cœur
 
-- Le cœur sert les fichiers d'une extension installée (donc vérifiée), en lecture seule, avec leur type MIME (`text/javascript` pour le JavaScript, contrairement au point `unpkg` d'Open VSX qui le sert en `text/plain`) et `X-Content-Type-Options: nosniff` : par son protocole `escouade-ext:` (`escouade-ext://localhost/<éditeur.nom>/<chemin>`, `http://escouade-ext.localhost/…` sous Windows) et par la commande de la page.
+- Le cœur sert les fichiers d'une extension installée (donc vérifiée), **active et permise**, en lecture seule, avec leur type MIME (`text/javascript` pour le JavaScript, contrairement au point `unpkg` d'Open VSX qui le sert en `text/plain`) et `X-Content-Type-Options: nosniff` : par son protocole `escouade-ext:` (`escouade-ext://localhost/<éditeur.nom>/<chemin>`, `http://escouade-ext.localhost/…` sous Windows) et par les commandes de la page (`vsx_files`, `vsx_file`).
+- **Une extension coupée, ou que la liste permise refuse, n'est plus servie** (ESC-648) : ni par le protocole (403), ni par les commandes de la page (« L'extension « x.y » est coupée : ses fichiers ne sont pas servis. », ou la raison de la liste permise), HTML et JavaScript compris. Ce n'est plus la page seule qui décide de ne pas la charger. La liste qui juge est celle que le cœur tient pour le poste : les couches imposées et les réglages du poste (voir *La liste permise*).
 - Jamais un autre fichier du disque : un chemin en `..` (même encodé, `%2e%2e`), absolu, de lecteur, un lien (même vers l'intérieur), une extension qui n'est pas installée sont refusés (403, 404). Seules les méthodes `GET` et `HEAD` répondent (405 sinon).
 - La politique de contenu (CSP) de la fenêtre **n'est pas élargie** : elle ne nomme pas `escouade-ext:`. La page reçoit les fichiers par la commande du cœur, en `blob:` et `data:`, que la CSP permettait déjà. Le protocole est celui de l'hôte d'extensions d'une origine à part (A6), qui aura sa propre CSP.
 
@@ -82,13 +83,16 @@ Le cœur la tient, en quatre couches, chacune devant permettre l'extension, la p
 | Ce poste | Réglages › Général › Avancé › « Extensions permises de l'éditeur » | « par les réglages de ce poste » |
 | Le dépôt | `editor.extensions_allowed` du `.escouade.yml` de chaque projet ouvert dans la vue | « par le .escouade.yml de <projet> » |
 
+- **Ce qui est imposé est jugé par le cœur sur ses propres projets** (ESC-648) : la stratégie du poste, et la liste de l'équipe de **chaque** projet d'équipe du poste, quels que soient les projets que la page dit ouverts dans la vue (une liste vide, un projet hors de l'équipe). Les extensions sont celles du poste, pour toute vue : la liste d'une équipe tient donc partout tant que le poste a un de ses projets. La liste des projets de la vue n'ajoute que ce qui n'est pas imposé : la couche du dépôt de ces projets.
 - La stratégie est de la sorte « restreindre » : une équipe peut l'imposer. Imposée, le réglage du poste est grisé avec qui l'impose, et le panneau le dit : « Liste permise imposée par la stratégie de ce poste. ».
-- Une extension hors de la liste : sa fiche le dit (« L'extension « x.y » n'est pas permise par … »), « Installer » est grisé, et rien d'elle n'est téléchargé (ni VSIX, ni somme, ni signature). Une extension installée que la liste exclut ensuite passe « Non permise » et quitte la vue.
+- Une extension hors de la liste : sa fiche le dit (« L'extension « x.y » n'est pas permise par … »), « Installer » est grisé, et rien d'elle n'est téléchargé (ni VSIX, ni somme, ni signature). Une extension installée que la liste exclut ensuite passe « Non permise », quitte la vue et n'est plus servie.
 - Le réglage du poste est un objet JSON dans un champ de texte ; vide, il permet tout. Ce qui n'est pas un objet est dit (« Ce n'est pas un objet JSON : … ») et pas gardé ; une clé ou une valeur illisible est dite et ignorée.
 
 ### Un projet privé
 
 Le moins bavard : quand un projet ouvert dans la vue est privé, **rien n'est demandé à Open VSX** depuis elle (ni recherche, ni fiche, ni icône, ni installation, ni mise à jour), refusé par le cœur. Le panneau le dit à la place de la recherche : « « <projet> » est un projet privé : Escouade ne demande rien à Open VSX depuis cette vue (ni recherche, ni fiche, ni mise à jour). Les extensions déjà installées marchent. »
+
+- Le cœur ne sait pas quels projets une vue montre : il prend ceux que la page nomme, et **refuse au plus sûr** (ESC-648) : une demande qui ne nomme aucun projet du poste (une liste vide, des identifiants inconnus) est refusée comme privée dès que le poste a un projet privé.
 
 ## Réglages
 
@@ -102,4 +106,6 @@ Le moins bavard : quand un projet ouvert dans la vue est privé, **rien n'est de
 - Pas de dépendances ni de packs d'extensions : une extension qui en demande d'autres s'installe seule.
 - Les extensions sont celles du poste, pour toute la vue : un projet n'a pas les siennes.
 - Les captures d'une fiche (images de son README) ne se chargent qu'au clic sur « Afficher l'image ».
+- La clé d'Open VSX épinglée et son stockage (`openvsx.eclipsecontent.org`) sont ceux du 2026-11-26 : si Open VSX change de clé ou de stockage, les installations sont refusées jusqu'à une mise à jour d'Escouade qui les connaît.
+- Le refus privé suit encore les projets que la page nomme : une page qui nommerait un projet public alors qu'elle montre un projet privé n'est pas arrêtée (c'est la page de l'utilisateur, ou un client de son API distante).
 - Poids (mesuré sur le build) : +24 Ko compressés (brotli) de frontend, dont 4 Ko dans le morceau principal ; côté cœur, le crate `escouade-vsx` sans aucune crate tierce nouvelle (Ed25519, zip, SHA-256 étaient déjà dans l'app).

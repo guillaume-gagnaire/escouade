@@ -831,6 +831,9 @@ export const api = {
   lspRunning: () => invoke<LspInfo[]>('lsp_running'),
   lspLog: (id: number) => invoke<LspLogLine[]>('lsp_log', { id }),
   lspTrust: (projectId: string, trusted: boolean) => invoke<void>('lsp_trust', { projectId, trusted }),
+  /** The worktree of an agent trusted with what its agent wrote there (ESC-648), for this run of the app. */
+  lspTrustWorktree: (projectId: string, agentId: string, trusted: boolean) =>
+    invoke<void>('lsp_trust_worktree', { projectId, agentId, trusted }),
   // The extensions of Open VSX in the VS Code view (ESC-481): by the core alone (`vsx.rs`). `projects`: those open in
   // the view (their `.escouade.yml` and their privacy count).
   vsxInstalled: (projects: string[]) => invoke<VsxInstalled>('vsx_installed', { projects }),

@@ -896,3 +896,28 @@ async fn a_review_github_refuses_says_its_422_and_its_words() {
         assert!(format!("{e:#}").contains(said), "{e:#}");
     }
 }
+
+#[tokio::test]
+async fn the_dots_of_a_branch_name_never_change_the_route() {
+    // ESC-648 (SR4-09): `delete_branch` with `../../../hooks/1` sent the DELETE to `/repos/cli/cli/hooks/1`, with
+    // `../../..` to the repository itself.
+    let server = FakeServer::start().await;
+    for path in [
+        "/repos/cli/cli/hooks/1",
+        "/repos/cli/cli",
+        "/repos/cli/cli/",
+    ] {
+        server.on("DELETE", path, 204, json!({}));
+    }
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    let r = repo();
+    for branch in ["../../../hooks/1", "../../..", "ticket/../x", "."] {
+        let e = github.delete_branch(&r, branch).await.unwrap_err();
+        assert!(format!("{e:#}").contains(".."), "{branch}: {e:#}");
+    }
+    assert!(
+        server.requests().is_empty(),
+        "{:?}",
+        server.requests().len()
+    );
+}

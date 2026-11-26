@@ -206,7 +206,10 @@ export interface LspStatus {
   runsProjectCode: boolean;
   /** It waits for the project’s trust to start in it: `ofProject` or `runsProjectCode`. */
   needsTrust: boolean;
+  /** What it would run is trusted: the project, or the agent’s worktree it runs in. */
   trusted: boolean;
+  /** It runs in an agent’s worktree: what the agent wrote there waits for that worktree’s trust, never the project’s (ESC-648). */
+  worktree: boolean;
 }
 
 export type LspState = 'starting' | 'running' | 'restarting' | 'failed' | 'stopped';
@@ -231,7 +234,13 @@ export type LspRefused =
   | { code: 'unknown'; name: string }
   | { code: 'disabled'; by: 'project' | 'app' | 'default' }
   | { code: 'notFound'; missing: LspNotFound }
-  | { code: 'needsTrust'; server: string; program: string; args: string[]; reason: 'chosen' | 'runsProjectCode' };
+  | {
+      code: 'needsTrust';
+      server: string;
+      program: string;
+      args: string[];
+      reason: 'chosen' | 'runsProjectCode' | 'agentProgram' | 'agentCode';
+    };
 
 export interface LspStart {
   info: LspInfo | null;

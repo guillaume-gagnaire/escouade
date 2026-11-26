@@ -680,3 +680,116 @@ async fn the_theme_chosen_is_one_of_an_installed_extension_turned_on() {
         .is_err());
     b.store.set_theme(None).unwrap();
 }
+
+#[tokio::test]
+async fn an_extension_turned_off_or_refused_is_not_served() {
+    // ESC-648 (SR4-07): the page decided alone not to load it; its files, HTML included, stayed readable.
+    let b = bench().await;
+    b.fake.add(theme("1.0.0"));
+    b.install("acme.night", &[]).await.unwrap();
+    std::fs::write(
+        b.store.dir_of("acme.night").unwrap().join("page.html"),
+        "<script>alert(1)</script>",
+    )
+    .unwrap();
+    assert_eq!(
+        serve::respond(&b.store, "GET", "/acme.night/page.html").status(),
+        200
+    );
+    b.store.set_enabled("acme.night", false).unwrap();
+    let r = serve::read(&b.store, "acme.night", "page.html").unwrap_err();
+    assert_eq!(r.code, Code::Off);
+    let answer = serve::respond(&b.store, "GET", "/acme.night/page.html");
+    assert_eq!(answer.status(), 403);
+    assert_eq!(
+        answer.headers()["content-type"],
+        "text/plain; charset=utf-8"
+    );
+    assert!(serve::served_dir(&b.store, &[], "acme.night").is_err());
+    // On again, but left out of the allowed list the core judges: refused too.
+    b.store.set_enabled("acme.night", true).unwrap();
+    let (rules, _) = crate::allowed::Rules::parse(&serde_json::json!({ "acme": false, "*": true }));
+    let layers = [crate::allowed::Layer {
+        by: "by a team".into(),
+        imposed: true,
+        rules,
+    }];
+    let r = serve::read_allowed(&b.store, &layers, "acme.night", "page.html").unwrap_err();
+    assert_eq!(r.code, Code::NotAllowed);
+    assert_eq!(
+        serve::respond_allowed(&b.store, &layers, "GET", "/acme.night/page.html").status(),
+        403
+    );
+    assert!(serve::read(&b.store, "acme.night", "page.html").is_ok());
+}
+
+#[tokio::test]
+async fn the_registry_redirections_stay_on_its_origin() {
+    // ESC-648 (SR4-09): the client followed any redirection, to a local address or over http too.
+    use crate::registry::{redirect_allowed, redirect_policy, OPEN_VSX};
+    let fake = FakeOpenVsx::start().await;
+    fake.add(theme("1.0.0"));
+    let client = reqwest::Client::builder()
+        .redirect(redirect_policy(&fake.url))
+        .build()
+        .unwrap();
+    let registry = Registry::new(&fake.url, client).unwrap();
+    let to = |u: &str| {
+        format!(
+            "{}/redirect?to={}",
+            fake.url,
+            percent_encoding::utf8_percent_encode(u, percent_encoding::NON_ALPHANUMERIC)
+        )
+    };
+    // On its own origin: followed.
+    let readme = format!("{}/files/acme.night-1.0.0/README.md", fake.url);
+    assert!(registry.bytes(&to(&readme), 1 << 20).await.is_ok());
+    // Elsewhere (another local port, here a second fake): not followed, nothing asked of it.
+    let other = FakeOpenVsx::start().await;
+    other.add(theme("1.0.0"));
+    let elsewhere = format!("{}/files/acme.night-1.0.0/README.md", other.url);
+    let r = registry.bytes(&to(&elsewhere), 1 << 20).await.unwrap_err();
+    assert_eq!(r.code, Code::Network);
+    assert!(other.asked().is_empty(), "{:?}", other.asked());
+    // open-vsx.org: its storage over https alone.
+    let base = url::Url::parse(OPEN_VSX).unwrap();
+    let u = |s: &str| url::Url::parse(s).unwrap();
+    assert!(redirect_allowed(&base, &u("https://open-vsx.org/api/x")));
+    assert!(redirect_allowed(
+        &base,
+        &u("https://openvsx.eclipsecontent.org/a/b/1.0.0/x.vsix")
+    ));
+    for refused in [
+        "http://openvsx.eclipsecontent.org/x.vsix",
+        "https://openvsx.eclipsecontent.org:8443/x.vsix",
+        "https://user@openvsx.eclipsecontent.org/x.vsix",
+        "http://127.0.0.1:9000/x",
+        "https://localhost/x",
+        "https://evil.example/x",
+        "file:///etc/passwd",
+    ] {
+        assert!(!redirect_allowed(&base, &u(refused)), "{refused}");
+    }
+}
+
+#[test]
+fn open_vsx_key_is_pinned() {
+    // ESC-648 (SR4-09): the key was read from Open VSX itself, which proved nothing against it.
+    let open = Registry::new(crate::registry::OPEN_VSX, reqwest::Client::new()).unwrap();
+    assert_eq!(open.pinned_key(), Some(crate::verify::open_vsx_key()));
+    let other = Registry::new("http://127.0.0.1:1", reqwest::Client::new()).unwrap();
+    assert_eq!(other.pinned_key(), None);
+    // An archive signed with another key (the fake's) does not hold with the pinned one.
+    let vsix = fake::theme_vsix("acme", "night", "1.0.0", "Acme Night");
+    let sig = fake::sigzip(&vsix);
+    assert!(crate::verify::check_signature(
+        &vsix,
+        &sig,
+        &crate::verify::public_key(&fake::public_pem()).unwrap()
+    )
+    .is_ok());
+    let r =
+        crate::verify::check_signature(&vsix, &sig, &crate::verify::open_vsx_key()).unwrap_err();
+    assert_eq!(r.code, Code::BadSignature);
+    assert_eq!(crate::verify::not_the_pinned_key().code, Code::BadSignature);
+}

@@ -142,6 +142,7 @@ impl Gitea {
     /// A call of the API, wherever it is redirected (a renamed repository): its JSON.
     async fn send(&self, method: Method, path: &str, body: Option<&Value>) -> Result<Value> {
         let url = format!("{}{path}", self.base);
+        crate::reach::route(&url)?;
         let make = |method, url: &str, own, body| self.request(method, url, own, body);
         Ok(crate::reach::send_named(NAME, method, url, body, make)
             .await?
@@ -155,6 +156,7 @@ impl Gitea {
     /// The text of a call (a job's log), whatever it holds.
     async fn text(&self, path: &str) -> Result<String> {
         let url = format!("{}{path}", self.base);
+        crate::reach::route(&url)?;
         let none: Option<&Value> = None;
         let reply = redirect::follow(
             NAME,

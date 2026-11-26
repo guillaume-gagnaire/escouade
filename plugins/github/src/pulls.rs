@@ -243,6 +243,7 @@ impl Github {
         } else {
             format!("{}{url}", self.base)
         };
+        crate::reach::route(&url)?;
         let reply = redirect::follow(
             NAME,
             method,

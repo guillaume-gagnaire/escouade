@@ -789,6 +789,7 @@ Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-serve
 - `lsp_servers` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
 - `lsp_start` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
 - `lsp_trust` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_trust_worktree` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
 - `open_path` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
 - `read_logo` : lu sur la machine du cœur : lu par le client et envoyé en mode serveur
 - `sent_file_open` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur

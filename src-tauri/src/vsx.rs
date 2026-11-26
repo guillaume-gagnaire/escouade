@@ -49,6 +49,8 @@ impl Extensions {
             .and_then(|b| {
                 b.connect_timeout(Duration::from_secs(15))
                     .timeout(Duration::from_secs(300))
+                    // Its redirections kept to Open VSX and its storage (ESC-648, SR4-09).
+                    .redirect(escouade_vsx::registry::redirect_policy(&self.base))
                     .build()
             })
             .map_err(Refusal::network)?;
@@ -76,16 +78,19 @@ pub struct Context {
     pub warnings: Vec<String>,
 }
 
-/// The layers of the allowed list for the projects `projects` (those open in the view): the imposed ones (each
-/// project's locks, the device's alone when none), the device's settings, each project's file.
+/// The layers of the allowed list for the projects `projects` (those the page says open in the view): the imposed ones,
+/// the device's settings, each project's file.
+///
+/// What is imposed is judged by the core on its own projects, never on the page's list (ESC-648, SR4-08): the device's
+/// locks and those of **every** project of the device (a team's `extensions.allowed`), as the extensions are the
+/// device's, whatever view installs them. The page's list only adds: the files of its projects (not imposed), and the
+/// refusal of a private one; a list that names no project of the device while the device holds a private one is
+/// refused as private too (the least said, when the core cannot tell which).
 pub fn context(core: &Core, projects: &[String]) -> Context {
     let mut out = Context::default();
     let mut imposed: Vec<crate::locks::Imposed> = Vec::new();
-    let locks: Vec<crate::locks::Locks> = if projects.is_empty() {
-        vec![core.locks.read().clone()]
-    } else {
-        projects.iter().map(|p| core.locks_for(p)).collect()
-    };
+    let mut locks: Vec<crate::locks::Locks> = vec![core.locks.read().clone()];
+    locks.extend(core.locks_by_project().into_values());
     for l in locks {
         for i in l.extension_layers() {
             if !imposed.contains(&i) {
@@ -111,8 +116,19 @@ pub fn context(core: &Core, projects: &[String]) -> Context {
         &device,
         &mut out,
     );
-    for id in projects {
-        let Ok(p) = core.project(id) else { continue };
+    let known: Vec<_> = projects
+        .iter()
+        .filter_map(|id| core.project(id).ok())
+        .collect();
+    if known.is_empty() {
+        out.private = core
+            .projects
+            .read()
+            .iter()
+            .find(|p| p.private)
+            .map(|p| p.name.clone());
+    }
+    for p in known {
         if p.private && out.private.is_none() {
             out.private = Some(p.name.clone());
         }
@@ -338,11 +354,16 @@ pub struct FileInfo {
     pub size: u64,
 }
 
-/// The files of an installed extension (no link, nothing outside its folder), at most 2000.
-pub fn files(ext: &Extensions, id: &str) -> Result<Vec<FileInfo>, Refusal> {
-    let Some(dir) = ext.store.dir_of(id) else {
-        return Err(Refusal::new(Code::NotFound, id.to_owned()));
-    };
+/// The layers an extension's files are served under (ESC-648, SR4-07): the imposed ones and the device's settings, as
+/// the core judges them (`context` with no project of the page).
+pub fn served_layers(core: &Core) -> Vec<Layer> {
+    context(core, &[]).layers
+}
+
+/// The files of an installed extension (no link, nothing outside its folder), at most 2000: none of one turned off or
+/// that `layers` refuse.
+pub fn files(ext: &Extensions, layers: &[Layer], id: &str) -> Result<Vec<FileInfo>, Refusal> {
+    let dir = escouade_vsx::serve::served_dir(&ext.store, layers, id)?;
     let mut out = Vec::new();
     let mut stack = vec![(dir.clone(), String::new())];
     while let Some((at, rel)) = stack.pop() {
@@ -376,18 +397,21 @@ pub fn files(ext: &Extensions, id: &str) -> Result<Vec<FileInfo>, Refusal> {
     Ok(out)
 }
 
-/// The protocol's answer (`escouade-ext:`), read-only.
+/// The protocol's answer (`escouade-ext:`), read-only: never a file of an extension turned off or refused by the
+/// allowed list the core judges (ESC-648).
 pub fn protocol(
+    core: Option<&Core>,
     ext: Option<&Extensions>,
     request: &tauri::http::Request<Vec<u8>>,
 ) -> tauri::http::Response<Vec<u8>> {
-    match ext {
-        Some(ext) => escouade_vsx::serve::respond(
+    match (core, ext) {
+        (Some(core), Some(ext)) => escouade_vsx::serve::respond_allowed(
             &ext.store,
+            &served_layers(core),
             request.method().as_str(),
             request.uri().path(),
         ),
-        None => tauri::http::Response::builder()
+        _ => tauri::http::Response::builder()
             .status(503)
             .body(Vec::new())
             .expect("a fixed response"),
@@ -499,14 +523,20 @@ pub fn vsx_set_theme(ext: Ext<'_>, theme: Option<String>) -> Result<(), String> 
 
 /// The files of an installed extension.
 #[escouade_command::command]
-pub fn vsx_files(ext: Ext<'_>, id: String) -> Result<Vec<FileInfo>, String> {
-    files(&ext, &id).map_err(|r| r.message)
+pub fn vsx_files(core: Core_<'_>, ext: Ext<'_>, id: String) -> Result<Vec<FileInfo>, String> {
+    files(&ext, &served_layers(&core), &id).map_err(|r| r.message)
 }
 
-/// A file of an installed extension, raw (`escouade_vsx::serve::read`: inside its folder alone).
+/// A file of an installed extension, raw (`escouade_vsx::serve::read_allowed`: inside its folder alone, of an
+/// extension on and allowed).
 #[escouade_command::command]
-pub fn vsx_file(ext: Ext<'_>, id: String, path: String) -> Result<tauri::ipc::Response, String> {
-    escouade_vsx::serve::read(&ext.store, &id, &path)
+pub fn vsx_file(
+    core: Core_<'_>,
+    ext: Ext<'_>,
+    id: String,
+    path: String,
+) -> Result<tauri::ipc::Response, String> {
+    escouade_vsx::serve::read_allowed(&ext.store, &served_layers(&core), &id, &path)
         .map(|(bytes, _)| tauri::ipc::Response::new(bytes))
         .map_err(|r| r.message)
 }

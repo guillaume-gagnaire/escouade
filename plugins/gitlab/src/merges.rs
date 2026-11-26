@@ -363,6 +363,7 @@ impl Gitlab {
         } else {
             format!("{}{path}", self.base)
         };
+        crate::reach::route(&url)?;
         let reply = redirect::follow(
             NAME,
             method,

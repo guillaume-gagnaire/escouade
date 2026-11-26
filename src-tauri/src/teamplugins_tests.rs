@@ -81,7 +81,7 @@ async fn publish(alice: &Side, bob: &Side, team: &str, id: &str, version: &str) 
     alice
         .h
         .core
-        .team_plugin_sign(team, &proposal, PASSWORD)
+        .team_plugin_sign(team, &proposal, PASSWORD, true)
         .await
         .unwrap();
 }
@@ -162,21 +162,40 @@ async fn a_member_proposes_an_administrator_signs_and_the_member_installs_by_his
     let e = alice
         .h
         .core
-        .team_plugin_sign(&team, &proposal, "un autre mot de passe")
+        .team_plugin_sign(&team, &proposal, "un autre mot de passe", true)
         .await
         .unwrap_err();
     assert!(e.contains("mot de passe") || e.contains("password"), "{e}");
+    // Without the administrator's agreement that this device compiles the member's plugin: nothing is signed (ESC-648).
+    let e = alice
+        .h
+        .core
+        .team_plugin_sign(&team, &proposal, PASSWORD, false)
+        .await
+        .unwrap_err();
+    assert!(e.contains("compile"), "{e}");
+    assert_eq!(
+        alice
+            .h
+            .core
+            .team_plugins(&team)
+            .await
+            .unwrap()
+            .proposed
+            .len(),
+        1
+    );
     // A member does not sign.
     assert!(bob
         .h
         .core
-        .team_plugin_sign(&team, &proposal, PASSWORD)
+        .team_plugin_sign(&team, &proposal, PASSWORD, true)
         .await
         .is_err());
     let (report, view) = alice
         .h
         .core
-        .team_plugin_sign(&team, &proposal, PASSWORD)
+        .team_plugin_sign(&team, &proposal, PASSWORD, true)
         .await
         .unwrap();
     assert_eq!(
@@ -395,7 +414,7 @@ async fn a_digest_that_differs_is_never_signed() {
     let e = alice
         .h
         .core
-        .team_plugin_sign(&team, &proposal, PASSWORD)
+        .team_plugin_sign(&team, &proposal, PASSWORD, true)
         .await
         .unwrap_err();
     assert!(

@@ -26,6 +26,7 @@ const status = (over: Partial<LspStatus>): LspStatus => ({
   runsProjectCode: false,
   needsTrust: false,
   trusted: false,
+  worktree: false,
   ...over,
 });
 

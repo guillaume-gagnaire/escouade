@@ -441,6 +441,7 @@ impl Azure {
         if host_of(url).is_empty() {
             return Err(refusal());
         }
+        crate::reach::route(url)?;
         let reply = redirect::follow(
             NAME,
             method,

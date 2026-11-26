@@ -16,7 +16,10 @@ use super::catalog::{self, SERVERS};
 use super::locate::{self, Found, NotFound, Origin, Places};
 use super::manager::{Info, Launch, Manager, Policy, Sink, State};
 use super::transport::{frame, read_frame, FrameError, MAX_MESSAGE};
-use super::{config, launch_for, server_named, status, Refused, TrustReason};
+use super::{
+    config, launch_for, launch_with, server_named, status, Refused, Trust, TrustReason,
+    WorktreeTrust,
+};
 use crate::model::LanguageServerSetting;
 
 fn tmp(name: &str) -> PathBuf {
@@ -416,7 +419,7 @@ fn a_server_of_the_project_runs_only_once_the_project_is_trusted() {
         }
     );
     assert!(refused.to_string().contains(&local.display().to_string()));
-    let s = status(js, &config(js, &none, None), &p, false);
+    let s = status(js, &config(js, &none, None), &p, &Trust::project(false));
     assert!(s.of_project && s.needs_trust && !s.runs_project_code && !s.trusted);
     // Trusted: it runs, known as the project's.
     let l = launch_for(js, &config(js, &none, None), &p, true, root.clone()).unwrap();
@@ -445,7 +448,7 @@ fn a_server_of_the_project_runs_only_once_the_project_is_trusted() {
     // The machine's own, with the catalog's arguments: nothing to ask.
     let l = launch_for(js, &config(js, &none, None), &p, false, root.clone()).unwrap();
     assert_eq!((l.program, l.of_project), (global.clone(), false));
-    let s = status(js, &config(js, &none, None), &p, false);
+    let s = status(js, &config(js, &none, None), &p, &Trust::project(false));
     assert!(!s.of_project && !s.needs_trust);
     // Nor one set by hand, even in the project's folder: the user chose it.
     let mut app = BTreeMap::new();
@@ -508,7 +511,7 @@ fn a_server_that_runs_code_of_the_project_waits_for_its_trust_even_from_the_mach
         refused.to_string(),
         "ce serveur exécute du code du projet (build.rs, macros) : confirme d’abord que tu fais confiance au projet"
     );
-    let s = status(rust, &config(rust, &none, None), &p, false);
+    let s = status(rust, &config(rust, &none, None), &p, &Trust::project(false));
     assert!(s.runs_project_code && s.needs_trust && !s.of_project);
     // With it: started, and stopped when the trust goes.
     let l = launch_for(rust, &config(rust, &none, None), &p, true, root.clone()).unwrap();
@@ -545,7 +548,7 @@ fn a_server_that_runs_code_of_the_project_waits_for_its_trust_even_from_the_mach
             "{id}"
         );
         assert!(
-            !status(s, &config(s, &none, None), &p, false).needs_trust,
+            !status(s, &config(s, &none, None), &p, &Trust::project(false)).needs_trust,
             "{id}"
         );
     }
@@ -1184,7 +1187,7 @@ async fn the_core_reads_the_project_file_and_keeps_the_trust_its_own() {
         inputs.root.display(),
         repo.display()
     );
-    assert!(!inputs.trusted);
+    assert!(!inputs.trust.project && inputs.trust.worktree.is_none());
     let rust = inputs
         .statuses()
         .into_iter()
@@ -1197,7 +1200,7 @@ async fn the_core_reads_the_project_file_and_keeps_the_trust_its_own() {
     );
     // Trusted by the core, kept in the settings' file.
     h.core.lsp_trust(&p.id, true).unwrap();
-    assert!(h.core.lsp_inputs(&p.id, None).await.unwrap().trusted);
+    assert!(h.core.lsp_inputs(&p.id, None).await.unwrap().trust.project);
     let saved: Value =
         serde_json::from_slice(&std::fs::read(h.core.data.settings_file()).unwrap()).unwrap();
     assert_eq!(saved["languageServersTrusted"], json!([p.id]));
@@ -1216,7 +1219,176 @@ async fn the_core_reads_the_project_file_and_keeps_the_trust_its_own() {
     assert_eq!(s.language_servers_trusted, vec![p.id.clone()]);
     assert_eq!(s.language_servers["rust"].path, "ra");
     h.core.lsp_trust(&p.id, false).unwrap();
-    assert!(!h.core.lsp_inputs(&p.id, None).await.unwrap().trusted);
+    assert!(!h.core.lsp_inputs(&p.id, None).await.unwrap().trust.project);
     // No such project: said.
     assert!(h.core.lsp_trust("nope", true).is_err());
+}
+
+// ---------- an agent's worktree (ESC-648, SR4-06) ----------
+
+/// The trust of an agent's worktree under `root`.
+fn in_worktree(root: &Path, project: bool, worktree: bool) -> Trust {
+    Trust {
+        project,
+        worktree: Some(WorktreeTrust {
+            root: root.to_path_buf(),
+            trusted: worktree,
+        }),
+    }
+}
+
+#[test]
+fn the_project_trust_does_not_run_a_program_the_agent_wrote_in_its_worktree() {
+    let dir = tmp("agent-program");
+    let (wt, proj) = (dir.join("worktree"), dir.join("project"));
+    std::fs::create_dir_all(&proj).unwrap();
+    // What an agent without the right to run a command writes in its worktree (node_modules: ignored by git).
+    let planted = exe(
+        &wt.join("node_modules").join(".bin"),
+        "typescript-language-server",
+    );
+    let p = places(Vec::new(), vec![wt.clone(), proj.clone()], None, &no_tool);
+    let ts = server("typescript");
+    let none = BTreeMap::new();
+    let c = config(ts, &none, None);
+    // The project trusted: still refused, its path said, the worktree's trust asked.
+    let refused = launch_with(ts, &c, &p, &in_worktree(&wt, true, false), wt.clone()).unwrap_err();
+    assert_eq!(
+        refused,
+        Refused::NeedsTrust {
+            server: "typescript",
+            program: planted.display().to_string(),
+            args: vec!["--stdio".into()],
+            reason: TrustReason::AgentProgram,
+        }
+    );
+    let said = refused.to_string();
+    assert!(said.contains(&planted.display().to_string()), "{said}");
+    assert!(said.contains("worktree"), "{said}");
+    let s = status(ts, &c, &p, &in_worktree(&wt, true, false));
+    assert!(s.worktree && s.needs_trust && !s.trusted);
+    // The worktree trusted: it runs, and stops with that trust.
+    let l = launch_with(ts, &c, &p, &in_worktree(&wt, false, true), wt.clone()).unwrap();
+    assert_eq!((l.program, l.of_project), (planted, true));
+    assert!(status(ts, &c, &p, &in_worktree(&wt, false, true)).trusted);
+    // In the project's own folder, the project's trust is the one asked, as before.
+    let own = exe(
+        &proj.join("node_modules").join(".bin"),
+        "typescript-language-server",
+    );
+    let pp = places(Vec::new(), vec![proj.clone()], None, &no_tool);
+    let l = launch_with(ts, &c, &pp, &Trust::project(true), proj.clone()).unwrap();
+    assert_eq!(l.program, own);
+}
+
+#[test]
+fn in_an_agent_worktree_the_project_trust_covers_its_programs_outside_of_it_alone() {
+    let dir = tmp("agent-outside");
+    let (wt, proj) = (dir.join("worktree"), dir.join("project"));
+    std::fs::create_dir_all(&wt).unwrap();
+    let name = "vscode-json-language-server";
+    // The project's node_modules (outside of the worktree): the project's trust, as for the project.
+    let own = exe(&proj.join("node_modules").join(".bin"), name);
+    let p = places(Vec::new(), vec![wt.clone(), proj.clone()], None, &no_tool);
+    let js = server("json");
+    let c = config(js, &BTreeMap::new(), None);
+    assert!(matches!(
+        launch_with(js, &c, &p, &in_worktree(&wt, false, true), wt.clone()),
+        Err(Refused::NeedsTrust {
+            reason: TrustReason::Chosen,
+            ..
+        })
+    ));
+    let l = launch_with(js, &c, &p, &in_worktree(&wt, true, false), wt.clone()).unwrap();
+    assert_eq!(l.program, own);
+    // A program of the machine that runs no code of the project: nothing to ask, worktree or not.
+    std::fs::remove_file(&own).unwrap();
+    let bin = dir.join("bin");
+    let global = exe(&bin, name);
+    let p = places(vec![bin], vec![wt.clone(), proj], None, &no_tool);
+    let l = launch_with(js, &c, &p, &in_worktree(&wt, false, false), wt.clone()).unwrap();
+    assert_eq!((l.program, l.of_project), (global, false));
+}
+
+#[test]
+fn a_server_that_runs_the_code_of_an_agent_worktree_waits_for_that_worktree_trust() {
+    // rust-analyzer runs the build.rs the agent may have written: the project's trust does not cover it.
+    let dir = tmp("agent-code");
+    let (wt, proj) = (dir.join("worktree"), dir.join("project"));
+    std::fs::create_dir_all(&wt).unwrap();
+    std::fs::create_dir_all(&proj).unwrap();
+    let bin = dir.join("bin");
+    let ra = exe(&bin, "rust-analyzer");
+    let p = places(vec![bin], vec![wt.clone(), proj], None, &no_tool);
+    let rust = server("rust");
+    let c = config(rust, &BTreeMap::new(), None);
+    let refused =
+        launch_with(rust, &c, &p, &in_worktree(&wt, true, false), wt.clone()).unwrap_err();
+    assert!(matches!(
+        &refused,
+        Refused::NeedsTrust { reason: TrustReason::AgentCode, program, .. } if *program == ra.display().to_string()
+    ));
+    assert!(refused.to_string().contains("build.rs"));
+    let l = launch_with(rust, &c, &p, &in_worktree(&wt, false, true), wt.clone()).unwrap();
+    assert_eq!((l.program, l.of_project), (ra, true));
+}
+
+#[tokio::test]
+async fn the_core_asks_the_trust_of_an_agent_worktree_apart_from_the_project() {
+    let h = crate::core_tests::harness("lsp-agent-worktree");
+    let (p, _repo) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.clone().unwrap().path);
+    h.core.lsp_trust(&p.id, true).unwrap();
+    let inputs = h
+        .core
+        .lsp_inputs(&p.id, Some(a.meta.id.clone()))
+        .await
+        .unwrap();
+    let w = inputs.trust.worktree.clone().expect("an agent's worktree");
+    assert!(inputs.trust.project && !w.trusted);
+    assert!(crate::tickets::same_dir(
+        &w.root.to_string_lossy(),
+        &wt.to_string_lossy()
+    ));
+    // Trusted for this agent: its worktree alone; the project's own folder needs none.
+    let root = h
+        .core
+        .lsp_trust_worktree(&p.id, &a.meta.id, true)
+        .await
+        .unwrap();
+    assert_eq!(root, w.root);
+    let inputs = h
+        .core
+        .lsp_inputs(&p.id, Some(a.meta.id.clone()))
+        .await
+        .unwrap();
+    assert!(inputs.trust.worktree.unwrap().trusted);
+    assert!(h
+        .core
+        .lsp_inputs(&p.id, None)
+        .await
+        .unwrap()
+        .trust
+        .worktree
+        .is_none());
+    // Another agent is asked again.
+    let b = h.core.create_agent(&p.id, None).await.unwrap();
+    let other = h
+        .core
+        .lsp_inputs(&p.id, Some(b.meta.id.clone()))
+        .await
+        .unwrap();
+    assert!(!other.trust.worktree.unwrap().trusted);
+    // No longer trusted.
+    h.core
+        .lsp_trust_worktree(&p.id, &a.meta.id, false)
+        .await
+        .unwrap();
+    let inputs = h
+        .core
+        .lsp_inputs(&p.id, Some(a.meta.id.clone()))
+        .await
+        .unwrap();
+    assert!(!inputs.trust.worktree.unwrap().trusted);
 }

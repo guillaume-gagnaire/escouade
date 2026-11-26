@@ -2,8 +2,8 @@
 title: "Le store de plugins privés"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md §3.7, §6.4, §6.5, §7, §9, §15.2 (C13), §16 (TS-14)","docs/STORE.md §4.5, §4.6 (la liste de révocation)","crates/escouade-team/src/signing.rs, crates/escouade-team/src/plugins.rs","crates/escouade-plugin-cli/src/team.rs","crates/escouade-plugins/src/team.rs","src-tauri/src/teamplugins.rs, src-tauri/src/teams_plugins.rs"]
-tickets: ["ESC-579"]
-decisions: [278]
+tickets: ["ESC-579","ESC-648"]
+decisions: [278,334]
 compared: null
 ---
 
@@ -42,6 +42,7 @@ Joués deux fois : par le client de l'équipe à la lecture de son flux, puis pa
 
   Rien ne part si un contrôle échoue ; la fenêtre dit lequel. Sinon, l'archive et le module partent comme **deux fichiers chiffrés par la clé d'équipe** sur le serveur, avec la proposition et son **empreinte** (celle de l'archive et du module ensemble).
 - **Qui signe** : un administrateur dont le poste garde la clé, « Contrôler à nouveau et signer ». Son poste relit l'archive sur le serveur, **rejoue les mêmes contrôles** et ne signe, mot de passe donné, **que si son empreinte est celle de la proposition**. Sinon : « Les empreintes diffèrent… Rien n'est signé. »
+- **La compilation tourne sur le poste de l'administrateur, et c'est dit** (ESC-648) : rejouer les contrôles compile le plugin d'un membre ici (rustc, les `build.rs` et macros natives de la liste fermée, ce que son code lit du disque à la compilation : `include_bytes!`, `include_str!`, `env!`). Ce n'est pas le bac à sable du store public : un plugin privé n'y va pas. Le formulaire de signature le dit par une case à cocher : « Je sais que les contrôles compilent ici le plugin de qui l'a proposé : rustc, ses build.rs et macros de la liste fermée, et ce que son code lit du disque à la compilation (include_bytes!, env!). Ce poste peut le compiler. » ; « Contrôler à nouveau et signer » reste grisé tant qu'elle n'est pas cochée, et **le cœur refuse de signer sans elle** (`team_plugin_sign`, `compileHere`) : « Signer compile ici le plugin de qui l'a proposé : confirme d'abord que ce poste peut le compiler. Rien n'est signé. » Ce qu'une compilation lit du disque ne sort pas tant que les empreintes des deux postes doivent être égales ; la sortie de rustc (4 000 caractères au plus) est montrée dans le rapport.
 - Ce qui est signé est l'**énoncé** de la version (son id, sa version, son étiquette, son nom, l'espace, l'empreinte de l'équipe, les SHA-256 de l'archive et du module, l'empreinte des contrôles), avec un commentaire de confiance propre au store privé, jamais celui du store public.
 - Les mêmes contrôles se jouent sans l'app : `escouade-plugin team-check <dossier> --tag <étiquette> [--last <version>]`.
 - Une proposition s'écarte, par un administrateur ou par son auteur.
@@ -69,3 +70,4 @@ Aucun outil du serveur MCP ne touche au store privé : **un agent ne publie ni n
 - L'archive et le module sont chacun un fichier du serveur, borné par sa limite des fichiers (25 Mo d'office, `--max-file`) : une archive plus grosse ne part pas, même sous les 50 Mo du contrôle.
 - Une nouvelle version publiée est offerte par la page « Équipe » de la vue Plugins, pas encore par « Mises à jour ».
 - Le coupe-circuit de TS-15 n'est pas encore là : la liste de l'équipe s'applique par sa lecture.
+- La compilation d'un plugin d'équipe n'a pas de bac à sable sur le poste de l'administrateur : elle est dite et consentie, pas isolée.

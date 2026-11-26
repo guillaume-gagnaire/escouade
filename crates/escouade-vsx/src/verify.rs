@@ -7,8 +7,11 @@
 //!
 //! **What it proves**: the bytes installed are those Open VSX received and published, unchanged on the way (its storage,
 //! a mirror, a cache, a proxy that would serve another file). **What it does not prove**: that the extension is
-//! harmless, nor that its author is who it says (that is the namespace « verified » of Open VSX, shown apart); nor
-//! anything against Open VSX itself, whose key is read from it (over TLS).
+//! harmless, nor that its author is who it says (that is the namespace « verified » of Open VSX, shown apart).
+//!
+//! **The key is pinned** (ESC-648, SR4-09): for open-vsx.org, the key is the one written here (`OPEN_VSX_KEY`), never
+//! the one Open VSX serves; a version it would sign with another key is refused until an update of Escouade knows it.
+//! Only the fake registry of a build of development is checked with the key it serves.
 
 use crate::{Code, Refusal, Result};
 use ed25519_dalek::{Signature, VerifyingKey};
@@ -41,6 +44,29 @@ pub fn check_sum(bytes: &[u8], sum_file: &str) -> Result<String> {
         ));
     }
     Ok(got)
+}
+
+/// Open VSX's signing key (`/api/-/public-key/14ccb407-4e79-41ed-be5a-6d608325c45a`), read on 2026-11-26: the one of
+/// every version of open-vsx.org then (from 2022's to that day's), checked on a real signature. Pinned: what Open VSX
+/// serves as its key is not read.
+pub const OPEN_VSX_KEY: &str = "-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAje+vAaSS1zHV5WHCJSa5UXvxRo6+yerEU3IEmtuEuF4=
+-----END PUBLIC KEY-----";
+
+/// The key pinned for open-vsx.org.
+pub fn open_vsx_key() -> VerifyingKey {
+    public_key(OPEN_VSX_KEY).expect("the pinned key is a valid Ed25519 key")
+}
+
+/// The refusal of a signature that does not hold with the pinned key.
+pub fn not_the_pinned_key() -> Refusal {
+    Refusal::new(
+        Code::BadSignature,
+        tr!(
+            "La signature ne tient pas avec la clé d’Open VSX qu’Escouade connaît : l’archive n’est pas installée (si Open VSX a changé de clé, une mise à jour d’Escouade la connaîtra).",
+            "The signature does not hold with the Open VSX key Escouade knows: the archive is not installed (if Open VSX changed its key, an update of Escouade will know it)."
+        ),
+    )
 }
 
 /// The DER prefix of an Ed25519 public key in SPKI (RFC 8410): the 32 bytes of the key follow it.
