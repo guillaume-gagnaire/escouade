@@ -2,10 +2,13 @@
 //! signed with the key of the app's updater.
 //!
 //! 1. The version: `--to X.Y.Z` (the client's, when it offers « Mettre à jour le serveur »), else the one of
-//!    `latest.json` (or `beta.json` with `--beta`) of the latest release, as the app's updater reads.
+//!    `latest.json` (with `--beta`, the higher of `latest.json` and `beta.json`, as `updates::accepts`), as the app's
+//!    updater reads. Never an older one than the program's (SR1-07: a mirror or a changed `latest.json` serving an old
+//!    signed version), unless it is named: `--to X.Y.Z --downgrade` ([`target_of`]).
 //! 2. The archive `escouade-server-<version>-linux-<x64|arm64>.tar.gz` and its signature (`.sig`, the Tauri updater's:
 //!    a minisign signature, in base64) downloaded; the signature checked with [`UPDATER_PUBLIC_KEY`] before anything is
-//!    touched. A refused signature changes nothing.
+//!    touched, and its trusted comment (signed too) must name that archive (`file:<name>`): the signed archive of
+//!    another version served under this one's name is refused ([`verify_archive`]). A refused signature changes nothing.
 //! 3. Each file of the archive (the program, `seed/`) put in place of the one beside the running program, the old one
 //!    kept as `<name>.old`: Linux runs on, from the file it opened.
 //! 4. The running server (its `server-status.json`) stopped once nothing would be cut: it waits for the turns, the
@@ -44,6 +47,70 @@ pub struct Asked {
     pub now: bool,
     /// `--check`: says what it would do, does nothing.
     pub check: bool,
+    /// `--downgrade` (with `--to`): the version named may be older than the program's.
+    pub downgrade: bool,
+}
+
+/// The version `update` aims at, the program being at `current`: `--to`'s, else `latest` (the version of
+/// `latest.json`), or with `--beta` the higher of `latest` and `beta` (`beta.json`'s, when it was read). An older one
+/// than `current` is refused, unless `--to` names it with `--downgrade` (SR1-07).
+pub fn target_of(
+    current: &str,
+    asked: &Asked,
+    latest: Option<&str>,
+    beta: Option<&str>,
+) -> Result<String> {
+    let parse = |v: &str| -> Result<semver::Version> {
+        let v = v.trim().trim_start_matches('v');
+        if !is_version(v) {
+            bail!(tr!(
+                "« {v} » n’est pas une version (X.Y.Z)",
+                "“{v}” is not a version (X.Y.Z)"
+            ));
+        }
+        semver::Version::parse(v).map_err(|e| anyhow!("{v}: {e}"))
+    };
+    let current_v = parse(current)?;
+    let target = match &asked.to {
+        Some(v) => parse(v)?,
+        None => {
+            let latest = parse(latest.ok_or_else(|| anyhow!("latest.json: no version"))?)?;
+            match beta.filter(|_| asked.beta) {
+                Some(b) => latest.max(parse(b)?),
+                None => latest,
+            }
+        }
+    };
+    if target < current_v && !(asked.to.is_some() && asked.downgrade) {
+        bail!(match &asked.to {
+            Some(_) => tr!(
+                "{target} est plus ancienne que ce programme ({current}) : « --to {target} --downgrade » pour revenir en arrière, rien n’est changé",
+                "{target} is older than this program ({current}): “--to {target} --downgrade” to go back, nothing is changed"
+            ),
+            None => tr!(
+                "la version publiée ({target}) est plus ancienne que ce programme ({current}) : rien n’est changé (« --to X.Y.Z --downgrade » pour revenir en arrière)",
+                "the published version ({target}) is older than this program ({current}): nothing is changed (“--to X.Y.Z --downgrade” to go back)"
+            ),
+        });
+    }
+    Ok(target.to_string())
+}
+
+/// The archive `data` checked as [`verify`] does, and its signature bound to its name: the trusted comment (which the
+/// signature covers) must say `file:<name>`, as the Tauri signer writes it (`timestamp:…\tfile:<name>`). The signed
+/// archive of another version, renamed, is refused (SR1-07).
+pub fn verify_archive(data: &[u8], sig: &str, key: &str, name: &str) -> Result<()> {
+    let comment = verify(data, sig, key)?;
+    let named = comment
+        .split(['\t', ' '])
+        .any(|field| field.strip_prefix("file:") == Some(name));
+    if !named {
+        bail!(tr!(
+            "la signature ne nomme pas {name} (« {comment} »)",
+            "the signature does not name {name} (“{comment}”)"
+        ));
+    }
+    Ok(())
 }
 
 /// The architecture's name in the archives.
@@ -87,8 +154,8 @@ pub fn is_version(v: &str) -> bool {
 }
 
 /// `data` signed as the Tauri updater signs (`sig`: the minisign signature file in base64) with `key` (the minisign
-/// public key file in base64, as `tauri.conf.json` holds it).
-pub fn verify(data: &[u8], sig: &str, key: &str) -> Result<()> {
+/// public key file in base64, as `tauri.conf.json` holds it). Answers the signature's trusted comment, which it covers.
+pub fn verify(data: &[u8], sig: &str, key: &str) -> Result<String> {
     use base64::Engine as _;
     let b64 = |s: &str| -> Result<String> {
         let bytes = base64::engine::general_purpose::STANDARD
@@ -100,7 +167,8 @@ pub fn verify(data: &[u8], sig: &str, key: &str) -> Result<()> {
         minisign_verify::PublicKey::decode(&b64(key)?).map_err(|e| anyhow!("public key: {e}"))?;
     let sig =
         minisign_verify::Signature::decode(&b64(sig)?).map_err(|e| anyhow!("signature: {e}"))?;
-    key.verify(data, &sig, false).map_err(|e| anyhow!("{e}"))
+    key.verify(data, &sig, false).map_err(|e| anyhow!("{e}"))?;
+    Ok(sig.trusted_comment().to_string())
 }
 
 /// The key that checks the archives: the updater's; another in a build of development when `ESCOUADE_SERVER_UPDATE_PUBKEY`
@@ -213,6 +281,74 @@ pub fn wait_of(status: Option<&Status>, alive: impl Fn(u32) -> bool) -> Wait {
     }
 }
 
+/// The version the releases at `base` aim `update` at, the program being at `current` ([`target_of`]): `--to`'s, else
+/// `latest.json`'s, and with `--beta` `beta.json`'s too (a channel without a `beta.json` is its `latest.json`).
+pub async fn read_target(
+    client: &reqwest::Client,
+    base: &str,
+    current: &str,
+    asked: &Asked,
+) -> Result<String> {
+    if asked.to.is_some() {
+        return target_of(current, asked, None, None);
+    }
+    let version_of = |beta: bool| async move {
+        let url = channel_url(base, beta);
+        let body: serde_json::Value = async {
+            let r = client.get(&url).send().await?.error_for_status()?;
+            anyhow::Ok(r.json().await?)
+        }
+        .await
+        .with_context(|| url.clone())?;
+        body["version"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| anyhow!("{url}: no version"))
+    };
+    let latest = version_of(false).await?;
+    let beta = match asked.beta {
+        true => match version_of(true).await {
+            Ok(v) => Some(v),
+            Err(e) => {
+                log::warn!("beta.json: {e:#}");
+                None
+            }
+        },
+        false => None,
+    };
+    target_of(current, asked, Some(&latest), beta.as_deref())
+}
+
+/// The archive of `target` for `arch` downloaded from the releases at `base`, with its signature, and checked with
+/// `key` ([`verify_archive`]) before it is answered.
+pub async fn download(
+    client: &reqwest::Client,
+    base: &str,
+    target: &str,
+    arch: &str,
+    key: &str,
+) -> Result<Vec<u8>> {
+    let url = archive_url(base, target, arch);
+    let get = |u: String| async move {
+        let r = client.get(&u).send().await?.error_for_status()?;
+        anyhow::Ok(r.bytes().await?.to_vec())
+    };
+    let (bytes, sig) = async {
+        let bytes = get(url.clone()).await?;
+        let sig = get(format!("{url}.sig")).await?;
+        anyhow::Ok((bytes, String::from_utf8(sig)?))
+    }
+    .await
+    .with_context(|| url.clone())?;
+    verify_archive(&bytes, &sig, key, &archive_name(target, arch)).map_err(|e| {
+        anyhow!(tr!(
+            "signature refusée ({e:#}) : l’archive ne vient pas de la release d’Escouade, rien n’est changé",
+            "signature refused ({e:#}): the archive does not come from Escouade's release, nothing is changed"
+        ))
+    })?;
+    Ok(bytes)
+}
+
 /// `escouade-server update` on the data folder `data`.
 pub fn run(data: &DataDir, asked: &Asked) -> Result<()> {
     if status::supervisor() == Some(Supervisor::Docker) {
@@ -240,29 +376,7 @@ pub fn run(data: &DataDir, asked: &Asked) -> Result<()> {
         .user_agent(concat!("escouade-server/", env!("CARGO_PKG_VERSION")))
         .build()?;
     let base = base();
-    let target = match &asked.to {
-        Some(v) => v.trim_start_matches('v').to_string(),
-        None => {
-            let url = channel_url(&base, asked.beta);
-            let body: serde_json::Value = runtime
-                .block_on(async {
-                    let r = client.get(&url).send().await?.error_for_status()?;
-                    anyhow::Ok(r.json().await?)
-                })
-                .with_context(|| url.clone())?;
-            body["version"]
-                .as_str()
-                .ok_or_else(|| anyhow!("{url}: no version"))?
-                .trim_start_matches('v')
-                .to_string()
-        }
-    };
-    if !is_version(&target) {
-        bail!(tr!(
-            "« {target} » n’est pas une version (X.Y.Z)",
-            "“{target}” is not a version (X.Y.Z)"
-        ));
-    }
+    let target = runtime.block_on(read_target(&client, &base, current, asked))?;
     let running = status::read(data).filter(|s| status::alive(s.pid));
     if asked.check {
         println!(
@@ -285,7 +399,6 @@ pub fn run(data: &DataDir, asked: &Asked) -> Result<()> {
         .to_path_buf();
     if target != current {
         let arch = arch();
-        let url = archive_url(&base, &target, arch);
         println!(
             "{}",
             tr!(
@@ -294,26 +407,7 @@ pub fn run(data: &DataDir, asked: &Asked) -> Result<()> {
                 archive_name(&target, arch)
             )
         );
-        let (bytes, sig) = runtime
-            .block_on(async {
-                let get = |u: String| {
-                    let client = client.clone();
-                    async move {
-                        let r = client.get(&u).send().await?.error_for_status()?;
-                        anyhow::Ok(r.bytes().await?.to_vec())
-                    }
-                };
-                let bytes = get(url.clone()).await?;
-                let sig = get(format!("{url}.sig")).await?;
-                anyhow::Ok((bytes, String::from_utf8(sig)?))
-            })
-            .with_context(|| url.clone())?;
-        verify(&bytes, &sig, &key()).map_err(|e| {
-            anyhow!(tr!(
-                "signature refusée ({e}) : l’archive ne vient pas de la release d’Escouade, rien n’est changé",
-                "signature refused ({e}): the archive does not come from Escouade's release, nothing is changed"
-            ))
-        })?;
+        let bytes = runtime.block_on(download(&client, &base, &target, arch, &key()))?;
         println!("{}", tr!("Signature vérifiée.", "Signature checked."));
         let names = install(&bytes, &dir).map_err(|e| {
             anyhow!(tr!(

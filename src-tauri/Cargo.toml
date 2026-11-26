@@ -176,7 +176,7 @@ quick-xml = "0.42"
 # `device`: no TUN, no driver, no administrator rights) and a TCP/IP stack of Escouade's own inside it; UPnP to open
 # its UDP port in the box (NAT-PMP and STUN are written by hand, `phone::nat`).
 boringtun = { version = "0.7", default-features = false }
-smoltcp = { version = "0.12", default-features = false, features = ["std", "log", "medium-ip", "proto-ipv4", "socket-tcp"] }
+smoltcp = { version = "0.14", default-features = false, features = ["std", "log", "medium-ip", "proto-ipv4", "socket-tcp"] }
 igd-next = { version = "0.18", default-features = false, features = ["aio_tokio"] }
 socket2 = "0.6"
 tokio-util = { version = "0.7", default-features = false }

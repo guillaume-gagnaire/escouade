@@ -11,9 +11,9 @@ const SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'image-ta
 const IMAGE = 'ghcr.io/guillaume-gagnaire/escouade/escouade-team-server';
 
 describe('the tags of a server’s image', () => {
-  it('a stable version: its number and latest', () => {
-    expect(imageTags(IMAGE, 'v2.3.0')).toEqual([`${IMAGE}:2.3.0`, `${IMAGE}:latest`]);
-    expect(imageTags(IMAGE, '2.2.5')).toEqual([`${IMAGE}:2.2.5`, `${IMAGE}:latest`]);
+  it('a stable version: its number, its minor one (the composes pull it, SR1-12) and latest', () => {
+    expect(imageTags(IMAGE, 'v2.3.0')).toEqual([`${IMAGE}:2.3.0`, `${IMAGE}:2.3`, `${IMAGE}:latest`]);
+    expect(imageTags(IMAGE, '2.2.5')).toEqual([`${IMAGE}:2.2.5`, `${IMAGE}:2.2`, `${IMAGE}:latest`]);
   });
 
   it('a beta: its number and beta, never latest', () => {
@@ -21,6 +21,7 @@ describe('the tags of a server’s image', () => {
     expect(imageTags(IMAGE, 'v2.3.0-beta.12')).toEqual([`${IMAGE}:2.3.0-beta.12`, `${IMAGE}:beta`]);
     // Any pre-release, not only a beta.
     expect(imageTags(IMAGE, 'v3.0.0-rc.1')).not.toContain(`${IMAGE}:latest`);
+    expect(imageTags(IMAGE, 'v2.3.0-beta.1')).not.toContain(`${IMAGE}:2.3`);
   });
 
   it('refuses what is not a version’s tag, or not an image', () => {

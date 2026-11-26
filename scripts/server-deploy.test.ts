@@ -140,6 +140,13 @@ describe('the image and its examples open nothing by default', () => {
     expect(instructions).not.toMatch(/sudo/);
     // Without ESCOUADE_SERVER_LISTEN, the API listens on 127.0.0.1 of the container alone.
     expect(file).not.toMatch(/ENV[^\n]*ESCOUADE_SERVER_LISTEN/);
+    // SR1-12: every base pinned by the digest of its index, and what 0.0.0.0 exposes said.
+    const bases = [...file.matchAll(/^FROM\s+(\S+)/gm)].map((m) => m[1]);
+    expect(bases.length).toBeGreaterThanOrEqual(2);
+    for (const base of bases) expect(base, base).toMatch(/^docker\.io\/library\/[a-z]+:[\w.-]+@sha256:[0-9a-f]{64}$/);
+    expect(file).not.toMatch(/^ARG\s+\w*IMAGE/m);
+    expect(file).toMatch(/in\s+(#\s+)?clear/);
+    expect(read('.github/dependabot.yml')).toMatch(/package-ecosystem: docker\n\s+directory: \/deploy/);
   });
 
   for (const compose of ['deploy/docker-compose.yml', 'deploy/coolify/docker-compose.yml']) {
@@ -149,7 +156,12 @@ describe('the image and its examples open nothing by default', () => {
         .split('\n')
         .filter((l) => !l.trim().startsWith('#'))
         .join('\n');
-      expect(active).toContain(`image: ${IMAGE}:latest`);
+      // On a minor version, never `latest` (SR1-12); the tag the Release puts on a stable version (image-tags.mjs).
+      expect(active).toMatch(new RegExp(`image: ${IMAGE.replace(/[.]/g, '\\.')}:\\d+\\.\\d+\\n`));
+      expect(active).not.toContain(':latest');
+      // 0.0.0.0 said: in clear on the container's network.
+      expect(text).toMatch(/ESCOUADE_SERVER_LISTEN[^\n]*0\.0\.0\.0/);
+      expect(text).toMatch(/in clear/);
       const ports = [...active.matchAll(/^\s+- ["']?([^"'\s]+)["']?$/gm)].map((m) => m[1]).filter((p) => /^[\d.]*:?\d+:\d+$/.test(p));
       expect(ports).toEqual(['127.0.0.1:46480:46480']);
       expect(active).toContain('read_only: true');

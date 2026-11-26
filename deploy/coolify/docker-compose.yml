@@ -17,10 +17,13 @@
 
 services:
   escouade:
-    image: ghcr.io/guillaume-gagnaire/escouade/escouade-server:latest
+    # A minor version (SR1-12): its fixes at each pull, never a jump to the next one unseen (change it to move on).
+    image: ghcr.io/guillaume-gagnaire/escouade/escouade-server:2.3
     restart: unless-stopped
     environment:
-      # The API on the container's network (the published port, or Coolify's proxy, reaches it).
+      # The API on the container's network (the published port, or Coolify's proxy, reaches it). There it is in clear
+      # (plain HTTP and WebSocket, no TLS): every container of this network (on Coolify, the other resources sharing it)
+      # reaches it and may try pairing codes. TLS is the tunnel's or Coolify's proxy's (the « domain » lines).
       - ESCOUADE_SERVER_LISTEN=0.0.0.0
       # domain: Coolify makes a domain for the port 46480 and routes it through Traefik, in TLS.
       # - SERVICE_FQDN_ESCOUADE_46480

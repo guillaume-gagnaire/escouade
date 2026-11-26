@@ -1,0 +1,26 @@
+# cargo audit, for the app (`cd src-tauri && cargo audit`), which reads every crate of Cargo.lock, the graph's or not
+# (SR1-14 of the review of the 2.3, ESC-640). The CI's check is cargo-deny's (deny.toml at the root, the compiled
+# graph alone): each advisory below is ignored there with its reason, or never reaches the graph. Keep the two lists
+# together: an ignore leaves with the dependency that carries it.
+[advisories]
+ignore = [
+    # zip 4.6.1 (tauri-plugin-updater 2.13.1, Windows): the reasons are deny.toml's.
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
+    "RUSTSEC-2026-0429",
+    "RUSTSEC-2026-0545",
+    "RUSTSEC-2026-0548",
+    # crypto-bigint 0.5.5 (P-256/P-384/K-256 of openmls_rust_crypto, never used by the team's suite 0x0003): deny.toml's.
+    "RUSTSEC-2026-0387",
+    # libcrux-kem 0.0.9: in Cargo.lock only, never compiled (`cargo tree -i libcrux-kem --target all -e all` prints
+    # nothing): hpke-rs-libcrux 0.7.0, which pins it (=0.0.9, no `cargo update` can lift it), is an optional backend of
+    # hpke-rs that openmls_rust_crypto does not turn on (it uses hpke-rs-rust-crypto). Fixed in 0.0.10.
+    "RUSTSEC-2026-0330",
+    "RUSTSEC-2026-0331",
+]
+
+# The warnings it still prints, none failing it: the unmaintained crates deny.toml ignores with their reasons (chrono,
+# paste, proc-macro-error and proc-macro-error2, ttf-parser, zbus_names, zvariant, zvariant_derive), and glib 0.18's
+# « unsound » RUSTSEC-2024-0429 (glib::VariantStrIter, which the app's code never names: its glib is tauri's gtk3 on Linux; fixed in
+# glib 0.20, which gtk 0.18 does not take). heapless 0.8 (RUSTSEC-2026-0580/0581/0582) left with smoltcp 0.14.

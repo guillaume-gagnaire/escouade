@@ -20,7 +20,7 @@ docker volume create escouade-data
 docker run -d --name escouade --restart unless-stopped --stop-timeout 60 \
   -e ESCOUADE_SERVER_LISTEN=0.0.0.0 -p 127.0.0.1:46480:46480 \
   -v escouade-data:/data --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
-  ghcr.io/guillaume-gagnaire/escouade/escouade-server:latest
+  ghcr.io/guillaume-gagnaire/escouade/escouade-server:2.3
 docker exec escouade escouade-server pair
 ```
 
@@ -29,7 +29,7 @@ The last one prints the pairing code (see [Pairing](#pairing)).
 - **What it holds.** A slim Debian 13, `escouade-server` and the seed of its plugins, `git`, `openssh-client`, `curl`, `tini` (which reaps the harnesses’ orphaned processes), Node.js and npm (for the harnesses installed with `npm install -g`). It weighs 427 MB uncompressed, about 150 MB to download. No harness and no account: you install and sign them in from Escouade.
 - **A user without privileges.** It runs as `escouade` (uid 10001), with no root and no sudo, a read-only filesystem (`--read-only`) and no capability at all (`--cap-drop ALL`).
 - **Everything in `/data`.** `HOME` is `/data`: Escouade’s data (`/data/.escouade`), your projects and their worktrees (clone them into `/data/projects`), the harnesses and their sign-ins (`/data/.local`, `/data/.npm-global`, `/data/.claude`…). Nothing is written anywhere else, except `/tmp`, in memory.
-- **Nothing exposed by default.** Without `ESCOUADE_SERVER_LISTEN`, the API listens on the container’s `127.0.0.1` alone: even a published port does not reach it. `ESCOUADE_SERVER_LISTEN=0.0.0.0` opens it to the container’s network, for the port published on the host’s `127.0.0.1` only.
+- **Nothing exposed by default.** Without `ESCOUADE_SERVER_LISTEN`, the API listens on the container’s `127.0.0.1` alone: even a published port does not reach it. `ESCOUADE_SERVER_LISTEN=0.0.0.0` opens it to the container’s network, for the port published on the host’s `127.0.0.1` only. The API is then **in clear** there (HTTP and WebSocket without TLS): any other container of that network (on Coolify, the other resources of the same network) reaches it and may try pairing codes. TLS is the proxy’s: put one in front (Coolify’s Traefik, Caddy) or go through an SSH tunnel, never a port published on a public address.
 - **Its health.** Its `HEALTHCHECK` runs `escouade-server health`, which checks that the server runs and writes its status. `docker ps` says “healthy”.
 - **Its stop.** `docker stop` sends SIGTERM: the turns under way are cut cleanly, the state is written, and each agent resumes its session at the next start. Give it time (`--stop-timeout 60`).
 - **At its first start**, on an empty volume, the log (`docker logs escouade`) says what to do: run `docker exec <container> escouade-server pair`. It never prints the code itself.
@@ -126,7 +126,7 @@ A backup holds the accounts’ sign-ins and the secrets: keep it encrypted, as t
 ## Update
 
 - **In Docker**, an update is a new image: `docker compose pull && docker compose up -d` (or `docker pull`, then the container made again on the same volume). The agents resume their sessions. `escouade-server update` refuses to run in the image.
-- **With systemd**: `escouade-server update`. It reads the latest version (`--to X.Y.Z` for a given version, `--beta` for the beta channel, `--check` to only say it), downloads the archive, checks its signature with the key of the app’s updates, then puts each file in place of the old one, kept as `.old`. It then waits for the server to be at rest (no turn under way, no question waiting, no background task, no terminal used in the last 5 minutes); in a terminal, it offers to restart right away, cutting the turns, and `--now` does so without waiting. systemd starts the server again on the new version.
+- **With systemd**: `escouade-server update`. It reads the latest version (`--to X.Y.Z` for a given version, `--beta` for the higher of the beta and stable channels, `--check` to only say it), downloads the archive, checks its signature with the key of the app’s updates and that this signature names this very archive, then puts each file in place of the old one, kept as `.old`. It then waits for the server to be at rest (no turn under way, no question waiting, no background task, no terminal used in the last 5 minutes); in a terminal, it offers to restart right away, cutting the turns, and `--now` does so without waiting. systemd starts the server again on the new version. It never goes back to an older version than its own unless it is named: `--to X.Y.Z --downgrade`.
 
 When your computer’s version and the server’s differ, the server refuses the connection and says which to update; for the server, it gives the command that puts it at the computer’s version (`escouade-server update --to <version>`, or the new image in Docker), which the client offers you.
 

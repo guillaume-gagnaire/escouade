@@ -20,7 +20,7 @@ docker volume create escouade-data
 docker run -d --name escouade --restart unless-stopped --stop-timeout 60 \
   -e ESCOUADE_SERVER_LISTEN=0.0.0.0 -p 127.0.0.1:46480:46480 \
   -v escouade-data:/data --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
-  ghcr.io/guillaume-gagnaire/escouade/escouade-server:latest
+  ghcr.io/guillaume-gagnaire/escouade/escouade-server:2.3
 docker exec escouade escouade-server pair
 ```
 
@@ -29,7 +29,7 @@ La dernière affiche le code d’appairage (voir [L’appairage](#l-appairage)).
 - **Ce qu’elle contient.** Debian 13 mince, `escouade-server` et l’amorce de ses plugins, `git`, `openssh-client`, `curl`, `tini` (qui recueille les processus orphelins des harness), Node.js et npm (pour les harness qui s’installent par `npm install -g`). Elle pèse 427 Mo décompressée, environ 150 Mo à télécharger. Aucun harness ni aucun compte : tu les installes et les connectes depuis Escouade.
 - **Un utilisateur sans privilège.** Elle tourne en `escouade` (uid 10001), sans root ni sudo, avec un système de fichiers en lecture seule (`--read-only`) et sans aucune capacité (`--cap-drop ALL`).
 - **Tout dans `/data`.** `HOME` est `/data` : les données d’Escouade (`/data/.escouade`), tes projets et leurs worktrees (clone-les dans `/data/projects`), les harness et leurs connexions (`/data/.local`, `/data/.npm-global`, `/data/.claude`…). Rien n’est écrit ailleurs, hormis `/tmp`, en mémoire.
-- **Rien d’exposé par défaut.** Sans `ESCOUADE_SERVER_LISTEN`, l’API n’écoute que sur `127.0.0.1` du conteneur : même un port publié n’y mène pas. `ESCOUADE_SERVER_LISTEN=0.0.0.0` l’ouvre au réseau du conteneur, pour le port publié sur `127.0.0.1` de l’hôte seulement.
+- **Rien d’exposé par défaut.** Sans `ESCOUADE_SERVER_LISTEN`, l’API n’écoute que sur `127.0.0.1` du conteneur : même un port publié n’y mène pas. `ESCOUADE_SERVER_LISTEN=0.0.0.0` l’ouvre au réseau du conteneur, pour le port publié sur `127.0.0.1` de l’hôte seulement. L’API y est alors **en clair** (HTTP et WebSocket sans TLS) : tout autre conteneur de ce réseau (sur Coolify, les autres ressources du même réseau) l’atteint et peut tenter des codes d’appairage. Le TLS est celui du proxy : mets-en un devant (le Traefik de Coolify, Caddy) ou passe par un tunnel SSH, jamais un port publié sur une adresse publique.
 - **Sa santé.** Son `HEALTHCHECK` lance `escouade-server health`, qui vérifie que le serveur tourne et écrit son état. `docker ps` dit « healthy ».
 - **Son arrêt.** `docker stop` envoie SIGTERM : les tours en cours sont coupés proprement, l’état est écrit, et chaque agent reprend sa session au démarrage suivant. Donne-lui le temps (`--stop-timeout 60`).
 - **Au premier démarrage**, sur un volume vide, le journal (`docker logs escouade`) dit quoi faire : lancer `docker exec <conteneur> escouade-server pair`. Il ne dit jamais le code lui-même.
@@ -126,7 +126,7 @@ Une sauvegarde contient les connexions des comptes et les secrets : garde-la chi
 ## Mettre à jour
 
 - **En Docker**, la mise à jour est une nouvelle image : `docker compose pull && docker compose up -d` (ou `docker pull`, puis le conteneur recréé sur le même volume). Les agents reprennent leurs sessions. `escouade-server update` refuse de tourner dans l’image.
-- **Avec systemd** : `escouade-server update`. Il lit la dernière version (`--to X.Y.Z` pour une version précise, `--beta` pour le canal bêta, `--check` pour seulement la dire), télécharge l’archive, vérifie sa signature avec la clé des mises à jour de l’app, puis pose chaque fichier à la place de l’ancien, gardé en `.old`. Il attend ensuite que le serveur soit au repos (aucun tour en cours, aucune question en attente, aucune tâche de fond, aucun terminal utilisé dans les 5 dernières minutes) ; dans un terminal, il propose de redémarrer tout de suite en coupant les tours, et `--now` le fait sans attendre. systemd relance le serveur sur la nouvelle version.
+- **Avec systemd** : `escouade-server update`. Il lit la dernière version (`--to X.Y.Z` pour une version précise, `--beta` pour la plus haute du canal bêta et du canal stable, `--check` pour seulement la dire), télécharge l’archive, vérifie sa signature avec la clé des mises à jour de l’app et que cette signature nomme bien cette archive, puis pose chaque fichier à la place de l’ancien, gardé en `.old`. Il attend ensuite que le serveur soit au repos (aucun tour en cours, aucune question en attente, aucune tâche de fond, aucun terminal utilisé dans les 5 dernières minutes) ; dans un terminal, il propose de redémarrer tout de suite en coupant les tours, et `--now` le fait sans attendre. systemd relance le serveur sur la nouvelle version. Il ne revient jamais à une version plus ancienne que la sienne, sauf nommée : `--to X.Y.Z --downgrade`.
 
 Quand la version de ton poste et celle du serveur diffèrent, le serveur refuse la connexion et dit lequel mettre à jour ; pour le serveur, il donne la commande qui le met à la version du poste (`escouade-server update --to <version>`, ou la nouvelle image en Docker), que le client te propose.
 

@@ -6,6 +6,12 @@
 # An advisory is closed by updating the crate. When no compatible update closes it, it is ignored below with the
 # reason, and the ignore leaves with the dependency that carries it: a new advisory fails the job. How soon an advisory
 # must be closed (7 days for a high one) is in docs/SECURITY-DEPENDENCIES.md (SEC-04 of the security audit).
+#
+# cargo-deny reads the compiled graph alone; `cargo audit` reads all of Cargo.lock, and its ignores are in
+# src-tauri/.cargo/audit.toml with the same reasons (SR1-14, ESC-640). One advisory is there alone, since it never
+# reaches the graph: libcrux-kem 0.0.9 (RUSTSEC-2026-0330/0331), pinned (=0.0.9) by hpke-rs-libcrux, a backend of
+# hpke-rs that openmls_rust_crypto does not turn on. A crate of the lock only is otherwise lifted by `cargo update -p`
+# (quinn-proto 0.11.19, quinn-udp 0.5.16); heapless 0.8's « unsound » advisories left with smoltcp 0.14.
 
 [graph]
 all-features = false

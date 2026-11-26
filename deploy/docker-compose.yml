@@ -16,11 +16,14 @@
 
 services:
   escouade:
-    image: ghcr.io/guillaume-gagnaire/escouade/escouade-server:latest
+    # A minor version (SR1-12): its fixes at each pull, never a jump to the next one unseen (change it to move on).
+    image: ghcr.io/guillaume-gagnaire/escouade/escouade-server:2.3
     restart: unless-stopped
     environment:
-      # The API on the container's network, so that the port published below reaches it. Without it, the API listens on
-      # 127.0.0.1 of the container alone, and nothing reaches it from outside.
+      # The API on the container's network, so that the port published below reaches it: there, it is in clear (plain HTTP
+      # and WebSocket, no TLS), and every other container of that network reaches it and may try pairing codes; TLS is
+      # an SSH tunnel's (below) or a proxy's in front (Caddy, Traefik), never a port on a public address. Without it,
+      # the API listens on 127.0.0.1 of the container alone, and nothing reaches it from outside.
       ESCOUADE_SERVER_LISTEN: 0.0.0.0
     ports:
       # 127.0.0.1 of the host only: reached through an SSH tunnel. Never "46480:46480", which opens it to the Internet.

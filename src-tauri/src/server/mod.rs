@@ -9,7 +9,7 @@
 //! - `escouade-server pair`: a pairing code for a new device, once and briefly (`remoteapi::pairing`);
 //! - `escouade-server devices [list]`, `devices revoke <id>`: the paired devices;
 //! - `escouade-server health`: whether the server of the folder runs and still answers (the image's `HEALTHCHECK`);
-//! - `escouade-server update [--to X.Y.Z] [--beta] [--now] [--check]`: the server at a signed version (`update`);
+//! - `escouade-server update [--to X.Y.Z [--downgrade]] [--beta] [--now] [--check]`: the server at a signed version (`update`);
 //! - `escouade-server phone [status]`, `phone on [PORT]`, `phone off`, `phone add NAME [--endpoint HOST]`,
 //!   `phone remove ID` (ESC-567): the phone's tunnel, its file changed, read again by a server that runs; `add` prints
 //!   the phone's WireGuard config and its QR code for the user alone (the official WireGuard app, until MO-4's pairing);
@@ -199,6 +199,10 @@ pub fn parse_with(
                 update_flags = true;
                 out.update.check = true;
             }
+            "--downgrade" => {
+                update_flags = true;
+                out.update.downgrade = true;
+            }
             f if f.starts_with('-') => {
                 return Err(tr!("option inconnue : {f}", "unknown option: {f}"))
             }
@@ -240,8 +244,15 @@ pub fn parse_with(
     };
     if update_flags && out.command != Command::Update {
         return Err(tr!(
-            "--to, --beta, --now et --check vont avec « update »",
-            "--to, --beta, --now and --check go with “update”"
+            "--to, --beta, --now, --check et --downgrade vont avec « update »",
+            "--to, --beta, --now, --check and --downgrade go with “update”"
+        ));
+    }
+    // An older version is taken only when it is named (SR1-07): never from latest.json nor beta.json.
+    if out.update.downgrade && out.update.to.is_none() {
+        return Err(tr!(
+            "--downgrade va avec --to X.Y.Z : la version plus ancienne se nomme",
+            "--downgrade goes with --to X.Y.Z: the older version is named"
         ));
     }
     if let Some(to) = &out.update.to {
@@ -310,7 +321,7 @@ pub fn help() -> String {
          escouade-server devices            les appareils appairés\n  \
          escouade-server devices revoke ID  révoque un appareil\n  \
          escouade-server health             le serveur tourne-t-il et répond-il ? (code 0 si oui)\n  \
-         escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z, --beta, --now, --check)\n  \
+         escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
          escouade-server phone              le tunnel WireGuard du téléphone (on [PORT], off, add NOM [--endpoint HÔTE], remove ID)\n\n\
          Options :\n  \
          --data-dir DOSSIER  le dossier des données (sinon ~/.escouade)\n  \
@@ -327,7 +338,7 @@ pub fn help() -> String {
          escouade-server devices            the paired devices\n  \
          escouade-server devices revoke ID  revokes a device\n  \
          escouade-server health             does the server run and answer? (exit code 0 if so)\n  \
-         escouade-server update             puts the server at the latest signed version (--to X.Y.Z, --beta, --now, --check)\n  \
+         escouade-server update             puts the server at the latest signed version (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
          escouade-server phone              the phone's WireGuard tunnel (on [PORT], off, add NAME [--endpoint HOST], remove ID)\n\n\
          Options:\n  \
          --data-dir FOLDER  the data folder (else ~/.escouade)\n  \
@@ -342,7 +353,9 @@ pub fn help() -> String {
     )
 }
 
-fn data_of(args: &Args) -> Result<DataDir> {
+/// The data folder `args` names (else the default one), made or put back in mode 0700 under Unix (`DataDir::ensure`,
+/// SR1-13): a server started by hand, without systemd's `UMask=0077` nor the image's `/data`, keeps it to its user.
+pub(crate) fn data_of(args: &Args) -> Result<DataDir> {
     let root = args
         .data_dir
         .clone()

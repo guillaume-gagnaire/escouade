@@ -109,7 +109,7 @@ Escouade tourne aussi H24 sur un serveur sans bureau (un VPS, un conteneur), et 
   docker run -d --name escouade --restart unless-stopped --stop-timeout 60 \
     -e ESCOUADE_SERVER_LISTEN=0.0.0.0 -p 127.0.0.1:46480:46480 \
     -v escouade-data:/data --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
-    ghcr.io/guillaume-gagnaire/escouade/escouade-server:latest
+    ghcr.io/guillaume-gagnaire/escouade/escouade-server:2.3
   docker exec escouade escouade-server pair
   ```
 

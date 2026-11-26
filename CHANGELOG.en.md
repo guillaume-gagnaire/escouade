@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: `escouade-server update` never goes back to an older version unless you name it (`--to X.Y.Z --downgrade`), takes the newest of the channels with `--beta`, and refuses a signed archive served under another version’s name. The server started by hand keeps its data folder and its log to its own user, and the Docker image stands on pinned bases.
 - Security: on the team server, a member or a hijacked agent can no longer freeze the team or a project with an invalid commit. Every device passes it, an administrator voids it and sees who posted it on the team’s card, then removes the member and changes the keys as usual; only administrators commit, but for a member’s own devices.
 - Security: the Overseer now grants an agent nothing but reading files of its project or its worktree. A command, a write, the network stay yours: it leaves the request in “Your turn” with what it recommends. And it reads only its own folder, the projects and their spec, never a harness’s credentials nor a key.
 - Security: behind a TLS proxy, each client of your server counts its failed tries apart (`--trust-proxy`), and wrong pairing codes from elsewhere never block the one you type on the machine or through SSH. Through Tailscale, only the phone app opens the API, no longer a web page of another machine.

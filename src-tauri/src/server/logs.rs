@@ -17,6 +17,10 @@ pub const TURN_AT: u64 = 5_000_000;
 /// The older files kept.
 pub const KEPT: usize = 3;
 
+/// The mode of the log's files under Unix: its owner alone reads and writes them (SR1-13).
+#[cfg(unix)]
+pub const PRIVATE_FILE_MODE: u32 = 0o600;
+
 struct Sink {
     path: PathBuf,
     file: Option<File>,
@@ -25,8 +29,24 @@ struct Sink {
 }
 
 impl Sink {
+    /// The file opened to append, readable by its owner alone under Unix (SR1-13: it names devices and projects): made
+    /// in mode 0600 whatever the `umask`, and one an earlier version made with it put back in 0600.
     fn open(path: &Path) -> Option<File> {
-        OpenOptions::new().create(true).append(true).open(path).ok()
+        let mut options = OpenOptions::new();
+        options.create(true).append(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            options.mode(PRIVATE_FILE_MODE);
+            let file = options.open(path).ok()?;
+            let mode = file.metadata().ok()?.permissions().mode() & 0o777;
+            if mode != PRIVATE_FILE_MODE {
+                let _ = file.set_permissions(std::fs::Permissions::from_mode(PRIVATE_FILE_MODE));
+            }
+            Some(file)
+        }
+        #[cfg(not(unix))]
+        options.open(path).ok()
     }
 
     /// `server.log` → `server.1.log` → … → `server.<KEPT>.log`, the oldest dropped; a new one opened.
@@ -66,6 +86,18 @@ impl Logger {
     /// each line on the standard output as well.
     pub fn new(dir: &Path, turn_at: u64, debug: bool, stdout: bool) -> Self {
         let path = dir.join(FILE);
+        // The older files an earlier version made with the `umask`, put back in 0600 (SR1-13).
+        #[cfg(unix)]
+        for n in 1..=KEPT {
+            use std::os::unix::fs::PermissionsExt;
+            let old = path.with_extension(format!("{n}.log"));
+            if std::fs::symlink_metadata(&old).is_ok_and(|m| m.is_file()) {
+                let _ = std::fs::set_permissions(
+                    &old,
+                    std::fs::Permissions::from_mode(PRIVATE_FILE_MODE),
+                );
+            }
+        }
         let written = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
         Self {
             sink: Mutex::new(Sink {

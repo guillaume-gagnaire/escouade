@@ -1130,3 +1130,250 @@ fn a_server_older_than_its_client_says_how_to_put_it_at_the_client_s_version() {
         "escouade-server update --to 2.3.1rm-rf"
     );
 }
+
+// ---------- SR1-07, SR1-13 (ESC-640): no downgrade, the signature bound to its archive, a private folder and log ----------
+
+fn asked(line: &str) -> update::Asked {
+    server::parse_with(&args(&format!("update {line}")), |_| None)
+        .unwrap()
+        .update
+}
+
+#[test]
+fn update_never_takes_an_older_version_unless_it_is_named_with_downgrade() {
+    // The published version older than the program's: refused, whatever latest.json says.
+    let e = update::target_of("2.3.0", &asked(""), Some("2.2.10"), None).unwrap_err();
+    assert!(e.to_string().contains("--downgrade"), "{e}");
+    // `--to` an older one: refused without `--downgrade`, taken with it.
+    assert!(update::target_of("2.3.0", &asked("--to 2.2.10"), None, None).is_err());
+    assert_eq!(
+        update::target_of("2.3.0", &asked("--to v2.2.10 --downgrade"), None, None).unwrap(),
+        "2.2.10"
+    );
+    // The same version or a newer one: taken.
+    assert_eq!(
+        update::target_of("2.3.0", &asked(""), Some("v2.3.0"), None).unwrap(),
+        "2.3.0"
+    );
+    assert_eq!(
+        update::target_of("2.3.0", &asked("--to 2.3.1"), None, None).unwrap(),
+        "2.3.1"
+    );
+    // A beta is older than its stable version: a server on 2.3.0 never goes to 2.3.0-beta.4.
+    assert!(update::target_of("2.3.0", &asked("--to 2.3.0-beta.4"), None, None).is_err());
+    // A server on a beta stays on it until the stable version that follows it.
+    assert!(update::target_of("2.3.0-beta.4", &asked(""), Some("2.2.10"), None).is_err());
+    assert_eq!(
+        update::target_of("2.3.0-beta.4", &asked(""), Some("2.3.0"), None).unwrap(),
+        "2.3.0"
+    );
+    // `--downgrade` alone (without the version it names) is refused, and goes with `update` alone.
+    for bad in [
+        "update --downgrade",
+        "update --beta --downgrade",
+        "--downgrade",
+    ] {
+        assert!(server::parse_with(&args(bad), |_| None).is_err(), "{bad}");
+    }
+    // Not a version: refused.
+    assert!(update::target_of("2.3.0", &asked(""), Some("latest"), None).is_err());
+}
+
+#[test]
+fn update_with_beta_takes_the_higher_of_the_two_channels() {
+    let beta = asked("--beta");
+    // beta.json ahead: the beta.
+    assert_eq!(
+        update::target_of("2.2.10", &beta, Some("2.2.10"), Some("2.3.0-beta.2")).unwrap(),
+        "2.3.0-beta.2"
+    );
+    // beta.json behind latest.json (a stable version came out after the last beta): the stable one, never the old beta.
+    assert_eq!(
+        update::target_of("2.2.10", &beta, Some("2.3.0"), Some("2.3.0-beta.2")).unwrap(),
+        "2.3.0"
+    );
+    assert_eq!(
+        update::target_of("2.3.0", &beta, Some("2.3.0"), Some("2.2.0-beta.9")).unwrap(),
+        "2.3.0"
+    );
+    // No beta.json: latest.json's.
+    assert_eq!(
+        update::target_of("2.2.10", &beta, Some("2.3.0"), None).unwrap(),
+        "2.3.0"
+    );
+    // Without --beta, beta.json is not read.
+    assert_eq!(
+        update::target_of("2.2.10", &asked(""), Some("2.2.10"), Some("2.3.0-beta.2")).unwrap(),
+        "2.2.10"
+    );
+}
+
+#[test]
+fn a_signature_that_does_not_name_its_archive_is_refused() {
+    let archive = fixture("escouade-server-9.9.9-linux-x64.tar.gz");
+    let sig = String::from_utf8(fixture("escouade-server-9.9.9-linux-x64.tar.gz.sig")).unwrap();
+    let key = String::from_utf8(fixture("test-key.pub")).unwrap();
+    // Its trusted comment (signed) says `file:escouade-server-9.9.9-linux-x64.tar.gz`.
+    let comment = update::verify(&archive, &sig, &key).unwrap();
+    assert!(
+        comment.contains("file:escouade-server-9.9.9-linux-x64.tar.gz"),
+        "{comment}"
+    );
+    update::verify_archive(&archive, &sig, &key, &update::archive_name("9.9.9", "x64")).unwrap();
+    // The same signed archive taken for another version, another architecture, or a name it only starts with.
+    for other in [
+        update::archive_name("9.9.10", "x64"),
+        update::archive_name("1.0.0", "x64"),
+        update::archive_name("9.9.9", "arm64"),
+        "escouade-server-9.9.9-linux-x64.tar".to_string(),
+    ] {
+        let e = update::verify_archive(&archive, &sig, &key, &other).unwrap_err();
+        assert!(e.to_string().contains(&other), "{other}: {e}");
+    }
+}
+
+/// A fake release on 127.0.0.1 (a port the system picks): each path of `files` answered with its bytes, any other 404.
+fn fake_releases(files: Vec<(String, Vec<u8>)>) -> String {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}/r", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut request = Vec::new();
+            let mut buf = [0u8; 1024];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                match stream.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => request.extend_from_slice(&buf[..n]),
+                }
+            }
+            let text = String::from_utf8_lossy(&request).to_string();
+            let path = text
+                .lines()
+                .next()
+                .and_then(|l| l.split(' ').nth(1))
+                .unwrap_or("")
+                .to_string();
+            let (status, body) = match files.iter().find(|(p, _)| format!("/r/{p}") == path) {
+                Some((_, b)) => ("200 OK", b.clone()),
+                None => ("404 Not Found", Vec::new()),
+            };
+            let _ = stream.write_all(
+                format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                )
+                .as_bytes(),
+            );
+            let _ = stream.write_all(&body);
+        }
+    });
+    base
+}
+
+fn channel(version: &str) -> Vec<u8> {
+    json!({ "version": version, "platforms": {} })
+        .to_string()
+        .into_bytes()
+}
+
+#[test]
+fn update_against_a_fake_release_refuses_an_older_version_and_a_renamed_archive() {
+    let archive = fixture("escouade-server-9.9.9-linux-x64.tar.gz");
+    let sig = fixture("escouade-server-9.9.9-linux-x64.tar.gz.sig");
+    let key = String::from_utf8(fixture("test-key.pub")).unwrap();
+    let name = |v: &str| format!("download/v{v}/{}", update::archive_name(v, "x64"));
+    let base = fake_releases(vec![
+        ("latest/download/latest.json".into(), channel("1.0.0")),
+        ("latest/download/beta.json".into(), channel("9.9.9")),
+        (name("9.9.9"), archive.clone()),
+        (format!("{}.sig", name("9.9.9")), sig.clone()),
+        // The archive of 9.9.9 and its signature, served as 9.9.10's.
+        (name("9.9.10"), archive.clone()),
+        (format!("{}.sig", name("9.9.10")), sig.clone()),
+    ]);
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        // latest.json says 1.0.0, older than the program: refused.
+        let e = update::read_target(&client, &base, "2.3.0", &asked("--check"))
+            .await
+            .unwrap_err();
+        assert!(e.to_string().contains("1.0.0"), "{e}");
+        // With --beta, the higher of 1.0.0 and 9.9.9.
+        assert_eq!(
+            update::read_target(&client, &base, "2.3.0", &asked("--beta"))
+                .await
+                .unwrap(),
+            "9.9.9"
+        );
+        // --to an older version, with --downgrade: nothing read, taken.
+        assert_eq!(
+            update::read_target(&client, &base, "2.3.0", &asked("--to 1.0.0 --downgrade"))
+                .await
+                .unwrap(),
+            "1.0.0"
+        );
+        // The archive of 9.9.9 passes; the same, served as 9.9.10, is refused though its signature is good.
+        let bytes = update::download(&client, &base, "9.9.9", "x64", &key)
+            .await
+            .unwrap();
+        assert_eq!(bytes, archive);
+        let e = update::download(&client, &base, "9.9.10", "x64", &key)
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{e:#}").contains("escouade-server-9.9.10-linux-x64.tar.gz"),
+            "{e:#}"
+        );
+        // A version the release does not hold: an error, nothing answered.
+        assert!(update::download(&client, &base, "9.9.11", "x64", &key)
+            .await
+            .is_err());
+    });
+}
+
+#[cfg(unix)]
+#[test]
+fn the_server_s_data_folder_is_0700_and_its_log_0600_whatever_the_umask() {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    let data_dir = |p: &std::path::Path| {
+        let parsed = server::parse_with(
+            &["--data-dir".to_string(), p.to_string_lossy().to_string()],
+            |_| None,
+        )
+        .unwrap();
+        server::data_of(&parsed).unwrap()
+    };
+    let dir = crate::paths::test_dir("server-private");
+    // A folder an earlier start left in 0755, and a log and an older one in 0644.
+    let root = dir.join("data");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+    for name in [server::logs::FILE, "server.1.log"] {
+        std::fs::write(root.join(name), "old line\n").unwrap();
+        std::fs::set_permissions(root.join(name), std::fs::Permissions::from_mode(0o644)).unwrap();
+    }
+    let data = data_dir(&root);
+    assert_eq!(mode(data.root()), 0o700);
+    let _logger = server::logs::Logger::new(data.root(), 40, false, false);
+    assert_eq!(mode(&root.join(server::logs::FILE)), 0o600);
+    assert_eq!(mode(&root.join("server.1.log")), 0o600);
+    // A new folder, and the log made after a turn: the same, under the usual mask 0022.
+    // SAFETY: the process's mask, set back right after; the other tests' files do not lean on it.
+    let before = unsafe { libc::umask(0o022) };
+    let fresh = dir.join("fresh");
+    let data = data_dir(&fresh);
+    let logger = server::logs::Logger::new(data.root(), 40, false, false);
+    logger.write(log::Level::Info, "a line long enough to turn the file");
+    logger.write(log::Level::Info, "and another, in a new file");
+    unsafe { libc::umask(before) };
+    assert_eq!(mode(&fresh), 0o700);
+    assert_eq!(mode(&fresh.join(server::logs::FILE)), 0o600);
+    assert_eq!(mode(&fresh.join("server.1.log")), 0o600);
+}

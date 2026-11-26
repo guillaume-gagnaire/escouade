@@ -21,14 +21,19 @@
 #
 # By default the API listens on 127.0.0.1 of the container alone: nothing is reachable from outside, even with a port
 # published. ESCOUADE_SERVER_LISTEN=0.0.0.0 opens it to the container's network, for a port published on 127.0.0.1 of
-# the host (an SSH tunnel) or a TLS proxy in front (deploy/docker-compose.yml, deploy/coolify/).
+# the host (an SSH tunnel) or a TLS proxy in front (deploy/docker-compose.yml, deploy/coolify/). The API is then in
+# clear (plain HTTP and WebSocket) on that network: every other container on it (on Coolify, the other resources of the
+# same network) reaches it and may try pairing codes and tokens. TLS is the proxy's: put one in front (Coolify's
+# Traefik, Caddy) or reach it through an SSH tunnel, never a port published on a public address.
 #
 # An update is a new image (`docker compose pull && docker compose up -d`): `escouade-server update` refuses to run here.
 
-ARG NODE_IMAGE=docker.io/library/node:22-trixie-slim
-FROM ${NODE_IMAGE} AS node
+# The bases pinned by their digest (the index of every architecture, SR1-12): the same bytes at each build, whatever
+# the registry's tag points at later. Dependabot (docker, .github/dependabot.yml) proposes the new digest; the tag
+# beside it says which one it is.
+FROM docker.io/library/node:22-trixie-slim@sha256:f0960f8dc047f358e3fb428f36ccba21732194fa5f0cac849f401e63e62fb9e6 AS node
 
-FROM docker.io/library/debian:trixie-slim
+FROM docker.io/library/debian:trixie-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0
 ARG TARGETARCH
 ARG VERSION
 
