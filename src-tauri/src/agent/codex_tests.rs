@@ -685,3 +685,42 @@ fn it_says_what_it_does_with_the_words_of_claude_code() {
         .unwrap()
         .ends_with(" cat a.ts && cat b.ts"));
 }
+
+#[test]
+fn a_subagent_on_another_model_is_priced_and_counted_on_its_own() {
+    // ESC-662: the subagent's start names its model (`model` of `subAgentActivity`); its thread's tokens go on it.
+    let mut a = rt();
+    a.meta.model = "gpt-6-luna".into();
+    started(&mut a, "t1");
+    item(
+        &mut a,
+        false,
+        json!({
+            "type": "subAgentActivity", "id": "call1", "kind": "started", "agentThreadId": "child",
+            "agentPath": "/root/revue", "model": "gpt-5.4-mini",
+        }),
+    );
+    let usage = |a: &mut AgentRt, thread: &str, input: u64, output: u64| {
+        frame(
+            a,
+            "thread/tokenUsage/updated",
+            json!({ "threadId": thread, "turnId": "t1", "tokenUsage": {
+                "total": { "inputTokens": input, "cachedInputTokens": 0, "outputTokens": output },
+                "last": { "inputTokens": 10, "cachedInputTokens": 0, "outputTokens": 1 },
+            } }),
+        )
+    };
+    usage(&mut a, "thr", 1_000_000, 100_000);
+    usage(&mut a, "child", 2_000_000, 200_000);
+    let fx = completed(&mut a, json!({ "id": "t1", "status": "completed" }));
+    let row = |m: &str| fx.turns.iter().find(|r| r.model == m).cloned().unwrap();
+    let (own, sub) = (row("gpt-6-luna"), row("gpt-5.4-mini"));
+    assert_eq!((own.input, own.output), (1_000_000, 100_000));
+    assert_eq!((sub.input, sub.output), (2_000_000, 200_000));
+    // Each at its own price: gpt-6-luna $0.10 / $0.50, gpt-5.4-mini $0.75 / $4.50 a million.
+    assert!((own.cost - (0.10 + 0.05)).abs() < 1e-9, "{}", own.cost);
+    assert!((sub.cost - (1.5 + 0.9)).abs() < 1e-9, "{}", sub.cost);
+    assert_eq!(fx.turns.len(), 2);
+    assert!((a.meta.cost - (own.cost + sub.cost)).abs() < 1e-9);
+    assert_eq!(a.meta.tokens, 3_300_000);
+}

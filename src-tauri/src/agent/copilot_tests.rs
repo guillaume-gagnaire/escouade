@@ -639,3 +639,97 @@ fn it_says_what_it_does_with_the_words_of_claude_code() {
     )
     .is_some_and(|a| a.ends_with(" src/x.ts")));
 }
+
+/// What the `assistant.usage` of `file` spent, by model: (input, cache, output, nano-AIU), the cached tokens out of
+/// the input as the turns count them.
+fn spent_by_model(file: &str) -> std::collections::BTreeMap<String, (u64, u64, u64, u64)> {
+    let mut by = std::collections::BTreeMap::new();
+    for l in recorded(file) {
+        let e = &l["msg"]["params"]["event"];
+        if l["dir"] != "s2c" || e["type"] != "assistant.usage" {
+            continue;
+        }
+        let d = &e["data"];
+        let n = |k: &str| d[k].as_u64().unwrap_or(0);
+        let cache = n("cacheReadTokens") + n("cacheWriteTokens");
+        let row: &mut (u64, u64, u64, u64) = by
+            .entry(d["model"].as_str().unwrap_or_default().to_string())
+            .or_default();
+        row.0 += n("inputTokens").saturating_sub(cache);
+        row.1 += cache;
+        row.2 += n("outputTokens");
+        row.3 += d["copilotUsage"]["totalNanoAiu"].as_u64().unwrap_or(0);
+    }
+    by
+}
+
+#[test]
+fn a_subagents_usage_is_counted_once_on_the_model_it_ran_on() {
+    // The real run (ESC-662): the agent on gpt-6-luna, its `task` subagent on mai-code-1.1-flash.
+    let (rt, fxs) = replay("full-turn.jsonl", "default");
+    let rows: Vec<_> = fxs.iter().flat_map(|f| f.turns.clone()).collect();
+    let mut by = std::collections::BTreeMap::<String, (u64, u64, u64, f64)>::new();
+    for r in &rows {
+        assert_eq!(r.engine, EngineId::COPILOT);
+        let row = by.entry(r.model.clone()).or_default();
+        row.0 += r.input;
+        row.1 += r.cache;
+        row.2 += r.output;
+        row.3 += r.cost;
+    }
+    let told = spent_by_model("full-turn.jsonl");
+    assert_eq!(
+        by.keys().collect::<Vec<_>>(),
+        told.keys().collect::<Vec<_>>(),
+        "a row by model that spent"
+    );
+    for (model, (input, cache, output, nano)) in &told {
+        let got = by[model];
+        assert_eq!((got.0, got.1, got.2), (*input, *cache, *output), "{model}");
+        assert!((got.3 - *nano as f64 / 1e11).abs() < 1e-9, "{model}");
+    }
+    let sub = by["mai-code-1.1-flash"];
+    assert_eq!(
+        sub.0 + sub.1 + sub.2,
+        4045 + 46 + 4105 + 26,
+        "the subagent's two calls"
+    );
+    // Once: the agent's totals are the rows', its subagent's `totalTokens` not added to them.
+    let tokens: u64 = rows.iter().map(|r| r.input + r.cache + r.output).sum();
+    let cost: f64 = rows.iter().map(|r| r.cost).sum();
+    assert_eq!(rt.meta.tokens, tokens);
+    assert!((rt.meta.cost - cost).abs() < 1e-9);
+}
+
+#[test]
+fn the_usage_of_a_subagent_it_did_not_see_start_is_still_the_agents() {
+    // Its plugin started again while a subagent ran: its `subagent.started` is gone, its calls are this session's
+    // all the same, on this agent's account.
+    let mut rt = agent("C:/p", "default");
+    start(&mut rt);
+    let mut fx = Effects::default();
+    rt.push_user("u1", "sous-agent", 0, &[], &mut fx);
+    let fxs = feed(
+        &mut rt,
+        &[
+            ev(
+                "assistant.usage",
+                json!({ "model": "gpt-6-luna", "inputTokens": 100, "outputTokens": 10, "copilotUsage": { "totalNanoAiu": 1_000_000_000u64 } }),
+            ),
+            ev_of(
+                "ghost",
+                "assistant.usage",
+                json!({ "model": "mai-code-1.1-flash", "inputTokens": 50, "outputTokens": 5, "copilotUsage": { "totalNanoAiu": 500_000_000u64 } }),
+            ),
+            ev("session.idle", json!({})),
+        ],
+    );
+    let rows: Vec<_> = fxs.iter().flat_map(|f| f.turns.clone()).collect();
+    let flash = rows
+        .iter()
+        .find(|r| r.model == "mai-code-1.1-flash")
+        .expect("the ghost's call");
+    assert_eq!((flash.input, flash.output), (50, 5));
+    assert!((flash.cost - 0.005).abs() < 1e-9);
+    assert_eq!(rt.meta.tokens, 165);
+}

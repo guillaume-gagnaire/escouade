@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Stats: what a subagent of Copilot CLI, Codex or OpenCode spends on another model than its agent’s now counts for that model, at the right price for Codex, and still only once in the agent’s totals. The work of a Copilot subagent its plugin lost sight of while restarting is no longer forgotten.
 - Security: on the team server, a file (a document, an image, a past conversation) can now only be read by the devices that have access to its project, and only its author or an administrator can delete it. Files put before stay their author’s and the administrators’ until one of them opens them again in their project.
 - Security: behind a proxy, your server refuses a request that comes under two names at once (two `Host` or `Origin` headers, or an address that names another), so that the proxy and the server always read the same one.
 - Team server: a machine of the team, in server mode, enrolls under a role of service, neither a member nor an administrator. An administrator shows a code in “Machines of the team”, the machine types it (`escouade-server team pair`); it reads and writes the projects opened to it and takes tickets, and can never sign a member, a role, a setting, a circuit breaker or a private plugin.

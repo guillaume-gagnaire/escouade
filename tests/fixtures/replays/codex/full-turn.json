@@ -6,7 +6,7 @@
     "mode": "default"
   },
   "agentAfter": {
-    "cost": 0.0,
+    "cost": 0.00197124,
     "lastEntry": "01a14658-d0fa-7720-a664-3938bc1fff73",
     "mode": "default",
     "plan": {
@@ -286,7 +286,7 @@
       "text": "`hello.txt` (« bonjour ») a été créé et commité (`502c571`), `git ls-remote` a réussi après élévation, et le sous-agent a compté 1 ligne dans `README.md`. -- fin du tour --"
     },
     {
-      "cost": 0.0,
+      "cost": 0.00197124,
       "durationMs": 52682,
       "engine": "codex",
       "error": null,

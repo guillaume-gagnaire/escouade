@@ -566,3 +566,61 @@ fn it_says_what_it_does_with_the_words_of_claude_code() {
     )
     .is_some_and(|a| a.ends_with(" src/x.ts")));
 }
+
+#[test]
+fn a_subagent_on_another_provider_is_counted_once_on_its_own_model() {
+    // ESC-662: a subagent of `opencode.json` set on another provider; each step on its message's model.
+    let mut rt = agent("C:/p");
+    start(&mut rt);
+    let mut fx = Effects::default();
+    rt.push_user("u1", "sous-agent", 0, &[], &mut fx);
+    let message = |id: &str, session: &str, provider: &str, model: &str| {
+        ev(
+            "message.updated",
+            json!({ "sessionID": session, "info": {
+                "id": id, "role": "assistant", "sessionID": session, "providerID": provider, "modelID": model,
+            } }),
+        )
+    };
+    let step = |id: &str, msg: &str, session: &str, input: u64, cost: f64| {
+        ev(
+            "message.part.updated",
+            json!({ "sessionID": session, "part": {
+                "id": id, "messageID": msg, "sessionID": session, "type": "step-finish",
+                "tokens": { "input": input, "output": 10, "reasoning": 0, "cache": { "read": 0, "write": 0 } },
+                "cost": cost,
+            } }),
+        )
+    };
+    let fxs = feed(
+        &mut rt,
+        &[
+            ev(
+                "session.status",
+                json!({ "sessionID": S, "status": { "type": "busy" } }),
+            ),
+            message("msg_a", S, "ollama", "qwen3-coder:30b-32k"),
+            step("prt_1", "msg_a", S, 1000, 0.0),
+            ev(
+                "session.created",
+                json!({ "sessionID": "ses_child", "info": { "id": "ses_child", "parentID": S } }),
+            ),
+            message("msg_c", "ses_child", "anthropic", "claude-haiku-4-5"),
+            step("prt_c", "msg_c", "ses_child", 300, 0.0009),
+            step("prt_c", "msg_c", "ses_child", 300, 0.0009),
+            ev("session.idle", json!({ "sessionID": S })),
+        ],
+    );
+    let rows: Vec<_> = fxs.iter().flat_map(|f| f.turns.clone()).collect();
+    let row = |m: &str| rows.iter().find(|r| r.model == m).cloned().expect(m);
+    let (own, sub) = (
+        row("ollama/qwen3-coder:30b-32k"),
+        row("anthropic/claude-haiku-4-5"),
+    );
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!((own.input, own.output, own.cost), (1000, 10, 0.0));
+    assert_eq!((sub.input, sub.output), (300, 10));
+    assert!((sub.cost - 0.0009).abs() < 1e-12, "once");
+    assert_eq!(rt.meta.tokens, 1320);
+    assert!((rt.meta.cost - 0.0009).abs() < 1e-12);
+}

@@ -64,6 +64,9 @@ pub struct Translator {
     /// threads when the turn began: a turn's are the difference.
     tokens: HashMap<String, Tokens>,
     tokens_at_start: HashMap<String, Tokens>,
+    /// The model of each subagent's thread, as its start said it (`model` of its `subAgentActivity`): its tokens are
+    /// priced and counted on it (ESC-662). The agent's own, and a thread not known, are on the agent's model.
+    thread_models: HashMap<String, String>,
     /// The plan of the mode Plan, its turn over on it: it waits for its approval.
     plan: Option<String>,
     /// The files of each `fileChange`, by call, for the card of its approval.
@@ -481,6 +484,10 @@ impl Translator {
                             return;
                         }
                         self.children.insert(child.to_string(), id.to_string());
+                        if let Some(model) = item["model"].as_str().filter(|m| !m.is_empty()) {
+                            self.thread_models
+                                .insert(child.to_string(), model.to_string());
+                        }
                         let name = item["agentPath"]
                             .as_str()
                             .and_then(|p| p.rsplit('/').next())
@@ -676,8 +683,8 @@ impl Translator {
                     )
                 })
         });
-        // Its tokens: what each thread (its subagents' included) counted since the turn began.
-        let mut used = Tokens::default();
+        // Its tokens: what each thread (its subagents' included) counted since the turn began, by the model each ran on.
+        let mut by_model = std::collections::BTreeMap::<String, Tokens>::new();
         for (thread, now) in &self.tokens {
             let before = self
                 .tokens_at_start
@@ -685,14 +692,36 @@ impl Translator {
                 .copied()
                 .unwrap_or_default();
             let d = now.minus(before);
-            used.input += d.input;
-            used.cached += d.cached;
-            used.output += d.output;
+            let model = self
+                .thread_models
+                .get(thread)
+                .map_or(c.model, String::as_str);
+            let m = by_model.entry(model.to_string()).or_default();
+            m.input += d.input;
+            m.cached += d.cached;
+            m.output += d.output;
         }
         self.tokens_at_start = self.tokens.clone();
-        let fresh = used.input.saturating_sub(used.cached);
-        // Codex tells no cost: estimated from the public prices of OpenAI's models ('estimé').
-        let cost = prices::estimate(c.model, fresh, used.cached, used.output).unwrap_or(0.0);
+        // Codex tells no cost: estimated from the public prices of OpenAI's models ('estimé'), each model at its own.
+        let mut models = Vec::new();
+        for (model, t) in by_model {
+            if t.input + t.cached + t.output == 0 {
+                continue;
+            }
+            let fresh = t.input.saturating_sub(t.cached);
+            models.push(crate::turnmodels::Spent {
+                cost: prices::estimate(&model, fresh, t.cached, t.output).unwrap_or(0.0),
+                model,
+                input: fresh,
+                output: t.output,
+                cache: t.cached,
+            });
+        }
+        let fresh: u64 = models.iter().map(|m| m.input).sum();
+        let cached: u64 = models.iter().map(|m| m.cache).sum();
+        let output: u64 = models.iter().map(|m| m.output).sum();
+        let cost = models.iter().fold(0.0, |s, m| s + m.cost);
+        out.extend(crate::turnmodels::item(&models));
         if limited {
             out.push(Item::LimitRest);
         }
@@ -704,8 +733,8 @@ impl Translator {
             limited: limited.then(|| self.limit_resets.take()),
             usage: TurnUsage {
                 input: fresh,
-                output: used.output,
-                cache: used.cached,
+                output,
+                cache: cached,
                 cost,
             },
             error: message,

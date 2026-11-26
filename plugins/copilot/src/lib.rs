@@ -9,6 +9,7 @@
 pub mod client;
 pub mod terminal;
 pub mod translate;
+pub mod turnmodels;
 pub mod view;
 pub mod words;
 
@@ -43,7 +44,10 @@ fn read<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, Refusal> {
 }
 
 fn give<T: serde::Serialize>(v: T) -> Result<Value, Refusal> {
-    serde_json::to_value(v).map_err(invalid)
+    // `turnModels` written as the core reads it (`turnmodels`).
+    let mut v = serde_json::to_value(v).map_err(invalid)?;
+    turnmodels::unmark(&mut v);
+    Ok(v)
 }
 
 fn writes(lines: Vec<String>) -> Result<Value, Refusal> {

@@ -84,6 +84,7 @@ impl AgentRt {
                 }
             }
             Item::Subagent { call, model } => self.child_model(&call, &model, fx),
+            Item::TurnModels { models } => self.turn_models = models,
             Item::Tool {
                 id,
                 name,
@@ -604,15 +605,33 @@ impl AgentRt {
                     self.main_model.clone()
                 };
                 self.heat_turn(&heat_model, usage.input, usage.cache, fx);
+                // By model, as its plugin told it (its subagents' on theirs, ESC-662); else on the agent's.
+                let by_model = std::mem::take(&mut self.turn_models);
                 if tokens > 0 || usage.cost > 0.0 {
-                    fx.turns.push(TurnRow {
-                        engine: self.meta.engine,
-                        model,
-                        input: usage.input,
-                        cache: usage.cache,
-                        output: usage.output,
-                        cost: usage.cost,
-                    });
+                    if by_model.is_empty() {
+                        fx.turns.push(TurnRow {
+                            engine: self.meta.engine,
+                            model: model.clone(),
+                            input: usage.input,
+                            cache: usage.cache,
+                            output: usage.output,
+                            cost: usage.cost,
+                        });
+                    }
+                    for m in by_model {
+                        fx.turns.push(TurnRow {
+                            engine: self.meta.engine,
+                            model: if m.model.is_empty() {
+                                model.clone()
+                            } else {
+                                m.model
+                            },
+                            input: m.input,
+                            cache: m.cache,
+                            output: m.output,
+                            cost: m.cost,
+                        });
+                    }
                     self.meta.tokens += tokens;
                     // What the harness says the turn cost (Mistral Vibe's `usage_update`, INT-10.6).
                     self.meta.cost += usage.cost;

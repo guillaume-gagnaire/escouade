@@ -157,6 +157,8 @@ pub struct AgentRt {
     pub context_window: u64,
     /// Model of the conversation's latest message (it may be switched mid-process).
     main_model: String,
+    /// What the turn about to end spent by model, as its plugin told it (`Item::TurnModels`, ESC-662).
+    turn_models: Vec<escouade_plugin_protocol::engine::ModelTurn>,
     /// The turn that warms its cache, from its first request to its end (`crate::heat`).
     warming: Option<crate::heat::Warming>,
     /// A compaction asked of its harness: the turn that ends it does not warm its cache.
@@ -509,6 +511,7 @@ impl AgentRt {
             context_tokens: 0,
             context_window: 0,
             main_model: String::new(),
+            turn_models: Vec::new(),
             warming: None,
             heat_compacting: false,
             launch_stamp: None,
