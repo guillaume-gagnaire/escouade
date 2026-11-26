@@ -4739,13 +4739,7 @@ pub fn deep_links_take(inbox: State<'_, crate::deeplink::Inbox>) -> Vec<crate::d
 
 /// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.
 fn own_of(app: &tauri::AppHandle) -> crate::devpage::Own {
-    use tauri::Manager;
-    let dev = app
-        .try_state::<crate::navigation::Home>()
-        .and_then(|h| h.dev.clone());
-    Arc::new(move |u: &tauri::Url| {
-        crate::navigation::destination(u, dev.as_ref()) == crate::navigation::Destination::App
-    })
+    crate::devpage::own_of(app)
 }
 
 /// What happens to the pages, to the window.
@@ -4859,6 +4853,38 @@ pub async fn devpage_revoke(
     let pages = pages.inner().clone();
     crate::mcp::browsers::revoke(&core, &pages, &agent_id).await;
     Ok(pages.consents(&agent_id))
+}
+
+/// The agents whose conversation the window shows now (ESC-678): what `open_browser` opens beside
+/// while the user looks at it.
+#[tauri::command]
+pub fn devpage_looking(pages: State<Arc<crate::devpage::Pages>>, agents: Vec<String>) {
+    pages.set_looking(agents.into_iter().take(16));
+}
+
+/// The agents' requests to open an address outside their project's launch (ESC-678, C3), for the
+/// bands of their conversations.
+#[tauri::command]
+pub fn devpage_open_asks(
+    core: CoreState,
+    pages: State<Arc<crate::devpage::Pages>>,
+) -> Vec<crate::devpage::OpenAsk> {
+    crate::mcp::browsers_open::open_asks(&core, &pages)
+}
+
+/// The user's answer to the request `id` to open an address (« Permettre une fois » or
+/// « Refuser », ESC-678): opened, the agent told by a message. The requests after.
+#[tauri::command]
+pub async fn devpage_open_answer(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    id: String,
+    allow: bool,
+) -> Res<Vec<crate::devpage::OpenAsk>> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers_open::answer(&core, &pages, &id, allow).await?;
+    Ok(crate::mcp::browsers_open::open_asks(&core, &pages))
 }
 
 /// Back, forward, reload, or `to` (an address typed in its bar).

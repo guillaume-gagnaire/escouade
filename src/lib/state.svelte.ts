@@ -72,6 +72,7 @@ import type {
   HarnessScope,
   LaunchHeld,
   PageEvent,
+  BrowserOpened,
   AgentReview,
   Project,
   ProjectEnvironments,
@@ -710,6 +711,8 @@ class AppState {
   private ticketDoneHooks = new Set<(agentId: string) => void>();
   /** What follows a launch's page (ESC-311): its loads, its links opened outside. */
   private devPageHooks = new Set<(e: PageEvent) => void>();
+  /** What follows a browser an agent opened (ESC-678). */
+  private browserOpenedHooks = new Set<(e: BrowserOpened) => void>();
   /** What must be written before the app restarts by itself for an update (the composers' drafts). */
   private restartHooks = new Set<() => void>();
   private turnEndHooks = new Set<(agentId: string) => void>();
@@ -736,6 +739,12 @@ class AppState {
   onDevPage(f: (e: PageEvent) => void) {
     this.devPageHooks.add(f);
     return () => void this.devPageHooks.delete(f);
+  }
+
+  /** `f` runs when an agent opened a browser, or showed one again (ESC-678). Returns what unregisters it. */
+  onBrowserOpened(f: (e: BrowserOpened) => void) {
+    this.browserOpenedHooks.add(f);
+    return () => void this.browserOpenedHooks.delete(f);
   }
 
   /** `f` runs, with its agent, when a ticket goes "Terminé". Returns what unregisters it. */
@@ -990,6 +999,9 @@ class AppState {
         break;
       case 'devPage':
         for (const f of this.devPageHooks) f(e.page);
+        break;
+      case 'browserOpened':
+        for (const f of this.browserOpenedHooks) f(e.browser);
         break;
       case 'openUrl':
         // The page a pull request needs (a compare page to finish it): a failure is told, not lost.

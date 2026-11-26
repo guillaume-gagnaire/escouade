@@ -299,6 +299,11 @@ pub enum UiEvent {
     DevPage {
         page: crate::devpage::PageEvent,
     },
+    /// A browser an agent opened or showed again (`open_browser`, ESC-678): its row, and where the
+    /// window shows it.
+    BrowserOpened {
+        browser: crate::devpage::Opened,
+    },
     /// What happened to an agent's page (ESC-667): a load, an address it asked for and was refused
     /// (a web one the window offers), a download or a permission refused, its title.
     AgentPage {

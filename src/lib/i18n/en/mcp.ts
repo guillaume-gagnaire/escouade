@@ -9,7 +9,7 @@ export default defineZone('mcp', {
       'Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
     browsers: 'Agents and browsers',
     browsersDesc:
-      'The agents read the browsers of “Browsers” in their project (list_browsers, read_browser): the page of their launch without asking; another origin, an artifact or a site you’re signed in to, with your permission, once per origin and per browser. Never the cookies, the storage or a password.',
+      'The agents open a browser of their project beside their conversation and close it (open_browser, close_browser), and read those of “Browsers” (list_browsers, read_browser, capture_browser, browser_console): the project’s launch without asking; another address with your permission, once per origin; an artifact they published, to show it to you. Never Escouade’s addresses, nor this machine outside the declared ports, nor the cookies, the storage or a password.',
     pages: 'Agents’ pages',
     pagesDesc:
       'The agents show you a page in “Browsers” (show_page): a review, a diagram, options to compare, or their own HTML. Escouade copies it and serves it apart, without network, without access to Escouade or to your files. Off, their tools go away and their rows close; nothing is erased.',
@@ -97,6 +97,8 @@ export default defineZone('mcp', {
     listBackgroundWork: 'List an agent’s subagents and background tasks',
     listBrowsers: 'List the browsers',
     readBrowser: 'Read a browser',
+    openBrowser: 'Open a browser',
+    closeBrowser: 'Close a browser',
     showPage: 'Show a page',
     getPage: 'Read a page’s state',
     closePage: 'Close a page',

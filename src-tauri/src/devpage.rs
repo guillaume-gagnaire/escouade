@@ -263,9 +263,89 @@ pub struct PageView {
     /// Where the window shows it (ESC-669).
     #[serde(default)]
     pub placement: Placement,
+    /// The agent that opened it by `open_browser` (ESC-678): a `browser:<id>` it may close. None
+    /// for one the user opened, an agent's test page or a launch command's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opener: Option<String>,
+    /// The agent that drives it (ESC-678, `open_browser` until `close_browser`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub driver: Option<String>,
     /// The order it opened in, the oldest first: its row's place in « Navigateurs ».
     #[serde(skip)]
     pub opened: u64,
+}
+
+/// Where an agent wants a browser it opens (`open_browser`, ESC-678): alone in the main area,
+/// beside its conversation, under it, or its row alone without showing anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Wish {
+    Full,
+    #[default]
+    Beside,
+    Below,
+    Quiet,
+}
+
+/// An agent's request to open an address outside its project's launch (choice C3, ESC-678): the
+/// user answers it in a band of the agent's conversation, « Permettre une fois » or « Refuser ».
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenAsk {
+    /// `o-<n>`.
+    pub id: String,
+    pub agent: String,
+    pub project_id: String,
+    /// `scheme://host[:port]`.
+    pub origin: String,
+    pub url: String,
+    pub wish: Wish,
+}
+
+/// A browser an agent opened or showed again (`open_browser`, ESC-678), for the window: its row,
+/// and where it goes (`place`: `full`, `beside`, `below`, `waiting` until the user looks at the
+/// agent's conversation, or `quiet`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Opened {
+    pub view: PageView,
+    pub agent: String,
+    pub wish: Wish,
+    pub place: &'static str,
+}
+
+/// The most openings an agent makes in an hour (asked ones included).
+pub const OPENS_PER_HOUR: usize = 10;
+/// The most browsers an agent drives at once.
+pub const DRIVEN_MAX: usize = 3;
+/// The most requests to open an address an agent has waiting for the user.
+pub const OPEN_ASKS_MAX: usize = 5;
+
+/// What the agents asked to open, what the user refused them, how often they opened, and the
+/// origins the user let open in each browser (ESC-678).
+#[derive(Default)]
+struct Openings {
+    asks: Vec<OpenAsk>,
+    /// (agent, origin) the user refused to open: not asked again.
+    refused: std::collections::HashSet<(String, String)>,
+    /// When each agent opened, the last hour's.
+    times: HashMap<String, std::collections::VecDeque<std::time::Instant>>,
+    /// By browser: the origins outside the launch the user let open in it. They fall with it.
+    allowed: HashMap<String, Vec<String>>,
+    seq: u64,
+}
+
+/// What an agent gets when it would open an origin outside its project's launch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenLeave {
+    /// Asked of the user now (its id).
+    Asked(String),
+    /// Already asked, the answer still to come.
+    Waiting(String),
+    /// The user said no.
+    Refused,
+    /// `OPEN_ASKS_MAX` of its requests wait already.
+    Full,
 }
 
 /// What happened to a page, for the window (`UiEvent::DevPage`).
@@ -297,6 +377,11 @@ pub struct Pages {
     /// The leaves to read each page outside the launch, its requests and its refusals, by key
     /// (ESC-669): they fall with the page.
     consents: Mutex<HashMap<String, Leaves>>,
+    /// What the agents asked to open and opened (ESC-678).
+    openings: Mutex<Openings>,
+    /// The agents whose conversation the window shows now (ESC-678): an agent's browser opens
+    /// beside its conversation only while the user looks at it, else its row waits.
+    looking: Mutex<std::collections::HashSet<String>>,
     /// The order the pages opened in.
     seq: std::sync::atomic::AtomicU64,
     /// The captures each agent took in the last minute (`capture_browser`, ESC-670), by agent.
@@ -415,6 +500,142 @@ impl Pages {
             .unwrap_or_default()
     }
 
+    /// The agents whose conversation the window shows now.
+    pub fn set_looking(&self, agents: impl IntoIterator<Item = String>) {
+        *self.looking.lock() = agents.into_iter().collect();
+    }
+
+    /// Whether the user looks at the conversation of `agent`.
+    pub fn looking(&self, agent: &str) -> bool {
+        self.looking.lock().contains(agent)
+    }
+
+    /// The agent that opened the page `key` (`open_browser`): its own to close.
+    pub fn set_opener(&self, key: &str, agent: &str) {
+        if let Some(p) = self.pages.lock().get_mut(key) {
+            p.opener = Some(agent.to_string());
+        }
+    }
+
+    /// The agent that drives the page `key`, or none (`close_browser`).
+    pub fn set_driver(&self, key: &str, agent: Option<&str>) {
+        if let Some(p) = self.pages.lock().get_mut(key) {
+            p.driver = agent.map(str::to_string);
+        }
+    }
+
+    /// How many pages `agent` drives, but `except`.
+    pub fn driven_by(&self, agent: &str, except: &str) -> usize {
+        self.pages
+            .lock()
+            .values()
+            .filter(|p| p.agent_id != except && p.driver.as_deref() == Some(agent))
+            .count()
+    }
+
+    /// Whether `agent` may open once more this hour (`OPENS_PER_HOUR`).
+    pub fn may_open(&self, agent: &str) -> bool {
+        let mut o = self.openings.lock();
+        let times = o.times.entry(agent.to_string()).or_default();
+        let hour = std::time::Duration::from_secs(3600);
+        while times.front().is_some_and(|t| t.elapsed() >= hour) {
+            times.pop_front();
+        }
+        times.len() < OPENS_PER_HOUR
+    }
+
+    /// `agent` opened (or asked to) now.
+    pub fn note_open(&self, agent: &str) {
+        self.openings
+            .lock()
+            .times
+            .entry(agent.to_string())
+            .or_default()
+            .push_back(std::time::Instant::now());
+    }
+
+    /// Asks the user to let `agent` open `url` (of `origin`), unless it asked already, was
+    /// refused, or has `OPEN_ASKS_MAX` requests waiting.
+    pub fn ask_open(
+        &self,
+        agent: &str,
+        project_id: &str,
+        origin: &str,
+        url: &str,
+        wish: Wish,
+    ) -> OpenLeave {
+        let mut o = self.openings.lock();
+        if o.refused.contains(&(agent.to_string(), origin.to_string())) {
+            return OpenLeave::Refused;
+        }
+        if let Some(a) = o
+            .asks
+            .iter()
+            .find(|a| a.agent == agent && a.origin == origin)
+        {
+            return OpenLeave::Waiting(a.id.clone());
+        }
+        if o.asks.iter().filter(|a| a.agent == agent).count() >= OPEN_ASKS_MAX {
+            return OpenLeave::Full;
+        }
+        o.seq += 1;
+        let id = format!("o-{}", o.seq);
+        o.asks.push(OpenAsk {
+            id: id.clone(),
+            agent: agent.to_string(),
+            project_id: project_id.to_string(),
+            origin: origin.to_string(),
+            url: url.to_string(),
+            wish,
+        });
+        OpenLeave::Asked(id)
+    }
+
+    /// The requests to open that wait for the user, the oldest first.
+    pub fn open_asks(&self) -> Vec<OpenAsk> {
+        self.openings.lock().asks.clone()
+    }
+
+    /// The user's answer to the request `id`: the request, gone; none when it waits no more. A
+    /// refusal holds for that agent and origin.
+    pub fn answer_open(&self, id: &str, allow: bool) -> Option<OpenAsk> {
+        let mut o = self.openings.lock();
+        let at = o.asks.iter().position(|a| a.id == id)?;
+        let ask = o.asks.remove(at);
+        if !allow {
+            o.refused.insert((ask.agent.clone(), ask.origin.clone()));
+        }
+        Some(ask)
+    }
+
+    /// The requests of `agent`, gone with it.
+    pub fn forget_open_asks(&self, agent: &str) -> Vec<OpenAsk> {
+        let mut o = self.openings.lock();
+        let (gone, kept) = std::mem::take(&mut o.asks)
+            .into_iter()
+            .partition(|a| a.agent == agent);
+        o.asks = kept;
+        gone
+    }
+
+    /// The user let `origin` open in the page `key`.
+    pub fn allow_origin(&self, key: &str, origin: &str) {
+        let mut o = self.openings.lock();
+        let list = o.allowed.entry(key.to_string()).or_default();
+        if !list.iter().any(|x| x == origin) {
+            list.push(origin.to_string());
+        }
+    }
+
+    /// Whether the user let `origin` open in the page `key`.
+    pub fn origin_allowed(&self, key: &str, origin: &str) -> bool {
+        self.openings
+            .lock()
+            .allowed
+            .get(key)
+            .is_some_and(|l| l.iter().any(|x| x == origin))
+    }
+
     fn set_url(&self, agent_id: &str, url: &str) {
         if let Some(p) = self.pages.lock().get_mut(agent_id) {
             p.url = url.to_string();
@@ -469,8 +690,9 @@ impl Pages {
         if let Some(logs) = self.logs.lock().remove(agent_id) {
             logs.close();
         }
-        // Its leaves fall with it (ESC-669).
+        // Its leaves fall with it (ESC-669), and the origins the user let open in it (ESC-678).
         self.consents.lock().remove(agent_id);
+        self.openings.lock().allowed.remove(agent_id);
         self.pages.lock().remove(agent_id)
     }
 
@@ -505,6 +727,16 @@ pub struct Open<'a> {
 
 /// Whether an address is Escouade's own, for the main window's setup.
 pub type Own = Arc<dyn Fn(&Url) -> bool + Send + Sync>;
+
+/// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.
+pub fn own_of<R: Runtime>(app: &AppHandle<R>) -> Own {
+    let dev = app
+        .try_state::<crate::navigation::Home>()
+        .and_then(|h| h.dev.clone());
+    Arc::new(move |u: &Url| {
+        crate::navigation::destination(u, dev.as_ref()) == crate::navigation::Destination::App
+    })
+}
 
 /// Opens the page of agent `o.agent_id` at `o.url`, or, when it is open, loads `o.url` in it
 /// (launching again reloads the same page).
@@ -552,6 +784,8 @@ pub fn open<R: Runtime>(
         } else {
             Placement::Hidden
         },
+        opener: None,
+        driver: None,
         opened: 0,
     };
     let window = app.get_window("main").ok_or("no main window")?;

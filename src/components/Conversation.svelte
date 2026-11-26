@@ -44,7 +44,8 @@
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import AgentTerminal from './AgentTerminal.svelte';
-  import { devpages, inPane as pageInPane, pageItem, showPage } from '../lib/devpage.svelte';
+  import { answerOpen, devpages, inPane as pageInPane, openAsksOf, pageItem, showPage } from '../lib/devpage.svelte';
+  import OpenAskBand from './OpenAskBand.svelte';
   import Composer from './Composer.svelte';
   import PlanBanner from './PlanBanner.svelte';
   import CriteriaReport from './conv/CriteriaReport.svelte';
@@ -1064,6 +1065,7 @@
       {@render harnessCard()}
       {@render codeModeBand()}
       {@render nextStart()}
+      <OpenAskBand asks={openAsksOf(agent.id)} onanswer={answerOpen} />
       <Composer {agent} />
     {/if}
   {/if}

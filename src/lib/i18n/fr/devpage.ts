@@ -60,6 +60,15 @@ export default {
     revoke: 'Retirer les accords',
     revoked: 'Accords retirés : les agents redemanderont pour lire ce navigateur.',
   },
+  /** The band « veut ouvrir » of an agent's conversation (ESC-678, choice C3): an address outside the project's launch. */
+  open: {
+    /** `{agent}`: its name; the host follows, then `where`. */
+    wants: '{agent} veut ouvrir',
+    where: '(hors du lancement du projet, dans un navigateur d’Escouade)',
+    more: { one: 'et {count} autre demande', other: 'et {count} autres demandes' },
+    allow: 'Permettre une fois',
+    refuse: 'Refuser',
+  },
   browsers: {
     title: 'Navigateurs',
     new: 'Nouveau navigateur',
@@ -74,6 +83,10 @@ export default {
     close: 'Fermer le navigateur',
     /** `{name}`: the agent whose launch opened it. */
     by: 'Lancement de {name}',
+    /** A tab an agent opened (ESC-678). `{name}`: the agent. */
+    opener: 'Ouvert par {name}',
+    /** Its row while the user looks elsewhere than the agent's conversation (ESC-678). */
+    waiting: '{name} veut te montrer la page',
     empty: 'Tape une adresse.',
     notAnAddress: 'Ce n’est pas une adresse (localhost:3000, par exemple).',
     scheme: 'Seule une adresse http:// ou https:// s’ouvre dans un navigateur d’Escouade.',

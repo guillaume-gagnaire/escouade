@@ -1339,6 +1339,45 @@ pub enum ReadWhatArg {
     Text,
 }
 
+/// Where `open_browser` shows the browser.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PlaceArg {
+    Full,
+    Beside,
+    Below,
+    Quiet,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct OpenBrowserArgs {
+    #[schemars(
+        description = "An http or https address. On an origin of your project's launch (its launch commands' addresses, localhost at the ports they declare) it opens without asking; any other address of the internet is asked of the user, once per origin. Never Escouade's own addresses, file:, data:, javascript:, blob: or another scheme; localhost, 127.0.0.1 or [::1] at a port no launch of the project declares is refused. With launch: an address of the same origin."
+    )]
+    pub url: Option<String>,
+    #[schemars(
+        description = "true: the page of your launch (your test's, else the project's launch command), at its address or at url."
+    )]
+    pub launch: Option<bool>,
+    #[schemars(
+        description = "Claude Code only: \"last\" for the last artifact you published (your Artifact tool's result), or the address of one you published in this conversation. Opened without asking, to show it; not with url or launch."
+    )]
+    pub artifact: Option<String>,
+    #[schemars(
+        description = "beside (the default): in a pane beside your conversation; below: under it; full: alone in the main area; quiet: its row alone, nothing shown."
+    )]
+    pub place: Option<PlaceArg>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CloseBrowserArgs {
+    #[schemars(
+        description = "The browser, by the key list_browsers or open_browser gives: one you opened is closed; on the page of your launch your driving stops and its row stays."
+    )]
+    pub browser: String,
+}
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ReadBrowserArgs {
     #[schemars(

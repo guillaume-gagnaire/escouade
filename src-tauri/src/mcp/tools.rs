@@ -42,6 +42,7 @@ use super::activity::{self, Outcome};
 use super::asks;
 use super::background;
 use super::browsers;
+use super::browsers_open;
 use super::docs;
 use super::files;
 use super::images;
@@ -1659,6 +1660,54 @@ impl<R: Runtime> Tools<R> {
         ]);
         let result = browsers::read(&ctx.core, &ctx.caller, args).await;
         ctx.reply_blocks("read_browser", &asked, result)
+    }
+
+    #[tool(
+        description = "Only for Escouade's own agents (refused to any other client). Open a real browser tab, a row of « Navigateurs » of your project with its address bar and widths, to show the user what you made: url (an http or https address), launch true (the page of your launch, at its address or at url of the same origin) or artifact (Claude Code: \"last\" or the address of an artifact you published, found in your Artifact tool's result; opened without asking, to show it). place: beside (the default, a pane beside your conversation), below, full (alone in the main area) or quiet (its row alone). On an origin of the project's launch it opens without asking; any other address of the internet is asked of the user in your conversation, once per origin: the tool answers place asked and opens nothing, and their leave (with the browser's key) or refusal comes back to you by a message. Never Escouade's addresses, file:, data:, javascript:, blob: nor another scheme; this machine (localhost, 127.0.0.1, [::1]) at a port no launch of the project declares is refused. Answers browser (its key), url and place: beside, below or full; waiting while the user looks elsewhere than your conversation (the row opens beside it when they come back); quiet. Opening an origin you have a tab on goes to that tab. The tab keeps your project's storage, never the window's. Bounds: 3 browsers driven at once, 10 openings an hour, one pane beside your conversation. Refused while “Agents and browsers” (« Agents et navigateurs ») is off in Settings › Agents.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = true
+        )
+    )]
+    async fn open_browser(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<OpenBrowserArgs>,
+    ) -> CallToolResult {
+        let launch = args.launch.map(|l| l.to_string());
+        let place = args.place.map(|p| match p {
+            PlaceArg::Full => "full",
+            PlaceArg::Beside => "beside",
+            PlaceArg::Below => "below",
+            PlaceArg::Quiet => "quiet",
+        });
+        let asked = summary(&[
+            ("url", args.url.as_deref()),
+            ("launch", launch.as_deref()),
+            ("artifact", args.artifact.as_deref()),
+            ("place", place),
+        ]);
+        let result = browsers_open::open(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("open_browser", &asked, result)
+    }
+
+    #[tool(
+        description = "Only for Escouade's own agents (refused to any other client). Close a browser you opened (open_browser), by its key; on the page of your launch, or a launch command's you opened by launch, your driving stops and its row stays. Never a browser the user opened, nor another agent's; an agent's page (page:…) is closed by close_page. Refused while “Agents and browsers” (« Agents et navigateurs ») is off in Settings › Agents.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn close_browser(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<CloseBrowserArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("browser", Some(&args.browser))]);
+        let result = browsers_open::close(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("close_browser", &asked, result)
     }
 
     #[tool(

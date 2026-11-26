@@ -77,8 +77,14 @@
     if (!typed.trim()) adding = false;
   }
 
-  /** Its dot, in a word: loading (amber), loaded (green), not answering (red). */
-  const tone = (p: PageState) => (p.phase === 'ready' ? 'on' : p.phase === 'stalled' ? 'bad' : 'wait');
+  /** Its dot, in a word: loading or waiting for the user (amber), loaded (green), not answering (red). */
+  const tone = (p: PageState) => (p.waiting ? 'wait' : p.phase === 'ready' ? 'on' : p.phase === 'stalled' ? 'bad' : 'wait');
+
+  /** The agent's name, for a row it opened or that waits for the user (ESC-678). */
+  const agentName = (id: string | undefined) => (id ? (app.agents[id]?.name ?? id) : '');
+
+  /** Its tip: what waits for the user, else its address. */
+  const tipOf = (p: PageState) => (p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : p.url);
 
   function rowMenu(e: MouseEvent, key: string, p: PageState) {
     // Beside what is on screen; a browser opened alone and shown alone has nothing to go beside.
@@ -117,6 +123,9 @@
   }
 
   function click(e: MouseEvent, key: string) {
+    // A row that waited is shown now: it waits no more.
+    const p = rows.find(([k]) => k === key)?.[1];
+    if (p?.waiting) p.waiting = undefined;
     if (e.ctrlKey || e.metaKey) openPageBeside(key, 'right');
     else showPage(key);
   }
@@ -168,11 +177,12 @@
         class="row-item browser"
         class:sel={selected(key)}
         class:inpane={inPane(key)}
+        class:waits={!!p.waiting}
         role="button"
         tabindex="0"
         aria-current={selected(key) ? 'true' : undefined}
         data-browser={key}
-        use:tip={{ text: p.url, aria: false }}
+        use:tip={{ text: tipOf(p), aria: false }}
         onclick={(e) => click(e, key)}
         onpointerdown={(e) => paneDrag.press(e, pageItem(key), rowName(p))}
         oncontextmenu={(e) => rowMenu(e, key, p)}
@@ -180,8 +190,13 @@
       >
         <i class="d {tn}" aria-hidden="true"></i>
         <span class="nm">{rowName(p)}</span>
-        <span class="sr">{t(`devpage.browsers.state.${p.phase}`)}</span>
+        <span class="sr"
+          >{p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : t(`devpage.browsers.state.${p.phase}`)}</span
+        >
         {#if p.by.kind === 'agent'}<span class="by" aria-hidden="true"><Icon name="branch" size={11} /></span>{/if}
+        {#if p.opener}<span class="by" use:tip={t('devpage.browsers.opener', { name: agentName(p.opener) })}
+            ><Icon name="agents" size={11} /></span
+          >{/if}
         <span class="ra">
           <button
             class="icon-btn x"
@@ -278,6 +293,11 @@
   }
   .d.bad {
     background: var(--del);
+  }
+  /* Its agent wants to show it while the user looks elsewhere (ESC-678): it opens beside the conversation once they
+     come back to it. */
+  .row-item.waits .nm {
+    color: var(--warn-ink);
   }
   .nm {
     min-width: 0;

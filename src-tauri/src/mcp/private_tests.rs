@@ -388,6 +388,10 @@ async fn every_tool_that_names_something_is_in_the_tests_of_the_private_projects
         "split_ticket",
         // A browser of the caller's own project alone, by its key (browsers_tests).
         "read_browser",
+        // The caller's own project alone: what it opens, and a browser of it by its key
+        // (browsers_open_tests).
+        "open_browser",
+        "close_browser",
         // The caller's own pages alone, in its own project (pages_tests).
         "show_page",
         "get_page",

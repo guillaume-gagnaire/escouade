@@ -4,11 +4,24 @@
 // it goes in the window. A browser is shown as a terminal is: alone in the main area, or in a pane of the split screen.
 // It lives while Escouade runs, as a terminal does: neither one is kept at a restart (its width is, by its name).
 
+import { untrack } from 'svelte';
 import { t } from './i18n';
 import { api } from './ipc';
 import { openUrl } from './opener';
 import { app } from './state.svelte';
-import type { Agent, PageBounds, PageConsent, PageConsents, PageEvent, PagePlacement, PagesOpen, Project } from './types';
+import type {
+  Agent,
+  BrowserOpenAsk,
+  BrowserOpened,
+  BrowserWish,
+  PageBounds,
+  PageConsent,
+  PageConsents,
+  PageEvent,
+  PagePlacement,
+  PagesOpen,
+  Project,
+} from './types';
 import { loadModes, nextMode, saveMode, type PageMode } from './devpage-key';
 import { activeItem, has, itemKey, type PaneItem } from './panes';
 
@@ -38,6 +51,13 @@ export interface PageState {
   opened: number;
   /** The agents' requests to read it outside the launch, and the leaves given (ESC-669): its band, its row's menu. */
   consents?: PageConsents;
+  /** The agent that opened it by `open_browser` (ESC-678): a tab of its own. */
+  opener?: string;
+  /** The agent that drives it (ESC-678). */
+  driver?: string;
+  /** Where its agent wants it, while the user looks elsewhere than its conversation (ESC-678): it opens there when they
+   * come back. */
+  waiting?: Exclude<BrowserWish, 'quiet'>;
   /** The width an agent's capture shows it at, for the capture's time (ESC-670): over its own, never kept. */
   shot?: PageMode;
 }
@@ -47,6 +67,9 @@ class DevPages {
   pages = $state<Record<string, PageState>>({});
   /** The width each page is shown at, by page (« worktree · processus », or its host), kept from one launch to the next. */
   modes = $state<Record<string, PageMode>>(loadModes());
+  /** The agents' requests to open an address outside their project's launch (ESC-678, C3): the bands of their
+   * conversations. */
+  asks = $state<BrowserOpenAsk[]>([]);
 }
 
 export const devpages = new DevPages();
@@ -351,6 +374,79 @@ export const hasConsents = (key: string): boolean => {
   return !!c && (c.asks.length > 0 || c.grants.length > 0);
 };
 
+/** The requests of the agent `id` to open an address, the oldest first. */
+export const openAsksOf = (id: string): BrowserOpenAsk[] => devpages.asks.filter((a) => a.agent === id);
+
+/** The requests to open read again from the backend: an agent asked, or was answered. */
+export async function loadOpenAsks() {
+  const asks = await api.devpageOpenAsks().catch(() => null);
+  if (asks) devpages.asks = asks;
+}
+
+/** « Permettre une fois » or « Refuser » in the band of the agent's conversation: the agent is told by a message. */
+export async function answerOpen(ask: BrowserOpenAsk, allow: boolean) {
+  const asks = await app.run(api.devpageOpenAnswer(ask.id, allow));
+  if (asks) devpages.asks = asks;
+}
+
+/** Who opened the browser `key`, by its key. */
+function byOf(key: string): PageBy {
+  if (key.startsWith('run:')) return { kind: 'command', id: key.split(':').slice(2).join(':') };
+  if (key.startsWith(BROWSER_PREFIX)) return { kind: 'user' };
+  return { kind: 'agent', id: key };
+}
+
+/**
+ * An agent opened a browser by `open_browser`, or showed one again (ESC-678): its row, then where it goes. `waiting`:
+ * the user looked elsewhere than its conversation; it opens where the agent wants once they look at it.
+ */
+export function onBrowserOpened(e: BrowserOpened) {
+  const v = e.view;
+  const key = v.agentId;
+  const before = devpages.pages[key];
+  devpages.pages[key] = {
+    url: v.url,
+    title: before?.title ?? v.title,
+    phase: v.loaded ? 'ready' : 'loading',
+    docTitle: v.docTitle || before?.docTitle,
+    projectId: v.projectId,
+    by: before?.by ?? byOf(key),
+    opened: before?.opened ?? ++order,
+    consents: before?.consents,
+    opener: v.opener,
+    driver: v.driver ?? e.agent,
+    waiting: e.place === 'waiting' && e.wish !== 'quiet' ? e.wish : undefined,
+  };
+  watchStall(key);
+  adopt(key);
+  if (!before) {
+    const mode = modeOf(key);
+    if (mode !== 'full') api.devpageMode(key, mode).catch(() => {});
+  }
+  if (e.place === 'full' || e.place === 'beside' || e.place === 'below') showWish(key, e.place, e.agent);
+}
+
+/**
+ * The browser `key` shown where its agent wants it: alone in the main area, or in a pane beside or under the agent's
+ * conversation. One pane per agent: another browser it drives leaves its pane (opening again moves it, it adds none).
+ */
+export function showWish(key: string, wish: Exclude<BrowserWish, 'quiet'>, agent: string) {
+  const page = devpages.pages[key];
+  if (!page) return;
+  page.waiting = undefined;
+  if (app.ui.activeProject !== page.projectId) return;
+  if (wish === 'full') {
+    app.ui.view = 'project';
+    app.selectPage(key);
+    return;
+  }
+  for (const [other, p] of browsersOf(page.projectId)) {
+    if (other !== key && p.driver === agent && inPane(other)) app.closePaneOf(`page:${other}`);
+  }
+  if (inPane(key)) return;
+  app.dropInPane({ kind: 'agent', id: agent }, wish === 'below' ? 'bottom' : 'right', pageItem(key));
+}
+
 /** Closes the browser `key`: its row's ×, its agent gone, its ticket done. */
 export function closePage(key: string) {
   const page = devpages.pages[key];
@@ -395,6 +491,8 @@ function adopt(key: string) {
 
 /** What the backend says of a page. */
 export function onPageEvent(e: PageEvent) {
+  // An agent's request to open an address, keyed by the agent (ESC-678): not a page's.
+  if (e.phase === 'opens') return void loadOpenAsks();
   const page = devpages.pages[e.agentId];
   if (!page) {
     // Its loads and its title only: what opens or refuses something is not done later.
@@ -421,6 +519,14 @@ export function onPageEvent(e: PageEvent) {
     case 'consents':
       void loadConsents(e.agentId);
       break;
+    case 'closed':
+      // Its agent closed it (`close_browser`, ESC-678).
+      closePage(e.agentId);
+      break;
+    case 'undriven':
+      page.driver = undefined;
+      page.waiting = undefined;
+      break;
     case 'outside':
       // Another origin: the system's browser, as every link of the window.
       app.run(openUrl(e.url));
@@ -441,11 +547,42 @@ export function onPageEvent(e: PageEvent) {
 }
 
 app.onDevPage(onPageEvent);
+app.onBrowserOpened(onBrowserOpened);
+
+/** The agents on screen, as last told to the backend; null while no tool of the browsers answers. */
+let looking: string | null = null;
+
+/**
+ * The backend knows whose conversations are on screen (ESC-678), while its tools of the browsers answer (the server on,
+ * « Agents et navigateurs » on): an agent's browser opens beside its conversation only then. A row that waited for the
+ * user to look at its agent opens where the agent wanted it.
+ */
+$effect.root(() => {
+  $effect(() => {
+    const shown = app.shownAgents;
+    const on = !!app.settings?.mcpEnabled && app.settings?.agentBrowsers !== false;
+    const said = shown.join(',');
+    if (!on) looking = null;
+    else if (said !== looking) {
+      looking = said;
+      api.devpageLooking(shown).catch(() => {});
+    }
+    untrack(() => {
+      for (const [key, p] of Object.entries(devpages.pages)) {
+        if (p.waiting && p.driver && shown.includes(p.driver)) showWish(key, p.waiting, p.driver);
+      }
+    });
+  });
+});
+void loadOpenAsks();
 app.pages = {
   open: (key) => !!devpages.pages[key],
   projectOf: (key) => devpages.pages[key]?.projectId ?? null,
 };
-app.onAgentRemoved(closePage);
+app.onAgentRemoved((id) => {
+  closePage(id);
+  devpages.asks = devpages.asks.filter((a) => a.agent !== id);
+});
 app.onTicketDone(closePage);
 
 /** The overlays of the window (menus, lists, dialogs, the palette): a native page would hide them, it is hidden under them. */

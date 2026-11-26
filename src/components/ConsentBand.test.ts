@@ -142,7 +142,7 @@ describe('the switch « Agents et navigateurs »', () => {
     const sw = screen.getByRole('switch', { name: 'Agents et navigateurs' });
     expect(sw).toHaveAttribute('aria-checked', 'true');
     expect(sw).toBeEnabled();
-    expect(screen.getByText(/la page de leur lancement sans demander/)).toBeInTheDocument();
+    expect(screen.getByText(/le lancement du projet sans demander/)).toBeInTheDocument();
     await userEvent.click(sw);
     expect(settingsForm.settings.agentBrowsers).toBe(false);
     unmount();

@@ -11,6 +11,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The commands an agent ran, kept for the Workspace, no longer keep any password, token or key in the clear: they are masked before being saved.
 - On Windows, your data files (the state, the settings) are no longer lost when two writes cross; and on a loaded machine, a plugin is no longer stopped during a big build beside it, and an agent of the Claude Code view that finished its turn no longer stays shown at work.
 - On a busy machine, the “New project” assistant no longer says “The repository has no commit” of a repository that has some: it reads the folder faster, says “Reading the repository…” while it does, and if git fails it shows its error with “Try again” instead of offering a first commit.
+- An agent opens a real tab next to its conversation to show you its work: the project’s launch, an address, or the Claude artifact it just published. It opens only while you look at its conversation; otherwise its row in “Browsers” waits for you. An address outside the project is asked once in its conversation; Escouade’s own addresses and your machine’s other ports never open.
 
 ## [2.2.13] — 2026-11-26
 

@@ -5,6 +5,7 @@ import type {
   EngineDecl,
   PageBounds,
   PageConsents,
+  BrowserOpenAsk,
   PagePlacement,
   PageView,
   Memory,
@@ -879,6 +880,12 @@ export const api = {
     invoke<PageConsents>('devpage_consent', { agentId, agent, origin, allow }),
   /** « Retirer les accords » of the browser `agentId`. */
   devpageRevoke: (agentId: string) => invoke<PageConsents>('devpage_revoke', { agentId }),
+  /** The agents whose conversation is on screen (ESC-678): an agent's browser opens beside it only then. */
+  devpageLooking: (agents: string[]) => invoke<void>('devpage_looking', { agents }),
+  /** The agents' requests to open an address outside their project's launch (ESC-678, C3). */
+  devpageOpenAsks: () => invoke<BrowserOpenAsk[]>('devpage_open_asks'),
+  /** « Permettre une fois » or « Refuser » of a request to open: the agent is told by a message. */
+  devpageOpenAnswer: (id: string, allow: boolean) => invoke<BrowserOpenAsk[]>('devpage_open_answer', { id, allow }),
   devpageGo: (agentId: string, action: 'back' | 'forward' | 'reload' | 'to', to?: string) =>
     invoke<void>('devpage_go', { agentId, action, to: to ?? null }),
   devpageDevtools: (agentId: string) => invoke<void>('devpage_devtools', { agentId }),

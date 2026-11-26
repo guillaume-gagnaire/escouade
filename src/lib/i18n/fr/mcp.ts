@@ -13,7 +13,7 @@ export default {
     /** ESC-669: the tools of the browsers (list_browsers, read_browser…), under the server. */
     browsers: 'Agents et navigateurs',
     browsersDesc:
-      'Les agents lisent les navigateurs de « Navigateurs » de leur projet (list_browsers, read_browser) : la page de leur lancement sans demander ; une autre origine, un artefact ou un site où tu es connecté, avec ton accord, une fois par origine et par navigateur. Jamais les cookies, le stockage ni un mot de passe.',
+      'Les agents ouvrent un navigateur de leur projet à côté de leur conversation et le ferment (open_browser, close_browser), et lisent ceux de « Navigateurs » (list_browsers, read_browser, capture_browser, browser_console) : le lancement du projet sans demander ; une autre adresse, avec ton accord, une fois par origine ; un artefact qu’ils ont publié, pour te le montrer. Jamais les adresses d’Escouade, ni ce poste hors des ports déclarés, ni les cookies, le stockage ou un mot de passe.',
     /** ESC-673: the tools of the agents' pages (show_page, get_page, close_page), under the server. */
     pages: 'Pages des agents',
     pagesDesc:
@@ -111,6 +111,8 @@ export default {
     listBackgroundWork: 'Lister les sous-agents et tâches de fond d’un agent',
     listBrowsers: 'Lister les navigateurs',
     readBrowser: 'Lire un navigateur',
+    openBrowser: 'Ouvrir un navigateur',
+    closeBrowser: 'Fermer un navigateur',
     showPage: 'Montrer une page',
     getPage: 'Lire l’état d’une page',
     closePage: 'Fermer une page',

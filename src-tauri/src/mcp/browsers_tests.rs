@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tauri::Manager;
 
 /// The browsers' models of the harness's app, made once.
-fn pages(h: &Harness) -> Arc<Pages> {
+pub(super) fn pages(h: &Harness) -> Arc<Pages> {
     if let Some(p) = h.core.app.try_state::<Arc<Pages>>() {
         return p.inner().clone();
     }
@@ -25,7 +25,7 @@ fn pages(h: &Harness) -> Arc<Pages> {
 }
 
 /// A browser of project `p`, keyed `key`, at `url`, shown at `placement`.
-fn browser(h: &Harness, p: &Project, key: &str, url: &str, placement: Placement) {
+pub(super) fn browser(h: &Harness, p: &Project, key: &str, url: &str, placement: Placement) {
     let pages = pages(h);
     pages.put(PageView {
         agent_id: key.into(),
@@ -36,12 +36,14 @@ fn browser(h: &Harness, p: &Project, key: &str, url: &str, placement: Placement)
         loaded: true,
         doc_title: String::new(),
         placement,
+        opener: None,
+        driver: None,
         opened: 0,
     });
 }
 
 /// The project's launch command at `url`.
-fn launch_command(h: &Harness, p: &Project, url: &str) {
+pub(super) fn launch_command(h: &Harness, p: &Project, url: &str) {
     let mut projects = h.core.projects.write();
     let found = projects.iter_mut().find(|x| x.id == p.id).unwrap();
     found.run_commands.push(RunCommand {
@@ -56,7 +58,7 @@ fn launch_command(h: &Harness, p: &Project, url: &str) {
 /// A project with a launch command on `localhost:${ESCOUADE_PORT_BASE:-4100}`, its agent with the
 /// ports 4210 to 4219 reserved, and three browsers: its test's page, the user's on claude.ai, and one
 /// the user opened on the launch but on no screen.
-async fn world(h: &Harness) -> (Project, AgentMeta) {
+pub(super) async fn world(h: &Harness) -> (Project, AgentMeta) {
     let p = project(h).await;
     launch_command(h, &p, "http://localhost:${ESCOUADE_PORT_BASE:-4100}/");
     let a = put_agent(h, &p, "Alice", 1);

@@ -50,6 +50,13 @@ export default {
     revoke: 'Revoke the permissions',
     revoked: 'Permissions revoked: the agents will ask again to read this browser.',
   },
+  open: {
+    wants: '{agent} wants to open',
+    where: '(outside the project’s launch, in an Escouade browser)',
+    more: { one: 'and {count} other request', other: 'and {count} other requests' },
+    allow: 'Allow once',
+    refuse: 'Refuse',
+  },
   browsers: {
     title: 'Browsers',
     new: 'New browser',
@@ -62,6 +69,8 @@ export default {
     copied: 'Address copied',
     close: 'Close the browser',
     by: 'Launch of {name}',
+    opener: 'Opened by {name}',
+    waiting: '{name} wants to show you the page',
     empty: 'Type an address.',
     notAnAddress: 'That isn’t an address (localhost:3000, for example).',
     scheme: 'Only an http:// or https:// address opens in an Escouade browser.',

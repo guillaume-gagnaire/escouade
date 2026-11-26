@@ -21,6 +21,9 @@ mod background;
 #[cfg(test)]
 mod background_tests;
 pub(crate) mod browsers;
+pub(crate) mod browsers_open;
+#[cfg(test)]
+mod browsers_open_tests;
 #[cfg(test)]
 mod browsers_tests;
 #[cfg(test)]

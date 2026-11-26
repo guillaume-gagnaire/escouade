@@ -1062,6 +1062,33 @@ export interface PageView {
   loaded?: boolean;
   /** Its document's title, once the page gave one. */
   docTitle?: string;
+  /** The agent that opened it by `open_browser` (ESC-678): a `browser:<id>` of its own. */
+  opener?: string;
+  /** The agent that drives it (ESC-678). */
+  driver?: string;
+}
+
+/** Where an agent wants a browser it opens (`open_browser`, ESC-678). */
+export type BrowserWish = 'full' | 'beside' | 'below' | 'quiet';
+
+/** A browser an agent opened or showed again (ESC-678): its row, and where it goes (`waiting`: until the user looks at
+ * the agent's conversation). */
+export interface BrowserOpened {
+  view: PageView;
+  agent: string;
+  wish: BrowserWish;
+  place: 'full' | 'beside' | 'below' | 'waiting' | 'quiet';
+}
+
+/** An agent's request to open an address outside its project's launch (ESC-678, choice C3): the band of its conversation. */
+export interface BrowserOpenAsk {
+  id: string;
+  agent: string;
+  projectId: string;
+  /** `scheme://host[:port]`. */
+  origin: string;
+  url: string;
+  wish: BrowserWish;
 }
 
 /** Where the window shows a browser (ESC-669, `list_browsers`): alone, in a pane beside or under something else, or nowhere. */
@@ -1085,8 +1112,10 @@ export interface PageConsents {
 export interface PageEvent {
   /** The page's key: its agent's id, or `browser:<id>` for a browser opened alone (ESC-657). */
   agentId: string;
-  /** `consents`: an agent asked to read it, or its leaves changed (ESC-669): the window reads them again. `width`: an agent's capture shows it at the width in `url` (`full`, `tablet`, `mobile`) for its time, an empty `url` gives it back its own (ESC-670). */
-  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title' | 'consents' | 'width';
+  /** `consents`: an agent asked to read it, or its leaves changed (ESC-669): the window reads them again. `width`: an agent's capture shows it at the width in `url` (`full`, `tablet`, `mobile`) for its time, an empty `url` gives it back its own (ESC-670). `opens`: an
+   * agent asked to open an address, or was answered (ESC-678, keyed by the agent): the bands read them again. `closed`:
+   * its agent closed it; `undriven`: its agent no longer drives it. */
+  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title' | 'consents' | 'width' | 'opens' | 'closed' | 'undriven';
   url: string;
   /** Its document's title, with `title` (cleaned by the backend). */
   title?: string;
@@ -2873,6 +2902,7 @@ export type UiEvent =
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }
   | { type: 'devPage'; page: PageEvent }
+  | { type: 'browserOpened'; browser: BrowserOpened }
   | { type: 'agentPage'; page: AgentPageEvent }
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
