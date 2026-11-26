@@ -37,6 +37,7 @@ fn conv_choice() -> ConvChoice {
         speak: SpeakOptions::default(),
         volume: 1.0,
         silence_ms: 600,
+        sensitivity: 0,
         online: None,
         online_error: None,
         online_notice: None,

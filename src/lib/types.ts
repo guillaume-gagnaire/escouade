@@ -194,6 +194,8 @@ export interface SpeechSettings {
   volume: number;
   /** The silence that ends what the user says, and sends it (ms). */
   silenceMs: number;
+  /** « Sensibilité du micro » (ESC-665): -5 (less sensitive) to 5 (more); 0, the detector as it always was. */
+  sensitivity: number;
   /** « Voix générée par » (ESC-132): Piper on the machine (the default), or the service `onlineService` with the key of its dictation. */
   engine: 'local' | 'online';
   onlineService: string;
@@ -333,7 +335,10 @@ export type VoiceEvent =
   | { kind: 'convSpoken'; session: number; reading: number; error: string | null; paused: boolean }
   | { kind: 'convNotice'; session: number; message: string }
   | { kind: 'convBargeIn'; session: number; reading: number }
-  | { kind: 'convEnded'; session: number; error: string | null };
+  | { kind: 'convEnded'; session: number; error: string | null }
+  /** The tester of « Sensibilité du micro » (ESC-665): levels (RMS) only, never the sound. */
+  | { kind: 'meter'; session: number; level: number; noise: number; threshold: number; speech: boolean }
+  | { kind: 'meterEnded'; session: number; error: string | null };
 
 /** A Claude account: Claude Code with a configuration folder of its own (its own sign-in, sessions and quota). */
 export interface Account {

@@ -783,6 +783,7 @@ fn called_off_while_the_microphone_opens_it_never_listens() {
 }
 
 include!("conv_tests.rs");
+include!("meter_tests.rs");
 
 fn online_choice(base: &str) -> Choice {
     let mut spec = online::Spec::new(online::Provider::Groq, "gsk-test-key".into());

@@ -482,6 +482,10 @@ pub struct SpeechSettings {
     pub volume: f32,
     /// The silence that ends what the user says, and sends it, in milliseconds.
     pub silence_ms: u32,
+    /// « Sensibilité du micro » (ESC-665): how loud over the room's noise the user must be heard, from -5 (less
+    /// sensitive) to 5 (more); 0, the detector as it always was. The conversation's (a sentence's start and end, the
+    /// user speaking over the agent), whatever transcribes it; kept on the machine.
+    pub sensitivity: i32,
     /// Who makes the voice (ESC-132): "local" (Piper, on the machine) or "online" (the service `online_service`, with
     /// the key of its dictation).
     pub engine: String,
@@ -501,6 +505,7 @@ impl Default for SpeechSettings {
             rate: 1.0,
             volume: 1.0,
             silence_ms: 1200,
+            sensitivity: 0,
             engine: "local".into(),
             online_service: "openai".into(),
             online_models: Default::default(),

@@ -203,9 +203,10 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('sync', 'services', 'integrations.sync.title', s('integrations')),
   row('autoImport', 'services', 'integrations.autoImport.title', s('integrations')),
 
-  // Voix › Dictée, Conversation.
+  // Voix › Dictée, Conversation (its « Sensibilité du micro » and tester, ESC-665).
   row('dictation', 'voice', 'voice.settings.transcription', s('voice')),
   row('conversation', 'voice', 'voice.speech.title', s('voice')),
+  row('micSensitivity', 'voice', 'voice.speech.sensitivity', s('voice')),
 
   // Notifications › Me prévenir pour, Pull requests et déploiements, Canaux, Son.
   row('notifyFor', 'notifications', 'settings.notifications.notifyFor', s('notifyFor')),

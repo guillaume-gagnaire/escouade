@@ -3902,6 +3902,33 @@ pub fn voice_cancel(voice: VoiceState) {
     voice.cancel();
 }
 
+/// « Tester » of Réglages › Voix (ESC-665): listens to `device` (empty: the system's) as the conversation's detector
+/// hears it at `sensitivity`, its levels in `UiEvent::Voice` (`meter`); nothing of the sound kept nor sent. Off the
+/// main thread: macOS may ask for the microphone first.
+#[tauri::command(async)]
+pub fn voice_meter_start(
+    voice: VoiceState,
+    device: String,
+    sensitivity: i32,
+    silence_ms: u32,
+) -> Res<u64> {
+    voice
+        .meter_start(&device, sensitivity, silence_ms)
+        .map_err(voice_err)
+}
+
+/// The slider of « Sensibilité du micro » moved while the tester listens: its line moves at once.
+#[tauri::command]
+pub fn voice_meter_set(voice: VoiceState, session: u64, sensitivity: i32) {
+    voice.meter_set(session, sensitivity);
+}
+
+/// « Arrêter », or the page left.
+#[tauri::command]
+pub fn voice_meter_stop(voice: VoiceState, session: u64) {
+    voice.meter_stop(session);
+}
+
 /// Downloads a model (its progress in `UiEvent::Voice`), through the proxy of the settings.
 #[tauri::command]
 pub async fn voice_download(core: CoreState<'_>, voice: VoiceState<'_>, model: String) -> Res<()> {
@@ -3977,6 +4004,7 @@ fn conv_choice(
         speak: speak_options(settings, &id),
         volume: settings.voice.speech.volume.clamp(0.0, 1.0),
         silence_ms: settings.voice.speech.silence_ms,
+        sensitivity: settings.voice.speech.sensitivity,
         voice: id,
         online: online.online,
         online_error: online.error,

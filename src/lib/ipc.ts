@@ -189,6 +189,12 @@ export const api = {
   /** Stops listening and gives the text heard (empty: nothing said). `target`: where it goes, for the usage statistics. */
   voiceStop: (session: number, target: string) => invoke<string>('voice_stop', { session, target }),
   voiceCancel: () => invoke<void>('voice_cancel'),
+  /** « Tester » of « Sensibilité du micro » (ESC-665): listens to `device`, its levels as `meter` events; nothing kept nor sent. */
+  voiceMeterStart: (device: string, sensitivity: number, silenceMs: number) =>
+    invoke<number>('voice_meter_start', { device, sensitivity, silenceMs }),
+  /** The slider moved while the tester listens. */
+  voiceMeterSet: (session: number, sensitivity: number) => invoke<void>('voice_meter_set', { session, sensitivity }),
+  voiceMeterStop: (session: number) => invoke<void>('voice_meter_stop', { session }),
   /** Its progress comes as `voice` events; resolves once the model is on the disk, its checksum checked. */
   voiceDownload: (model: string) => invoke<void>('voice_download', { model }),
   voiceDownloadCancel: (model: string) => invoke<void>('voice_download_cancel', { model }),

@@ -48,6 +48,8 @@ pub struct ConvChoice {
     pub volume: f32,
     /// The silence that ends a sentence, in milliseconds.
     pub silence_ms: u32,
+    /// « Sensibilité du micro » (ESC-665): the threshold of the endpointer and of the barge-in (`vad::Levels`).
+    pub sensitivity: i32,
     /// « Voix générée par » a service on line (ESC-132): what reads in place of Piper.
     pub online: Option<OnlineVoice>,
     /// The service chosen could not be asked (no key): Piper reads, or the conversation does not start.
@@ -210,11 +212,16 @@ impl Voice {
         if self.session.lock().is_some() || self.conv.lock().is_some() {
             return Err(VoiceError::AlreadyListening);
         }
+        // The conversation takes the microphone from the settings' tester.
+        self.meter_stop_any();
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let shared = Arc::new(Shared {
             id,
             mode: Mutex::new(Mode::Listening),
-            endpointer: Mutex::new(Endpointer::new(choice.silence_ms.clamp(400, 5000))),
+            endpointer: Mutex::new(
+                Endpointer::new(choice.silence_ms.clamp(400, 5000))
+                    .with_sensitivity(choice.sensitivity),
+            ),
             barge: Mutex::new(None),
             playing: Mutex::new(None),
             reading: AtomicU64::new(0),
@@ -422,7 +429,10 @@ impl Voice {
         let reading = s.reading.fetch_add(1, Ordering::AcqRel) + 1;
         let stop = Arc::new(AtomicBool::new(false));
         *s.hush.lock() = stop.clone();
-        *s.barge.lock() = Some(BargeIn::new(s.endpointer.lock().noise()));
+        *s.barge.lock() = {
+            let e = s.endpointer.lock();
+            Some(BargeIn::new(e.noise()).with_sensitivity(e.sensitivity()))
+        };
         *s.mode.lock() = Mode::Speaking;
         let engine = self.engine.clone();
         let output = self.output.clone();

@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Les voix de la conversation se téléchargent de nouveau : elles sont prises à une version fixée de leur dépôt, que ses mises à jour ne cassent plus (une voix réentraînée en amont faisait échouer son téléchargement). Les modèles de la dictée et de la recherche par le sens sont fixés de même.
 - Quand un fichier publié ne correspond plus à celui qu’attend Escouade, le message le dit en clair et dit que c’est à Escouade de se mettre à jour, au lieu de « 6369 bytes and more, 4875 expected ».
 - Pendant la dictée, la bande dit qu’on reclique sur le micro (ou le raccourci) pour écrire ce qu’on a dit.
+- La sensibilité du micro de la conversation vocale se règle dans Réglages › Voix, avec un testeur qui montre en direct le niveau de ta voix, le seuil et quand ta voix est détectée.
 
 ## [2.2.11] — 2026-11-25
 

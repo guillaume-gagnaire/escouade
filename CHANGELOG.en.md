@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The conversation’s voices download again: they are taken at a fixed version of their repository, which its updates no longer break (a voice retrained upstream made its download fail). The models of the dictation and of the search by meaning are fixed the same way.
 - When a published file no longer matches the one Escouade expects, the message says so plainly and that Escouade has to be updated, instead of “6369 bytes and more, 4875 expected”.
 - While dictating, the band says to click the mic again (or the shortcut) to type what you said.
+- The voice conversation’s microphone sensitivity can be set in Settings › Voice, with a tester that shows your voice’s level, the threshold and when your voice is detected, live.
 
 ## [2.2.11] — 2026-11-25
 

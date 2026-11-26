@@ -2,8 +2,8 @@
 title: "Dictée"
 subject: "Voix"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-16","ESC-96","ESC-110","ESC-132","ESC-134","ESC-135","ESC-136","ESC-350","ESC-664"]
-decisions: ["voix-et-modeles-epingles-a-une-revision"]
+tickets: ["ESC-16","ESC-96","ESC-110","ESC-132","ESC-134","ESC-135","ESC-136","ESC-350","ESC-664","ESC-665"]
+decisions: ["voix-et-modeles-epingles-a-une-revision","la-sensibilite-du-micro-se-regle-avec-un"]
 compared: null
 ---
 
@@ -126,3 +126,7 @@ Un plugin a 4 flux en direct à la fois au plus : au-delà, le son part entier p
 ## Comment finir, dans un compositeur étroit
 
 Ceci précise *Parler*. Dans un compositeur de moins de 760 px, la bande de la dictée cache les touches, mais jamais le second clic. Elle montre alors la forme courte : « Reclique sur le micro pour écrire ce que tu as dit » (« Click the mic again to type what you said »). Avant la 2.2.12, rien n'y disait comment finir.
+
+## La sensibilité du micro ne touche pas la dictée
+
+Ceci précise *Réglages*. « Sensibilité du micro » et son testeur (Réglages › Voix, 2.2.12, voir *Conversation vocale*) règlent le détecteur de la voix de la conversation vocale. La dictée n'a pas de détecteur : elle écoute tout, du premier clic au second (ou tant que la touche est tenue), et ce réglage ne change rien à ce qu'elle entend ni à ce qu'elle transcrit. Une dictée qui commence arrête le testeur, et le testeur ne s'ouvre pas pendant une dictée.

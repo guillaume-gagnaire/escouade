@@ -16,6 +16,7 @@ import { setLang, t } from './i18n';
 import { shownAgents, sidebarItems, type SidebarItem } from './sidebar';
 import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
+import { micMeter } from './mic-meter.svelte';
 import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
 import { errorText, missingAccountOf, missingAccountProjectOf, notOpened } from './refusal';
@@ -1003,6 +1004,7 @@ class AppState {
       case 'voice':
         dictation.take(e.voice);
         conversation.take(e.voice);
+        micMeter.take(e.voice);
         break;
       case 'docsShare':
         this.docsShare[e.projectId] = { pending: e.pending, conflict: e.conflict };
