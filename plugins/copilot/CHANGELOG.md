@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.9
+
+- Copilot CLI 1.0.116 (its SDK v2) answers with protocol 4: its agents were refused (“Copilot CLI speaks protocol 4”). Both protocols are spoken now, 3 for an older Copilot CLI and 4, whose sessions take their options in their new places (`events`, `permissions`, `interaction`, `inference`, `mcp`).
+
 ## 2.2.8
 
 - Its process no longer puts Escouade’s token in `ESCOUADE_MCP_TOKEN`: the core’s private file holds it (Escouade 2.2.0-beta.12 and later), as for its view, the variable is stripped from its commands, and its manifest no longer declares it (ESC-433). An older beta, which named the variable, loses Escouade’s server in its Copilot agents: update it.

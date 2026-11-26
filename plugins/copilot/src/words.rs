@@ -6,8 +6,12 @@
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
-/// The version of the protocol Escouade speaks (`connect`).
-pub const PROTOCOL: u64 = 3;
+/// The versions of the protocol Escouade speaks (`connect`): 3 (Copilot CLI up to 1.0.115) and 4 (SDK v2, Copilot CLI
+/// 1.0.116 of 2026-11-25), whose `session.create` and `session.resume` take their options nested (`events`,
+/// `permissions`, `interaction`, `inference`, `mcp`), the rest of the protocol as it was (`client::session_params`).
+pub const PROTOCOLS: [u64; 2] = [3, 4];
+/// The newest of them, the one the refusal names.
+pub const PROTOCOL: u64 = 4;
 
 /// The variables a token of GitHub reaches Copilot in, taken before its own sign-in.
 pub const INHERITED_TOKENS: [&str; 3] = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"];
