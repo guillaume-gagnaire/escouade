@@ -133,7 +133,11 @@ libc = "0.2"
 # Tauri's windows already run on).
 gtk = "0.18"
 # The end of the page's process (`pagecrash`), on the WebView wry makes: its version.
-webkit2gtk = { version = "2.0", features = ["v2_20"] }
+webkit2gtk = { version = "2.0", features = ["v2_22"] }
+# The read bridge of the browsers (`browserread`, ESC-668): the result of a script in Escouade's world
+# (JavaScriptCore's value) and a capture cut and written in PNG (cairo), in the versions wry uses.
+javascriptcore-rs = "=1.1.2"
+cairo-rs = { version = "0.18", features = ["png"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-notification = "2"
@@ -141,6 +145,12 @@ tauri-plugin-notification = "2"
 plist = "1"
 # The inspector of a launch's page in a window of its own (`devpage::open_devtools`): wry's version.
 objc2 = "0.6"
+# The read bridge of the browsers (`browserread`, ESC-668): a content world of Escouade's own and the
+# view's capture, in the versions wry uses.
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSError", "NSDictionary", "NSData", "NSGeometry", "NSValue"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-app-kit", "WKWebView", "WKContentWorld", "WKFrameInfo", "WKSnapshotConfiguration"] }
 
 # The dependencies keep their line tables only (backtraces still say where), Escouade its full debug info: with
 # everything in full, the program database of the debug build went over the MSVC linker's limit (LNK1140, 2026-10-28,

@@ -1,9 +1,9 @@
 ---
 title: "Les navigateurs (la page du lancement)"
 subject: "kanban"
-sources: ["design/browser/INVENTAIRE.md","design/browser/a-onglet.png","design/browser/a-tablette.png","design/browser/a-mobile.png","design/browser/a-retreci.png","design/browser/etats.png","design/split-view/index.html","website/content/docs/fr/browser.md","src/lib/devpage.svelte.ts","src/components/BrowsersSection.svelte","src/components/DevPage.svelte","src-tauri/src/devpage.rs"]
-tickets: ["ESC-311","ESC-419","ESC-560","ESC-657"]
-decisions: [26,149,294,310]
+sources: ["design/browser/INVENTAIRE.md","design/browser/a-onglet.png","design/browser/a-tablette.png","design/browser/a-mobile.png","design/browser/a-retreci.png","design/browser/etats.png","design/split-view/index.html","website/content/docs/fr/browser.md","src/lib/devpage.svelte.ts","src/components/BrowsersSection.svelte","src/components/DevPage.svelte","src-tauri/src/devpage.rs","src-tauri/src/browserread.rs","src-tauri/src/browserread.js","src-tauri/src/browserread-relay.js","src-tauri/src/agentbrowser_probe.rs","docs/AGENT-BROWSERS.md","docs/AGENT-BROWSERS-TICKETS.md"]
+tickets: ["ESC-311","ESC-419","ESC-560","ESC-657","ESC-668"]
+decisions: [26,149,294,310,"le-cœur-lit-un-navigateur-dans-un-monde"]
 compared: "2026-10-31T19:02:21+01:00"
 ---
 
@@ -73,6 +73,19 @@ Sur le modèle exact de « Terminaux » (mêmes lignes, mêmes gestes) :
 - Stockage du projet, jamais celui de la fenêtre : dossier `pages/<projet>` des données (Windows, Linux), magasin par projet (macOS 14+), session privée avant.
 - Adresses, les mêmes règles qu'une page de lancement, rien de plus large : seule une adresse `http` ou `https` avec un hôte s'ouvre (tapée dans « + », venue d'une commande ou d'un test), jamais une adresse d'Escouade, un fichier ou un autre schéma (`launch_url`, et son miroir dans la fenêtre) ; la page reste sur l'origine de son adresse de départ : une autre origine (tapée dans la barre ou suivie par un lien) s'ouvre dans le navigateur du système, avec un message ; adresses d'Escouade, fichiers et autres schémas → nulle part.
 
+## Ce que le cœur lit d'un navigateur (ESC-668)
+
+Le pont de lecture natif (`browserread`) prépare les outils des agents qui liront les navigateurs (`list_browsers`, `read_browser`, `capture_browser`, `browser_console`, à venir : voir `docs/AGENT-BROWSERS.md`). Il ne change rien à ce que voit l'utilisateur, et la page n'a toujours aucun canal vers Escouade.
+
+- **Un monde à Escouade** : ce que le cœur lit d'une page passe par la poignée native de sa webview, dans un monde isolé `escouade-agent` du cadre principal, que les scripts de la page ne touchent pas (une page qui réécrit `JSON.stringify` ou `querySelector` ne fausse pas la lecture). Seuls des scripts fixes d'Escouade, compilés dans l'app et paramétrés en JSON, y tournent ; jamais le monde de la page (`eval`), jamais un script d'un agent. WebView2 : `Page.createIsolatedWorld` et `Runtime.evaluate` ; WebKitGTK : `run_javascript_in_world` ; WKWebView : `WKContentWorld`.
+- **Sous Windows, une liste fermée** des méthodes du protocole DevTools, appelé dans le process, sans port de débogage : les captures, le monde isolé, et pour le pilotage à venir les entrées, l'overlay, l'émulation de largeur, l'arbre d'accessibilité, la navigation vers une adresse web. Toute autre méthode est refusée (ni cookies, ni stockage, ni en-têtes, ni corps de réponse), et `Runtime.evaluate` ne vaut que pour le monde d'Escouade et ses scripts.
+- **La console et le réseau, tenus dès la création** de chaque navigateur, qu'un agent les lise ou non, rouvert ou rechargé compris : 500 entrées de console (texte de 500 caractères au plus) et 500 requêtes en échec (statut 400 ou plus, ou sans réponse), les plus anciennes perdues d'abord et comptées. Les adresses y sont gardées sans chaîne de requête, fragment ni identifiants (`data:`, `blob:` réduits à leur schéma). Fermé, le navigateur emporte ses tampons.
+  - Windows : les événements du protocole (`Runtime`, `Log`, `Network`), activés à la création de la webview ; la page ne peut ni les taire ni les inventer (« rapporté par le navigateur »).
+  - Linux et macOS : WebKit n'en donne rien. Un relais posé au début de chaque document, dans le monde de la page, enveloppe `console.*`, `onerror`, `unhandledrejection`, `fetch` et XHR ; il garde ce qui précède la première relève et le dit au monde isolé, où le cœur le relève chaque seconde. La page peut le taire ou le tromper : marqué « rapporté par la page ». C'est, avec le raccourci des largeurs, le seul script ajouté à la page.
+- **Une lecture du HTML est masquée** : la valeur des champs mot de passe et cachés, le `content` d'un `<meta>` nommé pour un jeton (`csrf`, `xsrf`, `token`, `nonce`), le texte des scripts en ligne, et les jetons visibles (clés GitHub, GitLab, OpenAI, Anthropic, Slack, AWS, un JWT, un `Bearer`, un bloc de clé privée) deviennent `«masqué»` et sont comptés. Elle se coupe à une borne (50 000 caractères par défaut, 200 000 au plus), après la dernière balise entière. Le texte visible (`innerText`) ne contient pas ce que la page cache. Un sélecteur fait 200 caractères au plus, sans `:has()` ni plus de quatre niveaux.
+- **Les captures**, par système : la vue, un élément (ce qui en est visible), le document entier (8 000 px de haut au plus), 1 600 px au plus sur le grand côté. WebView2 : JPEG de qualité 70, et une autre largeur émulée le temps de la capture. WebKitGTK : PNG, le document entier compris ; une autre largeur passe par les largeurs de la barre. WKWebView : PNG de la vue seule (le document entier est refusé et dit).
+
 ## Vérifié par système
 
 - `devpage_probe` (vraie webview) en CI sous Linux (Xvfb) et macOS ; les e2e `devpage.spec.ts`, `devpage-pane.spec.ts` et `browsers.spec.ts` (un navigateur ouvert seul, plein écran, demi-écran, largeur mobile vue par la page, fermeture ; une adresse refusée) sous Windows.
+- `agentbrowser_probe` (vraie webview, ESC-668), contre une page qui se défend (globales réécrites, consigne cachée, cookie, jeton, champs mot de passe et caché, clé dans le texte) : lecture du HTML et du texte, sélecteur, captures, console, exception, 404, port refusé et navigation, lancée sous Windows (WebView2) et sous WebKitGTK (WSL). Sous macOS, la branche WKWebView compile (clippy pour `x86_64-apple-darwin`) mais n'a tourné sur aucun Mac : son premier essai réel est la CI Mac d'AB-5.

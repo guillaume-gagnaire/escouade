@@ -2,8 +2,8 @@
 title: "Les navigateurs pilotés par les agents (brouillon, ESC-663)"
 subject: "kanban"
 sources: ["docs/AGENT-BROWSERS.md (ESC-663 ; apportée sur main et mise d'accord par ESC-666 le 2026-11-26)","docs/AGENT-BROWSERS-TICKETS.md (ESC-666 : la liste finale des tickets)","docs/AGENT-PAGES.md (ESC-661, § 10 : le pilotage commun)","design/agent-browsers/probe/src/main.rs","design/agent-browsers/results/report-windows.json","design/agent-browsers/results/report-linux.json","design/agent-browsers/maquette/index.html","design/agent-browsers/maquette/cas-phare-clair.png","design/agent-browsers/maquette/cas-phare-sombre.png","src-tauri/src/devpage.rs","Demandes a-37 à a-39 et a-42, réponses de l'utilisateur des 2026-11-25 et 26 (C1 C, C2 B, C3 A, C4 A)","L'utilisateur, 2026-11-26 (par l'Overseer) : tout ce qui touche aux navigateurs sort en 2.2"]
-tickets: ["ESC-663","ESC-661","ESC-660","ESC-666"]
-decisions: ["un-seul-pilotage-pour-toutes-les-lignes",325,323,326,327,322]
+tickets: ["ESC-663","ESC-661","ESC-660","ESC-666","ESC-668"]
+decisions: ["un-seul-pilotage-pour-toutes-les-lignes",325,323,326,327,322,"le-cœur-lit-un-navigateur-dans-un-monde"]
 compared: null
 draft: true
 ---
@@ -106,3 +106,8 @@ Dans la 2.3 seulement (AB-R) :
 - le téléphone et la fenêtre connectée à un serveur, qui ne voient ni lignes ni accords ;
 - l'Overseer ;
 - le ticket d'équipe.
+
+## Où en est la construction
+
+- **AB-1 (ESC-668), construit** : le pont de lecture natif (`src-tauri/src/browserread.rs`), sans outil MCP encore. Les scripts fixes d'Escouade dans le monde isolé `escouade-agent` par système, la liste fermée des méthodes du protocole DevTools sous WebView2, les captures (vue, élément, document), les tampons de console et de réseau tenus dès la création de chaque navigateur (500 entrées de chaque, adresses sans chaîne de requête), le masquage du HTML. Ce qu'il fait est décrit dans `kanban/page-du-lancement`, « Ce que le cœur lit d'un navigateur ». La sonde est `src-tauri/examples/agentbrowser_probe.rs` : vérifiée sous Windows (WebView2) et sous WebKitGTK (WSL) ; sous macOS, la branche WKWebView compile seulement, son premier essai réel est la CI Mac d'AB-5.
+- Le reste (AB-2 à AB-12, DOC) est à construire.

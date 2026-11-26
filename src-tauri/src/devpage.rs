@@ -16,6 +16,8 @@
 //!   alone (ESC-657): its bar, a key while Escouade has the focus, the system's own keys and menu
 //!   in the page; never by an address the page could go to by itself. The window's stay off in a
 //!   release.
+//! - what the core reads of it (`browserread`, ESC-668) is read in a world of Escouade's own, by
+//!   the webview's native handle: the page has no channel to Escouade either way.
 //!
 //! A page is keyed by the agent whose launch opened it, by `run:<project>:<command>` for a launch
 //! command run in its project (ESC-560), or by `browser:<id>` for one the user opened alone.
@@ -232,6 +234,9 @@ pub type Tell = Arc<dyn Fn(PageEvent) + Send + Sync>;
 #[derive(Default)]
 pub struct Pages {
     pages: Mutex<HashMap<String, PageView>>,
+    /// The console and the network's failures of each page, kept from its webview's creation
+    /// (`browserread`, ESC-668), by the same key.
+    logs: Mutex<HashMap<String, Arc<crate::browserread::Buffers>>>,
 }
 
 impl Pages {
@@ -273,7 +278,24 @@ impl Pages {
     }
 
     fn remove(&self, agent_id: &str) -> Option<PageView> {
+        if let Some(logs) = self.logs.lock().remove(agent_id) {
+            logs.close();
+        }
         self.pages.lock().remove(agent_id)
+    }
+
+    /// The console and the network's failures of the page `agent_id`, kept since it opened.
+    pub fn logs(&self, agent_id: &str) -> Option<Arc<crate::browserread::Buffers>> {
+        self.logs.lock().get(agent_id).cloned()
+    }
+
+    /// New buffers for the page `agent_id`, its webview just made.
+    fn new_logs(&self, agent_id: &str) -> Arc<crate::browserread::Buffers> {
+        let logs = Arc::new(crate::browserread::Buffers::default());
+        if let Some(old) = self.logs.lock().insert(agent_id.to_string(), logs.clone()) {
+            old.close();
+        }
+        logs
     }
 }
 
@@ -353,6 +375,8 @@ pub fn open<R: Runtime>(
     if !(o.visible && o.bounds.is_some()) {
         let _ = webview.hide();
     }
+    // Its console and its network's failures, from now on (ESC-668).
+    crate::browserread::attach(&webview, pages.new_logs(o.agent_id));
     pages.put(page);
     Ok(())
 }
@@ -374,6 +398,10 @@ fn builder<R: Runtime>(
     let mut b = WebviewBuilder::new(label, WebviewUrl::External(url))
         .devtools(true)
         .initialization_script(shortcut_script());
+    // WebKit gives the app no console: a relay in the page tells Escouade's world (ESC-668).
+    if cfg!(not(windows)) {
+        b = b.initialization_script(crate::browserread::RELAY);
+    }
     b = with_store(b, data_root, project_id);
     // Every address it is asked to load.
     {
@@ -714,9 +742,11 @@ pub fn close<R: Runtime>(
     pages: &Arc<Pages>,
     agent_id: &str,
 ) -> Result<(), String> {
-    if let Some(w) = app.get_webview(&page_label(agent_id)) {
+    let label = page_label(agent_id);
+    if let Some(w) = app.get_webview(&label) {
         let _ = w.close();
     }
+    crate::browserread::forget(&label);
     pages.remove(agent_id);
     Ok(())
 }

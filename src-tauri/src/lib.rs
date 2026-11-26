@@ -8,6 +8,7 @@ mod agent;
 mod agentbranch;
 #[cfg(test)]
 mod agentbranch_tests;
+mod agentbrowser_probe;
 mod agentprs;
 #[cfg(test)]
 mod agentprs_tests;
@@ -24,8 +25,14 @@ mod attachfiles;
 mod attachfiles_tests;
 mod board;
 mod branchci;
+// The read bridge of the browsers (ESC-668): its MCP tools come with AB-2 to AB-4; until then the
+// probe (`agentbrowser_probe`) and the tests use it, and parts of it (the driving's methods) wait.
 #[cfg(test)]
 mod branches_tests;
+#[allow(dead_code)]
+mod browserread;
+#[cfg(test)]
+mod browserread_tests;
 mod bypass;
 mod clipboard;
 mod closed;
@@ -489,6 +496,13 @@ fn context() -> tauri::Context {
 /// could reach of Escouade, its storage, its devtools and its widths. Gives the exit code.
 pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
     devpage_probe::cli(args, context())
+}
+
+/// `agentbrowser_probe` (examples): what the read bridge of the browsers (`browserread`, ESC-668)
+/// reads, captures and keeps of a page that defends itself, in a real webview of this system.
+/// Gives the exit code.
+pub fn agentbrowser_probe_cli(args: Vec<String>) -> i32 {
+    agentbrowser_probe::cli(args, context())
 }
 
 pub fn run() {
