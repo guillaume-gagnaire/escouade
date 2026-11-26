@@ -1159,8 +1159,32 @@ pub struct LeaveToUserArgs {
     pub project: Option<String>,
     #[schemars(description = "The request's id, as list_requests gives it.")]
     pub request: String,
-    #[schemars(description = "Why you leave it to the user, in one sentence.")]
+    #[schemars(
+        description = "Why you leave it to the user, in one sentence: what the request does and what you would answer, said for the user."
+    )]
     pub why: String,
+    #[schemars(
+        description = "For a permission: what you recommend the user answers (allow or deny), shown on the request in the box « À toi ». The user answers it; you never grant what you may not."
+    )]
+    pub recommend: Option<RecommendArg>,
+}
+
+/// What the Overseer recommends the user answers to a permission it leaves to them (ESC-646).
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum RecommendArg {
+    Allow,
+    Deny,
+}
+
+impl RecommendArg {
+    pub fn name(self) -> &'static str {
+        match self {
+            RecommendArg::Allow => "allow",
+            RecommendArg::Deny => "deny",
+        }
+    }
 }
 
 // ---------- the box « À toi » (ESC-509, docs/INBOX.md § 9) ----------

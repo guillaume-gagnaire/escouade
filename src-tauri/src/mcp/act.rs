@@ -2132,7 +2132,7 @@ pub(super) fn answer_permission(
     )?;
     may_answer(core, caller, &found)?;
     let waiting = waiting_request(core, &found, &a.request)?;
-    let request = waiting.view.id;
+    let request = waiting.view.id.clone();
     if waiting.view.kind != "permission" {
         return Err(ToolError::Failed(tr!(
             "La demande {request} est une question : réponds-y avec answer_question.",
@@ -2151,15 +2151,10 @@ pub(super) fn answer_permission(
             "A message only goes with a refusal (decision deny): the agent gets none when you allow."
         )));
     }
-    // The Overseer lets an agent do what goes out under an instruction alone (ESC-462).
-    if a.decision == DecisionArg::Allow {
-        super::overseer::gate_text(
-            core,
-            caller,
-            &found.id,
-            &found.project_id,
-            &waiting.view.arg,
-        )?;
+    // The Overseer allows nothing but a read in the agent's project or worktree (ESC-646, SR4-02): a command, a write,
+    // the web, another server's tool stays the user's, whatever its text says. No instruction changes it.
+    if a.decision == DecisionArg::Allow && core.overseer_calls(caller) {
+        super::overseer::may_allow(core, &found, &waiting)?;
     }
     // Under its author's name: the card and, for a refusal, Claude are told who answered.
     let origin = activity::caller_name(core, Some(caller));

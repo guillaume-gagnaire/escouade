@@ -303,8 +303,34 @@ impl Core {
         Ok(())
     }
 
-    /// Its agent: made if it is not, in step with the settings otherwise.
+    /// Its agent: made if it is not, in step with the settings otherwise, told where it may read (ESC-646).
     pub(crate) fn overseer_ensure(self: &Arc<Self>) -> Result<AgentHandle> {
+        let h = self.overseer_made()?;
+        let roots = self.overseer_read_roots();
+        h.lock().read_roots = roots;
+        Ok(h)
+    }
+
+    /// Where the Overseer reads without a question besides its folder (ESC-646, SR4-03): the folders of the projects
+    /// that are not private, and those where their spec is kept. Never a private project's.
+    pub(crate) fn overseer_read_roots(&self) -> Vec<PathBuf> {
+        let projects = self.projects.read().clone();
+        projects
+            .iter()
+            .filter(|p| !p.private)
+            .flat_map(|p| {
+                [
+                    PathBuf::from(p.path.trim()),
+                    self.docs_text_dir(&p.id),
+                    self.docs_worktrees(&p.id),
+                    self.team_docs_root(&p.id),
+                ]
+            })
+            .filter(|p| !p.as_os_str().is_empty())
+            .collect()
+    }
+
+    fn overseer_made(self: &Arc<Self>) -> Result<AgentHandle> {
         let wanted = self.settings.read().overseer.clone();
         let dir = self.overseer.dir();
         std::fs::create_dir_all(self.overseer.memory_dir())
@@ -1037,6 +1063,11 @@ impl Core {
 
     /// A request of an agent the Overseer leaves to the user, unsure of the answer: it stays in « Attend ta réponse »,
     /// and the user is told why.
+    /// What the Overseer recommends of the request whose view in the box is `key` (ESC-646).
+    pub(crate) fn overseer_advice(&self, key: &str) -> Option<overseer::Advice> {
+        self.overseer.state.lock().advice.get(key).cloned()
+    }
+
     pub(crate) fn overseer_leave(
         self: &Arc<Self>,
         agent_id: &str,
@@ -1044,9 +1075,18 @@ impl Core {
         project_id: &str,
         request: &str,
         why: &str,
+        recommend: Option<&str>,
     ) {
         {
             let mut st = self.overseer.state.lock();
+            st.keep_advice(
+                format!("req:{agent_id}:{request}"),
+                overseer::Advice {
+                    recommend: recommend.map(str::to_string),
+                    why: why.to_string(),
+                    at: now_ms(),
+                },
+            );
             let id = st.next_id("a");
             st.keep_action(Action {
                 id,
@@ -1070,10 +1110,20 @@ impl Core {
         self.alert(
             crate::agent::NotifyKind::Question,
             format!("{} · {project} · {agent_name}", overseer::NAME),
-            tr!(
-                "L’Overseer te laisse la réponse : {why}",
-                "The Overseer leaves the answer to you: {why}"
-            ),
+            match recommend {
+                Some("allow") => tr!(
+                    "L’Overseer te laisse la réponse et te recommande d’autoriser : {why}",
+                    "The Overseer leaves the answer to you and recommends you allow: {why}"
+                ),
+                Some(_) => tr!(
+                    "L’Overseer te laisse la réponse et te recommande de refuser : {why}",
+                    "The Overseer leaves the answer to you and recommends you deny: {why}"
+                ),
+                None => tr!(
+                    "L’Overseer te laisse la réponse : {why}",
+                    "The Overseer leaves the answer to you: {why}"
+                ),
+            },
             UiEvent::Focus {
                 project_id: project_id.to_string(),
                 agent_id: Some(agent_id.to_string()),

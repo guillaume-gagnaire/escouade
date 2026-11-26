@@ -141,6 +141,25 @@
     </div>
   {/if}
 
+  {#if view.advice}
+    <!-- What the Overseer recommends of a request it left to the user (ESC-646): never an answer. -->
+    <div class="advice" data-testid="ivw-advice" data-recommend={view.advice.recommend ?? ''}>
+      <div class="who">
+        <Icon name="shield" size={13} />
+        {t(
+          view.advice.recommend === 'allow'
+            ? 'inboxViews.advice.allow'
+            : view.advice.recommend === 'deny'
+              ? 'inboxViews.advice.deny'
+              : 'inboxViews.advice.none',
+        )}
+        · {fLater(view.advice.at)}
+      </div>
+      <p class="said">{t('inboxViews.mark.note', { note: view.advice.why })}</p>
+      <p class="desc">{t('inboxViews.advice.note')}</p>
+    </div>
+  {/if}
+
   {#if view.request && view.source !== 'question'}
     <div class="what">
       <div class="tool">{toolLabel(view.request.tool)}</div>
@@ -279,6 +298,28 @@
     border-radius: var(--r);
     background: var(--well);
     box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .advice {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    border-radius: var(--r);
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .advice .who {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--teal-ink);
+  }
+  .advice .said {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+    overflow-wrap: anywhere;
   }
   .mark .who {
     display: flex;

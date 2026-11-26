@@ -25,6 +25,16 @@ export interface ViewMark {
   sign: string;
 }
 
+/**
+ * What the Overseer recommends of a request it leaves to the user (ESC-646, `leave_to_user`): to allow or to deny (none
+ * when it says neither), and why. Never an answer: the request still waits for the user.
+ */
+export interface ViewAdvice {
+  recommend: 'allow' | 'deny' | null;
+  why: string;
+  at: number;
+}
+
 /** A view, as `inbox_views` gives it (`inboxviews::InboxItem`). */
 export interface InboxItem {
   key: string;
@@ -60,6 +70,8 @@ export interface InboxItem {
   branch?: string | null;
   /** The squad lead took it in hand, or ticked it as settled (ESC-557). */
   mark: ViewMark | null;
+  /** The Overseer's recommendation, on a request it left to the user (ESC-646). */
+  advice?: ViewAdvice | null;
 }
 
 export interface InboxViews {

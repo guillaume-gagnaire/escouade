@@ -78,7 +78,7 @@ impl Core {
     }
 
     /// Where the fixed branch's worktree is made.
-    fn docs_worktrees(&self, project_id: &str) -> PathBuf {
+    pub(crate) fn docs_worktrees(&self, project_id: &str) -> PathBuf {
         self.data.project_files(project_id).join("docs")
     }
 

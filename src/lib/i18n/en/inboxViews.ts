@@ -76,6 +76,12 @@ export default defineZone('inboxViews', {
   teamAcceptTitle: '{key} · {title} · text by {name}',
   settled: 'Settled elsewhere: the box has updated.',
   /** What the squad lead said of it (ESC-557): taken in hand, or ticked as settled. */
+  advice: {
+    allow: 'The Overseer recommends you allow',
+    deny: 'The Overseer recommends you deny',
+    none: 'The Overseer leaves the answer to you',
+    note: 'You answer: it grants nothing but reads in the agent’s project.',
+  },
   mark: {
     group: 'The lead is on it',
     claimed: '{name} is on it · {when}',

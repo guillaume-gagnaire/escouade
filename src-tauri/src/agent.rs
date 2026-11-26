@@ -143,6 +143,9 @@ pub struct AgentRt {
     pub(crate) facts: crate::facts::Emitter,
     /// The launch environments (INT-14): whether a plugin runs its worktree's services. Set by the core.
     pub(crate) launch: Option<std::sync::Arc<crate::launchenv::Launch>>,
+    /// The Overseer's places to read besides its folder (ESC-646): the folders of the projects that are not private and
+    /// of their spec. Set by the core each time it is sent a message (`overseer_ensure`); empty for any other agent.
+    pub(crate) read_roots: Vec<std::path::PathBuf>,
     pub proc: Option<Process>,
     pub gen: u64,
     pub conv: Conv,
@@ -493,6 +496,7 @@ impl AgentRt {
             meta,
             facts: crate::facts::Emitter::default(),
             launch: None,
+            read_roots: Vec::new(),
             proc: None,
             gen: 0,
             active_since: None,
@@ -1517,31 +1521,49 @@ impl AgentRt {
     }
 
     /// The Overseer (ESC-462) drives Escouade through its tools alone: they go through without a question (the core
-    /// guards what goes out, `Core::overseer_gate`); what it would read of the files goes too; anything else (a write,
-    /// a command, a page of the web) is refused on the spot. Nothing of it waits for the user.
+    /// guards what goes out, `Core::overseer_gate`). What it would read of the files goes only in its folder, the
+    /// folders of the projects that are not private and of their spec, never a place of credentials or keys (ESC-646,
+    /// SR4-03); anything else (a read elsewhere, a write, a command, a page of the web) is refused on the spot. Nothing
+    /// of it waits for the user.
     fn overseer_answers(&mut self, fx: &mut Effects) {
-        let answers: Vec<(String, &str)> = self
+        use crate::overseer_reads::{read_within, Refusal, OWN_READS};
+        let cwd = std::path::PathBuf::from(&self.meta.cwd);
+        let mut roots = vec![cwd.clone()];
+        roots.extend(self.read_roots.iter().cloned());
+        let home = dirs::home_dir();
+        let answers: Vec<(String, Option<Refusal>)> = self
             .pending
             .iter()
             .filter(|p| p.view.kind == "permission")
             .map(|p| {
                 let tool = p.view.tool.as_str();
-                let reads = ["Read", "Grep", "Glob", "LS", "TodoWrite"].contains(&tool);
-                if tool.starts_with(ESCOUADE_TOOLS) || reads {
-                    (p.item_id.clone(), "allow")
-                } else {
-                    (p.item_id.clone(), "deny")
+                if tool.starts_with(ESCOUADE_TOOLS) || tool == "TodoWrite" {
+                    return (p.item_id.clone(), None);
                 }
+                let judged = read_within(&OWN_READS, tool, &p.input, &cwd, &roots, home.as_deref());
+                (p.item_id.clone(), judged.err())
             })
             .collect();
-        for (id, decision) in answers {
-            let message = (decision == "deny").then(|| {
-                tr_in!(
-                    i18n::claude(),
-                    "Escouade refuse : l’Overseer ne modifie aucun fichier, ne lance aucune commande et ne lit pas le web. Agis par les outils d’Escouade, ou lance un agent.",
-                    "Escouade refuses: the Overseer changes no file, runs no command and does not read the web. Act through Escouade’s tools, or launch an agent."
-                )
-            });
+        for (id, refused) in answers {
+            let (decision, message) = match refused {
+                None => ("allow", None),
+                Some(Refusal::NotRead) => (
+                    "deny",
+                    Some(tr_in!(
+                        i18n::claude(),
+                        "Escouade refuse : l’Overseer ne modifie aucun fichier, ne lance aucune commande et ne lit pas le web. Agis par les outils d’Escouade, ou lance un agent.",
+                        "Escouade refuses: the Overseer changes no file, runs no command and does not read the web. Act through Escouade’s tools, or launch an agent."
+                    )),
+                ),
+                Some(_) => (
+                    "deny",
+                    Some(tr_in!(
+                        i18n::claude(),
+                        "Escouade refuse : l’Overseer ne lit que son dossier, les dossiers des projets et de leur spec, jamais les identifiants d’un harness ni une clé. Lis la spec, les tickets et les documents par les outils d’Escouade.",
+                        "Escouade refuses: the Overseer reads only its folder, the folders of the projects and of their spec, never a harness’s credentials nor a key. Read the spec, the tickets and the documents through Escouade’s tools."
+                    )),
+                ),
+            };
             if let Err(e) = self.answer_permission_by(&id, decision, message, None, fx) {
                 log::warn!("overseer: answer to {id} not given: {e:#}");
             }

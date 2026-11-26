@@ -359,6 +359,26 @@ describe('a view opened in the panel', () => {
     expect(pane()).toHaveTextContent('Permission · the agent has stopped');
     expect(screen.getByRole('button', { name: 'Allow' })).toBeInTheDocument();
   });
+
+  it('shows what the Overseer recommends of a permission it left to the user, the user still answering (ESC-646)', async () => {
+    render(InboxViewPane, {
+      view: view({ advice: { recommend: 'deny', why: 'Elle supprime le dossier build hors du worktree.', at: NOW - MIN } }),
+    });
+    const advice = screen.getByTestId('ivw-advice');
+    expect(advice).toHaveAttribute('data-recommend', 'deny');
+    expect(advice).toHaveTextContent('L’Overseer te recommande de refuser');
+    expect(advice).toHaveTextContent('« Elle supprime le dossier build hors du worktree. »');
+    expect(advice).toHaveTextContent('C’est toi qui réponds');
+    // Its gestures stay the user's: « Autoriser » sends the user's answer, nothing was answered before.
+    expect(acts()).toEqual([]);
+    await userEvent.click(within(pane()).getByRole('button', { name: 'Autoriser' }));
+    await waitFor(() => expect(acts()).toEqual([['req:a1:req_perm', { act: 'allow' }]]));
+  });
+
+  it('shows no recommendation on a request the Overseer did not leave', () => {
+    render(InboxViewPane, { view: view() });
+    expect(screen.queryByTestId('ivw-advice')).toBeNull();
+  });
 });
 
 describe('one count for the box', () => {

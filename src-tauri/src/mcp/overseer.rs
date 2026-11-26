@@ -13,6 +13,7 @@ use crate::core::Core;
 use crate::model::now_ms;
 use crate::overseer::{Outgoing, Place, Scope};
 use serde_json::json;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// The Overseer calls, else the refusal.
@@ -191,15 +192,77 @@ pub(super) fn leave(
         .map(|p| resolve::project(core, caller, p))
         .transpose()?;
     let found = resolve::agent(core, caller, &a.agent, scope.as_ref())?;
-    super::act::waiting_request(core, &found, &a.request)?;
+    let request = super::act::waiting_request(core, &found, &a.request)?
+        .view
+        .id;
+    let recommend = a.recommend.map(|r| r.name());
     core.overseer_leave(
         &found.id,
         &found.name,
         &found.project_id,
-        a.request.trim(),
+        &request,
         a.why.trim(),
+        recommend,
     );
-    json(&json!({ "agent": found.name, "request": a.request.trim(), "left": true }))
+    json(&json!({ "agent": found.name, "request": request, "left": true, "recommend": recommend }))
+}
+
+/// What the Overseer may allow of an agent's request (ESC-646, SR4-02): a read or a search of files (`AGENT_READS`)
+/// that lands in the folder of the agent's project or of its worktree, its links followed, and in no place of
+/// credentials or keys. Anything else stays the user's: the Overseer leaves it to them (`leave_to_user`), with what it
+/// recommends, or refuses it.
+pub(super) fn may_allow(
+    core: &Core,
+    found: &resolve::AgentRef,
+    waiting: &crate::agent::Waiting,
+) -> Result<(), ToolError> {
+    use crate::overseer_reads::{read_within, Refusal, AGENT_READS};
+    let cwd = core
+        .agent(&found.id)
+        .map(|h| h.lock().meta.cwd.clone())
+        .unwrap_or_default();
+    let project = core
+        .project(&found.project_id)
+        .map(|p| p.path)
+        .unwrap_or_default();
+    let base = if cwd.trim().is_empty() {
+        &project
+    } else {
+        &cwd
+    };
+    let roots = [PathBuf::from(cwd.trim()), PathBuf::from(project.trim())];
+    let home = dirs::home_dir();
+    let tool = waiting.view.tool.as_str();
+    let why = match read_within(
+        &AGENT_READS,
+        tool,
+        &waiting.input,
+        Path::new(base.trim()),
+        &roots,
+        home.as_deref(),
+    ) {
+        Ok(()) => return Ok(()),
+        Err(Refusal::NotRead) => tr!(
+            "ce n’est pas une lecture ({tool})",
+            "it is not a read ({tool})"
+        ),
+        Err(Refusal::Secret(_)) => tr!(
+            "elle lit des identifiants ou une clé",
+            "it reads credentials or a key"
+        ),
+        Err(Refusal::Outside(_)) => tr!(
+            "elle lit hors du dossier du projet de l’agent et de son worktree",
+            "it reads outside the folder of the agent’s project and of its worktree"
+        ),
+        Err(Refusal::Unjudged) => tr!(
+            "Escouade ne peut pas dire sûrement où elle lit",
+            "Escouade cannot tell for sure where it reads"
+        ),
+    };
+    Err(ToolError::Refused(tr!(
+        "L’Overseer n’accorde que les lectures et les recherches de fichiers (Read, Grep, Glob) dans le dossier du projet de l’agent ou de son worktree, et cette demande n’en est pas une : {why}. Elle reste à l’utilisateur : laisse-la-lui avec leave_to_user, en disant en une phrase ce qu’elle fait et ce que tu recommandes (recommend : allow ou deny) ; ou refuse-la (decision deny).",
+        "The Overseer allows only reads and searches of files (Read, Grep, Glob) in the folder of the agent’s project or of its worktree, and this request is none: {why}. It stays the user’s: leave it to them with leave_to_user, saying in one sentence what it does and what you recommend (recommend: allow or deny); or deny it (decision deny)."
+    )))
 }
 
 /// Where the agent `id` works: its project and its ticket.

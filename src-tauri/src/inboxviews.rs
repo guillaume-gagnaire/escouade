@@ -105,6 +105,8 @@ pub struct InboxItem {
     /// What the squad lead said of it (ESC-557): « Le chef s'en occupe » (`claimed`) or « Réglé
     /// par … » (`settled`), with its note. Marked, it no longer counts as waiting for the user.
     pub mark: Option<ViewMark>,
+    /// What the Overseer recommends the user answers to a request it left to them (ESC-646): never an answer.
+    pub advice: Option<crate::overseer::Advice>,
     /// The state of its source, that a mark holds (`ViewMark::sign`): changed, the mark falls.
     #[serde(skip)]
     pub(crate) sign: String,
@@ -142,6 +144,7 @@ impl InboxItem {
             engine: None,
             branch: None,
             mark: None,
+            advice: None,
             sign: String::new(),
         }
     }
@@ -672,6 +675,9 @@ impl Core {
         };
         if changed {
             self.request_save();
+        }
+        for v in views.iter_mut().filter(|v| v.request.is_some()) {
+            v.advice = self.overseer_advice(&v.key);
         }
         ordered(&mut views);
         views

@@ -82,6 +82,13 @@ export default {
   /** A ticket assigned to the user with a teammate's text (ESC-645). */
   teamAcceptTitle: '{key} · {title} · texte de {name}',
   settled: 'Réglé ailleurs : la boîte s’est mise à jour.',
+  /** Ce que l’Overseer recommande d’une demande qu’il te laisse (ESC-646) : jamais une réponse. */
+  advice: {
+    allow: 'L’Overseer te recommande d’autoriser',
+    deny: 'L’Overseer te recommande de refuser',
+    none: 'L’Overseer te laisse la réponse',
+    note: 'C’est toi qui réponds : il n’accorde que des lectures dans le projet de l’agent.',
+  },
   /** Ce que le chef d’escouade en a dit (ESC-557) : pris en charge, ou coché comme réglé. */
   mark: {
     group: 'Le chef s’en occupe',

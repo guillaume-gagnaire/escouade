@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : l’Overseer n’accorde plus à un agent que de lire des fichiers de son projet ou de son worktree. Une commande, une écriture, le réseau restent à toi : il te laisse la demande dans « À toi » avec ce qu’il te recommande. Et lui-même ne lit que son dossier, les projets et leur spec, jamais les identifiants d’un harness ni une clé.
 - Sécurité : un appareil n’entre plus dans une équipe sur son seul lien d’invitation. L’invité et qui l’invite voient six mots, qu’ils comparent de vive voix avant « Les mots sont les mêmes » ; des mots différents refusent la demande, annulent l’invitation et préviennent les administrateurs : un lien qui a fuité ne laisse plus entrer qui l’a trouvé.
 - Sécurité : derrière un proxy TLS, chaque client de ton serveur compte ses essais ratés à part (`--trust-proxy`), et des codes d’appairage faux venus d’ailleurs ne bloquent jamais celui que tu tapes depuis la machine ou par SSH. Par Tailscale, seule l’app du téléphone ouvre l’API, plus une page web d’une autre machine.
 - Sécurité : un ticket du Kanban d’équipe qu’un collègue a écrit et qui t’est assigné attend ton accord : ni le pilote auto, ni l’Overseer, ni tes agents ne le lancent avant que tu l’acceptes, dans sa carte ou dans « À toi ». La carte dit qui a écrit le texte et qui l’a assigné, et un texte changé par un collègue après ton accord le redemande.

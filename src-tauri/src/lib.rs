@@ -193,6 +193,9 @@ mod opening_tests;
 mod outside;
 mod overseer;
 mod overseer_core;
+mod overseer_reads;
+#[cfg(test)]
+mod overseer_reads_tests;
 #[cfg(test)]
 mod overseer_tests;
 mod pace;

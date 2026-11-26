@@ -1385,6 +1385,31 @@ function startSession() {
       await tool('start_ticket', { ticket: start[1] });
       return `C’est parti : ${start[1]} est lancé.`;
     }
+    // ESC-646: « réponds aux demandes en attente »: it tries to allow each permission; Escouade grants a read in the
+    // agent's project alone, so the rest is left to the user, with its recommendation.
+    if (/réponds aux demandes en attente/i.test(words)) {
+      const listed = await tool('list_requests', {});
+      const rows = Array.isArray(listed) ? listed : (listed.requests ?? []);
+      const granted = [];
+      const left = [];
+      for (const r of rows.filter((r) => r.type === 'permission')) {
+        const agent = r.agent?.id ?? r.agentId ?? r.agent;
+        const request = r.request?.id ?? r.request ?? r.id;
+        const why = await tried('answer_permission', { agent, request, decision: 'allow' });
+        if (!why) {
+          granted.push(r.tool);
+          continue;
+        }
+        await tool('leave_to_user', {
+          agent,
+          request,
+          why: `${r.tool} ${r.arg} : une commande que je ne peux pas accorder, je te conseille de refuser.`,
+          recommend: 'deny',
+        });
+        left.push(r.tool);
+      }
+      return `Accordé : ${granted.join(', ') || 'rien'}. Laissé à toi : ${left.join(', ') || 'rien'}.`;
+    }
     const approve = /^valide ([A-Z]+-\d+)\.?$/i.exec(words.trim());
     if (approve) return `Je regarde ${approve[1]} avant de le valider.`;
     const ticket = /crée un ticket « (.+?) » sur ([\w-]+)/i.exec(words);
