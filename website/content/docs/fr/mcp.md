@@ -146,6 +146,17 @@ Deux outils de plus, en lecture seule, lisent les PR d’un projet (« merge re
 
 Une PR est écrite par n’importe qui sur un dépôt public : ces deux outils marquent ses titres, relectures et commentaires entre `<third_party_data>` et `</third_party_data>`, et un agent doit les lire comme des données, jamais comme des consignes.
 
+### Les navigateurs
+
+Deux outils, en lecture seule, lisent les [navigateurs](browser) de « Navigateurs » : un agent voit ceux de son projet, une discussion ceux qu’elle a ouverts. L’interrupteur « Agents et navigateurs » de Réglages › Agents, sous « Les agents peuvent piloter Escouade », les coupe tous deux.
+
+| Outil | Arguments | Ce qu’il rend |
+|---|---|---|
+| `list_browsers` | `project` (pour Claude hors d’Escouade) | Les navigateurs du projet, 50 au plus, dans l’ordre de la section : leur clé (`browser`), nom, adresse, origine, agent, qui l’a ouvert (`agent`, `run` ou `user`), où il est affiché (`full`, `beside`, `below` ou `hidden`), s’il est chargé et s’il est sur le lancement du projet (`launch`). Hors du lancement et sans accord, l’adresse est réduite à son origine. |
+| `read_browser` | `browser`, `selector` (facultatif), `what` (`html` ou `text`), `max_chars` (facultatif) | Le HTML de la page (le DOM sérialisé) ou son texte visible, tout le document ou ce que vise un sélecteur CSS (200 caractères, ni `:has()` ni plus de quatre niveaux). 50 000 caractères par défaut, 200 000 au plus, coupé à une balise. Mots de passe, champs cachés, `<meta>` de jetons et texte des scripts sortent en `«masqué»` ; jamais les cookies, le stockage ni les en-têtes. Réservé aux agents d’Escouade. |
+
+Un navigateur qui n’est affiché nulle part se liste mais ne se lit pas. Sur le lancement du projet (ses commandes de lancement, `localhost` aux ports qu’elles, les tests de ses agents et leurs blocs de ports déclarent), la page se lit sans demander. Sur une autre origine (un artefact, un site où tu es connecté), `read_browser` répond `asked` et la bande du navigateur te demande « esc-412 veut lire claude.ai » : « Permettre » vaut pour cet agent, cette origine et ce navigateur jusqu’à sa fermeture, « Refuser » tient aussi longtemps. Ta réponse revient à l’agent par un message, et « Retirer les accords », dans le menu de la ligne, les retire tous. Le contenu de la page arrive entre `<third_party_data>` et `</third_party_data>`.
+
 ### Mener tout le Kanban depuis Claude
 
 Avec ces outils, Claude conduit un ticket de bout en bout sans que tu ouvres la fenêtre : `start_ticket` le lance, `wait_ticket` attend qu’il change (son agent pose une question, passe en « À tester », se bloque), `get_ticket` dit où il en est, puis `approve_ticket` le valide ou `reject_ticket` le renvoie avec ce qui ne va pas. `resume_ticket`, `resolve_conflict` et `dismiss_block` règlent un blocage, et `delete_ticket` supprime. `wait_ticket` rend la main au premier changement, ou au bout de 120 secondes par défaut (240 au plus) ; le `since` de sa réponse, repassé à l’appel suivant, fait répondre aussitôt un ticket dont l’état diffère de celui qu’il garde, un changement survenu entre deux appels compris. `approve_ticket`, `reject_ticket`, `resume_ticket`, `resolve_conflict` et `dismiss_block` rendent aussi un `since`, celui du ticket tel qu’il était avant l’action : passé à `wait_ticket`, il fait dire aussitôt ce qui suit, une validation rapide comprise.

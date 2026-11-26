@@ -4,6 +4,10 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- Agents read the browsers of their project: they list them and read the HTML or the text of a page on screen, passwords and tokens masked, to see what you see. The page of their launch is read without asking; another origin (an artifact, a site you’re signed in to) waits for your permission in the browser’s band, which you revoke with “Revoke the permissions”. The “Agents and browsers” switch in Settings › Agents turns them off.
+
 ## [2.2.12] — 2026-11-26
 
 - The conversation’s voices download again: they are taken at a fixed version of their repository, which its updates no longer break (a voice retrained upstream made its download fail). The models of the dictation and of the search by meaning are fixed the same way.

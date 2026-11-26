@@ -7,6 +7,9 @@ export default defineZone('mcp', {
     enable: 'Agents can drive Escouade',
     enableDesc:
       'Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
+    browsers: 'Agents and browsers',
+    browsersDesc:
+      'The agents read the browsers of “Browsers” in their project (list_browsers, read_browser): the page of their launch without asking; another origin, an artifact or a site you’re signed in to, with your permission, once per origin and per browser. Never the cookies, the storage or a password.',
     answer: 'Agents can answer the other agents’ requests',
     answerDesc:
       'Through answer_permission and answer_question, and the requests of the “Your turn” box too, one at a time, when you leave them to the squad lead (answer_ask). “Drive Escouade” does not give them: by default, only you (and Claude outside Escouade, for the questions and permissions) answer an agent’s request.',
@@ -89,6 +92,8 @@ export default defineZone('mcp', {
     stopAgent: 'Stop an agent',
     deleteAgent: 'Ask to delete an agent',
     listBackgroundWork: 'List an agent’s subagents and background tasks',
+    listBrowsers: 'List the browsers',
+    readBrowser: 'Read a browser',
     getBackgroundOutput: 'Read a background task’s output or a subagent’s report',
     stopBackgroundWork: 'Stop a background task or a subagent',
     messageSubagent: 'Write to a subagent',

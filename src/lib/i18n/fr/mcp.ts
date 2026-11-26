@@ -10,6 +10,10 @@ export default {
     enable: 'Les agents peuvent piloter Escouade',
     enableDesc:
       'Les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
+    /** ESC-669: the tools of the browsers (list_browsers, read_browser…), under the server. */
+    browsers: 'Agents et navigateurs',
+    browsersDesc:
+      'Les agents lisent les navigateurs de « Navigateurs » de leur projet (list_browsers, read_browser) : la page de leur lancement sans demander ; une autre origine, un artefact ou un site où tu es connecté, avec ton accord, une fois par origine et par navigateur. Jamais les cookies, le stockage ni un mot de passe.',
     /** ESC-423 (audit SEC-03): who among the agents answers another agent's permissions and questions. */
     answer: 'Les agents peuvent répondre aux demandes des autres agents',
     answerDesc:
@@ -101,6 +105,8 @@ export default {
     stopAgent: 'Arrêter un agent',
     deleteAgent: 'Demander la suppression d’un agent',
     listBackgroundWork: 'Lister les sous-agents et tâches de fond d’un agent',
+    listBrowsers: 'Lister les navigateurs',
+    readBrowser: 'Lire un navigateur',
     getBackgroundOutput: 'Lire la sortie d’une tâche de fond ou le rapport d’un sous-agent',
     stopBackgroundWork: 'Arrêter une tâche de fond ou un sous-agent',
     messageSubagent: 'Écrire à un sous-agent',

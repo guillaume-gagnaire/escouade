@@ -41,6 +41,15 @@ export default {
     mac: 'In a window of their own: docked in the page, WebKit’s inspector changes its width.',
     linux: 'In the page, at the bottom: their buttons move them to the right or apart.',
   },
+  consent: {
+    wants: '{agent} wants to read',
+    session: '(with your session, in this browser)',
+    more: { one: 'and {count} other request', other: 'and {count} other requests' },
+    allow: 'Allow',
+    refuse: 'Refuse',
+    revoke: 'Revoke the permissions',
+    revoked: 'Permissions revoked: the agents will ask again to read this browser.',
+  },
   browsers: {
     title: 'Browsers',
     new: 'New browser',

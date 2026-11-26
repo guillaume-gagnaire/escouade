@@ -97,6 +97,8 @@ export interface Settings {
   mcpEnabled: boolean;
   /** « Les agents peuvent répondre aux demandes des autres agents » (ESC-423): nobody by default. */
   agentsAnswer?: AgentsAnswer;
+  /** « Agents et navigateurs » (ESC-669), under « Les agents peuvent piloter Escouade »: the tools of the browsers answer the agents (`list_browsers`, `read_browser`). On unless false. */
+  agentBrowsers?: boolean;
   /** « Garder les fichiers des demandes closes », in days: 7, 30 (by default) or 90. */
   inboxKeepDays?: number;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
@@ -1060,11 +1062,29 @@ export interface PageView {
   docTitle?: string;
 }
 
+/** Where the window shows a browser (ESC-669, `list_browsers`): alone, in a pane beside or under something else, or nowhere. */
+export type PagePlacement = 'full' | 'beside' | 'below' | 'hidden';
+
+/** An agent's leave to read an origin in one browser, or its request of it (ESC-669, outside the project's launch). */
+export interface PageConsent {
+  /** The agent's id. */
+  agent: string;
+  /** `scheme://host[:port]`. */
+  origin: string;
+}
+
+/** The band of a browser: the requests waiting for the user, the leaves given (they fall with the browser). */
+export interface PageConsents {
+  asks: PageConsent[];
+  grants: PageConsent[];
+}
+
 /** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
 export interface PageEvent {
   /** The page's key: its agent's id, or `browser:<id>` for a browser opened alone (ESC-657). */
   agentId: string;
-  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title';
+  /** `consents`: an agent asked to read it, or its leaves changed (ESC-669): the window reads them again. */
+  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title' | 'consents';
   url: string;
   /** Its document's title, with `title` (cleaned by the backend). */
   title?: string;

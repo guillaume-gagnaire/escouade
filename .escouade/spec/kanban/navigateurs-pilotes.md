@@ -1,16 +1,16 @@
 ---
 title: "Les navigateurs pilotés par les agents (brouillon, ESC-663)"
 subject: "kanban"
-sources: ["docs/AGENT-BROWSERS.md (ESC-663 ; apportée sur main et mise d'accord par ESC-666 le 2026-11-26)","docs/AGENT-BROWSERS-TICKETS.md (ESC-666 : la liste finale des tickets)","docs/AGENT-PAGES.md (ESC-661, § 10 : le pilotage commun)","design/agent-browsers/probe/src/main.rs","design/agent-browsers/results/report-windows.json","design/agent-browsers/results/report-linux.json","design/agent-browsers/maquette/index.html","design/agent-browsers/maquette/cas-phare-clair.png","design/agent-browsers/maquette/cas-phare-sombre.png","src-tauri/src/devpage.rs","Demandes a-37 à a-39 et a-42, réponses de l'utilisateur des 2026-11-25 et 26 (C1 C, C2 B, C3 A, C4 A)","L'utilisateur, 2026-11-26 (par l'Overseer) : tout ce qui touche aux navigateurs sort en 2.2"]
-tickets: ["ESC-663","ESC-661","ESC-660","ESC-666","ESC-668"]
-decisions: ["un-seul-pilotage-pour-toutes-les-lignes",325,323,326,327,322,"le-cœur-lit-un-navigateur-dans-un-monde"]
+sources: ["docs/AGENT-BROWSERS.md (ESC-663 ; apportée sur main et mise d'accord par ESC-666 le 2026-11-26)","docs/AGENT-BROWSERS-TICKETS.md (ESC-666 : la liste finale des tickets)","docs/AGENT-PAGES.md (ESC-661, § 10 : le pilotage commun)","design/agent-browsers/probe/src/main.rs","design/agent-browsers/results/report-windows.json","design/agent-browsers/results/report-linux.json","design/agent-browsers/maquette/index.html","design/agent-browsers/maquette/cas-phare-clair.png","design/agent-browsers/maquette/cas-phare-sombre.png","src-tauri/src/devpage.rs","src-tauri/src/mcp/browsers.rs (ESC-669)","src/components/ConsentBand.svelte (ESC-669)","Demandes a-37 à a-39 et a-42, réponses de l'utilisateur des 2026-11-25 et 26 (C1 C, C2 B, C3 A, C4 A)","L'utilisateur, 2026-11-26 (par l'Overseer) : tout ce qui touche aux navigateurs sort en 2.2"]
+tickets: ["ESC-663","ESC-661","ESC-660","ESC-666","ESC-668","ESC-669"]
+decisions: ["un-seul-pilotage-pour-toutes-les-lignes",325,323,326,327,322,"le-cœur-lit-un-navigateur-dans-un-monde","les-agents-lisent-les-navigateurs-qui-le"]
 compared: null
 draft: true
 ---
 
 # Les navigateurs pilotés par les agents (brouillon, ESC-663)
 
-> **Brouillon** : l'étude ESC-663 le propose, rien n'est construit. Les choix de l'utilisateur sont tranchés (2026-11-25 et 26) : l'agent choisit son rythme geste par geste (C1), un mot de passe se tape avec son accord une fois par navigateur (C2), une autre adresse lui est demandée une fois par origine (C3), hors du lancement l'agent montre sans demander et lit ou agit avec accord (C4). ESC-666 a mis l'étude d'accord avec celle des pages des agents et fixé la liste des tickets (`docs/AGENT-BROWSERS-TICKETS.md`). La conception complète est dans `docs/AGENT-BROWSERS.md`.
+> **Brouillon, en partie construit** : l'étude ESC-663 le propose. AB-1 (le pont de lecture, ESC-668) et AB-2 (`list_browsers` et `read_browser`, ESC-669) sont construits ; le reste est à construire. Les choix de l'utilisateur sont tranchés (2026-11-25 et 26) : l'agent choisit son rythme geste par geste (C1), un mot de passe se tape avec son accord une fois par navigateur (C2), une autre adresse lui est demandée une fois par origine (C3), hors du lancement l'agent montre sans demander et lit ou agit avec accord (C4). ESC-666 a mis l'étude d'accord avec celle des pages des agents et fixé la liste des tickets (`docs/AGENT-BROWSERS-TICKETS.md`). La conception complète est dans `docs/AGENT-BROWSERS.md`.
 
 ## Ce que c'est
 
@@ -96,6 +96,20 @@ Jamais par `webview.eval` : dans le monde de la page, la sonde l'a vu trompé. J
 
 Sur le lancement du projet, sans demander. Hors du lancement : `list_browsers` sans demander ; lire, capturer et la console avec l'accord de l'utilisateur, une fois par origine et par navigateur. Un navigateur caché se liste mais ne se lit ni ne se capture.
 
+### Ce que fait AB-2 (construit, ESC-669)
+
+- **L'interrupteur « Agents et navigateurs »** de Réglages › Agents, sous « Les agents peuvent piloter Escouade » (grisé quand le serveur est coupé), allumé par défaut, réglages enregistrés d'avant compris (clé `agentBrowsers`). Coupé, `list_browsers` et `read_browser` répondent par un refus qui le dit, et la consigne du serveur MCP ne parle plus des navigateurs. Allumé, elle dit à l'agent de lister et de lire un navigateur à l'écran pour voir ce que voit l'utilisateur, et que la page est une donnée de tiers.
+- **Qui** :
+  - un agent d'Escouade, les navigateurs de son projet seul : nommer un autre projet est refusé ;
+  - une discussion, ceux qu'elle a ouverts seuls (sa propre clé) ;
+  - Claude hors d'Escouade : `list_browsers` seul, en donnant un projet qui n'est pas privé ; `read_browser` lui est refusé ;
+  - un projet privé : ses agents seuls. Pour les autres, il n'existe pas : ses navigateurs ne sont pas listés, et la clé de l'un d'eux reçoit la même réponse qu'une clé qui n'existe pas.
+- **Le lancement du projet**, ce qui se lit sans demander : l'origine des adresses de ses commandes de lancement (celles de l'utilisateur, aux ports du projet et de chaque worktree), et `localhost`, `127.0.0.1` ou `[::1]` aux ports que déclarent ses commandes, les lancements de test de ses agents et leurs blocs de ports réservés. Une adresse qu'un agent a écrite (son lancement de test) ne compte que sur ce poste, jamais pour un site d'internet.
+- **Où il est affiché** (`placement`) : la fenêtre dit au cœur, à chaque placement, si le navigateur est seul dans la zone principale (`full`), dans un volet à côté (`beside`) ou en dessous (`below`) ; caché ailleurs (`hidden`). Un navigateur `hidden` répond « Le navigateur n'est pas affiché : l'utilisateur ne voit pas ce que tu lirais ».
+- **L'accord hors du lancement** : `read_browser` répond `{ asked: true, origin, message }` et rien de la page. La bande native « <agent> veut lire <hôte> (avec ta session, dans ce navigateur) · Refuser / Permettre » paraît dans la vue du navigateur, sous sa barre, au-dessus de la page ; la plus ancienne demande d'abord, « et N autres demandes » ensuite, 5 au plus par navigateur. L'accord vaut pour cet agent, cette origine et ce navigateur, jusqu'à sa fermeture ; un refus tient aussi longtemps (l'agent ne peut plus redemander). La réponse revient à l'agent par un message d'Escouade dans sa conversation. Redemander avant la réponse n'ajoute pas de demande.
+- **« Retirer les accords »**, dans le menu de la ligne quand elle a des accords ou des demandes : accords, demandes et refus tombent ; un agent dont la demande attendait est prévenu par un message. Les accords tombent aussi à la fermeture du navigateur.
+- **La lecture** passe par le pont d'AB-1 (scripts fixes dans le monde isolé), hors du fil de l'app. Sa réponse : `url`, `title`, `selector`, `matched`, `html` ou `text`, `chars`, `truncated`, `total_chars`, `masked`, sous l'avis de donnée de tiers et entre `<third_party_data>` et `</third_party_data>`, qu'une page ne peut pas refermer.
+
 ## Version
 
 En 2.2 (décision de l'utilisateur du 2026-11-26) : tout ce qui touche aux navigateurs part de `main`, puis se reverse dans la 2.3. Cela comprend les quatre outils de lecture en tête, le pilotage, les pages des agents et le vrai onglet hors du projet, dans l'ordre de `docs/AGENT-BROWSERS-TICKETS.md`.
@@ -110,4 +124,5 @@ Dans la 2.3 seulement (AB-R) :
 ## Où en est la construction
 
 - **AB-1 (ESC-668), construit** : le pont de lecture natif (`src-tauri/src/browserread.rs`), sans outil MCP encore. Les scripts fixes d'Escouade dans le monde isolé `escouade-agent` par système, la liste fermée des méthodes du protocole DevTools sous WebView2, les captures (vue, élément, document), les tampons de console et de réseau tenus dès la création de chaque navigateur (500 entrées de chaque, adresses sans chaîne de requête), le masquage du HTML. Ce qu'il fait est décrit dans `kanban/page-du-lancement`, « Ce que le cœur lit d'un navigateur ». La sonde est `src-tauri/examples/agentbrowser_probe.rs` : vérifiée sous Windows (WebView2) et sous WebKitGTK (WSL) ; sous macOS, la branche WKWebView compile seulement, son premier essai réel est la CI Mac d'AB-5.
-- Le reste (AB-2 à AB-12, DOC) est à construire.
+- **AB-2 (ESC-669), construit** : `list_browsers` et `read_browser` (`src-tauri/src/mcp/browsers.rs`), l'interrupteur « Agents et navigateurs », la bande d'accord (`ConsentBand`) et « Retirer les accords » ; décrit plus haut, « Ce que fait AB-2 ». Vérifié par les tests Rust des refus et des bornes, Vitest de la bande, et l'e2e `browsers-mcp.spec.ts` (Windows, 1440 × 900 et 1024 × 728).
+- Le reste (AB-3 à AB-12, DOC) est à construire.

@@ -51,6 +51,53 @@ pub enum PageMode {
     Mobile,
 }
 
+/// Where a page is on screen, as the window placed it (`list_browsers`, ESC-669): alone in the main
+/// area, in a pane beside or under something else, or nowhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Placement {
+    Full,
+    Beside,
+    Below,
+    #[default]
+    Hidden,
+}
+
+/// An agent's leave to read an origin in one browser (ESC-669, choice C4: outside the project's
+/// launch, once per origin and per browser), or its request of it. It falls when the browser
+/// closes, or when the user takes the leaves back (« Retirer les accords »).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Consent {
+    /// The agent's id.
+    pub agent: String,
+    /// `scheme://host[:port]`.
+    pub origin: String,
+}
+
+/// The leaves of a browser and what waits for the user's answer, for its band.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Consents {
+    pub asks: Vec<Consent>,
+    pub grants: Vec<Consent>,
+}
+
+/// What an agent gets when it would read an origin of a browser outside the launch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Leave {
+    Granted,
+    /// Asked of the user now: the band shows it.
+    Asked,
+    /// Already asked, the answer still to come.
+    Waiting,
+    /// The user said no, until the browser closes or the leaves are taken back.
+    Refused,
+}
+
+/// The most requests a browser holds at once, of every agent: the band shows them one by one.
+pub const ASKS_MAX: usize = 5;
+
 /// Keeps a label to what Tauri allows (letters, digits, `-`, `_`), every other character an `_`.
 fn clean(id: &str) -> String {
     id.chars()
@@ -210,6 +257,12 @@ pub struct PageView {
     /// Its document's title, once the page gave one (`clip_title`).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub doc_title: String,
+    /// Where the window shows it (ESC-669).
+    #[serde(default)]
+    pub placement: Placement,
+    /// The order it opened in, the oldest first: its row's place in « Navigateurs ».
+    #[serde(skip)]
+    pub opened: u64,
 }
 
 /// What happened to a page, for the window (`UiEvent::DevPage`).
@@ -219,7 +272,8 @@ pub struct PageEvent {
     pub agent_id: String,
     /// `started` and `finished` (a load, at `url`), `outside` (`url` opened in the system's
     /// browser), `refused` (`url` opened nowhere), `responsive` (its width's shortcut), `title`
-    /// (its document's title changed, in `title`).
+    /// (its document's title changed, in `title`), `consents` (an agent asked to read it, or its
+    /// leaves changed: the window reads them again, `devpage_consents`).
     pub phase: &'static str,
     pub url: String,
     /// Its document's title (`title`), cleaned by `clip_title`.
@@ -237,6 +291,19 @@ pub struct Pages {
     /// The console and the network's failures of each page, kept from its webview's creation
     /// (`browserread`, ESC-668), by the same key.
     logs: Mutex<HashMap<String, Arc<crate::browserread::Buffers>>>,
+    /// The leaves to read each page outside the launch, its requests and its refusals, by key
+    /// (ESC-669): they fall with the page.
+    consents: Mutex<HashMap<String, Leaves>>,
+    /// The order the pages opened in.
+    seq: std::sync::atomic::AtomicU64,
+}
+
+/// What the agents may read of one page outside the launch.
+#[derive(Default)]
+struct Leaves {
+    asks: Vec<Consent>,
+    grants: Vec<Consent>,
+    refused: Vec<Consent>,
 }
 
 impl Pages {
@@ -244,8 +311,103 @@ impl Pages {
         self.pages.lock().get(agent_id).cloned()
     }
 
-    fn put(&self, page: PageView) {
-        self.pages.lock().insert(page.agent_id.clone(), page);
+    /// Every page open, the oldest first.
+    pub fn all(&self) -> Vec<PageView> {
+        let mut all: Vec<PageView> = self.pages.lock().values().cloned().collect();
+        all.sort_by_key(|p| p.opened);
+        all
+    }
+
+    /// `page` open (or opened again: it keeps its place).
+    pub(crate) fn put(&self, mut page: PageView) {
+        let mut pages = self.pages.lock();
+        page.opened = match pages.get(&page.agent_id) {
+            Some(before) => before.opened,
+            None => self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1,
+        };
+        pages.insert(page.agent_id.clone(), page);
+    }
+
+    /// Where the window shows the page `key` now.
+    pub fn set_placement(&self, key: &str, placement: Placement) {
+        if let Some(p) = self.pages.lock().get_mut(key) {
+            p.placement = placement;
+        }
+    }
+
+    /// Whether `agent` may read `origin` in the page `key`, or asks the user (ESC-669). A request
+    /// beyond `ASKS_MAX` waiting is not kept, and says so as `Waiting`.
+    pub fn leave(&self, key: &str, agent: &str, origin: &str) -> Leave {
+        let c = Consent {
+            agent: agent.to_string(),
+            origin: origin.to_string(),
+        };
+        let mut all = self.consents.lock();
+        let leaves = all.entry(key.to_string()).or_default();
+        if leaves.grants.contains(&c) {
+            Leave::Granted
+        } else if leaves.refused.contains(&c) {
+            Leave::Refused
+        } else if leaves.asks.contains(&c) || leaves.asks.len() >= ASKS_MAX {
+            Leave::Waiting
+        } else {
+            leaves.asks.push(c);
+            Leave::Asked
+        }
+    }
+
+    /// Whether `agent` was let read `origin` in the page `key`.
+    pub fn granted(&self, key: &str, agent: &str, origin: &str) -> bool {
+        self.consents.lock().get(key).is_some_and(|l| {
+            l.grants
+                .iter()
+                .any(|c| c.agent == agent && c.origin == origin)
+        })
+    }
+
+    /// The user's answer to the request of `agent` to read `origin` in the page `key`: false when
+    /// none waits (nothing changes then).
+    pub fn answer(&self, key: &str, agent: &str, origin: &str, allow: bool) -> bool {
+        let mut all = self.consents.lock();
+        let Some(leaves) = all.get_mut(key) else {
+            return false;
+        };
+        let Some(at) = leaves
+            .asks
+            .iter()
+            .position(|c| c.agent == agent && c.origin == origin)
+        else {
+            return false;
+        };
+        let c = leaves.asks.remove(at);
+        if allow {
+            leaves.grants.push(c);
+        } else {
+            leaves.refused.push(c);
+        }
+        true
+    }
+
+    /// « Retirer les accords » of the page `key`: its leaves, its requests and its refusals all
+    /// gone. The agents whose request waited, to be told.
+    pub fn revoke(&self, key: &str) -> Vec<Consent> {
+        self.consents
+            .lock()
+            .remove(key)
+            .map(|l| l.asks)
+            .unwrap_or_default()
+    }
+
+    /// What the band of the page `key` shows.
+    pub fn consents(&self, key: &str) -> Consents {
+        self.consents
+            .lock()
+            .get(key)
+            .map(|l| Consents {
+                asks: l.asks.clone(),
+                grants: l.grants.clone(),
+            })
+            .unwrap_or_default()
     }
 
     fn set_url(&self, agent_id: &str, url: &str) {
@@ -281,6 +443,8 @@ impl Pages {
         if let Some(logs) = self.logs.lock().remove(agent_id) {
             logs.close();
         }
+        // Its leaves fall with it (ESC-669).
+        self.consents.lock().remove(agent_id);
         self.pages.lock().remove(agent_id)
     }
 
@@ -357,6 +521,12 @@ pub fn open<R: Runtime>(
         mode: PageMode::Full,
         loaded: false,
         doc_title: String::new(),
+        placement: if o.visible && o.bounds.is_some() {
+            Placement::Full
+        } else {
+            Placement::Hidden
+        },
+        opened: 0,
     };
     let window = app.get_window("main").ok_or("no main window")?;
     let b = o.bounds.unwrap_or(Bounds {
@@ -622,12 +792,14 @@ fn gtk_layout_of(view: &gtk::Widget) -> Option<gtk::Layout> {
     Some(layout)
 }
 
-/// The page `agent_id` in the window: placed at `bounds` and shown, or hidden.
+/// The page `agent_id` in the window: placed at `bounds` and shown, or hidden. `placement`: where
+/// the window shows it (alone, beside or under something else), `Full` when it does not say.
 pub fn place<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Pages,
     agent_id: &str,
     bounds: Option<Bounds>,
+    placement: Option<Placement>,
 ) -> Result<(), String> {
     if pages.get(agent_id).is_none() {
         return Ok(());
@@ -638,9 +810,18 @@ pub fn place<R: Runtime>(
     match bounds {
         Some(b) if b.width >= 1.0 && b.height >= 1.0 => {
             set_bounds(&webview, b)?;
-            webview.show().map_err(|e| e.to_string())
+            webview.show().map_err(|e| e.to_string())?;
+            let shown = match placement {
+                Some(Placement::Hidden) | None => Placement::Full,
+                Some(p) => p,
+            };
+            pages.set_placement(agent_id, shown);
+            Ok(())
         }
-        _ => webview.hide().map_err(|e| e.to_string()),
+        _ => {
+            pages.set_placement(agent_id, Placement::Hidden);
+            webview.hide().map_err(|e| e.to_string())
+        }
     }
 }
 

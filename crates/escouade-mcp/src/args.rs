@@ -1321,3 +1321,40 @@ pub struct SettleInboxViewArgs {
     )]
     pub note: String,
 }
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListBrowsersArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade leaves it out: it sees the browsers of its own project alone. Claude outside Escouade gives it."
+    )]
+    pub project: Option<String>,
+}
+
+/// What `read_browser` gives of a page: its HTML or its visible text.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum ReadWhatArg {
+    Html,
+    Text,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ReadBrowserArgs {
+    #[schemars(
+        description = "The browser, by the key list_browsers gives: the id of the agent for the page of its test, run:<project>:<command>, or browser:<id>."
+    )]
+    pub browser: String,
+    #[schemars(
+        description = "A CSS selector (200 characters at most, without :has(), four levels at most): only the elements it matches, end to end, matched saying how many. Left out: the whole document."
+    )]
+    pub selector: Option<String>,
+    #[schemars(
+        description = "html (the default): the serialized DOM, masked; text: the visible text (innerText)."
+    )]
+    pub what: Option<ReadWhatArg>,
+    #[schemars(
+        description = "The most characters answered: 50000 by default, 200000 at most. Beyond it the HTML is cut at a tag, truncated true and total_chars saying how long it was."
+    )]
+    pub max_chars: Option<u64>,
+}

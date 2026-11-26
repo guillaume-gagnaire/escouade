@@ -27,6 +27,7 @@ vi.mock('./terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 const SETTINGS_KEYS: Record<keyof Settings, true> = {
   claudePath: true,
   agentsAnswer: true,
+  agentBrowsers: true,
   inboxKeepDays: true,
   sound: true,
   osNotifications: true,

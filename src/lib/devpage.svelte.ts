@@ -8,7 +8,7 @@ import { t } from './i18n';
 import { api } from './ipc';
 import { openUrl } from './opener';
 import { app } from './state.svelte';
-import type { Agent, PageBounds, PageEvent, PagesOpen, Project } from './types';
+import type { Agent, PageBounds, PageConsent, PageConsents, PageEvent, PagePlacement, PagesOpen, Project } from './types';
 import { loadModes, nextMode, saveMode, type PageMode } from './devpage-key';
 import { activeItem, has, itemKey, type PaneItem } from './panes';
 
@@ -36,6 +36,8 @@ export interface PageState {
   by: PageBy;
   /** Its row's place: the order it opened in, the oldest first. */
   opened: number;
+  /** The agents' requests to read it outside the launch, and the leaves given (ESC-669): its band, its row's menu. */
+  consents?: PageConsents;
 }
 
 class DevPages {
@@ -298,11 +300,54 @@ export function devtools(key: string) {
   return app.run(api.devpageDevtools(key));
 }
 
-/** Where the page goes in the window (its view's room, in CSS pixels, times the zoom), or hidden (null). */
-export function place(key: string, bounds: PageBounds | null) {
+/**
+ * Where the page goes in the window (its view's room, in CSS pixels, times the zoom), or hidden (null); `placement`:
+ * alone, beside or under something else, as `list_browsers` says it (ESC-669).
+ */
+export function place(key: string, bounds: PageBounds | null, placement?: PagePlacement) {
   if (!devpages.pages[key]) return Promise.resolve();
-  return api.devpagePlace(key, bounds).catch(() => {});
+  return api.devpagePlace(key, bounds, bounds ? placement : 'hidden').catch(() => {});
 }
+
+/**
+ * Where a page in the room `room` is shown (ESC-669): alone in the main area, or in a pane of the split screen beside or
+ * under something else (narrower than the work area: beside).
+ */
+export function placementOf(inPane: boolean, room: DOMRect, work: DOMRect | undefined): PagePlacement {
+  if (!inPane) return 'full';
+  if (!work) return 'beside';
+  return room.width < work.width - 2 ? 'beside' : 'below';
+}
+
+/** Its band read again from the backend: an agent asked to read it, or its leaves changed. */
+export async function loadConsents(key: string) {
+  const consents = await api.devpageConsents(key).catch(() => null);
+  const page = devpages.pages[key];
+  if (page && consents) page.consents = consents;
+}
+
+/** « Permettre » or « Refuser » in its band, to `ask`: the agent is told by a message. */
+export async function answerConsent(key: string, ask: PageConsent, allow: boolean) {
+  const consents = await app.run(api.devpageConsent(key, ask.agent, ask.origin, allow));
+  const page = devpages.pages[key];
+  if (page && consents) page.consents = consents;
+}
+
+/** « Retirer les accords » of its row's menu: the leaves given, and the requests waiting, gone. */
+export async function revokeConsents(key: string) {
+  const consents = await app.run(api.devpageRevoke(key));
+  const page = devpages.pages[key];
+  if (page && consents) {
+    page.consents = consents;
+    app.toast(t('devpage.consent.revoked'), 'info');
+  }
+}
+
+/** It has leaves given or requests waiting: « Retirer les accords » is offered. */
+export const hasConsents = (key: string): boolean => {
+  const c = devpages.pages[key]?.consents;
+  return !!c && (c.asks.length > 0 || c.grants.length > 0);
+};
 
 /** Closes the browser `key`: its row's ×, its agent gone, its ticket done. */
 export function closePage(key: string) {
@@ -370,6 +415,9 @@ export function onPageEvent(e: PageEvent) {
       break;
     case 'title':
       page.docTitle = e.title || undefined;
+      break;
+    case 'consents':
+      void loadConsents(e.agentId);
       break;
     case 'outside':
       // Another origin: the system's browser, as every link of the window.

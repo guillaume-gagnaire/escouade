@@ -12,6 +12,7 @@
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
+  import Switch from './Switch.svelte';
   import Icon from '../Icon.svelte';
 
   // « Piloter Escouade »: one switch, « Les agents peuvent piloter Escouade » (ESC-119), gives the server to Escouade's agents
@@ -134,6 +135,14 @@
   <Row label={t('mcp.section.enable')} desc={t('mcp.section.enableDesc')}>
     <button class="switch" class:on role="switch" aria-checked={on} aria-label={t('mcp.section.enable')} disabled={busy} onclick={toggle}
     ></button>
+  </Row>
+  <!-- « Agents et navigateurs » (ESC-669): the tools of the browsers, under the server they depend on; saved with the draft. -->
+  <Row label={t('mcp.section.browsers')} desc={t('mcp.section.browsersDesc')}>
+    <Switch
+      label={t('mcp.section.browsers')}
+      disabled={!on}
+      bind:on={() => settingsForm.settings.agentBrowsers !== false, (v) => (settingsForm.settings.agentBrowsers = v)}
+    />
   </Row>
   <Row label={t('mcp.section.answer')} desc={t('mcp.section.answerDesc')}>
     <Chips

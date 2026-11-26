@@ -146,6 +146,17 @@ Two more tools, read-only, read a project’s PRs (“merge requests” on GitLa
 
 Anyone can write a PR on a public repository: these two tools mark its titles, reviews, and comments between `<third_party_data>` and `</third_party_data>`, and an agent must read them as data, never as instructions.
 
+### Browsers
+
+Two tools, read-only, read the [browsers](browser) of “Browsers”: an agent sees those of its project, a discussion those it opened. The “Agents and browsers” switch in Settings › Agents, under “Agents can drive Escouade”, turns both off.
+
+| Tool | Arguments | What it returns |
+|---|---|---|
+| `list_browsers` | `project` (for Claude outside Escouade) | The project’s browsers, 50 at most, in the section’s order: their key (`browser`), name, address, origin, agent, who opened it (`agent`, `run` or `user`), where it is shown (`full`, `beside`, `below` or `hidden`), whether it is loaded and whether it is on the project’s launch (`launch`). Outside the launch and without permission, the address is cut to its origin. |
+| `read_browser` | `browser`, `selector` (optional), `what` (`html` or `text`), `max_chars` (optional) | The page’s HTML (the serialized DOM) or its visible text, the whole document or what a CSS selector matches (200 characters, no `:has()`, four levels at most). 50,000 characters by default, 200,000 at most, cut at a tag. Passwords, hidden fields, token `<meta>` tags and script text come out as `«masqué»`; never the cookies, the storage or the headers. For Escouade’s agents only. |
+
+A browser shown nowhere is listed but not read. On the project’s launch (its launch commands, `localhost` at the ports they, its agents’ tests and their port blocks declare), the page is read without asking. On another origin (an artifact, a site you’re signed in to), `read_browser` answers `asked` and the browser’s band asks you “esc-412 wants to read claude.ai”: “Allow” holds for that agent, that origin and that browser until it closes, and “Refuse” holds as long. Your answer reaches the agent as a message, and “Revoke the permissions”, in the row’s menu, takes them all back. The page’s content arrives between `<third_party_data>` and `</third_party_data>`.
+
 ### Leading the whole Kanban from Claude
 
 With these tools, Claude takes a ticket from start to finish without you opening the window: `start_ticket` starts it, `wait_ticket` waits until it changes (its agent asks a question, moves to “To review”, gets blocked), `get_ticket` says where it stands, then `approve_ticket` approves it or `reject_ticket` sends it back with what is wrong. `resume_ticket`, `resolve_conflict`, and `dismiss_block` deal with a block, and `delete_ticket` deletes. `wait_ticket` hands back at the first change, or after 120 seconds by default (240 at most); the `since` of its answer, passed to the next call, has a ticket whose state differs from the one it holds answered at once, a change made between two calls included. `approve_ticket`, `reject_ticket`, `resume_ticket`, `resolve_conflict`, and `dismiss_block` also return a `since`, the ticket’s as it was before the action: passed to `wait_ticket`, it has what follows told at once, a quick approval included.

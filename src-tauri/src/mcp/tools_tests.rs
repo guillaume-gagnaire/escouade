@@ -212,8 +212,12 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
             t.name
         );
         assert_eq!(v["annotations"]["readOnlyHint"], true, "{}: {v}", t.name);
-        // The pull requests are read from the code host, and only they.
-        let host = matches!(&*t.name, "list_pull_requests" | "get_pull_request");
+        // The pull requests are read from the code host, and a browser's page from wherever it
+        // was served (ESC-669): only they.
+        let host = matches!(
+            &*t.name,
+            "list_pull_requests" | "get_pull_request" | "read_browser"
+        );
         assert_eq!(v["annotations"]["openWorldHint"], host, "{}: {v}", t.name);
     }
     let schema = |name: &str| {

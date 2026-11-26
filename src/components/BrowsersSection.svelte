@@ -11,9 +11,11 @@
     browsersOf,
     closePage,
     go,
+    hasConsents,
     newBrowser,
     openPageBeside,
     pageItem,
+    revokeConsents,
     rowName,
     showPage,
     type PageState,
@@ -101,6 +103,13 @@
         onClick: () => app.run(navigator.clipboard.writeText(p.url).then(() => app.toast(t('devpage.browsers.copied'), 'info'))),
       },
       { label: t('devpage.system'), icon: 'ext', onClick: () => app.run(openUrl(p.url)) },
+      // The agents' leaves to read it outside the launch (ESC-669), while it has some.
+      ...(hasConsents(key)
+        ? ([
+            { label: '', separator: true },
+            { label: t('devpage.consent.revoke'), icon: 'close', onClick: () => void revokeConsents(key) },
+          ] satisfies MenuItem[])
+        : []),
       { label: '', separator: true },
       { label: t('devpage.browsers.close'), icon: 'close', onClick: () => closePage(key) },
     ];

@@ -48,6 +48,18 @@ export default {
     linux: 'Dans la page, en bas : leurs boutons les mettent à droite ou à part.',
   },
   /** The section « Navigateurs » of the sidebar (ESC-657): one row per tab. */
+  /** The band « veut lire » of a browser (ESC-669): an agent asks to read a page outside its project's launch. */
+  consent: {
+    /** `{agent}`: its name; the host follows, then `session`. */
+    wants: '{agent} veut lire',
+    session: '(avec ta session, dans ce navigateur)',
+    more: { one: 'et {count} autre demande', other: 'et {count} autres demandes' },
+    allow: 'Permettre',
+    refuse: 'Refuser',
+    /** Its row's menu: the leaves given and the requests waiting, gone. */
+    revoke: 'Retirer les accords',
+    revoked: 'Accords retirés : les agents redemanderont pour lire ce navigateur.',
+  },
   browsers: {
     title: 'Navigateurs',
     new: 'Nouveau navigateur',

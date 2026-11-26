@@ -57,6 +57,8 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   stop_agent: 'mcp.tools.stopAgent',
   delete_agent: 'mcp.tools.deleteAgent',
   list_background_work: 'mcp.tools.listBackgroundWork',
+  list_browsers: 'mcp.tools.listBrowsers',
+  read_browser: 'mcp.tools.readBrowser',
   get_background_output: 'mcp.tools.getBackgroundOutput',
   stop_background_work: 'mcp.tools.stopBackgroundWork',
   message_subagent: 'mcp.tools.messageSubagent',

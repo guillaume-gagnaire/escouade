@@ -129,6 +129,11 @@ pub struct Settings {
     /// Nobody by default, for a new installation as for settings saved before it: Claude outside
     /// Escouade (`Caller::External`) always answers.
     pub agents_answer: AgentsAnswer,
+    /// « Agents et navigateurs » (ESC-669, docs/AGENT-BROWSERS.md § 9), under « Les agents peuvent
+    /// piloter Escouade »: the tools of the browsers (`list_browsers`, `read_browser`…) answer the
+    /// agents, and the server's instructions name them. On by default, for settings saved before it
+    /// too. In 2.3 it becomes the switch of Réglages › Fonctionnalités, under the same key.
+    pub agent_browsers: bool,
     /// « Garder les fichiers des demandes closes » (ESC-510): 7, 30 or 90 days after a request of
     /// the box closed, its files are erased (`asks_sweep`). 30 by default.
     pub inbox_keep_days: u32,
@@ -1025,6 +1030,7 @@ impl Default for Settings {
             writer_model: String::new(),
             mcp_enabled: false,
             agents_answer: AgentsAnswer::Nobody,
+            agent_browsers: true,
             inbox_keep_days: 30,
             mcp_port: 0,
             accounts: Vec::new(),
@@ -4139,6 +4145,18 @@ mod tests {
         s.todo_tools = false;
         assert_eq!(s.agent_env(), s.claude_env());
         assert!(s.agent_env().iter().all(|(k, _)| k != TODO_TOOLS_VAR));
+    }
+
+    #[test]
+    fn settings_saved_before_the_browsers_switch_have_it_on() {
+        let s: Settings = serde_json::from_str(r#"{"sound":false}"#).unwrap();
+        assert!(s.agent_browsers);
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["agentBrowsers"],
+            json!(true)
+        );
+        let off: Settings = serde_json::from_str(r#"{"agentBrowsers":false}"#).unwrap();
+        assert!(!off.agent_browsers);
     }
 
     #[test]

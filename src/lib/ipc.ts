@@ -4,6 +4,8 @@ import type {
   MergeHow,
   EngineDecl,
   PageBounds,
+  PageConsents,
+  PagePlacement,
   PageView,
   Memory,
   VectorsModelInfo,
@@ -867,7 +869,16 @@ export const api = {
   /** `projectId`: the page of a launch command run in its project, keyed `run:<project>:<command>` (ESC-560). */
   devpageOpen: (agentId: string, title: string, url: string, bounds: PageBounds | null, projectId?: string) =>
     invoke<PageView>('devpage_open', { agentId, title, url, bounds, ...(projectId ? { projectId } : {}) }),
-  devpagePlace: (agentId: string, bounds: PageBounds | null) => invoke<void>('devpage_place', { agentId, bounds }),
+  /** `placement`: where the window shows it (ESC-669), for `list_browsers`. */
+  devpagePlace: (agentId: string, bounds: PageBounds | null, placement?: PagePlacement) =>
+    invoke<void>('devpage_place', { agentId, bounds, placement: placement ?? null }),
+  /** The band of the browser `agentId` (ESC-669): the agents' requests to read it, the leaves given. */
+  devpageConsents: (agentId: string) => invoke<PageConsents>('devpage_consents', { agentId }),
+  /** « Permettre » or « Refuser » in its band: told to the agent by a message. */
+  devpageConsent: (agentId: string, agent: string, origin: string, allow: boolean) =>
+    invoke<PageConsents>('devpage_consent', { agentId, agent, origin, allow }),
+  /** « Retirer les accords » of the browser `agentId`. */
+  devpageRevoke: (agentId: string) => invoke<PageConsents>('devpage_revoke', { agentId }),
   devpageGo: (agentId: string, action: 'back' | 'forward' | 'reload' | 'to', to?: string) =>
     invoke<void>('devpage_go', { agentId, action, to: to ?? null }),
   devpageDevtools: (agentId: string) => invoke<void>('devpage_devtools', { agentId }),

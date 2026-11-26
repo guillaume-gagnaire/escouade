@@ -20,6 +20,9 @@ mod asks_tests;
 mod background;
 #[cfg(test)]
 mod background_tests;
+pub(crate) mod browsers;
+#[cfg(test)]
+mod browsers_tests;
 #[cfg(test)]
 mod declare_tests;
 mod docs;
@@ -210,7 +213,10 @@ impl<R: Runtime> McpServer<R> {
             port,
             std::sync::Arc::downgrade(&core),
             tools::Tools::<R>::router(),
-            tools::Tools::<R>::new,
+            {
+                let core = std::sync::Arc::downgrade(&core);
+                move |router| tools::Tools::<R>::new(router, core.clone())
+            },
         );
         let limits = self.limits.lock().clone();
         // On the app's own runtime: never the single-threaded one of a caller, which a stop's

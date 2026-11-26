@@ -4774,15 +4774,57 @@ pub fn devpage_open(
     pages.get(&agent_id).ok_or_else(|| "no page".into())
 }
 
-/// The page of agent `agent_id` in its view: placed at `bounds`, or hidden (none).
+/// The page of agent `agent_id` in its view: placed at `bounds`, or hidden (none); `placement`:
+/// alone, beside or under something else (`list_browsers`, ESC-669).
 #[tauri::command]
 pub fn devpage_place(
     app: tauri::AppHandle,
     pages: State<Arc<crate::devpage::Pages>>,
     agent_id: String,
     bounds: Option<crate::devpage::Bounds>,
+    placement: Option<crate::devpage::Placement>,
 ) -> Res<()> {
-    crate::devpage::place(&app, &pages, &agent_id, bounds)
+    crate::devpage::place(&app, &pages, &agent_id, bounds, placement)
+}
+
+/// The leaves of the browser `agent_id` and the requests waiting for the user (its band, ESC-669).
+#[tauri::command]
+pub fn devpage_consents(
+    pages: State<Arc<crate::devpage::Pages>>,
+    agent_id: String,
+) -> crate::devpage::Consents {
+    pages.consents(&agent_id)
+}
+
+/// The user's answer in the band of the browser `agent_id` to `agent`'s request to read `origin`
+/// (« Permettre » or « Refuser », ESC-669): told to the agent by a message. The band's state after.
+#[tauri::command]
+pub async fn devpage_consent(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    agent_id: String,
+    agent: String,
+    origin: String,
+    allow: bool,
+) -> Res<crate::devpage::Consents> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers::answer(&core, &pages, &agent_id, &agent, &origin, allow).await;
+    Ok(pages.consents(&agent_id))
+}
+
+/// « Retirer les accords » of the browser `agent_id` (ESC-669): its leaves gone; an agent whose
+/// request waited is told it was not given.
+#[tauri::command]
+pub async fn devpage_revoke(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    agent_id: String,
+) -> Res<crate::devpage::Consents> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers::revoke(&core, &pages, &agent_id).await;
+    Ok(pages.consents(&agent_id))
 }
 
 /// Back, forward, reload, or `to` (an address typed in its bar).

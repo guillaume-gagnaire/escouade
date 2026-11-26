@@ -259,6 +259,7 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                         width: 390.0,
                         height: 600.0,
                     }),
+                    None,
                 );
                 seen.width_in_agent = wait(&rx, &mut seen, Duration::from_secs(15), |t| match t {
                     Told::Width(390) => Some(390),
@@ -281,6 +282,7 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                         width: 768.0,
                         height: 600.0,
                     }),
+                    None,
                 );
                 seen.width_as_tablet = wait(&rx, &mut seen, Duration::from_secs(15), |t| match t {
                     Told::Width(768) => Some(768),

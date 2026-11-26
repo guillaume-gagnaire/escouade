@@ -7,6 +7,7 @@
   // then the system's browser; drawn with the app's controls (`icon-btn`, `btn`, `segmented small`, `field`).
   import { onDestroy, onMount } from 'svelte';
   import {
+    answerConsent,
     besideOf,
     boundsOf,
     coveredAt,
@@ -20,6 +21,8 @@
     openPageBeside,
     pageItem,
     place,
+    loadConsents,
+    placementOf,
     setMode,
   } from '../lib/devpage.svelte';
   import { DEVICE_WIDTH, deviceFit, modeKey, PAGE_MODES, typedAddress, type PageMode } from '../lib/devpage-key';
@@ -33,6 +36,7 @@
   import { app } from '../lib/state.svelte';
   import { anyRunning, flows, testAgent } from '../lib/test-launch.svelte';
   import { tip } from '../lib/tip';
+  import ConsentBand from './ConsentBand.svelte';
   import Icon from './Icon.svelte';
 
   /** The browser's key: its agent's id, or `browser:<id>` for one opened alone. */
@@ -85,11 +89,13 @@
       const f = deviceFit(mode, rect.width);
       const shown = { left: rect.left + f.left, top: rect.top, width: f.width, height: rect.height } as DOMRect;
       const bounds = show ? boundsOf(shown, zoomState.shown) : null;
+      // Alone, or in a pane beside or under something else (`list_browsers`, ESC-669).
+      const where = placementOf(ownPane, rect, room.closest('.work')?.getBoundingClientRect());
       // Only what changed goes to the backend: the observers below fire far more often than the page moves.
-      const said = JSON.stringify(bounds);
+      const said = JSON.stringify([bounds, where]);
       if (said === placed) return;
       placed = said;
-      void place(key, bounds);
+      void place(key, bounds, where);
     });
   }
   /** The last place told to the backend. */
@@ -114,6 +120,8 @@
     overlays = new MutationObserver(sync);
     overlays.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
     window.addEventListener('resize', sync);
+    // Its band as the backend keeps it: a request may have come while it was elsewhere.
+    void loadConsents(key);
   });
   onDestroy(() => {
     cancelAnimationFrame(frame);
@@ -294,6 +302,8 @@
       </div>
     </div>
     {#if page.phase === 'loading' && !waiting && !stopped}<div class="load" aria-hidden="true"></div>{/if}
+    <!-- An agent asks to read this page, outside its project's launch (ESC-669): native, above the page. -->
+    <ConsentBand asks={page.consents?.asks ?? []} onanswer={(ask, allow) => answerConsent(key, ask, allow)} />
   {/if}
 
   <div class="room" bind:this={room} class:on={visible} class:device={mode !== 'full' && visible}>
