@@ -139,6 +139,13 @@ fn the_arguments_of_a_script_are_values_never_code() {
     assert!(e.contains(r#""selector":"\"}); alert(1); ({\"""#), "{e}");
 }
 
+#[test]
+fn the_drain_and_the_world_are_calls_without_arguments() {
+    // The drain asks the relay inside its own call; the world's count is the probe's (ESC-692).
+    assert!(expression(&Script::Drain).ends_with(r#"({"run":"drain"})"#));
+    assert!(expression(&Script::World).ends_with(r#"({"run":"world"})"#));
+}
+
 // ---------- the selectors ----------
 
 #[test]

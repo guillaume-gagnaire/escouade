@@ -2,8 +2,8 @@
 title: "Les navigateurs pilotés par les agents (brouillon, ESC-663)"
 subject: "kanban"
 sources: ["docs/AGENT-BROWSERS.md (ESC-663 ; apportée sur main et mise d'accord par ESC-666 le 2026-11-26)","docs/AGENT-BROWSERS-TICKETS.md (ESC-666 : la liste finale des tickets)","docs/AGENT-PAGES.md (ESC-661, § 10 : le pilotage commun)","design/agent-browsers/probe/src/main.rs","design/agent-browsers/results/report-windows.json","design/agent-browsers/results/report-linux.json","design/agent-browsers/maquette/index.html","design/agent-browsers/maquette/cas-phare-clair.png","design/agent-browsers/maquette/cas-phare-sombre.png","src-tauri/src/devpage.rs","src-tauri/src/mcp/browsers.rs (ESC-669, ESC-671)","src-tauri/src/browserread.rs (ESC-668, ESC-671)","src/components/ConsentBand.svelte (ESC-669)","Demandes a-37 à a-39 et a-42, réponses de l'utilisateur des 2026-11-25 et 26 (C1 C, C2 B, C3 A, C4 A)","L'utilisateur, 2026-11-26 (par l'Overseer) : tout ce qui touche aux navigateurs sort en 2.2","src-tauri/src/mcp/browsers.rs (ESC-669, ESC-670)","src-tauri/src/browserread.rs (ESC-668 ; fit, ESC-670)","src-tauri/src/mcp/browsers.rs (ESC-669)","src-tauri/src/mcp/browsers_open.rs (ESC-678)","src/components/OpenAskBand.svelte (ESC-678)","Le chef d'escouade, ticket ESC-678 (2026-11-26) : la boucle locale hors des ports déclarés est refusée, pas demandée"]
-tickets: ["ESC-663","ESC-661","ESC-660","ESC-666","ESC-668","ESC-669","ESC-670","ESC-671","ESC-678"]
-decisions: ["un-seul-pilotage-pour-toutes-les-lignes",325,323,326,327,322,"le-cœur-lit-un-navigateur-dans-un-monde","les-agents-lisent-les-navigateurs-qui-le","un-agent-ouvre-un-onglet-a-cote-de-sa-co"]
+tickets: ["ESC-663","ESC-661","ESC-660","ESC-666","ESC-668","ESC-669","ESC-670","ESC-671","ESC-692","ESC-678"]
+decisions: ["un-seul-pilotage-pour-toutes-les-lignes",325,323,326,327,322,"le-cœur-lit-un-navigateur-dans-un-monde","les-agents-lisent-les-navigateurs-qui-le","le-relais-de-console-de-webkit-ne-rend-s","un-agent-ouvre-un-onglet-a-cote-de-sa-co"]
 compared: null
 draft: true
 ---
@@ -60,13 +60,13 @@ Le cœur exécute des **scripts fixes d'Escouade**, paramétrés en JSON, dans u
 - WebKitGTK : `run_javascript_in_world` ;
 - WKWebView : `WKContentWorld`.
 
-Jamais par `webview.eval` : dans le monde de la page, la sonde l'a vu trompé. Jamais un script d'agent. La page d'un lancement n'a aucun canal vers Escouade.
+Jamais par `webview.eval` : dans le monde de la page, la sonde l'a vu trompé. Jamais un script d'agent. La page d'un lancement n'a aucun canal vers Escouade. Sous WebKit, le monde isolé ne garde rien d'un appel à l'autre (ESC-692) : chaque script fixe fait tout dans son appel.
 
 ## Vérifié par système (sonde ESC-663)
 
 - Windows (WebView2) : capture (vue, élément, document), console, erreurs réseau, arbre d'accessibilité, vrais clics et vraie frappe, surlignage hors du DOM, largeur.
-- Linux (WebKitGTK 2.52) : monde isolé, captures, clics et frappe synthétiques. La console passe par un relais de la page (`from: "page"`).
-- macOS : la sonde compile ; l'essai sur un Mac viendra avec la CI Mac (AB-5, lot 1).
+- Linux (WebKitGTK 2.52) : monde isolé, captures, clics et frappe synthétiques. La console passe par un relais de la page (`from: "page"`), que le cœur interroge à chaque relève (ESC-692).
+- macOS (WKWebView) : le pont de lecture tourne en CI (ESC-672) : lecture, captures de la vue et d'un élément, et la console avec l'exception et les requêtes en échec depuis ESC-692.
 
 ## Deux modes d'ouverture
 
@@ -177,7 +177,7 @@ Dans la 2.3 seulement (AB-R) :
 
 ## Où en est la construction
 
-- **AB-1 (ESC-668), construit** : le pont de lecture natif (`src-tauri/src/browserread.rs`), sans outil MCP encore. Les scripts fixes d'Escouade dans le monde isolé `escouade-agent` par système, la liste fermée des méthodes du protocole DevTools sous WebView2, les captures (vue, élément, document), les tampons de console et de réseau tenus dès la création de chaque navigateur (500 entrées de chaque, adresses sans chaîne de requête), le masquage du HTML. Ce qu'il fait est décrit dans `kanban/page-du-lancement`, « Ce que le cœur lit d'un navigateur ». La sonde est `src-tauri/examples/agentbrowser_probe.rs` : vérifiée sous Windows (WebView2) et sous WebKitGTK (WSL) ; sous macOS, la branche WKWebView compile seulement, son premier essai réel est la CI Mac d'AB-5.
+- **AB-1 (ESC-668), construit** : le pont de lecture natif (`src-tauri/src/browserread.rs`), sans outil MCP encore. Les scripts fixes d'Escouade dans le monde isolé `escouade-agent` par système, la liste fermée des méthodes du protocole DevTools sous WebView2, les captures (vue, élément, document), les tampons de console et de réseau tenus dès la création de chaque navigateur (500 entrées de chaque, adresses sans chaîne de requête), le masquage du HTML. Ce qu'il fait est décrit dans `kanban/page-du-lancement`, « Ce que le cœur lit d'un navigateur ». La sonde est `src-tauri/examples/agentbrowser_probe.rs` : vérifiée sous Windows (WebView2) et sous WebKitGTK (WSL), et en CI sous Linux et macOS depuis AB-5 (ESC-672) ; sous macOS, sa console est complète depuis ESC-692 (le relais rend son lot à chaque relève du cœur).
 - **AB-2 (ESC-669), construit** : `list_browsers` et `read_browser` (`src-tauri/src/mcp/browsers.rs`), l'interrupteur « Agents et navigateurs », la bande d'accord (`ConsentBand`) et « Retirer les accords » ; décrit plus haut, « Ce que fait AB-2 ». Vérifié par les tests Rust des refus et des bornes, Vitest de la bande, et l'e2e `browsers-mcp.spec.ts` (Windows, 1440 × 900 et 1024 × 728).
 - **AB-3 (ESC-670), construit** : `capture_browser` ; décrit plus haut, « Ce que fait AB-3 ». Vérifié par les tests Rust (bornes de l'image, débit, largeurs, fichiers, refus sans accord) et l'e2e `browsers-capture.spec.ts` (Windows, 1440 × 900 et 1024 × 728). La largeur par la barre sous WebKit n'a tourné sur aucun Linux ni Mac : AB-5 l'essaie.
 - **AB-4 (ESC-671), construit** : `browser_console` (`src-tauri/src/mcp/browsers.rs`) ; décrit plus haut, « Ce que fait AB-4 ». Vérifié par les tests Rust (curseur, instant, niveaux, `limit`, `dropped`, adresses nettoyées, navigateur caché, accord, refus) et l'e2e `browsers-console.spec.ts` (Windows, 1440 × 900 et 1024 × 728).

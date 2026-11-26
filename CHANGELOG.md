@@ -13,6 +13,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Stats : ce que consomme un sous-agent de Copilot CLI, de Codex ou d’OpenCode compte une seule fois, sur le modèle où il a vraiment tourné (au bon prix chez Codex) ; celui d’un sous-agent de Copilot que le plugin avait perdu de vue n’est plus oublié.
 - Sous Windows, tes fichiers de données (l’état, les réglages) ne se perdent plus quand deux écritures se croisent ; et sur une machine chargée, un plugin n’est plus coupé pendant une grosse compilation à côté, et un agent de la vue Claude Code qui a fini son tour ne reste plus affiché au travail.
 - Sur un poste chargé, l’assistant « Nouveau projet » ne dit plus « Le dépôt n’a aucun commit » d’un dépôt qui en a : il lit le dossier plus vite, dit « Lecture du dépôt… » le temps de le faire, et si git échoue, il dit son erreur avec « Réessayer » au lieu de proposer un premier commit.
+- Sous macOS, la console d’un navigateur que lisent les agents garde aussi les erreurs de la page et ses requêtes en échec ; sous Linux, elle garde aussi ce qui arrive après le chargement de la page.
 - Un agent t’ouvre un vrai onglet à côté de sa conversation pour te montrer son travail : le lancement du projet, une adresse, ou l’artefact Claude qu’il vient de publier. Il l’ouvre seulement si tu regardes sa conversation, sinon la ligne de « Navigateurs » attend ton retour. Une adresse hors du projet t’est demandée une fois dans sa conversation ; les adresses d’Escouade et les autres ports de ton poste ne s’ouvrent jamais.
 
 ## [2.2.13] — 2026-11-26

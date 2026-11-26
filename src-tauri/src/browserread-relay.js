@@ -1,9 +1,12 @@
 // The console relay of a browser under WebKit (ESC-668, docs/AGENT-BROWSERS.md § 3 bis): WebKitGTK
 // and WKWebView give no console to the app, so this script, run at the start of each document in
 // the page's world, wraps `console.*`, `onerror`, `unhandledrejection` and the `fetch` and XHR that
-// fail, and tells the isolated world `escouade-agent` by an event (a JSON string). The core takes
-// what the collector of that world kept (`browserread.js`, `drain`). The page can silence or forge
-// all of it: what comes from here is marked `from: "page"`. Nothing here talks to Escouade.
+// fail, and keeps what it saw (500 entries at most, each a JSON string). It never pushes them: the
+// isolated world `escouade-agent` asks for them (`browserread.js`, `drain`) by an event, which this
+// relay answers at once, inside that very call. Under WKWebView, nothing kept in an isolated world
+// outlives the evaluation that made it, so nothing may wait there for an event to come later
+// (ESC-692). The page can silence or forge all of it: what comes from here is marked
+// `from: "page"`. Nothing here talks to Escouade.
 (function () {
   'use strict';
   if (window.top !== window) return;
@@ -12,8 +15,8 @@
   var Custom = window.CustomEvent;
   var stringify = JSON.stringify;
   var now = Date.now;
-  var backlog = [];
-  var ready = false;
+  var kept = [];
+  var dropped = 0;
 
   function tell(entry) {
     entry.t = now();
@@ -23,20 +26,20 @@
     } catch (e) {
       return;
     }
-    if (!ready) {
-      if (backlog.length >= 500) backlog.shift();
-      backlog.push(text);
-      return;
+    if (typeof text !== 'string' || text.length > 4000) return;
+    if (kept.length >= 500) {
+      kept.shift();
+      dropped++;
     }
-    dispatch(new Custom(EVENT, { detail: text }));
+    kept.push(text);
   }
 
-  // The collector says it listens: what came before goes to it.
-  window.addEventListener(EVENT + '-ready', function () {
-    ready = true;
-    var kept = backlog;
-    backlog = [];
-    for (var i = 0; i < kept.length; i++) dispatch(new Custom(EVENT, { detail: kept[i] }));
+  // Escouade's world asks: what was kept goes to it in this same call, and is forgotten here.
+  window.addEventListener(EVENT + '-drain', function () {
+    var batch = stringify({ entries: kept, dropped: dropped });
+    kept = [];
+    dropped = 0;
+    dispatch(new Custom(EVENT, { detail: batch }));
   });
 
   function show(v) {

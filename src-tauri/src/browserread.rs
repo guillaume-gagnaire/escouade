@@ -20,8 +20,10 @@
 //!   (`attach`), whether an agent reads them or not, in bounded buffers (`Buffers`: 500 entries of
 //!   each), their addresses without their query (`strip_url`). WebView2 gives them by the protocol
 //!   (`from: "browser"`: the page can neither silence nor forge them); WebKit has no such API, so a
-//!   relay in the page (`browserread-relay.js`) tells the isolated world, which the core takes by
-//!   polling (`from: "page"`: the page can silence or forge it);
+//!   relay in the page (`browserread-relay.js`) keeps them, and the core asks for them from the
+//!   isolated world every second, the relay answering inside that same call (`from: "page"`: the
+//!   page can silence or forge it). Nothing waits in the isolated world between two calls: under
+//!   WKWebView, it does not outlive an evaluation (ESC-692);
 //! - **the HTML masked** (`mask_html`): the values of password and hidden fields, the `content` of
 //!   a `<meta>` named for a token, the text of inline scripts, and the tokens that show (`mask_tokens`).
 //!   Cookies, storage and headers are never read.
@@ -217,8 +219,10 @@ pub enum Script<'a> {
     },
     /// The view's size and scroll, and the box of the first visible element a selector matches.
     Rect { selector: Option<&'a str> },
-    /// What WebKit's relay told since the last time (`browserread-relay.js`).
+    /// What WebKit's relay kept since the last time (`browserread-relay.js`), asked of it.
     Drain,
+    /// How many calls Escouade's world has seen since it was made (the probe's measure, ESC-692).
+    World,
 }
 
 /// The start of every expression the core runs: its library, called.
@@ -234,6 +238,7 @@ pub fn expression(script: &Script<'_>) -> String {
         }
         Script::Rect { selector } => json!({ "run": "rect", "selector": selector }),
         Script::Drain => json!({ "run": "drain" }),
+        Script::World => json!({ "run": "world" }),
     };
     format!("{})({args})", lib_head())
 }
@@ -1709,7 +1714,7 @@ mod platform {
 mod platform {
     use super::*;
 
-    /// Takes what the relay told, every second, while the browser is open.
+    /// Takes what the relay kept, every second, while the browser is open.
     pub fn attach<R: Runtime>(webview: &Webview<R>, buffers: Arc<Buffers>) {
         let webview = webview.clone();
         std::thread::spawn(move || {

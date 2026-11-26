@@ -8,7 +8,7 @@
 //!
 //! It reads the page (HTML, text, a selector), captures it (the view, an element, the document, a
 //! phone's width under WebView2), and reads what the buffers kept from the browser's creation (the
-//! console, an exception, a 404, a refused port), across a navigation. One line of JSON on stdout
+//! console, an exception, a 404, a refused port, and what the page says later), across a navigation. One line of JSON on stdout
 //! says what it saw; the exit code is 0 when every step held. Captures go to `--out` when given.
 
 use crate::browserread::{self, Ask, Level, Query, Teller, What};
@@ -51,6 +51,8 @@ const PAGE: &str = r#"<!doctype html><html><head><meta charset="utf-8"><meta nam
   fetch('/missing-668?token=secret-query-668').catch(() => {});
   fetch('http://127.0.0.1:9/refused-668').catch(() => {});
   setTimeout(() => { throw new Error('probe-exception-668'); }, 0);
+  // Later, after the core's first drains (ESC-692: WebKit's relay lost all that came then).
+  setTimeout(() => { console.warn('probe-late-692'); fetch('/late-692').catch(() => {}); }, 2500);
   // The page lies to every script of its own world.
   HTMLElement.prototype.click = function () {};
   document.querySelector = function () { return null; };
@@ -336,6 +338,22 @@ fn steps<R: tauri::Runtime>(
     }
     let _ = webview.eval("scrollTo(0, 0)");
 
+    // A measure, never a failure: whether Escouade's world outlives an evaluation (ESC-692: under
+    // WKWebView, what it kept was gone at the next call; the relay is asked, so it does not matter).
+    let calls = |webview: &tauri::Webview<R>| {
+        browserread::eval(webview, &browserread::Script::World)
+            .ok()
+            .and_then(|v| v["calls"].as_u64())
+    };
+    let first = calls(&webview);
+    std::thread::sleep(Duration::from_millis(1200));
+    let second = calls(&webview);
+    seen.step(
+        "worldKept",
+        true,
+        serde_json::json!({ "first": first, "second": second, "kept": matches!((first, second), (Some(a), Some(b)) if b > a) }),
+    );
+
     // The console and the network, kept from the browser's creation.
     let teller = if cfg!(windows) {
         Teller::Browser
@@ -349,6 +367,8 @@ fn steps<R: tauri::Runtime>(
             && has(l, "probe-exception-668")
             && l.network.iter().any(|n| n.url.ends_with("/missing-668"))
             && l.network.iter().any(|n| n.url.contains("refused-668"))
+            && has(l, "probe-late-692")
+            && l.network.iter().any(|n| n.url.ends_with("/late-692"))
     });
     let error = logs
         .entries
@@ -366,6 +386,11 @@ fn steps<R: tauri::Runtime>(
             .network
             .iter()
             .any(|n| n.url.contains("refused-668") && n.error.is_some())
+        && has(&logs, "probe-late-692")
+        && logs
+            .network
+            .iter()
+            .any(|n| n.url.ends_with("/late-692") && n.status == Some(404))
         && logs.entries.iter().all(|e| e.from == teller)
         && !serde_json::to_string(&logs)
             .unwrap_or_default()

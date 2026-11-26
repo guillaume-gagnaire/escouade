@@ -8,8 +8,9 @@
 // (`browserread::mask_html`) and marks it as third-party data.
 (function (args) {
   'use strict';
-  var COLLECTOR = '__escouadeConsole';
   var EVENT = 'escouade-console-relay';
+  // A batch of the relay: 500 entries of 4 000 characters at most, escaped once more in JSON.
+  var BATCH_MAX = 4200000;
 
   function elements(selector) {
     if (!selector) return [document.documentElement];
@@ -95,32 +96,46 @@
     return { view: view, box: null, none: true };
   }
 
-  // WebKit: the console relay of the page's world (`RELAY`) tells this world by an event; this
-  // collector keeps what it tells (500 at most) until the core takes it. Installed at the first
-  // drain of each document; the relay then gives what it kept before.
+  // WebKit: asks the console relay of the page's world (`RELAY`) for what it kept, by an event it
+  // answers at once, inside this call. Nothing is kept in this world from one call to the next:
+  // under WKWebView, it does not outlive the evaluation (ESC-692). 500 entries at most.
   function drain() {
-    var c = window[COLLECTOR];
-    if (!c) {
-      c = { entries: [], dropped: 0 };
-      Object.defineProperty(window, COLLECTOR, { value: c });
-      window.addEventListener(
-        EVENT,
-        function (e) {
-          if (typeof e.detail !== 'string' || e.detail.length > 4000) return;
-          if (c.entries.length >= 500) {
-            c.entries.shift();
-            c.dropped++;
-          }
-          c.entries.push(e.detail);
-        },
-        true,
-      );
-      window.dispatchEvent(new CustomEvent(EVENT + '-ready'));
+    var out = { entries: [], dropped: 0 };
+    function take(e) {
+      if (typeof e.detail !== 'string' || e.detail.length > BATCH_MAX) return;
+      var batch;
+      try {
+        batch = JSON.parse(e.detail);
+      } catch (err) {
+        return;
+      }
+      if (!batch || !Array.isArray(batch.entries)) return;
+      if (typeof batch.dropped === 'number' && batch.dropped > 0) out.dropped += Math.floor(batch.dropped);
+      for (var i = 0; i < batch.entries.length; i++) {
+        var entry = batch.entries[i];
+        if (typeof entry !== 'string' || entry.length > 4000) continue;
+        if (out.entries.length >= 500) {
+          out.entries.shift();
+          out.dropped++;
+        }
+        out.entries.push(entry);
+      }
     }
-    var out = { entries: c.entries, dropped: c.dropped };
-    c.entries = [];
-    c.dropped = 0;
+    window.addEventListener(EVENT, take, true);
+    try {
+      window.dispatchEvent(new CustomEvent(EVENT + '-drain'));
+    } finally {
+      window.removeEventListener(EVENT, take, true);
+    }
     return out;
+  }
+
+  // How many calls this world has seen since it was made: 1 when it is new. The probe's measure of
+  // whether an isolated world outlives an evaluation (ESC-692); nothing else uses it.
+  function world() {
+    var n = (window.__escouadeWorldCalls || 0) + 1;
+    window.__escouadeWorldCalls = n;
+    return { calls: n };
   }
 
   var result;
@@ -128,6 +143,7 @@
     if (args.run === 'read') result = read(args);
     else if (args.run === 'rect') result = rect(args);
     else if (args.run === 'drain') result = drain();
+    else if (args.run === 'world') result = world();
     else result = { error: 'unknown' };
   } catch (e) {
     result = { error: 'threw', message: String((e && e.message) || e).slice(0, 200) };

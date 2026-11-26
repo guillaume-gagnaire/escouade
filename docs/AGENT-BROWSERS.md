@@ -511,6 +511,7 @@ Ce qu'il ne garde pas :
 - il partage le DOM : la page peut déplacer, cacher ou recouvrir un élément, ou retirer notre surlignage ;
 - ses clics ne sont pas ceux de l'utilisateur : une page qui exige `isTrusted` les ignore. C'est rare dans une app en développement, et l'outil le dit (« clic synthétique sous WebKit ») ;
 - un relais de console posé dans la page (script d'initialisation, qui transmet par un `CustomEvent` au monde isolé) peut être tu ou trompé par la page, d'où `from: "page"`.
+- sous WKWebView, ce qu'un monde isolé garde (une globale, un écouteur) ne survit pas à l'évaluation qui l'a fait (ESC-692 : la CI Mac ne recevait que ce que la première relève vidait). Rien n'y attend donc un événement à venir : le relais garde tout (500 entrées) et chaque relève du cœur le lui demande par un événement, auquel il répond dans le même appel. La sonde le mesure (`worldKept`).
 
 Sous Windows, rien de tout cela ne manque.
 
