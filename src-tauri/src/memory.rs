@@ -349,108 +349,23 @@ pub fn check(description: &str, body: &str) -> Result<()> {
     Ok(())
 }
 
-/// Whether `c` may stand inside a token (letters, digits, `_`, `-`), so that a known prefix inside a word is not one.
-fn wordy(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_'
-}
-
-/// How many characters of `rest` from its start are in `ok`.
-fn run_of(rest: &str, ok: impl Fn(char) -> bool) -> usize {
-    rest.chars().take_while(|c| ok(*c)).count()
-}
-
-/// The first secret `text` holds, said as what it is (« un jeton GitHub »): the motifs of known tokens the audit reads
-/// its report for (`docs/security/audit-2026-11/build.mjs`, `leaks`): GitHub, OpenAI and Anthropic keys (`sk-`),
-/// Slack, GitLab, AWS, a bearer token, a private key, a webhook of Slack or Discord. None when it holds none.
+/// The first secret `text` holds, said as what it is (« un jeton GitHub »): the motifs of known tokens of
+/// `escouade_audit::never::secret_kind`, the one list the team's audit scrubs its free strings by too (TS-21, §2):
+/// GitHub, OpenAI and Anthropic keys (`sk-`), Slack, GitLab, AWS, a bearer token, a private key, a webhook of Slack or
+/// Discord. None when it holds none.
 pub fn secret_in(text: &str) -> Option<String> {
-    let alnum = |c: char| c.is_ascii_alphanumeric();
-    let token = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-';
-    // (prefix, the characters after it, how many at least, what it is).
-    type Rule = (&'static str, fn(char) -> bool, usize, &'static str);
-    let rules: [Rule; 9] = [
-        ("ghp_", |c| c.is_ascii_alphanumeric(), 20, "GitHub"),
-        ("gho_", |c| c.is_ascii_alphanumeric(), 20, "GitHub"),
-        ("ghu_", |c| c.is_ascii_alphanumeric(), 20, "GitHub"),
-        ("ghs_", |c| c.is_ascii_alphanumeric(), 20, "GitHub"),
-        ("ghr_", |c| c.is_ascii_alphanumeric(), 20, "GitHub"),
-        (
-            "github_pat_",
-            |c| c.is_ascii_alphanumeric() || c == '_',
-            20,
-            "GitHub",
-        ),
-        (
-            "sk-",
-            |c| c.is_ascii_alphanumeric() || c == '_' || c == '-',
-            20,
-            "API",
-        ),
-        (
-            "glpat-",
-            |c| c.is_ascii_alphanumeric() || c == '_' || c == '-',
-            20,
-            "GitLab",
-        ),
-        (
-            "AKIA",
-            |c| c.is_ascii_digit() || c.is_ascii_uppercase(),
-            16,
-            "AWS",
-        ),
-    ];
+    use escouade_audit::never::SecretKind;
     let say = |of: &str| tr!("un jeton ({of})", "a token ({of})");
-    for (at, _) in text.char_indices() {
-        let rest = &text[at..];
-        let starts = text[..at].chars().next_back().is_none_or(|c| !wordy(c));
-        if !starts {
-            continue;
-        }
-        for (prefix, ok, min, of) in &rules {
-            if let Some(after) = rest.strip_prefix(prefix) {
-                if run_of(after, ok) >= *min {
-                    return Some(say(of));
-                }
-            }
-        }
-        for slack in ["xoxa-", "xoxb-", "xoxp-", "xoxr-", "xoxs-"] {
-            if let Some(after) = rest.strip_prefix(slack) {
-                if run_of(after, |c| alnum(c) || c == '-') >= 10 {
-                    return Some(say("Slack"));
-                }
-            }
-        }
-        if let Some(after) = rest.strip_prefix("Bearer") {
-            let spaces = run_of(after, char::is_whitespace);
-            if spaces > 0 && run_of(&after[spaces..], |c| token(c) || c == '.' || c == '=') >= 24 {
-                return Some(tr!("un jeton d’accès (Bearer)", "an access token (Bearer)"));
-            }
-        }
-    }
-    if let Some(i) = text.find("-----BEGIN ") {
-        let rest = &text[i + "-----BEGIN ".len()..];
-        let label = run_of(rest, |c| c.is_ascii_uppercase() || c == ' ');
-        if rest[..label].ends_with("PRIVATE KEY") && rest[label..].starts_with("-----") {
-            return Some(tr!("une clé privée", "a private key"));
-        }
-    }
-    for hook in [
-        "https://hooks.slack.com/services/",
-        "https://discord.com/api/webhooks/",
-        "https://discordapp.com/api/webhooks/",
-        "https://ptb.discord.com/api/webhooks/",
-        "https://canary.discord.com/api/webhooks/",
-    ] {
-        if let Some(i) = text.find(hook) {
-            if text[i + hook.len()..]
-                .chars()
-                .next()
-                .is_some_and(|c| !c.is_whitespace())
-            {
-                return Some(tr!("l’adresse d’un webhook", "a webhook’s address"));
-            }
-        }
-    }
-    None
+    Some(match escouade_audit::never::secret_kind(text)? {
+        SecretKind::GitHub => say("GitHub"),
+        SecretKind::Api => say("API"),
+        SecretKind::GitLab => say("GitLab"),
+        SecretKind::Aws => say("AWS"),
+        SecretKind::Slack => say("Slack"),
+        SecretKind::Bearer => tr!("un jeton d’accès (Bearer)", "an access token (Bearer)"),
+        SecretKind::PrivateKey => tr!("une clé privée", "a private key"),
+        SecretKind::Webhook => tr!("l’adresse d’un webhook", "a webhook’s address"),
+    })
 }
 
 /// The hosts of the addresses (`http://`, `https://`) a text names, lower case, each once, in their order: those a

@@ -158,6 +158,9 @@ escouade-policy = { path = "../crates/escouade-policy" }
 # The team server's client (TS-3, docs/TEAM-SERVER.md): the team as an MLS group, its keys in the keychain (the app's
 # `SecretStore`), its state in the data's `teams` folder, its server through the app's proxy and certificates (`teams`).
 escouade-team = { path = "../crates/escouade-team" }
+# The team's audit (AU-1, docs/TEAM-AUDIT.md): the motifs of tokens the team memory refuses come from its list of what
+# never goes out (`memory::secret_in`); the stations' facts emit by it (AU-4).
+escouade-audit = { path = "../crates/escouade-audit" }
 # The extensions of the editor (ESC-481): Open VSX by the core, checked, served.
 escouade-vsx = { path = "../crates/escouade-vsx" }
 # The QR code of an invitation of one's own device (§3.4), drawn as SVG: no image library.
@@ -237,6 +240,7 @@ members = [
     "../crates/escouade-tauri-shim",
     "../crates/escouade-connector-proto",
     "../crates/escouade-gate",
+    "../crates/escouade-audit",
 ]
 default-members = [
     ".",
@@ -263,6 +267,7 @@ default-members = [
     "../crates/escouade-vsx",
     "../crates/escouade-connector-proto",
     "../crates/escouade-gate",
+    "../crates/escouade-audit",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their

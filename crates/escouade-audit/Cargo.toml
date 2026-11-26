@@ -1,0 +1,36 @@
+[package]
+name = "escouade-audit"
+version = "0.1.0"
+description = "Escouade's team audit (AU-1): the escouade.audit/v1 model and its closed list of events, what never goes out, JSON lines, syslog (RFC 5424 over TLS) and CEF, the disk buffer, the Ed25519 signature on canonical JSON (RFC 8785), the chain, and escouade-audit verify"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# Linked by the team server (AU-2) and the audit machine (AU-5), never published.
+publish = false
+
+[[bin]]
+name = "escouade-audit"
+path = "src/bin/escouade-audit.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The shortest digits of a number, for the canonical JSON (RFC 8785 §3.2.2.3).
+ryu = "1"
+ed25519-dalek = "2"
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+# The randomness of an event's id (ULID) and of a key drawn by `Emitter::generate`.
+getrandom = "0.3"
+thiserror = "2"
+# syslog over TLS (RFC 5425), blocking: ring, as the rest of the workspace.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+rustls-native-certs = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+rcgen = "0.14"
