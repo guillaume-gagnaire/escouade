@@ -6,7 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
-- Les agents lisent les navigateurs de leur projet : ils les listent et lisent le HTML ou le texte d’une page à l’écran, mots de passe et jetons masqués, pour voir ce que tu vois. La page de leur lancement se lit sans demander ; une autre origine (un artefact, un site où tu es connecté) attend ton accord dans la bande du navigateur, que tu retires par « Retirer les accords ». L’interrupteur « Agents et navigateurs » de Réglages › Agents les coupe.
+- Les agents lisent les navigateurs de leur projet : ils les listent, lisent le HTML ou le texte d’une page à l’écran, mots de passe et jetons masqués, et sa console avec ses requêtes en échec, pour voir ce que tu vois et ce qui casse. La page de leur lancement se lit sans demander ; une autre origine (un artefact, un site où tu es connecté) attend ton accord dans la bande du navigateur, que tu retires par « Retirer les accords ». L’interrupteur « Agents et navigateurs » de Réglages › Agents les coupe.
 
 ## [2.2.12] — 2026-11-26
 

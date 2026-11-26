@@ -388,6 +388,7 @@ async fn every_tool_that_names_something_is_in_the_tests_of_the_private_projects
         "split_ticket",
         // A browser of the caller's own project alone, by its key (browsers_tests).
         "read_browser",
+        "browser_console",
     ];
     let named: Vec<&str> = naming_calls().iter().map(|(t, _, _)| *t).collect();
     for tool in EXPOSED {

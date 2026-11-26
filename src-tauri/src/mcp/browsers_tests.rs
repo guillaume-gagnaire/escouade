@@ -6,7 +6,7 @@
 use super::browsers::{self, Launch};
 use super::private_tests::make_private;
 use super::tools_tests::{
-    as_agent, call, external, other_project, project, put_agent, read, refused,
+    as_agent, call, external, other_project, project, put_agent, read, refused, Client,
 };
 use crate::core_tests::{harness, Harness};
 use crate::devpage::{Leave, PageMode, PageView, Pages, Placement};
@@ -482,4 +482,359 @@ fn a_read_answers_its_html_or_its_text_with_its_bounds() {
     let v = browsers::answer_of(&t);
     assert_eq!(v["text"], "Bonjour");
     assert!(v.get("html").is_none());
+}
+
+// ---------- browser_console (ESC-671, AB-4) ----------
+
+/// The buffers of the browser `key`, as its webview's creation makes them.
+fn logs(h: &Harness, key: &str) -> Arc<crate::browserread::Buffers> {
+    pages(h).new_logs(key)
+}
+
+fn told(
+    text: &str,
+    level: crate::browserread::Level,
+    url: &str,
+) -> crate::browserread::ConsoleEntry {
+    crate::browserread::ConsoleEntry {
+        seq: 0,
+        t: 0,
+        level,
+        text: text.into(),
+        source: "console".into(),
+        url: url.into(),
+        line: Some(12),
+        from: crate::browserread::Teller::Browser,
+    }
+}
+
+fn failed(url: &str, status: Option<u16>, error: Option<&str>) -> crate::browserread::NetEntry {
+    crate::browserread::NetEntry {
+        seq: 0,
+        t: 0,
+        method: "GET".into(),
+        url: url.into(),
+        status,
+        error: error.map(str::to_string),
+        kind: "fetch".into(),
+        from: crate::browserread::Teller::Browser,
+    }
+}
+
+/// What `browser_console` answered, out of its mark of third-party data.
+async fn console(c: &Client, args: serde_json::Value) -> serde_json::Value {
+    let mut params = rmcp::model::CallToolRequestParams::new("browser_console");
+    if let serde_json::Value::Object(args) = args {
+        params = params.with_arguments(args);
+    }
+    let answer = serde_json::to_value(c.call_tool(params).await.unwrap()).unwrap();
+    assert_ne!(answer["isError"], true, "{answer}");
+    assert_eq!(
+        answer["content"][0]["text"],
+        browsers::PAGE_NOTICE,
+        "{answer}"
+    );
+    let text = answer["content"][1]["text"].as_str().unwrap().to_string();
+    let inner = text
+        .split_once("<third_party_data>\n")
+        .map(|(_, rest)| rest)
+        .and_then(|rest| rest.rsplit_once("\n</third_party_data>"))
+        .map(|(inner, _)| inner)
+        .unwrap_or(&text);
+    serde_json::from_str(inner).unwrap_or_else(|e| panic!("{e}: {text}"))
+}
+
+#[tokio::test]
+async fn the_console_is_read_from_the_cursor_the_last_read_gave_and_marked_as_the_pages() {
+    use crate::browserread::Level;
+    let h = harness("mcp-browsers-console-cursor");
+    let (_, a) = world(&h).await;
+    let buffers = logs(&h, &a.id);
+    buffers.push_console(told(
+        "TypeError: x is undefined",
+        Level::Error,
+        "http://localhost:4211/app.js?token=s3cr3t#frag",
+    ));
+    buffers.push_console(told("prêt", Level::Log, "http://localhost:4211/app.js"));
+    buffers.push_network(failed(
+        "http://localhost:4211/api/prix?session=abc",
+        Some(404),
+        None,
+    ));
+    let c = as_agent(&h, &a.id).await;
+    let (text, _) = call(&c, "browser_console", json!({ "browser": a.id })).await;
+    assert!(text.contains("<third_party_data>"), "{text}");
+    let v = console(&c, json!({ "browser": a.id })).await;
+    let entries = v["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0]["level"], "error");
+    assert_eq!(entries[0]["text"], "TypeError: x is undefined");
+    assert_eq!(entries[0]["from"], "browser");
+    assert_eq!(entries[0]["line"], 12);
+    // Addresses come without their query or fragment, where a token hides.
+    assert_eq!(entries[0]["url"], "http://localhost:4211/app.js");
+    assert_eq!(v["network"][0]["url"], "http://localhost:4211/api/prix");
+    assert_eq!(v["network"][0]["status"], 404);
+    assert!(!v.to_string().contains("s3cr3t") && !v.to_string().contains("session=abc"));
+    assert_eq!(v["dropped"], 0);
+    // From the cursor: only what came after it.
+    let cursor = v["cursor"].as_str().unwrap().to_string();
+    assert_eq!(cursor, "2.1");
+    let v = console(&c, json!({ "browser": a.id, "since": cursor })).await;
+    assert_eq!(v["entries"], json!([]));
+    assert_eq!(v["network"], json!([]));
+    assert_eq!(v["cursor"], "2.1");
+    buffers.push_network(failed(
+        "http://localhost:4211/ws",
+        None,
+        Some("net::ERR_CONNECTION_REFUSED"),
+    ));
+    buffers.push_console(told("après", Level::Warn, ""));
+    let v = console(&c, json!({ "browser": a.id, "since": "2.1" })).await;
+    assert_eq!(v["entries"][0]["text"], "après");
+    assert_eq!(v["network"][0]["error"], "net::ERR_CONNECTION_REFUSED");
+    assert!(v["network"][0].get("status").is_none(), "{v}");
+    assert_eq!(v["cursor"], "3.2");
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn the_console_keeps_the_levels_asked_the_network_if_asked_and_the_limit() {
+    use crate::browserread::Level;
+    let h = harness("mcp-browsers-console-filters");
+    let (_, a) = world(&h).await;
+    let buffers = logs(&h, &a.id);
+    let levels = [
+        Level::Error,
+        Level::Warn,
+        Level::Info,
+        Level::Log,
+        Level::Debug,
+    ];
+    for (i, level) in levels.into_iter().enumerate() {
+        buffers.push_console(told(&format!("n{i}"), level, ""));
+    }
+    buffers.push_network(failed("http://localhost:4211/a", Some(500), None));
+    let c = as_agent(&h, &a.id).await;
+    let v = console(
+        &c,
+        json!({ "browser": a.id, "levels": ["error", "debug"], "network": false }),
+    )
+    .await;
+    let kept: Vec<&str> = v["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["level"].as_str().unwrap())
+        .collect();
+    assert_eq!(kept, ["error", "debug"]);
+    assert_eq!(v["network"], json!([]));
+    // Every level by default, an empty list too, and the network.
+    for args in [
+        json!({ "browser": a.id }),
+        json!({ "browser": a.id, "levels": [] }),
+    ] {
+        let v = console(&c, args).await;
+        assert_eq!(v["entries"].as_array().unwrap().len(), 5);
+        assert_eq!(v["network"].as_array().unwrap().len(), 1);
+    }
+    // The limit: what is left comes from the cursor.
+    let v = console(&c, json!({ "browser": a.id, "limit": 2, "network": false })).await;
+    assert_eq!(v["entries"].as_array().unwrap().len(), 2);
+    let v = console(
+        &c,
+        json!({ "browser": a.id, "limit": 2, "network": false, "since": v["cursor"] }),
+    )
+    .await;
+    assert_eq!(v["entries"][0]["text"], "n2");
+    for limit in [0u64, 501] {
+        let e = refused(
+            &c,
+            "browser_console",
+            json!({ "browser": a.id, "limit": limit }),
+        )
+        .await;
+        assert!(e.contains("limit va de 1 à 500"), "{limit}: {e}");
+    }
+    let (_, error) = call(
+        &c,
+        "browser_console",
+        json!({ "browser": a.id, "levels": ["trace"] }),
+    )
+    .await;
+    assert!(error);
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn the_console_says_what_its_buffer_dropped_and_reads_from_a_time() {
+    use crate::browserread::Level;
+    let h = harness("mcp-browsers-console-dropped");
+    let (_, a) = world(&h).await;
+    let buffers = logs(&h, &a.id);
+    for i in 0..520 {
+        buffers.push_console(told(&format!("l{i}"), Level::Log, ""));
+    }
+    let c = as_agent(&h, &a.id).await;
+    let v = console(&c, json!({ "browser": a.id, "limit": 500 })).await;
+    assert_eq!(v["dropped"], 20);
+    assert_eq!(v["entries"][0]["text"], "l20");
+    // From a cursor the buffer went past: what it lost since.
+    let v = console(&c, json!({ "browser": a.id, "since": "5.0", "limit": 1 })).await;
+    assert_eq!(v["dropped"], 15);
+    // A time: in milliseconds, written as digits, or ISO 8601.
+    let first = buffers.read(&crate::browserread::Query::default()).entries[0].t;
+    let later = first + 3_600_000;
+    let iso = chrono::DateTime::from_timestamp_millis(later as i64)
+        .unwrap()
+        .to_rfc3339();
+    for since in [json!(later), json!(later.to_string()), json!(iso)] {
+        let v = console(&c, json!({ "browser": a.id, "since": since })).await;
+        assert_eq!(v["entries"], json!([]), "{since}");
+        assert_eq!(v["dropped"], 0, "{since}");
+    }
+    let v = console(&c, json!({ "browser": a.id, "since": first, "limit": 500 })).await;
+    assert_eq!(v["entries"].as_array().unwrap().len(), 500);
+    assert_eq!(v["dropped"], 20);
+    for since in ["hier", "1.", "2026-13-45T00:00:00Z"] {
+        let e = refused(
+            &c,
+            "browser_console",
+            json!({ "browser": a.id, "since": since }),
+        )
+        .await;
+        assert!(e.contains("since est le curseur"), "{since}: {e}");
+    }
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn the_console_of_a_browser_on_no_screen_is_read() {
+    use crate::browserread::Level;
+    let h = harness("mcp-browsers-console-hidden");
+    let (_, a) = world(&h).await;
+    let c = as_agent(&h, &a.id).await;
+    // No webview made yet: no console.
+    let (text, error) = call(
+        &c,
+        "browser_console",
+        json!({ "browser": "browser:hidden" }),
+    )
+    .await;
+    assert!(error);
+    assert!(text.contains("pas encore de console"), "{text}");
+    logs(&h, "browser:hidden").push_console(told("caché", Level::Info, ""));
+    let v = console(&c, json!({ "browser": "browser:hidden" })).await;
+    assert_eq!(v["entries"][0]["text"], "caché");
+    // Closed with its browser: gone.
+    pages(&h).logs("browser:hidden").unwrap().close();
+    let (text, error) = call(
+        &c,
+        "browser_console",
+        json!({ "browser": "browser:hidden" }),
+    )
+    .await;
+    assert!(error, "{text}");
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn outside_the_launch_the_console_waits_for_the_users_leave_shared_with_read_browser() {
+    use crate::browserread::Level;
+    let h = harness("mcp-browsers-console-leave");
+    let (_, a) = world(&h).await;
+    let pages = pages(&h);
+    logs(&h, "browser:claude").push_console(told(
+        "conversation chargée",
+        Level::Log,
+        "https://claude.ai/chat/secret-conversation?x=1",
+    ));
+    let c = as_agent(&h, &a.id).await;
+    let v = read(
+        &c,
+        "browser_console",
+        json!({ "browser": "browser:claude" }),
+    )
+    .await;
+    assert_eq!(v["asked"], true);
+    assert_eq!(v["origin"], "https://claude.ai");
+    assert!(!v.to_string().contains("conversation chargée"), "{v}");
+    assert_eq!(pages.consents("browser:claude").asks.len(), 1);
+    // The same request as read_browser's: still one.
+    let v = read(&c, "read_browser", json!({ "browser": "browser:claude" })).await;
+    assert_eq!(v["asked"], true);
+    assert_eq!(pages.consents("browser:claude").asks.len(), 1);
+    // Refused: refused.
+    assert!(pages.answer("browser:claude", &a.id, "https://claude.ai", false));
+    let e = refused(
+        &c,
+        "browser_console",
+        json!({ "browser": "browser:claude" }),
+    )
+    .await;
+    assert!(e.contains("a refusé"), "{e}");
+    // Given: read.
+    pages.revoke("browser:claude");
+    let _ = read(
+        &c,
+        "browser_console",
+        json!({ "browser": "browser:claude" }),
+    )
+    .await;
+    assert!(pages.answer("browser:claude", &a.id, "https://claude.ai", true));
+    let v = console(&c, json!({ "browser": "browser:claude" })).await;
+    assert_eq!(v["entries"][0]["text"], "conversation chargée");
+    assert_eq!(
+        v["entries"][0]["url"],
+        "https://claude.ai/chat/secret-conversation"
+    );
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn the_console_is_refused_switched_off_outside_escouade_and_in_another_project() {
+    let h = harness("mcp-browsers-console-who");
+    let (_, a) = world(&h).await;
+    logs(&h, &a.id);
+    let other = other_project(&h, "Voisin").await;
+    let b = put_agent(&h, &other, "Bob", 2);
+    let c = as_agent(&h, &b.id).await;
+    let e = refused(&c, "browser_console", json!({ "browser": a.id })).await;
+    assert!(e.contains("Aucun navigateur"), "{e}");
+    c.cancel().await.unwrap();
+    let c = external(&h).await;
+    let e = refused(&c, "browser_console", json!({ "browser": a.id })).await;
+    assert!(e.contains("n’en lit aucun"), "{e}");
+    c.cancel().await.unwrap();
+    h.core.settings.write().agent_browsers = false;
+    let c = as_agent(&h, &a.id).await;
+    let e = refused(&c, "browser_console", json!({ "browser": a.id })).await;
+    assert!(e.contains("« Agents et navigateurs » est coupé"), "{e}");
+    c.cancel().await.unwrap();
+}
+
+#[test]
+fn a_since_is_a_cursor_digits_or_an_iso_time() {
+    use crate::browserread::{Cursor, Since};
+    assert_eq!(
+        browsers::since_of("12.3"),
+        Some(Since::Cursor(Cursor {
+            console: 12,
+            network: 3
+        }))
+    );
+    assert_eq!(
+        browsers::since_of("1764151200000"),
+        Some(Since::Time(1_764_151_200_000))
+    );
+    assert_eq!(
+        browsers::since_of("2025-11-26T10:00:00Z"),
+        Some(Since::Time(1_764_151_200_000))
+    );
+    assert_eq!(
+        browsers::since_of("2025-11-26T11:00:00+01:00"),
+        Some(Since::Time(1_764_151_200_000))
+    );
+    assert_eq!(browsers::since_of("1969-01-01T00:00:00Z"), None);
+    assert_eq!(browsers::since_of(""), None);
 }

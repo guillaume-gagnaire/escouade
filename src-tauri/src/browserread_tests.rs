@@ -644,3 +644,27 @@ fn a_capture_takes_what_of_an_element_shows_or_the_view_or_the_document() {
     let dense = plan(View { dpr: 2.0, ..view() }, None, false).unwrap();
     assert!((dense.scale - 1600.0 / 1800.0).abs() < 1e-9);
 }
+
+#[test]
+fn a_cursor_of_an_older_webview_reads_the_new_buffers_from_their_start() {
+    // The browser opened again: its new buffers start over, behind the cursor the old ones gave.
+    let b = Buffers::default();
+    b.push_console(console("après", Level::Error));
+    b.push_network(failure("http://localhost:4100/manque"));
+    let read = b.read(&Query {
+        since: Since::Cursor("40.7".parse().unwrap()),
+        network: true,
+        ..Default::default()
+    });
+    assert_eq!(read.entries.len(), 1);
+    assert_eq!(read.network.len(), 1);
+    assert_eq!(read.cursor, "1.1");
+    assert_eq!(read.dropped, 0);
+    // A cursor of these buffers reads after it, as before.
+    let next = b.read(&Query {
+        since: Since::Cursor(read.cursor.parse().unwrap()),
+        network: true,
+        ..Default::default()
+    });
+    assert!(next.entries.is_empty() && next.network.is_empty());
+}

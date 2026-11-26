@@ -35,6 +35,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "answer_question",
     "approve_ticket",
     "ask_user",
+    "browser_console",
     "claim_inbox_view",
     "create_agent",
     "create_folder",
@@ -105,6 +106,7 @@ pub(super) const EXPOSED: &[&str] = &[
 
 /// Those of `EXPOSED` that only read.
 pub(super) const READING: &[&str] = &[
+    "browser_console",
     "get_agent_summary",
     "get_ask",
     "get_ask_file",

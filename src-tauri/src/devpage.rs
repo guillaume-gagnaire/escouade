@@ -454,7 +454,7 @@ impl Pages {
     }
 
     /// New buffers for the page `agent_id`, its webview just made.
-    fn new_logs(&self, agent_id: &str) -> Arc<crate::browserread::Buffers> {
+    pub(crate) fn new_logs(&self, agent_id: &str) -> Arc<crate::browserread::Buffers> {
         let logs = Arc::new(crate::browserread::Buffers::default());
         if let Some(old) = self.logs.lock().insert(agent_id.to_string(), logs.clone()) {
             old.close();

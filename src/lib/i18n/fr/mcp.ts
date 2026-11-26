@@ -107,6 +107,7 @@ export default {
     listBackgroundWork: 'Lister les sous-agents et tâches de fond d’un agent',
     listBrowsers: 'Lister les navigateurs',
     readBrowser: 'Lire un navigateur',
+    browserConsole: 'Lire la console d’un navigateur',
     getBackgroundOutput: 'Lire la sortie d’une tâche de fond ou le rapport d’un sous-agent',
     stopBackgroundWork: 'Arrêter une tâche de fond ou un sous-agent',
     messageSubagent: 'Écrire à un sous-agent',

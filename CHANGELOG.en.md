@@ -6,7 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
-- Agents read the browsers of their project: they list them and read the HTML or the text of a page on screen, passwords and tokens masked, to see what you see. The page of their launch is read without asking; another origin (an artifact, a site you’re signed in to) waits for your permission in the browser’s band, which you revoke with “Revoke the permissions”. The “Agents and browsers” switch in Settings › Agents turns them off.
+- Agents read the browsers of their project: they list them, read the HTML or the text of a page on screen, passwords and tokens masked, and its console with its failed requests, to see what you see and what breaks. The page of their launch is read without asking; another origin (an artifact, a site you’re signed in to) waits for your permission in the browser’s band, which you revoke with “Revoke the permissions”. The “Agents and browsers” switch in Settings › Agents turns them off.
 
 ## [2.2.12] — 2026-11-26
 

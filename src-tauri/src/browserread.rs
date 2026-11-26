@@ -911,7 +911,20 @@ impl Buffers {
         let inner = self.inner.lock();
         let (sc, sn) = match q.since {
             Since::Start => (SinceAt::Seq(0), SinceAt::Seq(0)),
-            Since::Cursor(c) => (SinceAt::Seq(c.console), SinceAt::Seq(c.network)),
+            // A cursor beyond these buffers was given by the buffers of a webview made before them
+            // (the browser opened again): everything they hold is after it.
+            Since::Cursor(c) => (
+                SinceAt::Seq(if c.console > inner.console.last {
+                    0
+                } else {
+                    c.console
+                }),
+                SinceAt::Seq(if c.network > inner.network.last {
+                    0
+                } else {
+                    c.network
+                }),
+            ),
             Since::Time(t) => (SinceAt::Time(t), SinceAt::Time(t)),
         };
         let (entries, console, dropped_c) = inner.console.read(sc, limit, |e| {

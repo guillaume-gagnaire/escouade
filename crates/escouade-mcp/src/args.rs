@@ -1358,3 +1358,49 @@ pub struct ReadBrowserArgs {
     )]
     pub max_chars: Option<u64>,
 }
+
+/// From where `browser_console` reads: a cursor a read gave or an ISO 8601 time (a string), or
+/// milliseconds since 1970 (a number).
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+#[serde(untagged)]
+#[schemars(inline)]
+pub enum SinceArg {
+    Millis(u64),
+    Text(String),
+}
+
+/// A level of the console `browser_console` keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum ConsoleLevelArg {
+    Error,
+    Warn,
+    Info,
+    Log,
+    Debug,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct BrowserConsoleArgs {
+    #[schemars(
+        description = "The browser, by the key list_browsers gives: the id of the agent for the page of its test, run:<project>:<command>, or browser:<id>."
+    )]
+    pub browser: String,
+    #[schemars(
+        description = "From where to read: the cursor the previous browser_console answered (only what came after it), an ISO 8601 time (2026-11-26T10:00:00Z), or milliseconds since 1970 as a number. Left out: everything the buffers keep since the browser opened."
+    )]
+    pub since: Option<SinceArg>,
+    #[schemars(
+        description = "The console's levels to keep, among error, warn, info, log and debug. Left out (or empty): all."
+    )]
+    pub levels: Option<Vec<ConsoleLevelArg>>,
+    #[schemars(
+        description = "The failed requests too (a status of 400 or more, or no answer): true by default."
+    )]
+    pub network: Option<bool>,
+    #[schemars(
+        description = "The most entries of the console, and the most requests, answered: 200 by default, 500 at most. What is left comes with the next read from the cursor answered."
+    )]
+    pub limit: Option<u64>,
+}
