@@ -5,6 +5,40 @@ use anyhow::{bail, Result};
 use std::process::Stdio;
 use std::time::Duration;
 
+/// What the core adds to a `git` that reaches a remote, by the folder it runs in: the gate of `escouade-server` (RP-1),
+/// its proxy and `GIT_SSH_COMMAND`, as its agents get them. None on the desktop.
+pub type NetEnv = std::sync::Arc<dyn Fn(&str) -> Vec<(String, String)> + Send + Sync>;
+
+static NET_ENV: std::sync::RwLock<Option<NetEnv>> = std::sync::RwLock::new(None);
+
+/// The variables of every `git` that reaches a remote, from now on (the gate of `escouade-server`).
+pub fn set_net_env(f: NetEnv) {
+    *NET_ENV.write().unwrap_or_else(|e| e.into_inner()) = Some(f);
+}
+
+/// `cmd` (made by [`command`]: its folder after `-C`) given what [`set_net_env`] says of its folder; a variable it was
+/// given already stays.
+pub fn with_net_env(cmd: &mut tokio::process::Command) {
+    let Some(f) = NET_ENV.read().unwrap_or_else(|e| e.into_inner()).clone() else {
+        return;
+    };
+    let std = cmd.as_std();
+    let mut args = std.get_args();
+    let dir = match (args.next(), args.next()) {
+        (Some(c), Some(d)) if c == "-C" => d.to_string_lossy().into_owned(),
+        _ => return,
+    };
+    let set: Vec<String> = std
+        .get_envs()
+        .map(|(k, _)| k.to_string_lossy().into_owned())
+        .collect();
+    for (k, v) in f(&dir) {
+        if !set.contains(&k) {
+            cmd.env(k, v);
+        }
+    }
+}
+
 pub fn command(cwd: &str, args: &[&str]) -> tokio::process::Command {
     let mut cmd = tokio::process::Command::new("git");
     cmd.arg("-C")
@@ -228,6 +262,7 @@ pub async fn run_net_command_within(
     background: bool,
     limit: Duration,
 ) -> Result<Vec<u8>> {
+    with_net_env(&mut cmd);
     cmd.kill_on_drop(true);
     if background {
         never_prompt(&mut cmd);
@@ -281,4 +316,50 @@ pub async fn text(cwd: &str, args: &[&str]) -> Result<String> {
 /// A file opened, or closed unwritten: nothing changed in it (the watchers of the repositories and of the plugins).
 pub fn is_read(ev: &::notify::Event) -> bool {
     matches!(ev.kind, ::notify::EventKind::Access(_))
+}
+
+#[cfg(test)]
+mod net_env_tests {
+    use super::*;
+
+    /// The gate of `escouade-server` (RP-1): a `git` that reaches a remote gets what the core says of its folder, and
+    /// keeps a variable it was given (the ssh of Windows for a background fetch).
+    #[test]
+    fn a_net_git_gets_the_variables_of_its_folder_and_keeps_its_own() {
+        let mut before = command("/srv/p", &["fetch"]);
+        with_net_env(&mut before);
+        assert_eq!(
+            before.as_std().get_envs().count(),
+            1,
+            "nothing before the core says"
+        );
+        set_net_env(std::sync::Arc::new(|dir: &str| {
+            vec![
+                (
+                    "HTTPS_PROXY".to_string(),
+                    format!("http://t@127.0.0.1:1/{dir}"),
+                ),
+                (
+                    "GIT_SSH_COMMAND".to_string(),
+                    "ssh -o ProxyCommand=x".to_string(),
+                ),
+            ]
+        }));
+        let mut cmd = command("/srv/p", &["fetch"]);
+        cmd.env("GIT_SSH_COMMAND", "windows-ssh");
+        with_net_env(&mut cmd);
+        let envs: Vec<(String, String)> = cmd
+            .as_std()
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                )
+            })
+            .collect();
+        assert!(envs.contains(&("HTTPS_PROXY".into(), "http://t@127.0.0.1:1//srv/p".into())));
+        assert!(envs.contains(&("GIT_SSH_COMMAND".into(), "windows-ssh".into())));
+    }
 }

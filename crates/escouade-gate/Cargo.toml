@@ -1,0 +1,26 @@
+[package]
+name = "escouade-gate"
+version = "0.1.0"
+description = "The gate of escouade-server (RP-1, docs/PRIVATE-NETWORK.md § 4.3): the agents' proxy on 127.0.0.1 (HTTP CONNECT and SOCKS5 by name), a token per agent, the list of each project, the routes to a connector, straight out or by the space's proxy, its refusals and its journal; `escouade-server via` for ssh"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[dependencies]
+# All already in the app's tree: nothing new to vet.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+httparse = "1"
+url = "2"
+base64 = "0.23"
+sha2 = "0.11"
+getrandom = "0.4"
+hex = "0.4"
+chrono = "0.4"
+parking_lot = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"

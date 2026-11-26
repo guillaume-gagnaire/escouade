@@ -290,6 +290,10 @@ mod projectfile;
 mod projectfile_tests;
 mod projectlogo;
 mod proxysecret;
+// The gate of escouade-server in the core (RP-1): the variables of the agents, terminals, launches and git.
+pub mod privatenet;
+#[cfg(test)]
+mod privatenet_tests;
 #[cfg(test)]
 mod proxysecret_tests;
 mod prread;

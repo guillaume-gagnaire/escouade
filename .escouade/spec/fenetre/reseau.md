@@ -2,8 +2,8 @@
 title: "Réseau : proxy et certificats"
 subject: "fenetre"
 sources: ["docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiches SEC-07 et SEC-28","website/content/docs/fr/settings-network.md","crates/escouade-plugins/src/tls.rs","src-tauri/src/tls_tests.rs","docs/security/audit-2026-11/rapport.md, SEC-18 (recommandations appliquées, accord a-7 du 2026-11-21)","src-tauri/src/offline.rs","src-tauri/src/sentfiles.rs","docs/TEAM-SERVER.md §6.3 (branche release/2.3)","docs/security/audit-2026-11/rapport.md, fiches SEC-10 et SEC-14 (ESC-595)","src-tauri/src/proxysecret.rs","crates/escouade-updates/src/net.rs"]
-tickets: ["ESC-425","ESC-435","ESC-596","ESC-595"]
-decisions: [154,214,306,302]
+tickets: ["ESC-425","ESC-435","ESC-596","ESC-595","ESC-597"]
+decisions: [154,214,306,302,338,337]
 compared: null
 ---
 
@@ -66,3 +66,10 @@ Réglages › Avancé › Réseau : le proxy HTTP(S), ses exclusions, et à qui 
 - Une image distante (« Afficher l'image ») n'est jamais téléchargée depuis la machine ni le réseau local : une adresse écrite (`127.0.0.1`, `[::1]`, `10.…`, `192.168.…`, `169.254.…`), un nom de la machine (`localhost`), ou un nom que cette machine résout vers une telle adresse, même derrière un proxy (qui résoudrait lui-même). Chaque redirection est jugée de même. Le message : « Une image de cette machine ou du réseau local ne s'affiche pas ».
 - Le mot de passe du proxy reste dans les variables d'environnement des agents (`HTTPS_PROXY`) : leurs harness en ont besoin pour s'authentifier.
 - Sur la ligne 2.2, « Ne jamais sortir sans le proxy » ne s'impose pas encore par un poste géré : la liste des politiques est celle de la 2.3.
+
+## Sur un serveur avec la porte du réseau privé (RP-1, ESC-597)
+
+- Sur un `escouade-server` lancé avec `--gate` (voir *Atteindre un réseau privé*), les agents, les terminaux, les lancements et les `git` du cœur ne reçoivent plus le proxy réglé ici : ils reçoivent la porte du serveur (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` vers 127.0.0.1, `NO_PROXY=127.0.0.1,localhost`), et **le proxy réglé ici passe derrière elle**, avec son mot de passe et ses exclusions, qui sortent directement. Les terminaux la reçoivent même avec « le proxy aussi pour les terminaux » décoché.
+- La porte ne parle qu'à un proxy en `http://` : un proxy réglé en `https://` ou `socks5://` ne laisse alors sortir que ses exclusions, plutôt que d'être contourné.
+- Le fichier d'autorités et « Ignorer la vérification des certificats TLS » restent donnés aux agents comme avant ; les connexions d'Escouade lui-même ne passent pas par la porte.
+- Le poste de bureau, et un serveur sans `--gate`, ne changent pas.

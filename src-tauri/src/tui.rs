@@ -1722,6 +1722,8 @@ impl Core {
         crate::proxysecret::refuse_without_password(&settings)?;
         let token = self.hooks.grant(id);
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();
+        // On a server with the gate (RP-1): its one proxy, as in its conversation.
+        self.gate_agent_env(id, &meta.project_id, &cwd, &mut env);
         let env_names: Vec<String> = env
             .iter()
             .filter(|(_, v)| !v.is_empty())

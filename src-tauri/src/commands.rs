@@ -3344,11 +3344,18 @@ pub async fn term_spawn(
         name,
         shell: sh.id.clone(),
     };
-    let env = if settings.proxy_terminals {
+    let mut env = if settings.proxy_terminals {
         settings.proxy_env()
     } else {
         Vec::new()
     };
+    // On a server with the gate (RP-1): the gate, whatever « le proxy aussi pour les terminaux » says.
+    core.gate_project_env(
+        crate::privatenet::Kind::Terminal,
+        &info.project_id,
+        &cwd,
+        &mut env,
+    );
     let hub_core = Arc::downgrade(core.inner());
     let id = info.id.clone();
     core.pty
@@ -3475,6 +3482,13 @@ fn spawn_launch(
     } else {
         Vec::new()
     };
+    // On a server with the gate (RP-1): the gate, whatever « le proxy aussi pour les terminaux » says.
+    core.gate_project_env(
+        crate::privatenet::Kind::Launch,
+        &launch.info.project_id,
+        launch.cwd,
+        &mut env,
+    );
     env.extend(launch.env);
     let hub_core = Arc::downgrade(core);
     let id = launch.info.id.clone();

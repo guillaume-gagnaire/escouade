@@ -128,6 +128,8 @@ toml_edit = "0.25"
 escouade-base = { path = "../crates/escouade-base" }
 # The data (`model`, `paths`, `proc`, `job`, `wsl`, `heat`, `pricing`, and the types they name).
 escouade-model = { path = "../crates/escouade-model" }
+# The gate of escouade-server (RP-1, docs/PRIVATE-NETWORK.md § 4.3): the agents’ proxy to the connectors of a private network.
+escouade-gate = { path = "../crates/escouade-gate" }
 # What an agent is getting through (`plan`, `planfiles`).
 escouade-plan = { path = "../crates/escouade-plan" }
 # The voice on the machine (`voice`): the microphone (cpal), the dictation (whisper.cpp), the reading (Piper, eSpeak NG,
@@ -233,6 +235,7 @@ members = [
     "../crates/escouade-vsx",
     "../crates/escouade-command",
     "../crates/escouade-tauri-shim",
+    "../crates/escouade-gate",
 ]
 default-members = [
     ".",
@@ -257,6 +260,7 @@ default-members = [
     "../crates/escouade-team",
     "../crates/escouade-tauri-shim",
     "../crates/escouade-vsx",
+    "../crates/escouade-gate",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their

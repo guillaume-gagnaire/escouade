@@ -5,6 +5,8 @@ Des agents qui tournent sur un serveur Escouade (`escouade-server`, sur un VPS o
 **Rien n'est tranché ici, et aucun code de produit n'est écrit.** Chaque choix a une recommandation et sa raison ; les choix structurants ont chacun une décision proposée, à accepter ou non.
 
 > **Tranché le 2026-11-21 (ESC-587)** : l'utilisateur a choisi « A · Les recommandations : V0 guidée, V2 construite ». R1 à R12 suivent les recommandations du § 5 ; les tickets RP-1 à RP-9 du § 6 sont ESC-597 (RP-1), ESC-598 (RP-2), ESC-599 (RP-3), ESC-600 (RP-4), ESC-601 (RP-5), ESC-602 (RP-6), ESC-603 (RP-7), ESC-605 (RP-8) et ESC-604 (RP-9).
+>
+> **RP-1 construit (ESC-597, 2026-11-26)** : la porte est la crate `crates/escouade-gate`, le cœur s'en sert dans `src-tauri/src/privatenet.rs` ; `escouade-server --gate` l'allume en attendant l'entrée des connecteurs (RP-4). Ce qui est construit, et les choix pris en route (décisions proposées `reseau-prive-rp-1-la-porte-s-allume-par`, `reseau-prive-rp-1-les-routes-de-la-porte`, `reseau-prive-rp-1-les-variables-et-ssh-t`), est dans la spec « Escouade à distance › Atteindre un réseau privé », section « La porte, construite ».
 
 La demande de l'utilisateur, le 2026-11-20, en choisissant « Atteindre un réseau privé depuis un serveur » : des agents qui tournent sur un serveur Escouade, avec un git (et d'autres services : registre de paquets, API internes) derrière le VPN d'une entreprise. Il avait dit « pas encore » le 2026-11-15, le mode serveur n'étant pas fait ; il l'est sur `release/2.3` (ESC-514, 515, 537 à 539, 541).
 

@@ -2162,6 +2162,7 @@ dependencies = [
  "escouade-command",
  "escouade-engines",
  "escouade-forge",
+ "escouade-gate",
  "escouade-mcp",
  "escouade-model",
  "escouade-plan",
@@ -2315,6 +2316,24 @@ dependencies = [
  "tokio-rustls",
  "uuid",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "escouade-gate"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "getrandom 0.4.3",
+ "hex",
+ "httparse",
+ "log",
+ "parking_lot 0.13.0",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tokio",
+ "url",
 ]
 
 [[package]]

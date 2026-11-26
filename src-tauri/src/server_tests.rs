@@ -46,6 +46,7 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             hosts: Vec::new(),
             proxies: Vec::new(),
             debug: false,
+            gate: false,
             update: update::Asked::default(),
             endpoint: None,
         }

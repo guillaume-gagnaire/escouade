@@ -2,8 +2,8 @@
 title: "Fetch automatique"
 subject: "git-fichiers"
 sources: ["Ticket ESC-561 (demandes de l'utilisateur du 2026-11-20 : « ajoute la possibilité d'activer le git fetch automatique », « pouvoir configurer le délai »)","~/.escouade/app.log de l'utilisateur (échecs du fetch de fond, 2026-09-29 au 2026-11-13)","git-for-windows/git#5199 (ssh d'OpenSSH 9.9p1 qui cale, corrigé dans 2.47.0(2))","src-tauri/src/core.rs (fetch_all, fetch_root, fetch_plans)","src-tauri/src/git.rs (fetch_background, windows_ssh_command, fetch_failure_kind)","crates/escouade-model/src/model.rs (GitFetchSettings, ProjectFetch, FetchPlan, FetchFailure)","src/components/settings/FetchSettings.svelte","src/components/settings/GitPage.svelte","src/components/branches/FetchLine.svelte","website/content/docs/fr/branches.md","website/content/docs/fr/settings-projects.md"]
-tickets: ["ESC-561"]
-decisions: [293]
+tickets: ["ESC-561","ESC-597"]
+decisions: [293,338]
 compared: null
 ---
 
@@ -83,3 +83,7 @@ D'où :
 ### Couper le réglage pendant un passage
 
 Le réglage est relu juste avant que git parte : un passage préparé avant que le fetch automatique soit coupé (pour tous les projets, ou « Jamais » pour le projet) ne lance rien. Seul un `git fetch` déjà lancé à ce moment va jusqu'au bout.
+
+### Sur un serveur avec la porte du réseau privé (RP-1, ESC-597)
+
+Sur un `escouade-server` lancé avec `--gate` (voir *Atteindre un réseau privé*), le fetch de fond, comme les autres `git` du cœur qui joignent un dépôt distant (`fetch`, `pull`, `push`), reçoit les variables de la porte avec un jeton de son projet : `HTTPS_PROXY`, `ALL_PROXY` vers la porte et `GIT_SSH_COMMAND` par `escouade-server via %h %p` (la commande ssh de l'utilisateur gardée dedans). Une variable que le fetch avait déjà (le ssh de Windows) reste. Rien n'est écrit dans la configuration par le fetch ; c'est le démarrage d'un agent qui écrit `core.sshCommand` dans le dépôt. Le poste de bureau ne change pas.

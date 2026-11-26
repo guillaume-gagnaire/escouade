@@ -1221,6 +1221,8 @@ pub struct Core {
     pub(crate) kept: Arc<integrations::kept::Kept>,
     /// The phone's access (ESC-567): the WireGuard tunnel, the API served in it, Réglages › Téléphone.
     pub phone: Arc<crate::phone::Phone>,
+    /// The gate of escouade-server (RP-1, `privatenet`): the agents’ one proxy, when the private network is on.
+    pub gate: Arc<crate::privatenet::GateSlot>,
     /// Where the Trello and GitHub APIs are.
     pub bases: RwLock<integrations::Bases>,
     /// The GitHub CLI's token, once asked for.
@@ -2473,6 +2475,7 @@ impl Core {
             secrets,
             kept,
             phone,
+            gate: Arc::default(),
             bases: RwLock::new(integrations::Bases::from_env()),
             gh_token: Mutex::default(),
             forges: RwLock::new(crate::forge::Registry::standard()),
@@ -3304,6 +3307,8 @@ impl Core {
         // A program of a plugin gets the network of now.
         self.plugin_runtime
             .set_agent_env(self.settings.read().network_env());
+        // The space’s proxy behind the gate (RP-1), as the settings now say.
+        self.gate.follow(&self.settings.read());
         self.plugin_runtime
             .set_network(crate::plugins::socket::Net::of(&self.settings.read()));
         // The plugins start again in the language of now: `initialize` says it.
@@ -4313,6 +4318,9 @@ impl Core {
             .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
             (spawn, rt.gen, engine::of(&rt.meta))
         };
+        // On a server with the gate (RP-1): its one proxy, with a token of its own, in place of the space’s (its lock let
+        // go: the repository's ssh command is read and written).
+        self.gate_agent_env(id, &spawn.project, &spawn.cwd, &mut spawn.env);
         // A session to resume that its harness may not take back (ESC-491): what the agent did so far goes with it, for
         // a new one in its place.
         if engine.takes_recap() && matches!(spawn.start, crate::engine::Start::Resume { .. }) {
@@ -7876,6 +7884,15 @@ impl Core {
         } else {
             Vec::new()
         };
+        // On a server with the gate (RP-1): the gate, as the project’s launches.
+        if let Some(project) = self.project_of_dir(project_dir) {
+            self.gate_project_env(
+                crate::privatenet::Kind::Launch,
+                &project,
+                &wt.path,
+                &mut env,
+            );
+        }
         env.extend(worktrees::step_env(project_dir, wt, ports));
         let log_path = self.data.setup_log(id);
         let setup_log = worktrees::SetupLog::create(&log_path);
@@ -8254,6 +8271,12 @@ impl Core {
             } else {
                 Vec::new()
             };
+            self.gate_project_env(
+                crate::privatenet::Kind::Launch,
+                &project.id,
+                &wt.path,
+                &mut env,
+            );
             env.extend(worktrees::step_env(&project.path, wt, ports));
             for step in &steps {
                 // Its output is not shown: the agent is being removed, and its failure says why.
@@ -9094,6 +9117,8 @@ impl Core {
         let lock = self.spawn_lock(id);
         let guard = lock.lock().await;
         let h = self.agents.write().remove(id).ok_or_else(agent_not_found)?;
+        // Its token of the gate (RP-1) is worth nothing any more.
+        self.gate.forget_agent(id);
         let (pid, worktree, ports, killed, interface, meta) = {
             let mut rt = h.lock();
             rt.gen += 1;

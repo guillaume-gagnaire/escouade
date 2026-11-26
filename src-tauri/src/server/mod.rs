@@ -13,6 +13,10 @@
 //! - `escouade-server phone [status]`, `phone on [PORT]`, `phone off`, `phone add NAME [--endpoint HOST]`,
 //!   `phone remove ID` (ESC-567): the phone's tunnel, its file changed, read again by a server that runs; `add` prints
 //!   the phone's WireGuard config and its QR code for the user alone (the official WireGuard app, until MO-4's pairing);
+//! - `escouade-server via <host> <port>` (RP-1): `ssh`'s `ProxyCommand` through the gate (`escouade_gate::via`), which
+//!   the core puts in `GIT_SSH_COMMAND` and `core.sshCommand`; nothing else read, nothing logged;
+//! - `--gate` (`ESCOUADE_SERVER_GATE`, RP-1): the gate of the private network on 127.0.0.1, the agents' one proxy
+//!   (`privatenet`); off by default;
 //! - `--data-dir <folder>` (else `~/.escouade`), `--port <n>` (else [`DEFAULT_PORT`]), `--listen <address>` (another
 //!   interface than 127.0.0.1: for Docker, behind a tunnel or a proxy; it warns), `--allow-host <name>` (a `Host`
 //!   the API takes besides the loopback's: the name a TLS proxy serves it under), `--trust-proxy <address>` (a proxy
@@ -52,6 +56,8 @@ pub const PORT_VAR: &str = "ESCOUADE_SERVER_PORT";
 pub const LISTEN_VAR: &str = "ESCOUADE_SERVER_LISTEN";
 pub const HOSTS_VAR: &str = "ESCOUADE_SERVER_ALLOW_HOSTS";
 pub const PROXIES_VAR: &str = "ESCOUADE_SERVER_TRUST_PROXIES";
+/// `--gate` (RP-1): `1`, `true`, `on` or `yes`.
+pub const GATE_VAR: &str = "ESCOUADE_SERVER_GATE";
 
 /// What the command line asks.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,6 +97,8 @@ pub struct Args {
     /// The addresses of the proxies whose `X-Forwarded-For` is read (`--trust-proxy`, SR1-04).
     pub proxies: Vec<IpAddr>,
     pub debug: bool,
+    /// The gate of the private network (`--gate`, RP-1): the agents’ one proxy.
+    pub gate: bool,
     /// What `update` is asked.
     pub update: update::Asked,
     /// Where a phone reaches the server (`phone add --endpoint`): its name or address on the Internet.
@@ -121,6 +129,9 @@ pub fn parse_with(
         hosts: Vec::new(),
         proxies: Vec::new(),
         debug: false,
+        gate: var(GATE_VAR).is_some_and(|v| {
+            matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "on" | "yes")
+        }),
         update: update::Asked::default(),
         endpoint: None,
     };
@@ -182,6 +193,7 @@ pub fn parse_with(
                 out.proxies.push(v);
             }
             "--debug" => out.debug = true,
+            "--gate" => out.gate = true,
             "--endpoint" => out.endpoint = Some(value("--endpoint")?),
             "--to" => {
                 update_flags = true;
@@ -322,13 +334,15 @@ pub fn help() -> String {
          escouade-server devices revoke ID  révoque un appareil\n  \
          escouade-server health             le serveur tourne-t-il et répond-il ? (code 0 si oui)\n  \
          escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
-         escouade-server phone              le tunnel WireGuard du téléphone (on [PORT], off, add NOM [--endpoint HÔTE], remove ID)\n\n\
+         escouade-server phone              le tunnel WireGuard du téléphone (on [PORT], off, add NOM [--endpoint HÔTE], remove ID)\n  \
+         escouade-server via HÔTE PORT      le ProxyCommand de ssh par la porte (ProxyCommand=\"escouade-server via %h %p\")\n\n\
          Options :\n  \
          --data-dir DOSSIER  le dossier des données (sinon ~/.escouade)\n  \
          --port N            le port de l’API distante (sinon {port})\n  \
          --listen ADRESSE    écoute sur une autre adresse que 127.0.0.1 (Docker, un tunnel, un proxy) : à ne jamais exposer sur Internet\n  \
          --allow-host NOM    accepte ce nom dans l’en-tête Host (celui d’un proxy TLS devant le serveur)\n  \
          --trust-proxy IP    lit X-Forwarded-For de ce proxy seul : chaque client y compte ses échecs à part\n  \
+         --gate              la porte du réseau privé : le seul proxy des agents, sur 127.0.0.1\n  \
          --debug             le journal en détail\n  \
          --version, --help",
         "escouade-server {version}: Escouade's core without a window, driven from afar.\n\n\
@@ -339,13 +353,15 @@ pub fn help() -> String {
          escouade-server devices revoke ID  revokes a device\n  \
          escouade-server health             does the server run and answer? (exit code 0 if so)\n  \
          escouade-server update             puts the server at the latest signed version (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
-         escouade-server phone              the phone's WireGuard tunnel (on [PORT], off, add NAME [--endpoint HOST], remove ID)\n\n\
+         escouade-server phone              the phone's WireGuard tunnel (on [PORT], off, add NAME [--endpoint HOST], remove ID)\n  \
+         escouade-server via HOST PORT      ssh's ProxyCommand through the gate (ProxyCommand=\"escouade-server via %h %p\")\n\n\
          Options:\n  \
          --data-dir FOLDER  the data folder (else ~/.escouade)\n  \
          --port N           the port of the remote API (else {port})\n  \
          --listen ADDRESS   listens on another address than 127.0.0.1 (Docker, a tunnel, a proxy): never to expose to the Internet\n  \
          --allow-host NAME  takes this name in the Host header (a TLS proxy's in front of the server)\n  \
          --trust-proxy IP   reads X-Forwarded-For from this proxy alone: each client behind it counts its failures apart\n  \
+         --gate             the gate of the private network: the agents' one proxy, on 127.0.0.1\n  \
          --debug            a detailed log\n  \
          --version, --help",
         version = env!("CARGO_PKG_VERSION"),
@@ -395,6 +411,10 @@ fn speak_as_the_settings(args: &[String]) {
 
 /// `escouade-server` with `args` (without the program's name): its exit code.
 pub fn main(args: Vec<String>) -> i32 {
+    // `ssh`’s ProxyCommand (RP-1): nothing else read, nothing logged; its refusal on its standard error.
+    if args.first().map(String::as_str) == Some("via") {
+        return escouade_gate::via::main(&args[1..]);
+    }
     speak_as_the_settings(&args);
     let args = match parse(&args) {
         Ok(a) => a,
@@ -688,6 +708,7 @@ fn run(args: &Args) -> Result<()> {
         port: args.port,
         hosts: args.hosts.clone(),
         proxies: args.proxies.clone(),
+        gate: args.gate,
     };
     let done = runtime.block_on(serve(
         data,
@@ -733,6 +754,8 @@ pub struct Endpoint {
     pub hosts: Vec<String>,
     /// `--trust-proxy`.
     pub proxies: Vec<IpAddr>,
+    /// `--gate` (RP-1).
+    pub gate: bool,
 }
 
 impl Endpoint {
@@ -782,6 +805,14 @@ pub async fn serve(
     core.phone.mark_server();
     // Its Kanbans go up to 64 tickets at once (ESC-620).
     core.mark_server();
+    // The gate of the private network (RP-1), before any agent starts: the agents’ one proxy. No connector yet (RP-4
+    // plugs its entry): a host of a private network is refused, the rest goes out as before.
+    if endpoint.gate {
+        if let Err(e) = core.start_gate(Arc::new(escouade_gate::NoConnectors)).await {
+            stop_core(headless).await;
+            return Err(e);
+        }
+    }
     {
         let core = core.clone();
         tauri::async_runtime::spawn(async move {
@@ -841,6 +872,7 @@ pub async fn serve(
     let why = stop.await;
     log::info!("escouade-server: {why}: stopping (the agents' turns are cut, the state written)");
     writer.abort();
+    core.gate.stop();
     let status_data = core.data.clone();
     drop(core);
     stop_core(headless).await;
