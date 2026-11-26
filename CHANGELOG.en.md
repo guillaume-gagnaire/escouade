@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: behind a proxy, your server refuses a request that comes under two names at once (two `Host` or `Origin` headers, or an address that names another), so that the proxy and the server always read the same one.
 - Security: on the team server, a member can no longer skew the team’s costs or put their spending in someone else’s name, nor give your agents an instruction through the memory: a teammate’s memory kept by them alone comes as data, with its author. The team’s machine takes on its own only the agents an administrator passes, without overwriting one of your branches, and the “auto” mode a team imposes waits for your consent in “Your turn”.
 - Security: phone access no longer takes an operator’s address (a 4G key, a shared connection) for Tailscale’s, and serves on Tailscale only if you turn it on. Settings › Phone says whom your computer asks for its public address (STUN, at Cloudflare and Google) and lets you turn it off; on the phone, another app can no longer shut Escouade out by opening silent connections.
 - Security: on the team server, a team can no longer stop the others from signing in, nor a stranger hold connections open by trickling their requests; connections are capped, and a new device’s short code grows to 10 characters, much harder to find. Keep the server behind its proxy (Caddy, Traefik) if it can be reached from the Internet.

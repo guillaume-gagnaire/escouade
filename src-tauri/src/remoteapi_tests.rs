@@ -2694,3 +2694,193 @@ async fn the_origins_taken_by_way() {
     }
     h.stop();
 }
+
+/// The status of the server's answer to the raw request `head` (its request line and headers) handed from `via`: what
+/// a client of test cannot write through tungstenite (an absolute URI, a header given twice as it likes).
+async fn raw_status(api: &Arc<RemoteApi>, via: Via, from: Option<IpAddr>, head: &str) -> u16 {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let (mut near, far) = tokio::io::duplex(1 << 16);
+    assert!(api.serve_stream_from(Box::new(far), via, from));
+    let upgrade = "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\n\
+                   Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n";
+    near.write_all(format!("{head}{upgrade}\r\n").as_bytes())
+        .await
+        .unwrap();
+    let mut answer = Vec::new();
+    let mut buf = [0u8; 1024];
+    while !answer.windows(4).any(|w| w == b"\r\n\r\n") {
+        let n = tokio::time::timeout(Duration::from_secs(30), near.read(&mut buf))
+            .await
+            .expect("an answer in 30 s")
+            .unwrap();
+        assert!(
+            n > 0,
+            "closed without an answer: {}",
+            String::from_utf8_lossy(&answer)
+        );
+        answer.extend_from_slice(&buf[..n]);
+    }
+    let text = String::from_utf8_lossy(&answer);
+    text.split(' ').nth(1).unwrap().parse().unwrap()
+}
+
+/// ESC-688: a `Host` or an `Origin` given twice, and an absolute URI whose authority is not the `Host`, are refused
+/// (400) by every way, before the WebSocket; what was taken before still is (the loopback, a name of `--allow-host`,
+/// the window's and the phone's origins, an absolute URI of the same authority).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_or_an_origin_given_twice_and_an_absolute_uri_of_another_authority_are_refused() {
+    let (_dir, h, api, _token) = served("remote-one-name").await;
+    api.allow_hosts(vec!["escouade.example.org".to_string()]);
+    let tunnel = || FakePeer::via("p").1;
+    let lo = ip("127.0.0.1");
+    let path = proto::PATH;
+    // Through tungstenite's own client: a second Origin appended to the first (it writes one Host alone).
+    for second in ["tauri://localhost", "https://evil.example"] {
+        let headers = [("origin", "tauri://localhost"), ("origin", second)];
+        let opened = handed(&api, Via::Loopback, lo, "127.0.0.1", &headers).await;
+        assert_eq!(
+            opened.err().as_deref(),
+            Some("HTTP 400"),
+            "a second Origin {second}"
+        );
+    }
+    let opened = handed(
+        &api,
+        tunnel(),
+        None,
+        "10.77.0.1",
+        &[
+            ("origin", "capacitor://localhost"),
+            ("origin", "capacitor://localhost"),
+        ],
+    )
+    .await;
+    assert_eq!(
+        opened.err().as_deref(),
+        Some("HTTP 400"),
+        "two Origins through the tunnel"
+    );
+
+    // Raw requests: the absolute URI, and the headers twice as the client writes them.
+    let cases: Vec<(Via, Option<IpAddr>, String, u16)> = vec![
+        // Another authority than the Host, whatever the way.
+        (Via::Loopback, lo, format!("GET http://evil.example{path} HTTP/1.1\r\nHost: 127.0.0.1\r\n"), 400),
+        (Via::Loopback, lo, format!("GET ws://127.0.0.1:9{path} HTTP/1.1\r\nHost: 127.0.0.1\r\n"), 400),
+        (
+            Via::Loopback,
+            lo,
+            format!("GET https://escouade.example.org{path} HTTP/1.1\r\nHost: localhost\r\n"),
+            400,
+        ),
+        (tunnel(), None, format!("GET http://10.77.0.2{path} HTTP/1.1\r\nHost: 10.77.0.1\r\n"), 400),
+        (
+            tailscale(),
+            ip("100.100.9.9"),
+            format!("GET http://evil.example{path} HTTP/1.1\r\nHost: 100.100.7.1\r\n"),
+            400,
+        ),
+        // Two Hosts, the loopback's or the way's first (the same one twice too); two Origins.
+        (
+            Via::Loopback,
+            lo,
+            format!("GET {path} HTTP/1.1
+Host: 127.0.0.1
+Host: 127.0.0.1
+"),
+            400,
+        ),
+        (
+            tunnel(),
+            None,
+            format!("GET {path} HTTP/1.1
+Host: 10.77.0.1
+Host: 10.77.0.1
+"),
+            400,
+        ),
+        (
+            tailscale(),
+            ip("100.100.9.9"),
+            format!("GET {path} HTTP/1.1
+Host: 100.100.7.1
+Host: evil.example
+"),
+            400,
+        ),
+        (
+            Via::Loopback,
+            lo,
+            format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nHost: evil.example\r\n"),
+            400,
+        ),
+        (
+            Via::Loopback,
+            lo,
+            format!(
+                "GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: tauri://localhost\r\nOrigin: https://evil.example\r\n"
+            ),
+            400,
+        ),
+        // Taken as before: the loopback, a name asked for, the window's Origin, the same authority in an absolute URI.
+        (Via::Loopback, lo, format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n"), 101),
+        (Via::Loopback, lo, format!("GET {path} HTTP/1.1\r\nHost: escouade.example.org\r\n"), 101),
+        (
+            Via::Loopback,
+            lo,
+            format!("GET {path} HTTP/1.1\r\nHost: localhost:4999\r\nOrigin: tauri://localhost\r\n"),
+            101,
+        ),
+        (
+            Via::Loopback,
+            lo,
+            format!("GET ws://LocalHost:4999{path} HTTP/1.1\r\nHost: localhost:4999\r\n"),
+            101,
+        ),
+        (
+            tunnel(),
+            None,
+            format!("GET {path} HTTP/1.1\r\nHost: 10.77.0.1\r\nOrigin: capacitor://localhost\r\n"),
+            101,
+        ),
+        (
+            tailscale(),
+            ip("100.100.9.9"),
+            format!("GET http://100.100.7.1{path} HTTP/1.1\r\nHost: 100.100.7.1\r\n"),
+            101,
+        ),
+        // Refused as before: a Host that is not the loopback, a web page's Origin (403), another path (404).
+        (Via::Loopback, lo, format!("GET {path} HTTP/1.1\r\nHost: evil.example\r\n"), 403),
+        (
+            Via::Loopback,
+            lo,
+            format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: https://evil.example\r\n"),
+            403,
+        ),
+        (Via::Loopback, lo, "GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n".to_string(), 404),
+    ];
+    for (via, from, head, status) in cases {
+        assert_eq!(raw_status(&api, via, from, &head).await, status, "{head}");
+    }
+    // On the listener itself, as a client over TCP sends it.
+    {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut tcp = tokio::net::TcpStream::connect(api.addr()).await.unwrap();
+        tcp.write_all(
+            format!(
+                "GET http://evil.example{path} HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+                 Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+        let mut buf = [0u8; 64];
+        let n = tcp.read(&mut buf).await.unwrap();
+        assert!(
+            buf[..n].starts_with(b"HTTP/1.1 400"),
+            "{}",
+            String::from_utf8_lossy(&buf[..n])
+        );
+    }
+    h.stop();
+}

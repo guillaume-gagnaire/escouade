@@ -13,6 +13,8 @@
 //!   past them, the pairing codes of that source are refused unread for the rest of the minute; past the wrong codes of
 //!   a minute from elsewhere in all, those from elsewhere, never those of this machine; a right token always passes
 //!   (SR1-04, ESC-654, ESC-631). Through Tailscale, no `Origin` of a `localhost`: the phone app's own alone (SR1-09).
+//!   A `Host` or an `Origin` given twice, or an absolute URI whose authority is not the `Host`, is refused (400): a
+//!   proxy and the server never read two names (ESC-688).
 //! - **The handshake**: the first message gives the device's token (compared in constant time, `devices`), the
 //!   client's version, which must be the server's (« Mettre à jour le serveur »), and the session it had before a cut
 //!   (`sessions`). Bounded: the connections of a device, and in all.
@@ -1551,8 +1553,9 @@ fn version_text(server: &str, client: &str, update: &str) -> String {
 }
 
 /// The request that opens the WebSocket, before it opens: its path, a `Host` of the loopback, no `Origin` but
-/// Escouade's own window's (and, through the tunnel or Tailscale, the phone app's: [`Way::origins`]). Else its HTTP
-/// status and why (shown in the log: no secret there).
+/// Escouade's own window's (and, through the tunnel or Tailscale, the phone app's: [`Way::origins`]); a single `Host`
+/// and `Origin`, and the authority of an absolute URI the `Host`'s. Else its HTTP status and why (shown in the log: no
+/// secret there).
 fn guard(
     req: &Request,
     hosts: &[String],
@@ -1566,11 +1569,33 @@ fn guard(
             format!("path {}", shown(req.uri().path())),
         ));
     }
+    // One name alone: a `Host` or an `Origin` given twice, a proxy and this server might each read another (ESC-688).
+    for name in ["host", "origin"] {
+        if req.headers().get_all(name).iter().nth(1).is_some() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("more than one {name} header"),
+            ));
+        }
+    }
     let host = req
         .headers()
         .get("host")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
+    // An absolute URI names the server too: the same as its `Host`, or refused.
+    if let Some(authority) = req.uri().authority() {
+        if !authority.as_str().eq_ignore_ascii_case(host) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "an absolute URI of another authority ({}) than its Host ({})",
+                    shown(authority.as_str()),
+                    shown(host)
+                ),
+            ));
+        }
+    }
     // Through the tunnel or Tailscale, the address the phone reached alone; on the loopback, the loopback (or a name
     // asked for in so many words).
     let host_ok = if through {
