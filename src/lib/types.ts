@@ -1070,6 +1070,16 @@ export interface PageEvent {
   title?: string;
 }
 
+/** What happened to an agent's page (ESC-667): a load, a web address it asked for (`wants`: the window offers it, opened
+ * by a gesture of the user alone), another refused, a download or a permission refused, its title as the page wrote it. */
+export interface AgentPageEvent {
+  /** Its number, `p-<n>`. */
+  page: string;
+  phase: 'started' | 'finished' | 'wants' | 'refused' | 'download' | 'permission' | 'title';
+  url?: string;
+  title?: string;
+}
+
 /** Where a page goes in the window, in its logical pixels. */
 export interface PageBounds {
   x: number;
@@ -2794,6 +2804,7 @@ export type UiEvent =
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }
   | { type: 'devPage'; page: PageEvent }
+  | { type: 'agentPage'; page: AgentPageEvent }
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
   | { type: 'focusPrs'; projectId: string }

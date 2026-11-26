@@ -9,6 +9,10 @@ mod agentbranch;
 #[cfg(test)]
 mod agentbranch_tests;
 mod agentbrowser_probe;
+mod agentpage;
+mod agentpage_probe;
+#[cfg(test)]
+mod agentpage_tests;
 mod agentprs;
 #[cfg(test)]
 mod agentprs_tests;
@@ -498,6 +502,12 @@ pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
     devpage_probe::cli(args, context())
 }
 
+/// `agentpage_probe` (examples): an agent's page in a real webview of this system (ESC-667), the
+/// trap of docs/AGENT-PAGES.md § 8.4 trying every way out. Gives the exit code.
+pub fn agentpage_probe_cli(args: Vec<String>) -> i32 {
+    agentpage_probe::cli(args, context())
+}
+
 /// `agentbrowser_probe` (examples): what the read bridge of the browsers (`browserread`, ESC-668)
 /// reads, captures and keeps of a page that defends itself, in a real webview of this system.
 /// Gives the exit code.
@@ -567,6 +577,8 @@ pub fn run() {
     // Restarted by itself behind another app, it does not take the focus from it.
     #[cfg(target_os = "macos")]
     let builder = builder.activate_ignoring_other_apps(window == updates::Window::Front);
+    // The agents' pages (ESC-667): each served to its own webview alone.
+    let builder = agentpage::register(builder);
     builder
         .setup(move |app| {
             init_logging();
@@ -583,6 +595,8 @@ pub fn run() {
             app.manage(deeplink::Inbox::default());
             // The pages of the launches (ESC-311).
             app.manage(Arc::new(devpage::Pages::default()));
+            // The agents' pages (ESC-667): what the scheme `escouade-page://` serves.
+            app.manage(Arc::new(agentpage::Shelter::default()));
             // The process groups of agents a killed launch left behind (macOS, Linux: ESC-417),
             // stopped before any agent starts; this launch's are noted from now on.
             agentgroups::start(
@@ -722,6 +736,11 @@ pub fn run() {
                 commands::devpage_devtools,
                 commands::devpage_mode,
                 commands::devpage_close,
+                commands::agentpage_open_trap,
+                commands::agentpage_view,
+                commands::agentpage_place,
+                commands::agentpage_outside,
+                commands::agentpage_close,
                 commands::open_path,
                 commands::save_settings,
                 commands::claude_locate,

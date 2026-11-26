@@ -299,6 +299,11 @@ pub enum UiEvent {
     DevPage {
         page: crate::devpage::PageEvent,
     },
+    /// What happened to an agent's page (ESC-667): a load, an address it asked for and was refused
+    /// (a web one the window offers), a download or a permission refused, its title.
+    AgentPage {
+        page: crate::agentpage::PageEvent,
+    },
     /// An address to open in the default browser (a pull request to finish on GitHub).
     OpenUrl {
         url: String,

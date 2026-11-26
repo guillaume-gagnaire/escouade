@@ -1,15 +1,15 @@
 ---
 title: "Les pages des agents"
 subject: "harness"
-sources: ["docs/AGENT-PAGES.md (ESC-661, étude du 2026-11-25 ; apportée sur main et mise d'accord par ESC-666 le 2026-11-26)","docs/AGENT-BROWSERS-TICKETS.md (ESC-666 : la liste finale des tickets)","design/agent-pages/README.md (direction A choisie ; captures a-*)","Demande a-36, réponse de l'utilisateur du 2026-11-25 : A « Les repères », recommandations P1 à P10 acceptées","L'utilisateur, 2026-11-26 (par l'Overseer) : tout ce qui touche aux navigateurs sort en 2.2","Message d'un utilisateur du 2026-11-24 (une donnée) ; l'utilisateur, 2026-11-25 : « le cas trop cool »","docs/AGENT-BROWSERS.md (ESC-663 : drive_browser, monde isolé)","src-tauri/src/devpage.rs, src-tauri/src/mcp/asks.rs (ce qui existe)","docs/TODO-2.4.md (plugins d'interface)"]
-tickets: ["ESC-661","ESC-666"]
-decisions: ["pages-des-agents-p1-p9-p10-les-outils-mc",318,319,320,"pages-des-agents-p7-p8-un-interrupteur-d",317,"un-seul-pilotage-pour-toutes-les-lignes"]
+sources: ["docs/AGENT-PAGES.md (ESC-661, étude du 2026-11-25 ; apportée sur main et mise d'accord par ESC-666 le 2026-11-26)","docs/AGENT-BROWSERS-TICKETS.md (ESC-666 : la liste finale des tickets)","design/agent-pages/README.md (direction A choisie ; captures a-*)","Demande a-36, réponse de l'utilisateur du 2026-11-25 : A « Les repères », recommandations P1 à P10 acceptées","L'utilisateur, 2026-11-26 (par l'Overseer) : tout ce qui touche aux navigateurs sort en 2.2","Message d'un utilisateur du 2026-11-24 (une donnée) ; l'utilisateur, 2026-11-25 : « le cas trop cool »","docs/AGENT-BROWSERS.md (ESC-663 : drive_browser, monde isolé)","src-tauri/src/devpage.rs, src-tauri/src/mcp/asks.rs (ce qui existe)","src-tauri/src/agentpage.rs (ESC-667 : la cloison)","docs/TODO-2.4.md (plugins d'interface)"]
+tickets: ["ESC-661","ESC-666","ESC-667"]
+decisions: ["pages-des-agents-p1-p9-p10-les-outils-mc",318,319,320,"pages-des-agents-p7-p8-un-interrupteur-d",317,"un-seul-pilotage-pour-toutes-les-lignes","la-cloison-des-pages-des-agents-une-orig"]
 compared: null
 ---
 
 # Les pages des agents
 
-> **Tranché, pas encore construit.** L'utilisateur a choisi le 2026-11-25 (demande a-36) la direction A « Les repères » et les recommandations P1 à P10 de l'étude ESC-661. Tout ce qui touche aux navigateurs sort en 2.2 (l'utilisateur, 2026-11-26) : les tickets partent de `main`, dans l'ordre de la liste finale `docs/AGENT-BROWSERS-TICKETS.md` (ESC-666). Ce que seule la 2.3 a est dit « en 2.3 ». Le détail est dans `docs/AGENT-PAGES.md`.
+> **Tranché ; la cloison est construite (AP-1, ESC-667), le reste pas encore.** L'utilisateur a choisi le 2026-11-25 (demande a-36) la direction A « Les repères » et les recommandations P1 à P10 de l'étude ESC-661. Tout ce qui touche aux navigateurs sort en 2.2 (l'utilisateur, 2026-11-26) : les tickets partent de `main`, dans l'ordre de la liste finale `docs/AGENT-BROWSERS-TICKETS.md` (ESC-666). Ce que seule la 2.3 a est dit « en 2.3 ». Le détail est dans `docs/AGENT-PAGES.md`.
 
 ## Ce que c'est
 
@@ -19,7 +19,7 @@ Un agent, quel que soit son harness, montre à l'utilisateur une page HTML dans 
 
 - `show_page` : `title`, `template` (`review`, `diagram`, `compare`, `html`, `custom`), `data` (le JSON d'un modèle, 256 Ko) ou `html` / `file` (un fichier du dossier de travail et ses fichiers relatifs), `page` (une nouvelle version d'une page), `ask` (la demande de la boîte qu'elle porte), `open` (`beside`, `quiet`). Rend `p-<n>`, la version, la demande `a-<n>`.
 - Le pilotage passe par `drive_browser`, l'outil unique des lignes de « Navigateurs » (ESC-663). Une page se vise par `browser: "page:p-12"`, la clé de sa ligne, sans champ `page` à part (fixé par ESC-666). Elle accepte les gestes de montrer (`scroll_to`, `scroll`, `highlight`, `clear`, `width`, `wait`), plus `tab` (un onglet déclaré) et `version` ; jamais `click`, `type`, `select`, `press` ni `navigate`. Les scripts sont des scripts fixes d'Escouade, exécutés dans un **monde isolé** de la page (DevTools de WebView2, `run_javascript_in_world` de WebKitGTK, `inContentWorld` de WKWebView), jamais `webview.eval` ni un script de l'agent. Le pilotage est suspendu dès que l'utilisateur reprend la main. La règle de la main, la bande et le canal sont les mêmes pour tous les modes (*Les navigateurs pilotés par les agents*, « Un seul pilotage »).
-- `get_page`, `close_page`. Pas de lecture de ce que l'utilisateur fait dans la page : `read_browser` y est refusé ; `capture_browser` et `browser_console` s'y servent.
+- `get_page`, `close_page`. Pas de lecture de ce que l'utilisateur fait dans la page : `read_browser` y est refusé ; `capture_browser` et `browser_console` s'y servent (une page n'a pas encore les tampons de lecture des navigateurs d'AB-1 : à décider par AB-2).
 - Une page a ses versions (10 gardées), copiées dans `<données>/pages/` : elle survit au worktree, vit avec son agent puis le délai des fichiers de la boîte. Bornes : 20 pages par agent, 2 Mo de HTML, 10 Mo et 64 fichiers par version.
 - Qui : les agents et les discussions ; l'Overseer en 2.3 ; Claude hors Escouade seulement avec une demande. Projet privé : ses pages ne sont connues que de ses agents.
 - Sa trace : une carte dans la conversation (titre, modèle, version, état de sa demande, « Afficher », le nombre de repères), et une rangée numérotée par geste de pilotage.
@@ -30,7 +30,7 @@ La conversation et la page côte à côte. Chaque geste de l'agent est un repèr
 
 ## Le retour des choix
 
-Les choix d'une page sont une demande de la boîte « À toi » (`ask` de `show_page`, le même dépôt que `ask_user`). Un clic dans la page propose une option par un seul canal (`escouade-page://<p-n>/_/choose`, schéma fermé, validé par le cœur, servi à la seule webview de la page) ; rien ne part sans le geste de l'utilisateur dans la bande d'Escouade sous la page, qui montre le libellé de la demande lu dans le cœur. Ensuite, le circuit de la boîte tel quel : 10 s pour annuler, un message à l'agent, rien d'autre. Un feu vert ne se propose jamais depuis la page. Un onglet (l'app développée, un site) n'a aucun canal.
+Les choix d'une page sont une demande de la boîte « À toi » (`ask` de `show_page`, le même dépôt que `ask_user`). Un clic dans la page propose une option par un seul canal (`escouade-page://p-<n>.localhost/_/choose`, schéma fermé, validé par le cœur, servi à la seule webview de la page) ; rien ne part sans le geste de l'utilisateur dans la bande d'Escouade sous la page, qui montre le libellé de la demande lu dans le cœur. Ensuite, le circuit de la boîte tel quel : 10 s pour annuler, un message à l'agent, rien d'autre. Un feu vert ne se propose jamais depuis la page. Un onglet (l'app développée, un site) n'a aucun canal.
 
 ## Les modèles et la page à soi
 
@@ -38,7 +38,7 @@ Les modèles `review`, `diagram` (Mermaid embarqué, sans réseau) et `compare` 
 
 ## Sécurité
 
-Une webview à part (`agentpage-*`, refusée par `refuses`), sous une origine à elle (`escouade-page://`) servie depuis la copie seule ; CSP stricte (`default-src 'none'`, `connect-src 'self'`, scripts sans `unsafe-eval`, pas de cadre ni de formulaire), aucun réseau sans exception, navigation hors de sa page seulement par une bande d'Escouade sur un geste, `incognito`, permissions et téléchargements refusés, préchargements DNS et `RTCPeerConnection` retirés, ce qu'Escouade exécute dans un monde isolé, devtools sur un geste de l'utilisateur. Ce qui manque à la webview des navigateurs, système par système, est dans `docs/AGENT-PAGES.md` § 8.4.
+Construite par AP-1 (ESC-667) et détaillée, système par système, dans *Les pages des agents : la cloison* (`kanban/pages-des-agents`). En bref : une webview à part (`agentpage-*`, refusée par la garde des commandes ; la capacité ne nomme que `main`), une origine par page (`escouade-page://p-12.localhost/`) servie à sa seule webview depuis sa copie ; une CSP en en-tête et en `<meta>` qui écrit l'origine de la page en toutes lettres (pas `'self'`), sans `unsafe-eval`, sans cadre ni formulaire ; navigation hors de sa page refusée, une adresse du web gardée pour la bande et ouverte sur un geste seulement ; rien qui dure d'une ouverture à l'autre ; permissions et téléchargements refusés ; un script de garde d'Escouade dans chaque cadre (WebRTC, `eval` et `Function`, préchargements ajoutés par script) ; sous Windows et Linux, un cul-de-sac du réseau (et sous Windows un filtre de toutes les requêtes) ; ce qu'Escouade exécute dans la page, dans un monde isolé ; devtools sur un geste de l'utilisateur. La sonde `agentpage_probe` et l'e2e `agentpage.spec.ts` ouvrent une page piège : rien n'en sort.
 
 ## Place dans l'app
 

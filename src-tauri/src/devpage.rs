@@ -546,7 +546,7 @@ fn placed() -> &'static Mutex<HashMap<String, Bounds>> {
 }
 
 /// Places `webview` at `b`, in its window's logical pixels.
-fn set_bounds<R: Runtime>(webview: &tauri::Webview<R>, b: Bounds) -> Result<(), String> {
+pub(crate) fn set_bounds<R: Runtime>(webview: &tauri::Webview<R>, b: Bounds) -> Result<(), String> {
     placed().lock().insert(webview.label().to_string(), b);
     webview
         .set_position(LogicalPosition::new(b.x, b.y))

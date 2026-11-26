@@ -221,9 +221,11 @@ pub fn off_the_window<R: Runtime>(
     let handler = Arc::new(handler);
     move |invoke: Invoke<R>| {
         let name = invoke.message.command().to_string();
-        // A launch's page (ESC-311) is the developed app, not Escouade: no command answers it.
-        if crate::devpage::refuses(invoke.message.webview_ref().label()) {
-            log::warn!("a launch's page called {name}: refused");
+        // A launch's page (ESC-311) is the developed app, not Escouade, and an agent's page
+        // (ESC-667) is an agent's HTML: no command answers either.
+        let label = invoke.message.webview_ref().label().to_string();
+        if crate::devpage::refuses(&label) || crate::agentpage::refuses(&label) {
+            log::warn!("the page {label} called {name}: refused");
             invoke
                 .resolver
                 .reject(format!("Command {name} not allowed by ACL"));

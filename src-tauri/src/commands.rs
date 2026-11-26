@@ -4822,6 +4822,99 @@ pub fn devpage_close(
     crate::devpage::close(&app, &pages, &agent_id)
 }
 
+// ---------- the agents' pages (ESC-667, AP-1): the shelter alone; the MCP tool comes in AP-2 ----------
+
+/// What happens to the agents' pages, to the window.
+fn agentpage_tell(core: &Arc<Core>) -> crate::agentpage::Tell {
+    let hub = Arc::downgrade(core);
+    Arc::new(move |page| {
+        if let Some(core) = hub.upgrade() {
+            core.hub.emit(UiEvent::AgentPage { page });
+        }
+    })
+}
+
+/// A debug build alone (the end-to-end test): opens the trap of docs/AGENT-PAGES.md § 8.4 as page
+/// `p-1` in its shelter, at `bounds`, its listeners on `tcp` and `udp` of the loopback; and `p-13`,
+/// a neighbour it tries to read. A release refuses it: no page opens before the MCP tool (AP-2).
+#[tauri::command]
+pub fn agentpage_open_trap(
+    app: tauri::AppHandle,
+    core: CoreState,
+    shelter: State<Arc<crate::agentpage::Shelter>>,
+    tcp: u16,
+    udp: u16,
+    bounds: Option<crate::agentpage::Bounds>,
+) -> Res<crate::agentpage::PageView> {
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    let root = core.data.root().join("agent-pages-trap");
+    let (trap, neighbour) = (root.join("p-1"), root.join("p-13"));
+    crate::agentpage::write_trap(&trap, tcp, udp).map_err(|e| err(e.into()))?;
+    crate::agentpage::write_neighbour(&neighbour).map_err(|e| err(e.into()))?;
+    shelter.put("p-1", trap)?;
+    shelter.put("p-13", neighbour)?;
+    crate::agentpage::open(
+        &app,
+        &shelter,
+        crate::agentpage::Open {
+            page: "p-1",
+            bounds,
+            visible: bounds.is_some(),
+            data_root: core.data.root(),
+        },
+        own_of(&app),
+        agentpage_tell(&core),
+    )?;
+    shelter.view("p-1").ok_or_else(|| "no page".into())
+}
+
+/// Agent's page `page`, as the shelter keeps it; none when it is not open.
+#[tauri::command]
+pub fn agentpage_view(
+    shelter: State<Arc<crate::agentpage::Shelter>>,
+    page: String,
+) -> Res<Option<crate::agentpage::PageView>> {
+    Ok(shelter.view(&page))
+}
+
+/// Agent's page `page` in the window: placed at `bounds`, or hidden (none).
+#[tauri::command]
+pub fn agentpage_place(
+    app: tauri::AppHandle,
+    page: String,
+    bounds: Option<crate::agentpage::Bounds>,
+) -> Res<()> {
+    crate::agentpage::place(&app, &page, bounds)
+}
+
+/// The user's gesture on « La page veut ouvrir… »: `follow` opens the web address the core kept
+/// for page `page` in the system's browser (never one the window gives), else it is let go.
+#[tauri::command]
+pub fn agentpage_outside(
+    shelter: State<Arc<crate::agentpage::Shelter>>,
+    page: String,
+    follow: bool,
+) -> Res<Option<String>> {
+    let wanted = crate::agentpage::take_wanted(&shelter, &page);
+    if let (true, Some(url)) = (follow, wanted.as_ref()) {
+        crate::outside::open_url(url).map_err(err)?;
+    }
+    Ok(wanted)
+}
+
+/// Closes agent's page `page`.
+#[tauri::command]
+pub fn agentpage_close(
+    app: tauri::AppHandle,
+    shelter: State<Arc<crate::agentpage::Shelter>>,
+    page: String,
+) -> Res<()> {
+    crate::agentpage::close(&app, &shelter, &page);
+    Ok(())
+}
+
 // ---------- the box « À toi » (ESC-509): the commands its screen (IN-2) reads and acts by ----------
 
 /// The box: the requests of a project, or of all (`project_id` left out); nothing while the MCP
