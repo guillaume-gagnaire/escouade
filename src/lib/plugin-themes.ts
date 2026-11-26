@@ -34,6 +34,7 @@ export const THEME_TOKENS: Readonly<Record<string, TokenKind>> = Object.freeze({
     '--git-m',
     '--warn-ink',
     '--info',
+    '--skill',
     '--teal-ink',
     '--teal-ink-2',
     '--disc',

@@ -127,7 +127,7 @@ test('the title bar, the projects’ rail and the status bar look as the preview
         expect(await look(appSearch), `search, ${where}`).toLookLike(await look(prevSearch));
         expect(await place(appSearch), `search's place, ${where}`).toLookLike(await place(prevSearch));
         const editor = (l: Locator) => look(l).then(({ width, ...rest }) => (void width, rest));
-        expect(await editor(page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' })), `editor, ${where}`).toLookLike(
+        expect(await editor(page.getByRole('button', { name: 'Éditeur ou workspace du projet' })), `editor, ${where}`).toLookLike(
           await editor(preview.locator('.titlebar [data-go="editor"]')),
         );
 

@@ -1417,6 +1417,14 @@ export interface ProjectEnvironments {
   /** The host has no deployments (Gitea, Forgejo, Azure DevOps). */
   unsupported: boolean;
   host: string;
+  /** The deployments of a commit of the agents' own branches, previews included. */
+  branches?: BranchDeployment[];
+}
+
+/** A deployment of a commit of these agents' own branches. */
+export interface BranchDeployment {
+  deployment: Deployment;
+  agents: string[];
 }
 
 export type MergeStrategy = 'merge' | 'squash' | 'rebase' | 'semiLinear';
@@ -1810,6 +1818,8 @@ export interface Agent {
   isola: boolean;
   /** How far it is through a plan (its task list, its subagents, its workflows), worked out by the backend from its stream; absent until it has any. */
   plan?: PlanState;
+  /** The skills and plugins it and its subagents used, for the « Workspace » (the backend's canvas summary); absent until it has any. */
+  canvas?: CanvasSummary;
   /** « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal, not in Escouade's conversation view. */
   terminal: boolean;
   /**
@@ -2094,6 +2104,42 @@ export interface TaskOutput {
   truncated: boolean;
   /** Where it was read: the running process, its output file (the process is gone, or the Claude Code view), or nowhere (a workflow, a remote agent, no file). */
   source: 'process' | 'file' | 'none';
+}
+
+/** A skill (a call of `Skill`) or a plugin (the server of a tool `mcp__<server>__<tool>`) a thread used. */
+export interface KitUse {
+  kind: 'skill' | 'plugin';
+  name: string;
+  calls: number;
+  /** Its calls running now. */
+  running: number;
+  /** Its first call (absent: saved before it was kept). */
+  firstAt?: number;
+  lastAt: number;
+}
+
+/** What the « Workspace » reads of an agent without its conversation: its tools, and each subagent's by its call. */
+export interface CanvasSummary {
+  tools: KitUse[];
+  /** Each subagent's tools and latest terminal calls. */
+  subs: { call: string; tools: KitUse[]; commands?: CommandRun[] }[];
+  /** The pages published with `Artifact`, by address, by any thread. */
+  artifacts?: { url: string; title: string; versions: number; at: number }[];
+  /** The publications running: their address comes with their result. */
+  publishing?: { call: string; name: string; since: number }[];
+  /** The agent's own latest terminal calls (5 at most). */
+  commands?: CommandRun[];
+}
+
+/** A terminal call (`Bash` in the foreground) of a thread: the window tells the test runs among them. */
+export interface CommandRun {
+  call: string;
+  command: string;
+  startedAt: number;
+  endedAt?: number | null;
+  failed: boolean;
+  /** Cut short by the end of the process (a restart): neither passed nor failed. */
+  stopped?: boolean;
 }
 
 /** How far an agent is through a plan: its task list, its subagents, its workflows. */

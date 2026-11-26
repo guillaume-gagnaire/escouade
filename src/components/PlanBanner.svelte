@@ -14,7 +14,8 @@
 
   // The plan an agent follows, between its header and its messages: a line (the plan, how far it is), a bar with a
   // segment for each task, and the list of the tasks. What the stream says is worked out in `lib/plan.ts`.
-  let { agent }: { agent: Agent } = $props();
+  // `folded`: held folded, the reader's choice aside (the « Workspace » at mid-height); its button calls `onunfold`.
+  let { agent, folded = false, onunfold }: { agent: Agent; folded?: boolean; onunfold?: () => void } = $props();
   const uid = $props.id();
   const listId = `plan-list-${uid}`;
 
@@ -42,8 +43,8 @@
 
   // Open or folded: the reader's choice for this agent, else by the window's height (told again when it changes).
   let tall = $state(window.innerHeight >= TALL);
-  const open = $derived(app.planOpen[agent.id] ?? tall);
-  const toggle = () => (app.planOpen[agent.id] = !open);
+  const open = $derived(!folded && (app.planOpen[agent.id] ?? tall));
+  const toggle = () => (folded ? onunfold?.() : (app.planOpen[agent.id] = !open));
 
   /** The height the reader gave the list, kept for every plan; none: as tall as the tasks need, up to its share of the window. */
   function keptHeight(): number | null {

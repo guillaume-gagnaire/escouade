@@ -70,7 +70,7 @@ describe('TitleBar', () => {
     app.openStats();
     render(TitleBar);
     expect(screen.queryByRole('button', { name: /Menu du projet/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Ouvrir l’éditeur du projet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Éditeur ou workspace du projet' })).not.toBeInTheDocument();
   });
 
   it('opens the search of the conversations from its field, Ctrl K', async () => {
@@ -83,15 +83,29 @@ describe('TitleBar', () => {
     expect(app.modal).toEqual({ kind: 'convSearch' });
   });
 
-  it('opens the editor on the active project', async () => {
+  it('opens the editor on the active project, from the menu of its button', async () => {
     fakeBackend();
     app.ui.activeProject = 'p2';
     render(TitleBar);
-    const editor = screen.getByRole('button', { name: 'Ouvrir l’éditeur du projet' });
+    const editor = screen.getByRole('button', { name: 'Éditeur ou workspace du projet' });
     expect(editor).toHaveTextContent('Éditeur');
+    expect(editor).toHaveAttribute('aria-haspopup', 'menu');
     expect(editor.querySelector('[data-icon="code"]')).not.toBeNull();
     await userEvent.click(editor);
+    expect(app.editor.p2?.on).toBeFalsy();
+    menu.open!.items.find((i) => i.label === 'Éditeur')!.onClick!();
     expect(app.editor.p2).toMatchObject({ on: true, source: 'project' });
+  });
+
+  it('offers the editor or the workspace from the « Éditeur » button', async () => {
+    fakeBackend();
+    app.ui.activeProject = 'p2';
+    render(TitleBar);
+    await userEvent.click(screen.getByRole('button', { name: 'Éditeur ou workspace du projet' }));
+    const items = menu.open!.items.filter((i) => !i.separator);
+    expect(items.map((i) => i.label)).toEqual(['Éditeur', 'Workspace']);
+    items[1].onClick!();
+    expect(app.workspaceOn).toBe(true);
   });
 
   it('draws the window’s buttons as icons, no character', () => {
@@ -128,9 +142,9 @@ describe('TitleBar in English', () => {
     expect(screen.getByRole('button', { name: 'Menu of the project demo-api' })).toBeInTheDocument();
     expect(getByTip(document.body, 'Uncommitted git changes')).toHaveTextContent('Δ 3');
     expect(screen.getByRole('button', { name: 'Search the conversations (Ctrl+K)' })).toHaveTextContent('Search');
-    expect(screen.getByRole('button', { name: 'Open the project’s editor' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Editor or workspace of the project' })).toHaveAttribute(
       'data-tip',
-      'Browse and edit the project’s files',
+      'Open the project’s editor, or the canvas of its agents',
     );
     expect(screen.getByRole('button', { name: 'Minimize' })).toHaveAttribute('data-tip', 'Minimize');
     expect(screen.getByRole('button', { name: 'Close' })).toHaveAttribute('data-tip', 'Close (the app stays in the notification area)');

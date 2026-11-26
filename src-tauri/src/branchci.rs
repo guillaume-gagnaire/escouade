@@ -217,7 +217,7 @@ impl<R: tauri::Runtime> Core<R> {
 
     /// The target branch whose CI the header shows: the board's, else the branch the project is on
     /// (not saved: a board that never ran a ticket keeps no target).
-    async fn ci_target(&self, p: &Project) -> String {
+    pub(crate) async fn ci_target(&self, p: &Project) -> String {
         if !p.board.target.is_empty() {
             return p.board.target.clone();
         }

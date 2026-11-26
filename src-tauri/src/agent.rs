@@ -3,6 +3,7 @@
 
 use crate::attachfiles;
 use crate::board::TurnEnd;
+use crate::canvas::Canvas;
 use crate::conv::Conv;
 use crate::engine::{self, PermissionAnswer, Process, StartLost};
 use crate::i18n::{self, Lang};
@@ -481,6 +482,9 @@ impl AgentRt {
         if let Some(plan) = meta.plan.as_mut() {
             plan.close_running(now_ms());
         }
+        if let Some(canvas) = meta.canvas.as_mut() {
+            canvas.close_running(now_ms());
+        }
         // Saved before Remote Control had a source: the user turned it on for this agent.
         if meta.remote_control && meta.remote_source.is_none() {
             meta.remote_source = Some(RemoteSource::Hand);
@@ -676,6 +680,24 @@ impl AgentRt {
         }
     }
 
+    /// Runs `f` on the agent's canvas summary (made when it has none yet), keeps it only when it
+    /// holds something, and tells what changed, as `plan_apply`.
+    pub(crate) fn canvas_apply(&mut self, fx: &mut Effects, f: impl FnOnce(&mut Canvas) -> Change) {
+        let mut canvas = self.meta.canvas.take().unwrap_or_default();
+        let change = f(&mut canvas);
+        if !canvas.is_empty() {
+            self.meta.canvas = Some(canvas);
+        }
+        match change {
+            Change::None => {}
+            Change::View => fx.agent_changed = true,
+            Change::Saved => {
+                fx.agent_changed = true;
+                fx.save = true;
+            }
+        }
+    }
+
     /// A message of the subagent `call` came from `model` (`PlanState::on_child_model`): the plan
     /// is only taken up when that is news, not at every message of the subagent.
     pub(crate) fn child_model(&mut self, call: &str, model: &str, fx: &mut Effects) {
@@ -699,7 +721,12 @@ impl AgentRt {
             .as_mut()
             .map_or(Change::None, |plan| plan.close_running(now));
         self.keep_runs(&before, None);
-        change
+        let canvas = self
+            .meta
+            .canvas
+            .as_mut()
+            .map_or(Change::None, |c| c.close_running(now));
+        change.and(canvas)
     }
 
     /// The subagents that ended since `before`, or whose totals came after their end: what the
@@ -1404,6 +1431,7 @@ impl AgentRt {
         self.remote_tried = false;
         self.forget_turn();
         self.plan_apply(fx, |plan| plan.close_running(now_ms()));
+        self.canvas_apply(fx, |c| c.close_running(now_ms()));
         self.clear_pending(fx);
         self.close_open_items(fx);
         let was_running = self.meta.status.is_active();
@@ -4047,6 +4075,106 @@ npm test")
             &mut fx,
         );
         fx
+    }
+
+    #[test]
+    fn the_canvas_follows_the_skills_and_plugins_of_the_agent_and_its_subagents() {
+        let mut a = rt();
+        assert!(a.view().meta.canvas.is_none());
+        let fx = call(
+            &mut a,
+            None,
+            "k1",
+            "Skill",
+            json!({"skill": "superpowers:writing-plans"}),
+        );
+        assert!(fx.agent_changed && fx.save);
+        let c = a.view().meta.canvas.expect("a canvas");
+        assert_eq!(
+            (c.tools[0].name.as_str(), c.tools[0].running),
+            ("superpowers:writing-plans", 1)
+        );
+        returns(&mut a, "k1", "ok", Value::Null);
+        assert_eq!(a.view().meta.canvas.unwrap().tools[0].running, 0);
+        call(
+            &mut a,
+            None,
+            "a1",
+            "Agent",
+            json!({"description": "Lire", "prompt": "x"}),
+        );
+        call(&mut a, Some("a1"), "m1", "mcp__github__get_pr", json!({}));
+        let c = a.view().meta.canvas.unwrap();
+        assert_eq!(
+            (c.subs[0].call.as_str(), c.subs[0].tools[0].name.as_str()),
+            ("a1", "github")
+        );
+        assert_eq!(
+            serde_json::to_value(a.view()).unwrap()["canvas"]["subs"][0]["tools"][0]["kind"],
+            "plugin"
+        );
+    }
+
+    #[test]
+    fn a_new_process_ends_the_calls_of_the_canvas() {
+        let mut a = rt();
+        call(&mut a, None, "k1", "Skill", json!({"skill": "x"}));
+        a.detach();
+        let c = a.view().meta.canvas.unwrap();
+        assert_eq!((c.tools[0].calls, c.tools[0].running), (1, 0));
+    }
+
+    #[test]
+    fn the_canvas_counts_once_a_call_read_again_after_a_restart() {
+        let mut a = rt();
+        call(&mut a, None, "k1", "Skill", json!({"skill": "x"}));
+        returns(&mut a, "k1", "ok", Value::Null);
+        // A restart: the canvas comes back from the disk, the calls it had seen forgotten.
+        a.meta.canvas =
+            serde_json::from_value(serde_json::to_value(&a.meta.canvas).unwrap()).unwrap();
+        call(&mut a, None, "k1", "Skill", json!({"skill": "x"}));
+        assert_eq!(a.view().meta.canvas.unwrap().tools[0].calls, 1);
+    }
+
+    #[test]
+    fn the_canvas_lands_an_artifact_published() {
+        let mut a = rt();
+        call(&mut a, None, "p1", "Artifact", json!({"title": "R"}));
+        returns(
+            &mut a,
+            "p1",
+            "Published https://claude.ai/artifact/z9",
+            Value::Null,
+        );
+        let v = serde_json::to_value(a.view()).unwrap();
+        let art = &v["canvas"]["artifacts"][0];
+        assert_eq!(art["url"], "https://claude.ai/artifact/z9");
+        assert_eq!(art["title"], "R");
+        assert_eq!(art["versions"], 1);
+    }
+
+    #[test]
+    fn a_reloaded_agent_has_no_call_of_its_canvas_running() {
+        let mut a = rt();
+        call(&mut a, None, "k1", "Skill", json!({"skill": "x"}));
+        let meta: AgentMeta =
+            serde_json::from_value(serde_json::to_value(&a.meta).unwrap()).unwrap();
+        assert_eq!(meta.canvas.unwrap().tools[0].running, 0);
+    }
+
+    #[test]
+    fn a_reloaded_agent_has_no_command_of_its_canvas_running() {
+        let mut a = rt();
+        call(&mut a, None, "b1", "Bash", json!({"command": "cargo test"}));
+        let meta: AgentMeta =
+            serde_json::from_value(serde_json::to_value(&a.meta).unwrap()).unwrap();
+        let back = AgentRt::new(
+            meta,
+            &std::env::temp_dir().join(format!("ccm-agent-tests-{}", std::process::id())),
+        );
+        let c = back.meta.canvas.unwrap();
+        // Cut by the restart: stopped, neither passed nor failed.
+        assert!(c.commands[0].ended_at.is_some() && c.commands[0].stopped && !c.commands[0].failed);
     }
 
     fn system(a: &mut AgentRt, f: Value) -> Effects {
