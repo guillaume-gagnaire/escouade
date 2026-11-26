@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { addProject, closeSettings, expect, openSettingsPage, test } from './fixture';
+import { letIn } from './team-admit';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SERVER = path.join(ROOT, 'src-tauri', 'target', 'debug', `escouade-team-server${process.platform === 'win32' ? '.exe' : ''}`);
@@ -185,8 +186,10 @@ test('a page and a decision written on one client are read on the other, then a 
   page = await app.restartAs(bobData);
   await addProject(page, app.repo, { name: 'paiements' });
   const bob = await projectId(bobData, app.repo);
-  await ipc(page, 'team_join', { link: invite.url, name: 'ACME' });
+  const asked = await ipc<{ joinWords: string[] }>(page, 'team_join', { link: invite.url, name: 'ACME' });
   page = await app.restartAs(app.data);
+  // Alice compares the six words of the request with Bob's screen, and lets him in (SR2-08).
+  await letIn(page, asked.joinWords);
   await expect.poll(async () => (await ipc<{ members: number }[]>(page, 'team_list'))[0]?.members, { timeout: 60_000 }).toBe(2);
 
   // Alice: « Sur le serveur d'équipe », in the project's settings. Its journal is shown.

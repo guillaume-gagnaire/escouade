@@ -22,6 +22,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { addProject, expect, test } from './fixture';
+import { letIn } from './team-admit';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SERVER = path.join(ROOT, 'src-tauri', 'target', 'debug', `escouade-team-server${process.platform === 'win32' ? '.exe' : ''}`);
@@ -170,7 +171,9 @@ test('a team from end to end: invite, join, share a Kanban, a ticket taken, the 
   const settings = JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8'));
   fs.writeFileSync(path.join(bobData, 'settings.json'), JSON.stringify({ ...settings, ...BOB }));
   const bob = await app.second(bobData);
-  await ipc(bob, 'team_join', { link: invite.url, name: 'ACME' });
+  const asked = await ipc<{ joinWords: string[] }>(bob, 'team_join', { link: invite.url, name: 'ACME' });
+  // Alice compares the six words of the request with Bob's screen, and lets him in (SR2-08).
+  await letIn(alice, asked.joinWords);
   await expect.poll(async () => (await ipc<{ joined: boolean }[]>(bob, 'team_list'))[0]?.joined, { timeout: 60_000 }).toBe(true);
   await expect.poll(async () => (await ipc<{ members: number }[]>(alice, 'team_list'))[0]?.members, { timeout: 60_000 }).toBe(2);
 

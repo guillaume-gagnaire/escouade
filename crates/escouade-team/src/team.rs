@@ -25,13 +25,16 @@ use std::sync::Arc;
 use ed25519_dalek::SigningKey;
 use escouade_team_crypto::anchor::AnchorGrant;
 use escouade_team_crypto::content::SealedObject;
-use escouade_team_crypto::invite::{InviteLink, JoinRequest, WelcomeDelivery, DEFAULT_LIFETIME};
+use escouade_team_crypto::invite::{
+    AdmissionCode, InvitationError, InviteLink, JoinRequest, WelcomeDelivery, DEFAULT_LIFETIME,
+};
 use escouade_team_crypto::keys::EpochRecord;
 use escouade_team_crypto::recovery::RecoveryWrap;
 use escouade_team_crypto::roster::EscrowPublic;
 use escouade_team_crypto::{
-    Change, Checkpoint, DeviceId, DeviceKind, Identity, MemberId, ObjectId, Processed, ProjectId,
-    Publication, Purpose, RecoveryKey, Role, Roster, SavedState, TeamDevice, CIPHERSUITE,
+    Admission, Change, Checkpoint, DeviceId, DeviceKind, Identity, MemberId, ObjectId, Processed,
+    ProjectId, Publication, Purpose, RecoveryKey, Role, Roster, SavedState, TeamDevice,
+    CIPHERSUITE,
 };
 use escouade_team_crypto::{EscrowTeamHalf, TeamFingerprint};
 use openmls_basic_credential::SignatureKeyPair;
@@ -59,6 +62,10 @@ pub const OWN_DEVICE_LIFETIME: u64 = 3600;
 
 /// The objects of the team itself (a request for a token), apart from any project's: a project id no client draws.
 pub const TEAM_OBJECTS: ProjectId = ProjectId(*b"escouade/team\0\0\0");
+
+/// The version of the team object an invitation's refusal is sealed as (its id is the invitation's, whose version 1
+/// is a member's request for a token).
+const REFUSAL_VERSION: u64 = 2;
 
 /// Where a team lives on this device, and how it reaches its server.
 #[derive(Clone)]
@@ -137,13 +144,30 @@ pub struct InvitationInfo {
     pub ready: bool,
     /// Someone came with it after its first use (a leaked link): when, seconds since the epoch.
     pub reused_at: Option<i64>,
+    /// Cancelled: the six words of its request differed from the invitee's (SR2-08).
+    pub refused: bool,
+}
+
+/// An invitation cancelled because the six words of its request differed from the invitee's (SR2-08), as the
+/// administrators are told: by the device that refused it (a sealed object of the team, signed by its leaf), or by
+/// this one.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefusalAlert {
+    #[serde(with = "hex::serde")]
+    pub invitation: [u8; 16],
+    pub purpose: Purpose,
+    /// The member whose device refused it.
+    pub by: MemberId,
+    /// When, seconds since the epoch.
+    pub at: u64,
 }
 
 /// What [`Team::serve`] did, an administrator's (or a member's, for their own devices) work.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Served {
-    /// The invitees admitted (their Welcome sent).
-    pub admitted: usize,
+    /// The requests of this device's invitations that wait for the six words to be confirmed ([`Team::admissions`]):
+    /// nothing is admitted without them (SR2-08).
+    pub waiting: usize,
     /// The tokens registered for members who asked.
     pub granted: usize,
     /// The roles set on the server, in step with the roster.
@@ -223,6 +247,9 @@ struct Meta {
     granted: BTreeSet<[u8; 32]>,
     /// The second uses of this device's invitations.
     alerts: Vec<ReuseAlert>,
+    /// The invitations of the team cancelled because the six words differed (SR2-08): this device's, and those the
+    /// other devices told of.
+    refusals: Vec<RefusalAlert>,
     /// The snapshots found unreadable (SR2-01): by this device, and for an administrator the ones the server lists.
     snapshot_alerts: Vec<SnapshotAlert>,
     /// The entries the server's operator removed (SR2-02), as the server lists them to an administrator.
@@ -556,7 +583,12 @@ impl Team {
             .await?;
         let mut device = Self::join_link(setup, &invited.link).await?;
         leaf.sync_at(now).await?;
-        leaf.serve(now).await?;
+        // Both screens are this one: the six words are the new device's own, read here, not compared by a person.
+        let words = device
+            .join_words()
+            .ok_or_else(|| Error::Server("the new device made no request".into()))?
+            .join(" ");
+        leaf.admit_invitation(invited.link.id, &words, now).await?;
         let synced = device.sync_at(now).await?;
         if !synced.joined {
             return Err(Error::Server(
@@ -757,6 +789,7 @@ impl Team {
                     .filter(|a| a.invitation == i.id)
                     .map(|a| a.reused_at)
                     .max(),
+                refused: i.refused,
             })
             .collect();
         out.sort_by_key(|i| std::cmp::Reverse(i.expires_at));
@@ -779,6 +812,37 @@ impl Team {
     /// The join requests read in the stream, for an administrator to admit ([`Team::admit`]).
     pub fn requests(&self) -> &[JoinRequest] {
         &self.meta.requests
+    }
+
+    /// The requests of this device's invitations that it may admit, checked (invitation, MAC, signed KeyPackage),
+    /// each with its six words: the inviting screen shows them, to compare with the invitee's before anything is
+    /// admitted ([`Team::admit_invitation`], [`Team::refuse`], SR2-08).
+    pub fn admissions(&self, now: u64) -> Vec<Admission> {
+        if self.device.group_id().is_err() || self.device.is_removed() {
+            return Vec::new();
+        }
+        let mut out: Vec<Admission> = Vec::new();
+        for request in &self.meta.requests {
+            if let Ok(a) = self.device.check_request(request, now) {
+                if !out.contains(&a) {
+                    out.push(a);
+                }
+            }
+        }
+        out
+    }
+
+    /// The six words of this device's join request, while it waits for its Welcome: to show, for the person who
+    /// invites to compare with theirs (SR2-08).
+    pub fn join_words(&self) -> Option<[&'static str; 6]> {
+        self.device.join_code().map(|c| c.words())
+    }
+
+    /// The invitations of the team cancelled because the six words differed (SR2-08), the newest first.
+    pub fn refusals(&self) -> Vec<RefusalAlert> {
+        let mut out = self.meta.refusals.clone();
+        out.sort_by_key(|r| std::cmp::Reverse(r.at));
+        out
     }
 
     /// How many messages wait to go to the server.
@@ -1114,6 +1178,7 @@ impl Team {
                     self.meta.requests.push(request);
                 }
             }
+            TeamMessage::Refused(sealed) => self.take_refusal(&sealed),
             TeamMessage::Welcome {
                 invitation,
                 delivery,
@@ -1505,8 +1570,9 @@ impl Team {
     }
 
     /// The work of a device online for the others, after a reading of the stream ([`Team::sync`]):
-    /// - **admits** the requests of the invitations it made (C6-A: `un administrateur en ligne fait entrer
-    ///   l'invité`), by their Welcome; a request of an invitation used or expired is dropped;
+    /// - **lists** the requests of the invitations it made, for the person who invites to compare their six words
+    ///   with the invitee's ([`Team::admissions`]): it admits none by itself (SR2-08); a request of an invitation
+    ///   used, expired or cancelled, or that does not prove itself, is dropped;
     /// - **registers the tokens** members asked for (their own other device), when it is an administrator of the
     ///   server: the request must be signed by a member of the group, for an invitation that member may make;
     /// - puts **the server's roles in step with the roster** (an administrator named after their enrolment becomes
@@ -1519,7 +1585,7 @@ impl Team {
         if self.device.group_id().is_err() || self.device.is_removed() {
             return Ok(served);
         }
-        self.admit_pending(now, &mut served).await?;
+        self.tidy_requests(now, &mut served)?;
         self.grant_tokens(&mut served).await?;
         self.read_alerts(&mut served).await?;
         self.read_snapshot_alerts(now, &mut served).await?;
@@ -1577,33 +1643,64 @@ impl Team {
         })
     }
 
-    async fn admit_pending(&mut self, now: u64, served: &mut Served) -> Result<(), Error> {
+    /// The requests of this device's invitations: nothing is admitted here (SR2-08), the person who invites confirms
+    /// the six words first ([`Team::admit_invitation`]). A request of an invitation used, expired or cancelled, or one
+    /// that does not prove itself (its MAC, its KeyPackage), is dropped; the others wait, counted.
+    fn tidy_requests(&mut self, now: u64, served: &mut Served) -> Result<(), Error> {
         let invitations = self.device.saved_state().invitations;
-        for request in self.meta.requests.clone() {
-            let Some(inv) = invitations.iter().find(|i| i.id == request.invitation) else {
+        let mut stale = Vec::new();
+        for request in &self.meta.requests {
+            if !invitations.iter().any(|i| i.id == request.invitation) {
                 // Another device's invitation.
                 continue;
-            };
-            if inv.used || now > inv.expires_at {
-                self.step(|t| {
-                    t.meta.requests.retain(|r| *r != request);
-                    Ok(())
-                })?;
-                continue;
             }
-            match self.admit(&request, now).await {
-                Ok(_) => served.admitted += 1,
-                Err(e) if e.alarm().is_some() => return Err(e),
+            match self.device.check_request(request, now) {
+                Ok(_) => served.waiting += 1,
                 Err(e) => {
-                    log::warn!("team: a join request not admitted: {e}");
-                    self.step(|t| {
-                        t.meta.requests.retain(|r| *r != request);
-                        Ok(())
-                    })?;
+                    log::warn!("team: a join request set aside: {e}");
+                    stale.push(request.clone());
                 }
             }
         }
+        if !stale.is_empty() {
+            self.step(|t| {
+                t.meta.requests.retain(|r| !stale.contains(r));
+                Ok(())
+            })?;
+        }
         Ok(())
+    }
+
+    /// An alert of an invitation refused by another device of the team (SR2-08): kept when its seal opens and its
+    /// author is a device of a member (an administrator, or the member for their own device).
+    fn take_refusal(&mut self, sealed: &SealedObject) {
+        let body = match self.device.open(sealed) {
+            Ok(plain) => wire::decode::<wire::RefusedBody>(&plain).ok(),
+            Err(e) => {
+                log::debug!("team: a refusal set aside: {e}");
+                None
+            }
+        };
+        let (Some(body), Some(author)) = (body, self.author_of(sealed)) else {
+            return;
+        };
+        if author.kind != DeviceKind::Device || body.invitation != sealed.header.object.0 {
+            return;
+        }
+        if self
+            .meta
+            .refusals
+            .iter()
+            .any(|r| r.invitation == body.invitation)
+        {
+            return;
+        }
+        self.meta.refusals.push(RefusalAlert {
+            invitation: body.invitation,
+            purpose: body.purpose,
+            by: author.member,
+            at: body.at,
+        });
     }
 
     /// Whose a sealed object of the group is: the identity of its author's leaf at its epoch.
@@ -2023,9 +2120,104 @@ impl Team {
         Ok(PairState::Sent)
     }
 
-    /// Admits a join request read in the stream (an administrator, or the member for their own device).
-    pub async fn admit(&mut self, request: &JoinRequest, now: u64) -> Result<Applied, Error> {
-        let applied = self.apply(Change::Admit(request.clone(), now)).await?;
+    /// Admits the request of one of this device's invitations whose six words the person who invites confirmed were
+    /// those of the invitee's screen (SR2-08): the words shown ([`Team::admissions`]), given back. Other words, or a
+    /// request gone: [`InvitationError::CodeMismatch`], nothing admitted.
+    pub async fn admit_invitation(
+        &mut self,
+        invitation: [u8; 16],
+        words: &str,
+        now: u64,
+    ) -> Result<Applied, Error> {
+        let request = self
+            .meta
+            .requests
+            .iter()
+            .find(|r| {
+                r.invitation == invitation && AdmissionCode::of_request(r).matches_words(words)
+            })
+            .cloned()
+            .ok_or(CryptoError::Invitation(InvitationError::CodeMismatch))?;
+        self.admit(&request, words, now).await
+    }
+
+    /// The person who invites said the six words of a request differed from the invitee's (SR2-08): the invitation
+    /// is cancelled (no one comes in by it any more), its requests dropped, the devices that made them cut on the
+    /// server (when this device may: an administrator of the server), and the administrators told by a sealed alert
+    /// in the team's stream.
+    pub async fn refuse(&mut self, invitation: [u8; 16], now: u64) -> Result<(), Error> {
+        let purpose = self
+            .device
+            .saved_state()
+            .invitations
+            .iter()
+            .find(|i| i.id == invitation)
+            .map(|i| i.purpose.clone())
+            .ok_or(CryptoError::Invitation(InvitationError::Unknown))?;
+        let leaves: BTreeSet<DeviceId> = self
+            .device
+            .leaves()?
+            .into_iter()
+            .map(|i| i.device)
+            .collect();
+        // The devices the requests' KeyPackages name, none of the group.
+        let askers: Vec<DeviceId> = self
+            .meta
+            .requests
+            .iter()
+            .filter(|r| r.invitation == invitation)
+            .filter_map(|r| self.device.key_package_identity(&r.key_package).ok())
+            .map(|i| i.device)
+            .filter(|d| !leaves.contains(d))
+            .collect();
+        let me = self.identity().member;
+        let body = wire::RefusedBody {
+            invitation,
+            purpose: purpose.clone(),
+            at: now,
+        };
+        let sealed = self.device.seal(
+            TEAM_OBJECTS,
+            ObjectId(invitation),
+            REFUSAL_VERSION,
+            &wire::encode(&body),
+        )?;
+        self.step(|t| {
+            t.device.refuse_invitation(&invitation)?;
+            t.meta.requests.retain(|r| r.invitation != invitation);
+            t.meta.invite_projects.retain(|(id, _)| *id != invitation);
+            if !t.meta.refusals.iter().any(|r| r.invitation == invitation) {
+                t.meta.refusals.push(RefusalAlert {
+                    invitation,
+                    purpose,
+                    by: me,
+                    at: now,
+                });
+            }
+            t.meta.outbox.push(TeamMessage::Refused(sealed));
+            Ok(())
+        })?;
+        self.flush().await?;
+        for device in askers {
+            match self.client.revoke(&device.0).await {
+                Ok(_) => {}
+                Err(e) => log::info!("team: the device of a refused request not cut: {e}"),
+            }
+        }
+        Ok(())
+    }
+
+    /// Admits a join request read in the stream (an administrator, or the member for their own device), with the six
+    /// words the person who invites confirmed were those of the invitee's screen (SR2-08).
+    pub async fn admit(
+        &mut self,
+        request: &JoinRequest,
+        words: &str,
+        now: u64,
+    ) -> Result<Applied, Error> {
+        let applied = self
+            .apply(Change::Admit(request.clone(), words.to_string(), now))
+            .await?;
         let joiner = self.device.key_package_identity(&request.key_package).ok();
         self.step(|t| {
             t.meta.requests.retain(|r| r != request);

@@ -36,10 +36,11 @@ pub use anchor::{Anchor, AnchorGrant};
 pub use beacon::Beacon;
 pub use costkey::CostKey;
 pub use device::{
-    Change, Checkpoint, HeadCheck, PendingCommit, Processed, Publication, SavedState, TeamDevice,
+    Admission, Change, Checkpoint, HeadCheck, PendingCommit, Processed, Publication, SavedState,
+    TeamDevice,
 };
 pub use identity::{DeviceId, DeviceKind, Identity, MemberId, ObjectId, ProjectId};
-pub use invite::{InvitationError, InviteLink, Purpose};
+pub use invite::{AdmissionCode, InvitationError, InviteLink, Purpose};
 pub use recovery::{EscrowKey, EscrowTeamHalf, RecoveryKey};
 pub use roster::{Role, Roster, TeamFingerprint};
 

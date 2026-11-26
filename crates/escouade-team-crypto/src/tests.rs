@@ -37,6 +37,20 @@ fn publish(relay: &mut Relay, publication: Publication) {
     relay.publish(publication).expect("the server takes it");
 }
 
+/// The six words the invitee's screen shows (SR2-08): what the person who invites confirms.
+fn said(invitee: &TeamDevice) -> String {
+    invitee
+        .join_code()
+        .expect("a request was made")
+        .words()
+        .join(" ")
+}
+
+/// The six words of a request as any reader computes them.
+fn code_of(request: &JoinRequest) -> String {
+    AdmissionCode::of_request(request).words().join(" ")
+}
+
 /// The owner creates the team.
 fn new_team(escrow: Option<EscrowTeamHalf>) -> (Relay, TeamDevice, RecoveryKey) {
     let mut relay = Relay::default();
@@ -55,7 +69,7 @@ fn join(relay: &mut Relay, admin: &mut TeamDevice, purpose: Purpose, who: Member
     let mut device = TeamDevice::new(who).unwrap();
     let request = device.request_join(&link).unwrap();
     relay.join_requests.push(request.clone());
-    publish(relay, admin.admit(&request, NOW).unwrap());
+    publish(relay, admin.admit(&request, &said(&device), NOW).unwrap());
     let delivery = relay.welcomes[&link.id].clone();
     device.accept_welcome(&delivery).unwrap();
     device.read_history(|e| relay.history_link(e)).unwrap();
@@ -396,7 +410,7 @@ fn the_server_cannot_slip_a_key_in() {
         ..request.clone()
     };
     assert!(matches!(
-        alice.admit(&swapped, NOW),
+        alice.admit(&swapped, &said(&bob), NOW),
         Err(Error::Invitation(InvitationError::BadMac))
     ));
     let guessed = JoinRequest {
@@ -405,11 +419,11 @@ fn the_server_cannot_slip_a_key_in() {
         ..request.clone()
     };
     assert!(matches!(
-        alice.admit(&guessed, NOW),
+        alice.admit(&guessed, &said(&bob), NOW),
         Err(Error::Invitation(InvitationError::BadMac))
     ));
     // Bob's own request still goes through.
-    publish(&mut relay, alice.admit(&request, NOW).unwrap());
+    publish(&mut relay, alice.admit(&request, &said(&bob), NOW).unwrap());
     bob.accept_welcome(&relay.welcomes[&link.id]).unwrap();
 
     // Even a GroupInfo in the server's hands (it never has one in the clear) gives it no seat: its external commit
@@ -490,7 +504,12 @@ fn the_server_cannot_show_another_team() {
         mac: join_mac(&fake_link.secret, &fake_link.id, &request.key_package),
         key_package: request.key_package.clone(),
     };
-    let fake_welcome = fake.admit(&fake_request, NOW).unwrap().welcome.unwrap().1;
+    let fake_welcome = fake
+        .admit(&fake_request, &code_of(&fake_request), NOW)
+        .unwrap()
+        .welcome
+        .unwrap()
+        .1;
     assert!(matches!(
         bob.accept_welcome(&fake_welcome),
         Err(Error::Invitation(InvitationError::WrongTeam))
@@ -499,7 +518,7 @@ fn the_server_cannot_show_another_team() {
     // A fake Welcome burns the KeyPackage it was made for (MLS uses one once): Bob asks again, under the same
     // link, which no administrator has used yet.
     let again = bob.request_join(&link).unwrap();
-    publish(&mut relay, alice.admit(&again, NOW).unwrap());
+    publish(&mut relay, alice.admit(&again, &said(&bob), NOW).unwrap());
     // The real Welcome, its confirmation changed: refused too.
     let mut tampered = relay.welcomes[&link.id].clone();
     tampered.confirmation[0] ^= 1;
@@ -572,11 +591,14 @@ fn a_leaked_link_gives_no_content() {
     // knows of it.
     let mut carol = TeamDevice::new(member(3)).unwrap();
     let request = carol.request_join(&leaked).unwrap();
-    publish(&mut relay, alice.admit(&request, NOW).unwrap());
+    publish(
+        &mut relay,
+        alice.admit(&request, &said(&carol), NOW).unwrap(),
+    );
     let mut thief = TeamDevice::new(member(9)).unwrap();
     let stolen = thief.request_join(&leaked).unwrap();
     assert!(matches!(
-        alice.admit(&stolen, NOW),
+        alice.admit(&stolen, &said(&thief), NOW),
         Err(Error::Invitation(InvitationError::AlreadyUsed))
     ));
     // And an expired link lets nobody in.
@@ -586,7 +608,7 @@ fn a_leaked_link_gives_no_content() {
     let mut dave = TeamDevice::new(member(4)).unwrap();
     let request = dave.request_join(&late).unwrap();
     assert!(matches!(
-        alice.admit(&request, NOW + 61),
+        alice.admit(&request, &said(&dave), NOW + 61),
         Err(Error::Invitation(InvitationError::Expired))
     ));
 }
@@ -1002,7 +1024,7 @@ fn an_invitation_made_before_the_app_links_lets_no_one_in() {
     let mut bob = TeamDevice::new(member(2)).unwrap();
     let request = bob.request_join(&link).unwrap();
     assert!(matches!(
-        alice.admit(&request, NOW),
+        alice.admit(&request, &said(&bob), NOW),
         Err(Error::Invitation(InvitationError::OldForm))
     ));
     // A state saved before has no such field: an invitation of before, expired once the device starts again.
@@ -1099,10 +1121,12 @@ fn an_admission_lost_to_another_commit_gives_its_invitation_back() {
         .unwrap();
     let mut bob = TeamDevice::new(member(2)).unwrap();
     let request = bob.request_join(&link).unwrap();
-    alice.stage(&Change::Admit(request.clone(), NOW)).unwrap();
+    alice
+        .stage(&Change::Admit(request.clone(), said(&bob), NOW))
+        .unwrap();
     alice.abandon_pending().unwrap();
     // Admitted again, once.
-    publish(&mut relay, alice.admit(&request, NOW).unwrap());
+    publish(&mut relay, alice.admit(&request, &said(&bob), NOW).unwrap());
     bob.accept_welcome(&relay.welcomes[&link.id]).unwrap();
     assert_eq!(bob.epoch().unwrap(), 1);
 }
@@ -1204,7 +1228,7 @@ fn a_history_link_is_written_again_by_any_member_who_holds_the_epoch() {
         .unwrap();
     let mut eve = TeamDevice::new(member(5)).unwrap();
     let request = eve.request_join(&link).unwrap();
-    publish(&mut relay, alice.admit(&request, NOW).unwrap());
+    publish(&mut relay, alice.admit(&request, &said(&eve), NOW).unwrap());
     eve.accept_welcome(&relay.welcomes[&link.id]).unwrap();
     assert!(matches!(
         eve.read_history(|e| relay.history_link(e)),
@@ -1557,7 +1581,7 @@ fn join_as(
         .unwrap();
     let link = InviteLink::parse(&link.to_url()).unwrap();
     let request = device.request_join(&link).unwrap();
-    publish(relay, admin.admit(&request, NOW).unwrap());
+    publish(relay, admin.admit(&request, &said(&device), NOW).unwrap());
     device
         .accept_welcome(&relay.welcomes[&link.id].clone())
         .unwrap();
@@ -1871,4 +1895,107 @@ fn the_escrow_reads_only_what_an_administrator_anchored_for_the_team() {
     let sealed = publication.escrow.unwrap();
     assert_eq!(sealed.epoch, rescue.epoch().unwrap());
     assert!(escrow.open(crypto, &team, &group_id, &sealed).is_ok());
+}
+
+/// SR2-08: the six words of an admission are the same on the invitee's screen (from the KeyPackage it made) and on
+/// the inviting one (from the request it checked), and they are kept while the invitee waits.
+#[test]
+fn the_admission_code_is_the_same_on_both_screens() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let link = alice
+        .invite(
+            Purpose::NewMember(Role::Member),
+            NOW,
+            DEFAULT_LIFETIME,
+            SERVER,
+        )
+        .unwrap();
+    let link = InviteLink::parse(&link.to_url()).unwrap();
+    let mut bob = TeamDevice::new(member(2)).unwrap();
+    assert!(bob.join_code().is_none());
+    let request = bob.request_join(&link).unwrap();
+    let shown = alice.check_request(&request, NOW).unwrap();
+    assert_eq!(Some(shown.code), bob.join_code());
+    assert_eq!(shown.code.words().len(), 6);
+    assert_eq!(shown.invitation, link.id);
+    assert_eq!(shown.joiner.member, member(2));
+    assert_eq!(shown.purpose, Purpose::NewMember(Role::Member));
+    // Kept with the device's state, for its screen after a restart.
+    assert_eq!(bob.saved_state().join_code, Some(shown.code.0));
+    // The words of another invitation, for the same KeyPackage, are others.
+    assert_ne!(
+        AdmissionCode::of(&[0; 16], &request.key_package),
+        shown.code
+    );
+    // Confirmed: Bob is in, and his screen no longer shows a code.
+    let words = shown.code.words().join(" ").to_uppercase();
+    publish(&mut relay, alice.admit(&request, &words, NOW).unwrap());
+    bob.accept_welcome(&relay.welcomes[&link.id]).unwrap();
+    assert!(bob.join_code().is_none());
+    assert_eq!(bob.saved_state().join_code, None);
+}
+
+/// SR2-08: whoever has the link (it leaked, or the server read it) makes a request whose MAC passes, but its
+/// KeyPackage is its own: its six words are not those of the invitee's screen, and the device does not admit it with
+/// the invitee's words. The person who invites says they differ: the invitation is cancelled, no one comes in by it.
+#[test]
+fn a_key_package_put_in_the_invitees_place_has_other_words_and_is_refused() {
+    let (_, mut alice, _) = new_team(None);
+    let link = alice
+        .invite(
+            Purpose::NewMember(Role::Member),
+            NOW,
+            DEFAULT_LIFETIME,
+            SERVER,
+        )
+        .unwrap();
+    let mut bob = TeamDevice::new(member(2)).unwrap();
+    let request = bob.request_join(&link).unwrap();
+    let mut intruder = TeamDevice::new(member(9)).unwrap();
+    let stolen = intruder
+        .request_join(&InviteLink::parse(&link.to_url()).unwrap())
+        .unwrap();
+    // Its MAC passes: the link is all it takes for that.
+    let shown = alice.check_request(&stolen, NOW).unwrap();
+    assert_ne!(shown.code.words().join(" "), said(&bob));
+    // A KeyPackage changed by a byte: its signature no longer holds.
+    let mut tampered = request.clone();
+    let last = tampered.key_package.len() - 1;
+    tampered.key_package[last] ^= 1;
+    tampered.mac = join_mac(&link.secret, &link.id, &tampered.key_package);
+    assert!(alice.check_request(&tampered, NOW).is_err());
+    // Bob's words, for the intruder's request: not admitted, and nothing staged.
+    assert!(matches!(
+        alice.admit(&stolen, &said(&bob), NOW),
+        Err(Error::Invitation(InvitationError::CodeMismatch))
+    ));
+    // Nor with no words, or five.
+    assert!(matches!(
+        alice.admit(&stolen, "", NOW),
+        Err(Error::Invitation(InvitationError::CodeMismatch))
+    ));
+    let five = shown.code.words()[..5].join(" ");
+    assert!(matches!(
+        alice.admit(&stolen, &five, NOW),
+        Err(Error::Invitation(InvitationError::CodeMismatch))
+    ));
+    assert!(!alice.saved_state().invitations[0].used);
+    // The words differ: refused, the invitation cancelled. Neither request comes in any more, whatever the words.
+    alice.refuse_invitation(&link.id).unwrap();
+    let kept = &alice.saved_state().invitations[0];
+    assert!(kept.used && kept.refused);
+    for (r, words) in [(&request, said(&bob)), (&stolen, code_of(&stolen))] {
+        assert!(matches!(
+            alice.check_request(r, NOW),
+            Err(Error::Invitation(InvitationError::Refused))
+        ));
+        assert!(matches!(
+            alice.admit(r, &words, NOW),
+            Err(Error::Invitation(InvitationError::Refused))
+        ));
+    }
+    assert!(matches!(
+        alice.refuse_invitation(&[3; 16]),
+        Err(Error::Invitation(InvitationError::Unknown))
+    ));
 }

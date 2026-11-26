@@ -113,8 +113,7 @@ async fn two(name: &str) -> Two {
         .id;
     let invite = alice.invite(&team, "member", None).await.unwrap();
     bob.join(&invite.url, "").await.unwrap();
-    alice.sync(&team).await.unwrap();
-    assert!(bob.sync(&team).await.unwrap().joined);
+    crate::teams_tests::let_in(&alice, &bob, &team).await;
     let ha = harness(&format!("{name}-alice"));
     let hb = harness(&format!("{name}-bob"));
     ha.core.settings.write().user_name = "Alice Martin".into();

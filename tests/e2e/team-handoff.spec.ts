@@ -17,6 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Locator, Page } from '@playwright/test';
 import { addProject, expect, openSettingsPage, test } from './fixture';
+import { letIn } from './team-admit';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SERVER = path.join(ROOT, 'src-tauri', 'target', 'debug', `escouade-team-server${process.platform === 'win32' ? '.exe' : ''}`);
@@ -203,7 +204,9 @@ test('an agent passed to a teammate with its uncommitted work goes on on his mac
   const bob = await app.second(bobData);
   const size = alice.viewportSize();
   if (size) await bob.setViewportSize(size);
-  await ipc(bob, 'team_join', { link: invite.url, name: 'ACME' });
+  const asked = await ipc<{ joinWords: string[] }>(bob, 'team_join', { link: invite.url, name: 'ACME' });
+  // Alice compares the six words of the request with Bob's screen, and lets him in (SR2-08).
+  await letIn(alice, asked.joinWords);
   await expect.poll(async () => (await ipc<{ joined: boolean }[]>(bob, 'team_list'))[0]?.joined, { timeout: 60_000 }).toBe(true);
 
   await addProject(alice, app.repo, { firstAgent: false, name: 'demo' });

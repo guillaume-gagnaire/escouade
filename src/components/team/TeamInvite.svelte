@@ -3,8 +3,9 @@
   // secret after the #) and its QR code. An administrator online lets the invitee in.
   import { t } from '../../lib/i18n';
   import { fDateTime } from '../../lib/format';
-  import { errorText, teamsApi, type InviteView } from '../../lib/teams.svelte';
+  import { errorText, teams, teamsApi, type InviteView } from '../../lib/teams.svelte';
   import InviteLink from './InviteLink.svelte';
+  import TeamAdmissions from './TeamAdmissions.svelte';
 
   let { teamId, onback }: { teamId: string; onback: () => void } = $props();
 
@@ -13,6 +14,8 @@
   let invite = $state<InviteView | null>(null);
   let busy = $state(false);
   let failure = $state('');
+  /** The team as the backend last said it: the requests of its invitations come in it (SR2-08). */
+  const current = $derived(teams.byId(teamId));
 
   async function make() {
     busy = true;
@@ -59,6 +62,7 @@
   <InviteLink {invite} label={t('team.invite.link')} qrLabel={t('team.invite.qr')} />
   <p class="hint">{t('team.invite.left', { date: fDateTime(invite.expiresAt * 1000) })}</p>
   <p class="state" class:ready={invite.ready}>{invite.ready ? t('team.invite.ready') : t('team.invite.notReady')}</p>
+  {#if current}<TeamAdmissions team={current} />{/if}
   <div class="foot">
     <button class="btn ghost" onclick={() => (invite = null)}>{t('team.invite.another')}</button>
     <button class="btn primary" onclick={onback}>{t('team.common.close')}</button>

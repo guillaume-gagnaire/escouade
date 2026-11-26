@@ -11,6 +11,7 @@
     teamsApi,
     type DropAlertView,
     type InvitationView,
+    type RefusalView,
     type SnapshotAlertView,
     type TeamView,
   } from '../../lib/teams.svelte';
@@ -18,6 +19,7 @@
   import Icon from '../Icon.svelte';
   import ForkAlarm from './ForkAlarm.svelte';
   import SixWords from './SixWords.svelte';
+  import TeamAdmissions from './TeamAdmissions.svelte';
   import type { TeamStep } from './TeamModal.svelte';
 
   let { onstep, onwords }: { onstep: (step: TeamStep, team?: string) => void; onwords: (team: string, words: string[]) => void } = $props();
@@ -93,11 +95,20 @@
           : t('team.card.member');
 
   function invitationState(i: InvitationView): string {
+    if (i.refused) return t('team.card.refused');
     if (i.used) return t('team.card.used');
     if (!isOpen(i.expiresAt)) return t('team.card.expired');
     if (!i.ready) return t('team.card.notReady');
     return t('team.card.open', { left: fDateTime(i.expiresAt * 1000) });
   }
+
+  function refusalBy(r: RefusalView): string {
+    if (r.byMe) return t('team.admit.byMe');
+    return r.byRole === 'admin' ? t('team.admit.byAdmin') : t('team.admit.byMember');
+  }
+
+  const refusalWhat = (r: RefusalView) =>
+    r.kind === 'member' ? t('team.card.invitationMember', { role: t('team.card.member') }) : t('team.admit.device');
 
   const entries: { step: TeamStep; icon: 'plus' | 'link' | 'phone' | 'lock'; title: string; detail: string }[] = $derived([
     { step: 'create', icon: 'plus', title: t('team.home.create'), detail: t('team.home.createDetail') },
@@ -126,6 +137,9 @@
       <ForkAlarm {team} busy={busy === team.id} onretry={() => sync(team)} onforget={() => (forgetting = team.id)} />
     {:else if !team.joined}
       <p class="note">{t('team.card.waitingLead')}</p>
+      {#if team.joinWords?.length}
+        <SixWords words={team.joinWords} label={t('team.admit.joinWords')} hint={t('team.admit.joinWordsHint')} />
+      {/if}
     {/if}
 
     {#if team.escrow}
@@ -182,6 +196,21 @@
     {/if}
 
     {#if team.joined && !team.alarm}
+      <TeamAdmissions {team} />
+      {#if team.refusals?.length}
+        <div class="snaps" role="alert" aria-label={t('team.admit.refusedTitle')}>
+          <span class="lbl">{t('team.admit.refusedTitle')}</span>
+          <p>{t('team.admit.refusedLead')}</p>
+          <ul>
+            {#each team.refusals.slice(0, 5) as r (r.invitation)}
+              <li>
+                <span class="what">{t('team.admit.refusedItem', { what: refusalWhat(r), date: fDateTime(r.at * 1000) })}</span>
+                <span class="st">{refusalBy(r)}</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
       <div class="facts">
         <span>{t('team.card.members', { count: team.members })}</span>
       </div>

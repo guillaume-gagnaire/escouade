@@ -564,7 +564,12 @@ impl World {
             .last()
             .cloned()
             .expect("the admin sees the request");
-        admin.admit(&request, NOW).await.expect("admitted");
+        // The person who invites compares the six words with the invitee's screen (SR2-08).
+        let words = device
+            .join_words()
+            .expect("the invitee shows its six words")
+            .join(" ");
+        admin.admit(&request, &words, NOW).await.expect("admitted");
         let synced = device.sync().await.unwrap();
         assert!(synced.joined, "the device joins by its Welcome");
         device

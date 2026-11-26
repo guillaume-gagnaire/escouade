@@ -284,8 +284,7 @@ async fn two_folders_share_a_team_board_and_take_a_ticket_once() {
         .id;
     let invite = alice_teams.invite(&id, "member", None).await.unwrap();
     bob_teams.join(&invite.url, "").await.unwrap();
-    alice_teams.sync(&id).await.unwrap();
-    assert!(bob_teams.sync(&id).await.unwrap().joined);
+    crate::teams_tests::let_in(&alice_teams, &bob_teams, &id).await;
 
     let ha = harness("teamboard-alice");
     let hb = harness("teamboard-bob");
@@ -560,8 +559,7 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
         .id;
     let invite = alice_teams.invite(&id, "member", None).await.unwrap();
     bob_teams.join(&invite.url, "").await.unwrap();
-    alice_teams.sync(&id).await.unwrap();
-    assert!(bob_teams.sync(&id).await.unwrap().joined);
+    crate::teams_tests::let_in(&alice_teams, &bob_teams, &id).await;
     let alice_member = {
         let t = alice_teams.team(&id).unwrap();
         let t = t.lock().await;

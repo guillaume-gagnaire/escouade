@@ -138,24 +138,35 @@ impl TeamFingerprint {
 
     /// Whether six words typed back (from the rescue sheet) are this fingerprint's: case and spaces do not matter.
     pub fn matches_words(&self, typed: &str) -> bool {
-        let typed: Vec<String> = typed.split_whitespace().map(str::to_lowercase).collect();
-        typed.len() == 6 && typed.iter().zip(self.words()).all(|(a, b)| a == b)
+        matches_six_words(&self.0, typed)
     }
 
     /// The first 66 bits, as six words of the BIP-39 English list (11 bits each).
     pub fn words(&self) -> [&'static str; 6] {
-        let list = bip39::Language::English.word_list();
-        let mut bits: u128 = 0;
-        for b in &self.0[..9] {
-            bits = (bits << 8) | u128::from(*b);
-        }
-        // 72 bits read, the first 66 kept.
-        bits >>= 6;
-        let mut out = [""; 6];
-        for (i, word) in out.iter_mut().enumerate() {
-            let shift = 11 * (5 - i);
-            *word = list[((bits >> shift) & 0x7ff) as usize];
-        }
-        out
+        six_words(&self.0)
     }
+}
+
+/// The first 66 bits of a digest, as six words of the BIP-39 English list (11 bits each): the team's fingerprint, and
+/// the code of an admission (`invite::AdmissionCode`).
+pub(crate) fn six_words(digest: &[u8; 32]) -> [&'static str; 6] {
+    let list = bip39::Language::English.word_list();
+    let mut bits: u128 = 0;
+    for b in &digest[..9] {
+        bits = (bits << 8) | u128::from(*b);
+    }
+    // 72 bits read, the first 66 kept.
+    bits >>= 6;
+    let mut out = [""; 6];
+    for (i, word) in out.iter_mut().enumerate() {
+        let shift = 11 * (5 - i);
+        *word = list[((bits >> shift) & 0x7ff) as usize];
+    }
+    out
+}
+
+/// Whether six words typed or shown back are a digest's: case and spaces do not matter.
+pub(crate) fn matches_six_words(digest: &[u8; 32], typed: &str) -> bool {
+    let typed: Vec<String> = typed.split_whitespace().map(str::to_lowercase).collect();
+    typed.len() == 6 && typed.iter().zip(six_words(digest)).all(|(a, b)| a == b)
 }

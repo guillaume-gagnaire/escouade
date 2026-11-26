@@ -9,6 +9,9 @@ import { fill } from '../../test/fill';
 
 const SIX = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
 const WORDS = Array.from({ length: 24 }, (_, i) => `mot${i + 1}`);
+/** The six words of a request to join (SR2-08). */
+const CODE = ['sign', 'peasant', 'riot', 'illness', 'cheap', 'athlete'];
+const ADMISSION = { invitation: 'aa'.repeat(16), kind: 'member' as const, role: 'member' as const, words: CODE };
 
 function team(over: Partial<TeamView> = {}): TeamView {
   return {
@@ -32,6 +35,9 @@ function team(over: Partial<TeamView> = {}): TeamView {
     invitations: [],
     snapshotAlerts: [],
     dropAlerts: [],
+    admissions: [],
+    refusals: [],
+    joinWords: [],
     lastError: null,
     ...over,
   };
@@ -272,8 +278,8 @@ describe('the screens of the team server (TS-3)', () => {
     expect(screen.getByText(/Prêt : l’invité peut venir/)).toBeInTheDocument();
   });
 
-  it('joins by a link: its server and six words to check, then waits for an administrator online', async () => {
-    const waiting = team({ joined: false, role: 'none' });
+  it('joins by a link: its server and six words to check, then shows the six words of its request and waits', async () => {
+    const waiting = team({ joined: false, role: 'none', joinWords: CODE });
     const backend = fakeBackend({
       team_list: () => [waiting],
       team_join_preview: () => ({ server: 'team.acme.fr', fingerprint: SIX, ownDevice: false }),
@@ -285,7 +291,11 @@ describe('the screens of the team server (TS-3)', () => {
     for (const w of SIX) expect(screen.getByText(w)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Rejoindre' }));
     expect(backend.called('team_join')[0].args).toEqual({ link: INVITE.url, name: '' });
-    expect(await screen.findByRole('status')).toHaveTextContent('Un administrateur en ligne te fait entrer');
+    expect(await screen.findByRole('status')).toHaveTextContent('La personne qui t’invite compare tes six mots aux siens');
+    // The six words of its request (SR2-08), for the person who invites to compare with theirs.
+    const code = screen.getByRole('group', { name: 'Code de cet appareil' });
+    for (const w of CODE) expect(within(code).getByText(w)).toBeInTheDocument();
+    expect(code).toHaveTextContent('Dis ces six mots à la personne qui t’invite');
     // The administrator let it in: the backend says the team changed.
     teams.put(team({ role: 'member', escrow: 'le RSSI' }));
     expect(await screen.findByText('Tu es dans l’équipe « ACME ».')).toBeInTheDocument();
@@ -447,7 +457,16 @@ describe('the screens of the team server (TS-3)', () => {
       team_list: () => [
         team({
           invitations: [
-            { id: 'a1', kind: 'member', role: 'member', expiresAt: 1_900_000_000, used: true, ready: true, reusedAt: 1_800_000_000 },
+            {
+              id: 'a1',
+              kind: 'member',
+              role: 'member',
+              expiresAt: 1_900_000_000,
+              used: true,
+              ready: true,
+              reusedAt: 1_800_000_000,
+              refused: false,
+            },
           ],
         }),
       ],
@@ -456,5 +475,102 @@ describe('the screens of the team server (TS-3)', () => {
     expect(await screen.findByText('Nouveau membre · Membre')).toBeInTheDocument();
     expect(screen.getByText('Utilisée')).toBeInTheDocument();
     expect(screen.getByText(/Quelqu’un a réutilisé ce lien après son invité/)).toBeInTheDocument();
+  });
+
+  it('admits a request only on « Les mots sont les mêmes », with the six words it shows (SR2-08)', async () => {
+    const backend = fakeBackend({
+      team_list: () => [team({ admissions: [ADMISSION] })],
+      team_admit: () => team({ members: 2 }),
+    });
+    render(TeamModal);
+    const card = await screen.findByRole('region', { name: 'ACME' });
+    const box = within(card).getByRole('group', { name: 'Demandes d’entrée' });
+    expect(box).toHaveTextContent('compare ces six mots avec ceux qu’affiche l’écran de l’invité');
+    expect(box).toHaveTextContent('Nouveau membre · Membre');
+    const code = within(box).getByRole('group', { name: 'Code de la demande' });
+    for (const w of CODE) expect(within(code).getByText(w)).toBeInTheDocument();
+    // Nothing is admitted by the screen itself.
+    expect(backend.called('team_admit')).toHaveLength(0);
+    await userEvent.click(within(box).getByRole('button', { name: 'Les mots sont les mêmes' }));
+    expect(backend.called('team_admit')[0].args).toEqual({ team: team().id, invitation: ADMISSION.invitation, words: CODE });
+    expect(backend.called('team_refuse')).toHaveLength(0);
+    await waitFor(() => expect(within(card).queryByRole('group', { name: 'Demandes d’entrée' })).toBeNull());
+  });
+
+  it('refuses a request whose words differ: the invitation is cancelled and said so (SR2-08)', async () => {
+    const refused = team({
+      invitations: [
+        {
+          id: ADMISSION.invitation,
+          kind: 'member',
+          role: 'member',
+          expiresAt: 1_900_000_000,
+          used: true,
+          ready: true,
+          reusedAt: null,
+          refused: true,
+        },
+      ],
+      refusals: [{ invitation: ADMISSION.invitation, kind: 'member', byMe: true, byRole: 'admin', at: 1_800_000_000 }],
+    });
+    const backend = fakeBackend({
+      team_list: () => [team({ admissions: [ADMISSION] })],
+      team_refuse: () => refused,
+    });
+    render(TeamModal);
+    const card = await screen.findByRole('region', { name: 'ACME' });
+    expect(within(card).getByText(/quelqu’un d’autre a le lien/)).toBeInTheDocument();
+    await userEvent.click(within(card).getByRole('button', { name: 'Les mots diffèrent' }));
+    expect(backend.called('team_refuse')[0].args).toEqual({ team: team().id, invitation: ADMISSION.invitation });
+    expect(backend.called('team_admit')).toHaveLength(0);
+    const told = await within(card).findByRole('alert', { name: 'Invitations annulées' });
+    expect(told).toHaveTextContent('Personne n’est entré avec');
+    expect(told).toHaveTextContent('Par cet appareil');
+    expect(within(card).getByText('Annulée : les mots différaient')).toBeInTheDocument();
+  });
+
+  it('tells an administrator a refusal made on another device (SR2-08)', async () => {
+    fakeBackend({
+      team_list: () => [
+        team({ refusals: [{ invitation: 'bb'.repeat(16), kind: 'device', byMe: false, byRole: 'member', at: 1_800_000_000 }] }),
+      ],
+    });
+    render(TeamModal);
+    const told = await screen.findByRole('alert', { name: 'Invitations annulées' });
+    expect(told).toHaveTextContent('Un de tes appareils · annulée le');
+    expect(told).toHaveTextContent('Par un membre, pour un de ses appareils');
+  });
+
+  it('shows the requests of the invitation just made on the invite screen, with their six words (SR2-08)', async () => {
+    const backend = fakeBackend({ team_list: () => [team()], team_invite: () => INVITE, team_admit: () => team() });
+    teams.list = [team()];
+    render(TeamModal, { props: { step: 'invite', teamId: team().id } });
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le lien' }));
+    expect(await screen.findByText(/Sa demande apparaîtra ici avec six mots/)).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Demandes d’entrée' })).toBeNull();
+    // The invitee asked: the backend says the team changed.
+    teams.put(team({ admissions: [ADMISSION] }));
+    const box = await screen.findByRole('group', { name: 'Demandes d’entrée' });
+    await userEvent.click(within(box).getByRole('button', { name: 'Les mots sont les mêmes' }));
+    expect(backend.called('team_admit')[0].args).toEqual({ team: team().id, invitation: ADMISSION.invitation, words: CODE });
+  });
+
+  it('shows the new device’s request with its six words on the screen of one’s own device (SR2-08)', async () => {
+    const own = team({ admissions: [{ ...ADMISSION, kind: 'device', role: null }] });
+    fakeBackend({ team_list: () => [own], team_own_device: () => INVITE });
+    teams.list = [own];
+    render(TeamModal, { props: { step: 'device', teamId: team().id } });
+    const box = await screen.findByRole('group', { name: 'Demandes d’entrée' });
+    expect(box).toHaveTextContent('Un de tes appareils');
+    for (const w of CODE) expect(within(box).getByText(w)).toBeInTheDocument();
+  });
+
+  it('shows the six words of its request on the card of a team it waits to enter (SR2-08)', async () => {
+    fakeBackend({ team_list: () => [team({ joined: false, role: 'none', joinWords: CODE })] });
+    render(TeamModal);
+    const card = await screen.findByRole('region', { name: 'ACME' });
+    expect(card).toHaveTextContent('Montre ces six mots à la personne qui t’invite');
+    const code = within(card).getByRole('group', { name: 'Code de cet appareil' });
+    for (const w of CODE) expect(within(code).getByText(w)).toBeInTheDocument();
   });
 });

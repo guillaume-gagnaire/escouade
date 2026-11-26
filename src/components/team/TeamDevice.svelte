@@ -4,8 +4,9 @@
   // try, and sends the invitation sealed under the PAKE's key; it then lets the new device in.
   import { onDestroy, onMount } from 'svelte';
   import { t } from '../../lib/i18n';
-  import { errorText, teamsApi, type InviteView, type PairView } from '../../lib/teams.svelte';
+  import { errorText, teams, teamsApi, type InviteView, type PairView } from '../../lib/teams.svelte';
   import InviteLink from './InviteLink.svelte';
+  import TeamAdmissions from './TeamAdmissions.svelte';
 
   let { teamId, onback }: { teamId: string; onback: () => void } = $props();
 
@@ -13,6 +14,8 @@
   let invite = $state<InviteView | null>(null);
   let pair = $state<PairView | null>(null);
   let failure = $state('');
+  /** The team as the backend last said it: the new device's request comes in it, with its six words (SR2-08). */
+  const current = $derived(teams.byId(teamId));
   let timer: ReturnType<typeof setInterval> | null = null;
 
   onMount(async () => {
@@ -102,6 +105,8 @@
   {/if}
   <p class="hint">{t('team.device.oneTry')}</p>
 {/if}
+
+{#if current}<TeamAdmissions team={current} />{/if}
 
 {#if failure}<p class="error" role="alert">{failure}</p>{/if}
 <div class="foot">

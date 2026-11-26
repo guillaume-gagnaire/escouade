@@ -586,6 +586,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `team_projects`
 - `team_projects_retry`
 - `team_recover`
+- `team_refuse`
 - `team_remove_snapshot`
 - `team_settings`
 - `team_settings_check`
@@ -714,6 +715,7 @@ Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 - `speech_info` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `speech_preview` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `speech_preview_online` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `team_admit` : l’admission d’un appareil dans une équipe (SR2-08) : ses six mots se comparent avec l’écran de l’invité, jamais à distance
 - `update_check` : l’updater du client : le client et le serveur ont chacun le leur
 - `update_close` : l’updater du client : le client et le serveur ont chacun le leur
 - `update_download` : l’updater du client : le client et le serveur ont chacun le leur

@@ -130,7 +130,13 @@ fn join(admin: &mut TeamDevice, who: MemberId, others: &mut [&mut TeamDevice]) -
         .expect("an invitation");
     let mut device = TeamDevice::new(who).expect("a device");
     let request = device.request_join(&link).expect("a request");
-    let publication = admin.admit(&request, NOW).expect("admitted");
+    let publication = admin
+        .admit(
+            &request,
+            &device.join_code().expect("a code").words().join(" "),
+            NOW,
+        )
+        .expect("admitted");
     let (_, delivery) = publication.welcome.clone().expect("a Welcome");
     apply_all(publication, others);
     device.accept_welcome(&delivery).expect("joined");

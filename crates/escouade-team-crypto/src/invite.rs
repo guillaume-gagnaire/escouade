@@ -16,6 +16,16 @@
 //! 5. The invitee checks that the group it joined has the team fingerprint of its link and the confirmation: the
 //!    server cannot show it another team.
 //!
+//! **No device is admitted on its link alone** (SR2-08): a link that leaks (a forwarded mail, a chat, a screenshot)
+//! would let whoever holds it in, in the invitee's place. Each request has an [`AdmissionCode`], six words drawn from
+//! the invitation's id and the invitee's signed KeyPackage: the invitee's device shows the words of the KeyPackage it
+//! made, the inviting device those of the KeyPackage it checked (its signature, its MAC), and the person who invites
+//! compares them with the invitee, by voice or face to face, before the Welcome leaves. The device admits a request
+//! only with the six words confirmed ([`InvitationError::CodeMismatch`] otherwise), so that nothing admits by itself.
+//! Different words: the request is refused and the invitation cancelled ([`Invitation::refused`]). The server, which
+//! neither makes the invitee's KeyPackage nor holds its signature key, cannot put another in its place without the
+//! two screens showing different words.
+//!
 //! The links of before (`https://<server>/join/<id>#…`, which opened the server's page) are refused: by the invitee's
 //! app ([`InvitationError::OldForm`], to ask for a new one), and by the inviting device, which admits no one with an
 //! invitation made before ([`Invitation::app_link`]).
@@ -27,11 +37,11 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::identity::MemberId;
-use crate::roster::{Role, TeamFingerprint};
+use crate::roster::{matches_six_words, six_words, Role, TeamFingerprint};
 use crate::Error;
 
 /// 72 hours.
@@ -62,6 +72,44 @@ pub struct Invitation {
     /// before, whose `https://` link may have been opened on the server's page: it lets no one in.
     #[serde(default)]
     pub app_link: bool,
+    /// The person who invited said the six words of a request differed from the invitee's (SR2-08): the invitation is
+    /// cancelled, it lets no one in.
+    #[serde(default)]
+    pub refused: bool,
+}
+
+/// The six words of an admission (SR2-08): drawn from the invitation's id and the invitee's KeyPackage as it went
+/// (signed by the invitee's leaf key), shown on both screens and confirmed by the person who invites before the
+/// Welcome leaves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AdmissionCode(pub [u8; 32]);
+
+impl AdmissionCode {
+    /// SHA-256 of a label, the invitation's id and the KeyPackage (TLS-encoded, as in the [`JoinRequest`]).
+    pub fn of(invitation: &[u8; 16], key_package: &[u8]) -> Self {
+        let mut h = Sha256::new();
+        h.update(b"escouade/admission-code/v1\0");
+        for part in [&invitation[..], key_package] {
+            h.update((part.len() as u32).to_be_bytes());
+            h.update(part);
+        }
+        Self(h.finalize().into())
+    }
+
+    /// The code of a request, as the device that reads it computes it.
+    pub fn of_request(request: &JoinRequest) -> Self {
+        Self::of(&request.invitation, &request.key_package)
+    }
+
+    /// Its first 66 bits, as six words of the BIP-39 English list (as the team's fingerprint).
+    pub fn words(&self) -> [&'static str; 6] {
+        six_words(&self.0)
+    }
+
+    /// Whether six words (as they were shown and confirmed) are this code's: case and spaces do not matter.
+    pub fn matches_words(&self, words: &str) -> bool {
+        matches_six_words(&self.0, words)
+    }
 }
 
 /// The link, parsed.
@@ -225,6 +273,12 @@ pub enum InvitationError {
     WrongTeam,
     #[error("the Welcome does not come from the administrator who invited")]
     BadConfirmation,
+    #[error("the six words confirmed are not those of this request: it is not admitted")]
+    CodeMismatch,
+    #[error(
+        "the invitation was cancelled: the six words of its request differed from the invitee's"
+    )]
+    Refused,
 }
 
 fn hmac(secret: &[u8; 32], parts: &[&[u8]]) -> Hmac<Sha256> {

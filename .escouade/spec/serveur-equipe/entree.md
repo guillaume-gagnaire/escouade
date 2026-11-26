@@ -1,9 +1,9 @@
 ---
 title: "Entrer dans une équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md"]
-tickets: ["ESC-461","ESC-632","ESC-633"]
-decisions: [173,286,288]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","Revue de sécurité de la 2.3 (ESC-625), SR2-08 : la vérification hors bande à l'admission"]
+tickets: ["ESC-461","ESC-632","ESC-633","ESC-634"]
+decisions: [173,286,288,329]
 compared: null
 ---
 
@@ -17,7 +17,7 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 - L'état de chaque équipe est dans le dossier `teams` des données, avec `teams.json` : le nom donné à l'équipe sur cet appareil, son serveur, la clé de secours confirmée ou non, l'alerte.
 - Tout passe par le proxy et les certificats de l'app (Réglages › Avancé › Réseau), la connexion en direct comme les requêtes.
 - Un serveur se joint en https ; en http seulement sur cette machine (`127.0.0.1`, `localhost`).
-- L'app relit chaque équipe toutes les 3 s et fait, pour les autres, ce que fait un appareil en ligne (voir « Un administrateur en ligne »).
+- L'app relit chaque équipe toutes les 3 s et fait, pour les autres, ce que fait un appareil en ligne (voir « Un appareil en ligne »).
 
 ## Créer une équipe
 
@@ -39,7 +39,21 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 - Le lien : `escouade://team/join/<serveur>/<id>#s=<secret>&t=<empreinte>` (et `&m=<membre>` pour un autre appareil d'un membre). La fenêtre le donne à copier, et en QR code ; elle dit que l'invité le clique ou, si sa messagerie ne le rend pas cliquable, le colle dans « Rejoindre par un lien ».
 - **Le secret ne passe jamais par une page web** : il n'y a aucune forme `https://` du lien qui le porte. HTTP n'envoie pas ce qui suit le `#`, mais une page servie par le serveur d'équipe le lirait dans le navigateur, et un serveur piraté entrerait alors à la place de l'invité. Une page statique ailleurs (escouade.dev) ferait d'un autre site un tiers de confiance : écartée aussi.
 - Le jeton du serveur que l'invité utilise est dérivé du secret : le serveur n'en garde que l'empreinte, et ne laisse entrer qu'une fois.
-- Les invitations de l'équipe sont listées sur sa carte : ouverte (jusqu'à quand), en attente d'un administrateur, utilisée, expirée.
+- **Le lien seul ne fait entrer personne** : chaque demande est confirmée par les six mots de son code (voir « Le code de six mots »). Un lien qui fuit (un courriel transféré, une messagerie, une capture d'écran) ne donne donc à qui l'a qu'une demande que la personne qui invite refuse.
+- Après « Créer le lien », l'écran d'invitation reste ouvert sur les demandes qui arrivent, avec leurs six mots.
+- Les invitations de l'équipe sont listées sur sa carte : ouverte (jusqu'à quand), en attente d'un administrateur, utilisée, expirée, annulée (« Annulée : les mots différaient »).
+
+## Le code de six mots
+
+À l'admission de tout appareil (un nouveau membre, ou un autre appareil d'un membre, par le QR code comme par le code court) :
+
+- **Sur l'écran de l'invité** : dès sa demande partie, « Code de cet appareil » et six mots, sur l'écran « Rejoindre » et sur la carte de l'équipe en attente : « Dis ces six mots à la personne qui t'invite : elle les compare à son écran avant de te faire entrer. S'ils diffèrent, elle refuse la demande. » Ils restent tant que l'appareil attend, même après un redémarrage, et disparaissent une fois entré.
+- **Sur l'écran de qui invite** : « Demandes d'entrée », sur la carte de l'équipe, sur l'écran d'invitation et sur celui d'« Ajouter un appareil », chaque demande avec ce qu'elle fait entrer (« Nouveau membre · Membre », « Un de tes appareils ») et « Code de la demande », six mots. « Avant de faire entrer qui que ce soit, compare ces six mots avec ceux qu'affiche l'écran de l'invité, de vive voix ou en personne, jamais par le message qui portait le lien. »
+- **« Les mots sont les mêmes »** fait entrer l'invité (le Welcome part), avec les six mots montrés : si la demande a changé entre-temps, ses mots ne sont plus ceux-là et rien n'entre (« Ces six mots ne sont plus ceux de la demande : rien n'est admis… »).
+- **« Les mots diffèrent »** (ou l'invité n'en voit aucun : on lui a dit « Cette invitation a déjà servi ») : la demande est refusée, **l'invitation annulée** (plus personne n'entre avec, quels que soient les mots), l'appareil qui a demandé est coupé du serveur quand celui qui refuse en est administrateur, et **les administrateurs sont prévenus** : « Invitations annulées » sur la carte de l'équipe de chacun, avec quand et par qui (« Par cet appareil », « Par un administrateur », « Par un membre, pour un de ses appareils »). Un membre ne voit que les siennes.
+- **Ce que garantissent les six mots** : ils sont tirés de l'identifiant de l'invitation et du KeyPackage MLS de l'invité tel qu'il est parti, signé par la clé de sa feuille, que l'appareil de l'invité fait et ne quitte pas. L'appareil de qui invite vérifie la signature et la preuve du secret de l'invitation, puis calcule les mots lui-même. Le serveur ne peut ni les calculer à la place d'un appareil ni mettre un autre KeyPackage à la place de celui de l'invité sans que les deux écrans montrent des mots différents ; qui a le lien en fait une demande à lui, dont les mots ne sont pas ceux de l'écran de l'invité.
+- **Aucune admission sans confirmation** : l'appareil en ligne liste les demandes et n'en fait entrer aucune de lui-même. La confirmation est un geste sur l'ordinateur : ni le MCP, ni l'API distante (le téléphone, un client à distance : la commande y est refusée), ni l'Overseer d'équipe (qui ne répond pas aux invitations) n'admettent.
+- La récupération (« Récupérer une équipe ») fait entrer le nouvel appareil de cette machine sans personne pour comparer : les deux écrans sont le même, l'app lit elle-même les six mots du nouvel appareil.
 
 ## Les liens de l'ancienne forme
 
@@ -49,25 +63,25 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 
 ## Rejoindre
 
-- « Rejoindre par un lien », ou un lien `escouade://team/join` ouvert (un clic dans une messagerie, un navigateur, un QR code scanné) : la fenêtre s'ouvre sur « Rejoindre une équipe », le lien rempli, et montre le serveur et les six mots de l'équipe. **Un lien venu d'ailleurs ne fait rien d'autre** : aucune requête ne part avant « Rejoindre ». **L'invité vérifie les six mots** avec qui l'invite : s'ils diffèrent, il n'entre pas. Rejoindre reste son geste.
+- « Rejoindre par un lien », ou un lien `escouade://team/join` ouvert (un clic dans une messagerie, un navigateur, un QR code scanné) : la fenêtre s'ouvre sur « Rejoindre une équipe », le lien rempli, et montre le serveur et les six mots de l'équipe. **Un lien venu d'ailleurs ne fait rien d'autre** : aucune requête ne part avant « Rejoindre ». **L'invité vérifie les six mots de l'équipe** avec qui l'invite : s'ils diffèrent, il n'entre pas. Rejoindre reste son geste.
 - Le schéma `escouade://` est celui de l'app sur les trois systèmes : l'installeur l'enregistre sous Windows et Linux (`.deb`, `.rpm`), le bundle sous macOS, et l'app elle-même pour une AppImage.
-- La demande part ; un administrateur en ligne le fait entrer (« Un administrateur en ligne te fait entrer : cette fenêtre le dira »). Le groupe rejoint doit avoir l'empreinte du lien.
+- La demande part ; l'écran montre le code de six mots de cet appareil (voir « Le code de six mots ») : « La personne qui t'invite compare tes six mots aux siens, puis te fait entrer : cette fenêtre le dira. » Le groupe rejoint doit avoir l'empreinte du lien.
 - **Une invitation déjà utilisée** : « Cette invitation a déjà servi : demande un nouveau lien à son administrateur, qui est prévenu. » Sur la carte de l'équipe de l'administrateur, l'invitation dit que quelqu'un l'a réutilisée après son invité, et quand : le lien a peut-être fuité.
-- **Une invitation expirée** est refusée par le serveur, et un administrateur en ligne après son terme ne fait plus entrer la demande.
+- **Une invitation expirée** est refusée par le serveur, et sa demande n'est plus montrée à qui l'a faite après son terme.
 
-## Un administrateur en ligne
+## Un appareil en ligne
 
 À chaque lecture, l'appareil :
-- fait entrer les demandes des invitations qu'il a faites (un Welcome MLS), sauf celles d'une invitation de l'ancienne forme ;
+- **liste les demandes** des invitations qu'il a faites, vérifiées (le secret de l'invitation, la signature du KeyPackage), chacune avec ses six mots, pour la personne qui invite ; il n'en fait entrer aucune de lui-même. Une demande d'une invitation utilisée, expirée, annulée ou de l'ancienne forme, ou qui ne se prouve pas, est écartée ;
 - s'il est administrateur du serveur, enregistre le jeton qu'un membre a demandé pour son propre appareil (voir plus bas) ;
 - tient **les rôles du serveur au pas du registre** : un administrateur nommé après son inscription le devient aussi sur le serveur, un administrateur redevenu membre aussi ; le dernier administrateur du serveur reste ;
 - donne **l'ancre de la clé de secours** (et celle du séquestre) aux appareils administrateurs qui ne l'ont pas encore, et écrit les enveloppes de secours et de séquestre de l'époque quand le commit d'un membre n'en a pas fait (voir « Le client de l'équipe ») ;
-- lit les seconds usages de ses invitations.
+- lit les seconds usages de ses invitations, et les invitations que d'autres appareils de l'équipe ont annulées.
 
 ## Ajouter un de ses appareils
 
-- « Ajouter un appareil… », onglet **QR code** : le lien d'un appareil du même membre (valable une heure), à scanner ou à coller dans « Rejoindre par un lien » sur l'autre appareil. L'appareil du membre le fait entrer lui-même.
-- Onglet **Code court**, sans caméra : 8 caractères (`K7Q4-M2XZ`), à taper sur l'autre appareil dans « Ajouter cet appareil par un code », avec l'adresse du serveur. Un code a **un seul essai** et 10 minutes : un mauvais code le rend inutilisable (« Un mauvais code a été tapé : ce code ne sert plus »), il en faut un nouveau. Le code passe par un échange de clés authentifié par mot de passe (SPAKE2) : le serveur ne peut pas l'essayer hors ligne.
+- « Ajouter un appareil… », onglet **QR code** : le lien d'un appareil du même membre (valable une heure), à scanner ou à coller dans « Rejoindre par un lien » sur l'autre appareil. L'appareil du membre le fait entrer lui-même, une fois les six mots des deux écrans comparés (« Demandes d'entrée » sous le QR code).
+- Onglet **Code court**, sans caméra : 8 caractères (`K7Q4-M2XZ`), à taper sur l'autre appareil dans « Ajouter cet appareil par un code », avec l'adresse du serveur. Un code a **un seul essai** et 10 minutes : un mauvais code le rend inutilisable (« Un mauvais code a été tapé : ce code ne sert plus »), il en faut un nouveau. Le code passe par un échange de clés authentifié par mot de passe (SPAKE2) : le serveur ne peut pas l'essayer hors ligne. Le bon code tapé, l'autre appareil montre ses six mots, et l'appareil du membre la demande avec les siens : « Compare les six mots qu'il affiche avec ceux de sa demande avant de le faire entrer. »
 - Un membre qui n'est pas administrateur du serveur : le jeton de son nouvel appareil est demandé dans l'équipe, signé par son appareil, et un administrateur en ligne l'enregistre. En attendant, la fenêtre le dit (« En attente d'un administrateur »).
 - Les O se lisent 0, les I et L se lisent 1, majuscules et tirets indifférents.
 

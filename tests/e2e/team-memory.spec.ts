@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { addProject, closeSettings, expect, openSettingsPage, send, test } from './fixture';
+import { letIn } from './team-admit';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SERVER = path.join(ROOT, 'src-tauri', 'target', 'debug', `escouade-team-server${process.platform === 'win32' ? '.exe' : ''}`);
@@ -184,7 +185,9 @@ test('an agent’s memory is read by the other machine only once kept, then a qu
   // Bob's has no agent: no MCP server of its own (it would take Alice's port).
   fs.writeFileSync(path.join(bobData, 'settings.json'), JSON.stringify({ ...settings, mcpEnabled: false, userName: 'Bob' }));
   const bob = await app.second(bobData);
-  await ipc(bob, 'team_join', { link: invite.url, name: 'ACME' });
+  const asked = await ipc<{ joinWords: string[] }>(bob, 'team_join', { link: invite.url, name: 'ACME' });
+  // Alice compares the six words of the request with Bob's screen, and lets him in (SR2-08).
+  await letIn(alice, asked.joinWords);
   await expect.poll(async () => (await ipc<{ joined: boolean }[]>(bob, 'team_list'))[0]?.joined, { timeout: 60_000 }).toBe(true);
 
   // Their projects, the team's; the docs of Alice's, and its memory, on the team server; Bob follows its journal.

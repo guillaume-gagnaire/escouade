@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : un appareil n’entre plus dans une équipe sur son seul lien d’invitation. L’invité et qui l’invite voient six mots, qu’ils comparent de vive voix avant « Les mots sont les mêmes » ; des mots différents refusent la demande, annulent l’invitation et préviennent les administrateurs : un lien qui a fuité ne laisse plus entrer qui l’a trouvé.
 - Sécurité : derrière un proxy TLS, chaque client de ton serveur compte ses essais ratés à part (`--trust-proxy`), et des codes d’appairage faux venus d’ailleurs ne bloquent jamais celui que tu tapes depuis la machine ou par SSH. Par Tailscale, seule l’app du téléphone ouvre l’API, plus une page web d’une autre machine.
 - Sécurité : un ticket du Kanban d’équipe qu’un collègue a écrit et qui t’est assigné attend ton accord : ni le pilote auto, ni l’Overseer, ni tes agents ne le lancent avant que tu l’acceptes, dans sa carte ou dans « À toi ». La carte dit qui a écrit le texte et qui l’a assigné, et un texte changé par un collègue après ton accord le redemande.
 - Sécurité : l’hébergeur d’un serveur d’équipe peut dégeler une équipe ou un projet bloqué par une entrée illisible, avec `escouade-team-server drop-entry`. Il voit l’entrée, confirme, et la base garde qui l’a retirée, quand et son empreinte, jamais son contenu ; les appareils lisent la suite au lieu d’y voir un retour en arrière, et les administrateurs le voient sur la carte de l’équipe.

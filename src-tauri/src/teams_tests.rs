@@ -93,6 +93,27 @@ async fn server() -> (
     (server, format!("127.0.0.1:{}", addr.port()), task, dir)
 }
 
+/// The person who invites compares the six words of the request with the invitee's screen, and says they are the
+/// same (SR2-08): the only way in. Then the invitee reads its Welcome.
+pub(crate) async fn let_in(inviter: &Teams, invitee: &Teams, id: &str) {
+    let shown = inviter.sync(id).await.unwrap().admissions;
+    assert_eq!(shown.len(), 1, "one request waits for its six words");
+    let theirs = invitee.sync(id).await.unwrap();
+    assert!(!theirs.joined, "not in before the words are confirmed");
+    assert_eq!(
+        shown[0].words, theirs.join_words,
+        "the same six words on both screens"
+    );
+    let after = inviter
+        .admit(id, &shown[0].invitation, &shown[0].words)
+        .await
+        .unwrap();
+    assert!(after.admissions.is_empty());
+    let joined = invitee.sync(id).await.unwrap();
+    assert!(joined.joined);
+    assert!(joined.join_words.is_empty());
+}
+
 fn teams(root: &std::path::Path, store: Arc<dyn SecretStore>) -> Arc<Teams> {
     Arc::new(Teams::open(
         root.to_path_buf(),
@@ -160,7 +181,43 @@ async fn two_data_folders_of_one_machine_a_team_an_invitation_and_its_admission(
     let waiting = bob.join(&invite.url, "").await.unwrap();
     assert!(!waiting.joined);
     assert_eq!(waiting.name, host, "named after its server when not named");
+    assert_eq!(
+        waiting.join_words.len(),
+        6,
+        "Bob's screen shows the six words of his request"
+    );
+    // Alice's watch reads the request, and lets no one in by itself (SR2-08).
     let watch = tokio::spawn(alice.clone().watch(Duration::from_millis(200)));
+    let mut shown = Vec::new();
+    for _ in 0..100 {
+        shown = alice.list().await[0].admissions.clone();
+        if !shown.is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(shown.len(), 1, "the request is shown with its six words");
+    assert_eq!(shown[0].words, waiting.join_words);
+    assert_eq!(shown[0].kind, "member");
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(
+        !bob.sync(&id).await.unwrap().joined,
+        "the watch admits no one"
+    );
+    // Other words: nothing admitted.
+    let mut other = shown[0].words.clone();
+    other.swap(0, 1);
+    let refused = alice
+        .admit(&id, &shown[0].invitation, &other)
+        .await
+        .unwrap_err();
+    assert!(refused.contains("six mots"), "{refused}");
+    assert!(!bob.sync(&id).await.unwrap().joined);
+    // « Les mots sont les mêmes »: Bob comes in.
+    alice
+        .admit(&id, &shown[0].invitation, &shown[0].words)
+        .await
+        .unwrap();
     let mut joined = None;
     for _ in 0..100 {
         let v = bob.sync(&id).await.unwrap();
@@ -170,7 +227,8 @@ async fn two_data_folders_of_one_machine_a_team_an_invitation_and_its_admission(
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    let joined = joined.expect("Bob is let in by Alice's watch");
+    let joined = joined.expect("Bob is let in once the words are confirmed");
+    assert!(joined.join_words.is_empty());
     assert_eq!(joined.role, "member");
     assert_eq!(joined.fingerprint, created.team.fingerprint);
     // Two devices of one keychain, each its own keys.
@@ -246,8 +304,7 @@ async fn a_projects_operation_comes_by_the_live_feed() {
         .id;
     let invite = alice.invite(&id, "member", None).await.unwrap();
     bob.join(&invite.url, "").await.unwrap();
-    alice.sync(&id).await.unwrap();
-    assert!(bob.sync(&id).await.unwrap().joined);
+    let_in(&alice, &bob, &id).await;
 
     // A project of the whole team, followed by Bob's folder.
     let project = {

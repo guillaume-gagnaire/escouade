@@ -138,9 +138,14 @@ async fn join(s: &TestServer, admin: &mut Member, who: MemberId) -> Member {
         .requests
         .pop()
         .expect("the admin sees the request");
-    publish(&admin.server, admin.mls.admit(&request, NOW).unwrap())
-        .await
-        .unwrap();
+    // The six words the invitee shows, confirmed by the person who invites (SR2-08).
+    let words = mls.join_code().unwrap().words().join(" ");
+    publish(
+        &admin.server,
+        admin.mls.admit(&request, &words, NOW).unwrap(),
+    )
+    .await
+    .unwrap();
 
     let v = view(&server).await;
     mls.accept_welcome(&v.welcomes[&link.id]).unwrap();

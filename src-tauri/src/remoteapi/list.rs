@@ -73,6 +73,7 @@ escouade_command::commands! {
         commands::team_new_recovery,
         commands::team_invite,
         commands::team_own_device,
+        commands::team_refuse,
         commands::team_join_preview,
         commands::team_join,
         commands::team_pair_start,
@@ -501,6 +502,9 @@ escouade_command::commands! {
     }
     // The desktop's only: refused at a distance (`desk-only`).
     desk {
+        // An admission confirms six words compared with the invitee's screen (SR2-08): on the desktop only, never
+        // at a distance.
+        commands::team_admit,
         commands::set_held,
         commands::open_url,
         commands::devpage_open,

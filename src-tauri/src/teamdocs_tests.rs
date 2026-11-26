@@ -182,8 +182,7 @@ pub(crate) async fn pair(name: &str) -> (Server, Side, Side, String) {
         .id;
     let invite = alice.teams.invite(&id, "member", None).await.unwrap();
     bob.teams.join(&invite.url, "").await.unwrap();
-    alice.teams.sync(&id).await.unwrap();
-    assert!(bob.teams.sync(&id).await.unwrap().joined);
+    crate::teams_tests::let_in(&alice.teams, &bob.teams, &id).await;
     alice.of_team(&id);
     bob.of_team(&id);
     (server, alice, bob, id)

@@ -458,6 +458,19 @@ pub enum TeamMessage {
     /// The anchor of the recovery or of the escrow wraps (SR2-09), sealed by an administrator's device for another
     /// administrator's device, to the X25519 form of its leaf key (`escouade_team_crypto::anchor`).
     Anchor(AnchorGrant),
+    /// An invitation cancelled because the six words of its request differed from the invitee's (SR2-08): sealed as
+    /// an object of the team by the device that refused it, signed by its leaf, for the administrators to be told.
+    Refused(SealedObject),
+}
+
+/// What a [`TeamMessage::Refused`] holds, once opened.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefusedBody {
+    #[serde(with = "hex::serde")]
+    pub invitation: [u8; 16],
+    pub purpose: escouade_team_crypto::Purpose,
+    /// When, seconds since the epoch.
+    pub at: u64,
 }
 
 /// What a [`TeamMessage::TokenRequest`] holds, once opened.

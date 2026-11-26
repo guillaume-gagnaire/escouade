@@ -9,8 +9,13 @@
 //! - **the folder** `teams` of the data: each team's state, and `teams.json`, what the window lists (a name, the
 //!   server, whether the recovery words were confirmed, the alarm);
 //! - the **commands** of the screens (`commands.rs`, `team_*`), and a **watch** that reads each team's stream and does
-//!   what an online device does for the others (`Team::serve`: let an invitee in, register a member's token, keep the
-//!   server's roles in step with the roster, read the second uses of an invitation).
+//!   what an online device does for the others (`Team::serve`: list the requests of its invitations, register a
+//!   member's token, keep the server's roles in step with the roster, read the second uses of an invitation).
+//!
+//! **No admission without the six words** (SR2-08). The watch lets no one in: each request of this device's
+//! invitations is shown with its six words ([`AdmissionView`]), the invitee's screen shows its own
+//! ([`TeamView::join_words`]), and only « Les mots sont les mêmes » on this desktop (`team_admit`, refused at a
+//! distance) admits it, with the words shown; « Les mots diffèrent » (`team_refuse`) cancels the invitation.
 //!
 //! **The alarm.** A fork, a rollback, a rewritten entry: the server shows what it should not. The team is then
 //! stopped on this device: nothing more is read nor sent (no invitation, no admission, no new device, no new recovery
@@ -29,7 +34,7 @@ use escouade_team::crypto::invite::{InvitationError, InviteLink, DEFAULT_LIFETIM
 use escouade_team::crypto::EscrowTeamHalf;
 use escouade_team::crypto::{MemberId, Purpose, RecoveryKey, Role};
 use escouade_team::pairing::{PairCode, Pairing};
-use escouade_team::team::{InvitationInfo, Invited, OWN_DEVICE_LIFETIME};
+use escouade_team::team::{InvitationInfo, Invited, RefusalAlert, OWN_DEVICE_LIFETIME};
 use escouade_team::{
     Alarm, ClientError, CryptoError, Error as TeamError, HttpTransport, KeyPlace, Keychain,
     Options, PairState, Setup, Team, Transport, Vault,
@@ -221,6 +226,8 @@ pub fn say(e: &TeamError) -> String {
         TeamError::Crypto(CryptoError::OtherTeam) => "Ces six mots ne sont pas ceux de l’équipe : recopie-les depuis la feuille de secours, sous les 24 mots.".into(),
         TeamError::Crypto(CryptoError::Unanchored) => "Cette enveloppe de secours n’est pas signée par un administrateur de l’équipe : elle est écartée.".into(),
         TeamError::Crypto(CryptoError::Invitation(InvitationError::OldForm)) => OLD_FORM.into(),
+        TeamError::Crypto(CryptoError::Invitation(InvitationError::CodeMismatch)) => "Ces six mots ne sont plus ceux de la demande : rien n’est admis. Relis les mots affichés et compare-les de nouveau avec l’invité.".into(),
+        TeamError::Crypto(CryptoError::Invitation(InvitationError::Refused)) => "Cette invitation a été annulée : les six mots de sa demande différaient de ceux de l’invité. Fais une nouvelle invitation.".into(),
         TeamError::Crypto(CryptoError::Words) => "Ces mots ne sont pas une clé de secours : vérifie-les (24 mots, dans l’ordre).".into(),
         TeamError::Crypto(CryptoError::NotAdmin) => "Seul un administrateur de l’équipe peut le faire.".into(),
         TeamError::Crypto(CryptoError::Decrypt) => "Ces mots n’ouvrent pas la dernière clé de secours de l’équipe : est-ce la clé en vigueur ?".into(),
@@ -294,6 +301,36 @@ pub struct InvitationView {
     pub used: bool,
     pub ready: bool,
     pub reused_at: Option<i64>,
+    /// Cancelled: the six words of its request differed from the invitee's (SR2-08).
+    pub refused: bool,
+}
+
+/// A request of one of this device's invitations, waiting for the six words to be confirmed (SR2-08): shown with its
+/// six words, to compare with those of the invitee's screen.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AdmissionView {
+    /// The invitation's id, hex.
+    pub invitation: String,
+    /// `member` (a new member) or `device` (another device of a member).
+    pub kind: String,
+    pub role: Option<String>,
+    /// The six words drawn from the invitee's signed KeyPackage.
+    pub words: Vec<String>,
+}
+
+/// An invitation cancelled because the six words differed (SR2-08), as the administrators are told.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RefusalView {
+    pub invitation: String,
+    pub kind: String,
+    /// The member's device that refused it is this one's member.
+    pub by_me: bool,
+    /// The role of the member who refused it, when still in the team.
+    pub by_role: Option<String>,
+    /// Seconds since the epoch.
+    pub at: u64,
 }
 
 /// A project's snapshot found unreadable and put aside (SR2-01): the copy reads the journal instead. An administrator
@@ -371,6 +408,14 @@ pub struct TeamView {
     pub recovery_stale: bool,
     pub alarm: Option<AlarmView>,
     pub invitations: Vec<InvitationView>,
+    /// The requests of this device's invitations waiting for their six words to be confirmed (SR2-08).
+    pub admissions: Vec<AdmissionView>,
+    /// The invitations of the team cancelled because the six words differed (SR2-08), the newest first: an
+    /// administrator's, and this device's own.
+    pub refusals: Vec<RefusalView>,
+    /// While this device waits to be let in: the six words of its request, for the person who invites to compare
+    /// (SR2-08). Empty once in.
+    pub join_words: Vec<String>,
     /// The projects' snapshots put aside (SR2-01), the newest first.
     pub snapshot_alerts: Vec<SnapshotAlertView>,
     /// The entries the server's operator removed (SR2-02), an administrator's, the newest first.
@@ -443,19 +488,24 @@ fn role_name(r: Role) -> String {
     .into()
 }
 
+fn purpose_view(p: &Purpose) -> (String, Option<String>) {
+    match p {
+        Purpose::NewMember(r) => ("member".into(), Some(role_name(*r))),
+        Purpose::OwnDevice(_) => ("device".into(), None),
+    }
+}
+
 fn invitation_view(i: &InvitationInfo) -> InvitationView {
-    let (kind, role) = match &i.purpose {
-        Purpose::NewMember(r) => ("member", Some(role_name(*r))),
-        Purpose::OwnDevice(_) => ("device", None),
-    };
+    let (kind, role) = purpose_view(&i.purpose);
     InvitationView {
         id: hex::encode(i.id),
-        kind: kind.into(),
+        kind,
         role,
         expires_at: i.expires_at,
         used: i.used,
         ready: i.ready,
         reused_at: i.reused_at,
+        refused: i.refused,
     }
 }
 
@@ -780,6 +830,12 @@ impl Teams {
             recovery_stale: false,
             alarm: known.alarm.clone(),
             invitations: Vec::new(),
+            admissions: Vec::new(),
+            refusals: Vec::new(),
+            join_words: team
+                .and_then(|t| t.join_words())
+                .map(words)
+                .unwrap_or_default(),
             snapshot_alerts: Vec::new(),
             drop_alerts: Vec::new(),
             last_error: known.last_error.clone(),
@@ -806,7 +862,36 @@ impl Teams {
         }
         view.head = team.head_words().map(words).unwrap_or_default();
         view.invitations = team.invitations().iter().map(invitation_view).collect();
+        view.admissions = team
+            .admissions(now())
+            .into_iter()
+            .map(|a| {
+                let (kind, role) = purpose_view(&a.purpose);
+                AdmissionView {
+                    invitation: hex::encode(a.invitation),
+                    kind,
+                    role,
+                    words: words(a.code.words()),
+                }
+            })
+            .collect();
         let members = team.members().unwrap_or_default();
+        let admin = view.role == "admin";
+        view.refusals = team
+            .refusals()
+            .into_iter()
+            .filter(|r| admin || r.by == me.member)
+            .map(|r: RefusalAlert| RefusalView {
+                invitation: hex::encode(r.invitation),
+                kind: purpose_view(&r.purpose).0,
+                by_me: r.by == me.member,
+                by_role: members
+                    .iter()
+                    .find(|(m, _, _)| *m == r.by)
+                    .map(|(_, role, _)| role_name(*role)),
+                at: r.at,
+            })
+            .collect();
         view.snapshot_alerts = team
             .snapshot_alerts()
             .into_iter()
@@ -996,6 +1081,50 @@ impl Teams {
         drop(t);
         (self.changed)();
         Ok(invite_view(&invited))
+    }
+
+    /// « Les mots sont les mêmes » (SR2-08): admits the request of one of this device's invitations whose six words
+    /// are those shown and confirmed. Other words, or a request gone: nothing is admitted.
+    pub async fn admit(
+        &self,
+        id: &str,
+        invitation: &str,
+        shown: &[String],
+    ) -> Result<TeamView, String> {
+        self.unblocked(id)?;
+        let invitation = hex_id(invitation.trim())
+            .map_err(|_| "Cette demande n’est pas une demande de l’équipe.".to_string())?;
+        if shown.len() != 6 {
+            return Err("Il faut les six mots de la demande.".into());
+        }
+        let team = self.team(id)?;
+        {
+            let mut t = team.lock().await;
+            t.admit_invitation(invitation, &shown.join(" "), now())
+                .await
+                .map_err(|e| self.failed(id, e))?;
+            // The invitee's Welcome is in the stream; the next reading says it to the window.
+            let _ = t.serve(now()).await;
+        }
+        (self.changed)();
+        self.view(id).await
+    }
+
+    /// « Les mots diffèrent » (SR2-08): the request is refused, the invitation cancelled, the device that asked cut
+    /// on the server, the administrators told.
+    pub async fn refuse(&self, id: &str, invitation: &str) -> Result<TeamView, String> {
+        self.unblocked(id)?;
+        let invitation = hex_id(invitation.trim())
+            .map_err(|_| "Cette demande n’est pas une demande de l’équipe.".to_string())?;
+        let team = self.team(id)?;
+        {
+            let mut t = team.lock().await;
+            t.refuse(invitation, now())
+                .await
+                .map_err(|e| self.failed(id, e))?;
+        }
+        (self.changed)();
+        self.view(id).await
     }
 
     /// What a link says before joining: its server, the team's six words, whether it is one's own device.

@@ -1,7 +1,9 @@
 // The team server (TS-3) on the real app, against a real `escouade-team-server` started by the test: Alice creates a
 // team (its 24 words noted, three typed back), invites; Bob, a second client on a data folder of his own, joins by the
-// link (he checks the team's six words) and waits; Alice's app, online, lets him in; Bob sees it. Then the alarm of a
-// fork as the window shows it. With `ESCOUADE_TEAM_SHOTS=<folder>`, the screens are kept there, dark and light.
+// link (he checks the team's six words) and waits, the six words of his request on his screen; Alice's app shows the
+// request with the same six words, and lets him in only on « Les mots sont les mêmes » (SR2-08); Bob sees it. A third
+// client's request whose words differ is refused, its invitation cancelled and said so. Then the alarm of a fork as
+// the window shows it. With `ESCOUADE_TEAM_SHOTS=<folder>`, the screens are kept there, dark and light.
 //
 // The server's binary is built when it is not there (`cargo build -p escouade-team-server`). Its port: the worktree's
 // last one (`ESCOUADE_PORT_BASE` + 9) when the run has a range, else one the system gives.
@@ -185,17 +187,42 @@ test('a team created, an invitation, a second client that joins and is let in by
   await page.getByLabel('Nom de l’équipe sur cet appareil').fill('ACME');
   await shoot(page, '07-rejoindre');
   await page.getByRole('button', { name: 'Rejoindre' }).click();
-  await expect(page.getByRole('dialog').getByRole('status')).toContainText('Un administrateur en ligne te fait entrer', {
+  await expect(page.getByRole('dialog').getByRole('status')).toContainText('La personne qui t’invite compare tes six mots', {
     timeout: 30_000,
   });
+  // The six words of his request (SR2-08), to tell Alice.
+  const bobCode = page.getByRole('dialog').getByRole('group', { name: 'Code de cet appareil' });
+  await expect(bobCode.getByRole('listitem')).toHaveCount(6);
+  const bobWords = await bobCode.getByRole('listitem').allTextContents();
+  expect(bobWords.join(' ')).not.toEqual(six.join(' '));
   await shoot(page, '08-en-attente');
 
-  // Alice's app, online: her watch lets Bob in; her invitation says it was used.
+  // Alice's app, online: her watch shows Bob's request with the same six words, and lets no one in by itself.
   page = await app.restartAs(app.data);
   await openTeams(page);
   const card = page.getByRole('region', { name: 'ACME' });
+  const request = card.getByRole('group', { name: 'Demandes d’entrée' });
+  await expect(request).toBeVisible({ timeout: 30_000 });
+  await expect(request).toContainText('Nouveau membre · Membre');
+  expect(await request.getByRole('group', { name: 'Code de la demande' }).getByRole('listitem').allTextContents()).toEqual(bobWords);
+  await expect(card.getByText('1 membre', { exact: true })).toBeVisible();
+  await shoot(page, '08b-demande');
+  // « Les mots sont les mêmes »: Bob is let in; her invitation says it was used.
+  await request.getByRole('button', { name: 'Les mots sont les mêmes' }).click();
+  await expect(request).toBeHidden({ timeout: 30_000 });
   await expect(card.getByText('Utilisée')).toBeVisible({ timeout: 30_000 });
   await expect(card.getByText('2 membres')).toBeVisible({ timeout: 30_000 });
+  // A second invitation, for the request whose words will differ.
+  const second = await page.evaluate(
+    async (team) => {
+      const ipc = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a?: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;
+      return (await ipc.invoke('team_invite', { team, role: 'member', hours: 24 })) as { url: string };
+    },
+    await page.evaluate(async () => {
+      const ipc = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a?: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;
+      return ((await ipc.invoke('team_list')) as { id: string }[])[0].id;
+    }),
+  );
   // « Ajouter un appareil » : the QR code of an own device, then a short code.
   await card.getByRole('button', { name: 'Ajouter un appareil…' }).click();
   await expect(page.getByLabel('Le lien à envoyer')).toHaveValue(/#s=.*&m=[0-9a-f]{32}$/);
@@ -236,6 +263,42 @@ test('a team created, an invitation, a second client that joins and is let in by
       const list = (await ipc.invoke('team_list')) as { id: string }[];
       for (const t of list) await ipc.invoke('team_forget', { team: t.id });
     });
+  await forget(page);
+
+  // Carol, a third client, asks with the second invitation; her words, compared with Alice's screen, differ.
+  const carolData = path.join(app.root, 'carol-data');
+  fs.mkdirSync(carolData);
+  fs.writeFileSync(path.join(carolData, 'settings.json'), fs.readFileSync(path.join(app.data, 'settings.json')));
+  page = await app.restartAs(carolData);
+  const carol = await page.evaluate(async (link) => {
+    const ipc = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a?: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;
+    return (await ipc.invoke('team_join', { link, name: 'ACME' })) as { joinWords: string[] };
+  }, second.url);
+  expect(carol.joinWords).toHaveLength(6);
+  page = await app.restartAs(app.data);
+  await openTeams(page);
+  const aliceCard = page.getByRole('region', { name: 'ACME' });
+  const carolAsks = aliceCard.getByRole('group', { name: 'Demandes d’entrée' });
+  await expect(carolAsks).toBeVisible({ timeout: 30_000 });
+  await expect(carolAsks).toContainText('quelqu’un d’autre a le lien');
+  await carolAsks.getByRole('button', { name: 'Les mots diffèrent' }).click();
+  await expect(carolAsks).toBeHidden({ timeout: 30_000 });
+  // Refused: the invitation cancelled, the administrators told; no one more in the team.
+  await expect(aliceCard.getByText('Annulée : les mots différaient')).toBeVisible();
+  const told = aliceCard.getByRole('alert', { name: 'Invitations annulées' });
+  await expect(told).toContainText('Personne n’est entré avec');
+  await expect(told).toContainText('Par cet appareil');
+  await expect(aliceCard.getByText('2 membres')).toBeVisible();
+  await shoot(page, '10b-annulee');
+  // Carol's client: not in, and the server no longer takes her device.
+  page = await app.restartAs(carolData);
+  const carolList = () =>
+    page.evaluate(async () => {
+      const ipc = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a?: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;
+      return (await ipc.invoke('team_list')) as { joined: boolean; lastError: string | null }[];
+    });
+  await expect.poll(async () => (await carolList())[0]?.lastError ?? '', { timeout: 30_000 }).toContain('refuse cet appareil');
+  expect((await carolList())[0].joined).toBe(false);
   await forget(page);
 
   // The alarm of a fork, as Alice's window shows it: her teams.json says it, as her watch writes it (written while her

@@ -36,6 +36,9 @@ const TEAM: TeamView = {
   lastError: null,
   snapshotAlerts: [],
   dropAlerts: [],
+  admissions: [],
+  refusals: [],
+  joinWords: [],
 };
 
 const CUT: Breaker = {

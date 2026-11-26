@@ -102,8 +102,7 @@ async fn an_agent_passes_to_a_teammate_then_to_the_teams_machine() {
         .id;
     let invite = alice_teams.invite(&team, "member", None).await.unwrap();
     bob_teams.join(&invite.url, "").await.unwrap();
-    alice_teams.sync(&team).await.unwrap();
-    bob_teams.sync(&team).await.unwrap();
+    crate::teams_tests::let_in(&alice_teams, &bob_teams, &team).await;
 
     let ha = harness("handoff-alice");
     let hb = harness("handoff-bob");

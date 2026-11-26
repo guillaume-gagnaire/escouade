@@ -4,6 +4,7 @@
   import { t } from '../../lib/i18n';
   import { codeComplete, typedCode } from '../../lib/team-words';
   import { errorText, teams, teamsApi } from '../../lib/teams.svelte';
+  import SixWords from './SixWords.svelte';
 
   let { onback, ondone }: { onback: () => void; ondone: () => void } = $props();
 
@@ -73,6 +74,9 @@
   <p class={team?.joined ? 'ok' : 'wait'} role="status">
     {team?.joined ? t('team.join.joined', { name: team.name }) : t('team.join.waiting')}
   </p>
+  {#if team && !team.joined && team.joinWords?.length}
+    <SixWords words={team.joinWords} label={t('team.admit.joinWords')} hint={t('team.admit.joinWordsHint')} />
+  {/if}
   <div class="foot"><button class="btn primary" onclick={ondone}>{t('team.common.close')}</button></div>
 {/if}
 

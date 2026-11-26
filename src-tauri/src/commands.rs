@@ -5674,6 +5674,28 @@ pub async fn team_own_device(teams: TeamsState<'_>, team: String) -> Res<crate::
     teams.own_device(&team).await
 }
 
+/// « Les mots sont les mêmes » (SR2-08): admits the request of one of this device's invitations, with the six words
+/// shown and compared with the invitee's screen. The desktop's only: no admission at a distance.
+#[tauri::command]
+pub async fn team_admit(
+    teams: TeamsState<'_>,
+    team: String,
+    invitation: String,
+    words: Vec<String>,
+) -> Res<crate::teams::TeamView> {
+    teams.admit(&team, &invitation, &words).await
+}
+
+/// « Les mots diffèrent » (SR2-08): the request refused, the invitation cancelled, the administrators told.
+#[tauri::command]
+pub async fn team_refuse(
+    teams: TeamsState<'_>,
+    team: String,
+    invitation: String,
+) -> Res<crate::teams::TeamView> {
+    teams.refuse(&team, &invitation).await
+}
+
 /// What an invitation link says, before joining: its server, the team's six words.
 #[tauri::command]
 pub fn team_join_preview(teams: TeamsState<'_>, link: String) -> Res<crate::teams::JoinPreview> {

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use common::*;
 use escouade_team::crypto::content::SealedObject;
-use escouade_team::crypto::invite::InviteLink;
+use escouade_team::crypto::invite::{InvitationError, InviteLink};
 use escouade_team::crypto::{Change, EscrowKey, ObjectId, ProjectId, Purpose, Role};
 use escouade_team::pairing::{self, PairCode};
 use escouade_team::wire::{self, Kind, TeamMessage};
@@ -25,10 +25,34 @@ fn as_text(url: &str) -> InviteLink {
     InviteLink::parse(url).unwrap()
 }
 
-/// The admin reads the stream and does its work: the invitee is let in.
+/// The admin reads the stream and does its work.
 async fn online(admin: &mut Team, now: u64) -> escouade_team::Served {
     admin.sync_at(now).await.unwrap();
     admin.serve(now).await.unwrap()
+}
+
+/// The device that invited, online: the request waits for its six words (SR2-08), nothing comes in by itself; the
+/// person who invites sees the same six words as the invitee's screen, confirms them, and the invitee is let in.
+async fn confirm(admin: &mut Team, invitee: &mut Team, now: u64) {
+    assert_eq!(online(admin, now).await.waiting, 1);
+    assert!(
+        !invitee.sync_at(now).await.unwrap().joined,
+        "no admission without the six words"
+    );
+    let shown = admin.admissions(now);
+    assert_eq!(shown.len(), 1);
+    let words = invitee.join_words().expect("the invitee's six words");
+    assert_eq!(
+        shown[0].code.words(),
+        words,
+        "the same six words on both screens"
+    );
+    admin
+        .admit_invitation(shown[0].invitation, &words.join(" "), now)
+        .await
+        .unwrap();
+    assert!(invitee.sync_at(now).await.unwrap().joined);
+    assert!(invitee.join_words().is_none());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -84,9 +108,7 @@ async fn a_team_is_created_and_an_invitation_serves_once() {
     );
     let mut bob = Team::join_link(pb.setup(), &link).await.unwrap();
     assert!(!bob.sync_at(NOW).await.unwrap().joined);
-    let served = online(&mut alice, NOW).await;
-    assert_eq!(served.admitted, 1);
-    assert!(bob.sync_at(NOW).await.unwrap().joined);
+    confirm(&mut alice, &mut bob, NOW).await;
     assert_eq!(bob.fingerprint().unwrap(), link.team());
     assert_eq!(
         bob.roster().unwrap().role(&bob.identity().member),
@@ -133,7 +155,7 @@ async fn an_invitation_expires_on_the_server_and_in_the_team() {
     let mut carol = Team::join_link(pc.setup(), &as_text(&invited.url))
         .await
         .unwrap();
-    assert_eq!(online(&mut alice, NOW + 7200).await.admitted, 0);
+    assert_eq!(online(&mut alice, NOW + 7200).await.waiting, 0);
     assert!(!carol.sync_at(NOW).await.unwrap().joined);
     assert!(alice.requests().is_empty(), "the late request is dropped");
 }
@@ -170,8 +192,7 @@ async fn the_server_roles_follow_the_roster() {
     let mut carol = Team::join_link(pc.setup(), &as_text(&invited.url))
         .await
         .unwrap();
-    assert_eq!(online(&mut bob, NOW).await.admitted, 1);
-    assert!(carol.sync_at(NOW).await.unwrap().joined);
+    confirm(&mut bob, &mut carol, NOW).await;
     // Back to member: the server follows.
     alice.set_role(member(2), Role::Member).await.unwrap();
     assert_eq!(online(&mut alice, NOW).await.roles, 1);
@@ -208,8 +229,7 @@ async fn a_member_adds_a_device_of_their_own_by_the_qr_codes_link() {
     assert!(bob.invitations().iter().any(|i| i.id == link.id && i.ready));
     // The new device comes; Bob's other device lets it in, not an administrator.
     let mut bob2 = Team::join_link(pb2.setup(), &link).await.unwrap();
-    assert_eq!(online(&mut bob, NOW).await.admitted, 1);
-    assert!(bob2.sync_at(NOW).await.unwrap().joined);
+    confirm(&mut bob, &mut bob2, NOW).await;
     assert_eq!(bob2.identity().member, member(2));
     let members = alice.members().ok();
     alice.sync_at(NOW).await.unwrap();
@@ -307,10 +327,133 @@ async fn a_short_code_adds_a_device_and_a_wrong_one_spends_its_only_try() {
     assert_eq!(link, pairing.link);
     assert_eq!(link.member, Some(member(1).0));
     let mut alice2 = Team::join_link(pa2.setup(), &link).await.unwrap();
-    assert_eq!(online(&mut alice, NOW).await.admitted, 1);
-    assert!(alice2.sync_at(NOW).await.unwrap().joined);
+    confirm(&mut alice, &mut alice2, NOW).await;
     assert_eq!(alice2.identity().member, member(1));
     assert!(alice2.is_admin().unwrap());
+}
+
+/// SR2-08: the link alone lets no one in. A request made with it elsewhere (the link leaked, or the server read it)
+/// proves the secret, but its KeyPackage is not the invitee's: its six words are others than those of the invitee's
+/// screen, and the device that invited admits it with none of the invitee's words; it admits the invitee's request.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_request_from_the_link_alone_has_other_words_than_the_invitees() {
+    let w = World::new().await;
+    let (pa, pb, pc) = (w.place(), w.place(), w.place());
+    let mut alice = w.create(&pa, member(1)).await;
+    let bob = w.join(&mut alice, &pb, member(2), Role::Member).await;
+    let invited = alice
+        .invite_for(Purpose::NewMember(Role::Member), NOW, 3600)
+        .await
+        .unwrap();
+    let mut carol = Team::join_link(pc.setup(), &as_text(&invited.url))
+        .await
+        .unwrap();
+    // Another request with the same link, posted in the team's stream as the server could: its MAC passes.
+    let mut other = escouade_team::crypto::TeamDevice::new(member(9)).unwrap();
+    let request = other.request_join(&as_text(&invited.url)).unwrap();
+    bob.client()
+        .append_message(&wire::encode(&TeamMessage::JoinRequest(request.clone())))
+        .await
+        .unwrap();
+
+    assert_eq!(online(&mut alice, NOW).await.waiting, 2);
+    let carols = carol.join_words().unwrap();
+    let shown = alice.admissions(NOW);
+    assert_eq!(shown.len(), 2);
+    assert!(shown.iter().any(|a| a.code.words() == carols));
+    let others = other.join_code().unwrap().words();
+    assert_ne!(others, carols, "other words than the invitee's");
+    // Carol's words for the other request: refused, nothing admitted, the invitation still open.
+    assert!(matches!(
+        alice.admit(&request, &carols.join(" "), NOW).await,
+        Err(Error::Crypto(CryptoError::Invitation(
+            InvitationError::CodeMismatch
+        )))
+    ));
+    assert!(!carol.sync_at(NOW).await.unwrap().joined);
+    assert!(alice
+        .invitations()
+        .iter()
+        .any(|i| i.id == invited.link.id && !i.used));
+    // Words nobody showed: refused too.
+    assert!(matches!(
+        alice
+            .admit_invitation(
+                invited.link.id,
+                "abandon ability able about above absent",
+                NOW
+            )
+            .await,
+        Err(Error::Crypto(CryptoError::Invitation(
+            InvitationError::CodeMismatch
+        )))
+    ));
+    // Carol's words: Carol's request, Carol in; the other request has no invitation left.
+    alice
+        .admit_invitation(invited.link.id, &carols.join(" "), NOW)
+        .await
+        .unwrap();
+    assert!(carol.sync_at(NOW).await.unwrap().joined);
+    assert_eq!(
+        alice.roster().unwrap().role(&carol.identity().member),
+        Some(Role::Member)
+    );
+    assert_eq!(online(&mut alice, NOW).await.waiting, 0);
+    assert!(alice.admissions(NOW).is_empty());
+}
+
+/// SR2-08: the words differ (the invitee's screen shows none, or others): the request is refused and the invitation
+/// cancelled; the device that asked is cut on the server, and the other administrators are told.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn different_words_refuse_the_request_and_cancel_the_invitation() {
+    let w = World::new().await;
+    let (pa, pd, pm, pc) = (w.place(), w.place(), w.place(), w.place());
+    let mut alice = w.create(&pa, member(1)).await;
+    let mut dave = w.join(&mut alice, &pd, member(4), Role::Admin).await;
+    online(&mut alice, NOW).await;
+    let invited = alice
+        .invite_for(Purpose::NewMember(Role::Member), NOW, 3600)
+        .await
+        .unwrap();
+    // Whoever has the link comes first; the invitee, after, is told it was used, and shows no words.
+    let mut first = Team::join_link(pm.setup(), &as_text(&invited.url))
+        .await
+        .unwrap();
+    assert!(matches!(
+        Team::join_link(pc.setup(), &as_text(&invited.url)).await,
+        Err(Error::InvitationUsed)
+    ));
+    assert_eq!(online(&mut alice, NOW).await.waiting, 1);
+    assert_eq!(alice.admissions(NOW).len(), 1);
+
+    alice.refuse(invited.link.id, NOW).await.unwrap();
+    let inv = alice
+        .invitations()
+        .into_iter()
+        .find(|i| i.id == invited.link.id)
+        .unwrap();
+    assert!(inv.used && inv.refused);
+    assert!(alice.admissions(NOW).is_empty());
+    assert!(alice.requests().is_empty());
+    // Not admitted afterwards, whatever the words.
+    let words = first.join_words().unwrap().join(" ");
+    assert!(alice
+        .admit_invitation(invited.link.id, &words, NOW)
+        .await
+        .is_err());
+    assert_eq!(online(&mut alice, NOW).await.waiting, 0);
+    // The device that asked is cut on the server: it reads nothing more.
+    assert!(first.sync_at(NOW).await.is_err());
+    // Told to this device and to the other administrators.
+    assert_eq!(alice.refusals().len(), 1);
+    dave.sync_at(NOW).await.unwrap();
+    let told = dave.refusals();
+    assert_eq!(told.len(), 1);
+    assert_eq!(told[0].invitation, invited.link.id);
+    assert_eq!(told[0].by, member(1));
+    assert_eq!(told[0].purpose, Purpose::NewMember(Role::Member));
+    // An invitation of another device, or none: refused.
+    assert!(dave.refuse(invited.link.id, NOW).await.is_err());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

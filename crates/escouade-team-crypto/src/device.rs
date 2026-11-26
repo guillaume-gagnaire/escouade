@@ -35,8 +35,8 @@ use crate::content::{ObjectHeader, SealedObject};
 use crate::history::{walk_back, HistoryLink};
 use crate::identity::{DeviceId, DeviceKind, Identity, MemberId, ObjectId, ProjectId};
 use crate::invite::{
-    join_mac, verify_join_mac, verify_welcome_confirmation, welcome_confirmation, Invitation,
-    InvitationError, InviteLink, JoinRequest, Purpose, WelcomeDelivery,
+    join_mac, verify_join_mac, verify_welcome_confirmation, welcome_confirmation, AdmissionCode,
+    Invitation, InvitationError, InviteLink, JoinRequest, Purpose, WelcomeDelivery,
 };
 use crate::keys::{head, EpochMember, EpochRecord, CONTENT_LABEL, HISTORY_LABEL};
 use crate::policy::check_commit;
@@ -112,8 +112,20 @@ pub enum Change {
     SetRole(MemberId, Role),
     SetEscrow(Option<EscrowPublic>),
     ReplaceRecovery(RecoveryPublic),
-    /// Admits an invitee's request, at the hour `now`.
-    Admit(JoinRequest, u64),
+    /// Admits an invitee's request, at the hour `now`, with the six words of its [`AdmissionCode`] the person who
+    /// invites confirmed were those of the invitee's screen (SR2-08): other words, and nothing is admitted.
+    Admit(JoinRequest, String, u64),
+}
+
+/// A request this device may admit, checked (its invitation, its MAC, its KeyPackage and the signature of it, the
+/// member it brings): what the inviting screen shows, to compare with the invitee's (SR2-08).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Admission {
+    pub invitation: [u8; 16],
+    pub purpose: Purpose,
+    /// Who the KeyPackage says the device is (its member, its id on the server).
+    pub joiner: Identity,
+    pub code: AdmissionCode,
 }
 
 /// The commit a device staged and sent, until the server takes it or refuses it. Kept in the device's saved state:
@@ -138,6 +150,9 @@ pub struct SavedState {
     pub invitations: Vec<Invitation>,
     /// The invitation link being used to join (`InviteLink::to_url`).
     pub joining: Option<String>,
+    /// The code of this device's join request (SR2-08), shown until it is in.
+    #[serde(default)]
+    pub join_code: Option<[u8; 32]>,
     pub removed: bool,
     pub pending: Option<PendingCommit>,
     /// The MLS groups of the projects kept to some members, and their commits waiting (their records are kept
@@ -205,6 +220,8 @@ pub struct TeamDevice<P: OpenMlsProvider = OpenMlsRustCrypto> {
     pub(crate) checkpoint: Option<Checkpoint>,
     invitations: BTreeMap<[u8; 16], Invitation>,
     joining: Option<InviteLink>,
+    /// The code of this device's join request, while it waits (SR2-08).
+    join_code: Option<AdmissionCode>,
     removed: bool,
     pending: Option<PendingCommit>,
     /// The MLS groups of the projects kept to some members (`project.rs`).
@@ -270,6 +287,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             checkpoint: None,
             invitations: BTreeMap::new(),
             joining: None,
+            join_code: None,
             removed: false,
             pending: None,
             projects: BTreeMap::new(),
@@ -298,6 +316,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             Some(url) => Some(InviteLink::parse_kept(url)?),
             None => None,
         };
+        device.join_code = state.join_code.map(AdmissionCode);
         device.removed = state.removed;
         device.pending = state.pending.clone();
         if let Some(id) = &state.group_id {
@@ -331,6 +350,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 .map(|g| g.group_id().as_slice().to_vec()),
             invitations: self.invitations.values().cloned().collect(),
             joining: self.joining.as_ref().map(InviteLink::to_url),
+            join_code: self.join_code.map(|c| c.0),
             removed: self.removed,
             pending: self.pending.clone(),
             projects: self.saved_projects(),
@@ -757,7 +777,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 let leaves = self.leaves_where(|i| i.kind == DeviceKind::Recovery && *i != own)?;
                 self.stage_commit(Vec::new(), leaves, Some(roster), None)
             }
-            Change::Admit(request, now) => self.stage_admit(request, *now),
+            Change::Admit(request, words, now) => self.stage_admit(request, words, *now),
         }
     }
 
@@ -1067,6 +1087,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 expires_at: now.saturating_add(lifetime),
                 used: false,
                 app_link: true,
+                refused: false,
             },
         );
         Ok(InviteLink {
@@ -1097,6 +1118,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             .map_err(mls)?;
         let key_package = encode(&MlsMessageOut::from(bundle.key_package().clone()))?;
         self.joining = Some(link.clone());
+        self.join_code = Some(AdmissionCode::of(&link.id, &key_package));
         Ok(JoinRequest {
             invitation: link.id,
             mac: join_mac(&link.secret, &link.id, &key_package),
@@ -1104,13 +1126,50 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         })
     }
 
-    /// An administrator (or the member, for their own device) admits a request: checks the invitation and the MAC,
-    /// adds the device (and the member to the roster), and makes the Welcome and its confirmation.
-    pub fn admit(&mut self, request: &JoinRequest, now: u64) -> Result<Publication, Error> {
-        self.commit_now(Change::Admit(request.clone(), now))
+    /// The invitee: the six words of its join request, to show while it waits for its Welcome (SR2-08). None once in,
+    /// or before a request.
+    pub fn join_code(&self) -> Option<AdmissionCode> {
+        self.join_code
     }
 
-    fn stage_admit(&mut self, request: &JoinRequest, now: u64) -> Result<Publication, Error> {
+    /// An administrator (or the member, for their own device) admits a request: checks the invitation, the MAC and
+    /// the six words confirmed (`words`, those the invitee's screen showed), adds the device (and the member to the
+    /// roster), and makes the Welcome and its confirmation.
+    pub fn admit(
+        &mut self,
+        request: &JoinRequest,
+        words: &str,
+        now: u64,
+    ) -> Result<Publication, Error> {
+        self.commit_now(Change::Admit(request.clone(), words.to_string(), now))
+    }
+
+    /// A request this device may admit, checked without staging anything: its invitation (this device's, open), the
+    /// MAC, the KeyPackage and its signature, the member it brings. Its six words are for the person who invites to
+    /// compare with the invitee's screen (SR2-08).
+    pub fn check_request(&self, request: &JoinRequest, now: u64) -> Result<Admission, Error> {
+        self.vet(request, now).map(|(admission, ..)| admission)
+    }
+
+    /// Cancels an invitation whose request's six words differed from the invitee's (SR2-08): no one comes in with it
+    /// any more.
+    pub fn refuse_invitation(&mut self, id: &[u8; 16]) -> Result<(), Error> {
+        let invitation = self
+            .invitations
+            .get_mut(id)
+            .ok_or(InvitationError::Unknown)?;
+        invitation.used = true;
+        invitation.refused = true;
+        Ok(())
+    }
+
+    /// The checks of a request, before any word is compared.
+    #[allow(clippy::type_complexity)]
+    fn vet(
+        &self,
+        request: &JoinRequest,
+        now: u64,
+    ) -> Result<(Admission, KeyPackage, Option<Roster>, Invitation), Error> {
         let invitation = self
             .invitations
             .get(&request.invitation)
@@ -1118,6 +1177,9 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             .clone();
         if !invitation.app_link {
             return Err(InvitationError::OldForm.into());
+        }
+        if invitation.refused {
+            return Err(InvitationError::Refused.into());
         }
         if invitation.used {
             return Err(InvitationError::AlreadyUsed.into());
@@ -1156,6 +1218,27 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 None
             }
         };
+        let admission = Admission {
+            invitation: invitation.id,
+            purpose: invitation.purpose.clone(),
+            joiner,
+            code: AdmissionCode::of_request(request),
+        };
+        Ok((admission, key_package, new_roster, invitation))
+    }
+
+    fn stage_admit(
+        &mut self,
+        request: &JoinRequest,
+        words: &str,
+        now: u64,
+    ) -> Result<Publication, Error> {
+        let (admission, key_package, new_roster, invitation) = self.vet(request, now)?;
+        // The person who invites confirmed these six words were the invitee's: a request whose KeyPackage is not the
+        // invitee's (another device's, the server's) has other words, and is not admitted.
+        if !admission.code.matches_words(words) {
+            return Err(InvitationError::CodeMismatch.into());
+        }
         // Used from now on, even if what follows fails: an invitation never serves twice. A commit the server
         // refuses gives it back (`abandon_pending`).
         if let Some(inv) = self.invitations.get_mut(&request.invitation) {
@@ -1198,6 +1281,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         )?;
         self.group = Some(group);
         self.joining = None;
+        self.join_code = None;
         self.enter_epoch()?;
         Ok(())
     }

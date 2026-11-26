@@ -23,6 +23,28 @@ export interface InvitationView {
   used: boolean;
   ready: boolean;
   reusedAt: number | null;
+  /** Cancelled: the six words of its request differed from the invitee's (SR2-08). */
+  refused: boolean;
+}
+
+/** A request of one of this device's invitations, waiting for its six words to be confirmed (SR2-08). */
+export interface AdmissionView {
+  /** The invitation's id, hex. */
+  invitation: string;
+  kind: 'member' | 'device';
+  role: 'admin' | 'member' | null;
+  /** Drawn from the invitee's signed KeyPackage: to compare with the invitee's screen. */
+  words: string[];
+}
+
+/** An invitation cancelled because the six words differed (SR2-08), as the administrators are told. */
+export interface RefusalView {
+  invitation: string;
+  kind: 'member' | 'device';
+  byMe: boolean;
+  byRole: 'admin' | 'member' | null;
+  /** Seconds since the epoch. */
+  at: number;
 }
 
 /** A project's snapshot found unreadable and put aside (SR2-01): the copy reads the journal instead. */
@@ -77,6 +99,12 @@ export interface TeamView {
   recoveryStale: boolean;
   alarm: AlarmView | null;
   invitations: InvitationView[];
+  /** The requests of this device's invitations waiting for their six words to be confirmed (SR2-08). */
+  admissions: AdmissionView[];
+  /** The invitations of the team cancelled because the six words differed (SR2-08), the newest first. */
+  refusals: RefusalView[];
+  /** While this device waits to be let in: the six words of its request, to tell the person who invites. */
+  joinWords: string[];
   /** The projects' snapshots put aside (SR2-01), the newest first. */
   snapshotAlerts: SnapshotAlertView[];
   dropAlerts: DropAlertView[];
@@ -127,6 +155,10 @@ export const teamsApi = {
   newRecovery: (team: string) => invoke<string[]>('team_new_recovery', { team }),
   invite: (team: string, role: 'admin' | 'member', hours: number) => invoke<InviteView>('team_invite', { team, role, hours }),
   ownDevice: (team: string) => invoke<InviteView>('team_own_device', { team }),
+  /** « Les mots sont les mêmes »: the six words shown, given back (SR2-08). The desktop's only. */
+  admit: (team: string, invitation: string, words: string[]) => invoke<TeamView>('team_admit', { team, invitation, words }),
+  /** « Les mots diffèrent »: the request refused, the invitation cancelled. */
+  refuse: (team: string, invitation: string) => invoke<TeamView>('team_refuse', { team, invitation }),
   joinPreview: (link: string) => invoke<JoinPreview>('team_join_preview', { link }),
   join: (link: string, name: string) => invoke<TeamView>('team_join', { link, name }),
   pairStart: (team: string) => invoke<PairView>('team_pair_start', { team }),

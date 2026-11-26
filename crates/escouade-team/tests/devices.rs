@@ -27,7 +27,8 @@ async fn own_device(alice: &mut Team, bob: &mut Team, place: &Place) -> Team {
         .unwrap();
     bob.sync().await.unwrap();
     let request = bob.requests().last().cloned().unwrap();
-    bob.admit(&request, NOW).await.unwrap();
+    let words = device.join_words().unwrap().join(" ");
+    bob.admit(&request, &words, NOW).await.unwrap();
     assert!(device.sync().await.unwrap().joined);
     alice.sync().await.unwrap();
     device

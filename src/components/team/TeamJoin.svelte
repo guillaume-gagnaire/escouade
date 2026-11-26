@@ -105,6 +105,9 @@
     {#if team.escrow}<p class="escrow" role="note">{t('team.card.escrow', { holder: team.escrow })}</p>{/if}
   {:else}
     <p class="wait" role="status">{t('team.join.waiting')}</p>
+    {#if team?.joinWords?.length}
+      <SixWords words={team.joinWords} label={t('team.admit.joinWords')} hint={t('team.admit.joinWordsHint')} />
+    {/if}
   {/if}
   <div class="foot">
     <button class="btn primary" onclick={ondone}>{t('team.common.close')}</button>

@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { addProject, expect, openSettingsPage, test } from './fixture';
+import { letIn } from './team-admit';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SERVER = path.join(ROOT, 'src-tauri', 'target', 'debug', `escouade-team-server${process.platform === 'win32' ? '.exe' : ''}`);
@@ -168,8 +169,10 @@ test('an administrator publishes a plugin of the team, a member sees it and inst
   fs.writeFileSync(path.join(bobData, 'settings.json'), fs.readFileSync(path.join(app.data, 'settings.json')));
   page = await app.restartAs(bobData);
   await addProject(page, app.repo, { name: 'site-local' });
-  await ipc(page, 'team_join', { link: invite.url, name: 'ACME' });
+  const asked = await ipc<{ joinWords: string[] }>(page, 'team_join', { link: invite.url, name: 'ACME' });
   page = await app.restartAs(app.data);
+  // Alice compares the six words of the request with Bob's screen, and lets him in (SR2-08).
+  await letIn(page, asked.joinWords);
   await expect.poll(async () => (await ipc<{ members: number }[]>(page, 'team_list'))[0]?.members, { timeout: 60_000 }).toBe(2);
 
   // Alice makes the team's key on her device: Escouade's own namespace refused, then fr.acme.*.

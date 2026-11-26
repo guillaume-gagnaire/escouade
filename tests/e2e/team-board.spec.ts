@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { addProject, expect, openSettingsPage, test } from './fixture';
+import { letIn } from './team-admit';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SERVER = path.join(ROOT, 'src-tauri', 'target', 'debug', `escouade-team-server${process.platform === 'win32' ? '.exe' : ''}`);
@@ -174,7 +175,9 @@ test('a ticket of the team taken on one client is seen taken on the other within
   fs.writeFileSync(path.join(bobData, 'settings.json'), JSON.stringify({ ...settings, ...BOB }));
   const bob = await app.second(bobData);
   await bob.setViewportSize({ width: 1024, height: 728 });
-  await ipc(bob, 'team_join', { link: invite.url, name: 'ACME' });
+  const asked = await ipc<{ joinWords: string[] }>(bob, 'team_join', { link: invite.url, name: 'ACME' });
+  // Alice compares the six words of the request with Bob's screen, and lets him in (SR2-08).
+  await letIn(alice, asked.joinWords);
   await expect.poll(async () => (await ipc<{ joined: boolean }[]>(bob, 'team_list'))[0]?.joined, { timeout: 60_000 }).toBe(true);
 
   // Their projects, the team's (TS-13); Alice's Kanban shared with the team, Bob's joins it by its id, in the team's

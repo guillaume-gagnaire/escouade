@@ -697,6 +697,9 @@ async fn an_invitation_gives_access_to_a_project(b: Backend) {
     let mut erin = Team::join_link(place.setup(), &link).await.unwrap();
     c[0].1.sync().await.unwrap();
     c[0].1.serve(NOW).await.unwrap();
+    // Admitted once the six words of Erin's screen are confirmed (SR2-08).
+    let words = erin.join_words().unwrap().join(" ");
+    c[0].1.admit_invitation(link.id, &words, NOW).await.unwrap();
     assert!(erin.sync().await.unwrap().joined);
     erin.serve(NOW).await.unwrap();
     c[0].1.sync().await.unwrap();
