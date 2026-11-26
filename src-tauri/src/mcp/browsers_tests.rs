@@ -838,3 +838,237 @@ fn a_since_is_a_cursor_digits_or_an_iso_time() {
     assert_eq!(browsers::since_of("1969-01-01T00:00:00Z"), None);
     assert_eq!(browsers::since_of(""), None);
 }
+
+// ---------- capture_browser (ESC-670, AB-3) ----------
+
+#[tokio::test]
+async fn a_capture_outside_the_launch_waits_for_the_same_leave_as_a_read() {
+    let h = harness("mcp-capture-leave");
+    let (_, a) = world(&h).await;
+    let pages = pages(&h);
+    let c = as_agent(&h, &a.id).await;
+    // Asked, in the same band as a read: nothing of the page, no image.
+    let v = read(
+        &c,
+        "capture_browser",
+        json!({ "browser": "browser:claude" }),
+    )
+    .await;
+    assert_eq!(v["asked"], true);
+    assert_eq!(v["origin"], "https://claude.ai");
+    assert_eq!(pages.consents("browser:claude").asks.len(), 1);
+    // A read asks no second time: it is the same request.
+    let v = read(&c, "read_browser", json!({ "browser": "browser:claude" })).await;
+    assert_eq!(v["asked"], true);
+    assert_eq!(pages.consents("browser:claude").asks.len(), 1);
+    // Refused: the capture is refused too.
+    assert!(pages.answer("browser:claude", &a.id, "https://claude.ai", false));
+    let e = refused(
+        &c,
+        "capture_browser",
+        json!({ "browser": "browser:claude" }),
+    )
+    .await;
+    assert!(e.contains("a refusé"), "{e}");
+    // Given: it passes the gate (no webview in a test: the capture fails).
+    pages.revoke("browser:claude");
+    let _ = read(
+        &c,
+        "capture_browser",
+        json!({ "browser": "browser:claude" }),
+    )
+    .await;
+    assert!(pages.answer("browser:claude", &a.id, "https://claude.ai", true));
+    let (text, error) = call(
+        &c,
+        "capture_browser",
+        json!({ "browser": "browser:claude" }),
+    )
+    .await;
+    assert!(error);
+    assert!(text.contains("vient de se fermer"), "{text}");
+    // On the launch, nothing is asked.
+    let (text, error) = call(&c, "capture_browser", json!({ "browser": a.id })).await;
+    assert!(error);
+    assert!(text.contains("vient de se fermer"), "{text}");
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_capture_is_refused_off_hidden_to_claude_outside_and_out_of_its_bounds() {
+    let h = harness("mcp-capture-refused");
+    let (_, a) = world(&h).await;
+    let c = as_agent(&h, &a.id).await;
+    let e = refused(
+        &c,
+        "capture_browser",
+        json!({ "browser": "browser:hidden" }),
+    )
+    .await;
+    assert!(e.contains("n’est pas affiché"), "{e}");
+    for (args, says) in [
+        (
+            json!({ "browser": a.id, "selector": "#a:has(b)" }),
+            "sélecteur n’est pas permis",
+        ),
+        (
+            json!({ "browser": a.id, "selector": "#pro", "full_page": true }),
+            "pas les deux",
+        ),
+    ] {
+        let (text, error) = call(&c, "capture_browser", args.clone()).await;
+        assert!(error, "{args}");
+        assert!(text.contains(says), "{args}: {text}");
+    }
+    let (text, error) = call(
+        &c,
+        "capture_browser",
+        json!({ "browser": a.id, "width": "watch" }),
+    )
+    .await;
+    assert!(error, "{text}");
+    c.cancel().await.unwrap();
+    let ext = external(&h).await;
+    let e = refused(&ext, "capture_browser", json!({ "browser": a.id })).await;
+    assert!(e.contains("n’en lit aucun"), "{e}");
+    ext.cancel().await.unwrap();
+    h.core.settings.write().agent_browsers = false;
+    let c = as_agent(&h, &a.id).await;
+    let e = refused(&c, "capture_browser", json!({ "browser": a.id })).await;
+    assert!(e.contains("« Agents et navigateurs » est coupé"), "{e}");
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn twenty_captures_a_minute_per_agent_at_most() {
+    let h = harness("mcp-capture-rate");
+    let (p, a) = world(&h).await;
+    let b = put_agent(&h, &p, "Bob", 2);
+    let c = as_agent(&h, &a.id).await;
+    // Each passes the gate and counts (no webview here: each then fails).
+    for i in 0..20 {
+        let (text, _) = call(&c, "capture_browser", json!({ "browser": a.id })).await;
+        assert!(text.contains("vient de se fermer"), "{i}: {text}");
+    }
+    let e = refused(&c, "capture_browser", json!({ "browser": a.id })).await;
+    assert!(e.contains("20 captures par minute"), "{e}");
+    // A request to the user is no capture: it is neither counted nor refused for it.
+    let v = read(
+        &c,
+        "capture_browser",
+        json!({ "browser": "browser:claude" }),
+    )
+    .await;
+    assert_eq!(v["asked"], true);
+    c.cancel().await.unwrap();
+    // Another agent has its own minute.
+    let c = as_agent(&h, &b.id).await;
+    let (text, _) = call(&c, "capture_browser", json!({ "browser": a.id })).await;
+    assert!(text.contains("vient de se fermer"), "{text}");
+    c.cancel().await.unwrap();
+}
+
+#[test]
+fn the_minute_of_the_captures_slides() {
+    let pages = Pages::default();
+    let t0 = std::time::Instant::now();
+    let at = |s: u64| t0 + std::time::Duration::from_secs(s);
+    for i in 0..20 {
+        assert_eq!(pages.take_shot("a", at(i)), Ok(()));
+    }
+    // The 21st, 30 s in: the oldest leaves the minute 30 s later.
+    assert_eq!(pages.take_shot("a", at(30)), Err(30));
+    assert_eq!(pages.take_shot("b", at(30)), Ok(()));
+    // A minute after the first: one place again, and one only.
+    assert_eq!(pages.take_shot("a", at(60)), Ok(()));
+    assert!(pages.take_shot("a", at(60)).is_err());
+}
+
+#[test]
+fn a_width_is_emulated_on_webview2_and_set_by_the_bar_elsewhere() {
+    use browsers::{widen, CaptureWidthArg as W, Widen};
+    use PageMode::*;
+    assert_eq!(widen(None, Tablet, true), Widen::No);
+    assert_eq!(widen(Some(W::Current), Mobile, false), Widen::No);
+    // Already at that width: nothing changes.
+    assert_eq!(widen(Some(W::Mobile), Mobile, true), Widen::No);
+    assert_eq!(widen(Some(W::Full), Full, false), Widen::No);
+    // WebView2: a tablet's and a phone's are emulated, the view untouched.
+    assert_eq!(widen(Some(W::Mobile), Full, true), Widen::Emulate(390));
+    assert_eq!(widen(Some(W::Tablet), Mobile, true), Widen::Emulate(768));
+    // The whole room is the bar's, and every width under WebKit.
+    assert_eq!(widen(Some(W::Full), Tablet, true), Widen::Bar(Full));
+    assert_eq!(widen(Some(W::Mobile), Full, false), Widen::Bar(Mobile));
+    assert_eq!(widen(Some(W::Tablet), Full, false), Widen::Bar(Tablet));
+}
+
+#[test]
+fn the_captures_files_are_numbered_and_the_last_fifty_kept() {
+    let dir = std::env::temp_dir().join(format!("escouade-captures-{}", uuid::Uuid::new_v4()));
+    let first = browsers::keep_file(&dir, b"one").unwrap();
+    assert_eq!(first, dir.join("1.jpg"));
+    assert_eq!(std::fs::read(&first).unwrap(), b"one");
+    for _ in 0..55 {
+        browsers::keep_file(&dir, b"x").unwrap();
+    }
+    let n = std::fs::read_dir(&dir).unwrap().count();
+    assert_eq!(n, browsers::FILES_KEPT);
+    assert!(!dir.join("6.jpg").exists());
+    assert!(dir.join("7.jpg").exists() && dir.join("56.jpg").exists());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_capture_answers_its_part_its_scale_and_its_file() {
+    let shot = crate::browserread::Shot {
+        bytes: vec![],
+        format: crate::browserread::Format::Jpeg,
+        width: 390.4,
+        height: 120.0,
+        scale: 2.0,
+    };
+    let fitted = crate::browserread::Fitted {
+        bytes: vec![],
+        width: 780,
+        height: 240,
+        factor: 0.5,
+    };
+    let v = browsers::shot_answer(
+        "http://localhost:4211/tarifs",
+        &shot,
+        &fitted,
+        Some("#pro"),
+        std::path::Path::new("captures/1.jpg"),
+    );
+    assert_eq!(v["width"], 390.0);
+    assert_eq!(v["height"], 120.0);
+    assert_eq!(v["scale"], 1.0);
+    assert_eq!(v["pixels"], json!({ "width": 780, "height": 240 }));
+    assert_eq!(v["selector"], "#pro");
+    assert!(v["file"].as_str().unwrap().ends_with("1.jpg"));
+}
+
+#[tokio::test]
+async fn the_instructions_say_what_a_capture_of_a_signed_in_page_shows() {
+    let h = harness("mcp-capture-guidance");
+    let (_, a) = world(&h).await;
+    let c = as_agent(&h, &a.id).await;
+    let said = c
+        .peer_info()
+        .and_then(|i| i.instructions.clone())
+        .unwrap_or_default();
+    assert!(said.contains("capture_browser"), "{said}");
+    assert!(said.contains("signed in shows what surrounds it"), "{said}");
+    assert!(said.contains("nor in an image"), "{said}");
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn an_agents_captures_go_with_it() {
+    let h = harness("mcp-capture-purge");
+    let (_, a) = world(&h).await;
+    let dir = h.core.data.captures(&a.id);
+    browsers::keep_file(&dir, b"x").unwrap();
+    h.core.delete_agent(&a.id, false).await.unwrap();
+    assert!(!dir.exists());
+}

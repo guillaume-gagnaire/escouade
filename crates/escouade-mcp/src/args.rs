@@ -1359,6 +1359,37 @@ pub struct ReadBrowserArgs {
     pub max_chars: Option<u64>,
 }
 
+/// The width `capture_browser` takes a page at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum CaptureWidthArg {
+    Current,
+    Full,
+    Tablet,
+    Mobile,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CaptureBrowserArgs {
+    #[schemars(
+        description = "The browser, by the key list_browsers gives: the id of the agent for the page of its test, run:<project>:<command>, or browser:<id>."
+    )]
+    pub browser: String,
+    #[schemars(
+        description = "A CSS selector (200 characters at most, without :has(), four levels at most): the first visible element it matches, what of it shows in the view. Left out: the view."
+    )]
+    pub selector: Option<String>,
+    #[schemars(
+        description = "current (the default): as shown; full, tablet (768 px) or mobile (390 px): taken at that width, then put back (the user sees the page change meanwhile)."
+    )]
+    pub width: Option<CaptureWidthArg>,
+    #[schemars(
+        description = "true: the whole document, 8000 CSS pixels high at most (not with a selector; not under macOS). false by default."
+    )]
+    pub full_page: Option<bool>,
+}
+
 /// From where `browser_console` reads: a cursor a read gave or an ISO 8601 time (a string), or
 /// milliseconds since 1970 (a number).
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]

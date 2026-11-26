@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Agents read the browsers of their project: they list them, read the HTML or the text of a page on screen, passwords and tokens masked, capture it as an image (the view, an element or the whole page, at a tablet’s or a phone’s width) and read its console with its failed requests, to see what you see and what breaks. The page of their launch is read and captured without asking; another origin (an artifact, a site you’re signed in to) waits for your permission in the browser’s band, which you revoke with “Revoke the permissions”. The “Agents and browsers” switch in Settings › Agents turns them off.
 - The Workspace, a canvas of all your agents, opened from the “Editor” button or the Overview: each with its plan, its skills and plugins, its subagents, its tests and what it delivered (artifacts, CI, deployments). You answer a question and write to an agent there without opening its conversation. Thanks to @OshOEz (#45).
 - Agents read the browsers of their project: they list them, read the HTML or the text of a page on screen, passwords and tokens masked, and its console with its failed requests, to see what you see and what breaks. The page of their launch is read without asking; another origin (an artifact, a site you’re signed in to) waits for your permission in the browser’s band, which you revoke with “Revoke the permissions”. The “Agents and browsers” switch in Settings › Agents turns them off.
 

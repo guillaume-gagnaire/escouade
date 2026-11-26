@@ -226,7 +226,7 @@ test.describe('a fake agent reads the console of the browsers', () => {
           .toContain('erreur du tiers');
         // The agent was told by a message that it may read it again.
         await page.locator('aside.side .agent').first().click();
-        await expect(page.getByText(/read_browser ou browser_console/).first()).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByText(/read_browser, capture_browser ou browser_console/).first()).toBeVisible({ timeout: 20_000 });
       } finally {
         launch.release();
         launch.server.close();

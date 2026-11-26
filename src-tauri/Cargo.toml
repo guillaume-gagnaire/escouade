@@ -49,6 +49,8 @@ notify = "8"
 rusqlite = { version = "0.41", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 base64 = "0.23"
+# The captures of `capture_browser` (ESC-670): decoded, reduced and written in JPEG, 600 KB at most.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 log = "0.4"
 # The system's language, in the usage statistics (`telemetry`).
 sys-locale = "0.3"

@@ -668,3 +668,75 @@ fn a_cursor_of_an_older_webview_reads_the_new_buffers_from_their_start() {
     });
     assert!(next.entries.is_empty() && next.network.is_empty());
 }
+
+// ---------- the bounds of a capture (ESC-670) ----------
+
+/// An image of noise, `w` × `h`, in `format`: what compresses worst.
+fn noise(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
+    let mut seed = 0x2545_f491_u32;
+    let img = image::RgbImage::from_fn(w, h, |_, _| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        image::Rgb([seed as u8, (seed >> 8) as u8, (seed >> 16) as u8])
+    });
+    let mut out = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgb8(img)
+        .write_to(&mut out, format)
+        .unwrap();
+    out.into_inner()
+}
+
+fn shot(bytes: Vec<u8>, format: Format) -> Shot {
+    Shot {
+        bytes,
+        format,
+        width: 0.0,
+        height: 0.0,
+        scale: 1.0,
+    }
+}
+
+#[test]
+fn a_jpeg_that_fits_is_kept_as_it_is() {
+    let bytes = noise(120, 80, image::ImageFormat::Jpeg);
+    let f = fit(&shot(bytes.clone(), Format::Jpeg)).unwrap();
+    assert_eq!(f.bytes, bytes);
+    assert_eq!((f.width, f.height, f.factor), (120, 80, 1.0));
+}
+
+#[test]
+fn a_png_becomes_a_jpeg_1600_pixels_at_most_on_its_longest_side() {
+    let f = fit(&shot(
+        noise(2400, 600, image::ImageFormat::Png),
+        Format::Png,
+    ))
+    .unwrap();
+    assert_eq!(&f.bytes[..2], &[0xFF, 0xD8], "a JPEG");
+    assert_eq!((f.width, f.height), (1600, 400));
+    assert!((f.factor - 1600.0 / 2400.0).abs() < 1e-9);
+    assert!(f.bytes.len() <= SHOT_BYTES);
+    let back = image::load_from_memory(&f.bytes).unwrap();
+    assert_eq!((back.width(), back.height()), (1600, 400));
+}
+
+#[test]
+fn too_many_bytes_lower_the_quality_then_the_size() {
+    let bytes = noise(1200, 900, image::ImageFormat::Jpeg);
+    assert!(bytes.len() > 200_000, "{}", bytes.len());
+    let f = fit_within(&shot(bytes, Format::Jpeg), 200_000).unwrap();
+    assert!(f.bytes.len() <= 200_000, "{}", f.bytes.len());
+    assert!(f.width <= 1200 && f.factor <= 1.0);
+    // Under the real bound, a capture of 1 600 pixels of noise fits too.
+    let f = fit(&shot(
+        noise(1600, 1600, image::ImageFormat::Png),
+        Format::Png,
+    ))
+    .unwrap();
+    assert!(f.bytes.len() <= SHOT_BYTES, "{}", f.bytes.len());
+}
+
+#[test]
+fn what_is_no_image_is_refused() {
+    assert!(fit(&shot(b"not an image".to_vec(), Format::Png)).is_err());
+}

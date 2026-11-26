@@ -94,6 +94,7 @@ export default defineZone('mcp', {
     listBackgroundWork: 'List an agent’s subagents and background tasks',
     listBrowsers: 'List the browsers',
     readBrowser: 'Read a browser',
+    captureBrowser: 'Capture a browser',
     browserConsole: 'Read a browser’s console',
     getBackgroundOutput: 'Read a background task’s output or a subagent’s report',
     stopBackgroundWork: 'Stop a background task or a subagent',

@@ -8735,6 +8735,8 @@ impl<R: Runtime> Core<R> {
         self.forget_interface(&meta);
         // The files joined to its messages (the copies; never a file of the user's own).
         self.forget_attachments(id);
+        // Its captures of the browsers (`capture_browser`, ESC-670).
+        let _ = std::fs::remove_dir_all(self.data.captures(id));
         self.forget_sidechains(id);
         {
             let mut ui = self.ui.write();

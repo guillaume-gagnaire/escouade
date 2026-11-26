@@ -59,6 +59,7 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   list_background_work: 'mcp.tools.listBackgroundWork',
   list_browsers: 'mcp.tools.listBrowsers',
   read_browser: 'mcp.tools.readBrowser',
+  capture_browser: 'mcp.tools.captureBrowser',
   browser_console: 'mcp.tools.browserConsole',
   get_background_output: 'mcp.tools.getBackgroundOutput',
   stop_background_work: 'mcp.tools.stopBackgroundWork',

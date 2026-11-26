@@ -38,6 +38,8 @@ export interface PageState {
   opened: number;
   /** The agents' requests to read it outside the launch, and the leaves given (ESC-669): its band, its row's menu. */
   consents?: PageConsents;
+  /** The width an agent's capture shows it at, for the capture's time (ESC-670): over its own, never kept. */
+  shot?: PageMode;
 }
 
 class DevPages {
@@ -237,7 +239,7 @@ export async function openProjectPage(project: Project, commandId: string, title
 /** The width the page `key` is shown at. */
 export function modeOf(key: string): PageMode {
   const page = devpages.pages[key];
-  return (page && devpages.modes[page.title]) || 'full';
+  return (page && (page.shot ?? devpages.modes[page.title])) || 'full';
 }
 
 /** Shows the page `key` at `mode`, kept for its next launches. */
@@ -426,6 +428,11 @@ export function onPageEvent(e: PageEvent) {
       break;
     case 'responsive':
       cycleMode(e.agentId);
+      break;
+    case 'width':
+      // An agent's capture at another width: shown at it, then given back its own.
+      page.shot = e.url === 'full' || e.url === 'tablet' || e.url === 'mobile' ? e.url : undefined;
+      api.devpageMode(e.agentId, modeOf(e.agentId)).catch(() => {});
       break;
     case 'refused':
       app.toast(t('devpage.refused', { url: e.url }), 'error');

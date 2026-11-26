@@ -1348,6 +1348,82 @@ pub fn capture<R: Runtime>(webview: &Webview<R>, ask: Ask<'_>) -> Result<Shot, S
     platform::capture(webview, ask)
 }
 
+/// The most bytes of a capture's image given to an agent (ESC-670).
+pub const SHOT_BYTES: usize = 600_000;
+
+/// A capture as the agent gets it: a JPEG within the bounds.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Fitted {
+    pub bytes: Vec<u8>,
+    /// Its pixels.
+    pub width: u32,
+    pub height: u32,
+    /// What its side was multiplied by to fit (1 when it fitted as it was).
+    pub factor: f64,
+}
+
+/// `shot` in JPEG of quality 70, 1 600 pixels at most on its longest side and `SHOT_BYTES` at
+/// most: a lower quality, then smaller, until it fits. A JPEG that already fits is kept as it is.
+pub fn fit(shot: &Shot) -> Result<Fitted, String> {
+    fit_within(shot, SHOT_BYTES)
+}
+
+pub(crate) fn fit_within(shot: &Shot, max_bytes: usize) -> Result<Fitted, String> {
+    let format = match shot.format {
+        Format::Jpeg => image::ImageFormat::Jpeg,
+        Format::Png => image::ImageFormat::Png,
+    };
+    let img = image::load_from_memory_with_format(&shot.bytes, format)
+        .map_err(|e| format!("not an image: {e}"))?;
+    let (w, h) = (img.width(), img.height());
+    if w == 0 || h == 0 {
+        return Err("an empty capture".into());
+    }
+    let side = w.max(h) as f64;
+    if shot.format == Format::Jpeg && side <= SHOT_SIDE && shot.bytes.len() <= max_bytes {
+        return Ok(Fitted {
+            bytes: shot.bytes.clone(),
+            width: w,
+            height: h,
+            factor: 1.0,
+        });
+    }
+    let rgb = image::DynamicImage::ImageRgb8(img.to_rgb8());
+    let encode = |im: &image::DynamicImage, quality: u8| -> Result<Vec<u8>, String> {
+        let mut out = Vec::new();
+        im.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+            &mut out, quality,
+        ))
+        .map_err(|e| e.to_string())?;
+        Ok(out)
+    };
+    let mut factor = (SHOT_SIDE / side).min(1.0);
+    for _ in 0..12 {
+        let (nw, nh) = (
+            ((w as f64 * factor).round() as u32).max(1),
+            ((h as f64 * factor).round() as u32).max(1),
+        );
+        let im = if (nw, nh) == (w, h) {
+            rgb.clone()
+        } else {
+            rgb.resize_exact(nw, nh, image::imageops::FilterType::Triangle)
+        };
+        for quality in [JPEG_QUALITY as u8, 55, 40] {
+            let bytes = encode(&im, quality)?;
+            if bytes.len() <= max_bytes {
+                return Ok(Fitted {
+                    bytes,
+                    width: nw,
+                    height: nh,
+                    factor,
+                });
+            }
+        }
+        factor *= 0.75;
+    }
+    Err("the capture does not fit in its bounds".into())
+}
+
 /// The view, and the box of `selector`, as the page shows them now.
 fn measure<R: Runtime>(
     webview: &Webview<R>,

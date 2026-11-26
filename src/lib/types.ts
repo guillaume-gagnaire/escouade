@@ -1083,8 +1083,8 @@ export interface PageConsents {
 export interface PageEvent {
   /** The page's key: its agent's id, or `browser:<id>` for a browser opened alone (ESC-657). */
   agentId: string;
-  /** `consents`: an agent asked to read it, or its leaves changed (ESC-669): the window reads them again. */
-  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title' | 'consents';
+  /** `consents`: an agent asked to read it, or its leaves changed (ESC-669): the window reads them again. `width`: an agent's capture shows it at the width in `url` (`full`, `tablet`, `mobile`) for its time, an empty `url` gives it back its own (ESC-670). */
+  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title' | 'consents' | 'width';
   url: string;
   /** Its document's title, with `title` (cleaned by the backend). */
   title?: string;

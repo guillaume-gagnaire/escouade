@@ -599,6 +599,12 @@ impl DataDir {
         self.0.join("logs").join(format!("{agent_id}-setup.log"))
     }
 
+    /// The captures of `capture_browser` kept for the agent `agent_id` (ESC-670): `<n>.jpg`, for a
+    /// harness that does not read the images of MCP; gone with the agent.
+    pub fn captures(&self, agent_id: &str) -> PathBuf {
+        self.0.join("captures").join(agent_id)
+    }
+
     /// The install's random id, for the usage statistics: there only while the user agrees to
     /// them (`telemetry`).
     pub fn telemetry_id_file(&self) -> PathBuf {

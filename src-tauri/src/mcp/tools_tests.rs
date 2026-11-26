@@ -216,7 +216,11 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
         // was served (ESC-669): only they.
         let host = matches!(
             &*t.name,
-            "list_pull_requests" | "get_pull_request" | "read_browser" | "browser_console"
+            "list_pull_requests"
+                | "get_pull_request"
+                | "read_browser"
+                | "capture_browser"
+                | "browser_console"
         );
         assert_eq!(v["annotations"]["openWorldHint"], host, "{}: {v}", t.name);
     }

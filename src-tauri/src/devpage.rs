@@ -41,6 +41,9 @@ pub const RUN_PREFIX: &str = "run:";
 /// next width (`Verdict::Responsive`).
 pub const RESPONSIVE_URL: &str = "escouade-devtools://responsive/";
 
+/// The most captures an agent takes in a minute (`capture_browser`, ESC-670).
+pub const SHOTS_PER_MINUTE: usize = 20;
+
 /// The width a page is shown at: the whole room, a tablet's, a phone's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -296,6 +299,8 @@ pub struct Pages {
     consents: Mutex<HashMap<String, Leaves>>,
     /// The order the pages opened in.
     seq: std::sync::atomic::AtomicU64,
+    /// The captures each agent took in the last minute (`capture_browser`, ESC-670), by agent.
+    shots: Mutex<HashMap<String, std::collections::VecDeque<std::time::Instant>>>,
 }
 
 /// What the agents may read of one page outside the launch.
@@ -426,6 +431,27 @@ impl Pages {
         if let Some(p) = self.pages.lock().get_mut(agent_id) {
             p.doc_title = title.to_string();
         }
+    }
+
+    /// One more capture by `agent` at `now`, `SHOTS_PER_MINUTE` in a minute at most: refused, the
+    /// seconds to wait until the oldest of the minute leaves it.
+    pub fn take_shot(&self, agent: &str, now: std::time::Instant) -> Result<(), u64> {
+        let minute = std::time::Duration::from_secs(60);
+        let mut shots = self.shots.lock();
+        let taken = shots.entry(agent.to_string()).or_default();
+        while taken
+            .front()
+            .is_some_and(|t| now.saturating_duration_since(*t) >= minute)
+        {
+            taken.pop_front();
+        }
+        if taken.len() >= SHOTS_PER_MINUTE {
+            let oldest = taken.front().copied().unwrap_or(now);
+            let left = minute.saturating_sub(now.saturating_duration_since(oldest));
+            return Err(left.as_secs().max(1));
+        }
+        taken.push_back(now);
+        Ok(())
     }
 
     /// Shows the page of `agent_id` at `mode`. False when it is not open.
