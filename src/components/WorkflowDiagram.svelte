@@ -15,8 +15,9 @@
   } from '../lib/workflow-diagram';
   import Icon from './Icon.svelte';
 
-  // The Diagram view of the Workflow tab (ESC-245, choices 196 to 212; `#loops-diagram*` of the preview), loaded only when
-  // it opens: the workflow drawn down the column, and enlarged over the whole work panel (`big`), across when it fits.
+  // The diagram of a workflow (ESC-245, choices 196 to 212; `#loops-diagram*` of the preview), loaded only when it opens:
+  // drawn down a column, and enlarged over the whole work panel (`big`), across when it fits. The « Workspace » opens it
+  // enlarged `alone`, from an agent's card or its « Workflows » (ESC-689): nothing is drawn where it is mounted.
   // Every name, command and condition comes from the repository's files: drawn as text, never as HTML.
   // It always starts from an entry (ESC-406, direction A of design/workflow-path): the door the agent read came in by
   // (`entry`), else one of `entries` to choose from. Only what that entry reaches is drawn, light and dashed as what may
@@ -31,6 +32,7 @@
     reader = '',
     agents,
     big = false,
+    alone = false,
     onclose,
     oncopy,
   }: {
@@ -43,6 +45,8 @@
     reader?: string;
     agents: Record<string, DgAgent[]>;
     big?: boolean;
+    /** Enlarged only: no column where it is mounted. */
+    alone?: boolean;
     onclose?: () => void;
     oncopy?: () => void;
   } = $props();
@@ -359,13 +363,15 @@
   {/if}
 {/snippet}
 
-{@render pick()}
-<div class="dg-wrap" bind:this={wrap} data-testid="workflow-diagram">
-  {@render svg(narrow, 1)}
-</div>
-{#if !big}{@render told()}{/if}
-{@render aside()}
-{@render legend()}
+{#if !alone}
+  {@render pick()}
+  <div class="dg-wrap" bind:this={wrap} data-testid="workflow-diagram">
+    {@render svg(narrow, 1)}
+  </div>
+  {#if !big}{@render told()}{/if}
+  {@render aside()}
+  {@render legend()}
+{/if}
 
 {#if big}
   <section class="dg-big" use:portal aria-label={t('workflow.dg.label', { name: model.name })} data-testid="workflow-diagram-big">

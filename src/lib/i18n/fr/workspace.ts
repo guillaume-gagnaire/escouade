@@ -87,4 +87,25 @@ export default {
   },
   /** The requests of an agent that waits, in its card. `fromSub`: on the agent's card, a subagent's question is on its own. */
   ask: { loading: 'Chargement de la question…', fromSub: 'question de {name}' },
+  /**
+   * The workflows in the canvas (ESC-689): the step on an agent's card, which opens its diagram with its path; and
+   * « Workflows » of the floating bar, the project's workflows with the agents in each.
+   */
+  wf: {
+    outcome: { running: 'en cours', done: 'faite', back: 'renvoyée', failed: 'en échec', stopped: 'arrêtée', left: 'quittée' },
+    back: 'Renvoyé par {from} : {reason}',
+    backPlain: 'Renvoyé par {from}',
+    open: 'Voir le schéma de {workflow} et le chemin de {name}',
+    entry: 'Workflows',
+    entryTip: 'Les workflows de {project} et les agents qui les suivent',
+    title: 'Workflows',
+    close: 'Fermer (Échap)',
+    diagram: 'Schéma',
+    diagramTip: 'Le schéma de {name}, depuis une porte d’entrée au choix',
+    following: { one: '{count} agent le suit', other: '{count} agents le suivent' },
+    nobody: 'Aucun agent ne le suit',
+    outside: 'hors du workflow',
+    between: 'entre deux étapes',
+    pathOf: 'Le schéma de {workflow} et le chemin de {name}',
+  },
 } as const satisfies Tree;

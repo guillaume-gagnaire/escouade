@@ -1,9 +1,10 @@
 // Where the card, the conversation and the Kanban meet the workflow (ESC-197, choices 145 and 159), at the runner's size
 // (1024 × 728), on a project laid out as GSD (tests/fixtures/workflows/gsd) and the fake agent's facts (`faits-workflow`
 // of tests/fixtures/fake-claude.mjs): the step on the agent's card in the place of its plan, a divider in the conversation
-// at each entry in a step that leads to the Workflow tab, the agent of a ticket in two workflows (GSD with its ticket and
-// its loop, « Tickets » of Escouade on « En cours »), its card keeping its loop with the step in its tooltip. The card and
-// the divider are compared to the preview (`#loops` of design/app-redesign/index.html) in both themes; then in English.
+// at each entry in a step that opens the workflow's diagram over the « Workspace » with the agent's path (ESC-689), the
+// agent of a ticket in two workflows (GSD with its ticket and its loop, « Tickets » of Escouade on « En cours », as
+// « Workflows » of the canvas lists them), its card keeping its loop with the step in its tooltip. The card and the
+// divider are compared to the preview (`#loops` of design/app-redesign/index.html) in both themes; then in English.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -60,9 +61,10 @@ const L = {
     // The step, then what comes after it (ESC-244).
     step: 'Étape : GSD · Plan phase\nEnsuite : Execute phase',
     ticketLoop: 'boucle 1/5 du ticket',
-    sendBack: 'Renvoyer : retour à En cours',
-    agentsIn: 'Agents dans Tickets',
-    divider: 'Voir l’étape dans l’onglet Workflow',
+    divider: 'Voir l’étape sur le schéma du workflow',
+    workspace: 'Éditeur ou workspace du projet',
+    entered: 'entré par',
+    close: 'Fermer (Échap)',
   },
   en: {
     newTicket: 'New ticket',
@@ -73,15 +75,16 @@ const L = {
     loop: 'loop 1/5',
     step: 'Step: GSD · Plan phase\nNext: Execute phase',
     ticketLoop: 'ticket loop 1/5',
-    sendBack: 'Send back: back to In progress',
-    agentsIn: 'Agents in Tickets',
-    divider: 'See the step in the Workflow tab',
+    divider: 'See the step on the workflow’s diagram',
+    workspace: 'Editor or workspace of the project',
+    entered: 'entered by',
+    close: 'Close (Esc)',
   },
 } as const;
 
 /**
- * The whole way, in `lang`: an agent through two steps (its card, its dividers, the tab opened from one), then the agent
- * of a ticket that follows GSD too.
+ * The whole way, in `lang`: an agent through two steps (its card, its dividers, the diagram opened from one), then the
+ * agent of a ticket that follows GSD too, as « Workflows » of the canvas lists it.
  */
 async function goThrough(page: Page, repo: string, lang: Language) {
   const l = L[lang];
@@ -102,15 +105,20 @@ async function goThrough(page: Page, repo: string, lang: Language) {
   await expect(dividers.nth(0)).toContainText('GSD · Plan phase/gsd:plan-phase');
   await expect(dividers.nth(1)).toContainText('GSD · Verify work/gsd:verify-work');
   await expect(dividers.nth(1).locator('xpath=following-sibling::*[1]')).toContainText('/gsd:verify-work 3');
-  // It leads to the Workflow tab, on GSD.
+  // It opens GSD's diagram over the « Workspace », with the agent's path: in by Plan, on Verify (ESC-689).
   const lead = dividers.nth(1).getByRole('button');
   await expect(lead).toHaveAttribute('data-tip', l.divider);
   await lead.click();
-  const side = page.locator('aside.git-side');
-  await expect(side.getByRole('tab', { name: /^Workflow/ })).toHaveAttribute('aria-selected', 'true');
-  const tab = side.getByTestId('workflow');
-  await expect(tab.locator('.wf-top .select b')).toHaveText('GSD');
-  await expect(tab.locator('.wf-step.here .wf-name')).toHaveText('Verify work');
+  const big = page.getByTestId('workflow-diagram-big');
+  await expect(big.locator('.dg-title')).toContainText(`${l.entered} /gsd:plan-phase`);
+  await expect(big.locator('.dg-node[data-step="gsd:verify-work"] circle.ag.cur title')).toHaveText(a1);
+  await expect(big.getByTestId('workflow-path').locator('li')).toHaveCount(2);
+  await big.getByRole('button', { name: l.close }).click();
+  await expect(big).toHaveCount(0);
+  // Back on the canvas, the step on its card.
+  await expect(page.locator('.ws article.agent').filter({ hasText: a1 }).getByTestId('card-step')).toContainText('Verify work');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.ws')).toHaveCount(0);
 
   // A ticket whose agent follows GSD too: it plans, its turn held (its ticket stays under way).
   await page.getByRole('button', { name: /^Kanban/ }).click();
@@ -127,23 +135,28 @@ async function goThrough(page: Page, repo: string, lang: Language) {
   await expect(loop).toHaveAttribute('data-tip', l.step);
   await expect(ticketCard.locator('.wf-mini')).toHaveCount(0);
 
-  // In GSD with its ticket and its loop.
-  // The panel the divider opened stays open beside it.
-  await side.getByRole('tab', { name: /^Workflow/ }).click();
-  await expect(tab.locator('.wf-top .select b')).toHaveText('GSD');
-  const row = tab.locator('.wf-ag').filter({ hasText: 'DEM-1' });
-  await expect(row.locator('.where')).toContainText('Plan phase');
-  await expect(row.locator('.where')).toContainText(l.ticketLoop);
-  // In « Tickets » on « En cours ».
-  await tab.locator('.wf-top .select').click();
-  await page.getByRole('menuitemradio', { name: 'Tickets' }).click();
-  await expect(tab.locator('.wf-step .wf-name')).toHaveText([...l.columns]);
-  await expect(tab.locator('.wf-step.here .wf-name')).toHaveText(l.doing);
-  await expect(tab.locator('.wf-step.here .who[aria-current="true"]')).toBeVisible();
-  await expect(tab.getByText(l.sendBack)).toBeVisible();
-  await expect(tab.getByText(l.agentsIn)).toBeVisible();
-  // The way back drawn in the gutter.
-  await expect(tab.locator('.wf-edges path')).toHaveCount(1);
+  // In GSD with its ticket and its loop, and in « Tickets » on « En cours »: « Workflows » of the canvas.
+  const ticketName = (await ticketCard.locator('.name').textContent())!.trim();
+  await page.getByRole('button', { name: l.workspace }).click();
+  await page.getByRole('menuitemradio', { name: 'Workspace' }).click();
+  await page
+    .locator('.ws')
+    .getByRole('button', { name: /^Workflows/ })
+    .click();
+  const side = page.getByTestId('workspace-workflows');
+  const gsdItem = side.locator('li.wf').filter({ has: page.locator('b', { hasText: /^GSD$/ }) });
+  const row = gsdItem.locator('.who button').filter({ hasText: ticketName });
+  await expect(row.locator('.at')).toContainText('Plan phase');
+  await expect(row.locator('.at')).toContainText(l.ticketLoop);
+  const tickets = side.locator('li.wf').filter({ has: page.locator('b', { hasText: /^Tickets$/ }) });
+  await expect(tickets.locator('.who button').filter({ hasText: ticketName }).locator('.at')).toContainText(l.doing);
+  // Its diagram from its line: the columns of the Kanban, the agent on « En cours ».
+  await tickets.locator('.who button').filter({ hasText: ticketName }).click();
+  await expect(big.locator('.dg-node .nm')).toContainText([...l.columns].slice(1, 3));
+  await expect(big.locator(`.dg-node[data-step="${l.doing}"] circle.ag.cur title`)).toHaveText(ticketName);
+  await page.keyboard.press('Escape');
+  await expect(big).toHaveCount(0);
+  const tab = side;
   return { a1, card, dividers, side, tab };
 }
 

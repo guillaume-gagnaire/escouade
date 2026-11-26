@@ -83,7 +83,7 @@ export default defineZone('workflow', {
   },
   sendBack: 'Send back: back to {step}',
   ticketsEscouade: 'Escouade’s workflow of the tickets, from the Kanban',
-  divider: 'See the step in the Workflow tab',
+  divider: 'See the step on the workflow’s diagram',
   cardStep: 'Step: {step}',
   dg: {
     viewTabs: 'Workflow view',

@@ -373,7 +373,7 @@
 </div>
 
 <style>
-  /* The panel's lists (FilesPanel, WorkflowPanel): rows of 30 px, state glyphs in the colours of the card's numbers. */
+  /* The panel's lists (FilesPanel): rows of 30 px, state glyphs in the colours of the card's numbers. */
   .hosts {
     flex: 1;
     min-height: 0;

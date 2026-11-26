@@ -208,7 +208,7 @@ Escouade lit seule les workflows d’un projet (GSD, Superpowers, Ralph…). Un 
 
 - Escouade appelle `workflow/read` avec `{ "reader": "bmad", "root": "…", "repos": [], "files": [{ "path": "_bmad/brief.md", "text": "…" }] }` : **seulement les fichiers que ses globs désignent**, depuis le dossier du projet (et celui de chaque dépôt pour un projet de plusieurs), en texte, au plus 200 fichiers de 256 Ko. Un glob avec `..` ou un chemin absolu ne trouve rien.
 - Le plugin rend le graphe : `{ "workflows": [{ "id", "name", "steps": [{ "name", "command", "description", "path", "agents", "reads", "writes" }], "transitions": [{ "from", "to", "back", "condition", "max" }], "exit" }] }`. Une étape est signalée par sa `command` tapée, par les sous-agents qu’elle nomme ou les fichiers qu’elle écrit ; une transition `back` est un retour en arrière, avec sa `condition` pour raison quand l’étape n’en donne pas.
-- Le workflow se suit comme ceux qu’Escouade lit : l’onglet Workflow, la carte, les faits `workflow.*`. Son id est `plugin:<plugin>:<id>`, donc il ne prend jamais la place d’un autre.
+- Le workflow se suit comme ceux qu’Escouade lit : le Workspace, la carte, les faits `workflow.*`. Son id est `plugin:<plugin>:<id>`, donc il ne prend jamais la place d’un autre.
 - Un graphe qui ne tient pas (une étape sans nom, deux du même nom, une transition vers une étape absente, plus de 50 workflows) est refusé en entier, avec la raison, dans le journal. L’appel a 60 s.
 
 ## Le journal

@@ -4,6 +4,11 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Les workflows de ton projet passent dans le Workspace : la carte de chaque agent dit son étape (et en rouge pourquoi il a été renvoyé), et un clic ouvre le schéma du workflow avec son chemin ; « Workflows », en haut à droite de la toile, liste les workflows du projet et leurs agents. Le panneau de droite garde trois onglets.
+- Les commandes qu’un agent a lancées, gardées pour le Workspace, ne gardent plus aucun mot de passe, jeton ou clé en clair : ils sont masqués avant d’être enregistrés.
+
 ## [2.2.13] — 2026-11-26
 
 - La sensibilité du micro de la conversation vocale se règle dans Réglages › Voix, avec un testeur qui montre en direct le niveau de ta voix, le seuil et quand ta voix est détectée.

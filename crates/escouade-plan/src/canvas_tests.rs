@@ -341,3 +341,49 @@ fn a_terminal_call_read_again_after_a_restart_is_one_run() {
     assert_eq!(c.commands.len(), 1);
     assert_eq!(c.subs[0].commands.len(), 1);
 }
+
+#[test]
+fn a_command_is_kept_and_sent_with_its_secrets_masked() {
+    let gh = format!("ghp_{}", "a".repeat(36));
+    let typed = format!(
+        "curl -H 'Authorization: Bearer abc.def' -u me:hunter2 'https://x/?token=t0k3n' && GH_TOKEN={gh} gh pr list --password p4ss"
+    );
+    let mut c = Canvas::default();
+    c.on_tool_use(None, "b1", "Bash", &json!({ "command": typed }), 1);
+    c.on_tool_use(
+        Some("a1"),
+        "b2",
+        "Bash",
+        &json!({"command": "psql --password=s3cr3t"}),
+        2,
+    );
+    let kept = &c.commands[0].command;
+    assert_eq!(
+        kept,
+        "curl -H 'Authorization: Bearer ***' -u me:*** 'https://x/?token=***' && GH_TOKEN=*** gh pr list --password ***"
+    );
+    assert_eq!(c.subs[0].commands[0].command, "psql --password=***");
+    // Neither in the agent's file nor in what goes to the window.
+    let sent = serde_json::to_string(&c).unwrap();
+    for secret in ["abc.def", "hunter2", "t0k3n", gh.as_str(), "p4ss", "s3cr3t"] {
+        assert!(!sent.contains(secret), "{secret} in {sent}");
+    }
+}
+
+#[test]
+fn a_secret_is_masked_before_the_command_is_cut() {
+    // Cut first, the token would lose its tail and its form: masked first, nothing of it stays.
+    let gh = format!("ghp_{}", "b".repeat(36));
+    let long = format!("{} {gh}", "x".repeat(MAX_COMMAND - 10));
+    let mut c = Canvas::default();
+    c.on_tool_use(None, "b1", "Bash", &json!({ "command": long }), 1);
+    assert!(!c.commands[0].command.contains("ghp_"));
+}
+
+#[test]
+fn a_command_kept_in_the_clear_before_is_masked_as_it_is_read() {
+    let old: CommandRun =
+        serde_json::from_value(json!({"call": "b", "command": "export API_TOKEN=s3cr3t && make"}))
+            .unwrap();
+    assert_eq!(old.command, "export API_TOKEN=*** && make");
+}

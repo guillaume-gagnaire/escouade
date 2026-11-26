@@ -398,8 +398,8 @@ class AppState {
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
-  /** Tab of the side panel: uncommitted files, the repository history or the project's workflow (ESC-194). */
-  panelTab = $state<'files' | 'history' | 'workflow' | 'hosts'>('files');
+  /** Tab of the side panel: uncommitted files, the repository history, the pull request with its CI (the workflows are in the « Workspace », ESC-689). */
+  panelTab = $state<'files' | 'history' | 'hosts'>('files');
   /** A text to put in an agent's composer without sending it (a door of the Workflow tab): taken by its composer, which then clears it. */
   composerPut = $state<{ agentId: string; text: string } | null>(null);
   /** How many messages went back to each agent's draft (`giveBack`): its composer reads the draft again. */
@@ -500,6 +500,11 @@ class AppState {
   workspace = $state<Record<string, boolean>>({});
   /** « Vue d’ensemble » shows the « Workspace » of every project in place of its list (not saved). */
   overviewCanvas = $state(false);
+  /**
+   * The diagram of a workflow open over the « Workspace » (ESC-689): from an agent's card, with its path; from
+   * « Workflows » of the floating bar, without an agent (`agentId` null). Gone with the canvas.
+   */
+  workflowDiagram = $state<{ projectId: string; workflow: string; agentId: string | null } | null>(null);
   /** The reviews written by an agent (ESC-66), by project then by pull request. */
   prReviews = $state<Record<string, Record<number, AgentReview>>>({});
   /** The pull request whose review fills the « Pull requests » view, by project. */
@@ -1291,6 +1296,7 @@ class AppState {
   /** Back from the canvas of every project to the list of « Vue d’ensemble ». */
   closeOverviewCanvas() {
     this.overviewCanvas = false;
+    this.workflowDiagram = null;
   }
 
   /** Goes back from « Vue d’ensemble » to the view it covered. */
@@ -1751,6 +1757,16 @@ class AppState {
 
   closeWorkspace(projectId = this.ui.activeProject) {
     if (projectId) this.workspace[projectId] = false;
+    this.workflowDiagram = null;
+  }
+
+  /**
+   * The diagram of a project's workflow, enlarged over its « Workspace » (ESC-689), opened first when another view is
+   * on screen (a divider of the conversation): with `agentId`'s path, or from a door to choose without one.
+   */
+  openWorkflowDiagram(projectId: string, workflow: string, agentId: string | null = null) {
+    if (!this.overviewCanvasOn && !(this.workspaceOn && this.project?.id === projectId)) this.openWorkspace(projectId);
+    this.workflowDiagram = { projectId, workflow, agentId };
   }
 
   /**

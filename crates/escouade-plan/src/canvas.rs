@@ -5,9 +5,15 @@
 //! (`AgentMeta::canvas`). Never reset: it says what the agent used in its life, its caps bound it.
 
 use crate::plan::{Change, Seen};
-use serde::{Deserialize, Serialize};
+use escouade_base::secrets::mask_secrets;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+
+/// A command as it is read from the agent's file: its secrets masked, were they kept in the clear before.
+fn masked<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    String::deserialize(d).map(|c| mask_secrets(&c))
+}
 
 /// The most skills and plugins a thread (the agent, a subagent) keeps: the least recent go.
 pub const MAX_KIT: usize = 40;
@@ -109,6 +115,8 @@ pub struct Publishing {
 #[serde(rename_all = "camelCase", default)]
 pub struct CommandRun {
     pub call: String,
+    /// Its secrets masked; one kept in the clear before they were is masked as it is read.
+    #[serde(deserialize_with = "masked")]
     pub command: String,
     pub started_at: i64,
     pub ended_at: Option<i64>,
@@ -269,7 +277,9 @@ impl Canvas {
             }
             commands.push(CommandRun {
                 call: id.to_string(),
-                command: command.chars().take(MAX_COMMAND).collect(),
+                // Its secrets masked before it is cut (a secret cut in two would no longer be told) and kept: never
+                // in the clear in the agent's file nor in the window (ESC-689).
+                command: mask_secrets(command).chars().take(MAX_COMMAND).collect(),
                 started_at: now,
                 ended_at: None,
                 failed: false,

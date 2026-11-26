@@ -2,7 +2,9 @@
   // The « Workspace » (spec 2026-11-25-vue-workspace-design.md, « La toile »): the agents of a project, or of every
   // project from « Vue d'ensemble » (a column each), stacked on a dotted canvas one moves and zooms: each its compass,
   // its sides in piles below 60 %. The canvas is one world, transformed by the camera; the controls float above it.
-  import { tick } from 'svelte';
+  // The project's workflows are here since ESC-689: the step on each agent's card, « Workflows » in the floating bar,
+  // and a workflow's diagram enlarged over the canvas.
+  import { tick, untrack } from 'svelte';
   import { t } from '../../lib/i18n';
   import { menu } from '../../lib/menu.svelte';
   import { shownAgents, sidebarItems } from '../../lib/sidebar';
@@ -26,9 +28,15 @@
   import { followEnvironments, prDetails } from '../../lib/workspace-ci.svelte';
   import { landingOf } from '../../lib/workspace-landing';
   import { frameOf, launchedOf, layoutColumns, type Level, type Side } from '../../lib/workspace-layout';
+  import { followers } from '../../lib/workflow-view';
+  import { workflows } from '../../lib/workflows.svelte';
+  import { projectTracks } from '../../lib/workspace-workflow';
+  import { tip } from '../../lib/tip';
   import Icon from '../Icon.svelte';
   import Compass from './Compass.svelte';
   import Links from './Links.svelte';
+  import WorkflowBig from './WorkflowBig.svelte';
+  import WorkflowsPanel from './WorkflowsPanel.svelte';
 
   /** None: every project's, over « Vue d'ensemble ». */
   let { project }: { project?: Project } = $props();
@@ -97,6 +105,40 @@
     const stops = followed.split(' ').filter(Boolean).map(followEnvironments);
     return () => stops.forEach((stop) => stop());
   });
+  // The workflows of its projects and their agents' tracks, as the Workflow tab read them: read again when the
+  // corrections of a project change (Réglages › Projets › Kanban › Workflow).
+  const fixes = $derived(JSON.stringify(columns.map((c) => [c.project.id, c.project.workflowFixes ?? []])));
+  $effect(() => {
+    void fixes;
+    const ids = columns.map((c) => c.project.id);
+    untrack(() => ids.forEach((id) => void workflows.follow(id)));
+  });
+  /** The agents that follow a workflow of the project, « Tickets » too: the count of « Workflows ». */
+  const following = $derived(
+    project
+      ? followers(
+          projectTracks(
+            project.id,
+            workflows.list(project.id),
+            Object.values(app.tickets).filter((tk) => tk.projectId === project.id),
+            app.agents,
+            0,
+          ),
+        )
+      : 0,
+  );
+  /** « Workflows » of the floating bar open. */
+  let wfOpen = $state(false);
+  let wfButton = $state<HTMLButtonElement>();
+  function closeWorkflows() {
+    wfOpen = false;
+    wfButton?.focus();
+  }
+  /** The diagram open over this canvas: of one of its projects. */
+  const diagram = $derived(app.workflowDiagram && projectOf.has(app.workflowDiagram.projectId) ? app.workflowDiagram : null);
+  // Gone with the canvas: it does not come back with the next one.
+  $effect(() => () => untrack(() => (app.workflowDiagram = null)));
+
   const laid = (level: Level) =>
     layoutColumns(
       columns.map((c) => ({ projectId: c.project.id, frames: c.agents.map((a) => frameAt(a, level)), launched: c.launched })),
@@ -225,6 +267,12 @@
   function key(e: KeyboardEvent) {
     if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
     if (typing(document.activeElement) || menu.open || document.querySelector(OVER)) return;
+    // A workflow's diagram over the canvas has the keys: Escape closes it, back to the canvas; then « Workflows ».
+    if (diagram) {
+      if (e.key === 'Escape') (e.preventDefault(), (app.workflowDiagram = null));
+      return;
+    }
+    if (wfOpen && e.key === 'Escape') return (e.preventDefault(), closeWorkflows());
     if (e.key === 'Escape') leave();
     else if (e.key === '+' || e.key === '=') zoomBy(ZOOM_STEP);
     else if (e.key === '-') zoomBy(1 / ZOOM_STEP);
@@ -298,6 +346,22 @@
     <span class="info">{t('workspace.count', { count: agents.length })}</span>
     {#if questions}<span class="info q">{t('workspace.questions', { count: questions })}</span>{/if}
   </div>
+  <!-- « Workflows », a pill of its own at the right, over the panel it opens: the bar keeps its width at 1024 px. -->
+  {#if project}
+    <button
+      class="hud wf-entry"
+      bind:this={wfButton}
+      aria-expanded={wfOpen}
+      aria-controls={wfOpen ? 'ws-workflows' : undefined}
+      use:tip={t('workspace.wf.entryTip', { project: project.name })}
+      onclick={() => (wfOpen ? closeWorkflows() : (wfOpen = true))}
+      ><Icon name="flow" size={14} /><span>{t('workspace.wf.entry')}</span>{#if following}<span class="n">{following}</span>{/if}</button
+    >
+  {/if}
+  {#if project && wfOpen}<WorkflowsPanel {project} onclose={closeWorkflows} />{/if}
+  {#if diagram}
+    {#key diagram}<WorkflowBig projectId={diagram.projectId} workflow={diagram.workflow} agentId={diagram.agentId} />{/key}
+  {/if}
 </div>
 
 <style>
@@ -422,5 +486,40 @@
   }
   .info.q {
     color: var(--wait);
+  }
+  /* « Workflows »: a pill as the bar, at the right; its icon in the project's ink, its count as the side panel's tabs
+     had it. Pressed while its panel is open. */
+  .wf-entry {
+    right: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 13px 0 11px;
+    border: none;
+    border-radius: 999px;
+    background: var(--raise);
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 550;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .wf-entry:hover,
+  .wf-entry[aria-expanded='true'] {
+    background: color-mix(in oklch, var(--text) 7%, var(--raise));
+  }
+  .wf-entry:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: 2px;
+  }
+  .wf-entry :global(.icon) {
+    color: var(--p-ink);
+  }
+  .wf-entry .n {
+    color: var(--muted);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
 </style>

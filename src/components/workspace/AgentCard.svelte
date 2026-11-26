@@ -4,6 +4,8 @@
   // write to it. Enter sends by the conversation's path
   // (`submitDraft`), from the agent's own draft: what is typed here is in its conversation once the canvas is left.
   // While it waits, the card grows with its requests (« La question ») ; a subagent's are on the subagent's card.
+  // An agent that follows a workflow of its project says its step (ESC-689), a click on it opening the workflow's
+  // diagram with its path.
   import { untrack } from 'svelte';
   import { conversationOf } from '../../lib/conversations.svelte';
   import { effortChoicesOf, modeChoicesOf, modelChoicesOf, setAgentOption, type OptionChoice } from '../../lib/agent-options';
@@ -24,6 +26,9 @@
   import { app } from '../../lib/state.svelte';
   import type { Agent } from '../../lib/types';
   import { askMaxH, CARD, subName, waits } from '../../lib/workspace-layout';
+  import { cardNext } from '../../lib/workflow-view';
+  import { workflows } from '../../lib/workflows.svelte';
+  import { cardStepOf } from '../../lib/workspace-workflow';
   import AskInset from './AskInset.svelte';
   import EngineMark from '../EngineMark.svelte';
   import HeatFigure from '../HeatFigure.svelte';
@@ -45,6 +50,18 @@
   const stateWord = $derived(t(`nav.sidebar.status.${agent.status}`));
   const duration = $derived(fDur(agent.activeMs + (agent.activeSince ? app.now - agent.activeSince : 0)));
   const act = $derived(cardActivity(agent, 0));
+  // Its step in a workflow of its project, as the tracks follow it.
+  const known = $derived(workflows.scans[agent.projectId]?.workflows ?? []);
+  const track = $derived(workflows.tracks[agent.projectId]?.[agentId]);
+  const step = $derived(cardStepOf(known, track));
+  const stepNext = $derived(step ? cardNext(known, track) : null);
+  const backSays = $derived(
+    step?.back
+      ? step.back.reason
+        ? t('workspace.wf.back', { from: step.back.from, reason: step.back.reason })
+        : t('workspace.wf.backPlain', { from: step.back.from })
+      : '',
+  );
 
   // Its conversation is loaded while it waits: what is typed answers the request there, as in the conversation.
   const waiting = $derived(waits(agent));
@@ -233,6 +250,29 @@
     {/if}
     <span class="spend">{cardSpend(agent)}</span>
   </div>
+  {#if step}
+    <button
+      type="button"
+      class="wf-step"
+      class:back={!!step.back}
+      data-testid="card-step"
+      use:tip={{
+        title: t('workspace.wf.open', { workflow: step.name, name: agent.name }),
+        rows: [backSays, stepNext ?? ''].filter(Boolean),
+      }}
+      onclick={() => app.openWorkflowDiagram(agent.projectId, step.workflow, agentId)}
+    >
+      <span class="wf-line">
+        <Icon name="flow" size={12} />
+        <span class="wf-name">{step.name}</span>
+        <span class="wf-sep" aria-hidden="true">·</span>
+        <b>{step.step}</b>
+        {#if step.pass > 1}<span class="wf-pass">· {t('workflow.pass', { n: step.pass })}</span>{/if}
+        {#if step.outcome}<span class="wf-state {step.outcome}">{t(`workspace.wf.outcome.${step.outcome}`)}</span>{/if}
+      </span>
+      {#if backSays}<span class="wf-back"><Icon name="restart" size={12} /><span>{backSays}</span></span>{/if}
+    </button>
+  {/if}
   {#if asking.length}<p class="from">{t('workspace.ask.fromSub', { name: asking.join(', ') })}</p>{/if}
   <AskInset {agent} {mine} label maxH={askH} onfocusback={() => field?.focus()} />
   <div class="bar">
@@ -378,6 +418,87 @@
     font-size: 11.5px;
     font-variant-numeric: tabular-nums;
   }
+  /* Its step in a workflow (ESC-689): a line of the card, its whole width a button to the workflow's diagram. */
+  .wf-step {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    margin: 2px -4px 0 0;
+    padding: 3px 4px 3px 16px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .wf-step:hover {
+    background: var(--hover);
+  }
+  .wf-step:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
+  }
+  .wf-line,
+  .wf-back {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .wf-line :global(.icon) {
+    flex: none;
+    color: var(--p-ink);
+  }
+  .wf-name {
+    flex: none;
+    max-width: 34%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wf-sep {
+    color: var(--sep);
+  }
+  .wf-line b {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-weight: 550;
+    text-overflow: ellipsis;
+  }
+  .wf-pass {
+    flex: none;
+  }
+  .wf-state {
+    flex: none;
+    margin-left: auto;
+    padding-left: 8px;
+    font-size: 11.5px;
+    font-weight: 550;
+  }
+  .wf-state.running {
+    color: var(--run);
+  }
+  .wf-state.back,
+  .wf-state.failed {
+    color: var(--del);
+  }
+  /* The way back that brought it here, in the red of a failure, with its reason. */
+  .wf-back {
+    color: var(--del);
+  }
+  .wf-back :global(.icon) {
+    flex: none;
+  }
+  .wf-back span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   /* The composer's field, in one line. */
   .bar {
     display: flex;

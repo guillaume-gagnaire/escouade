@@ -119,11 +119,9 @@
     const track = workflows.tracks[project.id]?.[agent.id];
     return track ? stepDividers(top, track.passages, workflows.scans[project.id]?.workflows ?? []) : new Map();
   });
-  /** The Workflow tab, on the workflow of the divider. */
+  /** The diagram of the divider's workflow with the agent's path, over the « Workspace » (ESC-689). */
   function openWorkflow(workflow: string) {
-    workflows.chosen[project.id] = workflow;
-    app.panelTab = 'workflow';
-    if (!docked) app.filesOpen = true;
+    app.openWorkflowDiagram(project.id, workflow, agent.id);
   }
   // The next slice: what « Afficher les N précédents » adds.
   const older = $derived(Math.min(SLICE, start));

@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-499","ESC-530","ESC-561","ESC-589"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-499","ESC-530","ESC-561","ESC-589","ESC-689"]
 decisions: [118,119,120,121,123,124,126,145,147,255,297]
 compared: null
 ---
@@ -21,7 +21,7 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
   - ⚙ (« Commandes de lancement… »), « Configurer » et « ✦ Proposer des commandes » de la section Lancement : la page Lancement du projet ; le dernier lance aussi la lecture du projet (voir *Barre latérale*) ;
   - « ⚙ Après validation » du Kanban : la page Kanban de son projet ;
   - « Les lire » du bandeau du Kanban (commandes de `.escouade.yml` en attente) : la page Équipe de son projet, sur « Réglages partagés » ;
-  - le panneau Workflow (« Réglages du workflow », « Décrire un workflow… », « Ouvrir les réglages du workflow ») : la page Kanban de son projet, sur « Workflow » ;
+  - « Workflows » du Workspace (« Réglages du workflow », « Décrire un workflow… », « Analyser avec un agent… », « Ouvrir les réglages du workflow ») : la page Kanban de son projet, sur « Workflow » ;
   - la fenêtre d'un compte ouverte par « Ajouter un compte réservé… » : en se fermant, la page Confidentialité du projet, son brouillon tel qu'il était ;
   - « Tous les projets fermés… » du menu `+` de la barre des projets : la page Tous les projets ;
   - « Lier une source » et « ⚙ Gérer les sources » de la fenêtre d'import : la page Tickets importés de son projet (voir *Intégrations*) ;
