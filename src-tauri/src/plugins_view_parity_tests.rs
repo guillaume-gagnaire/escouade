@@ -341,6 +341,48 @@ fn played(r: &Recording) -> Value {
     })
 }
 
+/// The steps whose turn the linked translation wrote on one model where the view writes one row by model (`turnModels`,
+/// ESC-691): Copilot's first call ran on mai-code-1.1-flash (`session.usage_record` of `copilot/tui-events.jsonl`), the
+/// linked translation counted it on gpt-6-luna. Each row as the recording says it; their sum is the linked one (ESC-693).
+fn by_model(name: &str, step: usize) -> Option<Value> {
+    let copilot = || {
+        json!([
+            ["gpt-6-luna", 3, 16108, 43, 0.002035],
+            ["mai-code-1.1-flash", 474, 11008, 6, 0.000322],
+        ])
+    };
+    match (name, step) {
+        ("copilot", 40) | ("copilot-hooks", 47) => Some(copilot()),
+        _ => None,
+    }
+}
+
+/// `got`'s `turns` against the linked `want`'s: the same, or the rows of `by_model`, whose sum is `want`'s one row.
+fn same_turns(name: &str, i: usize, got: &mut Value, want: &mut Value) {
+    let Some(rows) = by_model(name, i) else {
+        return;
+    };
+    assert_eq!(got["turns"], rows, "{name}: the turns by model of step {i}");
+    let linked = want["turns"].as_array().unwrap();
+    assert_eq!(linked.len(), 1, "{name}: step {i}");
+    let rows = rows.as_array().unwrap();
+    assert_eq!(
+        rows[0][0], linked[0][0],
+        "{name}: the agent's model of step {i}"
+    );
+    for k in 1..=3 {
+        let sum: u64 = rows.iter().map(|r| r[k].as_u64().unwrap()).sum();
+        assert_eq!(sum, linked[0][k].as_u64().unwrap(), "{name}: step {i}, {k}");
+    }
+    let cost: f64 = rows.iter().map(|r| r[4].as_f64().unwrap()).sum();
+    assert!(
+        (cost - linked[0][4].as_f64().unwrap()).abs() < 2e-6,
+        "{name}: step {i}"
+    );
+    got["turns"] = Value::Null;
+    want["turns"] = Value::Null;
+}
+
 #[test]
 fn each_view_reads_its_recordings_as_the_linked_translation_did() {
     let path = fixtures().join("plugins/parity/view.json");
@@ -364,6 +406,10 @@ fn each_view_reads_its_recordings_as_the_linked_translation_did() {
         for key in ["steps", "conv"] {
             let (got, want) = (got[key].as_array().unwrap(), want[key].as_array().unwrap());
             for (i, (g, w)) in got.iter().zip(want).enumerate() {
+                let (mut g, mut w) = (g.clone(), w.clone());
+                if key == "steps" {
+                    same_turns(name, i, &mut g, &mut w);
+                }
                 assert_eq!(g, w, "{name}: {key} {i}");
             }
             assert_eq!(got.len(), want.len(), "{name}: {key}");

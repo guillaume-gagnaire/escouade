@@ -400,13 +400,18 @@ fn recording(short: &str) -> PathBuf {
 /// the `turn` that follows it, whose usage is their sum.
 fn without_turn_models(step: &mut Value) {
     let text = step.to_string();
-    let Some(items) = step
+    if let Some(items) = step
         .get_mut("answer")
         .and_then(|a| a.get_mut("items"))
         .and_then(Value::as_array_mut)
-    else {
-        return;
-    };
+    {
+        items_without_turn_models(items, &text);
+    }
+}
+
+/// The `items` of a step without their `turnModels`, each checked against the `turn` that follows it: their sum is its
+/// usage (a model left empty is the agent's, as the core reads it). Also read by `plugins_wasm_parity_tests` (ESC-693).
+pub(crate) fn items_without_turn_models(items: &mut Vec<Value>, text: &str) {
     let mut pending: Option<Vec<Value>> = None;
     for item in items.iter() {
         match item["op"].as_str() {
