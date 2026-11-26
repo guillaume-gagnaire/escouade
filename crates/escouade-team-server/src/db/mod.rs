@@ -368,6 +368,22 @@ pub(crate) fn fenced(current: Option<Claim>, fence: &Fence, device: Id) -> Resul
     })
 }
 
+/// What a row with no payload of its own (a ticket's claim) is counted in its team's quota (SR2-04), so that the quota
+/// bounds every row a device makes. An access list counts its devices' bytes; a project's counter and its access row
+/// are one per project, bounded by `max_projects`.
+pub const ROW_BYTES: u64 = 128;
+
+/// How long the token of `init` lasts, in seconds (SR2-11): one use, then none, and 24 hours at most unused.
+pub const TEAM_TOKEN_TTL: i64 = 24 * 3600;
+
+/// The name of an error's kind from its `Debug` (its variant), never its values (SR2-10).
+pub(crate) fn kind_of(debug: &str) -> &str {
+    let end = debug
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .unwrap_or(debug.len());
+    &debug[..end]
+}
+
 /// The bounds a write is checked against, in its transaction.
 #[derive(Clone, Copy, Debug)]
 pub struct Quotas {
@@ -558,7 +574,8 @@ pub trait Store: Send + Sync {
 
     async fn device(&self, id: Id) -> Result<Option<Device>>;
     async fn devices(&self, team: Id) -> Result<Vec<Device>>;
-    /// Revokes a device of `team`; false if it is not one.
+    /// Revokes a device of `team`; false if it is not one. The last administrator not revoked stays (`LastAdmin`,
+    /// SR2-13).
     async fn revoke(&self, team: Id, device: Id, now: i64) -> Result<bool>;
     /// Sets the role of a device of `team` on the server; false if it is not one. The last administrator not revoked
     /// is never made a member (`LastAdmin`).
@@ -673,11 +690,19 @@ pub trait Store: Send + Sync {
     /// Who has access to a project, if the server knows it (TS-6).
     async fn access(&self, team: Id, project: Id) -> Result<Option<Access>>;
     /// Sets who has access to a project: anyone of the team the first time, an administrator afterwards
-    /// (`NotAdmin`).
-    async fn set_access(&self, team: Id, project: Id, access: Access, admin: bool) -> Result<()>;
+    /// (`NotAdmin`). It makes the project known (counted in `max_projects`), its devices' bytes in the quota.
+    async fn set_access(
+        &self,
+        team: Id,
+        project: Id,
+        access: Access,
+        admin: bool,
+        quotas: Quotas,
+    ) -> Result<()>;
     /// Makes a project open to the whole team if the server never heard of it (its first write).
     async fn open_access(&self, team: Id, project: Id) -> Result<()>;
-    /// Takes, renews or gives back a ticket's claim, in one transaction (§4.2).
+    /// Takes, renews or gives back a ticket's claim, in one transaction (§4.2). A new claim makes the project known
+    /// and counts `ROW_BYTES` in the quota (SR2-04).
     #[allow(clippy::too_many_arguments)]
     async fn claim(
         &self,
@@ -688,11 +713,13 @@ pub trait Store: Send + Sync {
         ask: ClaimAsk,
         now: i64,
         lease: i64,
+        quotas: Quotas,
     ) -> Result<Claim>;
     /// A project's claims.
     async fn claims(&self, team: Id, project: Id) -> Result<Vec<Claim>>;
     /// The next number of a project's tickets (§4.1): 1, 2, 3…, one at a time, never twice.
-    async fn next_key(&self, team: Id, project: Id) -> Result<u64>;
+    /// It makes the project known (counted in `max_projects`, SR2-04).
+    async fn next_key(&self, team: Id, project: Id, quotas: Quotas) -> Result<u64>;
 }
 
 /// The bound of a page of entries.

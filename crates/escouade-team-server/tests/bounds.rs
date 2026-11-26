@@ -31,6 +31,10 @@ both!(
     a_revoked_device_does_nothing_more,
     a_device_asking_challenges_without_end_stops_no_other,
     the_pairing_relay_is_bounded_by_address,
+    every_row_counts_in_the_projects_or_the_quota,
+    the_team_token_serves_once_and_expires,
+    the_revoked_devices_leave_the_bound,
+    the_last_administrator_is_not_revoked,
 );
 
 /// SR2-06: a device that asks for challenges without end holds two of them, its newest: its own team's other devices
@@ -710,5 +714,230 @@ async fn the_connections_are_bounded_by_address_and_in_all() {
         answer_or_close(&mut over, Duration::from_secs(5)).await,
         None
     );
+    s.finish().await;
+}
+
+fn project_path(p: &[u8; 16], rest: &str) -> String {
+    format!("/v1/projects/{}{rest}", hex::encode(p))
+}
+
+async fn take_claim(d: &Device, p: &[u8; 16]) -> Answer<ClaimAnswer> {
+    d.client
+        .post(
+            &project_path(p, &format!("/claims/{}", hex::encode(random::<16>()))),
+            &ClaimRequest { expected: None },
+        )
+        .await
+}
+
+async fn next_key(d: &Device, p: &[u8; 16]) -> Answer<KeyNumber> {
+    d.client.post(&project_path(p, "/keys"), &()).await
+}
+
+/// Puts a project's access: the status, and the refusal's code.
+async fn put_access(d: &Device, p: &[u8; 16], access: &AccessWire) -> (StatusCode, String) {
+    let r = d
+        .client
+        .request(Method::PUT, &project_path(p, "/access"))
+        .header("content-type", "application/cbor")
+        .body(escouade_team_server::transport::cbor::encode(access))
+        .send()
+        .await
+        .unwrap();
+    let status = r.status();
+    let body = r.bytes().await.unwrap();
+    let code = ciborium::from_reader::<Problem, _>(body.as_ref())
+        .map(|p| p.error)
+        .unwrap_or_default();
+    (status, code)
+}
+
+async fn used(d: &Device) -> u64 {
+    let usage: Usage = d.client.get("/v1/files/usage").await.ok();
+    usage.used
+}
+
+/// SR2-04: every write that makes a row makes its project known, counted in the team's projects (an unknown project
+/// is refused beyond them, whatever the write), and the rows with no payload count in the team's quota; an access list
+/// names each device once.
+async fn every_row_counts_in_the_projects_or_the_quota(b: Backend) {
+    let s = TestServer::start_with(&b, |c| c.limits.max_projects = 3).await;
+    let alice = s.new_team().await;
+    let bob = s.add_device(&alice).await;
+    // A device listed twice.
+    let twice = AccessWire {
+        everyone: false,
+        devices: vec![
+            serde_bytes::ByteBuf::from(bob.id.clone()),
+            serde_bytes::ByteBuf::from(bob.id.clone()),
+        ],
+    };
+    assert_eq!(
+        put_access(&alice, &random::<16>(), &twice).await,
+        (StatusCode::BAD_REQUEST, "duplicate_device".into())
+    );
+    // A number, a claim, an access: three projects the server did not know, each counted.
+    let before = used(&alice).await;
+    next_key(&alice, &random::<16>()).await.ok();
+    take_claim(&alice, &random::<16>()).await.ok();
+    let once = AccessWire {
+        everyone: false,
+        devices: vec![serde_bytes::ByteBuf::from(bob.id.clone())],
+    };
+    assert_eq!(
+        put_access(&alice, &random::<16>(), &once).await.0,
+        StatusCode::NO_CONTENT
+    );
+    // The claim's row and the access list's bytes are in the team's usage.
+    assert!(used(&alice).await >= before + 128 + 16);
+    // A fourth project is refused, whatever its first write.
+    let fourth = random::<16>();
+    let too_many = |(status, p): (StatusCode, Problem)| {
+        assert_eq!(
+            (status, p.error.as_str()),
+            (StatusCode::FORBIDDEN, "too_many")
+        )
+    };
+    too_many(next_key(&alice, &fourth).await.refused());
+    too_many(take_claim(&alice, &fourth).await.refused());
+    too_many(alice.append_project(&fourth, b"op").await.refused());
+    assert_eq!(
+        put_access(&alice, &fourth, &once).await,
+        (StatusCode::FORBIDDEN, "too_many".into())
+    );
+    s.finish().await;
+
+    // The claims fill the quota like any byte: beyond it, refused.
+    let s = TestServer::start_with(&b, |c| c.limits.team_quota = 300).await;
+    let alice = s.new_team().await;
+    let project = random::<16>();
+    take_claim(&alice, &project).await.ok();
+    take_claim(&alice, &project).await.ok();
+    let (status, p) = take_claim(&alice, &project).await.refused();
+    assert_eq!(
+        (status, p.error.as_str()),
+        (StatusCode::INSUFFICIENT_STORAGE, "quota")
+    );
+    s.finish().await;
+}
+
+/// SR2-11: the token of `init` serves once, and lasts 24 hours: past them, it creates no team.
+async fn the_team_token_serves_once_and_expires(b: Backend) {
+    use escouade_team_server::db::{Quotas, StoreError, TEAM_TOKEN_TTL};
+    use escouade_team_server::util::{now, token_hash};
+    let s = TestServer::start(&b).await;
+    assert_eq!(TEAM_TOKEN_TTL, 24 * 3600);
+    // Once.
+    let token = s.team_token().await;
+    Device::enroll(&s, &token).await.expect("it serves");
+    let (status, p) = Device::enroll(&s, &token).await.err().expect("refused");
+    assert_eq!(
+        (status, p.error.as_str()),
+        (StatusCode::CONFLICT, "token_used")
+    );
+    // Unused, past its 24 hours: refused, as unknown.
+    let token = s.team_token().await;
+    let quotas = Quotas {
+        team_bytes: 1 << 20,
+        devices: 10,
+        projects: 10,
+    };
+    let late = s
+        .server
+        .app()
+        .store
+        .enroll(
+            token_hash(&token),
+            random(),
+            now() + TEAM_TOKEN_TTL + 1,
+            quotas,
+        )
+        .await;
+    assert!(matches!(late, Err(StoreError::BadToken)), "{late:?}");
+    let (status, p) = Device::enroll(&s, &token).await.err().expect("refused");
+    assert_eq!(
+        (status, p.error.as_str()),
+        (StatusCode::UNAUTHORIZED, "bad_token")
+    );
+    s.finish().await;
+}
+
+/// SR2-12: the revoked devices are kept (the history of the team) and leave the bound of its devices: a team that
+/// renews its devices enrols new ones.
+async fn the_revoked_devices_leave_the_bound(b: Backend) {
+    let s = TestServer::start_with(&b, |c| c.limits.max_devices = 2).await;
+    let alice = s.new_team().await;
+    let bob = s.add_device(&alice).await;
+    let token = alice.enrollment_token().await;
+    assert_eq!(
+        Device::enroll(&s, &token).await.err().expect("refused").0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(alice.revoke(&bob).await, StatusCode::NO_CONTENT);
+    let carol = s.add_device(&alice).await;
+    let devices: Devices = alice.client.get("/v1/devices").await.ok();
+    assert_eq!(devices.devices.len(), 3);
+    assert!(devices.devices.iter().any(|d| d.id == bob.id && d.revoked));
+    assert!(devices
+        .devices
+        .iter()
+        .any(|d| d.id == carol.id && !d.revoked));
+    s.finish().await;
+}
+
+async fn set_role(
+    admin: &Device,
+    device: &Device,
+    role: escouade_team_server::db::Role,
+) -> StatusCode {
+    admin
+        .client
+        .request(
+            Method::POST,
+            &format!("/v1/devices/{}/role", device.id_hex()),
+        )
+        .header("content-type", "application/cbor")
+        .body(escouade_team_server::transport::cbor::encode(
+            &RoleRequest { role },
+        ))
+        .send()
+        .await
+        .unwrap()
+        .status()
+}
+
+/// SR2-13: the team's last administrator on the server is not revoked, by itself or another administrator, and is
+/// told why; once another is named, it is.
+async fn the_last_administrator_is_not_revoked(b: Backend) {
+    use escouade_team_server::db::Role;
+    let s = TestServer::start(&b).await;
+    let alice = s.new_team().await;
+    let bob = s.add_device(&alice).await;
+    let (status, body) = alice
+        .client
+        .status(
+            Method::POST,
+            &format!("/v1/devices/{}/revoke", alice.id_hex()),
+            None,
+        )
+        .await;
+    let p: Problem = ciborium::from_reader(body.as_slice()).unwrap();
+    assert_eq!(
+        (status, p.error.as_str()),
+        (StatusCode::CONFLICT, "last_admin")
+    );
+    assert!(p.message.contains("one administrator"), "{}", p.message);
+    // Bob named administrator: Alice goes, then Bob is the last and stays.
+    assert_eq!(
+        set_role(&alice, &bob, Role::Admin).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(bob.revoke(&alice).await, StatusCode::NO_CONTENT);
+    assert_eq!(bob.revoke(&bob).await, StatusCode::CONFLICT);
+    let devices: Devices = bob.client.get("/v1/devices").await.ok();
+    assert!(devices
+        .devices
+        .iter()
+        .any(|d| d.id == bob.id && !d.revoked && d.role == Role::Admin));
     s.finish().await;
 }

@@ -307,8 +307,25 @@ async fn the_signed_challenge_opens_a_short_session(b: Backend) {
     device.sign_in().await.unwrap();
     device.client.get::<Devices>("/v1/devices").await.ok();
 
-    // A revoked device gets no challenge, and its open session is refused.
+    // A revoked device gets no challenge, and its open session is refused. (Another administrator is named first: the
+    // last one is not revoked, SR2-13.)
     let admin = device;
+    let other = s.add_device(&admin).await;
+    let named = admin
+        .client
+        .request(
+            Method::POST,
+            &format!("/v1/devices/{}/role", other.id_hex()),
+        )
+        .header("content-type", "application/cbor")
+        .body(escouade_team_server::transport::cbor::encode(
+            &RoleRequest { role: Role::Admin },
+        ))
+        .send()
+        .await
+        .unwrap()
+        .status();
+    assert_eq!(named, StatusCode::NO_CONTENT);
     assert_eq!(admin.revoke(&admin).await, StatusCode::NO_CONTENT);
     assert_eq!(
         admin

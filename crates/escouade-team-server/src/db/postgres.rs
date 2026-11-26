@@ -242,6 +242,69 @@ async fn holder_ok(
         .is_none_or(|a| a.admits(&holder)))
 }
 
+/// Makes `project` known to the server at its first write of any sort (an entry, its access, a claim, a number),
+/// counted in the team's projects (SR2-04): beyond them, an unknown project is refused. The team's row is locked by the
+/// caller.
+async fn register_project(
+    c: &impl tokio_postgres::GenericClient,
+    team: &Id,
+    project: &Id,
+    quotas: &Quotas,
+) -> Result<()> {
+    let known = c
+        .query_opt(
+            "SELECT 1 FROM projects WHERE team_id = $1 AND id = $2",
+            &[&team.as_slice(), &project.as_slice()],
+        )
+        .await?
+        .is_some();
+    if known {
+        return Ok(());
+    }
+    let n: i64 = c
+        .query_one(
+            "SELECT COUNT(*) FROM projects WHERE team_id = $1",
+            &[&team.as_slice()],
+        )
+        .await?
+        .get(0);
+    if n >= quotas.projects as i64 {
+        return Err(StoreError::TooMany("projects"));
+    }
+    c.execute(
+        "INSERT INTO projects (team_id, id) VALUES ($1, $2)",
+        &[&team.as_slice(), &project.as_slice()],
+    )
+    .await?;
+    Ok(())
+}
+
+/// Counts `bytes` more in the team's quota (fewer when negative), refused beyond it (SR2-04). The team's row is locked
+/// by the caller.
+async fn charge(
+    c: &impl tokio_postgres::GenericClient,
+    team: &Id,
+    bytes: i64,
+    quotas: &Quotas,
+) -> Result<()> {
+    let stored: i64 = c
+        .query_one(
+            "SELECT stored FROM teams WHERE id = $1",
+            &[&team.as_slice()],
+        )
+        .await?
+        .get(0);
+    if bytes > 0 && (stored + bytes) as u64 > quotas.team_bytes {
+        return Err(StoreError::Quota);
+    }
+    c.execute(
+        "UPDATE teams SET stored = GREATEST(stored + $2, 0) WHERE id = $1",
+        &[&team.as_slice(), &bytes],
+    )
+    .await?;
+    Ok(())
+}
+
 pub struct Postgres {
     client: Mutex<Client>,
 }
@@ -251,8 +314,13 @@ fn backend(e: impl std::fmt::Display) -> StoreError {
 }
 
 impl From<tokio_postgres::Error> for StoreError {
+    /// Its code alone, never its text (SR2-10): a `DETAIL` of PostgreSQL can quote the value of a key.
     fn from(e: tokio_postgres::Error) -> Self {
-        backend(e)
+        StoreError::Backend(match e.code() {
+            Some(code) => format!("postgres: SQLSTATE {}", code.code()),
+            None if e.is_closed() => "postgres: the connection is closed".into(),
+            None => "postgres: a client error".into(),
+        })
     }
 }
 
@@ -382,6 +450,13 @@ impl Store for Postgres {
         client
             .batch_execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS handed_by BYTEA")
             .await?;
+        // A base made before the team tokens expired (SR2-11): one not used yet lasts its bound from its making.
+        client
+            .execute(
+                "UPDATE tokens SET expires_at = created_at + $1 WHERE kind = 0 AND expires_at IS NULL",
+                &[&TEAM_TOKEN_TTL],
+            )
+            .await?;
         // A base made before the retention (SR2-01): one snapshot per project, its messages already forgotten. The
         // schema of the search path (a test's own, or the base's).
         let old = client
@@ -494,9 +569,10 @@ impl Store for Postgres {
                 &[&team.as_slice()],
             )
             .await?;
+            // The revoked devices are kept for the history, out of the count (SR2-12).
             let count: i64 = tx
                 .query_one(
-                    "SELECT COUNT(*) FROM devices WHERE team_id = $1",
+                    "SELECT COUNT(*) FROM devices WHERE team_id = $1 AND revoked_at IS NULL",
                     &[&team.as_slice()],
                 )
                 .await?
@@ -561,16 +637,45 @@ impl Store for Postgres {
     }
 
     async fn revoke(&self, team: Id, device: Id, now: i64) -> Result<bool> {
-        let n = self
-            .client
-            .lock()
-            .await
-            .execute(
-                "UPDATE devices SET revoked_at = COALESCE(revoked_at, $3) WHERE id = $1 AND team_id = $2",
-                &[&device.as_slice(), &team.as_slice(), &now],
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await?;
+        // The team's row, locked: two revocations count one after the other.
+        tx.query_opt(
+            "SELECT 1 FROM teams WHERE id = $1 FOR UPDATE",
+            &[&team.as_slice()],
+        )
+        .await?;
+        let Some(row) = tx
+            .query_opt(
+                "SELECT role, revoked_at FROM devices WHERE id = $1 AND team_id = $2",
+                &[&device.as_slice(), &team.as_slice()],
             )
-            .await?;
-        Ok(n == 1)
+            .await?
+        else {
+            return Ok(false);
+        };
+        let role: String = row.get(0);
+        let revoked: Option<i64> = row.get(1);
+        // The team's last administrator on the server stays (SR2-13): another is named first.
+        if Role::parse(&role) == Role::Admin && revoked.is_none() {
+            let admins: i64 = tx
+                .query_one(
+                    "SELECT COUNT(*) FROM devices WHERE team_id = $1 AND role = 'admin' AND revoked_at IS NULL",
+                    &[&team.as_slice()],
+                )
+                .await?
+                .get(0);
+            if admins <= 1 {
+                return Err(StoreError::LastAdmin);
+            }
+        }
+        tx.execute(
+            "UPDATE devices SET revoked_at = COALESCE(revoked_at, $3) WHERE id = $1 AND team_id = $2",
+            &[&device.as_slice(), &team.as_slice(), &now],
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(true)
     }
 
     async fn set_role(&self, team: Id, device: Id, role: Role) -> Result<bool> {
@@ -832,21 +937,7 @@ impl Store for Postgres {
                 let current = match current.map(|c| c.0) {
                     Some(s) => s,
                     None => {
-                        let n: i64 = tx
-                            .query_one(
-                                "SELECT COUNT(*) FROM projects WHERE team_id = $1",
-                                &[&team.as_slice()],
-                            )
-                            .await?
-                            .get(0);
-                        if n >= quotas.projects as i64 {
-                            return Err(StoreError::TooMany("projects"));
-                        }
-                        tx.execute(
-                            "INSERT INTO projects (team_id, id) VALUES ($1, $2)",
-                            &[&team.as_slice(), &project.as_slice()],
-                        )
-                        .await?;
+                        register_project(&tx, &team, &project, &quotas).await?;
                         0
                     }
                 };
@@ -1490,7 +1581,14 @@ impl Store for Postgres {
         access_of(&*client, &team, &project).await
     }
 
-    async fn set_access(&self, team: Id, project: Id, access: Access, admin: bool) -> Result<()> {
+    async fn set_access(
+        &self,
+        team: Id,
+        project: Id,
+        access: Access,
+        admin: bool,
+        quotas: Quotas,
+    ) -> Result<()> {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await?;
         tx.query_one(
@@ -1498,9 +1596,19 @@ impl Store for Postgres {
             &[&team.as_slice()],
         )
         .await?;
-        if access_of(&tx, &team, &project).await?.is_some() && !admin {
+        let before = access_of(&tx, &team, &project).await?;
+        if before.is_some() && !admin {
             return Err(StoreError::NotAdmin);
         }
+        register_project(&tx, &team, &project, &quotas).await?;
+        let was = before.map_or(0, |a| a.devices_bytes().len() as i64);
+        charge(
+            &tx,
+            &team,
+            access.devices_bytes().len() as i64 - was,
+            &quotas,
+        )
+        .await?;
         tx.execute(
             "INSERT INTO project_access (team_id, project_id, everyone, devices) VALUES ($1, $2, $3, $4)
              ON CONFLICT (team_id, project_id) DO UPDATE SET everyone = excluded.everyone, devices = excluded.devices",
@@ -1532,6 +1640,7 @@ impl Store for Postgres {
         ask: ClaimAsk,
         now: i64,
         lease: i64,
+        quotas: Quotas,
     ) -> Result<Claim> {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await?;
@@ -1543,6 +1652,8 @@ impl Store for Postgres {
         .await?;
         let current = claim_of(&tx, &team, &project, &ticket).await?;
         if current.is_none() {
+            register_project(&tx, &team, &project, &quotas).await?;
+            charge(&tx, &team, ROW_BYTES as i64, &quotas).await?;
             let n: i64 = tx
                 .query_one(
                     "SELECT COUNT(*) FROM claims WHERE team_id = $1 AND project_id = $2",
@@ -1586,9 +1697,16 @@ impl Store for Postgres {
             .collect())
     }
 
-    async fn next_key(&self, team: Id, project: Id) -> Result<u64> {
-        let client = self.client.lock().await;
-        let n: i64 = client
+    async fn next_key(&self, team: Id, project: Id, quotas: Quotas) -> Result<u64> {
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await?;
+        tx.query_one(
+            "SELECT 1 FROM teams WHERE id = $1 FOR UPDATE",
+            &[&team.as_slice()],
+        )
+        .await?;
+        register_project(&tx, &team, &project, &quotas).await?;
+        let n: i64 = tx
             .query_one(
                 "INSERT INTO project_keys (team_id, project_id, n) VALUES ($1, $2, 1)
                  ON CONFLICT (team_id, project_id) DO UPDATE SET n = project_keys.n + 1 RETURNING n",
@@ -1596,6 +1714,7 @@ impl Store for Postgres {
             )
             .await?
             .get(0);
+        tx.commit().await?;
         Ok(n as u64)
     }
 }

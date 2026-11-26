@@ -75,7 +75,7 @@ OPTIONS (and their environment variables):
 const HELP_INIT: &str = concat!(
     "\
 escouade-team-server init: create the base (and the files' folder) if they do not exist, then print the
-one-use token that creates a team. Run again, it prints another token, for another team on the same server.
+one-use token that creates a team, good for 24 hours. Run again, it prints another token, for another team on the same server.
 
 USAGE:
     escouade-team-server init [OPTIONS]
@@ -387,7 +387,9 @@ async fn run(args: Args) -> Result<(), String> {
             let token = server.new_team_token().await.map_err(|e| e.to_string())?;
             println!("The base is ready.");
             println!();
-            println!("The token that creates the team (one use, keep it secret until then):");
+            println!(
+                "The token that creates the team (one use, for 24 hours; keep it secret until then):"
+            );
             println!();
             println!("    {token}");
             println!();

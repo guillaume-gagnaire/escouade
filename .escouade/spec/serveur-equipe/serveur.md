@@ -1,9 +1,9 @@
 ---
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md","Revue de sécurité de la 2.3 (ESC-625), SR2-05, SR2-06, SR2-07 : le serveur d'équipe borné"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635","ESC-639","ESC-638"]
-decisions: [167,168,173,178,277,288,286,314,330,332,340]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md","Revue de sécurité de la 2.3 (ESC-625), SR2-05, SR2-06, SR2-07 : le serveur d'équipe borné","Revue de sécurité de la 2.3 (ESC-625), SR2-04, SR2-10 à SR2-13 : quotas, journaux, jeton d'init, révoqués, dernier administrateur"]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635","ESC-639","ESC-638","ESC-642"]
+decisions: [167,168,173,178,277,288,286,314,330,332,340,344]
 compared: null
 ---
 
@@ -16,17 +16,17 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 - Il ne garde que des octets chiffrés de bout en bout (seul mode), et les métadonnées que voici : des ids opaques, les clés publiques des appareils, leurs rôles, les tailles, les heures, l'appareil qui a écrit, le projet auquel un fichier est rattaché, l'empreinte (SHA-256) des jetons d'inscription.
 - Il n'exécute rien (aucun agent, commande, plugin ni harness) et n'a aucune clé de contenu. Il ne voit jamais le secret d'une invitation ni un code court : le lien d'une invitation (`escouade://team/join/…`) ne passe par aucune de ses pages.
 - D'une opération d'un projet, il ne voit que son époque, sa taille, son heure et l'appareil qui l'envoie.
-- Son journal et ses métriques Prometheus ne portent aucun id d'équipe, de projet, d'appareil ni de fichier, aucune adresse, aucun jeton : seulement les modèles des routes, les statuts et des compteurs.
+- Son journal et ses métriques Prometheus ne portent aucun id d'équipe, de projet, d'appareil ni de fichier, aucune adresse, aucun jeton : seulement les modèles des routes, les statuts et des compteurs. **Ses erreurs non plus** (SR2-10) : une erreur de la base n'y dit que sa sorte (son code), jamais son texte, qui peut citer une valeur ; une erreur du stockage S3, que sa sorte (délai, connexion, envoi, corps) ou le statut rendu, jamais l'adresse de la requête, qui porte l'équipe et le fichier.
 
 ## Les appareils et l'entrée
 
 - Un appareil : un id, une clé publique Ed25519, une équipe, un rôle (administrateur ou membre), révoqué ou non. L'id d'un appareil sur le serveur est aussi celui de son identité dans le groupe MLS de l'équipe, mais sa clé pour le serveur n'est pas sa clé MLS.
-- `escouade-team-server init` crée la base et affiche un jeton à usage unique : le premier appareil qui s'inscrit avec crée l'équipe et en devient administrateur.
+- `escouade-team-server init` crée la base et affiche un jeton à usage unique : le premier appareil qui s'inscrit avec crée l'équipe et en devient administrateur. **Le jeton dure 24 heures** (SR2-11), ce que `init` dit en l'affichant : resté dans un terminal ou un historique et jamais servi, il ne crée plus d'équipe ensuite. Une base d'avant donne aussi 24 heures, depuis sa création, à un jeton d'`init` non servi.
 - Un administrateur demande un jeton d'inscription par nouvel appareil (24 h par défaut, 7 jours au plus), ou enregistre l'empreinte d'un jeton qu'il a fait lui-même : celui d'une invitation, dérivé du secret après le `#`.
 - **Un jeton sert une fois** : un second usage est refusé en disant « déjà utilisé » (et non « inconnu »), et noté ; les administrateurs de l'équipe lisent ces seconds usages. Un jeton expiré est inconnu.
 - `escouade-team-server recovery-token --team <id>` affiche un jeton qui inscrit un appareil dans une équipe existante comme administrateur du serveur : pour le détenteur de la clé de secours, le jour où tous les administrateurs ont perdu leurs appareils. Il ne donne aucune clé.
-- Un administrateur révoque un appareil de l'équipe, un appareil se révoque lui-même : ses sessions et ses connexions en direct se ferment aussitôt.
-- Un administrateur change le rôle d'un appareil sur le serveur : c'est ainsi que les rôles du serveur suivent le registre de l'équipe. Le dernier administrateur non révoqué ne devient jamais membre.
+- Un administrateur révoque un appareil de l'équipe, un appareil se révoque lui-même : ses sessions et ses connexions en direct se ferment aussitôt. **L'appareil révoqué reste listé**, pour l'histoire de l'équipe, mais ne compte plus dans ses 500 appareils (SR2-12) : une équipe qui renouvelle ses postes en inscrit toujours.
+- Un administrateur change le rôle d'un appareil sur le serveur : c'est ainsi que les rôles du serveur suivent le registre de l'équipe. **Le dernier administrateur non révoqué ne devient jamais membre et n'est jamais révoqué**, ni par lui-même ni par un autre administrateur (SR2-13) : le serveur refuse (`409 last_admin`) en disant qu'une équipe garde un administrateur sur le serveur ; on en nomme un autre d'abord. Sans cela, l'équipe n'aurait plus personne pour inviter ou restreindre un projet jusqu'à un jeton de récupération de l'opérateur.
 
 ## L'appairage par code court
 
@@ -72,6 +72,7 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 - Poignée de main des versions : le serveur accepte la version du client et la précédente ; une plus vieille est refusée avec « Mets Escouade à jour », une plus récente dit que le serveur est en retard.
 - Une limite de débit par adresse et par appareil (429 et `Retry-After`). Une adresse IPv6 compte par son préfixe /64 : changer d'adresse dans le sien ne change rien.
 - Des tailles bornées partout ; une longueur annoncée trop grande est refusée avant d'être lue.
+- **Chaque ligne qu'un appareil fait compte** (SR2-04) : un projet est connu du serveur dès sa première écriture, quelle qu'elle soit (une entrée de son flux, son accès, une prise de ticket, un numéro de ticket), et compte dès lors dans les 10 000 projets de l'équipe ; au-delà, un projet inconnu est refusé (`403 too_many`), quelle que soit l'écriture. Une prise compte 128 octets dans le quota de l'équipe, une liste d'accès les octets de ses appareils, et chaque appareil n'y figure qu'une fois (`400 duplicate_device`) ; le compteur des numéros et l'accès d'un projet sont une ligne par projet. Ainsi le quota borne tout ce qu'un membre (ou un agent détourné) fait grossir, et il ne remplit pas le disque des autres équipes du serveur.
 - **Des délais** (SR2-07) : l'en-tête d'une requête est lu en 15 secondes ; son corps arrive en entier en 30 secondes, plus le temps de sa longueur à 64 Kio par seconde (environ 7 minutes pour un fichier de 25 Mio), sinon `408` et la connexion se ferme ; une connexion où rien ne passe, dans un sens comme dans l'autre, pendant 60 secondes se ferme.
 - **Un nombre de connexions plafonné** (SR2-07) : 8 192 ouvertes à la fois, et 512 d'une même adresse (une adresse IPv6 par son /64). Au-delà, une nouvelle connexion est fermée dès qu'elle est acceptée, et comptée dans les métriques. Un WebSocket compte jusqu'à sa fermeture. Derrière un proxy de confiance (`--trust-proxy`), seul le plafond global tient, puisque toutes les connexions viennent du proxy.
 - TLS par rustls avec un certificat donné, ou derrière un proxy inverse (Caddy dans l'exemple, Traefik sous Coolify). **Joignable depuis Internet, le serveur reste derrière le proxy** : la doc d'installation le dit, le proxy encaisse d'abord les connexions lentes ou trop nombreuses ; TLS par le serveur lui-même est pour un réseau privé.

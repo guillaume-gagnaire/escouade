@@ -136,9 +136,10 @@ async fn a_file_follows_the_access_of_its_project(s: TestServer) {
         StatusCode::FORBIDDEN
     );
 
-    // The place of what was deleted came back.
+    // The place of what was deleted came back; the access list of the project kept to two devices counts their ids
+    // (SR2-04).
     let usage: Usage = admin.client.get("/v1/files/usage").await.ok();
-    assert_eq!(usage.used, 7 + 2);
+    assert_eq!(usage.used, 7 + 2 + 2 * 16);
     s.finish().await;
 }
 

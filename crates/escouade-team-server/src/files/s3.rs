@@ -21,6 +21,23 @@ fn err(e: impl std::fmt::Display) -> BlobError {
     BlobError(e.to_string())
 }
 
+/// An error of the request, said by its kind alone (SR2-10): its URL holds the team's and the file's ids, which never go
+/// to the logs.
+fn net(e: reqwest::Error) -> BlobError {
+    let kind = if e.is_timeout() {
+        "timed out"
+    } else if e.is_connect() {
+        "could not connect"
+    } else if e.is_body() || e.is_decode() {
+        "broke off in the body"
+    } else if e.is_request() {
+        "could not be sent"
+    } else {
+        "failed"
+    };
+    BlobError(format!("the S3 request {kind}"))
+}
+
 fn hmac(key: &[u8], data: &[u8]) -> [u8; 32] {
     let mut mac = Hmac::<Sha256>::new_from_slice(key).expect("HMAC takes any key");
     mac.update(data);
@@ -161,7 +178,7 @@ impl S3 {
         if let Some(body) = body {
             request = request.body(body);
         }
-        request.send().await.map_err(err)
+        request.send().await.map_err(net)
     }
 }
 
@@ -183,7 +200,7 @@ impl Blobs for S3 {
     async fn get(&self, team: &Id, file: &Id) -> Result<Option<Bytes>, BlobError> {
         let r = self.send(reqwest::Method::GET, team, file, None).await?;
         match r.status().as_u16() {
-            200 => Ok(Some(r.bytes().await.map_err(err)?)),
+            200 => Ok(Some(r.bytes().await.map_err(net)?)),
             404 => Ok(None),
             s => Err(BlobError(format!("S3 GET answered {s}"))),
         }
@@ -240,5 +257,46 @@ mod tests {
             amz_date(UNIX_EPOCH + Duration::from_secs(951_782_400 + 3_723)),
             "20000229T010203Z"
         );
+    }
+}
+
+#[cfg(test)]
+mod logs {
+    use super::*;
+
+    /// SR2-10: a store that cannot be reached gives an error that names neither the team nor the file (its URL holds
+    /// both), so the log that writes it holds no id.
+    #[tokio::test]
+    async fn an_unreachable_store_names_no_id() {
+        // A port nobody listens on: the connection is refused at once.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let s3 = S3::new(S3Config {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            bucket: "bucket".into(),
+            region: "us-east-1".into(),
+            access_key: "key".into(),
+            secret_key: "secret".into(),
+            prefix: "team-server/".into(),
+        })
+        .unwrap();
+        let (team, file) = ([0xab; 16], [0xcd; 16]);
+        let errors = [
+            s3.put(&team, &file, Bytes::from_static(b"x"))
+                .await
+                .unwrap_err(),
+            s3.get(&team, &file).await.unwrap_err(),
+            s3.delete(&team, &file).await.unwrap_err(),
+        ];
+        for e in errors {
+            let text = e.to_string();
+            assert!(!text.contains(&hex::encode(team)), "{text}");
+            assert!(!text.contains(&hex::encode(file)), "{text}");
+            assert!(!text.contains("127.0.0.1"), "{text}");
+            assert!(text.contains("could not connect"), "{text}");
+        }
     }
 }

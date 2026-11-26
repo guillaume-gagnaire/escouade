@@ -1190,6 +1190,13 @@ pub async fn put_access(
                 "a device listed is not of this team",
             ));
         }
+        // Each device once (SR2-04): the list is the team's, not a place to fill.
+        if devices.contains(&id) {
+            return Err(Problem::bad_request(
+                "duplicate_device",
+                "a device is listed twice",
+            ));
+        }
         devices.push(id);
     }
     app.store
@@ -1201,6 +1208,7 @@ pub async fn put_access(
                 devices,
             },
             authed.is_admin(),
+            app.quotas(),
         )
         .await
         .map_err(store_problem)?;
@@ -1236,6 +1244,7 @@ async fn claim_ask(
             ask,
             at,
             lease,
+            app.quotas(),
         )
         .await
         .map_err(|e| {
@@ -1383,7 +1392,7 @@ pub async fn next_key(
     may(&app, &authed, &project).await?;
     let n = app
         .store
-        .next_key(authed.device.team, project)
+        .next_key(authed.device.team, project, app.quotas())
         .await
         .map_err(store_problem)?;
     Ok(Cbor(KeyNumber { n }))

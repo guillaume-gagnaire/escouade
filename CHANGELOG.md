@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : sur le serveur d’équipe, un membre ne peut plus faire grossir la base sans fin hors du quota de son équipe : tout ce qu’il écrit compte dans ses projets ou son quota. Le jeton d’`init` expire après 24 h, un appareil révoqué ne prend plus de place parmi les 500 de l’équipe, le dernier administrateur ne peut plus être révoqué, et les journaux du serveur ne portent plus d’id d’équipe ni de fichier.
 - Stats : ce qu’un sous-agent de Copilot CLI, de Codex ou d’OpenCode consomme sur un autre modèle que son agent compte maintenant pour ce modèle, au bon prix chez Codex, et toujours une seule fois dans les totaux de l’agent. Le travail d’un sous-agent de Copilot que le plugin a perdu de vue en redémarrant n’est plus oublié.
 - Sécurité : sur le serveur d’équipe, un fichier (document, image, conversation passée) ne se lit plus que par les appareils qui ont accès à son projet, et seuls son auteur ou un administrateur l’effacent. Les fichiers posés avant restent à leur auteur et aux administrateurs jusqu’à ce que l’un d’eux les rouvre dans leur projet.
 - Sécurité : derrière un proxy, ton serveur refuse une requête qui se présente sous deux noms à la fois (deux en-têtes `Host` ou `Origin`, ou une adresse qui en nomme un autre), pour que le proxy et le serveur lisent toujours le même.

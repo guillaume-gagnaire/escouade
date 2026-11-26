@@ -216,6 +216,52 @@ fn holder_ok(c: &Connection, team: &Id, project: &Id, holder: Option<Id>) -> Res
     Ok(access_of(c, team, project)?.is_none_or(|a| a.admits(&holder)))
 }
 
+/// Makes `project` known to the server at its first write of any sort (an entry, its access, a claim, a number),
+/// counted in the team's projects (SR2-04): beyond them, an unknown project is refused.
+fn register_project(c: &Connection, team: &Id, project: &Id, quotas: &Quotas) -> Result<()> {
+    let known = c
+        .query_row(
+            "SELECT 1 FROM projects WHERE team_id = ?1 AND id = ?2",
+            params![team.as_slice(), project.as_slice()],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    if known {
+        return Ok(());
+    }
+    let n: i64 = c.query_row(
+        "SELECT COUNT(*) FROM projects WHERE team_id = ?1",
+        [team.as_slice()],
+        |r| r.get(0),
+    )?;
+    if n >= quotas.projects as i64 {
+        return Err(StoreError::TooMany("projects"));
+    }
+    c.execute(
+        "INSERT INTO projects (team_id, id) VALUES (?1, ?2)",
+        params![team.as_slice(), project.as_slice()],
+    )?;
+    Ok(())
+}
+
+/// Counts `bytes` more in the team's quota (fewer when negative), refused beyond it (SR2-04).
+fn charge(c: &Connection, team: &Id, bytes: i64, quotas: &Quotas) -> Result<()> {
+    let stored: i64 = c.query_row(
+        "SELECT stored FROM teams WHERE id = ?1",
+        [team.as_slice()],
+        |r| r.get(0),
+    )?;
+    if bytes > 0 && (stored + bytes) as u64 > quotas.team_bytes {
+        return Err(StoreError::Quota);
+    }
+    c.execute(
+        "UPDATE teams SET stored = MAX(stored + ?2, 0) WHERE id = ?1",
+        params![team.as_slice(), bytes],
+    )?;
+    Ok(())
+}
+
 pub struct Sqlite {
     conn: Arc<Mutex<Connection>>,
 }
@@ -225,8 +271,14 @@ fn backend(e: impl std::fmt::Display) -> StoreError {
 }
 
 impl From<rusqlite::Error> for StoreError {
+    /// Its kind alone, never its text (SR2-10): SQLite's can quote a value of the request.
     fn from(e: rusqlite::Error) -> Self {
-        backend(e)
+        StoreError::Backend(match &e {
+            rusqlite::Error::SqliteFailure(f, _) => {
+                format!("sqlite: {:?} ({})", f.code, f.extended_code)
+            }
+            other => format!("sqlite: {}", kind_of(&format!("{other:?}"))),
+        })
     }
 }
 
@@ -397,6 +449,11 @@ impl Store for Sqlite {
                     c.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {kind}"))?;
                 }
             }
+            // A base made before the team tokens expired (SR2-11): one not used yet lasts its bound from its making.
+            c.execute(
+                "UPDATE tokens SET expires_at = created_at + ?1 WHERE kind = 0 AND expires_at IS NULL",
+                [TEAM_TOKEN_TTL],
+            )?;
             // One commit holds an epoch, the ones declared null aside (SR2-02).
             c.execute_batch(
                 "DROP INDEX IF EXISTS team_commits;
@@ -495,7 +552,12 @@ impl Store for Sqlite {
             } else {
                 let team = id_of(team.ok_or(StoreError::BadToken)?)?;
                 let count: i64 =
-                    tx.query_row("SELECT COUNT(*) FROM devices WHERE team_id = ?1", [team.as_slice()], |r| r.get(0))?;
+                    // The revoked devices are kept for the history, out of the count (SR2-12).
+                    tx.query_row(
+                        "SELECT COUNT(*) FROM devices WHERE team_id = ?1 AND revoked_at IS NULL",
+                        [team.as_slice()],
+                        |r| r.get(0),
+                    )?;
                 if count >= quotas.devices as i64 {
                     return Err(StoreError::TooMany("devices"));
                 }
@@ -552,11 +614,34 @@ impl Store for Sqlite {
 
     async fn revoke(&self, team: Id, device: Id, now: i64) -> Result<bool> {
         self.run(move |c| {
-            let n = c.execute(
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let current: Option<(String, Option<i64>)> = tx
+                .query_row(
+                    "SELECT role, revoked_at FROM devices WHERE id = ?1 AND team_id = ?2",
+                    params![device.as_slice(), team.as_slice()],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            let Some((role, revoked)) = current else {
+                return Ok(false);
+            };
+            // The team's last administrator on the server stays (SR2-13): another is named first.
+            if Role::parse(&role) == Role::Admin && revoked.is_none() {
+                let admins: i64 = tx.query_row(
+                    "SELECT COUNT(*) FROM devices WHERE team_id = ?1 AND role = 'admin' AND revoked_at IS NULL",
+                    [team.as_slice()],
+                    |r| r.get(0),
+                )?;
+                if admins <= 1 {
+                    return Err(StoreError::LastAdmin);
+                }
+            }
+            tx.execute(
                 "UPDATE devices SET revoked_at = COALESCE(revoked_at, ?3) WHERE id = ?1 AND team_id = ?2",
                 params![device.as_slice(), team.as_slice(), now],
             )?;
-            Ok(n == 1)
+            tx.commit()?;
+            Ok(true)
         })
         .await
     }
@@ -777,18 +862,7 @@ impl Store for Sqlite {
                     let current = match current.map(|c| c.0) {
                         Some(s) => s,
                         None => {
-                            let n: i64 = tx.query_row(
-                                "SELECT COUNT(*) FROM projects WHERE team_id = ?1",
-                                [team.as_slice()],
-                                |r| r.get(0),
-                            )?;
-                            if n >= quotas.projects as i64 {
-                                return Err(StoreError::TooMany("projects"));
-                            }
-                            tx.execute(
-                                "INSERT INTO projects (team_id, id) VALUES (?1, ?2)",
-                                params![team.as_slice(), project.as_slice()],
-                            )?;
+                            register_project(&tx, &team, &project, &quotas)?;
                             0
                         }
                     };
@@ -1403,12 +1477,28 @@ impl Store for Sqlite {
         self.run(move |c| access_of(c, &team, &project)).await
     }
 
-    async fn set_access(&self, team: Id, project: Id, access: Access, admin: bool) -> Result<()> {
+    async fn set_access(
+        &self,
+        team: Id,
+        project: Id,
+        access: Access,
+        admin: bool,
+        quotas: Quotas,
+    ) -> Result<()> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            if access_of(&tx, &team, &project)?.is_some() && !admin {
+            let before = access_of(&tx, &team, &project)?;
+            if before.is_some() && !admin {
                 return Err(StoreError::NotAdmin);
             }
+            register_project(&tx, &team, &project, &quotas)?;
+            let was = before.map_or(0, |a| a.devices_bytes().len() as i64);
+            charge(
+                &tx,
+                &team,
+                access.devices_bytes().len() as i64 - was,
+                &quotas,
+            )?;
             tx.execute(
                 "INSERT INTO project_access (team_id, project_id, everyone, devices) VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT (team_id, project_id) DO UPDATE SET everyone = excluded.everyone, devices = excluded.devices",
@@ -1440,11 +1530,14 @@ impl Store for Sqlite {
         ask: ClaimAsk,
         now: i64,
         lease: i64,
+        quotas: Quotas,
     ) -> Result<Claim> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let current = claim_of(&tx, &team, &project, &ticket)?;
             if current.is_none() {
+                register_project(&tx, &team, &project, &quotas)?;
+                charge(&tx, &team, ROW_BYTES as i64, &quotas)?;
                 let n: i64 = tx.query_row(
                     "SELECT COUNT(*) FROM claims WHERE team_id = ?1 AND project_id = ?2",
                     params![team.as_slice(), project.as_slice()],
@@ -1483,9 +1576,10 @@ impl Store for Sqlite {
         .await
     }
 
-    async fn next_key(&self, team: Id, project: Id) -> Result<u64> {
+    async fn next_key(&self, team: Id, project: Id, quotas: Quotas) -> Result<u64> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            register_project(&tx, &team, &project, &quotas)?;
             tx.execute(
                 "INSERT INTO project_keys (team_id, project_id, n) VALUES (?1, ?2, 1)
                  ON CONFLICT (team_id, project_id) DO UPDATE SET n = n + 1",
@@ -1576,6 +1670,10 @@ mod tests {
         store
             .run(move |c| {
                 let tx = c.transaction()?;
+                tx.execute(
+                    "INSERT INTO teams (id, created_at) VALUES (?1, 0)",
+                    [team.as_slice()],
+                )?;
                 {
                     let mut insert = tx.prepare(
                         "INSERT INTO claims (team_id, project_id, ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder)
@@ -1593,8 +1691,13 @@ mod tests {
             .await
             .unwrap();
         let take = ClaimAsk::Take { expected: None };
+        let quotas = Quotas {
+            team_bytes: 1 << 30,
+            devices: 500,
+            projects: 10,
+        };
         let refused = store
-            .claim(team, project, [9; 16], device, take, 10, 600)
+            .claim(team, project, [9; 16], device, take, 10, 600, quotas)
             .await;
         assert!(
             matches!(refused, Err(StoreError::TooMany("claims"))),
@@ -1602,8 +1705,29 @@ mod tests {
         );
         // Another project has its own count.
         assert!(store
-            .claim(team, [5; 16], [9; 16], device, take, 10, 600)
+            .claim(team, [5; 16], [9; 16], device, take, 10, 600, quotas)
             .await
             .is_ok());
+    }
+
+    /// SR2-10: an error of the base is told by its kind alone, never by its text, which can quote a value of the
+    /// request (an id).
+    #[tokio::test]
+    async fn an_error_of_the_base_quotes_no_value() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Sqlite::open(&dir.path().join("team.db")).unwrap();
+        store.migrate().await.unwrap();
+        let id = "abababababababababababababababab";
+        let e = store
+            .run(move |c| {
+                c.execute(&format!("INSERT INTO nowhere VALUES (x'{id}')"), [])?;
+                Ok(())
+            })
+            .await
+            .unwrap_err();
+        let text = e.to_string();
+        assert!(!text.contains(id), "{text}");
+        assert!(!text.contains("nowhere"), "{text}");
+        assert!(text.starts_with("the base: sqlite: "), "{text}");
     }
 }

@@ -113,6 +113,9 @@ Il peut donc écouter en HTTPS. Les défenses :
 - aucune route sans authentification, sauf l'entrée par une invitation ;
 - une limite de débit par adresse (une adresse IPv6 par son /64) et par appareil ;
 - **des bornes partout** (SR2-05 à SR2-07, ESC-639) : les défis en attente comptés par appareil (deux, le plus récent l'emporte) et par équipe (1 024), les sessions par appareil (huit), si bien qu'une équipe n'empêche jamais les autres de se connecter ; un délai pour l'en-tête (15 s), pour le corps (30 s plus sa longueur à 64 Kio/s) et pour une connexion muette (60 s) ; un plafond des connexions ouvertes, global (8 192) et par adresse (512) ; le relais d'appairage avec un créneau parmi 33 millions, un débit à lui par adresse et la réponse prise par le seul jeton de l'essai (128 bits) ;
+- **chaque ligne comptée** (SR2-04, ESC-642) : un projet est connu du serveur dès sa première écriture, quelle qu'elle soit (une entrée, son accès, une prise, un numéro de ticket), et compte dès lors dans les 10 000 projets de l'équipe : au-delà, un projet inconnu est refusé. Une prise compte dans le quota de l'équipe (128 octets), une liste d'accès les octets de ses appareils, chacun une fois. Ainsi le quota borne tout ce qu'un membre fait grossir, et un membre ne remplit pas le disque des autres équipes ;
+- **des journaux sans identifiant** (SR2-10) : une erreur de la base n'y dit que sa sorte (son code), une erreur du stockage S3 que sa sorte ou le statut rendu, jamais une valeur ni l'URL qui porte l'équipe et le fichier ;
+- **un jeton d'`init` à usage unique qui expire** (SR2-11) : 24 h, dites à sa création ; resté dans un terminal ou un historique, il ne crée plus d'équipe ensuite ;
 - TLS par un proxy inverse (Caddy, Traefik, nginx), **à garder devant un serveur joignable depuis Internet** : il encaisse d'abord les connexions lentes ou trop nombreuses ; ou par rustls, plutôt sur un réseau privé ;
 - et, en option, derrière le VPN de l'entreprise.
 
@@ -165,6 +168,8 @@ Chaque projet d'équipe est un **journal d'opérations** : « créer le ticket X
   - **lecteur** : une MOA qui lit et commente, sans lancer d'agent sur les projets de l'équipe.
 
   Ce sont des rôles par équipe, avec des accès par projet : un projet peut être limité à une partie des membres.
+
+  **Une équipe garde un administrateur sur le serveur** (SR2-13, ESC-642) : le dernier administrateur non révoqué ne devient pas membre et n'est pas révoqué, ni par lui-même ni par un autre (`409 last_admin`, avec sa raison) ; on en nomme un autre d'abord. Sans cela, l'équipe n'aurait plus personne pour inviter ou restreindre un projet jusqu'à un jeton de récupération de l'opérateur. **Les appareils révoqués** restent listés, pour l'histoire de l'équipe, mais ne comptent plus dans ses 500 appareils (SR2-12) : une équipe qui renouvelle ses postes en inscrit toujours.
 - **Qui fait respecter les droits** :
   - le chiffrement (§3) : sans la clé d'un projet, son contenu ne se lit pas ;
   - le serveur, en défense en profondeur : il ne sert les objets d'un projet qu'aux appareils qui y ont accès, et refuse une écriture d'un lecteur.

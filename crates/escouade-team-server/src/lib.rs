@@ -103,17 +103,19 @@ impl Server {
         &self.app
     }
 
-    /// A one-use token that creates a team and its first device (`init`). Only its SHA-256 is kept.
+    /// A one-use token that creates a team and its first device (`init`). Only its SHA-256 is kept. It lasts
+    /// `db::TEAM_TOKEN_TTL` (24 hours, SR2-11): one shown in a terminal and never served creates nothing afterwards.
     pub async fn new_team_token(&self) -> Result<String, Error> {
         let token = util::new_token();
+        let now = util::now();
         self.app
             .store
             .add_token(
                 util::token_hash(&token),
                 TokenKind::Team,
                 None,
-                None,
-                util::now(),
+                Some(now + db::TEAM_TOKEN_TTL),
+                now,
             )
             .await?;
         Ok(token)
