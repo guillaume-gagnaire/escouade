@@ -226,6 +226,12 @@ impl Server {
             )
             .route("/v1/snapshots/unreadable", get(api::unreadable_snapshots))
             .route("/v1/dropped", get(api::dropped))
+            .route(
+                "/v1/projects/{project}/files/{file}",
+                get(api::get_project_file)
+                    .put(api::put_project_file)
+                    .delete(api::delete_project_file),
+            )
             .route("/v1/files/usage", get(api::usage))
             .route(
                 "/v1/files/{file}",

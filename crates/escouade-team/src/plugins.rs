@@ -851,7 +851,10 @@ pub async fn files(
     module_sha256: Option<&str>,
 ) -> Result<(Vec<u8>, Option<Vec<u8>>), Error> {
     let gone = || Error::Refused("the server no longer has this version's files".into());
-    let a = team.get_file(ObjectId(archive)).await?.ok_or_else(gone)?;
+    let a = team
+        .get_file(PLUGINS_STREAM, ObjectId(archive))
+        .await?
+        .ok_or_else(gone)?;
     if hex::encode(Sha256::digest(&a)) != archive_sha256 {
         return Err(Error::Refused(
             "the archive the server gave is not the one signed".into(),
@@ -859,7 +862,10 @@ pub async fn files(
     }
     let m = match module {
         Some(id) => {
-            let bytes = team.get_file(ObjectId(id)).await?.ok_or_else(gone)?;
+            let bytes = team
+                .get_file(PLUGINS_STREAM, ObjectId(id))
+                .await?
+                .ok_or_else(gone)?;
             if Some(hex::encode(Sha256::digest(&bytes)).as_str()) != module_sha256 {
                 return Err(Error::Refused(
                     "the module the server gave is not the one signed".into(),

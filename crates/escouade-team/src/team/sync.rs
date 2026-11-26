@@ -608,10 +608,11 @@ impl Team {
     /// A document put by [`Team::put_document`], opened with its key: None when the server has no such file.
     pub async fn get_document(
         &mut self,
+        project: ProjectId,
         file: ObjectId,
         key: &[u8; 32],
     ) -> Result<Option<Vec<u8>>, Error> {
-        let Some(blob) = self.get_file(file).await? else {
+        let Some(blob) = self.get_file(project, file).await? else {
             return Ok(None);
         };
         if blob.len() < 24 {

@@ -1702,6 +1702,8 @@ export interface TeamHandoff {
   agent: string;
   at: number;
   agentId: string | null;
+  /** The passage's deposit on the team server (hex): its author erases it once the offer is over (SR2-03). */
+  file?: string;
 }
 
 /** Whom an agent can be passed to (TS-17). */

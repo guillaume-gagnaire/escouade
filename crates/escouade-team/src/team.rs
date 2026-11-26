@@ -2585,23 +2585,31 @@ impl Team {
         plaintext: &[u8],
     ) -> Result<(), Error> {
         let sealed = self.device.seal(project, file, 1, plaintext)?;
-        Ok(self.client.put_file(&file.0, wire::encode(&sealed)).await?)
+        Ok(self
+            .client
+            .put_file(&project.0, &file.0, wire::encode(&sealed))
+            .await?)
     }
 
-    /// A file, opened; None when the server has none.
-    pub async fn get_file(&mut self, file: ObjectId) -> Result<Option<Vec<u8>>, Error> {
-        let Some(bytes) = self.client.get_file(&file.0).await? else {
+    /// A file of `project`, opened; None when the server has none there.
+    pub async fn get_file(
+        &mut self,
+        project: ProjectId,
+        file: ObjectId,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        let Some(bytes) = self.client.get_file(&project.0, &file.0).await? else {
             return Ok(None);
         };
         let sealed: SealedObject = wire::decode(&bytes).map_err(Error::Encoding)?;
-        if sealed.header.object != file {
+        if sealed.header.object != file || sealed.header.project != project {
             return Err(Error::Refused("the server gave another file".into()));
         }
         Ok(Some(self.device.open(&sealed)?))
     }
 
-    pub async fn delete_file(&mut self, file: ObjectId) -> Result<(), Error> {
-        Ok(self.client.delete_file(&file.0).await?)
+    /// Deletes a file of `project`: the server lets its author or an administrator alone.
+    pub async fn delete_file(&mut self, project: ProjectId, file: ObjectId) -> Result<(), Error> {
+        Ok(self.client.delete_file(&project.0, &file.0).await?)
     }
 }
 

@@ -168,6 +168,7 @@ Chaque projet d'équipe est un **journal d'opérations** : « créer le ticket X
 - **Qui fait respecter les droits** :
   - le chiffrement (§3) : sans la clé d'un projet, son contenu ne se lit pas ;
   - le serveur, en défense en profondeur : il ne sert les objets d'un projet qu'aux appareils qui y ont accès, et refuse une écriture d'un lecteur.
+- **Les fichiers chiffrés** (documents, images, conversations passées, dépôts d'une passation, archives du store privé) suivent la même règle (SR2-03, ESC-638). Chacun est rattaché à sa pose à un projet, ou à l'équipe par l'un de ses propres flux (`/v1/projects/{p}/files/{f}`). Il se lit selon les droits de ce projet, et seuls l'appareil qui l'a posé et les administrateurs l'effacent : l'effacement est définitif. Un fichier posé avant, ou par l'ancienne route `/v1/files/{f}` gardée une version, n'est rattaché à rien : son auteur et les administrateurs le lisent seuls, et leur lecture sous un projet l'y rattache. La migration n'ouvre donc rien de plus qu'avant. Le dépôt d'une passation (§11) est effacé par qui passe la main, quand l'offre est finie.
 
 **Choix C3 : l'entrée par l'annuaire de l'entreprise (OIDC : Entra ID, Google, Keycloak).**
 - **A. Sans annuaire** : on entre par invitation (§3.3), et on sort quand un administrateur retire le membre. Coût : rien de plus.

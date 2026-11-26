@@ -221,7 +221,9 @@ test('an administrator lists a project, the other client clones it from the wiza
   await expect(site).toContainText('Ici « site-local », dans la liste « Site ACME » : ton nom et ton logo restent.');
   await shots(page, 'team-projects-member');
   await site.getByRole('button', { name: 'Rattacher à l’équipe' }).click();
-  await expect(site.getByText('Projet de l’équipe', { exact: true })).toBeVisible();
+  // The attachment reads the team's list, then matches each project's remotes (a `git` per remote, twice: the match,
+  // then the view): on a loaded machine a `git remote` alone takes up to 5 s, more than the 15 s of an expect together.
+  await expect(site.getByText('Projet de l’équipe', { exact: true })).toBeVisible({ timeout: 45_000 });
 
   // « Cloner » on « Acme API »: the wizard, the address whole before the clone.
   const elsewhere = dialog.getByRole('region', { name: 'À cloner' });

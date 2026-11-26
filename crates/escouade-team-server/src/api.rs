@@ -1610,13 +1610,59 @@ pub async fn unreadable_snapshots(
     }))
 }
 
-pub async fn put_file(
-    State(app): State<Shared>,
+// The files (SR2-03). Each is attached to a project at its putting (or to the team, under one of `TEAM_STREAMS`): it
+// is read by the devices that have access to that project, as its stream, and deleted by the device that put it or an
+// administrator. A file attached to nothing (put by the old route, or before SR2-03) is its author's and the
+// administrators' alone, until one of them reads it under a project, which attaches it there.
+
+/// Whether `file` may be read under `project` (None: the old route), attaching it to `project` when it is attached to
+/// nothing and the device may: its author or an administrator. A file of another project is not found under this one.
+async fn readable(
+    app: &Shared,
+    authed: &Authed,
+    project: Option<Id>,
+    file: Id,
+) -> Result<(), Problem> {
+    let team = authed.device.team;
+    if let Some(p) = &project {
+        may(app, authed, p).await?;
+    }
+    let stored = app
+        .store
+        .file(team, file)
+        .await
+        .map_err(store_problem)?
+        .ok_or_else(Problem::not_found)?;
+    match (stored.project, project) {
+        (Some(attached), Some(asked)) if attached == asked => Ok(()),
+        (Some(_), Some(_)) => Err(Problem::not_found()),
+        (Some(attached), None) => may(app, authed, &attached).await,
+        (None, asked) => {
+            if stored.device != authed.device.id && !authed.is_admin() {
+                // Not found rather than refused: the old files stay out of sight of the others until attached.
+                return Err(Problem::not_found());
+            }
+            if let Some(asked) = asked {
+                app.store
+                    .attach_file(team, file, asked)
+                    .await
+                    .map_err(store_problem)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+async fn put_file_in(
+    app: Shared,
     authed: Authed,
-    Path(file): Path<String>,
+    project: Option<Id>,
+    file: Id,
     req: Request,
 ) -> Result<StatusCode, Problem> {
-    let file = path_id(&file)?;
+    if let Some(p) = &project {
+        may(&app, &authed, p).await?;
+    }
     let max = app.limits.max_file;
     let bytes: Bytes = body::read(req, max).await?;
     if bytes.is_empty() {
@@ -1627,6 +1673,7 @@ pub async fn put_file(
         .reserve_file(
             team,
             file,
+            project,
             bytes.len() as u64,
             authed.device.id,
             now(),
@@ -1647,25 +1694,16 @@ pub async fn put_file(
     Ok(StatusCode::CREATED)
 }
 
-pub async fn get_file(
-    State(app): State<Shared>,
+async fn get_file_in(
+    app: Shared,
     authed: Authed,
-    Path(file): Path<String>,
+    project: Option<Id>,
+    file: Id,
 ) -> Result<Response, Problem> {
-    let file = path_id(&file)?;
-    let team = authed.device.team;
-    if app
-        .store
-        .file_size(team, file)
-        .await
-        .map_err(store_problem)?
-        .is_none()
-    {
-        return Err(Problem::not_found());
-    }
+    readable(&app, &authed, project, file).await?;
     let bytes = app
         .blobs
-        .get(&team, &file)
+        .get(&authed.device.team, &file)
         .await
         .map_err(|e| {
             tracing::error!("{e}");
@@ -1682,13 +1720,36 @@ pub async fn get_file(
         .into_response())
 }
 
-pub async fn delete_file(
-    State(app): State<Shared>,
+async fn delete_file_in(
+    app: Shared,
     authed: Authed,
-    Path(file): Path<String>,
+    project: Option<Id>,
+    file: Id,
 ) -> Result<StatusCode, Problem> {
-    let file = path_id(&file)?;
     let team = authed.device.team;
+    let stored = app
+        .store
+        .file(team, file)
+        .await
+        .map_err(store_problem)?
+        .ok_or_else(Problem::not_found)?;
+    if let (Some(attached), Some(asked)) = (stored.project, project) {
+        if attached != asked {
+            return Err(Problem::not_found());
+        }
+    }
+    if stored.device != authed.device.id && !authed.is_admin() {
+        // Seen by the device or not, a file is deleted by its author or an administrator alone: the deletion is final.
+        if let Some(attached) = stored.project {
+            may(&app, &authed, &attached).await?;
+        } else {
+            return Err(Problem::not_found());
+        }
+        Metrics::inc(&app.metrics.refused_access);
+        return Err(Problem::forbidden(
+            "a file is deleted by the device that put it or an administrator",
+        ));
+    }
     if app
         .store
         .delete_file(team, file)
@@ -1703,6 +1764,64 @@ pub async fn delete_file(
         tracing::warn!("{e}");
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// `PUT /v1/projects/{project}/files/{file}`: a file attached to the project.
+pub async fn put_project_file(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path((project, file)): Path<(String, String)>,
+    req: Request,
+) -> Result<StatusCode, Problem> {
+    let (project, file) = (path_id(&project)?, path_id(&file)?);
+    put_file_in(app, authed, Some(project), file, req).await
+}
+
+pub async fn get_project_file(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path((project, file)): Path<(String, String)>,
+) -> Result<Response, Problem> {
+    let (project, file) = (path_id(&project)?, path_id(&file)?);
+    get_file_in(app, authed, Some(project), file).await
+}
+
+pub async fn delete_project_file(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path((project, file)): Path<(String, String)>,
+) -> Result<StatusCode, Problem> {
+    let (project, file) = (path_id(&project)?, path_id(&file)?);
+    delete_file_in(app, authed, Some(project), file).await
+}
+
+/// The old route (before SR2-03), kept for one version: a file put here is attached to nothing.
+pub async fn put_file(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(file): Path<String>,
+    req: Request,
+) -> Result<StatusCode, Problem> {
+    let file = path_id(&file)?;
+    put_file_in(app, authed, None, file, req).await
+}
+
+pub async fn get_file(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(file): Path<String>,
+) -> Result<Response, Problem> {
+    let file = path_id(&file)?;
+    get_file_in(app, authed, None, file).await
+}
+
+pub async fn delete_file(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(file): Path<String>,
+) -> Result<StatusCode, Problem> {
+    let file = path_id(&file)?;
+    delete_file_in(app, authed, None, file).await
 }
 
 pub async fn usage(State(app): State<Shared>, authed: Authed) -> Result<Cbor<Usage>, Problem> {

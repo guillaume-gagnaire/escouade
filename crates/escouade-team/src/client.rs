@@ -1266,12 +1266,18 @@ impl ServerClient {
         }))
     }
 
-    /// Writes an encrypted file, once (refused if it exists).
-    pub async fn put_file(&self, id: &[u8; 16], bytes: Vec<u8>) -> Result<(), ClientError> {
+    /// Writes an encrypted file, once (refused if it exists), attached to `project` (SR2-03): a project, or one of the
+    /// team's own streams for a file of the team. The server serves it to the devices that have access to the project.
+    pub async fn put_file(
+        &self,
+        project: &[u8; 16],
+        id: &[u8; 16],
+        bytes: Vec<u8>,
+    ) -> Result<(), ClientError> {
         let reply = self
             .authed(Call {
                 method: Method::Put,
-                path: format!("/v1/files/{}", hex::encode(id)),
+                path: file_path(project, id),
                 content_type: Some("application/octet-stream"),
                 body: bytes,
                 token: None,
@@ -1284,12 +1290,16 @@ impl ServerClient {
         }
     }
 
-    /// An encrypted file, None when the server has none.
-    pub async fn get_file(&self, id: &[u8; 16]) -> Result<Option<Vec<u8>>, ClientError> {
+    /// An encrypted file of `project`, None when the server has none there.
+    pub async fn get_file(
+        &self,
+        project: &[u8; 16],
+        id: &[u8; 16],
+    ) -> Result<Option<Vec<u8>>, ClientError> {
         let reply = self
             .authed(Call {
                 method: Method::Get,
-                path: format!("/v1/files/{}", hex::encode(id)),
+                path: file_path(project, id),
                 content_type: None,
                 body: Vec::new(),
                 token: None,
@@ -1302,11 +1312,12 @@ impl ServerClient {
         }
     }
 
-    pub async fn delete_file(&self, id: &[u8; 16]) -> Result<(), ClientError> {
+    /// Deletes a file of `project`: the server lets its author or an administrator alone.
+    pub async fn delete_file(&self, project: &[u8; 16], id: &[u8; 16]) -> Result<(), ClientError> {
         let reply = self
             .authed(Call {
                 method: Method::Delete,
-                path: format!("/v1/files/{}", hex::encode(id)),
+                path: file_path(project, id),
                 content_type: None,
                 body: Vec::new(),
                 token: None,
@@ -1482,4 +1493,13 @@ enum Stop {
     Connected,
     Revoked,
     Gone,
+}
+
+/// The route of a file attached to `project` (SR2-03).
+fn file_path(project: &[u8; 16], id: &[u8; 16]) -> String {
+    format!(
+        "/v1/projects/{}/files/{}",
+        hex::encode(project),
+        hex::encode(id)
+    )
 }

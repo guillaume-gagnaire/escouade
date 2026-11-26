@@ -509,7 +509,7 @@ impl Core {
         let object = match team.offer_handoff(pid, &offer) {
             Ok(o) => o,
             Err(e) => {
-                let _ = team.delete_file(file).await;
+                let _ = team.delete_file(pid, file).await;
                 bail!(said(&e));
             }
         };
@@ -520,7 +520,7 @@ impl Core {
             Err(e) => {
                 // Nothing passed: the offer and the deposit go.
                 let _ = team.end_handoff(pid, object);
-                let _ = team.delete_file(file).await;
+                let _ = team.delete_file(pid, file).await;
                 let _ = team.sync_project(pid).await;
                 drop(team);
                 let why = match &e {
@@ -556,6 +556,7 @@ impl Core {
             agent: offer.agent.clone(),
             at: offer.at,
             agent_id: Some(agent_id.clone()),
+            file: offer.file.clone(),
         };
         let t = self.edit_ticket(id, |x| {
             if let Some(tt) = x.team.as_mut() {
@@ -627,7 +628,7 @@ impl Core {
         {
             let _ = team.end_handoff(pid, object);
             if let Some(file) = object_of(&offer.file) {
-                let _ = team.delete_file(file).await;
+                let _ = team.delete_file(pid, file).await;
             }
         }
         let _ = team.sync_project(pid).await;
@@ -818,7 +819,7 @@ impl Core {
             }
             let file = object_of(&offer.file).ok_or_else(gone)?;
             let bytes = team
-                .get_file(file)
+                .get_file(pid, file)
                 .await
                 .map_err(|e| anyhow!(said(&e)))?
                 .ok_or_else(gone)?;
@@ -868,7 +869,8 @@ impl Core {
             )
             .await;
         }
-        // The claim, this machine's under a new token; the offer and the deposit erased.
+        // The claim, this machine's under a new token; the offer ended. The deposit is its author's to erase (SR2-03):
+        // the passing machine does it when it reads the offer gone (`read_handoffs`).
         let claim = object_of(&offer.claim).ok_or_else(gone)?;
         let (answer, me, name) = {
             let mut team = shared.lock().await;
@@ -877,9 +879,6 @@ impl Core {
                 .await
                 .map_err(|e| anyhow!(refusal(&t.key, &e, None)))?;
             let _ = team.end_handoff(pid, object);
-            if let Some(file) = object_of(&offer.file) {
-                let _ = team.delete_file(file).await;
-            }
             let _ = team.sync_project(pid).await;
             let me = DeviceId(team.client().device());
             let name = team.name_of(pid, &me);
@@ -1031,6 +1030,7 @@ impl Core {
         };
         let mut changed = Vec::new();
         let mut take = Vec::new();
+        let mut erase = Vec::new();
         {
             let mut tickets = self.tickets.write();
             for t in tickets.iter_mut().filter(|t| t.project_id == project_id) {
@@ -1054,7 +1054,15 @@ impl Core {
                     agent: o.agent.clone(),
                     at: o.at,
                     agent_id: tt.handoff.as_ref().and_then(|h| h.agent_id.clone()),
+                    file: o.file.clone(),
                 });
+                // An offer of this machine that is over (taken, or abandoned by another way): its deposit is this
+                // machine's to erase, the server lets no other member do it (SR2-03).
+                if let Some(gone) = tt.handoff.as_ref().filter(|h| h.outgoing && next.is_none()) {
+                    if let Some(file) = object_of(&gone.file) {
+                        erase.push(file);
+                    }
+                }
                 // On its own, only what the team's rule lets it take (SR3-05); the rest waits in « À toi ».
                 if next
                     .as_ref()
@@ -1075,6 +1083,17 @@ impl Core {
         if !changed.is_empty() {
             self.request_save();
             self.inbox_view_told(project_id);
+        }
+        if !erase.is_empty() {
+            let mut team = shared.lock().await;
+            for file in erase {
+                // Already gone (abandoned here, erased by an administrator) is no error.
+                if let Err(e) = team.delete_file(pid, file).await {
+                    log::warn!(
+                        "project {project_id}: the deposit of a passage over is not erased: {e}"
+                    );
+                }
+            }
         }
         for id in take {
             if self.handoffs_taking.lock().contains(&id) {

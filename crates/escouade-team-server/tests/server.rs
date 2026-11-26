@@ -514,7 +514,8 @@ async fn files_and_quotas(b: Backend) {
         alice.put_file(&f1, bytes.clone()).await,
         StatusCode::CREATED
     );
-    let (status, got) = bob.get_file(&f1).await;
+    // Put by the old route: the author's and the administrators' (SR2-03, `tests/files.rs`).
+    let (status, got) = alice.get_file(&f1).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(got, bytes);
     // A file is written once.
@@ -549,8 +550,8 @@ async fn files_and_quotas(b: Backend) {
         StatusCode::INSUFFICIENT_STORAGE
     );
     // A deleted file gives its place back.
-    assert_eq!(bob.delete_file(&f2).await, StatusCode::NO_CONTENT);
-    assert_eq!(bob.delete_file(&f2).await, StatusCode::NOT_FOUND);
+    assert_eq!(alice.delete_file(&f2).await, StatusCode::NO_CONTENT);
+    assert_eq!(alice.delete_file(&f2).await, StatusCode::NOT_FOUND);
     assert_eq!(alice.get_file(&f2).await.0, StatusCode::NOT_FOUND);
     assert_eq!(alice.put_file(&f3, vec![3; 600]).await, StatusCode::CREATED);
     assert_eq!(alice.get_file(&f3).await.1, vec![3; 600]);
@@ -883,6 +884,19 @@ async fn the_teams_do_not_see_each_other(b: Backend) {
     assert_eq!(a.put_file(&file, vec![1; 10]).await, StatusCode::CREATED);
     assert_eq!(z.get_file(&file).await.0, StatusCode::NOT_FOUND);
     assert_eq!(z.delete_file(&file).await, StatusCode::NOT_FOUND);
+    let attached = random::<16>();
+    assert_eq!(
+        a.file_in(Method::PUT, &project, &attached, Some(vec![1; 10]))
+            .await
+            .0,
+        StatusCode::CREATED
+    );
+    for method in [Method::GET, Method::DELETE] {
+        assert_eq!(
+            z.file_in(method, &project, &attached, None).await.0,
+            StatusCode::NOT_FOUND
+        );
+    }
     // Z's admin cannot revoke A's device.
     assert_eq!(z.revoke(&a).await, StatusCode::NOT_FOUND);
     let devices: Devices = z.client.get("/v1/devices").await.ok();

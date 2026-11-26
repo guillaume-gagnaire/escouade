@@ -92,6 +92,9 @@ CREATE TABLE IF NOT EXISTS files (
     at BIGINT NOT NULL,
     PRIMARY KEY (team_id, id)
 );
+-- A base made before the files were attached to a project (SR2-03): its files attached to nothing, their author's and
+-- the administrators' alone until one of them attaches each.
+ALTER TABLE files ADD COLUMN IF NOT EXISTS project_id BYTEA;
 CREATE TABLE IF NOT EXISTS project_access (
     team_id BYTEA NOT NULL,
     project_id BYTEA NOT NULL,
@@ -1345,10 +1348,12 @@ impl Store for Postgres {
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn reserve_file(
         &self,
         team: Id,
         file: Id,
+        project: Option<Id>,
         size: u64,
         device: Id,
         now: i64,
@@ -1377,13 +1382,14 @@ impl Store for Postgres {
             return Err(StoreError::Quota);
         }
         tx.execute(
-            "INSERT INTO files (team_id, id, size, device_id, at) VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO files (team_id, id, size, device_id, at, project_id) VALUES ($1, $2, $3, $4, $5, $6)",
             &[
                 &team.as_slice(),
                 &file.as_slice(),
                 &(size as i64),
                 &device.as_slice(),
                 &now,
+                &project.as_ref().map(|p| p.as_slice()),
             ],
         )
         .await?;
@@ -1396,17 +1402,37 @@ impl Store for Postgres {
         Ok(())
     }
 
-    async fn file_size(&self, team: Id, file: Id) -> Result<Option<u64>> {
-        Ok(self
+    async fn file(&self, team: Id, file: Id) -> Result<Option<StoredFile>> {
+        let row = self
             .client
             .lock()
             .await
             .query_opt(
-                "SELECT size FROM files WHERE team_id = $1 AND id = $2",
+                "SELECT size, device_id, project_id FROM files WHERE team_id = $1 AND id = $2",
                 &[&team.as_slice(), &file.as_slice()],
             )
+            .await?;
+        row.map(|r| {
+            Ok(StoredFile {
+                size: r.get::<_, i64>(0) as u64,
+                device: id_of(r.get(1))?,
+                project: r.get::<_, Option<Vec<u8>>>(2).map(id_of).transpose()?,
+            })
+        })
+        .transpose()
+    }
+
+    async fn attach_file(&self, team: Id, file: Id, project: Id) -> Result<bool> {
+        Ok(self
+            .client
+            .lock()
+            .await
+            .execute(
+                "UPDATE files SET project_id = $3 WHERE team_id = $1 AND id = $2 AND project_id IS NULL",
+                &[&team.as_slice(), &file.as_slice(), &project.as_slice()],
+            )
             .await?
-            .map(|r| r.get::<_, i64>(0) as u64))
+            == 1)
     }
 
     async fn delete_file(&self, team: Id, file: Id) -> Result<Option<u64>> {

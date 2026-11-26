@@ -2,8 +2,8 @@
 title: "Passer un agent à un collègue"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md §4.2, §11, §13, §15.2 (C16), §16 (TS-17)","docs/TEAM-SESSION-COPY.md (ESC-581, TS-0c : l'essai de reprise d'une session copiée, la recommandation)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : « C16 : a »","crates/escouade-team/src/handoff.rs","crates/escouade-team-server/src/db/mod.rs","src-tauri/src/teamhandoff.rs","src-tauri/src/handover.rs","Revue de sécurité de la 2.3 (ESC-626), constats SR3-05 et SR3-06 : corrigés par ESC-649"]
-tickets: ["ESC-548","ESC-581","ESC-588","ESC-607","ESC-649"]
-decisions: [274]
+tickets: ["ESC-548","ESC-581","ESC-588","ESC-607","ESC-649","ESC-638"]
+decisions: [274,340]
 compared: null
 ---
 
@@ -29,14 +29,14 @@ L'agent d'un ticket de l'équipe se passe à un collègue, ou à une machine de 
 - **Le ticket** : le serveur passe la prise à l'appareil choisi, sous un nouveau jeton (le jeton croît, §4.2) : l'ancien jeton de ce poste n'écrit plus rien. Une prise passée a un bail de **14 jours** tant qu'elle n'est pas prise ; la prendre donne encore un nouveau jeton. Le serveur refuse une prise passée à un appareil révoqué, sans accès au projet, ou à soi.
 - **La branche** : poussée chez l'hébergeur par le geste de qui passe la main, jamais avant.
 - **Le travail non commité** : commit « en cours » ou patch, au choix.
-- **La conversation** : le journal d'Escouade de l'agent, dans le **dépôt**, un fichier du serveur chiffré par la clé du projet (au-delà de 20 Mo, les plus anciens messages sont laissés de côté). Il est effacé à la reprise et à l'abandon. Le serveur voit un fichier d'une taille, jamais ce qu'il contient.
+- **La conversation** : le journal d'Escouade de l'agent, dans le **dépôt**, un fichier du serveur chiffré par la clé du projet et rattaché au projet (au-delà de 20 Mo, les plus anciens messages sont laissés de côté). **Son auteur l'efface** : le poste qui passe la main, dès qu'il voit l'offre finie (reprise par le collègue, ou annulée). Le serveur ne laisse que l'appareil qui l'a déposé ou un administrateur l'effacer (SR2-03), jamais qui le reprend. Le serveur voit un fichier d'une taille, jamais ce qu'il contient.
 - **Jamais un compte** : ni identifiant, ni jeton, ni réglage de compte ne passe.
 
 ## Chez le collègue
 
 - **La proposition** : « Alice Martin te passe DEM-41 » sur la carte du ticket, avec « Prendre », et dans sa boîte « À toi » (« Agent passé », « Alice Martin te passe DEM-41 · La passation », même geste « Prendre », source `handoff` des vues de la boîte). Elle ne se croit qu'avec la prise : celle que le serveur dit passée à cet appareil par celui qu'elle nomme.
 - **« Prendre »** : sur le harness de l'agent quand ce poste l'a pour le projet (écrit, trouvé, allumé, un compte qui sert le projet) ; sinon « Choisis ton harness » (« Claude Code n'est pas sur ce poste pour ce projet : l'agent repart sur le tien, avec la passation. ») liste ceux de ce poste ; aucun : « Aucun harness ne sert ce projet sur ce poste… ».
-- Escouade récupère la branche de son hébergeur, prend le ticket (un nouveau jeton), efface l'offre et le dépôt, puis lance l'agent du ticket comme « Lancer » : son worktree **sur la branche**, son compte à lui, le protocole du ticket. Le patch y est appliqué (s'il ne s'applique pas, la conversation le dit et le patch est gardé dans un fichier nommé).
+- Escouade récupère la branche de son hébergeur, prend le ticket (un nouveau jeton), efface l'offre (le dépôt, son auteur l'efface en la voyant finie), puis lance l'agent du ticket comme « Lancer » : son worktree **sur la branche**, son compte à lui, le protocole du ticket. Le patch y est appliqué (s'il ne s'applique pas, la conversation le dit et le patch est gardé dans un fichier nommé).
 - **La branche et l'hébergeur, vérifiés (SR3-06)** : la branche de l'offre doit être un nom de branche que git prend (`git check-ref-format --branch` : ni option `-x`, ni `@{-1}`, ni `..`), et **n'écrase jamais une branche locale** de ce poste autre que celle du ticket : « La branche release/2.3 de ce passage existe déjà sur ce poste : elle n'est pas écrasée. Le passage attend. ». Elle se récupère d'**un remote du dépôt** (celui que nomme l'offre s'il existe, sinon le premier), jamais d'une adresse que donne l'offre ; sans remote : « Ce dépôt n'a aucun remote : la branche de ce passage ne se récupère pas. Le passage attend. ». `git fetch` reçoit `--` avant le remote et la branche.
 - **La conversation** : la conversation d'avant, à lire, puis le séparateur « Passé par Alice Martin · suite sur Claude Code », puis le **dossier de passation** replié (« Dossier de passation »), premier message de la nouvelle session : « Passation : suite d'un travail que Alice Martin t'a passé », ce qui a été demandé, fait, les fichiers, l'état git de son worktree, ce qui attendait.
 - Chez qui l'a passé, la carte dit ensuite « Pris par Bob Durand ».
@@ -69,7 +69,7 @@ Dits avec leur raison, rien n'est passé ni perdu :
 
 ## Ce que voit le serveur
 
-La prise (son id opaque, l'appareil qui la tient, celui qui l'a passée tant qu'elle n'est pas prise, le jeton, les heures), un fichier chiffré d'une taille, une opération chiffrée de plus au journal du projet. Jamais le ticket, la branche, le code, la conversation ni les noms.
+La prise (son id opaque, l'appareil qui la tient, celui qui l'a passée tant qu'elle n'est pas prise, le jeton, les heures), un fichier chiffré d'une taille, rattaché au projet, une opération chiffrée de plus au journal du projet. Jamais le ticket, la branche, le code, la conversation ni les noms.
 
 ## Limites
 

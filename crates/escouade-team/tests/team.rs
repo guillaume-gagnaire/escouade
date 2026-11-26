@@ -440,19 +440,19 @@ async fn the_session_renews_itself_and_comes_back_after_a_restart() {
         .await
         .unwrap();
     assert_eq!(
-        alice.get_file(object(9)).await.unwrap().unwrap(),
+        alice.get_file(PROJECT, object(9)).await.unwrap().unwrap(),
         b"a document"
     );
     let raw = alice
         .client()
-        .get_file(&object(9).0)
+        .get_file(&PROJECT.0, &object(9).0)
         .await
         .unwrap()
         .unwrap();
     assert!(!raw.windows(10).any(|win| win == b"a document"));
     assert!(alice.client().usage().await.unwrap().used > 0);
-    alice.delete_file(object(9)).await.unwrap();
-    assert!(alice.get_file(object(9)).await.unwrap().is_none());
+    alice.delete_file(PROJECT, object(9)).await.unwrap();
+    assert!(alice.get_file(PROJECT, object(9)).await.unwrap().is_none());
     let _ = DeviceKind::Device;
 }
 

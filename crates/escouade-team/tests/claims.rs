@@ -549,7 +549,7 @@ async fn offline_no_claim_then_the_conflicts_show(b: Backend) {
 /// TS-17: Alice passes a ticket to Bob. Its deposit (the conversation, a patch) is encrypted on the server, the offer is
 /// in the journal for Bob alone to act on, the claim is Bob's under a new token at once (Alice's old one writes no
 /// more). Abandoned, Alice takes it back and the deposit is erased; offered again, Bob takes it (a new token), reads the
-/// deposit, and erases it with the offer. A machine in server mode says so in the project.
+/// deposit and ends the offer; Alice, its author, erases the deposit (Bob may not, SR2-03). A machine in server mode says so in the project.
 async fn a_ticket_handed_with_its_deposit(b: Backend) {
     use escouade_team::handoff::Offer;
     let w = World::on(&b).await;
@@ -592,7 +592,10 @@ async fn a_ticket_handed_with_its_deposit(b: Backend) {
     c[1].1.sync_project(p).await.unwrap();
     let offers = c[1].1.handoffs(p).unwrap();
     assert_eq!(offers, vec![(object, offer.clone())]);
-    assert_eq!(c[1].1.get_file(file).await.unwrap(), Some(deposit.clone()));
+    assert_eq!(
+        c[1].1.get_file(p, file).await.unwrap(),
+        Some(deposit.clone())
+    );
     if matches!(b, Backend::Sqlite) {
         for entry in walk(&w.server.folder) {
             let bytes = std::fs::read(&entry).unwrap_or_default();
@@ -611,11 +614,11 @@ async fn a_ticket_handed_with_its_deposit(b: Backend) {
         .unwrap();
     assert_eq!(back.claim.holder, Some(alice_device.0.to_vec()));
     c[0].1.end_handoff(p, object).unwrap();
-    c[0].1.delete_file(file).await.unwrap();
+    c[0].1.delete_file(p, file).await.unwrap();
     c[0].1.sync_project(p).await.unwrap();
     c[1].1.sync_project(p).await.unwrap();
     assert!(c[1].1.handoffs(p).unwrap().is_empty());
-    assert_eq!(c[1].1.get_file(file).await.unwrap(), None);
+    assert_eq!(c[1].1.get_file(p, file).await.unwrap(), None);
     // Offered again: Bob takes it under a new token; Alice no longer takes it back.
     let file = c[0].1.deposit(p, &deposit).await.unwrap();
     let object = c[0]
@@ -634,13 +637,29 @@ async fn a_ticket_handed_with_its_deposit(b: Backend) {
     let late = c[0].1.withdraw_claim(p, claim, h.claim.token).await;
     assert_eq!(refused(late.unwrap_err()).0, "claim_lost");
     c[1].1.sync_project(p).await.unwrap();
-    assert_eq!(c[1].1.get_file(file).await.unwrap(), Some(deposit));
+    assert_eq!(
+        c[1].1.get_file(p, file).await.unwrap(),
+        Some(deposit.clone())
+    );
     c[1].1.end_handoff(p, object).unwrap();
-    c[1].1.delete_file(file).await.unwrap();
+    // The deposit is its author's to erase (SR2-03): Bob, a member, cannot; Alice does once the offer is over.
+    let erase = c[1].1.delete_file(p, file).await;
+    assert!(
+        matches!(
+            erase,
+            Err(Error::Client(ClientError::Refused { status: 403, .. }))
+        ),
+        "{erase:?}"
+    );
+    assert_eq!(
+        c[1].1.get_file(p, file).await.unwrap(),
+        Some(deposit.clone())
+    );
+    c[0].1.delete_file(p, file).await.unwrap();
     c[1].1.sync_project(p).await.unwrap();
     c[0].1.sync_project(p).await.unwrap();
     assert!(c[0].1.handoffs(p).unwrap().is_empty());
-    assert_eq!(c[0].1.get_file(file).await.unwrap(), None);
+    assert_eq!(c[0].1.get_file(p, file).await.unwrap(), None);
     // Bob's device says it is a machine in server mode: Alice sees it.
     assert!(c[1].1.set_machine(p, true).unwrap());
     assert!(!c[1].1.set_machine(p, true).unwrap());

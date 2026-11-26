@@ -406,6 +406,15 @@ pub struct Unreadable {
     pub flagged_at: i64,
 }
 
+/// A file the base holds (SR2-03): its size, the device that put it, and the project it is attached to (None: put by
+/// the old route or before SR2-03, its author's and the administrators' alone).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredFile {
+    pub size: u64,
+    pub device: Id,
+    pub project: Option<Id>,
+}
+
 /// An entry the server's operator removed from a stream (`escouade-team-server drop-entry`, SR2-02): the line of the
 /// audit kept in the base (who, when, what, the digest of the entry removed, never its bytes), and what a device reads
 /// to tell a hole the operator made from a server that rolls back.
@@ -631,17 +640,25 @@ pub trait Store: Send + Sync {
     /// The entries removed from the team's streams by the operator, the oldest first.
     async fn dropped(&self, team: Id) -> Result<Vec<Dropped>>;
 
-    /// Reserves a file's place before its bytes are written.
+    /// Reserves a file's place before its bytes are written, attached to `project` (SR2-03): a project of the team or
+    /// one of its own streams (`api::TEAM_STREAMS`). None only for a file put by the old route, which stays its
+    /// author's and the administrators' until one of them attaches it.
+    #[allow(clippy::too_many_arguments)]
     async fn reserve_file(
         &self,
         team: Id,
         file: Id,
+        project: Option<Id>,
         size: u64,
         device: Id,
         now: i64,
         quotas: Quotas,
     ) -> Result<()>;
-    async fn file_size(&self, team: Id, file: Id) -> Result<Option<u64>>;
+    /// A file's size, author and project, if the base holds it.
+    async fn file(&self, team: Id, file: Id) -> Result<Option<StoredFile>>;
+    /// Attaches a file that is attached to nothing yet (SR2-03's migration) to `project`; false when it already was
+    /// (to this project or another) or is gone.
+    async fn attach_file(&self, team: Id, file: Id, project: Id) -> Result<bool>;
     /// Forgets a file and gives its place back; its size, if it was there.
     async fn delete_file(&self, team: Id, file: Id) -> Result<Option<u64>>;
     async fn used_bytes(&self, team: Id) -> Result<u64>;

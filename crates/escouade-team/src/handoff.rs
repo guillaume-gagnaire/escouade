@@ -5,7 +5,8 @@
 //!   the deposit that holds the rest. It is deleted once taken, or when the passage is abandoned.
 //! - **The deposit** is an encrypted file of the server ([`Team::deposit`], sealed as an object of the project): the
 //!   agent's conversation as Escouade keeps it, and the patch of the uncommitted work when it goes as a patch. It is
-//!   erased with the offer. The server sees a file of some size, never what it holds.
+//!   erased by its author (the passing device) once the offer is over: the server lets no other member erase it (SR2-03).
+//!   The server sees a file of some size, never what it holds.
 //! - **The claim** moves by the server's hand ([`Team::hand_claim`]): an offer is only trusted with the claim the
 //!   server says was handed to this device, by the device the offer names (`Claim::handed_by`).
 //! - **The machines**: a device in server mode says so in the project ([`Team::set_machine`]), so that the passage

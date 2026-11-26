@@ -274,6 +274,12 @@ async fn an_agent_passes_to_a_teammate_then_to_the_teams_machine() {
         .team_handoff(&t.id, &bob.device, Wip::Patch)
         .await
         .unwrap();
+    let deposit = ticket(&ha, &t.id).team.unwrap().handoff.unwrap().file;
+    let deposit = crate::teamboard::object_of(&deposit).expect("the deposit's id");
+    let (_, _, pid) = ha
+        .core
+        .team_project_of(&ha.core.project(&pa.id).unwrap())
+        .unwrap();
     read(&hb, &pb.id).await;
     let choice = hb.core.team_handoff_engines(&theirs.id).unwrap();
     assert_eq!(choice.preferred, Some(crate::model::EngineId::CLAUDE));
@@ -306,11 +312,25 @@ async fn an_agent_passes_to_a_teammate_then_to_the_teams_machine() {
         .position(|i| i["kind"] == "handover" && i["by"] == "Alice Martin")
         .expect("the separator");
     assert!(items[..sep].iter().any(|i| i["kind"] == "user"));
+    // The deposit is Alice's (SR2-03): Bob, who took it, cannot erase it; her machine does once it reads the offer gone.
+    let at_bob = bob_teams.team(&team).unwrap();
+    assert!(at_bob.lock().await.delete_file(pid, deposit).await.is_err());
+    assert!(at_bob
+        .lock()
+        .await
+        .get_file(pid, deposit)
+        .await
+        .unwrap()
+        .is_some());
     read(&ha, &pa.id).await;
     let at_alice = ticket(&ha, &t.id);
     let holder = at_alice.team.as_ref().unwrap().holder.clone().unwrap();
     assert_eq!(holder.name, "Bob Durand");
     assert!(at_alice.team.as_ref().unwrap().handoff.is_none());
+    assert_eq!(
+        at_bob.lock().await.get_file(pid, deposit).await.unwrap(),
+        None
+    );
 
     // Alice's machine in server mode: Bob passes it there, as a commit « en cours »; it takes it on its own.
     ha.core.set_team_machine(true);

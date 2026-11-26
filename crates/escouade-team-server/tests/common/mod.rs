@@ -153,6 +153,11 @@ impl TestServer {
         }
     }
 
+    /// The PostgreSQL schema of the test, None on SQLite.
+    pub fn schema(&self) -> Option<&str> {
+        self.schema.as_deref()
+    }
+
     pub fn client(&self) -> Client {
         Client::new(&self.base)
     }
@@ -504,6 +509,27 @@ impl Device {
             )
             .await
             .0
+    }
+
+    /// A file attached to `project` (SR2-03): `PUT`, `GET` and `DELETE /v1/projects/{project}/files/{file}`.
+    pub async fn file_in(
+        &self,
+        method: reqwest::Method,
+        project: &[u8; 16],
+        file: &[u8; 16],
+        bytes: Option<Vec<u8>>,
+    ) -> (StatusCode, Vec<u8>) {
+        self.client
+            .status(
+                method,
+                &format!(
+                    "/v1/projects/{}/files/{}",
+                    hex::encode(project),
+                    hex::encode(file)
+                ),
+                bytes,
+            )
+            .await
     }
 
     pub async fn put_file(&self, file: &[u8; 16], bytes: Vec<u8>) -> StatusCode {

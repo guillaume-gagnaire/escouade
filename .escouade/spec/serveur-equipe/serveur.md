@@ -2,8 +2,8 @@
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md","Revue de sécurité de la 2.3 (ESC-625), SR2-05, SR2-06, SR2-07 : le serveur d'équipe borné"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635","ESC-639"]
-decisions: [167,168,173,178,277,288,286,314,330,332]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635","ESC-639","ESC-638"]
+decisions: [167,168,173,178,277,288,286,314,330,332,340]
 compared: null
 ---
 
@@ -13,7 +13,7 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 ## Aveugle
 
-- Il ne garde que des octets chiffrés de bout en bout (seul mode), et les métadonnées que voici : des ids opaques, les clés publiques des appareils, leurs rôles, les tailles, les heures, l'appareil qui a écrit, l'empreinte (SHA-256) des jetons d'inscription.
+- Il ne garde que des octets chiffrés de bout en bout (seul mode), et les métadonnées que voici : des ids opaques, les clés publiques des appareils, leurs rôles, les tailles, les heures, l'appareil qui a écrit, le projet auquel un fichier est rattaché, l'empreinte (SHA-256) des jetons d'inscription.
 - Il n'exécute rien (aucun agent, commande, plugin ni harness) et n'a aucune clé de contenu. Il ne voit jamais le secret d'une invitation ni un code court : le lien d'une invitation (`escouade://team/join/…`) ne passe par aucune de ses pages.
 - D'une opération d'un projet, il ne voit que son époque, sa taille, son heure et l'appareil qui l'envoie.
 - Son journal et ses métriques Prometheus ne portent aucun id d'équipe, de projet, d'appareil ni de fichier, aucune adresse, aucun jeton : seulement les modèles des routes, les statuts et des compteurs.
@@ -58,7 +58,12 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
   - La lecture d'un projet dit où est le dernier instantané : quand il est après le numéro demandé (l'appareil en part), et toujours (l'appareil déjà au-delà le vérifie une fois). Un appareil peut demander l'instantané d'avant un numéro.
   - Un appareil du projet signale un instantané illisible. Les administrateurs de l'équipe lisent la liste de ces instantanés : le projet, le numéro, l'appareil qui l'a posé et quand, le premier appareil qui l'a signalé et quand. Les membres ne la lisent pas.
   - **Un administrateur retire un instantané** : l'instantané d'avant et le journal reprennent sa place, ses octets reviennent au quota. Le serveur refuse de retirer celui sur lequel le flux a déjà été élagué, puisque ses opérations sont parties.
-- Les fichiers chiffrés (documents, images) : sur le disque ou dans un stockage compatible S3 (MinIO, Garage, AWS), écrits une fois, avec une taille maximale par fichier (25 Mio par défaut) et un quota par équipe (2 Gio par défaut) qui compte aussi les flux et les instantanés.
+- Les fichiers chiffrés (documents, images, conversations passées, dépôts d'une passation, archives du store privé) : sur le disque ou dans un stockage compatible S3 (MinIO, Garage, AWS), écrits une fois, avec une taille maximale par fichier (25 Mio par défaut) et un quota par équipe (2 Gio par défaut) qui compte aussi les flux et les instantanés.
+- **Un fichier suit les droits de son projet** (SR2-03) :
+  - **Rattaché à sa pose** à un projet, ou à l'équipe par l'un de ses propres flux (le store privé, ouvert à tous ses appareils). Un appareil hors d'un projet n'y pose rien.
+  - **Lu selon les droits de ce projet**, comme son flux : un appareil hors du projet est refusé ; sous un autre projet, le fichier n'est pas trouvé.
+  - **Effacé par son auteur ou un administrateur seulement** : l'effacement est définitif. Un autre membre est refusé. Le dépôt d'une passation est donc effacé par qui passe la main, quand l'offre est finie (prise ou abandonnée).
+  - **Les fichiers posés avant** (et ceux de l'ancienne route, gardée une version) ne sont rattachés à rien : seuls leur auteur et les administrateurs les lisent et les effacent, et leur lecture sous un projet les y rattache. La migration n'ouvre rien de plus qu'avant : un membre qui les lisait les retrouve quand leur auteur ou un administrateur les a rouverts.
 - La diffusion en direct par WebSocket : un appareil abonné reçoit les nouvelles entrées de tous les flux de son équipe, et rien des autres équipes.
 
 ## Le protocole et les défenses
@@ -70,7 +75,7 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 - **Des délais** (SR2-07) : l'en-tête d'une requête est lu en 15 secondes ; son corps arrive en entier en 30 secondes, plus le temps de sa longueur à 64 Kio par seconde (environ 7 minutes pour un fichier de 25 Mio), sinon `408` et la connexion se ferme ; une connexion où rien ne passe, dans un sens comme dans l'autre, pendant 60 secondes se ferme.
 - **Un nombre de connexions plafonné** (SR2-07) : 8 192 ouvertes à la fois, et 512 d'une même adresse (une adresse IPv6 par son /64). Au-delà, une nouvelle connexion est fermée dès qu'elle est acceptée, et comptée dans les métriques. Un WebSocket compte jusqu'à sa fermeture. Derrière un proxy de confiance (`--trust-proxy`), seul le plafond global tient, puisque toutes les connexions viennent du proxy.
 - TLS par rustls avec un certificat donné, ou derrière un proxy inverse (Caddy dans l'exemple, Traefik sous Coolify). **Joignable depuis Internet, le serveur reste derrière le proxy** : la doc d'installation le dit, le proxy encaisse d'abord les connexions lentes ou trop nombreuses ; TLS par le serveur lui-même est pour un réseau privé.
-- La base : SQLite en WAL par défaut, PostgreSQL en option. Une base d'avant la rétention garde ses instantanés : le flux y est déjà élagué jusqu'à eux.
+- La base : SQLite en WAL par défaut, PostgreSQL en option. Une base d'avant la rétention garde ses instantanés : le flux y est déjà élagué jusqu'à eux. Une base d'avant SR2-03 garde ses fichiers, rattachés à rien.
 
 ## La publication
 

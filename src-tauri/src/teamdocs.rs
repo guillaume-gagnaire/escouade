@@ -1026,7 +1026,7 @@ pub async fn settle(
         ) else {
             continue;
         };
-        let bytes = match team.get_document(fid, &key).await {
+        let bytes = match team.get_document(pid, fid, &key).await {
             Ok(Some(b)) => b,
             Ok(None) => continue,
             Err(err) => {

@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS files (
     size INTEGER NOT NULL,
     device_id BLOB NOT NULL,
     at INTEGER NOT NULL,
+    project_id BLOB,
     PRIMARY KEY (team_id, id)
 );
 CREATE TABLE IF NOT EXISTS project_access (
@@ -380,6 +381,9 @@ impl Store for Sqlite {
                 ("claims", "handed_by", "BLOB"),
                 // A base made before the retention of the snapshots (SR2-01): the number the messages are gone up to.
                 ("projects", "pruned", "INTEGER NOT NULL DEFAULT 0"),
+                // A base made before the files were attached to a project (SR2-03): its files attached to nothing,
+                // their author's and the administrators' alone until one of them attaches each.
+                ("files", "project_id", "BLOB"),
                 // A base made before the voids (SR2-02): the commits declared null, the epochs kept to the administrators.
                 ("teams", "reserved", "INTEGER NOT NULL DEFAULT 0"),
                 ("team_entries", "voided", "INTEGER NOT NULL DEFAULT 0"),
@@ -1250,10 +1254,12 @@ impl Store for Sqlite {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn reserve_file(
         &self,
         team: Id,
         file: Id,
+        project: Option<Id>,
         size: u64,
         device: Id,
         now: i64,
@@ -1281,13 +1287,14 @@ impl Store for Sqlite {
                 return Err(StoreError::Quota);
             }
             tx.execute(
-                "INSERT INTO files (team_id, id, size, device_id, at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO files (team_id, id, size, device_id, at, project_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     team.as_slice(),
                     file.as_slice(),
                     size as i64,
                     device.as_slice(),
-                    now
+                    now,
+                    project.as_ref().map(|p| p.as_slice())
                 ],
             )?;
             tx.execute(
@@ -1300,15 +1307,39 @@ impl Store for Sqlite {
         .await
     }
 
-    async fn file_size(&self, team: Id, file: Id) -> Result<Option<u64>> {
+    async fn file(&self, team: Id, file: Id) -> Result<Option<StoredFile>> {
         self.run(move |c| {
-            Ok(c.query_row(
-                "SELECT size FROM files WHERE team_id = ?1 AND id = ?2",
-                params![team.as_slice(), file.as_slice()],
-                |r| r.get::<_, i64>(0),
-            )
-            .optional()?
-            .map(|s| s as u64))
+            let row = c
+                .query_row(
+                    "SELECT size, device_id, project_id FROM files WHERE team_id = ?1 AND id = ?2",
+                    params![team.as_slice(), file.as_slice()],
+                    |r| {
+                        Ok((
+                            r.get::<_, i64>(0)?,
+                            r.get::<_, Vec<u8>>(1)?,
+                            r.get::<_, Option<Vec<u8>>>(2)?,
+                        ))
+                    },
+                )
+                .optional()?;
+            row.map(|(size, device, project)| {
+                Ok(StoredFile {
+                    size: size as u64,
+                    device: id_of(device)?,
+                    project: project.map(id_of).transpose()?,
+                })
+            })
+            .transpose()
+        })
+        .await
+    }
+
+    async fn attach_file(&self, team: Id, file: Id, project: Id) -> Result<bool> {
+        self.run(move |c| {
+            Ok(c.execute(
+                "UPDATE files SET project_id = ?3 WHERE team_id = ?1 AND id = ?2 AND project_id IS NULL",
+                params![team.as_slice(), file.as_slice(), project.as_slice()],
+            )? == 1)
         })
         .await
     }

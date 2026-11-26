@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : sur le serveur d’équipe, un fichier (document, image, conversation passée) ne se lit plus que par les appareils qui ont accès à son projet, et seuls son auteur ou un administrateur l’effacent. Les fichiers posés avant restent à leur auteur et aux administrateurs jusqu’à ce que l’un d’eux les rouvre dans leur projet.
 - Sécurité : derrière un proxy, ton serveur refuse une requête qui se présente sous deux noms à la fois (deux en-têtes `Host` ou `Origin`, ou une adresse qui en nomme un autre), pour que le proxy et le serveur lisent toujours le même.
 - Sécurité : sur le serveur d’équipe, un membre ne peut plus fausser les coûts de l’équipe ni mettre sa dépense au nom d’un autre, ni donner à tes agents une consigne par la mémoire : un souvenir d’un collègue gardé par lui seul arrive comme une donnée, avec son auteur. La machine de l’équipe ne prend d’elle-même que les agents passés par un administrateur, sans écraser une de tes branches, et le mode « auto » imposé par l’équipe attend ton accord dans « À toi ».
 - Sécurité : faire confiance à un projet pour ses serveurs de langage ne couvre plus ce qu’écrit son agent. Dans le worktree d’un agent, un programme de ce worktree ou un serveur qui exécute du code (rust-analyzer, TypeScript, gopls) redemande ta confiance pour ce worktree, avec le chemin du programme.

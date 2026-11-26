@@ -2260,6 +2260,9 @@ pub struct TeamHandoff {
     pub at: i64,
     /// This machine's agent that was passed (the outgoing side): it goes on with the ticket if the passage is abandoned.
     pub agent_id: Option<String>,
+    /// The deposit of the passage on the team server (hex). The server lets its author alone (or an administrator) erase
+    /// it (SR2-03): the outgoing side erases it once the offer is over, taken or abandoned.
+    pub file: String,
 }
 
 /// Who holds a ticket of the team (§4.2).
