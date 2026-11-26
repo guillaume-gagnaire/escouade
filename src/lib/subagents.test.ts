@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { agent } from '../test/ipc';
 import { t, tIn } from './i18n';
-import { crumbs, isSubagentCall, sidebarSubs, subagentInfo, subDuration, threadOf } from './subagents';
+import { canWriteSub, crumbs, isSubagentCall, sidebarSubs, subagentInfo, subDuration, threadOf } from './subagents';
 import type { ConvItem, PlanState, SubAgent, ToolItem } from './types';
 
 const sub = (id: string, over: Partial<SubAgent> = {}): SubAgent => ({
@@ -249,5 +249,14 @@ describe('the words of the subagents', () => {
     expect(tIn('en', 'subagents.stopHint')).toBe('Stop this subagent alone: the agent goes on.');
     expect(t('subagents.stopHint')).not.toContain('stop_task');
     expect(tIn('en', 'subagents.stopHint')).not.toContain('stop_task');
+  });
+});
+
+describe('canWriteSub', () => {
+  it('lets one write to a subagent running in the background only', () => {
+    const a = agent();
+    expect(canWriteSub(a, { status: 'running', taskId: 't1', background: true })).toBe(true);
+    expect(canWriteSub(a, { status: 'running', taskId: 't1', background: false })).toBe(false);
+    expect(canWriteSub({ ...a, terminal: true }, { status: 'running', taskId: 't1', background: true })).toBe(false);
   });
 });

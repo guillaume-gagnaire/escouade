@@ -163,7 +163,9 @@
   const selectedAgentId = $derived(app.agent?.id);
   const termSelected = $derived(app.selectedTerm[project.id] ?? null);
   /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
-  const otherView = $derived(!!termSelected || !!app.pageShown || !!app.runCommand || app.boardOn || app.docsOn || app.prsOn);
+  const otherView = $derived(
+    !!termSelected || !!app.pageShown || !!app.runCommand || app.boardOn || app.docsOn || app.prsOn || app.workspaceOn,
+  );
   /** The contents of the split screen's panes (ESC-392), when it is on screen: each is highlighted, the active one more. */
   const paneKeys = $derived(app.panesOn && app.panes ? new Set(leaves(app.panes.root).map(itemKey)) : null);
   const inPane = (key: string) => !!paneKeys?.has(key) && app.panes?.active !== key;
@@ -1019,12 +1021,13 @@
   <!-- Agents · Kanban · PR · Docs (direction A of design/kanban-envs-2-2): words alone, each tab its own width. -->
   <div class="seg" role="group" aria-label={t('nav.sidebar.viewLabel')}>
     <button
-      class:on={!app.boardOn && !app.docsOn && !app.prsOn}
-      aria-pressed={!app.boardOn && !app.docsOn && !app.prsOn}
+      class:on={!app.boardOn && !app.docsOn && !app.prsOn && !app.workspaceOn}
+      aria-pressed={!app.boardOn && !app.docsOn && !app.prsOn && !app.workspaceOn}
       onclick={() => {
         app.closeBoard(project.id);
         app.closeDocs(project.id);
         app.closePrs(project.id);
+        app.closeWorkspace(project.id);
       }}>{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
     >
     <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}

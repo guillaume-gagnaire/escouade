@@ -147,3 +147,11 @@ export function crumbs(agent: Agent, items: ConvItem[], call: string): { call: s
   }
   return chain;
 }
+
+/**
+ * One can write to a subagent while it runs, and in the background: the plan never opens an ended row again, so one taken
+ * up again by a message would still say it ended; in the foreground the agent waits for it, and would pass the message on
+ * once it ended.
+ */
+export const canWriteSub = (agent: Agent, sub: { status: RunStatus | null; taskId?: string; background?: boolean }): boolean =>
+  sub.status === 'running' && !!sub.taskId && sub.background === true && !agent.terminal && !agent.archived;

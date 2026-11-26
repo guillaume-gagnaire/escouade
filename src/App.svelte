@@ -20,6 +20,7 @@
   import { WATCH_TICK_MS } from './lib/prnew';
   import Board from './components/board/Board.svelte';
   import PrsView from './components/prs/PrsView.svelte';
+  import WorkspaceView from './components/workspace/WorkspaceView.svelte';
   import DocsView from './components/docs/DocsView.svelte';
   import TicketForm from './components/board/TicketForm.svelte';
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
@@ -204,6 +205,7 @@
     void app.editorOn;
     void app.boardOn;
     void app.docsOn;
+    void app.workspaceOn;
     void app.ui.view;
     void app.panes;
     app.markSeen();
@@ -257,7 +259,9 @@
     {:else if !app.ready}
       <div class="work"></div>
     {:else if app.ui.view === 'overview'}
-      <div class="work"><Overview /></div>
+      <div class="work">
+        {#if app.overviewCanvas}<WorkspaceView />{:else}<Overview />{/if}
+      </div>
     {:else if app.ui.view === 'inbox' && app.settings.mcpEnabled}
       <InboxQueue />
       <div class="work"><InboxScreen /></div>
@@ -275,7 +279,11 @@
       {:else}
         <!-- What is shown alone carries its key: a content dragged from the sidebar is dropped beside it (ESC-392). -->
         <div class="work" data-pane-key={app.singleItem ? itemKey(app.singleItem) : undefined}>
-          {#if app.boardOn}
+          {#if app.workspaceOn}
+            {#key project.id}
+              <WorkspaceView {project} />
+            {/key}
+          {:else if app.boardOn}
             {#key project.id}
               <Board {project} />
             {/key}

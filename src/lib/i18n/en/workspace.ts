@@ -1,0 +1,77 @@
+import { defineZone } from '../types';
+
+// The « Workspace »: the canvas of a project's agents, its compasses and its controls. The names of the
+// agents and what they do are their own words: shown as they come, never translated.
+export default defineZone('workspace', {
+  open: 'Workspace',
+  exit: 'Leave the workspace',
+  label: 'Canvas of the agents',
+  empty: 'No agent in this project',
+  emptyAll: 'No agent',
+  count: { one: '{count} agent', other: '{count} agents' },
+  questions: { one: '{count} question', other: '{count} questions' },
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  zoom: '{percent} %',
+  fit: 'Fit',
+  waiting: 'waits for your answer',
+  land: {
+    title: 'Landing zone · {landed}, {coming}',
+    landed: { one: '{count} landed', other: '{count} landed' },
+    coming: '{count} on approach',
+    empty: 'Nothing has landed yet',
+    artifact: 'Artifact · version {n} · {ago}',
+    open: 'Open ↗',
+    /** The name of a page's button for a screen reader. */
+    openPage: 'Open {title}',
+  },
+  ribbon: {
+    label: '{kind}, {state}',
+    output: 'Output',
+    /** Its name for a screen reader: the card it opens. */
+    outputOf: 'Output of {title}',
+    checks: { one: '{count} check, {failed} failed', other: '{count} checks, {failed} failed' },
+    kind: { tests: 'Tests', ci: 'CI', deploy: 'Deployment' },
+    state: { running: 'running', success: 'passed', failure: 'failed', stopped: 'stopped' },
+  },
+  launched: 'launched',
+  /** The same, said in text on the agent launched (the link is drawn alone). */
+  launchedBy: 'launched by {name}',
+  tool: {
+    label: '{kind} {name}, {calls}',
+    skill: 'Skill',
+    plugin: 'Plugin',
+    calls: { one: '{count} call', other: '{count} calls' },
+    running: 'running',
+    tags: 'Tools of {name}',
+    /** The pile of the tools past the most recent, and its button once unfolded. */
+    more: { one: '+ {count} tool', other: '+ {count} tools' },
+    fold: 'Fold the tools',
+  },
+  pile: {
+    west: 'Tools ×{count}',
+    east: 'Team ×{count}',
+    south: 'Deliverables ×{count}',
+    /** Its name for a screen reader: what a click does. */
+    unfold: { west: 'Unfold the tools ({count})', east: 'Unfold the team ({count})', south: 'Unfold the deliverables ({count})' },
+  },
+  team: {
+    task: 'task {n}',
+    write: 'Write to {name}',
+    folded: { one: '+ {count} ended', other: '+ {count} ended' },
+    foldedCapped: '+ 30+ ended',
+    failed: { one: '{count} failed', other: '{count} failed' },
+  },
+  card: {
+    write: 'Write to {name}',
+    settings: 'Settings',
+    model: 'Model',
+    effort: 'Effort',
+    mode: 'Mode',
+    attach: 'Attach a file',
+    allModels: 'All models…',
+    files: { one: '{count} file', other: '{count} files' },
+    label: '{name}, {state}',
+  },
+  ask: { loading: 'Loading the question…', fromSub: 'question from {name}' },
+});

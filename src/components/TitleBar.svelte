@@ -91,15 +91,27 @@
   {/if}
   <div class="right" data-tauri-drag-region>
     {#if activeProject && !first}
+      <!-- « Éditeur » opens the menu of the project's views: the editor, the « Workspace ». -->
       <button
         class="btn-bar"
+        aria-haspopup="menu"
         aria-label={t('nav.titleBar.openEditor')}
         use:tip={t('nav.titleBar.openEditorTitle')}
-        onclick={() => app.openEditor({ projectId: activeProject.id, source: 'project' })}
+        onclick={(e) =>
+          menu.showAt(e.currentTarget, [
+            {
+              label: t('common.editor'),
+              icon: 'code',
+              checked: app.editorOn,
+              onClick: () => app.openEditor({ projectId: activeProject.id, source: 'project' }),
+            },
+            { label: t('workspace.open'), icon: 'diagram', checked: app.workspaceOn, onClick: () => app.openWorkspace(activeProject.id) },
+          ])}
         onpointerdown={(e) => paneDrag.press(e, { kind: 'editor' }, t('common.editor'))}
       >
         <Icon name="code" />
         <span class="lbl">{t('common.editor')}</span>
+        <Icon name="down" size={14} />
       </button>
     {/if}
     {#if !IS_MAC}

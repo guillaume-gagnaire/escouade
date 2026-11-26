@@ -103,6 +103,10 @@ export const ICONS = {
   pause: '<path d="M5.75 4v8M10.25 4v8" />',
   more: '<circle cx="3.75" cy="8" r=".9" fill="currentColor" /><circle cx="8" cy="8" r=".9" fill="currentColor" /><circle cx="12.25" cy="8" r=".9" fill="currentColor" />',
   lock: '<rect x="3.25" y="7" width="9.5" height="6.5" rx="1.5" /><path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" />',
+  // The « Workspace »'s tools: a skill (a scroll, « it is doc ») and a plugin (a box).
+  scroll:
+    '<path d="M4.75 2.75h6.5c.83 0 1.5.67 1.5 1.5v7.5c0 .83-.67 1.5-1.5 1.5h-6.5M4.75 2.75c-.83 0-1.5.67-1.5 1.5v1h1.5M4.75 2.75v10.5c-.83 0-1.5-.67-1.5-1.5v-.5h1.5M7 6h3.5M7 8.5h3.5" />',
+  box: '<path d="M8 2.25l5.25 2.75v6L8 13.75 2.75 11V5z" /><path d="M2.75 5L8 7.75 13.25 5M8 7.75v6" />',
   plug: '<path d="M6 2.75v3M10 2.75v3M4.25 5.75h7.5v2a3.75 3.75 0 0 1-7.5 0zM8 11.5v2" />',
   // A plugin (PLG-4), as the preview's: the view Plugins and Réglages › Plugins.
   puzzle:

@@ -143,7 +143,8 @@ async function agentAtWork(repo: string, write: ReturnType<typeof previewsProjec
  * `users.ts` shown.
  */
 async function editorAsThePreview(page: Page, lang: 'fr' | 'en' = 'fr') {
-  await page.getByRole('button', { name: lang === 'fr' ? 'Ouvrir l’éditeur du projet' : 'Open the project’s editor' }).click();
+  await page.getByRole('button', { name: lang === 'fr' ? 'Éditeur ou workspace du projet' : 'Editor or workspace of the project' }).click();
+  await page.getByRole('menuitemradio', { name: lang === 'fr' ? 'Éditeur' : 'Editor' }).click();
   const ed = page.locator('main.editor');
   await ed.locator('.ed-bar .src').click();
   await page.getByRole('menuitemradio').nth(1).click();
@@ -582,7 +583,10 @@ for (const lang of ['fr', 'en'] as const)
             await page.keyboard.press('Escape');
             await expect(palette).toBeHidden();
           }
-          await page.getByRole('button', { name: lang === 'fr' ? 'Ouvrir l’éditeur du projet' : 'Open the project’s editor' }).click();
+          await page
+            .getByRole('button', { name: lang === 'fr' ? 'Éditeur ou workspace du projet' : 'Editor or workspace of the project' })
+            .click();
+          await page.getByRole('menuitemradio', { name: lang === 'fr' ? 'Éditeur' : 'Editor' }).click();
           const ed = page.locator('main.editor');
           await expect(ed.locator('.cm-content')).toBeVisible();
           await ed.locator('.cm-content').click();

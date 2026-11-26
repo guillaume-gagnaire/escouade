@@ -78,7 +78,8 @@ test('53 to 56: the editor’s tree, its actions on hover, no file icons, its fo
   git(app.repo, 'add', '-A');
   git(app.repo, 'commit', '-qm', 'files');
   await addProject(page, app.repo);
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   const ed = page.locator('main.editor');
   const tree = ed.getByRole('tree', { name: 'Fichiers' });
   for (const name of ['src', 'routes']) {

@@ -496,6 +496,10 @@ class AppState {
   docs = $state<Record<string, boolean>>({});
   /** Projects whose « Pull requests » view (ESC-65) fills the main area, in place of the agents (not saved). */
   prs = $state<Record<string, boolean>>({});
+  /** Projects whose « Workspace » (the canvas of the agents) fills the main area, in place of the other views (not saved). */
+  workspace = $state<Record<string, boolean>>({});
+  /** « Vue d’ensemble » shows the « Workspace » of every project in place of its list (not saved). */
+  overviewCanvas = $state(false);
   /** The reviews written by an agent (ESC-66), by project then by pull request. */
   prReviews = $state<Record<string, Record<number, AgentReview>>>({});
   /** The pull request whose review fills the « Pull requests » view, by project. */
@@ -539,19 +543,32 @@ class AppState {
 
   project = $derived(this.projects.find((p) => p.id === this.ui.activeProject) ?? null);
   /** The board of the project on screen is shown. */
-  boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id]);
+  boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id] && !this.workspace[this.project.id]);
   /** The Docs tab of the project on screen is shown (ESC-258). */
-  docsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.board[this.project.id]);
+  docsOn = $derived(
+    this.ui.view === 'project' &&
+      !!this.project &&
+      !!this.docs[this.project.id] &&
+      !this.board[this.project.id] &&
+      !this.workspace[this.project.id],
+  );
   /** The « Pull requests » view of the project on screen is shown (ESC-65). */
   prsOn = $derived(
     this.ui.view === 'project' &&
       !!this.project &&
       !!this.prs[this.project.id] &&
       !this.board[this.project.id] &&
-      !this.docs[this.project.id],
+      !this.docs[this.project.id] &&
+      !this.workspace[this.project.id],
   );
+  /** The « Workspace » of the project on screen is shown: the canvas of its agents. */
+  workspaceOn = $derived(this.ui.view === 'project' && !!this.project && !!this.workspace[this.project.id]);
+  /** The « Workspace » of every project is shown, over « Vue d’ensemble ». */
+  overviewCanvasOn = $derived(this.ui.view === 'overview' && this.overviewCanvas);
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
-  editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on));
+  editorOn = $derived(
+    this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on) && !this.workspace[this.project.id],
+  );
   split = $derived(this.ui.layout === 'split');
   /** Estimated cost of the turns running now (their exact cost joins `usage.todayCost` at their end). */
   liveCost = $derived(Object.values(this.agents).reduce((sum, a) => sum + (a.liveCost ?? 0), 0));
@@ -634,11 +651,11 @@ class AppState {
     return p && raw ? prunePanes(raw, (x) => this.paneExists(p, x)) : null;
   });
   /** The panes are on screen: the Kanban, the pull requests and the Docs cover them (they come back when those close). */
-  panesOn = $derived(this.ui.view === 'project' && !!this.panes && !this.boardOn && !this.docsOn && !this.prsOn);
+  panesOn = $derived(this.ui.view === 'project' && !!this.panes && !this.boardOn && !this.docsOn && !this.prsOn && !this.workspaceOn);
   /** The content shown alone in the work area, which a content dropped beside it splits (null: none, or a wide view). */
   singleItem = $derived.by((): PaneItem | null => {
     const p = this.project;
-    if (!p || this.ui.view !== 'project' || this.panesOn || this.boardOn || this.docsOn || this.prsOn) return null;
+    if (!p || this.ui.view !== 'project' || this.panesOn || this.boardOn || this.docsOn || this.prsOn || this.workspaceOn) return null;
     if (this.editorOn) return { kind: 'editor' };
     if (this.runCommand) return { kind: 'launch', id: this.selectedLaunch[p.id]! };
     if (this.term) return { kind: 'term', id: this.term.id };
@@ -648,8 +665,12 @@ class AppState {
   });
   /** The editor is the content that has the keyboard: alone on screen, or in the active pane. */
   editorActive = $derived(this.panesOn ? this.panes?.active === 'editor' : this.editorOn);
-  /** The keys that answer a request go to `agentId`'s: shown alone, or in the active pane. */
+  /**
+   * The keys that answer a request go to `agentId`'s: shown alone, or in the active pane. On the « Workspace », to none:
+   * several cards may wait at once, one answers them by a click or by Tab.
+   */
   keysFor(agentId: string): boolean {
+    if (this.workspaceOn || this.overviewCanvasOn) return false;
     return !this.panesOn || this.panes?.active === `agent:${agentId}`;
   }
   /** The agents on screen: the one shown alone, or those of the panes. */
@@ -664,7 +685,14 @@ class AppState {
       ? this.panes.active.startsWith('agent:')
         ? (this.agents[this.panes.active.slice(6)] ?? null)
         : null
-      : this.ui.view === 'project' && !this.term && !this.pageShown && !this.runCommand && !this.editorOn && !this.boardOn && !this.prsOn
+      : this.ui.view === 'project' &&
+          !this.term &&
+          !this.pageShown &&
+          !this.runCommand &&
+          !this.editorOn &&
+          !this.boardOn &&
+          !this.prsOn &&
+          !this.workspaceOn
         ? this.agent
         : null,
   );
@@ -1249,7 +1277,20 @@ class AppState {
     if (this.ui.view === 'overview') return;
     this.overviewFrom = this.ui.view;
     this.ui.view = 'overview';
+    // Opened again, it shows its list: its canvas was left with it.
+    this.overviewCanvas = false;
     this.persistUi();
+  }
+
+  /** Shows the « Workspace » of every project over « Vue d’ensemble ». */
+  openOverviewCanvas() {
+    this.openOverview();
+    this.overviewCanvas = true;
+  }
+
+  /** Back from the canvas of every project to the list of « Vue d’ensemble ». */
+  closeOverviewCanvas() {
+    this.overviewCanvas = false;
   }
 
   /** Goes back from « Vue d’ensemble » to the view it covered. */
@@ -1399,6 +1440,7 @@ class AppState {
     this.selectedLaunch[a.projectId] = null;
     this.board[a.projectId] = false;
     this.docs[a.projectId] = false;
+    this.workspace[a.projectId] = false;
     this.prs[a.projectId] = false;
     const ed = this.editor[a.projectId];
     if (ed?.on) {
@@ -1420,6 +1462,7 @@ class AppState {
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.workspace[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
       this.paneShow(p.id, { kind: 'term', id });
@@ -1435,6 +1478,7 @@ class AppState {
       this.selectedPage[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.workspace[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
       this.paneShow(p.id, { kind: 'launch', id: commandId });
@@ -1451,6 +1495,7 @@ class AppState {
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.workspace[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
       this.paneShow(p.id, { kind: 'page', id: key });
@@ -1680,6 +1725,7 @@ class AppState {
     this.board[projectId] = true;
     this.docs[projectId] = false;
     this.prs[projectId] = false;
+    this.workspace[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
@@ -1689,6 +1735,22 @@ class AppState {
 
   closeBoard(projectId = this.ui.activeProject) {
     if (projectId) this.board[projectId] = false;
+  }
+
+  /**
+   * Shows the « Workspace » of a project: the canvas of its agents, over every other view of its main area (they all give
+   * way to it), which it leaves as they were: « Quitter » goes back to the view under it.
+   */
+  openWorkspace(projectId = this.ui.activeProject) {
+    if (!projectId) return;
+    this.ui.activeProject = projectId;
+    this.ui.view = 'project';
+    this.workspace[projectId] = true;
+    this.persistUi();
+  }
+
+  closeWorkspace(projectId = this.ui.activeProject) {
+    if (projectId) this.workspace[projectId] = false;
   }
 
   /**
@@ -1702,6 +1764,7 @@ class AppState {
     this.board[projectId] = false;
     this.docs[projectId] = true;
     this.prs[projectId] = false;
+    this.workspace[projectId] = false;
     if (space) this.docsSpace[projectId] = space;
     if (page !== undefined) this.docsPage[projectId] = page;
     // A space chosen: the discussion open leaves the main area.
@@ -1742,6 +1805,7 @@ class AppState {
     this.board[projectId] = false;
     this.docs[projectId] = false;
     this.prs[projectId] = true;
+    this.workspace[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
@@ -1907,6 +1971,7 @@ class AppState {
     this.board[projectId] = false;
     this.docs[projectId] = false;
     this.prs[projectId] = false;
+    this.workspace[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedPage[projectId] = null;
     this.selectedLaunch[projectId] = null;
