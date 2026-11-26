@@ -3,13 +3,13 @@ title: "L'audit vers un SIEM"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-AUDIT.md (ESC-580, TS-21 : l'étude, les choix A1 à A8, le découpage AU-1 à AU-6)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : toutes les recommandations, A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A","docs/TEAM-SERVER.md §3.7, §3.8, §6, §9, §12, §13, §15","crates/escouade-team-server/README.md (Ce que le serveur voit et garde)","crates/escouade-team-crypto/src/beacon.rs (les balises de tête)","crates/escouade-team/README.md (Les coûts de l'équipe : la clé des administrateurs)","docs/registre-rgpd.md"]
 tickets: ["ESC-580","ESC-588","ESC-608","ESC-609","ESC-610","ESC-612","ESC-614","ESC-617","ESC-606"]
-decisions: [264,275,265,266,267,268]
+decisions: [264,275,265,266,267,268,342]
 compared: null
 ---
 
 # L'audit vers un SIEM
 
-> **Décidé, pas encore construit.** L'utilisateur a pris toutes les recommandations de l'étude d'ESC-580 (`docs/TEAM-AUDIT.md`) le 2026-11-21 (A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A). Cette page dit ce qui est décidé ; chaque partie se construit par un ticket, de AU-1 (ESC-608) à AU-6 (ESC-617). Une partie construite le dira ici.
+> **Décidé, pas encore construit.** L'utilisateur a pris toutes les recommandations de l'étude d'ESC-580 (`docs/TEAM-AUDIT.md`) le 2026-11-21 (A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A). Cette page dit ce qui est décidé ; chaque partie se construit par un ticket, de AU-1 (ESC-608) à AU-6 (ESC-617). Une partie construite le dira ici. Le rôle de service dont dépend la machine d'audit est construit (OE-1, ESC-606).
 
 ## Ce que c'est
 
@@ -25,7 +25,8 @@ Un journal d'audit de l'équipe, envoyé à son outil de sécurité (Splunk, Ela
 ## Les sources (A1-C, A2-A)
 
 - **Le serveur seul** (AU-2, ESC-609) : ce que voient ses routes, en ids opaques, signé par une clé d'audit du serveur tirée à `init`.
-- **Une machine de l'équipe qui déchiffre** (AU-5, ESC-614), sous le **rôle de service** (OE-1, ESC-606 : elle lit, ne signe rien d'administratif) ; un poste d'administrateur en recours, tant qu'il est ouvert. Elle nomme ce qui se passe dans le journal et les projets qu'elle tient, et dit ceux qu'elle ne suit pas.
+- **Une machine de l'équipe qui déchiffre** (AU-5, ESC-614), sous le **rôle de service** (OE-1, ESC-606, **fait**) ; un poste d'administrateur en recours, tant qu'il est ouvert. Elle nomme ce qui se passe dans le journal et les projets qu'elle tient, et dit ceux qu'elle ne suit pas.
+  - Ce que donne OE-1 : un administrateur l'inscrit par un code court (« Inscrire une machine de l'équipe », puis `escouade-server team pair` sur la machine) ; elle a son propre id au registre, rattaché à l'équipe ; elle lit le flux de l'équipe et les projets qu'on lui ouvre, et ne signe jamais un membre, un rôle, un réglage, un coupe-circuit, un plugin privé, ni ne répond à une invitation (chaque poste le refuse, `policy.rs`) ; le serveur la refuse sur ses routes d'administrateur et sur les flux propres de l'équipe. La même machine peut porter l'Overseer d'équipe (voir « L'Overseer d'équipe »).
 - **Les postes** (AU-3, ESC-610 ; AU-4, ESC-612) : ce qui n'arrive que là (refus du cœur, autorisations, commandes approuvées, plugins, coupe-circuit appliqué), scellé pour une clé d'audit à part et déposé sur le serveur ; la machine l'ouvre. Un poste ne parle jamais au SIEM, et rien ne sort d'un poste en clair. Un poste modifié peut taire ses faits.
 
 ## Les formats (A4-A)
@@ -51,7 +52,7 @@ Chaque événement est signé par son émetteur, chaîné au précédent, et anc
 | AU-2 (ESC-609) | le serveur émet seul | AU-1 |
 | AU-3 (ESC-610) | la clé d'audit et le flux des postes | AU-1 |
 | AU-4 (ESC-612) | les faits des postes, ce que voit le membre | AU-3, ESC-546, ESC-579 |
-| AU-5 (ESC-614) | la machine d'audit, les noms, le recoupement | AU-2, AU-4, OE-1, ESC-546, ESC-579 |
+| AU-5 (ESC-614) | la machine d'audit, les noms, le recoupement | AU-2, AU-4, OE-1 (fait), ESC-546, ESC-579 |
 | AU-6 (ESC-617) | les guides du site, l'essai contre Splunk et Elastic | AU-5 |
 
 ## Ce qui attend l'utilisateur

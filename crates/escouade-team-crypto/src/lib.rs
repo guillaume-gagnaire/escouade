@@ -42,7 +42,7 @@ pub use device::{
 };
 pub use identity::{DeviceId, DeviceKind, Identity, MemberId, ObjectId, ProjectId};
 pub use invite::{AdmissionCode, InvitationError, InviteLink, Purpose};
-pub use policy::CommitScope;
+pub use policy::{may_sign, Act, CommitScope};
 pub use recovery::{EscrowKey, EscrowTeamHalf, RecoveryKey};
 pub use roster::{Role, Roster, TeamFingerprint};
 pub use void::Void;

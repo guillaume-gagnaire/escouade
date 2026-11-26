@@ -21,6 +21,8 @@ pub const PROTOCOL: u32 = 1;
 pub enum Role {
     Admin,
     Member,
+    /// A machine of the team (OE-1).
+    Service,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -21,6 +21,10 @@ use crate::util::Id;
 pub enum Role {
     Admin,
     Member,
+    /// A machine of the team (OE-1): the server sees only that sort, beside the device's opaque id. It keeps it off
+    /// the administrators' routes and off the team's own streams; the devices refuse what it signs out of its role
+    /// (`escouade_team_crypto::policy::may_sign`).
+    Service,
 }
 
 impl Role {
@@ -28,14 +32,15 @@ impl Role {
         match self {
             Role::Admin => "admin",
             Role::Member => "member",
+            Role::Service => "service",
         }
     }
 
     pub fn parse(s: &str) -> Role {
-        if s == "admin" {
-            Role::Admin
-        } else {
-            Role::Member
+        match s {
+            "admin" => Role::Admin,
+            "service" => Role::Service,
+            _ => Role::Member,
         }
     }
 }

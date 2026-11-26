@@ -27,6 +27,18 @@ pub enum Role {
     Admin,
     /// Reads and writes the content; adds and removes their own devices only.
     Member,
+    /// A machine of the team (OE-1, `docs/TEAM-OVERSEER.md` §3.2, `docs/TEAM-AUDIT.md` A2): tied to the team, not to
+    /// a person. It reads and writes the content of the projects opened to it and takes tickets, adds and removes its
+    /// own devices, and signs nothing of the administrators' (`policy::may_sign`). The role is given at its entry only
+    /// and never changes: a machine leaves, and another is enrolled.
+    Service,
+}
+
+impl Role {
+    /// A person: an administrator or a member, never a machine of the team.
+    pub fn is_person(self) -> bool {
+        self != Role::Service
+    }
 }
 
 /// What made the team, never changed afterwards: the team's fingerprint is made of it.
@@ -85,6 +97,14 @@ impl Roster {
 
     pub fn admins(&self) -> usize {
         self.members.values().filter(|r| **r == Role::Admin).count()
+    }
+
+    /// The machines of the team (the role of service).
+    pub fn services(&self) -> impl Iterator<Item = &MemberId> {
+        self.members
+            .iter()
+            .filter(|(_, r)| **r == Role::Service)
+            .map(|(m, _)| m)
     }
 
     /// JSON, its maps sorted (BTreeMap) and its fields in a fixed order: the same roster gives the same bytes.

@@ -280,6 +280,11 @@ impl Authed {
     pub fn is_admin(&self) -> bool {
         self.device.role == Role::Admin
     }
+
+    /// A machine of the team (OE-1): never on an administrator's route, nor on the team's own streams.
+    pub fn is_service(&self) -> bool {
+        self.device.role == Role::Service
+    }
 }
 
 impl FromRequestParts<Shared> for Authed {

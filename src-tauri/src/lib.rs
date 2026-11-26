@@ -734,53 +734,10 @@ pub fn run() {
             }
             let (core, git_rx) = Core::load(app.handle().clone(), data);
             app.manage(core.clone());
-            // The teams of the team server (TS-3): their keys in the app's keychain, the network of the settings, the
-            // data's `teams` folder; read every few seconds, for the invitees an online administrator lets in.
-            let teams = {
-                let settings = Arc::downgrade(&core);
-                let hub = Arc::downgrade(&core);
-                Arc::new(teams::Teams::open(
-                    core.data.root().join("teams"),
-                    core.secrets.clone(),
-                    Arc::new(move || {
-                        settings
-                            .upgrade()
-                            .map(|c| c.settings.read().clone())
-                            .unwrap_or_default()
-                    }),
-                    Arc::new(move || {
-                        if let Some(core) = hub.upgrade() {
-                            core.hub.emit(model::UiEvent::Teams {});
-                        }
-                    }),
-                ))
-            };
+            // The teams of the team server (TS-3): their keys in the app's keychain, the data's `teams` folder, read
+            // every few seconds; their Kanban, docs and signed settings to the core (`teams::open_for`).
+            let teams = teams::open_for(&core);
             app.manage(teams.clone());
-            // The Kanban of the teams' projects (TS-6): their journals, their claims.
-            core.set_teams(teams.clone());
-            {
-                let core = Arc::downgrade(&core);
-                teams.set_docs_sink(Arc::new(move |id| {
-                    if let Some(core) = core.upgrade() {
-                        let id = id.to_string();
-                        tauri::async_runtime::spawn(async move {
-                            core.team_docs_after_read(&id).await;
-                        });
-                    }
-                }));
-            }
-            // The team's signed settings (TS-13): the version in force of each team to the core's locks and projects.
-            {
-                let core = Arc::downgrade(&core);
-                teams.set_settings_sink(Arc::new(move |id, name, view| {
-                    if let Some(core) = core.upgrade() {
-                        core.apply_team_settings(id, name, view);
-                    }
-                }));
-                let started = teams.clone();
-                tauri::async_runtime::spawn(async move { started.start_settings().await });
-            }
-            tauri::async_runtime::spawn(teams.watch(teams::watch_every()));
             // The editor's language servers (ESC-446): their messages and states to the window.
             app.manage(lsp::for_app(app.handle().clone()));
             // The editor's extensions (ESC-481): Open VSX by the core, checked, served.

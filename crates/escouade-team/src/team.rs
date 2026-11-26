@@ -313,6 +313,10 @@ struct Meta {
     /// The administrators of each epoch this device lived through, as its roster said (TS-13: a version of the team's
     /// settings counts the signature of an administrator of the epoch it was sealed at).
     admins: BTreeMap<u64, BTreeSet<MemberId>>,
+    /// The machines of the team (role of service, OE-1) this device saw in a roster: the role never changes, so one
+    /// removed since is still a machine for what it signed before.
+    #[serde(default)]
+    services: BTreeSet<MemberId>,
     /// The last-resort KeyPackage of each device, read in the stream (TS-5): the groups of the projects kept to some
     /// members add a device by it. Checked against the team's leaves when used.
     key_packages: BTreeMap<DeviceId, Vec<u8>>,
@@ -742,6 +746,35 @@ impl Team {
         Ok(self.device.is_admin()?)
     }
 
+    /// This device is a machine of the team (role of service, OE-1): it signs its own devices and the content of the
+    /// projects opened to it, nothing else (`policy::may_sign`).
+    pub fn is_service(&self) -> bool {
+        self.identity().kind == DeviceKind::Device && self.is_machine(&self.identity().member)
+    }
+
+    /// Whether `member` is a machine of the team: in the roster now under the role of service, or seen so before (the
+    /// role never changes).
+    pub fn is_machine(&self, member: &MemberId) -> bool {
+        self.meta.services.contains(member)
+            || self
+                .device
+                .roster()
+                .is_ok_and(|r| r.role(member) == Some(Role::Service))
+    }
+
+    /// Whether this device may sign `act` (OE-1, `policy::may_sign`), by its role now; the recovery leaf is an
+    /// administrator's.
+    pub fn may_sign(&self, act: escouade_team_crypto::Act) -> bool {
+        if self.identity().kind == DeviceKind::Recovery {
+            return self.is_admin().unwrap_or(false);
+        }
+        self.device
+            .roster()
+            .ok()
+            .and_then(|r| r.role(&self.identity().member))
+            .is_some_and(|role| escouade_team_crypto::may_sign(role, act))
+    }
+
     pub fn is_removed(&self) -> bool {
         self.device.is_removed()
     }
@@ -971,6 +1004,7 @@ impl Team {
                 }
             }
             self.meta.admins.entry(epoch).or_insert(admins);
+            self.meta.services.extend(roster.services().copied());
         }
         let storage = self.device.provider().storage();
         storage.put_ours(b"state", &self.device.saved_state())?;
@@ -2296,6 +2330,8 @@ impl Team {
         for leaf in leaves.iter().filter(|l| l.kind == DeviceKind::Device) {
             let want = match roster.role(&leaf.member) {
                 Some(Role::Admin) => wire::Role::Admin,
+                // A machine of the team (OE-1): the server keeps it off its administrators' routes.
+                Some(Role::Service) => wire::Role::Service,
                 _ => wire::Role::Member,
             };
             let Some(on_server) = devices.iter().find(|d| d.id == leaf.device.0) else {
@@ -2356,9 +2392,22 @@ impl Team {
     /// first message of the PAKE on the server's relay. Then [`Team::pair_step`] until it is sent or refused.
     pub async fn pair_start(&mut self, now: u64) -> Result<Pairing, Error> {
         let me = self.identity().member;
-        let invited = self
-            .invite_for(Purpose::OwnDevice(me), now, OWN_DEVICE_LIFETIME)
-            .await?;
+        self.pair_start_for(Purpose::OwnDevice(me), now).await
+    }
+
+    /// Shows a short code that enrolls a **machine of the team** (OE-1): an invitation under the role of service (an
+    /// hour), an administrator's alone, typed on the machine (`escouade-server team pair`, or « Rejoindre par un
+    /// code » in its window). The machine then shows its six words, compared before « Admettre », as for anyone.
+    pub async fn pair_start_service(&mut self, now: u64) -> Result<Pairing, Error> {
+        if !self.may_sign(escouade_team_crypto::Act::Member) {
+            return Err(CryptoError::NotAdmin.into());
+        }
+        self.pair_start_for(Purpose::NewMember(Role::Service), now)
+            .await
+    }
+
+    async fn pair_start_for(&mut self, purpose: Purpose, now: u64) -> Result<Pairing, Error> {
+        let invited = self.invite_for(purpose, now, OWN_DEVICE_LIFETIME).await?;
         let mut code = PairCode::new("");
         let (spake, message) = Pairing::start(&code);
         let opened = self.client.pair_open(&message).await?;

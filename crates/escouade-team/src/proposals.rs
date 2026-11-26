@@ -104,6 +104,10 @@ fn open(team: &Team, payload: &[u8]) -> Result<(String, Entry), Opened> {
     let who = team
         .signer_at(sealed.header.epoch, &sealed.header.author)
         .ok_or(Opened::Refused)?;
+    // A machine of the team proposes nothing to the team (OE-1): the server keeps it off this stream, the devices too.
+    if team.is_machine(&who.member) {
+        return Err(Opened::Refused);
+    }
     let entry: Entry = wire::decode(&plain).map_err(|_| Opened::Refused)?;
     Ok((who.member.to_string(), entry))
 }
@@ -175,6 +179,9 @@ pub async fn propose(
     board: &str,
     at: u64,
 ) -> Result<Proposals, Error> {
+    if team.is_service() {
+        return Err(CryptoError::NotAdmin.into());
+    }
     let entry = Entry::Board {
         item: id16(item)?,
         board: id16(board)?,

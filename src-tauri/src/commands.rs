@@ -5728,10 +5728,26 @@ pub async fn team_join(
     Ok(team)
 }
 
-/// Shows a short code for another device of one's own.
+/// Shows a short code for another device of one's own, or, `service`, for a machine of the team (OE-1: an
+/// administrator's « Inscrire une machine de l'équipe »; typed on the machine).
 #[tauri::command]
-pub async fn team_pair_start(teams: TeamsState<'_>, team: String) -> Res<crate::teams::PairView> {
-    teams.pair_start(&team).await
+pub async fn team_pair_start(
+    teams: TeamsState<'_>,
+    team: String,
+    service: Option<bool>,
+) -> Res<crate::teams::PairView> {
+    teams.pair_start(&team, service.unwrap_or(false)).await
+}
+
+/// « Retirer la machine » (OE-1): an administrator takes a machine of the team out, as a device is revoked. The
+/// desktop's only, as an admission: never at a distance, and no tool of the MCP server gives or takes the role.
+#[tauri::command]
+pub async fn team_machine_remove(
+    teams: TeamsState<'_>,
+    team: String,
+    machine: String,
+) -> Res<crate::teams::TeamView> {
+    teams.remove_machine(&team, &machine).await
 }
 
 #[tauri::command]

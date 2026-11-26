@@ -2,8 +2,8 @@
 title: "Entrer dans une équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","Revue de sécurité de la 2.3 (ESC-625), SR2-08 : la vérification hors bande à l'admission","Revue de sécurité de la 2.3 (ESC-625), SR2-05 : le relais d'appairage"]
-tickets: ["ESC-461","ESC-632","ESC-633","ESC-634","ESC-639"]
-decisions: [173,286,288,329,332]
+tickets: ["ESC-461","ESC-632","ESC-633","ESC-634","ESC-639","ESC-606"]
+decisions: [173,286,288,329,332,342]
 compared: null
 ---
 
@@ -104,3 +104,14 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 ## Retirer une équipe de cet appareil
 
 Sur la carte de l'équipe, après confirmation : son état et ses clés sont effacés de cet appareil. Le groupe garde sa feuille jusqu'à ce qu'un administrateur la retire (TS-4).
+
+## Inscrire une machine de l'équipe (OE-1)
+
+Une machine en mode serveur qui tourne jour et nuit (l'Overseer d'équipe, l'audit) entre **sous le rôle de service** : rattachée à l'équipe, pas à une personne, ni membre ni administrateur (voir « L'Overseer d'équipe », « Le rôle de service »).
+
+- **Un administrateur seul** l'inscrit : carte de l'équipe › « Machines de l'équipe » › « Inscrire une machine de l'équipe ». L'écran montre le code court (une heure, un essai) et la commande à taper sur la machine : `escouade-server team pair <serveur> <CODE>` (`--name <nom>` : le nom de l'équipe sur la machine). Ou, dans une fenêtre connectée à la machine, « Ajouter cet appareil par un code ».
+- **Sur la machine**, la commande laisse le code au serveur qui tourne sur son dossier (un fichier lisible du seul compte du service, effacé avant d'être joué), qui joue l'unique essai du SPAKE2, reçoit l'invitation sous le rôle de service et demande à entrer ; la commande affiche les six mots de la demande. Sans serveur lancé sur le dossier, elle le dit et ne fait rien.
+- **L'administrateur compare les six mots** avec ceux de sa demande, puis « Les mots sont les mêmes », comme pour toute entrée. La machine a son propre id au registre.
+- **Le code va de l'administrateur à la machine**, comme pour « Ajouter un appareil » : le relais du serveur ne laisse ouvrir un créneau qu'à un appareil de l'équipe (SR2-05), et la machine n'en est pas encore un.
+- **Un membre** n'inscrit pas de machine, et une machine n'en inscrit pas d'autre (« Seul un administrateur de l'équipe peut le faire. »). Une machine ajoute ses propres appareils, comme un membre.
+- **Retirer une machine** : « Retirer » sur sa ligne, après confirmation ; ses appareils sont coupés au serveur, elle sort du groupe et les clés de l'équipe tournent.

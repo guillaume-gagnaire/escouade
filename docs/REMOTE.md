@@ -716,6 +716,7 @@ Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 - `speech_preview` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `speech_preview_online` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 - `team_admit` : l’admission d’un appareil dans une équipe (SR2-08) : ses six mots se comparent avec l’écran de l’invité, jamais à distance
+- `team_machine_remove` : retirer une machine de l’équipe (OE-1), un geste d’administrateur comme l’admission, jamais à distance
 - `update_check` : l’updater du client : le client et le serveur ont chacun le leur
 - `update_close` : l’updater du client : le client et le serveur ont chacun le leur
 - `update_download` : l’updater du client : le client et le serveur ont chacun le leur

@@ -8,6 +8,8 @@
 //! - `escouade-server [run]`: the server;
 //! - `escouade-server pair`: a pairing code for a new device, once and briefly (`remoteapi::pairing`);
 //! - `escouade-server devices [list]`, `devices revoke <id>`: the paired devices;
+//! - `escouade-server team pair <serveur> <CODE> [--name <nom>]` (OE-1): the machine enters a team as a machine of the
+//!   team (the role of service), by the short code an administrator shows (`teampair`);
 //! - `escouade-server health`: whether the server of the folder runs and still answers (the image's `HEALTHCHECK`);
 //! - `escouade-server update [--to X.Y.Z [--downgrade]] [--beta] [--now] [--check]`: the server at a signed version (`update`);
 //! - `escouade-server phone [status]`, `phone on [PORT]`, `phone off`, `phone add NAME [--endpoint HOST]`,
@@ -33,6 +35,7 @@
 pub mod logs;
 pub mod secrets;
 pub mod status;
+pub mod teampair;
 pub mod update;
 
 use crate::headless::Headless;
@@ -70,6 +73,11 @@ pub enum Command {
     Update,
     /// `phone …` (ESC-567).
     Phone(PhoneCommand),
+    /// `team pair <serveur> <CODE>` (OE-1): enters a team as a machine of the team.
+    TeamPair {
+        server: String,
+        code: String,
+    },
     Version,
     Help,
 }
@@ -103,6 +111,8 @@ pub struct Args {
     pub update: update::Asked,
     /// Where a phone reaches the server (`phone add --endpoint`): its name or address on the Internet.
     pub endpoint: Option<String>,
+    /// The name of the team on this machine (`team pair --name`; else its server's address).
+    pub name: Option<String>,
 }
 
 /// The command line `args` (without the program's name), with the process's variables. `--help` anywhere is the
@@ -134,6 +144,7 @@ pub fn parse_with(
         }),
         update: update::Asked::default(),
         endpoint: None,
+        name: None,
     };
     if let Some(v) = var(PORT_VAR) {
         out.port = port_of(&v)?;
@@ -195,6 +206,7 @@ pub fn parse_with(
             "--debug" => out.debug = true,
             "--gate" => out.gate = true,
             "--endpoint" => out.endpoint = Some(value("--endpoint")?),
+            "--name" => out.name = Some(value("--name")?),
             "--to" => {
                 update_flags = true;
                 out.update.to = Some(value("--to")?);
@@ -234,6 +246,16 @@ pub fn parse_with(
         ["phone", "off"] => Command::Phone(PhoneCommand::Off),
         ["phone", "add", name] => Command::Phone(PhoneCommand::Add(name.to_string())),
         ["phone", "remove", id] => Command::Phone(PhoneCommand::Remove(id.to_string())),
+        ["team", "pair", server, code] => Command::TeamPair {
+            server: server.to_string(),
+            code: code.to_string(),
+        },
+        ["team", ..] => {
+            return Err(tr!(
+                "team pair attend l’adresse du serveur d’équipe et le code que montre l’administrateur (escouade-server team pair team.acme.fr K7Q4M-2XZ8P)",
+                "team pair needs the team server's address and the code the administrator shows (escouade-server team pair team.acme.fr K7Q4M-2XZ8P)"
+            ))
+        }
         ["phone", "add"] | ["phone", "remove"] => {
             return Err(tr!(
                 "phone add attend un nom, phone remove l’id d’un téléphone (escouade-server phone)",
@@ -254,6 +276,12 @@ pub fn parse_with(
             ))
         }
     };
+    if out.name.is_some() && !matches!(out.command, Command::TeamPair { .. }) {
+        return Err(tr!(
+            "--name va avec « team pair »",
+            "--name goes with “team pair”"
+        ));
+    }
     if update_flags && out.command != Command::Update {
         return Err(tr!(
             "--to, --beta, --now, --check et --downgrade vont avec « update »",
@@ -335,6 +363,7 @@ pub fn help() -> String {
          escouade-server health             le serveur tourne-t-il et répond-il ? (code 0 si oui)\n  \
          escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
          escouade-server phone              le tunnel WireGuard du téléphone (on [PORT], off, add NOM [--endpoint HÔTE], remove ID)\n  \
+         escouade-server team pair SERVEUR CODE  entre dans une équipe comme machine de l’équipe, par le code que montre un administrateur (--name NOM : son nom ici)\n  \
          escouade-server via HÔTE PORT      le ProxyCommand de ssh par la porte (ProxyCommand=\"escouade-server via %h %p\")\n\n\
          Options :\n  \
          --data-dir DOSSIER  le dossier des données (sinon ~/.escouade)\n  \
@@ -354,6 +383,7 @@ pub fn help() -> String {
          escouade-server health             does the server run and answer? (exit code 0 if so)\n  \
          escouade-server update             puts the server at the latest signed version (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
          escouade-server phone              the phone's WireGuard tunnel (on [PORT], off, add NAME [--endpoint HOST], remove ID)\n  \
+         escouade-server team pair SERVER CODE  enters a team as a machine of the team, by the code an administrator shows (--name NAME: its name here)\n  \
          escouade-server via HOST PORT      ssh's ProxyCommand through the gate (ProxyCommand=\"escouade-server via %h %p\")\n\n\
          Options:\n  \
          --data-dir FOLDER  the data folder (else ~/.escouade)\n  \
@@ -438,6 +468,7 @@ pub fn main(args: Vec<String>) -> i32 {
         Command::Health => health(&args),
         Command::Update => data_of(&args).and_then(|data| update::run(&data, &args.update)),
         Command::Phone(what) => phone(&args, what),
+        Command::TeamPair { server, code } => team_pair(&args, server, code),
         Command::Run => run(&args),
     };
     match done {
@@ -448,6 +479,50 @@ pub fn main(args: Vec<String>) -> i32 {
             1
         }
     }
+}
+
+/// `team pair <serveur> <CODE>` (OE-1): the request left for the server of the folder, its answer waited for, the six
+/// words printed for the user alone (never in the log), to compare with the administrator's screen.
+fn team_pair(args: &Args, server: &str, code: &str) -> Result<()> {
+    let data = data_of(args)?;
+    let running = status::read(&data)
+        .is_some_and(|s| status::healthy(&s, crate::model::now_ms(), status::alive).is_ok());
+    if !running {
+        bail!(tr!(
+            "aucun serveur lancé sur {} : lance « escouade-server » d’abord, puis « team pair »",
+            "no server running on {}: start “escouade-server” first, then “team pair”",
+            data.root().display()
+        ));
+    }
+    let id = hex::encode(crate::model::now_ms().to_be_bytes());
+    let request = teampair::Request {
+        server: server.trim().to_string(),
+        code: code.trim().to_string(),
+        name: args.name.clone().unwrap_or_default(),
+        id: id.clone(),
+    };
+    teampair::ask(data.root(), &request)?;
+    println!(
+        "{}",
+        tr!(
+            "Code transmis au serveur ; il attend l’appareil de l’administrateur…",
+            "Code given to the server; it waits for the administrator's device…"
+        )
+    );
+    let answer = teampair::wait(data.root(), &id, teampair::WAIT)?;
+    if let Some(e) = answer.error {
+        bail!(e);
+    }
+    println!(
+        "{}",
+        tr!(
+            "Demande d’entrée dans l’équipe « {} », comme machine de l’équipe.\n\nLes six mots de cette machine : {}\n\nL’administrateur les compare avec ceux de son écran, puis « Admettre ». La machine entre alors, sous le rôle de service : elle lit et écrit les projets qu’on lui ouvre et prend des tickets, sans rien signer d’administratif.",
+            "Asked to enter the team “{}”, as a machine of the team.\n\nThis machine's six words: {}\n\nThe administrator compares them with those of their screen, then “Admit”. The machine then enters, under the role of service: it reads and writes the projects opened to it and takes tickets, signing nothing of the administrators'.",
+            answer.team.unwrap_or_default(),
+            answer.words.join(" ")
+        )
+    );
+    Ok(())
 }
 
 /// `pair`: a new code, printed for the user alone (never in the log).
@@ -788,6 +863,10 @@ pub async fn serve(
     crate::agentgroups::start(root.join("agent-groups.json"));
     let headless = Headless::start_locked(lock, data, host);
     let core = headless.core.clone();
+    // The teams of the team server (OE-1): a machine of the team in server mode is a device of its own, served to the
+    // remote windows; `escouade-server team pair` (another process) leaves its request for it.
+    let teams = headless.open_teams();
+    teampair::watch(teams, root.clone());
     let api = match headless
         .serve_remote_on(listen_on(listen, port)?, limits)
         .await

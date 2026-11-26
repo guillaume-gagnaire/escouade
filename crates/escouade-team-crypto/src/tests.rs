@@ -2094,3 +2094,235 @@ fn a_key_package_put_in_the_invitees_place_has_other_words_and_is_refused() {
         Err(Error::Invitation(InvitationError::Unknown))
     ));
 }
+
+/// A commit of `device` made by raw MLS, past the API's checks (what a pirate's client would send): its adds, its
+/// roster, the scope its authenticated data says.
+fn raw_commit(
+    device: &mut TeamDevice,
+    adds: Vec<KeyPackage>,
+    roster: Option<Roster>,
+    scope: CommitScope,
+) -> Vec<u8> {
+    let (provider, signer, group) = device.mls();
+    group.clear_pending_commit(provider.storage()).unwrap();
+    group.set_aad(scope.team_aad());
+    let mut builder = group.commit_builder().force_self_update(true);
+    if !adds.is_empty() {
+        builder = builder.propose_adds(adds);
+    }
+    if let Some(r) = roster {
+        builder = builder
+            .propose_group_context_extensions(r.to_extensions().unwrap())
+            .unwrap();
+    }
+    let bundle = builder
+        .load_psks(provider.storage())
+        .unwrap()
+        .build(provider.rand(), provider.crypto(), signer, |_| true)
+        .unwrap()
+        .stage_commit(provider)
+        .unwrap();
+    let bytes = encode(bundle.commit()).unwrap();
+    group.clear_pending_commit(provider.storage()).unwrap();
+    bytes
+}
+
+/// OE-1: what each role signs. A machine of the team signs its own devices and the content, nothing else.
+#[test]
+fn the_table_of_what_each_role_signs() {
+    use crate::policy::{may_sign, Act};
+    let all = [
+        Act::Member,
+        Act::Role,
+        Act::Setting,
+        Act::Breaker,
+        Act::PrivatePlugin,
+        Act::Invitation,
+        Act::OwnDevices,
+        Act::Content,
+    ];
+    assert!(all.iter().all(|a| may_sign(Role::Admin, *a)));
+    let service: Vec<Act> = all
+        .iter()
+        .copied()
+        .filter(|a| may_sign(Role::Service, *a))
+        .collect();
+    assert_eq!(service, vec![Act::OwnDevices, Act::Content]);
+    let member: Vec<Act> = all
+        .iter()
+        .copied()
+        .filter(|a| may_sign(Role::Member, *a))
+        .collect();
+    assert_eq!(
+        member,
+        vec![Act::PrivatePlugin, Act::OwnDevices, Act::Content]
+    );
+    assert!(!Role::Service.is_person());
+    assert!(Role::Member.is_person() && Role::Admin.is_person());
+}
+
+/// OE-1: a machine of the team enters by an administrator's invitation under the role of service; it reads and writes
+/// the content, adds its own devices, and every other commit of it is refused by the other devices, even made by raw
+/// MLS (a member added, a role changed, itself made an administrator).
+#[test]
+fn a_machine_of_the_team_signs_its_own_devices_and_the_content_only() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let mut machine = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Service),
+        member(7),
+    );
+    sync(&relay, &mut [&mut bob]);
+    let roster = alice.roster().unwrap();
+    assert_eq!(roster.role(&member(7)), Some(Role::Service));
+    assert_eq!(roster.services().collect::<Vec<_>>(), vec![&member(7)]);
+    assert_eq!(roster.admins(), 1, "a machine is no administrator");
+    assert!(!machine.is_admin().unwrap());
+    assert_eq!(machine.commit_scope().unwrap(), CommitScope::Own);
+
+    // The content, both ways.
+    let note = alice.seal(project(1), object(1), 1, b"DEM-4").unwrap();
+    assert_eq!(machine.open(&note).unwrap(), b"DEM-4");
+    let reply = machine
+        .seal(project(1), object(2), 1, b"taken by the machine")
+        .unwrap();
+    assert_eq!(bob.open(&reply).unwrap(), b"taken by the machine");
+
+    // The API refuses it what it never signs.
+    assert!(matches!(
+        machine.invite(
+            Purpose::NewMember(Role::Member),
+            NOW,
+            DEFAULT_LIFETIME,
+            SERVER
+        ),
+        Err(Error::NotAdmin)
+    ));
+    assert!(matches!(
+        machine.invite(Purpose::OwnDevice(member(2)), NOW, DEFAULT_LIFETIME, SERVER),
+        Err(Error::NotAdmin)
+    ));
+    assert!(matches!(
+        machine.set_role(member(7), Role::Admin),
+        Err(Error::NotAdmin)
+    ));
+    assert!(matches!(
+        machine.remove_member(member(2)),
+        Err(Error::NotAdmin)
+    ));
+
+    // By raw MLS: Mallory added (an invitation answered), the machine made an administrator, a member taken out of
+    // the roster. The other devices refuse each, whatever the scope says.
+    let mallory = outsider_key_package(member(9));
+    for scope in [CommitScope::Own, CommitScope::Admin] {
+        let commit = raw_commit(&mut machine, vec![mallory.clone()], None, scope);
+        assert!(matches!(
+            alice.process_commit(&commit),
+            Err(Error::Policy(_))
+        ));
+        assert!(matches!(bob.process_commit(&commit), Err(Error::Policy(_))));
+    }
+    let mut admin = machine.roster().unwrap();
+    admin.members.insert(member(7), Role::Admin);
+    let mut fewer = machine.roster().unwrap();
+    fewer.members.remove(&member(2));
+    for roster in [admin, fewer] {
+        for scope in [CommitScope::Own, CommitScope::Admin] {
+            let commit = raw_commit(&mut machine, Vec::new(), Some(roster.clone()), scope);
+            assert!(matches!(
+                alice.process_commit(&commit),
+                Err(Error::Policy(_))
+            ));
+            assert!(matches!(bob.process_commit(&commit), Err(Error::Policy(_))));
+        }
+    }
+    assert_eq!(
+        alice.roster().unwrap().role(&member(7)),
+        Some(Role::Service)
+    );
+
+    // Its own other device: taken, by a commit that says it is its own.
+    let mut machine2 = join(
+        &mut relay,
+        &mut machine,
+        Purpose::OwnDevice(member(7)),
+        member(7),
+    );
+    sync(&relay, &mut [&mut alice, &mut bob]);
+    assert_eq!(machine2.identity().member, member(7));
+    assert_eq!(alice.epoch().unwrap(), machine2.epoch().unwrap());
+    let sealed = machine2.seal(project(1), object(3), 1, b"second").unwrap();
+    assert_eq!(alice.open(&sealed).unwrap(), b"second");
+
+    // Removed as a member is: its devices go with it, and it reads nothing of the next epoch.
+    publish(&mut relay, alice.remove_member(member(7)).unwrap());
+    let last = relay.commits.last().unwrap().clone();
+    assert_eq!(machine.process_commit(&last).unwrap(), Processed::Removed);
+    assert_eq!(machine2.process_commit(&last).unwrap(), Processed::Removed);
+    sync(&relay, &mut [&mut bob]);
+    let after = alice.seal(project(1), object(4), 1, b"after").unwrap();
+    assert!(machine.open(&after).is_err());
+    assert_eq!(bob.open(&after).unwrap(), b"after");
+}
+
+/// OE-1: the role of service is given at the entry only. An administrator neither makes a person a machine nor a
+/// machine a person: refused by the API, and by every device when the commit is made by raw MLS.
+#[test]
+fn the_role_of_service_never_changes() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let mut machine = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Service),
+        member(7),
+    );
+    sync(&relay, &mut [&mut bob]);
+    for (who, role) in [
+        (member(7), Role::Admin),
+        (member(7), Role::Member),
+        (member(2), Role::Service),
+    ] {
+        assert!(matches!(alice.set_role(who, role), Err(Error::Policy(_))));
+    }
+    for (who, role) in [
+        (member(7), Role::Admin),
+        (member(2), Role::Service),
+        (member(1), Role::Service),
+    ] {
+        let mut roster = alice.roster().unwrap();
+        roster.members.insert(who, role);
+        if who == member(1) {
+            roster.members.insert(member(2), Role::Admin);
+        }
+        let commit = raw_commit(&mut alice, Vec::new(), Some(roster), CommitScope::Admin);
+        assert!(matches!(bob.process_commit(&commit), Err(Error::Policy(_))));
+        assert!(matches!(
+            machine.process_commit(&commit),
+            Err(Error::Policy(_))
+        ));
+    }
+    // An administrator still changes a person's role.
+    publish(&mut relay, alice.set_role(member(2), Role::Admin).unwrap());
+    sync(&relay, &mut [&mut bob, &mut machine]);
+    assert_eq!(
+        machine.roster().unwrap().role(&member(2)),
+        Some(Role::Admin)
+    );
+    assert_eq!(
+        machine.roster().unwrap().role(&member(7)),
+        Some(Role::Service)
+    );
+}

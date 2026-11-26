@@ -701,6 +701,19 @@ pub async fn set_role(
     if !authed.is_admin() {
         return Err(Problem::forbidden("only an administrator changes a role"));
     }
+    // A machine of the team stays one (OE-1, as the roster's rules): it leaves, another is enrolled.
+    let current = app.store.device(device).await.map_err(store_problem)?;
+    if current
+        .as_ref()
+        .is_some_and(|d| d.team == authed.device.team && d.role == Role::Service)
+        && req.role != Role::Service
+    {
+        return Err(Problem::new(
+            StatusCode::CONFLICT,
+            "service_stays",
+            "a machine of the team stays one: remove it, and enroll another",
+        ));
+    }
     if app
         .store
         .set_role(authed.device.team, device, req.role)
@@ -961,6 +974,17 @@ pub const TEAM_STREAMS: [Id; 7] = [
     BREAKER_STREAM,
 ];
 
+/// The team's streams a machine of the team never writes (OE-1): all of them but the totals of the costs, where it
+/// says what it spent as every device does.
+pub const SERVICE_DENIED_STREAMS: [Id; 6] = [
+    CATALOG_STREAM,
+    *b"escouade/setting",
+    *b"escouade/propose",
+    COST_KEY_STREAM,
+    PLUGINS_STREAM,
+    BREAKER_STREAM,
+];
+
 async fn append(
     app: &Shared,
     authed: &Authed,
@@ -1085,6 +1109,14 @@ pub async fn append_project(
     if project == COST_KEY_STREAM && !authed.is_admin() {
         return Err(Problem::forbidden(
             "only an administrator writes the key of the costs",
+        ));
+    }
+    // A machine of the team (OE-1) writes the content of the projects opened to it, never in the team's own streams:
+    // no setting, no list of projects, no proposal, no key, no private plugin, no circuit breaker (the devices refuse
+    // it at the reading too, `policy::may_sign`).
+    if authed.is_service() && SERVICE_DENIED_STREAMS.contains(&project) {
+        return Err(Problem::forbidden(
+            "a machine of the team signs nothing of the team's own streams",
         ));
     }
     let appended = append(&app, &authed, Stream::Project(project), req).await?;

@@ -120,6 +120,8 @@ pub struct Headless {
     pub host: Arc<HeadlessHost>,
     /// The remote API, once served (`serve_remote`).
     remote: parking_lot::Mutex<Option<Arc<RemoteApi>>>,
+    /// The teams of the team server, once opened (`open_teams`, `escouade-server`): served to the remote windows.
+    teams: parking_lot::Mutex<Option<Arc<crate::teams::Teams>>>,
     _lock: InstanceLock,
 }
 
@@ -144,8 +146,17 @@ impl Headless {
             core,
             host,
             remote: parking_lot::Mutex::new(None),
+            teams: parking_lot::Mutex::new(None),
             _lock: lock,
         }
+    }
+
+    /// The teams of the team server on this core (OE-1: a machine of the team in server mode is a device of its own),
+    /// as the desktop opens them (`teams::open_for`); before `serve_remote`, which serves them to the remote windows.
+    pub fn open_teams(&self) -> Arc<crate::teams::Teams> {
+        let mut held = self.teams.lock();
+        held.get_or_insert_with(|| crate::teams::open_for(&self.core))
+            .clone()
     }
 
     /// The remote API of this core served on 127.0.0.1:`port` (0: a free port), off until then (ESC-478): what
@@ -172,7 +183,11 @@ impl Headless {
         listen: crate::remoteapi::server::Listen,
         limits: crate::remoteapi::server::Limits,
     ) -> Result<Arc<RemoteApi>> {
-        let services = Arc::new(Services::new(self.core.clone()));
+        let mut services = Services::new(self.core.clone());
+        if let Some(teams) = self.teams.lock().clone() {
+            services = services.with(teams);
+        }
+        let services = Arc::new(services);
         let api = RemoteApi::start_with(services, listen, limits).await?;
         *self.remote.lock() = Some(api.clone());
         Ok(api)

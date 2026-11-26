@@ -24,6 +24,7 @@ export default defineZone('team', {
     recover: 'Recover a team',
     settings: 'Team settings',
     breakers: 'The team’s circuit breaker',
+    machine: 'Enroll a machine of the team',
   },
   home: {
     lead: 'A team shares, on a team server it hosts, what Escouade keeps on this machine today. Everything there is end-to-end encrypted: the server reads nothing.',
@@ -41,6 +42,7 @@ export default defineZone('team', {
     admin: 'Administrator',
     member: 'Member',
     recovery: 'Recovery key',
+    service: 'Machine of the team',
     waiting: 'Waiting',
     waitingLead:
       'Your request is sent. Show these six words to the person who invites you: they compare them with theirs, then let you in. This window will say it.',
@@ -220,6 +222,25 @@ export default defineZone('team', {
     expected:
       'According to the repository, the team is on {host}: ask one of its administrators for an invitation link, then paste it here.',
     otherServer: 'This link leads to {server}, not to {host} that the repository names: check it with whoever invites you.',
+  },
+  machines: {
+    title: 'Machines of the team',
+    lead: 'Tied to the team, not to a person: neither a member nor an administrator. They run day and night, in server mode.',
+    none: 'No machine in this team.',
+    name: 'Machine {id}',
+    devices: { one: '{count} device', other: '{count} devices' },
+    me: 'this machine',
+    can: 'It can: read and write the content of the projects opened to it (Kanban, docs, memory), take tickets, add its own devices.',
+    cannot:
+      'It never signs: a member, a role, a team setting, a circuit breaker, a private plugin; it answers no invitation. Every device checks it.',
+    enroll: 'Enroll a machine of the team',
+    remove: 'Remove',
+    removeConfirm: 'Remove the machine {id} from the team? Its devices are cut, and the team’s keys turn: it reads nothing new.',
+    lead2: 'On the machine, in server mode, type this code:',
+    command: 'escouade-server team pair {server} {code}',
+    window: 'Or, in the window connected to the machine: “Add this device by a code”.',
+    sent: 'The machine received its invitation. Compare the six words it shows with those of its request, below, before letting it in.',
+    role: 'It will enter under the role of service: tied to the team, signing nothing of the administrators’.',
   },
   device: {
     qrTab: 'QR code',

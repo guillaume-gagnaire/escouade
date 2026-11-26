@@ -505,6 +505,8 @@ escouade_command::commands! {
         // An admission confirms six words compared with the invitee's screen (SR2-08): on the desktop only, never
         // at a distance.
         commands::team_admit,
+        // A machine of the team taken out (OE-1), an administrator's gesture as an admission.
+        commands::team_machine_remove,
         commands::set_held,
         commands::open_url,
         commands::devpage_open,

@@ -17,7 +17,7 @@ export interface AlarmView {
 export interface InvitationView {
   id: string;
   kind: 'member' | 'device';
-  role: 'admin' | 'member' | null;
+  role: 'admin' | 'member' | 'service' | null;
   /** Seconds since the epoch. */
   expiresAt: number;
   used: boolean;
@@ -100,9 +100,12 @@ export interface TeamView {
   name: string;
   server: string;
   joined: boolean;
-  role: 'admin' | 'member' | 'recovery' | 'none';
+  role: 'admin' | 'member' | 'recovery' | 'service' | 'none';
   admins: number;
+  /** The people of the team (administrators and members): its machines apart. */
   members: number;
+  /** The machines of the team (role of service, OE-1), ranked apart: « Machines de l’équipe ». */
+  machines?: MachineView[];
   epoch: number | null;
   fingerprint: string[];
   head: string[];
@@ -128,6 +131,14 @@ export interface TeamView {
   /** The commits found null (SR2-02), the newest first: shown to the administrators. */
   nullAlerts: NullAlertView[];
   lastError: string | null;
+}
+
+/** A machine of the team (OE-1): its own id in the roster, tied to the team and to no member, and its devices. */
+export interface MachineView {
+  id: string;
+  devices: string[];
+  /** This device is that machine. */
+  me: boolean;
 }
 
 export interface Created {
@@ -180,7 +191,10 @@ export const teamsApi = {
   refuse: (team: string, invitation: string) => invoke<TeamView>('team_refuse', { team, invitation }),
   joinPreview: (link: string) => invoke<JoinPreview>('team_join_preview', { link }),
   join: (link: string, name: string) => invoke<TeamView>('team_join', { link, name }),
-  pairStart: (team: string) => invoke<PairView>('team_pair_start', { team }),
+  /** A short code for another device of one's own, or (`service`, an administrator's) for a machine of the team. */
+  pairStart: (team: string, service = false) => invoke<PairView>('team_pair_start', { team, service }),
+  /** « Retirer » a machine of the team (OE-1): an administrator's, the desktop's only. */
+  removeMachine: (team: string, machine: string) => invoke<TeamView>('team_machine_remove', { team, machine }),
   pairStep: (team: string) => invoke<PairView>('team_pair_step', { team }),
   pairCancel: (team: string) => invoke<void>('team_pair_cancel', { team }),
   pairJoin: (server: string, code: string, name: string) => invoke<TeamView>('team_pair_join', { server, code, name }),

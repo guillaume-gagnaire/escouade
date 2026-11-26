@@ -21,6 +21,7 @@
   import ForkAlarm from './ForkAlarm.svelte';
   import SixWords from './SixWords.svelte';
   import TeamAdmissions from './TeamAdmissions.svelte';
+  import TeamMachines from './TeamMachines.svelte';
   import type { TeamStep } from './TeamModal.svelte';
 
   let { onstep, onwords }: { onstep: (step: TeamStep, team?: string) => void; onwords: (team: string, words: string[]) => void } = $props();
@@ -100,7 +101,9 @@
         ? t('team.card.admin')
         : team.role === 'recovery'
           ? t('team.card.recovery')
-          : t('team.card.member');
+          : team.role === 'service'
+            ? t('team.card.service')
+            : t('team.card.member');
 
   function invitationState(i: InvitationView): string {
     if (i.refused) return t('team.card.refused');
@@ -242,6 +245,7 @@
       <div class="facts">
         <span>{t('team.card.members', { count: team.members })}</span>
       </div>
+      <TeamMachines {team} onenroll={() => onstep('machine', team.id)} />
       <SixWords words={team.fingerprint} label={t('team.card.fingerprint')} hint={t('team.card.fingerprintHint')} />
       {#if team.role === 'admin' && team.admins < 2}
         <p class="advice">{t('team.card.secondAdmin')}</p>
@@ -265,7 +269,10 @@
               <li>
                 <span
                   >{i.kind === 'member'
-                    ? t('team.card.invitationMember', { role: i.role === 'admin' ? t('team.card.admin') : t('team.card.member') })
+                    ? t('team.card.invitationMember', {
+                        role:
+                          i.role === 'admin' ? t('team.card.admin') : i.role === 'service' ? t('team.card.service') : t('team.card.member'),
+                      })
                     : t('team.card.invitationDevice')}</span
                 >
                 <span class="st">{invitationState(i)}</span>

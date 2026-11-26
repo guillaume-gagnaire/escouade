@@ -347,16 +347,19 @@ impl Core {
         let kept = team.project_members(&pid).unwrap_or_default();
         let members = team.members().unwrap_or_default();
         drop(team);
-        for (m, _, devices) in members {
+        for (m, role, devices) in members {
             if !kept.is_empty() && !kept.contains(&m) {
                 continue;
             }
+            // A machine of the team under the role of service (OE-1) is one of « Machines de l'équipe », whatever its
+            // project says.
+            let service = role == escouade_team::crypto::Role::Service;
             for d in devices.into_iter().filter(|d| *d != me) {
                 let Some(name) = names.get(&d) else { continue };
                 plan.targets.push(HandoffTarget {
                     device: hex::encode(d.0),
                     name: name.clone(),
-                    machine: machines.contains(&d),
+                    machine: service || machines.contains(&d),
                     mine: m == my_member,
                 });
             }

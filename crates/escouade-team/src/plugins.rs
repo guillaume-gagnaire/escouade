@@ -240,6 +240,8 @@ pub enum Refused {
     Unsigned,
     /// What an administrator alone writes, sealed by a member who was not one.
     NotAdmin,
+    /// Sealed by a machine of the team, which signs no plugin (OE-1).
+    Machine,
     /// A namespace that is not one, or Escouade's own.
     Namespace { why: BadNamespace },
     /// A version signed before the team declared its key.
@@ -516,6 +518,11 @@ fn open(team: &Team, e: &wire::Entry) -> Result<(MemberId, bool, Entry), Opened>
     let who = team
         .signer_at(sealed.header.epoch, &sealed.header.author)
         .ok_or(Opened::Refused(Refused::Unsigned))?;
+    // A machine of the team signs no plugin of the private store (OE-1, `policy::may_sign`): neither a proposal nor a
+    // dismissal, whatever its client let through.
+    if team.is_machine(&who.member) {
+        return Err(Opened::Refused(Refused::Machine));
+    }
     let admin = match team.admins_at(sealed.header.epoch) {
         Some(then) => then.contains(&who.member),
         None => admins_now(team).contains(&who.member),
@@ -813,6 +820,9 @@ pub async fn submit(
     module: Option<&[u8]>,
     at: u64,
 ) -> Result<(String, Store), Error> {
+    if !team.may_sign(escouade_team_crypto::Act::PrivatePlugin) {
+        return Err(CryptoError::NotAdmin.into());
+    }
     let view = sync(team).await?;
     let key = view.key.as_ref().ok_or_else(|| {
         Error::Refused("the team has no key for its store yet: an administrator makes it".into())
@@ -994,6 +1004,9 @@ pub async fn revoke(
 
 /// A proposal set aside: by an administrator, or its author.
 pub async fn dismiss(team: &mut Team, id: &str, why: &str, at: u64) -> Result<Store, Error> {
+    if !team.may_sign(escouade_team_crypto::Act::PrivatePlugin) {
+        return Err(CryptoError::NotAdmin.into());
+    }
     let mut sub = [0u8; 16];
     hex::decode_to_slice(id, &mut sub).map_err(|e| Error::Encoding(e.to_string()))?;
     append(

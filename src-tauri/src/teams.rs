@@ -407,7 +407,10 @@ pub struct TeamView {
     /// `admin`, `member`, `recovery`, or `none` while it waits.
     pub role: String,
     pub admins: usize,
+    /// The people of the team (administrators and members): its machines apart.
     pub members: usize,
+    /// The machines of the team (role of service, OE-1), apart from the people: « Machines de l'équipe ».
+    pub machines: Vec<MachineView>,
     pub epoch: Option<u64>,
     /// The team's six words, to compare out of band.
     pub fingerprint: Vec<String>,
@@ -443,6 +446,18 @@ pub struct TeamView {
     /// The commits found null (SR2-02), the newest first.
     pub null_alerts: Vec<NullAlertView>,
     pub last_error: Option<String>,
+}
+
+/// A machine of the team (role of service, OE-1), as Réglages › Équipe ranks it apart: its opaque id, its devices.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MachineView {
+    /// Its id in the roster (hex): its own, tied to the team and to no member.
+    pub id: String,
+    /// Its devices in the group (hex).
+    pub devices: Vec<String>,
+    /// This device is that machine.
+    pub me: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -506,6 +521,7 @@ fn role_name(r: Role) -> String {
     match r {
         Role::Admin => "admin",
         Role::Member => "member",
+        Role::Service => "service",
     }
     .into()
 }
@@ -841,6 +857,7 @@ impl Teams {
             role: "none".into(),
             admins: 0,
             members: 0,
+            machines: Vec::new(),
             epoch: None,
             fingerprint: known.fingerprint.clone(),
             head: Vec::new(),
@@ -874,7 +891,7 @@ impl Teams {
                 roster.role(&me.member).map_or("none".into(), role_name)
             };
             view.admins = roster.admins();
-            view.members = roster.members.len();
+            view.members = roster.members.values().filter(|r| r.is_person()).count();
             view.recovery_outdated = roster.recovery.anchor_key.is_empty();
             view.recovery_stale = team.recovery_stale();
             view.escrow = roster.escrow.map(|e| e.holder);
@@ -899,6 +916,15 @@ impl Teams {
             })
             .collect();
         let members = team.members().unwrap_or_default();
+        view.machines = members
+            .iter()
+            .filter(|(_, role, _)| *role == Role::Service)
+            .map(|(m, _, devices)| MachineView {
+                id: hex::encode(m.0),
+                devices: devices.iter().map(|d| hex::encode(d.0)).collect(),
+                me: *m == me.member,
+            })
+            .collect();
         let admin = view.role == "admin";
         view.refusals = team
             .refusals()
@@ -1152,6 +1178,36 @@ impl Teams {
         self.view(id).await
     }
 
+    /// « Retirer la machine » (OE-1): an administrator takes a machine of the team out as a device is, cut on the
+    /// server first, then out of the group (a new epoch, the keys turned). Only a machine: a person leaves otherwise.
+    pub async fn remove_machine(&self, id: &str, machine: &str) -> Result<TeamView, String> {
+        self.unblocked(id)?;
+        let member = hex_id(machine.trim()).map_err(|_| {
+            tr!(
+                "Cette machine n’est pas de l’équipe.",
+                "This machine is not of the team."
+            )
+        })?;
+        let member = escouade_team::crypto::MemberId(member);
+        let team = self.team(id)?;
+        {
+            let mut t = team.lock().await;
+            let roster = t.roster().map_err(|e| say(&e))?;
+            if roster.role(&member) != Some(Role::Service) {
+                return Err(tr!(
+                    "Ce n’est pas une machine de l’équipe.",
+                    "This is not a machine of the team."
+                ));
+            }
+            t.remove_member(member)
+                .await
+                .map_err(|e| self.failed(id, e))?;
+            let _ = t.serve(now()).await;
+        }
+        (self.changed)();
+        self.view(id).await
+    }
+
     /// « Les mots diffèrent » (SR2-08): the request is refused, the invitation cancelled, the device that asked cut
     /// on the server, the administrators told.
     pub async fn refuse(&self, id: &str, invitation: &str) -> Result<TeamView, String> {
@@ -1218,11 +1274,18 @@ impl Teams {
 
     // === Another device by a short code ===
 
-    pub async fn pair_start(&self, id: &str) -> Result<PairView, String> {
+    /// A short code for another device of this member, or, `service`, for a machine of the team (OE-1: an
+    /// administrator's; the machine types it, `escouade-server team pair`, and enters under the role of service).
+    pub async fn pair_start(&self, id: &str, service: bool) -> Result<PairView, String> {
         self.unblocked(id)?;
         let team = self.team(id)?;
         let mut t = team.lock().await;
-        let pairing = t.pair_start(now()).await.map_err(|e| self.failed(id, e))?;
+        let started = if service {
+            t.pair_start_service(now()).await
+        } else {
+            t.pair_start(now()).await
+        };
+        let pairing = started.map_err(|e| self.failed(id, e))?;
         let view = PairView {
             code: pairing.code.shown(),
             server: t.server().to_string(),
@@ -1596,6 +1659,57 @@ impl Teams {
         });
         self.live.lock().insert(id.to_string(), handle);
     }
+}
+
+/// The teams of this core (TS-3), on the desktop as in `escouade-server` (OE-1: a machine of the team in server mode
+/// holds its own): their keys in the core's keychain (a file on a server, which has none), the network of the
+/// settings, the data's `teams` folder; their Kanban (TS-6), their docs (TS-9) and their signed settings (TS-13) to
+/// the core; read every few seconds, for the invitees an online administrator lets in.
+pub fn open_for(core: &Arc<crate::core::Core>) -> Arc<Teams> {
+    let teams = {
+        let settings = Arc::downgrade(core);
+        let hub = Arc::downgrade(core);
+        Arc::new(Teams::open(
+            core.data.root().join("teams"),
+            core.secrets.clone(),
+            Arc::new(move || {
+                settings
+                    .upgrade()
+                    .map(|c| c.settings.read().clone())
+                    .unwrap_or_default()
+            }),
+            Arc::new(move || {
+                if let Some(core) = hub.upgrade() {
+                    core.hub.emit(crate::model::UiEvent::Teams {});
+                }
+            }),
+        ))
+    };
+    core.set_teams(teams.clone());
+    {
+        let core = Arc::downgrade(core);
+        teams.set_docs_sink(Arc::new(move |id| {
+            if let Some(core) = core.upgrade() {
+                let id = id.to_string();
+                tauri::async_runtime::spawn(async move {
+                    core.team_docs_after_read(&id).await;
+                });
+            }
+        }));
+    }
+    // The team's signed settings (TS-13): the version in force of each team to the core's locks and projects.
+    {
+        let core = Arc::downgrade(core);
+        teams.set_settings_sink(Arc::new(move |id, name, view| {
+            if let Some(core) = core.upgrade() {
+                core.apply_team_settings(id, name, view);
+            }
+        }));
+        let started = teams.clone();
+        tauri::async_runtime::spawn(async move { started.start_settings().await });
+    }
+    tauri::async_runtime::spawn(teams.clone().watch(watch_every()));
+    teams
 }
 
 /// How often the watch reads the teams when their live feed brings nothing: 15 s (the live feed reads them within a

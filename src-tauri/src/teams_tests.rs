@@ -369,3 +369,91 @@ async fn a_projects_operation_comes_by_the_live_feed() {
     bob.forget(&id).await.unwrap();
     task.abort();
 }
+
+/// OE-1: `escouade-server team pair`. An administrator shows a code for a machine of the team; the command leaves it for
+/// the server of the machine's folder, which plays it on the team server's relay and answers its six words; once they
+/// are confirmed, the machine is in under the role of service, ranked apart (« Machines de l'équipe »); the
+/// administrator takes it out as a device.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_machine_enters_by_team_pair_under_the_role_of_service() {
+    use crate::server::teampair;
+    let (server, host, task, dir) = server().await;
+    let store = Arc::new(MemoryStore::default());
+    let alice = teams(&dir.path().join("a"), store.clone());
+    let data = dir.path().join("machine");
+    let machine = teams(&data.join("teams"), store.clone());
+    let token = server.new_team_token().await.unwrap();
+    let id = alice
+        .create(&host, &token, "ACME", None)
+        .await
+        .unwrap()
+        .team
+        .id;
+
+    let shown = alice.pair_start(&id, true).await.unwrap();
+    let request = teampair::Request {
+        server: host.clone(),
+        code: shown.code.clone(),
+        name: "ACME".into(),
+        id: "r1".into(),
+    };
+    teampair::ask(&data, &request).unwrap();
+    let served = {
+        let (machine, data) = (machine.clone(), data.clone());
+        tokio::spawn(async move { teampair::serve_once(&machine, &data).await })
+    };
+    for _ in 0..200 {
+        if alice.pair_step(&id).await.unwrap().state == "sent" {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(served.await.unwrap(), "the request was taken");
+    assert!(
+        !data.join("teams").join(teampair::REQUEST).exists(),
+        "removed before it is played"
+    );
+    let answer = teampair::wait(&data, "r1", Duration::from_secs(2)).unwrap();
+    assert_eq!(answer.error, None);
+    assert_eq!(answer.team.as_deref(), Some("ACME"));
+    assert_eq!(answer.words.len(), 6);
+    // An answer is for its own request only.
+    assert!(teampair::wait(&data, "r1", Duration::from_millis(300)).is_err());
+
+    let_in(&alice, &machine, &id).await;
+    let seen = machine.sync(&id).await.unwrap();
+    assert_eq!(seen.role, "service");
+    assert_eq!(seen.machines.len(), 1);
+    assert!(seen.machines[0].me);
+    let view = alice.sync(&id).await.unwrap();
+    assert_eq!(view.members, 1, "the people of the team, the machine apart");
+    assert_eq!(view.admins, 1);
+    assert_eq!(view.machines.len(), 1);
+    assert_eq!(view.machines[0].devices.len(), 1);
+    assert!(!view.machines[0].me);
+    // Neither a member's id nor a person: refused; the machine itself, taken out.
+    assert!(alice.remove_machine(&id, &"00".repeat(16)).await.is_err());
+    let after = alice
+        .remove_machine(&id, &view.machines[0].id)
+        .await
+        .unwrap();
+    assert!(after.machines.is_empty());
+    task.abort();
+}
+
+/// OE-1: no tool of the MCP server gives or takes the role of service, enrolls a machine or removes one: gestures of the
+/// window alone.
+#[test]
+fn no_tool_of_the_mcp_server_gives_or_takes_the_role_of_service() {
+    let names: Vec<String> = crate::mcp::tools::Tools::tool_router()
+        .list_all()
+        .into_iter()
+        .map(|t| t.name.to_string())
+        .collect();
+    assert!(names.len() > 20, "the tools are listed");
+    for n in &names {
+        for word in ["role", "machine", "pair", "member", "admit", "invite"] {
+            assert!(!n.contains(word), "{n} touches {word}");
+        }
+    }
+}

@@ -6,6 +6,11 @@
 //! - **an administrator** (a member whose role is Admin in the roster, or the recovery leaf) adds and removes
 //!   members and devices, and changes the roster (roles, recovery key, escrow key);
 //! - **a member** adds and removes their own devices only, and never changes the roster;
+//! - **a machine of the team** (role of service, OE-1) is checked as a member: its own devices only, never the roster.
+//!   Its role is given at its entry and never changes (neither a person made a machine, nor a machine made a person:
+//!   a machine leaves, another is enrolled). What it signs beside the commits is [`may_sign`]'s table, which every
+//!   device applies at the reading of the team's streams (its settings, its circuit breakers, its private store, its
+//!   list of projects, the answers to invitations);
 //! - **an external commit** (a joiner from outside) is admitted for the recovery key only, whose signature key is
 //!   the roster's; it may remove an older recovery leaf, nothing else;
 //! - **a leaf** never changes its identity or its signature key in a commit;
@@ -62,6 +67,57 @@ impl CommitScope {
     pub fn team_aad(self) -> Vec<u8> {
         vec![self.byte()]
     }
+}
+
+/// What a device signs for the team, beside the content of a project (OE-1): what [`may_sign`] answers by role.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Act {
+    /// Adds or removes a member, or another member's device.
+    Member,
+    /// Changes a role, the recovery key or the escrow key: the roster.
+    Role,
+    /// A version of the team's settings (TS-13), or its list of projects (TS-8), or the key of its costs (TS-16).
+    Setting,
+    /// Sets or lifts a circuit breaker (TS-15).
+    Breaker,
+    /// Proposes, publishes or dismisses a plugin of the team's private store (TS-14).
+    PrivatePlugin,
+    /// Answers an invitation: admits its request, or registers its token for another (TS-3).
+    Invitation,
+    /// Adds or removes one's own devices.
+    OwnDevices,
+    /// Writes the content of a project opened to it (its Kanban, its docs, its memory), or takes a ticket of it.
+    Content,
+}
+
+/// Whether a device of `role` may sign `act` (OE-1). An administrator signs everything; a member their own devices,
+/// the content and their proposals of plugins (an administrator publishes them); a machine of the team its own
+/// devices and the content of the projects opened to it, nothing else: no member, no role, no setting, no circuit
+/// breaker, no private plugin, no answer to an invitation. Every device applies it to what it reads, whatever the
+/// author's client let through, and whatever the server says.
+pub fn may_sign(role: Role, act: Act) -> bool {
+    match role {
+        Role::Admin => true,
+        Role::Member => matches!(act, Act::OwnDevices | Act::Content | Act::PrivatePlugin),
+        Role::Service => matches!(act, Act::OwnDevices | Act::Content),
+    }
+}
+
+/// A role changed in the roster from `old` to `new` (OE-1): a machine of the team stays one, a person stays one.
+pub fn check_roles(old: &Roster, new: &Roster) -> Result<(), Error> {
+    for (member, role) in &new.members {
+        if let Some(before) = old.role(member) {
+            if before.is_person() != role.is_person() {
+                return Err(refuse(
+                    "the role of service is given at the entry only: a person is never made a machine of the team, nor a machine a person",
+                ));
+            }
+        }
+    }
+    if new.role(&new.genesis.owner) == Some(Role::Service) {
+        return Err(refuse("the owner of a team is a person"));
+    }
+    Ok(())
 }
 
 /// A leaf as the rules see it.
@@ -238,6 +294,7 @@ pub fn check_commit(
     if new != old && (external || !admin) {
         return Err(refuse("only an administrator changes the roster"));
     }
+    check_roles(&old, &new)?;
 
     // The state after it.
     let mut after: Vec<Leaf> = leaves.into_iter().map(|(_, l)| l).collect();

@@ -574,7 +574,7 @@ impl Store for Sqlite {
             let Some((current, revoked)) = current else {
                 return Ok(false);
             };
-            if Role::parse(&current) == Role::Admin && role == Role::Member && revoked.is_none() {
+            if Role::parse(&current) == Role::Admin && role != Role::Admin && revoked.is_none() {
                 let admins: i64 = tx.query_row(
                     "SELECT COUNT(*) FROM devices WHERE team_id = ?1 AND role = 'admin' AND revoked_at IS NULL",
                     [team.as_slice()],

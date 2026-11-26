@@ -27,6 +27,7 @@ export default {
     recover: 'Récupérer une équipe',
     settings: 'Réglages de l’équipe',
     breakers: 'Coupe-circuit de l’équipe',
+    machine: 'Inscrire une machine de l’équipe',
   },
   home: {
     lead: 'Une équipe partage, sur un serveur d’équipe qu’elle héberge, ce qu’Escouade garde aujourd’hui sur ce poste. Tout y est chiffré de bout en bout : le serveur ne lit rien.',
@@ -44,6 +45,7 @@ export default {
     admin: 'Administrateur',
     member: 'Membre',
     recovery: 'Clé de secours',
+    service: 'Machine de l’équipe',
     waiting: 'En attente',
     waitingLead:
       'Ta demande est envoyée. Montre ces six mots à la personne qui t’invite : elle les compare aux siens, puis te fait entrer. Cette fenêtre le dira.',
@@ -225,6 +227,27 @@ export default {
     joined: 'Tu es dans l’équipe « {name} ».',
     expected: 'D’après le dépôt, l’équipe est sur {host} : demande un lien d’invitation à un de ses administrateurs, puis colle-le ici.',
     otherServer: 'Ce lien mène à {server}, pas à {host} que nomme le dépôt : vérifie-le avec la personne qui t’invite.',
+  },
+  // Les machines de l’équipe (OE-1) : rattachées à l’équipe, ni membre ni administrateur, rangées à part.
+  machines: {
+    title: 'Machines de l’équipe',
+    lead: 'Rattachées à l’équipe, pas à une personne : ni membre ni administrateur. Elles tournent jour et nuit, en mode serveur.',
+    none: 'Aucune machine dans cette équipe.',
+    name: 'Machine {id}',
+    devices: { one: '{count} appareil', other: '{count} appareils' },
+    me: 'cette machine',
+    can: 'Elle peut : lire et écrire le contenu des projets qu’on lui ouvre (Kanban, docs, mémoire), prendre des tickets, ajouter ses propres appareils.',
+    cannot:
+      'Elle ne signe jamais : un membre, un rôle, un réglage de l’équipe, un coupe-circuit, un plugin privé ; elle ne répond à aucune invitation. Chaque poste le vérifie.',
+    enroll: 'Inscrire une machine de l’équipe',
+    remove: 'Retirer',
+    removeConfirm:
+      'Retirer la machine {id} de l’équipe ? Ses appareils sont coupés, et les clés de l’équipe tournent : elle ne lit plus rien de nouveau.',
+    lead2: 'Sur la machine, en mode serveur, tape ce code :',
+    command: 'escouade-server team pair {server} {code}',
+    window: 'Ou, dans la fenêtre connectée à la machine : « Ajouter cet appareil par un code ».',
+    sent: 'La machine a reçu son invitation. Compare les six mots qu’elle affiche avec ceux de sa demande, ci-dessous, avant de la faire entrer.',
+    role: 'Elle entrera sous le rôle de service : rattachée à l’équipe, sans rien signer d’administratif.',
   },
   device: {
     qrTab: 'QR code',

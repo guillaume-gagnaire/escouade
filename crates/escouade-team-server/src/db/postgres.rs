@@ -593,7 +593,7 @@ impl Store for Postgres {
         };
         let current: String = row.get(0);
         let revoked: Option<i64> = row.get(1);
-        if Role::parse(&current) == Role::Admin && role == Role::Member && revoked.is_none() {
+        if Role::parse(&current) == Role::Admin && role != Role::Admin && revoked.is_none() {
             let admins: i64 = tx
                 .query_one(
                     "SELECT COUNT(*) FROM devices WHERE team_id = $1 AND role = 'admin' AND revoked_at IS NULL",

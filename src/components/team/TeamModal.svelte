@@ -15,7 +15,8 @@
     | 'costs'
     | 'plugins'
     | 'told'
-    | 'breakers';
+    | 'breakers'
+    | 'machine';
 </script>
 
 <script lang="ts">
@@ -28,6 +29,7 @@
   import TeamCreate from './TeamCreate.svelte';
   import TeamCreated from './TeamCreated.svelte';
   import TeamDevice from './TeamDevice.svelte';
+  import TeamMachine from './TeamMachine.svelte';
   import TeamHome from './TeamHome.svelte';
   import TeamInvite from './TeamInvite.svelte';
   import TeamJoin from './TeamJoin.svelte';
@@ -94,7 +96,8 @@
       step === 'projects' ||
       step === 'plugins' ||
       step === 'costs' ||
-      step === 'breakers',
+      step === 'breakers' ||
+      step === 'machine',
   );
 </script>
 
@@ -139,6 +142,8 @@
     <TeamSettings {teamId} onback={() => go('home')} />
   {:else if step === 'breakers' && teamId}
     <TeamBreakers {teamId} onback={() => go('home')} />
+  {:else if step === 'machine' && teamId}
+    <TeamMachine {teamId} />
   {:else if step === 'device' && teamId}
     <TeamDevice {teamId} onback={() => go('home')} />
   {:else if step === 'join'}

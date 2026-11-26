@@ -49,8 +49,26 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             gate: false,
             update: update::Asked::default(),
             endpoint: None,
+            name: None,
         }
     );
+    // A machine of the team (OE-1): `team pair <serveur> <CODE> [--name <nom>]`.
+    let a = server::parse(&args("team pair team.acme.fr K7Q4M-2XZ8P --name ACME")).unwrap();
+    assert_eq!(
+        a.command,
+        Command::TeamPair {
+            server: "team.acme.fr".into(),
+            code: "K7Q4M-2XZ8P".into()
+        }
+    );
+    assert_eq!(a.name.as_deref(), Some("ACME"));
+    assert!(server::parse(&args("team pair team.acme.fr")).is_err());
+    assert!(server::parse(&args("team")).is_err());
+    assert!(
+        server::parse(&args("pair --name ACME")).is_err(),
+        "--name goes with team pair"
+    );
+    assert!(server::help().contains("team pair"));
     // The phone's tunnel (ESC-567).
     use crate::server::PhoneCommand;
     for (line, want) in [

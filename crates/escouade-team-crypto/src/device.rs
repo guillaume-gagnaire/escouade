@@ -39,7 +39,7 @@ use crate::invite::{
     Invitation, InvitationError, InviteLink, JoinRequest, Purpose, WelcomeDelivery,
 };
 use crate::keys::{head, EpochMember, EpochRecord, CONTENT_LABEL, HISTORY_LABEL};
-use crate::policy::{check_commit, CommitScope};
+use crate::policy::{check_commit, check_roles, CommitScope};
 use crate::recovery::{
     admin_signed, EscrowTeamHalf, EscrowWrap, RecoveryKey, RecoveryWrap, WrapAuthor,
 };
@@ -822,10 +822,13 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             Change::Rotate => self.stage_commit(Vec::new(), Vec::new(), None, None),
             Change::SetRole(member, role) => {
                 self.require_admin()?;
-                let mut roster = self.roster()?;
+                let old = self.roster()?;
+                let mut roster = old.clone();
                 if roster.members.insert(*member, *role).is_none() {
                     return Err(Error::Policy("no such member".into()));
                 }
+                // A machine of the team stays one, a person stays one (OE-1): refused here before every device does.
+                check_roles(&old, &roster)?;
                 self.stage_commit(Vec::new(), Vec::new(), Some(roster), None)
             }
             Change::SetEscrow(escrow) => {
