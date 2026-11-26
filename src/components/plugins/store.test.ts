@@ -376,7 +376,7 @@ describe('the link escouade://plugin/<id> (STORE-11)', () => {
       deep_links_take: () => [{ kind: 'plugin', id: 'dev.exemple.high-contrast' }],
     });
     app.ui.view = 'project';
-    await plugins.takeLinks();
+    await app.takeLinks();
     expect(app.ui.view).toBe('plugins');
     expect(plugins.page).toEqual({ kind: 'storePlugin', id: 'dev.exemple.high-contrast', tab: 'overview' });
     render(PluginsView);
@@ -389,7 +389,7 @@ describe('the link escouade://plugin/<id> (STORE-11)', () => {
   it('opens the page of an installed plugin as installed', async () => {
     fakeBackend({ deep_links_take: () => [{ kind: 'plugin', id: MANIFEST.id }] });
     plugins.list = [installed()];
-    await plugins.takeLinks();
+    await app.takeLinks();
     expect(plugins.page).toEqual({ kind: 'plugin', id: MANIFEST.id, tab: 'overview' });
   });
 
@@ -402,7 +402,7 @@ describe('the link escouade://plugin/<id> (STORE-11)', () => {
         { kind: 'bad', url: 'escouade://plugin/nope' },
       ],
     });
-    await plugins.takeLinks();
+    await app.takeLinks();
     render(PluginsView);
     expect(await screen.findByText('« dev.exemple.nowhere » n’est pas au catalogue du store.')).toBeTruthy();
     expect(app.toasts.map((t) => [t.kind, t.text])).toContainEqual([

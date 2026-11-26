@@ -76,6 +76,50 @@ fn refuses_what_is_no_plugin_page() {
     );
 }
 
+fn agent(id: &str) -> DeepLink {
+    DeepLink::Agent { id: id.into() }
+}
+
+#[test]
+fn reads_an_agent() {
+    assert_eq!(
+        parse("escouade://agent/8279e1ecf8b7"),
+        agent("8279e1ecf8b7")
+    );
+    assert_eq!(
+        parse("ESCOUADE://Agent/8279E1ECF8B7/"),
+        agent("8279e1ecf8b7")
+    );
+    assert_eq!(parse("escouade:agent/8279e1ecf8b7"), agent("8279e1ecf8b7"));
+    assert_eq!(
+        parse(&format!("escouade://agent/{}", "a".repeat(64))),
+        agent(&"a".repeat(64))
+    );
+}
+
+#[test]
+fn refuses_what_is_no_agent() {
+    for url in [
+        "escouade://agent/",
+        "escouade://agent",
+        "escouade://agent/x y",
+        "escouade://agent/abc?send=1",
+        "escouade://agent/abc#x",
+        "escouade://agent/../plugin/io.x",
+        "escouade://agent/abc/send",
+        "escouade://agent/ab%63",
+        "escouade://agent/xyz",
+    ] {
+        assert_eq!(parse(url), bad(url), "{url:?}");
+    }
+    let long = format!("escouade://agent/{}", "a".repeat(65));
+    assert_eq!(parse(&long), bad(&long));
+    match parse(&format!("escouade://agent/{}", "a".repeat(300))) {
+        DeepLink::Bad { url } => assert!(url.ends_with('…')),
+        other => panic!("{other:?}"),
+    }
+}
+
 #[test]
 fn finds_the_links_among_a_launchs_arguments() {
     // The program's name is never one, nor the arguments of another kind.

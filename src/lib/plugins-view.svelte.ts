@@ -14,7 +14,7 @@ import {
   type PluginView,
   type SeedOffer,
 } from './plugins';
-import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Suggestion } from './store';
+import { storeApi, type CatalogPlugin, type StoreView, type Suggestion } from './store';
 import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
 import { api } from './ipc';
@@ -217,25 +217,6 @@ class PluginsStore {
   openStorePlugin(id: string, tab: StoreTab = 'overview') {
     if (this.byId(id)) this.openPlugin(id);
     else this.show({ kind: 'storePlugin', id, tab });
-  }
-
-  /**
-   * The links `escouade://` not yet taken (STORE-11): a plugin's page opened in the view, a link it cannot read said. Never
-   * an install: that stays the user's gesture, from the page, with its permissions shown.
-   */
-  async takeLinks() {
-    let links: DeepLink[] = [];
-    try {
-      links = (await storeApi.deepLinks()) ?? [];
-    } catch {
-      return;
-    }
-    for (const link of links) {
-      if (link.kind === 'plugin') {
-        app.openPlugins();
-        this.openStorePlugin(link.id);
-      } else app.toast(t('plugins.deepLink.bad', { url: link.url }), 'error');
-    }
   }
 
   /** « Installer » from the store: downloaded and checked, then shown before anything is installed. */

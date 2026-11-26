@@ -21,11 +21,14 @@ const MAX_LEN: usize = 300;
 pub enum DeepLink {
     /// The page of the plugin `id`: its page in the store, its own when it is installed.
     Plugin { id: String },
+    /// The conversation of the agent `id` (ESC-2): shown, its composer focused. Navigation only, nothing sent nor started.
+    Agent { id: String },
     /// A link of the scheme the app cannot read: said, nothing done.
     Bad { url: String },
 }
 
-/// What `url` asks. `escouade://plugin/<id>`, the id a plugin's (a reversed domain name in lower case), a `/` after it
+/// What `url` asks. `escouade://agent/<id>`, the id an agent's (hexadecimal, any case, given in lower case), a `/` after
+/// it allowed. `escouade://plugin/<id>`, the id a plugin's (a reversed domain name in lower case), a `/` after it
 /// allowed; anything else (another path, a query, a fragment, an id that is no plugin's) is a bad link.
 pub fn parse(url: &str) -> DeepLink {
     let bad = || DeepLink::Bad { url: shown(url) };
@@ -35,6 +38,16 @@ pub fn parse(url: &str) -> DeepLink {
     let Some(rest) = strip_scheme(url) else {
         return bad();
     };
+    if let Some(rest) = strip_prefix_ci(rest, "agent/") {
+        let id = rest.strip_suffix('/').unwrap_or(rest);
+        return if (1..=64).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            DeepLink::Agent {
+                id: id.to_ascii_lowercase(),
+            }
+        } else {
+            bad()
+        };
+    }
     let Some(rest) = strip_prefix_ci(rest, "plugin/") else {
         return bad();
     };
@@ -85,6 +98,7 @@ pub fn deliver<R: Runtime>(app: &AppHandle<R>, urls: impl IntoIterator<Item = St
         let link = parse(&url);
         match &link {
             DeepLink::Plugin { id } => log::info!("deep link: the page of {id}"),
+            DeepLink::Agent { id } => log::info!("deep link: the agent {id}"),
             DeepLink::Bad { url } => log::warn!("deep link not understood: {url}"),
         }
         if let Some(inbox) = app.try_state::<Inbox>() {
