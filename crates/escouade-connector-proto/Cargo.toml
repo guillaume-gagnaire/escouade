@@ -1,0 +1,40 @@
+[package]
+name = "escouade-connector-proto"
+version = "0.1.0"
+description = "The protocol between escouade-server and escouade-connector (RP-2, docs/PRIVATE-NETWORK.md § 4.2): a WebSocket over TLS (through an HTTP CONNECT proxy), Noise IK inside with both keys pinned, then streams « open host:port » with a window per stream"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.85"
+workspace = "../../src-tauri"
+# Shared by escouade-server (RP-4) and escouade-connector (RP-3); never published.
+publish = false
+
+# The fuzzing targets' bodies (`fuzzing`), for the package `fuzz/` at the root. Never in the server nor the connector.
+[features]
+fuzzing = []
+
+# Nothing of the core nor of Tauri (the connector is a program apart, § 4.6): tokio, rustls, tungstenite, snow.
+[dependencies]
+snow = { version = "0.10", default-features = false, features = ["use-chacha20poly1305", "use-blake2", "use-curve25519", "use-getrandom", "std"] }
+tokio = { version = "1", features = ["rt", "macros", "net", "sync", "time", "io-util"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+# TLS by rustls (ring, as the app), the system's roots and Mozilla's, and a file of authorities more (a company's
+# inspection of TLS).
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+rustls-native-certs = "0.8"
+webpki-roots = "1"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+url = "2"
+percent-encoding = "2"
+base64 = "0.22"
+hex = "0.4"
+zeroize = "1"
+thiserror = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "sync", "time", "io-util", "test-util"] }
+rcgen = "0.14"
+tempfile = "3"

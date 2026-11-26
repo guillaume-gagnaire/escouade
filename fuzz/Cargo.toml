@@ -1,9 +1,10 @@
-# The fuzzing of the team server and its client (TS-18, docs/TEAM-SERVER.md § 14): a cargo-fuzz package of its own, at
-# the root, apart from the crates shipped. Its workspace and its lock are its own: none of its dependencies (libfuzzer-sys)
-# goes into src-tauri/Cargo.lock nor into `cargo deny` (which reads src-tauri and plugins). Its lock started from the
-# app's, so that it fuzzes the versions the app ships. The bodies of the targets are in the crates
-# (crates/escouade-team/src/fuzzing/, crates/escouade-team-server/src/fuzzing.rs, behind their feature `fuzzing`), which
-# the crates' own tests play on seeds/ in every run.
+# The fuzzing of the team server and its client (TS-18, docs/TEAM-SERVER.md § 14) and of the connectors' protocol
+# (RP-2, docs/PRIVATE-NETWORK.md § 6): a cargo-fuzz package of its own, at the root, apart from the crates shipped. Its
+# workspace and its lock are its own: none of its dependencies (libfuzzer-sys) goes into src-tauri/Cargo.lock nor into
+# `cargo deny` (which reads src-tauri and plugins). Its lock started from the app's, so that it fuzzes the versions the
+# app ships. The bodies of the targets are in the crates (crates/escouade-team/src/fuzzing/,
+# crates/escouade-team-server/src/fuzzing.rs, crates/escouade-connector-proto/src/fuzzing.rs, behind their feature
+# `fuzzing`), which the crates' own tests play on seeds/ in every run.
 #
 #   cargo install cargo-fuzz             (Linux or macOS; the nightly comes from rust-toolchain.toml)
 #   sh scripts/fuzz.sh 60                (every target, 60 s each: what the CI does, shorter)
@@ -23,6 +24,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 escouade-team = { path = "../crates/escouade-team", features = ["fuzzing"] }
 escouade-team-server = { path = "../crates/escouade-team-server", features = ["fuzzing"] }
+escouade-connector-proto = { path = "../crates/escouade-connector-proto", features = ["fuzzing"] }
 
 [workspace]
 members = ["."]
@@ -41,6 +43,20 @@ bench = false
 [[bin]]
 name = "commit"
 path = "fuzz_targets/commit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "connector-frames"
+path = "fuzz_targets/connector-frames.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "connector-handshake"
+path = "fuzz_targets/connector-handshake.rs"
 test = false
 doc = false
 bench = false

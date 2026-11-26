@@ -173,6 +173,7 @@ Sa forme :
 - **Les flux** : dans le canal Noise, des trames `open {id, hôte, port, agent, projet}`, `opened {id}` ou `refused {id, raison}`, `data {id, octets}`, `close {id}`, et un contrôle de débit par flux (une fenêtre, comme HTTP/2 : un `git clone` lent ne bloque pas un `npm install`). Une crate à part, `escouade-connector-proto`, partagée par le serveur et le connecteur.
 - **Les versions** : le connecteur et le serveur se disent la leur ; le serveur accepte la sienne et les deux mineures d'avant (le service informatique met à jour à son rythme, pas à celui de l'utilisateur), et dit au connecteur trop vieux ce qu'il faut faire. C'est différent de l'API distante, qui veut la même version des deux côtés.
 - **La vie** : un `ping` toutes les 15 s ; muet 45 s, le canal est dit coupé ; le connecteur rouvre (250 ms, 500 ms, 1 s, 2 s, 4 s, puis toutes les 5 s, comme le client), le serveur rejette tout flux pendant la coupure (§ 4.8).
+- **Construit** (RP-2, ESC-598) : `crates/escouade-connector-proto`. Sa forme exacte (la suite Noise, les versions dans la poignée de main, le format des trames, la `data` vide qui clôt un sens, les fenêtres de 256 Kio, le connecteur plus récent que le serveur refusé) est dans la décision `reseau-prive-rp-2-la-forme-du-protocole`.
 
 ### 4.3 Comment l'agent l'emprunte sans le savoir
 
