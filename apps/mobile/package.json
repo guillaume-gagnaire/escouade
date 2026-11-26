@@ -10,6 +10,7 @@
     "dev:server": "node scripts/dev-server.mjs",
     "build": "vite build",
     "sync": "vite build && cap sync",
+    "capacitor:copy:after": "node scripts/android-hostname.mjs",
     "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {

@@ -9,8 +9,10 @@
 //! - **Before the WebSocket opens**: the path, a `Host` of the loopback (DNS rebinding), and no `Origin` but the one of
 //!   Escouade's own window (a web page of the machine is refused). Bounded ([`Limits`]): the handshakes under way (all
 //!   taken, the oldest is let go for the newest: connections that say nothing never hold the door, ESC-654), and the
-//!   failed ones of a minute, counted by source (its address, the tunnel's peer): past them, the pairing codes of that
-//!   source are refused unread for the rest of the minute; a right token always passes (SR1-04, ESC-654).
+//!   failed ones of a minute, counted by source (its address, the tunnel's peer, the client a declared proxy forwards):
+//!   past them, the pairing codes of that source are refused unread for the rest of the minute; past the wrong codes of
+//!   a minute from elsewhere in all, those from elsewhere, never those of this machine; a right token always passes
+//!   (SR1-04, ESC-654, ESC-631). Through Tailscale, no `Origin` of a `localhost`: the phone app's own alone (SR1-09).
 //! - **The handshake**: the first message gives the device's token (compared in constant time, `devices`), the
 //!   client's version, which must be the server's (« Mettre à jour le serveur »), and the session it had before a cut
 //!   (`sessions`). Bounded: the connections of a device, and in all.
@@ -84,7 +86,8 @@ pub struct Limits {
     /// The raw bodies of one connection waiting for their call at once, and their bytes.
     pub bodies: usize,
     pub body_bytes: usize,
-    /// The wrong pairing codes of a minute, from all sources, past which any code is refused unread for the rest of it.
+    /// The wrong pairing codes of a minute, from all sources of a reach (this machine, or elsewhere), past which any code
+    /// of that reach is refused unread for the rest of it.
     pub pairing_per_minute: usize,
     /// The places beyond `total` kept for the first connection of a device: one that is not connected always gets in,
     /// to revoke the device that took the others.
@@ -302,8 +305,12 @@ pub struct RemoteApi {
     pending: Mutex<VecDeque<(u64, Arc<Notify>)>>,
     /// The failed handshakes of the last minute, by source.
     failures: Mutex<HashMap<String, VecDeque<Instant>>>,
-    /// The wrong pairing codes of the last minute, from all sources.
+    /// The wrong pairing codes of the last minute, from all sources elsewhere than this machine.
     wrong_codes: Mutex<VecDeque<Instant>>,
+    /// The wrong pairing codes of the last minute, from this machine (the loopback).
+    wrong_codes_here: Mutex<VecDeque<Instant>>,
+    /// The proxies whose `X-Forwarded-For` is read (`escouade-server --trust-proxy`, SR1-04).
+    proxies: Mutex<Arc<Vec<std::net::IpAddr>>>,
     counts: Counts,
     stopped: Notify,
     /// The names taken in a `Host` besides the loopback's (`escouade-server --allow-host`: a TLS proxy's).
@@ -403,6 +410,8 @@ impl RemoteApi {
             pending: Mutex::new(VecDeque::new()),
             failures: Mutex::new(HashMap::new()),
             wrong_codes: Mutex::new(VecDeque::new()),
+            wrong_codes_here: Mutex::new(VecDeque::new()),
+            proxies: Mutex::new(Arc::new(Vec::new())),
             counts: Counts::default(),
             stopped: Notify::new(),
             hosts: Mutex::new(Arc::new(Vec::new())),
@@ -420,6 +429,14 @@ impl RemoteApi {
     /// it serves it under (`escouade-server --allow-host`). Any other name is still refused (DNS rebinding).
     pub fn allow_hosts(&self, hosts: Vec<String>) {
         *self.hosts.lock() = Arc::new(hosts.into_iter().map(|h| h.to_ascii_lowercase()).collect());
+    }
+
+    /// The proxies in front of it, from now on (`escouade-server --trust-proxy`, SR1-04): a connection of one of them
+    /// that says whom it forwards (`X-Forwarded-For`, its last address) counts its failures as that client's, elsewhere
+    /// than this machine; one of them that says none, as its own address's. Of any other address, the header is never
+    /// read: a client cannot choose where its failures go.
+    pub fn trust_proxies(&self, proxies: Vec<std::net::IpAddr>) {
+        *self.proxies.lock() = Arc::new(proxies);
     }
 
     /// Where it listens: 127.0.0.1 and its port.
@@ -478,13 +495,13 @@ impl RemoteApi {
 
     /// A new device paired by the code `code` (`pairing`), named `name`, from `source`: it and its token, or the
     /// refusal's code and text. A refused code counts as a failed handshake of its source; past the failures of its
-    /// source, or the wrong codes of all, in the minute, the code is refused unread (`Wait`), the code waiting on
-    /// (ESC-654). The log says neither the code nor the token.
+    /// source, or the wrong codes of all those of its reach (this machine, or elsewhere) in the minute, the code is
+    /// refused unread (`Wait`), the code waiting on (ESC-654, SR1-04). The log says neither the code nor the token.
     fn pair(
         &self,
         code: &str,
         name: &str,
-        source: &str,
+        source: &Source,
     ) -> std::result::Result<
         (super::devices::Device, String),
         (&'static str, String, Option<&'static str>),
@@ -494,7 +511,7 @@ impl RemoteApi {
             return Err((codes::POLICY, e.to_string(), None));
         }
         let now = Instant::now();
-        if self.failing(source, now) || self.codes_failing(now) {
+        if self.failing(source, now) || self.codes_failing(source.reach, now) {
             log::warn!("remote API: pairing refused from {source}: too many wrong tries in the minute, the code not read");
             let refusal = super::pairing::Refusal::Wait;
             return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
@@ -505,7 +522,7 @@ impl RemoteApi {
             Err(refusal) => {
                 self.failed(source);
                 if refusal == super::pairing::Refusal::Wrong {
-                    self.wrong_code();
+                    self.wrong_code(source.reach);
                 }
                 log::warn!(
                     "remote API: pairing refused from {source}: {}",
@@ -603,24 +620,24 @@ impl RemoteApi {
     }
 
     /// Too many failed handshakes of `source` in the last minute: its pairing codes are refused unread.
-    fn failing(&self, source: &str, now: Instant) -> bool {
+    fn failing(&self, source: &Source, now: Instant) -> bool {
         let mut failures = self.failures.lock();
-        let Some(times) = failures.get_mut(source) else {
+        let Some(times) = failures.get_mut(&source.key) else {
             return false;
         };
         within_a_minute(times, now);
         if times.is_empty() {
-            failures.remove(source);
+            failures.remove(&source.key);
             return false;
         }
         times.len() >= self.limits.failures_per_minute
     }
 
     /// A failed handshake of `source`.
-    fn failed(&self, source: &str) {
+    fn failed(&self, source: &Source) {
         let now = Instant::now();
         let mut failures = self.failures.lock();
-        if !failures.contains_key(source) && failures.len() >= MAX_SOURCES {
+        if !failures.contains_key(&source.key) && failures.len() >= MAX_SOURCES {
             // Too many sources kept: those of no failure in the minute go, then the one whose last failure is oldest.
             failures.retain(|_, times| {
                 within_a_minute(times, now);
@@ -636,7 +653,7 @@ impl RemoteApi {
                 }
             }
         }
-        let times = failures.entry(source.to_string()).or_default();
+        let times = failures.entry(source.key.clone()).or_default();
         within_a_minute(times, now);
         times.push_back(now);
         if times.len() == self.limits.failures_per_minute {
@@ -651,23 +668,46 @@ impl RemoteApi {
         }
     }
 
-    /// Too many wrong pairing codes of all sources in the last minute: any code is refused unread.
-    fn codes_failing(&self, now: Instant) -> bool {
-        let mut wrong = self.wrong_codes.lock();
+    /// The wrong pairing codes of the last minute from all sources of `reach`.
+    fn wrong_codes(&self, reach: Reach) -> &Mutex<VecDeque<Instant>> {
+        match reach {
+            Reach::Here => &self.wrong_codes_here,
+            Reach::Elsewhere => &self.wrong_codes,
+        }
+    }
+
+    /// Too many wrong pairing codes of all sources of `reach` in the last minute: any code of that reach is refused
+    /// unread. Those from elsewhere never refuse this machine's, nor the other way (SR1-04).
+    fn codes_failing(&self, reach: Reach, now: Instant) -> bool {
+        let mut wrong = self.wrong_codes(reach).lock();
         within_a_minute(&mut wrong, now);
         wrong.len() >= self.limits.pairing_per_minute
     }
 
-    fn wrong_code(&self) {
+    fn wrong_code(&self, reach: Reach) {
         let now = Instant::now();
-        let mut wrong = self.wrong_codes.lock();
+        let mut wrong = self.wrong_codes(reach).lock();
         within_a_minute(&mut wrong, now);
         wrong.push_back(now);
         if wrong.len() == self.limits.pairing_per_minute {
-            log::warn!(
-                "remote API: {} wrong pairing codes in a minute: any code refused unread for the rest of it",
-                wrong.len()
-            );
+            let n = wrong.len();
+            match reach {
+                Reach::Here => log::warn!(
+                    "remote API: {n} wrong pairing codes from this machine in a minute: its codes refused unread for the rest of it"
+                ),
+                Reach::Elsewhere => {
+                    log::warn!(
+                        "remote API: {n} wrong pairing codes from elsewhere than this machine in a minute: their codes refused unread for the rest of it, the code waiting on"
+                    );
+                    // Said to the window too: never a code burnt, nor a pairing held up, behind the user's back.
+                    self.services.core().hub.emit(crate::model::UiEvent::Toast {
+                        text: tr!(
+                            "{n} codes d’appairage faux en une minute venus du réseau : les codes venus d’ailleurs que cette machine sont refusés jusqu’à la fin de la minute. Le code qui attend vaut toujours, et se donne depuis cette machine ou par SSH.",
+                            "{n} wrong pairing codes in a minute from the network: codes from elsewhere than this machine are refused until the minute ends. The code that waits still holds, and can be given from this machine or through SSH."
+                        ),
+                    });
+                }
+            }
         }
         while wrong.len() > self.limits.pairing_per_minute {
             wrong.pop_front();
@@ -683,13 +723,7 @@ impl RemoteApi {
         via: Via,
         from: Option<std::net::IpAddr>,
     ) -> bool {
-        // Where its failures are counted: its address, the tunnel's peer (there, every phone has its own).
-        let source = match (&via, from) {
-            (Via::Tunnel(peer), _) => format!("peer {}", peer.label()),
-            (_, Some(ip)) => ip.to_string(),
-            (Via::Loopback, None) => Ipv4Addr::LOCALHOST.to_string(),
-            (Via::Tailscale(_), None) => "tailscale".to_string(),
-        };
+        let source = Source::of(&via, from);
         let id = self.handshakes.fetch_add(1, Ordering::Relaxed);
         let cancel = Arc::new(Notify::new());
         {
@@ -706,7 +740,7 @@ impl RemoteApi {
         tokio::spawn(async move {
             // The handshake under way counts until it is over, whatever its end.
             let _over = HandshakeOver(me.clone(), id);
-            me.connection(stream, via, source, id, cancel).await
+            me.connection(stream, via, source, from, id, cancel).await
         });
         true
     }
@@ -747,13 +781,14 @@ impl RemoteApi {
         log::info!("remote API: stopped");
     }
 
-    /// The connection `id` from `source`: its handshake, within [`proto::HELLO_WAIT`] in all (the WebSocket opened and
-    /// its first message) and until `cancel` lets it go for a newer one; then served.
+    /// The connection `id` from `source` (the address `from`): its handshake, within [`proto::HELLO_WAIT`] in all (the
+    /// WebSocket opened and its first message) and until `cancel` lets it go for a newer one; then served.
     async fn connection(
         self: Arc<Self>,
         stream: Box<dyn Io>,
         via: Via,
-        source: String,
+        mut source: Source,
+        from: Option<std::net::IpAddr>,
         id: u64,
         cancel: Arc<Notify>,
     ) {
@@ -766,11 +801,21 @@ impl RemoteApi {
             Via::Loopback => self.hosts.lock().clone(),
             other => Arc::new(other.hosts()),
         };
-        let through = !matches!(via, Via::Loopback);
+        let way = Way::of(&via);
+        let through = way != Way::Loopback;
+        // A connection of a proxy declared (`--trust-proxy`) that says whom it forwards: that client is the source.
+        let proxied = matches!(via, Via::Loopback)
+            && from.is_some_and(|ip| self.proxies.lock().contains(&ip));
+        let forwarded: Mutex<Option<std::net::IpAddr>> = Mutex::new(None);
         // The callback's type is tungstenite's: its error, an HTTP answer, is large.
         #[allow(clippy::result_large_err)]
-        let guard = |req: &Request, resp: Response| match guard(req, &hosts, through) {
-            Ok(()) => Ok(resp),
+        let guard = |req: &Request, resp: Response| match guard(req, &hosts, way) {
+            Ok(()) => {
+                if proxied {
+                    *forwarded.lock() = forwarded_for(req);
+                }
+                Ok(resp)
+            }
             Err((status, why)) => {
                 log::warn!("remote API: refused a connection: {why}");
                 let mut refused = ErrorResponse::new(Some(why));
@@ -806,6 +851,9 @@ impl RemoteApi {
                 return;
             }
         };
+        if let Some(client) = forwarded.into_inner() {
+            source = Source::forwarded(client);
+        }
         let (mut sink, mut stream) = ws.split();
         // Before the handshake, the few messages of a refusal: a queue of their own, never past its bounds.
         let refuse_with = |code: &'static str,
@@ -1503,12 +1551,14 @@ fn version_text(server: &str, client: &str, update: &str) -> String {
 }
 
 /// The request that opens the WebSocket, before it opens: its path, a `Host` of the loopback, no `Origin` but
-/// Escouade's own window's. Else its HTTP status and why (shown in the log: no secret there).
+/// Escouade's own window's (and, through the tunnel or Tailscale, the phone app's: [`Way::origins`]). Else its HTTP
+/// status and why (shown in the log: no secret there).
 fn guard(
     req: &Request,
     hosts: &[String],
-    through: bool,
+    way: Way,
 ) -> std::result::Result<(), (tauri::http::StatusCode, String)> {
+    let through = way != Way::Loopback;
     use tauri::http::StatusCode;
     if req.uri().path() != proto::PATH {
         return Err((
@@ -1536,8 +1586,7 @@ fn guard(
     }
     if let Some(origin) = req.headers().get("origin") {
         let origin = origin.to_str().unwrap_or("");
-        if !proto::ORIGINS.contains(&origin) && !(through && proto::PHONE_ORIGINS.contains(&origin))
-        {
+        if !proto::ORIGINS.contains(&origin) && !way.origins().contains(&origin) {
             return Err((
                 StatusCode::FORBIDDEN,
                 format!("the Origin of a web page ({})", shown(origin)),
@@ -1545,6 +1594,98 @@ fn guard(
         }
     }
     Ok(())
+}
+
+/// Where a connection comes from, as its failures are counted (SR1-04): its key (the address of the other end, the
+/// client a declared proxy forwards, the tunnel's peer: every phone has its own), and whether it is this machine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Source {
+    key: String,
+    reach: Reach,
+}
+
+/// Whether a source is this machine (the loopback: its window, its command line, a client through SSH) or anywhere
+/// else (the tunnel, Tailscale, the network of `--listen`, a client behind a proxy): the wrong pairing codes from
+/// elsewhere are bounded apart, and never refuse those of this machine (SR1-04).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Reach {
+    Here,
+    Elsewhere,
+}
+
+impl Source {
+    fn of(via: &Via, from: Option<std::net::IpAddr>) -> Self {
+        let (key, reach) = match (via, from) {
+            (Via::Tunnel(peer), _) => (format!("peer {}", peer.label()), Reach::Elsewhere),
+            (Via::Loopback, Some(ip)) if ip.is_loopback() => (ip.to_string(), Reach::Here),
+            (_, Some(ip)) => (ip.to_string(), Reach::Elsewhere),
+            (Via::Loopback, None) => (Ipv4Addr::LOCALHOST.to_string(), Reach::Here),
+            (Via::Tailscale(_), None) => ("tailscale".to_string(), Reach::Elsewhere),
+        };
+        Self { key, reach }
+    }
+
+    /// The client a declared proxy forwards: elsewhere, whatever its address says.
+    fn forwarded(client: std::net::IpAddr) -> Self {
+        Self {
+            key: format!("{client} (forwarded)"),
+            reach: Reach::Elsewhere,
+        }
+    }
+}
+
+impl std::fmt::Display for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.key)
+    }
+}
+
+/// The client a proxy says it forwards: the last address of its last `X-Forwarded-For` (the one the proxy wrote; those
+/// before it, the client may have written itself). None when it says none, or not an address.
+fn forwarded_for(req: &Request) -> Option<std::net::IpAddr> {
+    let last = req
+        .headers()
+        .get_all("x-forwarded-for")
+        .iter()
+        .next_back()?;
+    let value = last.to_str().ok()?;
+    let ip = value.rsplit(',').next()?.trim();
+    // An address of IPv6 may come in brackets, with a port or not; one of IPv4 with a port.
+    let ip = ip
+        .strip_prefix('[')
+        .and_then(|rest| rest.split(']').next())
+        .unwrap_or(ip);
+    ip.parse()
+        .ok()
+        .or_else(|| ip.parse::<SocketAddr>().ok().map(|a| a.ip()))
+}
+
+/// The way of a connection, as the guard of its request reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Way {
+    Loopback,
+    Tunnel,
+    Tailscale,
+}
+
+impl Way {
+    fn of(via: &Via) -> Self {
+        match via {
+            Via::Loopback => Way::Loopback,
+            Via::Tunnel(_) => Way::Tunnel,
+            Via::Tailscale(_) => Way::Tailscale,
+        }
+    }
+
+    /// The `Origin`s of the phone app taken this way, besides the window's (SR1-09): none on the loopback, where they
+    /// would be a page of the machine; through Tailscale, the app's own alone, never a `localhost` of another machine.
+    fn origins(self) -> &'static [&'static str] {
+        match self {
+            Way::Loopback => &[],
+            Way::Tunnel => proto::PHONE_ORIGINS,
+            Way::Tailscale => proto::TAILSCALE_ORIGINS,
+        }
+    }
 }
 
 /// `127.0.0.1`, `localhost` or `[::1]`, with any port: through a tunnel, the client's port is its own.

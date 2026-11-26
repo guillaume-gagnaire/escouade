@@ -2,8 +2,8 @@
 title: "Le tunnel du téléphone"
 subject: "a-distance"
 sources: ["docs/MOBILE.md § 3.1, § 3.10, § 8 (MO-2), M12","docs/REMOTE.md, « Le téléphone » (« Architecture retenue », « Configuration, pour l'utilisateur », « Points durs (sur le PC) », « Alternative sans WireGuard dans l'app », « Le tunnel côté cœur, MO-2 »)","src-tauri/src/phone (mod.rs, stack.rs, nat.rs, tailscale.rs)","src-tauri/src/remoteapi/server.rs (Via, serve_stream, Listen::Nothing)","src/components/settings/PhonePage.svelte","crates/escouade-policy/src/list.rs (servers.phone)"]
-tickets: ["ESC-567","ESC-630"]
-decisions: [230,262,285]
+tickets: ["ESC-567","ESC-630","ESC-631"]
+decisions: [230,262,285,328]
 compared: null
 ---
 
@@ -17,8 +17,8 @@ Le téléphone pilote un cœur d'Escouade (le poste, ou un serveur) par l'API di
 - Le cœur a l'adresse `10.77.0.1` dans le tunnel ; chaque téléphone la sienne, de `10.77.0.2` à `10.77.0.254`, la seule d'où ses paquets sont pris.
 - **Un pair inconnu n'a aucune réponse** : une poignée de main d'une clé que le cœur ne connaît pas, ou un datagramme qui n'est pas WireGuard, est jeté sans un mot. Un scan du port ne voit rien. Sous une rafale de poignées de main, le cœur demande les cookies de WireGuard.
 - **L'API n'est servie que dans le tunnel** pour un téléphone, à `ws://10.77.0.1/remote`. Sur le poste, quand l'accès est allumé, l'API n'a alors **aucun port sur la machine** : elle n'est jointe que par le tunnel, jamais par l'adresse publique ni le réseau local. Sur un serveur, elle garde en plus son port de 127.0.0.1 (le tunnel SSH du poste, voir *Le mode serveur*).
-- Dans le tunnel aussi, **le jeton d'appareil est demandé** (défense en profondeur si la clé d'un téléphone fuit), le `Host` doit être l'adresse du tunnel, et seule l'`Origin` de la fenêtre d'Escouade ou de l'app mobile (`capacitor://localhost`, `https://localhost`, `http://localhost`) passe ; ces dernières restent refusées sur 127.0.0.1, où elles seraient une page du poste.
-- **Un téléphone appairé à travers le tunnel** (le code de l'appairage donné par son pair) appartient à cet appareil : par son pair, seul le jeton de cet appareil est pris. **Révoquer l'appareil retire aussi son pair** : sa clé n'est plus reconnue.
+- Dans le tunnel aussi, **le jeton d'appareil est demandé** (défense en profondeur si la clé d'un téléphone fuit), le `Host` doit être l'adresse du tunnel, et seule l'`Origin` de la fenêtre d'Escouade ou de l'app mobile passe : `capacitor://localhost` (iOS), `https://app.escouade.invalid` (Android, un nom propre à l'app depuis ESC-631), et `https://localhost` ou `http://localhost` d'une app construite avant ce nom ; ces dernières restent refusées sur 127.0.0.1, où elles seraient une page du poste.
+- **Un téléphone appairé à travers le tunnel** (le code de l'appairage donné par son pair) appartient à cet appareil : par son pair, seul le jeton de cet appareil est pris. **Révoquer l'appareil retire aussi son pair** : sa clé n'est plus reconnue. Les échecs d'un pair se comptent à lui seul : les essais ratés d'un autre pair, de Tailscale ou du réseau ne ferment jamais la porte à un pair lié à son appareil (voir *L'API distante*, « Les bornes »).
 - **La clé du tunnel** peut être changée (Réglages › Téléphone › Avancé › « Changer la clé du tunnel », après confirmation) : chaque téléphone doit être appairé de nouveau, l'ancienne clé n'a plus de réponse.
 
 ## Ce qui est gardé
@@ -37,7 +37,7 @@ Le téléphone pilote un cœur d'Escouade (le poste, ou un serveur) par l'API di
 
 ## Tailscale quand il est là
 
-Quand Tailscale tourne sur la machine (sa commande, ou la route vers son adresse 100.100.100.100), Escouade le dit, avec l'adresse et le nom de la machine dans le tailnet, et **sert aussi l'API sur l'adresse Tailscale**, au même numéro de port en TCP : un téléphone de ce tailnet la joint sans port à ouvrir, CGNAT compris. Seule une machine du tailnet est prise (100.64.0.0/10, `fd7a:115c:a1e0::/48`), le jeton d'appareil reste demandé. « Servir aussi sur l'adresse Tailscale » se coupe dans Réglages › Téléphone. Escouade ne refait pas Tailscale : ni perçage de NAT, ni relais.
+Quand Tailscale tourne sur la machine (sa commande, ou la route vers son adresse 100.100.100.100), Escouade le dit, avec l'adresse et le nom de la machine dans le tailnet, et **sert aussi l'API sur l'adresse Tailscale**, au même numéro de port en TCP : un téléphone de ce tailnet la joint sans port à ouvrir, CGNAT compris. Seule une machine du tailnet est prise (100.64.0.0/10, `fd7a:115c:a1e0::/48`), le jeton d'appareil reste demandé. **Par Tailscale, seule l'`Origin` de l'app du téléphone passe** (`capacitor://localhost`, `https://app.escouade.invalid`), ou celle de la fenêtre d'Escouade : plus aucun `http(s)://localhost`, qu'une page web servie sur une autre machine du tailnet (le serveur de développement d'un dépôt pas sûr) pourrait avoir (SR1-09, ESC-631). Chaque machine du tailnet compte ses échecs à son adresse. « Servir aussi sur l'adresse Tailscale » se coupe dans Réglages › Téléphone. Escouade ne refait pas Tailscale : ni perçage de NAT, ni relais.
 
 ## Réglages › Téléphone
 
@@ -64,7 +64,7 @@ Le tunnel dit son port, chaque poignée de main d'un téléphone, chaque télép
 
 ## Pas encore
 
-L'essai réel avec un téléphone en 4G (un geste de l'utilisateur) ; le QR code de l'appairage depuis Réglages › Téléphone et la sorte « téléphone » des appareils ; l'app elle-même ; un nom DynDNS à la place de l'adresse publique ; le pare-feu IPv6 de la box ouvert par Escouade ; empêcher la veille du poste tant que l'accès est allumé.
+L'essai réel avec un téléphone en 4G (un geste de l'utilisateur) ; l'essai réel de l'app Android sous son nom propre par Tailscale (un geste de l'utilisateur) ; le QR code de l'appairage depuis Réglages › Téléphone et la sorte « téléphone » des appareils ; l'app elle-même ; un nom DynDNS à la place de l'adresse publique ; le pare-feu IPv6 de la box ouvert par Escouade ; empêcher la veille du poste tant que l'accès est allumé.
 
 ## Retirer un téléphone (ESC-630)
 

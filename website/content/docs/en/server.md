@@ -96,7 +96,7 @@ Its risks: anyone with an SSH account on the server, or a process of the host, r
 
 The server can also be reached by a domain, behind a proxy that holds TLS (Coolify’s Traefik, Caddy, nginx). The server listens on the container’s network (`ESCOUADE_SERVER_LISTEN=0.0.0.0`) and takes the domain’s name in the `Host` header (`ESCOUADE_SERVER_ALLOW_HOSTS=escouade.example.org`, or `--allow-host`); any other name is still refused.
 
-Its risks: the API is then on the Internet. Anyone who reaches the domain may try to pair (a 40-bit code, good for 10 minutes, once, 5 wrong tries) or to guess a token (256 bits); every try is in the log, and too many failures close the connections for a minute. A flaw of the server would be exposed to everyone: keep this mode to a domain filtered by IP address on the proxy, or to a private network (Tailscale, WireGuard). Never without TLS: the API encrypts nothing itself. Escouade’s client connects through the SSH tunnel today; a domain’s address (`wss://`) comes with its screen.
+Its risks: the API is then on the Internet. Anyone who reaches the domain may try to pair (a 40-bit code, good for 10 minutes, once, 120 tries read a minute at most) or to guess a token (256 bits); every try is in the log. A wrong code never cancels yours, and tries from the Internet never block the one you type on the server or through SSH. Declare the proxy (`--trust-proxy <its address>`, or `ESCOUADE_SERVER_TRUST_PROXIES`): each client behind it then counts its failed tries apart, from the `X-Forwarded-For` header the proxy writes; otherwise they all count as one source. A flaw of the server would be exposed to everyone: keep this mode to a domain filtered by IP address on the proxy, or to a private network (Tailscale, WireGuard). Never without TLS: the API encrypts nothing itself. Escouade’s client connects through the SSH tunnel today; a domain’s address (`wss://`) comes with its screen.
 
 ## The harnesses on the server
 
@@ -153,6 +153,7 @@ Each option has its environment variable; the option wins over the variable.
 | `--port <n>` | `ESCOUADE_SERVER_PORT` | `46480` |
 | `--listen <address>` | `ESCOUADE_SERVER_LISTEN` | `127.0.0.1` |
 | `--allow-host <name>` | `ESCOUADE_SERVER_ALLOW_HOSTS` (names separated by commas) | none |
+| `--trust-proxy <address>` | `ESCOUADE_SERVER_TRUST_PROXIES` (addresses separated by commas) | none |
 | `--debug` | none | off |
 
 `--listen` on another address than `127.0.0.1` warns in the log: that port must never be open to the Internet.

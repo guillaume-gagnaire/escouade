@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: behind a TLS proxy, each client of your server counts its failed tries apart (`--trust-proxy`), and wrong pairing codes from elsewhere never block the one you type on the machine or through SSH. Through Tailscale, only the phone app opens the API, no longer a web page of another machine.
 - Security: a ticket of a team Kanban that a teammate wrote and that is assigned to you waits for your go-ahead: neither the autopilot, the Overseer nor your agents start it before you accept it, on its card or in the “Your turn” box. The card says who wrote its text and who assigned it, and a text a teammate changes after your go-ahead asks again.
 - Security: whoever hosts a team server can unfreeze a team or a project blocked by an unreadable entry, with `escouade-team-server drop-entry`. They see the entry, confirm, and the database keeps who removed it, when and its digest, never its content; the devices read on instead of taking it for a rollback, and the administrators see it on the team’s card.
 - Each project picks its parts in Settings › Projects › Project parts: turn off its Docs, its shared memory, its Kanban or its launch and browsers, and they disappear from that project, its agents’ tools included, deleting nothing. Its .escouade.yml can propose a default, but your choice always goes first.

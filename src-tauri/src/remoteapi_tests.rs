@@ -5,12 +5,12 @@ use crate::core_tests::repo;
 use crate::headless::Headless;
 use crate::headless_tests::{data, wait};
 use crate::remoteapi::proto::{self, Frame, ToClient, ToServer};
-use crate::remoteapi::server::RemoteApi;
+use crate::remoteapi::server::{RemoteApi, Via};
 use crate::remoteapi::{self, codes, list, Class};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -2377,5 +2377,320 @@ async fn the_state_a_remote_client_gets_never_holds_the_proxy_s_password_apart_f
         !initial.to_string().contains(secret),
         "the proxy's password in the state of a client at a distance"
     );
+    h.stop();
+}
+
+// ---------- the failures counted by source, the origins by way (SR1-04, SR1-09, ESC-631) ----------
+
+type Handed = tokio_tungstenite::WebSocketStream<tokio::io::DuplexStream>;
+
+/// A connection handed to the API from `via` and the address `from`, with the `Host` `host` and the headers `headers`:
+/// the WebSocket opened, or the HTTP status that refused it.
+async fn handed(
+    api: &Arc<RemoteApi>,
+    via: Via,
+    from: Option<IpAddr>,
+    host: &str,
+    headers: &[(&'static str, &str)],
+) -> Result<Handed, String> {
+    let (near, far) = tokio::io::duplex(1 << 16);
+    assert!(api.serve_stream_from(Box::new(far), via, from));
+    let mut req = format!("ws://{host}{}", proto::PATH)
+        .into_client_request()
+        .unwrap();
+    for (name, value) in headers {
+        req.headers_mut().append(*name, value.parse().unwrap());
+    }
+    tokio_tungstenite::client_async(req, near)
+        .await
+        .map(|(ws, _)| ws)
+        .map_err(|e| match e {
+            tokio_tungstenite::tungstenite::Error::Http(resp) => {
+                format!("HTTP {}", resp.status().as_u16())
+            }
+            other => other.to_string(),
+        })
+}
+
+/// The server's first answer to `m` on `ws`.
+async fn answer(ws: &mut Handed, m: &ToServer) -> ToClient {
+    ws.send(Message::text(serde_json::to_string(m).unwrap()))
+        .await
+        .unwrap();
+    loop {
+        match tokio::time::timeout(Duration::from_secs(30), ws.next()).await {
+            Ok(Some(Ok(m))) => {
+                if let Some(answer) = parse(&m) {
+                    return answer;
+                }
+            }
+            other => panic!("no answer: {other:?}"),
+        }
+    }
+}
+
+fn pair_message(code: &str) -> ToServer {
+    ToServer::Pair {
+        code: code.into(),
+        name: "Tablette".into(),
+    }
+}
+
+fn hello_message(token: &str) -> ToServer {
+    ToServer::Hello {
+        version: VERSION.into(),
+        token: token.into(),
+        session: None,
+    }
+}
+
+fn tailscale() -> Via {
+    Via::Tailscale(Arc::new(vec!["100.100.7.1".to_string()]))
+}
+
+fn ip(text: &str) -> Option<IpAddr> {
+    Some(text.parse().unwrap())
+}
+
+/// A peer of the phone's tunnel, as the tests make one: bound to a device once paired.
+struct FakePeer {
+    name: &'static str,
+    device: parking_lot::Mutex<Option<String>>,
+}
+
+impl FakePeer {
+    fn via(name: &'static str) -> (Arc<FakePeer>, Via) {
+        let peer = Arc::new(FakePeer {
+            name,
+            device: parking_lot::Mutex::new(None),
+        });
+        (peer.clone(), Via::Tunnel(peer))
+    }
+}
+
+impl crate::remoteapi::server::TunnelPeer for FakePeer {
+    fn hosts(&self) -> Vec<String> {
+        vec!["10.77.0.1".to_string()]
+    }
+    fn device(&self) -> Option<String> {
+        self.device.lock().clone()
+    }
+    fn paired(&self, device: &str) {
+        *self.device.lock() = Some(device.to_string());
+    }
+    fn label(&self) -> String {
+        self.name.to_string()
+    }
+}
+
+/// SR1-04: the failures of others, through Tailscale, the network of `--listen` or another peer of the tunnel, never
+/// shut the door on the owner's loopback nor on a peer of the tunnel bound to its device, whatever their number.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_failures_of_others_never_shut_out_the_owner_nor_a_bound_peer() {
+    let limits = crate::remoteapi::server::Limits {
+        failures_per_minute: 3,
+        pairing_per_minute: 4,
+        ..Default::default()
+    };
+    let (_dir, h, api, token) = served_within("remote-others", limits).await;
+    // A phone paired through its peer of the tunnel: the peer is bound to it.
+    let (bound, through_bound) = FakePeer::via("pixel");
+    let code = remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    let mut ws = handed(&api, through_bound.clone(), None, "10.77.0.1", &[])
+        .await
+        .unwrap();
+    let ToClient::Paired { token: phone, .. } = answer(&mut ws, &pair_message(&code.text)).await
+    else {
+        panic!("paired through the tunnel")
+    };
+    assert!(bound.device.lock().is_some());
+    // Strangers everywhere, past every bound: wrong tokens and wrong codes from Tailscale, the network of `--listen`
+    // and another peer of the tunnel.
+    let (_stranger, through_stranger) = FakePeer::via("stranger");
+    remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    for i in 0..8u8 {
+        let tailnet = format!("100.100.8.{i}");
+        let ways = [
+            (tailscale(), ip(&tailnet), "100.100.7.1"),
+            (Via::Loopback, ip("172.18.0.9"), "127.0.0.1"),
+            (through_stranger.clone(), None, "10.77.0.1"),
+        ];
+        for (via, from, host) in ways {
+            let mut ws = handed(&api, via, from, host, &[]).await.unwrap();
+            let m = if i % 2 == 0 {
+                hello_message("not-a-token")
+            } else {
+                pair_message("AAAA-AAAA")
+            };
+            let a = answer(&mut ws, &m).await;
+            assert!(matches!(a, ToClient::Refused { .. }), "{a:?}");
+        }
+    }
+    // The owner on the loopback, and the bound peer with its own token: welcome.
+    let _owner = Client::connect(&api, &token).await;
+    let mut ws = handed(&api, through_bound, None, "10.77.0.1", &[])
+        .await
+        .unwrap();
+    let welcome = answer(&mut ws, &hello_message(&phone)).await;
+    assert!(matches!(welcome, ToClient::Welcome { .. }), "{welcome:?}");
+    h.stop();
+}
+
+/// SR1-04: past the wrong codes of a minute from elsewhere in all (the bound that keeps a guess out of reach, whatever
+/// the number of sources), the codes from elsewhere are refused unread, never this machine's: the user still pairs
+/// from the server itself or through SSH, and the window is told.
+#[tokio::test(flavor = "multi_thread")]
+async fn wrong_codes_from_elsewhere_never_refuse_those_of_this_machine() {
+    let limits = crate::remoteapi::server::Limits {
+        pairing_per_minute: 3,
+        ..Default::default()
+    };
+    let (_dir, h, api, _token) = served_within("remote-pair-here", limits).await;
+    let events = Arc::new(parking_lot::Mutex::new(Vec::<crate::model::UiEvent>::new()));
+    let sink = events.clone();
+    h.core.hub.subscribe(Box::new(move |e| sink.lock().push(e)));
+    let code = remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    for from in ["100.100.9.1", "100.100.9.2", "100.100.9.3"] {
+        let a = pair_from(&api, from.parse().unwrap(), wrong_for(&code.text)).await;
+        assert_eq!(reason_of(&a), Some("wrong"), "{a:?}");
+    }
+    // The bound in all, from elsewhere: a new source's right code is refused unread, the code waiting on.
+    let a = pair_from(&api, "100.100.9.4".parse().unwrap(), &code.text).await;
+    assert_eq!(reason_of(&a), Some("wait"), "{a:?}");
+    assert!(remoteapi::pairing::waiting_until(&h.core.data, crate::model::now_ms()).is_some());
+    // The window is told, never the code.
+    let told: Vec<String> = events
+        .lock()
+        .iter()
+        .filter_map(|e| match e {
+            crate::model::UiEvent::Toast { text } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert!(!told[0].contains(&code.text), "{told:?}");
+    // From this machine: read, and paired.
+    let a = pair_answer(&api, &code.text).await;
+    assert!(matches!(a, ToClient::Paired { .. }), "{a:?}");
+    h.stop();
+}
+
+/// SR1-04: behind a proxy declared (`--trust-proxy`), each client it forwards counts its failures apart (the last
+/// address of `X-Forwarded-For`, the one the proxy wrote); of an address not declared, the header is never read: a
+/// client cannot choose where its failures go.
+#[tokio::test(flavor = "multi_thread")]
+async fn behind_a_declared_proxy_each_client_counts_its_failures_apart() {
+    let limits = crate::remoteapi::server::Limits {
+        failures_per_minute: 3,
+        ..Default::default()
+    };
+    let (_dir, h, api, _token) = served_within("remote-proxy", limits).await;
+    api.trust_proxies(vec!["172.18.0.5".parse().unwrap()]);
+    let through = |from: &'static str, forwarded: &'static str, code: String| {
+        let api = api.clone();
+        async move {
+            let mut ws = handed(
+                &api,
+                Via::Loopback,
+                ip(from),
+                "127.0.0.1",
+                &[("x-forwarded-for", forwarded)],
+            )
+            .await
+            .unwrap();
+            answer(&mut ws, &pair_message(&code)).await
+        }
+    };
+    let code = remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    let wrong = wrong_for(&code.text).to_string();
+    // A client behind the proxy past its failures (the address it wrote itself, before the proxy's, left aside).
+    for _ in 0..3 {
+        let a = through("172.18.0.5", "100.1.1.1, 203.0.113.7", wrong.clone()).await;
+        assert_eq!(reason_of(&a), Some("wrong"), "{a:?}");
+    }
+    let a = through("172.18.0.5", "203.0.113.8, 203.0.113.7", code.text.clone()).await;
+    assert_eq!(reason_of(&a), Some("wait"), "{a:?}");
+    // Another client behind the same proxy: its own count, paired.
+    let a = through("172.18.0.5", "203.0.113.7, 203.0.113.8", code.text.clone()).await;
+    assert!(matches!(a, ToClient::Paired { .. }), "{a:?}");
+
+    // An address not declared: whatever its header says, one source.
+    let code = remoteapi::pairing::create(&h.core.data, crate::model::now_ms()).unwrap();
+    let wrong = wrong_for(&code.text).to_string();
+    for forwarded in ["198.51.100.1", "198.51.100.2", "198.51.100.3"] {
+        let a = through("172.18.0.6", forwarded, wrong.clone()).await;
+        assert_eq!(reason_of(&a), Some("wrong"), "{a:?}");
+    }
+    let a = through("172.18.0.6", "198.51.100.4", code.text.clone()).await;
+    assert_eq!(reason_of(&a), Some("wait"), "{a:?}");
+    h.stop();
+}
+
+/// SR1-09: the `Origin`s taken by way. Through Tailscale, the phone app's own alone (iOS's `capacitor://localhost`, the
+/// Android app's name of its own), never a `localhost`, which a web page of another machine of the tailnet may be
+/// served from; through the phone's tunnel, an app built before its own name too; on the loopback, none of them.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_origins_taken_by_way() {
+    let (_dir, h, api, _token) = served("remote-origins-way").await;
+    let tunnel = || FakePeer::via("p").1;
+    let (ts, lo) = (ip("100.100.9.9"), ip("127.0.0.1"));
+    let cases = [
+        (
+            tailscale(),
+            ts,
+            "100.100.7.1",
+            "capacitor://localhost",
+            true,
+        ),
+        (tailscale(), ts, "100.100.7.1", proto::ANDROID_ORIGIN, true),
+        (tailscale(), ts, "100.100.7.1", "tauri://localhost", true),
+        (tailscale(), ts, "100.100.7.1", "http://localhost", false),
+        (tailscale(), ts, "100.100.7.1", "https://localhost", false),
+        (
+            tailscale(),
+            ts,
+            "100.100.7.1",
+            "http://localhost:5173",
+            false,
+        ),
+        (
+            tailscale(),
+            ts,
+            "100.100.7.1",
+            "https://evil.example",
+            false,
+        ),
+        (tunnel(), None, "10.77.0.1", "capacitor://localhost", true),
+        (tunnel(), None, "10.77.0.1", proto::ANDROID_ORIGIN, true),
+        (tunnel(), None, "10.77.0.1", "https://localhost", true),
+        (tunnel(), None, "10.77.0.1", "https://evil.example", false),
+        (
+            Via::Loopback,
+            lo,
+            "127.0.0.1",
+            "capacitor://localhost",
+            false,
+        ),
+        (Via::Loopback, lo, "127.0.0.1", proto::ANDROID_ORIGIN, false),
+        (Via::Loopback, lo, "127.0.0.1", "https://localhost", false),
+        (Via::Loopback, lo, "127.0.0.1", "tauri://localhost", true),
+    ];
+    for (via, from, host, origin, taken) in cases {
+        let way = match &via {
+            Via::Loopback => "the loopback",
+            Via::Tunnel(_) => "the tunnel",
+            Via::Tailscale(_) => "Tailscale",
+        };
+        let opened = handed(&api, via, from, host, &[("origin", origin)]).await;
+        if taken {
+            assert!(opened.is_ok(), "{origin} through {way}: {:?}", opened.err());
+        } else {
+            assert_eq!(
+                opened.err().as_deref(),
+                Some("HTTP 403"),
+                "{origin} through {way}"
+            );
+        }
+    }
     h.stop();
 }

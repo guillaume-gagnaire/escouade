@@ -44,6 +44,7 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             port: DEFAULT_PORT,
             listen: None,
             hosts: Vec::new(),
+            proxies: Vec::new(),
             debug: false,
             update: update::Asked::default(),
             endpoint: None,
@@ -735,7 +736,30 @@ fn health_update_and_allow_host_are_read_and_the_update_s_options_go_with_it_alo
         .hosts,
         ["escouade.example.org", "b.example.org"]
     );
+    // The proxies whose X-Forwarded-For is read (SR1-04): by option and by variable.
+    let proxies: Vec<std::net::IpAddr> =
+        vec!["172.18.0.5".parse().unwrap(), "::1".parse().unwrap()];
+    assert_eq!(
+        server::parse_with(&args("--trust-proxy 172.18.0.5 --trust-proxy ::1"), none)
+            .unwrap()
+            .proxies,
+        proxies
+    );
+    assert_eq!(
+        server::parse_with(&[], |n| (n == "ESCOUADE_SERVER_TRUST_PROXIES")
+            .then(|| "172.18.0.5, ::1".into()))
+        .unwrap()
+        .proxies,
+        proxies
+    );
+    assert!(
+        server::parse_with(&[], |n| (n == "ESCOUADE_SERVER_TRUST_PROXIES")
+            .then(|| "traefik".into()))
+        .is_err()
+    );
     for bad in [
+        "--trust-proxy",
+        "--trust-proxy traefik",
         "run --now",
         "pair --to 2.3.0",
         "update --to latest",
@@ -754,7 +778,7 @@ fn health_update_and_allow_host_are_read_and_the_update_s_options_go_with_it_alo
         Command::Help
     );
     let help = server::help();
-    for word in ["health", "update", "--allow-host"] {
+    for word in ["health", "update", "--allow-host", "--trust-proxy"] {
         assert!(help.contains(word), "{word}: {help}");
     }
 }

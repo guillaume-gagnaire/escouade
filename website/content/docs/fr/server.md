@@ -96,7 +96,7 @@ Ses risques : qui a un compte SSH sur le serveur, ou un processus de l’hôte, 
 
 Le serveur peut aussi être joint par un domaine, derrière un proxy qui tient le TLS (Traefik de Coolify, Caddy, nginx). Le serveur écoute sur le réseau du conteneur (`ESCOUADE_SERVER_LISTEN=0.0.0.0`) et accepte le nom du domaine dans l’en-tête `Host` (`ESCOUADE_SERVER_ALLOW_HOSTS=escouade.example.org`, ou `--allow-host`) ; tout autre nom reste refusé.
 
-Ses risques : l’API est alors sur Internet. Qui atteint le domaine peut tenter de s’appairer (un code de 40 bits, valable 10 minutes, une fois, 5 essais faux) ou de deviner un jeton (256 bits) ; chaque essai est dans le journal, et trop d’échecs ferment les connexions pendant une minute. Une faille du serveur serait exposée à tous : réserve ce mode à un domaine filtré par adresse IP sur le proxy, ou à un réseau privé (Tailscale, WireGuard). Jamais sans TLS : l’API ne chiffre rien elle-même. Le client d’Escouade se connecte aujourd’hui par le tunnel SSH ; l’adresse d’un domaine (`wss://`) vient avec son écran.
+Ses risques : l’API est alors sur Internet. Qui atteint le domaine peut tenter de s’appairer (un code de 40 bits, valable 10 minutes, une fois, 120 essais lus par minute au plus) ou de deviner un jeton (256 bits) ; chaque essai est dans le journal. Un code faux n’annule jamais le tien, et les essais venus d’Internet ne bloquent jamais celui que tu tapes sur le serveur ou par SSH. Déclare le proxy (`--trust-proxy <son adresse>`, ou `ESCOUADE_SERVER_TRUST_PROXIES`) : chaque client derrière lui compte alors ses essais ratés à part, d’après l’en-tête `X-Forwarded-For` que le proxy écrit ; sinon, tous comptent comme une seule source. Une faille du serveur serait exposée à tous : réserve ce mode à un domaine filtré par adresse IP sur le proxy, ou à un réseau privé (Tailscale, WireGuard). Jamais sans TLS : l’API ne chiffre rien elle-même. Le client d’Escouade se connecte aujourd’hui par le tunnel SSH ; l’adresse d’un domaine (`wss://`) vient avec son écran.
 
 ## Les harness sur le serveur
 
@@ -153,6 +153,7 @@ Chaque option a sa variable d’environnement ; l’option passe devant la varia
 | `--port <n>` | `ESCOUADE_SERVER_PORT` | `46480` |
 | `--listen <adresse>` | `ESCOUADE_SERVER_LISTEN` | `127.0.0.1` |
 | `--allow-host <nom>` | `ESCOUADE_SERVER_ALLOW_HOSTS` (noms séparés par des virgules) | aucun |
+| `--trust-proxy <adresse>` | `ESCOUADE_SERVER_TRUST_PROXIES` (adresses séparées par des virgules) | aucun |
 | `--debug` | aucune | éteint |
 
 `--listen` sur une autre adresse que `127.0.0.1` avertit dans le journal : ce port ne doit jamais être ouvert sur Internet.

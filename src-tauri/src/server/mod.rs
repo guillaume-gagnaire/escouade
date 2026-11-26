@@ -15,9 +15,12 @@
 //!   the phone's WireGuard config and its QR code for the user alone (the official WireGuard app, until MO-4's pairing);
 //! - `--data-dir <folder>` (else `~/.escouade`), `--port <n>` (else [`DEFAULT_PORT`]), `--listen <address>` (another
 //!   interface than 127.0.0.1: for Docker, behind a tunnel or a proxy; it warns), `--allow-host <name>` (a `Host`
-//!   the API takes besides the loopback's: the name a TLS proxy serves it under), `--debug`, `--version`, `--help`.
+//!   the API takes besides the loopback's: the name a TLS proxy serves it under), `--trust-proxy <address>` (a proxy
+//!   whose `X-Forwarded-For` says where a connection comes from: its clients' failures counted apart, SR1-04),
+//!   `--debug`, `--version`, `--help`.
 //! - Their variables, for a container (ESC-515): `ESCOUADE_SERVER_DATA`, `ESCOUADE_SERVER_PORT`, `ESCOUADE_SERVER_LISTEN`,
-//!   `ESCOUADE_SERVER_ALLOW_HOSTS` (names separated by commas); an option given wins over its variable. So
+//!   `ESCOUADE_SERVER_ALLOW_HOSTS` (names separated by commas), `ESCOUADE_SERVER_TRUST_PROXIES` (addresses separated by
+//!   commas); an option given wins over its variable. So
 //!   `docker exec <container> escouade-server pair` finds the folder of the server it runs beside.
 //!
 //! Built without the desktop (`cargo build --bin escouade-server --no-default-features`: no WebKit, no GTK, docs/CRATES.md
@@ -48,6 +51,7 @@ pub const DATA_VAR: &str = "ESCOUADE_SERVER_DATA";
 pub const PORT_VAR: &str = "ESCOUADE_SERVER_PORT";
 pub const LISTEN_VAR: &str = "ESCOUADE_SERVER_LISTEN";
 pub const HOSTS_VAR: &str = "ESCOUADE_SERVER_ALLOW_HOSTS";
+pub const PROXIES_VAR: &str = "ESCOUADE_SERVER_TRUST_PROXIES";
 
 /// What the command line asks.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,6 +88,8 @@ pub struct Args {
     pub listen: Option<IpAddr>,
     /// The names the API takes in a `Host` besides the loopback's (`--allow-host`).
     pub hosts: Vec<String>,
+    /// The addresses of the proxies whose `X-Forwarded-For` is read (`--trust-proxy`, SR1-04).
+    pub proxies: Vec<IpAddr>,
     pub debug: bool,
     /// What `update` is asked.
     pub update: update::Asked,
@@ -113,6 +119,7 @@ pub fn parse_with(
         port: DEFAULT_PORT,
         listen: None,
         hosts: Vec::new(),
+        proxies: Vec::new(),
         debug: false,
         update: update::Asked::default(),
         endpoint: None,
@@ -126,6 +133,11 @@ pub fn parse_with(
     if let Some(v) = var(HOSTS_VAR) {
         for h in v.split(',').map(str::trim).filter(|h| !h.is_empty()) {
             out.hosts.push(host_of(h)?);
+        }
+    }
+    if let Some(v) = var(PROXIES_VAR) {
+        for p in v.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+            out.proxies.push(proxy_of(p)?);
         }
     }
     if args
@@ -164,6 +176,10 @@ pub fn parse_with(
             "--allow-host" => {
                 let v = host_of(&value("--allow-host")?)?;
                 out.hosts.push(v);
+            }
+            "--trust-proxy" => {
+                let v = proxy_of(&value("--trust-proxy")?)?;
+                out.proxies.push(v);
             }
             "--debug" => out.debug = true,
             "--endpoint" => out.endpoint = Some(value("--endpoint")?),
@@ -257,6 +273,16 @@ fn ip_of(v: &str) -> std::result::Result<IpAddr, String> {
     })
 }
 
+/// The address of a proxy (`--trust-proxy`).
+fn proxy_of(v: &str) -> std::result::Result<IpAddr, String> {
+    v.trim().parse().map_err(|_| {
+        tr!(
+            "--trust-proxy : « {v} » n’est pas une adresse IP",
+            "--trust-proxy: “{v}” is not an IP address"
+        )
+    })
+}
+
 /// A host name (`--allow-host`), in lower case: letters, digits, dots and dashes; never one of the loopback's, which
 /// the API takes already.
 fn host_of(v: &str) -> std::result::Result<String, String> {
@@ -291,6 +317,7 @@ pub fn help() -> String {
          --port N            le port de l’API distante (sinon {port})\n  \
          --listen ADRESSE    écoute sur une autre adresse que 127.0.0.1 (Docker, un tunnel, un proxy) : à ne jamais exposer sur Internet\n  \
          --allow-host NOM    accepte ce nom dans l’en-tête Host (celui d’un proxy TLS devant le serveur)\n  \
+         --trust-proxy IP    lit X-Forwarded-For de ce proxy seul : chaque client y compte ses échecs à part\n  \
          --debug             le journal en détail\n  \
          --version, --help",
         "escouade-server {version}: Escouade's core without a window, driven from afar.\n\n\
@@ -307,6 +334,7 @@ pub fn help() -> String {
          --port N           the port of the remote API (else {port})\n  \
          --listen ADDRESS   listens on another address than 127.0.0.1 (Docker, a tunnel, a proxy): never to expose to the Internet\n  \
          --allow-host NAME  takes this name in the Host header (a TLS proxy's in front of the server)\n  \
+         --trust-proxy IP   reads X-Forwarded-For from this proxy alone: each client behind it counts its failures apart\n  \
          --debug            a detailed log\n  \
          --version, --help",
         version = env!("CARGO_PKG_VERSION"),
@@ -646,6 +674,7 @@ fn run(args: &Args) -> Result<()> {
         listen: args.listen,
         port: args.port,
         hosts: args.hosts.clone(),
+        proxies: args.proxies.clone(),
     };
     let done = runtime.block_on(serve(
         data,
@@ -689,6 +718,8 @@ pub struct Endpoint {
     pub port: u16,
     /// `--allow-host`.
     pub hosts: Vec<String>,
+    /// `--trust-proxy`.
+    pub proxies: Vec<IpAddr>,
 }
 
 impl Endpoint {
@@ -732,6 +763,7 @@ pub async fn serve(
         }
     };
     api.allow_hosts(endpoint.hosts.clone());
+    api.trust_proxies(endpoint.proxies.clone());
     // The phone's tunnel (ESC-567), when Réglages de l'espace › Téléphone turned it on: the same API, in the tunnel.
     core.phone.attach(&api);
     core.phone.mark_server();
@@ -777,6 +809,13 @@ pub async fn serve(
         log::info!(
             "escouade-server: the API takes the Host {} besides the loopback's (--allow-host)",
             endpoint.hosts.join(", ")
+        );
+    }
+    if !endpoint.proxies.is_empty() {
+        let proxies: Vec<String> = endpoint.proxies.iter().map(IpAddr::to_string).collect();
+        log::info!(
+            "escouade-server: X-Forwarded-For read from {} alone (--trust-proxy)",
+            proxies.join(", ")
         );
     }
     // A new server: what to do to reach it, never the code itself (`pair` prints it, on its own output).

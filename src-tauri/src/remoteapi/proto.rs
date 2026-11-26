@@ -57,13 +57,25 @@ pub const ORIGINS: &[&str] = &[
     "https://tauri.localhost",
 ];
 
-/// The `Origin`s an app of the phone comes with besides (ESC-567): its WebView's (Capacitor's, under iOS and Android).
-/// Taken through the phone's tunnel or Tailscale alone, never on the loopback, where they would be a page of the machine.
+/// The origin of the Android app's WebView (SR1-09, ESC-631): a name of its own (`apps/mobile/scripts/android-hostname.mjs`),
+/// under `.invalid`, which no site has (RFC 6761), in place of `https://localhost`, which any page served on port 443
+/// of a machine has.
+pub const ANDROID_ORIGIN: &str = "https://app.escouade.invalid";
+
+/// The `Origin`s an app of the phone comes with besides (ESC-567), through the phone's tunnel alone: its WebView's
+/// (Capacitor's, under iOS and Android), those of an app built before its own name too. Never on the loopback, where
+/// they would be a page of the machine.
 pub const PHONE_ORIGINS: &[&str] = &[
     "capacitor://localhost",
+    ANDROID_ORIGIN,
     "https://localhost",
     "http://localhost",
 ];
+
+/// The `Origin`s an app of the phone comes with through Tailscale (SR1-09, ESC-631): its WebView's alone, never a
+/// `localhost` of any kind, which a web page of another machine of the tailnet may be served from. (No browser makes
+/// `capacitor://`.)
+pub const TAILSCALE_ORIGINS: &[&str] = &["capacitor://localhost", ANDROID_ORIGIN];
 
 /// A terminal to resume: its channel, and the end of the last bytes the client received of it (none: nothing yet).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

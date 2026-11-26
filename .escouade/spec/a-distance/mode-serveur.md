@@ -2,8 +2,8 @@
 title: "Le mode serveur"
 subject: "a-distance"
 sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image)","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »"]
-tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620","ESC-654"]
-decisions: [202,216,281,289]
+tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620","ESC-654","ESC-631"]
+decisions: [202,216,281,289,328]
 compared: null
 ---
 
@@ -34,9 +34,9 @@ Ce qui est livré : le programme du serveur, `escouade-server` (MS-1) ; le clien
 | `escouade-server devices revoke <id>` | Révoque un appareil : son jeton ne vaut plus ; un serveur qui tourne ferme ses connexions en quelques secondes |
 | `escouade-server health` | Code 0 si le serveur du dossier tourne et écrit son état depuis moins de 30 s, 1 sinon, avec la raison : le `HEALTHCHECK` de l'image |
 | `escouade-server update` | Met le serveur à une version signée (voir *La mise à jour*) : `--to X.Y.Z`, `--beta`, `--now`, `--check` |
-| `--data-dir <dossier>`, `--port <n>`, `--listen <adresse>`, `--allow-host <nom>`, `--debug`, `--version`, `--help` | Les options |
+| `--data-dir <dossier>`, `--port <n>`, `--listen <adresse>`, `--allow-host <nom>`, `--trust-proxy <adresse>`, `--debug`, `--version`, `--help` | Les options |
 
-Chaque option a sa variable d'environnement, pour un conteneur ; l'option donnée l'emporte, une variable vide compte pour absente : `ESCOUADE_SERVER_DATA`, `ESCOUADE_SERVER_PORT`, `ESCOUADE_SERVER_LISTEN`, `ESCOUADE_SERVER_ALLOW_HOSTS` (des noms séparés par des virgules). C'est ce qui fait que `docker exec <conteneur> escouade-server pair` vise le dossier du serveur du conteneur.
+Chaque option a sa variable d'environnement, pour un conteneur ; l'option donnée l'emporte, une variable vide compte pour absente : `ESCOUADE_SERVER_DATA`, `ESCOUADE_SERVER_PORT`, `ESCOUADE_SERVER_LISTEN`, `ESCOUADE_SERVER_ALLOW_HOSTS` (des noms séparés par des virgules), `ESCOUADE_SERVER_TRUST_PROXIES` (des adresses IP séparées par des virgules). C'est ce qui fait que `docker exec <conteneur> escouade-server pair` vise le dossier du serveur du conteneur.
 
 `--help` n'exécute jamais une commande à sa place (`pair --help`, `update --help` montrent l'aide, sans faire de code ni rien télécharger). `--to`, `--beta`, `--now` et `--check` ne vont qu'avec `update`, et `--to` veut une version (`X.Y.Z`, `X.Y.Z-beta.N`). Les commandes parlent la langue des réglages du dossier de données, sinon celle du système. `pair` et `devices` marchent que le serveur tourne ou non.
 
@@ -51,7 +51,7 @@ Les refus, chacun avec sa raison pour le client (`none`, `expired`, `wrong`, `wa
 - **expiré** : « Ce code d'appairage a expiré : lance « escouade-server pair » de nouveau. » ;
 - **déjà utilisé, ou jamais demandé** (un code redonné) : « Aucun code d'appairage n'attend… » ;
 - **faux** : « Code d'appairage faux. » ; **le code qui attend vaut toujours** : un code faux ne l'annule jamais (ESC-654 : cinq codes faux de n'importe qui le finissaient, et bloquaient l'appairage à volonté) ;
-- **trop d'essais dans la minute** : au-delà de 20 poignées de main ratées d'une même source (son adresse, ou le pair du tunnel du téléphone), ou de 120 codes faux de toutes les sources, dans la minute, le code n'est pas lu (« Trop d'essais faux en une minute : le code d'appairage vaut toujours, réessaie dans une minute. »). C'est ce qui tient la force brute : au plus 1 200 codes lus pendant les 10 minutes d'un code, sur 2⁴⁰, une chance sur 900 millions environ.
+- **trop d'essais dans la minute** : au-delà de 20 poignées de main ratées d'une même source (son adresse, le pair du tunnel du téléphone, ou le client d'un proxy déclaré), ou de 120 codes faux de toutes les sources venues d'ailleurs que la machine, dans la minute, le code de cette source (ou venu d'ailleurs) n'est pas lu (« Trop d'essais faux en une minute : le code d'appairage vaut toujours, réessaie dans une minute. »). Les codes tapés **sur la machine** (`escouade-server pair` puis la boucle locale, un client par SSH) ont leur propre plafond : des codes faux venus du réseau ne les refusent jamais, et la fenêtre dit quand ce plafond-là est atteint (ESC-631). C'est ce qui tient la force brute : au plus 2 400 codes lus pendant les 10 minutes d'un code, sur 2⁴⁰, une chance sur 450 millions environ.
 
 Le code est comparé **en temps constant**. Un code refusé compte comme une poignée de main ratée de sa source ; un bon jeton, lui, passe toujours (voir *L'API distante*, « Les bornes »). Le fichier qui garde le code en attente ne contient que son empreinte, lisible du seul propriétaire. **Ni le code ni le jeton ne sont jamais écrits dans le journal** ; `pair` affiche le code sur sa seule sortie, pour l'utilisateur.
 
@@ -86,14 +86,14 @@ Le serveur le dit à chaque client : le message d'accueil de l'API porte `secret
 ## Compose et Coolify
 
 - `deploy/docker-compose.yml` : l'image, `ESCOUADE_SERVER_LISTEN=0.0.0.0`, le port publié sur **127.0.0.1 de l'hôte seulement** (`127.0.0.1:46480:46480`), le volume `escouade-data`, la lecture seule, aucune capacité, `no-new-privileges`, 60 s pour s'arrêter, les limites. L'appairage : `docker compose exec escouade escouade-server pair`.
-- `deploy/coolify/docker-compose.yml` : le même, tel que Coolify le prend (une ressource « Docker Compose »). Tel quel, rien ne va sur Internet. En commentaire, l'accès par un domaine derrière le proxy de Coolify (Traefik, en TLS) : `SERVICE_FQDN_ESCOUADE_46480` et `ESCOUADE_SERVER_ALLOW_HOSTS=${SERVICE_FQDN_ESCOUADE}`, avec ses risques.
+- `deploy/coolify/docker-compose.yml` : le même, tel que Coolify le prend (une ressource « Docker Compose »). Tel quel, rien ne va sur Internet. En commentaire, l'accès par un domaine derrière le proxy de Coolify (Traefik, en TLS) : `SERVICE_FQDN_ESCOUADE_46480`, `ESCOUADE_SERVER_ALLOW_HOSTS=${SERVICE_FQDN_ESCOUADE}` et `ESCOUADE_SERVER_TRUST_PROXIES` (l'adresse du proxy de Coolify sur ce réseau), avec ses risques.
 
 Aucun exemple n'expose l'API sans TLS sur Internet.
 
 ## Les deux accès, et leurs risques
 
 - **Le tunnel SSH** (conseillé) : `ssh -N -L 46480:127.0.0.1:46480 <serveur>`. Rien de nouveau n'est ouvert sur le serveur. Risque : qui a un compte SSH sur le serveur, ou un processus de l'hôte, atteint le port et peut tenter de s'appairer ; l'accès vaut ce que vaut le SSH.
-- **Un proxy TLS devant** (Traefik de Coolify, Caddy, nginx) : le serveur écoute sur le réseau du conteneur et accepte le nom du domaine dans `Host` (`--allow-host`, `ESCOUADE_SERVER_ALLOW_HOSTS`), tout autre nom restant refusé. Risque : l'API est sur Internet ; qui atteint le domaine peut tenter un code (40 bits, 10 minutes, une fois, 120 essais lus par minute au plus) ou un jeton (256 bits), chaque essai journalisé et borné ; derrière un proxy, toutes les connexions viennent de son adresse et comptent comme une seule source ; une faille du serveur serait exposée à tous. À réserver à un domaine filtré par adresse IP ou à un réseau privé, et jamais sans TLS. Le client se connecte aujourd'hui par le tunnel SSH qu'il ouvre (voir *Se connecter à un serveur*) ; une adresse `wss://` d'un domaine viendra plus tard.
+- **Un proxy TLS devant** (Traefik de Coolify, Caddy, nginx) : le serveur écoute sur le réseau du conteneur et accepte le nom du domaine dans `Host` (`--allow-host`, `ESCOUADE_SERVER_ALLOW_HOSTS`), tout autre nom restant refusé. **Le proxy se déclare** (`--trust-proxy <son adresse>`, `ESCOUADE_SERVER_TRUST_PROXIES`, ESC-631) : chaque client qu'il fait suivre compte alors ses échecs à part, d'après la dernière adresse de `X-Forwarded-For` (celle que le proxy écrit) ; sans cela, toutes ses connexions comptent comme une seule source. L'en-tête n'est jamais lu d'une adresse qui n'est pas déclarée. Risque : l'API est sur Internet ; qui atteint le domaine peut tenter un code (40 bits, 10 minutes, une fois, 120 essais lus par minute au plus, sans jamais bloquer un code tapé sur le serveur ou par SSH) ou un jeton (256 bits), chaque essai journalisé et borné ; une faille du serveur serait exposée à tous. À réserver à un domaine filtré par adresse IP ou à un réseau privé, et jamais sans TLS. Le client se connecte aujourd'hui par le tunnel SSH qu'il ouvre (voir *Se connecter à un serveur*) ; une adresse `wss://` d'un domaine viendra plus tard.
 
 ## Le service systemd
 
@@ -125,7 +125,7 @@ Le workflow de release publie, pour chaque version : les archives `escouade-serv
 ## La sécurité
 
 - L'API n'écoute que sur 127.0.0.1. `--listen <adresse>` la met sur une autre adresse. Cette option ne sert qu'à Docker, derrière un tunnel, un réseau privé ou un proxy. Elle avertit dans le journal et sur la sortie d'erreur : « ATTENTION : l'API distante écoute sur … pas seulement sur 127.0.0.1 … jamais ouvert sur Internet ». Rien n'est ouvert par défaut.
-- `--allow-host` n'ajoute qu'un nom au contrôle de `Host` ; il n'ouvre aucune interface.
+- `--allow-host` n'ajoute qu'un nom au contrôle de `Host` ; il n'ouvre aucune interface. `--trust-proxy` ne change que la source à qui sont comptés les échecs ; il n'ouvre rien non plus, et le journal dit au démarrage quels proxys sont déclarés.
 - Les stratégies imposées valent pour le serveur : `servers.remoteApi` à `false` l'empêche de servir l'API, et refuse aussi l'appairage.
 - Tout le reste de *L'API distante* vaut ici : le `Host` du bouclage, pas d'`Origin` de page web, les bornes des connexions, des appels et des files.
 
@@ -133,7 +133,7 @@ Le workflow de release publie, pour chaque version : les archives `escouade-serv
 
 Chaque ligne va sur la **sortie standard**, pour le journal de systemd et les logs de Docker. Elle va aussi dans **`server.log`**, dans le dossier de données, qui tourne à 5 Mo (`server.1.log` à `server.3.log`, le plus ancien supprimé). Le journal dit :
 
-- le démarrage, l'adresse de l'API, le dossier de données et celui des secrets ; sans appareil appairé, comment en appairer un ;
+- le démarrage, l'adresse de l'API, le dossier de données et celui des secrets, les noms pris en plus dans `Host` et les proxys déclarés ; sans appareil appairé, comment en appairer un ;
 - chaque appareil appairé, chaque connexion ;
 - chaque refus et sa raison ;
 - l'arrêt et ce qui l'a demandé.

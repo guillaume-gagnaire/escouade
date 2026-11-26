@@ -5,8 +5,9 @@
 //! - **Once and briefly**: one code waits at a time (a new `pair` takes the place of the one before), for
 //!   [`LIFETIME_MS`]; the right code ends it. A wrong one never does (ESC-654: five wrong codes from anyone who reached
 //!   the API once ended it, and so blocked the pairing at will): the server bounds the tries, by source and in all
-//!   (`server::Limits`), which keeps a guess out of reach: 120 wrong codes a minute in all, 1 200 in a code's 10
-//!   minutes, against 32⁸ = 2⁴⁰ codes, one chance in some 900 million.
+//!   (`server::Limits`), which keeps a guess out of reach: 120 wrong codes a minute from this machine and 120 from
+//!   elsewhere (apart, so that strangers never refuse the codes of this machine: SR1-04, ESC-631), 2 400 in a code's 10
+//!   minutes, against 32⁸ = 2⁴⁰ codes, one chance in some 450 million.
 //! - **Written beside the data**: the code waits in `remote-pairing.json`, readable by its owner alone, so that `pair`
 //!   works whether the server runs or not (the server holds the data folder: `pair` writes beside it, under a lock of its
 //!   own, `headless::with_file_lock`). The file holds the code's hash, never the code.
