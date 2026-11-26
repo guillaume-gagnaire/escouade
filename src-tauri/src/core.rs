@@ -1169,6 +1169,8 @@ pub struct Core {
     pub(crate) team_machine: AtomicBool,
     /// The passages this machine takes now (TS-17), by ticket: one at a time each.
     pub(crate) handoffs_taking: Mutex<HashSet<String>>,
+    /// Whose passages this machine takes on its own, by team (SR3-05: `handoff.machineTakes` of its file).
+    pub(crate) team_handoff_takes: Mutex<HashMap<String, crate::teamhandoff::MachineTakes>>,
     /// When each team's Kanban last read its claims from the server (TS-6).
     pub(crate) team_claims_at: Mutex<HashMap<String, std::time::Instant>>,
     /// Agents whose turn the app's previous stop cut (active when saved): their tickets go on.
@@ -2450,6 +2452,7 @@ impl Core {
             team_deleted: Mutex::default(),
             team_machine: AtomicBool::new(!cfg!(feature = "desktop")),
             handoffs_taking: Mutex::default(),
+            team_handoff_takes: Mutex::default(),
             team_claims_at: Mutex::default(),
             cut_turns: Mutex::new(cut_turns),
             gh: RwLock::new(locate_gh()),

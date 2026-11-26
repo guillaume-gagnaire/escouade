@@ -1,8 +1,8 @@
 ---
 title: "Passer un agent à un collègue"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md §4.2, §11, §13, §15.2 (C16), §16 (TS-17)","docs/TEAM-SESSION-COPY.md (ESC-581, TS-0c : l'essai de reprise d'une session copiée, la recommandation)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : « C16 : a »","crates/escouade-team/src/handoff.rs","crates/escouade-team-server/src/db/mod.rs","src-tauri/src/teamhandoff.rs","src-tauri/src/handover.rs"]
-tickets: ["ESC-548","ESC-581","ESC-588","ESC-607"]
+sources: ["docs/TEAM-SERVER.md §4.2, §11, §13, §15.2 (C16), §16 (TS-17)","docs/TEAM-SESSION-COPY.md (ESC-581, TS-0c : l'essai de reprise d'une session copiée, la recommandation)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : « C16 : a »","crates/escouade-team/src/handoff.rs","crates/escouade-team-server/src/db/mod.rs","src-tauri/src/teamhandoff.rs","src-tauri/src/handover.rs","Revue de sécurité de la 2.3 (ESC-626), constats SR3-05 et SR3-06 : corrigés par ESC-649"]
+tickets: ["ESC-548","ESC-581","ESC-588","ESC-607","ESC-649"]
 decisions: [274]
 compared: null
 ---
@@ -37,13 +37,19 @@ L'agent d'un ticket de l'équipe se passe à un collègue, ou à une machine de 
 - **La proposition** : « Alice Martin te passe DEM-41 » sur la carte du ticket, avec « Prendre », et dans sa boîte « À toi » (« Agent passé », « Alice Martin te passe DEM-41 · La passation », même geste « Prendre », source `handoff` des vues de la boîte). Elle ne se croit qu'avec la prise : celle que le serveur dit passée à cet appareil par celui qu'elle nomme.
 - **« Prendre »** : sur le harness de l'agent quand ce poste l'a pour le projet (écrit, trouvé, allumé, un compte qui sert le projet) ; sinon « Choisis ton harness » (« Claude Code n'est pas sur ce poste pour ce projet : l'agent repart sur le tien, avec la passation. ») liste ceux de ce poste ; aucun : « Aucun harness ne sert ce projet sur ce poste… ».
 - Escouade récupère la branche de son hébergeur, prend le ticket (un nouveau jeton), efface l'offre et le dépôt, puis lance l'agent du ticket comme « Lancer » : son worktree **sur la branche**, son compte à lui, le protocole du ticket. Le patch y est appliqué (s'il ne s'applique pas, la conversation le dit et le patch est gardé dans un fichier nommé).
+- **La branche et l'hébergeur, vérifiés (SR3-06)** : la branche de l'offre doit être un nom de branche que git prend (`git check-ref-format --branch` : ni option `-x`, ni `@{-1}`, ni `..`), et **n'écrase jamais une branche locale** de ce poste autre que celle du ticket : « La branche release/2.3 de ce passage existe déjà sur ce poste : elle n'est pas écrasée. Le passage attend. ». Elle se récupère d'**un remote du dépôt** (celui que nomme l'offre s'il existe, sinon le premier), jamais d'une adresse que donne l'offre ; sans remote : « Ce dépôt n'a aucun remote : la branche de ce passage ne se récupère pas. Le passage attend. ». `git fetch` reçoit `--` avant le remote et la branche.
 - **La conversation** : la conversation d'avant, à lire, puis le séparateur « Passé par Alice Martin · suite sur Claude Code », puis le **dossier de passation** replié (« Dossier de passation »), premier message de la nouvelle session : « Passation : suite d'un travail que Alice Martin t'a passé », ce qui a été demandé, fait, les fichiers, l'état git de son worktree, ce qui attendait.
 - Chez qui l'a passé, la carte dit ensuite « Pris par Bob Durand ».
 
 ## Vers la machine de l'équipe
 
 - Une machine en **mode serveur** (`escouade-server`, membre de l'équipe) le dit dans chaque projet de l'équipe qu'elle ouvre : la fenêtre du passage la range sous « Machines de l'équipe ».
-- Le même geste lui passe l'agent ; **elle le prend d'elle-même**, sur son harness (celui de l'agent s'il y est, sinon le premier qui sert le projet), et le fait tourner jour et nuit.
+- Le même geste lui passe l'agent. **Elle ne le prend d'elle-même que si la règle de l'équipe le permet (SR3-05)**, sur son harness (celui de l'agent s'il y est, sinon le premier qui sert le projet), et le fait tourner jour et nuit. La règle est la clé `handoff.machineTakes` du fichier de l'équipe (une valeur, imposée ou recommandée, page « Le .escouade.yml d'équipe ») :
+  - `admins` (**d'office**, et pour toute autre valeur) : seuls les agents passés par un **administrateur** de l'équipe ;
+  - `members` : ceux de tout membre du projet ;
+  - `nobody` : aucun.
+- Qui a passé l'agent est l'appareil que le serveur dit avoir passé la prise (celui que nomme l'offre, vérifié par la prise), et son rôle est celui que l'équipe lui donne maintenant.
+- **Le reste attend un humain de la machine** : l'agent passé reste proposé sur la carte du ticket et dans la boîte « À toi » de la machine (« Alice Martin te passe DEM-41 · Prendre »), jusqu'à ce que son administrateur le prenne par « Prendre » (depuis un poste connecté à la machine), comme chez un collègue.
 
 ## Les refus
 
@@ -52,6 +58,8 @@ Dits avec leur raison, rien n'est passé ni perdu :
 - un **agent d'un projet personnel** : « Cet agent est d'un projet personnel : seul l'agent d'un ticket d'un projet de l'équipe se passe à un collègue. » ; un ticket « Ne pas partager », aussi ;
 - **quelqu'un hors du projet** : « Cet appareil n'est pas du projet demo… », ou, refusé par le serveur, « Bob n'a pas accès à ce projet sur le serveur de l'équipe : rien n'est passé. » ;
 - **une branche dont l'hébergeur ne répond pas** : « L'hébergeur de la branche ticket/dem-41 ne répond pas : rien n'est passé, l'agent et son travail restent ici. (…) » — le commit « en cours » est défait ; chez qui prend, « La branche … ne se récupère pas de son hébergeur : le passage attend, rien n'est perdu. » ;
+- chez qui prend, **une branche qui écraserait une branche locale**, un nom qui n'est pas une branche, un dépôt sans remote : le passage attend (ci-dessus) ;
+- sur la machine de l'équipe, **un passage que la règle ne lui laisse pas prendre seule** : « Ce passage attend qu'un humain de cette machine le prenne. » ;
 - sans dépôt distant : « La branche … n'a pas d'hébergeur où la pousser » ; un agent hors de son worktree, un projet de plusieurs dépôts, un ticket que ce poste ne tient pas, un passage déjà en cours ; hors ligne.
 
 ## Le serveur MCP
@@ -62,6 +70,10 @@ Dits avec leur raison, rien n'est passé ni perdu :
 ## Ce que voit le serveur
 
 La prise (son id opaque, l'appareil qui la tient, celui qui l'a passée tant qu'elle n'est pas prise, le jeton, les heures), un fichier chiffré d'une taille, une opération chiffrée de plus au journal du projet. Jamais le ticket, la branche, le code, la conversation ni les noms.
+
+## Limites
+
+- Ce que passe un administrateur, la machine le prend et l'exécute : sa branche, son patch et sa conversation viennent de lui (un `.claude/settings.json` de la branche compris). Un compte d'administrateur volé le peut aussi ; `handoff.machineTakes: nobody` remet chaque passage au geste d'un humain de la machine.
 
 ## La reprise native de la session (C16-B pour Claude Code, décidée, pas encore construite)
 

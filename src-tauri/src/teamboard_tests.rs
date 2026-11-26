@@ -65,6 +65,23 @@ fn the_shared_fields_go_and_come_back_whole() {
     assert_eq!((back.column, back.key.as_str()), (Column::Review, "DEM-3"));
 }
 
+/// SR3-08: the loops a member gives a team ticket are those the window offers, never billions.
+#[test]
+fn the_loops_of_a_team_ticket_are_bounded() {
+    let mut t = team_ticket("t1", Column::Todo, None);
+    for (sent, kept) in [
+        (json!(4_000_000_000u64), 5),
+        (json!(u64::MAX), 5),
+        (json!(10), 5),
+        (json!(0), 5),
+        (json!(8), 8),
+        (json!(3), 3),
+    ] {
+        apply_field(&mut t, "maxLoops", &sent);
+        assert_eq!(t.max_loops, kept, "{sent}");
+    }
+}
+
 #[test]
 fn the_holder_says_interrupted_and_unreachable() {
     let me = DeviceId([1; 16]);

@@ -41,6 +41,12 @@ impl Classify for Keys {
             _ => return None,
         })
     }
+
+    /// As the core's list: the mode « auto » as the default asks each device's consent (SR3-07).
+    fn asks(&self, key: &str, value: &Value) -> bool {
+        self.sort(key) == Some(Sort::Sensitive)
+            || (key == "permissions.defaultMode" && value == &json!("auto"))
+    }
 }
 
 fn map(pairs: &[(&str, Value)]) -> std::collections::BTreeMap<String, Value> {
@@ -734,4 +740,75 @@ fn never_a_project_made_public_by_the_file() {
         hit(&enforced(&[("projects.forcePrivate", json!(true))])),
         None
     );
+}
+
+/// SR3-07: the mode « auto » imposed as the agents' default waits for each device's consent, and for the quorum; a
+/// stricter mode applies as a value.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_mode_auto_imposed_waits_for_the_consent_of_each_device() {
+    let w = World::new().await;
+    let (_pa, mut alice, _pb, mut bob) = two(&w).await;
+    bob.sync().await.unwrap();
+    // A stricter mode: a value, applied at once.
+    let view = propose(
+        &mut alice,
+        enforced(&[("permissions.defaultMode", json!("plan"))]),
+    )
+    .await;
+    assert_eq!(view.applied, Some(1));
+    let view = sync(&mut bob).await;
+    assert_eq!(
+        view.effective.enforced.get("permissions.defaultMode"),
+        Some(&json!("plan"))
+    );
+    // « auto »: the version applies, but the mode waits for Bob's consent on his device.
+    let view = propose(
+        &mut alice,
+        enforced(&[("permissions.defaultMode", json!("auto"))]),
+    )
+    .await;
+    assert_eq!(view.applied, Some(2));
+    let view = sync(&mut bob).await;
+    assert!(!view
+        .effective
+        .enforced
+        .contains_key("permissions.defaultMode"));
+    let p = view
+        .effective
+        .pending
+        .iter()
+        .find(|p| p.key == "permissions.defaultMode")
+        .expect("it waits")
+        .clone();
+    assert_eq!(p.value, json!("auto"));
+    let view = settings::consent(
+        &bob,
+        &Keys,
+        Part::Enforced,
+        "permissions.defaultMode",
+        &p.fingerprint,
+    )
+    .unwrap();
+    assert_eq!(
+        view.effective.enforced.get("permissions.defaultMode"),
+        Some(&json!("auto"))
+    );
+    // Under the quorum as a sensitive key: with two administrators, one signature does not suffice.
+    let file = |m: &str| enforced(&[("permissions.defaultMode", json!(m))]);
+    assert!(settings::needs_quorum(
+        Some(&file("plan")),
+        &file("auto"),
+        &Keys
+    ));
+    assert!(settings::needs_quorum(
+        Some(&file("auto")),
+        &file("plan"),
+        &Keys
+    ));
+    assert!(!settings::needs_quorum(
+        Some(&file("plan")),
+        &file("default"),
+        &Keys
+    ));
+    w.finish().await;
 }

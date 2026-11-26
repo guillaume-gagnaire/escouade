@@ -128,7 +128,8 @@ async fn a_proposed_memory_is_read_by_its_authors_agents_alone_until_a_human_kee
         .team_memory_entry(&bob.p, "licornes-avant-tests")
         .unwrap();
     assert_eq!(seen.standing, Standing::Accepted);
-    assert!(!seen.untrusted && !seen.mine);
+    // Kept by its author alone: Alice's word, a third party's data for Bob's agents (SR3-04).
+    assert!(seen.untrusted && !seen.mine);
     assert_eq!(seen.provenance.member, prov.member);
     assert_eq!(seen.provenance.device, prov.device);
     assert_eq!(seen.reviewed_by.as_deref(), Some(prov.member.as_str()));
@@ -145,8 +146,32 @@ async fn a_proposed_memory_is_read_by_its_authors_agents_alone_until_a_human_kee
         .unwrap();
     assert_eq!(hand.standing, Standing::Accepted);
     assert_eq!(hand.provenance.by, "hand");
+    assert!(!hand.untrusted, "Bob's own word, on his device");
     both(&alice, &bob, &id).await;
     assert_eq!(read_by(&alice), vec!["dragons", "licornes-avant-tests"]);
+    // On Alice's, Bob's word written by hand is a third party's data, never an instruction (SR3-04)…
+    let theirs = core_a.team_memory_entry(&alice.p, "dragons").unwrap();
+    assert_eq!(theirs.standing, Standing::Accepted);
+    assert!(theirs.untrusted && !theirs.mine);
+    // … until another human keeps it: Alice, an administrator, keeps it; it is then the team's for her agents.
+    core_a
+        .team_memory_decide(&alice.p.id, &theirs.id, true)
+        .await
+        .unwrap();
+    both(&alice, &bob, &id).await;
+    let kept = core_a.team_memory_entry(&alice.p, "dragons").unwrap();
+    assert!(!kept.untrusted);
+    assert_eq!(
+        kept.reviewed_by.as_deref(),
+        Some(seen.provenance.member.as_str())
+    );
+    // And for Bob's agents, the memory of Alice's agent she kept herself stays data.
+    let seen = bob
+        .h
+        .core
+        .team_memory_entry(&bob.p, "licornes-avant-tests")
+        .unwrap();
+    assert!(seen.untrusted);
     // The server keeps nothing of them in the clear.
     let kept = server.kept();
     for secret in ["licornes", "Nourrir", "dragons", "DEM-41", "claude-opus"] {

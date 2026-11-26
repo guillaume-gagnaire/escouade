@@ -58,6 +58,13 @@ pub enum Sort {
 /// The core's list of the keys: the sort of each, None for a key it does not know (left out, said).
 pub trait Classify: Sync {
     fn sort(&self, key: &str) -> Option<Sort>;
+
+    /// Whether `value` of `key` waits for each device's consent, and is under the quorum: a sensitive key whatever
+    /// its value; the core's list may name a value of another key that asks too (the mode « auto » imposed, SR3-07).
+    fn asks(&self, key: &str, value: &Value) -> bool {
+        let _ = value;
+        self.sort(key) == Some(Sort::Sensitive)
+    }
 }
 
 /// The team's file, as read from its YAML by the core: each part a map of the list's keys (dotted) to their value.
@@ -514,10 +521,12 @@ fn guarded(prev: Option<&TeamFile>, next: &TeamFile, classify: &dyn Classify) ->
         .into_iter()
         .any(|part| {
             let (a, b) = (prev.part(part), next.part(part));
-            a.keys()
-                .chain(b.keys())
-                .filter(|k| classify.sort(k) == Some(Sort::Sensitive))
-                .any(|k| a.get(k) != b.get(k))
+            a.keys().chain(b.keys()).any(|k| {
+                let (x, y) = (a.get(k), b.get(k));
+                x != y
+                    && (x.is_some_and(|v| classify.asks(k, v))
+                        || y.is_some_and(|v| classify.asks(k, v)))
+            })
         })
 }
 
@@ -797,7 +806,7 @@ fn effective(
         };
         let print = fingerprint(part, key, value);
         let accepted = consents.get(&consent_name(part, key)) == Some(&print);
-        let asks = part == Part::Proposed || sort == Sort::Sensitive;
+        let asks = part == Part::Proposed || classify.asks(key, value);
         if asks && !accepted {
             out.pending.push(Pending {
                 part,

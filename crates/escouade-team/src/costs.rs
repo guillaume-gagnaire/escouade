@@ -46,6 +46,112 @@ const STATE: &str = "costs";
 /// The days an administrator's device keeps of each device (a little more than a year).
 pub const KEPT_DAYS: usize = 400;
 
+// ---------- the bounds (SR3-03, SR3-08) ----------
+
+/// The most a device may say it spent in a day, all its rows together (dollars, or their equivalent in API): past it,
+/// its totals are refused whole (one member cannot fill the team's budgets and stop everyone's autopilot).
+pub const MAX_DAY_COST: f64 = 10_000.0;
+/// The most tokens a device may say it used in a day, all its rows together.
+pub const MAX_DAY_TOKENS: u64 = 10_000_000_000;
+/// The days of one entry: the month sent again whole, and a little more.
+pub const MAX_DAYS: usize = 62;
+/// The rows (project, harness, model) of a day, and its tickets.
+pub const MAX_ROWS: usize = 256;
+pub const MAX_TICKETS: usize = 1_024;
+/// The length of a name in a row (project, harness, model, ticket).
+const MAX_NAME: usize = 256;
+
+fn amount_ok(v: f64) -> bool {
+    v.is_finite() && (0.0..=MAX_DAY_COST).contains(&v)
+}
+
+/// A name of a row: bounded, no control character; empty only for a model the harness did not say.
+fn name_ok(s: &str, empty: bool) -> bool {
+    (empty || !s.is_empty()) && s.len() <= MAX_NAME && !s.chars().any(char::is_control)
+}
+
+/// `2026-11-20`.
+fn day_ok(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 10
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && b.iter()
+            .enumerate()
+            .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+}
+
+/// Why `totals` cannot be taken, when they cannot. `author`: the member (hex) whose device signed them, None for this
+/// device's own (the member is then checked by the caller). Every amount finite, positive and within its bounds; each
+/// day's sum within [`MAX_DAY_COST`] and [`MAX_DAY_TOKENS`]; the member named, when it is, the author.
+pub fn check(totals: &Totals, author: Option<&str>) -> Result<(), String> {
+    if let (Some(m), Some(a)) = (&totals.member, author) {
+        if m != a {
+            return Err("the totals name another member than the one who signed them".into());
+        }
+    }
+    if totals.days.len() > MAX_DAYS {
+        return Err(format!("more than {MAX_DAYS} days in one entry"));
+    }
+    for d in &totals.days {
+        if !day_ok(&d.day) {
+            return Err("a day that is not a date".into());
+        }
+        if d.rows.len() > MAX_ROWS || d.tickets.len() > MAX_TICKETS {
+            return Err(format!("too many rows on {}", d.day));
+        }
+        let (mut cost, mut tokens) = (0.0_f64, 0_u64);
+        for r in &d.rows {
+            if !name_ok(&r.project, false)
+                || !name_ok(&r.harness, false)
+                || !name_ok(&r.model, true)
+            {
+                return Err(format!("a row of {} without a proper name", d.day));
+            }
+            if !amount_ok(r.cost)
+                || r.quota
+                    .is_some_and(|q| !q.is_finite() || !(0.0..=1_000.0).contains(&q))
+            {
+                return Err(format!(
+                    "a cost or a quota on {} that is not finite, negative, or too high",
+                    d.day
+                ));
+            }
+            cost += r.cost;
+            tokens = tokens
+                .saturating_add(r.input)
+                .saturating_add(r.output)
+                .saturating_add(r.cache);
+        }
+        if cost > MAX_DAY_COST || tokens > MAX_DAY_TOKENS {
+            return Err(format!(
+                "more than a device can spend in a day on {}",
+                d.day
+            ));
+        }
+        for t in &d.tickets {
+            let tokens = t.input.saturating_add(t.output).saturating_add(t.cache);
+            if !name_ok(&t.project, false)
+                || !name_ok(&t.ticket, false)
+                || !amount_ok(t.cost)
+                || tokens > MAX_DAY_TOKENS
+            {
+                return Err(format!("a ticket's total on {} out of bounds", d.day));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn spent_ok(s: &Spent) -> bool {
+    s.cost.is_finite() && s.cost >= 0.0
+}
+
+/// A summary an administrator published: every amount finite and positive (a NaN would no longer read back here).
+fn summary_ok(s: &Summary) -> bool {
+    spent_ok(&s.team) && s.projects.values().all(spent_ok)
+}
+
 // ---------- what goes ----------
 
 /// What a device sends: the content of an entry of [`TOTALS_STREAM`] once opened, exactly.
@@ -442,6 +548,9 @@ async fn read_keys(team: &Team, state: &mut State) -> Result<(), Error> {
                             state.refused += 1;
                         }
                     }
+                    KeyEntry::Summary { summary } if !summary_ok(&summary) => {
+                        state.refused += 1;
+                    }
                     KeyEntry::Summary { summary } => {
                         if state.summary.as_ref().is_none_or(|s| {
                             (s.month.as_str(), s.at) <= (summary.month.as_str(), summary.at)
@@ -506,9 +615,9 @@ async fn read_totals(team: &Team, state: &mut State) -> Result<(), Error> {
                             })
                             .ok()
                             .and_then(|plain| wire::decode::<Totals>(&plain).ok());
-                        match opened {
-                            Some(t) => take(state, member, device, e.seq, t),
-                            None => state.refused += 1,
+                        let taken = opened.is_some_and(|t| take(state, member, device, e.seq, t));
+                        if !taken {
+                            state.refused += 1;
                         }
                     }
                     None => state.unreadable += 1,
@@ -526,8 +635,12 @@ async fn read_totals(team: &Team, state: &mut State) -> Result<(), Error> {
 }
 
 /// The totals of a device, day by day: the latest of each day wins (its hour, then its number), so an entry sent twice
-/// or late counts once.
-fn take(state: &mut State, member: MemberId, device: [u8; 16], seq: u64, t: Totals) {
+/// or late counts once. Totals out of their bounds, or naming another member than the one who signed them, are refused
+/// whole (SR3-03): false.
+fn take(state: &mut State, member: MemberId, device: [u8; 16], seq: u64, t: Totals) -> bool {
+    if check(&t, Some(&hex::encode(member.0))).is_err() {
+        return false;
+    }
     let device = hex::encode(device);
     let entry = state
         .received
@@ -566,6 +679,7 @@ fn take(state: &mut State, member: MemberId, device: [u8; 16], seq: u64, t: Tota
             entry.days.remove(&first);
         }
     }
+    true
 }
 
 /// What an administrator's device does: its own key written, a key drawn when there is none or the current one is
@@ -678,11 +792,11 @@ fn summary_of(state: &State, month: &str, now: i64) -> Summary {
                 continue;
             }
             for r in &got.rows {
-                let tokens = r.input + r.output + r.cache;
+                let tokens = r.input.saturating_add(r.output).saturating_add(r.cache);
                 let p = s.projects.entry(r.project.clone()).or_default();
-                p.tokens += tokens;
+                p.tokens = p.tokens.saturating_add(tokens);
                 p.cost += r.cost;
-                s.team.tokens += tokens;
+                s.team.tokens = s.team.tokens.saturating_add(tokens);
                 s.team.cost += r.cost;
             }
         }
@@ -766,6 +880,8 @@ pub fn wants_month(team: &Team) -> Result<bool, Error> {
 
 /// Puts the totals of this device in the queue: each day replaces what waited for it. They go at the next [`sync`].
 pub fn queue(team: &Team, totals: Totals) -> Result<(), Error> {
+    // What the administrators would refuse does not wait here either: a NaN would no longer read back (SR3-08).
+    check(&totals, Some(&hex::encode(team.identity().member.0))).map_err(Error::Refused)?;
     let mut state = load(team)?;
     // A day that went already as it is waits no more, unless the key changed (the month goes again to it) or the member
     // is named now: nothing goes for nothing.
@@ -847,4 +963,160 @@ pub fn retry(team: &Team) -> Result<(), Error> {
 /// The bytes that go for `totals` before they are sealed: what the tests and the window read back.
 pub fn plain_bytes(totals: &Totals) -> Vec<u8> {
     wire::encode(totals)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BOB: MemberId = MemberId([2; 16]);
+    const BOARD: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
+
+    fn row(cost: f64) -> Row {
+        Row {
+            project: BOARD.into(),
+            harness: "claude".into(),
+            model: "m".into(),
+            plan: false,
+            input: 10,
+            output: 0,
+            cache: 0,
+            cost,
+            quota: None,
+        }
+    }
+
+    fn totals(member: Option<MemberId>, day: &str, rows: Vec<Row>) -> Totals {
+        Totals {
+            member: member.map(|m| hex::encode(m.0)),
+            hour: 1,
+            days: vec![Day {
+                day: day.into(),
+                rows,
+                tickets: vec![],
+            }],
+        }
+    }
+
+    /// The administrator's state after Bob's device sent `t`: whether it was taken, and the month's summary.
+    fn taken(t: Totals) -> (bool, Summary, State) {
+        let mut state = State::default();
+        let ok = take(&mut state, BOB, [9; 16], 1, t);
+        let s = summary_of(&state, "2026-11", 0);
+        (ok, s, state)
+    }
+
+    /// SR3-03: what the report's proof sent is refused at the reading, and the summary does not move.
+    #[test]
+    fn an_inflated_a_negative_or_a_nan_total_is_refused_at_the_reading() {
+        for cost in [
+            1.0e12,
+            -2.0e12,
+            -0.01,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            MAX_DAY_COST + 1.0,
+        ] {
+            let (ok, s, state) = taken(totals(None, "2026-11-20", vec![row(cost)]));
+            assert!(!ok, "{cost} refused");
+            assert_eq!(s.team.cost, 0.0);
+            assert!(state.received.is_empty());
+        }
+        // Each row within the bound, but their sum past it: refused whole.
+        let (ok, s, _) = taken(totals(
+            None,
+            "2026-11-20",
+            vec![row(MAX_DAY_COST / 2.0 + 1.0), row(MAX_DAY_COST / 2.0 + 1.0)],
+        ));
+        assert!(!ok);
+        assert_eq!(s.team.cost, 0.0);
+        // Tokens past the bound of a day (the proof's `u64::MAX / 4`).
+        let mut r = row(1.0);
+        r.input = u64::MAX / 4;
+        assert!(!taken(totals(None, "2026-11-20", vec![r])).0);
+        // A quota that is not finite.
+        let mut r = row(1.0);
+        r.quota = Some(f64::NAN);
+        assert!(!taken(totals(None, "2026-11-20", vec![r])).0);
+        // Within the bounds: taken, and counted.
+        let (ok, s, _) = taken(totals(None, "2026-11-20", vec![row(12.5)]));
+        assert!(ok);
+        assert_eq!(s.team.cost, 12.5);
+        assert_eq!(s.projects[BOARD].cost, 12.5);
+    }
+
+    /// SR3-03: the totals are the device's that signs them; a member named that is not its author is refused.
+    #[test]
+    fn totals_naming_another_member_than_their_signer_are_refused() {
+        let carol = MemberId([3; 16]);
+        let (ok, s, state) = taken(totals(Some(carol), "2026-11-20", vec![row(1.0)]));
+        assert!(!ok, "Bob's spending is not put to Carol");
+        assert_eq!(s.team.cost, 0.0);
+        assert!(state.received.is_empty());
+        let (ok, _, state) = taken(totals(Some(BOB), "2026-11-20", vec![row(1.0)]));
+        assert!(ok);
+        let got = &state.received[&hex::encode([9u8; 16])];
+        assert_eq!(got.author, hex::encode(BOB.0));
+        assert_eq!(got.member, Some(hex::encode(BOB.0)));
+    }
+
+    /// SR3-03: the number of an entry is bounded (days, rows, tickets), and a day is a date.
+    #[test]
+    fn the_size_of_an_entry_is_bounded() {
+        let mut t = totals(None, "2026-11-20", vec![row(0.0); MAX_ROWS + 1]);
+        assert!(check(&t, None).is_err());
+        t.days[0].rows.truncate(MAX_ROWS);
+        assert!(check(&t, None).is_ok());
+        t.days = (0..=MAX_DAYS)
+            .map(|i| Day {
+                day: format!("2026-{:02}-{:02}", 1 + i / 28, 1 + i % 28),
+                rows: vec![],
+                tickets: vec![],
+            })
+            .collect();
+        assert!(check(&t, None).is_err());
+        assert!(check(&totals(None, "../../x", vec![row(1.0)]), None).is_err());
+        let mut t = totals(None, "2026-11-20", vec![row(1.0)]);
+        t.days[0].tickets = vec![
+            TicketRow {
+                project: BOARD.into(),
+                ticket: "ESC-1".into(),
+                input: 0,
+                output: 0,
+                cache: 0,
+                cost: 1.0,
+            };
+            MAX_TICKETS + 1
+        ];
+        assert!(check(&t, None).is_err());
+        t.days[0].tickets.truncate(1);
+        t.days[0].tickets[0].cost = f64::NAN;
+        assert!(check(&t, None).is_err());
+    }
+
+    /// SR3-08: a summary with a NaN is refused, and what is kept reads back.
+    #[test]
+    fn a_summary_that_is_not_finite_is_refused_and_the_state_reads_back() {
+        let mut s = Summary {
+            month: "2026-11".into(),
+            ..Default::default()
+        };
+        assert!(summary_ok(&s));
+        s.team.cost = f64::NAN;
+        assert!(!summary_ok(&s));
+        s.team.cost = 1.0;
+        s.projects.insert(
+            BOARD.into(),
+            Spent {
+                tokens: 1,
+                cost: f64::INFINITY,
+            },
+        );
+        assert!(!summary_ok(&s));
+        // What an administrator kept after refusing a NaN still reads back as JSON (the state of the costs).
+        let (_, _, state) = taken(totals(None, "2026-11-22", vec![row(f64::NAN)]));
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(serde_json::from_str::<State>(&json).is_ok());
+    }
 }

@@ -390,3 +390,62 @@ async fn a_team_s_plugin_setting_reaches_its_projects_alone() {
     h.core.apply_team_settings("acme", "Acme", None);
     assert!(h.core.project(&a.id).unwrap().shared.team_plugins.is_none());
 }
+
+// ── The mode « auto » imposed (SR3-07) ───────────────────────────────────────────────────────────────────────────────
+
+/// « auto » as the agents' default asks the consent of the device, as a sensitive key; a stricter mode does not.
+#[test]
+fn the_mode_auto_as_the_default_asks_the_consent_of_the_device() {
+    let mode = escouade_policy::list::DEFAULT_MODE;
+    assert_eq!(CORE_KEYS.sort(mode), Some(Sort::Value));
+    assert!(CORE_KEYS.asks(mode, &json!("auto")));
+    for stricter in ["plan", "default", "acceptEdits"] {
+        assert!(!CORE_KEYS.asks(mode, &json!(stricter)), "{stricter}");
+    }
+    assert!(CORE_KEYS.asks(PROXY_URL, &json!("http://proxy:3128")));
+    assert!(!CORE_KEYS.asks(TELEMETRY, &json!(false)));
+    // Whose passages the team's machine takes on its own (SR3-05): a value of the team, neither a lock nor a
+    // project's key.
+    assert_eq!(
+        CORE_KEYS.sort(crate::teamhandoff::MACHINE_TAKES),
+        Some(Sort::Value)
+    );
+}
+
+/// The first time a team's version waits for this device's consent to « auto », the box « À toi » says it, once.
+#[tokio::test]
+async fn the_mode_auto_waiting_for_consent_is_said_in_the_box_once() {
+    let h = harness("team-settings-auto");
+    let (a, _) = h.project(false).await;
+    h.core.set_project_team(&a.id, Some("acme".into())).unwrap();
+    let pending = |value: &str| Effective {
+        pending: vec![escouade_team::settings::Pending {
+            part: escouade_team::settings::Part::Enforced,
+            key: escouade_policy::list::DEFAULT_MODE.into(),
+            value: json!(value),
+            sort: Sort::Value,
+            fingerprint: format!("print-{value}"),
+        }],
+        ..Default::default()
+    };
+    let told = |h: &crate::core_tests::Harness| {
+        h.core
+            .asks_all()
+            .into_iter()
+            .filter(|x| x.title.contains("auto") && x.title.contains("Acme"))
+            .count()
+    };
+    h.core
+        .apply_team_settings("acme", "Acme", Some(&view(pending("auto"))));
+    assert_eq!(told(&h), 1);
+    // Not applied meanwhile: the device's mode stays its own.
+    assert!(h
+        .core
+        .locks_for(&a.id)
+        .get(escouade_policy::list::DEFAULT_MODE)
+        .is_none());
+    // Read again: not said twice.
+    h.core
+        .apply_team_settings("acme", "Acme", Some(&view(pending("auto"))));
+    assert_eq!(told(&h), 1);
+}

@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : sur le serveur d’équipe, un membre ne peut plus fausser les coûts de l’équipe ni mettre sa dépense au nom d’un autre, ni donner à tes agents une consigne par la mémoire : un souvenir d’un collègue gardé par lui seul arrive comme une donnée, avec son auteur. La machine de l’équipe ne prend d’elle-même que les agents passés par un administrateur, sans écraser une de tes branches, et le mode « auto » imposé par l’équipe attend ton accord dans « À toi ».
 - Sécurité : faire confiance à un projet pour ses serveurs de langage ne couvre plus ce qu’écrit son agent. Dans le worktree d’un agent, un programme de ce worktree ou un serveur qui exécute du code (rust-analyzer, TypeScript, gopls) redemande ta confiance pour ce worktree, avec le chemin du programme.
 - Sécurité : une extension de l’éditeur coupée, ou que la liste permise refuse, n’est plus servie du tout. La liste qu’impose ton équipe tient dans toutes tes vues, et la clé de signature d’Open VSX est maintenant inscrite dans Escouade au lieu d’être lue chez lui ; ses redirections restent chez lui.
 - Sécurité : un nom de branche ou de dépôt fait de points (`..`) ne peut plus détourner une requête des hébergeurs de code vers une autre route de leur API. Et signer un plugin d’équipe dit d’abord que ton poste va compiler le plugin de ton collègue.

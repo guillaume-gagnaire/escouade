@@ -329,6 +329,35 @@ async fn an_agent_passes_to_a_teammate_then_to_the_teams_machine() {
         .await
         .unwrap();
     assert!(git(&origin, &["log", "-1", "--format=%s", &plan.branch]).starts_with("wip:"));
+    // Bob is a member: the machine does not take on its own what he passes (SR3-05); it waits for a human of the
+    // machine, in its box « À toi ».
+    read(&ha, &pa.id).await;
+    let refused = ha.core.team_handoff_take_alone(&t.id).await;
+    let why = refused.expect_err("not taken on its own").to_string();
+    assert!(why.contains("humain"), "{why}");
+    let waiting = ticket(&ha, &t.id);
+    let hd = waiting
+        .team
+        .as_ref()
+        .unwrap()
+        .handoff
+        .clone()
+        .expect("it waits");
+    assert!(hd.incoming && hd.machine);
+    assert!(ha
+        .core
+        .inbox_views(None)
+        .await
+        .views
+        .iter()
+        .any(|v| v.key == format!("handoff:{}", t.id)));
+    // A rule an administrator wrote in the team's file lets it take a member's on its own.
+    let rule = escouade_team::settings::Effective {
+        enforced: [(MACHINE_TAKES.to_string(), serde_json::json!("members"))].into(),
+        ..Default::default()
+    };
+    ha.core.set_team_machine_takes(&team, Some(&rule));
+    assert_eq!(ha.core.team_machine_takes(&team), MachineTakes::Members);
     read(&ha, &pa.id).await;
     let (machine_agent, file) = handed_file(&ha, &t.id).await;
     assert_ne!(machine_agent, agent);
@@ -340,4 +369,84 @@ async fn an_agent_passes_to_a_teammate_then_to_the_teams_machine() {
     drop(ha);
     drop(hb);
     task.abort();
+}
+
+/// SR3-05: whose passages a machine takes on its own, as the team's file says (an administrator's without it).
+#[test]
+fn the_machine_takes_on_its_own_what_the_rule_lets_it() {
+    let of = |v: Option<&str>| {
+        let mut e = escouade_team::settings::Effective::default();
+        if let Some(v) = v {
+            e.defaults
+                .insert(MACHINE_TAKES.into(), serde_json::json!(v));
+        }
+        MachineTakes::of(&e)
+    };
+    assert_eq!(of(None), MachineTakes::Admins);
+    assert_eq!(of(Some("anything")), MachineTakes::Admins);
+    assert_eq!(of(Some("members")), MachineTakes::Members);
+    assert_eq!(of(Some("nobody")), MachineTakes::Nobody);
+    // Imposed wins over recommended.
+    let mut e = escouade_team::settings::Effective::default();
+    e.defaults
+        .insert(MACHINE_TAKES.into(), serde_json::json!("members"));
+    e.enforced
+        .insert(MACHINE_TAKES.into(), serde_json::json!("nobody"));
+    assert_eq!(MachineTakes::of(&e), MachineTakes::Nobody);
+    assert!(MachineTakes::Admins.takes(true) && !MachineTakes::Admins.takes(false));
+    assert!(MachineTakes::Members.takes(false));
+    assert!(!MachineTakes::Nobody.takes(true));
+}
+
+/// SR3-06: the remote is one of the repository's, never an address the offer gives.
+#[test]
+fn a_passage_is_fetched_from_a_remote_of_the_repository_only() {
+    let remotes = vec!["origin".to_string(), "upstream".to_string()];
+    assert_eq!(
+        remote_for(&remotes, "upstream").as_deref(),
+        Some("upstream")
+    );
+    assert_eq!(
+        remote_for(&remotes, "--upload-pack=touch /tmp/x").as_deref(),
+        Some("origin")
+    );
+    assert_eq!(
+        remote_for(&remotes, "ssh://evil.example/x").as_deref(),
+        Some("origin")
+    );
+    assert_eq!(
+        remote_for(&[], "ssh://evil.example/x"),
+        None,
+        "no remote: refused"
+    );
+}
+
+/// SR3-06: a passage's branch never crushes a local branch other than the ticket's, and is a branch's name.
+#[tokio::test]
+async fn a_passage_does_not_crush_a_local_branch() {
+    let h = harness("handoff-branch");
+    let repo = h.dir.join("repo-branch");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@t"]);
+    git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "x"]);
+    git(&repo, &["branch", "release/2.3"]);
+    git(&repo, &["branch", "ticket/dem-41"]);
+    let root = repo.to_string_lossy().to_string();
+    let why = passed_branch_ok(&root, "release/2.3", "ticket/dem-41")
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(why.contains("release/2.3"), "{why}");
+    assert!(passed_branch_ok(&root, "main", "").await.is_err());
+    // The ticket's own branch, or one this machine does not have: fetched.
+    assert!(passed_branch_ok(&root, "ticket/dem-41", "ticket/dem-41")
+        .await
+        .is_ok());
+    assert!(passed_branch_ok(&root, "ticket/dem-42", "").await.is_ok());
+    // Not a branch's name: refused before git reads it.
+    for bad in ["-x", "--upload-pack=x", "a..b", "@{-1}", ""] {
+        assert!(passed_branch_ok(&root, bad, "").await.is_err(), "{bad}");
+    }
 }

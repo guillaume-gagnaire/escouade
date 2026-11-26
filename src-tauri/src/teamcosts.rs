@@ -116,6 +116,8 @@ pub struct CostsFile {
     pub quota: BTreeMap<String, f64>,
     /// When each team's totals last went (ms).
     pub sent: BTreeMap<String, i64>,
+    /// The consents asked in the box « À toi » (`team|fingerprint`): the mode « auto » a team imposes (SR3-07).
+    pub consents: BTreeSet<String>,
 }
 
 /// What the core holds of the teams' costs.
@@ -228,7 +230,13 @@ pub fn totals_of(
         row.input += l.input;
         row.output += l.output;
         row.cache += l.cache;
-        row.cost += l.cost;
+        // A cost not well said (NaN, infinite, negative) counts nothing: the administrators would refuse the day.
+        let cost = if l.cost.is_finite() && l.cost > 0.0 {
+            l.cost
+        } else {
+            0.0
+        };
+        row.cost += cost;
         if let Some(ticket) = names.tickets.get(&l.agent) {
             let t = tickets
                 .entry((board.clone(), ticket.clone()))
@@ -243,7 +251,7 @@ pub fn totals_of(
             t.input += l.input;
             t.output += l.output;
             t.cache += l.cache;
-            t.cost += l.cost;
+            t.cost += cost;
         }
     }
     Totals {
@@ -743,6 +751,72 @@ impl Core {
         }
         if of.admin {
             self.alert_admin(team, &name, &budgets);
+        }
+    }
+
+    /// The first time a team's version sets the agents' default mode to « auto », a request in the box « À toi »: it
+    /// applies only once this device accepts it (Réglages › Équipe), once per fingerprint (SR3-07).
+    pub(crate) fn tell_team_consents(
+        self: &Arc<Self>,
+        team: &str,
+        name: &str,
+        effective: &Effective,
+    ) {
+        // The request goes to a project of the team (the box is by project); none yet: at the next pass.
+        let project = self
+            .projects
+            .read()
+            .iter()
+            .find(|p| p.team.as_deref() == Some(team))
+            .map(|p| p.id.clone());
+        let Some(project) = project else {
+            return;
+        };
+        for p in &effective.pending {
+            if p.key != escouade_policy::list::DEFAULT_MODE
+                || p.value.as_str() != Some(crate::team_settings::AUTO_MODE)
+            {
+                continue;
+            }
+            let key = format!("{team}|{}", p.fingerprint);
+            let told =
+                self.with_costs(|c| c.file.as_ref().is_some_and(|f| f.consents.contains(&key)));
+            if told {
+                continue;
+            }
+            let draft = crate::asks::AskDraft {
+                kind: AskKind::Task,
+                title: tr!(
+                    "L’équipe {name} veut le mode « auto » pour tes agents",
+                    "The team {name} wants the “auto” mode for your agents"
+                ),
+                body: tr!(
+                    "Le fichier de l’équipe {name} met « auto » comme mode par défaut des agents : un agent y demande presque rien avant d’agir. Il ne s’applique sur ce poste qu’une fois accepté ; d’ici là, ton mode reste le tien.",
+                    "The file of the team {name} sets “auto” as the agents’ default mode: an agent there asks almost nothing before acting. It applies on this machine only once accepted; until then, your mode stays yours."
+                ),
+                steps: vec![tr!(
+                    "Accepter ou laisser en attente dans Équipe › Réglages de l’équipe",
+                    "Accept it or leave it waiting in Team › Team settings"
+                )],
+                ..Default::default()
+            };
+            let author = AskAuthor {
+                agent: None,
+                name: "Escouade".into(),
+                chef: false,
+            };
+            match self.ask_deposit(author, &project, None, draft, Vec::new()) {
+                Ok(_) => {
+                    self.with_costs(|c| {
+                        c.file
+                            .get_or_insert_with(Default::default)
+                            .consents
+                            .insert(key);
+                    });
+                    self.save_costs_file();
+                }
+                Err(e) => log::info!("team settings: the consent not asked: {e:#}"),
+            }
         }
     }
 

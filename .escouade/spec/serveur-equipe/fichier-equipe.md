@@ -1,8 +1,8 @@
 ---
 title: "Le .escouade.yml d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.5, §6.6, §15.2 (C12-B), §16 (TS-13)","crates/escouade-team/src/settings.rs","src-tauri/src/team_settings.rs, src-tauri/src/teams_settings.rs"]
-tickets: ["ESC-471","ESC-480","ESC-493","ESC-547","ESC-532"]
+sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.5, §6.6, §15.2 (C12-B), §16 (TS-13)","crates/escouade-team/src/settings.rs","src-tauri/src/team_settings.rs, src-tauri/src/teams_settings.rs","Revue de sécurité de la 2.3 (ESC-626), constats SR3-05 et SR3-07 : corrigés par ESC-649"]
+tickets: ["ESC-471","ESC-480","ESC-493","ESC-547","ESC-532","ESC-649"]
 decisions: [183,186,194,225]
 compared: null
 ---
@@ -57,7 +57,7 @@ signers: []            # facultatif : les membres qui signent ; vide, tout admin
 
 ## Le quorum (C12-B)
 
-- Une version qui change une **clé sensible**, la **liste des signataires** ou le **quorum lui-même** ne vaut qu'avec **deux administrateurs distincts** : deux appareils d'un même administrateur comptent pour un. En attendant, elle est **proposée** : rien n'en s'applique, l'historique dit « En attente d'une seconde signature (1/2) », un autre administrateur la cosigne.
+- Une version qui change une **clé sensible** (ou une valeur qui demande l'accord, comme le mode « auto » ci-dessous), la **liste des signataires** ou le **quorum lui-même** ne vaut qu'avec **deux administrateurs distincts** : deux appareils d'un même administrateur comptent pour un. En attendant, elle est **proposée** : rien n'en s'applique, l'historique dit « En attente d'une seconde signature (1/2) », un autre administrateur la cosigne.
 - Le reste (restreindre, une valeur, une commande proposée) passe avec une signature.
 - Le quorum est une **option de l'équipe** (`quorum`), **allumée d'office dès qu'il y a deux administrateurs**. Le quorum en vigueur est celui de la version en vigueur.
 - **Un seul administrateur** : le quorum ne s'applique pas, une signature suffit pour tout, et l'écran dit « Un seul administrateur : le quorum ne s'applique pas. Nomme un second administrateur pour que deux signatures soient demandées. » Une équipe qui a écrit `quorum: true` avec un seul administrateur ne fait plus passer de clé sensible tant qu'un second n'est pas nommé.
@@ -67,6 +67,7 @@ signers: []            # facultatif : les membres qui signent ; vide, tout admin
 - **Restreindre** (couper une fonction, réduire une liste permise) : appliqué tout de suite.
 - **Valeur** (une branche cible, un préfixe) : appliqué et montré.
 - **Sensible** (`proxy.url`, `proxy.exclusions`, `proxy.authorities`) : **en attente de l'accord de chaque membre**, sur son poste, avec ce que cela permet, dit en clair (« Ce certificat permet de lire le trafic TLS d'Escouade »). L'accord porte sur l'empreinte de la valeur : une valeur changée redemande l'accord. Il se retire (« Retirer mon accord »).
+- **Le mode « auto » comme mode par défaut des agents (SR3-07)** : `permissions.defaultMode` est une valeur, mais **sa valeur `auto`** (un agent qui ne demande presque rien, l'autopilote sans bac à sable de Copilot) se tient **comme une clé sensible** : sous le quorum, et en attente de l'accord de chaque poste, recommandée comme imposée. D'ici là, le mode du poste reste le sien. **La première fois**, à chaque nouvelle empreinte, une demande arrive dans la boîte « À toi » du membre (« L'équipe Acme veut le mode « auto » pour tes agents ») ; il l'accepte, ou la laisse en attente, dans l'écran des réglages de l'équipe. Un mode plus strict (`plan`, `default`, `acceptEdits`) s'applique comme une valeur.
 - **Exécutable** (commandes, hooks, `launch`, tests, installation d'un plugin, serveur MCP, variables d'environnement des agents) : **jamais imposé**. Seulement dans `proposed`, relu et accepté sur chaque poste à son empreinte ; un changement redemande l'accord. Accepté, il s'applique comme une valeur recommandée (rang 2) aux projets de l'équipe.
 
 ## Ce qui n'entre jamais, même signé
@@ -112,6 +113,14 @@ Trois clés de l'équipe seule (le poste géré n'en a pas), lues par l'app et n
 - `costs.stopAutopilot` (restreindre) : au-delà d'un budget, le pilote auto s'arrête.
 
 Imposées (`enforced`) ou recommandées (`defaults`), elles valent pareil : la version imposée passe devant.
+
+## Les passages vers la machine de l'équipe (SR3-05)
+
+Une clé de l'équipe seule, lue par l'app et non par le verrou ni par le fichier d'un projet (page « Passer un agent à un collègue ») :
+
+- `handoff.machineTakes` (valeur) : à qui une machine de l'équipe en mode serveur prend d'elle-même un agent passé : `admins` d'office (les administrateurs de l'équipe), `members` (tout membre du projet) ou `nobody`. Une autre valeur vaut `admins`. Le reste attend « Prendre » d'un humain de la machine, dans sa boîte « À toi ».
+
+Imposée ou recommandée, elle vaut pareil : la version imposée passe devant.
 
 ## Un réglage de plugin (ESC-532)
 

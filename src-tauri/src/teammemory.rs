@@ -142,7 +142,8 @@ pub struct Entry {
     pub quarantined: Option<String>,
     /// Written by this member (by hand or by one of their agents).
     pub mine: bool,
-    /// Given as data, never as an instruction: proposed, or written by an agent that had read a third party's data.
+    /// Given as data, never as an instruction: proposed, written by an agent that had read a third party's data, or
+    /// another member's that no other human kept (SR3-04).
     pub untrusted: bool,
     /// The hosts of the addresses it names that the project does not know: shown at its validation.
     pub unknown: Vec<String>,
@@ -467,7 +468,12 @@ pub fn resolve(
         }
         e.order = order.to_bytes().to_vec();
         e.at = order.wall;
-        e.untrusted = e.standing != Standing::Accepted || prov.third_party;
+        // Another member's word is a third party's here (SR3-04): what its author alone kept (written by hand, or by
+        // one of their agents and kept by them) is data, never an instruction, until another human keeps it (an
+        // administrator, or this member).
+        let theirs_alone =
+            prov.member != me && e.reviewed_by.as_deref().is_none_or(|r| r == prov.member);
+        e.untrusted = e.standing != Standing::Accepted || prov.third_party || theirs_alone;
         if let Some((rv, _)) = rules.iter().find(|(_, rule)| rule.takes(&prov)) {
             e.quarantined = Some(rv.id.clone());
         }

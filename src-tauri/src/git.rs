@@ -3028,7 +3028,8 @@ pub fn fetch_failure_kind(message: &str, timed_out: bool) -> crate::model::Fetch
 pub async fn fetch_ref(repo: &str, from: &str, refspec: &str) -> Result<()> {
     run_net(
         repo,
-        &["fetch", "--quiet", "--no-tags", from, refspec],
+        // `--`: neither the remote nor the refspec is ever read as an option of git (SR3-06).
+        &["fetch", "--quiet", "--no-tags", "--", from, refspec],
         false,
     )
     .await

@@ -39,6 +39,78 @@ use crate::model::{new_id, now_ms, Column, TeamHandoff, UiEvent};
 use crate::plan::PlanState;
 use crate::teamboard::{holder_of, object_of, refusal};
 
+/// The key of the team's file that says whose passages a machine in server mode takes on its own (SR3-05).
+pub const MACHINE_TAKES: &str = "handoff.machineTakes";
+
+/// Whose passages a machine in server mode takes on its own; the others wait in its box « À toi », for a human of the
+/// machine to take them (« Prendre »). An administrator's by default: a member cannot make the team's machine run, day
+/// and night with no one looking, what they pass to it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MachineTakes {
+    Nobody,
+    #[default]
+    Admins,
+    Members,
+}
+
+impl MachineTakes {
+    /// As the version in force of the team's file says it (imposed first, then recommended): `nobody`, `admins` or
+    /// `members`; anything else, an administrator's.
+    pub fn of(e: &escouade_team::settings::Effective) -> MachineTakes {
+        let v = e
+            .enforced
+            .get(MACHINE_TAKES)
+            .or_else(|| e.defaults.get(MACHINE_TAKES));
+        match v.and_then(Value::as_str) {
+            Some("nobody") => MachineTakes::Nobody,
+            Some("members") => MachineTakes::Members,
+            _ => MachineTakes::Admins,
+        }
+    }
+
+    /// Whether the machine takes on its own the passage of a device whose member is (or not) an administrator.
+    pub fn takes(self, admin: bool) -> bool {
+        match self {
+            MachineTakes::Nobody => false,
+            MachineTakes::Admins => admin,
+            MachineTakes::Members => true,
+        }
+    }
+}
+
+/// The devices (hex) of the team's administrators now.
+fn admin_devices(team: &escouade_team::Team) -> std::collections::HashSet<String> {
+    team.members()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(_, role, _)| *role == escouade_team::crypto::Role::Admin)
+        .flat_map(|(_, _, ds)| ds.into_iter().map(|d| hex::encode(d.0)))
+        .collect()
+}
+
+/// The branch of a passage, before it is fetched over the local one (SR3-06): a name git takes as a branch, and that
+/// crushes no local branch other than the ticket's own (`release/2.3` passed would lose its commits not pushed).
+pub(crate) async fn passed_branch_ok(root: &str, branch: &str, ticket_branch: &str) -> Result<()> {
+    crate::git::check_ref_format(branch).await?;
+    if branch != ticket_branch && crate::git::branch_exists(root, branch).await {
+        bail!(tr!(
+            "La branche {branch} de ce passage existe déjà sur ce poste : elle n’est pas écrasée. Le passage attend.",
+            "The branch {branch} of this passage already exists on this machine: it isn’t overwritten. The passage waits."
+        ));
+    }
+    Ok(())
+}
+
+/// The remote a passage's branch is fetched from: the one the offer names when the repository has it, else its first;
+/// never an address the offer gives (SR3-06). None: the repository has no remote.
+pub(crate) fn remote_for(remotes: &[String], named: &str) -> Option<String> {
+    remotes
+        .iter()
+        .find(|r| *r == named)
+        .or_else(|| remotes.first())
+        .cloned()
+}
+
 /// The most a deposit weighs (the server keeps files of 25 MiB at most): the oldest items of the conversation are left
 /// out past it.
 const MAX_DEPOSIT: usize = 20 << 20;
@@ -629,12 +701,50 @@ impl Core {
                 "This passage is already being taken."
             ));
         }
-        let out = self.handoff_take(id, engine).await;
+        let out = self.handoff_take(id, engine, false).await;
         self.handoffs_taking.lock().remove(id);
         out
     }
 
-    async fn handoff_take(self: &Arc<Self>, id: &str, engine: Option<EngineId>) -> Result<()> {
+    /// A machine in server mode takes on its own the passage of the ticket `id`, when the team's rule lets it
+    /// ([`MachineTakes`]); it is checked again here against the device the server says handed it.
+    async fn team_handoff_take_alone(self: &Arc<Self>, id: &str) -> Result<()> {
+        if !self.handoffs_taking.lock().insert(id.to_string()) {
+            return Ok(());
+        }
+        let out = self.handoff_take(id, None, true).await;
+        self.handoffs_taking.lock().remove(id);
+        out
+    }
+
+    /// Whose passages this machine takes on its own, for the team `id` (its file's rule; an administrator's without).
+    pub(crate) fn team_machine_takes(&self, team_id: &str) -> MachineTakes {
+        self.team_handoff_takes
+            .lock()
+            .get(team_id)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    /// The rule of the version in force of the team `id` (None: the device left it).
+    pub(crate) fn set_team_machine_takes(
+        &self,
+        team_id: &str,
+        effective: Option<&escouade_team::settings::Effective>,
+    ) {
+        let mut all = self.team_handoff_takes.lock();
+        match effective {
+            Some(e) => all.insert(team_id.to_owned(), MachineTakes::of(e)),
+            None => all.remove(team_id),
+        };
+    }
+
+    async fn handoff_take(
+        self: &Arc<Self>,
+        id: &str,
+        engine: Option<EngineId>,
+        alone: bool,
+    ) -> Result<()> {
         let t = self.ticket(id)?;
         let tt = t.team.clone().unwrap_or_default();
         let hd = tt.handoff.clone().filter(|h| h.incoming).ok_or_else(gone)?;
@@ -694,6 +804,18 @@ impl Core {
             if offer.to != me || !handed {
                 bail!(gone());
             }
+            // On its own, only what the team's rule lets it take (SR3-05): the device that handed it, as the server
+            // says, is the offer's.
+            if alone
+                && !self
+                    .team_machine_takes(&team_id)
+                    .takes(admin_devices(&team).contains(&offer.from))
+            {
+                bail!(tr!(
+                    "Ce passage attend qu’un humain de cette machine le prenne.",
+                    "This passage waits for a human of this machine to take it."
+                ));
+            }
             let file = object_of(&offer.file).ok_or_else(gone)?;
             let bytes = team
                 .get_file(file)
@@ -709,18 +831,16 @@ impl Core {
             .await
             .unwrap_or(project.path.clone());
         let remotes = crate::git::remotes(&root).await;
-        let remote = remotes
-            .iter()
-            .find(|r| **r == offer.remote)
-            .or_else(|| remotes.first())
-            .cloned()
-            .unwrap_or_else(|| offer.remote.clone());
-        let spec = format!("+refs/heads/{0}:refs/heads/{0}", offer.branch);
-        let fetched = if offer.branch.is_empty() || offer.branch.starts_with('-') {
-            Err(anyhow!("bad branch name"))
-        } else {
-            crate::git::fetch_ref(&root, &remote, &spec).await
+        // A remote of the repository, never an address the offer gives (SR3-06).
+        let Some(remote) = remote_for(&remotes, &offer.remote) else {
+            bail!(tr!(
+                "Ce dépôt n’a aucun remote : la branche de ce passage ne se récupère pas. Le passage attend.",
+                "This repository has no remote: the branch of this passage can’t be fetched. The passage waits."
+            ));
         };
+        passed_branch_ok(&root, &offer.branch, &t.branch).await?;
+        let spec = format!("+refs/heads/{0}:refs/heads/{0}", offer.branch);
+        let fetched = crate::git::fetch_ref(&root, &remote, &spec).await;
         if let Err(e) = fetched {
             let branch = offer.branch.clone();
             let e = crate::tickets::error_line(&e);
@@ -895,14 +1015,15 @@ impl Core {
         let Ok(shared) = teams.team(&team_id) else {
             return;
         };
-        let (offers, me, names, machines) = {
+        let (offers, me, names, machines, admins) = {
             let mut team = shared.lock().await;
             let offers = team.handoffs(pid).unwrap_or_default();
             let me = hex::encode(team.client().device());
             let names = team.names(pid).unwrap_or_default();
             let machines = team.machines(pid).unwrap_or_default();
-            (offers, me, names, machines)
+            (offers, me, names, machines, admin_devices(&team))
         };
+        let takes = self.team_machine_takes(&team_id);
         let name_of = |hex_id: &str| {
             object_of(hex_id)
                 .and_then(|o| names.get(&DeviceId(o.0)).cloned())
@@ -934,7 +1055,10 @@ impl Core {
                     at: o.at,
                     agent_id: tt.handoff.as_ref().and_then(|h| h.agent_id.clone()),
                 });
-                if next.as_ref().is_some_and(|h| h.incoming)
+                // On its own, only what the team's rule lets it take (SR3-05); the rest waits in « À toi ».
+                if next
+                    .as_ref()
+                    .is_some_and(|h| h.incoming && takes.takes(admins.contains(&h.from_device)))
                     && self.team_machine.load(Ordering::Relaxed)
                 {
                     take.push(t.id.clone());
@@ -958,7 +1082,7 @@ impl Core {
             }
             let me = self.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = me.team_handoff_take(&id, None).await {
+                if let Err(e) = me.team_handoff_take_alone(&id).await {
                     log::warn!("ticket {id}: the agent passed to this machine is not taken: {e:#}");
                 }
             });

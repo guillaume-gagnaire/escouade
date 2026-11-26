@@ -114,8 +114,8 @@ async fn an_agents_memory_comes_with_its_provenance_marked_as_data_until_a_human
     )
     .await;
 
-    // A human keeps the first: Bob's tools read it, the team's now, with its provenance; still data, as its agent's
-    // later write is what Alice's agents read.
+    // A human keeps the first: Bob's tools read it, the team's now, with its provenance; but kept by its author alone,
+    // it is Alice's word, data for Bob's agents (SR3-04).
     let view = alice.h.core.team_memory_view(&alice.p.id).await.unwrap();
     let first = view
         .proposals
@@ -137,9 +137,14 @@ async fn an_agents_memory_comes_with_its_provenance_marked_as_data_until_a_human
     )
     .await;
     assert!(!error, "{text}");
-    let got: Value =
-        serde_json::from_str(&text).expect("kept, written before any third party's data: as it is");
+    assert!(text.starts_with(UNVALIDATED_NOTICE), "{text}");
+    let got = inside(&text);
     assert_eq!(got["memory"]["provenance"]["standing"], "accepted");
+    assert!(
+        got["memory"]["provenance"]["member"].is_string(),
+        "with its author"
+    );
+    assert!(got["memory"]["provenance"]["memberId"].is_string());
     assert_eq!(got["memory"]["provenance"]["agent"]["ticket"], "DEM-41");
     assert_eq!(got["memory"]["provenance"]["thirdPartyRead"], false);
 }
@@ -166,22 +171,41 @@ async fn a_memory_written_by_hand_is_the_teams_and_a_secret_is_refused() {
     alice.round(&id).await;
     bob.round(&id).await;
     let cb = external(&bob.h).await;
-    let found = read(
+    // Alice's word, kept by her alone: Bob's agents read it as a third party's data, with its author (SR3-04).
+    let (text, error) = call(
         &cb,
         "search_memory",
         json!({ "project": bob.p.id, "query": "dragons" }),
     )
     .await;
-    assert_eq!(found["memories"][0]["name"], "dragons");
-    assert_eq!(found["memories"][0]["provenance"]["standing"], "accepted");
-    assert_eq!(found["memories"][0]["provenance"]["by"], "hand");
-    let got = read(
+    assert!(!error, "{text}");
+    let (head, _) = text.split_once('\n').unwrap();
+    let head: Value = serde_json::from_str(head).unwrap();
+    assert_eq!(head["memories"], json!([]), "never as an instruction");
+    let found = &inside(&text)["unvalidated"][0];
+    assert_eq!(found["name"], "dragons");
+    assert_eq!(found["provenance"]["standing"], "accepted");
+    assert_eq!(found["provenance"]["by"], "hand");
+    assert!(found["provenance"]["member"].is_string(), "with its author");
+    assert!(found["provenance"]["memberId"].is_string());
+    let (text, error) = call(
         &cb,
         "read_memory",
         json!({ "project": bob.p.id, "name": "dragons" }),
     )
     .await;
-    assert_eq!(got["memory"]["body"], "Ils dorment le lundi.");
+    assert!(!error, "{text}");
+    assert!(text.starts_with(UNVALIDATED_NOTICE), "{text}");
+    assert_eq!(inside(&text)["memory"]["body"], "Ils dorment le lundi.");
+    // Alice's own agents read it as it is: her word.
+    let ca = external(&alice.h).await;
+    let (text, _) = call(
+        &ca,
+        "read_memory",
+        json!({ "project": alice.p.id, "name": "dragons" }),
+    )
+    .await;
+    assert!(!text.starts_with(UNVALIDATED_NOTICE), "{text}");
     // A client outside Escouade is an agent whose reading is not known: its write is a proposal, said after data.
     let wrote = read(
         &cb,

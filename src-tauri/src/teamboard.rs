@@ -126,8 +126,9 @@ pub fn apply_field(t: &mut Ticket, field: &str, v: &Value) {
             }
         }
         "maxLoops" => {
+            // As the window offers them (3, 5 or 8): a member cannot give a ticket billions of loops (SR3-08).
             if let Some(n) = v.as_u64() {
-                t.max_loops = n as u32;
+                t.max_loops = crate::board::max_loops(u32::try_from(n).unwrap_or(0));
             }
         }
         "progress" => {

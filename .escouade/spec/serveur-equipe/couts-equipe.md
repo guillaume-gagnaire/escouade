@@ -1,8 +1,8 @@
 ---
 title: "Les coûts et les quotas de l'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md §2.2, §3, §6.4, §10, §15.2 (C15), §16 (TS-16)","crates/escouade-team/src/costs.rs","crates/escouade-team-crypto/src/costkey.rs","src-tauri/src/teamcosts.rs, src-tauri/src/teams_costs.rs"]
-tickets: ["ESC-547"]
+sources: ["docs/TEAM-SERVER.md §2.2, §3, §6.4, §10, §15.2 (C15), §16 (TS-16)","crates/escouade-team/src/costs.rs","crates/escouade-team-crypto/src/costkey.rs","src-tauri/src/teamcosts.rs, src-tauri/src/teams_costs.rs","Revue de sécurité de la 2.3 (ESC-626), constats SR3-03 et SR3-08 : corrigés par ESC-649"]
+tickets: ["ESC-547","ESC-649"]
 decisions: [225]
 compared: null
 ---
@@ -23,6 +23,21 @@ Ce que l'équipe sait de ce que dépensent ses agents : des **totaux par jour**,
 - **Hors ligne**, les totaux attendent sur le poste (dans sa base chiffrée de l'équipe), un jour à la fois : le plus récent d'un jour remplace celui qui attendait. Ils partent au retour. Un envoi refait (une réponse perdue) ne compte pas deux fois : un administrateur garde, pour chaque poste et chaque jour, le dernier total reçu.
 - « Envoyer maintenant », dans l'écran des coûts, n'attend pas l'heure.
 
+## Les bornes d'un envoi (SR3-03, SR3-08)
+
+Un membre ne peut ni remplir les budgets de toute l'équipe (et arrêter le pilote auto de tous les postes), ni cacher sa dépense, ni la mettre au compte d'un autre. L'appareil de l'administrateur **refuse en entier, à la lecture**, des totaux :
+
+- dont un coût n'est pas un nombre fini (`NaN`, infini), est négatif, ou dépasse **10 000 $ par jour et par appareil** (toutes ses lignes du jour ensemble, et chaque ticket) ;
+- dont les tokens d'un jour dépassent **10 milliards** ;
+- dont un quota n'est pas un nombre fini entre 0 et 1 000 % ;
+- trop grands : plus de **62 jours** dans un envoi, plus de **256 lignes** ou de **1 024 tickets** par jour, un jour qui n'est pas une date (`2026-11-20`), un nom (projet, harness, modèle, ticket) de plus de 256 caractères ou avec un caractère de contrôle ;
+- **qui nomment un autre membre que celui qui les a signés** : en « par membre », la dépense est toujours celle de l'appareil qui signe l'entrée, jamais d'un nom qu'il donne.
+
+Un envoi refusé ne compte pas : le résumé du mois ne bouge pas, et l'appareil de l'administrateur en garde le nombre. Les sommes du résumé sont saturées (les tokens ne débordent jamais).
+
+- **Sur le poste qui envoie**, la file refuse de même ce que les administrateurs refuseraient : un `NaN` mis en file ne casse plus l'état des coûts du poste. Un coût que le harness donne mal (`NaN`, infini, négatif) compte pour 0 dans les totaux du poste.
+- **Le résumé publié** par un administrateur (« Le mois de l'équipe ») est refusé par chaque poste quand un de ses coûts n'est pas fini ou est négatif : l'état de chacun se relit toujours.
+
 ## Le chiffrement : la clé des administrateurs
 
 - Une **paire de clés à part** (HPKE, RFC 9180), hors des clés MLS de l'équipe. Chaque poste scelle ses totaux à sa moitié publique ; seul un appareil d'administrateur l'ouvre.
@@ -35,7 +50,7 @@ Ce que l'équipe sait de ce que dépensent ses agents : des **totaux par jour**,
 
 - `costs.grain` du fichier de l'équipe : `project` d'office, ou `member`.
 - **Par projet** : les totaux partent sans le nom du membre. Les administrateurs voient chaque projet, chaque ticket, chaque harness et modèle, jamais une personne.
-- **Par membre** : les administrateurs voient en plus les totaux de chaque membre, par jour. **Chaque membre le voit dit** : à sa prochaine ouverture d'Escouade, l'écran « Ton équipe voit tes totaux par jour » (« J'ai compris », « Voir ce qui remonte »). **Tant qu'il ne l'a pas vu, ses totaux partent sans son nom.** L'équipe repassée par projet, le prochain passage par membre est dit de nouveau.
+- **Par membre** : les administrateurs voient en plus les totaux de chaque membre, par jour. **Chaque membre le voit dit** : à sa prochaine ouverture d'Escouade, l'écran « Ton équipe voit tes totaux par jour » (« J'ai compris », « Voir ce qui remonte »). **Tant qu'il ne l'a pas vu, ses totaux partent sans son nom.** L'équipe repassée par projet, le prochain passage par membre est dit de nouveau. Le membre nommé est toujours celui qui signe (voir « Les bornes d'un envoi »).
 - Limite, dite telle quelle : par projet, le serveur sait toujours quel appareil a écrit chaque entrée, et l'appareil d'un administrateur la voit signée par l'appareil de son auteur. Le grain par projet est tenu par l'app, pas par la cryptographie.
 
 ## Le tableau (Équipe › Coûts)
@@ -73,3 +88,4 @@ enforced:
 - Le total du membre est celui de ce poste : deux postes d'un même membre ont chacun le leur.
 - Le budget d'un projet se nomme par le nom du projet sur le poste de l'administrateur, ou par l'id de son journal.
 - Le plus haut quota du jour est relevé par le poste à chaque minute, pas à chaque tour.
+- Un membre peut encore déclarer, sous les bornes, une dépense qu'il n'a pas faite (jusqu'à 10 000 $ par jour et par appareil) : elle reste à son appareil, que l'administrateur voit.

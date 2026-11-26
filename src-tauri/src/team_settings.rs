@@ -27,10 +27,21 @@ pub struct CoreKeys;
 
 pub static CORE_KEYS: CoreKeys = CoreKeys;
 
+/// The mode that asks a consent when a team sets it as the default (SR3-07).
+pub const AUTO_MODE: &str = "auto";
+
 /// The keys that install a plugin: proposed alone, each device's gesture.
 const INSTALL: &str = "plugins.install";
 
 impl Classify for CoreKeys {
+    /// The mode « auto » as the default of the agents (an agent that asks almost nothing, Copilot's autopilot without
+    /// a sandbox) waits for each device's consent and the quorum, as a sensitive key (SR3-07); a stricter mode does
+    /// not.
+    fn asks(&self, key: &str, value: &Value) -> bool {
+        self.sort(key) == Some(Sort::Sensitive)
+            || (key == escouade_policy::list::DEFAULT_MODE && value.as_str() == Some(AUTO_MODE))
+    }
+
     fn sort(&self, key: &str) -> Option<Sort> {
         use escouade_policy::list::Sort as P;
         if let Some(d) = escouade_policy::list::def(key) {
@@ -44,9 +55,12 @@ impl Classify for CoreKeys {
         if key == INSTALL {
             return Some(Sort::Executable);
         }
-        // The costs (TS-16): the grain and the budgets are values, the autopilot stopped beyond them restricts.
+        // The costs (TS-16): the grain and the budgets are values, the autopilot stopped beyond them restricts. Whose
+        // passages the team's machine takes on its own (SR3-05): a value.
         match key {
-            crate::teamcosts::GRAIN | crate::teamcosts::BUDGETS => return Some(Sort::Value),
+            crate::teamcosts::GRAIN
+            | crate::teamcosts::BUDGETS
+            | crate::teamhandoff::MACHINE_TAKES => return Some(Sort::Value),
             crate::teamcosts::STOP => return Some(Sort::Restrict),
             _ => {}
         }
@@ -157,9 +171,10 @@ pub fn plugin_values(
     }
 }
 
-/// Whether a key is one of the costs (TS-16): read by `teamcosts`, neither a lock nor a project's key.
+/// Whether a key is one of the costs (TS-16): read by `teamcosts`, neither a lock nor a project's key. The rule of the
+/// passages to the team's machine (`handoff.`, SR3-05) is read the same way, by `teamhandoff`.
 pub fn is_cost(key: &str) -> bool {
-    key.starts_with("costs.")
+    key.starts_with("costs.") || key.starts_with("handoff.")
 }
 
 /// Whether a key is one of the policies (the locks hold it), not of a project's file.
@@ -416,11 +431,12 @@ impl crate::core::Core {
         view: Option<&View>,
     ) {
         let (policies, layers) = view.map(|v| split(id, name, v)).unwrap_or_default();
-        self.set_team_cost_rules(
-            id,
-            name,
-            view.filter(|v| v.applied.is_some()).map(|v| &v.effective),
-        );
+        let effective = view.filter(|v| v.applied.is_some()).map(|v| &v.effective);
+        self.set_team_cost_rules(id, name, effective);
+        self.set_team_machine_takes(id, effective);
+        if let Some(e) = effective {
+            self.tell_team_consents(id, name, e);
+        }
         self.set_team_policies_of(id, policies);
         let changed = {
             let mut all = self.team_layers.write();

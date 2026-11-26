@@ -271,9 +271,37 @@ async fn offline_the_totals_wait_and_go_once(backend: Backend) {
     w.finish().await;
 }
 
+/// SR3-03, SR3-08: a device's queue refuses what the administrators would refuse (a cost not finite, negative or past a
+/// day's bound, another member named), and its state still reads afterwards; the total that is within bounds goes.
+async fn the_queue_refuses_what_is_out_of_bounds_and_the_state_still_reads(backend: Backend) {
+    let w = World::on(&backend).await;
+    let (_pa, mut alice, _pb, mut bob, _pc, _carol) = three(&w).await;
+    sync(&mut alice).await;
+    for cost in [1.0e12, -2.0e12, f64::NAN, f64::INFINITY] {
+        assert!(
+            costs::queue(&bob, totals(None, 100, cost)).is_err(),
+            "{cost} refused"
+        );
+    }
+    assert!(
+        costs::queue(&bob, totals(Some(&member(3).to_string()), 100, 1.0)).is_err(),
+        "Bob's totals are not put to Carol"
+    );
+    let b = sync(&mut bob).await;
+    assert!(b.sent.is_none(), "nothing went");
+    costs::queue(&bob, totals(None, 200, 2.0)).unwrap();
+    sync(&mut bob).await;
+    let a = sync(&mut alice).await;
+    let s = a.summary.expect("a summary");
+    assert_eq!(s.team.cost, 2.0);
+    assert_eq!(a.received[0].author, member(2).to_string());
+    w.finish().await;
+}
+
 both!(
     only_totals_go_sealed_and_a_member_reads_only_its_own,
     the_member_is_named_only_par_membre,
     the_key_turns_when_an_administrator_leaves,
     offline_the_totals_wait_and_go_once,
+    the_queue_refuses_what_is_out_of_bounds_and_the_state_still_reads,
 );
