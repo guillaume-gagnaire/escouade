@@ -16,3 +16,14 @@ Aujourd'hui, un plugin s'intègre à des endroits fixés d'avance : un harness, 
   - la sécurité, et ce que la revue « Vérifié par Escouade » du store doit lire de plus ;
   - ce qu'en voient le téléphone et une fenêtre connectée à un serveur.
 - [ ] **Repartir des pages des agents** (ESC-661, 2.3). Une page écrite par un agent et un panneau écrit par un plugin posent le même problème : cloisonner du HTML qui n'est pas digne de confiance et ne lui ouvrir qu'un canal étroit vers l'app.
+
+## Les bots
+
+Demandé par l'utilisateur le 2026-11-26 : des bots, un peu comme OpenClaw ou les bots d'Orca. Chacun a une âme (*soul*) et des tâches. Il est autonome et proactif : il agit de lui-même, sans attendre qu'on lui parle.
+
+- [ ] **Une étude d'abord.** Elle regarde comment OpenClaw et les bots d'Orca font. Puis elle tranche :
+  - ce qu'est l'âme d'un bot : son rôle, sa façon d'être, ce qu'il sait et ce qu'il retient d'une fois sur l'autre ;
+  - ses tâches : ce qu'il fait de lui-même, quand, et sur quels projets ;
+  - comment il vient vers l'utilisateur : la boîte « À toi », les notifications, le téléphone ;
+  - ses bornes : le quota, les accords, ce qu'il n'a jamais le droit de faire seul, le coupe-circuit ;
+  - sa place à côté de ce qui existe : les tâches programmées, l'Overseer (2.3) et l'Overseer d'équipe.
