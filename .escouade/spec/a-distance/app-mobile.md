@@ -2,8 +2,8 @@
 title: "L'app mobile"
 subject: "a-distance"
 sources: ["docs/MOBILE.md (ESC-549, MO-0 : la conception, les choix M1 à M16, le découpage MO-1 à MO-11 ; § 3.13, ESC-568 : le Rust du téléphone et le format des notifications scellées ; § 3.14, ESC-569 : la coque)","apps/mobile (ESC-569 : l'app en Capacitor 8, sa coque, ses e2e, son README)","crates/escouade-mobile (ESC-568 : le tunnel, le proxy, les notifications scellées)","apps/mobile-plugin (ESC-568 : le plugin Capacitor et son API TypeScript)","design/mobile-2-3/README.md (les trois directions, la création en B, la page qui les compare) ; design/mobile-2-3/app/ (ESC-569 : les captures de l'app)","docs/MOBILE-STUDY.md (ESC-445 : Capacitor recommandé)","docs/REMOTE.md (Le téléphone ; Ajouts du 2026-11-14 : l'app mobile ; Plusieurs serveurs pilotés par un seul Escouade ; Ce qui change de machine, MS-4)","docs/SERVER-UX.md (les espaces, direction B, et « Partout »)","docs/INBOX.md (I15 : la boîte en file, premier écran du téléphone)","Préférence de l'utilisateur du 2026-11-20, relayée par le chef : « Firebase obligatoire ? J'aurais bien tout hosté moi-même sur Coolify. »","Choix de l'utilisateur du 2026-11-20, relayés par le chef : la direction B ; créer depuis le téléphone (« Je pilote depuis le téléphone, comment je crée un nouveau projet ? »)"]
-tickets: ["ESC-549","ESC-445","ESC-568","ESC-569"]
-decisions: [227,233,234,235,236,228,229,230,231,232,237,258,283]
+tickets: ["ESC-549","ESC-445","ESC-568","ESC-569","ESC-641"]
+decisions: [227,233,234,235,236,228,229,230,231,232,237,258,283,333]
 compared: null
 ---
 
@@ -67,3 +67,10 @@ Tous faits par l'utilisateur le 2026-11-20 (`docs/MOBILE.md` § 7) : la directio
 ## Les tickets
 
 MO-1 la coque (fait, ESC-569) ; MO-2 le tunnel côté cœur (fait, ESC-567) ; MO-3 le Rust du téléphone (fait, ESC-568) ; MO-4 l'appairage et la révocation ; MO-5 ce qui attend et répondre ; MO-6 les notifications ; MO-7 le Kanban ; MO-8 la publication ; MO-9 UnifiedPush, en option ; MO-10 créer un projet et un agent ; MO-11 le ticket dicté (`docs/MOBILE.md` § 8). Avant MO-1, deux essais de l'utilisateur : la maquette de l'étude sur un vrai Android d'entrée de gamme (fait le 2026-11-21), et le push par un vrai projet Firebase réduit à FCM et une vraie clé APNs. Les comptes des stores, les fiches et le test fermé de Google Play sont ses gestes.
+
+## Le proxy local, ses délais (ESC-641)
+
+Toute app du téléphone joint `127.0.0.1` : le secret de la session protège l'accès au tunnel, et ces bornes en protègent la place (SR1-08 de la revue de sécurité de la 2.3).
+
+- **5 secondes pour passer la porte** : une connexion au proxy qui n'a pas donné sa première ligne avec le secret dans les 5 secondes qui suivent son acceptation est fermée, sans réponse ; une première ligne commencée et jamais finie aussi. Une connexion qui a passé la porte n'a plus ce délai (une WebSocket reste ouverte tant qu'elle sert).
+- **Au plafond, la place à la WebView** : le proxy tient 64 connexions à la fois. Quand une nouvelle arrive au plafond, **la plus ancienne connexion qui n'a pas encore passé la porte est fermée** pour lui faire place ; seule une nouvelle connexion qui arrive quand toutes ont passé la porte est fermée. Des connexions muettes d'une autre app ne ferment donc jamais la porte à la WebView, ni ne coupent une connexion qu'elle a déjà ouverte.

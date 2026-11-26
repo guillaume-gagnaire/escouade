@@ -18,6 +18,12 @@ export default {
     apply: 'Appliquer',
     invalid: 'Un port de 1 à 65535.',
   },
+  // SR1-11: who is asked the public address, when, and what they see; and the switch that stops it.
+  stun: {
+    label: 'Demander l’adresse publique à STUN',
+    labelDesc:
+      'Accès allumé, à l’allumage puis toutes les 5 minutes, {where} demande son adresse publique à {servers} : ils voient ton adresse IP et le port d’où part la demande, rien d’autre. Éteint, rien ne leur est envoyé ; la box (UPnP, NAT-PMP) et l’adresse donnée à la main servent encore.',
+  },
   state: {
     title: 'L’état',
     off: 'Éteint',
@@ -57,7 +63,7 @@ export default {
     found: 'Tailscale est sur cette machine ({address}) : un téléphone de ton tailnet passe par lui, sans port à ouvrir, CGNAT compris.',
     absent: 'Tailscale n’est pas sur cette machine. S’il y vient, un téléphone de ton tailnet passera par lui, sans port à ouvrir.',
     label: 'Servir aussi sur l’adresse Tailscale',
-    labelDesc: 'Pour un téléphone de ton tailnet seulement ; le jeton d’appareil reste demandé.',
+    labelDesc: 'Pour un téléphone de ton tailnet seulement ; le jeton d’appareil reste demandé. Éteint tant que tu ne l’allumes pas.',
     served: 'Servie sur {addr}',
   },
   phones: {

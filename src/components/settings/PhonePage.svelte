@@ -5,7 +5,7 @@
   // server's firewall), a CGNAT and its ways out, the public address and when it changed, Tailscale, the phones. A policy
   // of the device (`servers.phone`, `servers.remoteApi`) greys the switch with who imposes it. The QR code that pairs a
   // phone is MO-4's.
-  import { fDate, fWhen } from '../../lib/format';
+  import { fDate, fList, fWhen } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import { invoke } from '../../lib/transport';
@@ -58,6 +58,8 @@
     tailscale: { address: string; name: string | null } | null;
     tailscaleOn: boolean;
     tailscaleServed: string | null;
+    stunOn: boolean;
+    stunServers: string[];
     peers: PeerStatus[];
     handshakes: number;
     unknown: number;
@@ -91,7 +93,7 @@
     return () => clearInterval(timer);
   });
 
-  async function change(args: { enabled?: boolean; port?: number; tailscale?: boolean }) {
+  async function change(args: { enabled?: boolean; port?: number; tailscale?: boolean; stun?: boolean }) {
     busy = true;
     try {
       status = await invoke<PhoneStatus>('phone_set', args);
@@ -201,6 +203,14 @@
         onkeydown={(e) => e.key === 'Enter' && applyPort()}
       />
       <button class="btn" disabled={busy || port === String(status.port)} onclick={applyPort}>{t('phone.port.apply')}</button>
+    </Row>
+    <!-- SR1-11: STUN said (who, when, what) and its switch. -->
+    <Row
+      label={t('phone.stun.label')}
+      desc={t('phone.stun.labelDesc', { where, servers: fList(status.stunServers.map((s) => s.replace(/:\d+$/, ''))) })}
+      row="phoneStun"
+    >
+      <Switch label={t('phone.stun.label')} on={status.stunOn} disabled={busy} onchange={(v: boolean) => void change({ stun: v })} />
     </Row>
   </Group>
 

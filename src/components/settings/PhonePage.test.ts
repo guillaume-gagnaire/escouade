@@ -31,8 +31,10 @@ const base = (over: Status = {}): Status => ({
   checkedAt: null,
   public: null,
   tailscale: null,
-  tailscaleOn: true,
+  tailscaleOn: false,
   tailscaleServed: null,
+  stunOn: true,
+  stunServers: ['stun.cloudflare.com:3478', 'stun.l.google.com:19302'],
   peers: [],
   handshakes: 0,
   unknown: 0,
@@ -66,6 +68,7 @@ function serve(extra: Record<string, (args: any) => unknown> = {}) {
       if (a.enabled !== undefined && a.enabled !== null) status = a.enabled ? on() : base();
       if (a.port) status = { ...status, port: a.port };
       if (a.tailscale !== undefined && a.tailscale !== null) status = { ...status, tailscaleOn: a.tailscale };
+      if (a.stun !== undefined && a.stun !== null) status = { ...status, stunOn: a.stun };
       return status;
     },
     phone_check: () => status,
@@ -152,8 +155,39 @@ describe('Réglages › Téléphone', () => {
     expect(callsOf('phone_set').at(-1)?.args).toMatchObject({ port: 51900 });
   });
 
+  it('says who STUN asks, when and what they see, and turns it off', async () => {
+    render(PhonePage);
+    const sw = await screen.findByRole('switch', { name: 'Demander l’adresse publique à STUN' });
+    // Said before the access is even on.
+    expect(
+      screen.getByText(
+        /toutes les 5 minutes, ce poste demande son adresse publique à stun\.cloudflare\.com et stun\.l\.google\.com\s: ils voient ton adresse IP/,
+      ),
+    ).toBeVisible();
+    expect(screen.getByText(/la box \(UPnP, NAT-PMP\) et l’adresse donnée à la main servent encore/)).toBeVisible();
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(sw);
+    expect(callsOf('phone_set').at(-1)?.args).toMatchObject({ stun: false });
+    await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'false'));
+  });
+
+  it('shows Tailscale found but off until it is turned on (SR1-05)', async () => {
+    status = on({ tailscale: { address: '100.101.102.103', name: null } });
+    render(PhonePage);
+    const sw = await screen.findByRole('switch', { name: 'Servir aussi sur l’adresse Tailscale' });
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/Éteint tant que tu ne l’allumes pas/)).toBeVisible();
+    expect(screen.queryByText(/Servie sur/)).toBeNull();
+    await userEvent.click(sw);
+    expect(callsOf('phone_set').at(-1)?.args).toMatchObject({ tailscale: true });
+  });
+
   it('offers Tailscale when it is on the machine, and turns it off', async () => {
-    status = on({ tailscale: { address: '100.101.102.103', name: 'poste.tail1234.ts.net' }, tailscaleServed: '100.101.102.103:51820' });
+    status = on({
+      tailscaleOn: true,
+      tailscale: { address: '100.101.102.103', name: 'poste.tail1234.ts.net' },
+      tailscaleServed: '100.101.102.103:51820',
+    });
     render(PhonePage);
     expect(await screen.findByText(/Tailscale est sur cette machine \(100\.101\.102\.103 · poste\.tail1234\.ts\.net\)/)).toBeVisible();
     expect(screen.getByText('Servie sur 100.101.102.103:51820')).toBeVisible();

@@ -21,6 +21,8 @@ const SIZE = process.env.ESCOUADE_E2E_VIEWPORT ? `-${process.env.ESCOUADE_E2E_VI
 
 let box: dgram.Socket;
 let stun: dgram.Socket;
+/** The requests the fake STUN server received. */
+let stunAsked = 0;
 
 test.beforeAll(async () => {
   // A box of NAT-PMP: its address on the Internet is 100.72.3.9 (a CGNAT); it refuses mappings (« refusé », NAT-PMP off in it).
@@ -35,6 +37,7 @@ test.beforeAll(async () => {
   stun = dgram.createSocket('udp4');
   stun.on('message', (m, from) => {
     if (m.length < 20) return;
+    stunAsked += 1;
     const magic = 0x2112a442;
     const out = Buffer.alloc(32);
     out.writeUInt16BE(0x0101, 0);
@@ -165,6 +168,35 @@ test('Réglages › Téléphone turns the tunnel on, says the box to open and th
   await dialog.getByRole('switch', { name: 'Accès depuis le téléphone' }).click();
   await expect(dialog.getByTestId('phone-state')).toContainText('Éteint');
   await expect.poll(() => udpFree(UDP)).toBe(true);
+});
+
+test('Réglages › Téléphone says who STUN asks and when, and STUN turned off asks it nothing more (SR1-11)', async ({ app }) => {
+  const { page } = app;
+  const dialog = await openSettingsPage(page, 'Téléphone');
+  const sw = dialog.getByRole('switch', { name: 'Demander l’adresse publique à STUN' });
+  await expect(sw).toHaveAttribute('aria-checked', 'true');
+  await expect(dialog.getByText(/toutes les 5 minutes, ce poste demande son adresse publique à stun\.cloudflare\.com/)).toBeVisible();
+  await sw.click();
+  await expect(sw).toHaveAttribute('aria-checked', 'false');
+  const port = dialog.getByRole('spinbutton', { name: 'Port UDP' });
+  await port.fill(String(UDP));
+  // The app of the worker may hold the port of the tests' already (the test before): « Appliquer » is then greyed.
+  const apply = dialog.getByRole('button', { name: 'Appliquer' });
+  if (await apply.isEnabled()) await apply.click();
+  await expect(apply).toBeDisabled();
+  stunAsked = 0;
+  await dialog.getByRole('switch', { name: 'Accès depuis le téléphone' }).click();
+  await expect(dialog.getByTestId('phone-state')).toContainText(`Prêt sur le port UDP ${UDP}`);
+  // The box is still asked (it says the machine's address to redirect), STUN never.
+  await expect(dialog.getByTestId('phone-box-todo')).toContainText(`vers 192.168.1.20`, { timeout: 20_000 });
+  await dialog.getByRole('button', { name: 'Revoir le réseau' }).click();
+  await expect(dialog.getByTestId('phone-public')).not.toHaveText('203.0.113.7');
+  expect(stunAsked).toBe(0);
+  // Kept in phone.json.
+  const saved = JSON.parse(fs.readFileSync(path.join(app.data, 'phone.json'), 'utf8')) as { stun: boolean; tailscale: boolean };
+  expect(saved).toMatchObject({ stun: false, tailscale: false });
+  await dialog.getByRole('switch', { name: 'Accès depuis le téléphone' }).click();
+  await expect(dialog.getByTestId('phone-state')).toContainText('Éteint');
 });
 
 test('« Retirer » a phone revokes the device it was paired as, and says so', async ({ app }) => {

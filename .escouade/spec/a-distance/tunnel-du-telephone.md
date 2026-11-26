@@ -1,9 +1,9 @@
 ---
 title: "Le tunnel du téléphone"
 subject: "a-distance"
-sources: ["docs/MOBILE.md § 3.1, § 3.10, § 8 (MO-2), M12","docs/REMOTE.md, « Le téléphone » (« Architecture retenue », « Configuration, pour l'utilisateur », « Points durs (sur le PC) », « Alternative sans WireGuard dans l'app », « Le tunnel côté cœur, MO-2 »)","src-tauri/src/phone (mod.rs, stack.rs, nat.rs, tailscale.rs)","src-tauri/src/remoteapi/server.rs (Via, serve_stream, Listen::Nothing)","src/components/settings/PhonePage.svelte","crates/escouade-policy/src/list.rs (servers.phone)"]
-tickets: ["ESC-567","ESC-630","ESC-631"]
-decisions: [230,262,285,328]
+sources: ["docs/MOBILE.md § 3.1, § 3.10, § 8 (MO-2), M12","docs/REMOTE.md, « Le téléphone » (« Architecture retenue », « Configuration, pour l'utilisateur », « Points durs (sur le PC) », « Alternative sans WireGuard dans l'app », « Le tunnel côté cœur, MO-2 »)","src-tauri/src/phone (mod.rs, stack.rs, nat.rs, tailscale.rs)","src-tauri/src/remoteapi/server.rs (Via, serve_stream, Listen::Nothing)","src/components/settings/PhonePage.svelte","crates/escouade-policy/src/list.rs (servers.phone)","Revue de sécurité de la 2.3 (ESC-624), rapport privé SR-1 « Réseau et téléphone », SR1-05 et SR1-11 (hors du dépôt)","website/content/privacy (fr.md, en.md) : « L’accès du téléphone, si tu l’allumes »"]
+tickets: ["ESC-567","ESC-630","ESC-631","ESC-641"]
+decisions: [230,262,285,328,333]
 compared: null
 ---
 
@@ -23,7 +23,7 @@ Le téléphone pilote un cœur d'Escouade (le poste, ou un serveur) par l'API di
 
 ## Ce qui est gardé
 
-- `phone.json`, dans le dossier des données, lisible du seul propriétaire : l'accès allumé ou non, le port UDP, Tailscale ou non, les téléphones (nom, clé publique, adresse dans le tunnel, l'appareil qu'ils sont), l'adresse publique vue et quand elle a changé.
+- `phone.json`, dans le dossier des données, lisible du seul propriétaire : l'accès allumé ou non, le port UDP, Tailscale ou non (éteint tant que l'utilisateur ne l'allume pas), STUN ou non (allumé par défaut), les téléphones (nom, clé publique, adresse dans le tunnel, l'appareil qu'ils sont), l'adresse publique vue et quand elle a changé.
 - **La clé privée du tunnel** au trousseau du système ; sur un serveur, dans son fichier de secrets ; dans `phone.json` quand le trousseau la refuse. La clé privée d'un téléphone n'est jamais gardée par le cœur.
 
 ## Le port et la box
@@ -31,22 +31,25 @@ Le téléphone pilote un cœur d'Escouade (le poste, ou un serveur) par l'API di
 - Le port UDP est **51820** par défaut (celui de WireGuard), modifiable. Pris par un autre programme, l'accès ne s'allume pas et le dit : « Le port UDP 51820 est déjà pris sur cette machine (un autre WireGuard ?) : choisis-en un autre. »
 - Allumé sur le poste, Escouade **essaie d'ouvrir le port dans la box**, par UPnP puis NAT-PMP, pour une heure renouvelée tant que l'accès est allumé, et le retire quand on l'éteint. Il dit s'il y est arrivé (« Port UDP 51820 ouvert dans la box par UPnP »), sinon **le geste à faire**, avec l'adresse de la machine : « Dans la box, redirige le port UDP 51820 vers 192.168.1.20 (cette machine) », et ce que la box a répondu.
 - **L'adresse publique** est demandée à un serveur STUN (une requête de liaison, rien d'autre ne part : `stun.cloudflare.com`, puis `stun.l.google.com`), avec l'adresse que la box dit avoir sur Internet. Elle est **relue toutes les cinq minutes** ; quand elle change, Réglages › Téléphone le dit (« Changée le … (avant : …) : un téléphone appairé avant elle doit reprendre la nouvelle »).
+- **STUN est dit et se coupe** (SR1-11, ESC-641) : Réglages › Téléphone a la ligne « Demander l'adresse publique à STUN », visible même l'accès éteint, qui dit qui est demandé (Cloudflare et Google, par le nom de leurs serveurs), quand (à l'allumage, puis toutes les 5 minutes tant que l'accès est allumé) et ce qu'ils voient (l'adresse IP et le port d'où part la demande, rien d'autre). Allumée par défaut ; éteinte, **plus rien ne part vers eux** : la box (UPnP, NAT-PMP) est encore demandée, l'adresse que la box dit avoir sur Internet sert d'adresse publique quand elle en est une (pas celle d'un CGNAT), et l'adresse donnée à la main (`escouade-server phone add --endpoint`) sert encore. La page de confidentialité du site le dit aussi (« L'accès du téléphone, si tu l'allumes »).
 - **Un CGNAT est détecté et dit** : quand l'adresse de la box est partagée par l'opérateur (100.64.0.0/10) ou privée (une box derrière une autre), ou n'est pas l'adresse vue de dehors, une redirection n'y fait rien. L'écran le dit, avec les issues : une IPv4 dédiée demandée à l'opérateur, l'IPv6 de la box, Tailscale, un serveur Escouade sur un VPS.
 - Une **IPv6 publique** de la machine est dite, avec le port à ouvrir dans le pare-feu IPv6 de la box.
 - **Sur un serveur**, il n'y a pas de box : rien n'est demandé à une box, et l'écran dit d'ouvrir le port dans son pare-feu (« ufw allow 51820/udp »). Une machine qui a l'adresse publique elle-même est dite comme telle.
 
 ## Tailscale quand il est là
 
-Quand Tailscale tourne sur la machine (sa commande, ou la route vers son adresse 100.100.100.100), Escouade le dit, avec l'adresse et le nom de la machine dans le tailnet, et **sert aussi l'API sur l'adresse Tailscale**, au même numéro de port en TCP : un téléphone de ce tailnet la joint sans port à ouvrir, CGNAT compris. Seule une machine du tailnet est prise (100.64.0.0/10, `fd7a:115c:a1e0::/48`), le jeton d'appareil reste demandé. **Par Tailscale, seule l'`Origin` de l'app du téléphone passe** (`capacitor://localhost`, `https://app.escouade.invalid`), ou celle de la fenêtre d'Escouade : plus aucun `http(s)://localhost`, qu'une page web servie sur une autre machine du tailnet (le serveur de développement d'un dépôt pas sûr) pourrait avoir (SR1-09, ESC-631). Chaque machine du tailnet compte ses échecs à son adresse. « Servir aussi sur l'adresse Tailscale » se coupe dans Réglages › Téléphone. Escouade ne refait pas Tailscale : ni perçage de NAT, ni relais.
+- **Reconnu par sa commande, ou par sa propre interface** (SR1-05, ESC-641) : quand la commande `tailscale` est là (installée ou sur le `PATH`), elle seule fait foi (`tailscale ip -4`, puis son nom par `status --json`) ; sans adresse de sa part, pas de Tailscale. Sans la commande, la route vers 100.100.100.100 ne suffit plus : l'adresse d'où elle part (dans 100.64.0.0/10) doit être celle de **l'interface de Tailscale** : `tailscale0` (Linux), l'adaptateur « Tailscale » (Windows), ou un `utun` (macOS) dont 100.100.100.100 répond au DNS comme MagicDNS. Une adresse de 100.64.0.0/10 sur une autre interface est le CGNAT d'un opérateur (une clé 4G, un partage de connexion, certains hébergeurs) : ce n'est pas Tailscale, et l'API n'y est jamais servie.
+- **Éteint tant que l'utilisateur ne l'allume pas** : trouvé, Réglages › Téléphone le dit, avec l'adresse et le nom de la machine dans le tailnet, et l'interrupteur « Servir aussi sur l'adresse Tailscale » est éteint (« Éteint tant que tu ne l'allumes pas »). Allumé, l'API est **servie aussi sur l'adresse Tailscale**, au même numéro de port en TCP : un téléphone de ce tailnet la joint sans port à ouvrir, CGNAT compris. Un `phone.json` qui ne dit rien de Tailscale le prend éteint.
+- Seule une machine du tailnet est prise (100.64.0.0/10, `fd7a:115c:a1e0::/48`), le jeton d'appareil reste demandé. **Par Tailscale, seule l'`Origin` de l'app du téléphone passe** (`capacitor://localhost`, `https://app.escouade.invalid`), ou celle de la fenêtre d'Escouade : plus aucun `http(s)://localhost`, qu'une page web servie sur une autre machine du tailnet (le serveur de développement d'un dépôt pas sûr) pourrait avoir (SR1-09, ESC-631). Chaque machine du tailnet compte ses échecs à son adresse. Escouade ne refait pas Tailscale : ni perçage de NAT, ni relais.
 
 ## Réglages › Téléphone
 
 La page dit, pour le cœur où est la fenêtre (le poste, ou le serveur de son espace : la même page y agit sur le serveur) :
 
-- **l'accès** (allumé ou éteint) et **le port UDP** ;
+- **l'accès** (allumé ou éteint), **le port UDP**, et **STUN** (qui, quand, quoi, et son interrupteur) ;
 - **l'état** : éteint, prêt sur le port, ne démarre pas (et pourquoi), l'adresse de l'API dans le tunnel, le nombre de téléphones ;
 - **la box** : ouvert par UPnP ou NAT-PMP, ou le geste à faire, un CGNAT et ses issues, l'IPv6, l'adresse publique et son changement, « Revoir le réseau » ; sur un serveur, son pare-feu ;
-- **Tailscale** : là ou non, son adresse, l'interrupteur ;
+- **Tailscale** : là ou non, son adresse, l'interrupteur (éteint tant que l'utilisateur ne l'allume pas) ;
 - **les téléphones** : leur nom, leur dernière poignée de main (« Tunnel ouvert · dernière poignée de main il y a 3 min » ou « Tunnel au repos »), leur adresse, « Retirer » ; sans téléphone : « L'app d'Escouade pour Android et iOS les appairera par un QR code » ;
 - **Avancé** : la clé publique du tunnel, « Changer la clé du tunnel ».
 
@@ -64,7 +67,7 @@ Le tunnel dit son port, chaque poignée de main d'un téléphone, chaque télép
 
 ## Pas encore
 
-L'essai réel avec un téléphone en 4G (un geste de l'utilisateur) ; l'essai réel de l'app Android sous son nom propre par Tailscale (un geste de l'utilisateur) ; le QR code de l'appairage depuis Réglages › Téléphone et la sorte « téléphone » des appareils ; l'app elle-même ; un nom DynDNS à la place de l'adresse publique ; le pare-feu IPv6 de la box ouvert par Escouade ; empêcher la veille du poste tant que l'accès est allumé.
+L'essai réel avec un téléphone en 4G (un geste de l'utilisateur) ; l'essai réel de l'app Android sous son nom propre par Tailscale (un geste de l'utilisateur) ; la reconnaissance de Tailscale sans sa commande sur un vrai Mac (`utun` et MagicDNS) et sur un poste derrière une clé 4G en CGNAT (des gestes de l'utilisateur) ; le QR code de l'appairage depuis Réglages › Téléphone et la sorte « téléphone » des appareils ; l'app elle-même ; un nom DynDNS à la place de l'adresse publique ; le pare-feu IPv6 de la box ouvert par Escouade ; empêcher la veille du poste tant que l'accès est allumé.
 
 ## Retirer un téléphone (ESC-630)
 

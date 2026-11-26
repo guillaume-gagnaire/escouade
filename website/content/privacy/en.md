@@ -172,6 +172,7 @@ Escouade has no account or server of its own for your projects, conversations or
 - **The integrations** you connect (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards): Escouade talks to those services with your token ([integrations](integrations)).
 - **The code hosts** you connect: see [below](#code-hosts).
 - **Online dictation**, if you turn it on: see just below.
+- **Phone access**, if you turn it on: see [below](#phone-access-if-you-turn-it-on).
 
 ## Online dictation, if you turn it on
 
@@ -201,6 +202,16 @@ By default, the voice conversation’s answers are read by Piper, on your machin
 - **Where**: to the one service chosen, through the proxy of the network settings.
 - **What it does with it**: it sends the sound back, played on your machine. It handles the text under its own terms, those of your account with it.
 - **If the service does not answer**: the conversation says so, and Piper reads on if one of its voices is downloaded; else it pauses. Escouade’s log never holds your key nor the text read.
+
+## Phone access, if you turn it on
+
+In Settings › Phone, access from the phone is off by default. On, your computer waits for your phone through a WireGuard tunnel on a UDP port, and looks for how to be reached from outside:
+
+- **The public address, by STUN**: when it starts, then every 5 minutes while the access stays on, Escouade asks `stun.cloudflare.com` (Cloudflare) for the computer’s public address, then, if it does not answer, `stun.l.google.com` (Google). They see your IP address and the port the request leaves from, nothing else: not your name, nor your project, nor your phone. The row Ask STUN for the public address, in Settings › Phone, stops it: nothing more is sent to them, and the box (below) or the address you give by hand still serve.
+- **Your box, by UPnP or NAT-PMP**: Escouade asks it to open the UDP port toward your computer, renews that opening and removes it when you turn the access off. These exchanges stay on your local network.
+- **Tailscale**, if it is on your machine: it is recognised by its command, or else by its own network interface, and the API is served on its address only if you turn it on in Settings › Phone.
+
+None of this goes through a server of Escouade, and these addresses are not in the statistics.
 
 ## Code hosts
 

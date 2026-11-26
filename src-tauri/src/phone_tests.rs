@@ -545,6 +545,56 @@ async fn the_box_opens_the_port_and_the_public_address_read_again_says_it_change
     h.stop();
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn stun_turned_off_sends_nothing_to_its_servers_and_the_box_still_says_the_address() {
+    let (h, _api, _token) = core("phone-stun-off", Listen::Nothing).await;
+    // A STUN server that only listens: what it receives is read after.
+    let stun = std::net::UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    stun.set_nonblocking(true).unwrap();
+    let mapped = Arc::new(parking_lot::Mutex::new(Vec::new()));
+    let natpmp = fake_natpmp(Ipv4Addr::new(198, 51, 100, 40), mapped.clone());
+    h.core.phone.set_probes(nat::Probes {
+        upnp: None,
+        natpmp: Some(natpmp),
+        natpmp_on: true,
+        stun: vec![stun.local_addr().unwrap().to_string()],
+        wait: Duration::from_millis(500),
+        local: Some(Ipv4Addr::new(192, 168, 1, 20).into()),
+    });
+    assert!(h.core.phone.status(&h.core).await.stun_on, "on by default");
+    h.core.phone.set_stun(false).unwrap();
+    let udp = turn_on(&h).await;
+    wait("the first look at the network", || {
+        h.core.phone.checked_at().is_some()
+    })
+    .await;
+    h.core.phone.check().await;
+    let mut buf = [0u8; 64];
+    assert_eq!(
+        stun.recv_from(&mut buf).map_err(|e| e.kind()).err(),
+        Some(std::io::ErrorKind::WouldBlock),
+        "nothing sent to the STUN server"
+    );
+    let status = h.core.phone.status(&h.core).await;
+    assert!(!status.stun_on);
+    let net = status.net.unwrap();
+    assert_eq!(net.public, None);
+    // The box still opens the port, and its own address on the Internet is the one kept.
+    assert_eq!(
+        net.opened.as_ref().map(|o| o.external_port),
+        Some(udp.port())
+    );
+    assert_eq!(status.public.unwrap().address, "198.51.100.40");
+    // Kept in the file.
+    let saved = std::fs::read_to_string(h.core.data.root().join(crate::phone::FILE)).unwrap();
+    assert!(saved.contains("\"stun\": false"), "{saved}");
+    // On again: asked again at the next look.
+    h.core.phone.set_stun(true).unwrap();
+    h.core.phone.check().await;
+    assert!(stun.recv_from(&mut buf).is_ok(), "asked once on again");
+    h.stop();
+}
+
 #[test]
 fn a_stun_answer_reads_back_and_the_cgnat_is_told_from_what_was_seen() {
     let id = [3u8; 12];
@@ -644,6 +694,16 @@ async fn tailscale_found_the_api_is_served_on_its_address_to_the_tailnet_alone()
         })));
     let udp = turn_on(&h).await;
     h.core.phone.check().await;
+    // Found, but not served until the user turns it on (SR1-05).
+    let status = h.core.phone.status(&h.core).await;
+    assert!(status.tailscale.is_some());
+    assert!(!status.tailscale_on);
+    assert!(status.tailscale_served.is_none());
+    h.core
+        .phone
+        .set(&h.core, None, None, Some(true))
+        .await
+        .unwrap();
     let status = h.core.phone.status(&h.core).await;
     assert_eq!(
         status.tailscale.as_ref().unwrap().address,

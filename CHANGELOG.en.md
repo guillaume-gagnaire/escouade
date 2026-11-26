@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: phone access no longer takes an operator’s address (a 4G key, a shared connection) for Tailscale’s, and serves on Tailscale only if you turn it on. Settings › Phone says whom your computer asks for its public address (STUN, at Cloudflare and Google) and lets you turn it off; on the phone, another app can no longer shut Escouade out by opening silent connections.
 - Security: on the team server, a team can no longer stop the others from signing in, nor a stranger hold connections open by trickling their requests; connections are capped, and a new device’s short code grows to 10 characters, much harder to find. Keep the server behind its proxy (Caddy, Traefik) if it can be reached from the Internet.
 - Security: `escouade-server update` never goes back to an older version unless you name it (`--to X.Y.Z --downgrade`), takes the newest of the channels with `--beta`, and refuses a signed archive served under another version’s name. The server started by hand keeps its data folder and its log to its own user, and the Docker image stands on pinned bases.
 - Security: on the team server, a member or a hijacked agent can no longer freeze the team or a project with an invalid commit. Every device passes it, an administrator voids it and sees who posted it on the team’s card, then removes the member and changes the keys as usual; only administrators commit, but for a member’s own devices.

@@ -137,6 +137,11 @@ fn not_public(ip: IpAddr) -> bool {
     }
 }
 
+/// Whether `ip` is an address of the Internet.
+pub fn is_public(ip: IpAddr) -> bool {
+    !not_public(ip)
+}
+
 fn global_v6(ip: Ipv6Addr) -> bool {
     // 2000::/3, the global unicast addresses.
     (ip.segments()[0] & 0xe000) == 0x2000

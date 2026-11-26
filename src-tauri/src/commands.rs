@@ -7184,7 +7184,7 @@ pub async fn phone_status(core: CoreState<'_>) -> Res<crate::phone::Status> {
     Ok(core.phone.status(&core).await)
 }
 
-/// The phone's access changed: on or off, its UDP port, Tailscale on or off; applied at once. Refused when a policy
+/// The phone's access changed: on or off, its UDP port, Tailscale on or off, STUN on or off; applied at once. Refused when a policy
 /// of the device forbids it (`servers.remoteApi`, `servers.phone`), or when the port does not open (said as such).
 #[tauri::command]
 pub async fn phone_set(
@@ -7192,8 +7192,12 @@ pub async fn phone_set(
     enabled: Option<bool>,
     port: Option<u16>,
     tailscale: Option<bool>,
+    stun: Option<bool>,
 ) -> Res<crate::phone::Status> {
     let core = core.inner().clone();
+    if let Some(on) = stun {
+        core.phone.set_stun(on).map_err(err)?;
+    }
     core.phone
         .set(&core, enabled, port, tailscale)
         .await

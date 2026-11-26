@@ -155,6 +155,107 @@ fn the_proxy_refuses_a_request_without_its_secret() {
     assert!(backend.lines.lock().unwrap().is_empty());
 }
 
+/// Whether the proxy closed `s` (its end read, or a reset) within `within`.
+fn closed_within(s: &mut TcpStream, within: Duration) -> bool {
+    s.set_read_timeout(Some(within)).unwrap();
+    let mut buf = [0u8; 64];
+    loop {
+        match s.read(&mut buf) {
+            Ok(0) => return true,
+            // The 403 of a refusal is no closing of a silent connection: not expected here.
+            Ok(_) => return false,
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                return false
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return true,
+        }
+    }
+}
+
+#[test]
+fn a_connection_that_does_not_pass_the_gate_in_five_seconds_is_closed() {
+    let backend = HttpBackend::start();
+    let phone = Keys::new();
+    let core = TestPeer::start(&phone.public, backend.addr);
+    let tunnel = Tunnel::start(&phone_config(&phone, &core.keys.public, core.endpoint)).unwrap();
+    assert!(tunnel.wait_up(UP));
+
+    let start = std::time::Instant::now();
+    // One says nothing, one starts its first line and never ends it.
+    let mut mute = TcpStream::connect(tunnel.proxy_addr()).unwrap();
+    let mut half = TcpStream::connect(tunnel.proxy_addr()).unwrap();
+    write!(half, "GET /{}/rem", tunnel.secret()).unwrap();
+    assert!(
+        !closed_within(&mut mute, Duration::from_secs(4)),
+        "not before its 5 s"
+    );
+    assert!(closed_within(&mut mute, Duration::from_secs(5)));
+    assert!(closed_within(&mut half, Duration::from_secs(2)));
+    let took = start.elapsed();
+    assert!(took >= Duration::from_secs(4), "{took:?}");
+    assert!(eventually(Duration::from_secs(2), || tunnel
+        .status()
+        .connections
+        == 0));
+    assert_eq!(core.accepted.load(Ordering::SeqCst), 0);
+    // A request that names the secret at once still goes through.
+    let mut s = TcpStream::connect(tunnel.proxy_addr()).unwrap();
+    write!(s, "GET /{}/after HTTP/1.1\r\n\r\n", tunnel.secret()).unwrap();
+    assert!(read_all(s).ends_with("bonjour"));
+}
+
+#[test]
+fn at_the_ceiling_silent_connections_make_room_for_the_webview() {
+    let backend = EchoBackend::start();
+    let phone = Keys::new();
+    let core = TestPeer::start(&phone.public, backend.addr);
+    let tunnel = Tunnel::start(&phone_config(&phone, &core.keys.public, core.endpoint)).unwrap();
+    assert!(tunnel.wait_up(UP));
+    let url = tunnel.status().websocket_url;
+    let open = || {
+        let stream = TcpStream::connect(tunnel.proxy_addr()).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        tungstenite::client(url.as_str(), stream).unwrap().0
+    };
+    // The WebView's WebSocket, in before another app of the phone opens 70 silent connections (the ceiling is 64).
+    let mut first = open();
+    first.send(Message::text("un")).unwrap();
+    assert_eq!(first.read().unwrap(), Message::text("un"));
+    let mut mutes: Vec<TcpStream> = (0..70)
+        .map(|_| TcpStream::connect(tunnel.proxy_addr()).unwrap())
+        .collect();
+    let start = std::time::Instant::now();
+    assert!(
+        eventually(Duration::from_secs(3), || tunnel.status().connections == 64),
+        "{:?}",
+        tunnel.status()
+    );
+    // The silent ones past the ceiling took the place of the oldest silent ones, never of the WebSocket let in.
+    assert!(closed_within(&mut mutes[0], Duration::from_secs(1)));
+    first.send(Message::text("deux")).unwrap();
+    assert_eq!(first.read().unwrap(), Message::text("deux"));
+    // A new connection of the WebView gets in at once, well before the silent ones' 5 s.
+    let mut second = open();
+    second.send(Message::text("trois")).unwrap();
+    assert_eq!(second.read().unwrap(), Message::text("trois"));
+    assert!(
+        start.elapsed() < Duration::from_secs(4),
+        "{:?}",
+        start.elapsed()
+    );
+    assert!(tunnel.status().connections <= 64);
+    assert!(!closed_within(
+        mutes.last_mut().unwrap(),
+        Duration::from_millis(100)
+    ));
+}
+
 #[test]
 fn an_unknown_phone_or_a_wrong_core_key_never_gets_in() {
     let backend = HttpBackend::start();

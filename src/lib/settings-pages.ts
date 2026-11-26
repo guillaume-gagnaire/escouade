@@ -295,6 +295,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   // Réglages › Téléphone (ESC-567): its own file in the core (phone.json), nothing of the settings.
   row('phoneAccess', 'phone', 'phone.access.label'),
   row('phonePort', 'phone', 'phone.port.label'),
+  row('phoneStun', 'phone', 'phone.stun.label'),
   row('phoneTailscale', 'phone', 'phone.tailscale.label'),
   row('phonePhones', 'phone', 'phone.phones.title'),
   row('phoneKey', 'phone', 'phone.advanced.rotate', { advanced: true }),

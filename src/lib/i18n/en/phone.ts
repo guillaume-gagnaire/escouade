@@ -17,6 +17,11 @@ export default defineZone('phone', {
     apply: 'Apply',
     invalid: 'A port from 1 to 65535.',
   },
+  stun: {
+    label: 'Ask STUN for the public address',
+    labelDesc:
+      'With the access on, when it starts and then every 5 minutes, {where} asks {servers} for its public address: they see your IP address and the port the request leaves from, nothing else. Off, nothing is sent to them; the box (UPnP, NAT-PMP) and the address given by hand still serve.',
+  },
   state: {
     title: 'State',
     off: 'Off',
@@ -56,7 +61,7 @@ export default defineZone('phone', {
     found: 'Tailscale is on this machine ({address}): a phone of your tailnet goes through it, with no port to open, CGNAT included.',
     absent: 'Tailscale is not on this machine. If it comes, a phone of your tailnet will go through it, with no port to open.',
     label: 'Also serve on the Tailscale address',
-    labelDesc: 'For a phone of your tailnet alone; the device token is still asked.',
+    labelDesc: 'For a phone of your tailnet alone; the device token is still asked. Off until you turn it on.',
     served: 'Served on {addr}',
   },
   phones: {

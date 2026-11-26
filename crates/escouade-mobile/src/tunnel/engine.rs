@@ -37,6 +37,9 @@ const TCP_BUFFER: usize = 128 * 1024;
 const PENDING_MAX: usize = 64 * 1024;
 /// The proxy's connections at a time (the app opens one WebSocket per space, a few fetches).
 const MAX_CONNECTIONS: usize = 64;
+/// How long a connection has to pass the gate (its first line, with the secret): past it, it is closed (SR1-08 of the
+/// 2.3's security review). Another app of the phone that opens connections and says nothing holds no place for long.
+const GATE_WAIT: Duration = Duration::from_secs(5);
 /// A connection into the tunnel with no answer for this long is given up (the WebView then sees it close).
 const TCP_TIMEOUT: Duration = Duration::from_secs(30);
 /// A WireGuard session older than this is no longer valid (REJECT_AFTER_TIME).
@@ -46,6 +49,8 @@ const FIRST_PORT: u16 = 49152;
 
 struct Conn {
     stream: TcpStream,
+    /// When it was accepted: it has `GATE_WAIT` to pass the gate.
+    opened: Instant,
     /// The tunnel's socket, once the gate let the connection in.
     socket: Option<SocketHandle>,
     /// What was read before the first line passed the gate.
@@ -255,6 +260,7 @@ impl Engine {
             if accept {
                 self.accept();
             }
+            self.expire_gates();
             let mut moved = self.local_to_tunnel();
             self.iface
                 .poll(smol_now(), &mut self.device, &mut self.sockets);
@@ -327,7 +333,9 @@ impl Engine {
         loop {
             match self.listener.accept() {
                 Ok((mut stream, _)) => {
-                    if self.conns.len() >= MAX_CONNECTIONS {
+                    // At the ceiling, the oldest connection still at the gate makes room (SR1-08): connections that
+                    // say nothing never keep the WebView out. Without one, the new connection is closed.
+                    if self.conns.len() >= MAX_CONNECTIONS && !self.evict_one_at_the_gate() {
                         continue;
                     }
                     let _ = stream.set_nodelay(true);
@@ -349,6 +357,7 @@ impl Engine {
                         id,
                         Conn {
                             stream,
+                            opened: Instant::now(),
                             socket: None,
                             gate: Some(Vec::new()),
                             to_tunnel: Vec::new(),
@@ -373,6 +382,32 @@ impl Engine {
                     continue
                 }
                 Err(_) => return,
+            }
+        }
+    }
+
+    /// The oldest connection that has not passed the gate, closed at once to make room. Says whether there was one.
+    fn evict_one_at_the_gate(&mut self) -> bool {
+        let Some(id) = oldest_at_the_gate(
+            self.conns
+                .iter()
+                .map(|(&id, c)| (id, c.opened, c.gate.is_some() && !c.refused)),
+        ) else {
+            return false;
+        };
+        if let Some(mut c) = self.conns.remove(&id) {
+            let _ = self.poll.registry().deregister(&mut c.stream);
+            let _ = c.stream.shutdown(Shutdown::Both);
+        }
+        true
+    }
+
+    /// The connections that did not pass the gate in `GATE_WAIT`, closed (at the next reap).
+    fn expire_gates(&mut self) {
+        let now = Instant::now();
+        for c in self.conns.values_mut() {
+            if c.gate.is_some() && !c.refused && now.duration_since(c.opened) >= GATE_WAIT {
+                c.dead = true;
             }
         }
     }
@@ -571,9 +606,31 @@ impl Engine {
     }
 }
 
+/// Of the connections (`id`, when accepted, still at the gate), the oldest still at the gate.
+fn oldest_at_the_gate(conns: impl Iterator<Item = (usize, Instant, bool)>) -> Option<usize> {
+    conns
+        .filter(|&(_, _, at_gate)| at_gate)
+        .min_by_key(|&(id, opened, _)| (opened, id))
+        .map(|(id, _, _)| id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_oldest_connection_at_the_gate_makes_room_never_one_let_in() {
+        let t = Instant::now();
+        let later = t + Duration::from_millis(10);
+        // 16 passed the gate (the WebView's), 17 and 18 still at it: 17, the oldest of them, goes.
+        let conns = [(16, t, false), (18, later, true), (17, t, true)];
+        assert_eq!(oldest_at_the_gate(conns.into_iter()), Some(17));
+        // All let in: none goes, the new one is closed.
+        assert_eq!(
+            oldest_at_the_gate([(16, t, false), (17, later, false)].into_iter()),
+            None
+        );
+    }
 
     #[test]
     fn transient_errors_are_not_fatal() {

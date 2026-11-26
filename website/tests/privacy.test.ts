@@ -294,6 +294,20 @@ describe('the privacy page’s Markdown', () => {
     }
   });
 
+  it('says what the phone access tells STUN, who, when, and how to stop it (SR1-11)', () => {
+    for (const [lang, every, stop] of [
+      ['fr', /toutes les 5 minutes/, /Demander l’adresse publique à STUN/],
+      ['en', /every 5 minutes/, /Ask STUN for the public address/],
+    ] as const) {
+      const text = source(lang);
+      expect(text, lang).toContain('`stun.cloudflare.com`');
+      expect(text, lang).toContain('`stun.l.google.com`');
+      expect(text, lang).toMatch(every);
+      expect(text, lang).toMatch(stop);
+      expect(text, lang).toMatch(/UPnP/);
+    }
+  });
+
   it('writes the typography the way the documentation does', () => {
     const prose = (s: string) => s.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
     for (const lang of LANGS) {

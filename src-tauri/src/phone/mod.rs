@@ -6,7 +6,8 @@
 //!
 //! - **Off by default**, and never while a policy of the device forbids it (`servers.remoteApi`, `servers.phone`):
 //!   checked when it starts, and every two seconds while it runs (`watch`), and when the policies change.
-//! - **What is kept** (`phone.json`, beside the data): on or off, the port, Tailscale on or off, the peers (a phone's
+//! - **What is kept** (`phone.json`, beside the data): on or off, the port, Tailscale on or off (off until the user
+//!   turns it on), STUN on or off, the peers (a phone's
 //!   name, public key, address in the tunnel, the device it was paired as), the public address seen and when it
 //!   changed. The tunnel's private key is in the keychain (`phone-tunnel-key`), or in that file, readable by its owner
 //!   alone, when the keychain refuses it (Linux, a server).
@@ -100,8 +101,14 @@ struct Saved {
     enabled: bool,
     #[serde(default = "default_port")]
     port: u16,
-    #[serde(default = "yes")]
+    /// The API served on Tailscale's address: off until the user turns it on, once Réglages › Téléphone shows
+    /// Tailscale found (SR1-05).
+    #[serde(default)]
     tailscale: bool,
+    /// The public address asked of the STUN servers (Cloudflare's, Google's) at each look at the network; off, the
+    /// box (UPnP, NAT-PMP) and the address given by hand still serve (SR1-11).
+    #[serde(default = "yes")]
+    stun: bool,
     #[serde(default)]
     peers: Vec<Peer>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -119,7 +126,8 @@ impl Default for Saved {
         Self {
             enabled: false,
             port: DEFAULT_PORT,
-            tailscale: true,
+            tailscale: false,
+            stun: true,
             peers: Vec::new(),
             public: None,
             public_key: None,
@@ -179,6 +187,10 @@ pub struct Status {
     pub tailscale_on: bool,
     /// Where the API is served on Tailscale's address, once it is.
     pub tailscale_served: Option<String>,
+    /// Whether the public address is asked of the STUN servers.
+    pub stun_on: bool,
+    /// The STUN servers asked when it is on (`host:port`), as Réglages › Téléphone says them.
+    pub stun_servers: Vec<String>,
     pub peers: Vec<PeerStatus>,
     pub handshakes: u64,
     pub unknown: u64,
@@ -665,6 +677,12 @@ impl Phone {
         self.apply(core).await
     }
 
+    /// The public address asked of the STUN servers or not (Réglages › Téléphone), from the next look at the network.
+    pub fn set_stun(&self, on: bool) -> Result<()> {
+        self.saved.lock().stun = on;
+        self.save()
+    }
+
     /// What the file and the policies say, made true: started, restarted on another port, or stopped.
     pub async fn apply(&self, core: &Arc<Core>) -> Result<()> {
         let _one = self.applying.lock().await;
@@ -887,19 +905,27 @@ impl Phone {
 
     /// The network looked at now: the box, the public address, Tailscale.
     pub async fn check(&self) {
-        let (port, enabled) = {
+        let (port, enabled, stun) = {
             let saved = self.saved.lock();
-            (saved.port, saved.enabled)
+            (saved.port, saved.enabled, saved.stun)
         };
         let on = self.running();
         self.live.lock().checking = true;
-        let probes = self.probes.read().clone();
+        let mut probes = self.probes.read().clone();
+        if !stun {
+            // STUN off (SR1-11): nothing is sent to its servers; the box still says its own address.
+            probes.stun.clear();
+        }
         let tailscale_probe = self.tailscale_probe.read().clone();
         let server = self.server.load(Ordering::Relaxed);
         // The box is asked to open the port only while the access is on, and never on a server (its firewall).
         let net = nat::probe(&probes, port, on && enabled && !server).await;
         let found = tailscale::detect(&tailscale_probe).await;
-        if let Some(public) = net.public {
+        // Without STUN, the box's own address on the Internet, when it is one (not a CGNAT's).
+        let public = net
+            .public
+            .or_else(|| net.wan.filter(|w| !stun && nat::is_public(*w)));
+        if let Some(public) = public {
             self.seen(public);
         }
         {
@@ -1061,6 +1087,8 @@ impl Phone {
             tailscale_served: run
                 .as_ref()
                 .and_then(|r| r.tailscale.as_ref().map(|(a, _)| a.to_string())),
+            stun_on: saved.stun,
+            stun_servers: nat::Probes::real().stun,
             peers: saved
                 .peers
                 .iter()

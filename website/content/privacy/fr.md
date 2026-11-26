@@ -172,6 +172,7 @@ Escouade n’a pas de compte ni de serveur à elle pour tes projets, tes convers
 - **Les intégrations** que tu connectes (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) : Escouade s’adresse à ces services avec ton jeton ([les intégrations](integrations)).
 - **Les hébergeurs de code** que tu connectes : voir [plus bas](#les-hebergeurs-de-code).
 - **La dictée en ligne**, si tu l’allumes : voir juste en dessous.
+- **L’accès du téléphone**, si tu l’allumes : voir [plus bas](#l-acces-du-telephone-si-tu-l-allumes).
 
 ## La dictée en ligne, si tu l’allumes
 
@@ -201,6 +202,16 @@ Par défaut, les réponses de la conversation vocale sont lues par Piper, sur ta
 - **Où** : au seul service choisi, par le proxy des réglages réseau.
 - **Ce qu’il en fait** : il renvoie le son, joué sur ta machine. Il traite le texte selon ses propres conditions, celles de ton compte chez lui.
 - **Si le service ne répond pas** : la conversation le dit, et Piper lit la suite si une de ses voix est téléchargée ; sinon elle se met en pause. Le journal d’Escouade ne contient jamais ta clé ni le texte lu.
+
+## L’accès du téléphone, si tu l’allumes
+
+Dans Réglages › Téléphone, l’accès depuis le téléphone est éteint par défaut. Allumé, ton poste attend ton téléphone par un tunnel WireGuard sur un port UDP, et cherche comment le joindre depuis l’extérieur :
+
+- **L’adresse publique, par STUN** : à l’allumage, puis toutes les 5 minutes tant que l’accès reste allumé, Escouade demande l’adresse publique du poste à `stun.cloudflare.com` (Cloudflare), puis, s’il ne répond pas, à `stun.l.google.com` (Google). Ils voient ton adresse IP et le port d’où part la demande, rien d’autre : ni ton nom, ni ton projet, ni ton téléphone. La ligne Demander l’adresse publique à STUN, dans Réglages › Téléphone, l’arrête : plus rien ne leur est envoyé, et la box (ci-dessous) ou l’adresse que tu donnes à la main servent encore.
+- **Ta box, par UPnP ou NAT-PMP** : Escouade lui demande d’ouvrir le port UDP vers ton poste, renouvelle cette ouverture et la retire quand tu éteins l’accès. Ces échanges restent sur ton réseau local.
+- **Tailscale**, s’il est sur ta machine : il est reconnu par sa commande, ou à défaut par sa propre interface réseau, et l’API n’est servie sur son adresse que si tu l’allumes dans Réglages › Téléphone.
+
+Rien de tout cela ne passe par un serveur d’Escouade, et ces adresses ne vont pas dans les statistiques.
 
 ## Les hébergeurs de code
 
