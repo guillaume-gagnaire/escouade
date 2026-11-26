@@ -6,16 +6,16 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Agents can show you a page: a review, a diagram, options to compare or their own HTML, copied apart and served without network or access to Escouade or your files; a new version updates the page. The “Agents’ pages” switch in Settings › Agents turns them off, erasing nothing.
 - Your project’s workflows move to the Workspace: each agent’s card says its step (and in red why it was sent back), and a click opens the workflow’s diagram with its path; “Workflows”, at the top right of the canvas, lists the project’s workflows and their agents. The right-hand panel keeps three tabs.
 - The commands an agent ran, kept for the Workspace, no longer keep any password, token or key in the clear: they are masked before being saved.
+- On a busy machine, the “New project” assistant no longer says “The repository has no commit” of a repository that has some: it reads the folder faster, says “Reading the repository…” while it does, and if git fails it shows its error with “Try again” instead of offering a first commit.
 
 ## [2.2.13] — 2026-11-26
 
 - The voice conversation’s microphone sensitivity can be set in Settings › Voice, with a tester that shows your voice’s level, the threshold and when your voice is detected, live.
 - Agents read the browsers of their project: they list them, read the HTML or the text of a page on screen, passwords and tokens masked, capture it as an image (the view, an element or the whole page, at a tablet’s or a phone’s width) and read its console with its failed requests, to see what you see and what breaks. The page of their launch is read and captured without asking; another origin (an artifact, a site you’re signed in to) waits for your permission in the browser’s band, which you revoke with “Revoke the permissions”. The “Agents and browsers” switch in Settings › Agents turns them off.
 - The Workspace, a canvas of all your agents, opened from the “Editor” button or the Overview: each with its plan, its skills and plugins, its subagents, its tests and what it delivered (artifacts, CI, deployments). You answer a question and write to an agent there without opening its conversation. Thanks to @OshOEz (#45).
-- On a busy machine, the “New project” assistant no longer says “The repository has no commit” of a repository that has some: it reads the folder faster, says “Reading the repository…” while it does, and if git fails it shows its error with “Try again” instead of offering a first commit.
-- Agents read the browsers of their project: they list them, read the HTML or the text of a page on screen, passwords and tokens masked, and its console with its failed requests, to see what you see and what breaks. The page of their launch is read without asking; another origin (an artifact, a site you’re signed in to) waits for your permission in the browser’s band, which you revoke with “Revoke the permissions”. The “Agents and browsers” switch in Settings › Agents turns them off.
 
 ## [2.2.12] — 2026-11-26
 

@@ -28,6 +28,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   claudePath: true,
   agentsAnswer: true,
   agentBrowsers: true,
+  agentPages: true,
   inboxKeepDays: true,
   sound: true,
   osNotifications: true,

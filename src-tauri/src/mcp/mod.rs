@@ -49,6 +49,9 @@ pub(crate) mod memory;
 mod memory_tests;
 #[cfg(test)]
 mod modes_tests;
+mod pages;
+#[cfg(test)]
+mod pages_tests;
 #[cfg(test)]
 mod private_tests;
 mod prs;
@@ -78,6 +81,19 @@ use crate::paths;
 use anyhow::{anyhow, Context, Result};
 use parking_lot::{Mutex, MutexGuard};
 use std::path::PathBuf;
+
+pub(crate) use resolve::CHOICES;
+
+/// A file opened within `within` (its path checked on the file opened), for the copy of a page
+/// (`crate::pages`): what refuses it is said, never what it holds.
+pub(crate) fn open_within(
+    raw: &str,
+    within: Option<&std::path::Path>,
+) -> std::result::Result<(std::fs::File, u64), String> {
+    images::open_within(raw, within).map_err(|e| match e {
+        tools::ToolError::Refused(m) | tools::ToolError::Failed(m) => m,
+    })
+}
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Weak};
 use tauri::Runtime;

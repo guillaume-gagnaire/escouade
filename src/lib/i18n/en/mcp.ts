@@ -10,6 +10,9 @@ export default defineZone('mcp', {
     browsers: 'Agents and browsers',
     browsersDesc:
       'The agents read the browsers of “Browsers” in their project (list_browsers, read_browser): the page of their launch without asking; another origin, an artifact or a site you’re signed in to, with your permission, once per origin and per browser. Never the cookies, the storage or a password.',
+    pages: 'Agents’ pages',
+    pagesDesc:
+      'The agents show you a page in “Browsers” (show_page): a review, a diagram, options to compare, or their own HTML. Escouade copies it and serves it apart, without network, without access to Escouade or to your files. Off, their tools go away and their rows close; nothing is erased.',
     answer: 'Agents can answer the other agents’ requests',
     answerDesc:
       'Through answer_permission and answer_question, and the requests of the “Your turn” box too, one at a time, when you leave them to the squad lead (answer_ask). “Drive Escouade” does not give them: by default, only you (and Claude outside Escouade, for the questions and permissions) answer an agent’s request.',
@@ -94,6 +97,9 @@ export default defineZone('mcp', {
     listBackgroundWork: 'List an agent’s subagents and background tasks',
     listBrowsers: 'List the browsers',
     readBrowser: 'Read a browser',
+    showPage: 'Show a page',
+    getPage: 'Read a page’s state',
+    closePage: 'Close a page',
     captureBrowser: 'Capture a browser',
     browserConsole: 'Read a browser’s console',
     getBackgroundOutput: 'Read a background task’s output or a subagent’s report',

@@ -159,6 +159,18 @@ Four tools, read-only, read the [browsers](browser) of “Browsers”: an agent 
 
 A browser shown nowhere is listed but not read; its console is, as it shows nothing of the page. On the project’s launch (its launch commands, `localhost` at the ports they, its agents’ tests and their port blocks declare), the page is read and captured without asking. On another origin (an artifact, a site you’re signed in to), `read_browser`, `capture_browser` and `browser_console` answer `asked` and the browser’s band asks you “esc-412 wants to read claude.ai”: “Allow” holds for that agent, that origin and that browser until it closes, and “Refuse” holds as long. Your answer reaches the agent as a message, and “Revoke the permissions”, in the row’s menu, takes them all back. The page’s content arrives between `<third_party_data>` and `</third_party_data>`.
 
+### Agents’ pages
+
+Three tools show pages: an agent shows you a page in a `page:p-<n>` row of “Browsers”, a review, a diagram, options to compare or its own HTML. Escouade copies it at the call into its data folder (it outlives the worktree) and serves it in a webview of its own, without network, without access to Escouade or to your files. The “Agents’ pages” switch in Settings › Agents, under “Agents can drive Escouade”, turns all three off: they leave the list of tools and the rows close, nothing is erased. They are for Escouade’s agents only.
+
+| Tool | Arguments | What it returns |
+|---|---|---|
+| `show_page` | `title`, `template` (`review`, `diagram`, `compare` or `html`), `data` (for a template), `html` or `file` (for `html`), `page` (for a new version), `open` | The page’s number (`p-<n>`), the key of its row (`browser`), its version, `opened`, its size and files, and `left_out`: what the document named that was not taken. |
+| `get_page` | `page` | Its title, template, ticket, versions, its row (open or closed), where it is shown and whether it is loaded. Never what you did in it. |
+| `close_page` | `page` | Closes its row; the page is kept with its versions. |
+
+A page belongs to its agent: another agent, of its project or another, does not know it. A `file` is an `.html` of the agent’s working folder; the files it names relatively (`./app.js`, `img/x.png`, a style sheet’s `url()`, a script’s `import`) come with it, taken from its folder and its subfolders only: a path that leaves it, a hidden file (`.env`) or a missing one is left out. Bounds: 20 pages per agent, 10 versions per page, a 2 MB document, 64 files and 10 MB per version, 500 MB for all the pages of the machine. A page stays as long as its agent exists, then the delay of “Keep the files of closed requests” after it is archived or deleted. `list_browsers` lists its rows, `read_browser` refuses them.
+
 ### Leading the whole Kanban from Claude
 
 With these tools, Claude takes a ticket from start to finish without you opening the window: `start_ticket` starts it, `wait_ticket` waits until it changes (its agent asks a question, moves to “To review”, gets blocked), `get_ticket` says where it stands, then `approve_ticket` approves it or `reject_ticket` sends it back with what is wrong. `resume_ticket`, `resolve_conflict`, and `dismiss_block` deal with a block, and `delete_ticket` deletes. `wait_ticket` hands back at the first change, or after 120 seconds by default (240 at most); the `since` of its answer, passed to the next call, has a ticket whose state differs from the one it holds answered at once, a change made between two calls included. `approve_ticket`, `reject_ticket`, `resume_ticket`, `resolve_conflict`, and `dismiss_block` also return a `since`, the ticket’s as it was before the action: passed to `wait_ticket`, it has what follows told at once, a quick approval included.

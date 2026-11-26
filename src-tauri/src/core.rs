@@ -1067,6 +1067,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) pr_reviews: RwLock<Vec<crate::prreview::PrReview>>,
     /// The agents' asynchronous requests (« À toi », ESC-509): `asks`.
     pub(crate) asks: Mutex<crate::asks::AskBox>,
+    /// The agents' pages (ESC-673): their registry, and their rows of « Navigateurs » for this run (`pages`).
+    pub(crate) pages: Mutex<crate::pages::PageBox>,
     /// « Plus tard » on the views of the box (ESC-513, `inboxviews`).
     pub(crate) inbox_snoozes: Mutex<crate::inboxviews::ViewSnoozes>,
     /// What the summary of the box last told (ESC-513, `inboxnotify`).
@@ -2042,6 +2044,11 @@ impl<R: Runtime> Core<R> {
             list: std::mem::take(&mut state.asks),
             seq: state.ask_seq,
         };
+        let pages = crate::pages::PageBox {
+            list: std::mem::take(&mut state.pages),
+            seq: state.page_seq,
+            rows: HashMap::new(),
+        };
         let inbox_snoozes = crate::inboxviews::ViewSnoozes {
             until: std::mem::take(&mut state.inbox_snoozes),
             marks: std::mem::take(&mut state.inbox_marks),
@@ -2287,6 +2294,7 @@ impl<R: Runtime> Core<R> {
             leftover_histories: Mutex::new(leftover),
             pr_reviews: RwLock::new(pr_reviews),
             asks: Mutex::new(asks),
+            pages: Mutex::new(pages),
             inbox_snoozes: Mutex::new(inbox_snoozes),
             inbox_summary: Mutex::default(),
             create_lock: tokio::sync::Mutex::new(()),
@@ -2625,6 +2633,8 @@ impl<R: Runtime> Core<R> {
         self.tell_started();
         // The box « À toi » as the stop left it: what came due meanwhile (ESC-509).
         self.asks_sweep();
+        // The agents' pages whose agent or project went meanwhile (ESC-673).
+        self.pages_sweep();
         // The plugins that decide run before the first permission asked (PLG-8).
         crate::plugins::decide::warm(&self.plugins, &self.plugin_runtime);
         self.telemetry.track(self.started_event());
@@ -2735,6 +2745,7 @@ impl<R: Runtime> Core<R> {
                 // The box « À toi »: requests back from « Plus tard », past their date or taken out, and
                 // answers whose 10 seconds were cut by a stop (ESC-509).
                 c.asks_sweep();
+                c.pages_sweep();
                 c.deliver_answers().await;
                 // Its summary, when requests came and its time did (ESC-513).
                 c.inbox_summary_tick();
@@ -2815,6 +2826,10 @@ impl<R: Runtime> Core<R> {
             let b = self.asks.lock();
             (b.list.clone(), b.seq)
         };
+        let (pages, page_seq) = {
+            let b = self.pages.lock();
+            (b.list.clone(), b.seq)
+        };
         let (inbox_snoozes, inbox_marks) = {
             let s = self.inbox_snoozes.lock();
             (s.until.clone(), s.marks.clone())
@@ -2834,6 +2849,8 @@ impl<R: Runtime> Core<R> {
             ask_seq,
             inbox_snoozes,
             inbox_marks,
+            pages,
+            page_seq,
         }
     }
 
@@ -2978,6 +2995,10 @@ impl<R: Runtime> Core<R> {
         if telemetry.is_some() && before_settings.telemetry != telemetry {
             // The installs of the seed waiting for the answer: sent on a yes, forgotten on a no (ESC-394).
             self.spawn_seed_counts();
+        }
+        if (before_settings.agent_pages && !self.pages_on()) || (mcp_was_enabled && !mcp_enabled) {
+            // « Pages des agents » (or the server) turned off: the pages' rows close; nothing is erased (ESC-673).
+            self.pages_close_rows();
         }
         if mcp_was_enabled && !mcp_enabled {
             // « Claude et les agents peuvent piloter Escouade » turned off: the token changes at once, and its entry

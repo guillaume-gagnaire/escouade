@@ -174,6 +174,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('remoteKeepMax', 'agents', 'settings.claude.remoteKeepMax', s('remoteKeepMax')),
   row('mcp', 'agents', 'mcp.section.enable', s('mcpEnabled')),
   row('agentBrowsers', 'agents', 'mcp.section.browsers', s('agentBrowsers')),
+  row('agentPages', 'agents', 'mcp.section.pages', s('agentPages')),
   row('agentsAnswer', 'agents', 'mcp.section.answer', s('agentsAnswer')),
   row('inbox', 'agents', 'inbox.settings.box'),
   row('inboxKeep', 'agents', 'inbox.settings.keep', s('inboxKeepDays')),

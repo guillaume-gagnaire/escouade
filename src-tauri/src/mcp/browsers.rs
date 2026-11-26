@@ -19,6 +19,10 @@
 //!   tool asks in the browser's band (« veut lire ») and answers `asked`; the answer comes back to
 //!   the agent by a message. The leave falls when the browser closes or with « Retirer les accords ».
 //!
+//! The agents' pages (ESC-673) are rows too, `page:<p-n>`, listed while « Pages des agents » is on
+//! (after the browsers, in the order they were shown); `read_browser` refuses them: `get_page` says
+//! a page's state, and nothing the user does in it comes back to its agent.
+//!
 //! What a page says is a third party's: answered under `PAGE_NOTICE`.
 
 use super::tools::ToolError;
@@ -285,7 +289,7 @@ pub(super) fn list<R: Runtime>(
 ) -> Result<String, ToolError> {
     switched_on(core)?;
     let who = reader(core, caller, args.project.as_deref())?;
-    let rows = match pages_of(core) {
+    let mut rows = match pages_of(core) {
         Some(pages) => {
             let launch = Launch::of(core, &who.project);
             rows_of(&pages, &who)
@@ -331,6 +335,37 @@ pub(super) fn list<R: Runtime>(
         }
         None => Vec::new(),
     };
+    if core.pages_on() {
+        let room = LIST_MAX.saturating_sub(rows.len());
+        rows.extend(
+            core.page_rows(&who.project.id)
+                .into_iter()
+                .filter(|(p, _, _)| {
+                    !who.discussion || who.agent.as_deref() == Some(p.agent_id.as_str())
+                })
+                .take(room)
+                .map(|(p, placement, loaded)| {
+                    let url = crate::agentpage::url(&p.id).to_string();
+                    let agent = core
+                        .agent(&p.agent_id)
+                        .ok()
+                        .map(|h| h.lock().meta.name.clone())
+                        .unwrap_or_else(|| p.agent_name.clone());
+                    Row {
+                        browser: crate::pages::key(&p.id),
+                        name: devpage::clip_title(&p.title),
+                        origin: url.trim_end_matches('/').to_string(),
+                        url,
+                        project: who.project.name.clone(),
+                        agent: Some(agent),
+                        by: "agent",
+                        placement,
+                        loaded,
+                        launch: false,
+                    }
+                }),
+        );
+    }
     serde_json::to_string(&serde_json::json!({ "browsers": rows }))
         .map_err(|e| ToolError::Failed(e.to_string()))
 }
@@ -409,9 +444,22 @@ pub(super) fn gate<R: Runtime>(
         return Err(external_refused());
     }
     let agent = who.agent.clone().unwrap_or_default();
+    let asked = asked.trim();
+    if asked.starts_with(crate::pages::KEY_PREFIX) {
+        // An agent's page (ESC-673): get_page says its state; its console is not kept yet.
+        return Err(ToolError::Refused(match shows {
+            Shows::Page => tr!(
+                "Une page d’agent ne se lit ni ne se capture par les outils des navigateurs : get_page en dit l’état, et rien de ce que l’utilisateur y fait ne revient à l’agent.",
+                "An agent's page is neither read nor captured by the tools of the browsers: get_page says its state, and nothing the user does in it comes back to the agent."
+            ),
+            Shows::Console => tr!(
+                "La console d’une page d’agent ne se lit pas encore : get_page en dit l’état.",
+                "An agent's page's console is not read yet: get_page says its state."
+            ),
+        }));
+    }
     let pages = pages_of(core).unwrap_or_default();
     let rows = rows_of(&pages, &who);
-    let asked = asked.trim();
     let Some(page) = rows.iter().find(|p| p.agent_id == asked) else {
         let keys = rows
             .iter()

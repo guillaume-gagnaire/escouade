@@ -57,6 +57,8 @@ const EVENTS = [
   'ask_expired',
   'inbox_view_settled',
   'inbox_summary_shown',
+  // The agents' pages (ESC-673).
+  'page_shown',
 ];
 /** The values some props take, written on the page as `value`. */
 const VALUES = [
@@ -107,6 +109,14 @@ const VALUES = [
   'ticketReview',
   'decision',
   'docs',
+  // The agents' pages (ESC-673).
+  'review',
+  'diagram',
+  'compare',
+  'html',
+  'small',
+  'medium',
+  'large',
 ];
 const PROPS = [
   'worktree',
@@ -129,6 +139,9 @@ const PROPS = [
   'source',
   'act',
   'requests',
+  'template',
+  'ask',
+  'size',
 ];
 
 const source = (lang: Lang) => readFileSync(new URL(`../${privacySource(lang)}`, import.meta.url), 'utf8');

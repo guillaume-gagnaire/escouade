@@ -294,7 +294,7 @@ fn clean_path(raw: &str) -> Option<String> {
 }
 
 /// `%XX` decoded, as UTF-8; none for a broken escape or bytes that are not UTF-8.
-fn decode(s: &str) -> Option<String> {
+pub(crate) fn decode(s: &str) -> Option<String> {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;

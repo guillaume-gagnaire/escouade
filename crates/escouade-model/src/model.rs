@@ -135,6 +135,12 @@ pub struct Settings {
     /// agents, and the server's instructions name them. On by default, for settings saved before it
     /// too. In 2.3 it becomes the switch of Réglages › Fonctionnalités, under the same key.
     pub agent_browsers: bool,
+    /// « Pages des agents » (ESC-673, docs/AGENT-PAGES.md § 9), under « Les agents peuvent piloter
+    /// Escouade »: `show_page`, `get_page` and `close_page` are offered to the agents, and the server's
+    /// instructions name them. Off, the tools leave the list, the pages' rows close, nothing is erased.
+    /// On by default, for settings saved before it too. In 2.3 it becomes the switch of Réglages ›
+    /// Fonctionnalités, under the same key.
+    pub agent_pages: bool,
     /// « Garder les fichiers des demandes closes » (ESC-510): 7, 30 or 90 days after a request of
     /// the box closed, its files are erased (`asks_sweep`). 30 by default.
     pub inbox_keep_days: u32,
@@ -1032,6 +1038,7 @@ impl Default for Settings {
             mcp_enabled: false,
             agents_answer: AgentsAnswer::Nobody,
             agent_browsers: true,
+            agent_pages: true,
             inbox_keep_days: 30,
             mcp_port: 0,
             accounts: Vec::new(),
@@ -2908,6 +2915,11 @@ pub struct PersistedState {
     /// What the squad lead said of a view of the box (ESC-557): « Le chef s'en occupe », or
     /// « Réglé par … », by the view's key. It falls once its source changes.
     pub inbox_marks: BTreeMap<String, crate::asks::ViewMark>,
+    /// The agents' pages (ESC-673, docs/AGENT-PAGES.md § 3): who showed them, their versions. Their files are in
+    /// `<données>/pages/`.
+    pub pages: Vec<crate::agentpages::AgentPage>,
+    /// The number of the last page shown (`p-<n>`): never given twice.
+    pub page_seq: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -4150,6 +4162,15 @@ mod tests {
         s.todo_tools = false;
         assert_eq!(s.agent_env(), s.claude_env());
         assert!(s.agent_env().iter().all(|(k, _)| k != TODO_TOOLS_VAR));
+    }
+
+    #[test]
+    fn settings_saved_before_the_pages_switch_have_it_on() {
+        let s: Settings = serde_json::from_str(r#"{"sound":false}"#).unwrap();
+        assert!(s.agent_pages);
+        assert_eq!(serde_json::to_value(&s).unwrap()["agentPages"], json!(true));
+        let off: Settings = serde_json::from_str(r#"{"agentPages":false}"#).unwrap();
+        assert!(!off.agent_pages);
     }
 
     #[test]

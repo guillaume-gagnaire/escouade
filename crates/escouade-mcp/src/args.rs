@@ -1359,6 +1359,65 @@ pub struct ReadBrowserArgs {
     pub max_chars: Option<u64>,
 }
 
+/// The template of a page (`show_page`, ESC-673).
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PageTemplateArg {
+    Review,
+    Diagram,
+    Compare,
+    Html,
+    Custom,
+}
+
+/// Where a page opens.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PageOpenArg {
+    Beside,
+    Quiet,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ShowPageArgs {
+    #[schemars(
+        description = "One line, 120 characters at most: the name of the page's row in « Navigateurs » and of its card."
+    )]
+    pub title: String,
+    #[schemars(
+        description = "review (an end-of-batch or pre-merge review), diagram (a Mermaid diagram), compare (options side by side), html (your own page: html or file) or custom (the user's own page)."
+    )]
+    pub template: PageTemplateArg,
+    #[schemars(
+        description = "For review, diagram and compare: the template's data, a JSON object of its schema, 256 KB at most. Refused with every field that does not fit, by its path."
+    )]
+    pub data: Option<serde_json::Value>,
+    #[schemars(
+        description = "For html: the document, 2 MB at most. Give html or file, not both. What it names relatively has no folder to come from: give a file for a page with its own files."
+    )]
+    pub html: Option<String>,
+    #[schemars(
+        description = "For html: an .html file of your working folder (relative to it, or absolute within it). The files it names relatively (./app.js, img/x.png, a style sheet's url(), a script's import from \"./…\") come with it, taken from its own folder and its subfolders alone; a name that leaves the folder, a hidden file or one that is not there is left out (left_out). 64 files and 10 MB per version."
+    )]
+    pub file: Option<String>,
+    #[schemars(
+        description = "One of your pages (p-<n>): makes a new version of it rather than a new page. A page keeps its 10 last versions."
+    )]
+    pub page: Option<String>,
+    #[schemars(
+        description = "beside (the default) or quiet. The answer's opened says what happened: waiting, its row waiting in « Navigateurs »."
+    )]
+    pub open: Option<PageOpenArg>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct PageArgs {
+    #[schemars(description = "One of your pages, by its number (p-<n>), as show_page gave it.")]
+    pub page: String,
+}
+
 /// The width `capture_browser` takes a page at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]

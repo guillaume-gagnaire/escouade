@@ -170,6 +170,13 @@ pub enum Event {
     InboxAttachmentOpened {
         kind: &'static str,
     },
+    /// An agent showed a page, or a version of one (ESC-673): its template, whether it carries a request, and what
+    /// it weighs (a bracket). Never a title, a text, a path or a name.
+    PageShown {
+        template: &'static str,
+        ask: bool,
+        size: &'static str,
+    },
 }
 
 impl Event {
@@ -216,6 +223,7 @@ impl Event {
             Event::AskReopened => "ask_reopened",
             Event::InboxCompareOpened => "inbox_compare_opened",
             Event::InboxAttachmentOpened { .. } => "inbox_attachment_opened",
+            Event::PageShown { .. } => "page_shown",
         }
     }
 
@@ -297,6 +305,11 @@ impl Event {
                 None => json!({ "kind": kind, "delay": delay, "via": via }),
             },
             Event::InboxAttachmentOpened { kind } => json!({ "type": kind }),
+            Event::PageShown {
+                template,
+                ask,
+                size,
+            } => json!({ "template": template, "ask": yes(*ask), "size": size }),
             _ => json!({}),
         };
         match props {
@@ -944,6 +957,11 @@ mod tests {
             Event::AskReopened,
             Event::InboxCompareOpened,
             Event::InboxAttachmentOpened { kind: "pdf" },
+            Event::PageShown {
+                template: "review",
+                ask: false,
+                size: "small",
+            },
         ];
         let names: std::collections::HashSet<_> = events.iter().map(Event::name).collect();
         assert_eq!(names.len(), events.len());

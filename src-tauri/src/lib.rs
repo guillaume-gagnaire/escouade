@@ -171,6 +171,9 @@ mod opening_tests;
 mod outside;
 mod pace;
 mod pagecrash;
+mod pages;
+#[cfg(test)]
+mod pages_tests;
 mod paths;
 #[cfg(test)]
 mod recovery_tests;

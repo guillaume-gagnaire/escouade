@@ -6,16 +6,16 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Les agents peuvent te montrer une page : une revue, un schéma, des options à comparer ou leur propre HTML, copiés à part et servis sans réseau ni accès à Escouade ou à tes fichiers ; une nouvelle version met la page à jour. L’interrupteur « Pages des agents » de Réglages › Agents les coupe, sans rien effacer.
 - Les workflows de ton projet passent dans le Workspace : la carte de chaque agent dit son étape (et en rouge pourquoi il a été renvoyé), et un clic ouvre le schéma du workflow avec son chemin ; « Workflows », en haut à droite de la toile, liste les workflows du projet et leurs agents. Le panneau de droite garde trois onglets.
 - Les commandes qu’un agent a lancées, gardées pour le Workspace, ne gardent plus aucun mot de passe, jeton ou clé en clair : ils sont masqués avant d’être enregistrés.
+- Sur un poste chargé, l’assistant « Nouveau projet » ne dit plus « Le dépôt n’a aucun commit » d’un dépôt qui en a : il lit le dossier plus vite, dit « Lecture du dépôt… » le temps de le faire, et si git échoue, il dit son erreur avec « Réessayer » au lieu de proposer un premier commit.
 
 ## [2.2.13] — 2026-11-26
 
 - La sensibilité du micro de la conversation vocale se règle dans Réglages › Voix, avec un testeur qui montre en direct le niveau de ta voix, le seuil et quand ta voix est détectée.
 - Les agents lisent les navigateurs de leur projet : ils les listent, lisent le HTML ou le texte d’une page à l’écran, mots de passe et jetons masqués, la capturent en image (la vue, un élément ou toute la page, en largeur tablette ou mobile) et lisent sa console avec ses requêtes en échec, pour voir ce que tu vois et ce qui casse. La page de leur lancement se lit et se capture sans demander ; une autre origine (un artefact, un site où tu es connecté) attend ton accord dans la bande du navigateur, que tu retires par « Retirer les accords ». L’interrupteur « Agents et navigateurs » de Réglages › Agents les coupe.
 - Le Workspace, une toile de tous tes agents, ouverte depuis le bouton « Éditeur » ou la Vue d’ensemble : chacun avec son plan, ses skills et ses plugins, ses sous-agents, ses tests et ce qu’il a livré (artefacts, CI, déploiements). Tu y réponds à une question et y écris à un agent sans ouvrir sa conversation. Merci à @OshOEz (#45).
-- Sur un poste chargé, l’assistant « Nouveau projet » ne dit plus « Le dépôt n’a aucun commit » d’un dépôt qui en a : il lit le dossier plus vite, dit « Lecture du dépôt… » le temps de le faire, et si git échoue, il dit son erreur avec « Réessayer » au lieu de proposer un premier commit.
-- Les agents lisent les navigateurs de leur projet : ils les listent, lisent le HTML ou le texte d’une page à l’écran, mots de passe et jetons masqués, et sa console avec ses requêtes en échec, pour voir ce que tu vois et ce qui casse. La page de leur lancement se lit sans demander ; une autre origine (un artefact, un site où tu es connecté) attend ton accord dans la bande du navigateur, que tu retires par « Retirer les accords ». L’interrupteur « Agents et navigateurs » de Réglages › Agents les coupe.
 
 ## [2.2.12] — 2026-11-26
 

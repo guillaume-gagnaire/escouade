@@ -58,6 +58,7 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `ask_reopened` | You take back an answer before the agent read it | — |
 | `inbox_compare_opened` | The renders of a choice are compared full size | — |
 | `inbox_attachment_opened` | A file attached to a request is looked at | `type`: `image`, `pdf`, `markdown`, `word`, `csv` or `other`; never its name |
+| `page_shown` | An agent shows you a page, or a new version of one | `template`: `review`, `diagram`, `compare` or `html`; `ask`: whether it carries a request (yes or no); `size`: its weight, by range (`small`, `medium` or `large`); never its title, its content or a path |
 
 An event says that a feature was used, not on what: never the name of the project, the agent, the branch or the repository, nor a host’s address, nor anything that was written.
 

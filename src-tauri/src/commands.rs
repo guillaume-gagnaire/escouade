@@ -4898,7 +4898,7 @@ pub fn devpage_close(
     crate::devpage::close(&app, &pages, &agent_id)
 }
 
-// ---------- the agents' pages (ESC-667, AP-1): the shelter alone; the MCP tool comes in AP-2 ----------
+// ---------- the agents' pages (ESC-667, AP-1): the shelter; the MCP tools are `mcp::pages` (AP-2) ----------
 
 /// What happens to the agents' pages, to the window.
 fn agentpage_tell(core: &Arc<Core>) -> crate::agentpage::Tell {
@@ -4955,13 +4955,25 @@ pub fn agentpage_view(
     Ok(shelter.view(&page))
 }
 
-/// Agent's page `page` in the window: placed at `bounds`, or hidden (none).
+/// Agent's page `page` in the window: placed at `bounds`, or hidden (none). `placement` says where
+/// it is shown (`full` by default), for `list_browsers` and `get_page` (ESC-673).
 #[tauri::command]
 pub fn agentpage_place(
     app: tauri::AppHandle,
+    core: CoreState,
     page: String,
     bounds: Option<crate::agentpage::Bounds>,
+    placement: Option<crate::devpage::Placement>,
 ) -> Res<()> {
+    use crate::devpage::Placement;
+    let shown = match (bounds, placement) {
+        (Some(b), p) if b.width >= 1.0 && b.height >= 1.0 => match p {
+            Some(Placement::Hidden) | None => Placement::Full,
+            Some(p) => p,
+        },
+        _ => Placement::Hidden,
+    };
+    core.page_placed(&page, shown);
     crate::agentpage::place(&app, &page, bounds)
 }
 

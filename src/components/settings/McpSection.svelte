@@ -144,6 +144,14 @@
       bind:on={() => settingsForm.settings.agentBrowsers !== false, (v) => (settingsForm.settings.agentBrowsers = v)}
     />
   </Row>
+  <!-- « Pages des agents » (ESC-673): show_page, get_page and close_page, under the server they depend on; saved with the draft. -->
+  <Row label={t('mcp.section.pages')} desc={t('mcp.section.pagesDesc')}>
+    <Switch
+      label={t('mcp.section.pages')}
+      disabled={!on}
+      bind:on={() => settingsForm.settings.agentPages !== false, (v) => (settingsForm.settings.agentPages = v)}
+    />
+  </Row>
   <Row label={t('mcp.section.answer')} desc={t('mcp.section.answerDesc')}>
     <Chips
       label={t('mcp.section.answer')}

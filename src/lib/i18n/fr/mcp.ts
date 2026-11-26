@@ -14,6 +14,10 @@ export default {
     browsers: 'Agents et navigateurs',
     browsersDesc:
       'Les agents lisent les navigateurs de « Navigateurs » de leur projet (list_browsers, read_browser) : la page de leur lancement sans demander ; une autre origine, un artefact ou un site où tu es connecté, avec ton accord, une fois par origine et par navigateur. Jamais les cookies, le stockage ni un mot de passe.',
+    /** ESC-673: the tools of the agents' pages (show_page, get_page, close_page), under the server. */
+    pages: 'Pages des agents',
+    pagesDesc:
+      'Les agents te montrent une page dans « Navigateurs » (show_page) : une revue, un schéma, des options à comparer, ou leur propre HTML. Escouade la copie et la sert à part, sans réseau, sans accès à Escouade ni à tes fichiers. Coupé, leurs outils disparaissent et leurs lignes se ferment ; rien n’est effacé.',
     /** ESC-423 (audit SEC-03): who among the agents answers another agent's permissions and questions. */
     answer: 'Les agents peuvent répondre aux demandes des autres agents',
     answerDesc:
@@ -107,6 +111,9 @@ export default {
     listBackgroundWork: 'Lister les sous-agents et tâches de fond d’un agent',
     listBrowsers: 'Lister les navigateurs',
     readBrowser: 'Lire un navigateur',
+    showPage: 'Montrer une page',
+    getPage: 'Lire l’état d’une page',
+    closePage: 'Fermer une page',
     captureBrowser: 'Capturer un navigateur',
     browserConsole: 'Lire la console d’un navigateur',
     getBackgroundOutput: 'Lire la sortie d’une tâche de fond ou le rapport d’un sous-agent',

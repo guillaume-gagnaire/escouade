@@ -58,6 +58,7 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `ask_reopened` | Tu reviens sur une réponse avant que l’agent l’ait lue | — |
 | `inbox_compare_opened` | Les rendus d’un choix sont comparés en grand | — |
 | `inbox_attachment_opened` | Un fichier joint à une demande est regardé | `type` : `image`, `pdf`, `markdown`, `word`, `csv` ou `other` ; jamais son nom |
+| `page_shown` | Un agent te montre une page, ou une nouvelle version d’une page | `template` : `review`, `diagram`, `compare` ou `html` ; `ask` : si elle porte une demande (oui ou non) ; `size` : son poids par tranche (`small`, `medium` ou `large`) ; jamais son titre, son contenu ni un chemin |
 
 Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent, de la branche ou du dépôt, ni l’adresse d’un hébergeur, ni ce qui a été écrit.
 

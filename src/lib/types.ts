@@ -99,6 +99,8 @@ export interface Settings {
   agentsAnswer?: AgentsAnswer;
   /** « Agents et navigateurs » (ESC-669), under « Les agents peuvent piloter Escouade »: the tools of the browsers answer the agents (`list_browsers`, `read_browser`). On unless false. */
   agentBrowsers?: boolean;
+  /** « Pages des agents » (ESC-673), under « Les agents peuvent piloter Escouade »: `show_page`, `get_page` and `close_page` are offered to the agents. On unless false. */
+  agentPages?: boolean;
   /** « Garder les fichiers des demandes closes », in days: 7, 30 (by default) or 90. */
   inboxKeepDays?: number;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
@@ -1095,7 +1097,8 @@ export interface PageEvent {
 export interface AgentPageEvent {
   /** Its number, `p-<n>`. */
   page: string;
-  phase: 'started' | 'finished' | 'wants' | 'refused' | 'download' | 'permission' | 'title';
+  /** `shown`: an agent showed it or a version of it, its row opened (ESC-673); `closed`: its row closed. */
+  phase: 'started' | 'finished' | 'wants' | 'refused' | 'download' | 'permission' | 'title' | 'shown' | 'closed';
   url?: string;
   title?: string;
 }
