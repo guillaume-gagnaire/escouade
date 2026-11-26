@@ -332,7 +332,8 @@ pub async fn share(dir: &str, message: Option<&str>, with_code: bool) -> Result<
     }
     let to_push = match &target {
         Some(t) => divergence(dir, t).await.0 > 0,
-        None => git::has_commit(dir).await,
+        // Git failed to read it: its error, nothing pushed on it.
+        None => git::has_commit(dir).await?,
     };
     if to_push {
         git::push(dir)

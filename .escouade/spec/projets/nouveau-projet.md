@@ -2,8 +2,8 @@
 title: "Nouveau projet"
 subject: "Projets"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-94","ESC-167","ESC-168","ESC-142","ESC-163","ESC-89","ESC-309"]
-decisions: []
+tickets: ["ESC-94","ESC-167","ESC-168","ESC-142","ESC-163","ESC-89","ESC-309","ESC-687"]
+decisions: ["la-lecture-d-un-depot-qui-echoue-n-est-j"]
 compared: "2026-10-31T10:06:22+01:00"
 gaps: [{"text":"La page dit que la fenêtre fait 840 px de large. Le code ouvre la modale à 900 px (`width={900}`).","code":["src/components/modals/NewProjectModal.svelte"]}]
 ---
@@ -62,17 +62,18 @@ L'assistant « Nouveau projet » ajoute un projet en réglant, étape par étape
 
 ### Contrôles
 
-Chaque contrôle est dit avec sa correction dans son étape, et tous au récapitulatif (sinon « Harness trouvé · un compte sert le projet · dépôt prêt ») :
+Chaque contrôle est dit avec sa correction dans son étape, et tous au récapitulatif (sinon « Harness trouvé · un compte sert le projet · dépôt prêt » ; « Lecture du dépôt… » tant que le dossier n'est pas encore vérifié, jamais « aucun commit ») :
 
 | Contrôle | Étape | Correction |
 |---|---|---|
-| « Le dépôt n'a aucun commit » (dossier sans dépôt compris) | Départ | « Faire un premier commit » : `git init` au besoin, puis `git commit --allow-empty`, aucun fichier ajouté |
+| « Lecture du dépôt impossible : <erreur de git> » (git n'a pas pu lire le dossier : pas lancé, interrompu, erreur fatale, `safe.directory`, `.git` illisible, réponse vide ou coupée) ; dit aussi à la place de la détection de git quand c'est la lecture du dossier qui échoue, les étapes restant grisées | Départ | « Réessayer » : le dossier relu depuis le début. Rien n'est créé, initialisé ni commité sur une erreur |
+| « Le dépôt n'a aucun commit » (dossier sans dépôt compris), seulement quand git répond que HEAD ne désigne aucun commit | Départ | « Faire un premier commit » : `git init` au besoin, puis `git commit --allow-empty`, aucun fichier ajouté ; refusé avec l'erreur de git si git ne peut pas lire le dépôt |
 | « La branche cible … est introuvable » (merge ou PR, dépôt avec un commit) | Kanban | « Prendre la branche courante » |
 | « Les worktrees iraient dans un dossier suivi par git » (le dossier des worktrees existe dans le dépôt et git y suit des fichiers) | Worktrees | « Utiliser .claude/worktrees » |
 | « Aucun compte ne sert ce projet » (aucun compte actif qui ne soit réservé à d'autres projets) | Compte et commit | un texte : Réglages › Comptes |
 | « Aucun harness trouvé » | Compte et commit | un texte : l'installer, ou indiquer son chemin dans Réglages › Harness |
 
-Le dossier est revérifié à la lecture du chemin, au changement de projet copié, à chaque étape, après une correction et, après une pause, quand le dossier des worktrees ou celui d'une commande change.
+Le dossier est revérifié à la lecture du chemin, au changement de projet copié, à chaque étape, après une correction et, après une pause, quand le dossier des worktrees ou celui d'une commande change. Les lectures de git d'une vérification partent ensemble, pas l'une après l'autre : sur un poste chargé, chaque git met plusieurs secondes à démarrer.
 
 ### Récapitulatif et création
 

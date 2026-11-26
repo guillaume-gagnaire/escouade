@@ -1161,14 +1161,25 @@ pub async fn inspect_folder(
         });
     }
     let path = path.trim().to_string();
-    let history = core
-        .closed_project_info_for(&path, history_id.as_deref())
-        .await;
-    let repos = crate::repos::detect(p, &crate::paths::worktrees_root(&path, "")).await;
+    // At once, not one after the other (ESC-687): on a loaded machine each git takes seconds to
+    // start, and the window waits for all of them before it says what the folder is.
+    let worktrees = crate::paths::worktrees_root(&path, "");
+    let (history, repos, root, st) = tokio::join!(
+        core.closed_project_info_for(&path, history_id.as_deref()),
+        crate::repos::detect(p, &worktrees),
+        crate::git::repo_root(&path),
+        crate::git::status(&path),
+    );
     if !repos.is_empty() {
+        // A repository git failed to read is said, never counted as one without a commit.
+        let commits = futures_util::future::join_all(repos.iter().map(|r| {
+            let dir = crate::repos::join(&path, r);
+            async move { crate::git::has_commit(&dir).await }
+        }))
+        .await;
         let mut repos_without_commit = Vec::new();
-        for r in &repos {
-            if !crate::git::has_commit(&crate::repos::join(&path, r)).await {
+        for (r, has) in repos.iter().zip(commits) {
+            if !has.map_err(err)? {
                 repos_without_commit.push(r.clone());
             }
         }
@@ -1183,9 +1194,10 @@ pub async fn inspect_folder(
             repos_without_commit,
         });
     }
-    Ok(match crate::git::toplevel(&path).await {
+    // Git failed to read it: said, not shown as a folder without git, nor as a clean repository.
+    Ok(match root.map_err(err)? {
         Some(_) => {
-            let st = crate::git::status(&path).await.unwrap_or_default();
+            let st = st.map_err(err)?;
             FolderInfo {
                 exists: true,
                 is_repo: true,
@@ -1248,16 +1260,25 @@ pub async fn inspect_setup(
     )
     .await;
     if !repos.is_empty() {
+        // One that git failed to read, and none with a commit: the error, not « no commit ».
+        let mut unread = None;
         for r in &repos {
             let dir = crate::repos::join(&path, r);
-            if crate::git::has_commit(&dir).await {
-                return Ok(SetupInfo {
-                    has_commit: true,
-                    branches: crate::git::branches(&dir).await.unwrap_or_default(),
-                    missing_dirs,
-                    worktrees_tracked: false,
-                });
+            match crate::git::has_commit(&dir).await {
+                Ok(true) => {
+                    return Ok(SetupInfo {
+                        has_commit: true,
+                        branches: crate::git::branches(&dir).await.map_err(err)?,
+                        missing_dirs,
+                        worktrees_tracked: false,
+                    });
+                }
+                Ok(false) => {}
+                Err(e) => unread = unread.or(Some(e)),
             }
+        }
+        if let Some(e) = unread {
+            return Err(err(e));
         }
         return Ok(SetupInfo {
             has_commit: false,
@@ -1266,21 +1287,34 @@ pub async fn inspect_setup(
             worktrees_tracked: false,
         });
     }
-    let repo = crate::git::toplevel(&path).await.is_some();
+    // Git failed to read it: the error, never « no commit » (ESC-687), which would offer to make
+    // one in a repository that has some. The questions at once: each git is slow to start on a
+    // loaded machine.
+    if crate::git::repo_root(&path).await.map_err(err)?.is_none() {
+        return Ok(SetupInfo {
+            has_commit: false,
+            branches: Vec::new(),
+            missing_dirs,
+            worktrees_tracked: false,
+        });
+    }
+    let root = crate::paths::worktrees_root(&path, &worktree_dir);
+    let (has_commit, branches, worktrees_tracked) = tokio::join!(
+        crate::git::has_commit(&path),
+        crate::git::branches(&path),
+        crate::git::worktrees_in_tracked_folder(&path, &root),
+    );
+    let has_commit = has_commit.map_err(err)?;
     Ok(SetupInfo {
-        has_commit: repo && crate::git::has_commit(&path).await,
-        branches: if repo {
-            crate::git::branches(&path).await.unwrap_or_default()
+        has_commit,
+        // A new repository has no branch to list yet.
+        branches: if has_commit {
+            branches.map_err(err)?
         } else {
-            Vec::new()
+            branches.unwrap_or_default()
         },
         missing_dirs,
-        worktrees_tracked: repo
-            && crate::git::worktrees_in_tracked_folder(
-                &path,
-                &crate::paths::worktrees_root(&path, &worktree_dir),
-            )
-            .await,
+        worktrees_tracked,
     })
 }
 

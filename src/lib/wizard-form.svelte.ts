@@ -30,6 +30,14 @@ export class WizardForm {
   info = $state<FolderInfo | null>(null);
   /** What the assistant checked in it: a commit, its branches, the folders of the commands, the worktrees folder. */
   setup = $state<SetupInfo | null>(null);
+  /** What git said when it failed to read the folder (`inspect_folder`), or to check it (`inspect_setup`): told, never taken for « no commit ». */
+  folderError = $state<string | null>(null);
+  setupError = $state<string | null>(null);
+  readError = $derived(this.folderError ?? this.setupError);
+  /** The folder is being checked (`check`): the summary does not say it ready yet. */
+  checking = $state(false);
+  /** « Réessayer »: the window reads the folder again each time it changes. */
+  attempt = $state(0);
   start = $state<Start>('recommended');
   /** The project copied, when `start` is `copy`. */
   sourceId = $state('');
@@ -84,6 +92,7 @@ export class WizardForm {
       accounts: app.settings.accounts,
       claudeFound: app.enginesFound.length > 0,
       projectId: this.project?.id,
+      unread: !!this.readError,
     }),
   );
 
@@ -135,11 +144,22 @@ export class WizardForm {
     const path = this.path.trim();
     if (!path || (this.info && !this.info.exists)) {
       this.setup = null;
+      this.setupError = null;
       return;
     }
     const dirs = [...new Set([...(this.source ? copyDirs(this.source) : []), ...this.#ownDirs()])];
-    const s = await api.inspectSetup(path, this.config.worktreeDir, dirs).catch(() => null);
-    if (this.path.trim() === path) this.setup = s;
+    this.checking = true;
+    try {
+      const read = await api.inspectSetup(path, this.config.worktreeDir, dirs).then(
+        (s) => ({ s, error: null }),
+        (e: unknown) => ({ s: null, error: String(e) }),
+      );
+      if (this.path.trim() !== path) return;
+      this.setup = read.s;
+      this.setupError = read.error;
+    } finally {
+      this.checking = false;
+    }
   }
 
   #ownDirs(): string[] {
@@ -234,6 +254,8 @@ export class WizardForm {
   /** The corrections the assistant makes itself: the current branch as target, the default worktrees folder. */
   fix(id: ControlId) {
     if (id === 'noCommit') return this.firstCommit();
+    // Read again from the start: the folder, then its checks (the window's `read`).
+    if (id === 'unread') return void this.attempt++;
     if (id === 'noTarget') this.config.board.target = '';
     if (id === 'tracked') this.config.worktreeDir = '';
     return this.check();

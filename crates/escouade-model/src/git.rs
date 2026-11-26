@@ -57,6 +57,8 @@ pub async fn run_capped(cwd: &str, args: &[&str], max: usize) -> Result<(Vec<u8>
 
 /// Time limit of the git commands that read.
 pub const GIT_TIMEOUT: Duration = Duration::from_secs(120);
+/// How long a git command takes before the log says it was slow.
+const SLOW_GIT: Duration = Duration::from_secs(5);
 /// Time limit of the git commands that run the user's hooks.
 pub const GIT_HOOKS_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
@@ -102,7 +104,19 @@ pub async fn output_within(
     limit: Limit,
 ) -> Result<std::process::Output> {
     let limit = limit.duration();
-    match crate::proc::output_within(cmd, limit).await {
+    let started = std::time::Instant::now();
+    let out = crate::proc::output_within(cmd, limit).await;
+    // On a loaded machine (other builds running) a git can take seconds just to start (ESC-687):
+    // the log says it, as what the window then waits for.
+    let took = started.elapsed();
+    if took >= SLOW_GIT {
+        log::warn!(
+            "git {} took {:.1} s",
+            subcommand(args).unwrap_or("?"),
+            took.as_secs_f32()
+        );
+    }
+    match out {
         Ok(out) => Ok(out),
         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Err(stopped(args, limit)),
         Err(e) => Err(e.into()),

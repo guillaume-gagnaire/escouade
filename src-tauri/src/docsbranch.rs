@@ -144,7 +144,8 @@ impl<R: Runtime> Core<R> {
             // Its folder is gone: git forgets it, then it is made again.
             let _ = crate::git::run(&repo, &["worktree", "prune"]).await;
         }
-        if !crate::git::has_commit(&repo).await {
+        // Git failed to read it: its error, not « no commit ».
+        if !crate::git::has_commit(&repo).await? {
             bail!(tr!(
                 "Le dépôt n’a pas encore de commit : la branche des docs « {branch} » ne peut pas être créée.",
                 "The repository has no commit yet: the docs branch “{branch}” can’t be made."
