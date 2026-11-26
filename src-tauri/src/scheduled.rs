@@ -226,6 +226,8 @@ pub(crate) fn upcoming<Tz: TimeZone>(cron: &Cron, after: i64, n: usize, tz: &Tz)
 pub(crate) enum Pass {
     /// The task is paused.
     Paused,
+    /// An agent made or changed it, and it waits for the user's go-ahead (ESC-647).
+    Awaiting,
     /// It fell while Escouade was closed, and the task waits for the next one then.
     Missed,
     /// The ticket of the run before is « À faire » or « En cours » still.
@@ -238,7 +240,7 @@ impl Pass {
     /// What the task's row says of it until the next run (none for a pause, which it shows).
     fn note(self) -> Option<String> {
         match self {
-            Pass::Paused => None,
+            Pass::Paused | Pass::Awaiting => None,
             Pass::Missed => Some(tr!(
                 "Escouade était fermé à la dernière échéance : la tâche attend la suivante.",
                 "Escouade was closed at the last due time: the task waits for the next one."
@@ -286,7 +288,9 @@ pub(crate) fn decide<Tz: TimeZone>(
     if last <= after {
         return Due::Nothing;
     }
-    if task.paused {
+    if task.awaiting {
+        Due::Pass(last, Pass::Awaiting)
+    } else if task.paused {
         Due::Pass(last, Pass::Paused)
     } else if last < started && !task.catch_up {
         Due::Pass(last, Pass::Missed)
@@ -295,6 +299,24 @@ pub(crate) fn decide<Tz: TimeZone>(
     } else {
         Due::Run(last)
     }
+}
+
+/// The shortest rhythm an agent may give a task (ESC-647): 15 minutes between two due times.
+pub(crate) const AGENT_MIN_GAP_MS: i64 = 15 * 60 * 1000;
+
+/// How many due times ahead are looked at for the shortest gap of a rhythm.
+const GAP_LOOK: usize = 500;
+
+/// The shortest time between two due times of `rhythm` over its next ones from `after` (ms); None when it comes
+/// once or never in them.
+pub(crate) fn shortest_gap<Tz: TimeZone>(
+    rhythm: &Rhythm,
+    after: i64,
+    tz: &Tz,
+) -> Result<Option<i64>> {
+    let cron = parse(rhythm)?;
+    let next = upcoming(&cron, after, GAP_LOOK, tz);
+    Ok(next.windows(2).map(|w| w[1] - w[0]).min())
 }
 
 /// The ticket of the task's run before is « À faire » or « En cours » still: « À tester » and
@@ -315,6 +337,8 @@ pub struct ScheduledView {
     #[serde(flatten)]
     pub task: ScheduledTask,
     pub next: Option<i64>,
+    /// What the user reads of it before a go-ahead (`scheduled_print`, ESC-647), that `scheduled_accept` checks.
+    pub print: String,
 }
 
 /// A scheduled task as its form or a tool gives it: what is absent stays as it is (for a new
@@ -339,6 +363,28 @@ pub struct ScheduledDraft {
     pub paused: Option<bool>,
 }
 
+/// What the user reads of a task before its go-ahead (ESC-647): its project, rhythm, title, prompt, criteria, harness,
+/// account, model and effort, as a short print. Changed, the « À toi » line it made is another one.
+pub(crate) fn scheduled_print(t: &ScheduledTask) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (
+        &t.project_id,
+        &t.title,
+        &t.description,
+        &t.criteria,
+        t.max_loops,
+        t.engine.map(|e| e.as_str()),
+        &t.account,
+        &t.model,
+        &t.effort,
+        cron_of(&t.rhythm).unwrap_or_default(),
+        t.catch_up,
+    )
+        .hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
 fn task_not_found() -> anyhow::Error {
     anyhow!(tr!(
         "Cette tâche programmée n'existe plus.",
@@ -354,13 +400,14 @@ impl Core {
             .read()
             .iter()
             .map(|t| ScheduledView {
-                next: if t.paused {
+                next: if t.paused || t.awaiting {
                     None
                 } else {
                     parse(&t.rhythm)
                         .ok()
                         .and_then(|c| next_after(&c, now, &Local))
                 },
+                print: scheduled_print(t),
                 task: t.clone(),
             })
             .collect()
@@ -453,6 +500,17 @@ impl Core {
 
     /// A new scheduled task of the project: its first due time is the next one from now.
     pub fn scheduled_create(&self, project_id: &str, d: ScheduledDraft) -> Result<ScheduledView> {
+        self.scheduled_create_by(project_id, d, None)
+    }
+
+    /// A new task, by the user (`author` none) or by an agent (ESC-647): an agent's waits for the user's go-ahead,
+    /// its author kept.
+    pub(crate) fn scheduled_create_by(
+        &self,
+        project_id: &str,
+        d: ScheduledDraft,
+        author: Option<ScheduledAuthor>,
+    ) -> Result<ScheduledView> {
         let project = self.project(project_id)?;
         let now = self.schedule_clock.now();
         let mut t = ScheduledTask {
@@ -462,6 +520,8 @@ impl Core {
             catch_up: true,
             created_at: now,
             since: now,
+            awaiting: author.is_some(),
+            author,
             ..Default::default()
         };
         if d.rhythm.is_none() {
@@ -482,11 +542,23 @@ impl Core {
         }
         log::info!("scheduled task {id} made in project {project_id}");
         self.scheduled_changed();
+        self.inbox_view_told(project_id);
         self.scheduled_view(&id)
     }
 
     /// The task changed: its rhythm counts from now when it is another one.
     pub fn scheduled_update(&self, id: &str, d: ScheduledDraft) -> Result<ScheduledView> {
+        self.scheduled_update_by(id, d, None)
+    }
+
+    /// The task changed by the user (`author` none: its author and go-ahead stay as they are), or by an agent
+    /// (ESC-647): it waits again for the user's go-ahead, its author the agent.
+    pub(crate) fn scheduled_update_by(
+        &self,
+        id: &str,
+        d: ScheduledDraft,
+        author: Option<ScheduledAuthor>,
+    ) -> Result<ScheduledView> {
         let mut t = self
             .scheduled
             .read()
@@ -506,9 +578,51 @@ impl Core {
             t.last_ticket = slot.last_ticket.clone();
             t.last_run_at = slot.last_run_at;
             t.last_note = slot.last_note.clone();
+            match author {
+                Some(a) => {
+                    t.author = Some(a);
+                    t.awaiting = true;
+                }
+                None => {
+                    t.author = slot.author.clone();
+                    t.awaiting = slot.awaiting;
+                }
+            }
             *slot = t;
         }
         self.scheduled_changed();
+        if let Ok(v) = self.scheduled_view(id) {
+            self.inbox_view_told(&v.task.project_id);
+        }
+        self.scheduled_view(id)
+    }
+
+    /// The user's go-ahead to a task an agent made or changed (ESC-647), as it is now (`print`, from
+    /// `scheduled_print`): one changed since is refused, never accepted unread. Its due times count from now.
+    pub fn scheduled_accept(&self, id: &str, print: Option<&str>) -> Result<ScheduledView> {
+        let now = self.schedule_clock.now();
+        let project = {
+            let mut all = self.scheduled.write();
+            let t = all
+                .iter_mut()
+                .find(|t| t.id == id)
+                .ok_or_else(task_not_found)?;
+            if print.is_some_and(|p| p != scheduled_print(t)) {
+                bail!(tr!(
+                    "Cette tâche a changé depuis que tu l’as lue : relis-la avant de l’accepter.",
+                    "This task changed since you read it: read it again before accepting it."
+                ));
+            }
+            if t.awaiting {
+                t.awaiting = false;
+                t.since = now;
+                t.last_note = None;
+            }
+            t.project_id.clone()
+        };
+        log::info!("scheduled task {id} accepted by the user");
+        self.scheduled_changed();
+        self.inbox_view_told(&project);
         self.scheduled_view(id)
     }
 

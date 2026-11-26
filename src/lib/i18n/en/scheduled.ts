@@ -16,6 +16,12 @@ export default defineZone('scheduled', {
     deleteTitle: 'Delete the scheduled task?',
     deleteBody: '“{title}” will launch no more tickets. The tickets it made stay on the Kanban.',
     openTicket: 'Open {key}',
+    awaiting: 'awaits your go-ahead',
+    accept: 'Accept',
+    acceptLabel: 'Accept “{title}”, scheduled by {name}',
+    by: 'by {name}',
+    byTicket: 'by {name} · {key}',
+    byTip: 'Scheduled by the agent {name}: it launches nothing before your go-ahead.',
   },
   rhythm: {
     daily: 'Every day {time}',

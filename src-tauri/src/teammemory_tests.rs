@@ -14,7 +14,7 @@ use serde_json::json;
 
 use crate::memory::{self, Draft, Kind};
 use crate::teamdocs_tests::{holds, on_server, pair, Side};
-use crate::teammemory::{AgentOf, Rule, Standing, Writer};
+use crate::teammemory::{AgentOf, Forgot, Rule, Standing, Writer};
 
 fn draft(name: &str, body: &str) -> Draft {
     Draft {
@@ -324,12 +324,136 @@ async fn forgetting_leaves_a_tombstone_that_reaches_every_machine_and_the_journa
     both(&alice, &bob, &id).await;
     assert_eq!(read_by(&bob), vec!["vieux-port"]);
     // Forgetting what is not there says so.
-    assert!(!bob
+    assert_eq!(
+        bob.h
+            .core
+            .team_memory_forget(&bob.p.id, "rien", None)
+            .await
+            .unwrap(),
+        Forgot::Nothing
+    );
+}
+
+/// SR4-05 (ESC-647): a tool (an agent, or a client outside Escouade) no longer forgets for the whole team a memory a
+/// human accepted: its removal is proposed, the memory still read everywhere, until a member settles it in the window.
+/// A tool still forgets its own proposal, and a memory an agent wrote while the review was off.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_tool_only_proposes_the_removal_of_a_memory_a_human_accepted() {
+    let (_server, mut alice, mut bob, id) = pair("tmem-forget-tool").await;
+    on_server(&mut alice, &mut bob).await;
+    alice
         .h
         .core
-        .team_memory_forget(&bob.p.id, "rien")
+        .team_memory_write(
+            &alice.p.id,
+            draft("jamais-sur-main", "On ne pousse jamais sur main."),
+            Writer::hand(),
+        )
         .await
-        .unwrap());
+        .unwrap();
+    both(&alice, &bob, &id).await;
+    assert_eq!(read_by(&bob), vec!["jamais-sur-main"]);
+    // Bob's agent forgets it, through the tool: only proposed.
+    let tool = Some(agent("DEM-7", true).agent);
+    let forgot = bob
+        .h
+        .core
+        .team_memory_forget(&bob.p.id, "jamais-sur-main", tool.clone())
+        .await
+        .unwrap();
+    assert_eq!(forgot, Forgot::Proposed);
+    assert_eq!(read_by(&bob), vec!["jamais-sur-main"], "still read by Bob");
+    both(&alice, &bob, &id).await;
+    assert_eq!(
+        read_by(&alice),
+        vec!["jamais-sur-main"],
+        "still read by Alice"
+    );
+    let v = alice.h.core.team_memory_view(&alice.p.id).await.unwrap();
+    assert!(v.withdrawn.is_empty());
+    assert_eq!(v.removals.len(), 1, "shown at the review");
+    let ask = v.removals[0].removal.clone().unwrap();
+    assert_eq!(
+        ask.agent.as_ref().and_then(|a| a.ticket.as_deref()),
+        Some("DEM-7")
+    );
+    let bob_me = bob.h.core.team_memory_view(&bob.p.id).await.unwrap().me;
+    assert_eq!(ask.member, bob_me);
+    // Alice keeps it: the proposal goes, the memory stays.
+    let v = alice
+        .h
+        .core
+        .team_memory_decide_removal(&alice.p.id, &v.removals[0].id, false)
+        .await
+        .unwrap();
+    assert!(v.removals.is_empty());
+    assert_eq!(read_by(&alice), vec!["jamais-sur-main"]);
+    both(&alice, &bob, &id).await;
+    assert_eq!(read_by(&bob), vec!["jamais-sur-main"]);
+    // Asked again, and removed this time by a member's gesture: gone from every machine.
+    bob.h
+        .core
+        .team_memory_forget(&bob.p.id, "jamais-sur-main", tool.clone())
+        .await
+        .unwrap();
+    both(&alice, &bob, &id).await;
+    let v = alice.h.core.team_memory_view(&alice.p.id).await.unwrap();
+    let v = alice
+        .h
+        .core
+        .team_memory_decide_removal(&alice.p.id, &v.removals[0].id, true)
+        .await
+        .unwrap();
+    assert!(v.removals.is_empty());
+    assert!(read_by(&alice).is_empty());
+    both(&alice, &bob, &id).await;
+    assert!(read_by(&bob).is_empty());
+    // Settled already: refused.
+    let gone = v.withdrawn[0].id.clone();
+    assert!(alice
+        .h
+        .core
+        .team_memory_decide_removal(&alice.p.id, &gone, true)
+        .await
+        .is_err());
+    // Its own proposal, a tool still forgets at once.
+    bob.h
+        .core
+        .team_memory_write(
+            &bob.p.id,
+            draft("brouillon", "Proposé."),
+            agent("DEM-8", false),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        bob.h
+            .core
+            .team_memory_forget(&bob.p.id, "brouillon", tool.clone())
+            .await
+            .unwrap(),
+        Forgot::Gone
+    );
+    assert!(read_by(&bob).is_empty());
+    // The review off, what an agent wrote is the team's without a human: a tool forgets it as it wrote it.
+    bob.h.core.team_memory_set_review(&bob.p.id, false).unwrap();
+    bob.h
+        .core
+        .team_memory_write(
+            &bob.p.id,
+            draft("sans-revue", "Accepté seul."),
+            agent("DEM-9", false),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        bob.h
+            .core
+            .team_memory_forget(&bob.p.id, "sans-revue", tool)
+            .await
+            .unwrap(),
+        Forgot::Gone
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

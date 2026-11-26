@@ -75,6 +75,57 @@ describe('the team’s memory in the project’s settings (TS-10)', () => {
     expect(screen.getByTestId('team-memory-item')).toHaveAttribute('data-standing', 'accepted');
   });
 
+  it('shows a removal a tool proposed, and removes it or keeps the memory (ESC-647)', async () => {
+    resetApp({ projects: [team()] });
+    const kept = entry({
+      name: 'jamais-sur-main',
+      provenance: provenance({ by: 'hand', agent: null }),
+      removal: {
+        member: BOB,
+        name: 'Bob',
+        agent: { name: 'agent-dem-7', ticket: 'DEM-7', harness: 'claude', model: 'claude-opus-5-5' },
+        at: 1,
+      },
+    });
+    const b = fakeBackend({
+      team_memory_view: () => teamMemoryView({ memories: [kept], removals: [kept] }),
+      team_memory_decide_removal: (a: { remove: boolean }) =>
+        teamMemoryView({ memories: a.remove ? [] : [{ ...kept, removal: null }], removals: [] }),
+    });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
+    const r = await screen.findByTestId('team-memory-removal');
+    expect(screen.getByText('1 retrait proposé')).toBeInTheDocument();
+    expect(r).toHaveTextContent('retrait demandé par agent-dem-7 (DEM-7) · Bob');
+    // Still read until a member settles it.
+    expect(screen.getByTestId('team-memory-item')).toHaveAttribute('data-name', 'jamais-sur-main');
+    await userEvent.click(within(r).getByTestId('team-memory-keep-removal'));
+    await waitFor(() =>
+      expect(b.calls.find((c) => c.cmd === 'team_memory_decide_removal')?.args).toEqual({
+        projectId: 'p1',
+        id: kept.id,
+        remove: false,
+      }),
+    );
+    await waitFor(() => expect(screen.queryByTestId('team-memory-removal')).toBeNull());
+    expect(screen.getByTestId('team-memory-item')).toBeInTheDocument();
+  });
+
+  it('removes for the whole team a memory whose removal a tool proposed, by the member’s gesture (ESC-647)', async () => {
+    resetApp({ projects: [team()] });
+    const kept = entry({ name: 'vieux', removal: { member: BOB, name: 'Bob', agent: null, at: 1 } });
+    const b = fakeBackend({
+      team_memory_view: () => teamMemoryView({ memories: [kept], removals: [kept] }),
+      team_memory_decide_removal: () => teamMemoryView({ memories: [], removals: [] }),
+    });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
+    const r = await screen.findByTestId('team-memory-removal');
+    await userEvent.click(within(r).getByTestId('team-memory-remove'));
+    await waitFor(() =>
+      expect(b.calls.find((c) => c.cmd === 'team_memory_decide_removal')?.args).toEqual({ projectId: 'p1', id: kept.id, remove: true }),
+    );
+    await waitFor(() => expect(screen.queryByTestId('team-memory-item')).toBeNull());
+  });
+
   it('grays the review when the team imposes it, and turns it off otherwise', async () => {
     resetApp({ projects: [team()] });
     fakeBackend({ team_memory_view: () => teamMemoryView({ reviewLockedBy: 'ACME' }) });

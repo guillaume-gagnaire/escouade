@@ -1,9 +1,9 @@
 ---
 title: "La mémoire d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","src-tauri/src/teammemory.rs","src-tauri/src/mcp/memory.rs","src-tauri/src/memory.rs","docs/security/audit-2026-11/build.mjs","src/lib/i18n/fr/memory.ts","Revue de sécurité de la 2.3 (ESC-626), constat SR3-04 : corrigé par ESC-649"]
-tickets: ["ESC-518","ESC-649"]
-decisions: [203]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","src-tauri/src/teammemory.rs","src-tauri/src/mcp/memory.rs","src-tauri/src/memory.rs","docs/security/audit-2026-11/build.mjs","src/lib/i18n/fr/memory.ts","src/components/settings/TeamMemory.svelte","Revue de sécurité de la 2.3 (ESC-626), constat SR3-04 : corrigé par ESC-649","Revue de sécurité de la 2.3 (ESC-627), constat SR4-05 (rapport privé)"]
+tickets: ["ESC-518","ESC-649","ESC-647"]
+decisions: [203,340]
 compared: null
 ---
 
@@ -73,7 +73,10 @@ Accepté ne veut pas dire consigne pour tous : **chez un membre, un souvenir d'u
 
 ## Le retrait
 
-- **`forget_memory`** (et « Oublier » des réglages) laisse une **pierre tombale** sur ce que ce membre lit de ce nom, et sur ses propres propositions de ce nom : elle va à tous les postes. Un souvenir réécrit plus tard sous ce nom revient.
+- **« Oublier » des réglages** (le geste d'un membre) laisse une **pierre tombale** sur ce que ce membre lit de ce nom, et sur ses propres propositions de ce nom : elle va à tous les postes. Un souvenir réécrit plus tard sous ce nom revient.
+- **`forget_memory` (un outil : un agent, ou un client MCP hors d'Escouade) ne fait que proposer le retrait d'un souvenir validé par un humain** (ESC-647, constat SR4-05) : écrit à la main, ou gardé à la relecture. Comme une écriture n'est qu'une proposition, un effacement aussi : ce qu'un humain a validé, un agent ne le retire pas sans humain. Le souvenir reste lu par tous ; l'outil répond `proposed` avec une note (« Ce souvenir, un humain l'a validé : son retrait est proposé à l'équipe… »). La demande, signée par l'appareil qui la pose, nomme le membre, l'agent et son ticket.
+- **La demande se règle dans Réglages › Projets › Équipe › Mémoire partagée** : « N retraits proposés », chaque souvenir avec « retrait demandé par agent-dem-7 (DEM-7) · Bob, <date> », et « Retirer » (la pierre tombale, pour tous les postes) ou « Garder » (la demande s'en va, le souvenir reste). Tout membre la règle, comme il peut « Oublier » ; aucun outil MCP ne la règle. Une demande déjà réglée ailleurs est refusée (« Ce retrait n'est plus proposé »).
+- **Un outil oublie encore d'un coup** ses propres propositions, et, la relecture éteinte, ce qu'un agent a écrit (accepté sans humain). Une mémoire hors équipe (`.escouade/memory/` du dépôt, celle de l'Overseer) reste effaçable par l'outil, comme avant.
 - **La quarantaine**, d'un administrateur, dans Réglages › Projets › Équipe › Mémoire partagée › Quarantaine : « L'agent du ticket » (les tickets dont un agent a écrit), « Écrit par » (un membre et l'un de ses appareils), « Depuis le » (une date). « Voir ce qui part » montre l'aperçu (« N souvenirs partent », chacun), puis « Mettre en quarantaine » pose la règle. **La règle est au journal** : elle vaut sur tous les postes, pour ce qui est là et pour ce qui arrive plus tard (un appareil revenu de hors ligne avec ce qu'il a écrit entre-temps). Elle tient hors ligne sur le poste de l'administrateur, et chez les autres à leur retour. « Lever » la retire.
 - **L'historique reste au journal** : « N souvenirs retirés, gardés au journal » liste ce qui a été oublié, écarté ou mis en quarantaine (tout, pour un administrateur ; pour un membre, les siens et ceux de l'équipe).
 
@@ -85,6 +88,7 @@ Accepté ne veut pas dire consigne pour tous : **chez un membre, un souvenir d'u
 
 - **Écrire** : tout membre qui a accès au projet, et ses agents (proposés).
 - **Valider** (garder, écarter) : l'auteur d'un souvenir, ou un administrateur ; jamais un agent. Seule la garde par un autre humain que l'auteur en fait une consigne chez les autres membres.
+- **Retirer** un souvenir validé : un membre, dans la fenêtre (« Oublier », ou « Retirer » d'un retrait proposé) ; un agent le propose seulement.
 - **Mettre en quarantaine**, lever : un administrateur.
 - **Le serveur ne lit rien** d'un souvenir : ni son nom, ni son texte, ni sa provenance.
 

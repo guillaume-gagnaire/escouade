@@ -16,7 +16,7 @@ use super::Caller;
 use crate::core::Core;
 use crate::memory::{self, Draft, Kind};
 use crate::model::Project;
-use crate::teammemory::{AgentOf, Entry, Standing, Writer};
+use crate::teammemory::{AgentOf, Entry, Forgot, Standing, Writer};
 use crate::vectors::embed::Embedder;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -305,18 +305,41 @@ pub(crate) async fn forget(
         super::act::may_act_on(core, caller, id)?;
     }
     let name = memory::name_of(name).map_err(failed)?;
-    let gone = match (&p.project, p.team) {
+    // A tool never forgets what a human accepted in the team's memory: it proposes its removal (ESC-647).
+    let forgot = match (&p.project, p.team) {
         (Some(project), true) => core
-            .team_memory_forget(&project.id, &name)
+            .team_memory_forget(&project.id, &name, Some(writer_of(core, caller).agent))
             .await
             .map_err(failed)?,
-        _ => memory::forget(&p.dir, &name).map_err(failed)?,
+        _ => match memory::forget(&p.dir, &name).map_err(failed)? {
+            true => Forgot::Gone,
+            false => Forgot::Nothing,
+        },
     };
-    if !gone {
+    if forgot == Forgot::Nothing {
         return Err(ToolError::Failed(tr!(
             "Aucun souvenir « {name} » dans la mémoire du projet.",
             "No memory “{name}” in the project's memory."
         )));
+    }
+    if forgot == Forgot::Proposed {
+        if let Some(id) = p.project_id() {
+            core.memory_changed(id);
+        }
+        return Ok((
+            json(&json!({
+                "project": p.name,
+                "proposed": name,
+                "note": tr!(
+                    "Ce souvenir, un humain l’a validé : son retrait est proposé à l’équipe, qui le règle dans Réglages › Projets › Équipe › Mémoire partagée. Il reste lu d’ici là.",
+                    "A human approved this memory: its removal is proposed to the team, which settles it in Settings › Projects › Team › Shared memory. It is still read until then."
+                ),
+            }))?,
+            tr!(
+                "retrait du souvenir « {name} » proposé",
+                "removal of the memory “{name}” proposed"
+            ),
+        ));
     }
     if let Some(id) = p.project_id() {
         core.facts.emit(

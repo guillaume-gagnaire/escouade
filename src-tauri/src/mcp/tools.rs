@@ -1376,7 +1376,7 @@ impl Tools {
     }
 
     #[tool(
-        description = "Create a scheduled task in a project: at each of its due times, Escouade makes a ticket of it (its title, its description as the prompt, its criteria, account, model and effort) and launches it; the ticket follows the Kanban as one launched by hand, within its places and quotas, marked as scheduled. Give its rhythm: daily (time), weekly (days, time), monthly (day, time) or cron (a five-field expression), in the machine's time. Never twice: a due time passes its turn while the ticket of the run before is still To do or In progress, and several due times missed while Escouade was closed give one run at its return (catchUp, true by default) or none (false: it waits for the next). Its first due time is the next one from now. It stays on this machine, never shared through the repository. Answers the task as list_scheduled_tasks does.",
+        description = "Create a scheduled task in a project: at each of its due times, Escouade makes a ticket of it (its title, its description as the prompt, its criteria, account, model and effort) and launches it; the ticket follows the Kanban as one launched by hand, within its places and quotas, marked as scheduled. Give its rhythm: daily (time), weekly (days, time), monthly (day, time) or cron (a five-field expression), in the machine's time. Never twice: a due time passes its turn while the ticket of the run before is still To do or In progress, and several due times missed while Escouade was closed give one run at its return (catchUp, true by default) or none (false: it waits for the next). Its first due time is the next one from now. It stays on this machine, never shared through the repository. Made by an agent, it waits for the user's go-ahead (a line in « À toi » that shows its project, rhythm and prompt; awaiting true until then, no ticket made), keeps its author (the agent and its ticket), goes in the agent's own project only, and its rhythm leaves 15 minutes at least between two due times. Answers the task as list_scheduled_tasks does.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1399,7 +1399,7 @@ impl Tools {
     }
 
     #[tool(
-        description = "Change a project's scheduled task, named by its id or its title: what you give changes (title, description, criteria, rhythm and its days, day, time or cron, catchUp, account, model, effort), the rest stays. A new rhythm counts from now: none of its past due times runs. The tickets it made already stay as they are. Answers the task as list_scheduled_tasks does.",
+        description = "Change a project's scheduled task, named by its id or its title: what you give changes (title, description, criteria, rhythm and its days, day, time or cron, catchUp, account, model, effort), the rest stays. A new rhythm counts from now: none of its past due times runs. The tickets it made already stay as they are. Changed by an agent (in its own project only, 15 minutes at least between two due times), it waits again for the user's go-ahead, its author that agent. Answers the task as list_scheduled_tasks does.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

@@ -920,6 +920,8 @@ export const api = {
   scheduledCreate: (projectId: string, draft: ScheduledDraft) => invoke<ScheduledTask>('scheduled_create', { projectId, draft }),
   scheduledUpdate: (id: string, draft: ScheduledDraft) => invoke<ScheduledTask>('scheduled_update', { id, draft }),
   scheduledPause: (id: string, paused: boolean) => invoke<ScheduledTask>('scheduled_pause', { id, paused }),
+  /** The user's go-ahead to a task an agent scheduled (ESC-647), as its row shows it. */
+  scheduledAccept: (id: string, print: string | null) => invoke<ScheduledTask>('scheduled_accept', { id, print }),
   scheduledDelete: (id: string) => invoke<void>('scheduled_delete', { id }),
   scheduledPreview: (rhythm: Rhythm) => invoke<number[]>('scheduled_preview', { rhythm }),
   /** The Overseer (ESC-462): what the window reads of it, a message of the user, « Annuler » of an action, « Retirer » of an instruction. */

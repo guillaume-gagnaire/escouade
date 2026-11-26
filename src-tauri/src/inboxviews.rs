@@ -13,7 +13,7 @@
 
 use crate::asks::{MarkKind, ViewMark};
 use crate::core::Core;
-use crate::model::{now_ms, Column, PendingView, UiEvent};
+use crate::model::{now_ms, Column, PendingView, Rhythm, UiEvent};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -43,6 +43,9 @@ pub enum ViewSource {
     Handoff,
     /// A ticket of the team assigned to the user with a teammate's text (ESC-645): « Bob t’assigne DEM-4 · Accepter ».
     TeamAccept,
+    /// A scheduled task an agent made or changed, waiting for the user's go-ahead (ESC-647): « Claude programme
+    /// Maintenance · Accepter ».
+    Scheduled,
 }
 
 /// The group a view goes in (§ 10.2): « Tes agents se sont arrêtés », « Aujourd'hui », « Plus tôt ».
@@ -105,6 +108,8 @@ pub struct InboxItem {
     /// What the squad lead said of it (ESC-557): « Le chef s'en occupe » (`claimed`) or « Réglé
     /// par … » (`settled`), with its note. Marked, it no longer counts as waiting for the user.
     pub mark: Option<ViewMark>,
+    /// A scheduled task to accept (ESC-647): what the user reads before the go-ahead.
+    pub scheduled: Option<ScheduledAsk>,
     /// What the Overseer recommends the user answers to a request it left to them (ESC-646): never an answer.
     pub advice: Option<crate::overseer::Advice>,
     /// The state of its source, that a mark holds (`ViewMark::sign`): changed, the mark falls.
@@ -144,6 +149,7 @@ impl InboxItem {
             engine: None,
             branch: None,
             mark: None,
+            scheduled: None,
             advice: None,
             sign: String::new(),
         }
@@ -157,6 +163,22 @@ impl InboxItem {
     pub fn waiting(&self) -> bool {
         self.snoozed_until.is_none() && self.mark.is_none()
     }
+}
+
+/// A scheduled task waiting for the user's go-ahead (ESC-647), as its « À toi » line describes it: its project is the
+/// view's, its author the view's `by` and `ticket_key`.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduledAsk {
+    pub task_id: String,
+    pub rhythm: Rhythm,
+    /// Its rhythm as a cron expression.
+    pub cron: String,
+    pub description: String,
+    pub criteria: Vec<String>,
+    pub catch_up: bool,
+    /// Its next due time once accepted (epoch ms).
+    pub next: Option<i64>,
 }
 
 /// The views as the window reads them.
@@ -240,7 +262,7 @@ impl ViewAct {
             (Self::Resume, S::TicketBlocked) => v.column == Some(Column::Doing) && !v.conflict,
             (Self::Resolve | Self::Dismiss, S::TicketBlocked) => v.conflict,
             (Self::Retarget { .. }, S::TicketBlocked) => v.other_line.is_some(),
-            (Self::Accept, S::Decision | S::TeamAccept) => true,
+            (Self::Accept, S::Decision | S::TeamAccept | S::Scheduled) => true,
             (Self::Share, S::Docs) => true,
             (Self::Take { .. }, S::Handoff) => true,
             _ => false,
@@ -288,6 +310,10 @@ pub(crate) fn not_markable(source: ViewSource, from_ticket: bool, settle: bool) 
         ViewSource::TeamAccept => Some(tr!(
             "Accepter le texte qu’un collègue a écrit reste le geste de l’utilisateur : cette ligne n’est ni prise en charge ni cochée par un agent.",
             "Accepting a text a teammate wrote stays the user’s gesture: this line is neither taken in hand nor ticked by an agent."
+        )),
+        ViewSource::Scheduled => Some(tr!(
+            "Accepter une tâche programmée par un agent reste le geste de l’utilisateur : cette ligne n’est ni prise en charge ni cochée par un agent.",
+            "Accepting a task an agent scheduled stays the user’s gesture: this line is neither taken in hand nor ticked by an agent."
         )),
         ViewSource::Review => Some(tr!(
             "Cette relecture, l’hébergeur la demande à l’utilisateur : elle reste la sienne, ni prise en charge ni cochée par un agent.",
@@ -518,6 +544,45 @@ impl Core {
                 tt.written_by.join(", ")
             });
             v.sign = sign;
+            views.push(v);
+        }
+        // The scheduled tasks an agent made or changed (ESC-647): their key holds what the user reads, so that one
+        // changed meanwhile is refused, never accepted unread.
+        for sv in self.scheduled_views() {
+            let st = &sv.task;
+            if !st.awaiting {
+                continue;
+            }
+            let Some((pid, pname, private)) = of(&st.project_id) else {
+                continue;
+            };
+            let print = crate::scheduled::scheduled_print(st);
+            let mut v = InboxItem::new(
+                format!("scheduled:{}:{print}", st.id),
+                ViewSource::Scheduled,
+                ViewGroup::Today,
+                (&pid, &pname, private),
+            );
+            v.title = first_line(&st.title);
+            v.since = st.author.as_ref().map_or(st.created_at, |a| a.at);
+            v.agent_id = st.author.as_ref().map(|a| a.agent_id.clone());
+            v.agent_name = st.author.as_ref().map(|a| a.agent_name.clone());
+            v.by = v.agent_name.clone();
+            v.ticket_key = st.author.as_ref().and_then(|a| a.ticket_key.clone());
+            let next = crate::scheduled::parse(&st.rhythm).ok().and_then(|c| {
+                crate::scheduled::next_after(&c, self.schedule_clock.now(), &chrono::Local)
+            });
+            v.scheduled = Some(ScheduledAsk {
+                task_id: st.id.clone(),
+                rhythm: st.rhythm.clone(),
+                cron: crate::scheduled::cron_of(&st.rhythm)
+                    .unwrap_or_else(|_| st.rhythm.cron.clone()),
+                description: st.description.clone(),
+                criteria: st.criteria.clone(),
+                catch_up: st.catch_up,
+                next,
+            });
+            v.sign = print;
             views.push(v);
         }
         for t in &tickets {
@@ -795,6 +860,16 @@ impl Core {
                     .collect();
                 self.team_accept(&ticket(), &seen)?;
             }
+            // A task an agent scheduled (ESC-647), as the user read it: changed since, its key changed and this one
+            // was refused above; the print is checked again under the tasks' lock.
+            ViewAct::Accept if v.source == ViewSource::Scheduled => {
+                let id = v
+                    .scheduled
+                    .as_ref()
+                    .map(|s| s.task_id.clone())
+                    .unwrap_or_default();
+                self.scheduled_accept(&id, Some(&v.sign))?;
+            }
             ViewAct::Accept => {
                 let id = v.decision.clone().unwrap_or_default();
                 self.docs_accept_decision(&v.project_id, &crate::docs::Ref::Id(id))
@@ -969,6 +1044,7 @@ impl InboxItem {
             ViewSource::Review => "review",
             ViewSource::Handoff => "handoff",
             ViewSource::TeamAccept => "teamAccept",
+            ViewSource::Scheduled => "scheduled",
         }
     }
 }

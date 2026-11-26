@@ -40,10 +40,20 @@ export interface TeamMemoryEntry {
   removed: boolean;
   removedBy: string | null;
   quarantined: string | null;
+  /** Its removal proposed by a tool (ESC-647): still read until a member settles it here. */
+  removal?: RemovalAsk | null;
   mine: boolean;
   untrusted: boolean;
   /** The hosts of the addresses it names that the project does not know. */
   unknown: string[];
+  at: number;
+}
+
+/** A removal a tool proposed (ESC-647): the member whose agent (or outside client) asked, and when. */
+export interface RemovalAsk {
+  member: string;
+  name: string;
+  agent: AgentOf | null;
   at: number;
 }
 
@@ -76,6 +86,8 @@ export interface TeamMemoryView {
   me: string;
   memories: TeamMemoryEntry[];
   proposals: TeamMemoryEntry[];
+  /** The removals a tool proposed (ESC-647): « Retirer » or « Garder ». */
+  removals?: TeamMemoryEntry[];
   withdrawn: TeamMemoryEntry[];
   rules: RuleView[];
   authors: AuthorView[];
@@ -92,6 +104,8 @@ export interface QuarantinePreview {
 export const teamMemoryApi = {
   view: (projectId: string) => invoke<TeamMemoryView>('team_memory_view', { projectId }),
   decide: (projectId: string, id: string, keep: boolean) => invoke<TeamMemoryView>('team_memory_decide', { projectId, id, keep }),
+  decideRemoval: (projectId: string, id: string, remove: boolean) =>
+    invoke<TeamMemoryView>('team_memory_decide_removal', { projectId, id, remove }),
   quarantine: (projectId: string, rule: QuarantineRule, apply: boolean) =>
     invoke<QuarantinePreview>('team_memory_quarantine', { projectId, rule, apply }),
   lift: (projectId: string, ruleId: string) => invoke<TeamMemoryView>('team_memory_lift', { projectId, ruleId }),

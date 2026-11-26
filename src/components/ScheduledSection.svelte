@@ -45,6 +45,21 @@
     api.scheduledPause(task.id, !on).catch(failed);
   }
 
+  /** « Accepter » a task an agent scheduled (ESC-647), as the row shows it. */
+  function accept(e: Event, task: ScheduledTask) {
+    e.stopPropagation();
+    api.scheduledAccept(task.id, task.print ?? null).catch(failed);
+  }
+
+  /** Who scheduled it, when an agent did. */
+  function byLabel(task: ScheduledTask): string {
+    const a = task.author;
+    if (!a) return '';
+    return a.ticketKey
+      ? t('scheduled.section.byTicket', { name: a.agentName, key: a.ticketKey })
+      : t('scheduled.section.by', { name: a.agentName });
+  }
+
   function remove(task: ScheduledTask) {
     app.modal = {
       kind: 'confirm',
@@ -95,7 +110,8 @@
       {@const tk = runningTicket(task, app.tickets)}
       <div
         class="row-item"
-        class:paused={task.paused}
+        class:paused={task.paused || task.awaiting}
+        class:awaiting={task.awaiting}
         role="button"
         tabindex="0"
         data-task={task.id}
@@ -106,21 +122,36 @@
         <span class="txt">
           <span class="nm" use:tip={{ text: task.title, cut: true }}>{task.title}</span>
           <span class="when"
-            ><span>{rhythmLabel(task.rhythm)}</span><span class="sep">{' · '}</span>{#if task.paused}<span
-                >{t('scheduled.section.paused')}</span
-              >{:else if tk}<button class="run" onclick={(e) => openTicket(e, tk)}>{t('scheduled.section.running', { key: tk.key })}</button
+            ><span>{rhythmLabel(task.rhythm)}</span><span class="sep">{' · '}</span>{#if task.awaiting}<span class="wait"
+                >{t('scheduled.section.awaiting')}</span
+              >{:else if task.paused}<span>{t('scheduled.section.paused')}</span>{:else if tk}<button
+                class="run"
+                onclick={(e) => openTicket(e, tk)}>{t('scheduled.section.running', { key: tk.key })}</button
               >{:else if task.next}<span class="next" use:tip={task.lastNote ?? ''}>{nextLabel(task.next, now)}</span>{:else}<span
                 >{t('scheduled.section.never')}</span
               >{/if}</span
           >
+          {#if task.author}<span class="by" data-author use:tip={t('scheduled.section.byTip', { name: task.author.agentName })}
+              >{byLabel(task)}</span
+            >{/if}
         </span>
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <span class="sw" onclick={(e) => e.stopPropagation()}>
-          <Switch
-            label={task.paused ? t('scheduled.section.resume', { title: task.title }) : t('scheduled.section.pause', { title: task.title })}
-            bind:on={() => !task.paused, (on) => setOn(task, on)}
-          />
-        </span>
+        {#if task.awaiting}
+          <button
+            class="accept"
+            aria-label={t('scheduled.section.acceptLabel', { title: task.title, name: task.author?.agentName ?? '' })}
+            onclick={(e) => accept(e, task)}>{t('scheduled.section.accept')}</button
+          >
+        {:else}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <span class="sw" onclick={(e) => e.stopPropagation()}>
+            <Switch
+              label={task.paused
+                ? t('scheduled.section.resume', { title: task.title })
+                : t('scheduled.section.pause', { title: task.title })}
+              bind:on={() => !task.paused, (on) => setOn(task, on)}
+            />
+          </span>
+        {/if}
       </div>
     {:else}
       <div class="none">{t('scheduled.section.none')}</div>
@@ -219,6 +250,31 @@
   .paused .nm,
   .paused .when {
     color: var(--dim);
+  }
+  /* Scheduled by an agent, awaiting the user's go-ahead (ESC-647): said, and its author shown. */
+  .awaiting .wait {
+    color: var(--warn-ink);
+  }
+  .by {
+    overflow: hidden;
+    color: var(--dim);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .accept {
+    flex: none;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--soft);
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .accept:hover {
+    background: var(--hover);
   }
   .sw {
     display: flex;

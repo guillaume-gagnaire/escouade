@@ -5,10 +5,20 @@
 // read: one settled meanwhile is refused (« Réglé ailleurs »).
 import { invoke } from '../transport';
 import type { Key } from '../i18n';
-import type { Column, EngineId, PendingRequest } from '../types';
+import type { Column, EngineId, PendingRequest, Rhythm } from '../types';
 
 export type ViewSource =
-  'permission' | 'question' | 'plan' | 'ticketReview' | 'ticketBlocked' | 'decision' | 'docs' | 'review' | 'handoff' | 'teamAccept';
+  | 'permission'
+  | 'question'
+  | 'plan'
+  | 'ticketReview'
+  | 'ticketBlocked'
+  | 'decision'
+  | 'docs'
+  | 'review'
+  | 'handoff'
+  | 'teamAccept'
+  | 'scheduled';
 export type ViewGroup = 'stopped' | 'today' | 'earlier';
 
 /**
@@ -70,8 +80,21 @@ export interface InboxItem {
   branch?: string | null;
   /** The squad lead took it in hand, or ticked it as settled (ESC-557). */
   mark: ViewMark | null;
+  /** A task an agent scheduled, awaiting the go-ahead (ESC-647): what the user reads before accepting it. */
+  scheduled?: ScheduledAsk | null;
   /** The Overseer's recommendation, on a request it left to the user (ESC-646). */
   advice?: ViewAdvice | null;
+}
+
+/** A scheduled task an agent made or changed, as its « À toi » line describes it (ESC-647). */
+export interface ScheduledAsk {
+  taskId: string;
+  rhythm: Rhythm;
+  cron: string;
+  description: string;
+  criteria: string[];
+  catchUp: boolean;
+  next: number | null;
 }
 
 export interface InboxViews {
@@ -176,6 +199,9 @@ export function gesturesOf(v: InboxItem): Gesture[] {
       return [{ id: 'take', label: 'inboxViews.act.take', primary: true, inBox: true }];
     // A teammate's text assigned to me (ESC-645): accepted as the box shows it, never by an agent.
     case 'teamAccept':
+      return [{ id: 'accept', label: 'inboxViews.act.accept', primary: true, inBox: true }];
+    // A task an agent scheduled (ESC-647): it launches nothing before this go-ahead, which no agent gives.
+    case 'scheduled':
       return [{ id: 'accept', label: 'inboxViews.act.accept', primary: true, inBox: true }];
   }
 }

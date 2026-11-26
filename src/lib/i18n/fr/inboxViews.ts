@@ -13,6 +13,7 @@ export default {
     review: 'Relecture',
     handoff: 'Agent passé',
     teamAccept: 'Ticket à accepter',
+    scheduled: 'Tâche programmée à accepter',
   },
   /** Ce qu’une demande bloquante dit de son agent. */
   stopped: 'l’agent s’est arrêté',
@@ -74,6 +75,8 @@ export default {
     review: 'La relecture se fait chez l’hébergeur : Escouade l’a lue dans la dernière liste des PR.',
     teamAccept:
       'Son texte vient de {name} : accepté, le pilote auto peut le lancer avec tes droits et tes comptes. Lis-le d’abord dans le Kanban ; changé ensuite par un collègue, il revient ici.',
+    scheduled:
+      'L’agent {name} l’a programmée : elle ne lance aucun ticket avant ton accord. Acceptée, elle lance un agent à chaque échéance, avec tes comptes ; changée ensuite par un agent, elle revient ici.',
     handoff:
       'Escouade récupère la branche {branch}, fait un worktree, applique le travail en cours, puis l’agent repart ici sur ton harness et ton compte, avec un dossier de passation.',
   },
@@ -81,6 +84,14 @@ export default {
   handoffTitle: '{name} te passe {key} · {title}',
   /** A ticket assigned to the user with a teammate's text (ESC-645). */
   teamAcceptTitle: '{key} · {title} · texte de {name}',
+  /** A scheduled task an agent made or changed (ESC-647). */
+  scheduledTitle: '{name} programme « {title} »',
+  scheduled: {
+    project: 'Projet',
+    rhythm: 'Rythme',
+    prompt: 'Consigne',
+    criteria: 'Critères',
+  },
   settled: 'Réglé ailleurs : la boîte s’est mise à jour.',
   /** Ce que l’Overseer recommande d’une demande qu’il te laisse (ESC-646) : jamais une réponse. */
   advice: {

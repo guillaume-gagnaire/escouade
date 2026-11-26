@@ -17,7 +17,10 @@
 //!   validation or in Réglages › Projets › Équipe › Mémoire partagée; « Écarter » sets it aside. An acceptance holds the digest
 //!   of what was accepted: a content written over afterwards is no longer accepted. A memory written by hand by a member
 //!   is accepted at once. No tool of the MCP server accepts one: an agent never validates a memory.
-//! - **The removal**: `forget_memory` leaves a tombstone that goes to every machine; an administrator puts in
+//! - **The removal**: forgotten in the window, a memory leaves a tombstone that goes to every machine; `forget_memory`
+//!   (a tool: an agent, or Claude outside Escouade) of a memory a human accepted only **proposes** its removal (ESC-647),
+//!   shown at the review as a write is, that a member settles in the window (« Retirer » or « Garder »); a tool still
+//!   forgets its own proposals, and, the review off, what an agent wrote. An administrator puts in
 //!   **quarantine** by a rule (the agent of a ticket, a member or one of their devices, since a date), kept in the
 //!   journal: it holds for what is there, and for what comes later (a device back from offline).
 //! - **On this machine**, the copy of what this member may read (`team-docs/.escouade/memory/`, beside the copy of the
@@ -140,6 +143,8 @@ pub struct Entry {
     pub removed_by: Option<String>,
     /// Under a quarantine's rule (its id).
     pub quarantined: Option<String>,
+    /// Its removal proposed by a tool (ESC-647): it stays read until a member settles it in the window.
+    pub removal: Option<RemovalAsk>,
     /// Written by this member (by hand or by one of their agents).
     pub mine: bool,
     /// Given as data, never as an instruction: proposed, written by an agent that had read a third party's data, or
@@ -152,6 +157,27 @@ pub struct Entry {
     /// The same, as the journal orders it.
     #[serde(skip)]
     order: Vec<u8>,
+}
+
+/// A removal a tool proposed (ESC-647), signed by the device that asked: the member (hex), their name, the agent.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RemovalAsk {
+    pub member: String,
+    pub name: String,
+    pub agent: Option<AgentOf>,
+    pub at: i64,
+}
+
+/// What `forget_memory` did (ESC-647).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Forgot {
+    /// Nothing of that name.
+    Nothing,
+    /// Tombstones left.
+    Gone,
+    /// Its removal proposed: a human accepted it.
+    Proposed,
 }
 
 /// A quarantine: what it takes out, written by an administrator.
@@ -254,6 +280,14 @@ impl Resolved {
             }
         }
         best.into_values().filter(|e| !e.removed).collect()
+    }
+
+    /// The removals a tool proposed (ESC-647), of what this member's agents read: any member settles them.
+    pub fn removals(&self) -> Vec<&Entry> {
+        self.visible()
+            .into_iter()
+            .filter(|e| e.removal.is_some())
+            .collect()
     }
 
     /// The proposals this member may accept or set aside: their own, or every one for an administrator.
@@ -466,6 +500,19 @@ pub fn resolve(
                 }
             }
         }
+        if !e.removed {
+            if let Some(ask) = f
+                .get("removalAsked")
+                .and_then(|v| serde_json::from_value::<RemovalAsk>(v.clone()).ok())
+            {
+                // Its member is the one of the device that signed it, whatever it says.
+                if let Some(m) =
+                    stamp(&view.id, "removalAsked").and_then(|s| member_of(&s.device.0))
+                {
+                    e.removal = Some(RemovalAsk { member: m, ..ask });
+                }
+            }
+        }
         e.order = order.to_bytes().to_vec();
         e.at = order.wall;
         // Another member's word is a third party's here (SR3-04): what its author alone kept (written by hand, or by
@@ -675,6 +722,8 @@ pub struct TeamMemoryView {
     pub memories: Vec<Entry>,
     /// The proposals this member may accept or set aside.
     pub proposals: Vec<Entry>,
+    /// The removals a tool proposed (ESC-647): « Retirer » or « Garder ».
+    pub removals: Vec<Entry>,
     /// The memories forgotten, set aside or in quarantine: the journal keeps them (an administrator's view holds all).
     pub withdrawn: Vec<Entry>,
     pub rules: Vec<RuleView>,
@@ -706,6 +755,7 @@ fn view_of(r: &Resolved) -> TeamMemoryView {
     v.memories = r.visible().into_iter().cloned().collect();
     v.memories.sort_by(|a, b| a.name.cmp(&b.name));
     v.proposals = r.reviewable().into_iter().cloned().collect();
+    v.removals = r.removals().into_iter().cloned().collect();
     let shown: BTreeSet<&str> = v.memories.iter().map(|e| e.id.as_str()).collect();
     v.withdrawn = r
         .entries
@@ -975,9 +1025,15 @@ impl Core {
         Ok((m, new, entry))
     }
 
-    /// `forget_memory` in a project whose memory is on the team server: a tombstone on what this member's agents read
-    /// of that name (and on their own proposals of it), which goes to every machine. False when there was none.
-    pub(crate) async fn team_memory_forget(&self, project_id: &str, name: &str) -> Result<bool> {
+    /// A memory forgotten in a project whose memory is on the team server: a tombstone on what this member's agents
+    /// read of that name (and on their own proposals of it), which goes to every machine. By a tool (`by_tool`, with
+    /// the agent if one calls: ESC-647), a memory a human accepted is not forgotten: its removal is proposed.
+    pub(crate) async fn team_memory_forget(
+        &self,
+        project_id: &str,
+        name: &str,
+        by_tool: Option<Option<AgentOf>>,
+    ) -> Result<Forgot> {
         let project = self.project(project_id)?;
         let (shared, pid) = self.team_memory_link(&project)?;
         let name = memory::name_of(name)?;
@@ -996,15 +1052,84 @@ impl Core {
             .map(|e| e.id.clone())
             .collect();
         if targets.is_empty() {
-            return Ok(false);
+            return Ok(Forgot::Nothing);
         }
+        let (review, _) = self.team_memory_review(&project);
+        let mut proposed = false;
         for id in targets {
             let o = id_of(&id).ok_or_else(|| anyhow!("an object"))?;
-            t.set_field(pid, o, "removed", Value::Bool(true))
-                .map_err(say)?;
+            // Accepted by a human: by hand, or kept at the review (the review off, what an agent wrote is accepted
+            // without one, and a tool forgets it as it wrote it).
+            let human = resolved.entries.iter().any(|e| {
+                e.id == id
+                    && e.standing == Standing::Accepted
+                    && (review || e.provenance.by != "agent")
+            });
+            match &by_tool {
+                Some(agent) if human => {
+                    let ask = RemovalAsk {
+                        member: resolved.me.clone(),
+                        name: self.me_in(&project).name,
+                        agent: agent.clone(),
+                        at: crate::model::now_ms(),
+                    };
+                    t.set_field(pid, o, "removalAsked", serde_json::to_value(&ask)?)
+                        .map_err(say)?;
+                    proposed = true;
+                }
+                _ => {
+                    t.set_field(pid, o, "removed", Value::Bool(true))
+                        .map_err(say)?;
+                }
+            }
         }
         self.team_memory_after(&project, &mut t, pid).await?;
-        Ok(true)
+        Ok(if proposed {
+            Forgot::Proposed
+        } else {
+            Forgot::Gone
+        })
+    }
+
+    /// « Retirer » (`remove`) or « Garder » a memory whose removal a tool proposed (ESC-647): a member's gesture, in
+    /// the window alone (no tool of the MCP server comes here). Removed, a tombstone for every machine; kept, the
+    /// proposal goes.
+    pub(crate) async fn team_memory_decide_removal(
+        &self,
+        project_id: &str,
+        id: &str,
+        remove: bool,
+    ) -> Result<TeamMemoryView> {
+        let project = self.project(project_id)?;
+        let (shared, pid) = self.team_memory_link(&project)?;
+        let object = id_of(id).ok_or_else(|| anyhow!("an id of 32 hexadecimal digits"))?;
+        {
+            let one = crate::teamdocs::pass_lock(project_id);
+            let _one = one.lock().await;
+            let mut t = shared.lock().await;
+            let mut devices = self.team_memory_manifest(project_id).devices;
+            let resolved = resolve(&mut t, pid, &mut devices, &BTreeSet::new())?;
+            if !resolved
+                .entries
+                .iter()
+                .any(|e| e.id == id && e.removal.is_some())
+            {
+                bail!(tr!(
+                    "Ce retrait n’est plus proposé : la mémoire se met à jour.",
+                    "This removal is no longer proposed: the memory is updating."
+                ));
+            }
+            if remove {
+                t.set_field(pid, object, "removed", Value::Bool(true))
+                    .map_err(say)?;
+            } else {
+                t.set_field(pid, object, "removalAsked", Value::Null)
+                    .map_err(say)?;
+            }
+            self.team_memory_after(&project, &mut t, pid).await?;
+        }
+        self.memory_changed(project_id);
+        self.team_memory_view(project_id).await
     }
 
     /// The shared memory of a project of a team, as its settings show it.

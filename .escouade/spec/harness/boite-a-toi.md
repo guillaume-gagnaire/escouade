@@ -2,8 +2,8 @@
 title: "La boîte « À toi »"
 subject: "harness"
 sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 16 et § 18 pour le reversement)","design/inbox-2-3/README.md (direction B, captures b-)","docs/REMOTE.md (Le classement des commandes)","docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 5.1 pour ESC-557 ; § 10.2 pour le filtre d'ESC-578 ; § 18)","Demande de l'utilisateur du 2026-11-20 (ESC-557) : « quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans \"à toi\", afin d'être toujours à jour »","Demande de l'utilisateur du 2026-11-21 (ESC-578) : « Dans le \"À toi\", ajoute le fait de pouvoir filtrer par type de demande. »"]
-tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552","ESC-585","ESC-557","ESC-578","ESC-628","ESC-645"]
-decisions: [210,204,240,242,222,227,263,290,296,315]
+tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552","ESC-585","ESC-557","ESC-578","ESC-628","ESC-645","ESC-647"]
+decisions: [210,204,240,242,222,227,263,290,296,315,340]
 compared: null
 ---
 
@@ -274,3 +274,10 @@ Demandé le 2026-11-21 : « Dans le "À toi", ajoute le fait de pouvoir filtrer 
 - Ses gestes : « Accepter » (comme la carte) et « Voir dans le Kanban ». Sous eux : « Son texte vient de Bob Durand : accepté, le pilote auto peut le lancer avec tes droits et tes comptes. Lis-le d'abord dans le Kanban ; changé ensuite par un collègue, il revient ici. »
 - **Sur la vue que l'utilisateur a lue** : sa clé porte l'empreinte des écritures du collègue ; un texte changé entre-temps fait une autre vue, et « Accepter » sur l'ancienne est refusé.
 - Le chef d'escouade ne la prend pas en charge et ne la coche pas : « Accepter le texte qu'un collègue a écrit reste le geste de l'utilisateur ».
+
+## Une tâche programmée à accepter (ESC-647)
+
+- Une vue « Tâche programmée à accepter » : une tâche programmée qu'un agent a créée ou modifiée, qui ne lance rien avant l'accord de l'utilisateur (voir *Tâches programmées › Une tâche programmée par un agent*). Sa ligne : « Claude programme « Maintenance » », dans « Aujourd'hui », l'icône d'horloge, l'agent et son ticket ; son type pour le filtre : « Feux verts » (un accord que l'utilisateur seul donne).
+- Son panneau montre ce qu'elle fera : le projet, le rythme (en mots et son expression cron), la consigne, les critères. Son geste : « Accepter ». Sous lui : « L'agent Claude l'a programmée : elle ne lance aucun ticket avant ton accord. Acceptée, elle lance un agent à chaque échéance, avec tes comptes ; changée ensuite par un agent, elle revient ici. »
+- **Sur la vue que l'utilisateur a lue** : sa clé porte l'empreinte de la tâche (projet, titre, consigne, critères, boucles, harness, compte, modèle, effort, rythme, rattrapage) ; une tâche changée entre-temps fait une autre vue, et « Accepter » sur l'ancienne est refusé. L'empreinte est vérifiée encore sous le verrou des tâches.
+- Le chef d'escouade ne la prend pas en charge et ne la coche pas : « Accepter une tâche programmée par un agent reste le geste de l'utilisateur ».

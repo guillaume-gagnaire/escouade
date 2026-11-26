@@ -17,8 +17,8 @@ use super::Caller;
 use crate::accounts;
 use crate::core::Core;
 use crate::i18n;
-use crate::model::{Project, Rhythm, RhythmKind, ScheduledTask};
-use crate::scheduled::{cron_of, ScheduledDraft, ScheduledView};
+use crate::model::{Project, Rhythm, RhythmKind, ScheduledAuthor, ScheduledTask};
+use crate::scheduled::{cron_of, shortest_gap, ScheduledDraft, ScheduledView, AGENT_MIN_GAP_MS};
 use chrono::{Local, TimeZone};
 use serde::Serialize;
 use std::sync::Arc;
@@ -53,6 +53,21 @@ struct TaskRow {
     account: String,
     model: String,
     effort: String,
+    /// Made or changed by an agent, it waits for the user's go-ahead (ESC-647): no ticket until then.
+    awaiting: bool,
+    /// The agent that made or last changed it (ESC-647); none: the user.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    author: Option<AuthorRow>,
+}
+
+/// Who made a task, as the tools answer it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthorRow {
+    agent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ticket: Option<String>,
+    project: String,
 }
 
 /// `ms` in the machine's time, as RFC 3339.
@@ -117,7 +132,72 @@ fn row(core: &Core, v: &ScheduledView) -> TaskRow {
         account,
         model: auto(&t.model),
         effort: auto(&t.effort),
+        awaiting: t.awaiting,
+        author: t.author.as_ref().map(|a| AuthorRow {
+            agent: a.agent_name.clone(),
+            ticket: a.ticket_key.clone(),
+            project: core
+                .project(&a.project_id)
+                .map_or_else(|_| a.project_id.clone(), |p| p.name.clone()),
+        }),
     }
+}
+
+/// The agent that calls (ESC-647), as a task keeps its author; none for Claude outside Escouade, which is the user's.
+/// An agent other than the Overseer makes and changes the tasks of its own project only.
+fn author(
+    core: &Core,
+    caller: &Caller,
+    project: &Project,
+) -> Result<Option<ScheduledAuthor>, ToolError> {
+    let Caller::Agent(id) = caller else {
+        return Ok(None);
+    };
+    let (name, own, ticket) = {
+        let h = core.agent(id).map_err(|_| {
+            ToolError::Refused(tr!(
+                "L’agent {id} n’est plus dans Escouade : il n’agit plus.",
+                "The agent {id} is no longer in Escouade: it no longer acts."
+            ))
+        })?;
+        let rt = h.lock();
+        (
+            rt.meta.name.clone(),
+            rt.meta.project_id.clone(),
+            rt.meta.ticket_id.clone(),
+        )
+    };
+    if own != project.id && !core.is_overseer(id) {
+        return Err(ToolError::Refused(tr!(
+            "Un agent ne programme des tâches que dans son propre projet : {name} n’en crée ni n’en change dans « {project} ».",
+            "An agent schedules tasks in its own project only: {name} neither makes nor changes one in “{project}”.",
+            project = project.name
+        )));
+    }
+    let ticket_key = ticket
+        .as_deref()
+        .and_then(|t| core.ticket(t).ok())
+        .map(|t| t.key);
+    Ok(Some(ScheduledAuthor {
+        agent_id: id.clone(),
+        agent_name: name,
+        project_id: own,
+        ticket_id: ticket,
+        ticket_key,
+        at: core.schedule_clock.now(),
+    }))
+}
+
+/// An agent's rhythm leaves 15 minutes at least between two due times (ESC-647).
+fn agent_rhythm(core: &Core, rhythm: &Rhythm) -> Result<(), ToolError> {
+    let gap = shortest_gap(rhythm, core.schedule_clock.now(), &Local).map_err(failure)?;
+    if gap.is_some_and(|g| g < AGENT_MIN_GAP_MS) {
+        return Err(ToolError::Refused(tr!(
+            "Un agent ne programme pas une tâche plus d’une fois par quart d’heure : laisse 15 minutes au moins entre deux échéances (l’utilisateur, lui, le peut dans la fenêtre).",
+            "An agent does not schedule a task more than once every quarter of an hour: leave 15 minutes at least between two due times (the user can, in the window)."
+        )));
+    }
+    Ok(())
 }
 
 /// The task `asked` names in `project`: its id, else its title in any case.
@@ -261,11 +341,17 @@ pub(super) fn create(
 ) -> Result<String, ToolError> {
     let project = resolve::project(core, caller, &a.project)?;
     may_act_on(core, caller, &project.id)?;
+    let by = author(core, caller, &project)?;
     let mut d = draft(core, caller, &project, None, Some(&a.title), &a.fields)?;
     if d.catch_up.is_none() {
         d.catch_up = Some(true);
     }
-    let v = core.scheduled_create(&project.id, d).map_err(failure)?;
+    if let (Some(_), Some(r)) = (&by, &d.rhythm) {
+        agent_rhythm(core, r)?;
+    }
+    let v = core
+        .scheduled_create_by(&project.id, d, by)
+        .map_err(failure)?;
     json(&row(core, &v))
 }
 
@@ -277,6 +363,7 @@ pub(super) fn update(
 ) -> Result<String, ToolError> {
     let project = resolve::project(core, caller, &a.project)?;
     may_act_on(core, caller, &project.id)?;
+    let by = author(core, caller, &project)?;
     let t = task(core, &project, &a.task)?;
     let d = draft(
         core,
@@ -286,7 +373,10 @@ pub(super) fn update(
         a.title.as_deref(),
         &a.fields,
     )?;
-    let v = core.scheduled_update(&t.id, d).map_err(failure)?;
+    if by.is_some() {
+        agent_rhythm(core, d.rhythm.as_ref().unwrap_or(&t.rhythm))?;
+    }
+    let v = core.scheduled_update_by(&t.id, d, by).map_err(failure)?;
     json(&row(core, &v))
 }
 

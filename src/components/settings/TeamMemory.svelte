@@ -51,6 +51,21 @@
   const decide = (e: TeamMemoryEntry, keep: boolean) =>
     act(() => teamMemoryApi.decide(project.id, e.id, keep), t(keep ? 'memory.team.kept' : 'memory.team.rejected', { name: e.name }));
 
+  /** « Retirer » or « Garder » a memory whose removal a tool proposed (ESC-647). */
+  const settleRemoval = (e: TeamMemoryEntry, remove: boolean) =>
+    act(
+      () => teamMemoryApi.decideRemoval(project.id, e.id, remove),
+      t(remove ? 'memory.team.removedAll' : 'memory.team.removalKept', { name: e.name }),
+    );
+
+  /** Who asked a removal: the agent (or the outside client) and its member, when. */
+  function askedBy(e: TeamMemoryEntry): string {
+    const r = e.removal;
+    if (!r) return '';
+    const who = r.agent ? `${r.agent.name}${r.agent.ticket ? ` (${r.agent.ticket})` : ''} · ${r.name}` : r.name;
+    return t('memory.team.removalBy', { who, date: fDateTime(r.at) });
+  }
+
   async function forget(name: string) {
     if (armed !== name) {
       armed = name;
@@ -175,6 +190,38 @@
               >
               <button class="btn small ghost" disabled={busy} onclick={() => decide(e, false)} data-testid="team-memory-reject"
                 >{t('memory.team.reject')}</button
+              >
+            </div>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if view.removals?.length}
+    <section class="proposals removals" aria-label={t('memory.team.removals', { count: view.removals.length })}>
+      <h4>{t('memory.team.removals', { count: view.removals.length })}</h4>
+      <p class="note">{t('memory.team.removalsNote')}</p>
+      <ul class="list">
+        {#each view.removals as e (e.id)}
+          <li data-testid="team-memory-removal" data-name={e.name}>
+            <details>
+              <summary>
+                <span class="name mono">{e.name}</span>
+                <span class="desc">{e.description}</span>
+                <span class="who">{askedBy(e)}</span>
+              </summary>
+              <pre class="body">{e.body}</pre>
+            </details>
+            <div class="acts">
+              <button class="btn small" disabled={busy} onclick={() => settleRemoval(e, true)} data-testid="team-memory-remove"
+                >{t('memory.team.remove')}</button
+              >
+              <button
+                class="btn small primary"
+                disabled={busy}
+                onclick={() => settleRemoval(e, false)}
+                data-testid="team-memory-keep-removal">{t('memory.team.keepIt')}</button
               >
             </div>
           </li>

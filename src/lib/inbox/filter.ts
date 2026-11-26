@@ -48,6 +48,8 @@ const VIEW_TYPE: Record<ViewSource, InboxType> = {
   handoff: 'tickets',
   // A teammate's text assigned to me, to accept (ESC-645).
   teamAccept: 'tickets',
+  // A task an agent scheduled (ESC-647): a go-ahead the user alone gives.
+  scheduled: 'gate',
 };
 
 /** The type of what Escouade puts in the box (a view). */

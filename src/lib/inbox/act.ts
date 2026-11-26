@@ -44,6 +44,9 @@ export function goToSource(v: InboxItem) {
     case 'decision':
       app.closeInbox();
       return app.openDocs(v.projectId, 'decisions');
+    case 'scheduled':
+      app.closeInbox();
+      return app.selectProject(v.projectId);
     case 'docs':
       app.closeInbox();
       return app.openDocs(v.projectId);
@@ -67,6 +70,8 @@ export function placeOf(v: InboxItem): { label: string; icon: IconName } | null 
     case 'decision':
     case 'docs':
       return { label: t('inboxViews.act.docs'), icon: 'file' };
+    case 'scheduled':
+      return null;
     case 'review':
       return null;
   }

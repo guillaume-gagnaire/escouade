@@ -91,6 +91,7 @@ escouade_command::commands! {
         // The team's memory (TS-10, ESC-518).
         commands::team_memory_view,
         commands::team_memory_decide,
+        commands::team_memory_decide_removal,
         commands::team_memory_quarantine,
         commands::team_memory_lift,
         commands::team_memory_of_ticket,
@@ -359,6 +360,7 @@ escouade_command::commands! {
         commands::scheduled_create,
         commands::scheduled_update,
         commands::scheduled_pause,
+        commands::scheduled_accept,
         commands::scheduled_delete,
         commands::scheduled_preview,
         commands::overseer_view,

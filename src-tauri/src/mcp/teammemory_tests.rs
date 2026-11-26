@@ -224,20 +224,50 @@ async fn a_memory_written_by_hand_is_the_teams_and_a_secret_is_refused() {
     )
     .await;
     assert!(why.contains("AWS"), "{why}");
-    // Forgotten by a tool: a tombstone, for Alice too.
-    read(
+    // Forgotten by a tool (SR4-05, ESC-647): a memory written by hand is a human's, its removal only proposed; Alice
+    // still reads it, and the review shows the removal asked.
+    let forgot = read(
         &cb,
         "forget_memory",
         json!({ "project": bob.p.id, "name": "dragons" }),
     )
     .await;
+    assert_eq!(forgot["proposed"], "dragons");
+    assert!(forgot.get("forgotten").is_none(), "{forgot}");
     bob.round(&id).await;
     alice.round(&id).await;
     let ca = external(&alice.h).await;
-    refused(
+    let got = read(
         &ca,
         "read_memory",
         json!({ "project": alice.p.id, "name": "dragons" }),
     )
     .await;
+    assert_eq!(got["memory"]["body"], "Ils dorment le lundi.");
+    let v = alice.h.core.team_memory_view(&alice.p.id).await.unwrap();
+    assert_eq!(v.removals.len(), 1);
+    assert!(v.withdrawn.is_empty());
+    // No tool settles it: the gesture is the window's. Alice removes it there: a tombstone, for Bob too.
+    alice
+        .h
+        .core
+        .team_memory_decide_removal(&alice.p.id, &v.removals[0].id, true)
+        .await
+        .unwrap();
+    alice.round(&id).await;
+    bob.round(&id).await;
+    refused(
+        &cb,
+        "read_memory",
+        json!({ "project": bob.p.id, "name": "dragons" }),
+    )
+    .await;
+    // Its own proposal, the tool forgets at once.
+    let forgot = read(
+        &cb,
+        "forget_memory",
+        json!({ "project": bob.p.id, "name": "dehors" }),
+    )
+    .await;
+    assert_eq!(forgot["forgotten"], "dehors");
 }

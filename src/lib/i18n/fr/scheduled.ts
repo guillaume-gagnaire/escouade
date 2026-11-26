@@ -16,6 +16,12 @@ export default {
     deleteTitle: 'Supprimer la tâche programmée ?',
     deleteBody: '« {title} » ne lancera plus de ticket. Les tickets qu’elle a créés restent sur le Kanban.',
     openTicket: 'Ouvrir {key}',
+    awaiting: 'attend ton accord',
+    accept: 'Accepter',
+    acceptLabel: 'Accepter « {title} », programmée par {name}',
+    by: 'par {name}',
+    byTicket: 'par {name} · {key}',
+    byTip: 'Programmée par l’agent {name} : elle ne lance rien avant ton accord.',
   },
   rhythm: {
     daily: 'Chaque jour {time}',

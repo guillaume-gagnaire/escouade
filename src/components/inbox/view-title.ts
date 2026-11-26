@@ -15,6 +15,8 @@ export function viewTitle(v: InboxItem): string {
       return t('inboxViews.handoffTitle', { name: v.by ?? '', key: v.ticketKey ?? '', title: v.title });
     case 'teamAccept':
       return t('inboxViews.teamAcceptTitle', { name: v.by ?? '', key: v.ticketKey ?? '', title: v.title });
+    case 'scheduled':
+      return t('inboxViews.scheduledTitle', { name: v.by ?? '', title: v.title });
     default:
       return v.title;
   }

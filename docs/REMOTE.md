@@ -502,6 +502,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `resume_on_account`
 - `run_start`
 - `save_settings`
+- `scheduled_accept`
 - `scheduled_create`
 - `scheduled_delete`
 - `scheduled_pause`
@@ -562,6 +563,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `team_join_preview`
 - `team_list`
 - `team_memory_decide`
+- `team_memory_decide_removal`
 - `team_memory_lift`
 - `team_memory_of_ticket`
 - `team_memory_quarantine`

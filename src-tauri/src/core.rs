@@ -9962,7 +9962,7 @@ impl Core {
     pub async fn forget_memory(&self, id: &str, name: &str) -> Result<()> {
         let p = self.project(id)?;
         let gone = if self.team_docs_on(&p) {
-            self.team_memory_forget(id, name).await?
+            self.team_memory_forget(id, name, None).await? != crate::teammemory::Forgot::Nothing
         } else {
             crate::memory::forget(&crate::memory::dir_of(&p), name)?
         };

@@ -13,6 +13,7 @@ export default defineZone('inboxViews', {
     review: 'Review',
     handoff: 'Agent passed',
     teamAccept: 'Ticket to accept',
+    scheduled: 'Scheduled task to accept',
   },
   stopped: 'the agent has stopped',
   /** The tooltip of the box's tile: the views it counts besides the requests and the agents stopped. */
@@ -69,11 +70,21 @@ export default defineZone('inboxViews', {
     review: 'The review is done on the host: Escouade read it in the last list of pull requests.',
     teamAccept:
       'Its text comes from {name}: accepted, the autopilot may start it with your rights and accounts. Read it first on the Kanban; changed by a teammate afterwards, it comes back here.',
+    scheduled:
+      'The agent {name} scheduled it: it launches no ticket before your go-ahead. Accepted, it launches an agent at each due time, with your accounts; changed afterwards by an agent, it comes back here.',
     handoff:
       'Escouade fetches the branch {branch}, makes a worktree, applies the work in progress, then the agent goes on here on your harness and account, with a handover file.',
   },
   handoffTitle: '{name} passes you {key} · {title}',
   teamAcceptTitle: '{key} · {title} · text by {name}',
+  /** A scheduled task an agent made or changed (ESC-647). */
+  scheduledTitle: '{name} schedules “{title}”',
+  scheduled: {
+    project: 'Project',
+    rhythm: 'Rhythm',
+    prompt: 'Prompt',
+    criteria: 'Criteria',
+  },
   settled: 'Settled elsewhere: the box has updated.',
   /** What the squad lead said of it (ESC-557): taken in hand, or ticked as settled. */
   advice: {

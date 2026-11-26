@@ -32,8 +32,9 @@ test('a scheduled task makes and launches its ticket at its due time, once while
 
   // At its due time (within an hour of the fast clock, 6 s), its ticket is made and launched: « en cours » with its key.
   await expect(row).toContainText('en cours (DEM-1)', { timeout: 30_000 });
-  // Its agent's card says it.
-  await expect(page.locator('.side [data-scheduled-mark]').first()).toHaveText('⏱ programmée');
+  // Its agent's card says it, once that agent is made and started: seconds on a loaded machine (14 s seen, more at
+  // times), as long as the ticket itself may take.
+  await expect(page.locator('.side [data-scheduled-mark]').first()).toHaveText('⏱ programmée', { timeout: 30_000 });
 
   // Two more hours of the fast clock: their due times pass their turn while DEM-1 runs, no second ticket.
   await page.waitForTimeout(13_000);

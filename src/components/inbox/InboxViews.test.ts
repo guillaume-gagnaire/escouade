@@ -353,6 +353,41 @@ describe('a view opened in the panel', () => {
     expect(acts()).toHaveLength(2);
   });
 
+  it('shows a task an agent scheduled, its project, rhythm and prompt, and accepts it (ESC-647)', async () => {
+    render(InboxViewPane, {
+      view: view({
+        key: 'scheduled:s1:abc',
+        source: 'scheduled',
+        group: 'today',
+        title: 'Maintenance',
+        request: null,
+        agentName: 'Claude',
+        by: 'Claude',
+        ticketKey: 'DEM-3',
+        scheduled: {
+          taskId: 's1',
+          rhythm: { kind: 'daily', days: [], day: 1, hour: 18, minute: 0, cron: '' },
+          cron: '0 18 * * *',
+          description: 'Relis les tickets du jour.',
+          criteria: ['Rien de poussé'],
+          catchUp: true,
+          next: null,
+        },
+      }),
+    });
+    expect(pane()).toHaveTextContent('Tâche programmée à accepter');
+    expect(pane()).toHaveTextContent('Claude programme « Maintenance »');
+    const d = screen.getByTestId('ivw-scheduled');
+    expect(d).toHaveTextContent('portail');
+    expect(d).toHaveTextContent('Chaque jour 18:00');
+    expect(d).toHaveTextContent('0 18 * * *');
+    expect(d).toHaveTextContent('Relis les tickets du jour.');
+    expect(d).toHaveTextContent('Rien de poussé');
+    expect(pane()).toHaveTextContent('elle ne lance aucun ticket avant ton accord');
+    await userEvent.click(screen.getByRole('button', { name: 'Accepter' }));
+    await waitFor(() => expect(acts()).toEqual([['scheduled:s1:abc', { act: 'accept' }]]));
+  });
+
   it('speaks English', () => {
     setLang('en');
     render(InboxViewPane, { view: view() });

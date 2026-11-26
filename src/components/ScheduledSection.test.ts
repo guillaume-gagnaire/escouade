@@ -125,6 +125,34 @@ describe('ScheduledSection', () => {
     expect(backend.called('scheduled_delete').map((c) => c.args)).toEqual([{ id: 's1' }]);
   });
 
+  it('shows who scheduled a task an agent made, that it awaits the go-ahead, and accepts it (ESC-647)', async () => {
+    const backend = fakeBackend();
+    app.scheduled = [
+      task({
+        awaiting: true,
+        next: null,
+        print: 'abc123',
+        author: { agentId: 'a1', agentName: 'Claude', projectId: 'p1', ticketId: 't3', ticketKey: 'DEM-3', at: 1 },
+      }),
+      task({ id: 's2', title: 'À moi', author: null }),
+    ];
+    render(ScheduledSection, { project: P });
+    const r = row('Revue des dépendances');
+    expect(r).toHaveTextContent('Chaque lundi 7:00 · attend ton accord');
+    expect(r).toHaveClass('awaiting');
+    expect(within(r).getByText('par Claude · DEM-3')).toHaveAccessibleDescription(
+      'Programmée par l’agent Claude : elle ne lance rien avant ton accord.',
+    );
+    // No switch while it awaits: its go-ahead first.
+    expect(within(r).queryByRole('switch')).toBeNull();
+    // The user's own task names no author.
+    expect(row('À moi').querySelector('[data-author]')).toBeNull();
+    await userEvent.click(within(r).getByRole('button', { name: 'Accepter « Revue des dépendances », programmée par Claude' }));
+    expect(backend.called('scheduled_accept').map((c) => c.args)).toEqual([{ id: 's1', print: 'abc123' }]);
+    // The button does not open the form.
+    expect(app.modal).toBeNull();
+  });
+
   it('says what it is for while it has none', () => {
     fakeBackend();
     render(ScheduledSection, { project: P });

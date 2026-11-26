@@ -1415,8 +1415,24 @@ export interface ScheduledTask {
   lastRunAt: number | null;
   /** What became of its last due time when it made no ticket. */
   lastNote: string | null;
-  /** Its next due time (ms), none while paused. */
+  /** Its next due time (ms), none while paused or awaiting the user's go-ahead. */
   next: number | null;
+  /** The agent that made or last changed it (ESC-647); absent: the user. */
+  author?: ScheduledAuthor | null;
+  /** Made or changed by an agent, it waits for the user's go-ahead (ESC-647): no ticket until then. */
+  awaiting?: boolean;
+  /** What the user reads of it, that « Accepter » sends back (a task changed since is refused). */
+  print?: string;
+}
+
+/** The agent that made or last changed a scheduled task (ESC-647). */
+export interface ScheduledAuthor {
+  agentId: string;
+  agentName: string;
+  projectId: string;
+  ticketId?: string | null;
+  ticketKey?: string | null;
+  at: number;
 }
 
 /** A scheduled task as its form gives it: what is absent stays as it is. */

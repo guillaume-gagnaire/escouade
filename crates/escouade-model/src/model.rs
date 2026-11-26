@@ -1976,6 +1976,28 @@ pub struct ScheduledTask {
     /// What became of its last due time when it made no ticket (passed its turn, or the ticket
     /// could not be made), until the next one.
     pub last_note: Option<String>,
+    /// Who made or last changed it, when it was an agent (ESC-647): kept and shown on its row. None: the user.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<ScheduledAuthor>,
+    /// Made or changed by an agent, it waits for the user's go-ahead (ESC-647): its due times pass without a
+    /// ticket until the user accepts it (« À toi », or its row).
+    pub awaiting: bool,
+}
+
+/// The agent that made or last changed a scheduled task (ESC-647), as it was then: kept after it is gone.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ScheduledAuthor {
+    pub agent_id: String,
+    pub agent_name: String,
+    /// The agent's project.
+    pub project_id: String,
+    /// The ticket it worked on then, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ticket_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ticket_key: Option<String>,
+    pub at: i64,
 }
 
 /// The pull request of a ticket « En revue » (ESC-59), as its host last told it.

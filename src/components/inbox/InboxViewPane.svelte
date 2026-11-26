@@ -5,6 +5,7 @@
   import { fLater, laterTimes } from '../../lib/inbox/inbox.svelte';
   import { answerable, blocking, gesturesOf, type Gesture, type InboxItem } from '../../lib/inbox/views';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
+  import { rhythmLabel } from '../../lib/scheduled';
   import { app } from '../../lib/state.svelte';
   import { toolLabel } from '../../lib/tools';
   import RejectForm from '../board/RejectForm.svelte';
@@ -90,6 +91,8 @@
         return t('inboxViews.note.handoff', { branch: view.branch ?? '' });
       case 'teamAccept':
         return t('inboxViews.note.teamAccept', { name: view.by ?? '' });
+      case 'scheduled':
+        return t('inboxViews.note.scheduled', { name: view.by ?? '' });
     }
   });
 
@@ -181,6 +184,24 @@
     {/each}
   {:else if view.blocked}
     <p class="blocked">{view.blocked}</p>
+  {:else if view.scheduled}
+    <!-- A task an agent scheduled (ESC-647): its project, rhythm and prompt, read before the go-ahead. -->
+    <dl class="sched" data-testid="ivw-scheduled">
+      <dt>{t('inboxViews.scheduled.project')}</dt>
+      <dd>{view.projectName}</dd>
+      <dt>{t('inboxViews.scheduled.rhythm')}</dt>
+      <dd>{rhythmLabel(view.scheduled.rhythm)} <code>{view.scheduled.cron}</code></dd>
+      <dt>{t('inboxViews.scheduled.prompt')}</dt>
+      <dd><pre class="arg">{view.scheduled.description}</pre></dd>
+      {#if view.scheduled.criteria.length}
+        <dt>{t('inboxViews.scheduled.criteria')}</dt>
+        <dd>
+          <ul>
+            {#each view.scheduled.criteria as c, i (i)}<li>{c}</li>{/each}
+          </ul>
+        </dd>
+      {/if}
+    </dl>
   {/if}
 
   {#if denying}
@@ -271,6 +292,24 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--muted);
+  }
+  .sched {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    margin: 0;
+    font-size: 12.5px;
+  }
+  .sched dt {
+    color: var(--muted);
+  }
+  .sched dd {
+    min-width: 0;
+    margin: 0;
+  }
+  .sched ul {
+    margin: 0;
+    padding-left: 16px;
   }
   .arg {
     margin: 0;

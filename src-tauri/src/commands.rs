@@ -5492,6 +5492,19 @@ pub async fn team_memory_view(
     core.team_memory_view(&project_id).await.map_err(err)
 }
 
+/// « Retirer » or « Garder » a memory whose removal a tool proposed (ESC-647).
+#[tauri::command]
+pub async fn team_memory_decide_removal(
+    core: CoreState<'_>,
+    project_id: String,
+    id: String,
+    remove: bool,
+) -> Res<crate::teammemory::TeamMemoryView> {
+    core.team_memory_decide_removal(&project_id, &id, remove)
+        .await
+        .map_err(err)
+}
+
 /// « Garder » (`keep`) or « Écarter » a proposed memory of the team: its author or an administrator, in the window
 /// alone.
 #[tauri::command]
@@ -6521,6 +6534,16 @@ pub fn scheduled_pause(
     paused: bool,
 ) -> Res<crate::scheduled::ScheduledView> {
     core.scheduled_set_paused(&id, paused).map_err(err)
+}
+
+/// The user's go-ahead to a task an agent scheduled (ESC-647), as its row shows it (`print`).
+#[tauri::command]
+pub fn scheduled_accept(
+    core: CoreState,
+    id: String,
+    print: Option<String>,
+) -> Res<crate::scheduled::ScheduledView> {
+    core.scheduled_accept(&id, print.as_deref()).map_err(err)
 }
 
 #[tauri::command]
