@@ -7938,17 +7938,16 @@ async fn deleting_an_agent_stops_the_setup_of_its_worktree() {
     assert!(process_exists(pid));
     let log = h.core.data.setup_log(&a.meta.id);
     assert!(log.is_file());
-    let started = std::time::Instant::now();
     assert_eq!(h.core.delete_agent(&a.meta.id, true).await.unwrap(), None);
-    let took = started.elapsed();
+    // It did not wait for the command to end on its own (which writes `late.txt` DELAY_MS after it started): said by
+    // the command's work, not by how long a loaded machine takes to remove a worktree (10,5 s once, ESC-650).
+    assert!(
+        !r.join("late.txt").exists(),
+        "the deletion waited for the setup"
+    );
     // Its log goes with it, and its worktree.
     assert!(!log.exists());
     assert!(!Path::new(&wt.path).exists());
-    // It did not wait for the command to end on its own (which takes DELAY_MS after it started).
-    assert!(
-        took < Duration::from_millis(DELAY_MS / 2),
-        "deleted in {took:?}, the setup would have ended by itself in {DELAY_MS} ms"
-    );
     // Killed with it, long before its delay: it never ends its work.
     let deadline = std::time::Instant::now() + Duration::from_secs(15);
     while process_exists(pid) {

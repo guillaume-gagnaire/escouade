@@ -1409,6 +1409,9 @@ async fn an_agent_that_commits_nothing_is_said_on_the_card() {
     pr_opens(&server);
     let (t, _) = reviewed(&h, &p.id, "Fichier [ok] [ci-rien]").await;
     h.core.ticket_approve(&t.id).await.unwrap();
+    // The fix given by hand: with the autopilot (a board's default), the reading of the pull requests could give it
+    // first, and the click be refused (« Son agent corrige déjà la CI », the CI's Linux, ESC-650).
+    h.set_board(&p.id, |s| s.autopilot = false);
     answer_ci(&server, "FAILURE");
     h.core.ticket_prs_refresh(Some(&p.id)).await.unwrap();
     h.core.ticket_pr_fix_ci(&t.id).await.unwrap();

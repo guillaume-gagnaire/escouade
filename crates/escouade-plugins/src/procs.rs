@@ -708,7 +708,6 @@ impl Procs {
     }
 
     /// The commands under way.
-    #[cfg(test)]
     pub(crate) fn running(&self) -> usize {
         self.live.lock().len()
     }

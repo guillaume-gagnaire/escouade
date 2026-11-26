@@ -2,7 +2,7 @@
 title: "Pilotage de Claude Code"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-artifacts","https://code.claude.com/docs/en/code-mode (lue le 2026-11-20)","https://code.claude.com/docs/en/agent-teams (lue le 2026-11-20)","Essais réels d'ESC-553 sur Claude Code 2.1.329 (bilan du ticket)"]
-tickets: ["ESC-106","ESC-133","ESC-400","ESC-553"]
+tickets: ["ESC-106","ESC-133","ESC-400","ESC-553","ESC-650"]
 decisions: [136,292]
 compared: null
 ---
@@ -119,3 +119,7 @@ Dans Plugins › Claude Code › Réglages, le groupe « Fonctionnalités expér
 - Un artefact ne se supprime pas sans l'accord de l'utilisateur ; un agent en stream-json ne suit pas les nouvelles versions d'un artefact publiées ailleurs (Claude Code le réserve à une session interactive).
 - Le Code Mode et les Agent Teams ne marchent que dans la vue Claude Code : la conversation d'Escouade (stream-json) les ignore, et un agent en Code Mode ne revient jamais dans la conversation d'Escouade. Ce que fait le code n'est lu que par les appels qu'il fait (hooks, transcript) : le JavaScript lui-même n'est jamais montré comme une commande.
 - La première session en Code Mode d'un compte demande une confirmation dans le terminal (« Yes, turn on Code Mode ») : l'utilisateur y répond lui-même.
+
+## Depuis ESC-650 : un hook lu après la fin de son tour
+
+- Dans la vue Claude Code, le serveur des hooks répond aussitôt et lit chaque hook à part de sa connexion. Le hook `UserPromptSubmit` met l'agent « En cours ». Sur une machine chargée, il peut être lu **après** que le transcript a déjà fini le tour qu'il ouvre (une commande locale comme `/compact`, qui finit sur sa sortie). Escouade garde l'heure où le hook est arrivé : un hook arrivé avant la fin du dernier tour de l'interface ne remet pas l'agent « En cours ». Avant, l'agent restait affiché au travail pour de bon, sur un tour qui ne finirait jamais. Un message qui arrive après cette fin ouvre son tour, comme avant.

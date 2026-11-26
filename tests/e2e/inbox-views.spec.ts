@@ -195,6 +195,9 @@ test.describe('the squad lead’s marks', () => {
     // The lead, another agent than the ticket's, takes it in hand through the MCP server.
     await page.getByRole('button', { name: 'Agents', exact: true }).click();
     await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
+    // Its own view first: until the new agent lands, the view is the ticket's agent's, and the message went to it,
+    // which the box refuses as the lead (the ticket's own agent; ESC-650, under load and at 1024).
+    await expect(page.getByRole('heading', { name: 'agent-2', level: 1 })).toBeVisible();
     await send(page, '[chef-prend DEM-1]');
     await expect(page.getByText('Je m’occupe de DEM-1 (il en reste 0).')).toBeVisible({ timeout: 30_000 });
     // No longer waiting for the user: the count drops; the line stays to read, with its note.

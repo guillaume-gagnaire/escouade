@@ -355,24 +355,54 @@ fn a_pointer_out_of_its_memory_is_a_fault_of_the_module() {
     }
 }
 
+/// ESC-650: the turn counts in processor time of the plugin's thread, the host's calls included; the real time of a call
+/// that waits (a program slow to start on a loaded machine) does not eat it, and the ceiling in real time stops one that
+/// waits too long.
 #[test]
 fn the_time_of_escouade_call_counts_in_the_turn() {
     let slow: Calls = Arc::new(|_, _| {
         std::thread::sleep(Duration::from_millis(200));
         Ok(json!(null))
     });
+    // Waited for, under the ceiling: the turn goes on.
     let limits = wasm::Limits {
         turn: Duration::from_millis(50),
         ..wasm::Limits::default()
     };
-    let s = Served::plain(limits, Some(slow));
+    let s = Served::plain(limits, Some(slow.clone()));
+    let r = s.call(1, "probe/call", json!({}));
+    assert_eq!(r["answer"], json!({ "result": null }), "{r}");
+    // Past the ceiling: cut.
+    let limits = wasm::Limits {
+        turn: Duration::from_millis(50),
+        ceiling: Duration::from_millis(100),
+        ..wasm::Limits::default()
+    };
+    let s = Served::plain(limits, Some(slow.clone()));
+    s.send(1, "probe/call", json!({}));
+    assert_eq!(s.fault(), Fault::Timeout(Duration::from_millis(50)));
+    // A call that works on the thread past the turn: cut too.
+    let busy: Calls = Arc::new(|_, _| {
+        let began = Instant::now();
+        let mut x = 0u64;
+        while began.elapsed() < Duration::from_millis(300) {
+            x = x.wrapping_mul(31).wrapping_add(7);
+        }
+        std::hint::black_box(x);
+        Ok(json!(null))
+    });
+    let limits = wasm::Limits {
+        turn: Duration::from_millis(50),
+        ..wasm::Limits::default()
+    };
+    let s = Served::plain(limits, Some(busy));
     s.send(1, "probe/call", json!({}));
     assert_eq!(s.fault(), Fault::Timeout(Duration::from_millis(50)));
 }
 
-/// ESC-420: the epoch watches the WASM only. A call to the host that outlasts the turn, followed at once by the end of
-/// the turn (the fixture answers and returns), leaves the epoch no chance to be seen: the host itself cuts the turn at
-/// the return of the call. Many times, so that no race hides it; a decision's turn follows the same rule.
+/// ESC-420: the epoch watches the WASM only. A call to the host that outlasts the turn's time (since ESC-650: its ceiling
+/// in real time, the call waiting), followed at once by the end of the turn (the fixture answers and returns), leaves the
+/// epoch no chance to be seen: the host itself cuts the turn at the return of the call. Many times, so that no race hides it; a decision's turn follows the same rule.
 #[test]
 fn a_long_call_followed_by_the_end_of_the_turn_is_cut() {
     let slow: Calls = Arc::new(|_, _| {
@@ -382,6 +412,7 @@ fn a_long_call_followed_by_the_end_of_the_turn_is_cut() {
     for _ in 0..20 {
         let limits = wasm::Limits {
             turn: Duration::from_millis(20),
+            ceiling: Duration::from_millis(20),
             ..wasm::Limits::default()
         };
         let s = Served::plain(limits, Some(slow.clone()));
@@ -390,6 +421,7 @@ fn a_long_call_followed_by_the_end_of_the_turn_is_cut() {
     }
     let limits = wasm::Limits {
         decision: Duration::from_millis(20),
+        ceiling: Duration::from_millis(20),
         ..wasm::Limits::default()
     };
     let s = Served::plain(limits, Some(slow));
@@ -872,12 +904,18 @@ fn with_agent(w: &W) -> (PathBuf, BTreeMap<String, String>) {
     (base, roots)
 }
 
+/// How long a probe's call is waited for: what is tested is what the module was answered, not the protocol's 5 s,
+/// which a program started on a loaded machine outlasts (`git` at more than 5 s beside a full nextest, ESC-650). A
+/// guard: the call gives back as soon as the module answers.
+const PROBE_GUARD: Duration = Duration::from_secs(30);
+
 /// What the module was answered, by `escouade.call`.
 async fn host(w: &W, method: &str, params: Value) -> Value {
-    w.rt.call(
+    w.rt.call_within(
         ID,
         "probe/sync",
         json!({ "method": method, "params": params }),
+        PROBE_GUARD,
     )
     .await
     .unwrap()
@@ -885,10 +923,11 @@ async fn host(w: &W, method: &str, params: Value) -> Value {
 
 /// What the module was answered, by a line.
 async fn by_line(w: &W, method: &str, params: Value) -> Value {
-    w.rt.call(
+    w.rt.call_within(
         ID,
         "probe/host",
         json!({ "method": method, "params": params }),
+        PROBE_GUARD,
     )
     .await
     .unwrap()

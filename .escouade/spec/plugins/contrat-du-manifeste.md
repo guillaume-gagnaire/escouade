@@ -2,7 +2,7 @@
 title: "Le contrat du manifeste : réglages, secrets, profils, jokers et limite"
 subject: "plugins"
 sources: ["docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §1.5, §2 à §6, §8 et §10","design/plugins-contract-2-3/captures/install.png (release/2.3)","issues GitHub #38, #39, #40, #42 (un auteur de plugin tiers)","crates/escouade-plugin-cli/src/manifest.rs","crates/escouade-plugins/src/procs.rs","crates/escouade-plugins/src/files.rs","crates/escouade-plugins/src/lib.rs","crates/escouade-plugins/src/plugins_jokers_tests.rs","schemas/plugin-manifest.mjs","schemas/plugin-1.json","schemas/plugin-protocol-1.json","src/lib/plugins.ts","src/components/plugins/AskList.svelte","tests/fixtures/plugins/manifests.json","store/server/utils/checks.ts","docs/PLUGINS-CONTRACT-STUDY.md (release/2.3, ESC-501) §2 à §6 et §10","src/components/plugins/PluginSettings.svelte","src/lib/plugin-fields.ts","src-tauri/src/plugin_secrets.rs","design/plugins-contract-2-3/captures (release/2.3) : a-plugin, a-projet, b-profil","crates/escouade-plugins/src/profiles.rs"]
-tickets: ["ESC-525","ESC-528","ESC-529","ESC-526","ESC-530","ESC-531"]
+tickets: ["ESC-525","ESC-528","ESC-529","ESC-526","ESC-530","ESC-531","ESC-650"]
 decisions: [246,248,253,249,255]
 compared: null
 ---
@@ -174,3 +174,7 @@ L'onglet « Réglages » de la page d'un plugin sert `groups`, `description` d'u
 - `tests/fixtures/plugins/sdk-contract`, un plugin sur le SDK compilé en WASM par le banc, prend profils, secrets sur plusieurs lignes, jokers et `limits.processes` à 5, et passe le banc ; trois variantes (sans `profile:vpn`, une commande retirée, une limite à 2) échouent au scénario attendu.
 - **Le faux Escouade du SDK**, donné le manifeste, sert `proc/spawn` sur `permissions.commands` (chaque joker, `{pid}` parmi ses programmes, `limits.processes`) et les profils comme l'app.
 - **Le schéma publié** (`plugin-1.json`) dit qu'un secret de portée `project` est lu mais coupe le plugin, et la version qui sert les jokers et `limits.processes`. La documentation du site (fr et en) et `docs/PLUGINS.md` décrivent le tout, avec le guide « Des identifiants par projet ».
+
+## Depuis ESC-650 : le banc après un fait
+
+Ceci remplace « 300 ms sans rien de nouveau, 3 s au plus » plus haut. Après un fait, le banc attend que le plugin se calme : rien de nouveau en 300 ms, et rien que l'hôte fasse pour lui (aucun de ses appels en cours, aucun de ses programmes qui tourne), 10 s au plus en temps réel. Sous charge, le lancement d'un `git` dépassait les 300 ms : le banc ne voyait que la moitié des commandes du plugin du contrat. Le détail : *Les programmes JS/TS des plugins, en WASM sans Node*.

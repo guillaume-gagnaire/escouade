@@ -22,7 +22,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// The method the bench calls to see that a plugin answers what it does not serve.
 pub const UNKNOWN: &str = "bench/unknown";
@@ -857,13 +857,16 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
                 .filter(|s| matches!(s, Seen::Stray { .. }))
                 .count();
             first.notify("events/fact", &fact(name));
-            // What it does of the fact (its programs, its profiles: ESC-531), until it settles, 3 s at most; then whether it
-            // still answers.
+            // What it does of the fact (its programs, its profiles: ESC-531), until it settles: nothing new for 300 ms
+            // while the host does nothing for it (no call of it under way, no program of it running: under load,
+            // starting a program outlasts 300 ms, ESC-650), 10 s at most in real time (a program it keeps running);
+            // then whether it still answers.
             let mut was = usize::MAX;
-            for _ in 0..10 {
+            let until = Instant::now() + super::wasm::TURN_MAX;
+            while Instant::now() < until {
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 let now = first.seen().len();
-                if now == was {
+                if now == was && !first.busy() {
                     break;
                 }
                 was = now;

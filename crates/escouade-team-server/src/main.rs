@@ -338,6 +338,19 @@ impl Args {
                 secret_key: need("ESCOUADE_TEAM_S3_SECRET_KEY")?,
             });
         }
+        // The end-to-end tests run two apps on one address and read their teams 19 times as often as the app
+        // (`ESCOUADE_TEAMS_EVERY_MS`): their server's rate by address, scaled as their cadence, in a build of
+        // development alone (ESC-650; as SEC-13 does for the app's cadence). Never in a published server.
+        if let Some(rate) = std::env::var("ESCOUADE_TEAM_TEST_ADDRESS_RATE")
+            .ok()
+            .filter(|_| cfg!(debug_assertions))
+        {
+            let (per_second, burst) = rate
+                .split_once('/')
+                .and_then(|(p, b)| Some((p.trim().parse().ok()?, b.trim().parse().ok()?)))
+                .ok_or("ESCOUADE_TEAM_TEST_ADDRESS_RATE: <per second>/<burst>")?;
+            config.rates.per_address = escouade_team_server::config::Rate { per_second, burst };
+        }
         if let Some(n) = self.number("--max-file", "ESCOUADE_TEAM_MAX_FILE")? {
             config.limits.max_file = n as usize;
         }

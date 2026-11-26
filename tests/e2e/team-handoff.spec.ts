@@ -44,7 +44,13 @@ async function freePort(): Promise<number> {
 }
 
 async function startServer() {
-  server = spawn(SERVER, ['serve', '--data', dir, '--listen', host], { stdio: 'ignore' });
+  // Two apps on one address, reading their team every 800 ms (19 times the app's 15 s): the server's rate by address
+  // scaled as that cadence (30 a second, 120 at once, in a published server; ESC-650: 50 to 85 requests a second at peaks,
+  // its 429s failing a reading), read by a build of development alone.
+  server = spawn(SERVER, ['serve', '--data', dir, '--listen', host], {
+    stdio: 'ignore',
+    env: { ...process.env, ESCOUADE_TEAM_TEST_ADDRESS_RATE: '600/2400' },
+  });
   for (let i = 0; i < 100; i++) {
     try {
       if ((await fetch(`http://${host}/healthz`)).ok) return;

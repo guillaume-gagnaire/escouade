@@ -301,6 +301,10 @@ struct Shared {
     /// An instance in WASM: the id of the `shutdown` asked, whose answer ends it, as Escouade ends it.
     wasm: bool,
     shutdown: Mutex<Option<u64>>,
+    /// Its calls to the host under way (`escouade.call`: a program started, a file read): the host's work, not quiet.
+    host_calls: AtomicU64,
+    /// What the host serves it, for the programs it runs.
+    reached: std::sync::OnceLock<Arc<wasm::Capabilities>>,
 }
 
 impl Shared {
@@ -331,6 +335,8 @@ impl Shared {
             watch: Mutex::new(None),
             wasm,
             shutdown: Mutex::new(None),
+            host_calls: AtomicU64::new(0),
+            reached: std::sync::OnceLock::new(),
         })
     }
 
@@ -429,6 +435,7 @@ impl Session {
             offline,
             back.clone(),
         );
+        let _ = shared.reached.set(reached.clone());
         let (s1, s2, s3, s4, s5) = (
             shared.clone(),
             shared.clone(),
@@ -439,7 +446,16 @@ impl Session {
         std::thread::Builder::new()
             .name(format!("bench {}", manifest.id))
             .spawn(move || {
-                let calls = Some(reached.calls());
+                // Each call counted while the host serves it (`Session::busy`).
+                let calls: Option<wasm::Calls> = {
+                    let (served, counted) = (reached.calls(), s1.clone());
+                    Some(Arc::new(move |method, params| {
+                        counted.host_calls.fetch_add(1, Ordering::AcqRel);
+                        let r = served(method, params);
+                        counted.host_calls.fetch_sub(1, Ordering::AcqRel);
+                        r
+                    }))
+                };
                 let fault = match wasm::Instance::start_with(&module, &files, limits, calls) {
                     Err(f) => Some(f),
                     Ok(instance) => {
@@ -538,6 +554,13 @@ impl Session {
     }
 
     /// What it did on its own so far.
+    /// Whether the host works for it now: a call of it under way, or a program of it running (ESC-650: under load,
+    /// starting a program outlasts the bench's quiet of 300 ms, which is no quiet of the plugin's).
+    pub fn busy(&self) -> bool {
+        self.shared.host_calls.load(Ordering::Acquire) > 0
+            || self.shared.reached.get().is_some_and(|r| r.programs() > 0)
+    }
+
     pub fn seen(&self) -> Vec<Seen> {
         self.shared.seen.lock().clone()
     }

@@ -216,13 +216,15 @@ fn a_password_kept_in_the_keychain_and_gone_is_missing_and_never_one_that_never_
 async fn an_agent_does_not_start_while_the_proxys_password_is_missing_and_never_direct_is_on() {
     let h = crate::core_tests::harness("esc595-proxy-held-back");
     let (p, dir) = h.project(false).await;
-    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // As at a start of the app, before any agent: the password found missing, then the agent made. Set after, the
+    // warm-up of the agent just made could start its process first, and the message go to it (the CI's macOS, ESC-650).
     {
         let mut s = h.core.settings.write();
         s.proxy_url = "http://ada@127.0.0.1:9".into();
         s.proxy_password_kept = true;
         s.proxy_password_missing = true;
     }
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     let launches = h.launches(&dir).len();
     let e = h
         .core

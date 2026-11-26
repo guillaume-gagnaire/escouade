@@ -2,12 +2,16 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import userEvent from '@testing-library/user-event';
 import { flushSync, tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Loaded with this file, not at the first use in a test: under load, Vite transforms a module the first time in more than
+// the 15 s of a test (ESC-650).
+import { localDay } from '../lib/heat.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import type { Account, AccountUsage, EngineDecl, RateWindow, Settings } from '../lib/types';
 import { agent, BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, resetApp, usageOf, usageWith } from '../test/ipc';
 import StatusBar from './StatusBar.svelte';
+import { heat } from '../test/heat';
 import { getByTip, tabTo } from '../test/tip';
 
 describe('StatusBar', () => {
@@ -1019,8 +1023,6 @@ describe('StatusBar at the first start', () => {
 
 describe('StatusBar and the cache', () => {
   it('says what the agents’ cache saved today with its setting on, and nothing when it saved nothing', async () => {
-    const { localDay } = await import('../lib/heat.svelte');
-    const { heat } = await import('../test/heat');
     resetApp({ agents: [agent({ id: 'a1' })] });
     app.settings.cacheSavingsInBar = true;
     fakeBackend();
@@ -1041,8 +1043,6 @@ describe('StatusBar and the cache', () => {
   });
 
   it('hides what the cache saved by default (ESC-421), and shows it as soon as its setting is on', async () => {
-    const { localDay } = await import('../lib/heat.svelte');
-    const { heat } = await import('../test/heat');
     resetApp({ agents: [{ ...agent({ id: 'a1' }), heat: heat({ day: localDay(Date.now()), savedToday: 2 }) }] });
     // A settings file of before ESC-421 has no such key: off too.
     delete (app.settings as Partial<typeof app.settings>).cacheSavingsInBar;

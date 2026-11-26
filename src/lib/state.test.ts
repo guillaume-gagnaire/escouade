@@ -10,6 +10,10 @@ import { trees } from './editor/trees.svelte';
 import { locale, setLang } from './i18n';
 import { app } from './state.svelte';
 import { onboarding } from './onboarding.svelte';
+// Loaded with this file, not at the first use in a test: under load, Vite transforms a module the first time in more
+// than the 15 s of a test (ESC-650).
+import { closeTerminal } from './term-actions';
+import { settingsForm } from './settings.svelte';
 import type { CodeHost, InitialState, LaunchState, Ticket, UiEvent } from './types';
 
 /** Starts the app against a fake backend and returns a function pushing backend events. */
@@ -2049,7 +2053,6 @@ describe('the split screen when a content goes (ESC-399)', () => {
     app.openBeside({ kind: 'agent', id: 'a2' }, 'right');
     app.setPaneRatio('a', 0.4);
     app.activatePane('term:t1');
-    const { closeTerminal } = await import('./term-actions');
     closeTerminal('t1');
     expect(app.panes?.root).toEqual({
       dir: 'row',
@@ -2161,7 +2164,6 @@ describe('closing what shows files modified in the VS Code view (ESC-464)', () =
 
 describe('a policy changed while the app runs (TS-12)', () => {
   it('gives the settings it brought within it to the app and to an open form, which saves nothing over them', async () => {
-    const { settingsForm } = await import('./settings.svelte');
     const { emit, backend } = await start({ settings: { ...SETTINGS, autoUpdate: true } });
     settingsForm.open();
     expect(settingsForm.settings.autoUpdate).toBe(true);

@@ -4771,19 +4771,20 @@ sleep {seconds}
     #[tokio::test]
     async fn a_command_that_reads_is_cut_at_its_limit_and_says_so() {
         let r = repo_with_a_slow_hook("git-limit-reads");
+        // A hook that outlasts any cut, however late a loaded machine makes it: the test ends at the cut (its job object
+        // stops the hook with git), never at the hook's end.
+        slow_hook(&r, 30);
         let _short = ShortLimits::new(Duration::from_secs(1), Duration::from_secs(60));
-        let started = Instant::now();
+        let before = last_subject(&r);
         let e = run(&r, &["commit", "-qm", "slow"]).await.unwrap_err();
         // « interrompu : toujours pas terminé après 1 s » / « stopped: still not done after 1 s ».
         assert!(
             e.to_string().contains("après 1 s") || e.to_string().contains("after 1 s"),
             "{e}"
         );
-        assert!(
-            started.elapsed() < Duration::from_secs(3),
-            "{:?}",
-            started.elapsed()
-        );
+        // Cut, not waited for: git stopped before its hook of 3 s let it commit. Said by the repository, not by how
+        // long a loaded machine takes to stop the process (3,45 s once in a full run, ESC-650).
+        assert_eq!(last_subject(&r), before);
     }
 
     #[tokio::test]
@@ -4811,18 +4812,17 @@ sleep {seconds}
     #[tokio::test]
     async fn a_command_that_runs_hooks_is_cut_at_its_own_limit() {
         let r = repo_with_a_slow_hook("git-limit-hooks-cut");
+        // As for the reads: a hook that outlasts any cut, and the cut said by the repository, not by a time a loaded
+        // machine passes (3,85 s once beside a full nextest, ESC-650).
+        slow_hook(&r, 30);
         let _short = ShortLimits::new(Duration::from_secs(60), Duration::from_secs(1));
-        let started = Instant::now();
+        let before = last_subject(&r);
         let e = run_hooks(&r, &["commit", "-qm", "slow"]).await.unwrap_err();
         assert!(
             e.to_string().contains("après 1 s") || e.to_string().contains("after 1 s"),
             "{e}"
         );
-        assert!(
-            started.elapsed() < Duration::from_secs(3),
-            "{:?}",
-            started.elapsed()
-        );
+        assert_eq!(last_subject(&r), before);
     }
 
     /// `main` and a branch `feat` that changed the same file (`conflict`) or another one.

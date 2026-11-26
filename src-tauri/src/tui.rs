@@ -2427,7 +2427,13 @@ impl Core {
     }
 
     /// A hook of the agent's interface: what it tells, after what its transcript said before.
+    #[cfg(test)]
     pub(crate) fn on_tui_hook(self: &Arc<Self>, id: &str, hook: Value) {
+        self.on_tui_hook_came(id, hook, Instant::now());
+    }
+
+    /// `on_tui_hook` for a hook that came at `came`, read only now.
+    pub(crate) fn on_tui_hook_came(self: &Arc<Self>, id: &str, hook: Value, came: Instant) {
         #[cfg(test)]
         self.tui_hooks.lock().push(hook.clone());
         self.read_transcript(id);
@@ -2447,7 +2453,9 @@ impl Core {
             let Ok((view, _)) = view_of(&rt.meta) else {
                 return;
             };
+            rt.hook_received = Some(came);
             let out = view.on_hook(&mut rt, &hook, &mut fx);
+            rt.hook_received = None;
             if let Some(path) = &out.transcript {
                 let path = match &wsl {
                     Some(wsl) if path.starts_with('/') => wsl.windows_path(path),
@@ -3109,8 +3117,10 @@ async fn answer(req: Request<Incoming>, core: &Weak<Core>, port: u16) -> Respons
     if let (Some(event), Some(map)) = (event, hook.as_object_mut()) {
         map.insert(EVENT_KEY.into(), Value::String(event));
     }
-    // Off the connection: the interface does not wait for what Escouade makes of it.
-    tauri::async_runtime::spawn_blocking(move || core.on_tui_hook(&agent, hook));
+    // Off the connection: the interface does not wait for what Escouade makes of it. When it came goes with it: read
+    // later, under load, it may come after the end of the turn it opened.
+    let came = Instant::now();
+    tauri::async_runtime::spawn_blocking(move || core.on_tui_hook_came(&agent, hook, came));
     reply(StatusCode::OK, "{}")
 }
 
