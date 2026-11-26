@@ -335,6 +335,7 @@ mod parallel_tests;
 mod servers;
 #[cfg(test)]
 mod servers_tests;
+mod sessioncopy;
 mod sharing;
 #[cfg(test)]
 mod sharing_tests;

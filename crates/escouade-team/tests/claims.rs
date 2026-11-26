@@ -572,6 +572,7 @@ async fn a_ticket_handed_with_its_deposit(b: Backend) {
         engine: "claude".into(),
         agent: "Agent 1".into(),
         at: 1,
+        session: true,
     };
     let file = c[0].1.deposit(p, &deposit).await.unwrap();
     let offer = offer_for(hex::encode(file.0));

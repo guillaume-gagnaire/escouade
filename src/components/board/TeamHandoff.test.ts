@@ -86,6 +86,7 @@ function plan(over: Partial<HandoffPlan> = {}): HandoffPlan {
     remote: 'origin',
     dirty: [' M src/app.ts', '?? src/passation.ts'],
     running: true,
+    session: false,
     targets: [
       { device: 'bb'.repeat(16), name: 'Bob Durand', machine: false, mine: false },
       { device: 'cc'.repeat(16), name: 'serveur-acme', machine: true, mine: false },
@@ -189,6 +190,26 @@ describe('passing an agent (TS-17)', () => {
     expect(backend.called('ticket_team_handoff')).toEqual([
       { cmd: 'ticket_team_handoff', args: { id: 't41', to: 'cc'.repeat(16), wip: 'commit' } },
     ]);
+  });
+
+  it('says that the session of Claude Code goes with it, encrypted, only when it does (TS-17b)', async () => {
+    fakeBackend({ ticket_team_handoff_plan: () => plan({ session: true }) });
+    render(TeamHandoffModal, { ticketId: 't41' });
+    expect(await screen.findByTestId('team-handoff-session')).toHaveTextContent(
+      'Sa session de Claude Code part avec lui, chiffrée ; s’il ne peut pas la reprendre, il repart avec la passation.',
+    );
+    cleanup();
+    setLang('en');
+    fakeBackend({ ticket_team_handoff_plan: () => plan({ session: true }) });
+    render(TeamHandoffModal, { ticketId: 't41' });
+    expect(await screen.findByTestId('team-handoff-session')).toHaveTextContent('Its Claude Code session goes with it, encrypted');
+    cleanup();
+    setLang('fr');
+    // Another harness, or no session: nothing said of it.
+    fakeBackend({ ticket_team_handoff_plan: () => plan({ engine: 'codex' }) });
+    render(TeamHandoffModal, { ticketId: 't41' });
+    await screen.findByText('Passer DEM-41');
+    expect(screen.queryByTestId('team-handoff-session')).toBeNull();
   });
 
   it('a refusal says why and offers nothing; a failure keeps the window', async () => {

@@ -13,11 +13,16 @@ export default defineZone('handover', {
     limitedUntil: 'Continued on {harness} · {from} quota spent until {time}',
     limited: 'Continued on {harness} · {from} quota spent',
     asked: 'Continued on {harness} · the agent was on {from}',
-    passed: 'Passed by {name} · continued on {harness}',
+    passed: 'Passed by {name} · handover file, continued on {harness}',
+    resumed: 'Passed by {name} · session resumed, continued on {harness}',
   },
   file: {
     title: 'Handover file',
     hint: 'Written by Escouade from the conversation: the agent’s first message on {harness}.',
+  },
+  resume: {
+    title: 'Session resumed',
+    hint: 'Written by Escouade: the session goes on here, on {harness}, with all its context.',
   },
   turnOn: 'on {harness}',
   settings: {

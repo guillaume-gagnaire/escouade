@@ -101,7 +101,7 @@ fn clip(text: &str, max: usize) -> String {
 
 /// Whether the item is a handover file sent before (a way back): not one of the user's requests.
 fn is_dossier(item: &Value) -> bool {
-    item["kind"] == "user" && item["origin"] == "handover"
+    item["kind"] == "user" && (item["origin"] == "handover" || item["origin"] == "resume")
 }
 
 /// The tool call as one line: its name and what it acts on.
@@ -601,6 +601,32 @@ pub(crate) fn passed_separator(from: EngineId, to: EngineId, by: &str) -> Value 
     let mut v = separator(from, to, false, None);
     v["by"] = json!(by);
     v
+}
+
+/// Where an agent of Claude Code passed by a teammate goes on here in its own session (TS-17b, C16-B): « Reprise de la
+/// session d’Alice · suite sur Claude Code ».
+pub(crate) fn resumed_separator(from: EngineId, to: EngineId, by: &str) -> Value {
+    let mut v = passed_separator(from, to, by);
+    v["native"] = json!(true);
+    v
+}
+
+/// The first message of a session of Claude Code resumed here (TS-17b): the agent has all its context, it is only told
+/// where it is now; `patch`: why the uncommitted work of who passed it did not apply, and where its patch is kept.
+pub fn resumed_message(lang: Lang, by: &str, cwd: &str, patch: Option<(&str, &str)>) -> String {
+    let mut out = tr_in!(
+        lang,
+        "# Reprise de ta session\n\n{by} t’a passé ce travail : ta session continue ici, sur son poste à lui, avec tout ce qui a été dit et fait jusqu’ici. Tu es dans un nouveau dossier de travail, {cwd}, sur la même branche, poussée par {by} ; son travail non commité y est (dans un commit « en cours » ou appliqué tel quel). Les chemins de ta session ont été réécrits vers ce dossier ; ce qui vivait hors du dépôt sur l’autre poste n’est pas ici. Vérifie l’état des fichiers avant de les modifier, puis continue là où tu t’es arrêté.\n",
+        "# Your session resumed\n\n{by} passed this work to you: your session goes on here, on their machine, with all that was said and done so far. You are in a new working folder, {cwd}, on the same branch, pushed by {by}; its uncommitted work is there (in an “in progress” commit or applied as it was). The paths of your session were rewritten to this folder; what lived out of the repository on the other machine isn’t here. Check the files before you change them, then go on where you stopped.\n"
+    );
+    if let Some((e, path)) = patch {
+        out.push_str(&tr_in!(
+            lang,
+            "\nLe travail non commité de {by} ne s’est pas appliqué tel quel ({e}) : son patch est gardé dans {path}.\n",
+            "\n{by}’s uncommitted work didn’t apply as it was ({e}): its patch is kept in {path}.\n"
+        ));
+    }
+    out
 }
 
 impl Core {

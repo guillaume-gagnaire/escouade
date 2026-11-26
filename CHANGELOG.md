@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : un agent de Claude Code passé à un collègue qui le prend avec Claude Code reprend sa propre session, chemins réécrits vers son worktree ; si sa version de `claude` est plus ancienne, s'il reste un chemin d'avant ou si le premier tour échoue, il repart de la passation, comme avant (ESC-607).
 - Sécurité : une tâche programmée par un agent ne lance plus rien avant ton accord, dans « À toi » ou sur sa ligne, qui dit quel agent l’a posée. Un agent ne programme que dans son propre projet, jamais plus d’une fois par quart d’heure, et n’efface plus un souvenir d’équipe validé par un humain : il en propose le retrait, que tu règles dans Mémoire partagée.
 - Sécurité : sur le serveur d’équipe, un membre ne peut plus faire grossir la base sans fin hors du quota de son équipe : tout ce qu’il écrit compte dans ses projets ou son quota. Le jeton d’`init` expire après 24 h, un appareil révoqué ne prend plus de place parmi les 500 de l’équipe, le dernier administrateur ne peut plus être révoqué, et les journaux du serveur ne portent plus d’id d’équipe ni de fichier.
 - Stats : ce qu’un sous-agent de Copilot CLI, de Codex ou d’OpenCode consomme sur un autre modèle que son agent compte maintenant pour ce modèle, au bon prix chez Codex, et toujours une seule fois dans les totaux de l’agent. Le travail d’un sous-agent de Copilot que le plugin a perdu de vue en redémarrant n’est plus oublié.

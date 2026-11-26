@@ -70,6 +70,7 @@ export default defineZone('teamBoard', {
     wipPatchHint: 'Encrypted by the project’s key, applied as it is by whoever takes it: nothing is added to the branch.',
     conversation:
       'The conversation goes encrypted by the project’s key, left on the server for the passage, erased once taken or the passage cancelled.',
+    session: 'Its Claude Code session goes with it, encrypted; if they can’t resume it, they start again from the handover file.',
     pass: 'Pass',
     passing: 'Passing…',
     done: 'Passed to {name}',

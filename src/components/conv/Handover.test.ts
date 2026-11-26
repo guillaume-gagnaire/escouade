@@ -53,6 +53,31 @@ describe('the change of harness in the conversation', () => {
     expect(screen.getByRole('separator')).toHaveTextContent('Continued on Codex · Claude Code quota spent until 6:00 PM');
   });
 
+  it('says a passage from a teammate: « Passation » with the handover file, « Reprise de la session » with its own (TS-17b)', () => {
+    const passed = render(Handover, { item: sep({ from: 'claude', to: 'claude', limited: false, until: null, by: 'Alice Martin' }) });
+    expect(screen.getByRole('separator')).toHaveTextContent(/^Passé par Alice Martin · passation, suite sur Claude Code$/);
+    passed.unmount();
+    const resumed = render(Handover, {
+      item: sep({ from: 'claude', to: 'claude', limited: false, until: null, by: 'Alice Martin', native: true }),
+    });
+    expect(screen.getByRole('separator')).toHaveTextContent(/^Passé par Alice Martin · reprise de la session, suite sur Claude Code$/);
+    expect(screen.getByRole('separator').querySelector('b')).toHaveTextContent(/^Passé par Alice Martin$/);
+    resumed.unmount();
+    setLang('en');
+    render(Handover, { item: sep({ from: 'claude', to: 'claude', limited: false, until: null, by: 'Alice Martin', native: true }) });
+    expect(screen.getByRole('separator')).toHaveTextContent('Passed by Alice Martin · session resumed, continued on Claude Code');
+  });
+
+  it('folds the first message of a session resumed under its own title', async () => {
+    const first: UserItem = { kind: 'user', id: 'u2', text: '# Reprise de ta session', images: 0, ts: 1, queued: false, origin: 'resume' };
+    render(UserMessage, { item: first, engine: 'claude' });
+    const fold = screen.getByRole('button', { name: /Reprise de la session/ });
+    expect(fold).toHaveTextContent('Écrit par Escouade : la session continue ici, sur Claude Code, avec tout son contexte.');
+    expect(screen.queryByText('# Reprise de ta session')).not.toBeInTheDocument();
+    await userEvent.click(fold);
+    expect(screen.getByText('# Reprise de ta session')).toBeInTheDocument();
+  });
+
   it('folds the handover file under its title', async () => {
     const file: UserItem = { kind: 'user', id: 'u1', text: '# Passation : suite…', images: 0, ts: 1, queued: false, origin: 'handover' };
     render(UserMessage, { item: file, engine: 'codex' });

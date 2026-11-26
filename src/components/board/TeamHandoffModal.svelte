@@ -102,6 +102,12 @@
           <Icon name="lock" size={14} />
           <span>{t('teamBoard.handoff.conversation')}</span>
         </li>
+        {#if plan.session}
+          <li data-testid="team-handoff-session">
+            <Icon name="lock" size={14} />
+            <span>{t('teamBoard.handoff.session')}</span>
+          </li>
+        {/if}
       </ul>
       <fieldset class="wip" data-testid="team-handoff-wip">
         <legend>{plan.dirty.length ? t('teamBoard.handoff.dirty', { count: plan.dirty.length }) : t('teamBoard.handoff.clean')}</legend>

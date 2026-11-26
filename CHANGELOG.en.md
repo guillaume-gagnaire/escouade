@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: a Claude Code agent passed to a teammate who takes it with Claude Code resumes its own session, its paths rewritten to their worktree; if their `claude` is older, a path of before is left or the first turn fails, it starts again from the handover file, as before (ESC-607).
 - Security: a task an agent schedules launches nothing until you accept it, in the “Your turn” box or on its row, which names the agent that set it. An agent schedules in its own project only, never more than once every quarter of an hour, and no longer erases a team memory a human approved: it proposes its removal, which you settle in Shared memory.
 - Security: on the team server, a member can no longer grow the base without end outside their team’s quota: everything they write counts in its projects or its quota. The `init` token expires after 24 hours, a revoked device no longer takes a place among the team’s 500, the last administrator can no longer be revoked, and the server’s logs no longer carry a team or file id.
 - Stats: what a subagent of Copilot CLI, Codex or OpenCode spends on another model than its agent’s now counts for that model, at the right price for Codex, and still only once in the agent’s totals. The work of a Copilot subagent its plugin lost sight of while restarting is no longer forgotten.

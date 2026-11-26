@@ -1,11 +1,14 @@
-// Passing an agent to a teammate (TS-17) on the real app, two clients at the same time against a real
+// Passing an agent to a teammate (TS-17, TS-17b) on the real app, two clients at the same time against a real
 // `escouade-team-server` started by the test, and a bare repository as their host. Alice launches a ticket of the team;
 // its turn runs ([lent:600]) and she leaves work uncommitted in its worktree. From the card's menu, « Passer à un
-// collègue… »: the window says the branch will be pushed on origin, the turn interrupted, the work as a patch; she passes
-// it to Bob. Bob's card says « Alice Martin te passe DEM-1 · Prendre », and so does his box « À toi »; he takes it: his
-// worktree has the branch and the work, his agent's first message on the fake harness is the handover file, the
-// conversation of before above it. With `ESCOUADE_E2E_SHOTS=<folder>`, the window and the card, dark and light, at the
-// size of the window (`ESCOUADE_E2E_VIEWPORT`).
+// collègue… »: the window says the branch will be pushed on origin, the turn interrupted, the work as a patch, its
+// session of Claude Code with it; she passes it to Bob. Bob's card says « Alice Martin te passe DEM-1 · Prendre », and so
+// does his box « À toi »; he takes it: his worktree has the branch and the work. The fake `claude` keeps its sessions in
+// the account's folder as Claude Code does (Alice's is moved away, as on another machine): the copy goes under Bob's
+// worktree, its paths rewritten, and is resumed (`--resume <id> --fork-session`) under « Reprise de la session », the
+// conversation of before above; when its first turn fails there, the agent goes on from the handover file and the copy
+// is taken out. With `ESCOUADE_E2E_SHOTS=<folder>`, the window and the card, dark and light, at the size of the window
+// (`ESCOUADE_E2E_VIEWPORT`).
 //
 // Its server's port: the worktree's `ESCOUADE_PORT_BASE` + 5, else one the system gives. The second app's DevTools port:
 // `ESCOUADE_E2E_SECOND_CDP_PORT`, else the first one's + 1.
@@ -16,7 +19,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, openSettingsPage, test } from './fixture';
+import { addProject, expect, openSettingsPage, test, type App } from './fixture';
 import { letIn } from './team-admit';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -76,7 +79,7 @@ async function stopServer() {
   server = null;
 }
 
-test.beforeAll(async () => {
+test.beforeEach(async () => {
   test.setTimeout(600_000);
   if (!fs.existsSync(SERVER)) {
     execFileSync('cargo', ['build', '-p', 'escouade-team-server'], { cwd: path.join(ROOT, 'src-tauri'), stdio: 'inherit' });
@@ -88,7 +91,7 @@ test.beforeAll(async () => {
   await startServer();
 });
 
-test.afterAll(async () => {
+test.afterEach(async () => {
   await stopServer();
   if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 });
@@ -181,10 +184,16 @@ async function shoot(page: Page, name: string, what?: Locator) {
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd, encoding: 'utf8' }).trim();
 
-test('an agent passed to a teammate with its uncommitted work goes on on his machine, with the handover file first', async ({ app }) => {
-  test.setTimeout(480_000);
-  const alice = app.page;
+/** The folder of `projects` Claude Code keeps the sessions of `dir` in (each character neither letter nor digit a `-`). */
+const encoded = (dir: string) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
+/**
+ * Alice and Bob in a team, the project « demo » on its Kanban; Alice's ticket runs on Claude Code ([lent:600]) and she
+ * passes it to Bob, its work uncommitted as a patch. The window says what goes, its session of Claude Code too (the
+ * fake `claude` keeps it in the account's folder, `CLAUDE_CONFIG_DIR`, as Claude Code does). Then Bob's card offers it.
+ */
+async function passToBob(app: App, title: string) {
+  const alice = app.page;
   // Their host: a bare repository; Alice's repository pushes there, Bob clones it.
   const origin = path.join(app.root, 'origin.git');
   git(app.root, 'clone', '-q', '--bare', app.repo, origin);
@@ -226,16 +235,22 @@ test('an agent passed to a teammate with its uncommitted work goes on on his mac
   const pa = await projectId(app.data, app.repo);
   await ipc(alice, 'ticket_create', {
     projectId: pa,
-    draft: { title: 'La passation', description: '[lent:600]', criteria: [], maxLoops: 3, teamLocal: false },
+    draft: { title, description: '[lent:600]', criteria: [], maxLoops: 3, teamLocal: false },
   });
-  const aliceCard = alice.locator('.card', { hasText: 'La passation' });
+  const aliceCard = alice.locator('.card', { hasText: title });
   await expect(aliceCard).toBeVisible({ timeout: 15_000 });
-  await expect(bob.locator('.card', { hasText: 'La passation' })).toBeVisible({ timeout: 15_000 });
+  await expect(bob.locator('.card', { hasText: title })).toBeVisible({ timeout: 15_000 });
   await aliceCard.getByRole('button', { name: 'Lancer' }).click({ timeout: 15_000 });
   await expect(aliceCard.locator('[data-team-holder="here"]')).toBeVisible({ timeout: 30_000 });
   const aliceTree = path.join(app.repo, '.claude', 'worktrees', 'dem-1');
   await expect.poll(() => fs.existsSync(aliceTree), { timeout: 60_000 }).toBe(true);
   fs.writeFileSync(path.join(aliceTree, 'passation.txt'), 'le travail en cours\n');
+  // Its session, where Claude Code keeps it: in the account's folder, under its worktree.
+  const claude = path.join(app.root, 'claude');
+  const aliceSessions = path.join(claude, 'projects', encoded(aliceTree));
+  await expect
+    .poll(() => fs.existsSync(aliceSessions) && fs.readdirSync(aliceSessions).some((f) => f.endsWith('.jsonl')), { timeout: 60_000 })
+    .toBe(true);
 
   // « Passer à un collègue… » from the card's menu, once the card has its agent: the window says what goes before the
   // gesture.
@@ -252,6 +267,10 @@ test('an agent passed to a teammate with its uncommitted work goes on on his mac
   await expect(dialog.getByTestId('team-handoff-wip')).toContainText('1 fichier non commité');
   await expect(dialog.getByTestId('team-handoff-target').filter({ hasText: 'Bob Durand' })).toBeVisible();
   await expect(dialog.getByTestId('team-handoff-patch')).toBeChecked();
+  // TS-17b: its session of Claude Code goes with it.
+  await expect(dialog.getByTestId('team-handoff-session')).toContainText(
+    'Sa session de Claude Code part avec lui, chiffrée ; s’il ne peut pas la reprendre, il repart avec la passation.',
+  );
   await shoot(alice, 'equipe-passer-agent', dialog);
   // Nothing pushed before the gesture.
   expect(git(origin, 'branch', '--list', 'ticket/dem-1')).toBe('');
@@ -263,20 +282,26 @@ test('an agent passed to a teammate with its uncommitted work goes on on his mac
   await expect(aliceCard.locator('[data-team-holder]')).toHaveCount(0);
   // The work stays here too: nothing lost.
   expect(fs.readFileSync(path.join(aliceTree, 'passation.txt'), 'utf8')).toBe('le travail en cours\n');
+  // As on another machine: Alice's session is not where Bob's `claude` could find it, only the copy he gets is.
+  const session = fs.readdirSync(aliceSessions).find((f) => f.endsWith('.jsonl'))!;
+  fs.renameSync(aliceSessions, `${aliceSessions}-ailleurs`);
 
   // Bob: the proposal on the card and in his box « À toi ».
-  const bobCard = bob.locator('.card', { hasText: 'La passation' });
+  const bobCard = bob.locator('.card', { hasText: title });
   const offer = bobCard.locator('[data-team-handoff="incoming"]');
   await expect(offer).toContainText('Alice Martin te passe DEM-1', { timeout: 30_000 });
   await expect(bobCard.locator('[data-team-holder]')).toHaveCount(0);
-  await shoot(bob, 'equipe-prendre-agent');
   const views = await ipc<{ views: { key: string; source: string; by: string }[] }>(bob, 'inbox_views', { projectId: null });
   expect(views.views.find((v) => v.source === 'handoff')).toMatchObject({ by: 'Alice Martin' });
+  const bobTree = path.join(bobRepo, '.claude', 'worktrees', 'dem-1');
+  return { alice, bob, aliceCard, bobCard, offer, bobTree, claude, session, aliceTree };
+}
 
-  // « Prendre »: the branch and the work in his worktree, his agent's first message the handover file.
+/** « Prendre »: the branch and the work in Bob's worktree, the ticket his. */
+async function take(p: Awaited<ReturnType<typeof passToBob>>) {
+  const { alice, bob, aliceCard, bobCard, offer, bobTree } = p;
   await offer.getByRole('button', { name: 'Prendre' }).click();
   await expect(bobCard.locator('[data-team-holder="here"]')).toBeVisible({ timeout: 60_000 });
-  const bobTree = path.join(bobRepo, '.claude', 'worktrees', 'dem-1');
   await expect.poll(() => fs.existsSync(path.join(bobTree, 'passation.txt')), { timeout: 60_000 }).toBe(true);
   // As a checkout writes it on this machine (its git may turn the line ends to CRLF).
   expect(fs.readFileSync(path.join(bobTree, 'passation.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe('le travail en cours\n');
@@ -285,18 +310,61 @@ test('an agent passed to a teammate with its uncommitted work goes on on his mac
   expect(git(bobTree, 'rev-parse', '--abbrev-ref', '@{upstream}')).toBe('origin/ticket/dem-1');
   await expect(aliceCard.locator('[data-team-holder="held"]')).toContainText('Pris par Bob Durand', { timeout: 30_000 });
   await expect(aliceCard.locator('[data-team-handoff]')).toHaveCount(0);
+  void alice;
   await bobCard.click();
-  await expect(bob.getByTestId('handover')).toContainText('Passé par Alice Martin · suite sur Claude Code', { timeout: 30_000 });
-  await expect(bob.getByRole('button', { name: /Dossier de passation/ })).toBeVisible();
-  await bob.getByRole('button', { name: /Dossier de passation/ }).click();
-  await expect(bob.locator('.file-text')).toContainText('Passation : suite d’un travail que Alice Martin t’a passé');
-  await shoot(bob, 'equipe-agent-repris');
+}
 
-  for (const p of [alice, bob]) {
+async function forgetTeams(pages: Page[]) {
+  for (const p of pages) {
     await p.evaluate(async () => {
       const ipc = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a?: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;
       const list = (await ipc.invoke('team_list')) as { id: string }[];
       for (const t of list) await ipc.invoke('team_forget', { team: t.id }).catch(() => {});
     });
   }
+}
+
+test('an agent of Claude Code passed to a teammate goes on on their machine in its own session, resumed', async ({ app }) => {
+  test.setTimeout(480_000);
+  const p = await passToBob(app, 'La passation');
+  await shoot(p.bob, 'equipe-prendre-agent');
+  await take(p);
+  // TS-17b: the copy in the account's folder, under Bob's worktree, its paths his; resumed by `--resume <id>
+  // --fork-session`, the conversation of before above « Reprise de la session ».
+  const copy = path.join(p.claude, 'projects', encoded(p.bobTree), p.session);
+  await expect.poll(() => fs.existsSync(copy), { timeout: 60_000 }).toBe(true);
+  const placed = fs.readFileSync(copy, 'utf8');
+  expect(placed).toContain(JSON.stringify(p.bobTree).slice(1, -1));
+  expect(placed).not.toContain(JSON.stringify(p.aliceTree).slice(1, -1));
+  await expect(p.bob.getByTestId('handover')).toContainText('Passé par Alice Martin · reprise de la session, suite sur Claude Code', {
+    timeout: 30_000,
+  });
+  await expect(p.bob.getByRole('button', { name: /Reprise de la session/ })).toBeVisible();
+  await expect(p.bob.getByRole('button', { name: /Dossier de passation/ })).toHaveCount(0);
+  const id = p.session.replace(/\.jsonl$/, '');
+  await expect
+    .poll(() => app.launches().some((l) => l.argv.includes(`--resume=${id}`) && l.argv.includes('--fork-session')), { timeout: 60_000 })
+    .toBe(true);
+  await shoot(p.bob, 'equipe-agent-repris');
+  await forgetTeams([p.alice, p.bob]);
+});
+
+test('an agent of Claude Code whose session fails at its first turn on the teammate’s machine goes on from the handover file', async ({
+  app,
+}) => {
+  test.setTimeout(480_000);
+  const p = await passToBob(app, 'Le repli');
+  // Its first turn there fails (an error of the API, once): back to the handover file, the copy taken out.
+  fs.writeFileSync(path.join(p.claude, 'fake-error'), '1');
+  await take(p);
+  await expect(p.bob.getByTestId('handover').last()).toContainText('Passé par Alice Martin · passation, suite sur Claude Code', {
+    timeout: 60_000,
+  });
+  await expect(p.bob.getByText(/ne s’est pas reprise ici/)).toBeVisible();
+  await expect(p.bob.getByRole('button', { name: /Dossier de passation/ })).toBeVisible();
+  await p.bob.getByRole('button', { name: /Dossier de passation/ }).click();
+  await expect(p.bob.locator('.file-text')).toContainText('Passation : suite d’un travail que Alice Martin t’a passé');
+  expect(fs.existsSync(path.join(p.claude, 'projects', encoded(p.bobTree), p.session))).toBe(false);
+  await shoot(p.bob, 'equipe-agent-repli');
+  await forgetTeams([p.alice, p.bob]);
 });

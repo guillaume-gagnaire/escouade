@@ -4,9 +4,11 @@
 //!   every operation: which ticket, from which device to which, the branch pushed, whether a patch goes with it, and
 //!   the deposit that holds the rest. It is deleted once taken, or when the passage is abandoned.
 //! - **The deposit** is an encrypted file of the server ([`Team::deposit`], sealed as an object of the project): the
-//!   agent's conversation as Escouade keeps it, and the patch of the uncommitted work when it goes as a patch. It is
-//!   erased by its author (the passing device) once the offer is over: the server lets no other member erase it (SR2-03).
-//!   The server sees a file of some size, never what it holds.
+//!   agent's conversation as Escouade keeps it, and the patch of the uncommitted work when it goes as a patch; for an
+//!   agent of Claude Code passed between two turns, its session too ([`SessionCopy`], TS-17b, choice C16-B), which the
+//!   teammate resumes natively when they take it with Claude Code. It is erased by its author (the passing device) once
+//!   the offer is over: the server lets no other member erase it (SR2-03). The server sees a file of some size, never
+//!   what it holds.
 //! - **The claim** moves by the server's hand ([`Team::hand_claim`]): an offer is only trusted with the claim the
 //!   server says was handed to this device, by the device the offer names (`Claim::handed_by`).
 //! - **The machines**: a device in server mode says so in the project ([`Team::set_machine`]), so that the passage
@@ -48,6 +50,27 @@ pub struct Offer {
     pub agent: String,
     /// When it was offered (ms).
     pub at: i64,
+    /// The deposit holds the agent's session of Claude Code ([`SessionCopy`]): the teammate may resume it natively
+    /// (TS-17b). Absent from the offers of before: none.
+    #[serde(default)]
+    pub session: bool,
+}
+
+/// The session of Claude Code of an agent passed (TS-17b, choice C16-B), as it goes in the encrypted deposit: its file
+/// as Claude Code wrote it (`<config>/projects/<folder>/<id>.jsonl`, its `transcript_path`), the folder it ran in (the
+/// worktree of who passes it, which the teammate's replaces in each of its strings) and the version of `claude` that
+/// wrote it (the teammate's must be the same or newer).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionCopy {
+    /// The session's id (`<id>.jsonl`).
+    pub id: String,
+    /// The worktree it ran in, on the machine of who passes it.
+    pub worktree: String,
+    /// The version of `claude` of the session (`2.1.330`).
+    pub version: String,
+    /// The file, as Claude Code wrote it.
+    pub lines: String,
 }
 
 impl Offer {
@@ -136,5 +159,53 @@ impl Team {
             .filter(|o| o.fields.get("machine").and_then(Value::as_bool) == Some(true))
             .map(|o| DeviceId(o.id.0))
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn offer() -> Offer {
+        Offer {
+            ticket: "01".repeat(16),
+            claim: "02".repeat(16),
+            from: "aa".repeat(16),
+            to: "bb".repeat(16),
+            file: "03".repeat(16),
+            branch: "ticket/dem-41".into(),
+            remote: "origin".into(),
+            patch: false,
+            engine: "claude".into(),
+            agent: "DEM-41".into(),
+            at: 1,
+            session: true,
+        }
+    }
+
+    #[test]
+    fn an_offer_says_whether_its_deposit_holds_the_session_and_one_of_before_holds_none() {
+        let o = offer();
+        assert_eq!(Offer::from_fields(&o.fields()), Some(o.clone()));
+        let mut before = o.fields();
+        before.remove("session");
+        assert_eq!(
+            Offer::from_fields(&before).map(|x| x.session),
+            Some(false),
+            "an offer written before TS-17b"
+        );
+    }
+
+    #[test]
+    fn a_session_copy_goes_in_the_deposit_as_camel_case_json() {
+        let s = SessionCopy {
+            id: "1e97c2d5".into(),
+            worktree: r"C:\a\wt".into(),
+            version: "2.1.330".into(),
+            lines: "{}\n".into(),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["worktree"], r"C:\a\wt");
+        assert_eq!(serde_json::from_value::<SessionCopy>(v).unwrap(), s);
     }
 }

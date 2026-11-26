@@ -72,6 +72,8 @@ export default {
     wipPatchHint: 'Chiffré par la clé du projet, appliqué tel quel chez qui reprend : rien ne s’ajoute à la branche.',
     conversation:
       'La conversation part chiffrée par la clé du projet, déposée sur le serveur le temps du passage, effacée une fois reprise ou le passage annulé.',
+    /** The agent runs on Claude Code (TS-17b): its session goes in the deposit, resumed natively by who takes it with Claude Code. */
+    session: 'Sa session de Claude Code part avec lui, chiffrée ; s’il ne peut pas la reprendre, il repart avec la passation.',
     pass: 'Passer',
     passing: 'Passage…',
     done: 'Passé à {name}',

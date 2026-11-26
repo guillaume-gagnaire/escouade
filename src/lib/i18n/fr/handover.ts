@@ -19,13 +19,20 @@ export default {
     limitedUntil: 'Suite sur {harness} · quota {from} épuisé jusqu’à {time}',
     limited: 'Suite sur {harness} · quota {from} épuisé',
     asked: 'Suite sur {harness} · l’agent était sur {from}',
-    /** An agent a teammate passed (TS-17): the conversation of before is above. */
-    passed: 'Passé par {name} · suite sur {harness}',
+    /** An agent a teammate passed (TS-17): the conversation of before is above, the handover file below. */
+    passed: 'Passé par {name} · passation, suite sur {harness}',
+    /** An agent of Claude Code a teammate passed, its own session resumed here (TS-17b). */
+    resumed: 'Passé par {name} · reprise de la session, suite sur {harness}',
   },
   /** The first message of the agent on its new harness, folded. */
   file: {
     title: 'Dossier de passation',
     hint: 'Écrit par Escouade depuis la conversation : le premier message de l’agent sur {harness}.',
+  },
+  /** The first message of a session of Claude Code resumed after a passage (TS-17b), folded. */
+  resume: {
+    title: 'Reprise de la session',
+    hint: 'Écrit par Escouade : la session continue ici, sur {harness}, avec tout son contexte.',
   },
   /** The mark of the harness on a turn, once the conversation went from one to another. */
   turnOn: 'sur {harness}',

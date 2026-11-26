@@ -470,3 +470,279 @@ async fn a_passage_does_not_crush_a_local_branch() {
         assert!(passed_branch_ok(&root, bad, "").await.is_err(), "{bad}");
     }
 }
+
+/// TS-17b: who reaches the native resume. Claude Code on both sides only; any other harness, on either side, goes on
+/// from the handover file, its session never copied.
+#[test]
+fn only_claude_code_on_both_sides_resumes_its_session_natively() {
+    use crate::model::EngineId;
+    assert!(resumes_natively(EngineId::CLAUDE, EngineId::CLAUDE));
+    for other in ["codex", "copilot", "cursor", "opencode", "gemini"] {
+        let e = EngineId::new(other);
+        assert!(!resumes_natively(EngineId::CLAUDE, e), "{other}");
+        assert!(!resumes_natively(e, EngineId::CLAUDE), "{other}");
+        assert!(!resumes_natively(e, e), "{other}");
+    }
+    use crate::board::TurnEnd;
+    assert!(native_failed(&TurnEnd::Error(
+        "No conversation found".into()
+    )));
+    assert!(native_failed(&TurnEnd::Refused));
+    for fine in [
+        TurnEnd::Finished("ok".into()),
+        TurnEnd::Interrupted,
+        TurnEnd::Limited,
+        TurnEnd::SignIn,
+    ] {
+        assert!(!native_failed(&fine), "{fine:?}");
+    }
+}
+
+/// Each one's Claude Code on an account of its own folder (`CLAUDE_CONFIG_DIR`), where the fake `claude` keeps its
+/// sessions as Claude Code does: the only account of the harness.
+fn own_account(h: &Harness, id: &str) -> std::path::PathBuf {
+    let dir = h.dir.join(format!("claude-{id}"));
+    let account = crate::model::Account {
+        id: id.into(),
+        name: id.into(),
+        config_dir: dir.to_string_lossy().into(),
+        ..Default::default()
+    };
+    let mut s = h.core.settings.read().clone();
+    s.accounts = vec![account];
+    h.core.save_settings(s).unwrap();
+    dir
+}
+
+/// The files of `projects/*/<session>.jsonl` in the account's folder `config`.
+fn sessions_named(config: &Path, session: &str) -> Vec<std::path::PathBuf> {
+    let Ok(folders) = std::fs::read_dir(config.join("projects")) else {
+        return Vec::new();
+    };
+    folders
+        .flatten()
+        .map(|f| f.path().join(format!("{session}.jsonl")))
+        .filter(|f| f.is_file())
+        .collect()
+}
+
+/// TS-17b (C16-B): Alice's agent of Claude Code passed between two turns takes its session with it; Bob, on Claude
+/// Code, resumes it natively: the copy in his account's folder under his worktree, its paths rewritten, the agent started
+/// by `--resume <id> --fork-session` (a new session of its own), the separator « Reprise de la session », and the
+/// deposit erased from the server. A second ticket whose first turn fails at Bob's (an error of the API) goes on from
+/// the handover file, the copy taken out of his account's folder.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_agent_of_claude_code_passed_resumes_its_own_session_else_the_handover_file() {
+    let (server, host, task, dir) = server().await;
+    let store = Arc::new(MemoryStore::default());
+    let alice_teams = teams(&dir.path().join("a"), store.clone());
+    let bob_teams = teams(&dir.path().join("b"), store.clone());
+    let token_ = server.new_team_token().await.unwrap();
+    let team = alice_teams
+        .create(&host, &token_, "ACME", None)
+        .await
+        .unwrap()
+        .team
+        .id;
+    let invite = alice_teams.invite(&team, "member", None).await.unwrap();
+    bob_teams.join(&invite.url, "").await.unwrap();
+    crate::teams_tests::let_in(&alice_teams, &bob_teams, &team).await;
+
+    let ha = harness("handoff-native-alice");
+    let hb = harness("handoff-native-bob");
+    ha.core.settings.write().user_name = "Alice Martin".into();
+    hb.core.settings.write().user_name = "Bob Durand".into();
+    let alice_claude = own_account(&ha, "alice");
+    let bob_claude = own_account(&hb, "bob");
+    let origin = ha.dir.join("origin.git");
+    git(
+        &ha.dir,
+        &[
+            "init",
+            "-q",
+            "--bare",
+            "-b",
+            "main",
+            &origin.to_string_lossy(),
+        ],
+    );
+    let seed = crate::core_tests::repo(&ha.dir);
+    git(&seed, &["push", "-q", &origin.to_string_lossy(), "main"]);
+    let pa = project_on(&ha, &origin, "alice").await;
+    let pb = project_on(&hb, &origin, "bob").await;
+    ha.core.set_teams(alice_teams.clone());
+    hb.core.set_teams(bob_teams.clone());
+    ha.core
+        .set_project_team(&pa.id, Some(team.clone()))
+        .unwrap();
+    hb.core
+        .set_project_team(&pb.id, Some(team.clone()))
+        .unwrap();
+    let linked = ha.core.link_team_board(&pa.id, None).await.unwrap();
+    hb.core
+        .link_team_board(&pb.id, linked.team_project.clone())
+        .await
+        .unwrap();
+
+    // Alice's ticket runs on Claude Code; its session is in her account's folder.
+    let pass = |title: &'static str| {
+        let (ha, hb, pa, pb) = (&ha, &hb, pa.clone(), pb.clone());
+        let alice_claude = alice_claude.clone();
+        async move {
+            let mut d = draft(title, false);
+            d.description = "[lent]".into();
+            let t = ha.core.ticket_create(&pa.id, d).await.unwrap();
+            read(ha, &pa.id).await;
+            ha.core.ticket_start(&t.id).unwrap();
+            let agent = agent_running(ha, &t.id).await;
+            let session = {
+                ha.wait("its session", |h| h.agent(&agent).session_id.is_some())
+                    .await;
+                ha.agent(&agent).session_id.unwrap()
+            };
+            ha.wait("its session kept", |_| {
+                !sessions_named(&alice_claude, &session).is_empty()
+            })
+            .await;
+            read(hb, &pb.id).await;
+            read(ha, &pa.id).await;
+            let plan = ha.core.team_handoff_plan(&t.id).await.unwrap();
+            assert!(plan.session, "the window says its session goes with it");
+            let bob = plan
+                .targets
+                .iter()
+                .find(|x| x.name == "Bob Durand")
+                .cloned()
+                .unwrap();
+            ha.core
+                .team_handoff(&t.id, &bob.device, Wip::Patch)
+                .await
+                .unwrap();
+            read(hb, &pb.id).await;
+            let theirs = crate::teamboard::tests::find(hb, &pb.id, title).unwrap();
+            let wt = ha.agent(&agent).cwd;
+            (t, theirs, session, wt)
+        }
+    };
+
+    let (_t, theirs, session, alice_wt) = pass("La reprise native").await;
+    // The offer says its deposit holds the session; the deposit is on the server until it is taken.
+    let pb_now = hb.core.project(&pb.id).unwrap();
+    let (teams_b, team_id, pid) = hb.core.team_project_of(&pb_now).unwrap();
+    let shared = teams_b.team(&team_id).unwrap();
+    let (offer, file) = {
+        let mut t = shared.lock().await;
+        let (_, offer) = t.handoffs(pid).unwrap().into_iter().next().unwrap();
+        let file = crate::teamboard::object_of(&offer.file).unwrap();
+        assert!(t.get_file(pid, file).await.unwrap().is_some());
+        (offer, file)
+    };
+    assert!(offer.session);
+    hb.core.team_handoff_take(&theirs.id, None).await.unwrap();
+    // Bob's agent: the copy in his account's folder, under his worktree, nothing of Alice's worktree left.
+    let bob_agent = ticket(&hb, &theirs.id).agent_id.unwrap();
+    let bob_wt = hb.agent(&bob_agent).cwd;
+    let copy = crate::sessioncopy::session_path(&bob_claude, &bob_wt, &session);
+    assert!(copy.is_file(), "{}", copy.display());
+    let placed = std::fs::read_to_string(&copy).unwrap();
+    assert!(
+        placed.contains(&serde_json::to_string(&bob_wt).unwrap()),
+        "{placed}"
+    );
+    crate::sessioncopy::verify(&placed, &alice_wt, &bob_wt).unwrap();
+    // Started by `--resume <id> --fork-session`: a session of its own, never the one passed.
+    hb.wait("the resumed turn", |h| {
+        h.agent(&bob_agent)
+            .session_id
+            .as_deref()
+            .is_some_and(|s| s != session)
+    })
+    .await;
+    let launches = hb.launch_log(Path::new(&bob_wt));
+    assert!(
+        launches.iter().any(|l| {
+            let argv: Vec<&str> = l["argv"]
+                .as_array()
+                .map(|a| a.iter().filter_map(Value::as_str).collect())
+                .unwrap_or_default();
+            argv.windows(2)
+                .any(|w| w[0] == format!("--resume={session}") && w[1] == "--fork-session")
+        }),
+        "{launches:?}"
+    );
+    let items = hb.items(&bob_agent);
+    let sep = items
+        .iter()
+        .position(|i| i["kind"] == "handover" && i["native"] == true)
+        .expect("« Reprise de la session »");
+    assert_eq!(items[sep]["by"], "Alice Martin");
+    assert!(
+        items[..sep].iter().any(|i| i["kind"] == "user"),
+        "the conversation of before above"
+    );
+    assert!(items[sep..]
+        .iter()
+        .any(|i| i["kind"] == "user" && i["origin"] == "resume"));
+    assert!(
+        !items[sep..]
+            .iter()
+            .any(|i| i["kind"] == "user" && i["origin"] == "handover"),
+        "no handover file"
+    );
+    // The first turn went well: it stays on its session.
+    hb.wait("the first turn's end", |h| {
+        !h.agent(&bob_agent).status.is_active()
+    })
+    .await;
+    assert!(hb.core.native_resumes.lock().get(&bob_agent).is_none());
+    assert!(copy.is_file());
+    // Erased from the server once taken, by Alice's machine, its author (SR2-03), when it reads the offer gone.
+    read(&ha, &pa.id).await;
+    {
+        let mut t = shared.lock().await;
+        assert_eq!(t.get_file(pid, file).await.unwrap(), None);
+        assert!(t.handoffs(pid).unwrap().is_empty());
+    }
+
+    // The second: its first turn fails at Bob's (an error of the API, once): the handover file, the copy gone.
+    let (_t2, theirs2, session2, _) = pass("Le repli").await;
+    std::fs::write(bob_claude.join("fake-error"), "1").unwrap();
+    hb.core.team_handoff_take(&theirs2.id, None).await.unwrap();
+    let bob_agent2 = ticket(&hb, &theirs2.id).agent_id.unwrap();
+    let bob_wt2 = hb.agent(&bob_agent2).cwd;
+    let copy2 = crate::sessioncopy::session_path(&bob_claude, &bob_wt2, &session2);
+    let (agent2, text) = handed_file(&hb, &theirs2.id).await;
+    assert_eq!(agent2, bob_agent2);
+    assert!(text.contains("Passation"), "{text}");
+    assert!(!copy2.exists(), "the copy out of the account's folder");
+    let items = hb.items(&bob_agent2);
+    let native = items
+        .iter()
+        .position(|i| i["kind"] == "handover" && i["native"] == true)
+        .expect("resumed first");
+    let back = items
+        .iter()
+        .rposition(|i| {
+            i["kind"] == "handover" && i["native"].is_null() && i["by"] == "Alice Martin"
+        })
+        .expect("then the passation");
+    assert!(back > native);
+    assert!(items[native..back].iter().any(|i| i["kind"] == "notice"
+        && i["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("ne s’est pas reprise"))));
+    // Its handover turn runs on a new session, not the copy's.
+    hb.wait("the handover turn", |h| {
+        !h.agent(&bob_agent2).status.is_active() && h.agent(&bob_agent2).session_id.is_some()
+    })
+    .await;
+    assert_ne!(
+        hb.agent(&bob_agent2).session_id.as_deref(),
+        Some(session2.as_str())
+    );
+    assert!(hb.agent(&bob_agent2).fork_of.is_none());
+
+    drop(ha);
+    drop(hb);
+    task.abort();
+}

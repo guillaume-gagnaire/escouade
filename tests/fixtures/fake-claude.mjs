@@ -24,7 +24,8 @@
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
 // get_usage); while a <dir>/fake-usage.json file is there, get_usage tells its body as its rate_limits. Each get_usage is
 // logged to <dir>/fake-get-usage.jsonl ({ pid, alone }: alone for a process given no session, an account's own read). While a <dir>/fake-error file is there, every turn fails with an error of the API
-// ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit.
+// ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit; a number N in it: its
+// next N turns only.
 // While a <dir>/fake-oauth-lost file is there, a turn fails as a sign-in Claude Code could not refresh does
 // (« OAuth session expired and could not be refreshed », ESC-162), and the process that failed so fails every turn after
 // (its refresh token dead in its memory, as Claude Code keeps it): a number in the file is how many turns fail so,
@@ -243,8 +244,16 @@ const oauthLost = () => {
   oauthDead = true;
   return true;
 };
-// Failing with an error of the API, for as long as the file is there.
-const failing = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-error'));
+// Failing with an error of the API, for as long as the file is there; when it holds a number, for that many turns only
+// (then it goes): a first turn that fails, the next ones not (TS-17b).
+const failing = () => {
+  const file = configDir === null ? null : path.join(configDir, 'fake-error');
+  if (file === null || !fs.existsSync(file)) return false;
+  const left = Number(fs.readFileSync(file, 'utf8').trim() || 'NaN');
+  if (left <= 1) fs.rmSync(file, { force: true });
+  else if (!Number.isNaN(left)) fs.writeFileSync(file, String(left - 1));
+  return true;
+};
 // The alias haiku as `initialize` lists it, when <dir>/fake-haiku says which: « 5-5 » as from 2.1.293 on (Haiku 5.5, with
 // the mode auto and its efforts), « 4-5 » as before (Haiku 4.5, without either); else Haiku 5.5 with the mode auto but no
 // effort (as the rule of Escouade has it).

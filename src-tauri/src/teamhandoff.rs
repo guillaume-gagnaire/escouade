@@ -26,7 +26,7 @@ use anyhow::{anyhow, bail, Result};
 use base64::Engine as _;
 use escouade_team::client::ClientError;
 use escouade_team::crypto::DeviceId;
-use escouade_team::handoff::Offer;
+use escouade_team::handoff::{Offer, SessionCopy};
 use escouade_team::Error as TeamError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -37,6 +37,7 @@ use crate::handover::{self, Dossier};
 use crate::model::EngineId;
 use crate::model::{new_id, now_ms, Column, TeamHandoff, UiEvent};
 use crate::plan::PlanState;
+use crate::sessioncopy;
 use crate::teamboard::{holder_of, object_of, refusal};
 
 /// The key of the team's file that says whose passages a machine in server mode takes on its own (SR3-05).
@@ -125,6 +126,9 @@ pub struct Deposit {
     pub patch: Option<String>,
     pub plan: Option<PlanState>,
     pub progress: Option<String>,
+    /// The agent's session of Claude Code, passed between two turns (TS-17b, C16-B): resumed natively by a teammate
+    /// who takes it with Claude Code.
+    pub session: Option<SessionCopy>,
 }
 
 /// What an agent passed brings to the agent that goes on with it here (`Core::launch_ticket_agent`).
@@ -136,6 +140,33 @@ pub struct HandedIn {
     pub patch: Option<Vec<u8>>,
     pub plan: Option<PlanState>,
     pub progress: Option<String>,
+    pub session: Option<SessionCopy>,
+}
+
+/// An agent passed whose session of Claude Code resumes here (TS-17b), until its first turn ends.
+#[derive(Debug, Clone)]
+pub struct NativeResume {
+    /// The copy placed in the account's folder: taken out again on a failure.
+    pub path: std::path::PathBuf,
+    /// The handover file it goes on with on a failure, who passed it and the harness it ran on there.
+    pub text: String,
+    pub by: String,
+    pub from: EngineId,
+}
+
+/// Whether an agent passed from the harness `from` and taken on `to` resumes its own session (C16-B): Claude Code on both
+/// sides only; every other harness goes on from the handover file (C16-A), its session never copied.
+pub(crate) fn resumes_natively(from: EngineId, to: EngineId) -> bool {
+    from == EngineId::CLAUDE && to == EngineId::CLAUDE
+}
+
+/// Whether the end of the first turn of a session resumed natively is a failure (the session not found, an error of the
+/// API, a process gone in error, a refusal): the agent goes on with the handover file.
+pub(crate) fn native_failed(end: &crate::board::TurnEnd) -> bool {
+    matches!(
+        end,
+        crate::board::TurnEnd::Error(_) | crate::board::TurnEnd::Refused
+    )
 }
 
 /// Whom an agent can be passed to: a device of the project.
@@ -167,6 +198,8 @@ pub struct HandoffPlan {
     pub dirty: Vec<String>,
     /// Its turn runs: it is interrupted first.
     pub running: bool,
+    /// Its session of Claude Code goes with it, encrypted (TS-17b).
+    pub session: bool,
     pub targets: Vec<HandoffTarget>,
     /// Why it cannot be passed; the window shows it and offers nothing.
     pub refusal: Option<String>,
@@ -250,6 +283,7 @@ impl Core {
             remote: String::new(),
             dirty: Vec::new(),
             running: false,
+            session: false,
             targets: Vec::new(),
             refusal: None,
         };
@@ -298,7 +332,7 @@ impl Core {
                 )),
             );
         };
-        let (wt, cwd, status) = {
+        let (wt, cwd, status, session, account) = {
             let rt = agent.lock();
             plan.agent_name = rt.meta.name.clone();
             plan.engine = Some(rt.meta.engine);
@@ -306,9 +340,17 @@ impl Core {
                 rt.meta.worktree.clone(),
                 rt.meta.cwd.clone(),
                 rt.meta.status,
+                rt.meta
+                    .session_id
+                    .clone()
+                    .filter(|_| rt.meta.engine == EngineId::CLAUDE),
+                rt.meta.account.clone(),
             )
         };
         plan.running = status.is_active();
+        plan.session = session
+            .as_deref()
+            .is_some_and(|s| self.session_file(&account, &cwd, s).is_some());
         let Some(wt) = wt.filter(|w| w.repos.is_empty()) else {
             return refuse(
                 plan,
@@ -416,9 +458,19 @@ impl Core {
             }
         }
         let h = self.agent(&agent_id)?;
-        let (cwd, engine) = {
+        let (cwd, engine, session_id, account) = {
             let rt = h.lock();
-            (rt.meta.cwd.clone(), rt.meta.engine)
+            (
+                rt.meta.cwd.clone(),
+                rt.meta.engine,
+                rt.meta.session_id.clone(),
+                rt.meta.account.clone(),
+            )
+        };
+        // Between two turns, on Claude Code: its session goes with it (TS-17b), read before its folder changes.
+        let session = match session_id.filter(|_| engine == EngineId::CLAUDE) {
+            Some(s) => self.session_to_pass(&account, &cwd, &s).await,
+            None => None,
         };
         let branch = plan.branch.clone();
         let key = plan.key.clone();
@@ -475,15 +527,22 @@ impl Core {
                     .map(|p| base64::engine::general_purpose::STANDARD.encode(p)),
                 plan: rt.meta.plan.clone(),
                 progress: rt.meta.progress_line.clone(),
+                session,
             };
             let mut bytes = serde_json::to_vec(&d)?;
+            // The same bound as the conversation: past it, no copy of the session (the teammate gets the handover file).
+            if bytes.len() > MAX_DEPOSIT && d.session.take().is_some() {
+                log::info!("ticket {key}: the agent's session is too big to go with it");
+                bytes = serde_json::to_vec(&d)?;
+            }
             while bytes.len() > MAX_DEPOSIT && d.items.len() > 1 {
                 let half = d.items.len() / 2;
                 d.items.drain(..half);
                 bytes = serde_json::to_vec(&d)?;
             }
-            bytes
+            (bytes, d.session.is_some())
         };
+        let (deposit, with_session) = deposit;
         let t = self.ticket(id)?;
         let tt = t.team.clone().unwrap_or_default();
         let claim = object_of(&tt.claim).ok_or_else(|| anyhow!("a claim id"))?;
@@ -508,6 +567,7 @@ impl Core {
             engine: engine.to_string(),
             agent: plan.agent_name.clone(),
             at: now_ms(),
+            session: with_session,
         };
         let object = match team.offer_handoff(pid, &offer) {
             Ok(o) => o,
@@ -918,6 +978,7 @@ impl Core {
             patch,
             plan: deposit.plan,
             progress: deposit.progress,
+            session: deposit.session,
         };
         let started_at = t.started_at;
         let launched = self.launch_ticket_agent(&project, &t, Some(handed)).await;
@@ -936,7 +997,9 @@ impl Core {
     }
 
     /// The agent passed goes on here (`launch_ticket_agent`, its worktree made): the patch applied, the conversation of
-    /// before above, then the handover file as its first message.
+    /// before above, then, on Claude Code with the session of Claude Code that came with it, that session resumed
+    /// natively (TS-17b, C16-B: its version checked, its paths rewritten and checked, placed in the account's folder,
+    /// `--resume <id> --fork-session`); else, or when that fails, the handover file as its first message (C16-A).
     pub(crate) async fn go_on_handed(
         self: &Arc<Self>,
         agent_id: &str,
@@ -944,13 +1007,14 @@ impl Core {
         handed: HandedIn,
     ) -> Result<()> {
         let h = self.agent(agent_id)?;
-        let (cwd, base, engine, model) = {
+        let (cwd, base, engine, model, account) = {
             let rt = h.lock();
             (
                 rt.meta.cwd.clone(),
                 rt.meta.worktree.as_ref().map(|w| w.base_branch.clone()),
                 rt.meta.engine,
                 rt.meta.model.clone(),
+                rt.meta.account.clone(),
             )
         };
         let mut patch_failed = None;
@@ -967,11 +1031,79 @@ impl Core {
         }
         let by = handed.by.clone();
         let from = handed.from;
+        // Its own session, on Claude Code on both sides: placed in the account's folder, or why not.
+        let native = match handed
+            .session
+            .as_ref()
+            .filter(|_| resumes_natively(from, engine))
+        {
+            Some(copy) => Some(
+                self.place_session(&account, &cwd, copy)
+                    .await
+                    .map(|path| (path, copy.id.clone())),
+            ),
+            None => None,
+        };
+        let changes = self.changes_of(&cwd, base.as_deref()).await;
+        let ticket = format!("{} — {}", t.key, t.title);
+        let to = engine::by_id(engine);
+        let lang = self.lang().claude;
+        let text = handover::passed(
+            &Dossier {
+                lang,
+                from: engine::by_name(from),
+                limited: false,
+                items: &handed.items,
+                plan: handed.plan.as_ref(),
+                progress: handed.progress.as_deref(),
+                changes: &changes,
+                ticket: Some(&ticket),
+                budget: handover::budget(to.context_window(&model)),
+            },
+            &by,
+        );
+        let resumed = matches!(native, Some(Ok(_)));
+        // Its process may be started ahead already, on a new session: stopped, so that its next start forks the session
+        // placed; none starts meanwhile.
+        let lock = self.spawn_lock(agent_id);
+        let guard = lock.lock().await;
+        let mut stopped_ahead = false;
+        if resumed {
+            let stopped = h.lock().detach();
+            if let Some(p) = stopped {
+                stopped_ahead = true;
+                let _ = crate::accounts::ended(&p).await;
+            }
+        }
         self.with_agent(agent_id, |rt, fx| {
             for item in &handed.items {
                 rt.append(item.clone(), fx);
             }
-            rt.append(handover::passed_separator(from, engine, &by), fx);
+            if let Some(Err(why)) = &native {
+                let why = why.said();
+                rt.notice(
+                    "warn",
+                    tr!(
+                        "La session de Claude Code de {by} ne se reprend pas ici ({why}) : la suite part de la passation.",
+                        "{by}’s session of Claude Code isn’t resumed here ({why}): it goes on from the handover file."
+                    ),
+                    fx,
+                );
+            }
+            match &native {
+                Some(Ok((_, id))) => {
+                    // Its next start forks the session placed: a new id, never two histories under the same one.
+                    rt.meta.session_id = None;
+                    rt.meta.last_entry = None;
+                    rt.meta.fork_of = Some(id.clone());
+                    rt.meta.fork_at = None;
+                    if stopped_ahead {
+                        rt.meta.status = crate::model::AgentStatus::Done;
+                    }
+                    rt.append(handover::resumed_separator(from, engine, &by), fx);
+                }
+                _ => rt.append(handover::passed_separator(from, engine, &by), fx),
+            }
             if let Some((path, e)) = &patch_failed {
                 rt.notice(
                     "warn",
@@ -985,24 +1117,163 @@ impl Core {
             fx.save = true;
             Ok(())
         })?;
-        let changes = self.changes_of(&cwd, base.as_deref()).await;
-        let ticket = format!("{} — {}", t.key, t.title);
-        let to = engine::by_id(engine);
-        let text = handover::passed(
-            &Dossier {
-                lang: self.lang().claude,
-                from: engine::by_name(from),
-                limited: false,
-                items: &handed.items,
-                plan: handed.plan.as_ref(),
-                progress: handed.progress.as_deref(),
-                changes: &changes,
-                ticket: Some(&ticket),
-                budget: handover::budget(to.context_window(&model)),
-            },
-            &by,
+        drop(guard);
+        let Some(Ok((path, _))) = native.filter(|_| resumed) else {
+            return Box::pin(self.send_handover(agent_id, text)).await;
+        };
+        log::info!(
+            "ticket {}: the session of Claude Code passed resumes natively",
+            t.key
         );
-        self.send_handover(agent_id, text).await
+        self.native_resumes.lock().insert(
+            agent_id.to_string(),
+            NativeResume {
+                path: path.clone(),
+                text,
+                by: by.clone(),
+                from,
+            },
+        );
+        let patch = patch_failed.as_ref().map(|(p, e)| (e.as_str(), p.as_str()));
+        let first = handover::resumed_message(lang, &by, &cwd, patch);
+        let sent = Box::pin(self.send_by_escouade(agent_id, first, "resume")).await;
+        if sent.is_err() {
+            // Never started: the copy goes, the ticket says why (`send_by_escouade`).
+            self.native_resumes.lock().remove(agent_id);
+            sessioncopy::remove(&path);
+        }
+        sent
+    }
+
+    /// The account's folder of Claude Code and its `claude` (None when it is not found).
+    fn claude_of(&self, account: &str) -> (std::path::PathBuf, Option<engine::Program>) {
+        let settings = self.settings.read().clone();
+        let acc = crate::accounts::get(&settings, account);
+        (
+            crate::accounts::config_dir(&acc, &settings),
+            crate::accounts::program(&acc, &settings),
+        )
+    }
+
+    /// The file of the session `id` of Claude Code the agent of `account` ran in `cwd` (its `transcript_path`).
+    pub(crate) fn session_file(
+        &self,
+        account: &str,
+        cwd: &str,
+        id: &str,
+    ) -> Option<std::path::PathBuf> {
+        sessioncopy::transcript_of(&self.claude_of(account).0, cwd, id)
+    }
+
+    /// The session of Claude Code that goes in the deposit (TS-17b): its file, the worktree it ran in, the version of
+    /// `claude` that wrote it (its lines say it; else this machine's `claude`). None when its file is not found or read.
+    pub(crate) async fn session_to_pass(
+        &self,
+        account: &str,
+        cwd: &str,
+        id: &str,
+    ) -> Option<SessionCopy> {
+        let path = self.session_file(account, cwd, id)?;
+        let lines = match std::fs::read_to_string(&path) {
+            Ok(l) => l,
+            Err(e) => {
+                log::warn!("the agent's session is not read, it doesn't go with it: {e}");
+                return None;
+            }
+        };
+        let version = match sessioncopy::session_version(&lines) {
+            Some(v) => v,
+            None => {
+                let program = self.claude_of(account).1?;
+                let v =
+                    engine::registry::version(engine::by_id(EngineId::CLAUDE), &program).await?;
+                engine::registry::Version::find(&v)?.to_string()
+            }
+        };
+        Some(SessionCopy {
+            id: id.to_string(),
+            worktree: cwd.to_string(),
+            version,
+            lines,
+        })
+    }
+
+    /// The session passed, placed for this machine's account `account` and its worktree `cwd` (`sessioncopy::place`):
+    /// its path, or why not.
+    async fn place_session(
+        &self,
+        account: &str,
+        cwd: &str,
+        copy: &SessionCopy,
+    ) -> std::result::Result<std::path::PathBuf, sessioncopy::NotNative> {
+        let (config, program) = self.claude_of(account);
+        let mine = match program {
+            Some(p) => engine::registry::version(engine::by_id(EngineId::CLAUDE), &p).await,
+            None => None,
+        };
+        let placed = sessioncopy::place(&config, cwd, copy, mine.as_deref());
+        if let Err(why) = &placed {
+            log::info!("the session of Claude Code passed is not resumed natively: {why:?}");
+        }
+        placed
+    }
+
+    /// The first turn of a session of Claude Code resumed natively ended (`turn_ended`): a failure (the session not
+    /// found, an error of the API, a process gone in error) falls back on the handover file, as ESC-88's passage does,
+    /// the conversation of before above it, and the copy is taken out of the account's folder. True when it fell back:
+    /// the end of that turn moves nothing more.
+    pub(crate) async fn native_resume_ended(
+        self: &Arc<Self>,
+        agent_id: &str,
+        end: &crate::board::TurnEnd,
+    ) -> bool {
+        let Some(n) = self.native_resumes.lock().remove(agent_id) else {
+            return false;
+        };
+        if !native_failed(end) {
+            return false;
+        }
+        let Ok(h) = self.agent(agent_id) else {
+            sessioncopy::remove(&n.path);
+            return false;
+        };
+        let why = match end {
+            crate::board::TurnEnd::Error(e) => crate::tickets::error_line(&anyhow!(e.clone())),
+            _ => tr!("refusé", "refused"),
+        };
+        log::info!("agent {agent_id}: the session resumed failed at its first turn, back to the handover file");
+        // Its process holds the session that failed: it stops, its next start is a new session.
+        let lock = self.spawn_lock(agent_id);
+        let guard = lock.lock().await;
+        let stopped = h.lock().detach();
+        if let Some(p) = stopped {
+            let _ = crate::accounts::ended(&p).await;
+        }
+        sessioncopy::remove(&n.path);
+        let by = n.by.clone();
+        let _ = self.with_agent(agent_id, |rt, fx| {
+            rt.forget_session();
+            rt.meta.status = crate::model::AgentStatus::Done;
+            rt.notice(
+                "warn",
+                tr!(
+                    "La session de Claude Code de {by} ne s’est pas reprise ici ({why}) : la suite part de la passation.",
+                    "{by}’s session of Claude Code wasn’t resumed here ({why}): it goes on from the handover file."
+                ),
+                fx,
+            );
+            let engine = rt.meta.engine;
+            rt.append(handover::passed_separator(n.from, engine, &by), fx);
+            fx.save = true;
+            Ok(())
+        });
+        drop(guard);
+        if let Err(e) = Box::pin(self.send_handover(agent_id, n.text)).await {
+            log::warn!(
+                "agent {agent_id}: the handover file after the session resumed is not sent: {e:#}"
+            );
+        }
+        true
     }
 
     /// The passages of the project's journal, put on its tickets (« Alice te passe DEM-41 · Prendre », « Passé à Bob

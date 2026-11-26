@@ -22,14 +22,19 @@
   let open = $state(false);
 </script>
 
-{#if item.origin === 'handover'}
-  <!-- The handover file (ESC-88): written by Escouade, folded under its title. -->
+{#if item.origin === 'handover' || item.origin === 'resume'}
+  <!-- The handover file (ESC-88), or the first message of a session of Claude Code resumed after a passage (TS-17b):
+       written by Escouade, folded under its title. -->
   <div class="handover">
     <button class="fold" aria-expanded={open} onclick={() => (open = !open)}>
       <span class="chev" aria-hidden="true"><Icon name="right" size={14} /></span>
       <EngineMark {engine} />
-      <b>{t('handover.file.title')}</b>
-      <span class="grow d">{t('handover.file.hint', { harness: engineName(engine) })}</span>
+      <b>{item.origin === 'resume' ? t('handover.resume.title') : t('handover.file.title')}</b>
+      <span class="grow d"
+        >{item.origin === 'resume'
+          ? t('handover.resume.hint', { harness: engineName(engine) })
+          : t('handover.file.hint', { harness: engineName(engine) })}</span
+      >
     </button>
     {#if open}<div class="file-text">{item.text}</div>{/if}
   </div>

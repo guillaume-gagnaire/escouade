@@ -1169,6 +1169,9 @@ pub struct Core {
     pub(crate) team_machine: AtomicBool,
     /// The passages this machine takes now (TS-17), by ticket: one at a time each.
     pub(crate) handoffs_taking: Mutex<HashSet<String>>,
+    /// The agents passed whose session of Claude Code resumes natively here (TS-17b), by agent, until their first turn
+    /// ends: a failure falls back on the handover file.
+    pub(crate) native_resumes: Mutex<HashMap<String, crate::teamhandoff::NativeResume>>,
     /// Whose passages this machine takes on its own, by team (SR3-05: `handoff.machineTakes` of its file).
     pub(crate) team_handoff_takes: Mutex<HashMap<String, crate::teamhandoff::MachineTakes>>,
     /// When each team's Kanban last read its claims from the server (TS-6).
@@ -2454,6 +2457,7 @@ impl Core {
             team_deleted: Mutex::default(),
             team_machine: AtomicBool::new(!cfg!(feature = "desktop")),
             handoffs_taking: Mutex::default(),
+            native_resumes: Mutex::default(),
             team_handoff_takes: Mutex::default(),
             team_claims_at: Mutex::default(),
             cut_turns: Mutex::new(cut_turns),
@@ -6152,6 +6156,18 @@ impl Core {
     /// on: its conversation shows it as such (`origin`: "handover"), folded. A ticket's agent
     /// that cannot get it blocks its ticket.
     pub(crate) async fn send_handover(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
+        self.send_by_escouade(id, text, "handover").await
+    }
+
+    /// Escouade's own first message of an agent, shown folded as `origin` says: the handover file (« handover »), the
+    /// message of a session of Claude Code resumed after a passage (« resume », TS-17b). A ticket's agent that cannot
+    /// get it blocks its ticket.
+    pub(crate) async fn send_by_escouade(
+        self: &Arc<Self>,
+        id: &str,
+        text: String,
+        origin: &str,
+    ) -> Result<()> {
         let sent = self
             .send(
                 id,
@@ -6162,11 +6178,13 @@ impl Core {
                 false,
                 // Escouade's own text, never said aloud.
                 false,
-                Some("handover"),
+                Some(origin),
             )
             .await;
         if let (Err(e), Some(ticket)) = (&sent, self.doing_ticket_of(id)) {
-            log::warn!("agent {id}: handover file to its ticket's agent not sent: {e:#}");
+            log::warn!(
+                "agent {id}: Escouade's {origin} message to its ticket's agent not sent: {e:#}"
+            );
             let _ = self.edit_ticket(&ticket, |t| {
                 t.blocked = Some(crate::tickets::error_reason(e));
                 Ok(())

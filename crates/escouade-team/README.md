@@ -359,7 +359,7 @@ Le cœur (`src-tauri/src/teams_breakers.rs`, `team_breakers.rs`) le lit en premi
 
 - **La prise passée** : `Team::hand_claim` la donne à un appareil du projet sous un jeton neuf (le serveur refuse `not_in_project` un appareil révoqué, sans accès, ou soi-même) ; `Claim::handed_by` dit qui l'a passée tant qu'elle n'est pas prise ; `Team::withdraw_claim` la reprend tant que le destinataire ne l'a pas prise (`claim_lost` ensuite). Le bail d'une prise passée est de 14 jours (`Limits::hand_lease`).
 - **L'offre** : un objet `handoff` du journal du projet (`Offer` : le ticket, sa prise, de quel appareil à quel autre, la branche et son dépôt distant, patch ou non, le harness). Elle s'efface à la reprise et à l'abandon (`end_handoff`). Ne la croire qu'avec la prise : celle que le serveur dit passée à cet appareil, par l'appareil qu'elle nomme.
-- **Le dépôt** : un fichier du serveur scellé comme un objet du projet (`Team::deposit`), la conversation et le patch ; effacé avec l'offre (`delete_file`).
+- **Le dépôt** : un fichier du serveur scellé comme un objet du projet (`Team::deposit`), la conversation et le patch ; pour un agent de Claude Code passé entre deux tours, sa session aussi (`SessionCopy` : son id, le worktree où elle a tourné, la version de `claude`, son fichier tel quel ; TS-17b, C16-B), que l'offre annonce (`Offer::session`, absent des offres d'avant : faux). Effacé avec l'offre (`delete_file`). La réécriture et la reprise sont au cœur (`src-tauri/src/sessioncopy.rs`).
 - **Les machines** : `set_machine` écrit `machine: true` sur l'objet `person` de l'appareil, `machines` les lit.
 
 ## Les coûts de l'équipe (TS-16)

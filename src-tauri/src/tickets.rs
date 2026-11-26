@@ -2582,7 +2582,8 @@ impl Core {
             return Ok(());
         }
         if let Some(handed) = handed {
-            return self.go_on_handed(&agent_id, t, handed).await;
+            // Boxed: its future is a big one (the native resume, the handover file).
+            return Box::pin(self.go_on_handed(&agent_id, t, handed)).await;
         }
         let failure = self
             .agent(&agent_id)
@@ -2611,6 +2612,11 @@ impl Core {
     pub(crate) async fn turn_ended(self: &Arc<Self>, agent_id: &str, end: TurnEnd) {
         // Its turn over, a mode the policies no longer allow goes to the nearest allowed (TS-11).
         self.settle_locked_mode(agent_id).await;
+        // The first turn of a session of Claude Code passed by a teammate, resumed natively (TS-17b): failed, it goes
+        // on from the handover file, and that turn moves nothing.
+        if Box::pin(self.native_resume_ended(agent_id, &end)).await {
+            return;
+        }
         let report = match &end {
             TurnEnd::Finished(text) => board::parse_report(text),
             _ => None,

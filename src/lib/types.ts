@@ -1742,6 +1742,8 @@ export interface HandoffPlan {
   remote: string;
   dirty: string[];
   running: boolean;
+  /** Its session of Claude Code goes with it, encrypted (TS-17b). */
+  session: boolean;
   targets: HandoffTarget[];
   refusal: string | null;
 }
@@ -2777,7 +2779,7 @@ export interface UserItem extends Base {
   ts: number;
   queued: boolean;
   /** "remote": sent from claude.ai / the Claude app (Remote Control); "ask": the answer to a request of the box « À toi » (ESC-509). */
-  origin?: 'remote' | 'handover' | 'ask';
+  origin?: 'remote' | 'handover' | 'resume' | 'ask';
 }
 export interface TextItem extends Base {
   kind: 'text';
@@ -2886,6 +2888,8 @@ export interface HandoverItem extends Base {
   until: number | null;
   /** Passed by a teammate (TS-17): their name. */
   by?: string;
+  /** Its session of Claude Code resumed here (TS-17b), not the handover file. */
+  native?: boolean;
 }
 /** The sign-in an agent waits for (`Agent.signIn`): its account's, another than `stamp`. */
 export interface SignInWait {
