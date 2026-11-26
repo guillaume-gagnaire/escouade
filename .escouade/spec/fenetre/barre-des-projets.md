@@ -67,7 +67,7 @@ Une colonne à gauche de la fenêtre, de la barre de titre à la barre de statut
 - À gauche, au-dessus de la barre des projets : le logo d'Escouade (Windows, Linux) ou les feux de macOS.
 - Puis le projet affiché : pastille de couleur, nom, cadenas, `Δ n`, menu.
 - Au centre : « Rechercher » (`Ctrl+K`, voir *Rechercher dans les conversations*).
-- À droite : « Éditeur » et les boutons de la fenêtre.
+- À droite : « Éditeur » et les boutons de la fenêtre. « Éditeur » ouvre un menu, « Éditeur » ou « Workspace » (voir *Workspace*).
 
 ## Réglages
 

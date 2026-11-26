@@ -58,6 +58,7 @@ Dire où en est un agent qui déroule un plan (liste de tâches, sous-agents, pl
 - Sans tâche mais avec des sous-agents en cours : un cadre réduit, la pastille « Sous-agents », la pile et le compteur ; ni pli, ni barre, ni liste. Il disparaît quand ils ont fini. Un sous-agent interrompu n'est pas actif.
 - Accessibilité : tout au clavier, avec un focus visible ; une seule région d'état polie, la synthèse « d/n tâches », mise à jour au plus toutes les 2 s ; prefers-reduced-motion respecté (rond fixe, pas de transition de largeur, défilement instantané) ; des textes lisibles sur le fond (le gris le plus faible n'est employé que pour le décor). En français et en anglais, langue changée à chaud.
 - Étroit (moitié / moitié, conteneur sous 560 px) : la barre des lignes et, sans liste, le compteur de sous-agents s'effacent.
+- Le même bandeau est posé au-dessus de la carte de l'agent dans le *Workspace*. À mi-hauteur, il y est tenu replié, le choix du lecteur mis de côté, et son bouton déplie la pile au lieu de la liste.
 
 ### Sur la carte de l'agent
 
