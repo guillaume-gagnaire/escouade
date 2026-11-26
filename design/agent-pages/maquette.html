@@ -1,0 +1,453 @@
+<!doctype html>
+<!--
+  ESC-661 : les pages des agents (2.3), trois directions. Maquette statique, rien n'est branché.
+  ?d=a|b|c, &theme=light, puis #revue (l'agent ouvre la revue à côté de sa conversation et la pilote) ou #choisi
+  (l'utilisateur a repris la main et choisi). La page prend la taille de la fenêtre du navigateur : 1440 × 900 ou 1024 × 728.
+  Jetons, polices et icônes de l'app (src/app.css, src/lib/icons.ts) ; données fictives (projet « portail-adherents »,
+  agent « pagination », ticket POR-41). Captures : node design/agent-pages/render.mjs
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>ESC-661 · les pages des agents</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
+<script src="icons.js"></script>
+<style>
+  :root {
+    --p: oklch(0.72 0.12 250);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+    --fg-rgb: 255, 255, 255;
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --line-3: rgba(255, 255, 255, 0.2);
+    --hover: rgba(255, 255, 255, 0.045);
+    --sel: color-mix(in oklch, var(--p) 16%, transparent);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --dim: #8f949e;
+    --text-ai: #e9ebee;
+    --p-ink: color-mix(in oklch, var(--p) 70%, white);
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --wait-bg: oklch(from var(--wait) l c h / 0.07);
+    --wait-line: oklch(from var(--wait) l c h / 0.32);
+    --del: oklch(0.74 0.14 22);
+    --add: oklch(0.8 0.13 155);
+    --primary: #f2f3f4;
+    --on-primary: #08090a;
+    --shade: 1;
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    --side: 276px;
+    /* La page de l'agent : son propre fond, celui du modèle « Revue ». */
+    --pg: color-mix(in oklch, var(--p) 1.5%, #111214);
+    --pg-2: color-mix(in oklch, var(--p) 3%, #17181b);
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+    --fg-rgb: 15, 17, 22;
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --line-3: rgba(15, 17, 22, 0.24);
+    --hover: rgba(15, 17, 22, 0.045);
+    --sel: color-mix(in oklch, var(--p) 12%, transparent);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --dim: #5c616a;
+    --text-ai: #1d2026;
+    --p-ink: color-mix(in oklch, var(--p) 50%, #15171c);
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --wait-bg: oklch(from var(--wait) l c h / 0.09);
+    --wait-line: oklch(from var(--wait) l c h / 0.4);
+    --del: oklch(0.5 0.18 25);
+    --add: oklch(0.46 0.13 155);
+    --primary: #1b1d22;
+    --on-primary: #f7f8f8;
+    --shade: 0.3;
+    --pg: #ffffff;
+    --pg-2: color-mix(in oklch, var(--p) 3%, #f5f6f8);
+    color-scheme: light;
+  }
+  @media (max-width: 1100px) { :root { --side: 236px; } }
+  * { box-sizing: border-box; }
+  html, body { background: var(--frame); }
+  body { margin: 0; font: 13px/1.45 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03';
+    color: var(--text); -webkit-font-smoothing: antialiased; overflow: hidden; }
+  ::selection { background: var(--sel); }
+  p { margin: 0; }
+  h1, h2, h3 { margin: 0; text-wrap: balance; }
+  svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--mono); font-size: 0.92em; letter-spacing: -0.01em; }
+  .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .tn { font-variant-numeric: tabular-nums; }
+  .sp { margin-left: auto; }
+  kbd { font: 500 11px/1 'Inter Variable', Inter, sans-serif; padding: 3px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); white-space: nowrap; }
+  @media (max-width: 1100px) { .wide-only { display: none !important; } }
+
+  /* ───────── La fenêtre ───────── */
+  .win { width: 100vw; height: 100vh; display: grid; grid-template-columns: 52px var(--side) minmax(0, 1fr); grid-template-rows: 44px minmax(0, 1fr) 30px; overflow: hidden; }
+  .tb { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding-left: 14px; color: var(--muted); min-width: 0; }
+  .tb .logo { width: 22px; height: 22px; border-radius: 6px; background: #35c1bd; display: grid; place-items: center; color: #08090a; flex: none; }
+  .tb .proj { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; margin-left: 18px; white-space: nowrap; }
+  .tb .proj i { width: 8px; height: 8px; border-radius: 2.5px; background: var(--p); }
+  .tb .search { margin: 0 auto; height: 30px; border-radius: 8px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); display: flex; align-items: center; gap: 8px; padding: 0 6px 0 11px; flex: 0 1 340px; min-width: 0; }
+  .tb .search kbd { margin-left: auto; }
+  .tb .wbtn { width: 46px; height: 44px; display: grid; place-items: center; }
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 8px; }
+  .rail .tile { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #101114; }
+  .rail .tile.cur { box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--p); }
+  .rail .r-i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); position: relative; }
+  .rail .sep { width: 22px; height: 1px; background: var(--line-2); }
+  .rail .badge { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; background: var(--wait); color: #1a1405; box-shadow: 0 0 0 2px var(--frame); }
+  :root[data-theme='light'] .rail .badge { color: #fff; }
+  .side { min-width: 0; padding: 4px 10px 10px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+  .stabs { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); }
+  .stabs span { flex: 1; display: inline-flex; justify-content: center; align-items: center; gap: 5px; height: 26px; border-radius: 7px; color: var(--muted); font-weight: 550; font-size: 12px; }
+  .stabs span.on { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .new { display: flex; align-items: center; gap: 8px; height: 32px; margin: 8px 0 4px; padding: 0 8px 0 9px; color: var(--soft); font-weight: 550; }
+  .new .plus { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: rgba(var(--fg-rgb), 0.07); box-shadow: inset 0 0 0 1px var(--line); }
+  .new kbd { margin-left: auto; }
+  .ag { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 2px 9px; align-items: center; padding: 8px 9px; border-radius: 9px; }
+  .ag.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .ag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--run); }
+  .ag .dot.idle { background: var(--dim); opacity: 0.6; }
+  .ag b { font-weight: 600; font-size: 13px; }
+  .ag .m { grid-column: 2 / -1; color: var(--muted); font-size: 11.5px; }
+  .ag .t { color: var(--dim); font-size: 11.5px; }
+  .sect { margin-top: auto; display: grid; gap: 2px; }
+  .sect h4 { margin: 10px 0 2px; display: flex; align-items: center; gap: 7px; padding: 0 9px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .sect h4 .n { color: var(--dim); font-weight: 500; }
+  .sect h4 .sp { color: var(--dim); }
+  .row { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 8px; color: var(--soft); min-width: 0; }
+  .row.on { background: var(--sel); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 30%, transparent); }
+  .row .d { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--run); }
+  .row .tag { font-size: 10.5px; color: var(--muted); padding: 1px 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--line-2); flex: none; }
+  .row .tag.w { color: var(--wait); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px; color: var(--muted); font-size: 11.5px; }
+  .status .w { color: var(--wait); display: inline-flex; align-items: center; gap: 6px; }
+  .status .w i { width: 6px; height: 6px; border-radius: 50%; background: var(--wait); }
+  .main { min-width: 0; min-height: 0; padding: 0 8px 0 0; display: flex; }
+  .work { flex: 1; min-width: 0; display: flex; gap: 8px; min-height: 0; }
+  .panel { background: var(--panel); border-radius: 12px; box-shadow: 0 0 0 1px var(--line), 0 8px 24px -6px rgba(0, 0, 0, calc(0.5 * var(--shade))); min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ───────── La conversation ───────── */
+  .conv { flex: 1 1 0; }
+  .hd { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; box-shadow: inset 0 -1px 0 var(--line); min-width: 0; }
+  .hd .nm { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; }
+  .hd .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11.5px; font-weight: 550; color: var(--run); background: oklch(from var(--run) l c h / 0.1); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.25); white-space: nowrap; }
+  .hd .pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .hd .key { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .hd .ib { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--muted); flex: none; }
+  .hd .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: rgba(var(--fg-rgb), 0.035); box-shadow: inset 0 0 0 1px var(--line); }
+  .hd .seg span { height: 22px; padding: 0 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); font-weight: 550; white-space: nowrap; }
+  .hd .seg span.on { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .msgs { flex: 1; min-height: 0; overflow: hidden; padding: 18px 20px 0; display: flex; flex-direction: column; gap: 14px; }
+  .col { width: 100%; max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .me { align-self: flex-end; max-width: 82%; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line); padding: 9px 12px; border-radius: 12px 12px 4px 12px; color: var(--text); }
+  .ai { color: var(--text-ai); font-size: 13.5px; line-height: 1.55; }
+  .ai code { font-family: var(--mono); font-size: 0.88em; padding: 1px 5px; border-radius: 4px; background: rgba(var(--fg-rgb), 0.06); }
+  .tool { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12.5px; min-width: 0; }
+  .tool b { color: var(--soft); font-weight: 550; }
+  .tool .ok { color: var(--run); }
+  .compose { flex: none; margin: 10px 16px 14px; border-radius: 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2), 0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade))); padding: 10px 12px; display: flex; align-items: center; gap: 10px; color: var(--dim); }
+  .compose .send { margin-left: auto; width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; }
+  .compose.narrow { margin: 10px 12px 12px; }
+
+  /* Les gestes de l'agent sur la page, dans la conversation */
+  .drive { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+  .drive b { color: var(--soft); font-weight: 550; }
+  .pin { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: 10.5px; font-weight: 700; color: var(--p-ink);
+    background: color-mix(in oklch, var(--p) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 45%, transparent); font-variant-numeric: tabular-nums; }
+  .pin.cur { background: var(--p); color: #0b0c0e; box-shadow: none; }
+
+  /* ───────── La carte de la page, dans la conversation ───────── */
+  .card { border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); display: flex; flex-direction: column; overflow: hidden; }
+  .card .top { display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-width: 0; }
+  .card .ic { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: none; color: var(--p-ink); background: color-mix(in oklch, var(--p) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 30%, transparent); }
+  .card .tt { min-width: 0; display: grid; gap: 1px; }
+  .card .tt b { font-weight: 600; font-size: 13px; }
+  .card .tt span { color: var(--muted); font-size: 11.5px; }
+  .card .btn { margin-left: auto; }
+  .card .foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px; box-shadow: inset 0 1px 0 var(--line); font-size: 12px; color: var(--muted); min-width: 0; }
+  .card .foot.w { color: var(--wait); background: var(--wait-bg); }
+  .card .foot.ok { color: var(--run); }
+  .card .thumbs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px 10px; }
+  .card .thumbs div { height: 46px; border-radius: 6px; background: var(--pg); box-shadow: inset 0 0 0 1px var(--line); padding: 7px; display: grid; gap: 4px; align-content: start; }
+  .card .thumbs i { display: block; height: 4px; border-radius: 2px; background: rgba(var(--fg-rgb), 0.14); }
+  .card .thumbs i.s { width: 55%; } .card .thumbs i.g { background: oklch(from var(--run) l c h / 0.5); width: 70%; } .card .thumbs i.a { background: oklch(from var(--wait) l c h / 0.55); width: 40%; }
+  .btn { height: 28px; padding: 0 10px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-weight: 550; font-size: 12px; color: var(--text); background: rgba(var(--fg-rgb), 0.04); box-shadow: inset 0 0 0 1px var(--line-2); white-space: nowrap; flex: none; }
+  .btn.pri { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .btn.ghost { background: transparent; box-shadow: none; color: var(--muted); }
+  .btn.lg { height: 32px; padding: 0 13px; font-size: 12.5px; }
+  .btn kbd { padding: 2px 5px; font-size: 10.5px; }
+  .btn.pri kbd { color: inherit; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.45); }
+
+  /* ───────── La vue de la page (la ligne de « Navigateurs ») ───────── */
+  .pv { flex: 1 1 0; container-type: inline-size; }
+  .sp-panel { container-type: inline-size; }
+  .bar { height: 44px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; box-shadow: inset 0 -1px 0 var(--line); min-width: 0; }
+  .bar .pt { display: flex; align-items: center; gap: 8px; min-width: 90px; flex: 1 1 auto; font-weight: 600; }
+  .bar .pt .ic { color: var(--p-ink); }
+  .bar .ver, .ver { white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 4px 0 7px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); font-size: 11.5px; font-weight: 550; flex: none; }
+  .bar .ib { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--muted); flex: none; }
+  .bar .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: rgba(var(--fg-rgb), 0.035); box-shadow: inset 0 0 0 1px var(--line); flex: none; }
+  .bar .seg span { width: 26px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: var(--muted); }
+  .bar .seg span.on { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  /* Qui tient la page : l'agent qui la pilote, ou toi */
+  .drv { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 4px 0 9px; border-radius: 8px; font-size: 12px; font-weight: 550; white-space: nowrap; flex: none;
+    color: var(--p-ink); background: color-mix(in oklch, var(--p) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 32%, transparent); }
+  .drv .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--p); box-shadow: 0 0 0 3px color-mix(in oklch, var(--p) 22%, transparent); }
+  .drv .take { height: 20px; padding: 0 7px; border-radius: 6px; display: inline-flex; align-items: center; background: rgba(var(--fg-rgb), 0.07); color: var(--text); font-size: 11.5px; }
+  .drv.mine { color: var(--soft); background: rgba(var(--fg-rgb), 0.04); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .drv.mine .pulse { background: var(--muted); box-shadow: none; }
+  /* La bande de confiance : ce que la page est, dit par Escouade */
+  .trust { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 26px; font-size: 11.5px; color: var(--dim); box-shadow: inset 0 -1px 0 var(--line); background: rgba(var(--fg-rgb), 0.015); min-width: 0; }
+  .trust svg { color: var(--muted); }
+  .stage { flex: 1; min-height: 0; display: flex; position: relative; background: var(--well); }
+  .webview { flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--pg); position: relative; }
+  /* Le rail des repères (direction A) : à Escouade, hors de la page */
+  .pins { width: 26px; flex: none; position: relative; box-shadow: inset -1px 0 0 var(--line); background: var(--panel); }
+  .pins .trk { position: absolute; left: 12px; top: 10px; bottom: 10px; width: 2px; border-radius: 1px; background: var(--line-2); }
+  .pins .vp { position: absolute; left: 9px; width: 8px; border-radius: 4px; background: color-mix(in oklch, var(--p) 30%, transparent); }
+  .pins .pin { position: absolute; left: 4px; }
+
+  /* ───────── Le modèle « Revue » (le contenu de la page) ───────── */
+  .rv { padding: 22px 28px 40px; max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; color: var(--text); }
+  .rv.shift { transform: translateY(-168px); }
+  .rv.shift2 { transform: translateY(-420px); }
+  .rv h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; }
+  .rv .sub { color: var(--muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; }
+  .rv .sub b { color: var(--soft); font-weight: 550; }
+  .rv .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+  .rv .facts div { background: var(--pg-2); padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+  .rv .facts span { color: var(--muted); font-size: 11.5px; }
+  .rv .facts b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rv .facts .add { color: var(--add); } .rv .facts .del { color: var(--del); }
+  .rv h2 { font-size: 14px; font-weight: 650; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .rv h2 .c { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .crit { display: grid; gap: 6px; }
+  .cr { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 12px; border-radius: 9px; background: var(--pg-2); box-shadow: inset 0 0 0 1px var(--line); position: relative; }
+  .cr svg { margin-top: 2px; }
+  .cr .g { color: var(--run); } .cr .a { color: var(--wait); }
+  .cr p { color: var(--soft); font-size: 12.5px; }
+  .cr p b { color: var(--text); font-weight: 600; display: block; font-size: 13px; margin-bottom: 2px; }
+  .cr .st { font-size: 11.5px; font-weight: 550; white-space: nowrap; }
+  .cr.warn { background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  /* Ce que l'agent met en évidence : dessiné par Escouade dans la page */
+  .hl { outline: 2px solid var(--p); outline-offset: 3px; box-shadow: 0 0 0 7px color-mix(in oklch, var(--p) 16%, transparent); }
+  .hl-tag { position: absolute; right: 10px; top: -13px; height: 20px; padding: 0 8px; border-radius: 6px; background: var(--p); color: #0b0c0e; font-size: 11px; font-weight: 650; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .files { border-radius: 9px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+  .files div { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: var(--pg-2); box-shadow: inset 0 -1px 0 var(--line); font-size: 12.5px; min-width: 0; }
+  .files .mono { color: var(--soft); }
+  .files .n { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 11.5px; white-space: nowrap; }
+  .files .n .p { color: var(--add); } .files .n .m { color: var(--del); }
+  .verdict { display: grid; gap: 8px; }
+  .opt { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 12px; border-radius: 10px; background: var(--pg-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .opt .l { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; box-shadow: inset 0 0 0 1px var(--line-3); color: var(--soft); }
+  .opt p { font-size: 12.5px; color: var(--muted); }
+  .opt p b { display: block; color: var(--text); font-weight: 600; font-size: 13px; }
+  .opt .rec { font-size: 11px; font-weight: 600; color: var(--p-ink); padding: 2px 7px; border-radius: 5px; background: color-mix(in oklch, var(--p) 12%, transparent); white-space: nowrap; }
+  .opt.on { box-shadow: inset 0 0 0 2px var(--p); background: color-mix(in oklch, var(--p) 8%, var(--pg-2)); }
+  .opt.on .l { background: var(--p); color: #0b0c0e; box-shadow: none; }
+
+  /* ───────── La bande du choix : à Escouade, sous la page ───────── */
+  .decide { flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 12px; box-shadow: inset 0 1px 0 var(--line-2); background: var(--raise); min-width: 0; }
+  .decide .q { min-width: 0; display: grid; gap: 1px; }
+  .decide .q b { font-weight: 600; font-size: 12.5px; }
+  .decide .q span { color: var(--muted); font-size: 11.5px; }
+  .decide .chips { display: flex; gap: 5px; margin-left: auto; flex: none; }
+  .decide .chip { height: 28px; min-width: 28px; padding: 0 9px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--soft); box-shadow: inset 0 0 0 1px var(--line-2); background: rgba(var(--fg-rgb), 0.03); white-space: nowrap; }
+  .decide .chip.rec { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 55%, transparent); color: var(--p-ink); }
+  .decide.armed { background: color-mix(in oklch, var(--p) 9%, var(--raise)); box-shadow: inset 0 1px 0 color-mix(in oklch, var(--p) 45%, transparent); }
+  .decide .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; }
+  .decide .note { height: 28px; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--dim); display: flex; align-items: center; padding: 0 10px; font-size: 12px; min-width: 0; flex: 1 1 160px; max-width: 300px; white-space: nowrap; overflow: hidden; }
+
+  /* ───────── Direction B : la visite ───────── */
+  .narr { flex: 0 0 34%; max-width: 420px; min-width: 280px; }
+  .narr .msgs { padding: 16px 16px 0; gap: 12px; }
+  .old { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  .cap { border-radius: 12px; padding: 14px 14px 12px; background: color-mix(in oklch, var(--p) 7%, var(--raise)); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 26%, transparent); display: grid; gap: 10px; }
+  .cap .who { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--p-ink); font-weight: 600; }
+  .cap p { font-size: 15px; line-height: 1.5; color: var(--text); letter-spacing: -0.005em; }
+  .cap p code { font-family: var(--mono); font-size: 0.85em; padding: 1px 5px; border-radius: 4px; background: rgba(var(--fg-rgb), 0.07); }
+  .steps { display: grid; gap: 2px; }
+  .step { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 9px; align-items: center; padding: 6px 8px; border-radius: 8px; font-size: 12.5px; color: var(--muted); }
+  .step.done { color: var(--soft); }
+  .step.cur { background: var(--sel); color: var(--text); font-weight: 550; }
+  .step .t { font-size: 11.5px; color: var(--dim); font-weight: 500; }
+  .tour { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--muted); font-size: 12px; }
+  .tour .dots { display: inline-flex; gap: 4px; margin: 0 4px; }
+  .tour .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-3); }
+  .tour .dots i.on { background: var(--p); width: 16px; border-radius: 3px; }
+
+  /* ───────── Direction C : l'onglet du panneau de droite ───────── */
+  .sp-panel { flex: 0 0 46%; }
+  .sp-tabs { height: 44px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 8px; box-shadow: inset 0 -1px 0 var(--line); min-width: 0; }
+  .sp-tabs span { height: 44px; padding: 0 9px; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; font-weight: 550; white-space: nowrap; box-shadow: inset 0 -2px 0 transparent; }
+  .sp-tabs span.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+  .sp-tabs .x { opacity: 0.7; }
+  .mini { height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; box-shadow: inset 0 -1px 0 var(--line); font-size: 12px; color: var(--muted); min-width: 0; }
+  .choices { flex: none; padding: 10px 12px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; background: var(--raise); box-shadow: inset 0 1px 0 var(--line-2); }
+  .choices .h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; min-width: 0; }
+  .choices .h span { color: var(--muted); font-weight: 500; font-size: 11.5px; }
+  .ch { display: grid; grid-template-columns: 16px 20px minmax(0, 1fr) auto; gap: 8px; align-items: center; height: 32px; padding: 0 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); font-size: 12.5px; min-width: 0; }
+  .ch .rd { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-3); }
+  .ch.on { box-shadow: inset 0 0 0 1.5px var(--p); background: color-mix(in oklch, var(--p) 8%, transparent); }
+  .ch.on .rd { box-shadow: inset 0 0 0 4px var(--p); }
+  .ch .k { color: var(--dim); font-weight: 600; font-size: 11.5px; }
+  .ch .rec { font-size: 11px; color: var(--p-ink); font-weight: 600; }
+  .choices .send { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+  .choices .send .note { flex: 1; height: 30px; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--dim); display: flex; align-items: center; padding: 0 10px; font-size: 12px; min-width: 0; white-space: nowrap; overflow: hidden; }
+
+  @media (prefers-reduced-motion: no-preference) { .drv .pulse { animation: br 1.6s var(--ease, ease) infinite; } }
+  @keyframes br { 50% { box-shadow: 0 0 0 5px color-mix(in oklch, var(--p) 8%, transparent); } }
+  @media (max-width: 1100px) {
+    .rv { padding: 18px 18px 30px; }
+    .rv .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .narr { min-width: 250px; }
+  }
+  @container (max-width: 720px) { .bar .seg { display: none; } .decide .note { display: none; } }
+  @container (max-width: 620px) { .bar .ver { display: none; } }
+  @container (max-width: 400px) { .rv { padding: 16px 14px 28px; } .rv .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cr { grid-template-columns: 18px minmax(0, 1fr); } .cr .st { grid-column: 2; } }
+  @container (max-width: 470px) { .drv .lbl { display: none; } .bar .pt { min-width: 60px; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const D = q.get('d') || 'a';
+  if (q.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+  const R = (location.hash || '#revue').slice(1);
+  const chosen = R === 'choisi';
+  const ic = (n, s = 14) => `<svg class="i" viewBox="0 0 16 16" style="width:${s}px;height:${s}px">${ICONS[n] || ''}</svg>`;
+  const narrow = innerWidth <= 1100;
+
+  const titlebar = `<div class="tb"><span class="logo">${ic('spark', 13)}</span><span class="proj"><i></i>portail-adherents</span>
+    <div class="search">${ic('search')}<span class="ell">Rechercher, aller à…</span><kbd>Ctrl K</kbd></div>
+    <span class="wbtn">${ic('min')}</span><span class="wbtn">${ic('max')}</span><span class="wbtn">${ic('close')}</span></div>`;
+  const rail = `<div class="rail"><span class="r-i">${ic('overview', 16)}</span><span class="r-i">${ic('bell', 16)}<span class="badge">${chosen ? 2 : 3}</span></span><span class="sep"></span>
+    <span class="tile cur" style="background:oklch(0.72 0.12 250)">PA</span><span class="tile" style="background:oklch(0.72 0.12 155)">AW</span><span class="tile" style="background:oklch(0.72 0.12 48)">DM</span></div>`;
+  const pageRow = `<div class="row on">${ic('page')}<span class="ell">Revue avant fusion · POR-41</span><span class="tag ${chosen ? '' : 'w'}">${chosen ? 'v2' : 'choix'}</span></div>`;
+  const side = `<div class="side"><div class="stabs"><span class="on">${ic('agents')}Agents</span><span>${ic('kanban')}Kanban</span><span>${ic('read')}Docs</span></div>
+    <div class="new"><span class="plus">${ic('plus', 12)}</span>Nouvel agent<kbd>Ctrl N</kbd></div>
+    <div class="ag on"><span class="dot"></span><b class="ell">pagination</b><span class="t">POR-41</span><span class="m ell">${chosen ? 'Attend ta réponse dans sa page' : 'Te montre la revue avant fusion'}</span></div>
+    <div class="ag"><span class="dot"></span><b class="ell">export-csv</b><span class="t">POR-38</span><span class="m ell">Écrit les tests de l'export</span></div>
+    <div class="ag"><span class="dot idle"></span><b class="ell">chef-portail</b><span class="t">chef</span><span class="m ell">Prêt</span></div>
+    <div class="sect"><h4>${ic('term', 12)}Terminaux<span class="n">1</span></h4><div class="row">${ic('bash', 13)}<span class="ell">PowerShell</span></div>
+    <h4>${ic('globe', 12)}Navigateurs<span class="n">2</span><span class="sp">${ic('plus', 12)}</span></h4>${pageRow}
+    <div class="row"><span class="d"></span><span class="ell">pagination · web</span><span class="tag">POR-41</span></div></div></div>`;
+  const statusbar = `<div class="status"><span>${ic('branch', 12)} ticket/por-41</span><span class="tn">Opus · 48 k tokens · 0,61 $</span><span class="w"><i></i>${chosen ? '2' : '3'} en attente</span><span class="sp tn">Session 34 % · Semaine 61 %</span></div>`;
+
+  const head = (extra = '') => `<div class="hd"><span class="nm">pagination</span><span class="pill"><i></i>En cours</span><span class="key ell">POR-41 · Paginer la liste des adhérents</span>
+    <span class="sp"></span>${extra}<span class="ib">${ic('more')}</span></div>`;
+
+  /* La carte de la page dans la conversation, une par direction */
+  const cardA = `<div class="card"><div class="top"><span class="ic">${ic('page', 15)}</span><div class="tt"><b class="ell">Revue avant fusion · POR-41</b><span class="ell">Page de pagination · modèle Revue · v2 · à côté</span></div>
+      <span class="btn">${ic('pane-r', 13)}Afficher</span></div>
+      <div class="foot ${chosen ? 'ok' : 'w'}">${chosen ? ic('check', 13) + 'Tu as choisi A · Fusionner dans main' : ic('clock', 13) + 'Attend ton choix · 3 options · a-31'}<span class="sp">3 repères</span></div></div>`;
+  const cardB = `<div class="card"><div class="top"><span class="ic">${ic('page', 15)}</span><div class="tt"><b class="ell">Revue avant fusion · POR-41</b><span class="ell">Visite guidée · 4 étapes · v2</span></div></div>
+      <div class="thumbs"><div><i></i><i class="s"></i><i class="s"></i></div><div><i class="g"></i><i class="g"></i><i class="a"></i></div><div><i></i><i></i><i class="s"></i></div></div>
+      <div class="foot ${chosen ? 'ok' : 'w'}">${chosen ? ic('check', 13) + 'Tu as choisi A' : ic('clock', 13) + 'Attend ton choix · a-31'}<span class="sp btn ghost">${ic('restart', 13)}Revoir la visite</span></div></div>`;
+  const cardC = `<div class="card"><div class="top"><span class="ic">${ic('page', 15)}</span><div class="tt"><b class="ell">Revue avant fusion · POR-41</b><span class="ell">Ouverte dans le panneau · v2</span></div>
+      <span class="sp"></span><span class="ver tn" style="box-shadow:inset 0 0 0 1px var(--line-2);border-radius:6px;padding:2px 7px;font-size:11.5px;color:var(--muted)">${chosen ? 'A choisi' : '3 options'}</span></div></div>`;
+
+  const drives = (cur) => [
+    [1, 'Ouvre la page', 'à côté de la conversation'],
+    [2, 'Fait défiler jusqu’à', '« Critères »'],
+    [3, 'Met en évidence', 'le critère 3'],
+  ].map(([n, a, b]) => `<div class="drive"><span class="pin ${n === cur ? 'cur' : ''}">${n}</span><span class="ell"><b>${a}</b> ${b}</span></div>`).join('');
+
+  const convMsgs = (card, withDrives) => `
+    <div class="me">Montre-moi la revue avant que je fusionne.</div>
+    <div class="tool">${ic('check', 13)}<span class="ell"><b>Tests</b> 48 réussis · <b>Lint</b> propre</span></div>
+    <div class="ai">Voici la revue de POR-41, je te l'ouvre à côté.</div>
+    ${card}
+    ${withDrives ? drives(3) : ''}
+    <div class="ai">Les deux premiers critères passent. Le troisième, à moitié : le filtre est gardé dans l'adresse (<code>?q=</code>), <b>pas le tri</b>. Le tri n'est pas dans le ticket ; je te recommande de fusionner et d'en faire un ticket à part.</div>
+    ${chosen ? `<div class="me">Je reprends la main deux secondes… ok pour A.</div>` : ''}`;
+
+  /* Le modèle « Revue » : écrit par Escouade, rempli des données de l'agent */
+  const review = ({ buttons = true, shift = '', hl = true, pick = chosen } = {}) => `<div class="rv ${shift}">
+    <div><h1>Revue avant fusion · POR-41</h1><div class="sub"><span><b>pagination</b> · boucle 2/5</span><span class="mono">ticket/por-41 → main</span><span>mardi 25 nov., 21:40</span></div></div>
+    <div class="facts"><div><span>Fichiers</span><b class="tn">6</b></div><div><span>Lignes</span><b class="tn"><span class="add">+214</span> <span class="del">−38</span></b></div><div><span>Tests</span><b class="tn">48 / 48</b></div><div><span>Critères</span><b class="tn">2 + ½ sur 3</b></div></div>
+    <section><h2>Critères d'acceptation<span class="c">3</span></h2><div class="crit">
+      <div class="cr">${ic('check-c', 15).replace('class="i"', 'class="i g"')}<p><b>La liste montre 25 adhérents par page</b>Vérifié par <span class="mono">users.spec.ts</span> et sur la page de test.</p><span class="st g">Atteint</span></div>
+      <div class="cr">${ic('check-c', 15).replace('class="i"', 'class="i g"')}<p><b>Suivante et précédente au clavier</b>Flèches et Page suivante ; focus visible.</p><span class="st g">Atteint</span></div>
+      <div class="cr warn ${hl && !pick ? 'hl' : ''}">${hl && !pick ? `<span class="hl-tag">${ic('spark', 11)}pagination le montre</span>` : ''}${ic('info', 15).replace('class="i"', 'class="i a"')}<p><b>La page garde le filtre et le tri après rechargement</b>Le filtre est dans l'adresse (<span class="mono">?q=</span>) ; le tri revient à « Nom ».</p><span class="st a">À moitié</span></div>
+    </div></section>
+    <section><h2>Changements<span class="c">6 fichiers</span></h2><div class="files">
+      <div>${ic('file', 13)}<span class="mono ell">src/routes/adherents/+page.svelte</span><span class="n"><span class="p">+96</span> <span class="m">−21</span></span></div>
+      <div>${ic('file', 13)}<span class="mono ell">src/lib/pagination.ts</span><span class="n"><span class="p">+58</span></span></div>
+      <div>${ic('file', 13)}<span class="mono ell">tests/users.spec.ts</span><span class="n"><span class="p">+44</span> <span class="m">−9</span></span></div>
+    </div></section>
+    ${buttons ? `<section><h2>Ton verdict<span class="c">a-31</span></h2><div class="verdict">
+      <div class="opt ${pick ? 'on' : ''}"><span class="l">A</span><p><b>Fusionner dans main</b>Le tri devient un ticket à part.</p><span class="rec">Recommandé</span></div>
+      <div class="opt"><span class="l">B</span><p><b>Renvoyer à pagination</b>Garder aussi le tri dans l'adresse.</p><span></span></div>
+      <div class="opt"><span class="l">C</span><p><b>Attendre</b>Je veux l'essayer sur la recette d'abord.</p><span></span></div>
+    </div></section>` : ''}
+  </div>`;
+
+  const trust = `<div class="trust">${ic('shield', 12)}<span class="ell">Écrite par pagination · hors réseau, sans accès à Escouade ni à tes fichiers · ce que tu y choisis passe par la bande ci-dessous</span></div>`;
+  const pageBar = (drv, extra = '') => `<div class="bar"><span class="pt ell"><span class="ic">${ic('page', 15)}</span><span class="ell">Revue avant fusion · POR-41</span></span>
+    <span class="ver tn">v2 ${ic('down', 11)}</span>${extra}<span class="sp"></span>${drv}
+    <span class="seg"><span class="on">${ic('monitor', 13)}</span><span>${ic('tablet', 13)}</span><span>${ic('phone', 13)}</span></span><span class="ib">${ic('more')}</span></div>`;
+  const drvAgent = `<span class="drv"><span class="pulse"></span><span class="lbl">pagination pilote</span><span class="take">Reprendre la main</span></span>`;
+  const drvMe = `<span class="drv mine"><span class="pulse"></span><span class="lbl">Tu as la main</span><span class="take">La rendre</span></span>`;
+
+  const decideIdle = `<div class="decide"><div class="q"><b class="ell">Fusionner POR-41 ?</b><span class="ell">Choisis dans la page ou ici · tu confirmes toujours ici</span></div>
+    <div class="chips"><span class="chip rec">A ${narrow ? '' : '· Fusionner'}</span><span class="chip">B</span><span class="chip">C</span></div></div>`;
+  const decideArmed = `<div class="decide armed"><div class="q"><b class="ell">Choisi dans la page : A · Fusionner dans main</b><span class="ell">Rien ne part sans ce bouton</span></div>
+    <span class="note wide-only">Un mot pour pagination…</span><div class="acts"><span class="btn ghost">Annuler</span><span class="btn pri">Envoyer à pagination<kbd>Entrée</kbd></span></div></div>`;
+
+  const compose = (cls = '') => `<div class="compose ${cls}">${ic('clip')}<span class="ell">Écris à pagination…</span><span class="send">${ic('up', 13)}</span></div>`;
+
+  /* ── A : les repères ── */
+  function dirA() {
+    const pins = `<div class="pins"><div class="trk"></div><div class="vp" style="top:${chosen ? 46 : 26}%;height:30%"></div>
+      <span class="pin" style="top:3%">1</span><span class="pin" style="top:22%">2</span><span class="pin cur" style="top:36%">3</span></div>`;
+    return `<div class="work"><div class="panel conv">${head()}<div class="msgs"><div class="col">${convMsgs(cardA, true)}</div></div>${compose()}</div>
+      <div class="panel pv">${pageBar(chosen ? drvMe : drvAgent)}${trust}<div class="stage">${pins}<div class="webview">${review({ shift: chosen ? 'shift2' : 'shift' })}</div></div>${chosen ? decideArmed : decideIdle}</div></div>`;
+  }
+  /* ── B : la visite ── */
+  function dirB() {
+    const steps = [['Ouvre la revue', '0:00', 'done'], ['Les critères', '0:06', 'done'], ['Le critère 3, à moitié', '0:12', chosen ? 'done' : 'cur'], ['Ton verdict', '', chosen ? 'cur' : '']];
+    const narr = `<div class="panel conv narr">${head()}<div class="msgs">
+      <div class="old">Toi : Montre-moi la revue avant que je fusionne.</div>
+      ${cardB}
+      <div class="cap"><div class="who"><span class="pin cur">${chosen ? 4 : 3}</span>pagination · étape ${chosen ? 4 : 3} sur 4</div>
+        <p>${chosen ? 'À toi de trancher : je recommande A, fusionner, et un ticket à part pour le tri.' : 'Le troisième critère passe à moitié : le filtre reste dans l’adresse (<code>?q=</code>), pas le tri.'}</p></div>
+      <div class="steps">${steps.map(([t, s, c], i) => `<div class="step ${c}">${c === 'done' ? ic('check', 13) : `<span class="pin ${c === 'cur' ? 'cur' : ''}" style="width:16px;height:16px;font-size:10px">${i + 1}</span>`}<span class="ell">${t}</span><span class="t tn">${s}</span></div>`).join('')}</div>
+      </div>${compose('narrow')}</div>`;
+    const tour = `<span class="tour wide-only"><span class="ib" style="width:24px;height:24px">${ic('left', 13)}</span><span class="dots">${[1, 2, 3, 4].map((n) => `<i class="${n === (chosen ? 4 : 3) ? 'on' : ''}"></i>`).join('')}</span><span class="ib" style="width:24px;height:24px">${ic('right', 13)}</span></span>`;
+    return `<div class="work">${narr}<div class="panel pv">${pageBar(chosen ? drvMe : drvAgent, tour)}${trust}<div class="stage"><div class="webview">${review({ shift: chosen ? 'shift2' : 'shift' })}</div></div>${chosen ? decideArmed : decideIdle}</div></div>`;
+  }
+  /* ── C : l'onglet du panneau de droite ── */
+  function dirC() {
+    const choices = `<div class="choices"><div class="h">${ic('clock', 13)}<span style="color:var(--text);font-weight:600;font-size:12.5px" class="ell">Fusionner POR-41 ?</span><span class="sp ell">a-31 · aussi dans À toi</span></div>
+      <div class="ch ${chosen ? 'on' : ''}"><span class="rd"></span><span class="k">A</span><span class="ell">Fusionner dans main</span><span class="rec">Recommandé</span></div>
+      <div class="ch"><span class="rd"></span><span class="k">B</span><span class="ell">Renvoyer à pagination</span><span></span></div>
+      <div class="ch"><span class="rd"></span><span class="k">C</span><span class="ell">Attendre l'essai sur la recette</span><span></span></div>
+      <div class="send"><span class="note">Un mot pour pagination (facultatif)</span><span class="btn pri lg">${chosen ? 'Choisir A' : 'Choisir A'}<kbd>Entrée</kbd></span></div></div>`;
+    const panel = `<div class="panel sp-panel"><div class="sp-tabs"><span>${ic('edit', 13)}Non commités</span><span class="wide-only">${ic('branch', 13)}Historique</span><span>${ic('pr', 13)}PR</span><span class="on">${ic('page', 13)}Revue · POR-41<span class="x">${ic('close', 11)}</span></span></div>
+      <div class="mini"><span class="ver tn" style="height:20px">v2 ${ic('down', 11)}</span><span class="sp"></span>${chosen ? drvMe : drvAgent}<span class="ib" style="width:26px;height:26px;display:grid;place-items:center">${ic('expand', 13)}</span></div>
+      ${trust}<div class="stage"><div class="webview">${review({ buttons: false, shift: chosen ? 'shift' : '' })}</div></div>${choices}</div>`;
+    return `<div class="work"><div class="panel conv">${head(`<span class="seg wide-only"><span class="on">Escouade</span><span>Claude Code</span></span>`)}<div class="msgs"><div class="col">${convMsgs(cardC, true)}</div></div>${compose()}</div>${panel}</div>`;
+  }
+
+  document.getElementById('app').innerHTML = `<div class="win">${titlebar}${rail}${side}<div class="main">${({ a: dirA, b: dirB, c: dirC })[D]()}</div>${statusbar}</div>`;
+</script>
+</body>
+</html>
