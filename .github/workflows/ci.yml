@@ -696,6 +696,13 @@ jobs:
         working-directory: src-tauri
         run: xvfb-run -a cargo run --example agentpage_probe
 
+      # The read bridge of the browsers in a real WebKitGTK (ESC-672, AB-5): a page that defends itself is read (its
+      # secrets masked), captured (the view, an element, the document) and its console and failed requests kept from the
+      # browser's creation, across a navigation. The probe exits 1 when a step does not hold, which fails the job.
+      - name: The agents read a browser in a real webview
+        working-directory: src-tauri
+        run: xvfb-run -a cargo run --example agentbrowser_probe
+
       # The conversation's voice under Linux: Microsoft's ONNX Runtime (glibc 2.27), in the .deb and the AppImage
       # (tauri.ort-linux.conf.json), its checksum checked; pyke's needs glibc 2.38.
       - name: ONNX Runtime for Linux
@@ -970,3 +977,9 @@ jobs:
       - name: An agent's page in a real webview
         working-directory: src-tauri
         run: cargo run --example agentpage_probe
+
+      # The read bridge of the browsers in a real WKWebView (ESC-672, AB-5), its first true trial: the same page read,
+      # captured and its console kept; the probe exits 1 when a step does not hold.
+      - name: The agents read a browser in a real webview
+        working-directory: src-tauri
+        run: cargo run --example agentbrowser_probe

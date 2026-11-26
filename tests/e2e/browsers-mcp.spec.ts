@@ -132,6 +132,8 @@ test.describe('a fake agent reads the browsers', () => {
 
         // A browser on the launch, shown alone.
         await openBrowser(page, `localhost:${lp}/tarifs`, 'Tarifs — demo');
+        // Its place is told by the window once the view is laid out, a moment after the row.
+        await expect.poll(async () => (await agent.json('list_browsers', {})).browsers[0]?.placement).toBe('full');
         const first = (await agent.json('list_browsers', {})).browsers;
         expect(first).toHaveLength(1);
         expect(first[0]).toMatchObject({
@@ -170,6 +172,7 @@ test.describe('a fake agent reads the browsers', () => {
 
         // Another origin, shown alone: the first is now on no screen.
         await openBrowser(page, `127.0.0.1:${op}/compte/ada`, 'Mon compte');
+        await expect.poll(async () => (await agent.json('list_browsers', {})).browsers[1]?.placement).toBe('full');
         const both = (await agent.json('list_browsers', {})).browsers;
         expect(both).toHaveLength(2);
         expect(both[0].placement).toBe('hidden');
