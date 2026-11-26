@@ -229,6 +229,8 @@ pub enum Route {
     File(String),
     /// The page's way back (`_/<name>`, AP-4): none answers yet.
     Channel(String),
+    /// A file of the templates (`_t/<name>`, AP-5): Escouade's, the same for every page.
+    Template(String),
 }
 
 /// The page and route a request names: `escouade-page://p-12.localhost/<path>` (WebView2's
@@ -250,10 +252,14 @@ pub fn locate(uri: &str) -> Option<(String, Route)> {
         .next()
         .unwrap_or("");
     let rel = clean_path(raw)?;
-    let route = match rel.strip_prefix("_/") {
-        Some(name) => Route::Channel(name.to_string()),
-        None if rel == "_" => Route::Channel(String::new()),
-        None => Route::File(rel),
+    let route = if let Some(name) = rel.strip_prefix("_/") {
+        Route::Channel(name.to_string())
+    } else if rel == "_" {
+        Route::Channel(String::new())
+    } else if let Some(name) = rel.strip_prefix("_t/") {
+        Route::Template(name.to_string())
+    } else {
+        Route::File(rel)
     };
     Some((page.to_string(), route))
 }
@@ -478,12 +484,35 @@ impl Shelter {
             log::warn!("the webview {label} asked for page {page}: refused");
             return nothing();
         }
-        let Route::File(rel) = route else {
-            return nothing();
-        };
         if !matches!(method, "GET" | "HEAD") {
             return nothing();
         }
+        let rel = match route {
+            Route::File(rel) => rel,
+            Route::Template(name) => {
+                if self.unfiltered.lock().contains(&page) {
+                    return nothing();
+                }
+                let Some(header) = self.served.lock().get(&page).map(|s| s.harden.header) else {
+                    return nothing();
+                };
+                let Some((kind, bytes)) = crate::agentpage_templates::asset(&name) else {
+                    return nothing();
+                };
+                let body = if method == "HEAD" {
+                    Vec::new()
+                } else {
+                    bytes.into_owned()
+                };
+                return answer(
+                    StatusCode::OK,
+                    kind,
+                    body,
+                    header.then(|| csp(&page, windows)),
+                );
+            }
+            Route::Channel(_) => return nothing(),
+        };
         if self.unfiltered.lock().contains(&page) {
             return nothing();
         }
@@ -1010,6 +1039,15 @@ pub fn register<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
         let method = request.method().as_str().to_string();
         let uri = request.uri().to_string();
         std::thread::spawn(move || {
+            // Windows: a request that comes before the page's filter is on waits for it (5 s at
+            // most) rather than being refused, which left WebView2 now and then on its error page
+            // over the navigation that follows the filter (ESC-674). Nothing is served before it.
+            if let (Some(s), Some(page)) = (shelter.as_ref(), page_of(&label)) {
+                let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                while s.unfiltered.lock().contains(page) && std::time::Instant::now() < until {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+            }
             let answer = match shelter {
                 Some(s) => s.serve(&label, &method, &uri, cfg!(windows)),
                 None => answer(StatusCode::NOT_FOUND, "text/plain", Vec::new(), None),

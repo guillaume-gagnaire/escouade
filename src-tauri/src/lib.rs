@@ -11,6 +11,9 @@ mod agentbranch_tests;
 mod agentbrowser_probe;
 mod agentpage;
 mod agentpage_probe;
+mod agentpage_templates;
+#[cfg(test)]
+mod agentpage_templates_tests;
 #[cfg(test)]
 mod agentpage_tests;
 mod agentprs;
@@ -741,6 +744,9 @@ pub fn run() {
                 commands::agentpage_place,
                 commands::agentpage_outside,
                 commands::agentpage_close,
+                commands::agentpage_open_template,
+                commands::agentpage_read,
+                commands::agentpage_capture,
                 commands::open_path,
                 commands::save_settings,
                 commands::claude_locate,

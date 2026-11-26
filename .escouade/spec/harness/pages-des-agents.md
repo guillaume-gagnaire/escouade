@@ -1,15 +1,15 @@
 ---
 title: "Les pages des agents"
 subject: "harness"
-sources: ["docs/AGENT-PAGES.md (ESC-661, étude du 2026-11-25 ; apportée sur main et mise d'accord par ESC-666 le 2026-11-26)","docs/AGENT-BROWSERS-TICKETS.md (ESC-666 : la liste finale des tickets)","design/agent-pages/README.md (direction A choisie ; captures a-*)","Demande a-36, réponse de l'utilisateur du 2026-11-25 : A « Les repères », recommandations P1 à P10 acceptées","L'utilisateur, 2026-11-26 (par l'Overseer) : tout ce qui touche aux navigateurs sort en 2.2","Message d'un utilisateur du 2026-11-24 (une donnée) ; l'utilisateur, 2026-11-25 : « le cas trop cool »","docs/AGENT-BROWSERS.md (ESC-663 : drive_browser, monde isolé)","src-tauri/src/devpage.rs, src-tauri/src/mcp/asks.rs (ce qui existe)","src-tauri/src/agentpage.rs (ESC-667 : la cloison)","docs/TODO-2.4.md (plugins d'interface)"]
-tickets: ["ESC-661","ESC-666","ESC-667"]
+sources: ["docs/AGENT-PAGES.md (ESC-661, étude du 2026-11-25 ; apportée sur main et mise d'accord par ESC-666 le 2026-11-26)","docs/AGENT-BROWSERS-TICKETS.md (ESC-666 : la liste finale des tickets)","design/agent-pages/README.md (direction A choisie ; captures a-*)","Demande a-36, réponse de l'utilisateur du 2026-11-25 : A « Les repères », recommandations P1 à P10 acceptées","L'utilisateur, 2026-11-26 (par l'Overseer) : tout ce qui touche aux navigateurs sort en 2.2","docs/AGENT-BROWSERS.md (ESC-663 : drive_browser, monde isolé)","src-tauri/src/agentpage.rs (ESC-667 : la cloison)","src-tauri/src/agentpage_templates.rs, agentpage_templates/ (ESC-674 : les modèles)","tests/e2e/agentpage-templates.spec.ts (ESC-674)","docs/TODO-2.4.md (plugins d'interface)"]
+tickets: ["ESC-661","ESC-666","ESC-667","ESC-674"]
 decisions: ["pages-des-agents-p1-p9-p10-les-outils-mc",318,319,320,"pages-des-agents-p7-p8-un-interrupteur-d",317,"un-seul-pilotage-pour-toutes-les-lignes","la-cloison-des-pages-des-agents-une-orig"]
 compared: null
 ---
 
 # Les pages des agents
 
-> **Tranché ; la cloison est construite (AP-1, ESC-667), le reste pas encore.** L'utilisateur a choisi le 2026-11-25 (demande a-36) la direction A « Les repères » et les recommandations P1 à P10 de l'étude ESC-661. Tout ce qui touche aux navigateurs sort en 2.2 (l'utilisateur, 2026-11-26) : les tickets partent de `main`, dans l'ordre de la liste finale `docs/AGENT-BROWSERS-TICKETS.md` (ESC-666). Ce que seule la 2.3 a est dit « en 2.3 ». Le détail est dans `docs/AGENT-PAGES.md`.
+> **Tranché ; la cloison (AP-1, ESC-667) et les modèles (AP-5, ESC-674) sont construits, le reste pas encore.** L'utilisateur a choisi le 2026-11-25 (demande a-36) la direction A « Les repères » et les recommandations P1 à P10 de l'étude ESC-661. Tout ce qui touche aux navigateurs sort en 2.2 (l'utilisateur, 2026-11-26) : les tickets partent de `main`, dans l'ordre de la liste finale `docs/AGENT-BROWSERS-TICKETS.md` (ESC-666). Ce que seule la 2.3 a est dit « en 2.3 ». Le détail est dans `docs/AGENT-PAGES.md`.
 
 ## Ce que c'est
 
@@ -32,9 +32,22 @@ La conversation et la page côte à côte. Chaque geste de l'agent est un repèr
 
 Les choix d'une page sont une demande de la boîte « À toi » (`ask` de `show_page`, le même dépôt que `ask_user`). Un clic dans la page propose une option par un seul canal (`escouade-page://p-<n>.localhost/_/choose`, schéma fermé, validé par le cœur, servi à la seule webview de la page) ; rien ne part sans le geste de l'utilisateur dans la bande d'Escouade sous la page, qui montre le libellé de la demande lu dans le cœur. Ensuite, le circuit de la boîte tel quel : 10 s pour annuler, un message à l'agent, rien d'autre. Un feu vert ne se propose jamais depuis la page. Un onglet (l'app développée, un site) n'a aucun canal.
 
-## Les modèles et la page à soi
+## Les modèles (construits, AP-5)
 
-Les modèles `review`, `diagram` (Mermaid embarqué, sans réseau) et `compare` (les planches de la boîte) sont des pages d'Escouade remplies des données de l'agent, rendues en texte. La page à soi (`custom`) se règle sur le poste ou est proposée par `pages.custom` du `.escouade.yml` ; le poste l'emporte, et en 2.3 l'équipe peut l'imposer ou la recommander. Elle reçoit `window.escouade` (titre, agent, ticket, thème, langue, données, demande, `choose`).
+Un modèle est une page d'Escouade (son HTML écrit par le cœur, et les fichiers `_t/page.css`, `_t/page.js` et `_t/mermaid.js` livrés avec l'app), servie dans la même cloison que toute page. L'agent ne donne que des **données** (`src-tauri/src/agentpage_templates.rs`).
+
+- **Validées par le cœur** contre le schéma du modèle, avant tout rendu : un champ que le schéma n'a pas, une valeur mal typée, vide, trop longue, hors bornes, avec un caractère de contrôle, est refusé. Tous les problèmes sont dits d'un coup, chacun par son chemin (`criteria.2.state: one of: met, partial, unmet, unknown`), dans la langue de l'app. Règles en plus : ids uniques, une recommandation qui nomme une option. Bornes : données 256 Ko, diff d'un fichier 200 Ko, source d'un schéma 64 Ko, titre d'une ligne de 120 caractères.
+- **Rendues en texte** : chaque valeur est échappée ; un champ `md` passe par un Markdown à soi qui n'écrit que ses quelques balises (paragraphes, listes, citations, code, titres en gras, `code`, gras, italique, liens vers `http(s)` seulement). Aucun HTML de l'agent n'atteint la page, donc aucun script.
+- **`review`** : `subject` (`ticket` ou `tickets` d'un lot, `branch`, `target`, `loop`), `facts` (`files`, `added`, `removed`, `tests` : `passed`, `total`, `failed`), `criteria` (`text`, `state` : `met`, `partial`, `unmet`, `unknown`, `md`, `ticket`), `changes` (`path`, `added`, `removed`, `status`, `diff`, `ticket` ; un diff aux couleurs de l'éditeur, replié au-delà de 400 lignes), `risks` (`md`, `level`, `ticket`), `sections` (`id`, `title`, `md`, `ticket`). Un lot a un onglet par ticket (`role="tab"`, que `tab` de `drive_browser` peut cliquer). Avec une demande, la section « Ton verdict » montre ses options, la recommandée marquée ; un clic propose (AP-4).
+- **`diagram`** : `{ kind: "mermaid", source, md }`. Mermaid est **embarqué** (12.3.0, gzippé dans l'app, vérifié par son SHA-256 ; `scripts/mermaid-vendor.sh` le change), sans réseau, en `securityLevel: 'strict'` et sans étiquettes HTML : le balisage d'une étiquette est montré ou retiré, jamais exécuté. Il tourne sous le script de garde de la cloison (qui refuse `eval` et `Function`). Zoom (« − Ajuster + », Ctrl + molette, touches) et déplacement à la souris. Une source que Mermaid ne comprend pas montre son erreur et la source, en texte.
+- **`compare`** : `options` (2 à 8 : `id`, `title`, `md`, `images`, `pros`, `cons`), `criteria`, `recommend`. Les planches de la boîte : chaque option sur son fond, sa ligne de crédits, le sceau « Recommandé » ; « Sombre · Clair » quand une option a deux rendus (`{ "dark": …, "light": … }`). Une image est un chemin relatif du dossier de travail, PNG, JPEG, GIF, WebP ou AVIF par son nom (jamais un SVG), copiée dans la version et vérifiée par son contenu par AP-2. Avec une demande, chaque planche de même id porte « Choisir ».
+- **Les ancres pour le pilotage** : chaque partie a un id stable, et une clé du modèle la nomme pour `target` de `drive_browser` (AB-7) : `criteria.2` → `#crit-3`, `changes.0` → `#change-1`, `risks.0`, `sections.<id>` → `#sec-<id>`, `verdict.<option>` → `#option-<option>`, `tabs.<ticket>`, `options.<id>` ou `options.<rang>` → `#option-<id>`, `criteria.<rang>` d'une comparaison → `#ccrit-…`, `diagram`, `legend`, `nodes.<id>` (un nœud du schéma par son id dans la source, `data-node`). Une clé inconnue est refusée avec la liste des clés de la page.
+- **Clair et sombre, fr et en** : la page suit la langue de l'app (ses mots sont écrits dans les deux) et son thème (`data-theme`, que `?theme=` de son adresse change sans nouveau rendu), et le teint du projet (`--p`, `#rrggbb` seulement). Les polices sont celles du système : la page ne joint que sa propre origine.
+- **Vérifié** : tests Rust (schémas, refus, échappement, Markdown, ancres, `_t/`, SHA-256 de Mermaid) ; l'e2e `agentpage-templates.spec.ts` (Windows) ouvre chaque modèle dans la vraie cloison, en fr et en, clair et sombre, à la largeur d'une page à côté de la conversation à 1440 et à 1024, avec des données dont chaque texte est piégé, et le lit par le pont de lecture : le piège reste du texte, Mermaid dessine, les ancres sont là.
+
+## La page à soi
+
+La page à soi (`custom`) se règle sur le poste ou est proposée par `pages.custom` du `.escouade.yml` ; le poste l'emporte, et en 2.3 l'équipe peut l'imposer ou la recommander. Elle reçoit `window.escouade` (titre, agent, ticket, thème, langue, données, demande, `choose`).
 
 ## Sécurité
 

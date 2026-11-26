@@ -4915,6 +4915,177 @@ pub fn agentpage_close(
     Ok(())
 }
 
+/// A request a template draws, as the end-to-end test gives it (AP-4 takes it from the box).
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TemplateChoice {
+    key: String,
+    title: String,
+    options: Vec<TemplateChoiceOption>,
+    recommend: Option<String>,
+    multi: bool,
+    answered: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct TemplateChoiceOption {
+    id: String,
+    label: String,
+    description: Option<String>,
+}
+
+/// A debug build alone (the end-to-end test of the templates, ESC-674): renders `template` with
+/// `data` (checked by the core: refused with its problems) as page `page` in the shelter, in `lang`
+/// and `theme`, with `images` (a name and its bytes in base64) beside it, and opens it at `bounds`.
+/// Its anchors come back. A release refuses it: the MCP tool shows pages (AP-2).
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn agentpage_open_template(
+    app: tauri::AppHandle,
+    core: CoreState<'_>,
+    shelter: State<'_, Arc<crate::agentpage::Shelter>>,
+    page: String,
+    template: String,
+    title: String,
+    data: serde_json::Value,
+    lang: String,
+    theme: String,
+    choice: Option<TemplateChoice>,
+    images: Option<Vec<(String, String)>>,
+    bounds: Option<crate::agentpage::Bounds>,
+) -> Res<Vec<crate::agentpage_templates::Anchor>> {
+    use crate::agentpage_templates as t;
+    use base64::Engine;
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    if !crate::agentpage::is_page(&page) {
+        return Err(format!("not a page: {page}"));
+    }
+    let template = t::Template::parse(&template).ok_or("not a template")?;
+    let look = t::Look {
+        lang: crate::i18n::Lang::named(&lang).unwrap_or(crate::i18n::Lang::Fr),
+        theme: if theme == "light" {
+            t::Theme::Light
+        } else {
+            t::Theme::Dark
+        },
+        tint: None,
+        choice: choice.map(|c| t::Choice {
+            key: c.key,
+            title: c.title,
+            options: c
+                .options
+                .into_iter()
+                .map(|o| t::ChoiceOption {
+                    id: o.id,
+                    label: o.label,
+                    description: o.description,
+                })
+                .collect(),
+            recommend: c.recommend,
+            multi: c.multi,
+            answered: c.answered,
+        }),
+    };
+    let rendered = t::render(template, &title, &data, &look).map_err(|p| t::tell(&p))?;
+    let dir = core.data.root().join("agent-pages-templates").join(&page);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| err(e.into()))?;
+    std::fs::write(dir.join("index.html"), &rendered.html).map_err(|e| err(e.into()))?;
+    for (name, b64) in images.unwrap_or_default() {
+        if !rendered.images.contains(&name) {
+            continue;
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| e.to_string())?;
+        let at = dir.join(&name);
+        if let Some(parent) = at.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| err(e.into()))?;
+        }
+        std::fs::write(at, bytes).map_err(|e| err(e.into()))?;
+    }
+    if shelter.view(&page).is_some() {
+        crate::agentpage::close(&app, &shelter, &page);
+    }
+    shelter.put(&page, dir)?;
+    crate::agentpage::open(
+        &app,
+        &shelter,
+        crate::agentpage::Open {
+            page: &page,
+            bounds,
+            visible: bounds.is_some(),
+            data_root: core.data.root(),
+        },
+        own_of(&app),
+        agentpage_tell(&core),
+    )?;
+    Ok(rendered.anchors)
+}
+
+/// A debug build alone: the HTML or the text of `selector` in agent's page `page`, read in
+/// Escouade's world (the read bridge, ESC-668), as the end-to-end test checks what a template drew.
+#[tauri::command]
+pub async fn agentpage_read(
+    app: tauri::AppHandle,
+    page: String,
+    selector: Option<String>,
+    text: bool,
+) -> Res<String> {
+    use tauri::Manager;
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    let webview = app
+        .get_webview(&crate::agentpage::label(&page))
+        .ok_or("no such page")?;
+    let what = if text {
+        crate::browserread::What::Text
+    } else {
+        crate::browserread::What::Html
+    };
+    tokio::task::spawn_blocking(move || {
+        crate::browserread::read(&webview, selector.as_deref(), what, Some(200_000))
+            .map(|r| r.content)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// A debug build alone: a capture of agent's page `page` (its view), written to `path` (PNG or
+/// JPEG, as the system gives it); its extension comes back.
+#[tauri::command]
+pub async fn agentpage_capture(app: tauri::AppHandle, page: String, path: String) -> Res<String> {
+    use tauri::Manager;
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    let webview = app
+        .get_webview(&crate::agentpage::label(&page))
+        .ok_or("no such page")?;
+    tokio::task::spawn_blocking(move || {
+        let shot = crate::browserread::capture(
+            &webview,
+            crate::browserread::Ask {
+                selector: None,
+                full_page: false,
+                width: None,
+            },
+        )?;
+        let ext = match shot.format {
+            crate::browserread::Format::Png => "png",
+            crate::browserread::Format::Jpeg => "jpg",
+        };
+        std::fs::write(format!("{path}.{ext}"), &shot.bytes).map_err(|e| e.to_string())?;
+        Ok::<_, String>(ext.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 // ---------- the box « À toi » (ESC-509): the commands its screen (IN-2) reads and acts by ----------
 
 /// The box: the requests of a project, or of all (`project_id` left out); nothing while the MCP
