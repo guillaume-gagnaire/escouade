@@ -748,6 +748,7 @@ impl AgentRt {
         self.plan_apply(fx, |plan| {
             plan.on_tool_result(&id, error, &output, &tur, now_ms())
         });
+        self.canvas_apply(fx, |c| c.on_tool_result(&id, error, &output, now_ms()));
         let result = tool_result(output, error, &tur);
         self.patch(
             &id,

@@ -1,6 +1,7 @@
 //! Types persisted on disk and exchanged with the frontend.
 
 use crate::notify::NotifyKind;
+use escouade_plan::canvas::Canvas;
 use escouade_plan::plan::PlanState;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -2505,6 +2506,10 @@ pub struct AgentMeta {
     /// its stream (`plan`). None until it has any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plan: Option<PlanState>,
+    /// What the « Workspace » shows of it without its conversation: the skills and plugins it and
+    /// its subagents used (`canvas`). None until it has any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canvas: Option<Canvas>,
     /// The account it ran on before « Reprendre sur <compte> » moved it, until a turn ends on the
     /// new one: a turn that fails there is the resume's failure, and this is where it goes back to.
     pub moved_from: Option<String>,

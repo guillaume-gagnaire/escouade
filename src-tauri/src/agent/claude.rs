@@ -159,6 +159,15 @@ impl AgentRt {
         let files = (parent.is_none() && matches!(name, "TodoWrite" | "TaskCreate" | "TaskUpdate"))
             .then(|| self.plan_list.clone())
             .flatten();
+        // A call the conversation holds ended is one read again (a transcript after a restart): counted once already,
+        // and the canvas's memory of the calls it saw is gone with the app.
+        let ended = self
+            .conv
+            .get(id)
+            .is_some_and(|c| matches!(c["status"].as_str(), Some("ok" | "error")));
+        if !ended {
+            self.canvas_apply(fx, |c| c.on_tool_use(parent, id, name, input, now));
+        }
         self.plan_apply(fx, |plan| {
             let change = plan.on_tool_use(parent, id, name, input, now);
             match (parent, files) {

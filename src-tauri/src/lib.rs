@@ -179,7 +179,7 @@ mod remote_tests;
 #[cfg(test)]
 mod save_tests;
 // What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
-use escouade_plan::{plan, planfiles};
+use escouade_plan::{canvas, plan, planfiles};
 // The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).
 use escouade_model::{agentgroups, heat, job, pricing, proc, wsl};
 /// A plugin's profiles and its settings of each project, as the window sets them (ESC-530).
