@@ -84,9 +84,9 @@ describe('the card of an agent on the workspace', () => {
     expect(backend.called('send_message')).toHaveLength(0);
     expect(field.value).toBe('Oui');
     loaded([question]);
-    await vi.waitFor(() => expect(backend.called('get_conversation').length).toBeGreaterThan(0));
-    // The request just shown: Enter waits HOLD_MS, as in the conversation.
-    await new Promise((r) => setTimeout(r, HOLD_MS + 20));
+    // The request shown on the card (not only asked for): Enter waits HOLD_MS from then, as in the conversation.
+    await vi.waitFor(() => expect(screen.getByText('Q ?')).toBeTruthy());
+    await new Promise((r) => setTimeout(r, HOLD_MS + 100));
     await fireEvent.keyDown(field, { key: 'Enter' });
     await vi.waitFor(() =>
       expect(backend.called('answer_question')[0]?.args).toMatchObject({ id: 'a1', requestId: 'q1', answers: { 'Q ?': 'Oui' } }),
