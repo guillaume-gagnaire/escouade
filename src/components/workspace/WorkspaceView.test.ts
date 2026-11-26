@@ -82,6 +82,24 @@ describe('the workspace', () => {
     expect(pieces(container).map((p) => p.id)).toEqual(['a1']);
   });
 
+  it('hides the agents ready or done on « Masquer les inactifs », and shows them again', async () => {
+    resetApp({
+      agents: [
+        agent({ id: 'a1', status: 'idle' }),
+        agent({ id: 'a2', status: 'running' }),
+        agent({ id: 'a3', status: 'done' }),
+        agent({ id: 'a4', status: 'error' }),
+      ],
+    });
+    const { container } = show();
+    const toggle = screen.getByRole('button', { name: 'Masquer les inactifs' });
+    await fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(pieces(container).map((p) => p.id)).toEqual(['a2', 'a4']);
+    await fireEvent.click(toggle);
+    expect(pieces(container)).toHaveLength(4);
+  });
+
   it('draws two agents running the same tool, in two projects on the canvas of every project', () => {
     const canvas = { tools: [kit('plugin', 'escouade', 1, 1)], subs: [] };
     resetApp({

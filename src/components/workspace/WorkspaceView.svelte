@@ -41,6 +41,9 @@
   /** None: every project's, over « Vue d'ensemble ». */
   let { project }: { project?: Project } = $props();
 
+  /** « Masquer les inactifs » of the floating bar: the agents ready or done left out, those that work, wait or failed kept. */
+  let hideIdle = $state(false);
+  const inactive = (a: Agent) => a.status === 'idle' || a.status === 'done';
   // As « Vue d'ensemble »: the projects in the order of the rail, those without an agent left out; each one's agents in
   // the order of its sidebar, archived ones aside.
   const columns = $derived(
@@ -50,7 +53,7 @@
           p,
           Object.values(app.agents).filter((a) => a.projectId === p.id && !a.archived),
         ),
-      );
+      ).filter((a) => !hideIdle || !inactive(a));
       return project || agents.length ? [{ project: p, agents, launched: launchedOf(agents, app.agents, app.tickets) }] : [];
     }),
   );
@@ -343,6 +346,8 @@
     <i></i>
     <button onclick={fitAll}>{t('workspace.fit')}</button>
     <i></i>
+    <button aria-pressed={hideIdle} onclick={() => (hideIdle = !hideIdle)}>{t('workspace.hideIdle')}</button>
+    <i></i>
     <span class="info">{t('workspace.count', { count: agents.length })}</span>
     {#if questions}<span class="info q">{t('workspace.questions', { count: questions })}</span>{/if}
   </div>
@@ -432,6 +437,8 @@
     position: absolute;
     top: 14px;
     z-index: 1;
+    /* Its own layer: WebKit otherwise paints the cards of the scaled world over it. */
+    will-change: transform;
     box-shadow:
       inset 0 0 0 1px var(--line-2),
       0 8px 24px -6px rgba(0, 0, 0, calc(0.5 * var(--shade)));
@@ -466,7 +473,8 @@
     font-weight: 550;
     cursor: pointer;
   }
-  .bar button:hover {
+  .bar button:hover,
+  .bar button[aria-pressed='true'] {
     background: var(--hover);
   }
   .bar i {
