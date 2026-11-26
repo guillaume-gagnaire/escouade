@@ -1426,11 +1426,11 @@ pub struct ShowPageArgs {
     )]
     pub title: String,
     #[schemars(
-        description = "review (an end-of-batch or pre-merge review), diagram (a Mermaid diagram), compare (options side by side), html (your own page: html or file) or custom (the user's own page)."
+        description = "review (an end-of-batch or pre-merge review), diagram (a Mermaid diagram), compare (options side by side), html (your own page: html or file) or custom (the page of one's own the user set for the project: give it your data, which it reads in window.escouade.data; refused, saying what to take, when none is set)."
     )]
     pub template: PageTemplateArg,
     #[schemars(
-        description = "For review, diagram and compare: the template's data, a JSON object of its schema, 256 KB at most. Refused with every field that does not fit, by its path."
+        description = "For review, diagram and compare: the template's data, a JSON object of its schema, 256 KB at most; for custom, any JSON value the page reads (window.escouade.data), 256 KB at most. Refused with every field that does not fit, by its path."
     )]
     pub data: Option<serde_json::Value>,
     #[schemars(

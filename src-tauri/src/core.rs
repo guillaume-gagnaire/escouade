@@ -1813,6 +1813,8 @@ pub(crate) fn blank_project(path: &str) -> Project {
         git_fetch: Default::default(),
         workflows_enabled: true,
         workflows_in_repo: true,
+        custom_page: String::new(),
+        file_custom_page: String::new(),
         agent_folders: Vec::new(),
         agent_order: Vec::new(),
     }
@@ -9423,6 +9425,9 @@ impl<R: Runtime> Core<R> {
             crate::testlaunch::check_run_url(&c.url, crate::i18n::ui())
                 .map_err(|e| anyhow::anyhow!("« {} » : {e}", c.name.trim()))?;
         }
+        // « Page à soi » (AP-7): an .html document, or none.
+        let custom_page = crate::pages::checked_custom_page(crate::i18n::ui(), &p.custom_page)
+            .map_err(anyhow::Error::msg)?;
         let mut projects = self.projects.write();
         let cur = projects
             .iter_mut()
@@ -9450,6 +9455,8 @@ impl<R: Runtime> Core<R> {
         cur.worktree_teardown = p.worktree_teardown;
         cur.commit_mode = p.commit_mode;
         cur.pages_open = p.pages_open;
+        // « Page à soi » (AP-7): the window's alone; `file_custom_page` is the file's, never the window's.
+        cur.custom_page = custom_page;
         cur.account = account;
         cur.engine = p.engine;
         // « Projet privé »: the MCP server reads it at each call (`mcp::resolve::Sight`), the

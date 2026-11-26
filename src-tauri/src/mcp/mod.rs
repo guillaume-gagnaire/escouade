@@ -27,6 +27,8 @@ mod browsers_open_tests;
 #[cfg(test)]
 mod browsers_tests;
 #[cfg(test)]
+mod custom_pages_tests;
+#[cfg(test)]
 mod declare_tests;
 mod docs;
 #[cfg(test)]

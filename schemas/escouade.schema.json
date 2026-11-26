@@ -199,6 +199,17 @@
         }
       ]
     },
+    "pages": {
+      "additionalProperties": false,
+      "properties": {
+        "custom": {
+          "description": "« Page à soi »: the project's own page for show_page(template: \"custom\"), an .html document by its path relative to the repository (never out of it). Needs the user's approval, with the commands; a page chosen on a machine comes first there.",
+          "pattern": "\\.[Hh][Tt][Mm][Ll]?$",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "plugins": {
       "additionalProperties": false,
       "patternProperties": {

@@ -579,6 +579,20 @@ export default {
     pagesOpen: 'Ouvrir les pages des lancements',
     pagesOpenDesc:
       'Quand « ▶ Tester » ou une commande de lancement est prêt, la page s’ouvre toute seule. Dans Escouade, c’est sa ligne de la section « Navigateurs », à part : ni les commandes d’Escouade, ni tes cookies.',
+    agentPagesGroup: 'Pages des agents',
+    customPage: 'Page à soi',
+    customPageDesc:
+      'Un document .html que tes agents remplissent de leurs données (show_page, modèle custom). Il est copié et montré dans la même cloison que leurs pages : sans réseau, sans accès à Escouade ni à tes fichiers. Gardé sur ce poste, il passe devant celui de .escouade.yml.',
+    customPagePlaceholder: 'design/ma-revue.html',
+    customPagePick: 'Choisir un fichier…',
+    customPagePickTitle: 'Page à soi',
+    customPageFilter: 'Document HTML',
+    customPageClear: 'Retirer',
+    customPageNone: 'Aucune page à soi : un agent qui la demande est invité à prendre review, diagram, compare ou html.',
+    customPageRepo: 'Proposée par le dépôt (.escouade.yml) : {path}',
+    customPageWaiting: 'Proposée par le dépôt (.escouade.yml) : {path}, en attente de ton accord (.escouade.yml, plus haut).',
+    customPageAhead: 'Réglage de ce poste : il passe devant la page que propose .escouade.yml ({path}).',
+    customPageNotHtml: 'La page à soi est un document .html.',
     pagesOpens: {
       agent: 'Dans Escouade',
       system: 'Dans le navigateur du système',
@@ -724,6 +738,7 @@ export default {
       teardown: 'Démontage des worktrees',
       launch: 'Lancement',
       test: 'Commande de tests',
+      page: 'Page à soi (pages des agents)',
     },
     export: 'Exporter vers .escouade.yml',
     exportDesc:

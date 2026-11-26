@@ -24,6 +24,7 @@ import type {
   WorktreeSuggestion,
 } from './types';
 import { runUrlProblem } from './run-url';
+import { customPageProblem } from './custom-page';
 import { branchPrefixProblem, worktreesRootProblem } from './worktrees';
 import { DEFAULT_FETCH } from './fetch';
 import { rowsOf, SETTINGS_PAGES, type RowInfo, type SettingsPage } from './settings-pages';
@@ -58,6 +59,7 @@ type ProjectFields = Pick<
   | 'worktreeTeardown'
   | 'commitMode'
   | 'pagesOpen'
+  | 'customPage'
   | 'account'
   | 'worktreeDir'
   | 'agentBranchPrefix'
@@ -109,6 +111,8 @@ export interface ProjectDraft {
   commitMode: CommitMode;
   /** « Ouvrir les pages des lancements » (ESC-311). */
   pagesOpen: PagesOpen;
+  /** « Page à soi » (AP-7): empty is none. */
+  customPage: string;
   /** « Compte préféré »: the Claude account its agents and tickets go to; empty is « Automatique ». */
   account: string;
   /** « Dossier des worktrees », as typed: empty is `.claude/worktrees`. */
@@ -161,6 +165,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeTeardown,
     commitMode,
     pagesOpen,
+    customPage,
     account,
     worktreeDir,
     agentBranchPrefix,
@@ -202,6 +207,8 @@ function draftOf(p: Project): ProjectDraft {
     commitMode,
     // Absent from a project saved before ESC-311, or « Dans une fenêtre à part » of before (ESC-657): in Escouade.
     pagesOpen: pagesOpen === 'system' ? 'system' : 'agent',
+    // Absent from a project without a page of its own (AP-7).
+    customPage: customPage ?? '',
     account,
     worktreeDir,
     agentBranchPrefix,
@@ -283,6 +290,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeTeardown: stepsOf(d.worktreeTeardown),
     commitMode: d.commitMode,
     pagesOpen: d.pagesOpen,
+    customPage: d.customPage.trim(),
     account: d.account,
     worktreeDir: d.worktreeDir.trim(),
     agentBranchPrefix: d.agentBranchPrefix.trim(),
@@ -402,12 +410,15 @@ class SettingsForm {
   projectProblems(id: string) {
     const d = this.projects[id];
     const p = app.projects.find((x) => x.id === id);
-    if (!d || !p) return { name: false, commands: false, urls: false, dir: null, agentPrefix: false, ticketPrefix: false };
+    if (!d || !p)
+      return { name: false, commands: false, urls: false, customPage: false, dir: null, agentPrefix: false, ticketPrefix: false };
     return {
       name: !d.name.trim(),
       commands: d.runCommands.some((c) => !c.name.trim() || !c.command.trim()),
       /** An address to open that is not http(s) (ESC-560), said on its own field. */
       urls: d.runCommands.some((c) => !!runUrlProblem(c.url ?? '')),
+      /** « Page à soi » that is not an .html document (AP-7). */
+      customPage: !!customPageProblem(d.customPage),
       ...worktreesProblems(p.path, d),
     };
   }
@@ -418,6 +429,7 @@ class SettingsForm {
     const out: (keyof ProjectFields)[] = [];
     if (p.name) out.push('name');
     if (p.commands || p.urls) out.push('runCommands');
+    if (p.customPage) out.push('customPage');
     if (p.dir) out.push('worktreeDir');
     if (p.agentPrefix) out.push('agentBranchPrefix');
     if (p.ticketPrefix) out.push('ticketBranchPrefix');

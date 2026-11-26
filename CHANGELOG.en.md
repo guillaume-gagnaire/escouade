@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - Agents can show you a page: a review, a diagram, options to compare or their own HTML, copied apart and served without network or access to Escouade or your files; a new version updates the page. The “Agents’ pages” switch in Settings › Agents turns them off, erasing nothing.
+- Your own page for the agents: an HTML document chosen in Settings › Projects › Launch, or proposed by the repository in `.escouade.yml` (once you trust it), that your agents fill with their data. Your machine’s comes before the repository’s.
 - Your project’s workflows move to the Workspace: each agent’s card says its step (and in red why it was sent back), and a click opens the workflow’s diagram with its path; “Workflows”, at the top right of the canvas, lists the project’s workflows and their agents. The right-hand panel keeps three tabs.
 - The commands an agent ran, kept for the Workspace, no longer keep any password, token or key in the clear: they are masked before being saved.
 - Stats: what a subagent of Copilot CLI, Codex or OpenCode spends counts only once, on the model it really ran on (at the right price for Codex); that of a Copilot subagent its plugin had lost sight of is no longer forgotten.

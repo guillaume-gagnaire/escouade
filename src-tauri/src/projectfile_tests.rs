@@ -61,6 +61,8 @@ board:
   mode: plan
 workflows:
   enabled: false
+pages:
+  custom: design/revue.html
 plugins:
   recommended: [dev.exemple.slack]
 ";
@@ -126,6 +128,7 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("board.mode"), json!("plan"));
     assert_eq!(v("plugins.recommended"), json!(["dev.exemple.slack"]));
     assert_eq!(v("workflows.enabled"), json!(false));
+    assert_eq!(v("pages.custom"), json!("design/revue.html"));
 }
 
 /// « Pas de workflow pour ce projet » (ESC-309): a key of the file, true when absent.
@@ -571,6 +574,7 @@ fn applied_settings_change_the_project_commands_wait_for_trust() {
         [
             "board.test_command",
             "launch",
+            "pages.custom",
             "worktrees.setup",
             "worktrees.teardown"
         ]
@@ -1471,11 +1475,11 @@ async fn exported_the_project_s_settings_make_its_file_its_commands_trusted() {
     // Its own commands: nothing to approve, nothing kept apart.
     let file = p.shared.file.unwrap();
     assert!(file.pending.is_none());
-    // No target branch yet, and none of the file's own keys (`plugins.*`).
+    // No target branch yet, no page of one's own, and none of the file's own keys (`plugins.*`).
     let own = pf::KEYS.iter().filter(|k| k.file_only).count();
     assert_eq!(
         file.keys.len(),
-        pf::KEYS.len() - 1 - own,
+        pf::KEYS.len() - 2 - own,
         "no target branch yet"
     );
     assert!(p.shared.local.is_empty());
@@ -1654,4 +1658,62 @@ fn the_project_file_is_neither_read_nor_written_through_a_link_nor_past_its_cap(
     } else {
         eprintln!("no symbolic link to a file allowed here: that part skipped");
     }
+}
+
+/// « Page à soi » the repository proposes (AP-7, ESC-677): a page of the repository, by its path relative
+/// to it, that never leaves it; held with the commands until the user trusts the file; never set by the
+/// window (`custom_page` is the machine's), and not written while empty.
+#[test]
+fn the_page_of_ones_own_is_a_key_held_until_trusted_that_never_leaves_the_repository() {
+    let k = pf::key_of(pf::CUSTOM_PAGE).unwrap();
+    assert_eq!(k.kind, pf::Kind::Page);
+    assert!(k.command && !k.file_only);
+    for good in ["revue.html", "design/revue.HTM", ".escouade/pages/lot.html"] {
+        assert_eq!(pf::repo_page_problem(good), None, "{good}");
+    }
+    for bad in [
+        "../dehors.html",
+        "design/../../dehors.html",
+        r"design\..\..\x.html",
+        "/etc/x.html",
+        r"\\serveur\x.html",
+        "C:/x.html",
+        "~/x.html",
+        "https://exemple.org/x.html",
+        "design/revue.js",
+    ] {
+        assert!(pf::repo_page_problem(bad).is_some(), "{bad}");
+        let r = read(&format!("version: 1\npages:\n  custom: '{bad}'\n"));
+        assert!(!r.values.contains_key(pf::CUSTOM_PAGE), "{bad}");
+        assert_eq!(lines(&r.warnings), vec![Some(3)], "{bad}");
+    }
+    // Held with the commands: the project keeps none until trusted.
+    let mut p = project();
+    let r = read("pages:\n  custom: design/revue.html\n");
+    pf::apply(&mut p, &r);
+    assert!(p.file_custom_page.is_empty());
+    let pending = p.shared.file.clone().unwrap().pending.unwrap();
+    assert_eq!(
+        pending.commands[pf::CUSTOM_PAGE],
+        json!("design/revue.html")
+    );
+    p.shared.trusted = pending.hash;
+    pf::apply(&mut p, &r);
+    assert_eq!(p.file_custom_page, "design/revue.html");
+    assert!(p.shared.file.clone().unwrap().pending.is_none());
+    // The machine's page is no key of the file: the window setting it keeps nothing apart.
+    let before = p.clone();
+    p.custom_page = "C:/mes-pages/revue.html".into();
+    assert!(pf::keep_local(&before, &mut p).is_empty());
+    assert!(!pf::export_values(&p)
+        .iter()
+        .any(|(_, v)| v == &json!("C:/mes-pages/revue.html")));
+    // Written as the file gave it; not at all while empty.
+    assert!(pf::export_values(&p).contains(&(pf::CUSTOM_PAGE, json!("design/revue.html"))));
+    assert!(!pf::export_values(&project())
+        .iter()
+        .any(|(k, _)| *k == pf::CUSTOM_PAGE));
+    let schema = pf::schema();
+    let key = &schema["properties"]["pages"]["properties"]["custom"];
+    assert_eq!(key["type"], "string");
 }

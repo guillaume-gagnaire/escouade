@@ -97,6 +97,35 @@ fn look<R: Runtime>(core: &Core<R>, project: &str) -> templates::Look {
     }
 }
 
+/// What the page of one's own receives (`window.escouade`, docs/AGENT-PAGES.md § 7.4), but its number
+/// and version (`pages::with_escouade`): **what a template is given, no more**: its title, the agent's
+/// name, its ticket, the project's name, the app's theme and language, the agent's data, and its request
+/// (none until AP-4). Neither a path, a token nor an id of Escouade.
+fn escouade_of<R: Runtime>(core: &Core<R>, who: &Who, title: &str, data: Option<Value>) -> Value {
+    let look = look(core, &who.author.project_id);
+    let ticket = who
+        .author
+        .ticket_id
+        .as_deref()
+        .and_then(|t| core.ticket(t).ok())
+        .map(|t| json!({ "key": t.key, "title": t.title }));
+    let project = core
+        .project(&who.author.project_id)
+        .map(|p| p.name)
+        .unwrap_or_default();
+    json!({
+        "template": "custom",
+        "title": title,
+        "agent": { "name": who.author.name },
+        "ticket": ticket,
+        "project": { "name": project },
+        "theme": match look.theme { templates::Theme::Light => "light", _ => "dark" },
+        "lang": if look.lang == crate::i18n::Lang::En { "en" } else { "fr" },
+        "data": data,
+        "ask": null,
+    })
+}
+
 /// What a page is made of, as the call gives it: checked, then copied (out of the async runtime: it
 /// reads files).
 fn bundle<R: Runtime>(
@@ -111,10 +140,43 @@ fn bundle<R: Runtime>(
     let lang = crate::i18n::ui();
     let failed = ToolError::Failed;
     match template {
-        PageTemplateArg::Custom => Err(ToolError::Refused(tr!(
-            "L’utilisateur n’a pas réglé de page à soi pour ce projet : prends review, diagram, compare ou html.",
-            "The user has set no page of their own for this project: take review, diagram, compare or html."
-        ))),
+        PageTemplateArg::Custom => {
+            let project = core
+                .project(&who.author.project_id)
+                .map_err(|e| ToolError::Failed(e.to_string()))?;
+            let page = pages::custom_page_of(&project);
+            if matches!(page, pages::CustomPage::None | pages::CustomPage::Waiting) {
+                return Err(ToolError::Refused(pages::no_custom_page(
+                    lang,
+                    page == pages::CustomPage::Waiting,
+                )));
+            }
+            if html.is_some() || file.is_some() {
+                return Err(failed(tr!(
+                    "La page à soi (custom) prend ses données (data), pas de html ni de file : son document est celui que l’utilisateur a réglé.",
+                    "The page of one's own (custom) takes its data (data), neither html nor file: its document is the one the user set."
+                )));
+            }
+            let data = data.unwrap_or(Value::Null);
+            let weight = data.to_string().len();
+            if weight > templates::DATA_MAX {
+                return Err(failed(tr!(
+                    "Les données (data) d’une page font 256 Ko au plus.",
+                    "A page's data (data) is 256 KB at most."
+                )));
+            }
+            let mut b =
+                pages::from_custom(lang, &page, &pages::open_within).map_err(ToolError::Refused)?;
+            if b.bytes() + weight as u64 > pages::VERSION_MAX {
+                return Err(ToolError::Refused(tr!(
+                    "Une version pèse 10 Mo au plus, ses fichiers compris : allège tes données.",
+                    "A version weighs 10 MB at most, its files included: make your data lighter."
+                )));
+            }
+            // Its document is the user's: what it left out is not the agent's to know by name.
+            b.left_out.clear();
+            Ok(b)
+        }
         PageTemplateArg::Html => {
             if data.is_some() {
                 return Err(failed(tr!(
@@ -159,7 +221,10 @@ fn bundle<R: Runtime>(
                 )));
             };
             let t = templates::Template::parse(template_name(t)).ok_or_else(|| {
-                failed(tr!("Ce modèle n’existe pas.", "This template doesn’t exist."))
+                failed(tr!(
+                    "Ce modèle n’existe pas.",
+                    "This template doesn’t exist."
+                ))
             })?;
             let rendered = templates::render(t, title, &data, &look(core, &who.author.project_id))
                 .map_err(|p| failed(templates::tell(&p)))?;
@@ -186,6 +251,8 @@ pub(super) async fn show_page<R: Runtime>(
     let template = a.template;
     let core2 = core.clone();
     let shown = tokio::task::spawn_blocking(move || {
+        let escouade = (template == PageTemplateArg::Custom)
+            .then(|| escouade_of(&core2, &who, &title, a.data.clone()));
         let bundle = bundle(&core2, &who, template, &title, a.data, a.html, a.file)?;
         core2
             .page_show(
@@ -195,6 +262,7 @@ pub(super) async fn show_page<R: Runtime>(
                     template: template_name(template),
                     page: a.page,
                     bundle,
+                    escouade,
                 },
             )
             .map_err(ToolError::Refused)

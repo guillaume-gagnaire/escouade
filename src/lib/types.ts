@@ -909,6 +909,10 @@ export interface Project {
   commitMode: CommitMode;
   /** « Ouvrir les pages des lancements » (ESC-311): where a launch's page opens once it answers. Kept on this machine. */
   pagesOpen?: PagesOpen;
+  /** « Page à soi » (AP-7): the .html this machine chose for show_page(template: "custom"), absolute or relative to its folder; absent: none. Kept on this machine, ahead of the file's. */
+  customPage?: string;
+  /** `pages.custom` of its .escouade.yml, once trusted: never set by the window. */
+  fileCustomPage?: string;
   /** « Compte préféré »: the Claude account its new agents and tickets go to (an `Account`'s id); empty is « Automatique ». */
   account: string;
   /** « Dossier des worktrees »: where its new worktrees go, from its folder or absolute; empty is `.claude/worktrees`. */

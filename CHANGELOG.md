@@ -7,6 +7,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ## [Non publié]
 
 - Les agents peuvent te montrer une page : une revue, un schéma, des options à comparer ou leur propre HTML, copiés à part et servis sans réseau ni accès à Escouade ou à tes fichiers ; une nouvelle version met la page à jour. L’interrupteur « Pages des agents » de Réglages › Agents les coupe, sans rien effacer.
+- Ta propre page pour les agents : un document HTML choisi dans Réglages › Projets › Lancement, ou proposé par le dépôt dans `.escouade.yml` (après ton accord), que tes agents remplissent de leurs données. Celle de ton poste passe devant celle du dépôt.
 - Les workflows de ton projet passent dans le Workspace : la carte de chaque agent dit son étape (et en rouge pourquoi il a été renvoyé), et un clic ouvre le schéma du workflow avec son chemin ; « Workflows », en haut à droite de la toile, liste les workflows du projet et leurs agents. Le panneau de droite garde trois onglets.
 - Les commandes qu’un agent a lancées, gardées pour le Workspace, ne gardent plus aucun mot de passe, jeton ou clé en clair : ils sont masqués avant d’être enregistrés.
 - Stats : ce que consomme un sous-agent de Copilot CLI, de Codex ou d’OpenCode compte une seule fois, sur le modèle où il a vraiment tourné (au bon prix chez Codex) ; celui d’un sous-agent de Copilot que le plugin avait perdu de vue n’est plus oublié.

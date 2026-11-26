@@ -1236,6 +1236,15 @@ pub struct Project {
     /// (`git.auto_fetch`, `git.fetch_every`, `git.fetch_timeout`).
     #[serde(default)]
     pub git_fetch: ProjectFetch,
+    /// « Page à soi » (AP-7, ESC-677): the `.html` this machine chose for `show_page(template:
+    /// "custom")`, absolute or relative to the project's folder; empty: none. Of this machine, never
+    /// in `.escouade.yml`, and ahead of what the file proposes (`file_custom_page`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub custom_page: String,
+    /// `pages.custom` of its `.escouade.yml` (AP-7): a page relative to the repository, set only once
+    /// the user trusted the file (it counts with its commands), never by the window.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub file_custom_page: String,
     /// Its agent folders (`folders`): groups of agents in the sidebar, with a principal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agent_folders: Vec<AgentFolder>,

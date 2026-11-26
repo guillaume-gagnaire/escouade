@@ -213,6 +213,14 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 
 - `enabled`: `false` stands for “No workflow for this project” (Settings › Projects › Kanban › Workflow): Escouade neither reads nor writes the project’s [workflows](workflows) and follows no agent in them, on every machine that reads the file; `.escouade/workflows/` is left as it is.
 
+### pages
+
+| Key | Type | Values | Missing | Example |
+|---|---|---|---|---|
+| `pages.custom` | Relative path | An `.html` document of the repository | no page of one’s own proposed | `custom: design/my-review.html` |
+
+- `custom`: the page of one’s own the repository proposes to the agents (`show_page` with the `custom` template). It is served in the same shelter as their pages, without network, and receives their data in `window.escouade`. It waits for your trust, with the file’s commands: before that, nothing of it applies. It never leaves the repository: a full path, or one that goes up out of it (`../`), is refused; a link that leads outside is not followed. A page of your own set on your machine (Settings › Projects › Launch, Agents’ pages group) comes first.
+
 ### plugins
 
 | Key | Type | Values | Missing | Example |

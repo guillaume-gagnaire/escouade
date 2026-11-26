@@ -119,6 +119,7 @@ const PROJECT_KEYS: Record<Exclude<keyof ProjectDraft, 'board'>, true> = {
   worktreeTeardown: true,
   commitMode: true,
   pagesOpen: true,
+  customPage: true,
   account: true,
   worktreeDir: true,
   agentBranchPrefix: true,

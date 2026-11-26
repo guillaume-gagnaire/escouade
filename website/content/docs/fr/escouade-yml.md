@@ -213,6 +213,14 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 
 - `enabled` : `false` vaut « Pas de workflow pour ce projet » (Réglages › Projets › Kanban › Workflow) : Escouade ne lit ni n’écrit les [workflows](workflows) du projet et n’y suit aucun agent, sur chaque machine qui lit le fichier ; `.escouade/workflows/` reste tel quel.
 
+### pages
+
+| Clé | Type | Valeurs | Absente | Exemple |
+|---|---|---|---|---|
+| `pages.custom` | Chemin relatif | Un document `.html` du dépôt | aucune page à soi proposée | `custom: design/ma-revue.html` |
+
+- `custom` : la page à soi que le dépôt propose aux agents (`show_page` avec le modèle `custom`). Elle est servie dans la même cloison que leurs pages, sans réseau, et reçoit leurs données dans `window.escouade`. Elle attend ton accord, avec les commandes du fichier : avant, rien d’elle ne s’applique. Elle ne sort jamais du dépôt : un chemin complet, ou qui remonte au-dessus du dépôt (`../`), est refusé ; un lien qui mène dehors n’est pas suivi. Une page à soi réglée sur ta machine (Réglages › Projets › Lancement, groupe Pages des agents) passe devant.
+
 ### plugins
 
 | Clé | Type | Valeurs | Absente | Exemple |

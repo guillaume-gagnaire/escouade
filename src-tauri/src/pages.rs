@@ -126,6 +126,151 @@ pub(crate) fn bracket(bytes: u64) -> &'static str {
     }
 }
 
+// ---------- the page of one's own (AP-7) ----------
+
+/// Where the page of one's own of a project comes from (`show_page(template: "custom")`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CustomPage {
+    /// Chosen on this machine (« Page à soi » of Réglages › Projets › Lancement): ahead of the file.
+    Machine(PathBuf),
+    /// Proposed by `pages.custom` of `.escouade.yml`, trusted: the document, and the repository it
+    /// never leaves.
+    Repo { file: PathBuf, root: PathBuf },
+    /// Proposed by the file, waiting for the user's trust.
+    Waiting,
+    /// None.
+    None,
+}
+
+/// « Page à soi » as the window saves it: trimmed, an `.html` document or none.
+pub(crate) fn checked_custom_page(lang: Lang, raw: &str) -> Result<String, String> {
+    let page = raw.trim();
+    if page.is_empty() {
+        return Ok(String::new());
+    }
+    let html = Path::new(page)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm"));
+    if !html {
+        return Err(tr_in!(
+            lang,
+            "La page à soi est un document .html.",
+            "A page of one's own is an .html document."
+        ));
+    }
+    Ok(page.to_string())
+}
+
+/// The page of one's own of project `p`: **the machine's first**, then the file's once trusted (its
+/// last trusted value stays while a new one waits), never one that leaves the repository.
+pub(crate) fn custom_page_of(p: &crate::model::Project) -> CustomPage {
+    let root = PathBuf::from(&p.path);
+    let mine = p.custom_page.trim();
+    if !mine.is_empty() {
+        let path = Path::new(mine);
+        return CustomPage::Machine(if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            root.join(path)
+        });
+    }
+    let file = p.file_custom_page.trim();
+    if !file.is_empty() && crate::projectfile::repo_page_problem(file).is_none() {
+        return CustomPage::Repo {
+            file: root.join(file.replace('/', std::path::MAIN_SEPARATOR_STR)),
+            root,
+        };
+    }
+    let waiting = p
+        .shared
+        .file
+        .as_ref()
+        .and_then(|f| f.pending.as_ref())
+        .is_some_and(|x| {
+            x.commands
+                .get(crate::projectfile::CUSTOM_PAGE)
+                .and_then(|v| v.as_str())
+                .is_some_and(|v| !v.trim().is_empty())
+        });
+    if waiting {
+        CustomPage::Waiting
+    } else {
+        CustomPage::None
+    }
+}
+
+/// The refusal of `custom` without a page of one's own, saying what to take instead.
+pub(crate) fn no_custom_page(lang: Lang, waiting: bool) -> String {
+    if waiting {
+        tr_in!(
+            lang,
+            "La page à soi que propose .escouade.yml (pages.custom) attend l’accord de l’utilisateur (Réglages › Projets › Équipe) : prends review, diagram, compare ou html.",
+            "The page of one's own .escouade.yml proposes (pages.custom) waits for the user's trust (Settings › Projects › Team): take review, diagram, compare or html."
+        )
+    } else {
+        tr_in!(
+            lang,
+            "L’utilisateur n’a pas réglé de page à soi pour ce projet : prends review, diagram, compare ou html.",
+            "The user has set no page of their own for this project: take review, diagram, compare or html."
+        )
+    }
+}
+
+/// The bundle of the page of one's own `page`: its document and the files it names, from its own
+/// folder alone; the file's never out of the repository (its path checked on the file opened, links
+/// followed). Why it failed is not said: a path of the machine is no business of the agent's.
+pub(crate) fn from_custom(
+    lang: Lang,
+    page: &CustomPage,
+    open: Opener<'_>,
+) -> Result<Bundle, String> {
+    let gone = || {
+        tr_in!(
+            lang,
+            "La page à soi de ce projet est introuvable, n’est pas un document .html ou sort du dépôt : l’utilisateur doit la régler à nouveau (Réglages › Projets › Lancement).",
+            "This project's page of one's own is not there, is not an .html document or leaves the repository: the user must set it again (Settings › Projects › Launch)."
+        )
+    };
+    match page {
+        CustomPage::Machine(file) => {
+            let home = file.parent().ok_or_else(gone)?;
+            from_file(lang, file, home, open).map_err(|_| gone())
+        }
+        CustomPage::Repo { file, root } => from_file(lang, file, root, open).map_err(|_| gone()),
+        CustomPage::Waiting => Err(no_custom_page(lang, true)),
+        CustomPage::None => Err(no_custom_page(lang, false)),
+    }
+}
+
+/// `escouade` (what `window.escouade` holds), completed by the page's number and version, written
+/// into the document of `b` before any script of its own: read-only (`Object.freeze`, all the way
+/// down, on a property that can be neither written nor redefined), and as a literal no text of it
+/// can close (`<`, `>`, `&`, U+2028 and U+2029 escaped).
+pub(crate) fn with_escouade(b: &mut Bundle, mut escouade: serde_json::Value, page: &str, n: u32) {
+    escouade["page"] = serde_json::json!(page);
+    escouade["version"] = serde_json::json!(n);
+    let literal = escouade
+        .to_string()
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029");
+    let script = format!(
+        "<script>(()=>{{const f=o=>{{if(o&&typeof o===\"object\"){{for(const k of Object.keys(o))f(o[k]);Object.freeze(o)}}return o}};Object.defineProperty(window,\"escouade\",{{value:f({literal}),writable:false,configurable:false,enumerable:true}})}})()</script>"
+    );
+    let Some((_, doc)) = b.files.iter_mut().find(|(r, _)| r == "index.html") else {
+        return;
+    };
+    let html = String::from_utf8_lossy(doc).into_owned();
+    let at = crate::agentpage::doctype_end(&html);
+    let mut out = String::with_capacity(html.len() + script.len());
+    out.push_str(&html[..at]);
+    out.push_str(&script);
+    out.push_str(&html[at..]);
+    *doc = out.into_bytes();
+}
+
 // ---------- the copy ----------
 
 /// What a version is made of: its files by their relative path (`index.html`, the document, first), and
@@ -567,6 +712,9 @@ pub(crate) struct Show {
     /// A page of the agent's, for a new version of it.
     pub page: Option<String>,
     pub bundle: Bundle,
+    /// For the page of one's own (`custom`, AP-7): what `window.escouade` holds but its page and
+    /// version, which `page_show` adds once it knows them (`with_escouade`).
+    pub escouade: Option<serde_json::Value>,
 }
 
 /// What `show_page` answers.
@@ -631,8 +779,14 @@ impl<R: Runtime> Core<R> {
         }
         let root = self.data.root().to_path_buf();
         let now = now_ms();
-        let incoming = show.bundle.bytes();
-        let (id, n, project, dropped, evicted) = {
+        let mut show = show;
+        // `window.escouade` is written into the document once its number is known: its room is held.
+        let extra = show
+            .escouade
+            .as_ref()
+            .map_or(0, |e| e.to_string().len() as u64 + 512);
+        let incoming = show.bundle.bytes() + extra;
+        let (id, n, project, dropped, evicted, incoming) = {
             let mut b = self.pages.lock();
             let at = match &show.page {
                 Some(asked) => {
@@ -703,6 +857,10 @@ impl<R: Runtime> Core<R> {
                     (format!("p-{}", b.seq), 1, who.project_id.clone())
                 }
             };
+            if let Some(e) = show.escouade.take() {
+                with_escouade(&mut show.bundle, e, &id, n);
+            }
+            let incoming = show.bundle.bytes();
             let dir = version_dir(&root, &project, &id, n);
             write_version(&dir, &show.bundle).map_err(|e| {
                 tr_in!(
@@ -745,7 +903,7 @@ impl<R: Runtime> Core<R> {
                 }),
             }
             b.rows.entry(id.clone()).or_insert(Placement::Hidden);
-            (id, n, project, dropped, evicted)
+            (id, n, project, dropped, evicted, incoming)
         };
         for dir in dropped {
             let _ = std::fs::remove_dir_all(dir);

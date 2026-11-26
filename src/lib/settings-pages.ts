@@ -284,6 +284,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   // Lancement.
   row('pagesOpen', 'launch', 'settings.project.pagesOpen', { project: ['pagesOpen'] }),
   row('runCommands', 'launch', 'settings.project.launch', { project: ['runCommands'] }),
+  row('customPage', 'launch', 'settings.project.customPage', { project: ['customPage'] }),
 
   // Kanban › Validation, Avant et après, Pilote auto, Agents des tickets, Workflow.
   row('action', 'board', 'boardSettings.tab.actionsTitle', { board: ['action'] }),

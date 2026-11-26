@@ -160,7 +160,7 @@ pub fn harden_html(html: &str, page: &str, windows: bool, meta: bool) -> String 
 }
 
 /// Where the doctype ends (after a BOM and blanks), or 0 without one.
-fn doctype_end(html: &str) -> usize {
+pub(crate) fn doctype_end(html: &str) -> usize {
     let start = html.len()
         - html
             .trim_start_matches(['\u{feff}', ' ', '\t', '\r', '\n'])

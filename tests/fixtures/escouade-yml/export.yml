@@ -44,3 +44,5 @@ board:
   mode: plan
 workflows:
   enabled: false
+pages:
+  custom: design/revue.html

@@ -60,6 +60,9 @@ pub enum Kind {
     /// A whole number, 0 (the general setting's) or from `.1` to `.2`: one out of them is brought
     /// back to its bound, and the file is told so (ESC-561).
     Range(u32, u32),
+    /// A page of the repository (`pages.custom`, AP-7): an `.html` document by its path relative to
+    /// it, which never leaves it (no absolute path, no `..`).
+    Page,
 }
 
 /// A setting of the file.
@@ -139,6 +142,8 @@ const BYPASS: &str = "bypassPermissions";
 /// « Projet privé »: the file may turn it on, never off.
 pub const PRIVATE: &str = "private";
 const MODE: &str = "board.mode";
+/// « Page à soi » the repository proposes (AP-7).
+pub const CUSTOM_PAGE: &str = "pages.custom";
 /// « Pas de workflow pour ce projet » (ESC-309) when false.
 pub const WORKFLOWS: &str = "workflows.enabled";
 
@@ -289,6 +294,11 @@ pub const KEYS: &[Key] = &[
         WORKFLOWS,
         Kind::Bool,
         "The project has workflows (true when absent). false: « Pas de workflow pour ce projet », Escouade neither reads nor writes its workflows (.escouade/workflows/ left as it is) and follows its agents in none.",
+    ),
+    command(
+        CUSTOM_PAGE,
+        Kind::Page,
+        "« Page à soi »: the project's own page for show_page(template: \"custom\"), an .html document by its path relative to the repository (never out of it). Needs the user's approval, with the commands; a page chosen on a machine comes first there.",
     ),
     file_key(
         RECOMMENDED,
@@ -728,6 +738,37 @@ fn is_absolute(p: &str) -> bool {
         || (p.len() >= 2 && p.as_bytes()[1] == b':')
 }
 
+/// What is wrong with `page` as a page of the repository (`pages.custom`): none for an empty one (no
+/// page) or an `.html` document by its path relative to the repository, that never goes up out of it.
+pub fn repo_page_problem(page: &str) -> Option<String> {
+    let page = page.trim();
+    if page.is_empty() {
+        return None;
+    }
+    if is_absolute(page) || page.contains(':') {
+        return Some(tr!(
+            "« {page} » : le chemin doit être relatif au dépôt",
+            "“{page}”: the path must be relative to the repository"
+        ));
+    }
+    if page.split(['/', '\\']).any(|c| c == "..") {
+        return Some(tr!(
+            "« {page} » sort du dépôt : une page à soi y reste",
+            "“{page}” leaves the repository: a page of one's own stays in it"
+        ));
+    }
+    let html = std::path::Path::new(page)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm"));
+    if !html {
+        return Some(tr!(
+            "« {page} » : une page à soi est un document .html",
+            "“{page}”: a page of one's own is an .html document"
+        ));
+    }
+    None
+}
+
 fn rel_dir(node: &Node) -> Result<String, Invalid> {
     let dir = text_of(node)?;
     if is_absolute(&dir) {
@@ -946,6 +987,10 @@ fn value_of(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, 
             Ok(json!(ids))
         }
         Kind::Dir => rel_dir(node).map(Value::String),
+        Kind::Page => {
+            let page = text_of(node)?;
+            repo_page_problem(&page).map_or(Ok(Value::String(page)), |why| Err((node.line, why)))
+        }
         Kind::Range(min, max) => {
             let n = text_of(node)?.parse::<u64>().map_err(|_| {
                 (
@@ -1062,6 +1107,7 @@ pub fn get(p: &Project, key: &str) -> Value {
         "board.effort" => json!(b.effort),
         MODE => json!(b.mode),
         WORKFLOWS => json!(p.workflows_enabled),
+        CUSTOM_PAGE => json!(p.file_custom_page),
         _ => Value::Null,
     }
 }
@@ -1164,6 +1210,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
         "board.effort" => b.effort = str_of(v),
         MODE => b.mode = str_of(v),
         WORKFLOWS => p.workflows_enabled = flag,
+        CUSTOM_PAGE => p.file_custom_page = str_of(v),
         _ => {}
     }
 }
@@ -1508,9 +1555,11 @@ pub fn write_plugin(existing: Option<&str>, id: &str, key: &str, v: &Value) -> R
 }
 
 /// Whether the project's value of a key goes into the file: not an empty target branch (set by the
-/// first ticket), nor `bypassPermissions` (`MODES`).
+/// first ticket), nor `bypassPermissions` (`MODES`), nor an empty page of one's own.
 fn writable(k: &str, v: &Value) -> bool {
-    !(k == "board.target_branch" && v.as_str() == Some("")) && !(k == MODE && v == &json!(BYPASS))
+    !(k == "board.target_branch" && v.as_str() == Some(""))
+        && !(k == MODE && v == &json!(BYPASS))
+        && !(k == CUSTOM_PAGE && v.as_str() == Some(""))
 }
 
 /// Every key, as the project has them: what « Exporter vers .escouade.yml » writes (but what is not
@@ -1564,6 +1613,7 @@ fn schema_of(k: &Key) -> Value {
     let mut s = match k.kind {
         Kind::Bool => json!({ "type": "boolean" }),
         Kind::Text | Kind::Dir | Kind::Prefix => json!({ "type": "string" }),
+        Kind::Page => json!({ "type": "string", "pattern": "\\.[Hh][Tt][Mm][Ll]?$" }),
         Kind::Enum(values) => json!({ "type": "string", "enum": values }),
         Kind::Range(min, max) => json!({
             "oneOf": [

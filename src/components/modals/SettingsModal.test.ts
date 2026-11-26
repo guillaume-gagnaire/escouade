@@ -1893,7 +1893,7 @@ describe('SettingsModal in English', () => {
     expect(screen.getByRole('group', { name: 'Teardown command 1' })).toBeInTheDocument();
 
     await userEvent.click(tab('Launch'));
-    expect(h2()).toEqual(['Launch']);
+    expect(h2()).toEqual(['Launch', 'Agents’ pages']);
     const launch = group('Launch');
     expect(launch.getByText('Command 1', { selector: 'legend' })).toBeInTheDocument();
     expect(launch.getByLabelText(/^Subfolder/)).toHaveValue('web');
