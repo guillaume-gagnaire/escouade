@@ -4,18 +4,17 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.13] — 2026-11-26
 
+- La sensibilité du micro de la conversation vocale se règle dans Réglages › Voix, avec un testeur qui montre en direct le niveau de ta voix, le seuil et quand ta voix est détectée.
 - Les agents lisent les navigateurs de leur projet : ils les listent, lisent le HTML ou le texte d’une page à l’écran, mots de passe et jetons masqués, la capturent en image (la vue, un élément ou toute la page, en largeur tablette ou mobile) et lisent sa console avec ses requêtes en échec, pour voir ce que tu vois et ce qui casse. La page de leur lancement se lit et se capture sans demander ; une autre origine (un artefact, un site où tu es connecté) attend ton accord dans la bande du navigateur, que tu retires par « Retirer les accords ». L’interrupteur « Agents et navigateurs » de Réglages › Agents les coupe.
 - Le Workspace, une toile de tous tes agents, ouverte depuis le bouton « Éditeur » ou la Vue d’ensemble : chacun avec son plan, ses skills et ses plugins, ses sous-agents, ses tests et ce qu’il a livré (artefacts, CI, déploiements). Tu y réponds à une question et y écris à un agent sans ouvrir sa conversation. Merci à @OshOEz (#45).
-- Les agents lisent les navigateurs de leur projet : ils les listent, lisent le HTML ou le texte d’une page à l’écran, mots de passe et jetons masqués, et sa console avec ses requêtes en échec, pour voir ce que tu vois et ce qui casse. La page de leur lancement se lit sans demander ; une autre origine (un artefact, un site où tu es connecté) attend ton accord dans la bande du navigateur, que tu retires par « Retirer les accords ». L’interrupteur « Agents et navigateurs » de Réglages › Agents les coupe.
 
 ## [2.2.12] — 2026-11-26
 
 - Les voix de la conversation se téléchargent de nouveau : elles sont prises à une version fixée de leur dépôt, que ses mises à jour ne cassent plus (une voix réentraînée en amont faisait échouer son téléchargement). Les modèles de la dictée et de la recherche par le sens sont fixés de même.
 - Quand un fichier publié ne correspond plus à celui qu’attend Escouade, le message le dit en clair et dit que c’est à Escouade de se mettre à jour, au lieu de « 6369 bytes and more, 4875 expected ».
 - Pendant la dictée, la bande dit qu’on reclique sur le micro (ou le raccourci) pour écrire ce qu’on a dit.
-- La sensibilité du micro de la conversation vocale se règle dans Réglages › Voix, avec un testeur qui montre en direct le niveau de ta voix, le seuil et quand ta voix est détectée.
 
 ## [2.2.11] — 2026-11-25
 
