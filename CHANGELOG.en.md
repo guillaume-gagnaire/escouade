@@ -4,17 +4,17 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.14] — 2026-11-27
 
+- An agent opens a real tab next to its conversation to show you its work: the project’s launch, an address, or the Claude artifact it just published. It opens only while you look at its conversation; otherwise its row in “Browsers” waits for you. An address outside the project is asked once in its conversation; Escouade’s own addresses and your machine’s other ports never open.
 - Agents can show you a page: a review, a diagram, options to compare or their own HTML, copied apart and served without network or access to Escouade or your files; a new version updates the page. The “Agents’ pages” switch in Settings › Agents turns them off, erasing nothing.
 - Your own page for the agents: an HTML document chosen in Settings › Projects › Launch, or proposed by the repository in `.escouade.yml` (once you trust it), that your agents fill with their data. Your machine’s comes before the repository’s.
 - Your project’s workflows move to the Workspace: each agent’s card says its step (and in red why it was sent back), and a click opens the workflow’s diagram with its path; “Workflows”, at the top right of the canvas, lists the project’s workflows and their agents. The right-hand panel keeps three tabs.
 - The commands an agent ran, kept for the Workspace, no longer keep any password, token or key in the clear: they are masked before being saved.
 - Stats: what a subagent of Copilot CLI, Codex or OpenCode spends counts only once, on the model it really ran on (at the right price for Codex); that of a Copilot subagent its plugin had lost sight of is no longer forgotten.
+- On macOS, the console of a browser the agents read now also keeps the page’s errors and its failed requests; on Linux, it also keeps what comes after the page has loaded.
 - On Windows, your data files (the state, the settings) are no longer lost when two writes cross; and on a loaded machine, a plugin is no longer stopped during a big build beside it, and an agent of the Claude Code view that finished its turn no longer stays shown at work.
 - On a busy machine, the “New project” assistant no longer says “The repository has no commit” of a repository that has some: it reads the folder faster, says “Reading the repository…” while it does, and if git fails it shows its error with “Try again” instead of offering a first commit.
-- On macOS, the console of a browser the agents read now also keeps the page’s errors and its failed requests; on Linux, it also keeps what comes after the page has loaded.
-- An agent opens a real tab next to its conversation to show you its work: the project’s launch, an address, or the Claude artifact it just published. It opens only while you look at its conversation; otherwise its row in “Browsers” waits for you. An address outside the project is asked once in its conversation; Escouade’s own addresses and your machine’s other ports never open.
 
 ## [2.2.13] — 2026-11-26
 
