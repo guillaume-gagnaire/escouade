@@ -68,7 +68,7 @@ Les tests d’Escouade cherchent les identifiants dans le journal et les métriq
 - **Le chiffrement** : MLS (RFC 9420) par openmls, en suite `MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519`. Les clés du contenu sont dérivées du groupe à chaque époque, puis par projet et par objet ; le contenu est chiffré en XChaCha20-Poly1305 et signé en Ed25519. Rien n’est inventé en cryptographie : des primitives standard, en Rust (RustCrypto).
 - **L’historique se lit** : un nouvel appareil remonte les époques passées par une chaîne de liens. C’est voulu, car un Kanban et une spec durent ; l’envers est qu’un appareil compromis livre tout l’historique qu’il peut lire.
 - **L’invitation** : le lien porte un secret après le `#`, que ni les navigateurs ni HTTP n’envoient au serveur. Le serveur ne garde que l’empreinte d’un jeton dérivé de ce secret, et ne le laisse servir qu’une fois ; il expire (72 h par défaut). L’invité vérifie les six mots de l’empreinte de l’équipe avec qui l’invite, et un administrateur en ligne le fait entrer. Le serveur ne peut ni substituer sa clé à celle de l’invité, ni lui montrer une fausse équipe.
-- **Un autre appareil du même membre** entre par un QR code (un lien valable une heure) ou par un code court de 8 caractères, échangé par SPAKE2 : un seul essai, 10 minutes, et rien que le serveur puisse essayer hors ligne.
+- **Un autre appareil du même membre** entre par un QR code (un lien valable une heure) ou par un code court de 10 caractères, échangé par SPAKE2 : un seul essai, 10 minutes, et rien que le serveur puisse essayer hors ligne.
 
 ### La clé de secours et la clé de séquestre
 

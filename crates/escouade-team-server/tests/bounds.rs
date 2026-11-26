@@ -29,7 +29,120 @@ both!(
     the_live_connection_takes_small_frames_only,
     the_pairing_relay_bounds_what_it_carries,
     a_revoked_device_does_nothing_more,
+    a_device_asking_challenges_without_end_stops_no_other,
+    the_pairing_relay_is_bounded_by_address,
 );
+
+/// SR2-06: a device that asks for challenges without end holds two of them, its newest: its own team's other devices
+/// and the other teams sign in as before. (The bounds by team and on the whole server: `auth.rs`.)
+async fn a_device_asking_challenges_without_end_stops_no_other(b: Backend) {
+    let s = TestServer::start(&b).await;
+    let alice = s.new_team().await;
+    let mut bob = s.add_device(&alice).await;
+    let mut carol = s.new_team().await;
+    let first = alice.challenge().await.ok();
+    let mut last = None;
+    for _ in 0..3000 {
+        last = Some(alice.challenge().await.ok());
+    }
+    // Its first is gone, its last serves.
+    let (status, _) = alice
+        .session(&first.challenge, alice.sign(&first.challenge))
+        .await
+        .refused();
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let last = last.unwrap();
+    let _: TokenResponse = alice
+        .session(&last.challenge, alice.sign(&last.challenge))
+        .await
+        .ok();
+    bob.sign_in().await.expect("its teammate signs in");
+    carol.sign_in().await.expect("another team signs in");
+    s.finish().await;
+}
+
+/// SR2-05: the steps of the pairing relay without a session (a slot's message, its try) have their own rate by address,
+/// an IPv6 address counted by its /64; the answer goes only with the token of the try.
+async fn the_pairing_relay_is_bounded_by_address(b: Backend) {
+    let s = TestServer::start_with(&b, |c| {
+        c.trust_proxy = true;
+        c.rates.pairing.burst = 3.0;
+        c.rates.pairing.per_second = 0.001;
+    })
+    .await;
+    let alice = s.new_team().await;
+    let opened: PairOpened = alice
+        .client
+        .post(
+            "/v1/pair",
+            &PairOpen {
+                message: vec![1; 33],
+            },
+        )
+        .await
+        .ok();
+    assert_eq!(opened.slot.len(), 5);
+    let stranger = |from: &'static str, path: String| {
+        let client = s.client();
+        async move {
+            client
+                .request(Method::GET, &path)
+                .header("x-forwarded-for", from)
+                .send()
+                .await
+                .unwrap()
+                .status()
+        }
+    };
+    // Three looks from one /64, then it waits; changing address within it changes nothing.
+    for n in 0..3 {
+        let status = stranger("2001:db8:1:2::1", format!("/v1/pair/{:05}", n)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+    let status = stranger("2001:db8:1:2:ffff::9", format!("/v1/pair/{}", opened.slot)).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    // Its try waits too.
+    let tried = s
+        .client()
+        .request(Method::POST, &format!("/v1/pair/{}/try", opened.slot))
+        .header("x-forwarded-for", "2001:db8:1:2::7")
+        .header("content-type", "application/cbor")
+        .body(escouade_team_server::transport::cbor::encode(&PairTry {
+            message: vec![2; 33],
+            confirm: vec![3; 32],
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(tried.status(), StatusCode::TOO_MANY_REQUESTS);
+    // Another address finds the slot (it has the code), tries, and takes the answer with its token only.
+    let status = stranger("203.0.113.7", format!("/v1/pair/{}", opened.slot)).await;
+    assert_eq!(status, StatusCode::OK);
+    let tried: PairTried = s
+        .client()
+        .post(
+            &format!("/v1/pair/{}/try", opened.slot),
+            &PairTry {
+                message: vec![2; 33],
+                confirm: vec![3; 32],
+            },
+        )
+        .await
+        .ok();
+    assert_eq!(tried.token.len(), 32, "128 bits");
+    let (status, _) = s
+        .client()
+        .post::<_, PairAnswer>(
+            &format!("/v1/pair/{}/take", opened.slot),
+            &PairTake {
+                token: hex::encode(random::<16>()),
+            },
+        )
+        .await
+        .refused();
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    s.finish().await;
+}
 
 async fn the_devices_and_the_projects_of_a_team_are_bounded(b: Backend) {
     let s = TestServer::start_with(&b, |c| {
@@ -439,6 +552,163 @@ async fn the_head_of_a_request_is_bounded_in_size_and_in_time() {
         started.elapsed() >= Duration::from_secs(14),
         "closed after {:?}",
         started.elapsed()
+    );
+    s.finish().await;
+}
+
+/// Reads until the server answers or closes: the status line of its answer, or None when it closed without one. Waits
+/// `within` at most.
+async fn answer_or_close(tcp: &mut tokio::net::TcpStream, within: Duration) -> Option<String> {
+    use tokio::io::AsyncReadExt;
+    let mut buf = vec![0u8; 512];
+    let n = tokio::time::timeout(within, tcp.read(&mut buf))
+        .await
+        .expect("an answer or a close in time")
+        .unwrap_or(0);
+    (n > 0).then(|| {
+        String::from_utf8_lossy(&buf[..n])
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .to_string()
+    })
+}
+
+/// SR2-07: a body that trickles in is cut at its time (`body_timeout`, plus its length at `body_min_rate`), on a route
+/// without a session; the connection closes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_trickled_body_is_cut_at_its_time() {
+    use tokio::io::AsyncWriteExt;
+    let s = TestServer::start_with(&Backend::Sqlite, |c| {
+        c.limits.body_timeout = Duration::from_secs(2);
+        c.limits.body_min_rate = 1 << 30;
+    })
+    .await;
+    let mut tcp = tokio::net::TcpStream::connect(s.addr).await.unwrap();
+    tcp.write_all(
+        b"POST /v1/enroll HTTP/1.1\r\nHost: x\r\nX-Escouade-Protocol: 1\r\nContent-Type: application/cbor\r\nContent-Length: 60000\r\n\r\n",
+    )
+    .await
+    .unwrap();
+    let started = std::time::Instant::now();
+    let trickle = tokio::spawn(async move {
+        for _ in 0..40 {
+            if tcp.write_all(b"\0").await.is_err() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        tcp
+    });
+    let mut tcp = trickle.await.unwrap();
+    let line = answer_or_close(&mut tcp, Duration::from_secs(5)).await;
+    let elapsed = started.elapsed();
+    assert!(
+        line.as_deref().is_none_or(|l| l.contains("408")),
+        "{line:?}"
+    );
+    assert!(elapsed < Duration::from_secs(12), "cut after {elapsed:?}");
+    s.finish().await;
+}
+
+/// SR2-07: a connection where nothing passes is closed at its idle time, after an answer as before a first request.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_silent_connection_is_closed_at_its_idle_time() {
+    use tokio::io::AsyncWriteExt;
+    let s = TestServer::start_with(&Backend::Sqlite, |c| {
+        c.limits.idle_timeout = Duration::from_secs(2)
+    })
+    .await;
+    let mut tcp = tokio::net::TcpStream::connect(s.addr).await.unwrap();
+    tcp.write_all(b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+        .await
+        .unwrap();
+    let line = answer_or_close(&mut tcp, Duration::from_secs(5)).await;
+    assert!(
+        line.as_deref().is_some_and(|l| l.contains("200")),
+        "{line:?}"
+    );
+    // Kept alive, then silent: closed within its idle time, well before the 15 s of a head.
+    let started = std::time::Instant::now();
+    assert_eq!(
+        answer_or_close(&mut tcp, Duration::from_secs(10)).await,
+        None
+    );
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed >= Duration::from_millis(1500) && elapsed < Duration::from_secs(6),
+        "closed after {elapsed:?}"
+    );
+    s.finish().await;
+}
+
+/// SR2-07: so many connections open from one address, and in all; past it, a new one is closed at once, and counted.
+/// One that ends gives its place back. Behind a trusted proxy, only the bound in all holds.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_connections_are_bounded_by_address_and_in_all() {
+    use std::sync::atomic::Ordering;
+    use tokio::io::AsyncWriteExt;
+    let open = |addr| async move { tokio::net::TcpStream::connect(addr).await.unwrap() };
+    let healthy = |mut tcp: tokio::net::TcpStream| async move {
+        tcp.write_all(b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+            .await
+            .unwrap();
+        answer_or_close(&mut tcp, Duration::from_secs(5)).await
+    };
+    // By address.
+    let s = TestServer::start_with(&Backend::Sqlite, |c| {
+        c.limits.max_connections_per_address = 3
+    })
+    .await;
+    let mut held = Vec::new();
+    for _ in 0..3 {
+        held.push(open(s.addr).await);
+    }
+    let mut fourth = open(s.addr).await;
+    assert_eq!(
+        answer_or_close(&mut fourth, Duration::from_secs(5)).await,
+        None
+    );
+    assert_eq!(
+        s.server
+            .app()
+            .metrics
+            .connections_refused
+            .load(Ordering::Relaxed),
+        1
+    );
+    // One ends: its place serves again.
+    drop(held.pop());
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let line = healthy(open(s.addr).await).await;
+    assert!(
+        line.as_deref().is_some_and(|l| l.contains("200")),
+        "{line:?}"
+    );
+    s.finish().await;
+
+    // In all, behind a proxy: the bound by address does not hold, the one in all does.
+    let s = TestServer::start_with(&Backend::Sqlite, |c| {
+        c.trust_proxy = true;
+        c.limits.max_connections_per_address = 1;
+        c.limits.max_connections = 3;
+    })
+    .await;
+    let mut held = Vec::new();
+    for _ in 0..2 {
+        held.push(open(s.addr).await);
+    }
+    let line = healthy(open(s.addr).await).await;
+    assert!(
+        line.as_deref().is_some_and(|l| l.contains("200")),
+        "{line:?}"
+    );
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    held.push(open(s.addr).await);
+    let mut over = open(s.addr).await;
+    assert_eq!(
+        answer_or_close(&mut over, Duration::from_secs(5)).await,
+        None
     );
     s.finish().await;
 }

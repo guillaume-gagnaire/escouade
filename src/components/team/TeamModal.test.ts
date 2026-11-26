@@ -382,8 +382,8 @@ describe('the screens of the team server (TS-3)', () => {
     const backend = fakeBackend({
       team_list: () => [team()],
       team_own_device: () => INVITE,
-      team_pair_start: () => ({ code: 'K7Q4-M2XZ', server: 'team.acme.fr', expiresAt: 1_900_000_000, state: 'waiting' }),
-      team_pair_step: () => ({ code: 'K7Q4-M2XZ', server: 'team.acme.fr', expiresAt: 1_900_000_000, state }),
+      team_pair_start: () => ({ code: 'K7Q4M-2XZ8P', server: 'team.acme.fr', expiresAt: 1_900_000_000, state: 'waiting' }),
+      team_pair_step: () => ({ code: 'K7Q4M-2XZ8P', server: 'team.acme.fr', expiresAt: 1_900_000_000, state }),
       team_pair_cancel: () => null,
     });
     render(TeamModal, { props: { step: 'device', teamId: team().id } });
@@ -392,7 +392,7 @@ describe('the screens of the team server (TS-3)', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await user.click(screen.getByRole('tab', { name: 'Code court' }));
     await user.click(screen.getByRole('button', { name: 'Afficher un code' }));
-    expect(await screen.findByTestId('pair-code')).toHaveTextContent('K7Q4-M2XZ');
+    expect(await screen.findByTestId('pair-code')).toHaveTextContent('K7Q4M-2XZ8P');
     expect(screen.getByText('Serveur : team.acme.fr')).toBeInTheDocument();
     expect(screen.getByText('Un code n’a qu’un essai, et 10 minutes.')).toBeInTheDocument();
     await vi.advanceTimersByTimeAsync(1100);
@@ -412,12 +412,12 @@ describe('the screens of the team server (TS-3)', () => {
     render(TeamModal, { props: { step: 'pairJoin' } });
     const submit = screen.getByRole('button', { name: 'Ajouter cet appareil' });
     await userEvent.type(screen.getByLabelText('Adresse du serveur'), 'team.acme.fr');
-    await userEvent.type(screen.getByLabelText('Code de 8 caractères'), 'k7q4m2x');
+    await userEvent.type(screen.getByLabelText('Code de 10 caractères'), 'k7q4m2xz8');
     expect(submit).toBeDisabled();
-    await userEvent.type(screen.getByLabelText('Code de 8 caractères'), 'z');
-    expect(screen.getByLabelText('Code de 8 caractères')).toHaveValue('K7Q4-M2XZ');
+    await userEvent.type(screen.getByLabelText('Code de 10 caractères'), 'p');
+    expect(screen.getByLabelText('Code de 10 caractères')).toHaveValue('K7Q4M-2XZ8P');
     await userEvent.click(submit);
-    expect(backend.called('team_pair_join')[0].args).toEqual({ server: 'team.acme.fr', code: 'K7Q4-M2XZ', name: '' });
+    expect(backend.called('team_pair_join')[0].args).toEqual({ server: 'team.acme.fr', code: 'K7Q4M-2XZ8P', name: '' });
   });
 
   it('recovers a team by its 24 words, its six words and the operator’s token, then shows the new key', async () => {

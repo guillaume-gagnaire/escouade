@@ -41,6 +41,8 @@ impl TestServer {
         config.rates.per_address.per_second = 100_000.0;
         config.rates.per_device.burst = 100_000.0;
         config.rates.per_device.per_second = 100_000.0;
+        config.rates.pairing.burst = 100_000.0;
+        config.rates.pairing.per_second = 100_000.0;
         change(&mut config);
         let server = Arc::new(Server::open(config).await.expect("the server opens"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

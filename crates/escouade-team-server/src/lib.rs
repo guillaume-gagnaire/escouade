@@ -52,6 +52,8 @@ pub struct App {
     pub metrics: Metrics,
     pub address_rate: Limiter<IpAddr>,
     pub device_rate: Limiter<Id>,
+    /// The pairing relay's steps without a session, by address (SR2-05).
+    pub pair_rate: Limiter<IpAddr>,
     pub trust_proxy: bool,
 }
 
@@ -91,6 +93,7 @@ impl Server {
             metrics: Metrics::default(),
             address_rate: Limiter::new(config.rates.per_address),
             device_rate: Limiter::new(config.rates.per_device),
+            pair_rate: Limiter::new(config.rates.pairing),
             trust_proxy: config.trust_proxy,
         });
         Ok(Server { app })
@@ -150,18 +153,28 @@ impl Server {
             .route("/v1/devices/{device}/revoke", post(api::revoke))
             .route("/v1/devices/{device}/role", post(api::set_role))
             .route("/v1/pair", post(api::pair_open))
+            // The new device's steps without a session have their own rate by address (SR2-05); `DELETE` and
+            // reading the try are the device in the team's, signed in.
             .route(
                 "/v1/pair/{slot}",
-                get(api::pair_message).delete(api::pair_close),
+                get(api::pair_message)
+                    .route_layer(middleware::from_fn_with_state(
+                        self.app.clone(),
+                        limit_pairing,
+                    ))
+                    .delete(api::pair_close),
             )
             .route(
                 "/v1/pair/{slot}/try",
-                get(api::pair_tried).post(api::pair_try),
+                post(api::pair_try)
+                    .route_layer(middleware::from_fn_with_state(
+                        self.app.clone(),
+                        limit_pairing,
+                    ))
+                    .get(api::pair_tried),
             )
-            .route(
-                "/v1/pair/{slot}/answer",
-                get(api::pair_take).post(api::pair_answer),
-            )
+            .route("/v1/pair/{slot}/answer", post(api::pair_answer))
+            .route("/v1/pair/{slot}/take", post(api::pair_take))
             .route(
                 "/v1/team/stream",
                 get(api::read_team)
@@ -233,6 +246,10 @@ impl Server {
             ))
             .layer(middleware::from_fn_with_state(self.app.clone(), observe))
             .layer(axum::extract::DefaultBodyLimit::disable())
+            .layer(Extension(body::Deadline {
+                base: limits.body_timeout,
+                min_rate: limits.body_min_rate,
+            }))
             .with_state(self.app.clone())
     }
 
@@ -254,6 +271,7 @@ impl Server {
                 app.sessions.sweep();
                 app.address_rate.sweep();
                 app.device_rate.sweep();
+                app.pair_rate.sweep();
                 app.hub.sweep();
                 app.pairs.sweep();
                 if let Err(e) = app.store.sweep_tokens(util::now()).await {
@@ -274,7 +292,18 @@ impl Server {
         tls: Option<Arc<rustls::ServerConfig>>,
         shutdown: impl std::future::Future<Output = ()> + Send,
     ) -> std::io::Result<()> {
-        listen::serve(listener, self.router(), tls, shutdown).await
+        let limits = &self.app.limits;
+        let app = self.app.clone();
+        let bounds = listen::Bounds {
+            idle: limits.idle_timeout,
+            max_connections: limits.max_connections,
+            // Behind a proxy, every connection comes from its address.
+            per_address: (!self.app.trust_proxy).then_some(limits.max_connections_per_address),
+            on_refused: Some(Arc::new(move || {
+                Metrics::inc(&app.metrics.connections_refused)
+            })),
+        };
+        listen::serve(listener, self.router(), tls, bounds, shutdown).await
     }
 }
 
@@ -287,8 +316,8 @@ async fn render_metrics(State(app): State<Shared>) -> Response {
         .into_response()
 }
 
-/// The rate by address, before anything else.
-async fn limit_address(State(app): State<Shared>, req: Request, next: Next) -> Response {
+/// The key of a request's client for a rate: its address (an IPv6 one by its /64).
+fn client_key(app: &App, req: &Request) -> Option<IpAddr> {
     let peer = req
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
@@ -297,13 +326,27 @@ async fn limit_address(State(app): State<Shared>, req: Request, next: Next) -> R
         .headers()
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok());
-    if let Some(ip) = listen::client_address(peer, forwarded, app.trust_proxy) {
-        if let Err(wait) = app.address_rate.take(&ip) {
+    listen::client_address(peer, forwarded, app.trust_proxy).map(rate::address_key)
+}
+
+async fn limit_by(app: &App, limiter: &Limiter<IpAddr>, req: Request, next: Next) -> Response {
+    if let Some(key) = client_key(app, &req) {
+        if let Err(wait) = limiter.take(&key) {
             Metrics::inc(&app.metrics.rate_limited);
             return rate::refused(wait).into_response();
         }
     }
     next.run(req).await
+}
+
+/// The rate by address, before anything else.
+async fn limit_address(State(app): State<Shared>, req: Request, next: Next) -> Response {
+    limit_by(&app, &app.address_rate, req, next).await
+}
+
+/// The rate of the pairing relay's steps without a session, by address (SR2-05).
+async fn limit_pairing(State(app): State<Shared>, req: Request, next: Next) -> Response {
+    limit_by(&app, &app.pair_rate, req, next).await
 }
 
 /// Counts and logs each request by its route's template: never a path with an id, an address or a token.

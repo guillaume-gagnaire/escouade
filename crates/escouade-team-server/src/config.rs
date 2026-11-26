@@ -58,6 +58,15 @@ pub struct Limits {
     /// How long the messages a snapshot holds stay after it (SR2-01): 30 days. A device that finds the snapshot
     /// unreadable reads them instead, and flags it: a flagged snapshot never takes their place.
     pub snapshot_retention: Duration,
+    /// The time any body has to come whole (SR2-07), plus what its length takes at `body_min_rate` bytes a second.
+    pub body_timeout: Duration,
+    pub body_min_rate: u64,
+    /// A connection where nothing passes for so long is closed (SR2-07).
+    pub idle_timeout: Duration,
+    /// Connections open at once, in all and from one address (an IPv6 address by its /64). Behind a trusted proxy
+    /// (`trust_proxy`), only the bound in all holds: every connection comes from the proxy.
+    pub max_connections: usize,
+    pub max_connections_per_address: usize,
 }
 
 impl Default for Limits {
@@ -77,6 +86,11 @@ impl Default for Limits {
             claim_lease: Duration::from_secs(10 * 60),
             hand_lease: Duration::from_secs(14 * 24 * 3600),
             snapshot_retention: Duration::from_secs(30 * 24 * 3600),
+            body_timeout: Duration::from_secs(30),
+            body_min_rate: 64 << 10,
+            idle_timeout: Duration::from_secs(60),
+            max_connections: 8192,
+            max_connections_per_address: 512,
         }
     }
 }
@@ -88,6 +102,9 @@ pub use crate::transport::rate::Rate;
 pub struct Rates {
     pub per_address: Rate,
     pub per_device: Rate,
+    /// The steps of the pairing relay without a session (reading a slot's message, its try), by address (SR2-05):
+    /// a new device makes one of each.
+    pub pairing: Rate,
 }
 
 impl Default for Rates {
@@ -100,6 +117,10 @@ impl Default for Rates {
             per_device: Rate {
                 per_second: 20.0,
                 burst: 80.0,
+            },
+            pairing: Rate {
+                per_second: 0.2,
+                burst: 10.0,
             },
         }
     }

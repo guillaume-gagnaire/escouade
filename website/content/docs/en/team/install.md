@@ -154,23 +154,27 @@ Today, the app stores no file there yet: they will come with the team’s spec, 
 
 ## TLS and the reverse proxy
 
-Members reach the server over HTTPS. Two ways:
+Members reach the server over HTTPS. Two ways, and **the first is the one to keep** for a server reachable from the Internet: a proxy (Caddy, Traefik) takes the slow or too many connections first, with its own timeouts, before the server has to bound them itself (see *The defenses in place*).
 
-- **A reverse proxy** (Caddy, nginx) holds TLS and passes the requests to the server, which listens on `127.0.0.1` or on the compose network. Set `--trust-proxy` so that the rate limit counts per client address, not per proxy address. The proxy must:
+- **A reverse proxy** (Caddy, Traefik, nginx) holds TLS and passes the requests to the server, which listens on `127.0.0.1` or on the compose network. Set `--trust-proxy` so that the rate limit counts per client address, not per proxy address. The proxy must:
   - pass the WebSocket of `/v1/live` (the live broadcast);
   - add the client’s address to `X-Forwarded-For`;
   - let bodies through up to the largest file (25 MiB by default).
 
   The example `Caddyfile`, in a few lines, does all of this. The repository gives no configuration for nginx.
-- **The server itself**, through rustls: `--tls-cert` and `--tls-key`, PEM files the service’s user can read. The certificate is read on startup: after a renewal, restart the server.
+- **The server itself**, through rustls: `--tls-cert` and `--tls-key`, PEM files the service’s user can read. The certificate is read on startup: after a renewal, restart the server. Keep this for a private network (a VPN, Tailscale): exposed alone on the Internet, the server has only its own bounds against a stranger’s connections.
 
 Only turn on `--trust-proxy` behind a proxy that is the only one to reach the server: otherwise a client would choose the address the rate limit counts.
 
 ## The defenses in place
 
 - Every route asks for a session, except `/healthz`, enrollment by a token, the two steps of the signed challenge, the page of an invitation link and the new device’s side of pairing by a short code.
-- A rate limit per address (30 requests a second, 120 at once) and per device (20 a second, 80 at once). Beyond that: `429` and `Retry-After`.
+- A rate limit per address (30 requests a second, 120 at once) and per device (20 a second, 80 at once). An IPv6 address counts by its /64 prefix. Beyond that: `429` and `Retry-After`.
 - Bounded sizes everywhere: 1 MiB per stream entry, 25 MiB per file, 2 GiB per team, 500 devices and 10,000 projects per team, 4 live connections per device, 64 KiB of headers read within 15 seconds.
+- **Timeouts**: a body comes whole within 30 seconds, plus the time of its length at 64 KiB a second (about 7 minutes for a 25 MiB file), else `408` and the connection closes; a connection where nothing passes for 60 seconds closes.
+- **A capped number of connections**: 8,192 open at once, and 512 from one address (an IPv6 address by its /64). Beyond that, a new connection is closed at once, and counted in the metrics. Behind a proxy (`--trust-proxy`), only the overall cap holds, since every connection comes from the proxy.
+- **Sign-ins per device**: at most two challenges waiting per device (a new one takes the place of the oldest), 1,024 per team, eight sessions open per device. A device, or a team, that asks for them without end does not stop the other teams from signing in.
+- **Pairing by a short code**: a slot among 33 million (the first 5 characters of the 10-character code), a rate limit per address to read a slot and make its try (10 at once, then one every 5 seconds), and the answer is taken only with the token the try returns.
 
 ## Back up and restore
 
@@ -234,7 +238,7 @@ So update the server first: it keeps apps one version behind.
 ## Monitor
 
 - **`/healthz`** answers `200` and `ok` when the database answers, `503` and `base unavailable` otherwise. It does without the version handshake: a probe reaches it with no header.
-- **Prometheus metrics**, on `/metrics` at the `--metrics-listen` address only, never at the exposed address: requests by method, route template and status, refused sign-ins and sessions, rate-limit refusals, entries and files written and their bytes, commits refused because their epoch was taken, frames sent live, the numbers of teams, devices and revoked devices, live connections. No team, project or device id.
+- **Prometheus metrics**, on `/metrics` at the `--metrics-listen` address only, never at the exposed address: requests by method, route template and status, refused sign-ins and sessions, connections closed at once for want of room, rate-limit refusals, entries and files written and their bytes, commits refused because their epoch was taken, frames sent live, the numbers of teams, devices and revoked devices, live connections. No team, project or device id.
 - **The log** goes to standard error (`journalctl -u escouade-team-server`, `docker compose logs team-server`), at the `RUST_LOG` level. One line per request: the method, the route template (`/v1/projects/{project}/stream`), the status and the duration. Never an id, an IP address, a token or content. Your reverse proxy’s log, on the other hand, keeps the clients’ addresses: set how long it keeps them.
 
 ## What is not there yet

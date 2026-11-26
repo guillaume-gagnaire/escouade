@@ -229,7 +229,7 @@ test('a team created, an invitation, a second client that joins and is let in by
   await shoot(page, '09-appareil-qr');
   await page.getByRole('tab', { name: 'Code court' }).click();
   await page.getByRole('button', { name: 'Afficher un code' }).click();
-  await expect(page.getByTestId('pair-code')).toHaveText(/^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/);
+  await expect(page.getByTestId('pair-code')).toHaveText(/^[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/);
   await expect(page.getByRole('dialog').getByRole('status')).toContainText('En attente de l’autre appareil');
   await shoot(page, '10-appareil-code');
 
@@ -242,8 +242,8 @@ test('a team created, an invitation, a second client that joins and is let in by
   await shoot(page, '11-membre');
   // The screens of a new device by a code, and of a recovery.
   await page.getByRole('button', { name: /Ajouter cet appareil par un code/ }).click();
-  await page.getByLabel('Code de 8 caractères').fill('k7q4m2xz');
-  await expect(page.getByLabel('Code de 8 caractères')).toHaveValue('K7Q4-M2XZ');
+  await page.getByLabel('Code de 10 caractères').fill('k7q4m2xz8p');
+  await expect(page.getByLabel('Code de 10 caractères')).toHaveValue('K7Q4M-2XZ8P');
   await shoot(page, '12-code-nouvel-appareil');
   await page.getByRole('button', { name: 'Retour' }).click();
   await page.getByRole('button', { name: /Récupérer une équipe/ }).click();

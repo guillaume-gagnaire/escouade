@@ -149,6 +149,17 @@ pub struct PairTry {
     pub confirm: Vec<u8>,
 }
 
+/// The token of the new device's try (SR2-05): what takes the answer.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PairTried {
+    pub token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PairTake {
+    pub token: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PairAnswer {
     #[serde(with = "serde_bytes")]

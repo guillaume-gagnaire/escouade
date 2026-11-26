@@ -92,6 +92,8 @@ pub fn config(backend: &Backend, dir: &std::path::Path) -> (Config, Option<Strin
     config.rates.per_address.per_second = 100_000.0;
     config.rates.per_device.burst = 100_000.0;
     config.rates.per_device.per_second = 100_000.0;
+    config.rates.pairing.burst = 100_000.0;
+    config.rates.pairing.per_second = 100_000.0;
     (config, schema)
 }
 

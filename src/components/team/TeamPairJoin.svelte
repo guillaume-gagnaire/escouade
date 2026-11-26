@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The new device of a short code (TS-3, §3.4): the server's address and the 8 characters shown on the device in the
+  // The new device of a short code (TS-3, §3.4): the server's address and the 10 characters shown on the device in the
   // team. One try: a wrong code spends it, and a new one is needed.
   import { t } from '../../lib/i18n';
   import { codeComplete, typedCode } from '../../lib/team-words';

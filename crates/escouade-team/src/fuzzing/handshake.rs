@@ -24,10 +24,13 @@ pub fn handshake(data: &[u8]) {
     if let Ok(text) = std::str::from_utf8(data) {
         if let Ok(code) = PairCode::parse(text) {
             assert_eq!(PairCode::parse(&code.shown()).expect("again"), code);
-            assert!(code.slot.bytes().all(|b| ALPHABET.contains(&b)) && code.slot.len() == 3);
+            assert!(
+                code.slot.bytes().all(|b| ALPHABET.contains(&b))
+                    && code.slot.len() == crate::pairing::SLOT_LEN
+            );
         }
     }
-    let code = PairCode::parse("ABC4M2XZ").expect("a code");
+    let code = PairCode::parse("ABC4M2XZ8P").expect("a code");
     let (spake, first) = Pairing::start(&code);
     let mut pairing = Pairing {
         code: code.clone(),
@@ -40,7 +43,7 @@ pub fn handshake(data: &[u8]) {
     // The new device: the right code, or the one the first byte makes wrong.
     let wrong = data.first().is_some_and(|b| b % 4 == 0);
     let typed = if wrong {
-        PairCode::parse("ABC4M2XY").expect("a code")
+        PairCode::parse("ABC4M2XY8P").expect("a code")
     } else {
         code.clone()
     };
@@ -67,7 +70,7 @@ pub fn handshake(data: &[u8]) {
         let plain = open(&key, &code.slot, &sealed).expect("the new device opens it");
         assert_eq!(plain.as_slice(), link().to_url().as_bytes());
         assert!(
-            open(&key, "ABD", &sealed).is_err(),
+            open(&key, "ABD4M", &sealed).is_err(),
             "an answer opened under another slot"
         );
     } else {

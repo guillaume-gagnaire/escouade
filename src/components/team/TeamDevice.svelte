@@ -1,6 +1,6 @@
 <script lang="ts">
   // « Ajouter un de tes appareils » (TS-3, §3.4): a QR code (the link of one's own device, an hour), or, without a camera,
-  // a short code of 8 characters for a PAKE through the server (one try, 10 minutes). The device in the team checks the
+  // a short code of 10 characters for a PAKE through the server (one try, 10 minutes). The device in the team checks the
   // try, and sends the invitation sealed under the PAKE's key; it then lets the new device in.
   import { onDestroy, onMount } from 'svelte';
   import { t } from '../../lib/i18n';

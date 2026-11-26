@@ -1,14 +1,16 @@
 //! « Ajouter un appareil » by a short code (TS-3, `docs/TEAM-SERVER.md` §3.4): two desktops of one member, without a
-//! camera. The device in the team shows 8 characters; they are typed on the new device.
+//! camera. The device in the team shows 10 characters; they are typed on the new device.
 //!
-//! The code is not a MAC key: 40 bits would fall to a server that tries them all offline. It is the password of a
+//! The code is not a MAC key: 50 bits would fall to a server that tries them all offline. It is the password of a
 //! PAKE (SPAKE2 on Ed25519, RustCrypto's `spake2`), whose messages the server's relay carries (`escouade-team-server`,
 //! `pair.rs`):
 //!
-//! - the code: the **slot** (3 characters, chosen by the server, which routes by it) and the **secret** (5 characters,
-//!   25 bits, drawn by the device in the team, which never reach the server);
+//! - the code: the **slot** (5 characters, chosen by the server, which routes by it: one among 33 million, so that an
+//!   open one is hard to find, SR2-05) and the **secret** (5 characters, 25 bits, drawn by the device in the team,
+//!   which never reach the server);
 //! - the device in the team starts SPAKE2 (side A) on the secret and opens the slot with its message;
-//! - the new device reads it, plays side B, and leaves its message with a key confirmation: the slot takes **one try**;
+//! - the new device reads it, plays side B, and leaves its message with a key confirmation: the slot takes **one try**,
+//!   and the server gives it a token of the try, which alone takes the answer;
 //! - the device in the team derives the key, checks the confirmation: a wrong code closes the slot (a new code is
 //!   needed), and nothing has left the device; the right one gets the answer, sealed under the key
 //!   (XChaCha20-Poly1305): the invitation link of the member's new device (`Purpose::OwnDevice`);
@@ -29,7 +31,7 @@ use crate::Error;
 
 /// Crockford's base 32: no I, L, O, U (the server's alphabet of slots too).
 pub const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-pub const SLOT_LEN: usize = 3;
+pub const SLOT_LEN: usize = 5;
 pub const SECRET_LEN: usize = 5;
 
 pub(crate) const SIDE_A: &[u8] = b"escouade/pair/v1/device-in-the-team";
@@ -73,12 +75,12 @@ impl PairCode {
         }
     }
 
-    /// A code as typed: 8 characters of the alphabet, spaces and dashes aside, any case.
+    /// A code as typed: 10 characters of the alphabet, spaces and dashes aside, any case.
     pub fn parse(text: &str) -> Result<PairCode, Error> {
         let chars: String = text.chars().filter_map(normal).collect();
         if chars.len() != SLOT_LEN + SECRET_LEN || !chars.bytes().all(|b| ALPHABET.contains(&b)) {
             return Err(Error::Refused(
-                "a code is 8 characters, letters and digits".into(),
+                "a code is 10 characters, letters and digits".into(),
             ));
         }
         Ok(PairCode {
@@ -87,10 +89,9 @@ impl PairCode {
         })
     }
 
-    /// As shown: `K7Q4-M2XZ`.
+    /// As shown: `K7Q4M-2XZ8P`.
     pub fn shown(&self) -> String {
-        let all = format!("{}{}", self.slot, self.secret.as_str());
-        format!("{}-{}", &all[..4], &all[4..])
+        format!("{}-{}", self.slot, self.secret.as_str())
     }
 
     pub(crate) fn password(&self) -> Password {
@@ -225,12 +226,12 @@ pub async fn fetch_link(
         &Identity::new(SIDE_B),
     );
     let key = Zeroizing::new(spake.finish(&first).map_err(|_| Error::WrongCode)?);
-    client::pair_try(transport, &code.slot, message, confirmation(&key).to_vec())
+    let token = client::pair_try(transport, &code.slot, message, confirmation(&key).to_vec())
         .await
         .map_err(gone)?;
     let until = std::time::Instant::now() + wait;
     loop {
-        match client::pair_take(transport, &code.slot).await {
+        match client::pair_take(transport, &code.slot, &token).await {
             Ok(Some(sealed)) => {
                 let plain = open(&key, &code.slot, &sealed)?;
                 let url = std::str::from_utf8(&plain).map_err(|_| Error::WrongCode)?;
@@ -256,24 +257,24 @@ mod tests {
 
     #[test]
     fn a_code_is_typed_loosely_and_shown_in_two_halves() {
-        let code = PairCode::new("K7Q");
+        let code = PairCode::new("K7Q4M");
         let shown = code.shown();
-        assert_eq!(shown.len(), 9);
-        assert_eq!(&shown[4..5], "-");
+        assert_eq!(shown.len(), 11);
+        assert_eq!(&shown[5..6], "-");
         assert_eq!(PairCode::parse(&shown.to_lowercase()).unwrap(), code);
-        let typed = PairCode::parse(" k7q o-il zz ").unwrap();
+        let typed = PairCode::parse(" k7q4m o-il zz ").unwrap();
         assert_eq!(
             (typed.slot.as_str(), typed.secret.as_str()),
-            ("K7Q", "011ZZ")
+            ("K7Q4M", "011ZZ")
         );
-        assert!(PairCode::parse("K7Q4M2X").is_err());
-        assert!(PairCode::parse("K7Q4M2XU").is_err());
+        assert!(PairCode::parse("K7Q4M2XZ8").is_err());
+        assert!(PairCode::parse("K7Q4M2XZ8U").is_err());
         assert!(!format!("{code:?}").contains(code.secret.as_str()));
     }
 
     #[test]
     fn the_right_code_opens_the_answer_and_a_wrong_one_fails_the_confirmation() {
-        let code = PairCode::new("ABC");
+        let code = PairCode::new("ABCDE");
         let (spake, first) = Pairing::start(&code);
         let link = InviteLink {
             server: "team.example.org".into(),
@@ -299,13 +300,13 @@ mod tests {
         let key = b.finish(&first).unwrap();
         assert!(pairing.check_try(&message, &confirmation(&key)));
         let sealed = pairing.sealed_answer().unwrap();
-        let plain = open(&key, "ABC", &sealed).unwrap();
+        let plain = open(&key, "ABCDE", &sealed).unwrap();
         assert_eq!(
             InviteLink::parse(std::str::from_utf8(&plain).unwrap()).unwrap(),
             link
         );
         // Under another slot, or another key: nothing.
-        assert!(open(&key, "ABD", &sealed).is_err());
+        assert!(open(&key, "ABCDF", &sealed).is_err());
 
         // A wrong code: the confirmation does not hold, and the try is spent.
         let (spake, first) = Pairing::start(&code);
@@ -314,7 +315,7 @@ mod tests {
             key: None,
             ..pairing
         };
-        let wrong = PairCode::parse("ABC00000").unwrap();
+        let wrong = PairCode::parse("ABCDE00000").unwrap();
         let (b, message) = Spake2::<Ed25519Group>::start_b(
             &wrong.password(),
             &Identity::new(SIDE_A),

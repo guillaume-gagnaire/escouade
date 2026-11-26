@@ -1,9 +1,9 @@
 ---
 title: "Entrer dans une équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","Revue de sécurité de la 2.3 (ESC-625), SR2-08 : la vérification hors bande à l'admission"]
-tickets: ["ESC-461","ESC-632","ESC-633","ESC-634"]
-decisions: [173,286,288,329]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","Revue de sécurité de la 2.3 (ESC-625), SR2-08 : la vérification hors bande à l'admission","Revue de sécurité de la 2.3 (ESC-625), SR2-05 : le relais d'appairage"]
+tickets: ["ESC-461","ESC-632","ESC-633","ESC-634","ESC-639"]
+decisions: [173,286,288,329,332]
 compared: null
 ---
 
@@ -81,7 +81,8 @@ Créer une équipe sur un serveur d'équipe, y inviter, y ajouter ses autres app
 ## Ajouter un de ses appareils
 
 - « Ajouter un appareil… », onglet **QR code** : le lien d'un appareil du même membre (valable une heure), à scanner ou à coller dans « Rejoindre par un lien » sur l'autre appareil. L'appareil du membre le fait entrer lui-même, une fois les six mots des deux écrans comparés (« Demandes d'entrée » sous le QR code).
-- Onglet **Code court**, sans caméra : 8 caractères (`K7Q4-M2XZ`), à taper sur l'autre appareil dans « Ajouter cet appareil par un code », avec l'adresse du serveur. Un code a **un seul essai** et 10 minutes : un mauvais code le rend inutilisable (« Un mauvais code a été tapé : ce code ne sert plus »), il en faut un nouveau. Le code passe par un échange de clés authentifié par mot de passe (SPAKE2) : le serveur ne peut pas l'essayer hors ligne. Le bon code tapé, l'autre appareil montre ses six mots, et l'appareil du membre la demande avec les siens : « Compare les six mots qu'il affiche avec ceux de sa demande avant de le faire entrer. »
+- Onglet **Code court**, sans caméra : 10 caractères en deux moitiés de cinq (`K7Q4M-2XZ8P`), à taper sur l'autre appareil dans « Ajouter cet appareil par un code », avec l'adresse du serveur. Un code a **un seul essai** et 10 minutes : un mauvais code le rend inutilisable (« Un mauvais code a été tapé : ce code ne sert plus »), il en faut un nouveau. Le code passe par un échange de clés authentifié par mot de passe (SPAKE2) : le serveur ne peut pas l'essayer hors ligne. Le bon code tapé, l'autre appareil montre ses six mots, et l'appareil du membre la demande avec les siens : « Compare les six mots qu'il affiche avec ceux de sa demande avant de le faire entrer. »
+- **Les cinq premiers caractères** désignent le créneau du relais du serveur, un parmi 33 millions : un inconnu qui joint le serveur ne trouve pas un code ouvert pour en brûler l'essai (voir « Le serveur d'équipe »). Les cinq autres sont le mot de passe du SPAKE2, que le serveur ne voit jamais.
 - Un membre qui n'est pas administrateur du serveur : le jeton de son nouvel appareil est demandé dans l'équipe, signé par son appareil, et un administrateur en ligne l'enregistre. En attendant, la fenêtre le dit (« En attente d'un administrateur »).
 - Les O se lisent 0, les I et L se lisent 1, majuscules et tirets indifférents.
 

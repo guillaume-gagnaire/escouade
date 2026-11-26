@@ -39,7 +39,7 @@ If the app says the invitation was already used, someone used it before you: the
 On a device already in the team, open its card and “Add a device…”.
 
 - **QR code**: have the other device scan it, or paste its link in “Join by a link” on the other device. It is valid for an hour.
-- **Short code**, without a camera: the device in the team shows an 8-character code (`K7Q4-M2XZ`). On the new device, “Add this device by a code”, with the server’s address and this code. A code has one try and 10 minutes: a wrong code makes it unusable, show a new one.
+- **Short code**, without a camera: the device in the team shows a 10-character code (`K7Q4M-2XZ8P`). On the new device, “Add this device by a code”, with the server’s address and this code. A code has one try and 10 minutes: a wrong code makes it unusable, show a new one.
 
 If you are not an administrator, your new device waits for an administrator of the server to let it through: as soon as one is online.
 

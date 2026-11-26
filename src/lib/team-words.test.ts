@@ -19,14 +19,16 @@ describe('the helpers of the team screens', () => {
   });
 
   it('reads a short code as typed: case, O and I/L, spaces and dashes', () => {
-    expect(typedCode('k7q4m2xz')).toBe('K7Q4-M2XZ');
-    expect(typedCode(' k7q o-il zz ')).toBe('K7Q0-11ZZ');
-    expect(typedCode('k7q')).toBe('K7Q');
-    expect(typedCode('K7Q4-M2XZ-EXTRA')).toBe('K7Q4-M2XZ');
-    expect(codeComplete('K7Q4-M2XZ')).toBe(true);
-    expect(codeComplete('K7Q4-M2X')).toBe(false);
+    expect(typedCode('k7q4m2xz8p')).toBe('K7Q4M-2XZ8P');
+    expect(typedCode(' k7q4m o-il zz ')).toBe('K7Q4M-011ZZ');
+    expect(typedCode('k7q4m')).toBe('K7Q4M');
+    expect(typedCode('K7Q4M-2XZ8P-EXTRA')).toBe('K7Q4M-2XZ8P');
+    expect(codeComplete('K7Q4M-2XZ8P')).toBe(true);
+    expect(codeComplete('K7Q4M-2XZ8')).toBe(false);
+    // The 8 characters of a code of before the 2.3: not a whole one.
+    expect(codeComplete('K7Q4-M2XZ')).toBe(false);
     // U is not of the alphabet.
-    expect(codeComplete('K7Q4-M2XU')).toBe(false);
+    expect(codeComplete('K7Q4M-2XZ8U')).toBe(false);
   });
 
   it('counts the words of a recovery key as typed', () => {

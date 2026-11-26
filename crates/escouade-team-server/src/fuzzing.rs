@@ -98,7 +98,7 @@ const ROUTES: &[(&str, &str, bool)] = &[
     ("POST", "/v1/pair/{s}/try", true),
     ("GET", "/v1/pair/{s}/try", false),
     ("POST", "/v1/pair/{s}/answer", false),
-    ("GET", "/v1/pair/{s}/answer", true),
+    ("POST", "/v1/pair/{s}/take", true),
     ("GET", "/v1/team/stream?since=0", false),
     ("POST", "/v1/team/stream", false),
     ("GET", "/v1/projects/{p}/stream?since=0&limit=3", false),
@@ -224,6 +224,7 @@ impl Bench {
         config.rates = Rates {
             per_address: fast,
             per_device: fast,
+            pairing: fast,
         };
         let (router, admin, member, revoked, project) = rt.block_on(async {
             let server = Server::open(config).await.expect("the server opens");
@@ -444,6 +445,13 @@ mod tests {
                 &encode(&PairTry {
                     message: vec![5; 33],
                     confirm: vec![6; 32],
+                }),
+            );
+            write(
+                "server-bodies",
+                "pair-take",
+                &encode(&PairTake {
+                    token: "0".repeat(32),
                 }),
             );
             write(

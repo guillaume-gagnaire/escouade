@@ -449,13 +449,13 @@ fn ok_cbor<T: serde::de::DeserializeOwned>(reply: Reply) -> Result<T, ClientErro
     wire::decode(&reply.body).map_err(ClientError::Decode)
 }
 
-/// A slot of the pairing relay, as it goes in a path: three characters of its alphabet.
+/// A slot of the pairing relay, as it goes in a path: five characters of its alphabet.
 fn slot_path(slot: &str) -> Result<&str, ClientError> {
-    if slot.len() == 3 && slot.bytes().all(|b| b.is_ascii_alphanumeric()) {
+    if slot.len() == crate::pairing::SLOT_LEN && slot.bytes().all(|b| b.is_ascii_alphanumeric()) {
         Ok(slot)
     } else {
         Err(ClientError::Decode(
-            "a code's slot is three characters".into(),
+            "a code's slot is five characters".into(),
         ))
     }
 }
@@ -476,13 +476,13 @@ pub async fn pair_message(transport: &dyn Transport, slot: &str) -> Result<Vec<u
     Ok(ok_cbor::<PairMessage>(reply)?.message)
 }
 
-/// The new device's one try.
+/// The new device's one try: the token that takes the answer.
 pub async fn pair_try(
     transport: &dyn Transport,
     slot: &str,
     message: Vec<u8>,
     confirm: Vec<u8>,
-) -> Result<(), ClientError> {
+) -> Result<String, ClientError> {
     let reply = transport
         .call(cbor_call(
             Method::Post,
@@ -490,25 +490,24 @@ pub async fn pair_try(
             &PairTry { message, confirm },
         ))
         .await?;
-    match reply.status {
-        204 => Ok(()),
-        _ => Err(refusal(&reply)),
-    }
+    Ok(ok_cbor::<PairTried>(reply)?.token)
 }
 
-/// The answer, once the device in the team left it (the slot goes with it); None while there is none.
+/// The answer, once the device in the team left it (the slot goes with it), taken with the token of the try; None
+/// while there is none.
 pub async fn pair_take(
     transport: &dyn Transport,
     slot: &str,
+    token: &str,
 ) -> Result<Option<Vec<u8>>, ClientError> {
     let reply = transport
-        .call(Call {
-            method: Method::Get,
-            path: format!("/v1/pair/{}/answer", slot_path(slot)?),
-            content_type: None,
-            body: Vec::new(),
-            token: None,
-        })
+        .call(cbor_call(
+            Method::Post,
+            format!("/v1/pair/{}/take", slot_path(slot)?),
+            &PairTake {
+                token: token.to_string(),
+            },
+        ))
         .await?;
     if reply.status == 204 {
         return Ok(None);

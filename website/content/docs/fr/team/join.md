@@ -39,7 +39,7 @@ Si l’app dit « Cette invitation a déjà servi : demande un nouveau lien à 
 Sur un appareil déjà dans l’équipe, ouvre sa carte et « Ajouter un appareil… ».
 
 - **QR code** : fais-le scanner par l’autre appareil, ou colle son lien dans « Rejoindre par un lien » sur l’autre appareil. Il est valable une heure.
-- **Code court**, sans caméra : l’appareil dans l’équipe affiche un code de 8 caractères (`K7Q4-M2XZ`). Sur le nouvel appareil, « Ajouter cet appareil par un code », avec l’adresse du serveur et ce code. Un code n’a qu’un essai et 10 minutes : un mauvais code le rend inutilisable, affiches-en un nouveau.
+- **Code court**, sans caméra : l’appareil dans l’équipe affiche un code de 10 caractères (`K7Q4M-2XZ8P`). Sur le nouvel appareil, « Ajouter cet appareil par un code », avec l’adresse du serveur et ce code. Un code n’a qu’un essai et 10 minutes : un mauvais code le rend inutilisable, affiches-en un nouveau.
 
 Si tu n’es pas administrateur, ton nouvel appareil attend qu’un administrateur du serveur le valide : dès qu’il est en ligne.
 

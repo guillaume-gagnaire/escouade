@@ -83,6 +83,23 @@ impl<K: Eq + Hash + Clone> Limiter<K> {
     }
 }
 
+/// The key of an address for the rates and the connections (SR2-06, SR2-07): an IPv4 address as it is (an IPv4 address
+/// mapped in IPv6 too), an IPv6 address by its /64 — what one subscriber holds whole, so that changing addresses within
+/// it changes nothing.
+pub fn address_key(ip: std::net::IpAddr) -> std::net::IpAddr {
+    use std::net::{IpAddr, Ipv6Addr};
+    match ip {
+        IpAddr::V4(_) => ip,
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => IpAddr::V4(v4),
+            None => {
+                let s = v6.segments();
+                IpAddr::V6(Ipv6Addr::new(s[0], s[1], s[2], s[3], 0, 0, 0, 0))
+            }
+        },
+    }
+}
+
 pub fn refused(retry_after: u64) -> Problem {
     let mut p = Problem::new(
         StatusCode::TOO_MANY_REQUESTS,
@@ -116,5 +133,14 @@ mod tests {
         limiter.take_at(&1, at(10)).unwrap();
         limiter.sweep_at(at(20));
         assert!(limiter.is_empty());
+    }
+
+    #[test]
+    fn an_ipv6_address_counts_by_its_64() {
+        let key = |s: &str| address_key(s.parse().unwrap());
+        assert_eq!(key("2001:db8:1:2::1"), key("2001:db8:1:2:ffff:1:2:3"));
+        assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:1:3::1"));
+        assert_eq!(key("::ffff:203.0.113.7"), key("203.0.113.7"));
+        assert_ne!(key("203.0.113.7"), key("203.0.113.8"));
     }
 }

@@ -68,7 +68,7 @@ Escouade’s tests look for the ids in the server’s log and metrics, and for t
 - **The encryption**: MLS (RFC 9420) through openmls, with the suite `MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519`. The content keys are derived from the group at each epoch, then per project and per object; the content is encrypted with XChaCha20-Poly1305 and signed with Ed25519. Nothing is invented in cryptography: standard primitives, in Rust (RustCrypto).
 - **The history can be read**: a new device climbs back through past epochs by a chain of links. This is on purpose, since a Kanban and a spec last; the flip side is that a compromised device gives away all the history it can read.
 - **The invitation**: the link carries a secret after the `#`, which neither browsers nor HTTP send to the server. The server keeps only the hash of a token derived from that secret, and lets it serve only once; it expires (72 h by default). The invitee checks the six words of the team’s fingerprint with whoever invites them, and an administrator online lets them in. The server can neither swap its own key for the invitee’s, nor show them a fake team.
-- **Another device of the same member** joins by a QR code (a link valid for an hour) or by an 8-character short code, exchanged over SPAKE2: one try, 10 minutes, and nothing the server can try offline.
+- **Another device of the same member** joins by a QR code (a link valid for an hour) or by a 10-character short code, exchanged over SPAKE2: one try, 10 minutes, and nothing the server can try offline.
 
 ### The recovery key and the escrow key
 

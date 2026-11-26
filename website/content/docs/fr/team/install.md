@@ -154,23 +154,27 @@ Aujourd’hui, l’app n’y dépose encore aucun fichier : ils viendront avec l
 
 ## TLS et le proxy inverse
 
-Les membres joignent le serveur en HTTPS. Deux façons :
+Les membres joignent le serveur en HTTPS. Deux façons, et **la première est celle à garder** pour un serveur joignable depuis Internet : un proxy (Caddy, Traefik) encaisse d’abord les connexions lentes ou trop nombreuses, avec ses propres délais, avant que le serveur ait à les borner lui-même (voir *Les défenses en place*).
 
-- **Un proxy inverse** (Caddy, nginx) tient TLS et passe les requêtes au serveur, qui écoute sur `127.0.0.1` ou sur le réseau du compose. Mets `--trust-proxy` pour que la limite de débit compte par adresse de client, et non par adresse du proxy. Le proxy doit :
+- **Un proxy inverse** (Caddy, Traefik, nginx) tient TLS et passe les requêtes au serveur, qui écoute sur `127.0.0.1` ou sur le réseau du compose. Mets `--trust-proxy` pour que la limite de débit compte par adresse de client, et non par adresse du proxy. Le proxy doit :
   - passer le WebSocket de `/v1/live` (la diffusion en direct) ;
   - ajouter l’adresse du client à `X-Forwarded-For` ;
   - laisser passer des corps jusqu’à la taille maximale d’un fichier (25 Mio par défaut).
 
   Le `Caddyfile` d’exemple, en quelques lignes, fait tout cela. Le dépôt ne donne pas de configuration pour nginx.
-- **Le serveur lui-même**, par rustls : `--tls-cert` et `--tls-key`, des fichiers PEM lisibles par l’utilisateur du service. Le certificat est lu au démarrage : après un renouvellement, redémarre le serveur.
+- **Le serveur lui-même**, par rustls : `--tls-cert` et `--tls-key`, des fichiers PEM lisibles par l’utilisateur du service. Le certificat est lu au démarrage : après un renouvellement, redémarre le serveur. À réserver à un réseau privé (un VPN, Tailscale) : exposé seul sur Internet, le serveur n’a que ses propres bornes devant les connexions d’un inconnu.
 
 N’active `--trust-proxy` que derrière un proxy qui est le seul à joindre le serveur : sinon un client choisirait l’adresse que compte la limite de débit.
 
 ## Les défenses en place
 
 - Toutes les routes demandent une session, sauf `/healthz`, l’inscription par un jeton, les deux temps du défi signé, la page d’un lien d’invitation et le côté du nouvel appareil dans l’appairage par code court.
-- Une limite de débit par adresse (30 requêtes par seconde, 120 d’un coup) et par appareil (20 par seconde, 80 d’un coup). Au-delà : `429` et `Retry-After`.
+- Une limite de débit par adresse (30 requêtes par seconde, 120 d’un coup) et par appareil (20 par seconde, 80 d’un coup). Une adresse IPv6 compte par son préfixe /64. Au-delà : `429` et `Retry-After`.
 - Des tailles bornées partout : 1 Mio par entrée d’un flux, 25 Mio par fichier, 2 Gio par équipe, 500 appareils et 10 000 projets par équipe, 4 connexions en direct par appareil, 64 Kio d’en-têtes lus en 15 secondes.
+- **Des délais** : un corps arrive en entier en 30 secondes, plus le temps de sa longueur à 64 Kio par seconde (environ 7 minutes pour un fichier de 25 Mio), sinon `408` et la connexion se ferme ; une connexion où rien ne passe pendant 60 secondes se ferme.
+- **Un nombre de connexions plafonné** : 8 192 ouvertes à la fois, et 512 d’une même adresse (une adresse IPv6 par son /64). Au-delà, une nouvelle connexion est fermée aussitôt, et comptée dans les métriques. Derrière un proxy (`--trust-proxy`), seul le plafond global tient, puisque toutes les connexions viennent du proxy.
+- **Les défis et les sessions** : deux défis en attente au plus par appareil (un nouveau prend la place du plus ancien), 1 024 par équipe, huit sessions ouvertes par appareil. Un appareil, ou une équipe, qui en demande sans fin n’empêche pas les autres équipes de se connecter.
+- **L’appairage par code court** : un créneau parmi 33 millions (les 5 premiers caractères du code de 10), une limite de débit par adresse pour lire un créneau et y faire son essai (10 d’un coup, puis un toutes les 5 secondes), et la réponse ne se prend qu’avec le jeton que rend l’essai.
 
 ## Sauvegarder et restaurer
 
@@ -234,7 +238,7 @@ Mets donc à jour le serveur d’abord : il garde les apps d’une version en ar
 ## Surveiller
 
 - **`/healthz`** répond `200` et `ok` quand la base répond, `503` et `base unavailable` sinon. Elle se passe de la poignée de main des versions : un sondeur la joint sans en-tête.
-- **Les métriques** Prometheus, sur `/metrics` à l’adresse de `--metrics-listen` seulement, jamais à l’adresse exposée : les requêtes par méthode, modèle de route et statut, les connexions et les sessions refusées, les refus de la limite de débit, les entrées et les fichiers écrits et leurs octets, les commits refusés parce que leur époque était prise, les trames envoyées en direct, les nombres d’équipes, d’appareils et d’appareils révoqués, les connexions en direct. Aucun identifiant d’équipe, de projet ni d’appareil.
+- **Les métriques** Prometheus, sur `/metrics` à l’adresse de `--metrics-listen` seulement, jamais à l’adresse exposée : les requêtes par méthode, modèle de route et statut, les connexions et les sessions refusées, les connexions fermées aussitôt faute de place, les refus de la limite de débit, les entrées et les fichiers écrits et leurs octets, les commits refusés parce que leur époque était prise, les trames envoyées en direct, les nombres d’équipes, d’appareils et d’appareils révoqués, les connexions en direct. Aucun identifiant d’équipe, de projet ni d’appareil.
 - **Le journal** va sur la sortie d’erreur (`journalctl -u escouade-team-server`, `docker compose logs team-server`), au niveau de `RUST_LOG`. Une ligne par requête : la méthode, le modèle de la route (`/v1/projects/{project}/stream`), le statut et la durée. Jamais un identifiant, une adresse IP, un jeton ni un contenu. Le journal de ton proxy inverse, lui, garde les adresses des clients : règle sa durée de conservation.
 
 ## Ce qui n’est pas encore là

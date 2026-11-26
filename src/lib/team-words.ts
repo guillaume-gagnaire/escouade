@@ -12,11 +12,11 @@ export function pickPositions(count = 24, k = 3, random: () => number = Math.ran
 }
 
 /** Crockford's base 32: what a short code is made of (no I, L, O, U). */
-const CODE = /^[0-9A-HJKMNP-TV-Z]{8}$/;
+const CODE = /^[0-9A-HJKMNP-TV-Z]{10}$/;
 
 /**
- * A short code as typed, shown in two halves (`K7Q4-M2XZ`): upper case, `O` read as `0`, `I` and `L` as `1`, spaces and
- * dashes aside, 8 characters at most.
+ * A short code as typed, shown in two halves of five (`K7Q4M-2XZ8P`): upper case, `O` read as `0`, `I` and `L` as `1`,
+ * spaces and dashes aside, 10 characters at most.
  */
 export function typedCode(text: string): string {
   const chars = text
@@ -25,8 +25,8 @@ export function typedCode(text: string): string {
     .replace(/O/g, '0')
     .replace(/[IL]/g, '1')
     .replace(/[^0-9A-Z]/g, '')
-    .slice(0, 8);
-  return chars.length > 4 ? `${chars.slice(0, 4)}-${chars.slice(4)}` : chars;
+    .slice(0, 10);
+  return chars.length > 5 ? `${chars.slice(0, 5)}-${chars.slice(5)}` : chars;
 }
 
 /** Whether a code as typed is a whole one. */

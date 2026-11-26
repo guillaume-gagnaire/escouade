@@ -111,8 +111,9 @@ Le mode serveur de `docs/REMOTE.md` ne s'expose jamais sur Internet : il lance d
 
 Il peut donc écouter en HTTPS. Les défenses :
 - aucune route sans authentification, sauf l'entrée par une invitation ;
-- une limite de débit par adresse et par appareil ;
-- TLS par un proxy inverse (Caddy, nginx), ou par rustls avec ACME ;
+- une limite de débit par adresse (une adresse IPv6 par son /64) et par appareil ;
+- **des bornes partout** (SR2-05 à SR2-07, ESC-639) : les défis en attente comptés par appareil (deux, le plus récent l'emporte) et par équipe (1 024), les sessions par appareil (huit), si bien qu'une équipe n'empêche jamais les autres de se connecter ; un délai pour l'en-tête (15 s), pour le corps (30 s plus sa longueur à 64 Kio/s) et pour une connexion muette (60 s) ; un plafond des connexions ouvertes, global (8 192) et par adresse (512) ; le relais d'appairage avec un créneau parmi 33 millions, un débit à lui par adresse et la réponse prise par le seul jeton de l'essai (128 bits) ;
+- TLS par un proxy inverse (Caddy, Traefik, nginx), **à garder devant un serveur joignable depuis Internet** : il encaisse d'abord les connexions lentes ou trop nombreuses ; ou par rustls, plutôt sur un réseau privé ;
 - et, en option, derrière le VPN de l'entreprise.
 
 **Choix C1 : un binaire à part ou dans `escouade-server`.**
@@ -251,7 +252,7 @@ C'est le même principe, entre deux appareils du même membre.
 - L'appareil déjà membre affiche un QR code : l'adresse du serveur, l'id du membre, un secret de 128 bits et l'empreinte de l'équipe.
 - Le nouvel appareil le scanne : un téléphone, ou un poste avec une caméra.
 - L'ancien appareil vérifie le MAC du nouveau, signe son certificat d'appareil au journal, puis lui enveloppe les clés.
-- **Sans caméra** (deux postes de bureau) : l'un affiche un code court de 8 caractères, à taper sur l'autre. Un code court se casse hors ligne par un serveur malveillant, si on l'utilise comme un MAC. Il passe donc par un échange de clés authentifié par mot de passe (un PAKE : CPace ou SPAKE2, la crate `spake2`), qui ne laisse qu'un essai par connexion.
+- **Sans caméra** (deux postes de bureau) : l'un affiche un code court de 10 caractères (5 pour le créneau du relais, 5 pour le mot de passe du PAKE), à taper sur l'autre. Un code court se casse hors ligne par un serveur malveillant, si on l'utilise comme un MAC. Il passe donc par un échange de clés authentifié par mot de passe (un PAKE : CPace ou SPAKE2, la crate `spake2`), qui ne laisse qu'un essai par connexion.
 - **Une machine en mode serveur**, sans écran ni caméra : `escouade-server team pair` affiche le code court dans le terminal, et on le tape dans le client.
 
 Coût : environ 3 j, dont 1 j pour le PAKE.

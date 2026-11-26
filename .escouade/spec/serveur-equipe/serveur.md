@@ -1,9 +1,9 @@
 ---
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635"]
-decisions: [167,168,173,178,277,288,286,314,330]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md","Revue de sécurité de la 2.3 (ESC-625), SR2-05, SR2-06, SR2-07 : le serveur d'équipe borné"]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635","ESC-639"]
+decisions: [167,168,173,178,277,288,286,314,330,332]
 compared: null
 ---
 
@@ -30,8 +30,9 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 ## L'appairage par code court
 
-- Un relais en mémoire pour « Ajouter un appareil » par un code de 8 caractères : l'appareil dans l'équipe ouvre un créneau (3 caractères, la tête du code), le nouvel appareil, pas encore inscrit, y fait **un seul essai**, puis prend la réponse scellée. Un créneau dure 10 minutes ; quatre au plus par équipe.
+- Un relais en mémoire pour « Ajouter un appareil » par un code de 10 caractères : l'appareil dans l'équipe ouvre un créneau (5 caractères, la tête du code, un parmi 33 millions), le nouvel appareil, pas encore inscrit, y fait **un seul essai**, qui lui rend un jeton de 128 bits, puis prend la réponse scellée avec ce jeton. Un créneau dure 10 minutes ; quatre au plus par équipe.
 - Il ne porte que les messages d'un PAKE (SPAKE2) et une réponse scellée : rien qui permette au serveur d'essayer des codes.
+- **Difficile à trouver** (SR2-05) : lire le message d'un créneau et y faire son essai, sans session, ont leur propre limite de débit par adresse (10 d'un coup, puis une toutes les 5 secondes ; une adresse IPv6 par son /64), et la réponse ne se prend qu'avec le jeton de l'essai (403 sous un autre). Un inconnu du réseau ne parcourt pas les créneaux pour brûler l'unique essai d'un autre.
 
 ## La page d'un lien d'invitation de l'ancienne forme
 
@@ -41,6 +42,7 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 - Par défi signé : le serveur donne un défi (60 s, une seule fois), l'appareil le signe avec sa clé, le serveur rend un jeton de session de 15 minutes. Aucun mot de passe.
 - Une mauvaise signature, un appareil révoqué ou une session expirée sont refusés.
+- **Bornée par appareil et par équipe** (SR2-06) : deux défis en attente au plus par appareil (un nouveau prend la place du plus ancien), 1 024 par équipe, 100 000 sur le serveur ; huit sessions ouvertes par appareil (une nouvelle ferme la plus ancienne). Un appareil, ou une équipe, qui demande des défis sans fin ne remplit que ses propres places : les autres équipes se connectent comme avant.
 - Toutes les routes demandent une session, sauf `/healthz`, la page `/join/<id>`, l'inscription par jeton, le défi, et les étapes du nouvel appareil dans le relais d'appairage.
 
 ## Les flux et les fichiers
@@ -63,9 +65,11 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 - Messages en CBOR, objets chiffrés en binaire.
 - Poignée de main des versions : le serveur accepte la version du client et la précédente ; une plus vieille est refusée avec « Mets Escouade à jour », une plus récente dit que le serveur est en retard.
-- Une limite de débit par adresse et par appareil (429 et `Retry-After`).
+- Une limite de débit par adresse et par appareil (429 et `Retry-After`). Une adresse IPv6 compte par son préfixe /64 : changer d'adresse dans le sien ne change rien.
 - Des tailles bornées partout ; une longueur annoncée trop grande est refusée avant d'être lue.
-- TLS par rustls avec un certificat donné, ou derrière un proxy inverse (Caddy dans l'exemple, Traefik sous Coolify).
+- **Des délais** (SR2-07) : l'en-tête d'une requête est lu en 15 secondes ; son corps arrive en entier en 30 secondes, plus le temps de sa longueur à 64 Kio par seconde (environ 7 minutes pour un fichier de 25 Mio), sinon `408` et la connexion se ferme ; une connexion où rien ne passe, dans un sens comme dans l'autre, pendant 60 secondes se ferme.
+- **Un nombre de connexions plafonné** (SR2-07) : 8 192 ouvertes à la fois, et 512 d'une même adresse (une adresse IPv6 par son /64). Au-delà, une nouvelle connexion est fermée dès qu'elle est acceptée, et comptée dans les métriques. Un WebSocket compte jusqu'à sa fermeture. Derrière un proxy de confiance (`--trust-proxy`), seul le plafond global tient, puisque toutes les connexions viennent du proxy.
+- TLS par rustls avec un certificat donné, ou derrière un proxy inverse (Caddy dans l'exemple, Traefik sous Coolify). **Joignable depuis Internet, le serveur reste derrière le proxy** : la doc d'installation le dit, le proxy encaisse d'abord les connexions lentes ou trop nombreuses ; TLS par le serveur lui-même est pour un réseau privé.
 - La base : SQLite en WAL par défaut, PostgreSQL en option. Une base d'avant la rétention garde ses instantanés : le flux y est déjà élagué jusqu'à eux.
 
 ## La publication

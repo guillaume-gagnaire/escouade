@@ -31,6 +31,8 @@ pub struct Metrics {
     pub file_bytes: AtomicU64,
     pub live_connections: AtomicI64,
     pub live_frames: AtomicU64,
+    /// Connections closed as soon as accepted: a bound of the connections was reached (SR2-07).
+    pub connections_refused: AtomicU64,
 }
 
 fn escape(label: &str) -> String {
@@ -68,7 +70,7 @@ impl Metrics {
                 escape(route)
             );
         }
-        let counters: [(&str, &str, &AtomicU64); 13] = [
+        let counters: [(&str, &str, &AtomicU64); 14] = [
             (
                 "escouade_team_auth_failures_total",
                 "Refused sign-ins and sessions.",
@@ -133,6 +135,11 @@ impl Metrics {
                 "escouade_team_live_frames_total",
                 "Frames sent to live connections.",
                 &self.live_frames,
+            ),
+            (
+                "escouade_team_connections_refused_total",
+                "Connections closed as soon as accepted: too many open, in all or from one address.",
+                &self.connections_refused,
             ),
         ];
         for (name, help, value) in counters {

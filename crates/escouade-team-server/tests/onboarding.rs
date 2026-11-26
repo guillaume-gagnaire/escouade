@@ -205,7 +205,7 @@ async fn the_pairing_relay_takes_one_try(b: Backend) {
         )
         .await
         .ok();
-    assert_eq!(opened.slot.len(), 3);
+    assert_eq!(opened.slot.len(), 5);
     let slot = opened.slot.clone();
     // The new device, not enrolled, reads the first message.
     let m: PairMessage = open
@@ -236,10 +236,12 @@ async fn the_pairing_relay_takes_one_try(b: Backend) {
         message: vec![2; 33],
         confirm: vec![3; 32],
     };
-    assert_eq!(
-        post_status(&open, &try_path, &first).await,
-        StatusCode::NO_CONTENT
-    );
+    let token = open
+        .post::<_, PairTried>(&try_path, &first)
+        .await
+        .ok()
+        .token;
+    assert_eq!(token.len(), 32);
     let second = PairTry {
         message: vec![4; 33],
         confirm: vec![5; 32],
@@ -250,11 +252,13 @@ async fn the_pairing_relay_takes_one_try(b: Backend) {
     );
     let tried: PairTry = alice.client.get(&format!("/v1/pair/{slot}/try")).await.ok();
     assert_eq!((tried.message, tried.confirm), (vec![2; 33], vec![3; 32]));
-    // No answer yet; then the answer, taken once.
+    // No answer yet; then the answer, taken once, with the token of the try only.
+    let take = |token: &str| PairTake {
+        token: token.to_string(),
+    };
+    let take_path = format!("/v1/pair/{slot}/take");
     assert_eq!(
-        open.status(Method::GET, &format!("/v1/pair/{slot}/answer"), None)
-            .await
-            .0,
+        post_status(&open, &take_path, &take(&token)).await,
         StatusCode::NO_CONTENT
     );
     let answer = PairAnswer {
@@ -264,7 +268,11 @@ async fn the_pairing_relay_takes_one_try(b: Backend) {
         post_status(&alice.client, &format!("/v1/pair/{slot}/answer"), &answer).await,
         StatusCode::NO_CONTENT
     );
-    let a: PairAnswer = open.get(&format!("/v1/pair/{slot}/answer")).await.ok();
+    assert_eq!(
+        post_status(&open, &take_path, &take(&"0".repeat(32))).await,
+        StatusCode::FORBIDDEN
+    );
+    let a: PairAnswer = open.post(&take_path, &take(&token)).await.ok();
     assert_eq!(a.sealed, vec![7; 100]);
     assert_eq!(
         open.status(Method::GET, &format!("/v1/pair/{slot}"), None)

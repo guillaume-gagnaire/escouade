@@ -129,6 +129,17 @@ pub mod wire {
         pub confirm: Vec<u8>,
     }
 
+    /// The token of a try (SR2-05): what takes the answer.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct PairTried {
+        pub token: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct PairTake {
+        pub token: String,
+    }
+
     #[derive(Debug, Serialize, Deserialize)]
     pub struct PairAnswer {
         #[serde(with = "serde_bytes")]
@@ -553,12 +564,14 @@ pub async fn challenge(
 ) -> Result<Cbor<ChallengeResponse>, Problem> {
     let id = device_id(&req.device)?;
     let known = app.store.device(id).await.map_err(store_problem)?;
-    if !known.is_some_and(|d| d.revoked_at.is_none()) {
+    let Some(device) = known.filter(|d| d.revoked_at.is_none()) else {
         Metrics::inc(&app.metrics.auth_failures);
         return Err(Problem::unauthorized());
-    }
+    };
     let ttl = app.limits.challenge_ttl;
-    let challenge = app.sessions.challenge(id, Instant::now() + ttl)?;
+    let challenge = app
+        .sessions
+        .challenge(id, device.team, Instant::now() + ttl)?;
     Ok(Cbor(ChallengeResponse {
         challenge: challenge.to_vec(),
         expires_in: ttl.as_secs(),
@@ -808,13 +821,14 @@ pub async fn pair_try(
     State(app): State<Shared>,
     Path(slot): Path<String>,
     Cbor(req): Cbor<PairTry>,
-) -> Result<StatusCode, Problem> {
+) -> Result<Cbor<PairTried>, Problem> {
     bounded(&req.message, crate::pair::MAX_MESSAGE)?;
     bounded(&req.confirm, crate::pair::MAX_MESSAGE)?;
-    app.pairs
+    let token = app
+        .pairs
         .try_once(&slot, req.message, req.confirm)
         .map_err(pair_problem)?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Cbor(PairTried { token }))
 }
 
 pub async fn pair_tried(
@@ -845,11 +859,20 @@ pub async fn pair_answer(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// The new device takes the answer with the token of its try (SR2-05).
 pub async fn pair_take(
     State(app): State<Shared>,
     Path(slot): Path<String>,
+    Cbor(req): Cbor<PairTake>,
 ) -> Result<Response, Problem> {
-    match app.pairs.take_answer(&slot).map_err(pair_problem)? {
+    if req.token.len() > 2 * crate::pair::TOKEN_BYTES {
+        return Err(pair_problem(crate::pair::PairError::NotYours));
+    }
+    match app
+        .pairs
+        .take_answer(&slot, &req.token)
+        .map_err(pair_problem)?
+    {
         Some(sealed) => Ok(Cbor(PairAnswer { sealed }).into_response()),
         None => Ok(StatusCode::NO_CONTENT.into_response()),
     }
