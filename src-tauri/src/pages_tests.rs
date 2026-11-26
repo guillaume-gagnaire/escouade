@@ -59,6 +59,7 @@ fn show(title: &str, page: Option<&str>, b: Bundle) -> Show {
         template: "html",
         page: page.map(str::to_string),
         bundle: b,
+        quiet: false,
         escouade: None,
     }
 }
@@ -439,6 +440,91 @@ async fn the_window_says_where_a_row_is_shown() {
     // A page with no row is not given one.
     h.core.page_placed("p-9", Placement::Full);
     assert_eq!(h.core.page_rows(&p.id).len(), 1);
+}
+
+#[tokio::test]
+async fn the_window_draws_a_row_goes_back_to_a_version_and_opens_a_closed_page_again() {
+    let (h, p, a) = world("pages-window").await;
+    h.core.app.manage(Arc::new(Shelter::default()));
+    let shelter = h.core.app.state::<Arc<Shelter>>().inner().clone();
+    let body = || {
+        let r = shelter.serve(
+            "agentpage-p-1",
+            "GET",
+            "escouade-page://p-1.localhost/",
+            false,
+        );
+        String::from_utf8_lossy(r.body()).into_owned()
+    };
+    h.core
+        .page_show(&author(&a), show("Revue", None, html("première")))
+        .unwrap();
+    h.core
+        .page_show(&author(&a), show("Revue v2", Some("p-1"), html("seconde")))
+        .unwrap();
+    let rows = h.core.page_open_rows();
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert_eq!(
+        (row.page.as_str(), row.project_id.as_str()),
+        ("p-1", p.id.as_str())
+    );
+    assert_eq!(
+        (row.title.as_str(), row.agent_name.as_str()),
+        ("Revue v2", "pagination")
+    );
+    assert_eq!(row.versions.iter().map(|v| v.n).collect::<Vec<_>>(), [1, 2]);
+    assert_eq!((row.shown, row.open, row.quiet), (2, true, false));
+    // « v1 ▾ »: the row shows its first version, served again; a version not kept is refused.
+    let back = h.core.page_show_version("p-1", 1).unwrap();
+    assert_eq!(back.shown, 1);
+    assert!(body().contains("première"));
+    let e = h.core.page_show_version("p-1", 7).unwrap_err();
+    assert!(e.contains("plus gardée"), "{e}");
+    // The agent's next version shows the last again.
+    h.core
+        .page_show(
+            &author(&a),
+            show("Revue v3", Some("p-1"), html("troisième")),
+        )
+        .unwrap();
+    assert_eq!(h.core.page_row("p-1").unwrap().shown, 3);
+    assert!(body().contains("troisième"));
+    // Closed by its ×: kept, its card opens it again on its last version.
+    assert!(h.core.page_close_row("p-1"));
+    assert!(!h.core.page_close_row("p-1"));
+    let closed = h.core.page_row("p-1").unwrap();
+    assert!(!closed.open);
+    assert!(h.core.page_open_rows().is_empty());
+    assert!(h.core.page_show_version("p-1", 2).is_err());
+    let again = h.core.page_reopen("p-1").unwrap();
+    assert_eq!((again.open, again.shown), (true, 3));
+    assert_eq!(h.core.page_rows(&p.id)[0].1, Placement::Hidden);
+    // `open: quiet`: its row waits.
+    let mut quiet = show("Calme", None, html("c"));
+    quiet.quiet = true;
+    h.core.page_show(&author(&a), quiet).unwrap();
+    assert!(h.core.page_row("p-2").unwrap().quiet);
+    // Off: nothing opens again; its project gone, the page is no longer kept.
+    let mut s = h.core.settings.read().clone();
+    s.agent_pages = false;
+    h.core.save_settings(s).unwrap();
+    assert!(h
+        .core
+        .page_reopen("p-1")
+        .unwrap_err()
+        .contains("Pages des agents"));
+    let mut s = h.core.settings.read().clone();
+    s.agent_pages = true;
+    h.core.save_settings(s).unwrap();
+    h.core.projects.write().retain(|x| x.id != p.id);
+    h.core.pages_sweep();
+    assert!(h.core.page_row("p-1").is_none());
+    assert!(h
+        .core
+        .page_reopen("p-1")
+        .unwrap_err()
+        .contains("plus gardée"));
 }
 
 // ---------- the copy ----------

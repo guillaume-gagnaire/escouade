@@ -55,6 +55,8 @@
   import PermissionCard from './conv/PermissionCard.svelte';
   import QuestionCard from './conv/QuestionCard.svelte';
   import SentFiles from './conv/SentFiles.svelte';
+  import PageCard from './conv/PageCard.svelte';
+  import { pageCall } from '../lib/agentpages.svelte';
   import SetupProgress from './conv/SetupProgress.svelte';
   import Thinking from './conv/Thinking.svelte';
   import ToolRow from './conv/ToolRow.svelte';
@@ -978,6 +980,9 @@
                 <Thinking {item} />
               {:else if item.kind === 'tool' && item.name === 'SendUserFile' && !item.parent}
                 <SentFiles {item} agentId={agent.id} engine={agent.engine} />
+              {:else if item.kind === 'tool' && !item.parent && pageCall(item)}
+                <!-- A page the agent showed (show_page, AP-3): its card, not its call's row; a failed call keeps its row. -->
+                <PageCard {item} {agent} />
               {:else if item.kind === 'tool'}
                 <ToolRow
                   {item}

@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  AgentPageRow,
   CodeHost,
   MergeHow,
   EngineDecl,
@@ -891,6 +892,21 @@ export const api = {
   devpageDevtools: (agentId: string) => invoke<void>('devpage_devtools', { agentId }),
   devpageMode: (agentId: string, mode: 'full' | 'tablet' | 'mobile') => invoke<void>('devpage_mode', { agentId, mode }),
   devpageClose: (agentId: string) => invoke<void>('devpage_close', { agentId }),
+  /** The agents' pages whose row is open, in every project (AP-3). */
+  agentpageRows: () => invoke<AgentPageRow[]>('agentpage_rows'),
+  /** An agent's page as its card and its view draw it; null once it is no longer kept. */
+  agentpageInfo: (page: string) => invoke<AgentPageRow | null>('agentpage_info', { page }),
+  /** The user opens an agent's page again (its card): its row, on its last version. */
+  agentpageReopen: (page: string) => invoke<AgentPageRow>('agentpage_reopen', { page }),
+  /** The row of an agent's page shows its version `n` (« v2 ▾ » of its bar). */
+  agentpageVersion: (page: string, n: number) => invoke<AgentPageRow>('agentpage_version', { page, n }),
+  /** The user closes the row of an agent's page (its ×): the page stays kept. Whether it was open. */
+  agentpageCloseRow: (page: string) => invoke<boolean>('agentpage_close_row', { page }),
+  /** An agent's page placed at `bounds` in the window, or hidden. */
+  agentpagePlace: (page: string, bounds: PageBounds | null, placement?: PagePlacement) =>
+    invoke<void>('agentpage_place', { page, bounds, placement: placement ?? null }),
+  /** « La page veut ouvrir… »: `follow` opens the address the core kept in the system's browser. */
+  agentpageOutside: (page: string, follow: boolean) => invoke<string | null>('agentpage_outside', { page, follow }),
   /** The write's number, which the backend's log tells it by. */
   termWrite: (id: string, data: string) => invoke<number>('term_write', { id, data }),
   termReport: (id: string, report: TermReport) => invoke<void>('term_report', { id, report }),

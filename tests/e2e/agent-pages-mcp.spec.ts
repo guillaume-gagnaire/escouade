@@ -4,7 +4,7 @@
 // the copy, its style sheet and its script among it, never the secret beside it nor its .env. get_page says its versions,
 // list_browsers lists its row page:p-1 (read_browser refuses it), close_page closes it, kept. « Pages des agents » off
 // in Réglages › Agents: the tools leave the list and the instructions, a call is refused. At 1440 × 900 and 1024 × 728.
-// On Windows: the read goes through WebView2's protocol (the view of AP-3 is not there yet: the test places the page).
+// On Windows: the read goes through WebView2's protocol; the page is on screen beside the conversation (the view of AP-3).
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
@@ -140,19 +140,17 @@ test.describe('a fake agent shows its pages', () => {
       expect(agent.instructions).toContain('show_page');
       expect(await agent.tools()).toEqual(expect.arrayContaining(['show_page', 'get_page', 'close_page']));
 
-      // The template: a page p-1, its row waiting in « Navigateurs ».
+      // The template: a page p-1, its row in « Navigateurs », opened beside the conversation the user looks at (AP-3).
       const shown = await agent.json('show_page', { title: 'Revue de POR-41', template: 'review', data: REVIEW });
-      expect(shown).toMatchObject({ page: 'p-1', browser: 'page:p-1', version: 1, opened: 'waiting', ask: null });
+      expect(shown).toMatchObject({ page: 'p-1', browser: 'page:p-1', version: 1, opened: 'beside', ask: null });
       let rows = (await agent.json('list_browsers', {})).browsers;
       expect(rows.find((r: { browser: string }) => r.browser === 'page:p-1')).toMatchObject({
         name: 'Revue de POR-41',
         by: 'agent',
-        placement: 'hidden',
+        placement: 'beside',
         launch: false,
       });
-      // Put beside the conversation, as the view of AP-3 will: it is on screen, and read in Escouade's world.
-      const bounds = { x: Math.round(size.width / 2), y: 48, width: Math.round(size.width / 2), height: size.height - 96 };
-      await invoke(page, 'agentpage_place', { page: 'p-1', bounds, placement: 'beside' });
+      // On screen beside the conversation (the view of AP-3), and read in Escouade's world.
       await textOf(page, 'p-1', 'La liste montre 25 adhérents par page');
       await expect.poll(async () => (await agent.json('get_page', { page: 'p-1' })).loaded, { timeout: 20_000 }).toBe(true);
       let state = await agent.json('get_page', { page: 'p-1' });

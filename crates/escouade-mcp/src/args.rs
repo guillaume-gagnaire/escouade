@@ -1446,7 +1446,7 @@ pub struct ShowPageArgs {
     )]
     pub page: Option<String>,
     #[schemars(
-        description = "beside (the default) or quiet. The answer's opened says what happened: waiting, its row waiting in « Navigateurs »."
+        description = "beside (the default: beside your conversation when the user is looking at it) or quiet (its row waits). The answer's opened says what happened: beside, on screen; waiting, its row waiting in « Navigateurs » for the user."
     )]
     pub open: Option<PageOpenArg>,
 }

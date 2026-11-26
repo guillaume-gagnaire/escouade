@@ -5003,6 +5003,36 @@ pub fn agentpage_place(
     crate::agentpage::place(&app, &page, bounds)
 }
 
+/// The agents' pages whose row is open, in every project (the window's rows of « Navigateurs », AP-3).
+#[tauri::command]
+pub fn agentpage_rows(core: CoreState) -> Vec<crate::pages::PageRow> {
+    core.page_open_rows()
+}
+
+/// Agent's page `page` as its card and its view draw it; none once it is no longer kept.
+#[tauri::command]
+pub fn agentpage_info(core: CoreState, page: String) -> Option<crate::pages::PageRow> {
+    core.page_row(&page)
+}
+
+/// The user opens agent's page `page` again (its card): its row, on its last version.
+#[tauri::command]
+pub fn agentpage_reopen(core: CoreState, page: String) -> Res<crate::pages::PageRow> {
+    core.inner().page_reopen(&page)
+}
+
+/// The row of agent's page `page` shows its version `n` (« v2 ▾ » of its bar).
+#[tauri::command]
+pub fn agentpage_version(core: CoreState, page: String, n: u32) -> Res<crate::pages::PageRow> {
+    core.inner().page_show_version(&page, n)
+}
+
+/// The user closes the row of agent's page `page` (its ×): the page stays kept.
+#[tauri::command]
+pub fn agentpage_close_row(core: CoreState, page: String) -> bool {
+    core.page_close_row(&page)
+}
+
 /// The user's gesture on « La page veut ouvrir… »: `follow` opens the web address the core kept
 /// for page `page` in the system's browser (never one the window gives), else it is let go.
 #[tauri::command]

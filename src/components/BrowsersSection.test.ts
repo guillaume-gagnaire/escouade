@@ -160,3 +160,50 @@ describe('the section « Navigateurs »', () => {
     expect(screen.getAllByRole('button', { name: 'Close the browser' })).toHaveLength(3);
   });
 });
+
+describe('an agent’s page in « Navigateurs » (AP-3)', () => {
+  it('is a row with the page’s icon, its title, its last version; its point while it waits; its menu and its × close its row alone', async () => {
+    const { agentpages } = await import('../lib/agentpages.svelte');
+    agentpages.info = {
+      'p-12': {
+        page: 'p-12',
+        projectId: 'p1',
+        agentId: 'a7',
+        agentName: 'pagination-users',
+        ticketId: null,
+        title: 'Revue avant fusion',
+        template: 'review',
+        versions: [
+          { n: 1, at: 0 },
+          { n: 2, at: 1 },
+        ],
+        shown: 2,
+        open: true,
+        quiet: false,
+        loaded: true,
+      },
+    };
+    devpages.pages = {
+      'page:p-12': page({ url: '', title: 'Revue avant fusion', by: { kind: 'page', id: 'a7', page: 'p-12' }, unseen: true, opened: 5 }),
+    };
+    const b = fakeBackend();
+    render(BrowsersSection, { project: project() });
+    const r = rows()[0];
+    expect(r.querySelector('.nm')?.textContent).toBe('Revue avant fusion');
+    expect(r.querySelector('.d')).toBeNull();
+    expect(r.querySelector('.pg.unseen')).toBeTruthy();
+    expect(r.querySelector('[data-testid="page-row-version"]')?.textContent).toBe('v2');
+    expect(r.textContent).toContain('Nouvelle page : elle attend que tu l’ouvres');
+    await fireEvent.contextMenu(r);
+    expect(menu.open?.items.filter((i) => !i.separator).map((i) => i.label)).toEqual([
+      'Ouvrir à côté',
+      'Ouvrir en dessous',
+      'Fermer la page (elle reste gardée)',
+    ]);
+    await fireEvent.click(within(r).getByRole('button', { name: 'Fermer la page (elle reste gardée)' }));
+    expect(b.called('agentpage_close_row')).toEqual([{ cmd: 'agentpage_close_row', args: { page: 'p-12' } }]);
+    expect(b.called('devpage_close')).toEqual([]);
+    await tick();
+    expect(rows()).toEqual([]);
+  });
+});

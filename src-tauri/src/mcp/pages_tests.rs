@@ -457,3 +457,36 @@ async fn off_the_tools_leave_the_list_and_the_instructions_and_refuse() {
     assert_eq!(h.core.pages.lock().list.len(), 1);
     c.cancel().await.unwrap();
 }
+
+#[tokio::test]
+async fn opened_says_whether_the_window_put_the_page_on_screen() {
+    let h = harness("mcp-pages-opened");
+    let (_p, a) = world(&h).await;
+    let c = as_agent(&h, &a.id).await;
+    let v = read(
+        &c,
+        "show_page",
+        json!({ "title": "Revue", "template": "review", "data": review() }),
+    )
+    .await;
+    assert_eq!(v["opened"], "waiting");
+    // The window put it beside the conversation (AP-3): a new version is reloaded where it is.
+    h.core.page_placed("p-1", crate::devpage::Placement::Beside);
+    let v = read(
+        &c,
+        "show_page",
+        json!({ "title": "Revue", "template": "review", "data": review(), "page": "p-1" }),
+    )
+    .await;
+    assert_eq!(v["opened"], "beside");
+    // `open: quiet`: its row waits, the window told so.
+    let v = read(
+        &c,
+        "show_page",
+        json!({ "title": "Schéma", "template": "review", "data": review(), "open": "quiet" }),
+    )
+    .await;
+    assert_eq!(v["opened"], "waiting");
+    assert!(h.core.page_row("p-2").unwrap().quiet);
+    assert!(!h.core.page_row("p-1").unwrap().quiet);
+}

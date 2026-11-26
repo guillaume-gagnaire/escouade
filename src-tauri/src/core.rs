@@ -2049,7 +2049,7 @@ impl<R: Runtime> Core<R> {
         let pages = crate::pages::PageBox {
             list: std::mem::take(&mut state.pages),
             seq: state.page_seq,
-            rows: HashMap::new(),
+            ..Default::default()
         };
         let inbox_snoozes = crate::inboxviews::ViewSnoozes {
             until: std::mem::take(&mut state.inbox_snoozes),

@@ -76,6 +76,9 @@
   import StatusBar from './components/StatusBar.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import DevPage from './components/DevPage.svelte';
+  import AgentPageView from './components/AgentPageView.svelte';
+  import { isAgentPage } from './lib/devpage.svelte';
+  import { loadRows } from './lib/agentpages.svelte';
   import TitleBar from './components/TitleBar.svelte';
   import TlsBanner from './components/TlsBanner.svelte';
   import RecoveryBanner from './components/RecoveryBanner.svelte';
@@ -89,6 +92,8 @@
 
   onMount(() => {
     app.init().catch((e) => (initError = String(e)));
+    // The agents' pages whose row the backend kept for this run (a reload of the window).
+    void loadRows();
     if (!import.meta.env.PROD) return;
     const stopChecks = watchForUpdates();
     const stopPresence = watchPresence();
@@ -306,7 +311,12 @@
           {:else if app.pageShown}
             <!-- A browser of the project (ESC-657), shown alone as a terminal is. -->
             {#key app.pageShown}
-              <DevPage pageKey={app.pageShown} />
+              {#if isAgentPage(app.pageShown)}
+                <!-- An agent's page (AP-3), in its shelter. -->
+                <AgentPageView pageKey={app.pageShown} />
+              {:else}
+                <DevPage pageKey={app.pageShown} />
+              {/if}
             {/key}
           {:else if app.agent}
             {#key app.agent.id}

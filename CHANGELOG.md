@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Une page d’agent s’ouvre à côté de sa conversation quand tu la regardes, sinon elle t’attend dans « Navigateurs » ; sa carte dans la conversation l’affiche ou la rouvre, et sa barre remonte à une version précédente ou la montre en largeur tablette ou mobile. Une bande au-dessus rappelle qui l’a écrite et qu’elle n’a ni réseau ni accès à Escouade ou à tes fichiers.
+
 ## [2.2.14] — 2026-11-27
 
 - Un agent t’ouvre un vrai onglet à côté de sa conversation pour te montrer son travail : le lancement du projet, une adresse, ou l’artefact Claude qu’il vient de publier. Il l’ouvre seulement si tu regardes sa conversation, sinon la ligne de « Navigateurs » attend ton retour. Une adresse hors du projet t’est demandée une fois dans sa conversation ; les adresses d’Escouade et les autres ports de ton poste ne s’ouvrent jamais.

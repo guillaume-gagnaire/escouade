@@ -72,6 +72,7 @@ import type {
   HarnessScope,
   LaunchHeld,
   PageEvent,
+  AgentPageEvent,
   BrowserOpened,
   AgentReview,
   Project,
@@ -711,6 +712,7 @@ class AppState {
   private ticketDoneHooks = new Set<(agentId: string) => void>();
   /** What follows a launch's page (ESC-311): its loads, its links opened outside. */
   private devPageHooks = new Set<(e: PageEvent) => void>();
+  private agentPageHooks = new Set<(e: AgentPageEvent) => void>();
   /** What follows a browser an agent opened (ESC-678). */
   private browserOpenedHooks = new Set<(e: BrowserOpened) => void>();
   /** What must be written before the app restarts by itself for an update (the composers' drafts). */
@@ -733,6 +735,12 @@ class AppState {
   onRecipeChanged(f: (agentId: string) => void) {
     this.recipeHooks.add(f);
     return () => void this.recipeHooks.delete(f);
+  }
+
+  /** `f` runs at each event of an agent's page (AP-3). Returns what unregisters it. */
+  onAgentPage(f: (e: AgentPageEvent) => void) {
+    this.agentPageHooks.add(f);
+    return () => void this.agentPageHooks.delete(f);
   }
 
   /** `f` runs at each event of a launch's page (ESC-311). Returns what unregisters it. */
@@ -999,6 +1007,9 @@ class AppState {
         break;
       case 'devPage':
         for (const f of this.devPageHooks) f(e.page);
+        break;
+      case 'agentPage':
+        for (const f of this.agentPageHooks) f(e.page);
         break;
       case 'browserOpened':
         for (const f of this.browserOpenedHooks) f(e.browser);

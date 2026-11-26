@@ -20,6 +20,7 @@
     showPage,
     type PageState,
   } from '../lib/devpage.svelte';
+  import { agentpages, latestOf, pageOfKey } from '../lib/agentpages.svelte';
   import { t } from '../lib/i18n';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { openUrl } from '../lib/opener';
@@ -84,7 +85,17 @@
   const agentName = (id: string | undefined) => (id ? (app.agents[id]?.name ?? id) : '');
 
   /** Its tip: what waits for the user, else its address. */
-  const tipOf = (p: PageState) => (p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : p.url);
+  /** An agent's page (AP-3): its version tag (« v2 »), its agent. */
+  const pageInfo = (key: string) => {
+    const id = pageOfKey(key);
+    return id ? (agentpages.info[id] ?? null) : null;
+  };
+  const tipOf = (key: string, p: PageState) => {
+    const info = pageInfo(key);
+    const name = (p.by.kind === 'page' && app.agents[p.by.id]?.name) || info?.agentName || '';
+    if (p.by.kind === 'page') return t('devpage.agentPage.rowTip', { title: p.title, agent: name });
+    return p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : p.url;
+  };
 
   function rowMenu(e: MouseEvent, key: string, p: PageState) {
     // Beside what is on screen; a browser opened alone and shown alone has nothing to go beside.
@@ -100,6 +111,11 @@
             { label: '', separator: true },
           ]
         : [];
+    // An agent's page: beside or below, and close its row (the page stays kept, its card opens it again).
+    if (p.by.kind === 'page') {
+      menu.show(e, [...beside, { label: t('devpage.agentPage.closeRow'), icon: 'close', onClick: () => closePage(key) }]);
+      return;
+    }
     const items: MenuItem[] = [
       ...beside,
       { label: t('devpage.reload'), icon: 'restart', onClick: () => go(key, 'reload') },
@@ -182,26 +198,35 @@
         tabindex="0"
         aria-current={selected(key) ? 'true' : undefined}
         data-browser={key}
-        use:tip={{ text: tipOf(p), aria: false }}
+        use:tip={{ text: tipOf(key, p), aria: false }}
         onclick={(e) => click(e, key)}
         onpointerdown={(e) => paneDrag.press(e, pageItem(key), rowName(p))}
         oncontextmenu={(e) => rowMenu(e, key, p)}
         onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && showPage(key)}
       >
-        <i class="d {tn}" aria-hidden="true"></i>
-        <span class="nm">{rowName(p)}</span>
-        <span class="sr"
-          >{p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : t(`devpage.browsers.state.${p.phase}`)}</span
-        >
-        {#if p.by.kind === 'agent'}<span class="by" aria-hidden="true"><Icon name="branch" size={11} /></span>{/if}
-        {#if p.opener}<span class="by" use:tip={t('devpage.browsers.opener', { name: agentName(p.opener) })}
-            ><Icon name="agents" size={11} /></span
-          >{/if}
+        {#if p.by.kind === 'page'}
+          <!-- An agent's page (AP-3): the page's icon for the dot; its point while it waits for the user. -->
+          <span class="pg" class:unseen={p.unseen} aria-hidden="true"><Icon name="page" size={13} /></span>
+          <span class="nm">{rowName(p)}</span>
+          {#if p.unseen}<span class="sr">{t('devpage.agentPage.unseen')}</span>{/if}
+          {@const info = pageInfo(key)}
+          {#if info}<span class="vtag" data-testid="page-row-version">{t('devpage.agentPage.version', { n: latestOf(info) })}</span>{/if}
+        {:else}
+          <i class="d {tn}" aria-hidden="true"></i>
+          <span class="nm">{rowName(p)}</span>
+          <span class="sr"
+            >{p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : t(`devpage.browsers.state.${p.phase}`)}</span
+          >
+          {#if p.by.kind === 'agent'}<span class="by" aria-hidden="true"><Icon name="branch" size={11} /></span>{/if}
+          {#if p.opener}<span class="by" use:tip={t('devpage.browsers.opener', { name: agentName(p.opener) })}
+              ><Icon name="agents" size={11} /></span
+            >{/if}
+        {/if}
         <span class="ra">
           <button
             class="icon-btn x"
-            aria-label={t('devpage.browsers.close')}
-            use:tip={{ text: t('devpage.browsers.close'), aria: false }}
+            aria-label={p.by.kind === 'page' ? t('devpage.agentPage.closeRow') : t('devpage.browsers.close')}
+            use:tip={{ text: p.by.kind === 'page' ? t('devpage.agentPage.closeRow') : t('devpage.browsers.close'), aria: false }}
             onclick={(e) => {
               e.stopPropagation();
               closePage(key);
@@ -306,6 +331,39 @@
     font-weight: 550;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* An agent's page: the page's icon in the project's ink, a point on it while it waits for the user. */
+  .pg {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    margin-left: -3px;
+    color: var(--p-ink);
+  }
+  .pg.unseen::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wait);
+    box-shadow: 0 0 0 2px var(--frame);
+  }
+  /* Its last version, as the design's « v2 »: a hairline tag. */
+  .vtag {
+    flex: none;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
   }
   /* Opened by an agent's launch: its worktree's mark, as the chip of its bar. */
   .by {

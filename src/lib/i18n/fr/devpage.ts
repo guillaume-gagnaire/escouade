@@ -60,6 +60,58 @@ export default {
     revoke: 'Retirer les accords',
     revoked: 'Accords retirés : les agents redemanderont pour lire ce navigateur.',
   },
+  /** An agent's page (AP-3): its row of « Navigateurs », its view and its bar. */
+  agentPage: {
+    /** The view's name, for the screen readers. */
+    view: 'Page de {agent} : {title}',
+    by: '{agent}',
+    templates: { review: 'Revue', diagram: 'Schéma', compare: 'Comparaison', html: 'Page HTML', custom: 'Page à soi' },
+    versions: 'Versions de la page',
+    /** A version, short: the bar's chip, the row's tag, the card. */
+    version: 'v{n}',
+    versionItem: 'Version {n}',
+    latest: 'la dernière',
+    older: 'Tu regardes la v{n} ; la dernière est la v{last}.',
+    toLatest: 'Revenir à la v{last}',
+    close: 'Fermer la page',
+    loading: 'La page se charge…',
+    gone: 'Cette page est fermée : sa carte dans la conversation la rouvre.',
+    wants: 'La page veut ouvrir',
+    wantsOpen: 'Ouvrir dans le navigateur du système',
+    wantsIgnore: 'Ignorer',
+    /** Its row in « Navigateurs »: its tip, its tag, its point. */
+    rowTip: '{title} · page de {agent}',
+    unseen: 'Nouvelle page : elle attend que tu l’ouvres',
+    closeRow: 'Fermer la page (elle reste gardée)',
+  },
+  /** The driving band of every row (AP-3; driven by AB-8). */
+  drive: {
+    label: 'Pilotage et confiance',
+    trust: 'Écrite par {agent} · hors réseau, sans accès à Escouade ni à tes fichiers',
+    trustTip:
+      'La page vit à part : aucune adresse du web, aucune commande d’Escouade, aucun de tes fichiers. Ce qu’elle dit vient de l’agent : relis avant de copier une commande.',
+    drives: '{agent} pilote',
+    take: 'Reprendre la main',
+    youHave: 'Tu as la main',
+    give: 'La rendre',
+    continue: 'Continuer',
+  },
+  /** The card of a page in its agent's conversation (AP-3). */
+  card: {
+    label: 'Page montrée par {agent}',
+    by: 'Page de {agent}',
+    template: 'modèle {name}',
+    where: { beside: 'à côté', waiting: 'attend dans Navigateurs', closed: 'fermée', erased: 'plus gardée' },
+    shown: 'Montrée',
+    updated: 'Mise à jour',
+    newer: 'v{n} depuis',
+    show: 'Afficher',
+    reopen: 'Rouvrir',
+    opening: 'Ouverture de la page…',
+    erased: 'Cette page n’est plus gardée : son agent ou son projet n’est plus là, ou la place a manqué.',
+    off: 'Les pages des agents sont coupées (Réglages › Agents).',
+    closedBy: 'Page {page} fermée par {agent} : elle reste gardée.',
+  },
   /** The band « veut ouvrir » of an agent's conversation (ESC-678, choice C3): an address outside the project's launch. */
   open: {
     /** `{agent}`: its name; the host follows, then `where`. */

@@ -35,7 +35,14 @@ export const BROWSER_PREFIX = 'browser:';
  * Who opened a browser: an agent's launch (its key is the agent's id), a launch command run in its project (ESC-560,
  * keyed `run:<project>:<command>`), or the user alone.
  */
-export type PageBy = { kind: 'agent'; id: string } | { kind: 'command'; id: string } | { kind: 'user' };
+export type PageBy =
+  { kind: 'agent'; id: string } | { kind: 'command'; id: string } | { kind: 'user' } | { kind: 'page'; id: string; page: string };
+
+/** The key of an agent's page's row (AP-3, the backend's `pages::KEY_PREFIX`): `page:p-12`. */
+export const AGENT_PAGE_PREFIX = 'page:';
+
+/** The row `key` is an agent's page (`page:p-12`), shown by `AgentPageView` rather than `DevPage`. */
+export const isAgentPage = (key: string): boolean => key.startsWith(AGENT_PAGE_PREFIX);
 
 export interface PageState {
   url: string;
@@ -60,6 +67,12 @@ export interface PageState {
   waiting?: Exclude<BrowserWish, 'quiet'>;
   /** The width an agent's capture shows it at, for the capture's time (ESC-670): over its own, never kept. */
   shot?: PageMode;
+  /** An agent's page (AP-3): the width the user chose for it, for this run. */
+  width?: PageMode;
+  /** An agent's page whose row waits for the user (they were not looking at its agent): its point. */
+  unseen?: boolean;
+  /** An agent's page asked to open this web address (« La page veut ouvrir… », AP-1): offered, never followed alone. */
+  wants?: string;
 }
 
 class DevPages {
@@ -78,6 +91,9 @@ const stalls = new Map<string, ReturnType<typeof setTimeout>>();
 let seq = 0;
 /** The order the rows opened in. */
 let order = 0;
+
+/** The place of a row opening now. */
+export const nextOrder = () => ++order;
 
 /** Where the pages of project `project` open: in Escouade, or in the system's browser. The « Pages » window is gone (ESC-657): set before, it opens the browser's row. */
 export const pagesOpenOf = (project: Project | undefined): 'agent' | 'system' => (project?.pagesOpen === 'system' ? 'system' : 'agent');
@@ -262,6 +278,7 @@ export async function openProjectPage(project: Project, commandId: string, title
 /** The width the page `key` is shown at. */
 export function modeOf(key: string): PageMode {
   const page = devpages.pages[key];
+  if (page?.by.kind === 'page') return page.shot ?? page.width ?? 'full';
   return (page && (page.shot ?? devpages.modes[page.title])) || 'full';
 }
 
@@ -269,6 +286,11 @@ export function modeOf(key: string): PageMode {
 export function setMode(key: string, mode: PageMode) {
   const page = devpages.pages[key];
   if (!page) return;
+  // An agent's page: the window lays it out by its width, for this run (its title is the agent's, not a launch's).
+  if (page.by.kind === 'page') {
+    page.width = mode;
+    return;
+  }
   if (mode === 'full') delete devpages.modes[page.title];
   else devpages.modes[page.title] = mode;
   saveMode(page.title, mode);
@@ -303,7 +325,9 @@ export function besideOf(key: string): PaneItem | null {
   if (!page) return null;
   const on = app.panes && app.panesOn ? activeItem(app.panes) : app.singleItem;
   if (!on || itemKey(on) !== `page:${key}`) return on;
-  return page.by.kind === 'agent' && app.agents[page.by.id] && !app.agents[page.by.id].archived ? { kind: 'agent', id: page.by.id } : null;
+  return (page.by.kind === 'agent' || page.by.kind === 'page') && app.agents[page.by.id] && !app.agents[page.by.id].archived
+    ? { kind: 'agent', id: page.by.id }
+    : null;
 }
 
 /** The browser `key` in a pane beside what is on screen (`right`) or under it (`bottom`), as a terminal goes. */
@@ -330,7 +354,9 @@ export function devtools(key: string) {
  * alone, beside or under something else, as `list_browsers` says it (ESC-669).
  */
 export function place(key: string, bounds: PageBounds | null, placement?: PagePlacement) {
-  if (!devpages.pages[key]) return Promise.resolve();
+  const page = devpages.pages[key];
+  if (!page) return Promise.resolve();
+  if (page.by.kind === 'page') return api.agentpagePlace(page.by.page, bounds, bounds ? placement : 'hidden').catch(() => {});
   return api.devpagePlace(key, bounds, bounds ? placement : 'hidden').catch(() => {});
 }
 
@@ -447,15 +473,20 @@ export function showWish(key: string, wish: Exclude<BrowserWish, 'quiet'>, agent
   app.dropInPane({ kind: 'agent', id: agent }, wish === 'below' ? 'bottom' : 'right', pageItem(key));
 }
 
-/** Closes the browser `key`: its row's ×, its agent gone, its ticket done. */
-export function closePage(key: string) {
+/**
+ * Closes the browser `key`: its row's ×, its agent gone, its ticket done. An agent's page closes its row alone (it stays
+ * kept, its card opens it again); `told`: the backend already closed it (its agent's `close_page`), nothing to ask.
+ */
+export function closePage(key: string, told = false) {
   const page = devpages.pages[key];
   if (!page) return;
   delete devpages.pages[key];
   clearTimeout(stalls.get(key));
   stalls.delete(key);
   if (app.selectedPage[page.projectId] === key) app.selectedPage[page.projectId] = null;
-  api.devpageClose(key).catch(() => {});
+  if (page.by.kind === 'page') {
+    if (!told) api.agentpageCloseRow(page.by.page).catch(() => {});
+  } else api.devpageClose(key).catch(() => {});
   // Its pane, if it had one, closes.
   app.settlePanes();
 }

@@ -61,6 +61,39 @@ pub struct PageBox {
     /// The number of the last page shown.
     pub seq: u64,
     pub rows: HashMap<String, Placement>,
+    /// The rows the agent asked to wait (`open: quiet`): the window does not open them beside.
+    pub quiet: HashSet<String>,
+    /// The version each open row shows, when it is not the last (« v2 ▾ » of its bar, AP-3).
+    pub shown: HashMap<String, u32>,
+}
+
+/// A page as the window draws it (AP-3): its row of « Navigateurs », its bar, its card.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageRow {
+    pub page: String,
+    pub project_id: String,
+    pub agent_id: String,
+    pub agent_name: String,
+    pub ticket_id: Option<String>,
+    pub title: String,
+    pub template: String,
+    /// Its versions kept, the oldest first: their number and when they were made.
+    pub versions: Vec<RowVersion>,
+    /// The version its row shows (the last unless the user went back to another).
+    pub shown: u32,
+    /// Its row is open in « Navigateurs ».
+    pub open: bool,
+    /// The agent asked its row to wait (`open: quiet`).
+    pub quiet: bool,
+    /// Its webview's last load finished.
+    pub loaded: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct RowVersion {
+    pub n: u32,
+    pub at: i64,
 }
 
 impl PageBox {
@@ -712,6 +745,8 @@ pub(crate) struct Show {
     /// A page of the agent's, for a new version of it.
     pub page: Option<String>,
     pub bundle: Bundle,
+    /// `open: quiet`: its row waits, even when the user looks at the agent.
+    pub quiet: bool,
     /// For the page of one's own (`custom`, AP-7): what `window.escouade` holds but its page and
     /// version, which `page_show` adds once it knows them (`with_escouade`).
     pub escouade: Option<serde_json::Value>,
@@ -903,6 +938,13 @@ impl<R: Runtime> Core<R> {
                 }),
             }
             b.rows.entry(id.clone()).or_insert(Placement::Hidden);
+            // A new version shows at once, wherever the user went back to.
+            b.shown.remove(&id);
+            if show.quiet {
+                b.quiet.insert(id.clone());
+            } else {
+                b.quiet.remove(&id);
+            }
             (id, n, project, dropped, evicted, incoming)
         };
         for dir in dropped {
@@ -973,13 +1015,119 @@ impl<R: Runtime> Core<R> {
     /// Closes the row of page `page` of agent `agent`: the page stays kept. Whether it was open.
     pub(crate) fn page_close(&self, agent: &str, page: &str) -> Result<bool, String> {
         let seen = self.page_get(agent, page)?;
-        let open = self.pages.lock().rows.remove(&seen.page.id).is_some();
-        self.page_close_view(&seen.page.id);
+        Ok(self.page_close_row(&seen.page.id))
+    }
+
+    /// Closes the row of page `page`, whoever asks (its agent, or the user by its row's ×): the page
+    /// stays kept, its card reopens it. Whether it was open.
+    pub(crate) fn page_close_row(&self, page: &str) -> bool {
+        let open = {
+            let mut b = self.pages.lock();
+            b.quiet.remove(page);
+            b.shown.remove(page);
+            b.rows.remove(page).is_some()
+        };
+        self.page_close_view(page);
         if open {
-            log::info!("page {} closed", seen.page.id);
-            self.page_tell(&seen.page.id, "closed");
+            log::info!("page {page} closed");
+            self.page_tell(page, "closed");
         }
-        Ok(open)
+        open
+    }
+
+    /// Page `page` as the window draws it, its row open or not; none once it is no longer kept.
+    pub(crate) fn page_row(&self, page: &str) -> Option<PageRow> {
+        let loaded = self.page_loaded(page);
+        let b = self.pages.lock();
+        let p = b.list.iter().find(|p| p.id == page)?;
+        Some(row_of(&b, p, loaded))
+    }
+
+    /// The pages whose row is open, in every project, in the order they were shown.
+    pub(crate) fn page_open_rows(&self) -> Vec<PageRow> {
+        let open: Vec<String> = {
+            let b = self.pages.lock();
+            b.list
+                .iter()
+                .filter(|p| b.rows.contains_key(&p.id))
+                .map(|p| p.id.clone())
+                .collect()
+        };
+        open.iter().filter_map(|p| self.page_row(p)).collect()
+    }
+
+    fn page_loaded(&self, page: &str) -> bool {
+        self.app
+            .try_state::<Arc<Shelter>>()
+            .and_then(|s| s.view(page))
+            .is_some_and(|v| v.loaded)
+    }
+
+    /// The user opens page `page` again (its card, after its row closed or a restart): its row, on its
+    /// last version. Refused while the pages are off, or once it is no longer kept.
+    pub(crate) fn page_reopen(self: &Arc<Self>, page: &str) -> Result<PageRow, String> {
+        let lang = crate::i18n::ui();
+        if !self.pages_on() {
+            return Err(switched_off(lang));
+        }
+        let dir = {
+            let mut b = self.pages.lock();
+            let Some(p) = b.list.iter().find(|p| p.id == page) else {
+                return Err(gone(lang, page));
+            };
+            let n = p.latest().map_or(1, |v| v.n);
+            let dir = version_dir(self.data.root(), &p.project_id, &p.id, n);
+            b.rows.entry(page.to_string()).or_insert(Placement::Hidden);
+            b.quiet.remove(page);
+            b.shown.remove(page);
+            dir
+        };
+        log::info!("page {page} opened again by the user");
+        self.page_serve(page, &dir);
+        self.page_row(page).ok_or_else(|| gone(lang, page))
+    }
+
+    /// The row of page `page` shows its version `n` (« v2 ▾ » of its bar): served, and reloaded where
+    /// it is. The agent's next version shows the last again.
+    pub(crate) fn page_show_version(
+        self: &Arc<Self>,
+        page: &str,
+        n: u32,
+    ) -> Result<PageRow, String> {
+        let lang = crate::i18n::ui();
+        if !self.pages_on() {
+            return Err(switched_off(lang));
+        }
+        let dir = {
+            let mut b = self.pages.lock();
+            if !b.rows.contains_key(page) {
+                return Err(tr_in!(
+                    lang,
+                    "La page {page} n’est pas ouverte.",
+                    "Page {page} is not open."
+                ));
+            }
+            let Some(p) = b.list.iter().find(|p| p.id == page) else {
+                return Err(gone(lang, page));
+            };
+            if !p.versions.iter().any(|v| v.n == n) {
+                return Err(tr_in!(
+                    lang,
+                    "La version {n} de {page} n’est plus gardée.",
+                    "Version {n} of {page} is no longer kept."
+                ));
+            }
+            let last = p.latest().map(|v| v.n);
+            let dir = version_dir(self.data.root(), &p.project_id, &p.id, n);
+            if Some(n) == last {
+                b.shown.remove(page);
+            } else {
+                b.shown.insert(page.to_string(), n);
+            }
+            dir
+        };
+        self.page_serve(page, &dir);
+        self.page_row(page).ok_or_else(|| gone(lang, page))
     }
 
     /// The pages of project `project` whose row is open, in the order they were shown, with where the
@@ -1010,7 +1158,12 @@ impl<R: Runtime> Core<R> {
 
     /// « Pages des agents » or the MCP server turned off: every row closes; nothing is erased.
     pub(crate) fn pages_close_rows(&self) {
-        let rows: Vec<String> = self.pages.lock().rows.drain().map(|(k, _)| k).collect();
+        let rows: Vec<String> = {
+            let mut b = self.pages.lock();
+            b.quiet.clear();
+            b.shown.clear();
+            b.rows.drain().map(|(k, _)| k).collect()
+        };
         for page in rows {
             self.page_close_view(&page);
             self.page_tell(&page, "closed");
@@ -1063,6 +1216,8 @@ impl<R: Runtime> Core<R> {
             b.list = kept;
             for p in &erased {
                 b.rows.remove(&p.id);
+                b.quiet.remove(&p.id);
+                b.shown.remove(&p.id);
             }
             let changed = changed || !erased.is_empty();
             (erased, changed)
@@ -1084,6 +1239,22 @@ impl<R: Runtime> Core<R> {
             s.remove(&p.id);
         }
         let _ = std::fs::remove_dir_all(folder(root, &p.project_id, &p.id));
+        // Its row, if it had one, goes; its cards say it is no longer kept.
+        self.page_tell(&p.id, "erased");
+    }
+
+    /// The row of page `page` is on screen (alone, beside or under something else).
+    pub(crate) fn page_on_screen(&self, page: &str) -> bool {
+        self.pages
+            .lock()
+            .rows
+            .get(page)
+            .is_some_and(|p| *p != Placement::Hidden)
+    }
+
+    /// The window has a shelter to show pages in (the tests have none).
+    pub(crate) fn pages_shown(&self) -> bool {
+        self.app.try_state::<Arc<Shelter>>().is_some()
     }
 
     /// The window is told what became of page `page`'s row.
@@ -1157,4 +1328,36 @@ pub(crate) fn switched_off(lang: Lang) -> String {
         "Les pages des agents sont coupées (Réglages › Agents › « Pages des agents ») : aucun de leurs outils ne répond. L’utilisateur seul les rallume.",
         "The agents' pages are off (Settings › Agents › “Agents' pages”): none of their tools answers. Only the user turns them back on."
     )
+}
+
+/// The refusal of a page no longer kept (its agent or its project gone, or room made for others).
+pub(crate) fn gone(lang: Lang, page: &str) -> String {
+    tr_in!(
+        lang,
+        "La page {page} n’est plus gardée.",
+        "Page {page} is no longer kept."
+    )
+}
+
+/// Page `p` as the window draws it.
+fn row_of(b: &PageBox, p: &AgentPage, loaded: bool) -> PageRow {
+    let last = p.latest().map_or(1, |v| v.n);
+    PageRow {
+        page: p.id.clone(),
+        project_id: p.project_id.clone(),
+        agent_id: p.agent_id.clone(),
+        agent_name: p.agent_name.clone(),
+        ticket_id: p.ticket_id.clone(),
+        title: p.title.clone(),
+        template: p.template.clone(),
+        versions: p
+            .versions
+            .iter()
+            .map(|v| RowVersion { n: v.n, at: v.at })
+            .collect(),
+        shown: b.shown.get(&p.id).copied().unwrap_or(last),
+        open: b.rows.contains_key(&p.id),
+        quiet: b.quiet.contains(&p.id),
+        loaded,
+    }
 }

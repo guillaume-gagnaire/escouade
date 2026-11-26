@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
 // message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
@@ -2003,6 +2003,71 @@ function startSession() {
     result();
   }
 
+  // ---------- "[page montre]", "[page maj p-N]", "[page ferme p-N]" (AP-3, ESC-675) ----------
+
+  // An agent's page by Escouade's tools (its --mcp-config server), as Claude Code calls them: a review shown, then a new
+  // version of it, then its row closed. The call and its answer go in the conversation, where the window draws its card.
+  function pageTurn(text) {
+    const [, what, num] = text.match(/\[page (montre|maj|ferme|calme)(?: (p-\d+))?\]/);
+    const criteria = [
+      { text: 'La liste montre 25 adhérents par page', state: 'met', md: 'Vérifié par `users.spec.ts`.' },
+      { text: 'Suivante et précédente au clavier', state: 'met' },
+      { text: 'La page garde le filtre et le tri après rechargement', state: what === 'maj' ? 'met' : 'partial' },
+    ];
+    const review = {
+      subject: { ticket: 'POR-41', branch: 'ticket/por-41', target: 'main', loop: '2/5' },
+      facts: { files: 3, added: 214, removed: 38, tests: { passed: 48, total: 48 } },
+      criteria,
+      changes: [
+        { path: 'src/routes/adherents/+page.svelte', added: 96, removed: 21 },
+        { path: 'src/lib/pagination.ts', added: 58, removed: 0 },
+        { path: 'tests/users.spec.ts', added: 44, removed: 9 },
+      ],
+      risks: what === 'maj' ? [] : [{ md: 'Le tri n’est pas gardé dans l’adresse.' }],
+    };
+    const tool = what === 'ferme' ? 'close_page' : 'show_page';
+    // « calme »: a diagram whose row waits (open: quiet), whatever the user looks at.
+    const diagram = {
+      title: 'Le tri gardé dans l’adresse',
+      template: 'diagram',
+      data: {
+        kind: 'mermaid',
+        source: 'flowchart LR\n  A[Liste] --> B[Tri]\n  B --> C[Adresse ?q=&tri=]',
+        md: 'Le tri suit le filtre dans l’adresse.',
+      },
+      open: 'quiet',
+    };
+    const input =
+      what === 'ferme'
+        ? { page: num ?? 'p-1' }
+        : what === 'calme'
+          ? diagram
+          : { title: 'Revue avant fusion · POR-41', template: 'review', data: review, ...(what === 'maj' ? { page: num ?? 'p-1' } : {}) };
+    const call = `toolu_p${msg}`;
+    assistant({ type: 'tool_use', id: call, name: `mcp__escouade__${tool}`, input });
+    escouadeTool(tool, input)
+      .then((r) => {
+        toolResult(call, r.content[0].text);
+        const said = {
+          montre: 'Voici la revue de POR-41, je te l’ouvre à côté.',
+          maj: 'J’ai gardé le tri dans l’adresse : la revue est à jour.',
+          ferme: 'Je ferme la revue ; elle reste gardée.',
+          calme: 'Je t’ai laissé le schéma du tri dans Navigateurs, à ouvrir quand tu veux.',
+        }[what];
+        streamText(said);
+        result();
+      })
+      .catch((e) => {
+        out({
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: call, content: e.message, is_error: true }] },
+          parent_tool_use_id: null,
+        });
+        streamText(`${tool} a échoué : ${e.message}`);
+        result();
+      });
+  }
+
   function toolResult(toolUseId, content, extra = {}) {
     out({
       type: 'user',
@@ -3347,6 +3412,10 @@ function startSession() {
           ],
         },
       });
+      return;
+    }
+    if (/\[page (montre|maj|ferme|calme)( p-\d+)?\]/.test(text)) {
+      pageTurn(text);
       return;
     }
     if (text.includes('[artefact]')) {

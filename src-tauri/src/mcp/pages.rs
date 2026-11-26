@@ -249,6 +249,7 @@ pub(super) async fn show_page<R: Runtime>(
     let lang = crate::i18n::ui();
     let title = pages::checked_title(lang, &a.title).map_err(ToolError::Failed)?;
     let template = a.template;
+    let quiet = matches!(a.open, Some(escouade_mcp::args::PageOpenArg::Quiet));
     let core2 = core.clone();
     let shown = tokio::task::spawn_blocking(move || {
         let escouade = (template == PageTemplateArg::Custom)
@@ -262,6 +263,7 @@ pub(super) async fn show_page<R: Runtime>(
                     template: template_name(template),
                     page: a.page,
                     bundle,
+                    quiet,
                     escouade,
                 },
             )
@@ -274,7 +276,7 @@ pub(super) async fn show_page<R: Runtime>(
         "browser": pages::key(&shown.page),
         "version": shown.version,
         "ask": null,
-        "opened": "waiting",
+        "opened": opened(core, &shown.page, quiet).await,
         "bytes": shown.bytes,
         "files": shown.files,
     });
@@ -282,6 +284,25 @@ pub(super) async fn show_page<R: Runtime>(
         v["left_out"] = json!(shown.left_out);
     }
     Ok(v.to_string())
+}
+
+/// Where the page went (AP-3): `beside` once the window put it on screen (the user was looking at the
+/// agent: it opens beside its conversation, or it was already shown and reloaded where it is), else
+/// `waiting`, its row waiting in « Navigateurs ». The window says so within a second and a half.
+async fn opened<R: Runtime>(core: &Core<R>, page: &str, quiet: bool) -> &'static str {
+    if !quiet && core.pages_shown() {
+        for _ in 0..15 {
+            if core.page_on_screen(page) {
+                return "beside";
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+    if core.page_on_screen(page) {
+        "beside"
+    } else {
+        "waiting"
+    }
 }
 
 /// The author of a call on one of its pages.

@@ -1130,10 +1130,34 @@ export interface PageEvent {
 export interface AgentPageEvent {
   /** Its number, `p-<n>`. */
   page: string;
-  /** `shown`: an agent showed it or a version of it, its row opened (ESC-673); `closed`: its row closed. */
-  phase: 'started' | 'finished' | 'wants' | 'refused' | 'download' | 'permission' | 'title' | 'shown' | 'closed';
+  /** `shown`: an agent showed it or a version of it, its row opened (ESC-673); `closed`: its row closed; `erased`: no
+   * longer kept (its agent or its project gone, room made), its cards say so (AP-3). */
+  phase: 'started' | 'finished' | 'wants' | 'refused' | 'download' | 'permission' | 'title' | 'shown' | 'closed' | 'erased';
   url?: string;
   title?: string;
+}
+
+/** An agent's page as the window draws it (AP-3, `pages::PageRow`): its row of « Navigateurs », its bar, its card. */
+export interface AgentPageRow {
+  /** `p-<n>`. */
+  page: string;
+  projectId: string;
+  agentId: string;
+  /** Its agent's name when it showed the page. */
+  agentName: string;
+  ticketId: string | null;
+  title: string;
+  /** `review`, `diagram`, `compare`, `html` or `custom`. */
+  template: string;
+  /** Its versions kept, the oldest first. */
+  versions: { n: number; at: number }[];
+  /** The version its row shows: the last, unless the user went back to another. */
+  shown: number;
+  /** Its row is open in « Navigateurs ». */
+  open: boolean;
+  /** The agent asked its row to wait (`open: quiet`). */
+  quiet: boolean;
+  loaded: boolean;
 }
 
 /** Where a page goes in the window, in its logical pixels. */

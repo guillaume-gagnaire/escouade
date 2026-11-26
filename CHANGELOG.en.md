@@ -4,6 +4,10 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- An agent’s page opens beside its conversation when you’re looking at it, otherwise it waits for you in “Browsers”; its card in the conversation shows it or opens it again, and its bar goes back to an earlier version or shows it at tablet or mobile width. A band above it says who wrote it and that it has no network nor access to Escouade or your files.
+
 ## [2.2.14] — 2026-11-27
 
 - An agent opens a real tab next to its conversation to show you its work: the project’s launch, an address, or the Claude artifact it just published. It opens only while you look at its conversation; otherwise its row in “Browsers” waits for you. An address outside the project is asked once in its conversation; Escouade’s own addresses and your machine’s other ports never open.
