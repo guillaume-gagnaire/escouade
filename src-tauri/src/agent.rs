@@ -239,6 +239,11 @@ pub struct AgentRt {
     tui_error: Option<String>,
     /// The running turn of its interface, from its prompt (what it was) to its end.
     pub(crate) tui_prompt: Option<String>,
+    /// When the last turn of its interface ended (`end_tui_turn`).
+    pub(crate) tui_turn_ended: Option<std::time::Instant>,
+    /// When the hook of its interface being read came (`Core::on_tui_hook_came`): it is read off its connection, maybe
+    /// after the transcript ended the turn it opened (ESC-650).
+    pub(crate) hook_received: Option<std::time::Instant>,
     /// The `promptId` of its transcript's entry that prompt was read from: Claude Code 2.1.302
     /// writes a command typed twice under the same one, as typed then as `<command-name>`.
     tui_prompt_id: Option<String>,
@@ -537,6 +542,8 @@ impl AgentRt {
             tui_usage: HashMap::new(),
             tui_error: None,
             tui_prompt: None,
+            tui_turn_ended: None,
+            hook_received: None,
             tui_prompt_id: None,
             tui_since: None,
             tui_exit: None,

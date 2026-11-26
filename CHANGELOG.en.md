@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Agents can show you a page: a review, a diagram, options to compare or their own HTML, copied apart and served without network or access to Escouade or your files; a new version updates the page. The “Agents’ pages” switch in Settings › Agents turns them off, erasing nothing.
 - Your project’s workflows move to the Workspace: each agent’s card says its step (and in red why it was sent back), and a click opens the workflow’s diagram with its path; “Workflows”, at the top right of the canvas, lists the project’s workflows and their agents. The right-hand panel keeps three tabs.
 - The commands an agent ran, kept for the Workspace, no longer keep any password, token or key in the clear: they are masked before being saved.
+- On Windows, your data files (the state, the settings) are no longer lost when two writes cross; and on a loaded machine, a plugin is no longer stopped during a big build beside it, and an agent of the Claude Code view that finished its turn no longer stays shown at work.
 - On a busy machine, the “New project” assistant no longer says “The repository has no commit” of a repository that has some: it reads the folder faster, says “Reading the repository…” while it does, and if git fails it shows its error with “Try again” instead of offering a first commit.
 
 ## [2.2.13] — 2026-11-26

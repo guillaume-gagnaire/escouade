@@ -1430,10 +1430,7 @@ async fn a_local_command_is_one_message_and_its_output_ends_its_turn() {
     // prompt, then its output, and no end of a turn.
     let h = harness("tui-compact");
     let id = agent_in_tui(&h).await;
-    let start = std::time::Instant::now();
     say_in_tui(&h, &id, "/compact").await;
-    // Its output ended it, not the registry's idle (`IDLE_ENDS_TURN_MS`).
-    assert!(start.elapsed() < std::time::Duration::from_secs(2));
     assert_eq!(texts(&h, &id, "user"), ["/compact"]);
     let notices = texts(&h, &id, "notice");
     assert!(
@@ -1453,11 +1450,36 @@ async fn a_local_command_is_one_message_and_its_output_ends_its_turn() {
     no_local_command_tag(&h, &id);
     let turns = turns_of(&h, &id);
     assert_eq!(turns.len(), 1);
+    // Its output ended it, not the registry's idle (`IDLE_ENDS_TURN_MS`), which ends a turn as interrupted: said by
+    // the turn, not by a time a loaded machine passes (the CI's Windows, ESC-650).
     assert_eq!(
         (&turns[0]["interrupted"], &turns[0]["isError"]),
         (&json!(false), &json!(false))
     );
     assert_eq!(h.agent(&id).status, AgentStatus::Done);
+}
+
+/// The hook of a prompt read after the end of the turn it opened (read off its connection, under load: the CI's
+/// Windows, ESC-650): that turn stays over, the agent is not « Running » again for a turn that will never end.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_hook_of_a_prompt_read_after_its_turn_ended_does_not_start_it_again() {
+    let h = harness("tui-late-hook");
+    let id = agent_in_tui(&h).await;
+    let came = std::time::Instant::now();
+    say_in_tui(&h, &id, "/compact").await;
+    assert_eq!(h.agent(&id).status, AgentStatus::Done);
+    h.core.on_tui_hook_came(
+        &id,
+        json!({ "hook_event_name": "UserPromptSubmit", "prompt": "/compact" }),
+        came,
+    );
+    assert_eq!(h.agent(&id).status, AgentStatus::Done, "a late hook");
+    // A prompt that comes after that end starts its turn.
+    h.core.on_tui_hook(
+        &id,
+        json!({ "hook_event_name": "UserPromptSubmit", "prompt": "Bonjour" }),
+    );
+    assert_eq!(h.agent(&id).status, AgentStatus::Running);
 }
 
 #[tokio::test(flavor = "multi_thread")]

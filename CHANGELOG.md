@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Les agents peuvent te montrer une page : une revue, un schéma, des options à comparer ou leur propre HTML, copiés à part et servis sans réseau ni accès à Escouade ou à tes fichiers ; une nouvelle version met la page à jour. L’interrupteur « Pages des agents » de Réglages › Agents les coupe, sans rien effacer.
 - Les workflows de ton projet passent dans le Workspace : la carte de chaque agent dit son étape (et en rouge pourquoi il a été renvoyé), et un clic ouvre le schéma du workflow avec son chemin ; « Workflows », en haut à droite de la toile, liste les workflows du projet et leurs agents. Le panneau de droite garde trois onglets.
 - Les commandes qu’un agent a lancées, gardées pour le Workspace, ne gardent plus aucun mot de passe, jeton ou clé en clair : ils sont masqués avant d’être enregistrés.
+- Sous Windows, tes fichiers de données (l’état, les réglages) ne se perdent plus quand deux écritures se croisent ; et sur une machine chargée, un plugin n’est plus coupé pendant une grosse compilation à côté, et un agent de la vue Claude Code qui a fini son tour ne reste plus affiché au travail.
 - Sur un poste chargé, l’assistant « Nouveau projet » ne dit plus « Le dépôt n’a aucun commit » d’un dépôt qui en a : il lit le dossier plus vite, dit « Lecture du dépôt… » le temps de le faire, et si git échoue, il dit son erreur avec « Réessayer » au lieu de proposer un premier commit.
 
 ## [2.2.13] — 2026-11-26

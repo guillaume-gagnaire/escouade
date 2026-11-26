@@ -180,6 +180,7 @@ impl AgentRt {
         if !self.meta.status.is_active() {
             return;
         }
+        self.tui_turn_ended = Some(std::time::Instant::now());
         if self.meta.engine != EngineId::CLAUDE {
             self.tui_asked = None;
             let error = self.tui_error.take();
@@ -239,7 +240,13 @@ impl AgentRt {
         let tool = h["tool_name"].as_str().unwrap_or("");
         match h["hook_event_name"].as_str().unwrap_or("") {
             "UserPromptSubmit" => {
-                if !self.meta.status.is_active() {
+                // Read after the end of the turn it opened (under load, the transcript ended that turn before the hook,
+                // read off its connection, was): that turn is over, not a new one (ESC-650).
+                let over = self
+                    .hook_received
+                    .zip(self.tui_turn_ended)
+                    .is_some_and(|(came, ended)| ended > came);
+                if !self.meta.status.is_active() && !over {
                     self.set_status(AgentStatus::Running, fx);
                 }
             }

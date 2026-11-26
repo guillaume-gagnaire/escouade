@@ -16,6 +16,7 @@ pub mod asks;
 pub mod attachfiles;
 pub mod backups;
 pub mod branchci;
+pub mod cputime;
 pub mod discussion;
 pub mod docs;
 pub mod docsplan;

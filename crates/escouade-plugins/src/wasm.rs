@@ -13,8 +13,9 @@
 //! - **Its instance.** One per plugin, which keeps its state from a call to the next, as its process did: the same
 //!   JSON-RPC lines, carried by the module's standard input and output, held in memory ([`Instance`]). The input
 //!   never blocks; a turn (`escouade-turn`) hands the plugin what came, and ends when QuickJS has nothing left to
-//!   run. 64 MiB of memory; 2 s a turn, 500 ms when it holds a decision (the epoch, ticked every 10 ms): past them
-//!   the instance is done, and the runtime makes a new one with its budget of restarts (`runtime.rs`).
+//!   run. 64 MiB of memory; 2 s a turn, 500 ms when it holds a decision, in processor time of its thread (host calls
+//!   included) with a ceiling of 10 s in real time ([`Turn`], ESC-650: the epoch, ticked every 10 ms, then the thread's
+//!   time): past them the instance is done, and the runtime makes a new one with its budget of restarts (`runtime.rs`).
 //! - **What it is served.** The runtime's methods (`secrets/get`, `settings/get`, `log`), and two that Node gave
 //!   before: the JSON files at the root of its folder (the first line, `escouade/boot`), and `net/fetch`
 //!   ([`Fetcher`]): https only, to a host of `permissions.network` or one of its subdomains, no redirection followed,
@@ -67,6 +68,11 @@ pub use escouade_plugin_cli::wasm::{
 
 /// The epoch's tick.
 const TICK_MS: u64 = 10;
+
+/// The epoch's ticks of `d`, one at least.
+fn ticks_of(d: Duration) -> u64 {
+    (d.as_millis() as u64 / TICK_MS).max(1)
+}
 /// The error of a fetch refused (JSON-RPC): a host, a scheme or an address the plugin may not reach.
 pub const REFUSED: i64 = -32003;
 /// The error of a fetch that failed on the way (no answer, an answer too big).
@@ -107,6 +113,8 @@ pub struct Limits {
     pub turn: Duration,
     /// A turn that holds a decision (`permissions/*`).
     pub decision: Duration,
+    /// The real time a turn never passes, whatever its processor time ([`Turn`], ESC-650): `TURN_MAX`.
+    pub ceiling: Duration,
 }
 
 impl Limits {
@@ -133,6 +141,7 @@ impl Default for Limits {
             memory: 64 << 20,
             turn: Duration::from_secs(2),
             decision: Duration::from_millis(500),
+            ceiling: TURN_MAX,
         }
     }
 }
@@ -639,8 +648,46 @@ struct State {
     /// The last answer that did not fit, and the request it answers: the same request comes for it, not to be served
     /// twice (a write).
     too_big: Option<(Vec<u8>, String)>,
-    /// When the turn running must end: checked at the return of every host function (the epoch only watches the WASM).
-    deadline: Option<std::time::Instant>,
+    /// The turn running, and its time: checked at the return of every host function (the epoch only watches the WASM).
+    turn: Option<Turn>,
+}
+
+/// The time of a turn (ESC-650): its budget counts in processor time of the plugin's thread, what its WASM runs as
+/// what the host does for it on that thread (`escouade.call`, WASI), so that a loaded machine, which leaves the thread
+/// waiting for a processor or a program longer to start, does not eat it; and a ceiling in real time (`Limits::ceiling`,
+/// never less than its budget) stops all the same a plugin that sleeps or waits without end, checked by the epoch and
+/// at the return of every host function. Where the system does not tell a thread's time, the turn counts in real time.
+struct Turn {
+    within: Duration,
+    /// The thread's time at its start.
+    cpu: Option<Duration>,
+    started: std::time::Instant,
+    ceiling: Duration,
+}
+
+impl Turn {
+    fn new(within: Duration, ceiling: Duration) -> Self {
+        Self {
+            within,
+            cpu: escouade_model::cputime::thread(),
+            started: std::time::Instant::now(),
+            ceiling: ceiling.max(within),
+        }
+    }
+
+    /// What is left of its time, on the plugin's thread: none once it is spent.
+    fn left(&self) -> Option<Duration> {
+        let real = self.started.elapsed();
+        let budget = match self.cpu.zip(escouade_model::cputime::thread()) {
+            Some((from, now)) => self.within.checked_sub(now.saturating_sub(from)),
+            None => self.within.checked_sub(real),
+        };
+        let ceiling = self.ceiling.checked_sub(real);
+        match (budget, ceiling) {
+            (Some(b), Some(c)) if !b.is_zero() && !c.is_zero() => Some(b.min(c)),
+            _ => None,
+        }
+    }
 }
 
 /// What `escouade.call` serves: a method and its parameters, its result or why not (a code of the protocol, and its
@@ -750,6 +797,11 @@ impl Capabilities {
     pub fn end(&self) {
         self.procs.end();
     }
+
+    /// How many of its programs run.
+    pub fn programs(&self) -> usize {
+        self.procs.running()
+    }
 }
 
 /// Why an instance is done.
@@ -820,7 +872,7 @@ impl Instance {
                     .build(),
                 calls,
                 too_big: None,
-                deadline: None,
+                turn: None,
             },
         );
         // The epoch interrupts the WASM only: a turn that ends right after a long host call (`escouade.call`, a
@@ -830,12 +882,19 @@ impl Instance {
             if matches!(hook, wasmtime::CallHook::ReturningFromHost)
                 && state
                     .data()
-                    .deadline
-                    .is_some_and(|d| std::time::Instant::now() >= d)
+                    .turn
+                    .as_ref()
+                    .is_some_and(|t| t.left().is_none())
             {
                 return Err(wasmtime::Trap::Interrupt.into());
             }
             Ok(())
+        });
+        // The epoch reached: the turn goes on for what is left of its time (the processor time of its thread), else it
+        // is cut.
+        store.epoch_deadline_callback(|ctx| match ctx.data().turn.as_ref().and_then(Turn::left) {
+            Some(left) => Ok(wasmtime::UpdateDeadline::Continue(ticks_of(left))),
+            None => Err(wasmtime::Trap::Interrupt.into()),
         });
         store.limiter(|s| &mut s.limits);
         store.set_epoch_deadline(u64::MAX / 2);
@@ -882,11 +941,10 @@ impl Instance {
     }
 
     fn call(&mut self, f: TypedFunc<(), ()>, within: Duration) -> Result<(), Fault> {
-        let ticks = (within.as_millis() as u64 / TICK_MS).max(1);
-        self.store.set_epoch_deadline(ticks);
-        self.store.data_mut().deadline = Some(std::time::Instant::now() + within);
+        self.store.set_epoch_deadline(ticks_of(within));
+        self.store.data_mut().turn = Some(Turn::new(within, self.limits.ceiling));
         let r = f.call(&mut self.store, ());
-        self.store.data_mut().deadline = None;
+        self.store.data_mut().turn = None;
         self.store.set_epoch_deadline(u64::MAX / 2);
         match r {
             Ok(()) => Ok(()),

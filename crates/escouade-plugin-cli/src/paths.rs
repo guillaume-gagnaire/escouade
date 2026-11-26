@@ -53,7 +53,7 @@ pub fn tools_dir(data: &Path) -> PathBuf {
 ///
 /// The temporary file is the write's own (`temp_of`): two writers of a same file at once, threads or processes, never
 /// share one, and neither fails (ESC-535; with one name for all, the second found its file renamed away, « os error
-/// 2 »). The last one put in place wins: a writer whose content must follow the order of its changes takes the
+/// 2 »); their renamings go one at a time (`in_turn`, ESC-650). The last one put in place wins: a writer whose content must follow the order of its changes takes the
 /// snapshot and writes it under one lock of its own (the state: `Core::save_state`). The temporary file is removed when
 /// the writing fails; one a crash left is removed by the first write in its folder (`sweep_leftovers`).
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -114,15 +114,43 @@ fn write_through_temp(
         }
         // Closed first: Windows does not move a file still open.
         drop(f);
-        match durability {
+        in_turn(path, || match durability {
             Durability::Forced => replace_durably(&tmp, path),
             Durability::Light => std::fs::rename(&tmp, path),
-        }
+        })
     })();
     if written.is_err() {
         let _ = std::fs::remove_file(&tmp);
     }
     written
+}
+
+/// The replacements of a same file in this process (`replace`), one at a time; those of other files go on beside
+/// them (ESC-650). Windows refuses (« Accès refusé », os error 5) a renaming onto a file that another renaming is
+/// putting in place at that very moment, `MoveFileExW` as well as `std::fs::rename`: writers of one file at once, which
+/// ESC-535 allows, failed now and then on a loaded machine. Only the renaming waits, never the writing of the data;
+/// the place is the path as given (the data folder's files always come by the same one), its case set aside under
+/// Windows. Another process writing the same file at that moment is not held by it.
+fn in_turn<T>(path: &Path, replace: impl FnOnce() -> T) -> T {
+    let _turn = TURNS[turn_of(path)].lock();
+    replace()
+}
+
+const TURN_COUNT: usize = 64;
+
+/// One lock per stripe of places: a file's replacements always take the same.
+static TURNS: [parking_lot::Mutex<()>; TURN_COUNT] =
+    [const { parking_lot::Mutex::new(()) }; TURN_COUNT];
+
+fn turn_of(path: &Path) -> usize {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    if cfg!(windows) {
+        path.to_string_lossy().to_lowercase().hash(&mut h);
+    } else {
+        path.hash(&mut h);
+    }
+    (h.finish() % TURN_COUNT as u64) as usize
 }
 
 /// The temporary file of one write of `path`: `<file>.<process>-<n>.tmp` beside it, `n` counting this process's
@@ -364,6 +392,68 @@ mod tests {
         }
         assert!(temporaries(&d).is_empty());
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// The race of ESC-650: under Windows, a renaming onto a file another renaming is putting in place is refused
+    /// (os error 5), and `writers_of_a_same_file_at_once_all_succeed` failed so on a loaded machine. The replacements
+    /// of one file go one at a time, whatever the machine's load; another file's are never held up by them.
+    #[test]
+    fn the_replacements_of_a_same_file_go_one_at_a_time_and_another_file_waits_for_none() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let place = Path::new("/d/state.json");
+        let (inside, most) = (
+            std::sync::Arc::new(AtomicUsize::new(0)),
+            std::sync::Arc::new(AtomicUsize::new(0)),
+        );
+        const WRITERS: usize = 8;
+        let start = std::sync::Arc::new(std::sync::Barrier::new(WRITERS));
+        let writers: Vec<_> = (0..WRITERS)
+            .map(|_| {
+                let (inside, most, start) = (inside.clone(), most.clone(), start.clone());
+                std::thread::spawn(move || {
+                    start.wait();
+                    for _ in 0..20 {
+                        in_turn(place, || {
+                            let now = inside.fetch_add(1, Ordering::SeqCst) + 1;
+                            most.fetch_max(now, Ordering::SeqCst);
+                            // Holds the place long enough for the others to come: without the turn, they come in.
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                            inside.fetch_sub(1, Ordering::SeqCst);
+                        });
+                    }
+                })
+            })
+            .collect();
+        for w in writers {
+            w.join().unwrap();
+        }
+        assert_eq!(most.load(Ordering::SeqCst), 1, "one replacement at a time");
+        if cfg!(windows) {
+            assert_eq!(turn_of(Path::new("/D/State.JSON")), turn_of(place));
+        }
+        // Another file, of another stripe, goes while the first one's place is held.
+        let other = (0..)
+            .map(|n| PathBuf::from(format!("/d/other-{n}.json")))
+            .find(|p| turn_of(p) != turn_of(place))
+            .unwrap();
+        let (held, release) = (
+            std::sync::Arc::new(std::sync::Barrier::new(2)),
+            std::sync::mpsc::channel::<()>(),
+        );
+        let holder = {
+            let held = held.clone();
+            let release = release.1;
+            std::thread::spawn(move || {
+                in_turn(place, || {
+                    held.wait();
+                    release.recv().unwrap();
+                })
+            })
+        };
+        held.wait();
+        assert!(in_turn(&other, || true), "never held up by another file");
+        release.0.send(()).unwrap();
+        holder.join().unwrap();
     }
 
     #[test]
