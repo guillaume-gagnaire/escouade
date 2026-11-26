@@ -2,8 +2,8 @@
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636"]
-decisions: [167,168,173,178,277,288,286,314]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635"]
+decisions: [167,168,173,178,277,288,286,314,330]
 compared: null
 ---
 
@@ -47,6 +47,8 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 - Un flux par équipe (les messages MLS) et un par projet (les opérations chiffrées, et les commits du groupe d'un projet gardé à quelques membres). Le serveur numérote chaque entrée, la garde et la diffuse ; un appareil relit depuis le numéro n pour reprendre.
 - Les commits MLS, de l'équipe comme du groupe d'un projet : le premier pour une époque gagne. Un second pour la même époque est refusé, avec les entrées depuis le commit gagnant, pour que l'appareil rattrape.
+- **Les commits sont aux administrateurs** (SR2-02) : le serveur refuse (`403`) le commit d'un membre qui ne dit pas, en clair, ne changer que ses propres appareils. Les appareils vérifient ce que le commit signe (voir « Le client de l'équipe », Le commit nul).
+- **L'annulation d'un commit gagnant** (SR2-02) : un appareil administrateur, et lui seul, déclare nul le dernier commit du flux (l'équipe ou un projet), une fois. Le serveur ne la lit pas : il la garde dans le flux après le commit, qui reste servi tel quel, et l'époque redevient libre, **réservée aux administrateurs jusqu'à leur prochain commit** (un membre reçoit `409 epoch_reserved`). Une annulation qui ne vise pas l'époque du dernier commit, ou un commit déjà déclaré nul, est refusée (`409 void_refused`).
 - **Les instantanés d'un projet** (SR2-01) : un appareil du projet envoie l'état chiffré du projet jusqu'à un numéro. Le serveur le garde à côté des précédents, et ses octets comptent dans le quota.
   - **Rien n'est oublié à sa pose.** Les opérations qu'il couvre restent **30 jours**, puis le serveur les oublie (pas les commits) et rend leurs octets au quota, avec les instantanés d'avant. Il ne le fait jamais pour un instantané qu'un appareil a signalé comme illisible.
   - Un instantané qui n'est pas après le dernier, ou qui va au-delà du flux, est refusé.
@@ -75,11 +77,11 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 ## Dégeler une équipe ou un projet (SR2-02)
 
-Le serveur garde le premier commit d'une époque sans pouvoir le lire, puis refuse tout autre commit de cette époque : un commit que les appareils ne lisent pas (des octets quelconques, ou un commit contraire aux règles de l'équipe) gèle l'équipe, ou le projet. En attendant que les appareils dépassent eux-mêmes un tel commit, **l'hébergeur le retire** par une commande, sans toucher à la base à la main.
+Le serveur garde le premier commit d'une époque sans pouvoir le lire, puis refuse tout autre commit de cette époque. Un commit que les appareils ne lisent pas (des octets quelconques, ou un commit contraire aux règles de l'équipe) ne gèle plus l'équipe : les appareils le tiennent pour nul et un administrateur l'annule (voir *Les flux et les fichiers*). **L'hébergeur le retire** encore par une commande, sans toucher à la base à la main, quand aucun administrateur ne peut l'annuler (le groupe d'un projet sans administrateur, une équipe dont aucun administrateur n'est en ligne).
 
 - `escouade-team-server drop-entry --team <id> --stream team --seq <n>` retire une entrée du flux de l'équipe ; `--project <id>` celle du flux d'un projet ; `--stream <nom>` celle d'un flux propre à l'équipe (`escouade/setting`…). En SQLite comme en PostgreSQL, dans une seule transaction.
 - **Confirmée** : la commande montre l'entrée (genre, époque, appareil qui l'a écrite, date, taille, empreinte) et attend `yes` ; `--yes` s'en passe. **Elle refuse sans l'id de l'équipe** (elle ne devine jamais l'équipe), sans flux ou avec deux, sans numéro, pour une entrée ou une équipe que la base n'a pas.
-- **Un commit doit être le dernier de son flux** : son époque redevient libre, et le commit suivant (celui de l'administrateur) la prend. Un commit que d'autres suivent est refusé : on retire les plus récents d'abord.
+- **Un commit doit être le dernier de son flux** : son époque redevient libre, et le commit suivant (celui de l'administrateur) la prend. Un commit que d'autres suivent est refusé : on retire les plus récents d'abord. **Une annulation, et le commit qu'elle a déclaré nul, ne se retirent pas** : les appareils les ont déjà dépassés.
 - **Le flux garde sa numérotation** : le trou se voit ; les octets de l'entrée reviennent au quota.
 - **Journalisée sans contenu** : une ligne d'audit dans la base, dans la même transaction : l'équipe, le flux, le numéro, le genre et l'époque, l'appareil qui l'avait écrite et quand, sa taille, son empreinte (SHA-256 de l'entrée telle que servie), qui la retire (`--by`, ou le nom du compte) et quand. Jamais ses octets. Le journal du serveur n'en garde qu'une ligne sans identifiant, comme le reste. `drop-entry --team <id> --list` relit l'audit.
 - **Les appareils voient le trou.** Le serveur liste à chaque appareil de l'équipe les entrées retirées (`GET /v1/dropped`) : le flux (celles d'un projet aux seuls appareils qui y ont accès), le numéro, le genre et l'époque, l'appareil qui l'avait écrite et quand, l'empreinte, l'heure du retrait ; jamais qui l'a retirée. La dernière entrée qu'un appareil a lue, retirée, n'est pas un retour en arrière si son empreinte est celle qu'il en a gardée : il lit la suite. Une entrée cachée sans être listée reste un retour en arrière. Un appareil qui avait noté le commit retiré sans l'avoir pris (avant d'entrer) l'oublie, pour que le commit qui reprend l'époque ne soit pas une fourche.

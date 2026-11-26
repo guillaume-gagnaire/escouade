@@ -44,7 +44,8 @@ pub use keychain::{KeyPlace, Keychain, MemoryKeychain, Vault};
 pub use pairing::{PairCode, PairState};
 pub use storage::{SqliteStorage, StorageError, TeamProvider};
 pub use team::{
-    Applied, DropAlert, Invited, Options, RefusalAlert, Served, Setup, SnapshotAlert, Synced, Team,
+    Applied, DropAlert, Invited, NullAlert, Options, RefusalAlert, Served, Setup, SnapshotAlert,
+    Synced, Team,
 };
 
 #[derive(Debug, thiserror::Error)]

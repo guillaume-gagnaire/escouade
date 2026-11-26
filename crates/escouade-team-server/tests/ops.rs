@@ -31,7 +31,7 @@ async fn the_metrics_say_no_id() {
     let file = random::<16>();
     alice.message(b"m").await;
     alice.commit(0, b"c").await.ok();
-    bob.commit(0, b"c").await.refused();
+    bob.commit_own(0, b"c").await.refused();
     bob.append_project(&project, b"op").await.ok();
     assert_eq!(bob.put_file(&file, vec![1; 100]).await, StatusCode::CREATED);
     bob.get_file(&file).await;

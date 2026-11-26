@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS teams (
     created_at INTEGER NOT NULL,
     seq INTEGER NOT NULL DEFAULT 0,
     commits INTEGER NOT NULL DEFAULT 0,
-    stored INTEGER NOT NULL DEFAULT 0
+    stored INTEGER NOT NULL DEFAULT 0,
+    reserved INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS devices (
     id BLOB PRIMARY KEY,
@@ -44,14 +45,15 @@ CREATE TABLE IF NOT EXISTS team_entries (
     device_id BLOB NOT NULL,
     at INTEGER NOT NULL,
     payload BLOB NOT NULL,
+    voided INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (team_id, seq)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS team_commits ON team_entries(team_id, epoch) WHERE kind = 1;
 CREATE TABLE IF NOT EXISTS projects (
     team_id BLOB NOT NULL,
     id BLOB NOT NULL,
     seq INTEGER NOT NULL DEFAULT 0,
     commits INTEGER NOT NULL DEFAULT 0,
+    reserved INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (team_id, id)
 );
 CREATE TABLE IF NOT EXISTS project_entries (
@@ -63,6 +65,7 @@ CREATE TABLE IF NOT EXISTS project_entries (
     device_id BLOB NOT NULL,
     at INTEGER NOT NULL,
     payload BLOB NOT NULL,
+    voided INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (team_id, project_id, seq)
 );
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -377,6 +380,11 @@ impl Store for Sqlite {
                 ("claims", "handed_by", "BLOB"),
                 // A base made before the retention of the snapshots (SR2-01): the number the messages are gone up to.
                 ("projects", "pruned", "INTEGER NOT NULL DEFAULT 0"),
+                // A base made before the voids (SR2-02): the commits declared null, the epochs kept to the administrators.
+                ("teams", "reserved", "INTEGER NOT NULL DEFAULT 0"),
+                ("team_entries", "voided", "INTEGER NOT NULL DEFAULT 0"),
+                ("projects", "reserved", "INTEGER NOT NULL DEFAULT 0"),
+                ("project_entries", "voided", "INTEGER NOT NULL DEFAULT 0"),
             ] {
                 let has: bool = c
                     .prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?1"))?
@@ -385,8 +393,14 @@ impl Store for Sqlite {
                     c.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {kind}"))?;
                 }
             }
+            // One commit holds an epoch, the ones declared null aside (SR2-02).
             c.execute_batch(
-                "CREATE UNIQUE INDEX IF NOT EXISTS project_commits ON project_entries(team_id, project_id, epoch) WHERE kind = 1",
+                "DROP INDEX IF EXISTS team_commits;
+                 DROP INDEX IF EXISTS project_commits;
+                 CREATE UNIQUE INDEX IF NOT EXISTS team_live_commits ON team_entries(team_id, epoch)
+                   WHERE kind = 1 AND voided = 0;
+                 CREATE UNIQUE INDEX IF NOT EXISTS project_live_commits ON project_entries(team_id, project_id, epoch)
+                   WHERE kind = 1 AND voided = 0;",
             )?;
             // A base made before the retention (SR2-01): one snapshot per project, its messages already forgotten.
             let old: bool = c
@@ -619,10 +633,11 @@ impl Store for Sqlite {
     ) -> Result<Entry> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let (seq, commits, stored): (i64, i64, i64) = tx
-                .query_row("SELECT seq, commits, stored FROM teams WHERE id = ?1", [team.as_slice()], |r| {
-                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-                })?;
+            let (seq, commits, stored, reserved): (i64, i64, i64, bool) = tx.query_row(
+                "SELECT seq, commits, stored, reserved FROM teams WHERE id = ?1",
+                [team.as_slice()],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get::<_, i64>(3)? != 0)),
+            )?;
             let size = entry.payload.len() as i64;
             if (stored + size) as u64 > quotas.team_bytes {
                 return Err(StoreError::Quota);
@@ -630,12 +645,28 @@ impl Store for Sqlite {
             let out = match stream {
                 Stream::Team => {
                     let is_commit = entry.kind == Kind::Commit;
+                    if entry.kind == Kind::Void {
+                        let asked = entry.epoch.unwrap_or(u64::MAX);
+                        if commits == 0 || asked != commits as u64 - 1 {
+                            return Err(StoreError::Void("it is not for the epoch of the last commit"));
+                        }
+                        let n = tx.execute(
+                            "UPDATE team_entries SET voided = 1 WHERE team_id = ?1 AND kind = 1 AND epoch = ?2 AND voided = 0",
+                            params![team.as_slice(), asked as i64],
+                        )?;
+                        if n == 0 {
+                            return Err(StoreError::Void("the last commit is declared null already"));
+                        }
+                    }
                     if is_commit {
                         let asked = entry.epoch.unwrap_or(u64::MAX);
+                        if asked == commits as u64 && reserved && !entry.by_admin {
+                            return Err(StoreError::Reserved);
+                        }
                         if asked != commits as u64 {
                             let from: Option<i64> = tx
                                 .query_row(
-                                    "SELECT seq FROM team_entries WHERE team_id = ?1 AND kind = 1 AND epoch = ?2",
+                                    "SELECT seq FROM team_entries WHERE team_id = ?1 AND kind = 1 AND epoch = ?2 AND voided = 0",
                                     params![team.as_slice(), asked as i64],
                                     |r| r.get(0),
                                 )
@@ -659,31 +690,36 @@ impl Store for Sqlite {
                             team.as_slice(),
                             seq,
                             entry.kind.code(),
-                            entry.epoch.filter(|_| is_commit).map(|e| e as i64),
+                            entry.epoch.filter(|_| entry.kind != Kind::Message).map(|e| e as i64),
                             entry.device.as_slice(),
                             entry.at,
                             entry.payload
                         ],
                     )?;
+                    let (step, reserved) = match entry.kind {
+                        Kind::Commit => (1, false),
+                        Kind::Void => (-1, true),
+                        Kind::Message => (0, reserved),
+                    };
                     tx.execute(
-                        "UPDATE teams SET seq = ?2, commits = commits + ?3, stored = stored + ?4 WHERE id = ?1",
-                        params![team.as_slice(), seq, is_commit as i64, size],
+                        "UPDATE teams SET seq = ?2, commits = commits + ?3, stored = stored + ?4, reserved = ?5 WHERE id = ?1",
+                        params![team.as_slice(), seq, step, size, reserved as i64],
                     )?;
                     Entry {
                         seq: seq as u64,
                         kind: entry.kind,
-                        epoch: entry.epoch.filter(|_| is_commit),
+                        epoch: entry.epoch.filter(|_| entry.kind != Kind::Message),
                         device: entry.device.to_vec(),
                         at: entry.at,
                         payload: entry.payload,
                     }
                 }
                 Stream::Project(project) => {
-                    let current: Option<(i64, i64)> = tx
+                    let current: Option<(i64, i64, bool)> = tx
                         .query_row(
-                            "SELECT seq, commits FROM projects WHERE team_id = ?1 AND id = ?2",
+                            "SELECT seq, commits, reserved FROM projects WHERE team_id = ?1 AND id = ?2",
                             params![team.as_slice(), project.as_slice()],
-                            |r| Ok((r.get(0)?, r.get(1)?)),
+                            |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? != 0)),
                         )
                         .optional()?;
                     let is_commit = entry.kind == Kind::Commit;
@@ -694,12 +730,31 @@ impl Store for Sqlite {
                         put_claim(&tx, &team, &project, &moved)?;
                     }
                     let project_commits = current.map_or(0, |c| c.1);
+                    let reserved = current.is_some_and(|c| c.2);
+                    if entry.kind == Kind::Void {
+                        let asked = entry.epoch.unwrap_or(u64::MAX);
+                        if project_commits == 0 || asked != project_commits as u64 - 1 {
+                            return Err(StoreError::Void("it is not for the epoch of the last commit"));
+                        }
+                        let n = tx.execute(
+                            "UPDATE project_entries SET voided = 1
+                             WHERE team_id = ?1 AND project_id = ?2 AND kind = 1 AND epoch = ?3 AND voided = 0",
+                            params![team.as_slice(), project.as_slice(), asked as i64],
+                        )?;
+                        if n == 0 {
+                            return Err(StoreError::Void("the last commit is declared null already"));
+                        }
+                    }
                     if is_commit {
                         let asked = entry.epoch.unwrap_or(u64::MAX);
+                        if asked == project_commits as u64 && reserved && !entry.by_admin {
+                            return Err(StoreError::Reserved);
+                        }
                         if asked != project_commits as u64 {
                             let from: Option<i64> = tx
                                 .query_row(
-                                    "SELECT seq FROM project_entries WHERE team_id = ?1 AND project_id = ?2 AND kind = 1 AND epoch = ?3",
+                                    "SELECT seq FROM project_entries
+                                     WHERE team_id = ?1 AND project_id = ?2 AND kind = 1 AND epoch = ?3 AND voided = 0",
                                     params![team.as_slice(), project.as_slice(), asked.min(i64::MAX as u64) as i64],
                                     |r| r.get(0),
                                 )
@@ -734,7 +789,7 @@ impl Store for Sqlite {
                         }
                     };
                     let seq = current + 1;
-                    let epoch = entry.epoch.filter(|_| is_commit);
+                    let epoch = entry.epoch.filter(|_| entry.kind != Kind::Message);
                     tx.execute(
                         "INSERT INTO project_entries (team_id, project_id, seq, kind, epoch, device_id, at, payload)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -749,9 +804,14 @@ impl Store for Sqlite {
                             entry.payload
                         ],
                     )?;
+                    let (step, reserved) = match entry.kind {
+                        Kind::Commit => (1, false),
+                        Kind::Void => (-1, true),
+                        Kind::Message => (0, reserved),
+                    };
                     tx.execute(
-                        "UPDATE projects SET seq = ?3, commits = commits + ?4 WHERE team_id = ?1 AND id = ?2",
-                        params![team.as_slice(), project.as_slice(), seq, is_commit as i64],
+                        "UPDATE projects SET seq = ?3, commits = commits + ?4, reserved = ?5 WHERE team_id = ?1 AND id = ?2",
+                        params![team.as_slice(), project.as_slice(), seq, step, reserved as i64],
                     )?;
                     tx.execute("UPDATE teams SET stored = stored + ?2 WHERE id = ?1", params![team.as_slice(), size])?;
                     Entry {
@@ -815,7 +875,26 @@ impl Store for Sqlite {
                 Stream::Team => None,
                 Stream::Project(p) => Some(p),
             };
+            // A void and the commit it declared null stay together (SR2-02): the devices read on past them already.
+            if entry.kind == Kind::Void {
+                return Err(StoreError::Drop("a void stays: the devices read on past it already"));
+            }
             if is_commit {
+                let voided: i64 = match project {
+                    None => tx.query_row(
+                        "SELECT voided FROM team_entries WHERE team_id = ?1 AND seq = ?2",
+                        params![team.as_slice(), seq as i64],
+                        |r| r.get(0),
+                    )?,
+                    Some(p) => tx.query_row(
+                        "SELECT voided FROM project_entries WHERE team_id = ?1 AND project_id = ?2 AND seq = ?3",
+                        params![team.as_slice(), p.as_slice(), seq as i64],
+                        |r| r.get(0),
+                    )?,
+                };
+                if voided != 0 {
+                    return Err(StoreError::Drop("a commit declared null stays: the devices read on past it already"));
+                }
                 let stream_commits = match project {
                     None => team_commits,
                     Some(p) => tx.query_row(

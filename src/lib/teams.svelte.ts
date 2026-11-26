@@ -63,6 +63,23 @@ export interface SnapshotAlertView {
 }
 
 /** An entry the server's operator removed from a stream of the team (`drop-entry`, SR2-02), as an administrator is told. */
+/** A commit that won its epoch but that the team's rules refuse (SR2-02): every device read on past it. */
+export interface NullAlertView {
+  /** The project's own group, hex (`Project.teamProject` for a Kanban of the team); null for the team's. */
+  project: string | null;
+  seq: number;
+  epoch: number;
+  /** The device that posted it, hex, and its member's role when it is still in the team. */
+  writtenBy: string;
+  writtenByRole: 'admin' | 'member' | null;
+  writtenByMe: boolean;
+  /** Seconds since the epoch. */
+  writtenAt: number;
+  foundAt: number;
+  /** An administrator's device declared it null to the server: the epoch was taken again. */
+  voided: boolean;
+}
+
 export interface DropAlertView {
   /** The project's stream, hex (`Project.teamProject` for a Kanban of the team); null for the team's own stream. */
   project: string | null;
@@ -108,6 +125,8 @@ export interface TeamView {
   /** The projects' snapshots put aside (SR2-01), the newest first. */
   snapshotAlerts: SnapshotAlertView[];
   dropAlerts: DropAlertView[];
+  /** The commits found null (SR2-02), the newest first: shown to the administrators. */
+  nullAlerts: NullAlertView[];
   lastError: string | null;
 }
 

@@ -291,7 +291,10 @@ pub fn commit(data: &[u8]) {
     };
 
     let mut bytes = data.iter().copied();
-    let by_admin = bytes.next().unwrap_or(0) % 2 == 0;
+    let first = bytes.next().unwrap_or(0);
+    let by_admin = first % 2 == 0;
+    // The scope the commit signs (SR2-02): an administrator's, a member's own, or none known.
+    let scope = (first >> 1) % 3;
     let before = fx.carol.roster().expect("a roster");
     let (committer_member, committer) = if by_admin {
         (member(1), &mut fx.alice)
@@ -320,6 +323,7 @@ pub fn commit(data: &[u8]) {
     }
     let commit = {
         let (provider, signer, group) = committer.mls();
+        group.set_aad(vec![scope]);
         let mut builder = group
             .commit_builder()
             .force_self_update(self_update)
@@ -370,7 +374,12 @@ pub fn commit(data: &[u8]) {
             );
         }
     }
-    if !by_admin {
+    assert!(scope < 2, "a commit that signs no known scope was taken");
+    assert!(
+        by_admin || scope == 1,
+        "a member's commit that says it is an administrator's was taken"
+    );
+    if !by_admin || scope == 1 {
         assert_eq!(after, before, "a member changed the roster");
         let members: BTreeSet<MemberId> = leaves.iter().map(|i| i.member).collect();
         let before_members: BTreeSet<MemberId> = before.members.keys().copied().collect();

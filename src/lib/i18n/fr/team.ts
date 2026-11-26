@@ -115,6 +115,14 @@ export default {
     remove: 'Retirer l’instantané',
     dismiss: 'Masquer',
   },
+  nulls: {
+    title: 'Commits nuls',
+    lead: 'Un appareil a posté un commit que les règles de l’équipe refusent. Aucun appareil ne l’a pris : l’équipe continue, et un administrateur l’a déclaré nul. Si ce n’était pas une erreur, retire l’appareil ou le membre, puis change les clés.',
+    team: 'Équipe · époque {epoch}',
+    item: '{project} · époque {epoch}',
+    found: 'Trouvé le {date}',
+    voided: 'Trouvé le {date}, déclaré nul',
+  },
   drops: {
     title: 'Entrées retirées par l’opérateur du serveur',
     lead: 'L’opérateur du serveur d’équipe a retiré ces entrées, qui bloquaient l’équipe ou un projet. Les appareils lisent la suite ; si personne ne le lui a demandé, demande-lui pourquoi.',

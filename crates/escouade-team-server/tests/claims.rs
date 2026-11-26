@@ -173,6 +173,7 @@ async fn fenced_append(d: &Device, p: &[u8; 16], t: &[u8; 16], token: u64) -> An
         .post(
             &path(p, "/stream"),
             &AppendRequest {
+                own: false,
                 kind: Kind::Message,
                 epoch: None,
                 payload: vec![7; 40],
@@ -226,6 +227,7 @@ async fn a_write_under_a_stale_token_is_refused(b: Backend) {
         .post(
             "/v1/team/stream",
             &AppendRequest {
+                own: false,
                 kind: Kind::Message,
                 epoch: None,
                 payload: vec![1],

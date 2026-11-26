@@ -116,6 +116,8 @@ async fn two_administrators_commit_at_once_one_wins_the_other_plays_again() {
     let mut alice = w.create(&pa, member(1)).await;
     let mut dave = w.join(&mut alice, &pd, member(4), Role::Admin).await;
     let mut carol = w.join(&mut alice, &pc, member(3), Role::Member).await;
+    // Dave an administrator on the server too (the commits are the administrators', SR2-02).
+    alice.serve(NOW).await.unwrap();
     dave.sync().await.unwrap();
     assert!(dave.is_admin().unwrap());
     let epoch = alice.epoch().unwrap();
@@ -390,7 +392,11 @@ async fn a_missing_history_link_is_written_by_another_member() {
     // Carol rotates, but the link of her epoch never reaches the server (she drops it from her outbox).
     let staged = carol.device_mut().stage(&Change::Rotate).unwrap();
     let (epoch, commit) = staged.commit.unwrap();
-    carol.client().append_commit(epoch, &commit).await.unwrap();
+    carol
+        .client()
+        .append_commit(epoch, &commit, true)
+        .await
+        .unwrap();
     carol.device_mut().confirm_pending().unwrap();
     drop(carol);
 
@@ -450,9 +456,10 @@ async fn the_session_renews_itself_and_comes_back_after_a_restart() {
     let _ = DeviceKind::Device;
 }
 
-/// SR2-02, the operator's way out: a member's commit of bytes nobody reads freezes the whole team; the server's
-/// operator removes it (`drop-entry`); every device reads on past the hole, the administrator removes the member, and
-/// the administrators are told what went. The last entry a device read, removed, is no rollback either.
+/// SR2-02, the operator's way out: a member's commit of bytes nobody reads, that no administrator declared null yet
+/// (`nulls.rs`), removed by the server's operator (`drop-entry`); every device reads on past the hole, the
+/// administrator removes the member, and the administrators are told what went. The last entry a device read,
+/// removed, is no rollback either.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_operator_removes_the_commit_that_froze_the_team() {
     use escouade_team_server::db::Stream;
@@ -464,10 +471,12 @@ async fn the_operator_removes_the_commit_that_froze_the_team() {
     bob.sync().await.unwrap();
     carol.sync().await.unwrap();
     let epoch = alice.epoch().unwrap();
-    let seq = bob.client().append_commit(epoch, b"garbage").await.unwrap();
-    assert!(alice.sync().await.is_err(), "the team is frozen");
-    assert!(carol.sync().await.is_err(), "the team is frozen");
-    assert!(alice.remove_member(member(2)).await.is_err());
+    let seq = bob
+        .client()
+        .append_commit(epoch, b"garbage", true)
+        .await
+        .unwrap();
+    assert_eq!(carol.sync().await.unwrap().nulls, 1, "null, passed");
 
     let store = &w.server.server.app().store;
     store

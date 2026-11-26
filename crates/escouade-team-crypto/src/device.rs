@@ -39,13 +39,14 @@ use crate::invite::{
     Invitation, InvitationError, InviteLink, JoinRequest, Purpose, WelcomeDelivery,
 };
 use crate::keys::{head, EpochMember, EpochRecord, CONTENT_LABEL, HISTORY_LABEL};
-use crate::policy::check_commit;
+use crate::policy::{check_commit, CommitScope};
 use crate::recovery::{
     admin_signed, EscrowTeamHalf, EscrowWrap, RecoveryKey, RecoveryWrap, WrapAuthor,
 };
 use crate::roster::{
     EscrowPublic, Genesis, RecoveryPublic, Role, Roster, TeamFingerprint, ROSTER_EXTENSION,
 };
+use crate::void::Void;
 use crate::{mls, Error, CIPHERSUITE};
 
 /// What goes to the server after an operation.
@@ -435,6 +436,70 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         })
     }
 
+    /// What this device's commits say they are (SR2-02): an administrator's change, or, from a member, a change of
+    /// their own devices only. The client tells the server the same in clear (a member's commit is refused without it).
+    pub fn commit_scope(&self) -> Result<CommitScope, Error> {
+        Ok(if self.is_admin()? {
+            CommitScope::Admin
+        } else {
+            CommitScope::Own
+        })
+    }
+
+    /// Declares null the commit `digest` (the SHA-256 of its bytes) that the server numbered `seq` at `epoch` of the
+    /// team's group (`project` None) or of a project's own group: signed by this device's leaf, for the other devices
+    /// to check that an administrator of the epoch said so (`void.rs`).
+    pub fn sign_void(
+        &self,
+        project: Option<&ProjectId>,
+        epoch: u64,
+        seq: u64,
+        digest: [u8; 32],
+    ) -> Result<Void, Error> {
+        let group_id = match project {
+            None => self.group_id()?,
+            Some(p) => crate::project::project_group_id(&self.group_id()?, p),
+        };
+        Void::sign(
+            &group_id,
+            epoch,
+            seq,
+            digest,
+            self.signer.to_public_vec(),
+            |bytes| self.signer.sign(bytes).map_err(mls),
+        )
+    }
+
+    /// Who signed a void: its signature good for the team's group (`project` None) or the project's, by a leaf of the
+    /// epoch it names as this device holds it. None when this device does not hold that epoch (before it joined) or no
+    /// leaf of it has the key; [`Error::BadSignature`] for a signature that does not hold. Whether that leaf was an
+    /// administrator's is the caller's to say (the roster of that epoch).
+    pub fn void_signer(
+        &self,
+        project: Option<&ProjectId>,
+        void: &Void,
+    ) -> Result<Option<Identity>, Error> {
+        let (group_id, record) = match project {
+            None => (self.group_id()?, self.records.get(&void.epoch)),
+            Some(p) => (
+                crate::project::project_group_id(&self.group_id()?, p),
+                self.project_record(p, void.epoch),
+            ),
+        };
+        let Some(record) = record else {
+            return Ok(None);
+        };
+        let Some(member) = record
+            .members
+            .iter()
+            .find(|m| m.signature_key == void.author)
+        else {
+            return Ok(None);
+        };
+        void.verify(&group_id)?;
+        Ok(Identity::from_bytes(&member.identity).ok())
+    }
+
     pub fn checkpoint(&self) -> Option<Checkpoint> {
         self.checkpoint
     }
@@ -808,9 +873,11 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         invitation: Option<([u8; 16], [u8; 32])>,
     ) -> Result<Publication, Error> {
         self.current_record()?;
+        let scope = self.commit_scope()?;
         let provider = &self.provider;
         let group = self.group.as_mut().ok_or(Error::NotInTeam)?;
         let from_epoch = group.epoch().as_u64();
+        group.set_aad(scope.team_aad());
         let mut builder = group
             .commit_builder()
             .force_self_update(true)
@@ -832,7 +899,12 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             let staged = group
                 .pending_commit()
                 .ok_or_else(|| Error::Mls("no pending commit".into()))?;
-            check_commit(group, &Sender::Member(group.own_leaf_index()), staged)
+            check_commit(
+                group,
+                &Sender::Member(group.own_leaf_index()),
+                staged,
+                scope,
+            )
         };
         if let Err(e) = checked {
             group
@@ -1022,6 +1094,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         let group = self.group.as_mut().ok_or(Error::NotInTeam)?;
         let processed = group.process_message(provider, message).map_err(mls)?;
         let sender = processed.sender().clone();
+        let scope = CommitScope::of_team_aad(processed.aad())?;
         let staged = match processed.into_content() {
             ProcessedMessageContent::StagedCommitMessage(staged) => *staged,
             _ => {
@@ -1030,7 +1103,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 ))
             }
         };
-        check_commit(group, &sender, &staged)?;
+        check_commit(group, &sender, &staged, scope)?;
         let removed = staged.self_removed();
         group.merge_staged_commit(provider, staged).map_err(mls)?;
         if removed {

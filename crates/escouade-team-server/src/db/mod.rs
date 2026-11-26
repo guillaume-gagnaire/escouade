@@ -51,12 +51,14 @@ pub struct Device {
 }
 
 /// What a stream entry is, for the server: an MLS commit (ordered by epoch, the first one wins: the team's group in the
-/// team's stream, a project's own group in its stream) or anything else.
+/// team's stream, a project's own group in its stream), the void of the commit that won an epoch (SR2-02: an
+/// administrator's device says it is null, the epoch is free again) or anything else.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Commit,
     Message,
+    Void,
 }
 
 impl Kind {
@@ -64,14 +66,15 @@ impl Kind {
         match self {
             Kind::Commit => 1,
             Kind::Message => 0,
+            Kind::Void => 2,
         }
     }
 
     pub fn from_code(c: i64) -> Kind {
-        if c == 1 {
-            Kind::Commit
-        } else {
-            Kind::Message
+        match c {
+            1 => Kind::Commit,
+            2 => Kind::Void,
+            _ => Kind::Message,
         }
     }
 }
@@ -115,6 +118,9 @@ pub struct NewEntry {
     pub payload: Vec<u8>,
     /// A write of a ticket's holder (TS-6): refused when its claim token is no longer the current one.
     pub fence: Option<Fence>,
+    /// The device is an administrator's on the server: after a void, the epoch is kept to the administrators until
+    /// their next commit (SR2-02).
+    pub by_admin: bool,
 }
 
 /// Who reads and writes a project on the server (TS-6, `docs/TEAM-SERVER.md` §2.6): every device of the team, or
@@ -457,6 +463,13 @@ pub enum StoreError {
         /// The entries from the commit that won the epoch on, a page at most.
         preceding: Vec<Entry>,
     },
+    /// The commit that won the epoch was declared null (SR2-02): the epoch is kept to the administrators until their
+    /// next commit.
+    #[error("this epoch is kept to the administrators")]
+    Reserved,
+    /// A void that names no commit the stream may still free: not the last one, or one declared null already.
+    #[error("this void is refused: {0}")]
+    Void(&'static str),
     #[error("the team's quota is reached")]
     Quota,
     /// A snapshot older than the one kept, or beyond the stream.
@@ -541,7 +554,10 @@ pub trait Store: Send + Sync {
     /// Forgets the used tokens whose time is over.
     async fn sweep_tokens(&self, now: i64) -> Result<()>;
 
-    /// Appends an entry and gives it its number. A commit must be for the next epoch.
+    /// Appends an entry and gives it its number. A commit must be for the next epoch (and, after a void, an
+    /// administrator's). A void (SR2-02) must be for the epoch of the stream's last commit, not declared null yet: that
+    /// commit is then declared null (it stays, served as before), and its epoch free again, kept to the administrators
+    /// until their next commit.
     async fn append(
         &self,
         team: Id,

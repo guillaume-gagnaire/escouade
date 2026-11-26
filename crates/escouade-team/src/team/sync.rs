@@ -47,6 +47,8 @@ pub struct ProjectSynced {
     pub sent: usize,
     /// This device wrote a snapshot.
     pub snapshot_made: bool,
+    /// The commits of the project's own group found null (SR2-02), passed.
+    pub nulls: usize,
 }
 
 /// Writes of a ticket's holder the server refused (TS-6): another device took the ticket over meanwhile (a device
@@ -262,6 +264,17 @@ impl Team {
         project: ProjectId,
         members: Option<BTreeSet<MemberId>>,
     ) -> Result<bool, Error> {
+        self.project_in_step_with(project, members, false).await
+    }
+
+    /// As [`Self::project_in_step`]; with `force`, a commit even when nothing is to do (an administrator's, after a
+    /// void, SR2-02: the epoch kept to the administrators is taken again, so that the members' own changes go on).
+    async fn project_in_step_with(
+        &mut self,
+        project: ProjectId,
+        members: Option<BTreeSet<MemberId>>,
+        force: bool,
+    ) -> Result<bool, Error> {
         for _ in 0..TRIES {
             if !self.device.in_project(&project) {
                 return Err(Error::NoAccess);
@@ -272,6 +285,11 @@ impl Team {
                 continue;
             }
             let staged = self.step(|t| {
+                if force && members.is_none() {
+                    return Ok(Some(
+                        t.device.project_rotate(&project, &t.meta.key_packages)?,
+                    ));
+                }
                 Ok(t.device
                     .project_stage(&project, members.clone(), &t.meta.key_packages)?)
             })?;
@@ -300,9 +318,10 @@ impl Team {
         epoch: u64,
         commit: Vec<u8>,
     ) -> Result<bool, Error> {
+        let own = !self.device.is_admin()?;
         let sent = self
             .client
-            .append_project_commit(&project.0, epoch, &commit)
+            .append_project_commit(&project.0, epoch, &commit, own)
             .await;
         match self.heard(sent) {
             Ok(_) => {
@@ -318,6 +337,11 @@ impl Team {
                 self.step(|t| Ok(t.device.project_abandon(&project)?))?;
                 self.read_project(project).await?;
                 Ok(false)
+            }
+            // The commit that won was declared null: the epoch waits for an administrator's (SR2-02).
+            Err(Error::Client(e)) if e.code() == Some("epoch_reserved") => {
+                self.step(|t| Ok(t.device.project_abandon(&project)?))?;
+                Err(Error::Busy)
             }
             Err(e) => Err(e),
         }
@@ -765,7 +789,93 @@ impl Team {
         if let Some((seq, _)) = meta.sent.iter().next() {
             return Err(Error::Withheld { seq: *seq });
         }
+        self.void_project_nulls(project).await?;
         Ok(report)
+    }
+
+    /// An administrator's device in a project's own group declares null to the server the commits of its current
+    /// epoch it found null (SR2-02), as for the team's.
+    async fn void_project_nulls(&mut self, project: ProjectId) -> Result<(), Error> {
+        if !self.device.in_project(&project) || !self.device.is_admin().unwrap_or(false) {
+            return Ok(());
+        }
+        let current = self.device.project_epoch(&project)?;
+        let due: Vec<(u64, [u8; 32])> = self
+            .meta
+            .nulls
+            .iter()
+            .filter(|n| {
+                n.project == Some(project) && n.epoch == current && !n.voided && !n.void_sent
+            })
+            .map(|n| (n.seq, n.digest))
+            .collect();
+        for (seq, digest) in due {
+            let void = self
+                .device
+                .sign_void(Some(&project), current, seq, digest)?;
+            let sent = self
+                .client
+                .append_void(Some(&project.0), current, &wire::encode(&void))
+                .await;
+            match self.heard(sent) {
+                Ok(_) => {}
+                Err(Error::Client(e)) if e.code() == Some("void_refused") => {}
+                // Not an administrator for the server yet: tried again at the next reading.
+                Err(Error::Client(e)) if e.status() == Some(403) => continue,
+                Err(e) => return Err(e),
+            }
+            self.step(|t| {
+                for n in t.meta.nulls.iter_mut() {
+                    if n.project == Some(project) && n.seq == seq {
+                        n.void_sent = true;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
+    /// A void in a project's stream (SR2-02): signed by a leaf of the project's group of its epoch whose member is an
+    /// administrator of the team, it marks the null commit it names as passed. Anything else changes nothing.
+    fn take_project_void(&mut self, project: ProjectId, entry: &Entry) -> Result<(), Error> {
+        if !self.device.in_project(&project) {
+            return Ok(());
+        }
+        let Some(epoch) = entry.epoch else {
+            return Ok(());
+        };
+        let void: escouade_team_crypto::Void = match wire::decode(&entry.payload) {
+            Ok(v) => v,
+            Err(e) => {
+                log::debug!("team: a project's void not understood: {e}");
+                return Ok(());
+            }
+        };
+        if void.epoch != epoch {
+            return Ok(());
+        }
+        let roster = self.device.roster()?;
+        let by_admin = match self.device.void_signer(Some(&project), &void) {
+            Ok(Some(i)) => {
+                i.kind == escouade_team_crypto::DeviceKind::Device
+                    && roster.role(&i.member) == Some(escouade_team_crypto::Role::Admin)
+            }
+            _ => false,
+        };
+        if let Some(n) = self
+            .meta
+            .nulls
+            .iter_mut()
+            .find(|n| n.project == Some(project) && n.epoch == epoch && n.digest == void.digest)
+        {
+            if by_admin {
+                n.voided = true;
+            } else {
+                log::warn!("team: a project's void of a null commit that no administrator signed");
+            }
+        }
+        Ok(())
     }
 
     /// The last entry read must still be there, the same: unless a snapshot took its place.
@@ -815,6 +925,7 @@ impl Team {
         report.entries += 1;
         match entry.kind {
             Kind::Commit => self.take_project_commit(project, &entry, report)?,
+            Kind::Void => self.step(|t| t.take_project_void(project, &entry))?,
             Kind::Message => {
                 let covered = meta.snapshot.is_some_and(|upto| entry.seq <= upto);
                 if !covered {
@@ -855,6 +966,11 @@ impl Team {
                 }
                 t.device.project_abandon(&project)?;
             }
+            let current = t.device.project_epoch(&project)?;
+            if epoch > current && t.null_at(Some(project), current).is_some() {
+                // The commit this device found null, others took: two versions of the project's group.
+                return Err(CryptoError::Fork { epoch: current + 1 }.into());
+            }
             match t.device.project_process_commit(&project, &entry.payload) {
                 Ok(Processed::Epoch(_)) | Ok(Processed::Removed) => {
                     report.commits += 1;
@@ -862,6 +978,21 @@ impl Team {
                 }
                 // Before this device joined, or its own merged already.
                 Err(CryptoError::Stale { .. }) => Ok(()),
+                Err(e @ CryptoError::Behind(_)) => Err(e.into()),
+                // Refused, the group still at its epoch: null, the reading goes on (SR2-02).
+                Err(e)
+                    if super::is_null(&e)
+                        && epoch == current
+                        && t.device.project_epoch(&project).ok() == Some(current) =>
+                {
+                    log::warn!(
+                        "team: the commit {} of a project's epoch {epoch} is null: {e}",
+                        entry.seq
+                    );
+                    t.note_null(Some(project), epoch, entry, e.to_string());
+                    report.nulls += 1;
+                    Ok(())
+                }
                 Err(e) => Err(e.into()),
             }
         })
@@ -1248,11 +1379,18 @@ impl Team {
                 Ok(())
             })?;
         }
+        let admin = self.device.is_admin()?;
         for project in self.device.project_ids() {
             if !self.device.in_project(&project) {
                 continue;
             }
-            match self.project_in_step(project, None).await {
+            // After a void, the epoch is the administrators' to take again (SR2-02).
+            let current = self.device.project_epoch(&project)?;
+            let force = admin
+                && self.meta.nulls.iter().any(|n| {
+                    n.project == Some(project) && n.epoch == current && (n.voided || n.void_sent)
+                });
+            match self.project_in_step_with(project, None, force).await {
                 Ok(_) => {}
                 Err(e) if e.alarm().is_some() => return Err(e),
                 Err(e) => log::debug!("team: a project's group not put in step: {e}"),

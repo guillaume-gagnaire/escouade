@@ -48,6 +48,7 @@ async fn a_snapshot_takes_the_place_of_the_start_of_a_projects_stream(b: Backend
         .post(
             &format!("/v1/projects/{}/stream", hex::encode(p)),
             &AppendRequest {
+                own: false,
                 fence: None,
                 kind: Kind::Commit,
                 epoch: Some(0),
@@ -371,6 +372,8 @@ async fn the_streams_are_numbered_and_read_again_from_n(b: Backend) {
     assert_eq!(alice.read_team(5).await.entries.len(), 0);
     // A project's own group commits in its stream (TS-5): the first commit of an epoch wins there too.
     let project_commit = |epoch: u64, payload: Vec<u8>| AppendRequest {
+        // Said of their own devices: Bob is a member (SR2-02).
+        own: true,
         fence: None,
         kind: Kind::Commit,
         epoch: Some(epoch),
@@ -434,7 +437,7 @@ async fn the_first_commit_of_an_epoch_wins(b: Backend) {
     assert_eq!(alice.commit(0, b"alice: epoch 0 -> 1").await.ok().seq, 1);
     alice.message(b"welcome for someone").await;
     // Bob's commit for the same epoch is refused, with what preceded it.
-    let (status, p) = bob.commit(0, b"bob: epoch 0 -> 1").await.refused();
+    let (status, p) = bob.commit_own(0, b"bob: epoch 0 -> 1").await.refused();
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(p.error, "epoch_taken");
     let detail: EpochTaken = p.detail.unwrap().deserialized().unwrap();
@@ -447,7 +450,7 @@ async fn the_first_commit_of_an_epoch_wins(b: Backend) {
     assert_eq!(detail.preceding[0].epoch, Some(0));
     assert_eq!(detail.preceding[0].kind, Kind::Commit);
     // Bob catches up and commits the next epoch.
-    assert_eq!(bob.commit(1, b"bob: epoch 1 -> 2").await.ok().seq, 3);
+    assert_eq!(bob.commit_own(1, b"bob: epoch 1 -> 2").await.ok().seq, 3);
     // An epoch ahead is refused too, with nothing before it.
     let (_, p) = alice.commit(7, b"ahead").await.refused();
     let detail: EpochTaken = p.detail.unwrap().deserialized().unwrap();
@@ -467,6 +470,7 @@ async fn the_first_commit_of_an_epoch_wins(b: Backend) {
                 .post(
                     "/v1/team/stream",
                     &AppendRequest {
+                        own: false,
                         fence: None,
                         kind: Kind::Commit,
                         epoch: Some(2),

@@ -110,6 +110,14 @@ export default defineZone('team', {
     remove: 'Remove the snapshot',
     dismiss: 'Hide',
   },
+  nulls: {
+    title: 'Null commits',
+    lead: 'A device posted a commit the team’s rules refuse. No device took it: the team goes on, and an administrator declared it null. If it was no mistake, remove the device or the member, then change the keys.',
+    team: 'Team · epoch {epoch}',
+    item: '{project} · epoch {epoch}',
+    found: 'Found on {date}',
+    voided: 'Found on {date}, declared null',
+  },
   drops: {
     title: 'Entries the server’s operator removed',
     lead: 'The team server’s operator removed these entries, which blocked the team or a project. The devices read on; if nobody asked for it, ask the operator why.',

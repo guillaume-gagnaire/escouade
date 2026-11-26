@@ -184,6 +184,10 @@ pub mod wire {
         /// `stale_token`) when the token is no longer the current one.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub fence: Option<FenceWire>,
+        /// A commit says, in clear, that it changes its member's own devices only (SR2-02): a member's commit is
+        /// refused without it (403). The devices check the same, signed inside the commit.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        pub own: bool,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -400,6 +404,12 @@ fn store_problem(e: StoreError) -> Problem {
             "the team's quota is reached",
         ),
         StoreError::Drop(why) => Problem::new(StatusCode::CONFLICT, "drop_refused", why),
+        StoreError::Reserved => Problem::new(
+            StatusCode::CONFLICT,
+            "epoch_reserved",
+            "the commit of this epoch was declared null: the epoch is kept to the administrators until their next commit",
+        ),
+        StoreError::Void(why) => Problem::new(StatusCode::CONFLICT, "void_refused", why),
         StoreError::TooMany(what) => Problem::new(
             StatusCode::FORBIDDEN,
             "too_many",
@@ -941,9 +951,12 @@ async fn append(
         return Err(Problem::bad_request("empty", "an entry carries bytes"));
     }
     match (stream, req.kind, req.epoch) {
-        (_, Kind::Commit, Some(_)) | (_, Kind::Message, None) => {}
-        (_, Kind::Commit, None) => {
-            return Err(Problem::bad_request("no_epoch", "a commit says its epoch"))
+        (_, Kind::Commit | Kind::Void, Some(_)) | (_, Kind::Message, None) => {}
+        (_, Kind::Commit | Kind::Void, None) => {
+            return Err(Problem::bad_request(
+                "no_epoch",
+                "a commit, or its void, says its epoch",
+            ))
         }
         (_, Kind::Message, Some(_)) => {
             return Err(Problem::bad_request(
@@ -951,6 +964,21 @@ async fn append(
                 "only a commit has an epoch",
             ))
         }
+    }
+    // SR2-02, in defense in depth: the commits are the administrators', but for a member's change of their own devices,
+    // which says so; and only an administrator declares a commit null. The devices check the same, signed.
+    match req.kind {
+        Kind::Commit if !req.own && !authed.is_admin() => {
+            return Err(Problem::forbidden(
+                "a member's commit changes their own devices only, and says so",
+            ))
+        }
+        Kind::Void if !authed.is_admin() => {
+            return Err(Problem::forbidden(
+                "only an administrator declares a commit null",
+            ))
+        }
+        _ => {}
     }
     let team = authed.device.team;
     let size = req.payload.len() as u64;
@@ -974,6 +1002,7 @@ async fn append(
         at: now(),
         payload: req.payload,
         fence,
+        by_admin: authed.is_admin(),
     };
     let entry = app
         .store

@@ -389,6 +389,101 @@ fn a_member_adds_their_own_devices_only_and_never_changes_the_roster() {
     assert_eq!(alice.roster().unwrap().role(&member(2)), Some(Role::Member));
 }
 
+/// SR2-02: a commit says its scope in its authenticated data, signed with it. A member's commit that says it is an
+/// administrator's is refused, even when what it does is a member's; an administrator's commit that says it is a
+/// member's is checked as one; a member's own change that says so passes.
+#[test]
+fn a_commit_is_checked_by_the_scope_it_signs() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let raw = |device: &mut TeamDevice, aad: Vec<u8>, roster: Option<Roster>| {
+        let (provider, signer, group) = device.mls();
+        group.clear_pending_commit(provider.storage()).unwrap();
+        group.set_aad(aad);
+        let mut builder = group.commit_builder().force_self_update(true);
+        if let Some(r) = roster {
+            builder = builder
+                .propose_group_context_extensions(r.to_extensions().unwrap())
+                .unwrap();
+        }
+        let bundle = builder
+            .load_psks(provider.storage())
+            .unwrap()
+            .build(provider.rand(), provider.crypto(), signer, |_| true)
+            .unwrap()
+            .stage_commit(provider)
+            .unwrap();
+        let bytes = encode(bundle.commit()).unwrap();
+        group.clear_pending_commit(provider.storage()).unwrap();
+        bytes
+    };
+    // Bob's rotation that says it is an administrator's.
+    let commit = raw(&mut bob, CommitScope::Admin.team_aad(), None);
+    assert!(matches!(
+        alice.process_commit(&commit),
+        Err(Error::Policy(_))
+    ));
+    // An unknown scope.
+    let commit = raw(&mut bob, vec![7], None);
+    assert!(matches!(
+        alice.process_commit(&commit),
+        Err(Error::Policy(_))
+    ));
+    // Alice's change of the roster that says it is a member's.
+    let mut roster = alice.roster().unwrap();
+    roster.members.insert(member(2), Role::Admin);
+    let commit = raw(&mut alice, CommitScope::Own.team_aad(), Some(roster));
+    assert!(matches!(bob.process_commit(&commit), Err(Error::Policy(_))));
+    assert_eq!(bob.epoch().unwrap(), alice.epoch().unwrap());
+    // Bob's own rotation, said so: taken.
+    assert_eq!(bob.commit_scope().unwrap(), CommitScope::Own);
+    assert_eq!(alice.commit_scope().unwrap(), CommitScope::Admin);
+    let publication = bob.rotate().unwrap();
+    let (_, commit) = publication.commit.clone().unwrap();
+    assert!(alice.process_commit(&commit).is_ok());
+    assert_eq!(bob.epoch().unwrap(), alice.epoch().unwrap());
+}
+
+/// SR2-02: a void is signed by a leaf of the epoch it names; the other devices find who signed it.
+#[test]
+fn a_void_names_its_signer_in_the_epoch_it_is_for() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let epoch = alice.epoch().unwrap();
+    let void = alice.sign_void(None, epoch, 3, [1; 32]).unwrap();
+    assert_eq!(
+        bob.void_signer(None, &void).unwrap().map(|i| i.member),
+        Some(member(1))
+    );
+    // For another group (a project's), it does not hold.
+    assert!(matches!(
+        bob.void_signer(Some(&project(1)), &void),
+        Ok(None) | Err(Error::BadSignature)
+    ));
+    // Changed, it does not hold.
+    let forged = Void {
+        seq: 4,
+        ..void.clone()
+    };
+    assert!(matches!(
+        bob.void_signer(None, &forged),
+        Err(Error::BadSignature)
+    ));
+    // An epoch this device does not hold: nobody known.
+    let later = alice.sign_void(None, epoch + 5, 3, [1; 32]).unwrap();
+    assert_eq!(bob.void_signer(None, &later).unwrap(), None);
+}
+
 #[test]
 fn the_server_cannot_slip_a_key_in() {
     let (mut relay, mut alice, _) = new_team(None);

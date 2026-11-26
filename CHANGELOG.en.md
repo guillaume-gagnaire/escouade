@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: on the team server, a member or a hijacked agent can no longer freeze the team or a project with an invalid commit. Every device passes it, an administrator voids it and sees who posted it on the team’s card, then removes the member and changes the keys as usual; only administrators commit, but for a member’s own devices.
 - Security: the Overseer now grants an agent nothing but reading files of its project or its worktree. A command, a write, the network stay yours: it leaves the request in “Your turn” with what it recommends. And it reads only its own folder, the projects and their spec, never a harness’s credentials nor a key.
 - Security: behind a TLS proxy, each client of your server counts its failed tries apart (`--trust-proxy`), and wrong pairing codes from elsewhere never block the one you type on the machine or through SSH. Through Tailscale, only the phone app opens the API, no longer a web page of another machine.
 - Security: a ticket of a team Kanban that a teammate wrote and that is assigned to you waits for your go-ahead: neither the autopilot, the Overseer nor your agents start it before you accept it, on its card or in the “Your turn” box. The card says who wrote its text and who assigned it, and a text a teammate changes after your go-ahead asks again.

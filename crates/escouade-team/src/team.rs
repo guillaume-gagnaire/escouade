@@ -9,8 +9,14 @@
 //!   Refused with 409 `epoch_taken`, the device drops it, reads the commit that won, and stages again if the change is
 //!   still to do. It never holds two epochs that diverge; and a commit it sent without hearing back is found again in
 //!   the stream (merged if the server has it, dropped if not).
+//! - **Null commits** (SR2-02): a commit of the current epoch that MLS or the team's rules refuse does not stop the
+//!   reading. It is kept **null** (its digest, who posted it), the group stays at its epoch, the administrators are
+//!   told ([`Team::null_alerts`]); an administrator's device declares it null to the server by a signed void
+//!   (`escouade_team_crypto::Void`), which frees the epoch, kept to the administrators until their next commit (a
+//!   rotation when nothing else waits). The same in a project's own group.
 //! - **Forks**: a commit for an epoch already seen that is not the one this device saw, a history link or a beacon
-//!   of a member that shows another head for an epoch this device holds: [`escouade_team_crypto::Error::Fork`].
+//!   of a member that shows another head for an epoch this device holds, a void of an administrator for a commit
+//!   this device took, a later epoch after a commit this device found null: [`escouade_team_crypto::Error::Fork`].
 //! - **Rollbacks**: the state on the disk older than the checkpoint of the keychain (an old backup) is refused at
 //!   [`Team::open`]; the server that hides its last entries is refused at [`Team::sync`].
 //! - **The history links** of the epochs whose committer did not write them are written by any member who holds the
@@ -33,7 +39,7 @@ use escouade_team_crypto::recovery::RecoveryWrap;
 use escouade_team_crypto::roster::EscrowPublic;
 use escouade_team_crypto::{
     Admission, Change, Checkpoint, DeviceId, DeviceKind, Identity, MemberId, ObjectId, Processed,
-    ProjectId, Publication, Purpose, RecoveryKey, Role, Roster, SavedState, TeamDevice,
+    ProjectId, Publication, Purpose, RecoveryKey, Role, Roster, SavedState, TeamDevice, Void,
     CIPHERSUITE,
 };
 use escouade_team_crypto::{EscrowTeamHalf, TeamFingerprint};
@@ -117,6 +123,8 @@ pub struct Synced {
     pub removed: bool,
     /// The device joined by its Welcome.
     pub joined: bool,
+    /// The commits found null (SR2-02): refused by MLS or the team's rules, passed.
+    pub nulls: usize,
 }
 
 /// An invitation made: its link (the secret after the `#`) and whether the server already knows its token.
@@ -213,6 +221,48 @@ pub struct SnapshotAlert {
     pub found_here: bool,
 }
 
+/// A commit that won its epoch on the server but that MLS or the team's rules refuse (SR2-02): kept null, the group
+/// still at its epoch, the reading goes on. An administrator's device declares it null to the server (a void signed by
+/// its leaf), which frees the epoch; the administrators are told, with the device that posted it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NullAlert {
+    /// The project's own group, None for the team's.
+    pub project: Option<ProjectId>,
+    /// Its number in the stream, the epoch it was for, and the SHA-256 of its bytes.
+    pub seq: u64,
+    pub epoch: u64,
+    #[serde(with = "hex::serde")]
+    pub digest: [u8; 32],
+    /// The device that posted it, and when (seconds since the epoch, as the server says).
+    pub written_by: DeviceId,
+    pub written_at: i64,
+    /// When this device found it null (seconds since the epoch), and why (the rule or the error of MLS).
+    pub found_at: u64,
+    pub why: String,
+    /// An administrator's void of it is in the stream: its epoch was taken again.
+    pub voided: bool,
+    /// This device sent a void of it (an administrator's).
+    #[serde(default)]
+    pub void_sent: bool,
+}
+
+/// How many null commits a device keeps in mind, the newest.
+const NULLS_KEPT: usize = 100;
+
+/// Whether a commit's refusal is the commit's (bytes of nothing, a commit MLS refuses, a rule of the team, a replay):
+/// such a commit is null (SR2-02). A fork, a rollback, this device's own state are not.
+pub(crate) fn is_null(e: &CryptoError) -> bool {
+    matches!(
+        e,
+        CryptoError::Mls(_)
+            | CryptoError::Policy(_)
+            | CryptoError::Encoding(_)
+            | CryptoError::Stale { .. }
+            | CryptoError::BadSignature
+            | CryptoError::Decrypt
+    )
+}
+
 /// A second use of one of this device's invitations, as the server told it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct ReuseAlert {
@@ -235,6 +285,10 @@ struct Meta {
     links: BTreeSet<u64>,
     /// The commits read before this device joined (while it waits for its Welcome).
     early: BTreeMap<u64, Vec<u8>>,
+    /// The number, the device and the hour of each of them (to tell a null one, SR2-02).
+    early_from: BTreeMap<u64, (u64, [u8; 16], i64)>,
+    /// The commits found null (SR2-02), the team's and the projects' own groups', the oldest first.
+    nulls: Vec<NullAlert>,
     /// The join requests an administrator may admit.
     requests: Vec<JoinRequest>,
     /// What waits to go to the server, in order.
@@ -534,7 +588,7 @@ impl Team {
             let (from_epoch, commit) = publication.commit.clone().ok_or_else(|| {
                 Error::Crypto(CryptoError::Mls("a recovery without its commit".into()))
             })?;
-            client.append_commit(from_epoch, &commit).await?;
+            client.append_commit(from_epoch, &commit, false).await?;
             Ok::<_, Error>((device, publication, from_epoch, commit))
         };
         let (device, publication, from_epoch, commit) = match attempt.await {
@@ -1040,6 +1094,7 @@ impl Team {
             }
         }
         if self.device.group_id().is_ok() {
+            self.void_nulls().await?;
             self.step(|t| t.read_back())?;
             self.step(|t| t.read_back_projects())?;
             self.step(|t| {
@@ -1087,7 +1142,13 @@ impl Team {
                 let epoch = entry
                     .epoch
                     .ok_or_else(|| Error::Server("a commit without its epoch".into()))?;
-                self.take_commit(epoch, &entry.payload, report)?;
+                self.take_commit(epoch, &entry, report)?;
+            }
+            Kind::Void => {
+                let epoch = entry
+                    .epoch
+                    .ok_or_else(|| Error::Server("a void without its epoch".into()))?;
+                self.take_void(epoch, &entry)?;
             }
             Kind::Message => match wire::decode::<TeamMessage>(&entry.payload) {
                 Ok(message) => self.take_message(message, report)?,
@@ -1099,7 +1160,8 @@ impl Team {
         Ok(())
     }
 
-    fn take_commit(&mut self, epoch: u64, commit: &[u8], report: &mut Synced) -> Result<(), Error> {
+    fn take_commit(&mut self, epoch: u64, entry: &Entry, report: &mut Synced) -> Result<(), Error> {
+        let commit = entry.payload.as_slice();
         let d = digest(commit);
         if let Some(seen) = self.meta.commits.get(&epoch) {
             if *seen != d {
@@ -1115,6 +1177,11 @@ impl Team {
             // Not in the group yet: kept for when the Welcome comes.
             self.meta.commits.insert(epoch, d);
             self.meta.early.insert(epoch, commit.to_vec());
+            if let Ok(device) = <[u8; 16]>::try_from(entry.device.as_slice()) {
+                self.meta
+                    .early_from
+                    .insert(epoch, (entry.seq, device, entry.at));
+            }
             return Ok(());
         };
         if epoch < current {
@@ -1123,6 +1190,10 @@ impl Team {
             return Ok(());
         }
         if epoch > current {
+            if self.null_at(None, current).is_some() {
+                // The commit this device found null, others took: the server shows two versions of the team.
+                return Err(CryptoError::Fork { epoch: current + 1 }.into());
+            }
             return Err(Error::Server(format!(
                 "the server skipped the commits from epoch {current} to {epoch}"
             )));
@@ -1138,13 +1209,191 @@ impl Team {
             }
             self.device.abandon_pending()?;
         }
-        let processed = self.device.process_commit(commit)?;
+        let processed = match self.device.process_commit(commit) {
+            Ok(p) => p,
+            // Refused, the group still at its epoch: null, the reading goes on (SR2-02).
+            Err(e) if is_null(&e) && self.device.epoch().ok() == Some(epoch) => {
+                log::warn!(
+                    "team: the commit {} of epoch {epoch} is null: {e}",
+                    entry.seq
+                );
+                self.note_null(None, epoch, entry, e.to_string());
+                report.nulls += 1;
+                return Ok(());
+            }
+            Err(e) => return Err(e.into()),
+        };
         self.meta.commits.insert(epoch, d);
         report.commits += 1;
         if processed == Processed::Removed {
             report.removed = true;
         }
         Ok(())
+    }
+
+    /// Keeps a commit found null (SR2-02), for the administrators and for the void.
+    pub(crate) fn note_null(
+        &mut self,
+        project: Option<ProjectId>,
+        epoch: u64,
+        entry: &Entry,
+        why: String,
+    ) {
+        let Ok(device) = <[u8; 16]>::try_from(entry.device.as_slice()) else {
+            return;
+        };
+        self.note_null_from(
+            project,
+            epoch,
+            (entry.seq, device, entry.at),
+            digest(&entry.payload),
+            why,
+        );
+    }
+
+    fn note_null_from(
+        &mut self,
+        project: Option<ProjectId>,
+        epoch: u64,
+        (seq, device, at): (u64, [u8; 16], i64),
+        digest: [u8; 32],
+        why: String,
+    ) {
+        if self
+            .meta
+            .nulls
+            .iter()
+            .any(|n| n.project == project && n.seq == seq)
+        {
+            return;
+        }
+        self.meta.nulls.push(NullAlert {
+            project,
+            seq,
+            epoch,
+            digest,
+            written_by: DeviceId(device),
+            written_at: at,
+            found_at: now(),
+            why,
+            voided: false,
+            void_sent: false,
+        });
+        let over = self.meta.nulls.len().saturating_sub(NULLS_KEPT);
+        self.meta.nulls.drain(..over);
+    }
+
+    /// The null commit of `epoch` in the team's group (`project` None) or a project's, if any.
+    pub(crate) fn null_at(&self, project: Option<ProjectId>, epoch: u64) -> Option<&NullAlert> {
+        self.meta
+            .nulls
+            .iter()
+            .rev()
+            .find(|n| n.project == project && n.epoch == epoch)
+    }
+
+    /// A void in the team's stream (SR2-02). Signed by a leaf of an administrator of its epoch (as this device lived
+    /// it), it marks the null commit it names as passed; it names a commit this device took: the server shows two
+    /// versions of the team. Before this device was in the group at that epoch, the commit it names is forgotten (as
+    /// one the operator removed), so that the commit that takes the epoch again is not a fork. Anything else changes
+    /// nothing.
+    fn take_void(&mut self, epoch: u64, entry: &Entry) -> Result<(), Error> {
+        let void: Void = match wire::decode(&entry.payload) {
+            Ok(v) => v,
+            Err(e) => {
+                log::debug!("team: a void not understood: {e}");
+                return Ok(());
+            }
+        };
+        if void.epoch != epoch {
+            log::debug!("team: a void for another epoch than its entry's");
+            return Ok(());
+        }
+        let lived = self.meta.admins.get(&epoch).cloned();
+        let by_admin = match self.device.void_signer(None, &void) {
+            Ok(Some(i)) => {
+                i.kind == DeviceKind::Device
+                    && lived.as_ref().is_some_and(|a| a.contains(&i.member))
+            }
+            _ => false,
+        };
+        if let Some(n) = self
+            .meta
+            .nulls
+            .iter_mut()
+            .find(|n| n.project.is_none() && n.epoch == epoch && n.digest == void.digest)
+        {
+            if by_admin {
+                n.voided = true;
+            } else {
+                log::warn!("team: a void of a null commit that no administrator signed");
+            }
+            return Ok(());
+        }
+        if self.meta.commits.get(&epoch) == Some(&void.digest) {
+            if lived.is_none() {
+                self.meta.commits.remove(&epoch);
+                self.meta.early.remove(&epoch);
+                self.meta.early_from.remove(&epoch);
+            } else if by_admin {
+                return Err(CryptoError::Fork { epoch: epoch + 1 }.into());
+            }
+        }
+        Ok(())
+    }
+
+    /// An administrator's device declares null to the server the commits of the current epoch it found null (SR2-02):
+    /// a void signed by its leaf. Refused (`void_refused`) when another administrator did it first.
+    async fn void_nulls(&mut self) -> Result<(), Error> {
+        if !self.device.is_admin().unwrap_or(false) {
+            return Ok(());
+        }
+        let Ok(current) = self.device.epoch() else {
+            return Ok(());
+        };
+        let due: Vec<(u64, [u8; 32])> = self
+            .meta
+            .nulls
+            .iter()
+            .filter(|n| n.project.is_none() && n.epoch == current && !n.voided && !n.void_sent)
+            .map(|n| (n.seq, n.digest))
+            .collect();
+        for (seq, digest) in due {
+            let void = self.device.sign_void(None, current, seq, digest)?;
+            match self
+                .client
+                .append_void(None, current, &wire::encode(&void))
+                .await
+            {
+                Ok(_) => {}
+                Err(e) if e.code() == Some("void_refused") => {}
+                // An administrator of the roster the server does not know as one yet (its roles follow at an
+                // administrator's next `serve`): tried again at the next reading, the reading goes on.
+                Err(e) if e.status() == Some(403) => {
+                    log::info!(
+                        "team: the server takes a void from its administrators alone: later"
+                    );
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+            self.step(|t| {
+                for n in t.meta.nulls.iter_mut() {
+                    if n.project.is_none() && n.seq == seq {
+                        n.void_sent = true;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
+    /// The commits found null (SR2-02), the newest first: shown to the administrators.
+    pub fn null_alerts(&self) -> Vec<NullAlert> {
+        let mut out = self.meta.nulls.clone();
+        out.reverse();
+        out
     }
 
     fn take_message(&mut self, message: TeamMessage, report: &mut Synced) -> Result<(), Error> {
@@ -1288,15 +1537,28 @@ impl Team {
         // The commits that came before the Welcome but after its epoch.
         let early = std::mem::take(&mut self.meta.early);
         let current = self.device.epoch()?;
+        let from = std::mem::take(&mut self.meta.early_from);
         for (epoch, commit) in early.range(current..) {
             if *epoch != self.device.epoch()? {
                 return Err(Error::Server("a gap in the early commits".into()));
             }
-            if self.device.process_commit(commit)? == Processed::Removed {
-                report.removed = true;
-                break;
+            match self.device.process_commit(commit) {
+                Ok(Processed::Removed) => {
+                    report.removed = true;
+                    break;
+                }
+                Ok(_) => report.commits += 1,
+                // A null one (SR2-02): the group stays at its epoch, the commit that takes it again comes next.
+                Err(e) if is_null(&e) && self.device.epoch().ok() == Some(*epoch) => {
+                    self.meta.commits.remove(epoch);
+                    if let Some(f) = from.get(epoch) {
+                        self.note_null_from(None, *epoch, *f, digest(commit), e.to_string());
+                    }
+                    report.nulls += 1;
+                    break;
+                }
+                Err(e) => return Err(e.into()),
             }
-            report.commits += 1;
         }
         Ok(())
     }
@@ -1389,7 +1651,8 @@ impl Team {
                     Error::Crypto(CryptoError::Mls("a change without its commit".into()))
                 })
             })?;
-            match self.client.append_commit(epoch, &commit).await {
+            let own = self.device.commit_scope()? == escouade_team_crypto::CommitScope::Own;
+            match self.client.append_commit(epoch, &commit, own).await {
                 Ok(_) => {
                     self.step(|t| {
                         let rest = t.device.confirm_pending()?;
@@ -1403,6 +1666,11 @@ impl Team {
                 Err(ClientError::EpochTaken(_)) => {
                     // The commit that won comes with the next reading.
                     self.step(|t| Ok(t.device.abandon_pending()?))?;
+                }
+                // The commit that won was declared null: the epoch waits for an administrator's (SR2-02).
+                Err(e) if e.code() == Some("epoch_reserved") => {
+                    self.step(|t| Ok(t.device.abandon_pending()?))?;
+                    return Err(Error::Busy);
                 }
                 // Sent or not, it stays pending: the next reading finds out which.
                 Err(e) => return Err(e.into()),
@@ -1590,6 +1858,7 @@ impl Team {
         self.read_alerts(&mut served).await?;
         self.read_snapshot_alerts(now, &mut served).await?;
         self.read_drops(now, &mut served).await?;
+        self.retake_voided_epoch().await?;
         self.roles_in_step(&mut served).await?;
         self.anchors_in_step()?;
         self.serve_projects(now).await?;
@@ -1866,6 +2135,27 @@ impl Team {
                 t.meta.snapshot_alerts = alerts;
                 Ok(())
             })?;
+        }
+        Ok(())
+    }
+
+    /// An administrator's: the epoch whose commit was declared null is kept to the administrators until their next
+    /// commit (SR2-02). When nothing else took it, a rotation does, so that the members' own changes go on.
+    async fn retake_voided_epoch(&mut self) -> Result<(), Error> {
+        if !self.device.is_admin()? {
+            return Ok(());
+        }
+        let current = self.device.epoch()?;
+        let voided = self
+            .meta
+            .nulls
+            .iter()
+            .any(|n| n.project.is_none() && n.epoch == current && (n.voided || n.void_sent));
+        if voided {
+            match self.apply(Change::Rotate).await {
+                Ok(_) | Err(Error::Busy) => {}
+                Err(e) => return Err(e),
+            }
         }
         Ok(())
     }

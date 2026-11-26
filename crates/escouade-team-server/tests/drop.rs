@@ -34,7 +34,7 @@ async fn a_commit_that_blocks_the_team_goes_and_its_epoch_is_free_again(b: Backe
     assert_eq!(admin.commit(0, b"admin: epoch 0 -> 1").await.ok().seq, 1);
     admin.message(b"a message").await;
     // Bob takes the next epoch with bytes no device reads: the administrator's commit is refused.
-    assert_eq!(bob.commit(1, b"garbage").await.ok().seq, 3);
+    assert_eq!(bob.commit_own(1, b"garbage").await.ok().seq, 3);
     let (status, p) = admin.commit(1, b"admin: epoch 1 -> 2").await.refused();
     assert_eq!(
         (status, p.error.as_str()),
@@ -142,6 +142,8 @@ async fn a_projects_entry_goes_and_is_listed_to_its_devices_alone(b: Backend) {
     let project: [u8; 16] = *b"a-project-of-two";
     let path = format!("/v1/projects/{}/stream", hex::encode(project));
     let commit = |epoch: u64, payload: &[u8]| AppendRequest {
+        // A member's, of their own devices (SR2-02).
+        own: true,
         fence: None,
         kind: Kind::Commit,
         epoch: Some(epoch),

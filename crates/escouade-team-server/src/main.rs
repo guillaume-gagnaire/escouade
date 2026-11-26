@@ -552,6 +552,8 @@ async fn drop_entry(args: &Args) -> Result<(), String> {
         (Kind::Commit, Some(epoch)) => format!("a commit, for epoch {epoch}"),
         (Kind::Commit, None) => "a commit".into(),
         (Kind::Message, _) => "a message".into(),
+        (Kind::Void, Some(epoch)) => format!("the void of the commit of epoch {epoch}"),
+        (Kind::Void, None) => "a void".into(),
     };
     println!(
         "Team {}, {label} stream, entry {seq}: {what}.",
@@ -629,6 +631,8 @@ async fn list_dropped(args: &Args, team: escouade_team_server::util::Id) -> Resu
             (Kind::Commit, Some(e)) => format!("commit, epoch {e}"),
             (Kind::Commit, None) => "commit".into(),
             (Kind::Message, _) => "message".into(),
+            (Kind::Void, Some(e)) => format!("void, epoch {e}"),
+            (Kind::Void, None) => "void".into(),
         };
         println!(
             "{} by {}: {stream} stream, entry {} ({what}, {} bytes, written by {} at {}), digest {}",

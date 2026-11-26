@@ -30,6 +30,7 @@ const TEAM: TeamView = {
   invitations: [],
   snapshotAlerts: [],
   dropAlerts: [],
+  nullAlerts: [],
   admissions: [],
   refusals: [],
   joinWords: [],

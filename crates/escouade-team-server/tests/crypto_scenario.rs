@@ -76,6 +76,7 @@ async fn view(device: &Device) -> View {
                     }
                     Msg::Recovery(_) | Msg::Escrow(_) => {}
                 },
+                Kind::Void => {}
             }
         }
         if !page.more {
@@ -91,7 +92,9 @@ async fn send(device: &Device, msg: &Msg) {
 /// Publishes what an operation gives: its commit first (refused if its epoch is taken), then the rest.
 async fn publish(device: &Device, publication: Publication) -> Result<(), (StatusCode, Problem)> {
     if let Some((epoch, commit)) = publication.commit {
-        if let Answer::No(s, p) = device.commit(epoch, &commit).await {
+        // Said in clear to be of its own devices: the server takes it from a member then; the devices read the scope
+        // the commit signs (SR2-02).
+        if let Answer::No(s, p) = device.commit_own(epoch, &commit).await {
             return Err((s, p));
         }
     }

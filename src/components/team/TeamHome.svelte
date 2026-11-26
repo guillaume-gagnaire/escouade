@@ -10,6 +10,7 @@
     teams,
     teamsApi,
     type DropAlertView,
+    type NullAlertView,
     type InvitationView,
     type RefusalView,
     type SnapshotAlertView,
@@ -76,7 +77,14 @@
     return t('team.drops.item', { project: name ?? own ?? a.project.slice(0, 8), seq: a.seq });
   }
 
-  function writtenBy(a: DropAlertView): string {
+  /** Where a null commit was (SR2-02): the team's group, or a project's own group by its name. */
+  function nullWhere(a: NullAlertView): string {
+    if (a.project === null) return t('team.nulls.team', { epoch: a.epoch });
+    const name = app.projects.find((p) => p.teamProject === a.project)?.name;
+    return t('team.nulls.item', { project: name ?? a.project.slice(0, 8), epoch: a.epoch });
+  }
+
+  function writtenBy(a: DropAlertView | NullAlertView): string {
     const date = fDateTime(a.writtenAt * 1000);
     if (a.writtenByMe) return t('team.drops.writtenByMe', { date });
     const device = a.writtenBy.slice(0, 8);
@@ -171,6 +179,26 @@
                   >{t('team.snapshots.dismiss')}</button
                 >
               {/if}
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    {#if team.joined && !team.alarm && team.role === 'admin' && team.nullAlerts?.length}
+      <div class="snaps" role="alert" aria-label={t('team.nulls.title')}>
+        <span class="lbl">{t('team.nulls.title')}</span>
+        <p>{t('team.nulls.lead')}</p>
+        <ul>
+          {#each team.nullAlerts as a ((a.project ?? 'team') + ':' + a.seq)}
+            <li>
+              <span class="what">{nullWhere(a)}</span>
+              <span class="st">{writtenBy(a)}</span>
+              <span class="st"
+                >{a.voided
+                  ? t('team.nulls.voided', { date: fDateTime(a.foundAt * 1000) })
+                  : t('team.nulls.found', { date: fDateTime(a.foundAt * 1000) })}</span
+              >
             </li>
           {/each}
         </ul>

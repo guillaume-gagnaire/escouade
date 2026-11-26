@@ -111,6 +111,7 @@ async fn a_snapshot_keeps_its_messages_for_the_retention(b: Backend) {
         .post(
             &format!("/v1/projects/{}/stream", hex::encode(p)),
             &AppendRequest {
+                own: false,
                 fence: None,
                 kind: Kind::Commit,
                 epoch: Some(0),

@@ -35,6 +35,7 @@ function team(over: Partial<TeamView> = {}): TeamView {
     invitations: [],
     snapshotAlerts: [],
     dropAlerts: [],
+    nullAlerts: [],
     admissions: [],
     refusals: [],
     joinWords: [],
@@ -154,6 +155,36 @@ describe('the screens of the team server (TS-3)', () => {
     render(TeamModal);
     await screen.findByRole('region', { name: 'ACME' });
     expect(screen.queryByRole('alert', { name: 'Entrées retirées par l’opérateur du serveur' })).toBeNull();
+  });
+
+  it('tells an administrator the null commits and who posted them, never a member (SR2-02)', async () => {
+    const nul = (project: string | null, seq: number, voided: boolean) => ({
+      project,
+      seq,
+      epoch: 4,
+      writtenBy: '0123456789abcdef0123456789abcdef',
+      writtenByRole: 'member' as const,
+      writtenByMe: false,
+      writtenAt: 1_800_000_000,
+      foundAt: 1_800_000_100,
+      voided,
+    });
+    const alerts = [nul(null, 12, true), nul('aa'.repeat(16), 5, false)];
+    app.projects = [project({ id: 'p1', name: 'Atlas', teamProject: 'aa'.repeat(16) })];
+    fakeBackend({ team_list: () => [team({ nullAlerts: alerts })] });
+    const { unmount } = render(TeamModal);
+    const band = await screen.findByRole('alert', { name: 'Commits nuls' });
+    expect(band).toHaveTextContent('Équipe · époque 4');
+    expect(band).toHaveTextContent('Atlas · époque 4');
+    expect(band).toHaveTextContent(/par l’appareil 01234567 \(Membre\)/);
+    expect(band).toHaveTextContent(/déclaré nul/);
+    unmount();
+    teams.list = [];
+    teams.loaded = false;
+    fakeBackend({ team_list: () => [team({ role: 'member', nullAlerts: alerts })] });
+    render(TeamModal);
+    await screen.findByRole('region', { name: 'ACME' });
+    expect(screen.queryByRole('alert', { name: 'Commits nuls' })).toBeNull();
   });
 
   it('lets a member hide a snapshot this device put aside (SR2-01)', async () => {

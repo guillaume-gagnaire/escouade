@@ -28,6 +28,8 @@ pub enum Role {
 pub enum Kind {
     Commit,
     Message,
+    /// The void of the commit that won an epoch (SR2-02): an administrator's device says it is null.
+    Void,
 }
 
 /// One entry of a stream, as the server numbers it.
@@ -181,6 +183,9 @@ pub struct AppendRequest {
     /// A write of a ticket's holder (TS-6): the claim's opaque id and its token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fence: Option<FenceWire>,
+    /// A commit of a member, of their own devices only (SR2-02): the server refuses a member's commit without it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub own: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

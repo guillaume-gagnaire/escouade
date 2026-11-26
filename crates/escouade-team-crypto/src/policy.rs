@@ -14,6 +14,12 @@
 //!
 //! The server is not a leaf: it cannot commit, so it cannot slip a key in. A GroupInfo would let it try an external
 //! commit, which these rules refuse; and it never sees one in the clear (`recovery.rs`).
+//!
+//! **What a commit says it is** (SR2-02): its authenticated data carries its [`CommitScope`], signed with it. A
+//! member's commit says [`CommitScope::Own`] (their own devices, nothing else) and is checked as a member's even from
+//! an administrator; a commit that says [`CommitScope::Admin`] must come from an administrator. The client tells the
+//! server the same in clear, and the server takes a member's commit only when it says `Own`: what the server reads
+//! decides nothing for the devices, the signed scope does.
 
 use openmls::prelude::{LeafNodeIndex, MlsGroup, Proposal, Sender, StagedCommit};
 
@@ -23,6 +29,39 @@ use crate::Error;
 
 fn refuse(why: impl Into<String>) -> Error {
     Error::Policy(why.into())
+}
+
+/// What a commit says it does, in its authenticated data (SR2-02): an administrator's change, or a member's change of
+/// their own devices only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommitScope {
+    Admin,
+    Own,
+}
+
+impl CommitScope {
+    /// The byte the commit carries.
+    pub fn byte(self) -> u8 {
+        match self {
+            CommitScope::Admin => 0,
+            CommitScope::Own => 1,
+        }
+    }
+
+    /// The scope a team's commit says by its authenticated data: none (an external commit, the recovery key's) is an
+    /// administrator's; anything but one known byte is refused.
+    pub fn of_team_aad(aad: &[u8]) -> Result<Self, Error> {
+        match aad {
+            [] | [0] => Ok(CommitScope::Admin),
+            [1] => Ok(CommitScope::Own),
+            _ => Err(refuse("a commit whose authenticated data says no scope")),
+        }
+    }
+
+    /// The authenticated data of a team's commit.
+    pub fn team_aad(self) -> Vec<u8> {
+        vec![self.byte()]
+    }
 }
 
 /// A leaf as the rules see it.
@@ -49,11 +88,13 @@ fn is_admin(roster: &Roster, leaf: &Leaf) -> bool {
     }
 }
 
-/// Checks a commit staged on `group` (before its merge), sent by `sender`. Returns the roster of the new epoch.
+/// Checks a commit staged on `group` (before its merge), sent by `sender`, that says `scope`. Returns the roster of
+/// the new epoch.
 pub fn check_commit(
     group: &MlsGroup,
     sender: &Sender,
     staged: &StagedCommit,
+    scope: CommitScope,
 ) -> Result<Roster, Error> {
     let old = Roster::from_extensions(group.extensions())?;
     let new = Roster::from_context(staged.group_context())?;
@@ -99,6 +140,13 @@ pub fn check_commit(
         _ => return Err(refuse("a commit from outside the group")),
     };
     let admin = is_admin(&old, &committer);
+    if scope == CommitScope::Admin && !admin {
+        return Err(refuse(
+            "a commit that says it is an administrator's, from a member",
+        ));
+    }
+    // A commit that says it is a member's is checked as one, whoever sent it.
+    let admin = admin && scope == CommitScope::Admin;
 
     // A leaf keeps its identity and its key.
     if !external {

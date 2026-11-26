@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS teams (
     commits BIGINT NOT NULL DEFAULT 0,
     stored BIGINT NOT NULL DEFAULT 0
 );
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS reserved BIGINT NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS devices (
     id BYTEA PRIMARY KEY,
     team_id BYTEA NOT NULL REFERENCES teams(id),
@@ -45,7 +46,9 @@ CREATE TABLE IF NOT EXISTS team_entries (
     payload BYTEA NOT NULL,
     PRIMARY KEY (team_id, seq)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS team_commits ON team_entries(team_id, epoch) WHERE kind = 1;
+ALTER TABLE team_entries ADD COLUMN IF NOT EXISTS voided BIGINT NOT NULL DEFAULT 0;
+DROP INDEX IF EXISTS team_commits;
+CREATE UNIQUE INDEX IF NOT EXISTS team_live_commits ON team_entries(team_id, epoch) WHERE kind = 1 AND voided = 0;
 CREATE TABLE IF NOT EXISTS projects (
     team_id BYTEA NOT NULL,
     id BYTEA NOT NULL,
@@ -64,7 +67,11 @@ CREATE TABLE IF NOT EXISTS project_entries (
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS commits BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE project_entries ADD COLUMN IF NOT EXISTS kind BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE project_entries ADD COLUMN IF NOT EXISTS epoch BIGINT;
-CREATE UNIQUE INDEX IF NOT EXISTS project_commits ON project_entries(team_id, project_id, epoch) WHERE kind = 1;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS reserved BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE project_entries ADD COLUMN IF NOT EXISTS voided BIGINT NOT NULL DEFAULT 0;
+DROP INDEX IF EXISTS project_commits;
+CREATE UNIQUE INDEX IF NOT EXISTS project_live_commits ON project_entries(team_id, project_id, epoch)
+    WHERE kind = 1 AND voided = 0;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS pruned BIGINT NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS snapshots (
     team_id BYTEA NOT NULL,
@@ -652,11 +659,12 @@ impl Store for Postgres {
         let tx = client.transaction().await?;
         let row = tx
             .query_one(
-                "SELECT seq, commits, stored FROM teams WHERE id = $1 FOR UPDATE",
+                "SELECT seq, commits, stored, reserved FROM teams WHERE id = $1 FOR UPDATE",
                 &[&team.as_slice()],
             )
             .await?;
         let (seq, commits, stored): (i64, i64, i64) = (row.get(0), row.get(1), row.get(2));
+        let team_reserved = row.get::<_, i64>(3) != 0;
         let size = entry.payload.len() as i64;
         if (stored + size) as u64 > quotas.team_bytes {
             return Err(StoreError::Quota);
@@ -664,12 +672,33 @@ impl Store for Postgres {
         let out = match stream {
             Stream::Team => {
                 let is_commit = entry.kind == Kind::Commit;
+                if entry.kind == Kind::Void {
+                    let asked = entry.epoch.unwrap_or(u64::MAX);
+                    if commits == 0 || asked != commits as u64 - 1 {
+                        return Err(StoreError::Void(
+                            "it is not for the epoch of the last commit",
+                        ));
+                    }
+                    let n = tx
+                        .execute(
+                            "UPDATE team_entries SET voided = 1
+                             WHERE team_id = $1 AND kind = 1 AND epoch = $2 AND voided = 0",
+                            &[&team.as_slice(), &(asked as i64)],
+                        )
+                        .await?;
+                    if n == 0 {
+                        return Err(StoreError::Void("the last commit is declared null already"));
+                    }
+                }
                 if is_commit {
                     let asked = entry.epoch.unwrap_or(u64::MAX);
+                    if asked == commits as u64 && team_reserved && !entry.by_admin {
+                        return Err(StoreError::Reserved);
+                    }
                     if asked != commits as u64 {
                         let from = tx
                             .query_opt(
-                                "SELECT seq FROM team_entries WHERE team_id = $1 AND kind = 1 AND epoch = $2",
+                                "SELECT seq FROM team_entries WHERE team_id = $1 AND kind = 1 AND epoch = $2 AND voided = 0",
                                 &[&team.as_slice(), &(asked.min(i64::MAX as u64) as i64)],
                             )
                             .await?
@@ -693,7 +722,10 @@ impl Store for Postgres {
                     }
                 }
                 let seq = seq + 1;
-                let epoch = entry.epoch.filter(|_| is_commit).map(|e| e as i64);
+                let epoch = entry
+                    .epoch
+                    .filter(|_| entry.kind != Kind::Message)
+                    .map(|e| e as i64);
                 tx.execute(
                     "INSERT INTO team_entries (team_id, seq, kind, epoch, device_id, at, payload)
                      VALUES ($1, $2, $3, $4, $5, $6, $7)",
@@ -708,15 +740,20 @@ impl Store for Postgres {
                     ],
                 )
                 .await?;
+                let (step, reserved): (i64, bool) = match entry.kind {
+                    Kind::Commit => (1, false),
+                    Kind::Void => (-1, true),
+                    Kind::Message => (0, team_reserved),
+                };
                 tx.execute(
-                    "UPDATE teams SET seq = $2, commits = commits + $3, stored = stored + $4 WHERE id = $1",
-                    &[&team.as_slice(), &seq, &(is_commit as i64), &size],
+                    "UPDATE teams SET seq = $2, commits = commits + $3, stored = stored + $4, reserved = $5 WHERE id = $1",
+                    &[&team.as_slice(), &seq, &step, &size, &(reserved as i64)],
                 )
                 .await?;
                 Entry {
                     seq: seq as u64,
                     kind: entry.kind,
-                    epoch: entry.epoch.filter(|_| is_commit),
+                    epoch: entry.epoch.filter(|_| entry.kind != Kind::Message),
                     device: entry.device.to_vec(),
                     at: entry.at,
                     payload: entry.payload,
@@ -725,11 +762,11 @@ impl Store for Postgres {
             Stream::Project(project) => {
                 let current = tx
                     .query_opt(
-                        "SELECT seq, commits FROM projects WHERE team_id = $1 AND id = $2 FOR UPDATE",
+                        "SELECT seq, commits, reserved FROM projects WHERE team_id = $1 AND id = $2 FOR UPDATE",
                         &[&team.as_slice(), &project.as_slice()],
                     )
                     .await?
-                    .map(|r| (r.get::<_, i64>(0), r.get::<_, i64>(1)));
+                    .map(|r| (r.get::<_, i64>(0), r.get::<_, i64>(1), r.get::<_, i64>(2) != 0));
                 let is_commit = entry.kind == Kind::Commit;
                 // A holder's write passes under the claim's current token alone (TS-6); the team's row is locked.
                 if let Some(fence) = &entry.fence {
@@ -738,12 +775,35 @@ impl Store for Postgres {
                     put_claim(&tx, &team, &project, &moved).await?;
                 }
                 let project_commits = current.map_or(0, |c| c.1);
+                let reserved = current.is_some_and(|c| c.2);
+                if entry.kind == Kind::Void {
+                    let asked = entry.epoch.unwrap_or(u64::MAX);
+                    if project_commits == 0 || asked != project_commits as u64 - 1 {
+                        return Err(StoreError::Void(
+                            "it is not for the epoch of the last commit",
+                        ));
+                    }
+                    let n = tx
+                        .execute(
+                            "UPDATE project_entries SET voided = 1
+                             WHERE team_id = $1 AND project_id = $2 AND kind = 1 AND epoch = $3 AND voided = 0",
+                            &[&team.as_slice(), &project.as_slice(), &(asked as i64)],
+                        )
+                        .await?;
+                    if n == 0 {
+                        return Err(StoreError::Void("the last commit is declared null already"));
+                    }
+                }
                 if is_commit {
                     let asked = entry.epoch.unwrap_or(u64::MAX);
+                    if asked == project_commits as u64 && reserved && !entry.by_admin {
+                        return Err(StoreError::Reserved);
+                    }
                     if asked != project_commits as u64 {
                         let from = tx
                             .query_opt(
-                                "SELECT seq FROM project_entries WHERE team_id = $1 AND project_id = $2 AND kind = 1 AND epoch = $3",
+                                "SELECT seq FROM project_entries
+                                 WHERE team_id = $1 AND project_id = $2 AND kind = 1 AND epoch = $3 AND voided = 0",
                                 &[&team.as_slice(), &project.as_slice(), &(asked.min(i64::MAX as u64) as i64)],
                             )
                             .await?
@@ -788,7 +848,7 @@ impl Store for Postgres {
                     }
                 };
                 let seq = current + 1;
-                let epoch = entry.epoch.filter(|_| is_commit);
+                let epoch = entry.epoch.filter(|_| entry.kind != Kind::Message);
                 tx.execute(
                     "INSERT INTO project_entries (team_id, project_id, seq, kind, epoch, device_id, at, payload)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
@@ -804,9 +864,14 @@ impl Store for Postgres {
                     ],
                 )
                 .await?;
+                let (step, reserved): (i64, bool) = match entry.kind {
+                    Kind::Commit => (1, false),
+                    Kind::Void => (-1, true),
+                    Kind::Message => (0, reserved),
+                };
                 tx.execute(
-                    "UPDATE projects SET seq = $3, commits = commits + $4 WHERE team_id = $1 AND id = $2",
-                    &[&team.as_slice(), &project.as_slice(), &seq, &(is_commit as i64)],
+                    "UPDATE projects SET seq = $3, commits = commits + $4, reserved = $5 WHERE team_id = $1 AND id = $2",
+                    &[&team.as_slice(), &project.as_slice(), &seq, &step, &(reserved as i64)],
                 )
                 .await?;
                 tx.execute(
@@ -865,7 +930,34 @@ impl Store for Postgres {
             Stream::Team => None,
             Stream::Project(p) => Some(p),
         };
+        // A void and the commit it declared null stay together (SR2-02): the devices read on past them already.
+        if entry.kind == Kind::Void {
+            return Err(StoreError::Drop(
+                "a void stays: the devices read on past it already",
+            ));
+        }
         if is_commit {
+            let voided: i64 = match project {
+                None => tx
+                    .query_one(
+                        "SELECT voided FROM team_entries WHERE team_id = $1 AND seq = $2",
+                        &[&team.as_slice(), &(seq as i64)],
+                    )
+                    .await?
+                    .get(0),
+                Some(p) => tx
+                    .query_one(
+                        "SELECT voided FROM project_entries WHERE team_id = $1 AND project_id = $2 AND seq = $3",
+                        &[&team.as_slice(), &p.as_slice(), &(seq as i64)],
+                    )
+                    .await?
+                    .get(0),
+            };
+            if voided != 0 {
+                return Err(StoreError::Drop(
+                    "a commit declared null stays: the devices read on past it already",
+                ));
+            }
             let stream_commits = match project {
                 None => team_commits,
                 Some(p) => tx

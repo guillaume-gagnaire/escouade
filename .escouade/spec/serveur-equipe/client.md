@@ -2,8 +2,8 @@
 title: "Le client de l'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
-tickets: ["ESC-458","ESC-461","ESC-466","ESC-471","ESC-632"]
-decisions: [168,173,178,288]
+tickets: ["ESC-458","ESC-461","ESC-466","ESC-471","ESC-632","ESC-635"]
+decisions: [168,173,178,288,330]
 compared: null
 ---
 
@@ -80,3 +80,15 @@ Ce que fait Escouade, sur chaque appareil, pour être dans une équipe d'un serv
 
 - Le client tient aussi le fichier de réglages de l'équipe (voir « Le .escouade.yml d'équipe ») : un flux du serveur à part, des versions scellées sous la clé d'équipe et signées par la feuille d'un administrateur, chaînées, au quorum pour le sensible. Il le relit après chaque lecture du flux d'équipe et des projets.
 - Pour savoir qui était administrateur quand une version a été scellée, chaque appareil garde le rôle des membres à chaque époque qu'il a vécue ; pour une époque d'avant son arrivée, il s'en tient aux administrateurs d'aujourd'hui.
+
+## Le commit nul (SR2-02)
+
+Un commit qui a gagné son époque sur le serveur mais que MLS ou les règles de l'équipe refusent (des octets quelconques, un rejeu, ou le commit MLS valide d'un membre qui fait ce que seul un administrateur peut faire), qu'il vienne d'un membre ou d'un agent détourné sur son poste, ne gèle ni l'équipe ni un projet.
+
+- **Il est nul sur chaque appareil** : gardé avec son numéro, son empreinte et l'appareil qui l'a posté ; le groupe reste à son époque ; la lecture continue, et les messages, les objets et les projets passent comme avant. Seul le refus du commit lui-même le rend nul, et seulement si le groupe n'a pas bougé : une erreur de l'appareil arrête la lecture comme avant.
+- **Un administrateur l'annule** : son appareil signe de sa feuille une annulation (l'époque, le numéro, l'empreinte) et l'envoie ; le serveur rend l'époque libre, réservée aux administrateurs jusqu'à leur prochain commit. Ce commit est le changement qui attendait (retirer le membre, changer les clés), sinon une rotation que l'appareil de l'administrateur fait seul. Un membre qui tente de commiter pendant ce temps attend (« occupé ») ; son changement passe après.
+- **Chaque appareil vérifie l'annulation** : signée par la feuille d'un administrateur de cette époque, pour ce groupe. Elle marque le commit nul comme dépassé ; une annulation qui ne tient pas ne change rien. Un appareil pas encore dans le groupe à cette époque oublie le commit qu'elle nomme, pour que celui qui reprend l'époque ne soit pas une fourche.
+- **C'est une fourche, dite** : qu'un appareil ait pris le commit qu'un administrateur annule ensuite, ou qu'il voie l'époque d'après un commit qu'il a trouvé nul (le commit était valide pour les uns, pas pour les autres). L'appareil le dit comme toute fourche et ne la suit pas.
+- **Les administrateurs sont prévenus** : la carte de l'équipe montre « Commits nuls » pendant 30 jours, avec l'équipe ou le projet, l'époque, l'appareil qui l'a posté et son rôle, et s'il a été déclaré nul. Les membres ne le voient pas. À l'administrateur ensuite de retirer l'appareil ou le membre, et de changer les clés.
+- **Ce qu'un commit dit de lui-même** : sa portée est dans ses données authentifiées, signées avec lui : celle d'un administrateur, ou « ses propres appareils » pour un membre. Un commit « administrateur » venant d'un membre est nul ; un commit « ses propres appareils » est vérifié comme celui d'un membre, même venant d'un administrateur. Le client le dit aussi en clair au serveur, qui refuse le commit d'un membre qui ne le dit pas ; seul compte, pour les appareils, ce que le commit signe. Un administrateur fraîchement nommé commite comme administrateur une fois que les rôles du serveur ont suivi le registre (au passage suivant d'un administrateur).
+- **Dans le groupe d'un projet**, la même chose, dans le flux du projet : nul sur chaque appareil du groupe, annulé par un administrateur de l'équipe qui en est. Un membre n'y ajoute que ses propres appareils (et retire encore ceux qui ont quitté l'équipe ou perdu l'accès) ; un administrateur y ajoute ceux des autres. Un groupe de projet sans aucun administrateur ne s'annule pas : la commande `drop-entry` de l'hébergeur reste le recours (voir « Le serveur d'équipe », Dégeler une équipe ou un projet).

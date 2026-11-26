@@ -373,6 +373,26 @@ pub struct DropAlertView {
     pub dropped_at: i64,
 }
 
+/// A commit that won its epoch but that MLS or the team's rules refuse (SR2-02), as an administrator is told: kept
+/// null, every device read on past it; an administrator's device declared it null to the server (`voided`), which
+/// gave the epoch back. Shown for 30 days.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NullAlertView {
+    /// The project's own group, hex (`Project::team_project` for a Kanban of the team); None for the team's.
+    pub project: Option<String>,
+    pub seq: u64,
+    pub epoch: u64,
+    /// The device that posted it, hex; its member's role in the team, when it is still in.
+    pub written_by: String,
+    pub written_by_role: Option<String>,
+    pub written_by_me: bool,
+    /// Seconds since the epoch.
+    pub written_at: i64,
+    pub found_at: i64,
+    pub voided: bool,
+}
+
 /// How long an entry the operator removed is shown to an administrator (SR2-02).
 const DROP_ALERTS_SHOWN: i64 = 30 * 24 * 3600;
 
@@ -420,6 +440,8 @@ pub struct TeamView {
     pub snapshot_alerts: Vec<SnapshotAlertView>,
     /// The entries the server's operator removed (SR2-02), an administrator's, the newest first.
     pub drop_alerts: Vec<DropAlertView>,
+    /// The commits found null (SR2-02), the newest first.
+    pub null_alerts: Vec<NullAlertView>,
     pub last_error: Option<String>,
 }
 
@@ -838,6 +860,7 @@ impl Teams {
                 .unwrap_or_default(),
             snapshot_alerts: Vec::new(),
             drop_alerts: Vec::new(),
+            null_alerts: Vec::new(),
             last_error: known.last_error.clone(),
         };
         let Some(team) = team.filter(|_| joined) else {
@@ -927,6 +950,25 @@ impl Teams {
                 written_by_me: a.written_by == me.device,
                 written_at: a.written_at,
                 dropped_at: a.dropped_at,
+            })
+            .collect();
+        view.null_alerts = team
+            .null_alerts()
+            .into_iter()
+            .filter(|a| a.found_at as i64 >= shown_after)
+            .map(|a| NullAlertView {
+                project: a.project.map(|p| hex::encode(p.0)),
+                seq: a.seq,
+                epoch: a.epoch,
+                written_by: hex::encode(a.written_by.0),
+                written_by_role: members
+                    .iter()
+                    .find(|(_, _, devices)| devices.contains(&a.written_by))
+                    .map(|(_, role, _)| role_name(*role)),
+                written_by_me: a.written_by == me.device,
+                written_at: a.written_at,
+                found_at: a.found_at as i64,
+                voided: a.voided,
             })
             .collect();
         view

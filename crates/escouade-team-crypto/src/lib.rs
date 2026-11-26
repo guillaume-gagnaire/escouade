@@ -24,6 +24,7 @@ pub mod project;
 pub mod recovery;
 pub mod relay;
 pub mod roster;
+pub mod void;
 
 #[cfg(test)]
 mod tests;
@@ -41,8 +42,10 @@ pub use device::{
 };
 pub use identity::{DeviceId, DeviceKind, Identity, MemberId, ObjectId, ProjectId};
 pub use invite::{AdmissionCode, InvitationError, InviteLink, Purpose};
+pub use policy::CommitScope;
 pub use recovery::{EscrowKey, EscrowTeamHalf, RecoveryKey};
 pub use roster::{Role, Roster, TeamFingerprint};
+pub use void::Void;
 
 /// The suite: `MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519` (0x0003, RFC 9420 §17.1). X25519 and Ed25519
 /// as the first design chose (§3.2), ChaCha20-Poly1305 as the content's XChaCha20-Poly1305: constant time without

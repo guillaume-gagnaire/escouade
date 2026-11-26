@@ -271,7 +271,7 @@ async fn a_blocked_team() -> (TestServer, common::Device, String) {
     let bob = s.add_device(&admin).await;
     admin.commit(0, b"admin: epoch 0 -> 1").await.ok();
     admin.message(b"a message").await;
-    bob.commit(1, b"garbage").await.ok();
+    bob.commit_own(1, b"garbage").await.ok();
     let team = hex::encode(&admin.team);
     (s, admin, team)
 }

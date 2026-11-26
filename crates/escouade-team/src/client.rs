@@ -819,7 +819,8 @@ impl ServerClient {
         epoch: Option<u64>,
         payload: &[u8],
     ) -> Result<u64, ClientError> {
-        self.append_with(path, kind, epoch, payload, None).await
+        self.append_with(path, kind, epoch, payload, None, false)
+            .await
     }
 
     async fn append_with(
@@ -829,6 +830,7 @@ impl ServerClient {
         epoch: Option<u64>,
         payload: &[u8],
         fence: Option<FenceWire>,
+        own: bool,
     ) -> Result<u64, ClientError> {
         let reply = self
             .authed(cbor_call(
@@ -839,6 +841,7 @@ impl ServerClient {
                     epoch,
                     payload: payload.to_vec(),
                     fence,
+                    own,
                 },
             ))
             .await?;
@@ -859,6 +862,7 @@ impl ServerClient {
             None,
             payload,
             fence,
+            false,
         )
         .await
     }
@@ -1036,9 +1040,39 @@ impl ServerClient {
     }
 
     /// A commit for `epoch`, in the team's stream: refused with [`ClientError::EpochTaken`] when another holds it.
-    pub async fn append_commit(&self, epoch: u64, commit: &[u8]) -> Result<u64, ClientError> {
-        self.append("/v1/team/stream".into(), Kind::Commit, Some(epoch), commit)
-            .await
+    /// `own`: a member's commit, of their own devices only (SR2-02), said in clear (the commit signs the same).
+    /// After a void, refused `epoch_reserved` (409) to a member until an administrator's commit.
+    pub async fn append_commit(
+        &self,
+        epoch: u64,
+        commit: &[u8],
+        own: bool,
+    ) -> Result<u64, ClientError> {
+        self.append_with(
+            "/v1/team/stream".into(),
+            Kind::Commit,
+            Some(epoch),
+            commit,
+            None,
+            own,
+        )
+        .await
+    }
+
+    /// Declares null the commit of `epoch` that won it (SR2-02), in the team's stream (`project` None) or a project's:
+    /// `payload` is the signed void (`escouade_team_crypto::Void`). An administrator's; refused `void_refused` (409)
+    /// when the last commit of the stream is not of that epoch, or is declared null already.
+    pub async fn append_void(
+        &self,
+        project: Option<&[u8; 16]>,
+        epoch: u64,
+        payload: &[u8],
+    ) -> Result<u64, ClientError> {
+        let path = match project {
+            None => "/v1/team/stream".to_string(),
+            Some(p) => format!("/v1/projects/{}/stream", hex::encode(p)),
+        };
+        self.append(path, Kind::Void, Some(epoch), payload).await
     }
 
     /// A message in the team's stream.
@@ -1090,12 +1124,15 @@ impl ServerClient {
         project: &[u8; 16],
         epoch: u64,
         commit: &[u8],
+        own: bool,
     ) -> Result<u64, ClientError> {
-        self.append(
+        self.append_with(
             format!("/v1/projects/{}/stream", hex::encode(project)),
             Kind::Commit,
             Some(epoch),
             commit,
+            None,
+            own,
         )
         .await
     }

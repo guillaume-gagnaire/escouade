@@ -424,6 +424,7 @@ impl Device {
             .post(
                 "/v1/team/stream",
                 &AppendRequest {
+                    own: false,
                     fence: None,
                     kind,
                     epoch,
@@ -444,11 +445,28 @@ impl Device {
         self.append_team(Kind::Commit, Some(epoch), payload).await
     }
 
+    /// A member's commit, said to be of their own devices only (SR2-02): the server takes a member's commit only so.
+    pub async fn commit_own(&self, epoch: u64, payload: &[u8]) -> Answer<Appended> {
+        self.client
+            .post(
+                "/v1/team/stream",
+                &AppendRequest {
+                    own: true,
+                    fence: None,
+                    kind: Kind::Commit,
+                    epoch: Some(epoch),
+                    payload: payload.to_vec(),
+                },
+            )
+            .await
+    }
+
     pub async fn append_project(&self, project: &[u8; 16], payload: &[u8]) -> Answer<Appended> {
         self.client
             .post(
                 &format!("/v1/projects/{}/stream", hex::encode(project)),
                 &AppendRequest {
+                    own: false,
                     fence: None,
                     kind: Kind::Message,
                     epoch: None,

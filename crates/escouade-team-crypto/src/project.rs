@@ -15,7 +15,9 @@
 //!   epoch, which they never hold; the history is not encrypted again).
 //! - **Its commits** travel in the project's stream, the first one of an epoch winning on the server, as the team's.
 //!   Each carries, in its authenticated data, the team's epoch its committer saw: a device behind it reads the team
-//!   first ([`Error::Behind`]). Every device checks every commit by the rules of [`check_project_commit`].
+//!   first ([`Error::Behind`]), and its [`CommitScope`] (SR2-02): an administrator's, or a member's for their own
+//!   devices (and the removal of devices that lost their place). Every device checks every commit by the rules of
+//!   [`check_project_commit`].
 //! - **Its history**: as the team's (`history.rs`), a link per epoch, so that a device added later reads the
 //!   operations sealed before it.
 
@@ -39,6 +41,7 @@ use crate::history::HistoryLink;
 use crate::identity::{DeviceId, DeviceKind, Identity, MemberId, ProjectId};
 use crate::keys::{head, EpochMember, EpochRecord, CONTENT_LABEL, HISTORY_LABEL};
 use crate::ops::{Scope, Sealed, What};
+use crate::policy::CommitScope;
 use crate::roster::{Role, Roster, ROSTER_EXTENSION};
 use crate::{mls, Error, CIPHERSUITE};
 
@@ -98,6 +101,33 @@ pub fn project_capabilities() -> Capabilities {
         None,
         Some(&[CredentialType::Basic]),
     )
+}
+
+/// The authenticated data of a project's commit: the team's epoch its committer saw, then its scope (SR2-02).
+fn project_aad(team_epoch: u64, scope: CommitScope) -> Vec<u8> {
+    let mut out = team_epoch.to_be_bytes().to_vec();
+    out.push(scope.byte());
+    out
+}
+
+/// The team's epoch and the scope a project's commit says; a commit that says no scope (made before SR2-02) is an
+/// administrator's.
+fn of_project_aad(aad: &[u8]) -> Result<(u64, CommitScope), Error> {
+    let epoch = aad
+        .get(..8)
+        .and_then(|b| <[u8; 8]>::try_from(b).ok())
+        .map(u64::from_be_bytes)
+        .ok_or_else(|| refuse("a project's commit says the team's epoch its committer saw"))?;
+    let scope = match &aad[8..] {
+        [] | [0] => CommitScope::Admin,
+        [1] => CommitScope::Own,
+        _ => {
+            return Err(refuse(
+                "a project's commit whose authenticated data says no scope",
+            ))
+        }
+    };
+    Ok((epoch, scope))
 }
 
 /// A project's group id: one per project of one team.
@@ -184,12 +214,15 @@ impl TeamView {
 /// - a device added is a leaf of the team (same identity, same key) whose member has access;
 /// - a device is removed when it left the team, or its member lost access, or by its own member, or by an
 ///   administrator;
-/// - nothing else than adds, removals, updates of the committer and a new roster.
+/// - nothing else than adds, removals, updates of the committer and a new roster;
+/// - a commit that says it is an administrator's ([`CommitScope::Admin`]) comes from one; one that says it is a
+///   member's is checked as a member's, whoever sent it, and adds the committer's own devices only (SR2-02).
 pub fn check_project_commit(
     group: &MlsGroup,
     sender: &Sender,
     staged: &StagedCommit,
     team: &TeamView,
+    scope: CommitScope,
 ) -> Result<ProjectRoster, Error> {
     let old = ProjectRoster::from_extensions(group.extensions())?;
     let new = ProjectRoster::from_extensions(staged.group_context().extensions())?;
@@ -208,6 +241,12 @@ pub fn check_project_commit(
         return Err(refuse("a committer who is not a leaf of the team"));
     }
     let admin = team.is_admin(&committer.identity.member);
+    if scope == CommitScope::Admin && !admin {
+        return Err(refuse(
+            "a project's commit that says it is an administrator's, from a member",
+        ));
+    }
+    let admin = admin && scope == CommitScope::Admin;
     if new.members != old.members && !admin {
         return Err(refuse(
             "only an administrator of the team changes who has access to a project",
@@ -239,6 +278,9 @@ pub fn check_project_commit(
                 }
                 if !team.has_leaf(&leaf) {
                     return Err(refuse("a device added that is not a leaf of the team"));
+                }
+                if !admin && leaf.identity.member != committer.identity.member {
+                    return Err(refuse("a member adds their own devices only"));
                 }
             }
             Proposal::Remove(remove) => {
@@ -517,6 +559,28 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         members: Option<BTreeSet<MemberId>>,
         key_packages: &BTreeMap<DeviceId, Vec<u8>>,
     ) -> Result<Option<ProjectPublication>, Error> {
+        self.stage_project(project, members, key_packages, false)
+    }
+
+    /// As [`Self::project_stage`], and a commit even when there is nothing to do (a new path): the administrator's,
+    /// after a void (SR2-02), so that the epoch kept to the administrators is taken again.
+    pub fn project_rotate(
+        &mut self,
+        project: &ProjectId,
+        key_packages: &BTreeMap<DeviceId, Vec<u8>>,
+    ) -> Result<ProjectPublication, Error> {
+        Ok(self
+            .stage_project(project, None, key_packages, true)?
+            .unwrap_or_default())
+    }
+
+    fn stage_project(
+        &mut self,
+        project: &ProjectId,
+        members: Option<BTreeSet<MemberId>>,
+        key_packages: &BTreeMap<DeviceId, Vec<u8>>,
+        force: bool,
+    ) -> Result<Option<ProjectPublication>, Error> {
         if self.project_pending(project).is_some() {
             return Err(Error::Mls(
                 "a commit of this project is pending: confirm or abandon it first".into(),
@@ -553,11 +617,19 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 removals.push(m.index);
             }
         }
+        // A member's commit adds their own devices only (SR2-02): an administrator's adds the others'.
+        let admin = team.is_admin(&own.member);
+        let scope = if admin {
+            CommitScope::Admin
+        } else {
+            CommitScope::Own
+        };
         let mut adds: Vec<KeyPackage> = Vec::new();
         for (identity, _key) in &team.leaves {
             if identity.kind != DeviceKind::Device
                 || !roster.members.contains(&identity.member)
                 || present.contains(&identity.device)
+                || (!admin && identity.member != own.member)
             {
                 continue;
             }
@@ -574,7 +646,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 _ => {}
             }
         }
-        if adds.is_empty() && removals.is_empty() && new_roster.is_none() {
+        if adds.is_empty() && removals.is_empty() && new_roster.is_none() && !force {
             return Ok(None);
         }
         let provider = &self.provider;
@@ -582,7 +654,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         let g = self.projects.get_mut(project).expect("checked above");
         let group = g.group.as_mut().expect("checked above");
         let from_epoch = group.epoch().as_u64();
-        group.set_aad(team.epoch.to_be_bytes().to_vec());
+        group.set_aad(project_aad(team.epoch, scope));
         let mut builder = group
             .commit_builder()
             .force_self_update(true)
@@ -609,6 +681,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
                 &Sender::Member(group.own_leaf_index()),
                 staged,
                 &team,
+                scope,
             )
         };
         if let Err(e) = checked {
@@ -707,9 +780,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         let g = self.projects.get_mut(project).expect("in the project");
         let group = g.group.as_mut().expect("in the project");
         let processed = group.process_message(provider, message).map_err(mls)?;
-        let cited = <[u8; 8]>::try_from(processed.aad())
-            .map(u64::from_be_bytes)
-            .map_err(|_| refuse("a project's commit says the team's epoch its committer saw"))?;
+        let (cited, scope) = of_project_aad(processed.aad())?;
         if cited > team.epoch {
             return Err(Error::Behind(cited));
         }
@@ -718,7 +789,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             ProcessedMessageContent::StagedCommitMessage(staged) => *staged,
             _ => return Err(refuse("only commits travel in a project's stream")),
         };
-        check_project_commit(group, &sender, &staged, &team)?;
+        check_project_commit(group, &sender, &staged, &team, scope)?;
         let removed = staged.self_removed();
         group.merge_staged_commit(provider, staged).map_err(mls)?;
         if removed {
