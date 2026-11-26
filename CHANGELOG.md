@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.12] — 2026-11-26
 
 - Les voix de la conversation se téléchargent de nouveau : elles sont prises à une version fixée de leur dépôt, que ses mises à jour ne cassent plus (une voix réentraînée en amont faisait échouer son téléchargement). Les modèles de la dictée et de la recherche par le sens sont fixés de même.
 - Quand un fichier publié ne correspond plus à celui qu’attend Escouade, le message le dit en clair et dit que c’est à Escouade de se mettre à jour, au lieu de « 6369 bytes and more, 4875 expected ».
