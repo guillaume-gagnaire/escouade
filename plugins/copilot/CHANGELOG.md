@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.10
+
+- A subagent's calls (its `assistant.usage`) now count for the model it ran on, not its agent's, and those of a subagent whose start it did not see (it restarted while it ran) are no longer lost: each turn tells Escouade its spend by model (`turnModels`, written in JSON on the published protocol crate), once in the agent's totals (ESC-691). Still speaks protocols 3 and 4 of Copilot CLI.
+
 ## 2.2.9
 
 - Copilot CLI 1.0.116 (its SDK v2) answers with protocol 4: its agents were refused (“Copilot CLI speaks protocol 4”). Both protocols are spoken now, 3 for an older Copilot CLI and 4, whose sessions take their options in their new places (`events`, `permissions`, `interaction`, `inference`, `mcp`).

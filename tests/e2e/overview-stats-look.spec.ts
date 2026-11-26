@@ -172,9 +172,12 @@ test('the overview looks as the preview draws it, in both themes, at both sizes'
         expect
           .soft(await lookBut(head.locator('.keys kbd').first(), 'width'), `a key, ${where}`)
           .toLookLike(await lookBut(phead.locator('.keys kbd').first(), 'width'));
-        const [kx, , kw] = await place(head.locator('.keys'));
+        // The header ends where the preview's keys end: since the Workspace (#45), on its « Workspace » button, after
+        // the keys, which the preview does not draw.
+        const canvas = head.locator('button.canvas');
+        const [ex, , ew] = await place((await canvas.count()) ? canvas : head.locator('.keys'));
         const [pkx, , pkw] = await place(phead.locator('.keys'));
-        expect.soft(kx + kw, `keys' right edge, ${where}`).toBe(pkx + pkw);
+        expect.soft(ex + ew, `header's right edge, ${where}`).toBe(pkx + pkw);
 
         // The headings of the columns, and where each column starts.
         const cols = ov.locator('.cols');

@@ -1106,6 +1106,11 @@ pub enum Item {
     },
     /// What the harness wrote that is none of its protocol, kept for what its end says.
     Said { line: String },
+    /// What the turn about to end (its `Turn`, which follows) spent by model, its subagents' calls included on the model
+    /// each ran on (ESC-662, the protocol's next version): the stats count one row by model, their sum the turn's
+    /// `usage`. Without it (an older plugin), or for a core that does not know it, the turn is counted on the agent's
+    /// model.
+    TurnModels { models: Vec<ModelTurn> },
     /// An item of a later version of the contract: left aside.
     #[serde(other)]
     Unknown,

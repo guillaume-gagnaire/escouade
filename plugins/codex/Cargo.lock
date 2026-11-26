@@ -29,7 +29,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-codex"
-version = "2.2.5"
+version = "2.2.6"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",

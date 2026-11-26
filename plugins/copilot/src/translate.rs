@@ -21,7 +21,7 @@ use escouade_acp::git;
 use escouade_acp::tools::absolute;
 use escouade_plugin_protocol::engine::{hunks_of, Item, TurnUsage};
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 /// What the conversation holds, as a rule needs it.
@@ -65,6 +65,8 @@ pub struct Translator {
     streamed: HashSet<String>,
     /// The turn's usage so far, its subagents' included.
     usage: Spent,
+    /// The same, by the model of each call (`model` of its `assistant.usage`).
+    by_model: BTreeMap<String, Spent>,
     /// The last event of its own kept by Copilot: where a copy of it starts from.
     last_event: Option<String>,
     /// The turn was stopped (`abort`).
@@ -247,6 +249,11 @@ impl Translator {
             return;
         }
         if matches!(owner, Owner::Other) {
+            // A subagent whose start it did not see (its plugin started again while it ran): shown nowhere, its calls
+            // are this session's all the same, on this account (ESC-662).
+            if kind == "assistant.usage" {
+                self.spend(d, out);
+            }
             return;
         }
         // A subagent's message tells the model it runs on: not always the one its start named (its definition's), the
@@ -342,23 +349,7 @@ impl Translator {
             | "elicitation.completed"
             | "exit_plan_mode.completed"
             | "session_limits_exhausted.completed" => self.answered_elsewhere(kind, d, out),
-            "assistant.usage" => {
-                let n = |k: &str| d[k].as_u64().unwrap_or(0);
-                let cache = n("cacheReadTokens") + n("cacheWriteTokens");
-                let nano = words::call_nano(d, &self.prices);
-                let u = &mut self.usage;
-                u.input += n("inputTokens").saturating_sub(cache);
-                u.cache += cache;
-                u.output += n("outputTokens");
-                u.nano += nano;
-                // The month's credits, as every call tells them.
-                if let Some(m) = words::credits(&d["quotaSnapshots"], now_ms()) {
-                    self.credits_reset = Some(m.resets_at);
-                    out.push(Item::Quota {
-                        meters: json!([m.meter()]),
-                    });
-                }
-            }
+            "assistant.usage" => self.spend(d, out),
             "session.usage_info" if own => out.push(Item::Context {
                 tokens: Some(d["currentTokens"].as_u64().unwrap_or(0)),
                 window: d["tokenLimit"].as_u64(),
@@ -430,6 +421,33 @@ impl Translator {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// A call of the model (`assistant.usage`), the agent's or a subagent's: its tokens and cost added to the turn's, once,
+    /// and to its model's (the one the call names: a subagent's may be another, ESC-662).
+    fn spend(&mut self, d: &Value, out: &mut Vec<Item>) {
+        let n = |k: &str| d[k].as_u64().unwrap_or(0);
+        let cache = n("cacheReadTokens") + n("cacheWriteTokens");
+        let call = Spent {
+            input: n("inputTokens").saturating_sub(cache),
+            cache,
+            output: n("outputTokens"),
+            nano: words::call_nano(d, &self.prices),
+        };
+        let model = d["model"].as_str().unwrap_or_default().to_string();
+        for u in [&mut self.usage, self.by_model.entry(model).or_default()] {
+            u.input += call.input;
+            u.cache += call.cache;
+            u.output += call.output;
+            u.nano += call.nano;
+        }
+        // The month's credits, as every call tells them.
+        if let Some(m) = words::credits(&d["quotaSnapshots"], now_ms()) {
+            self.credits_reset = Some(m.resets_at);
+            out.push(Item::Quota {
+                meters: json!([m.meter()]),
+            });
         }
     }
 
@@ -748,6 +766,18 @@ impl Translator {
         let cost = u.nano as f64 / 1e11;
         self.totals.clear();
         self.reports.clear();
+        // By model, for the stats: their sum is the turn's.
+        let models: Vec<crate::turnmodels::Spent> = std::mem::take(&mut self.by_model)
+            .into_iter()
+            .map(|(model, s)| crate::turnmodels::Spent {
+                model,
+                input: s.input,
+                output: s.output,
+                cache: s.cache,
+                cost: s.nano as f64 / 1e11,
+            })
+            .collect();
+        out.extend(crate::turnmodels::item(&models));
         out.push(Item::Turn {
             interrupted,
             limited,

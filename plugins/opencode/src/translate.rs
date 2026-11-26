@@ -65,6 +65,10 @@ pub struct Translator {
     error: Option<String>,
     /// The turn's usage so far, its subagents' included.
     usage: TurnUsage,
+    /// The same, by the model of each call: a subagent may run on another model, or another provider (ESC-662).
+    by_model: BTreeMap<String, TurnUsage>,
+    /// The model of each assistant message (`providerID/modelID` of its `message.updated`), by its id.
+    msg_models: HashMap<String, String>,
     /// The agent's last message was its plan agent's (`plan`): the turn ends on a plan to approve.
     plan_agent: bool,
     /// The last words of the turn after its last tool: the plan of a turn of the plan agent.
@@ -209,6 +213,16 @@ impl Translator {
                 };
                 let role = info["role"].as_str().unwrap_or("assistant");
                 self.roles.insert(id.to_string(), role.to_string());
+                if let (Some(model), "assistant") = (info["modelID"].as_str(), role) {
+                    if self.msg_models.len() > 4096 {
+                        self.msg_models.clear();
+                    }
+                    let model = match info["providerID"].as_str() {
+                        Some(provider) => format!("{provider}/{model}"),
+                        None => model.to_string(),
+                    };
+                    self.msg_models.insert(id.to_string(), model);
+                }
                 // A subagent's message tells the model it runs on, as the agent's is written.
                 if let (Some(call), "assistant", Some(model)) =
                     (parent.as_deref(), role, info["modelID"].as_str())
@@ -531,11 +545,19 @@ impl Translator {
         let n = |v: &Value| v.as_u64().unwrap_or(0);
         let (input, output) = (n(&t["input"]), n(&t["output"]) + n(&t["reasoning"]));
         let cache = n(&t["cache"]["read"]) + n(&t["cache"]["write"]);
-        let u = &mut self.usage;
-        u.input += input;
-        u.cache += cache;
-        u.output += output;
-        u.cost += part["cost"].as_f64().unwrap_or(0.0);
+        let cost = part["cost"].as_f64().unwrap_or(0.0);
+        // Its model: its message's (none known: the agent's, which the core gives an empty one).
+        let model = part["messageID"]
+            .as_str()
+            .and_then(|m| self.msg_models.get(m))
+            .cloned()
+            .unwrap_or_default();
+        for u in [&mut self.usage, self.by_model.entry(model).or_default()] {
+            u.input += input;
+            u.cache += cache;
+            u.output += output;
+            u.cost += cost;
+        }
         Some((input, cache, output))
     }
 
@@ -778,6 +800,18 @@ impl Translator {
         }
         let entry = last.filter(|_| error.is_none());
         let usage = std::mem::take(&mut self.usage);
+        // By model, for the stats: their sum is the turn's.
+        let models: Vec<crate::turnmodels::Spent> = std::mem::take(&mut self.by_model)
+            .into_iter()
+            .map(|(model, u)| crate::turnmodels::Spent {
+                model,
+                input: u.input,
+                output: u.output,
+                cache: u.cache,
+                cost: u.cost,
+            })
+            .collect();
+        out.extend(crate::turnmodels::item(&models));
         self.child_tokens.clear();
         self.child_tools.clear();
         self.final_text.clear();

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.6
+
+- Each step of a subagent now counts on its message's model (`providerID/modelID`), another provider included, not its agent's: each turn tells Escouade its spend by model (`turnModels`, written in JSON on the published protocol crate), once in the agent's totals (ESC-691).
+
 ## 2.2.5
 
 - Its manifest declares the environment variables its launches set (`permissions.env`: `OPENCODE_CONFIG_CONTENT`, `OPENCODE_DISABLE_AUTOUPDATE`, `OPENCODE_ENABLE_QUESTION_TOOL`, `OPENCODE_SERVER_PASSWORD`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).

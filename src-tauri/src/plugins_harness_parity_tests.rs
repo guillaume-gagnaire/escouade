@@ -396,6 +396,42 @@ fn recording(short: &str) -> PathBuf {
         .join(format!("{short}.jsonl"))
 }
 
+/// `step` without its `turnModels`, which the native plugins did not have (ESC-662, ESC-691): each is checked against
+/// the `turn` that follows it, whose usage is their sum.
+fn without_turn_models(step: &mut Value) {
+    let text = step.to_string();
+    let Some(items) = step
+        .get_mut("answer")
+        .and_then(|a| a.get_mut("items"))
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    let mut pending: Option<Vec<Value>> = None;
+    for item in items.iter() {
+        match item["op"].as_str() {
+            Some("turnModels") => pending = item["models"].as_array().cloned(),
+            Some("turn") => {
+                if let Some(models) = pending.take() {
+                    let u = &item["usage"];
+                    let sum = |k: &str| models.iter().map(|m| m[k].as_u64().unwrap()).sum::<u64>();
+                    for k in ["input", "output", "cache"] {
+                        assert_eq!(sum(k), u[k].as_u64().unwrap_or(0), "{k} of {text}");
+                    }
+                    let cost: f64 = models.iter().map(|m| m["cost"].as_f64().unwrap()).sum();
+                    assert!(
+                        (cost - u["cost"].as_f64().unwrap_or(0.0)).abs() < 1e-9,
+                        "{text}"
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    assert!(pending.is_none(), "a turnModels without its turn: {text}");
+    items.retain(|i| i["op"] != "turnModels");
+}
+
 fn parity_of(h: &Harness) {
     if std::env::var_os("ESCOUADE_PARITY_RECORD").is_some() {
         let mut native = Native::start(h.short);
@@ -411,7 +447,8 @@ fn parity_of(h: &Harness) {
     };
     let net = Net::default();
     let mut hosted = Hosted::start(wasm, Fetcher::new(h.id, &[], &net));
-    let steps = transcript(&mut hosted, h);
+    let mut steps = transcript(&mut hosted, h);
+    steps.iter_mut().for_each(without_turn_models);
     let text = std::fs::read_to_string(recording(h.short)).expect("a recording of the native");
     let native: Vec<Value> = text
         .lines()

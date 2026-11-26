@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.6
+
+- A subagent's tokens now count, and are priced, on the model its start names (`model` of its `subAgentActivity`), not its agent's: each turn tells Escouade its spend by model (`turnModels`, written in JSON on the published protocol crate), once in the agent's totals (ESC-691).
+
 ## 2.2.5
 
 - Its manifest declares the environment variables its launches set (`permissions.env`: `ESCOUADE_MCP_TOKEN`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).

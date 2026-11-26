@@ -1449,6 +1449,49 @@ mod tests {
     }
 
     #[test]
+    fn a_turn_with_a_subagent_on_another_model_is_one_turn_counted_once_in_every_view() {
+        // ESC-662: a turn of Copilot whose subagent ran on another model, one row by model.
+        let today = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
+        let noon = local_ms(today) + 12 * 3600 * 1000;
+        let s = Stats::memory();
+        let on = |model: &str, input, cost| TurnRow {
+            engine: crate::model::EngineId::COPILOT,
+            ..row(model, input, cost)
+        };
+        s.record_turns_at(
+            noon,
+            "copilot-work",
+            "a1",
+            "p1",
+            &[
+                on("gpt-6-luna", 1000, 0.3),
+                on("mai-code-1.1-flash", 400, 0.1),
+            ],
+        );
+        let v = s.query_at_by("day", today, Filter::default(), &Labels::default());
+        let model = |m: &str| v.by_model.iter().find(|s| s.key == m).cloned().unwrap();
+        assert_eq!(model("gpt-6-luna").tokens, 1110);
+        assert_eq!(model("mai-code-1.1-flash").tokens, 510);
+        assert!((model("mai-code-1.1-flash").cost - 0.1).abs() < 1e-9);
+        assert_eq!(v.tokens, 1620);
+        assert!((v.cost - 0.4).abs() < 1e-9);
+        assert_eq!(v.by_project.len(), 1);
+        assert_eq!(v.by_project[0].tokens, 1620);
+        let account: Vec<_> = v
+            .by_account
+            .iter()
+            .map(|a| (a.account.as_str(), a.tokens, a.turns, a.agents))
+            .collect();
+        assert_eq!(account, [("copilot-work", 1620, 1, 1)], "one turn, not two");
+        let engine: Vec<_> = v
+            .by_engine
+            .iter()
+            .map(|e| (e.engine.as_str(), e.tokens, e.turns))
+            .collect();
+        assert_eq!(engine, [("copilot", 1620, 1)]);
+    }
+
+    #[test]
     fn the_engine_column_is_added_once_whatever_the_age_of_the_database() {
         let noon = local_ms(NaiveDate::from_ymd_opt(2026, 9, 27).unwrap()) + 12 * 3600 * 1000;
         // From 1.7 (accounts, no engine) and from before the accounts (neither).

@@ -151,13 +151,14 @@ impl Session {
 
     fn push(&self, items: Vec<Item>) {
         if !items.is_empty() {
-            self.host.notify(
-                method::ITEMS,
-                &Pushed {
-                    agent: self.agent.clone(),
-                    items,
-                },
-            );
+            let pushed = Pushed {
+                agent: self.agent.clone(),
+                items,
+            };
+            // `turnModels` written as the core reads it (`turnmodels`).
+            let mut pushed = serde_json::to_value(&pushed).unwrap_or_default();
+            crate::turnmodels::unmark(&mut pushed);
+            self.host.notify(method::ITEMS, &pushed);
         }
     }
 

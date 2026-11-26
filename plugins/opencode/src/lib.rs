@@ -16,6 +16,7 @@ pub mod rules;
 mod server;
 mod session;
 pub mod translate;
+pub mod turnmodels;
 
 pub use rules::{catalog, listed, no_model, split_model};
 pub use translate::{absolute, patch_file, Translator};
@@ -74,7 +75,10 @@ fn read<T: DeserializeOwned>(params: Value) -> Result<T, Refusal> {
 }
 
 fn give<T: Serialize>(v: T) -> Result<Value, Refusal> {
-    serde_json::to_value(v).map_err(invalid)
+    // `turnModels` written as the core reads it (`turnmodels`).
+    let mut v = serde_json::to_value(v).map_err(invalid)?;
+    turnmodels::unmark(&mut v);
+    Ok(v)
 }
 
 fn no_writes() -> Result<Value, Refusal> {
