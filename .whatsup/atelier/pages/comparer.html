@@ -1,0 +1,79 @@
+<!doctype html>
+<!-- An agent's page as the `compare` template renders it (src-tauri/src/agentpage_templates.rs), made-up data. The
+     atelier draws it where the app's own webview would be. ?theme=light|dark, ?choisi=a|b. -->
+<html lang="fr" data-theme="dark" data-template="compare">
+  <head>
+    <meta charset="utf-8" />
+    <title>Deux mises en page du tableau de bord</title>
+    <link rel="stylesheet" href="/src-tauri/src/agentpage_templates/page.css" />
+  </head>
+  <body>
+    <main class="page t-compare">
+      <section id="criteria" class="block">
+        <h2 id="criteria-title">Ce qui compte</h2>
+        <ol class="ccrits">
+          <li>Lisible sur téléphone</li>
+          <li>Les retards en premier</li>
+          <li>Peu de clics pour relancer</li>
+        </ol>
+      </section>
+      <section id="options" class="plates" style="--n: 2" aria-label="Les options">
+        <article id="option-a" class="plate" data-key="options.0">
+          <div class="shot"><img id="img-a" alt="" /></div>
+          <div class="cred"><span class="l">A</span><b>Colonnes de chiffres</b></div>
+          <div class="body">
+            <ul class="pros">
+              <li>Tout tient sur un écran large</li>
+              <li>Proche de l'actuel</li>
+            </ul>
+            <ul class="cons">
+              <li>Serré sur téléphone</li>
+            </ul>
+            <button class="pick" type="button" data-option="a" aria-pressed="false">Choisir A</button>
+          </div>
+        </article>
+        <article id="option-b" class="plate rec" data-key="options.1">
+          <span class="seal" role="img" aria-label="Recommandé"><span>Recommandé</span></span>
+          <div class="shot"><img id="img-b" alt="" /></div>
+          <div class="cred"><span class="l">B</span><b>Cartes empilées</b></div>
+          <div class="body">
+            <ul class="pros">
+              <li>Les retards en tête de liste</li>
+              <li>Relance en un geste</li>
+            </ul>
+            <ul class="cons">
+              <li>Moins de chiffres d'un coup d'œil</li>
+            </ul>
+            <button class="pick" type="button" data-option="b" aria-pressed="false">Choisir B</button>
+          </div>
+        </article>
+      </section>
+    </main>
+    <script>
+      const q = new URLSearchParams(location.search);
+      const dark = q.get('theme') === 'dark';
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      const c = q.get('choisi');
+      if (c) document.querySelector(`.pick[data-option="${c}"]`).setAttribute('aria-pressed', 'true');
+      // The two renders the agent joined: drawn here, plain shapes.
+      const bg = dark ? '#16171b' : '#ffffff',
+        ink = dark ? '#3a3d45' : '#dfe1e6',
+        acc = '#35c1bd',
+        warn = '#e0884a';
+      const svg = (body) =>
+        'data:image/svg+xml,' +
+        encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 130"><rect width="320" height="130" rx="8" fill="${bg}"/>${body}</svg>`,
+        );
+      let a = '';
+      for (let i = 0; i < 4; i++)
+        a += `<rect x="${14 + i * 76}" y="16" width="66" height="40" rx="5" fill="${ink}"/><rect x="${22 + i * 76}" y="26" width="30" height="8" rx="3" fill="${i === 1 ? warn : acc}"/>`;
+      for (let r = 0; r < 3; r++) a += `<rect x="14" y="${70 + r * 24}" width="292" height="16" rx="4" fill="${ink}"/>`;
+      let b = '';
+      for (let r = 0; r < 3; r++)
+        b += `<rect x="70" y="${14 + r * 38}" width="180" height="34" rx="7" fill="${ink}"/><rect x="80" y="${24 + r * 38}" width="${r === 0 ? 60 : 90}" height="8" rx="3" fill="${r === 0 ? warn : acc}"/><rect x="80" y="${38 + r * 38}" width="120" height="6" rx="3" fill="${bg}"/>`;
+      document.getElementById('img-a').src = svg(a);
+      document.getElementById('img-b').src = svg(b);
+    </script>
+  </body>
+</html>
