@@ -18,6 +18,8 @@ import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
 import { micMeter } from './mic-meter.svelte';
 import { mcp } from './mcp.svelte';
+import { plugins } from './plugins-view.svelte';
+import { storeApi, type DeepLink } from './store';
 import { readPref, writePref } from './prefs';
 import { errorText, missingAccountOf, missingAccountProjectOf, notOpened } from './refusal';
 import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
@@ -2324,6 +2326,41 @@ class AppState {
     this.toasts.push(action ? { id, text, kind, action } : { id, text, kind });
     // One with a button stays long enough to reach it.
     setTimeout(() => this.dismissToast(id), ms ?? (action ? 12_000 : kind === 'error' ? 7000 : 3500));
+  }
+
+  /**
+   * The links `escouade://` not yet taken: a plugin's page opened in the view Plugins (STORE-11), an agent's conversation
+   * shown with its composer focused (ESC-2), a link the app cannot read said; the last one wins. Navigation only: any page
+   * or app may open such a link, so it never installs, sends, answers, starts nor stops anything.
+   */
+  async takeLinks() {
+    let links: DeepLink[] = [];
+    try {
+      links = (await storeApi.deepLinks()) ?? [];
+    } catch {
+      return;
+    }
+    for (const link of links) {
+      if (link.kind === 'plugin') {
+        this.openPlugins();
+        plugins.openStorePlugin(link.id);
+      } else if (link.kind === 'agent') {
+        const a = this.agents[link.id];
+        if (!a) {
+          this.toast(t('nav.deepLink.agentUnknown', { id: link.id }), 'error');
+          continue;
+        }
+        this.selectAgent(a.id);
+        this.closeEditor(a.projectId);
+        // `show_main` asked the system for the focus; a field focused before the window has it may not take the keys
+        // (macOS): focused again once the window has it, if that comes soon.
+        if (!document.hasFocus()) {
+          const again = () => this.focusComposer++;
+          window.addEventListener('focus', again, { once: true });
+          setTimeout(() => window.removeEventListener('focus', again), 3000);
+        }
+      } else this.toast(t('plugins.deepLink.bad', { url: link.url }), 'error');
+    }
   }
 
   /** The deletion the agent that made `a` asks for, with that agent's name; none once that agent is gone (ESC-511). */

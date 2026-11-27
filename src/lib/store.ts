@@ -77,7 +77,7 @@ export interface Suggestion {
 }
 
 /** What a link `escouade://` asks (STORE-11): the page of a plugin, or nothing for a link the app cannot read. */
-export type DeepLink = { kind: 'plugin'; id: string } | { kind: 'bad'; url: string };
+export type DeepLink = { kind: 'plugin'; id: string } | { kind: 'agent'; id: string } | { kind: 'bad'; url: string };
 
 export const storeApi = {
   view: () => invoke<StoreView>('store_view'),
