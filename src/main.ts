@@ -8,7 +8,8 @@ import { guardFileDrops } from './lib/attachments';
 import { guardLinks } from './lib/links';
 import { earlyPluginTheme } from './lib/plugin-theme.svelte';
 import { markWebKit } from './lib/webkit';
-import { skipOtherLanguage, skipPastNews } from './lib/whats-up';
+import { app } from './lib/state.svelte';
+import { seenAtStart, showWhatsUp } from './lib/whats-up';
 
 // The app is a desktop window: keep the browser's own context menu out of the way,
 // except in text fields where copy/paste matters.
@@ -23,10 +24,16 @@ guardFileDrops(window);
 // A link never takes the window away from the app: the ones that go outside open in the browser.
 guardLinks(document);
 
-// What's up ? stays shut at the window's first start (nothing kept yet): past notes are no news.
-void skipPastNews(document.querySelector('whats-up'));
-// Its notes are in French alone for now: an interface in English sees none (nothing kept, a note in English will open).
-skipOtherLanguage(document.querySelector('whats-up'));
+// What's up ?: what counts as seen is known at once (and kept at the very first start), before the settings are read.
+const whatsUpSeen = seenAtStart();
+// Its window comes once the interface knows its language (the settings'): its notes and its words are in that one. In
+// a browser without the app (`?whats-up=apercu`), the browser's language at once.
+const inApp = '__TAURI_INTERNALS__' in window;
+const whatsUpReady = setInterval(() => {
+  if (inApp && !app.ready) return;
+  clearInterval(whatsUpReady);
+  showWhatsUp(document.querySelector<HTMLTemplateElement>('template#whats-up'), whatsUpSeen);
+}, 50);
 
 // The theme the page kept, before the first render: the settings say it again a moment later.
 earlyAppearance();

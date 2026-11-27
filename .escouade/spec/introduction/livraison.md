@@ -1,9 +1,9 @@
 ---
 title: "Livraison et mises à jour"
 subject: "Introduction"
-sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml",".github/workflows/advisories.yml","scripts/beta-channel.mjs","scripts/release-sums.mjs","scripts/no-testing.mjs","docs/SECURITY-DEPENDENCIES.md","docs/security/audit-2026-11/rapport.md (SEC-04, SEC-16, SEC-18)","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh","tests/e2e/fixture.ts","tests/e2e/update-guard.ts"]
-tickets: ["ESC-374","ESC-380","ESC-533","ESC-543","ESC-594"]
-decisions: [114,244,251,300]
+sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml",".github/workflows/advisories.yml","scripts/beta-channel.mjs","scripts/release-sums.mjs","scripts/no-testing.mjs","docs/SECURITY-DEPENDENCIES.md","docs/security/audit-2026-11/rapport.md (SEC-04, SEC-16, SEC-18)","src-tauri/src/updates.rs","src-tauri/windows/installer-hooks.nsh","tests/e2e/fixture.ts","tests/e2e/update-guard.ts","docs/WHATS-UP.md","src/lib/whats-up.ts","public/whats-up/whats-up.js","PR 51 (OshOEz)"]
+tickets: ["ESC-374","ESC-380","ESC-533","ESC-543","ESC-594","ESC-699"]
+decisions: [114,244,251,300,"what-s-up-fiches-en-francais-et-en-angla"]
 compared: null
 ---
 
@@ -137,3 +137,13 @@ Sur GitHub Actions :
 - **Les secrets Apple** ne sont donnés qu'à l'étape qui construit et signe l'app macOS, comme la clé des mises à jour et les secrets Azure ; plus rien ne les pose dans l'environnement du job. Le job ne sait que s'il y a un certificat (`APPLE_SIGNING`, `true` ou `false`) : avec, la construction signée par Developer ID et notarisée ; sans, la même construction que Windows et Linux, l'app macOS signée sur place. Les deux formes de l'étape restent pareilles (un test le vérifie).
 - **Les avis des dépendances** (`advisories.yml`) : l'app échoue sur tout avis, le store et le site sur un avis élevé ou critique (`npm audit --omit=dev --audit-level=high`), leurs avis faibles et moyens restant dits dans le run. Les délais de correction sont dans `docs/SECURITY-DEPENDENCIES.md` : 7 jours pour un avis élevé ou critique.
 - **Trois variables lues par l'app** : `ESCOUADE_TERM_TRACE` (les temps des terminaux au journal) n'est lue que par un build de développement ; `ESCOUADE_ORT_DYLIB` (une autre bibliothèque ONNX Runtime) que par un build qui a la fonction `ort-dynamic`, que la release n'a pas ; `ESCOUADE_JAVY` reste lue partout, l'image du store nommant ainsi sa Javy (voir *Les programmes JS/TS des plugins*).
+
+## La fenêtre des nouveautés : What's up ? (PR 51, ESC-699)
+
+- Après une mise à jour, une fenêtre s'ouvre **une fois** : 1 à 5 écrans d'une fiche, chacun un geste nouveau en captures de la vraie interface (claires ou sombres selon le thème). Composant `public/whats-up/whats-up.js`, copié tel quel du plugin `osho-whats-up` d'OshOEz.
+- **Dans la langue de l'app** : chaque fiche existe en français (`public/whats-up/`) et en anglais (`public/whats-up/en/`), ses captures prises dans l'interface de cette langue. La fenêtre n'entre dans la page qu'une fois la langue des réglages connue ; ses propres mots (« Nouveautés de Escouade », « Suivant »… / « What's new in Escouade », « Next »…) suivent.
+- **Premier lancement** (ni thème ni fiche vue gardés) : rien ne s'ouvre, et la dernière fiche est enregistrée comme vue aussitôt, sans attendre le réseau (les fiches sont connues dès le build) : un rechargement juste après reste fermé.
+- **Versions sautées** : seule la fiche la plus récente s'ouvre, pas toutes celles depuis la dernière vue.
+- Fermer la fenêtre l'enregistre comme vue (`localStorage`, `whats-up:Escouade`).
+- **Trois fiches au plus** sont livrées (leurs captures entrent dans le binaire) ; un test le tient. Une fiche publiée ne se réécrit pas : une nouvelle la suit (`AAAA-MM-JJ-2` le même jour).
+- La fiche est **facultative** : elle n'accompagne qu'une version aux nouveautés visibles. Elle se fait avec l'atelier (`.whatsup/atelier/`, la vraie interface sur le faux backend des tests, données fictives) et `.whatsup/capturer.mjs` (Playwright), ou avec le plugin de l'auteur, au choix ; aucun hook n'est exigé (`docs/WHATS-UP.md`).

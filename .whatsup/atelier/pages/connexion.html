@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- A made-up project's page (the « Atelier » project's login), drawn where the app's own webview would be.
-     ?theme=light|dark; ?marque=<label>: the contour drive_browser puts (src-tauri/src/browserdrive.js, highlight). -->
+     ?theme=light|dark; ?lang=en; ?sso=1: « Continue with Exemple ID » first; ?marque=<label> (?cible=<id>): the contour drive_browser puts (src-tauri/src/browserdrive.js, highlight). -->
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
@@ -90,6 +90,24 @@
           600 15px system-ui,
           sans-serif;
       }
+      .sso,
+      .ou {
+        display: none;
+      }
+      .sso-on .sso {
+        display: block;
+        margin: 0;
+        background: var(--carte);
+        color: var(--texte);
+        border: 1px solid var(--bord);
+      }
+      .sso-on .ou {
+        display: block;
+        margin: 14px 0;
+        text-align: center;
+        font-size: 13px;
+        color: var(--doux);
+      }
       .bas {
         margin-top: 18px;
         text-align: center;
@@ -101,22 +119,30 @@
   <body>
     <header><i></i>Atelier</header>
     <main>
-      <h1>Connexion</h1>
-      <p>Retrouve tes ateliers et tes inscrits.</p>
-      <label>Adresse e-mail</label>
+      <h1 data-en="Sign in">Connexion</h1>
+      <p data-en="Find your workshops and who signed up.">Retrouve tes ateliers et tes inscrits.</p>
+      <button class="sso" id="sso" data-en="Continue with Exemple ID">Continuer avec Exemple ID</button>
+      <div class="ou" data-en="or">ou</div>
+      <label data-en="Email address">Adresse e-mail</label>
       <div class="champ">camille@exemple.test</div>
-      <label>Mot de passe</label>
+      <label data-en="Password">Mot de passe</label>
       <div class="champ">••••••••</div>
-      <button id="entrer">Se connecter</button>
-      <div class="bas">Pas encore de compte ? Créer un compte</div>
+      <button id="entrer" data-en="Sign in">Se connecter</button>
+      <div class="bas" data-en="No account yet? Create one">Pas encore de compte ? Créer un compte</div>
     </main>
     <script>
       const q = new URLSearchParams(location.search);
       if (q.get('theme') === 'dark') document.documentElement.classList.add('dark');
+      if (q.get('sso')) document.documentElement.classList.add('sso-on');
+      if (q.get('lang') === 'en') {
+        document.documentElement.lang = 'en';
+        document.title = 'Atelier · Sign in';
+        for (const el of document.querySelectorAll('[data-en]')) el.textContent = el.dataset.en;
+      }
       const label = q.get('marque');
       if (label) {
         // As browserdrive.js draws it: a contour at the project's colour, its label above.
-        const el = document.getElementById('entrer'),
+        const el = document.getElementById(q.get('cible') || 'entrer'),
           r = el.getBoundingClientRect(),
           color = '#e0884a';
         const ring = document.createElement('div');

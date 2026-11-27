@@ -10,41 +10,41 @@
   <body>
     <main class="page t-compare">
       <section id="criteria" class="block">
-        <h2 id="criteria-title">Ce qui compte</h2>
+        <h2 id="criteria-title" data-en="What matters">Ce qui compte</h2>
         <ol class="ccrits">
-          <li>Lisible sur téléphone</li>
-          <li>Les retards en premier</li>
-          <li>Peu de clics pour relancer</li>
+          <li data-en="Readable on a phone">Lisible sur téléphone</li>
+          <li data-en="Delays first">Les retards en premier</li>
+          <li data-en="Few clicks to follow up">Peu de clics pour relancer</li>
         </ol>
       </section>
       <section id="options" class="plates" style="--n: 2" aria-label="Les options">
         <article id="option-a" class="plate" data-key="options.0">
           <div class="shot"><img id="img-a" alt="" /></div>
-          <div class="cred"><span class="l">A</span><b>Colonnes de chiffres</b></div>
+          <div class="cred"><span class="l">A</span><b data-en="Columns of figures">Colonnes de chiffres</b></div>
           <div class="body">
             <ul class="pros">
-              <li>Tout tient sur un écran large</li>
-              <li>Proche de l'actuel</li>
+              <li data-en="Everything fits on a wide screen">Tout tient sur un écran large</li>
+              <li data-en="Close to the current one">Proche de l'actuel</li>
             </ul>
             <ul class="cons">
-              <li>Serré sur téléphone</li>
+              <li data-en="Cramped on a phone">Serré sur téléphone</li>
             </ul>
-            <button class="pick" type="button" data-option="a" aria-pressed="false">Choisir A</button>
+            <button class="pick" type="button" data-option="a" aria-pressed="false" data-en="Pick A">Choisir A</button>
           </div>
         </article>
         <article id="option-b" class="plate rec" data-key="options.1">
-          <span class="seal" role="img" aria-label="Recommandé"><span>Recommandé</span></span>
+          <span class="seal" role="img" aria-label="Recommandé"><span data-en="Recommended">Recommandé</span></span>
           <div class="shot"><img id="img-b" alt="" /></div>
-          <div class="cred"><span class="l">B</span><b>Cartes empilées</b></div>
+          <div class="cred"><span class="l">B</span><b data-en="Stacked cards">Cartes empilées</b></div>
           <div class="body">
             <ul class="pros">
-              <li>Les retards en tête de liste</li>
-              <li>Relance en un geste</li>
+              <li data-en="Delays at the top of the list">Les retards en tête de liste</li>
+              <li data-en="Follow up in one gesture">Relance en un geste</li>
             </ul>
             <ul class="cons">
-              <li>Moins de chiffres d'un coup d'œil</li>
+              <li data-en="Fewer figures at a glance">Moins de chiffres d'un coup d'œil</li>
             </ul>
-            <button class="pick" type="button" data-option="b" aria-pressed="false">Choisir B</button>
+            <button class="pick" type="button" data-option="b" aria-pressed="false" data-en="Pick B">Choisir B</button>
           </div>
         </article>
       </section>
@@ -53,6 +53,12 @@
       const q = new URLSearchParams(location.search);
       const dark = q.get('theme') === 'dark';
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      if (q.get('lang') === 'en') {
+        document.documentElement.lang = 'en';
+        document.title = 'Two dashboard layouts';
+        for (const el of document.querySelectorAll('[data-en]')) el.textContent = el.dataset.en;
+        document.querySelector('.seal').setAttribute('aria-label', 'Recommended');
+      }
       const c = q.get('choisi');
       if (c) document.querySelector(`.pick[data-option="${c}"]`).setAttribute('aria-pressed', 'true');
       // The two renders the agent joined: drawn here, plain shapes.

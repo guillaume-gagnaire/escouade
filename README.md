@@ -193,7 +193,7 @@ La CI (`.github/workflows/ci.yml`) exécute l'ensemble sur chaque push et pull r
    - `TAURI_SIGNING_PRIVATE_KEY` : le contenu de la clé privée de signature des mises à jour (générée avec `npx tauri signer generate`, la clé publique correspondante est dans `src-tauri/tauri.conf.json`) ;
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` : son mot de passe (vide s'il n'y en a pas) ;
    - optionnel, pour signer et notariser l'app macOS (sans eux, elle est signée ad hoc et macOS demande une confirmation au premier lancement) : `APPLE_CERTIFICATE` (certificat Developer ID Application exporté en `.p12`, encodé en base64), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` (ex. `Developer ID Application: Nom (TEAMID)`), `APPLE_ID`, `APPLE_PASSWORD` (mot de passe d'application) et `APPLE_TEAM_ID`.
-2. Prépare la fiche des nouveautés (What's up ?, la fenêtre qui les montre une fois après la mise à jour) : « what's up » dans Claude Code, puis sa PR sur `main`. Le hook `pre-push` refuse un tag sans fiche plus récente. Installation du plugin et du hook, une fois par développeur : [docs/WHATS-UP.md](docs/WHATS-UP.md).
+2. Si la version apporte des nouveautés visibles, prépare sa fiche (What’s up ?, la fenêtre qui les montre une fois après la mise à jour), en français et en anglais, captures faites dans l’atelier avec Playwright, puis sa PR sur `main`. La fiche est facultative : une version de correctifs part sans. Comment faire : [docs/WHATS-UP.md](docs/WHATS-UP.md).
 3. Mets à jour la version partout, committe, tague et pousse :
 
    ```powershell

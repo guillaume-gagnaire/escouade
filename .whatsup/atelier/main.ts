@@ -12,6 +12,8 @@ const q = new URLSearchParams(location.search);
 const nom = q.get('etat') || 'defaut';
 const etat = ETATS[nom] ?? ETATS.defaut;
 const theme = q.get('theme') === 'sombre' ? 'dark' : 'light';
+// ?lang=en: the interface in English, as a note's English captures show it.
+const lang = q.get('lang') === 'en' ? 'en' : 'fr';
 
 let channel: { onmessage: (e: UiEvent) => void } | null = null;
 const initial: InitialState = {
@@ -40,7 +42,7 @@ fakeBackend({
 });
 resetApp();
 app.ready = false;
-setLang('fr');
+setLang(lang);
 document.documentElement.dataset.theme = theme;
 mount(App, { target: document.getElementById('app')! });
 
