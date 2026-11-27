@@ -1,0 +1,23 @@
+{
+  "id": "2026-11-27",
+  "ecrans": [
+    {
+      "etiquette": "Pages des agents",
+      "titre": "Réponds à un agent depuis sa page",
+      "texte": "Un agent ouvre une revue, un schéma ou une comparaison à côté de sa conversation, avec sa ligne dans <b>Navigateurs</b>. Tu choisis dans la page, et <b>Envoyer</b> lui transmet ta réponse.",
+      "scene": "<div class=\"wu-20261127-s1\"><div class=\"wu-20261127-rail\"><span class=\"wu-20261127-rub\">Terminaux</span><span class=\"wu-20261127-ligne\">serveur</span><span class=\"wu-20261127-rub\">Navigateurs</span><span class=\"wu-20261127-ligne wu-20261127-lpage\">page: Revue du lot 2</span></div><div class=\"wu-20261127-zone\"><div class=\"wu-20261127-page\"><span class=\"wu-20261127-ptitre\">Revue du lot 2</span><span class=\"wu-20261127-opt\">A · Garder l'ancien menu</span><span class=\"wu-20261127-opt wu-20261127-optb\"><span class=\"wu-20261127-case\"></span>B · Menu replié</span><span class=\"wu-20261127-bande\"><span>Choix : B</span><b class=\"wu-20261127-envoyer\">Envoyer</b></span><span class=\"wu-20261127-curseur\"></span></div><div class=\"wu-20261127-conv\"><span class=\"wu-20261127-bulle\">J'ai préparé la revue, choisis une option.</span><span class=\"wu-20261127-bulle wu-20261127-rep\">Option B retenue.</span></div></div></div>"
+    },
+    {
+      "etiquette": "Le Workspace",
+      "titre": "Vois tous les agents d'un projet sur une toile",
+      "texte": "Le bouton <b>Éditeur</b> ou la <b>Vue d'ensemble</b> ouvre la toile : chaque agent avec son étape de workflow. <b>Workflows</b>, en haut à droite, remplace l'onglet du panneau de droite.",
+      "scene": "<div class=\"wu-20261127-aa\"><div class=\"wu-20261127-avant\"><span class=\"wu-20261127-titre\">Avant</span><div class=\"wu-20261127-av2\"><div class=\"wu-20261127-liste\"><span class=\"wu-20261127-item\">front-1</span><span class=\"wu-20261127-item\">testeur</span><span class=\"wu-20261127-item\">rédacteur</span></div><div class=\"wu-20261127-panneau\"><span class=\"wu-20261127-onglet\">Workflow</span><span class=\"wu-20261127-etape\">Dev → Revue</span></div></div></div><svg class=\"wu-20261127-fleche\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" aria-hidden=\"true\"><path d=\"M4 12h14M13 6l6 6-6 6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"></path></svg><div class=\"wu-20261127-apres\"><span class=\"wu-20261127-titre\">La toile <b class=\"wu-20261127-wf\">Workflows</b></span><div class=\"wu-20261127-toile\"><span class=\"wu-20261127-agent\">front-1<i>Revue</i></span><span class=\"wu-20261127-agent\">testeur<i>Tests</i></span><span class=\"wu-20261127-agent\">rédacteur<i>Dev</i></span></div></div></div>"
+    },
+    {
+      "etiquette": "Navigateurs",
+      "titre": "Ouvre un navigateur comme un terminal",
+      "texte": "Chaque onglet a sa ligne sous <b>Navigateurs</b>, dans la barre latérale. Il s'ouvre en plein écran ou à côté d'un agent, et <b>+</b> en ajoute un.",
+      "scene": "<div class=\"wu-20261127-aa\"><div class=\"wu-20261127-avant\"><span class=\"wu-20261127-titre\">Avant</span><div class=\"wu-20261127-fenetre\"><span class=\"wu-20261127-fbarre\">Pages</span><span class=\"wu-20261127-item\">:5173</span><span class=\"wu-20261127-item\">Revue du lot 2</span></div></div><svg class=\"wu-20261127-fleche\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" aria-hidden=\"true\"><path d=\"M4 12h14M13 6l6 6-6 6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"></path></svg><div class=\"wu-20261127-apres wu-20261127-ap3\"><div class=\"wu-20261127-rail3\"><span class=\"wu-20261127-rub\">Terminaux</span><span class=\"wu-20261127-ligne\">serveur</span><span class=\"wu-20261127-rub\">Navigateurs <b>+</b></span><span class=\"wu-20261127-ligne wu-20261127-sel\">:5173</span><span class=\"wu-20261127-ligne\">Revue du lot 2</span></div><div class=\"wu-20261127-ecran\"><span class=\"wu-20261127-moitie\">Agent</span><span class=\"wu-20261127-moitie wu-20261127-nav\">:5173</span></div></div></div>"
+    }
+  ]
+}
