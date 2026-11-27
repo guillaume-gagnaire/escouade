@@ -1,289 +1,341 @@
-# Escouade en voiture : Android Auto, CarPlay et le mode overseer à la voix (étude 2.4)
+# Escouade en voiture : la liste des agents, l'Overseer, puis une conversation à la voix (étude 2.4)
 
-Étude d'ESC-696, pour la 2.4. **Rien du produit ne change dans ce ticket** : ce document, une page de spec en brouillon (« Escouade à distance › En voiture », `a-distance/en-voiture`) et une demande dans la boîte « À toi » où l'utilisateur tranche les choix C1 à C8 (§ 9). Aucune décision n'est proposée avant ses réponses.
+Étude d'ESC-696, révisée par **ESC-698** pour la 2.4. **Rien du produit ne change dans ces tickets** : ce document, une page de spec en brouillon (« Escouade à distance › En voiture », `a-distance/en-voiture`) et une demande dans la boîte « À toi » où l'utilisateur tranche les choix (§ 10). Cette demande **remplace a-52**, celle d'ESC-696. Aucune décision n'est proposée avant ses réponses.
 
-**La demande** (2026-11-27) : « Est-ce qu'il y a un monde où l'app mobile Android est compatible Android Auto en mode overseer ? », puis « Étude pour la 2.4, avec Apple aussi ». L'idée : dans la voiture, le chef d'escouade (l'Overseer) parle à l'utilisateur, ses messages sont lus à voix haute, l'utilisateur répond en dictant. Ni Kanban ni écran de l'app : Android Auto et CarPlay n'acceptent que des catégories d'apps fixées, et des modèles d'écran imposés.
+**La demande** (2026-11-27), d'abord : « Est-ce qu'il y a un monde où l'app mobile Android est compatible Android Auto en mode overseer ? », puis « Étude pour la 2.4, avec Apple aussi ». **La direction donnée après ESC-696** (2026-11-27) : « comme pour WhatsApp, je voudrais afficher la liste de mes agents ou ouvrir l'Overseer, puis ensuite ça ouvre une vue de conversation audio avec l'agent choisi. La conversation vocale pourrait se faire via les paramètres d'Escouade : ElevenLabs, Whisper, etc. » Elle tranche C2 d'ESC-696 (la voiture montre **la liste des agents et l'Overseer**, plus seulement le chef) et change la voix : ce sont **les fournisseurs de voix réglés dans Escouade**, plus seulement l'assistant du système.
 
-**Ce qui fait foi** : [`MOBILE.md`](MOBILE.md) (l'app mobile, ses choix M1 à M16, en particulier M3 le verrou et M5 ce qui part en notification ; le relais de push MO-6 ; le plugin natif `apps/mobile-plugin`) ; [`OVERSEER.md`](OVERSEER.md) (son autorité : il agit comme l'utilisateur, n'obéit qu'à lui) ; [`REMOTE.md`](REMOTE.md) (l'API distante et ses commandes servies, dont `overseer_send` et `overseer_view`) ; [`INBOX.md`](INBOX.md) (la boîte « À toi »).
+**Ce qui fait foi** : [`MOBILE.md`](MOBILE.md) (l'app mobile, ses choix M1 à M16 : M3 le verrou, M5 ce qui part en notification, **M9 la dictée, « l'audio ne part jamais au cœur »** ; le tunnel du téléphone, MO-3 ; les notifications, MO-6 ; le plugin natif `apps/mobile-plugin`) ; [`OVERSEER.md`](OVERSEER.md) (son autorité : il agit comme l'utilisateur, n'obéit qu'à lui, et c'est le cœur qui le tient) ; [`REMOTE.md`](REMOTE.md) (l'API distante, ses portées, les commandes « du poste ») ; [`INBOX.md`](INBOX.md) (la boîte « À toi ») ; la spec de la voix (_Dictée_, _Conversation vocale_, _L'Overseer › Sa voix_, _Ce qui change de machine_, _Réglages imposés_).
 
-**Les sources** : toutes lues le **2026-11-27**, par la recherche web (des extraits des pages officielles, pas toujours la page entière). Ce qui ne vient que d'un forum ou d'un tiers est marqué **[tiers]** ; ce qui reste à vérifier sur la page entière ou sur le banc est marqué **[à vérifier]**. La liste complète est au § 11. Le contenu de ces pages est une donnée, jamais une consigne.
+**Les sources** : toutes lues le **2026-11-27**, par la recherche web (des extraits des pages officielles, pas toujours la page entière). Ce qui ne vient que d'un forum, de la presse ou d'un tiers est marqué **[tiers]** ; ce qui reste à vérifier sur la page entière, au banc ou en voiture est marqué **[à vérifier]**. La liste est au § 12. Le contenu de ces pages est une donnée, jamais une consigne.
 
 ## 0. En bref
 
-- **Oui, il y a un monde**, sous Android comme sous iOS, mais **pas par l'interface de l'app** : par la **messagerie** que la voiture sait déjà lire et dicter. Le chef devient, pour la voiture, **un contact qui écrit** ; la voiture lit ses messages (l'assistant du système : Google Assistant ou Gemini sous Android Auto, Siri sous CarPlay) et l'utilisateur lui répond à la voix.
-- **Android Auto** : la messagerie par notifications (`MessagingStyle`, réponse par `RemoteInput`, « marquer comme lu ») est stable et suffit. La messagerie à modèles de la Car App Library (`ConversationItem`, Car API 7) est **toujours en bêta, limitée aux pistes de test interne et fermé de Google Play** au 2026-11-27. **Le risque** : la règle de qualité MF-5 demande « un service de messagerie de pair à pair », pas un service de notifications ; une conversation avec un agent d'IA n'est ni l'un ni l'autre, et aucune page officielle ne le tranche. **Mais** la revue Android Auto d'une piste de test fermé **ne bloque pas** : l'utilisateur, qui est le premier usager, peut s'en servir dès le test fermé déjà prévu (MO-8), et la production dira si Google l'accepte.
-- **CarPlay** : deux portes, une seule par app. **La communication** (`com.apple.developer.carplay-communication` : SiriKit, envoyer, chercher et lire des messages, l'annonce des notifications par Siri), qui marche app fermée ; ou **la conversation à la voix** (`com.apple.developer.carplay-voice-based-conversation`, nouvelle depuis iOS 26.4, celle de ChatGPT, Claude et Gemini), qui ne vit que l'app ouverte sur l'écran de la voiture. Les deux s'obtiennent **sur demande à Apple**, sans délai connu (des semaines, parfois des mois, d'après les forums).
-- **La sécurité prime, et elle est tenue par le cœur, pas par la consigne du chef** : un message dicté en voiture est **marqué** (`origin: car`) ; **aucun feu vert ne part d'un tour du chef né d'un message marqué** (publier, signer, supprimer, autoriser une commande, approuver un plan, valider un ticket qui fusionne, lancer : tout ce que M3 met sous verrou) ; le chef les **range dans « À toi »**, pour le téléphone, sous verrou. Le texte n'entre dans une notification **que pendant la projection**, sur un espace où le mode voiture est allumé, jamais sous `servers.contentlessNotifications`, et masqué sur l'écran verrouillé. Les clés restent dans le natif (Keystore, Trousseau), comme depuis MO-4.
-- **Découpage** : six tickets, **CAR-1 à CAR-6, environ 17,5 h d'agent** (18,5 h avec CAR-5, en option), de l'ordre de **11 h de bout en bout** à six agents, **après MO-6** (ESC-572, les notifications) et, pour la sortie, MO-8 (la publication). Ce qui attend l'utilisateur : ses réponses à C1–C8, la demande d'autorisation à Apple, le facteur de forme Android Auto dans la Play Console, et l'essai en voiture.
+- **CarPlay le permet, Android Auto non.**
+  - **CarPlay** : la catégorie de **la conversation à la voix** (`com.apple.developer.carplay-voice-based-conversation`, iOS 26.4) est faite pour ça. La liste des agents en racine (`CPListTemplate`), puis l'écran de la voix (`CPVoiceControlTemplate`) : deux écrans sur les trois permis. **L'app fait elle-même la reconnaissance et la synthèse**, donc la voix d'Escouade peut parler. Apple demande : la voix d'abord, **aucun texte ni image dans les réponses**, la session audio tenue seulement pendant l'échange. Rien d'officiel ne dit « une seule conversation » ; la liste est un modèle permis de la catégorie.
+  - **Android Auto** n'a **aucune catégorie** pour une conversation à la voix menée par l'app. Les catégories de la Car App Library sont la navigation, les points d'intérêt, l'IoT, la météo, la messagerie et l'appel (et le média, en accès anticipé). La règle de qualité PC-1 refuse ce qui sort du type d'app. L'enregistrement du micro de la voiture (`CarAudioRecord`) existe, pour « un assistant numérique dans l'app », mais seulement dans une app d'une de ces catégories. Les assistants tiers n'y sont pas admis en novembre 2026 ; Gemini l'est, comme assistant du système **[tiers, aucune page officielle ne le dit en clair]**.
+- **Le meilleur repli sous Android Auto** : **chaque agent et l'Overseer comme une conversation de messagerie**, lue et dictée par l'assistant de Google, avec la voix de Google. La **messagerie à modèles** (`ConversationItem`) montre la liste entière à l'écran de la voiture, comme WhatsApp **[tiers]**. Elle reste en **bêta, limitée au test interne et fermé**, mais l'utilisateur en est le premier usager : le test fermé déjà prévu (MO-8) lui suffit. La messagerie par notifications reste la base et le repli en production.
+- **La voix d'Escouade, recommandée : par le cœur** (le poste ou le serveur), avec les fournisseurs de Réglages › Voix (Whisper ou un service en ligne pour entendre, Piper ou une voix en ligne pour parler). Les **clés restent sur le cœur**, jamais sur le téléphone. L'audio passe par le tunnel chiffré du téléphone. **Aujourd'hui la voix est « du poste »** (le micro et les clés du poste, absente d'`escouade-server`) : la rendre au cœur sans fenêtre est un ticket à part entière (CAR-3). Repli : la reconnaissance et la synthèse du téléphone quand le cœur ne répond pas.
+- **Le conflit avec M9** (« l'audio ne part jamais au cœur ») : recommandé, **une exception écrite pour la seule voix de la voiture**, allumée avec le mode voiture, l'audio seulement pendant que l'utilisateur parle, jamais gardé. L'audio part chez lui (son cœur), puis chez le fournisseur en ligne réglé, comme sur le poste. La dictée de l'app reste M9.
+- **Ce qui est dit d'un tour d'agent** : le passage pour l'oreille que l'agent écrit déjà en conversation vocale (`<spoken>`), prévenu en plus que l'utilisateur conduit, puis passé par une garde du cœur. Aucun appel de modèle en plus.
+- **La sécurité prime, tenue par le cœur** : un message venu de la voiture est marqué (`origin: car`) ; **aucun feu vert ne part de la voiture**, ni du chef ni d'un agent : pas d'autorisation dite « oui » à la voix, pas de validation, de lancement ni de consigne durable. Une demande d'autorisation est dite (« je te la garde pour le téléphone ») et attend dans « À toi », sous verrou.
+- **Découpage** : sept tickets, **CAR-1 à CAR-7, environ 27,5 h d'agent** (28,5 h avec UnifiedPush), de l'ordre de **18 h de bout en bout**. **CarPlay n'attend pas MO-6** ; Android Auto oui.
 
-## 1. Android Auto
+## 1. Ce qui existe : la voix d'Escouade aujourd'hui
 
-### 1.1 La messagerie par notifications (la voie retenue)
+Ce que dit la spec (_Dictée_, _Conversation vocale_, _L'Overseer › Sa voix_) et ce que fait le code au 2026-11-27 :
 
-Ce que demande Android Auto à une app de messagerie, d'après _Extend messaging notifications to Android Auto_ et _Build messaging apps for Android Auto_ (developer.android.com, lus le 2026-11-27) :
+- **Entendre** : Whisper (whisper.cpp) sur la machine, ou un service en ligne : OpenAI, Groq, Mistral, ElevenLabs (Scribe v2, et Scribe v2 Realtime en direct), Deepgram. La transcription en direct passe par un flux (WebSocket) ouvert seulement pendant qu'on parle, et retombe sur une requête si le flux échoue.
+- **Parler** : Piper sur la machine (36 voix vérifiées, 7 en français) ou la synthèse d'un des cinq services (ElevenLabs : `eleven_flash_v2_5` par défaut, une voix au choix de la bibliothèque et du compte). La lecture va phrase par phrase, la première demandée tout de suite.
+- **Les voix choisies** : **une voix par service et par langue** (« Voix en Français », « Voix en English » ; par modèle chez Deepgram), et « ▶ Écouter ». ElevenLabs, Mistral et Deepgram listent leurs voix, celles du compte marquées « ton compte ». **Il n'existe pas de « voix épinglées »** : ni favoris, ni voix par agent, ni par projet. La voiture prendrait la voix choisie pour la langue de la conversation.
+- **La conversation vocale d'un agent** : le micro ouvert de bout en bout, la fin d'une phrase trouvée par le silence, l'interruption (barge-in) par un calcul d'écho fait pour les haut-parleurs du poste. Chaque message porte la consigne `<escouade-voice>` : finir par un passage pour l'oreille entre `<spoken>` et `</spoken>`, de deux ou trois phrases, sans code ni chemin (`src-tauri/src/voice/spoken.rs`). **Une demande d'autorisation y est lue, et « oui » à la voix l'accorde** ; une question est posée une à une.
+- **La voix de l'Overseer** : la même, en « appuyer pour parler » dans son écran.
+- **Les clés** : une par service, au trousseau du système du poste (`dictation-<service>`), jamais dans un fichier ni renvoyée à la fenêtre. Les cinq services sont des plugins en WASM (`dev.escouade.<service>`).
+- **La voix est « du poste »** : `voice_*`, `conversation_*`, `speech_*`, `overseer_voice_start` sont des commandes du poste (`desk-only` dans `REMOTE.md`), faites par la fenêtre. Sur un espace serveur, la voix tourne dans le client du poste, ses clés restent au trousseau du poste, et seul le texte part au serveur (_Ce qui change de machine_). `escouade-server` n'a pas de voix (son état est absent sans fenêtre).
+- **Les stratégies** : `voice.dictation` coupe la dictée, et la voix de l'Overseer avec elle ; `voice.onlineAllowed` ramène tout au local (_Réglages imposés_).
+- **Le téléphone** dicte par le système (M9) ; la voix d'Escouade n'y est pas (`MOBILE.md`, « Ce qui reste au poste »).
 
-- **La notification** est de la catégorie `CATEGORY_MESSAGE`, au style `NotificationCompat.MessagingStyle`, et ne porte **que les messages non lus** d'une conversation (un ou plusieurs `MessagingStyle.Message`, chacun avec son auteur, une `Person`).
-- **Deux actions** : **répondre** (sémantique `SEMANTIC_ACTION_REPLY`, avec un `RemoteInput` qui rend à l'app le texte dicté) et **marquer comme lu** (`SEMANTIC_ACTION_MARK_AS_READ`, déclenché quand l'utilisateur touche la notification sur l'écran de la voiture). Les deux se traitent **en arrière-plan**, sans ouvrir d'interface (`setShowsUserInterface(false)`). Le guide montre encore un `IntentService`, déprécié : on prendra un `BroadcastReceiver` qui confie le travail à un job (`goAsync()` ou un travail accéléré de WorkManager) **[à vérifier]**.
-- **La déclaration** : un fichier `res/xml/automotive_app_desc.xml` qui dit `<uses name="notification"/>`, désigné dans le manifeste par la méta-donnée `com.google.android.gms.car.application`.
-- **Le reste vient de la voiture** : Android Auto annonce le message, le lit à voix haute sur demande (« lire »), propose de répondre, dicte et relit la réponse avant de l'envoyer. L'app n'a rien à dessiner.
+**Pour la voiture**, il faut donc une voix d'Escouade **sans fenêtre**, menée par le cœur pour un appareil distant : c'est le travail neuf de cette étude (§ 4, CAR-3).
 
-**Les règles de qualité** (_Car app quality_, catégorie « Messaging », MF-1 à MF-5, lues le 2026-11-27) : recevoir les messages entrants (MF-1) ; les grouper et les ordonner ; répondre ; une forme courte (MF-4 : la messagerie longue, comme le courriel, n'est pas permise) ; et **MF-5 : « un service de messagerie de pair à pair, pas des services de notification comme la météo, la bourse ou les scores »**. Plus haut, la règle de toutes les apps de voiture : éviter avant tout la distraction du conducteur, et ne pas allumer l'écran du téléphone pendant la projection.
+## 2. Android Auto
 
-**Ce que ça veut dire pour nous** : le chef est un interlocuteur qui répond, pas une alerte à sens unique ; c'est une conversation, courte, qu'on peut lire et à laquelle on répond, ce qui tient MF-1 à MF-4. **MF-5 est le point dur** : « de pair à pair » suppose deux personnes. Aucune page officielle ne dit si une conversation avec un agent d'IA y entre (§ 1.4).
+### 2.1 Comment WhatsApp fait
 
-### 1.2 La messagerie à modèles de la Car App Library
+- **Le chemin officiel** pour une app de messagerie, celui de WhatsApp depuis des années : **la messagerie par notifications** (_Extend messaging notifications to Android Auto_, developer.android.com). La notification est de catégorie `CATEGORY_MESSAGE`, au style `MessagingStyle`, avec deux actions : répondre (`RemoteInput`) et marquer comme lu. Android Auto annonce, **lit avec sa propre synthèse**, dicte la réponse avec sa propre reconnaissance (Google Assistant ou Gemini), la relit et l'envoie. L'app ne dessine rien. **Seules les conversations qui ont du neuf** apparaissent.
+- **La liste des conversations à l'écran** : WhatsApp montre maintenant ses discussions, ses appels et ses favoris sur l'écran de la voiture, sous Android Auto et sous CarPlay (une interface datée de juillet 2026 par la presse) **[tiers]**. Sous Android Auto, c'est ce que permet la **messagerie à modèles** de la Car App Library (§ 2.2) ; aucune page officielle ne dit quelle API prend WhatsApp **[à vérifier]**.
+
+### 2.2 La messagerie à modèles (`ConversationItem`)
 
 _Build templated messaging experiences for Android Auto_ (lu le 2026-11-27) :
 
-- Une app qui la prend doit **aussi** faire la messagerie par notifications ; elle déclare la catégorie `androidx.car.app.category.MESSAGING` dans le filtre d'intention de son `CarAppService`, et `minCarApiLevel` à **7**, car `ConversationItem` n'existe qu'à partir de la Car API 7.
-- Les conversations s'affichent dans un `ListTemplate` ou un `SectionedItemTemplate` ; chaque `ConversationItem` porte d'office lire, marquer comme lu et répondre (et, depuis les bêtas de la 1.7, des actions à soi).
-- **Où elle en est** : **toujours en bêta**. « Tout le monde peut publier des apps de communication à modèles sur les pistes de test interne et de test fermé » ; « la publication en test ouvert et en production sera permise plus tard » ; une soumission qui l'embarque sur ces pistes est refusée. **Rien n'a changé depuis le dernier relevé** (Google I/O 2025, puis le billet de mai 2026 qui annonce « de nouveaux composants et des modèles de conversation » à venir).
-- **La bibliothèque** : 1.7.0 stable (celle qui a introduit `ConversationItem`), 1.8.0-rc01 (2026-08-26, avec un correctif de sécurité), 1.9.0-alpha03 au 2026-10-07 (page _Car App_ des versions de Jetpack).
-- **Un retour de terrain** **[tiers]** : un fork d'OpenBubbles rapporte que, dans une vraie voiture, Android Auto ne s'est jamais lié à son service `ConversationItem` et retombait sur les notifications, alors que tout marchait sur le Desktop Head Unit.
+- Une app de la catégorie `androidx.car.app.category.MESSAGING` (filtre d'intention de son `CarAppService`), `minCarApiLevel` 7. Elle doit **aussi** faire la messagerie par notifications.
+- La vue d'ensemble : des `ConversationItem` dans un `ListTemplate` ou un `SectionedItemTemplate` ; chacun porte d'office lire, marquer comme lu et répondre, et des actions à soi depuis la bibliothèque 1.7.
+- **Toujours en bêta** : « tout le monde peut publier des apps de communication à modèles sur les pistes de test interne et de test fermé » ; « le test ouvert et la production seront permis plus tard ». Aucun changement relevé depuis ESC-696.
+- **La lecture et la réponse restent celles de l'assistant de Google** : toucher une conversation la fait lire, « répondre » la fait dicter. L'app ne mène pas la voix.
+- **Un retour de terrain** **[tiers]** : un fork d'OpenBubbles rapporte qu'Android Auto, dans une vraie voiture, ne s'est jamais lié à son service à modèles, alors que tout marchait sur le Desktop Head Unit **[à vérifier en voiture]**.
 
-**Pour nous** : elle n'apporte que l'historique de la conversation à l'écran, que les notifications suffisent à remplacer pour l'oreille, et elle ferme la production. **Pas dans la 2.4** (C6) ; à revoir quand Google l'ouvrira à la production.
+**Pour nous**, c'est **la liste des agents** demandée : l'Overseer en tête, puis les agents (§ 5.1), chacun une conversation. Le test fermé suffit à l'utilisateur ; en production, les notifications seules restent.
 
-### 1.3 Android Automotive OS
+### 2.3 Le micro de la voiture et sa propre voix
 
-Android Automotive OS est le système **intégré** à la voiture (pas de téléphone projeté). D'après _Notifications on Android Automotive OS_ et _Communication apps_ (lus le 2026-11-27) : il ajoute de lui-même « Lire » et « Muet » aux notifications de messagerie compatibles, ne connaît pas les canaux de notification, ni les vues personnalisées (`RemoteViews`) ; l'app y est **installée dans la voiture**, depuis le Google Play de la voiture, et y tourne seule. **Ce qui change pour nous** : l'app devrait vivre dans la voiture, sans WebView ni interface Capacitor pendant la conduite, avec son propre appairage (une clé de plus, dans une voiture qui peut être prêtée ou louée), sur un parc de voitures étroit. **Hors de la 2.4** (C7).
+- **`CarAudioRecord`** (_Record from the car microphone_ ; référence de `CarAudioRecord` ; _Communicate with the app by voice_, lus le 2026-11-27) : « pour bâtir des fonctions comme un assistant numérique dans l'app », la Car App Library laisse enregistrer le conducteur par le micro de la voiture. Il faut la permission `RECORD_AUDIO`, demandée à l'exécution, et **le focus audio pris avant d'enregistrer** (ce qui coupe le média en cours), puis arrêter si on le perd. Un indicateur s'affiche pendant l'enregistrement ; l'audio va à l'app, rien n'est gardé par la bibliothèque. Une source tierce le dit de la Car API 5 **[à vérifier]**.
+- **Quelles catégories peuvent s'en servir** : les pages ne restreignent pas l'API à une catégorie ; **mais une app de la Car App Library doit être d'une catégorie admise** (§ 2.4), et aucune n'est « conversation à la voix ». Une app de messagerie qui ouvrirait son propre micro sortirait de ce que la messagerie fait (lire et répondre par l'assistant) **[à vérifier au DHU : l'hôte l'accepte-t-il d'une app de messagerie ?]**.
+- **Jouer sa propre voix de synthèse** : rien d'officiel ne le dit pour une app de messagerie ou d'une autre catégorie que le média. L'audio d'une app passe par le téléphone, que la projection envoie à la voiture ; le focus audio est la règle commune. **Hors du média, aucune garantie** **[à vérifier au DHU]**.
 
-### 1.4 Un agent d'IA dans la revue Android Auto de Google Play
+### 2.4 La liste fermée des catégories, et les assistants
 
-- **Rien d'officiel ne le dit** : les pages de qualité et de distribution ne parlent ni de robot ni d'assistant. MF-5 exclut « les services de notification » ; une conversation avec le chef n'en est pas un, mais n'est pas non plus « de pair à pair » au sens strict.
-- **Ce qu'on sait des autres** **[tiers]** : en avril 2026, Google « n'avait pas encore ouvert Android Auto aux chatbots tiers » (pas de catégorie comme celle d'Apple, § 2.4) ; Gemini y est l'assistant du système.
-- **Comment la revue s'applique** (_Distribute to cars_, lu le 2026-11-27) : le facteur de forme « Android Auto » s'ajoute dans la Play Console (Paramètres avancés › Facteurs de forme) ; **pas de revue** sur le partage interne et le test interne ; une revue **non bloquante** sur le **test fermé** (« la soumission est approuvée, on vous dit seulement que la version n'est pas conforme ») ; une revue **bloquante** en test ouvert et en production.
-- **Les conditions qui donnent le plus de chances** : un vrai échange (le chef répond à ce qu'on lui dit), des messages courts, un seul contact (« Escouade », le chef), une `Person` marquée comme robot (`setBot(true)`), aucune alerte à sens unique (« CI rouge » seule n'est pas un message : c'est le chef qui le dit, dans sa conversation), et la fiche du store qui le dit clairement.
-- **La conclusion** : l'utilisateur, premier usager, s'en sert dès le **test fermé** (MO-8 le prévoit, avec ses 14 jours) ; la **production** dépend d'un avis de Google qu'on ne peut pas connaître d'avance. On ne bâtit rien qui ne servirait qu'en production.
+- **Les catégories** (_Set up your project_, _Android for Cars overview_, _Car app quality_) : `NAVIGATION`, `POI`, `IOT`, `WEATHER`, `MESSAGING`, `CALLING` dans le manifeste d'une app de la Car App Library ; le média, par sa propre API, et par modèles seulement en accès anticipé ; les jeux et la vidéo, voiture à l'arrêt. **Aucune catégorie d'assistant, de robot ou de conversation à la voix.**
+- **La règle de qualité** : PC-1 refuse les fonctions hors des types d'apps prévus pour la voiture ; MF-5 veut une messagerie « de pair à pair », pas un service de notifications. La seule mise à jour récente relevée (mai 2026) touche VC-1 : les apps de média et de navigation doivent prendre les commandes vocales de Gemini et de Google Assistant. **Rien en novembre 2026** sur les agents d'IA.
+- **Ce qu'on sait des autres** **[tiers]** : en 2026, Google tient une liste des catégories et les chatbots n'y sont pas ; Gemini y est, comme assistant du système ; ChatGPT est venu sur CarPlay, pas sur Android Auto ; Google n'a rien annoncé.
+- **La revue** (_Distribute to cars_) : aucune sur le test interne ; **non bloquante sur le test fermé** (la soumission passe, on dit seulement ce qui n'est pas conforme) ; bloquante en test ouvert et en production.
 
-## 2. CarPlay
+### 2.5 Le meilleur repli
 
-### 2.1 Les catégories et l'autorisation
+1. **Recommandé** : **la messagerie, une conversation par agent et une pour l'Overseer**. À modèles pour le test fermé (la liste à l'écran) ; par notifications partout (la base, le repli en production). Google lit et dicte, avec sa voix. Ce que l'utilisateur entend d'un agent est le même passage pour l'oreille que sous CarPlay (§ 6.1), et ses réponses partent comme des messages dictés en voiture (§ 7).
+2. **Écarté pour le produit** : une app de messagerie qui mènerait la voix d'Escouade par `CarAudioRecord` et sa propre synthèse. Hors de ce que la catégorie fait (PC-1), elle ne passerait pas la production. Un essai au DHU peut dire si l'hôte la laisse faire, **pour savoir, pas pour livrer**.
+3. **Pour mémoire** : un « bulletin » joué comme un média (les nouvelles de l'Overseer lues avec la voix d'Escouade), à côté de la messagerie. Ce n'est pas une conversation, et le média attend sa propre revue **[à vérifier]**.
+4. **Android Automotive OS** (le système intégré à la voiture) : hors de la 2.4, comme dans ESC-696 (C7).
 
-D'après _CarPlay Developer Guide_ (édition d'octobre 2026, PDF sur developer.apple.com), _Requesting CarPlay entitlements_ et la page CarPlay d'Apple (lus le 2026-11-27) :
+## 3. CarPlay
 
-- **Toute app CarPlay demande une autorisation (entitlement) propre à sa catégorie**, et **une seule catégorie par app** (sauf la recharge et le carburant, cumulables).
-- **La communication** : `com.apple.developer.carplay-communication` (depuis iOS 14 ; elle remplace les anciennes `carplay-messaging` et `carplay-calling`, à ajouter seulement pour iOS 13). « Les apps de communication doivent offrir de la messagerie courte, de l'appel en VoIP, ou les deux. » Elles passent par **SiriKit** (et CallKit pour les appels).
-- **La conversation à la voix** : `com.apple.developer.carplay-voice-based-conversation`, **nouvelle depuis iOS 26.4** (février 2026) : « une modalité principale qui est la voix dès le lancement », puis répondre aux questions et aux demandes et agir ; une session audio active **seulement pendant que la voix sert** ; le modèle `CPVoiceControlTemplate` (réservé à la navigation et à cette catégorie) ; trois écrans de modèle au plus, la racine comprise. ChatGPT y est entré en avril 2026 **[tiers]**. Le nombre de boutons d'action du modèle (deux ou quatre) diffère selon les sources **[à vérifier]**.
-- **La demande** : par la page « CarPlay › Contact Us » d'Apple, en acceptant le _CarPlay Entitlement Addendum_ ; Apple juge sur des critères qu'elle ne publie pas en entier, et, si la demande y répond, **ajoute l'autorisation au compte de développeur** (« managed capabilities ») ; on l'ajoute alors à l'App ID, et on régénère le profil d'approvisionnement.
-- **Les délais** : **aucun délai officiel**. Les forums **[tiers]** : de l'ordre de 4 semaines pour certains, des mois sans réponse pour d'autres, une demande d'octobre 2026 encore en attente après 15 jours ; Apple ne notifie pas toujours un refus ; certains redéposent après 2 ou 3 semaines avec une autre justification.
+### 3.1 La conversation à la voix
 
-### 2.2 SiriKit : envoyer, chercher, lire
+D'après le _CarPlay Developer Guide_ (édition d'octobre 2026, developer.apple.com), la page de l'autorisation `com.apple.developer.carplay-voice-based-conversation` et _Requesting CarPlay entitlements_ (lus le 2026-11-27) :
 
-- **Ce qu'Apple demande à une app de messagerie** (guide de programmation CarPlay, édition archivée, et _SiriKit › Messaging_) : trois intentions, **`INSendMessageIntent`** (envoyer), **`INSearchForMessagesIntent`** (chercher et lire les messages reçus) et, d'après les forums, **`INSetMessageAttributeIntent`** (marquer comme lu) **[à vérifier sur le guide d'octobre 2026]**. Toute interaction vocale passe par SiriKit ; une intention que l'app ne prend pas reçoit de Siri « pas disponible en voiture ».
-- **L'extension d'intentions** (Intents Extension) les traite **sans lancer l'app** : c'est elle qui ira chercher les messages du chef, et qui enverra la réponse.
-- **L'annonce des notifications par Siri** : les **notifications de communication** (_Implementing communication notifications_, et la session WWDC21 _Send communication and Time Sensitive notifications_) : l'extension de service de notification (celle de MO-6) crée une `INSendMessageIntent` entrante, la **donne** (donate) au système et en met à jour la notification ; `NSUserActivityTypes` doit contenir `INSendMessageIntent`. Siri peut alors annoncer la notification dans CarPlay (réglage de l'utilisateur : Siri › Annoncer les notifications) et proposer d'y répondre. Un fil des forums **[tiers]** dit que le don seul n'a pas suffi à faire lire les messages dans CarPlay **[à vérifier au simulateur et en voiture]**.
-- **Ce qu'on ne fait pas** : afficher le texte des messages sur l'écran de la voiture (une source tierce dit que c'est interdit aux apps de communication **[à vérifier]** ; on ne le voulait pas de toute façon).
+- **Ce qu'elle est** : nouvelle depuis iOS 26.4 ; « une modalité principale qui est la voix dès le lancement », puis répondre aux questions et aux demandes et agir. Celle de ChatGPT (avril 2026), Claude et Gemini **[tiers]**.
+- **Ce qu'Apple demande** :
+  - l'écran de la voix (`CPVoiceControlTemplate`, réservé à la navigation et à cette catégorie) affiché **pendant que la voix sert** ;
+  - **ni texte ni image dans les réponses** (« should not show text or imagery in query responses ») **[tiers pour la citation exacte, à vérifier dans le guide]** ;
+  - une session audio tenue **seulement pendant que la voix sert**, pour ne pas couper la musique ou la radio au repos ;
+  - **trois écrans de modèle au plus, la racine comprise** ;
+  - les modèles permis : feuille d'actions, alerte, grille, **liste**, barre d'onglets, information, point d'intérêt et **contrôle vocal** ;
+  - les boutons d'action et de la barre : iOS 26.4 et Xcode 26.4, deux boutons d'action au plus d'après des tiers **[à vérifier]** ;
+  - aucune commande de la voiture ni de l'iPhone.
+- **Pas de mot d'éveil** : l'utilisateur touche l'icône de l'app sur l'écran de la voiture ; « Dis Siri » ne la lance pas **[tiers]**. Un ingénieur d'Apple dit sur les forums que Siri et App Intents donnent l'autre chemin, et la catégorie celui des modèles **[tiers, forums d'Apple]**.
+- **L'autorisation** : sur demande à Apple (CarPlay › Contact Us, le _CarPlay Entitlement Addendum_), ajoutée au compte de développeur ; **une seule catégorie par app**. Aucun délai officiel : de quelques semaines à des mois d'après les forums **[tiers]**.
 
-### 2.3 Les modèles de CarPlay pour une app de communication
+### 3.2 La liste des agents, puis la voix
 
-Une app de communication peut montrer une liste de conversations (`CPListTemplate`, ses lignes `CPMessageListItem`, dont le toucher ouvre Siri sur la conversation) et des onglets ; **jamais le texte** d'un message. Pour nous : une seule ligne (« Escouade, le chef d'escouade », le nombre de non lus), et un toucher qui demande à Siri de lire. C'est un confort ; l'essentiel passe par Siri, app fermée.
+- **La racine** : un `CPListTemplate` (une ligne pour l'Overseer, puis une par agent, § 5.1). **Une ligne n'a qu'un nom, un projet et un état** (« attend ta réponse », « travaille », « fini il y a 4 min ») : aucun texte de message.
+- **Toucher une ligne** pousse l'écran de la voix de cet agent : **deux écrans sur trois**. Le troisième reste libre (une alerte : « pas de réseau »).
+- **Plusieurs agents, donc plusieurs conversations** : la liste est un modèle permis, et rien de ce qu'on a lu ne limite la catégorie à une seule conversation. Mais aucune page ne le dit en clair, et un fil des forums demande sans réponse comment montrer une conversation en cours **[à vérifier : poser la question dans la demande d'autorisation]**. Une seule session de voix à la fois : revenir à la liste ferme la précédente.
+- **L'écran de la voix** : ses états (« Je t'écoute », « Il réfléchit », « Il te parle »), le nom de l'agent en titre, deux boutons (« Parler » ou « Arrêter », « Retour à la liste »).
 
-### 2.4 Ce qu'Apple accepte, et laquelle prendre
+### 3.3 La reconnaissance et la synthèse sont faites par l'app
 
-- **La communication** colle à la demande telle qu'elle est faite : le chef écrit, Siri **annonce** et lit, l'utilisateur dicte sa réponse, **app fermée**, comme sous Android Auto, avec le même cœur. Le doute : Apple pourrait juger qu'une conversation avec un agent d'IA n'est pas de la « messagerie » et la renvoyer vers la catégorie de la voix.
-- **La conversation à la voix** est faite pour les agents d'IA, donc l'autorisation la plus probable ; mais elle ne vit **que l'app ouverte** sur l'écran de la voiture (pas d'annonce spontanée d'une nouvelle du chef quand on ne l'a pas ouverte), et l'app y fait elle-même la reconnaissance et la synthèse de la voix (`SFSpeechRecognizer` sur l'appareil, `AVSpeechSynthesizer`), en natif.
-- **Recommandé (C4)** : demander **la communication** d'abord (un seul modèle pour les deux systèmes, l'annonce spontanée, app fermée) ; si Apple la refuse ou ne répond pas en six semaines, demander la conversation à la voix (CAR-4 en a deux variantes, § 8).
+La catégorie ne fournit **ni reconnaissance ni synthèse** : l'app ouvre sa session audio (`AVAudioSession`), capte le micro et joue sa voix. Elle peut le faire elle-même sur l'iPhone (`SFSpeechRecognizer` sur l'appareil, `AVSpeechSynthesizer`), ou **envoyer le son à un service et jouer ce qu'il rend** : c'est ce qui laisse parler la voix d'Escouade (§ 4). Des forums **[tiers]** disent que certaines voitures ne jouent pas un `AVSpeechUtterance` et que le média reprend mal après une capture : **[à vérifier en voiture]**.
 
-## 3. Le mode overseer en voiture
+### 3.4 La recommandation de C4, revue
 
-### 3.1 Ce que la voiture expose
+- **ESC-696 recommandait la communication** (SiriKit : Siri lit et dicte, annonce les messages app fermée), la voix en recours. **La direction de l'utilisateur la retourne** : la communication ne laisse ni la voix d'Escouade (Siri lit et dicte), ni une liste à soi au-delà des lignes de messages (`CPMessageListItem`).
+- **Recommandé (C4)** : **la conversation à la voix**, seule (une catégorie par app). Elle est faite pour les agents d'IA, donc la plus probable à obtenir. Elle porte la liste des agents puis la voix d'Escouade, et n'attend pas MO-6 : sans notification, elle marche app ouverte sur l'écran de la voiture.
+- **Ce qu'on perd** : l'annonce spontanée app fermée. Hors de l'app, le téléphone garde les notifications ordinaires de M5, sans texte. Dans l'app ouverte, une nouvelle peut être dite dans la session de voix en cours **[à vérifier : ouvrir la session audio pour une nouvelle, sans que l'utilisateur ait parlé]**.
 
-- **Recommandé (C2) : une seule conversation, celle du chef**, qui dit le reste. Il annonce, à sa façon, les agents arrêtés (« tests-e2e attend une autorisation sur Atlas : je te la garde pour le téléphone »), les nouvelles (« ESC-31 est fini, la CI est verte ») et la boîte « À toi » résumée (« trois choses t'attendent : deux choix de design et un feu vert »).
-- **Pas les agents un par un** : leurs questions demandent souvent de lire du code ou une commande, et une conversation par agent dans la voiture inviterait à répondre de la voix à une autorisation. **Pas la boîte en détail** : ses demandes ont des rendus, des PDF, des commandes.
-- **Les projets privés** restent hors de la vue du chef (ESC-140), donc hors de la voiture.
-- **Les stratégies d'un espace** valent : `servers.aggregateView` à `false` ne laisse au chef que des nombres pour cet espace ; `servers.contentlessNotifications` y **éteint le mode voiture** (§ 4.1) ; une nouvelle stratégie `servers.carMode` permet à un espace de travail de l'interdire (C5).
+## 4. La voix d'Escouade en voiture
 
-### 3.2 Ce qui est lu
+### 4.1 Où se font la reconnaissance et la synthèse
 
-Seulement **les messages du chef écrits pour la voiture** (§ 3.4), jamais ses messages d'avant la projection, jamais le texte d'une commande, d'une demande de la boîte, d'un message d'agent, d'un chemin ou d'un nom de branche : le chef les résume. Une file de messages non lus par conversation ; Android Auto et Siri lisent, l'utilisateur dit « lire » ou « répondre ».
+| Où                                 | Ce que c'est                                                                                                                                                    | Pour                                                                                                         | Contre                                                                                                                                                                |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **V1 · par le cœur** (recommandé)  | Le téléphone capte et joue ; le son passe par le tunnel ; le cœur entend (Whisper ou le service réglé) et parle (Piper ou la voix réglée), avec Réglages › Voix | La voix d'Escouade, celle du poste ; les clés sur le cœur ; un seul réglage ; la même voix pour chaque agent | Le son quitte le téléphone (M9, § 4.4) ; il faut le réseau ; il faut une voix d'Escouade sans fenêtre (CAR-3) ; sur un serveur, la clé de la voix doit y être (§ 4.2) |
+| **V2 · sur le téléphone**          | La reconnaissance et la synthèse de l'iPhone, sur l'appareil                                                                                                    | Aucun son ne part ; tient sans réseau pour entendre ; aucune clé                                             | Pas la voix d'Escouade ; une seule voix système ; mettre les clés des fournisseurs sur le téléphone est **exclu**                                                     |
+| **V3 · les deux** (le repli de V1) | Entendre sur le téléphone (le texte monte, M9 tenu), parler par le cœur (le son de la voix d'Escouade descend)                                                  | M9 tenu ; la voix d'Escouade pour parler ; moins de données montantes                                        | Pas Whisper ni Scribe pour entendre ; la reconnaissance de l'iPhone, de qualité variable en voiture                                                                   |
 
-### 3.3 Comment le cœur sait que l'utilisateur conduit
+**Recommandé (C9)** : **V1**, qui suit les réglages d'Escouade comme la conversation vocale du poste ; **V3 en repli automatique**, quand le cœur n'entend plus (le tunnel tombe, le fournisseur refuse) ; la synthèse du téléphone (`AVSpeechSynthesizer`) pour les seules phrases de service (« pas de réseau, je réessaie »). Sous Android Auto, aucune des trois : c'est l'assistant de Google (§ 2.5).
 
-- **Sous Android** : `androidx.car.app.connection.CarConnection` (_Connection API_, référence de `CarConnection`, lues le 2026-11-27) : `getType()` rend un `LiveData` de `CONNECTION_TYPE_NOT_CONNECTED` (0), `CONNECTION_TYPE_NATIVE` (1, Android Automotive OS) ou `CONNECTION_TYPE_PROJECTION` (2, Android Auto). Avec une cible Android 14 ou plus, la bibliothèque doit être 1.3.0-beta01 ou plus récente. Le natif l'observe tant que le process vit, et l'interroge à la réception d'un push (le process peut avoir été tué) **[à vérifier : l'interrogation ponctuelle depuis un `FirebaseMessagingService`]**.
-- **Sous iOS** : avec la communication, la sortie audio de la voiture (`AVAudioSession.Port.carAudio` dans la route courante) et, quand l'app est ouverte sur CarPlay, la scène (`CPTemplateApplicationScene`, connectée et déconnectée) ; avec la conversation à la voix, la scène seule (l'app n'y vit qu'ouverte).
-- **Le téléphone le dit au cœur** par une commande servie nouvelle, `device_car_state` (`driving: true|false`), à chaque changement et toutes les 10 minutes pendant la projection ; **l'état s'éteint seul au bout de 15 minutes** sans nouvelle (un téléphone tué, une batterie vide ne laissent pas le chef « en voiture »). Le cœur le garde **en mémoire seulement**, par appareil.
+### 4.2 Les clés des fournisseurs, sur le cœur
 
-### 3.4 Comment le chef écrit pour l'oreille
+- **Un poste** : la clé du service est déjà au trousseau du poste ; le cœur du poste s'en sert pour le téléphone.
+- **Un serveur** : aujourd'hui, la clé d'une voix reste au trousseau du poste client, et le serveur n'a pas de voix. Pour la voiture, **la clé du service doit être posée sur le serveur** (son magasin de secrets en fichier, comme les autres clés d'un serveur), par un réglage neuf de l'espace : « La voix en voiture, sur Travail », qui dit « Gardée dans un fichier sur Travail ». Ou bien Whisper et Piper sur le serveur, sans clé (un VPS sans carte graphique : Whisper base de l'ordre de la seconde par phrase **[à mesurer]**).
+- **Jamais sur le téléphone**, jamais dans un réveil ni dans le journal. Le téléphone ne voit que du son et du texte.
 
-- **Le cœur prévient le chef** : à `driving: true`, un événement dans sa session (« l'utilisateur conduit, par tel téléphone ; écris pour l'oreille ») ; à `false`, le retour à l'écrit.
-- **Sa consigne en voiture** : une à trois phrases ; le plus important d'abord ; ni tableau, ni code, ni chemin, ni lien, ni liste de plus de trois éléments ; les nombres et les clés de tickets dits simplement (« le ticket sept cent douze ») ; une seule question à la fois, fermée si possible ; « je te le garde pour le téléphone » pour tout ce qui demande à voir.
-- **Une garde du cœur**, parce qu'une consigne ne suffit jamais : `ear_text()` retire du message envoyé à la voiture les blocs de code, les tableaux et le Markdown, remplace un bloc retiré par « (du détail, sur ton téléphone) », et coupe au-delà de 600 caractères. Le message entier reste dans la conversation du chef, sur le poste et le téléphone.
+### 4.3 La latence, le réseau, l'interruption, le bouton, le coût
 
-### 3.5 Les réponses dictées
+- **Le tour** (V1, de l'ordre de **[à mesurer sur 4G]**) : la fin de la phrase (un bouton : tout de suite ; le silence : le « Délai avant l'envoi », 1,2 s par défaut) ; le son en Opus par le tunnel (environ 3 ko/s, contre 32 ko/s en PCM 16 kHz ; un aller-retour de 4G, de l'ordre de 50 à 150 ms) ; le texte définitif (en direct chez ElevenLabs, Deepgram, Mistral ou OpenAI : quelques centaines de ms après la fin ; Whisper base sur le poste : de l'ordre de la seconde) ; **le tour de l'agent, qui domine** (des secondes à des minutes) ; le premier son de la synthèse (Flash v2.5 d'ElevenLabs et Piper : en dessous de la seconde **[à mesurer]**). La voix ajoute de l'ordre d'une à deux secondes à ce que met l'agent.
+- **Un tour long** : la voix dit tout de suite « C'est parti, je te le dis quand c'est fini », libère la session audio (CarPlay le veut), et dit la réponse à la fin du tour si l'écran de la voix est encore ouvert ; sinon elle attend dans la liste (« fini il y a 2 min »).
+- **Les zones sans couverture** : la phrase captée est gardée **en mémoire**, jamais sur le disque, et renvoyée au retour du tunnel (deux minutes au plus, puis « pas envoyé, redis-le ») ; ce que le cœur avait à dire attend dans la conversation ; une alerte « Pas de réseau » est le troisième écran permis.
+- **Parler pendant que la voix parle** : le barge-in du poste (l'écho appris sur ses haut-parleurs) ne vaut pas pour une voiture. Recommandé : la **suppression de l'écho du système** (le mode `voiceChat` de la session audio d'iOS) et l'interruption **par le bouton « Parler »** de l'écran ; l'interruption par la voix seulement si l'essai en voiture la montre fiable **[à vérifier en voiture]**.
+- **Le bouton de la voix au volant** appartient à Siri (et à l'assistant de Google sous Android Auto) : il ne vient pas à l'app **[à vérifier]**. D'où, sous CarPlay, « Parler » à l'écran et l'écoute qui reprend seule après chaque réponse.
+- **Le coût et le quota** : la minute de transcription et les caractères de synthèse au tarif du fournisseur réglé (la minute en direct coûte de l'ordre de 1,8 fois plus chez ElevenLabs et Deepgram, d'après Réglages › Voix) ; Whisper et Piper ne coûtent rien. Chaque phrase est un tour d'agent, sur le quota de son compte : la voiture invite à des tours courts et nombreux. Le passage pour l'oreille ne demande aucun appel en plus (§ 6.1).
 
-- La voiture dicte (Google Assistant ou Gemini, Siri), relit et envoie ; l'app reçoit **un texte**, jamais l'audio.
-- Le natif l'envoie au chef par `overseer_send`, avec **`origin: "car"`** (§ 4.3). Le chef montre, comme toujours, le message « tel qu'il l'a reçu », marqué « dicté en voiture », puis ce qu'il fait, avec « Annuler ».
-- **En voiture, le chef redit ce qu'il a compris avant d'agir** quand l'action n'est pas annulable, et la fait dans le même tour ; pour une action annulable, il la fait et le dit (« j'ai lancé ESC-712, dis "annule" pour revenir »).
+### 4.4 Le conflit avec M9
 
-### 3.6 L'app fermée
+M9 (tranché le 2026-11-20, `MOBILE.md`) : « la dictée du système, sur l'appareil ; **l'audio ne part jamais au cœur** ». V1 le contredit. Les options :
 
-- **Sous Android** : le push à haute priorité de MO-6 réveille le `FirebaseMessagingService` même app tuée (pas arrêtée de force) ; la réponse et « marquer comme lu » arrivent à un `BroadcastReceiver`. La WebView ne démarre jamais.
-- **Sous iOS, avec la communication** : l'extension de service de notification (MO-6) et l'extension d'intentions tournent sans l'app.
-- **Sous iOS, avec la conversation à la voix** : CarPlay lance l'app (en arrière-plan sur le téléphone, la scène sur la voiture) quand l'utilisateur la touche sur l'écran de la voiture ; fermée, elle ne dit rien : le chef passe alors par les notifications ordinaires (M5), sans texte.
+1. **Recommandé (C10)** : **une exception écrite à M9, pour la seule voix de la voiture**. Allumée avec le mode voiture de l'espace (§ 7.4), éteinte par défaut ; le son ne part que pendant que l'utilisateur parle (l'écran de la voix ouvert, son état « Je t'écoute »), par le tunnel chiffré ; le cœur ne le garde jamais (ni disque, ni journal), le transcrit ou le passe au fournisseur réglé, comme sur le poste. **La dictée de l'app reste M9.**
+2. **M9 tenu** : V3 seulement (entendre sur le téléphone, parler par le cœur). Pas de Whisper ni de Scribe en voiture.
+3. **M9 révisé partout** : la dictée de l'app passe aussi par la voix d'Escouade. Hors de cette étude.
 
-## 4. La sécurité, qui prime
+**Ce que l'utilisateur doit savoir**, dit à l'activation du mode voiture : sa voix (et celle des passagers) part de son téléphone **vers son cœur** (son poste, ou son serveur), puis, s'il a réglé un service en ligne, **vers ce fournisseur, avec sa clé**, comme quand il parle à son poste ; elle n'est gardée nulle part par Escouade ; sous Android Auto, c'est Google qui entend et lit, pas Escouade.
 
-### 4.1 Le conflit avec M5, et les options
+## 5. La liste et la conversation
 
-M5 dit que **le texte d'un message ne part jamais en notification**, même chiffré de bout en bout, parce que l'écran verrouillé se lit par-dessus l'épaule. Or Android Auto ne lit **que** ce qui est dans la notification, et Siri n'annonce que ce qui l'est. Les options :
+### 5.1 Ce que montre la liste
 
-1. **Recommandé (C3)** : un **mode voiture**, **éteint par défaut**, à allumer **par espace** dans les réglages de l'app (« Lire les messages du chef en voiture »), avec ce qu'il implique dit en clair (le texte sera lu à voix haute, donc entendu par les passagers, et passera par l'assistant du système, Google ou Apple, qui le lit et dicte la réponse). Puis :
-   - **le push ne change pas** : toujours le réveil scellé de M5, **sans le texte** ;
-   - **seulement pendant la projection**, à la réception, le natif **va chercher** le message du chef par le tunnel (`overseer_car_feed`, § 5.1), et pose la notification de messagerie avec le texte ;
-   - cette notification est **masquée sur l'écran verrouillé** du téléphone (`VISIBILITY_PRIVATE`, avec une version publique sans texte, « Le chef t'a écrit ») **[à vérifier au DHU : ce qu'Android Auto montre d'une notification privée]** ;
-   - **à la fin de la projection**, le natif retire les notifications de voiture et n'en laisse qu'une, sans texte ;
-   - **jamais sous `servers.contentlessNotifications`** : le mode voiture n'est pas proposé pour cet espace, et le cœur refuse `overseer_car_feed` à un appareil de cet espace.
-2. **Le texte scellé dans le push**, quand le cœur sait que le téléphone est en voiture : plus rapide (pas de tunnel à monter), mais le texte « part » en notification, à rebours de M5 même si le relais ne le lit pas, et le cœur peut se tromper d'état. **Écarté.**
-3. **Aucun texte** (« Le chef a deux nouvelles ; regarde ton téléphone à l'arrêt ») : fidèle à M5, mais inutile en voiture. **Écarté.**
+- **C2 est tranché par l'utilisateur** (2026-11-27) : la liste des agents et l'Overseer.
+- **Recommandé (dans C2)** : **l'Overseer en tête** (s'il est allumé), puis les agents **qui t'attendent** (une autorisation, une question, un plan), puis ceux **qui travaillent**, puis ceux **finis depuis moins de 24 h** ; 12 lignes au plus (la limite d'une liste varie selon la voiture **[à vérifier]**). Une ligne : le nom de l'agent, son projet, son état.
+- **Les projets privés** : **hors de la voiture** par défaut (C11), comme ils sont hors de la vue du chef (ESC-140) : leurs noms se disent devant les passagers.
+- **Les stratégies d'un espace** : `servers.aggregateView` à `false` ne montre de cet espace que des nombres (« 3 agents sur Travail ») ; `servers.contentlessNotifications` y éteint le mode voiture ; `voice.dictation` coupée y éteint la voix en voiture, `voice.onlineAllowed` y ramène tout au local ; la stratégie neuve `servers.carMode` permet à un espace de travail d'interdire la voiture (C5).
 
-Sous iOS, la même règle : l'extension de service de notification ne met le texte que si le mode voiture est allumé pour l'espace et que la route audio est celle de la voiture ; l'extension d'intentions va chercher les messages par le tunnel quand Siri le demande. Avec la conversation à la voix, rien ne passe par les notifications : le texte vient par le tunnel, l'app ouverte.
+### 5.2 La conversation avec un agent
 
-### 4.2 Aucun feu vert depuis la voiture
+- **Ce qu'on lui dit** part comme un message de l'utilisateur, marqué « dicté en voiture » (`origin: car`, § 7.2).
+- **Ce qu'il répond** est dit (§ 6.1) ; la réponse entière reste dans sa conversation, sur le poste et le téléphone.
+- **Ses questions** (celles qui ne font pas agir) sont posées une à une, comme en conversation vocale ; la réponse dite y répond. **Ses autorisations ne se donnent pas à la voix** (§ 7.1).
+- **L'Overseer** est une conversation comme les autres, la sienne : il résume, lance (C8), dit ce qui attend.
 
-- **La règle** : rien de ce que M3 met sous le verrou du téléphone ne part d'un message dicté en voiture : **publier, signer, supprimer, autoriser une commande, « Toujours autoriser », approuver un plan, « oui » à un feu vert (`gate`), valider un ticket (un merge), lancer un ticket ou un agent**. Ce qui ne demande pas le verrou reste permis : refuser, répondre à une question qui ne fait pas agir, envoyer un message à un agent, « plus tard », renvoyer un ticket avec un mot, demander des nouvelles (C1 tranche si « lancer » en est, C8).
-- **Tenue par le cœur** : chaque tour du chef porte l'origine du message qui l'a déclenché ; si c'est `car`, le cœur **refuse** les outils de feu vert à ce tour (la même liste, du côté du serveur MCP, comme les droits du chef sont déjà tenus par le cœur, `OVERSEER.md` « Son autorité ») et rend au chef : « depuis la voiture : déposé dans À toi ». Le chef **crée alors la demande** dans la boîte (un `confirm` à `gate`), que l'utilisateur règle sur le téléphone, à l'arrêt, sous verrou.
-- **Les consignes durables aussi** : « tu peux merger seul », dit en voiture, n'ajoute **aucune consigne** (ce serait un feu vert pour plus tard) ; le chef la propose dans « À toi ». Retirer une consigne (« arrête de merger seul ») reste permis : ça ne fait que retirer un droit.
-- **Le chef ne répond pas non plus à la place de l'utilisateur sur la foi d'un message dicté** : « dis oui à tests-e2e » est un feu vert, et va dans la boîte.
+## 6. Ce qui est dit d'un tour d'agent
 
-### 4.3 Le message dicté est marqué
+### 6.1 Qui fait le résumé
 
-- `overseer_send` gagne un champ `origin` (`typed`, `dictated`, `car`), posé **par le natif**, jamais par le texte. Le cœur le garde avec le message, l'affiche (« dicté en voiture ») et le passe au chef.
-- **Le chef ne le prend jamais pour un feu vert** (§ 4.2), même s'il dit « je confirme », « vas-y, publie » ou « c'est bien moi ».
-- Une réponse à une demande de la boîte ne se donne pas depuis la voiture : la voiture n'en montre aucune (§ 3.1).
+La sortie d'un agent a du code, des chemins, des commandes. Les options :
 
-### 4.4 Les passagers, la dictée, les clés
+1. **Recommandé (C12) : l'agent lui-même, prévenu**. La conversation vocale l'a déjà : la consigne `<escouade-voice>` lui fait finir sa réponse par un passage `<spoken>` de deux ou trois phrases, sans code, chemin ni liste. En voiture, la consigne dit en plus « l'utilisateur conduit : le plus important d'abord, une seule question, fermée si possible ; ce qui demande à voir, dis "je te le garde pour le téléphone" ». **Coût : quelques dizaines de tokens par message**, aucun appel en plus.
+2. **Un modèle léger** (Haiku) résume chaque tour : un appel de plus, du quota, une à trois secondes.
+3. **Le cœur seul** : `ear_text()` sur la réponse entière ; souvent illisible.
 
-- **Les passagers** : tout ce qui est lu est entendu ; n'importe qui dans la voiture peut dicter une réponse, sans déverrouiller le téléphone. D'où le mode éteint par défaut, la lecture limitée aux messages du chef écrits pour l'oreille, et aucun feu vert.
-- **Les erreurs de la dictée** : la voiture relit avant d'envoyer ; le chef montre ce qu'il a reçu et redit son action non annulable (§ 3.5) ; tout ce qui a du poids va dans la boîte.
-- **Les assistants du système** : le texte lu et la réponse dictée passent par Google Assistant ou Gemini, ou Siri ; c'est le prix de la voiture, dit à l'activation (§ 4.1).
-- **Les clés restent dans le natif** : la clé de l'appairage et le jeton de chaque espace, au **Keystore** (une clé AES de l'AndroidKeyStore, sans authentification de l'utilisateur, pour servir écran verrouillé, comme aujourd'hui) et au **Trousseau** (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`) ; sous iOS, un **groupe de trousseau partagé** avec les extensions (notification, intentions), qui en ont besoin sans l'app. Jamais dans la WebView, jamais en clair sur le disque ; le texte reçu en voiture n'est gardé qu'en mémoire et dans la notification, effacée à la fin de la projection.
-- **La révocation** (MO-4) coupe tout : sans jeton, `overseer_car_feed` et `overseer_send` sont refusés.
+### 6.2 La garde du cœur
 
-## 5. La technique
+Une consigne ne suffit jamais. `ear_text()` (ESC-696 § 3.4) s'applique à ce qui est dit : il retire les blocs de code, les tableaux, le Markdown, les chemins et les adresses, remplace un bloc retiré par « du détail, sur ton téléphone », et coupe au-delà de 600 caractères. **Sans passage `<spoken>`** : « C'est fait. La réponse est sur ton téléphone. » ; tour en erreur : « L'agent s'est arrêté sur une erreur. » Sous Android Auto, c'est ce texte qui va dans la conversation de messagerie, que Google lit.
 
-### 5.1 Le chemin d'un message du chef
+## 7. La sécurité, qui prime
 
-1. Le chef écrit ; le cœur voit qu'un appareil de l'utilisateur est en voiture (§ 3.3) et que le mode voiture est allumé pour cet espace.
-2. Le cœur envoie **le réveil scellé de MO-6** (sorte `overseer`, sans texte, M5) par le relais (FCM, APNs) ou par UnifiedPush (MO-9).
-3. Le natif ouvre le réveil par le Rust (`openNotification`, MO-6), vérifie la projection (§ 3.3), **monte le tunnel** (`startTunnel`, le Rust de MO-3) et appelle **`overseer_car_feed`** (nouvelle commande servie : les messages du chef non lus par cet appareil, passés par `ear_text()`, depuis un curseur) ; **sans la WebView**.
-4. Il pose la notification de messagerie (§ 1.1) ou donne l'intention entrante (§ 2.2), puis referme le tunnel.
+### 7.1 Aucun feu vert depuis la voiture
 
-**Le budget** : un `FirebaseMessagingService` a de l'ordre de 10 à 20 secondes, une extension de service de notification 30 secondes et une mémoire bornée (de l'ordre de 24 Mo) **[à vérifier]** ; monter le tunnel (boringtun et smoltcp) et un appel HTTP tiennent dans ce budget sur le banc de MO-3, à mesurer sur un vrai téléphone. Si le délai est dépassé, la notification reste celle de M5, sans texte.
+- **La règle** : rien de ce que M3 met sous le verrou du téléphone ne part de la voiture, ni par le chef ni pour un agent : **autoriser une commande** (y compris le « oui » dit à une autorisation, qui existe en conversation vocale), « Toujours autoriser », **approuver un plan**, « oui » à un feu vert (`gate`), **valider un ticket** (un merge), publier, signer, supprimer, **lancer un ticket ou un agent** (recommandé, C8), ajouter une consigne durable.
+- **Ce qui reste permis** : refuser, répondre à une question qui ne fait pas agir, envoyer un message, « plus tard », demander des nouvelles, retirer une consigne.
+- **Une demande d'autorisation d'un agent**, en voiture : la voix la **dit** sans la lire en entier (« tests-e2e demande à lancer une commande sur Atlas ; je te la garde pour le téléphone ») ; elle **reste** dans « Attend ta réponse » et dans « À toi », pour le téléphone, à l'arrêt, sous verrou. La commande n'est jamais lue.
+- **Un agent qui agit sans demander** (le mode Bypass, ou un mode qui accepte seul) : un message de la voiture **ne lui part pas** ; la voix dit « il agit sans te demander : je te le garde pour le téléphone », et le message attend dans « À toi » (recommandé, dans C8). Sinon un passager ou une dictée fautive lui ferait pousser du code.
 
-### 5.2 La réponse, en arrière-plan
+### 7.2 Tenue par le cœur, avec `origin: car`
 
-Le `BroadcastReceiver` (Android) ou l'extension d'intentions (iOS) reçoit le texte, monte le tunnel, appelle `overseer_send` (`origin: "car"`) puis, sous Android, **remet à jour la notification** (la réponse ajoutée à la conversation, sinon Android Auto garde un indicateur d'envoi). « Marquer comme lu » appelle `overseer_car_seen` (le curseur avance). En cas d'échec (pas de réseau), la réponse est gardée **en mémoire** et réessayée trois fois, puis la notification dit « pas envoyé ».
+- `origin` (`typed`, `dictated`, `car`) est posé **par le natif** (l'app de CarPlay, le receiver d'Android Auto), jamais par le texte, sur `overseer_send` et sur l'envoi d'un message à un agent. Le cœur le garde avec le message et l'affiche (« dicté en voiture »).
+- **Pour le chef** : un tour né d'un message `car` se voit **refuser les outils de feu vert** du serveur MCP (comme ses droits sont déjà tenus par le cœur, `OVERSEER.md`), avec « depuis la voiture : déposé dans À toi » ; il crée alors la demande dans la boîte. `add_directive` refuse un message `car`.
+- **Pour un agent** : la voix en voiture du cœur **n'a pas** la réponse vocale aux autorisations ; le cœur refuse `answer_permission` (allow), `approve_ticket`, `start_ticket` et les feux verts quand l'appel vient d'une session de voiture ; il refuse l'envoi d'un message `car` à un agent qui agit sans demander.
+- **Testé par nextest** : c'est la partie qui protège.
 
-### 5.3 Ce que le plugin natif doit apprendre à faire seul
+### 7.3 Les passagers, la dictée, les clés
 
-`apps/mobile-plugin` sait déjà, sans la WebView : ouvrir une notification scellée (MO-3, MO-6), garder les clés (MO-4), monter un tunnel (MO-3). Il doit apprendre :
+- **Les passagers** entendent tout et peuvent parler : d'où le mode éteint par défaut, ce qui est dit limité au passage pour l'oreille, et aucun feu vert.
+- **Les erreurs de la reconnaissance** : la phrase comprise est redite quand elle fait agir (« je lance ESC-712 ? » sans effet sans un « oui » ; et lancer reste refusé sous C8) ; tout ce qui pèse va dans la boîte.
+- **Les clés** : la clé de l'appairage et le jeton au Keystore et au Trousseau (MO-4), jamais dans la WebView ; les clés des fournisseurs sur le cœur (§ 4.2). Le son et le texte reçus en voiture ne sont gardés qu'en mémoire.
+- **La révocation** (MO-4) coupe tout : sans jeton, le flux de la voix et les commandes de la voiture sont refusés.
 
-- **Android** : observer et interroger `CarConnection` ; un client natif de l'API dans le tunnel (deux commandes : `overseer_car_feed`, `overseer_send`, plus `device_car_state` et `overseer_car_seen`), sans passer par le proxy de la WebView ; le constructeur de la notification `MessagingStyle` (la `Person` du chef, robot ; un raccourci de conversation) ; le `BroadcastReceiver` des réponses et du lu ; le retrait des notifications de voiture à la fin de la projection ; `automotive_app_desc.xml` et la méta-donnée du manifeste ; la dépendance `androidx.car.app:app` (pour `CarConnection` seulement, version 1.7.0 stable).
-- **iOS (communication)** : l'extension d'intentions (les trois intentions) ; la donation dans l'extension de service de notification ; le groupe de trousseau partagé ; la ligne `CPListTemplate` de la scène CarPlay ; les entrées `NSUserActivityTypes` et l'autorisation dans les entitlements.
-- **iOS (conversation à la voix, en recours)** : la scène CarPlay, `CPVoiceControlTemplate`, la reconnaissance sur l'appareil (`requiresOnDeviceRecognition`), la synthèse, la session audio tenue seulement pendant l'échange.
-- **Le Rust** (`crates/escouade-mobile`) : une fonction d'appel de l'API dans le tunnel, exposée par UniFFI, pour que Kotlin et Swift n'aient pas à refaire HTTP par-dessus smoltcp.
-- **Le cœur** : `device_car_state`, `overseer_car_feed`, `overseer_car_seen` servis (portée `phone`, `REMOTE.md` « Les portées des appareils ») ; `origin` sur `overseer_send` ; le refus des feux verts à un tour d'origine `car` ; l'événement « en voiture » du chef ; `ear_text()` ; la stratégie `servers.carMode`. La liste des commandes reste unique (`remoteapi/list.rs`).
+### 7.4 Le mode voiture et M5
 
-### 5.4 Les dépendances
+- **Un mode voiture**, **éteint par défaut**, à allumer **par espace** dans les réglages de l'app, qui dit en clair ce qu'il implique (§ 4.4) : les noms et les passages lus à voix haute, entendus des passagers ; le son vers le cœur et le fournisseur (CarPlay) ; Google qui lit et entend (Android Auto).
+- **Le conflit avec M5, sous Android Auto seulement** (le texte doit être dans la notification ou le modèle pour que Google le lise) : la réponse d'ESC-696 tient (C3). Le push reste sans texte ; **seulement pendant la projection**, le natif va chercher les passages par le tunnel (`car_feed`) et les pose dans la conversation ; la notification est masquée sur l'écran verrouillé (`VISIBILITY_PRIVATE`) et retirée en fin de projection ; jamais sous `servers.contentlessNotifications`.
+- **Sous CarPlay**, rien ne passe par les notifications : le texte et le son viennent par le tunnel, l'app ouverte, et l'écran de la voiture n'en montre rien (Apple l'interdit, et on ne le voulait pas).
 
-- **MO-6 (ESC-572), les notifications** : le relais, le réveil scellé, le `FirebaseMessagingService`, l'extension de service de notification. **Rien de la voiture ne marche sans lui.**
-- **Le tunnel** (MO-2, MO-3, faits) et **l'appairage** (MO-4, fait) : le natif monte le tunnel sans l'app ; les clés au Keystore et au Trousseau.
-- **UnifiedPush** (MO-9, en option) : le même réveil par ntfy ; CAR-5 le branche s'il existe.
+## 8. La technique
+
+### 8.1 Comment le cœur sait que l'utilisateur conduit
+
+- **Android** : `CarConnection.getType()` (`CONNECTION_TYPE_PROJECTION`), comme dans ESC-696.
+- **iOS** : la scène CarPlay (`CPTemplateApplicationScene`), connectée et déconnectée ; l'app n'y vit qu'ouverte.
+- **Le téléphone le dit au cœur** : `device_car_state` (`driving: true|false`) à chaque changement et toutes les 10 minutes ; l'état s'éteint seul après 15 minutes sans nouvelle ; en mémoire seulement.
+
+### 8.2 Le chemin d'une phrase, sous CarPlay
+
+1. L'utilisateur touche un agent ; l'app pousse l'écran de la voix, ouvre la session audio (`playAndRecord`, mode `voiceChat`), monte le tunnel (le Rust de MO-3) et ouvre **un flux de voix** vers le cœur (`car_voice_open`, la conversation nommée ; servi, portée `phone`).
+2. Elle envoie le son en Opus ; le cœur transcrit (Whisper, ou le fournisseur réglé, en direct quand il le permet), envoie le texte à l'agent (`origin: car`, la consigne de la voiture), et rend à l'app l'état (« Il réfléchit »).
+3. À la fin du tour, le cœur prend le passage pour l'oreille (§ 6), le passe par `ear_text()`, le fait dire (Piper ou la voix réglée), et rend le son phrase par phrase par le même flux ; l'app le joue, puis réécoute.
+4. Revenir à la liste, ou une minute sans parler, ferme le flux et rend la session audio.
+
+### 8.3 Le chemin d'un message, sous Android Auto
+
+Celui d'ESC-696 § 5.1 et 5.2, **par conversation** : le réveil scellé de MO-6 ; le natif, pendant la projection, va chercher les passages non lus de chaque conversation (`car_feed`) et pose les notifications `MessagingStyle` (une `Person` par agent, robot) ou met à jour les `ConversationItem` ; la réponse dictée par Google arrive au receiver, qui l'envoie (`origin: car`) ; « marquer comme lu » avance le curseur (`car_seen`).
+
+### 8.4 Ce qu'il faut construire
+
+- **Le cœur** : `origin` sur `overseer_send` et sur l'envoi à un agent ; `device_car_state`, `car_feed`, `car_seen`, `car_voice_open` servis (portée `phone`) ; la consigne de la voiture pour le chef et pour les agents ; `ear_text()` ; les refus du § 7.2 ; `servers.carMode` ; la liste des conversations (§ 5.1). La liste des commandes reste unique (`remoteapi/list.rs`).
+- **La voix sans fenêtre** (le plus gros) : une session de voix du cœur pour un appareil distant, qui prend le son d'un flux au lieu du micro et rend le son au lieu des haut-parleurs ; Whisper, les plugins de voix en ligne et Piper appelés par le cœur sans fenêtre, aussi dans `escouade-server` **[à vérifier : ce que les crates `escouade-voice` et `escouade-voice-local` portent déjà hors de Tauri]** ; le décodage et l'encodage Opus ; les stratégies de la voix ; la clé d'un service sur un serveur (§ 4.2) ; un journal sans texte ni son.
+- **Le Rust du téléphone** (`crates/escouade-mobile`) : l'appel de l'API dans le tunnel et le flux de voix, exposés par UniFFI.
+- **iOS** : la scène CarPlay, `CPListTemplate` et `CPVoiceControlTemplate`, la session audio, la capture et la lecture, le repli V3 (`SFSpeechRecognizer` sur l'appareil) ; l'autorisation dans les entitlements.
+- **Android** : `CarConnection`, les notifications `MessagingStyle` par conversation, le `CarAppService` de messagerie à modèles (`ConversationItem`, Car API 7), le receiver, `automotive_app_desc.xml`.
+
+### 8.5 Les dépendances
+
+- **Le tunnel** (MO-2, MO-3) et **l'appairage** (MO-4) : faits.
+- **MO-6 (ESC-572), les notifications** : **pour Android Auto seulement**. CarPlay n'en a pas besoin.
 - **MO-8, la publication** : le test fermé de Google Play et TestFlight, où la voiture s'essaie.
-- **L'Overseer** (ESC-462, ESC-468) et l'API distante : faits ; `overseer_send` et `overseer_view` sont déjà servis.
+- **MO-9** (UnifiedPush, en option) : le réveil d'Android sans Google ; CAR-6 le branche s'il existe.
+- **L'Overseer** (ESC-462, ESC-468) et l'API distante : faits.
 
-## 6. Les essais
+## 9. Les essais, la publication, le découpage
 
-| Quoi                                                                                                                                                      | Où                                                                                                                                                      | En CI                                                                        |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Le cœur : le refus des feux verts à un tour `car`, les consignes refusées, `ear_text()`, `overseer_car_feed` et ses refus (révocation, `contentlessNotifications`, `servers.carMode`), l'état qui s'éteint seul | nextest                                                                                                                                                 | **Oui** : c'est la partie qui protège, elle est entièrement testable           |
-| Le Rust du téléphone : l'appel de l'API dans le tunnel, contre le pair de test de MO-3                                                                     | nextest de `crates/escouade-mobile`                                                                                                                    | **Oui** (job Linux de la crate)                                               |
-| Android : la notification construite (style, actions, sémantiques, visibilité), le receiver, le retrait en fin de projection                              | tests unitaires Kotlin (Robolectric) **[à vérifier : Robolectric dans le plugin]**                                                                     | **Oui** (job Linux)                                                           |
-| Android Auto de bout en bout : la notification annoncée, lue, la réponse dictée (le DHU accepte un micro ou des commandes), le lu                          | **Desktop Head Unit** (_Test using the Desktop Head Unit_ : Windows, macOS, Linux ; l'émulateur ou un vrai téléphone par USB ou ADB ; ligne de commande) | **Non** au départ : le DHU veut un écran et l'app Android Auto du Play Store sur l'émulateur ; procédure locale écrite, scriptée autant que possible |
-| iOS : l'extension d'intentions et la donation                                                                                                             | tests XCTest                                                                                                                                            | **Oui** (job Mac, sans signer)                                                |
-| CarPlay de bout en bout                                                                                                                                   | **Simulateur CarPlay** (Simulator › I/O › External Displays › CarPlay, ou _CarPlay Simulator_ des Additional Tools for Xcode) ; **demande l'autorisation sur le profil**, d'après les forums **[tiers]** | **Non** : un Mac, l'autorisation d'Apple, et un simulateur que des versions de Xcode ouvrent en noir **[tiers]** |
-| **En voiture**                                                                                                                                            | **L'utilisateur**, avec sa voiture (Android Auto ou CarPlay), l'app du test fermé ou de TestFlight                                                      | Non : un geste de l'utilisateur, déposé dans « À toi » par chaque ticket       |
+### 9.1 Les essais
 
-Apple et Google disent tous deux de ne pas se fier au seul simulateur : l'essai en voiture fait partie du ticket, pas de l'après.
+| Quoi                                                                                                                                                                                       | Où                                                                                                                                        | En CI                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Le cœur : `origin: car`, chaque feu vert refusé (chef et agents), le message refusé à un agent qui agit seul, `ear_text()`, la liste (privés exclus, stratégies), l'état qui s'éteint seul | nextest                                                                                                                                   | **Oui** : c'est ce qui protège                                                                                   |
+| La voix sans fenêtre : un flux de son enregistré (un fichier WAV de test) transcrit par Whisper et par un faux service, la synthèse rendue en Opus, les refus des stratégies               | nextest (un faux service de voix, comme les tests de la voix en plugins)                                                                  | **Oui**                                                                                                          |
+| Le Rust du téléphone : l'appel et le flux dans le tunnel, contre le pair de test de MO-3                                                                                                   | nextest de `crates/escouade-mobile`                                                                                                       | **Oui**                                                                                                          |
+| Android : les notifications et les `ConversationItem` construits, le receiver                                                                                                              | tests Kotlin (Robolectric) **[à vérifier dans le plugin]**                                                                                | **Oui**                                                                                                          |
+| Android Auto de bout en bout : la liste, la lecture, la réponse dictée                                                                                                                     | **Desktop Head Unit** (Windows, macOS, Linux ; l'émulateur ou un téléphone par ADB ; le DHU accepte un micro ou des commandes)            | Non : un écran et l'app Android Auto ; une procédure locale écrite                                               |
+| iOS : la liste, l'écran de la voix, la session audio, le repli V3                                                                                                                          | XCTest ; **le simulateur CarPlay** (Simulator › I/O › External Displays › CarPlay, ou _CarPlay Simulator_ des Additional Tools for Xcode) | XCTest **oui** (job Mac, sans signer) ; le simulateur **non** (il veut l'autorisation sur le profil **[tiers]**) |
+| **En voiture** : la latence sur 4G, une zone sans couverture, l'écho et l'interruption, le bouton du volant                                                                                | **L'utilisateur**, avec sa voiture, l'app du test fermé ou de TestFlight                                                                  | Non : un geste de l'utilisateur, déposé dans « À toi » par chaque ticket                                         |
 
-## 7. La publication
+Apple et Google disent de ne pas se fier au seul simulateur : l'essai en voiture fait partie du ticket.
 
-- **Google Play** (_Distribute to cars_) : dans la Play Console, Paramètres avancés › Facteurs de forme › Ajouter « Android Auto », puis une version avec Android Auto sur une piste de test. **Au test fermé déjà prévu (MO-8)**, la revue ne bloque pas : l'utilisateur s'en sert ; en production, elle bloque, et décide (§ 1.4). Le retirer : retirer Android Auto de toutes les versions actives, puis « Retirer » le facteur de forme.
-- **Apple** : la demande de l'autorisation (§ 2.1), par le compte de développeur de l'utilisateur, avec la description de l'app et de son usage en voiture (le texte, préparé par CAR-6) ; puis l'autorisation ajoutée à l'App ID, le profil régénéré, TestFlight, et **l'App Review**, qui revoit CarPlay avec l'app.
-- **Ce qui attend l'utilisateur** :
-  - ses réponses aux choix C1 à C8 (§ 9), d'une seule réponse s'il les prend tels que recommandés ;
-  - **la demande de l'autorisation CarPlay** à Apple (son compte, l'addendum à accepter) ; à faire **tôt** : c'est le plus long délai, et le seul qu'on ne maîtrise pas ;
-  - **ajouter le facteur de forme Android Auto** dans la Play Console, sur le test fermé ;
-  - **l'essai en voiture**, sous Android Auto et sous CarPlay, d'après les étapes que lui laissera chaque ticket ;
-  - l'option « Sources inconnues » d'Android Auto (paramètres de développeur) pour essayer une version qui ne vient pas du Play Store, s'il le veut avant le test fermé.
-- **Les agents ne créent aucun compte, aucun projet, aucune demande chez Apple ou Google**, ne lisent ni ne copient aucune clé ; ils écrivent le texte des demandes et des fiches.
+### 9.2 La publication
 
-## 8. Le découpage en tickets
+- **Apple** : la demande de l'autorisation de **la conversation à la voix**, par le compte de développeur de l'utilisateur, avec son texte (CAR-7, écrit d'abord : c'est le plus long délai, et le seul qu'on ne maîtrise pas) ; puis l'App ID, le profil, TestFlight, l'App Review.
+- **Google Play** : le facteur de forme Android Auto dans la Play Console, sur le test fermé (la revue n'y bloque pas) ; la production attend que Google ouvre la messagerie à modèles, et reste aux notifications d'ici là.
+- **Les agents ne créent aucun compte, ne déposent aucune demande** chez Apple ou Google, ne lisent ni ne copient aucune clé : ils écrivent les textes.
+
+### 9.3 Le découpage en tickets
 
 Estimations en **heures d'agent** (Claude Code, six agents en parallèle), jamais en jours-homme.
 
-| Ticket                                           | Ce qu'il fait                                                                                                                                                                                                                                                                                                                | Dépend de                                   | Heures |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------ |
-| **CAR-1** · le cœur en voiture                    | `origin` sur `overseer_send` ; `device_car_state` (l'état en mémoire, éteint seul à 15 min) ; `overseer_car_feed` et `overseer_car_seen` servis (portée `phone`) ; `ear_text()` ; l'événement « en voiture » et la consigne du chef ; **le refus des feux verts et des consignes à un tour `car`, la demande déposée dans « À toi »** ; la stratégie `servers.carMode` ; le refus sous `contentlessNotifications` ; nextest ; spec et `REMOTE.md` | les réponses C2, C3, C5, C8                 | 4 h    |
-| **CAR-2** · le Rust du téléphone                  | L'appel de l'API dans le tunnel exposé par UniFFI (`crates/escouade-mobile`), sans la WebView ; ses tests contre le pair de test                                                                                                                                                                                             | —                                           | 2 h    |
-| **CAR-3** · Android Auto                          | `CarConnection` ; la notification `MessagingStyle` (la `Person` du chef, robot, ses actions, `VISIBILITY_PRIVATE`) ; le receiver des réponses et du lu ; le retrait en fin de projection ; `automotive_app_desc.xml` ; le réglage « Lire les messages du chef en voiture » par espace ; Robolectric ; la procédure du DHU ; l'essai en voiture déposé dans « À toi » | **MO-6 (ESC-572)**, CAR-1, CAR-2, C1, C3    | 5 h    |
-| **CAR-4** · CarPlay                               | **Communication** : l'extension d'intentions (les trois intentions), la donation et le texte conditionnel dans l'extension de service de notification, le groupe de trousseau, la ligne `CPListTemplate`, XCTest ; **ou, en recours, conversation à la voix** : la scène, `CPVoiceControlTemplate`, la voix sur l'appareil (+1 h) ; l'essai en voiture déposé dans « À toi » | **MO-6 (ESC-572)**, CAR-1, CAR-2, C4, **l'autorisation d'Apple** pour l'essai | 5 h (6 h) |
-| **CAR-5** · UnifiedPush en voiture (en option)    | Le même chemin depuis le réveil par ntfy                                                                                                                                                                                                                                                                                     | MO-9, CAR-3                                 | 1 h    |
-| **CAR-6** · la publication                        | Le texte de la demande d'autorisation à Apple (à déposer par l'utilisateur), la fiche des stores, la page de confidentialité (ce que lisent les assistants), les notes pour l'App Review et la revue Android Auto ; les gestes de l'utilisateur déposés dans « À toi »                                                          | CAR-3, CAR-4, MO-8                          | 1,5 h  |
+| Ticket                              | Ce qu'il fait                                                                                                                                                                                                                                                                  | Dépend de                                                   | Heures |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | ------ |
+| **CAR-1** · le cœur en voiture      | `origin: car` (chef et agents) ; `device_car_state` ; `car_feed`, `car_seen` ; la liste des conversations (§ 5.1) ; la consigne de la voiture ; `ear_text()` ; **les refus du § 7.2** et la demande déposée dans « À toi » ; `servers.carMode` ; nextest ; spec et `REMOTE.md` | C2, C3, C5, C8, C11, C12                                    | 5 h    |
+| **CAR-2** · le Rust du téléphone    | L'appel de l'API et le flux de voix dans le tunnel, par UniFFI, sans la WebView ; ses tests                                                                                                                                                                                    | —                                                           | 3 h    |
+| **CAR-3** · la voix sans fenêtre    | La session de voix du cœur pour un appareil (`car_voice_open`) : le son d'un flux, Whisper ou le service réglé, Piper ou la voix réglée, Opus ; dans le poste et dans `escouade-server` ; la clé d'un service sur un serveur ; les stratégies ; nextest                        | CAR-1, C9, C10                                              | 6 h    |
+| **CAR-4** · CarPlay                 | La scène ; `CPListTemplate` puis `CPVoiceControlTemplate` ; la session audio (`voiceChat`) tenue pendant l'échange ; le flux vers le cœur ; le repli V3 ; « Pas de réseau » ; XCTest ; l'essai au simulateur et en voiture déposé dans « À toi »                               | CAR-2, CAR-3, C4, **l'autorisation d'Apple** (pour l'essai) | 6 h    |
+| **CAR-5** · Android Auto            | `CarConnection` ; une conversation par agent et pour l'Overseer : les notifications `MessagingStyle` et la messagerie à modèles (`ConversationItem`) ; le receiver ; le mode voiture par espace ; Robolectric ; la procédure du DHU ; l'essai en voiture                       | **MO-6 (ESC-572)**, CAR-1, CAR-2, C3, C6                    | 6 h    |
+| **CAR-6** · UnifiedPush (en option) | Le même chemin depuis le réveil par ntfy                                                                                                                                                                                                                                       | MO-9, CAR-5                                                 | 1 h    |
+| **CAR-7** · la publication          | Le texte de la demande à Apple (d'abord), les fiches des stores, la page de confidentialité (le son vers le cœur et le fournisseur ; Google sous Android Auto), les notes pour les revues ; les gestes de l'utilisateur dans « À toi »                                         | — (le texte) ; CAR-4, CAR-5, MO-8 (le reste)                | 1,5 h  |
 
-- **L'ordre, à six agents** : **CAR-1 et CAR-2 en parallèle** (4 h), qui n'attendent pas MO-6 ; puis, **une fois MO-6 fait**, **CAR-3 et CAR-4 en parallèle** (5 h, 6 h en recours) ; puis **CAR-6** (1,5 h) ; CAR-5 quand MO-9 existe. **Total : environ 17,5 h d'agent** (18,5 h avec CAR-5, une heure de plus avec la voix sous iOS), **de l'ordre de 11 h de bout en bout** (le plus long chemin : CAR-1, CAR-4, CAR-6), sans compter MO-6 ni les délais d'Apple.
-- **Le texte de la demande à Apple peut partir avant tout le reste** : CAR-6 peut l'écrire seul, d'abord (une demi-heure), pour que le délai d'Apple coure pendant CAR-1 à CAR-4 (C4).
-- **Ce qui attend l'utilisateur** : § 7 ; et, comme pour l'app mobile, chaque ticket laisse son essai réel dans « À toi », avec ses étapes.
+- **L'ordre, à six agents** : **CAR-7 (le texte à Apple), CAR-1 et CAR-2 tout de suite**, en parallèle ; puis **CAR-3** ; puis **CAR-4** dès CAR-3 et l'autorisation d'Apple ; **CAR-5** dès MO-6 et CAR-1, en parallèle de CAR-3 et CAR-4 ; CAR-6 quand MO-9 existe ; la fin de CAR-7 après eux.
+- **Total : environ 27,5 h d'agent** (28,5 h avec CAR-6), **de l'ordre de 18 h de bout en bout** (le plus long chemin : CAR-1, CAR-3, CAR-4, CAR-7), sans compter MO-6 ni les délais d'Apple et de Google.
+- **ESC-696 comptait 17,5 h** : la voix sans fenêtre (CAR-3, 6 h), la liste des agents (CAR-1 et CAR-5 plus lourds) et le flux de voix (CAR-2) font la différence ; l'extension d'intentions de SiriKit sort.
+- **Ce qui attend l'utilisateur** : ses réponses (§ 10) ; la demande de l'autorisation CarPlay à Apple ; le facteur de forme Android Auto dans la Play Console ; sur un serveur, la clé d'une voix en ligne à y poser s'il en veut une ; l'essai en voiture, sous CarPlay et sous Android Auto.
 
-## 9. Les choix
+## 10. Les choix
 
-Ils restent à l'utilisateur, déposés en une demande dans « À toi ». Aucune décision n'est écrite avant ses réponses.
+Ils restent à l'utilisateur, déposés en une demande dans « À toi » (a-53), qui **remplace a-52**. Aucune décision n'est écrite avant ses réponses.
 
-1. **C1. Le périmètre et l'ordre** : **Recommandé** : Android Auto et CarPlay dans la 2.4, **Android d'abord** (pas d'autorisation à attendre, le test fermé suffit à l'utilisateur), CarPlay dès que l'autorisation d'Apple arrive. Autres : Android seul ; attendre que Google ouvre la messagerie à modèles à la production. _Débloque_ CAR-1 à CAR-3.
-2. **C2. Ce que la voiture expose** : **Recommandé** : la conversation du chef seule, qui résume les agents arrêtés, les nouvelles et la boîte. Autres : le chef et une conversation par agent ; le chef et la boîte lue demande par demande. _Débloque_ CAR-1.
-3. **C3. Le conflit avec M5** : **Recommandé** : un mode voiture éteint par défaut, par espace ; le push reste sans texte ; le texte va chercher par le tunnel seulement pendant la projection ; masqué sur l'écran verrouillé ; retiré en fin de projection ; jamais sous `contentlessNotifications`. Autres : le texte scellé dans le push quand le cœur sait le téléphone en voiture ; aucun texte. _Débloque_ CAR-1, CAR-3, CAR-4.
-4. **C4. La catégorie de CarPlay** : **Recommandé** : demander **la communication** (SiriKit, l'annonce par Siri, app fermée, le même modèle qu'Android), et la conversation à la voix en recours si Apple refuse ou ne répond pas en six semaines ; la demande déposée au plus tôt, son texte écrit d'abord. Autre : la conversation à la voix d'emblée (plus sûre d'être acceptée, mais app ouverte seulement, sans annonce spontanée). _Débloque_ la demande à Apple et CAR-4.
-5. **C5. Une stratégie pour les espaces de travail** : **Recommandé** : `servers.carMode` (`true` par défaut, forcé à `false` sous `contentlessNotifications`), pour qu'un espace de travail puisse interdire la lecture en voiture. Autre : pas de stratégie, le mode voiture par espace suffit. _Débloque_ CAR-1.
-6. **C6. La messagerie à modèles de la Car App Library** : **Recommandé** : pas dans la 2.4 (bêta, production fermée, rien de plus pour l'oreille) ; à revoir quand Google l'ouvrira. Autre : la faire pour le test fermé (l'historique à l'écran de la voiture). _Débloque_ CAR-3 tel qu'il est écrit.
-7. **C7. Android Automotive OS** : **Recommandé** : hors de la 2.4 (une app dans la voiture, sans WebView, un appairage de plus dans une voiture qu'on prête ; un parc étroit). Autre : un ticket d'étude à part. _Débloque_ : rien, il ferme une porte.
-8. **C8. Ce que la voiture ne peut pas faire** : **Recommandé** : **tout ce que M3 met sous verrou**, lancer un ticket ou un agent compris (une voix non authentifiée ne vaut pas le verrou, et lancer dépense du quota) ; le chef le range dans « À toi ». Autre : la liste minimale du ticket (publier, signer, supprimer, autoriser une commande, valider un ticket qui fusionne), en laissant « lance ESC-712 » permis depuis la voiture. _Débloque_ CAR-1.
+1. **C1. Le périmètre et l'ordre** : **Recommandé** : les deux dans la 2.4 ; la demande à Apple déposée d'abord ; CAR-1 à CAR-3 tout de suite ; **CarPlay dès l'autorisation** (il n'attend pas MO-6, et c'est lui qui porte la voix d'Escouade) ; Android Auto après MO-6. Autres : CarPlay seul ; Android Auto seul (sans la voix d'Escouade). _Débloque_ CAR-1 à CAR-3, CAR-7.
+2. **C2. Ce que la voiture expose** : **tranché par l'utilisateur** (2026-11-27) : la liste des agents et l'Overseer. **Reste à confirmer, recommandé** : l'Overseer en tête, puis les agents qui t'attendent, qui travaillent, finis depuis 24 h ; 12 lignes au plus ; un nom, un projet, un état. _Débloque_ CAR-1.
+3. **C3. Le conflit avec M5, sous Android Auto** : **Recommandé** : la réponse d'ESC-696 (le mode voiture par espace ; le push sans texte ; les passages cherchés par le tunnel pendant la projection seulement, masqués sur l'écran verrouillé, retirés en fin de projection ; jamais sous `contentlessNotifications`). Autres : le texte scellé dans le push ; aucun texte. _Débloque_ CAR-1, CAR-5.
+4. **C4. La catégorie de CarPlay** : **Recommandé (revu)** : **la conversation à la voix**, seule ; la communication abandonnée. Autre : la communication (Siri lit et dicte, annonce app fermée ; ni la voix d'Escouade, ni la liste à soi). _Débloque_ la demande à Apple et CAR-4.
+5. **C5. Une stratégie pour les espaces de travail** : **Recommandé** : `servers.carMode` (vrai par défaut, faux sous `contentlessNotifications`), qui coupe la liste et la voix en voiture. Autre : pas de stratégie. _Débloque_ CAR-1.
+6. **C6. La messagerie à modèles d'Android Auto** : **Recommandé (revu)** : **oui, pour le test fermé** : c'est elle qui montre la liste des agents ; les notifications restent la base et le repli en production. Autre : les notifications seules (seules les conversations qui ont du neuf). _Débloque_ CAR-5.
+7. **C7. Android Automotive OS** : **Recommandé** : hors de la 2.4. Autre : un ticket d'étude à part.
+8. **C8. Ce que la voiture ne peut pas faire** : **Recommandé** : tout ce que M3 met sous verrou, **lancer un ticket ou un agent compris**, **le « oui » dit à une autorisation**, et **aucun message à un agent qui agit sans demander** (gardé pour le téléphone). Autre : la liste minimale (publier, signer, supprimer, autoriser une commande, valider un ticket qui fusionne), « lance ESC-712 » permis. _Débloque_ CAR-1.
+9. **C9. Où se fait la voix** : **Recommandé** : par le cœur, avec Réglages › Voix (V1), clés sur le cœur ; repli sur la reconnaissance de l'iPhone quand le cœur n'entend plus (V3). Autres : tout sur le téléphone (V2, pas la voix d'Escouade) ; V3 toujours. _Débloque_ CAR-3, CAR-4.
+10. **C10. Le conflit avec M9** : **Recommandé** : une exception écrite pour la seule voix de la voiture (mode voiture allumé, le son seulement pendant qu'on parle, par le tunnel, jamais gardé, puis au fournisseur réglé) ; la dictée de l'app reste M9. Autres : M9 tenu (V3 seulement) ; M9 révisé partout. _Débloque_ CAR-3.
+11. **C11. Les projets privés** : **Recommandé** : hors de la voiture. Autre : un réglage par projet privé. _Débloque_ CAR-1.
+12. **C12. Ce qui est dit d'un tour d'agent** : **Recommandé** : l'agent lui-même, prévenu (le passage `<spoken>` et la consigne de la voiture), sous la garde `ear_text()` ; aucun appel de plus. Autres : un modèle léger qui résume chaque tour (du quota, une à trois secondes) ; le cœur seul. _Débloque_ CAR-1, CAR-3.
 
-## 10. Ce qui serait un échec, même si tout marche
+## 11. Ce qui serait un échec, même si tout marche
 
-- Un feu vert parti d'une phrase dite en voiture, par l'utilisateur, un passager ou une dictée fautive.
-- Le texte d'un message du chef sur l'écran verrouillé, ou dans une notification hors de la projection.
-- Une clé de l'appairage hors du Keystore ou du Trousseau, ou dans la WebView.
-- Un chef qui lit en voiture un tableau, un chemin ou une commande.
-- Une version de production refusée par Google ou Apple parce qu'on y a mis ce qu'ils interdisent : la production attend leur avis, le test fermé sert d'abord.
+- Un feu vert parti d'une phrase dite en voiture : une autorisation accordée d'un « oui », un merge, un lancement, une consigne.
+- Une commande d'un agent lue à voix haute, ou un tableau, un chemin, du code.
+- Une clé d'un fournisseur de voix sur le téléphone, ou une clé de l'appairage hors du Keystore ou du Trousseau.
+- Le son de la voiture gardé sur le disque ou dans un journal, du téléphone ou du cœur.
+- Le texte d'un message sur l'écran verrouillé, ou dans une notification hors de la projection.
+- Une version de production refusée par Google ou Apple pour ce qu'ils interdisent : la production attend leur avis.
 
-## 11. Les sources (lues le 2026-11-27)
+## 12. Les sources (lues le 2026-11-27)
 
 **Android (developer.android.com, sauf mention)**
 
-- _Extend messaging notifications to Android Auto_ : https://developer.android.com/training/cars/communication/notification-messaging (et https://developer.android.com/training/cars/messaging)
+- _Extend messaging notifications to Android Auto_ : https://developer.android.com/training/cars/messaging
 - _Build templated messaging experiences for Android Auto_ : https://developer.android.com/training/cars/communication/templated-messaging
 - _Communication apps_ (design) : https://developer.android.com/design/ui/cars/guides/app-types/communications
-- _Car app quality_ : https://developer.android.com/docs/quality-guidelines/car-app-quality
+- _Record from the car microphone_ : https://developer.android.com/training/cars/apps/library/car-microphone ; référence de `CarAudioRecord` : https://developer.android.com/reference/androidx/car/app/media/CarAudioRecord
+- _Communicate with the app by voice_ : https://developer.android.com/design/ui/cars/guides/ux-requirements/communicate-app-by-voice
+- _Set up your project_ (les catégories du manifeste) : https://developer.android.com/training/cars/apps/library/set-up-project ; _Android for Cars App Library_ (design) : https://developer.android.com/design/ui/cars/guides/foundations/cal ; _Android for Cars overview_ : https://developer.android.com/training/cars
+- _Car app quality_ (PC-1, MF-1 à MF-5, VC-1) : https://developer.android.com/docs/quality-guidelines/car-app-quality
 - _Distribute to cars_ : https://developer.android.com/training/cars/distribute
-- _Notifications on Android Automotive OS_ : https://developer.android.com/training/cars/notifications
-- _Connection API_ : https://developer.android.com/training/cars/apps/library/connection-api ; référence de `CarConnection` : https://developer.android.com/reference/androidx/car/app/connection/CarConnection
-- _Car App_ (versions de Jetpack) : https://developer.android.com/jetpack/androidx/releases/car-app ; `CarAppApiLevels` : https://developer.android.com/reference/androidx/car/app/versioning/CarAppApiLevels
+- _Connection API_ : https://developer.android.com/training/cars/apps/library/connection-api
 - _Test using the Desktop Head Unit_ : https://developer.android.com/training/cars/testing/dhu
-- _What's new in Android for Cars_ (Android Developers Blog, mai 2026) : https://android-developers.googleblog.com/2026/05/android-for-cars-unifying-platforms-premium-experiences.html ; _New in-car app experiences_ (Google I/O 2025) : https://android-developers.googleblog.com/2025/05/android-for-cars-google-io-2025.html
+- _What's new_ (Android for Cars) : https://developer.android.com/training/cars/whats-new
 
 **Apple (developer.apple.com, sauf mention)**
 
 - _CarPlay Developer Guide_ (édition d'octobre 2026) : https://developer.apple.com/download/files/CarPlay-Developer-Guide.pdf
+- L'autorisation `com.apple.developer.carplay-voice-based-conversation` : https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.carplay-voice-based-conversation
 - _Requesting CarPlay entitlements_ : https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements
-- _CarPlay_ : https://developer.apple.com/carplay/
-- _CarPlay App Programming Guide_ (édition archivée) : https://developer.apple.com/carplay/documentation/CarPlay-App-Programming-Guide.pdf
-- _SiriKit › Messaging_ : https://developer.apple.com/documentation/sirikit/messaging ; `INSendMessageIntent` : https://developer.apple.com/documentation/intents/insendmessageintent ; _Improving interactions between Siri and your messaging app_ : https://developer.apple.com/documentation/sirikit/improving-interactions-between-siri-and-your-messaging-app
-- _Implementing communication notifications_ : https://developer.apple.com/documentation/usernotifications/implementing-communication-notifications ; WWDC21 _Send communication and Time Sensitive notifications_ : https://developer.apple.com/videos/play/wwdc2021/10091/
-- _Using the CarPlay simulator_ : https://developer.apple.com/documentation/carplay/using-the-carplay-simulator
-- Les règles de l'App Review : https://developer.apple.com/app-store/review/guidelines/ (CarPlay y renvoie au guide ci-dessus)
+- _CarPlay_ : https://developer.apple.com/carplay/ ; _Using the CarPlay simulator_ : https://developer.apple.com/documentation/carplay/using-the-carplay-simulator
+- Les règles de l'App Review : https://developer.apple.com/app-store/review/guidelines/
 
 **Tiers, pour mémoire (jamais seuls à fonder une conclusion)**
 
-- Forums d'Apple sur les délais des autorisations : https://developer.apple.com/forums/thread/848946, https://developer.apple.com/forums/thread/847440, https://developer.apple.com/forums/thread/736111 ; sur l'annonce dans CarPlay : https://developer.apple.com/forums/thread/783730 ; sur le simulateur d'une app de communication : https://developer.apple.com/forums/thread/664874
-- La catégorie de la voix dans iOS 26.4 : https://www.macrumors.com/2026/02/18/ios-26-4-carplay-support/
+- La catégorie de la voix dans iOS 26.4 : https://www.macrumors.com/2026/02/18/ios-26-4-carplay-support/ ; https://9to5mac.com/2026/02/18/ios-26-4-adds-support-for-voice-based-ai-apps-to-carplay/ ; https://appleinsider.com/articles/26/02/18/ai-agents-are-coming-to-carplay-but-theyre-not-getting-the-keys
+- Android Auto et les chatbots : https://www.androidauthority.com/chatgpt-apple-carplay-vs-android-auto-3653922/
+- WhatsApp sur l'écran de la voiture : https://thecarplayer.com/blogs/news/whatsapp-official-app-android-auto-apple-carplay
+- Forums d'Apple : la catégorie de la voix (https://developer.apple.com/forums/thread/821632, https://developer.apple.com/forums/thread/831674, https://developer.apple.com/forums/thread/849047, https://developer.apple.com/forums/thread/831720) ; la synthèse en voiture (https://developer.apple.com/forums/thread/807197) ; les délais des autorisations (https://developer.apple.com/forums/thread/848946, https://developer.apple.com/forums/thread/847440)
 - Le retour d'OpenBubbles sur `ConversationItem` : https://github.com/mumeicopperhead/openbubbles-app
