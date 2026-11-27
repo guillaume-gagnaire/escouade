@@ -48,7 +48,9 @@ pub const WAIT_MAX: Duration = Duration::from_secs(30);
 pub const SETTLE: Duration = Duration::from_millis(1500);
 /// How often the core takes the user's gestures of a driven row.
 pub const POLL: Duration = Duration::from_millis(500);
-/// The tail of an agent's gesture: what the page makes of it in that time is not the user's.
+/// The tail of an agent's gesture: what the page makes of it in that time is not the user's. Its real inputs (CDP)
+/// are Windows's alone; under WebKit the gesture is a script of the isolated world.
+#[cfg(windows)]
 pub const TAIL_MS: u64 = 400;
 /// How long after an agent's gesture on a page a choice it proposes is taken for the agent's (AP-4).
 pub const CHOICE_QUIET: Duration = Duration::from_secs(2);
@@ -813,6 +815,7 @@ pub fn run<R: Runtime>(webview: &Webview<R>, args: Value) -> Result<Value, Strin
 }
 
 /// An agent's gesture is under way for `ms`: what the page makes of it is not the user's.
+#[cfg(windows)]
 pub fn arm<R: Runtime>(webview: &Webview<R>, ms: u64) {
     let _ = run(webview, json!({ "run": "arm", "ms": ms }));
 }
