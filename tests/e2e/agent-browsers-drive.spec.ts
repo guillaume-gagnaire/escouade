@@ -118,9 +118,12 @@ const ps = (text: string) => `'${text.replace(/'/g, "''")}'`;
  * A real wheel of Windows at the point (`x`, `y`) of the app's window, in CSS pixels of its client area: the user's own
  * gesture, `isTrusted`, over the native webview there (never the user's own Escouade: another program's path). The
  * window of the tests is off every screen, where no cursor goes: the wheel is the message Windows sends a window under
- * the cursor (`WM_MOUSEWHEEL`), posted to Chromium's render window of the webview that holds the point.
+ * the cursor (`WM_MOUSEWHEEL`), posted to Chromium's render window of the webview that holds the point. The point is
+ * the middle of what the window shows of the webview, its box cut by the window's client area: a page made wider than
+ * its window (`setViewportSize` of 1440 × 900 in the CI runner's window of 1028 × 779) puts most of the webview past
+ * the window's edge, where Chromium drops a wheel as no user could give it there (ESC-694). Says where it aimed.
  */
-function nativeWheel(box: { x: number; y: number; width: number; height: number }, dpr: number) {
+function nativeWheel(box: { x: number; y: number; width: number; height: number }, dpr: number): string {
   const script = `
 Add-Type @"
 using System; using System.Runtime.InteropServices; using System.Collections.Generic;
@@ -131,6 +134,7 @@ public static class Wheel {
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
@@ -176,13 +180,20 @@ $o.X = ${Math.round(box.x * dpr)}; $o.Y = ${Math.round(box.y * dpr)}
 [void][Wheel]::ClientToScreen($top, [ref]$o)
 $h = [Wheel]::Boxed($top, $o.X, $o.Y, ${Math.round(box.width * dpr)}, ${Math.round(box.height * dpr)})
 if ($h -eq [IntPtr]::Zero) { throw ('no webview at ' + $o.X + ',' + $o.Y + ' among ' + [Wheel]::Seen) }
+$c = New-Object Wheel+RECT; [void][Wheel]::GetClientRect($top, [ref]$c)
+$co = New-Object Wheel+POINT; [void][Wheel]::ClientToScreen($top, [ref]$co)
+$left = [Math]::Max($o.X, $co.X); $right = [Math]::Min($o.X + ${Math.round(box.width * dpr)}, $co.X + $c.Right)
+$up = [Math]::Max($o.Y, $co.Y); $down = [Math]::Min($o.Y + ${Math.round(box.height * dpr)}, $co.Y + $c.Bottom)
+$shown = 'webview ' + $o.X + ',' + $o.Y + ' ${Math.round(box.width * dpr)}x${Math.round(box.height * dpr)} in a window ' + $co.X + ',' + $co.Y + ' ' + $c.Right + 'x' + $c.Bottom
+if ($right - $left -lt 8 -or $down - $up -lt 8) { throw ('the window shows none of the ' + $shown) }
 $p = New-Object Wheel+POINT
-$p.X = $o.X + ${Math.round((box.width * dpr) / 2)}; $p.Y = $o.Y + ${Math.round((box.height * dpr) / 2)}
+$p.X = [int](($left + $right) / 2); $p.Y = [int](($up + $down) / 2)
 $l = [IntPtr](([int64]($p.Y -band 0xFFFF) -shl 16) -bor ([int64]($p.X -band 0xFFFF)))
 $w = [IntPtr]([int64](0xFF880000))
 foreach ($i in 1..3) { [void][Wheel]::PostMessage($h, 0x020A, $w, $l); Start-Sleep -Milliseconds 120 }
+Write-Output ($shown + ', at ' + $p.X + ',' + $p.Y)
 `;
-  execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' });
+  return execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' }).trim();
 }
 
 type Drive = { hand: string; waiting: boolean; agent: string | null; passwordAsks: string[]; step: number; what: string };
@@ -314,14 +325,15 @@ test.describe('a fake agent drives its launch and its page', () => {
         const dpr = await page.evaluate(() => devicePixelRatio);
         // The wheel reaches the page (it says it heard it, isTrusted), again as a user would if it did not; then the
         // hand is the user's: a failure says which of the two did not happen.
+        const aimed: string[] = [];
         for (let i = 0; i < 3 && !launch.heard.includes('wheel=true'); i++) {
-          nativeWheel(box, dpr);
+          aimed.push(nativeWheel(box, dpr));
           await expect
             .poll(() => launch.heard.includes('wheel=true'), { timeout: 4_000 })
             .toBe(true)
             .catch(() => {});
         }
-        expect(launch.heard, 'the wheel of Windows did not reach the page').toContain('wheel=true');
+        expect(launch.heard, `the wheel of Windows did not reach the page (${aimed.join('; ')})`).toContain('wheel=true');
         await expect
           .poll(async () => (await state(page, key)).hand, { timeout: 15_000, message: 'the page heard the wheel, the hand did not pass' })
           .toBe('user');
