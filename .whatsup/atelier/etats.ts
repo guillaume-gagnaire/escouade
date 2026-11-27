@@ -121,7 +121,14 @@ function pageRow(choisi: boolean) {
 }
 
 const CONV_PAGE = [
-  { kind: 'user', id: 'u1', text: 'Propose-moi deux mises en page pour le tableau de bord, je choisis.', images: 0, ts: Date.now() - 300_000, queued: false },
+  {
+    kind: 'user',
+    id: 'u1',
+    text: 'Propose-moi deux mises en page pour le tableau de bord, je choisis.',
+    images: 0,
+    ts: Date.now() - 300_000,
+    queued: false,
+  },
   { kind: 'text', id: 'x1', text: 'J’ai rendu les deux mises en page et je te les montre côte à côte.', streaming: false },
   {
     kind: 'tool',
@@ -130,7 +137,10 @@ const CONV_PAGE = [
     name: 'mcp__escouade__show_page',
     input: { title: 'Deux mises en page du tableau de bord', template: 'compare', data: {} },
     status: 'ok',
-    result: { text: JSON.stringify({ browser: 'page:p-3', page: 'p-3', version: 1, opened: 'beside', ask: 'a-7', bytes: 1, files: 1 }), isError: false },
+    result: {
+      text: JSON.stringify({ browser: 'page:p-3', page: 'p-3', version: 1, opened: 'beside', ask: 'a-7', bytes: 1, files: 1 }),
+      isError: false,
+    },
   },
   { kind: 'text', id: 'x2', text: 'Choisis dans la page : je reprends dès que ta réponse arrive.', streaming: false },
 ];
@@ -185,7 +195,9 @@ function etatWorkspace(liste: boolean): Etat {
   return {
     projects: [atelier],
     agents: agentsAuTravail,
-    tickets: [ticket({ id: 't1', key: 'ATL-5', title: 'Écrire l’aide de l’export', column: 'doing', agentId: 'a3', iteration: 1, projectId: 'p1' })],
+    tickets: [
+      ticket({ id: 't1', key: 'ATL-5', title: 'Écrire l’aide de l’export', column: 'doing', agentId: 'a3', iteration: 1, projectId: 'p1' }),
+    ],
     ui: { selectedAgent: { p1: 'a1' } },
     git: { p1: gitInfo() },
     handlers: {
@@ -248,11 +260,47 @@ ETATS['navigateur-ouvert'] = etatNavigateur(true);
 // ---------- 4. The agent drives the tab it opened for you (AB-7): scroll, highlight, a phone's width. ----------
 
 const CONV_PILOTE = [
-  { kind: 'user', id: 'u1', text: 'Le bouton de connexion passe sous le clavier sur téléphone, regarde.', images: 0, ts: Date.now() - 200_000, queued: false },
-  { kind: 'tool', id: 't1', ts: Date.now() - 150_000, name: 'mcp__escouade__open_browser', input: { url: 'http://localhost:5173/connexion', where: 'beside' }, status: 'ok', result: { text: 'Ouvert à côté', isError: false } },
-  { kind: 'tool', id: 't2', ts: Date.now() - 120_000, name: 'mcp__escouade__drive_browser', input: { browser: 'browser:b7', action: 'mode', mode: 'mobile' }, status: 'ok', result: { text: 'Largeur mobile, 390 px', isError: false } },
-  { kind: 'tool', id: 't3', ts: Date.now() - 90_000, name: 'mcp__escouade__drive_browser', input: { browser: 'browser:b7', action: 'highlight', target: '#entrer', label: 'Passe sous le clavier' }, status: 'ok', result: { text: 'Mis en évidence', isError: false } },
-  { kind: 'text', id: 'x1', text: 'Je te l’ai mis en largeur mobile et j’ai entouré le bouton. Je remonte le formulaire de 40 px ?', streaming: false },
+  {
+    kind: 'user',
+    id: 'u1',
+    text: 'Le bouton de connexion passe sous le clavier sur téléphone, regarde.',
+    images: 0,
+    ts: Date.now() - 200_000,
+    queued: false,
+  },
+  {
+    kind: 'tool',
+    id: 't1',
+    ts: Date.now() - 150_000,
+    name: 'mcp__escouade__open_browser',
+    input: { url: 'http://localhost:5173/connexion', where: 'beside' },
+    status: 'ok',
+    result: { text: 'Ouvert à côté', isError: false },
+  },
+  {
+    kind: 'tool',
+    id: 't2',
+    ts: Date.now() - 120_000,
+    name: 'mcp__escouade__drive_browser',
+    input: { browser: 'browser:b7', action: 'mode', mode: 'mobile' },
+    status: 'ok',
+    result: { text: 'Largeur mobile, 390 px', isError: false },
+  },
+  {
+    kind: 'tool',
+    id: 't3',
+    ts: Date.now() - 90_000,
+    name: 'mcp__escouade__drive_browser',
+    input: { browser: 'browser:b7', action: 'highlight', target: '#entrer', label: 'Passe sous le clavier' },
+    status: 'ok',
+    result: { text: 'Mis en évidence', isError: false },
+  },
+  {
+    kind: 'text',
+    id: 'x1',
+    text: 'Je te l’ai mis en largeur mobile et j’ai entouré le bouton. Je remonte le formulaire de 40 px ?',
+    streaming: false,
+  },
 ];
 
 ETATS['pilote-avant'] = {
@@ -263,7 +311,16 @@ ETATS['pilote-avant'] = {
   settings: { mcpEnabled: true },
   conversations: { a1: CONV_PILOTE.slice(0, 2) },
   apres: async ({ emit }) => {
-    const view = { agentId: 'browser:b7', projectId: 'p1', title: 'Atelier · Connexion', url: 'http://localhost:5173/connexion', loaded: true, docTitle: 'Atelier · Connexion', opener: 'a1', driver: 'a1' };
+    const view = {
+      agentId: 'browser:b7',
+      projectId: 'p1',
+      title: 'Atelier · Connexion',
+      url: 'http://localhost:5173/connexion',
+      loaded: true,
+      docTitle: 'Atelier · Connexion',
+      opener: 'a1',
+      driver: 'a1',
+    };
     emit({ type: 'browserOpened', browser: { view, agent: 'a1', wish: 'beside', place: 'beside' } } as UiEvent);
     app.setPaneRatio('', 0.5);
     await dessineOnglet();
@@ -278,7 +335,16 @@ ETATS.pilote = {
   settings: { mcpEnabled: true },
   conversations: { a1: CONV_PILOTE },
   apres: async ({ emit }) => {
-    const view = { agentId: 'browser:b7', projectId: 'p1', title: 'Atelier · Connexion', url: 'http://localhost:5173/connexion', loaded: true, docTitle: 'Atelier · Connexion', opener: 'a1', driver: 'a1' };
+    const view = {
+      agentId: 'browser:b7',
+      projectId: 'p1',
+      title: 'Atelier · Connexion',
+      url: 'http://localhost:5173/connexion',
+      loaded: true,
+      docTitle: 'Atelier · Connexion',
+      opener: 'a1',
+      driver: 'a1',
+    };
     emit({ type: 'browserOpened', browser: { view, agent: 'a1', wish: 'beside', place: 'beside' } } as UiEvent);
     emit({ type: 'devPage', page: { agentId: 'browser:b7', phase: 'mode', url: 'mobile' } } as UiEvent);
     app.setPaneRatio('', 0.5);

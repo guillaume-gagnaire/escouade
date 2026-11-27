@@ -1,35 +1,35 @@
 {
- "id": "2026-11-27",
- "ecrans": [
-  {
-   "etiquette": "Pages des agents",
-   "titre": "Choisis dans la page que l’agent te montre",
-   "texte": "Un agent ouvre une revue, un schéma ou une comparaison à côté de sa conversation, avec sa ligne sous <b>Navigateurs</b>. Choisis une option dans la page : <b>Envoyer</b> lui transmet ta réponse.",
-   "scene": "<div class=\"wu-20261127-cadre wu-20261127-p1\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-page.webp\" data-sombre=\"2026-11-27-page-sombre.webp\" alt=\"\"><img class=\"wu-20261127-etat wu-20261127-apres\" src=\"2026-11-27-page-choisie.webp\" data-sombre=\"2026-11-27-page-choisie-sombre.webp\" alt=\"\"><span class=\"wu-20261127-curseur\"></span></div>"
-  },
-  {
-   "etiquette": "Le Workspace",
-   "titre": "Suis tes agents sur la toile du Workspace",
-   "texte": "Ouvre-la par <b>Éditeur</b> ou la Vue d’ensemble : chaque agent y porte son étape de workflow. <b>Workflows</b> liste ceux du projet et les agents qui les suivent.",
-   "scene": "<div class=\"wu-20261127-cadre wu-20261127-p2\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-workspace.webp\" data-sombre=\"2026-11-27-workspace-sombre.webp\" alt=\"\"><img class=\"wu-20261127-etat wu-20261127-apres\" src=\"2026-11-27-workspace-workflows.webp\" data-sombre=\"2026-11-27-workspace-workflows-sombre.webp\" alt=\"\"><span class=\"wu-20261127-curseur\"></span></div>"
-  },
-  {
-   "etiquette": "Navigateurs",
-   "titre": "Ouvre un onglet depuis la barre latérale",
-   "texte": "Le <b>+</b> de <b>Navigateurs</b> demande une adresse et ajoute l’onglet avec sa ligne. Il s’ouvre en plein écran, ou à côté de l’agent par <b>Ouvrir à côté</b>.",
-   "scene": "<div class=\"wu-20261127-cadre wu-20261127-p3\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-navigateur.webp\" data-sombre=\"2026-11-27-navigateur-sombre.webp\" alt=\"\"><img class=\"wu-20261127-etat wu-20261127-apres\" src=\"2026-11-27-navigateur-ouvert.webp\" data-sombre=\"2026-11-27-navigateur-ouvert-sombre.webp\" alt=\"\"><span class=\"wu-20261127-curseur\"></span></div>"
-  },
-  {
-   "etiquette": "Onglet piloté",
-   "titre": "Laisse l’agent te montrer ce qu’il voit",
-   "texte": "Dans l’onglet qu’il t’ouvre, l’agent fait défiler, entoure un élément ou passe en largeur mobile. Ton premier geste dans la page te rend la main.",
-   "scene": "<div class=\"wu-20261127-cadre wu-20261127-p4\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-pilote-avant.webp\" data-sombre=\"2026-11-27-pilote-avant-sombre.webp\" alt=\"\"><img class=\"wu-20261127-etat wu-20261127-apres\" src=\"2026-11-27-pilote.webp\" data-sombre=\"2026-11-27-pilote-sombre.webp\" alt=\"\"></div>"
-  },
-  {
-   "etiquette": "Page à soi",
-   "titre": "Donne ta propre page à tes agents",
-   "texte": "Dans <b>Réglages › Projets › Lancement</b>, <b>Page à soi</b> désigne un document .html de ton projet. Tes agents le remplissent et te le montrent comme leurs pages.",
-   "scene": "<div class=\"wu-20261127-cadre wu-20261127-p5\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-page-a-soi.webp\" data-sombre=\"2026-11-27-page-a-soi-sombre.webp\" alt=\"\"><span class=\"wu-20261127-curseur\"></span></div>"
-  }
- ]
+  "id": "2026-11-27",
+  "ecrans": [
+    {
+      "etiquette": "Pages des agents",
+      "titre": "Choisis dans la page que l’agent te montre",
+      "texte": "Un agent ouvre une revue, un schéma ou une comparaison à côté de sa conversation, avec sa ligne sous <b>Navigateurs</b>. Choisis une option dans la page : <b>Envoyer</b> lui transmet ta réponse.",
+      "scene": "<div class=\"wu-20261127-cadre wu-20261127-p1\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-page.webp\" data-sombre=\"2026-11-27-page-sombre.webp\" alt=\"\"><img class=\"wu-20261127-etat wu-20261127-apres\" src=\"2026-11-27-page-choisie.webp\" data-sombre=\"2026-11-27-page-choisie-sombre.webp\" alt=\"\"><span class=\"wu-20261127-curseur\"></span></div>"
+    },
+    {
+      "etiquette": "Le Workspace",
+      "titre": "Suis tes agents sur la toile du Workspace",
+      "texte": "Ouvre-la par <b>Éditeur</b> ou la Vue d’ensemble : chaque agent y porte son étape de workflow. <b>Workflows</b> liste ceux du projet et les agents qui les suivent.",
+      "scene": "<div class=\"wu-20261127-cadre wu-20261127-p2\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-workspace.webp\" data-sombre=\"2026-11-27-workspace-sombre.webp\" alt=\"\"><img class=\"wu-20261127-etat wu-20261127-apres\" src=\"2026-11-27-workspace-workflows.webp\" data-sombre=\"2026-11-27-workspace-workflows-sombre.webp\" alt=\"\"><span class=\"wu-20261127-curseur\"></span></div>"
+    },
+    {
+      "etiquette": "Navigateurs",
+      "titre": "Ouvre un onglet depuis la barre latérale",
+      "texte": "Le <b>+</b> de <b>Navigateurs</b> demande une adresse et ajoute l’onglet avec sa ligne. Il s’ouvre en plein écran, ou à côté de l’agent par <b>Ouvrir à côté</b>.",
+      "scene": "<div class=\"wu-20261127-cadre wu-20261127-p3\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-navigateur.webp\" data-sombre=\"2026-11-27-navigateur-sombre.webp\" alt=\"\"><img class=\"wu-20261127-etat wu-20261127-apres\" src=\"2026-11-27-navigateur-ouvert.webp\" data-sombre=\"2026-11-27-navigateur-ouvert-sombre.webp\" alt=\"\"><span class=\"wu-20261127-curseur\"></span></div>"
+    },
+    {
+      "etiquette": "Onglet piloté",
+      "titre": "Laisse l’agent te montrer ce qu’il voit",
+      "texte": "Dans l’onglet qu’il t’ouvre, l’agent fait défiler, entoure un élément ou passe en largeur mobile. Ton premier geste dans la page te rend la main.",
+      "scene": "<div class=\"wu-20261127-cadre wu-20261127-p4\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-pilote-avant.webp\" data-sombre=\"2026-11-27-pilote-avant-sombre.webp\" alt=\"\"><img class=\"wu-20261127-etat wu-20261127-apres\" src=\"2026-11-27-pilote.webp\" data-sombre=\"2026-11-27-pilote-sombre.webp\" alt=\"\"></div>"
+    },
+    {
+      "etiquette": "Page à soi",
+      "titre": "Donne ta propre page à tes agents",
+      "texte": "Dans <b>Réglages › Projets › Lancement</b>, <b>Page à soi</b> désigne un document .html de ton projet. Tes agents le remplissent et te le montrent comme leurs pages.",
+      "scene": "<div class=\"wu-20261127-cadre wu-20261127-p5\"><img class=\"wu-20261127-etat\" src=\"2026-11-27-page-a-soi.webp\" data-sombre=\"2026-11-27-page-a-soi-sombre.webp\" alt=\"\"><span class=\"wu-20261127-curseur\"></span></div>"
+    }
+  ]
 }
