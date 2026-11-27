@@ -588,6 +588,10 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
     hb.core.settings.write().user_name = "Bob Durand".into();
     let (pa, _) = ha.project(false).await;
     let (pb, _) = hb.project(false).await;
+    // Alice's own autopilot is off while the test reads `to_start` on her tickets as they are: on, its pass after
+    // « Accepter » (`schedule`) starts the ticket, sooner or later than the test's look (sooner on a fast machine).
+    // Its real passes are checked below, on then off again.
+    ha.set_board(&pa.id, |s| s.autopilot = false);
     ha.core.set_teams(alice_teams.clone());
     hb.core.set_teams(bob_teams.clone());
     ha.core.set_project_team(&pa.id, Some(id.clone())).unwrap();
@@ -691,6 +695,14 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
         "changed by Bob after the acceptance: {tt:?}"
     );
     assert!(!starts(&ha).contains(&seen.id));
+    // Her real autopilot, on, leaves it too.
+    ha.set_board(&pa.id, |s| s.autopilot = true);
+    ha.core.schedule();
+    ha.wait_board_idle().await;
+    let left = ha.core.ticket(&seen.id).unwrap();
+    assert_eq!(left.column, crate::model::Column::Todo, "{left:?}");
+    ha.set_board(&pa.id, |s| s.autopilot = false);
+    ha.wait_board_idle().await;
     assert!(ha
         .core
         .inbox_view_act(&view.key, crate::inboxviews::ViewAct::Accept)
@@ -726,4 +738,15 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
         "the description is still his"
     );
     assert!(starts(&ha).contains(&seen.id));
+    // And her real autopilot, on, takes it: the ticket goes, held by her.
+    ha.set_board(&pa.id, |s| s.autopilot = true);
+    ha.wait_board_idle().await;
+    ha.wait_ticket(&seen.id, "started by her autopilot", |t| {
+        t.column == crate::model::Column::Doing
+            && t.team
+                .as_ref()
+                .and_then(|x| x.holder.as_ref())
+                .is_some_and(|h| h.mine)
+    })
+    .await;
 }
