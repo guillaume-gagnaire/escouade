@@ -13,5 +13,14 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <!-- What's up ? : the window of the release's news, once per user after an update (.whatsup/config.json).
+         After main.ts: the `<style>` it creates gets the page's nonce (lib/style-nonce.ts). -->
+    <script type="module" src="/whats-up/whats-up.js"></script>
+    <whats-up
+      src="/whats-up/"
+      app="Escouade"
+      lang="fr"
+      style="--wu-fond: var(--raise); --wu-texte: var(--text); --wu-accent: var(--brand); --wu-doux: var(--muted); --wu-bord: var(--line-2); --wu-rayon: 10px; --wu-police: 'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif"
+    ></whats-up>
   </body>
 </html>
