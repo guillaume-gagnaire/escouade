@@ -12,6 +12,7 @@
     closePage,
     go,
     hasConsents,
+    lendBrowser,
     newBrowser,
     openPageBeside,
     pageItem,
@@ -125,6 +126,36 @@
     ];
   }
 
+  /**
+   * « Laisser piloter par… » (AB-9), on a browser the user opened alone: the live agents of its project, the one that
+   * drives it ticked, and « Personne ».
+   */
+  function lendItems(key: string, p: PageState): MenuItem[] {
+    if (p.by.kind !== 'user' || p.opener) return [];
+    const agents = Object.values(app.agents)
+      .filter((a) => a.projectId === project.id && !a.archived)
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const submenu: MenuItem[] = agents.length
+      ? [
+          ...agents.map((a) => ({
+            label: a.name,
+            checked: p.driver === a.id,
+            onClick: () => void lendBrowser(key, a.id),
+          })),
+          ...(p.driver
+            ? ([
+                { label: '', separator: true },
+                { label: t('devpage.drive.lendNobody'), onClick: () => void lendBrowser(key, null) },
+              ] satisfies MenuItem[])
+            : []),
+        ]
+      : [{ label: t('devpage.drive.lendNone'), disabled: true }];
+    return [
+      { label: t('devpage.drive.lend'), icon: 'play', submenu },
+      { label: '', separator: true },
+    ];
+  }
+
   function rowMenu(e: MouseEvent, key: string, p: PageState) {
     // Beside what is on screen; a browser opened alone and shown alone has nothing to go beside.
     const beside: MenuItem[] =
@@ -150,6 +181,7 @@
     }
     const items: MenuItem[] = [
       ...beside,
+      ...lendItems(key, p),
       ...driveItems(key),
       { label: t('devpage.reload'), icon: 'restart', onClick: () => go(key, 'reload') },
       {

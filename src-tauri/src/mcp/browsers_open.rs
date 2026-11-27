@@ -684,6 +684,18 @@ fn opened_answer(key: &str, url: &str, place: &str) -> Value {
     v
 }
 
+/// What `open_browser` answers while the user has closed the agent's pane and not come back to its conversation
+/// (AB-9): nothing opens, nothing waits.
+pub(crate) fn dismissed_answer() -> Value {
+    json!({
+        "place": "closed",
+        "why": tr!(
+            "L’utilisateur a fermé ton volet : rien ne s’ouvre sur son écran tant qu’il n’a pas quitté ta conversation puis n’y est pas revenu. Rien n’est ouvert ni en attente ; dis-lui ce que tu voulais lui montrer, ou redemande quand il sera revenu.",
+            "The user closed your pane: nothing opens on their screen until they have left your conversation and come back to it. Nothing is open nor waiting; tell them what you wanted to show, or ask again once they are back."
+        ),
+    })
+}
+
 /// `open_browser`.
 pub(super) async fn open<R: Runtime>(
     core: &Arc<Core<R>>,
@@ -706,6 +718,9 @@ pub(super) async fn open<R: Runtime>(
         )));
     }
     let wish = wish_of(args.place);
+    if wish != Wish::Quiet && pages.dismissed(&meta.id) {
+        return Ok(dismissed_answer().to_string());
+    }
     match plan(core, &pages, &meta, &project, &args)? {
         Step::Asked { origin, new } => {
             if new {
@@ -859,10 +874,17 @@ pub(super) async fn close<R: Runtime>(
         return Ok(json!({
             "browser": page.agent_id,
             "closed": false,
-            "message": tr!(
-                "Tu ne pilotes plus ce navigateur ; sa ligne reste : c’est celle d’un lancement.",
-                "You no longer drive this browser; its row stays: it is a launch's."
-            ),
+            "message": if page.agent_id.starts_with(devpage::BROWSER_PREFIX) {
+                tr!(
+                    "Tu ne pilotes plus ce navigateur ; sa ligne reste : l’utilisateur l’a ouvert lui-même.",
+                    "You no longer drive this browser; its row stays: the user opened it themselves."
+                )
+            } else {
+                tr!(
+                    "Tu ne pilotes plus ce navigateur ; sa ligne reste : c’est celle d’un lancement.",
+                    "You no longer drive this browser; its row stays: it is a launch's."
+                )
+            },
         })
         .to_string());
     }

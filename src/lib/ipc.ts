@@ -896,6 +896,8 @@ export const api = {
   browserDriveRevisit: (key: string, n: number) => invoke<void>('browser_drive_revisit', { key, n }),
   /** The agents whose conversation is on screen (ESC-678): an agent's browser opens beside it only then. */
   devpageLooking: (agents: string[]) => invoke<void>('devpage_looking', { agents }),
+  devpageDismiss: (agent: string) => invoke<void>('devpage_dismiss', { agent }),
+  devpageLend: (key: string, agent: string | null) => invoke<void>('devpage_lend', { key, agent }),
   /** The agents' requests to open an address outside their project's launch (ESC-678, C3). */
   devpageOpenAsks: () => invoke<BrowserOpenAsk[]>('devpage_open_asks'),
   /** « Permettre une fois » or « Refuser » of a request to open: the agent is told by a message. */

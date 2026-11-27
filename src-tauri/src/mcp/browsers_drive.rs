@@ -125,8 +125,8 @@ fn row_of<R: Runtime>(core: &Core<R>, caller: &Caller, asked: &str) -> Result<Ro
         return Err(refused(
             if p.opener.is_none() && p.agent_id.starts_with(devpage::BROWSER_PREFIX) {
                 tr!(
-                "L’utilisateur a ouvert ce navigateur : tu ne le pilotes pas. Ouvre le tien par open_browser.",
-                "The user opened this browser: you do not drive it. Open your own by open_browser."
+                "L’utilisateur a ouvert ce navigateur : tu ne le pilotes pas, à moins qu’il ne te le laisse (« Laisser piloter par… » dans le menu de sa ligne). Ouvre le tien par open_browser.",
+                "The user opened this browser: you do not drive it unless they let you (« Laisser piloter par… » in its row's menu). Open your own by open_browser."
             )
             } else {
                 tr!(
@@ -1368,6 +1368,76 @@ pub(crate) async fn hand<R: Runtime>(
         }
     }
     pages.drives.view(key)
+}
+
+/// « Laisser piloter par… » (AB-9): the user lets \`agent\` of the browser's project drive the browser \`key\` they opened
+/// alone, or nobody (\`None\`). The agent is told by a message; one it was lent to before, that it no longer drives it.
+/// Its driving starts afresh: the hand to the agent, no leave of a password kept.
+pub(crate) async fn lend<R: Runtime>(
+    core: &Arc<Core<R>>,
+    pages: &Arc<Pages>,
+    key: &str,
+    agent: Option<&str>,
+) -> Result<(), String> {
+    let page = pages.get(key).ok_or("no such browser")?;
+    if !key.starts_with(devpage::BROWSER_PREFIX) || page.opener.is_some() {
+        return Err(tr!(
+            "Seul un navigateur que tu as ouvert toi-même se laisse piloter par un agent.",
+            "Only a browser you opened yourself is let be driven by an agent."
+        ));
+    }
+    if let Some(a) = agent {
+        let meta = core.agent(a).map(|h| h.lock().meta.clone()).map_err(|_| {
+            tr!(
+                "Escouade ne connaît pas cet agent.",
+                "Escouade does not know this agent."
+            )
+        })?;
+        if meta.project_id != page.project_id || meta.archived {
+            return Err(tr!(
+                "Cet agent n’est pas un agent actif du projet de ce navigateur.",
+                "This agent is not a live agent of this browser's project."
+            ));
+        }
+        if page.driver.as_deref() != Some(a) && pages.driven_by(a, key) >= devpage::DRIVEN_MAX {
+            return Err(tr!(
+                "{name} pilote déjà {n} navigateurs : c’est la borne.",
+                "{name} drives {n} browsers already: that is the bound.",
+                name = meta.name,
+                n = devpage::DRIVEN_MAX
+            ));
+        }
+    }
+    let before = page.driver.clone();
+    if before.as_deref() == agent {
+        return Ok(());
+    }
+    pages.set_driver(key, agent);
+    pages.drives.forget(key);
+    tell(core, key);
+    let host = Url::parse(&page.url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_else(|| page.url.clone());
+    if let Some(old) = before {
+        let text = tr!(
+            "Escouade : l’utilisateur ne te laisse plus piloter le navigateur {key} ({host}).",
+            "Escouade: the user no longer lets you drive the browser {key} ({host})."
+        );
+        if let Err(e) = core.send_by_app(&old, text).await {
+            log::warn!("browsers: {old} not told it no longer drives {key}: {e:#}");
+        }
+    }
+    if let Some(a) = agent {
+        let text = tr!(
+            "Escouade : l’utilisateur te laisse piloter le navigateur {key} ({host}), qu’il a ouvert lui-même. Pilote-le par drive_browser avec browser: \"{key}\" tant qu’il est à l’écran ; il peut reprendre la main à tout moment.",
+            "Escouade: the user lets you drive the browser {key} ({host}), which they opened themselves. Drive it by drive_browser with browser: \"{key}\" while it is on screen; they may take the hand back at any time."
+        );
+        if let Err(e) = core.send_by_app(a, text).await {
+            log::warn!("browsers: {a} not told it may drive {key}: {e:#}");
+        }
+    }
+    Ok(())
 }
 
 /// The user's answer to `agent`'s request to fill a password in the row `key` (C2): told to the agent.

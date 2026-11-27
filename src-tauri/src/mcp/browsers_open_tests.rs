@@ -690,3 +690,148 @@ async fn a_tabs_page_goes_on_this_machine_at_its_projects_declared_ports_alone()
     assert!(!e.contains(PASSED), "{e}");
     c.cancel().await.unwrap();
 }
+
+#[test]
+fn a_closed_pane_holds_until_the_user_leaves_the_conversation_and_comes_back() {
+    let pages = crate::devpage::Pages::default();
+    // The user looks at a1 and closes its pane: nothing of a1's opens while they stay.
+    pages.set_looking(["a1".to_string()]);
+    pages.dismiss("a1");
+    assert!(pages.dismissed("a1"));
+    pages.set_looking(["a1".to_string(), "a2".to_string()]);
+    assert!(pages.dismissed("a1"), "still on its conversation");
+    // They leave it: still held; they come back: lifted.
+    pages.set_looking(["a2".to_string()]);
+    assert!(pages.dismissed("a1"));
+    assert!(!pages.dismissed("a2"));
+    pages.set_looking(["a1".to_string()]);
+    assert!(!pages.dismissed("a1"));
+    // Closed while elsewhere (its row, from the sidebar): held until they come to its conversation.
+    pages.set_looking(Vec::<String>::new());
+    pages.dismiss("a3");
+    assert!(pages.dismissed("a3"));
+    pages.set_looking(["a3".to_string()]);
+    assert!(!pages.dismissed("a3"));
+}
+
+#[tokio::test]
+async fn after_the_user_closed_its_pane_nothing_reopens_nor_waits_until_they_come_back() {
+    let h = harness("mcp-browsers-open-dismissed");
+    let (_, a) = world(&h).await;
+    let c = as_agent(&h, &a.id).await;
+    pages(&h).set_looking([a.id.clone()]);
+    pages(&h).dismiss(&a.id);
+    for args in [
+        json!({ "launch": true }),
+        json!({ "url": "http://localhost:4100/", "place": "full" }),
+        json!({ "url": "https://docs.stripe.com/", "place": "below" }),
+    ] {
+        let v = read(&c, "open_browser", args.clone()).await;
+        assert_eq!(v["place"], "closed", "{args}");
+        assert!(
+            v["why"].as_str().unwrap().contains("a fermé ton volet"),
+            "{v}"
+        );
+    }
+    // Nothing asked of the user, no opening counted.
+    assert!(pages(&h).open_asks().is_empty());
+    // Its row alone (quiet) shows nothing: it still opens.
+    let e = refused(
+        &c,
+        "open_browser",
+        json!({ "launch": true, "place": "quiet" }),
+    )
+    .await;
+    assert!(e.contains(PASSED), "{e}");
+    // The user goes elsewhere, then comes back: it opens again.
+    pages(&h).set_looking(Vec::<String>::new());
+    let v = read(&c, "open_browser", json!({ "launch": true })).await;
+    assert_eq!(v["place"], "closed");
+    pages(&h).set_looking([a.id.clone()]);
+    let e = refused(&c, "open_browser", json!({ "launch": true })).await;
+    assert!(e.contains(PASSED), "{e}");
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn the_user_lets_an_agent_of_the_project_drive_a_browser_they_opened_alone() {
+    let h = harness("mcp-browsers-lend");
+    let (p, a) = world(&h).await;
+    let b = put_agent(&h, &p, "Bob", 2);
+    let all = pages(&h);
+    let drivable = |v: &serde_json::Value, key: &str| {
+        v["browsers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["browser"] == key)
+            .unwrap()["drivable"]
+            .clone()
+    };
+    let c = as_agent(&h, &a.id).await;
+    let v = read(&c, "list_browsers", json!({})).await;
+    assert_eq!(drivable(&v, "browser:claude"), false);
+    let e = refused(
+        &c,
+        "drive_browser",
+        json!({ "browser": "browser:claude", "action": "scroll", "by": 200 }),
+    )
+    .await;
+    assert!(e.contains("Laisser piloter par"), "{e}");
+    // « Laisser piloter par… » Alice: hers to drive, not Bob's.
+    super::browsers_drive::lend(&h.core, &all, "browser:claude", Some(&a.id))
+        .await
+        .unwrap();
+    assert_eq!(
+        all.get("browser:claude").unwrap().driver.as_deref(),
+        Some(a.id.as_str())
+    );
+    let v = read(&c, "list_browsers", json!({})).await;
+    assert_eq!(drivable(&v, "browser:claude"), true);
+    // She stops driving it: its row stays, the user's.
+    let v = read(&c, "close_browser", json!({ "browser": "browser:claude" })).await;
+    assert_eq!(v["closed"], false);
+    assert!(
+        v["message"]
+            .as_str()
+            .unwrap()
+            .contains("l’utilisateur l’a ouvert"),
+        "{v}"
+    );
+    assert!(all.get("browser:claude").is_some());
+    assert_eq!(all.get("browser:claude").unwrap().driver, None);
+    // Lent to Bob, then to nobody.
+    super::browsers_drive::lend(&h.core, &all, "browser:claude", Some(&b.id))
+        .await
+        .unwrap();
+    let v = read(&c, "list_browsers", json!({})).await;
+    assert_eq!(drivable(&v, "browser:claude"), false);
+    super::browsers_drive::lend(&h.core, &all, "browser:claude", None)
+        .await
+        .unwrap();
+    assert_eq!(all.get("browser:claude").unwrap().driver, None);
+    // Never a tab an agent opened, nor its launch's page, nor to an agent of another project or archived.
+    tab(&h, &p, "browser:bobs", "http://localhost:4100/", &b.id);
+    for key in ["browser:bobs", a.id.as_str()] {
+        let e = super::browsers_drive::lend(&h.core, &all, key, Some(&a.id))
+            .await
+            .unwrap_err();
+        assert!(
+            e.contains("Seul un navigateur que tu as ouvert"),
+            "{key}: {e}"
+        );
+    }
+    let q = other_project(&h, "ailleurs").await;
+    let z = put_agent(&h, &q, "Zoé", 1);
+    let e = super::browsers_drive::lend(&h.core, &all, "browser:claude", Some(&z.id))
+        .await
+        .unwrap_err();
+    assert!(e.contains("n’est pas un agent actif"), "{e}");
+    h.core.agent(&b.id).unwrap().lock().meta.archived = true;
+    let e = super::browsers_drive::lend(&h.core, &all, "browser:claude", Some(&b.id))
+        .await
+        .unwrap_err();
+    assert!(e.contains("n’est pas un agent actif"), "{e}");
+    assert_eq!(all.get("browser:claude").unwrap().driver, None);
+    c.cancel().await.unwrap();
+}

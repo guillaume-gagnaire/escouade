@@ -4,6 +4,10 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- An agent never takes your screen: what it wants to show you opens beside its conversation only if you are looking at it, otherwise its row waits in “Browsers” and opens when you come back. It has one pane at a time, and a pane you closed does not come back until you have left its conversation and returned. “Let drive…”, in the menu of a browser you opened, hands it to an agent of the project.
+
 ## [2.2.16] — 2026-11-27
 
 - You sign in to a site in an Escouade tab, its sign-in window included (Google, OAuth, a link from an email pasted in the bar): it all happens in Escouade, and the session stays the project’s.

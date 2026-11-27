@@ -150,6 +150,7 @@ pub(super) fn rows_of(pages: &Pages, who: &Reader) -> Vec<PageView> {
             !who.discussion
                 || who.agent.as_deref() == Some(p.agent_id.as_str())
                 || (p.opener.is_some() && p.opener == who.agent)
+                || (p.driver.is_some() && p.driver == who.agent)
         })
         .collect()
 }

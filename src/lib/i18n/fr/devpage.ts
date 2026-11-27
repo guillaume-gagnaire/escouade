@@ -126,6 +126,12 @@ export default {
     rowYours: 'Tu as repris la main sur {agent}',
     rowStopped: 'Pilotage arrêté',
     stop: 'Ne plus laisser piloter',
+    /** AB-9: a browser the user opened alone, lent to an agent of its project. */
+    lend: 'Laisser piloter par…',
+    lendNobody: 'Personne',
+    lendNone: 'Aucun agent actif dans ce projet',
+    lent: '{agent} peut piloter ce navigateur : il le sait par un message',
+    unlent: 'Plus aucun agent ne pilote ce navigateur',
     /** A gesture in the conversation. */
     running: 'Pilote le navigateur…',
     stepSr: 'Geste {n} : ',

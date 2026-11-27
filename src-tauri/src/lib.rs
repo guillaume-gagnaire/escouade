@@ -766,6 +766,8 @@ pub fn run() {
                 commands::browser_drive_place,
                 commands::browser_drive_revisit,
                 commands::devpage_looking,
+                commands::devpage_dismiss,
+                commands::devpage_lend,
                 commands::devpage_open_asks,
                 commands::devpage_open_answer,
                 commands::devpage_go,

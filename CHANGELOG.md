@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Un agent ne prend jamais ton écran : ce qu’il veut te montrer s’ouvre à côté de sa conversation seulement si tu la regardes, sinon sa ligne attend dans « Navigateurs » et s’ouvre quand tu y reviens. Il n’a qu’un volet à la fois, et un volet que tu as fermé ne revient pas tant que tu n’as pas quitté sa conversation puis n’y es pas revenu. « Laisser piloter par… », dans le menu d’un navigateur que tu as ouvert, le confie à un agent du projet.
+
 ## [2.2.16] — 2026-11-27
 
 - Tu te connectes à un site dans un onglet d’Escouade, sa fenêtre de connexion comprise (Google, OAuth, lien reçu par courriel collé dans la barre) : tout se fait dans Escouade, et la session reste celle du projet.

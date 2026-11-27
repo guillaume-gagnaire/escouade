@@ -7,7 +7,7 @@
 import { t } from './i18n';
 import { api } from './ipc';
 import { app } from './state.svelte';
-import { closePage, devpages, isAgentPage, nextOrder, AGENT_PAGE_PREFIX, type PageState } from './devpage.svelte';
+import { closePage, devpages, dismissed, isAgentPage, leavePane, nextOrder, AGENT_PAGE_PREFIX, type PageState } from './devpage.svelte';
 import { activeItem, itemKey, leaves, type PaneItem } from './panes';
 import type { AgentPageEvent, AgentPageRow } from './types';
 
@@ -109,7 +109,7 @@ export function openBesideAgent(key: string, agentId: string) {
   if (!on || itemKey(on) !== itemKey(agent)) app.selectAgent(agentId);
   // One pane per agent (ESC-678): another browser or page it drives leaves its pane.
   for (const [other, p] of Object.entries(devpages.pages)) {
-    if (other !== key && p.projectId === page.projectId && p.driver === agentId && inAPane(other)) app.closePaneOf(`page:${other}`);
+    if (other !== key && p.projectId === page.projectId && p.driver === agentId && inAPane(other)) leavePane(other);
   }
   app.dropInPane(agent, 'right', { kind: 'page', id: key });
   app.activatePane(itemKey(agent));
@@ -144,7 +144,7 @@ export async function onAgentPageEvent(e: AgentPageEvent) {
     case 'shown': {
       const row = await refresh(e.page);
       if (!row?.open) return;
-      if (!row.quiet && looking(row.agentId, row.projectId)) openBesideAgent(key, row.agentId);
+      if (!row.quiet && !dismissed(row.agentId) && looking(row.agentId, row.projectId)) openBesideAgent(key, row.agentId);
       else if (!shown(key) && !inAPane(key)) {
         const page = devpages.pages[key];
         if (page) page.unseen = true;

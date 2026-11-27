@@ -23,7 +23,7 @@ import type {
   Project,
 } from './types';
 import { loadModes, nextMode, saveMode, type PageMode } from './devpage-key';
-import { activeItem, has, itemKey, type PaneItem } from './panes';
+import { activeItem, has, itemKey, leaves, type PaneItem } from './panes';
 import { forgetDrive, refreshDrive } from './drives.svelte';
 
 /** A page that started loading and has not finished after this long does not answer. */
@@ -340,6 +340,22 @@ export function openPageBeside(key: string, zone: 'right' | 'bottom' = 'right') 
   app.dropInPane(target, zone, pageItem(key));
 }
 
+/**
+ * « Laisser piloter par… » (AB-9): the user lets the agent `agent` of its project drive the browser `key` they opened
+ * alone, or nobody (`null`). The backend tells the agent by a message; nothing opens or moves on screen.
+ */
+export async function lendBrowser(key: string, agent: string | null) {
+  const page = devpages.pages[key];
+  if (!page) return;
+  const done = await app.run(api.devpageLend(key, agent).then(() => true));
+  if (!done) return;
+  page.driver = agent ?? undefined;
+  page.waiting = undefined;
+  void refreshDrive(key);
+  const name = agent ? (app.agents[agent]?.name ?? agent) : '';
+  app.toast(agent ? t('devpage.drive.lent', { agent: name }) : t('devpage.drive.unlent'), 'info');
+}
+
 /** Back, forward, reload, or an address typed in its bar. */
 export function go(key: string, action: 'back' | 'forward' | 'reload' | 'to', to?: string) {
   return app.run(api.devpageGo(key, action, to));
@@ -460,18 +476,70 @@ export function onBrowserOpened(e: BrowserOpened) {
 export function showWish(key: string, wish: Exclude<BrowserWish, 'quiet'>, agent: string) {
   const page = devpages.pages[key];
   if (!page) return;
+  // Never the user's screen taken elsewhere (AB-9): the backend said where while they looked at the agent; if they
+  // have gone since, the row waits for them; if they closed its pane, nothing opens.
+  if (dismissed(agent)) {
+    page.waiting = undefined;
+    return;
+  }
+  if (app.ui.view !== 'project' || app.ui.activeProject !== page.projectId || !app.shownAgents.includes(agent)) {
+    page.waiting = wish;
+    return;
+  }
   page.waiting = undefined;
-  if (app.ui.activeProject !== page.projectId) return;
   if (wish === 'full') {
-    app.ui.view = 'project';
     app.selectPage(key);
     return;
   }
   for (const [other, p] of browsersOf(page.projectId)) {
-    if (other !== key && p.driver === agent && inPane(other)) app.closePaneOf(`page:${other}`);
+    if (other !== key && p.driver === agent && inPane(other)) leavePane(other);
   }
   if (inPane(key)) return;
-  app.dropInPane({ kind: 'agent', id: agent }, wish === 'below' ? 'bottom' : 'right', pageItem(key));
+  const conversation: PaneItem = { kind: 'agent', id: agent };
+  app.dropInPane(conversation, wish === 'below' ? 'bottom' : 'right', pageItem(key));
+  // The conversation stays the active pane: the user goes on reading it, or writing to it.
+  if (inPane(key)) app.activatePane(itemKey(conversation));
+}
+
+/**
+ * The rows that leave the screen by the window's own doing (one pane per agent, an agent closing its browser or its
+ * page), not by the user's: their leaving is no close of the user's (AB-9).
+ */
+const quietly = new Set<string>();
+
+/** The rows the user closed (their ×, their menu) since the screen was last looked at: gone, yet a close of theirs. */
+const closedByUser = new Set<string>();
+
+/** The pane of the row `key` taken off by the window itself: one pane per agent, another of its rows opening. */
+export function leavePane(key: string) {
+  quietly.add(key);
+  app.closePaneOf(`page:${key}`);
+}
+
+/**
+ * The agents whose pane the user closed (AB-9), with whether the user has left their conversation since: nothing of
+ * theirs opens on screen (a browser, a page) until the user leaves it and comes back. The backend holds the same, for
+ * what `open_browser` answers.
+ */
+export const dismissals = $state<Record<string, boolean>>({});
+
+/** The user closed the pane of `agent` and has not come back to its conversation since. */
+export const dismissed = (agent: string): boolean => agent in dismissals;
+
+/** The tools of the browsers answer: the MCP server on, « Agents et navigateurs » on. */
+const browsersOn = () => !!app.settings?.mcpEnabled && app.settings?.agentBrowsers !== false;
+
+/** The user closed a pane (or the row) of something `agent` drives while looking at its conversation. */
+function dismiss(agent: string) {
+  dismissals[agent] = !app.shownAgents.includes(agent);
+  if (browsersOn()) api.devpageDismiss(agent).catch(() => {});
+}
+
+/** The rows on screen now, alone or in the panes of the split screen. */
+function rowsOnScreen(): string[] {
+  if (app.ui.view !== 'project') return [];
+  if (app.panesOn && app.panes) return leaves(app.panes.root).flatMap((x) => (x.kind === 'page' ? [x.id] : []));
+  return app.pageShown ? [app.pageShown] : [];
 }
 
 /**
@@ -481,6 +549,8 @@ export function showWish(key: string, wish: Exclude<BrowserWish, 'quiet'>, agent
 export function closePage(key: string, told = false) {
   const page = devpages.pages[key];
   if (!page) return;
+  if (told) quietly.add(key);
+  else closedByUser.add(key);
   delete devpages.pages[key];
   forgetDrive(key);
   clearTimeout(stalls.get(key));
@@ -555,7 +625,8 @@ export function onPageEvent(e: PageEvent) {
       void loadConsents(e.agentId);
       break;
     case 'closed':
-      // Its agent closed it (`close_browser`, ESC-678).
+      // Its agent closed it (`close_browser`, ESC-678): no close of the user's.
+      quietly.add(e.agentId);
       closePage(e.agentId);
       break;
     case 'undriven':
@@ -603,7 +674,7 @@ let looking: string | null = null;
 $effect.root(() => {
   $effect(() => {
     const shown = app.shownAgents;
-    const on = !!app.settings?.mcpEnabled && app.settings?.agentBrowsers !== false;
+    const on = browsersOn();
     const said = shown.join(',');
     if (!on) looking = null;
     else if (said !== looking) {
@@ -611,9 +682,37 @@ $effect.root(() => {
       api.devpageLooking(shown).catch(() => {});
     }
     untrack(() => {
+      // A pane the user closed holds until they leave its agent's conversation and come back (AB-9).
+      for (const [agent, away] of Object.entries(dismissals)) {
+        if (!shown.includes(agent)) dismissals[agent] = true;
+        else if (away) delete dismissals[agent];
+      }
       for (const [key, p] of Object.entries(devpages.pages)) {
         if (p.waiting && p.driver && shown.includes(p.driver)) showWish(key, p.waiting, p.driver);
       }
+    });
+  });
+  // A row an agent drives that leaves the screen while its conversation stays: the user closed it (its pane's ×, its
+  // row's ×, « Fermer le volet », back to one pane), unless the window did (AB-9).
+  let before = new Map<string, string | undefined>();
+  let shownBefore: string[] = [];
+  $effect(() => {
+    const keys = rowsOnScreen();
+    const shown = app.shownAgents;
+    untrack(() => {
+      const now = new Map<string, string | undefined>();
+      for (const key of keys) now.set(key, devpages.pages[key]?.driver ?? before.get(key));
+      for (const [key, agent] of before) {
+        if (now.has(key) || quietly.has(key) || !agent) continue;
+        // A row gone without the user closing it (its agent removed, its ticket done) is no close of theirs.
+        if (!devpages.pages[key] && !closedByUser.has(key)) continue;
+        // Its conversation on screen before and after: not the user going back to it from its browser shown alone.
+        if (shown.includes(agent) && shownBefore.includes(agent)) dismiss(agent);
+      }
+      quietly.clear();
+      closedByUser.clear();
+      before = now;
+      shownBefore = shown;
     });
   });
 });
@@ -622,11 +721,16 @@ app.pages = {
   open: (key) => !!devpages.pages[key],
   projectOf: (key) => devpages.pages[key]?.projectId ?? null,
 };
+// Its agent gone, its ticket done: the window's own close, not the user's (AB-9).
 app.onAgentRemoved((id) => {
+  quietly.add(id);
   closePage(id);
   devpages.asks = devpages.asks.filter((a) => a.agent !== id);
 });
-app.onTicketDone(closePage);
+app.onTicketDone((key) => {
+  quietly.add(key);
+  closePage(key);
+});
 
 /** The overlays of the window (menus, lists, dialogs, the palette): a native page would hide them, it is hidden under them. */
 const OVERLAYS = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .palette';

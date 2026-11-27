@@ -430,6 +430,9 @@ pub struct Pages {
     /// The agents whose conversation the window shows now (ESC-678): an agent's browser opens
     /// beside its conversation only while the user looks at it, else its row waits.
     looking: Mutex<std::collections::HashSet<String>>,
+    /// The agents whose pane the user closed (AB-9), with whether the user has left their conversation since: nothing
+    /// of theirs opens on screen until the user leaves it and comes back.
+    dismissed: Mutex<HashMap<String, bool>>,
     /// The order the pages opened in.
     seq: std::sync::atomic::AtomicU64,
     /// The captures each agent took in the last minute (`capture_browser`, ESC-670), by agent.
@@ -585,7 +588,28 @@ impl Pages {
 
     /// The agents whose conversation the window shows now.
     pub fn set_looking(&self, agents: impl IntoIterator<Item = String>) {
-        *self.looking.lock() = agents.into_iter().collect();
+        let now: std::collections::HashSet<String> = agents.into_iter().collect();
+        self.dismissed.lock().retain(|agent, away| {
+            if !now.contains(agent) {
+                *away = true;
+                true
+            } else {
+                !*away
+            }
+        });
+        *self.looking.lock() = now;
+    }
+
+    /// The user closed the pane of a browser or a page \`agent\` drives, or its row (AB-9): nothing of the agent's
+    /// opens on screen until the user has left its conversation and come back to it.
+    pub fn dismiss(&self, agent: &str) {
+        let away = !self.looking(agent);
+        self.dismissed.lock().insert(agent.to_string(), away);
+    }
+
+    /// Whether the user closed the pane of \`agent\` and has not come back to its conversation since.
+    pub fn dismissed(&self, agent: &str) -> bool {
+        self.dismissed.lock().contains_key(agent)
     }
 
     /// Whether the user looks at the conversation of `agent`.

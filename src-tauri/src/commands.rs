@@ -4863,6 +4863,26 @@ pub fn devpage_looking(pages: State<Arc<crate::devpage::Pages>>, agents: Vec<Str
     pages.set_looking(agents.into_iter().take(16));
 }
 
+/// The user closed the pane of a browser or a page the agent \`agent\` drives, or its row (AB-9): nothing of the
+/// agent's opens on screen until the user leaves its conversation and comes back.
+#[tauri::command]
+pub fn devpage_dismiss(pages: State<Arc<crate::devpage::Pages>>, agent: String) {
+    pages.dismiss(&agent);
+}
+
+/// « Laisser piloter par… » (AB-9): the user lets \`agent\` drive the browser \`key\` they opened alone, or nobody.
+#[tauri::command]
+pub async fn devpage_lend(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    key: String,
+    agent: Option<String>,
+) -> Res<()> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers_drive::lend(&core, &pages, &key, agent.as_deref()).await
+}
+
 /// The agents' requests to open an address outside their project's launch (ESC-678, C3), for the
 /// bands of their conversations.
 #[tauri::command]
