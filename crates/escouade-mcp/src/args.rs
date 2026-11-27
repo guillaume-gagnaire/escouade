@@ -1672,6 +1672,10 @@ pub struct DriveBrowserArgs {
     )]
     pub target: Option<String>,
     #[schemars(
+        description = "scroll_to and highlight: the <iframe> (#id or a CSS selector) whose frame holds target, such as an artifact of claude.ai in its frame of another origin. Under Windows the gesture is made in the frame; under macOS and Linux, or without target, on the frame as a whole (the answer says frame: inside or whole). The frame's content is never read."
+    )]
+    pub frame: Option<String>,
+    #[schemars(
         description = "navigate: an address of the browser's origin (or of your project's launch). Another origin is opened by open_browser, which asks the user."
     )]
     pub url: Option<String>,

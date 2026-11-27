@@ -161,6 +161,43 @@ async fn outside_the_launch_it_shows_without_asking_and_acts_with_the_leave() {
         let e = refused(&c, "drive_browser", drive(args.clone())).await;
         assert!(e.contains(PASSED), "{args}: {e}");
     }
+    // In the frame of the artifact (ESC-682, AB-11): scroll_to and highlight, without asking either; `frame` is for
+    // them alone, by a selector.
+    for args in [
+        json!({ "action": "scroll_to", "frame": "iframe#artifact", "target": "#risques" }),
+        json!({ "action": "highlight", "frame": "iframe#artifact", "target": "text=Risques", "label": "Les risques" }),
+        json!({ "action": "highlight", "frame": "iframe#artifact" }),
+        json!({ "action": "scroll_to", "frame": "iframe#artifact" }),
+    ] {
+        let e = refused(&c, "drive_browser", drive(args.clone())).await;
+        assert!(e.contains(PASSED), "{args}: {e}");
+    }
+    for (args, said) in [
+        (
+            json!({ "action": "click", "frame": "iframe#artifact", "target": "#a" }),
+            "scroll_to et highlight seuls",
+        ),
+        (
+            json!({ "action": "highlight", "frame": "text=Artefact" }),
+            "pas par text=",
+        ),
+        (
+            json!({ "action": "highlight", "frame": "iframe:has(p)" }),
+            "sélecteur n’est pas permis",
+        ),
+        (
+            json!({ "action": "scroll_to", "frame": "#art", "target": "div:has(a)" }),
+            "sélecteur n’est pas permis",
+        ),
+        (
+            json!({ "action": "highlight", "frame": "#art", "label": "x".repeat(61) }),
+            "60 caractères",
+        ),
+    ] {
+        let e = refused(&c, "drive_browser", drive(args.clone())).await;
+        assert!(e.contains(said), "{args}: {e}");
+    }
+    assert!(pages.consents("browser:claude").asks.is_empty());
     // To act: asked of the user, once per origin and per browser.
     let v = read(
         &c,

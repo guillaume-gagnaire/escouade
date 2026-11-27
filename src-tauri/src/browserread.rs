@@ -91,10 +91,13 @@ pub enum Method {
     RuntimeEnable,
     LogEnable,
     NetworkEnable,
+    /// The frames of another site, each in its own process, reached by a session of its own (ESC-682, AB-11):
+    /// iframes alone, never paused, flattened.
+    TargetSetAutoAttach,
 }
 
 impl Method {
-    pub const ALL: [Method; 17] = [
+    pub const ALL: [Method; 18] = [
         Method::PageCaptureScreenshot,
         Method::PageCreateIsolatedWorld,
         Method::PageGetFrameTree,
@@ -112,6 +115,7 @@ impl Method {
         Method::RuntimeEnable,
         Method::LogEnable,
         Method::NetworkEnable,
+        Method::TargetSetAutoAttach,
     ];
 
     /// Its name in the protocol.
@@ -134,6 +138,7 @@ impl Method {
             Method::RuntimeEnable => "Runtime.enable",
             Method::LogEnable => "Log.enable",
             Method::NetworkEnable => "Network.enable",
+            Method::TargetSetAutoAttach => "Target.setAutoAttach",
         }
     }
 
@@ -253,6 +258,13 @@ pub fn guard(method: Method, params: &Value, world: Option<i64>) -> Result<(), S
                 Err("Input.insertText: a text of 2 000 characters alone".into())
             }
         }
+        Method::TargetSetAutoAttach => {
+            if *params == auto_attach() {
+                Ok(())
+            } else {
+                Err("Target.setAutoAttach: iframes alone, never paused".into())
+            }
+        }
         Method::EmulationSetDeviceMetricsOverride => {
             let w = fields.get("width").and_then(Value::as_i64).unwrap_or(0);
             if (200..=4000).contains(&w) {
@@ -262,6 +274,63 @@ pub fn guard(method: Method, params: &Value, world: Option<i64>) -> Result<(), S
             }
         }
         _ => Ok(()),
+    }
+}
+
+/// The parameters of `Target.setAutoAttach`, the only ones (ESC-682): the frames of another site, each in its own
+/// process (an artifact of claude.ai in its frame), attached flat, never waiting for a debugger.
+pub fn auto_attach() -> Value {
+    json!({
+        "autoAttach": true,
+        "waitForDebuggerOnStart": false,
+        "flatten": true,
+        "filter": [{ "type": "iframe", "exclude": false }],
+    })
+}
+
+/// What may be called in the session of a frame (ESC-682): its frame tree, Escouade's world in it, and Escouade's
+/// scripts in that world. Nothing else: no input, no capture, no console, no network of the frame.
+#[cfg(any(windows, test))]
+pub fn guard_frame(method: Method, params: &Value, world: Option<i64>) -> Result<(), String> {
+    match method {
+        Method::PageGetFrameTree | Method::PageCreateIsolatedWorld | Method::RuntimeEvaluate => {
+            guard(method, params, world)
+        }
+        m => Err(format!("{}: not in a frame's session", m.name())),
+    }
+}
+
+/// A child frame of a browser's document, as the protocol says it: its id, its address, and the session that
+/// reaches it when it lives in its own process.
+#[cfg(any(windows, test))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Frame {
+    pub id: String,
+    pub url: String,
+    pub session: Option<String>,
+}
+
+/// The frame of the `<iframe>` the agent named: its `src` (resolved), and its rank among the document's iframes of
+/// that origin. The same origin first, by rank; a single frame of the document when its address went elsewhere
+/// (a redirect). None when it cannot be told.
+#[cfg(any(windows, test))]
+pub fn pick_frame<'a>(frames: &'a [Frame], src: &str, rank: usize) -> Option<&'a Frame> {
+    let origin = |u: &str| {
+        tauri::Url::parse(u)
+            .ok()
+            .map(|u| u.origin().ascii_serialization())
+            .filter(|o| o != "null")
+    };
+    let want = origin(src);
+    let same: Vec<&Frame> = frames
+        .iter()
+        .filter(|f| want.is_some() && origin(&f.url) == want)
+        .collect();
+    match same.len() {
+        0 if frames.len() == 1 => frames.first(),
+        0 => None,
+        1 => same.first().copied(),
+        _ => same.get(rank).copied(),
     }
 }
 
@@ -1301,6 +1370,22 @@ pub fn eval_expression<R: Runtime>(
     platform::eval(webview, expression)
 }
 
+/// Runs an expression of the driving's library in Escouade's world of a child frame (ESC-682, AB-11): the frame of
+/// the `<iframe>` whose resolved `src` and rank among the document's iframes of that origin are given. Under Windows
+/// alone; `Err("unreached")` when the frame is not among the document's.
+#[cfg(windows)]
+pub fn eval_frame_expression<R: Runtime>(
+    webview: &Webview<R>,
+    src: &str,
+    rank: usize,
+    expression: &str,
+) -> Result<String, String> {
+    if !expression.starts_with(&drive_head()) {
+        return Err("Escouade's scripts alone".into());
+    }
+    platform::eval_frame(webview, src, rank, expression)
+}
+
 /// An input or a width of the DevTools protocol for the driving (ESC-679), of the closed list and checked by `guard`.
 #[cfg(windows)]
 pub fn input<R: Runtime>(
@@ -1564,7 +1649,10 @@ pub fn attach<R: Runtime>(webview: &Webview<R>, buffers: Arc<Buffers>) {
 /// Forgets what the core kept for the browser `label` (its world): it is closed.
 pub fn forget(label: &str) {
     #[cfg(windows)]
-    platform::worlds().lock().remove(label);
+    {
+        platform::worlds().lock().remove(label);
+        platform::forget_frames(label);
+    }
     #[cfg(not(windows))]
     let _ = label;
 }
@@ -1594,6 +1682,41 @@ mod platform {
         WORLDS.get_or_init(Default::default)
     }
 
+    /// The sessions of the frames of another site that live in their own process, by browser label: the session,
+    /// the frame's id (its target's), as `Target.attachedToTarget` said them (ESC-682).
+    type Sessions = Mutex<HashMap<String, Vec<(String, String)>>>;
+    fn sessions() -> &'static Sessions {
+        static SESSIONS: OnceLock<Sessions> = OnceLock::new();
+        SESSIONS.get_or_init(Default::default)
+    }
+
+    /// Escouade's world in a child frame, by browser label and frame id.
+    fn frame_worlds() -> &'static Mutex<HashMap<(String, String), i64>> {
+        static WORLDS: OnceLock<Mutex<HashMap<(String, String), i64>>> = OnceLock::new();
+        WORLDS.get_or_init(Default::default)
+    }
+
+    /// Whether an event comes from a frame's own session rather than the browser's (ESC-682).
+    fn from_frame(a: &ICoreWebView2DevToolsProtocolEventReceivedEventArgs) -> bool {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2DevToolsProtocolEventReceivedEventArgs2;
+        use windows_core::Interface;
+        let Ok(a2) = a.cast::<ICoreWebView2DevToolsProtocolEventReceivedEventArgs2>() else {
+            return false;
+        };
+        let mut s = PWSTR::null();
+        // SAFETY: the event's arguments, alive for the call; the string is taken (freed) at once.
+        if unsafe { a2.SessionId(&mut s) }.is_err() {
+            return false;
+        }
+        !take_pwstr(s).is_empty()
+    }
+
+    /// What a browser closing leaves: its frames' sessions and worlds.
+    pub fn forget_frames(label: &str) {
+        sessions().lock().remove(label);
+        frame_worlds().lock().retain(|(l, _), _| l != label);
+    }
+
     /// Calls a method of the closed list on the webview, in the process (no debugging port).
     pub fn cdp<R: Runtime>(
         webview: &Webview<R>,
@@ -1602,9 +1725,34 @@ mod platform {
     ) -> Result<Value, String> {
         let world = worlds().lock().get(webview.label()).copied();
         guard(method, &params, world)?;
+        call(webview, None, method, params)
+    }
+
+    /// Calls a method in the session of a child frame (`session`), or in the browser's own (`None`), for Escouade's
+    /// world `world` of that frame: `guard_frame` first (ESC-682).
+    fn cdp_frame<R: Runtime>(
+        webview: &Webview<R>,
+        session: Option<&str>,
+        method: Method,
+        params: Value,
+        world: Option<i64>,
+    ) -> Result<Value, String> {
+        guard_frame(method, &params, world)?;
+        call(webview, session, method, params)
+    }
+
+    fn call<R: Runtime>(
+        webview: &Webview<R>,
+        session: Option<&str>,
+        method: Method,
+        params: Value,
+    ) -> Result<Value, String> {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_11;
+        use windows_core::Interface;
         let (tx, rx) = std::sync::mpsc::channel();
         let name = method.name();
         let body = params.to_string();
+        let session = session.map(String::from);
         webview
             .with_webview(move |platform| {
                 let failed = tx.clone();
@@ -1618,13 +1766,24 @@ mod platform {
                     }));
                 // SAFETY: the controller is the live one of this WebView, used on its thread.
                 let sent = unsafe {
-                    platform.controller().CoreWebView2().and_then(|core| {
-                        core.CallDevToolsProtocolMethod(
-                            &HSTRING::from(name),
-                            &HSTRING::from(body),
-                            &handler,
-                        )
-                    })
+                    platform
+                        .controller()
+                        .CoreWebView2()
+                        .and_then(|core| match &session {
+                            None => core.CallDevToolsProtocolMethod(
+                                &HSTRING::from(name),
+                                &HSTRING::from(body),
+                                &handler,
+                            ),
+                            Some(s) => core.cast::<ICoreWebView2_11>().and_then(|core| {
+                                core.CallDevToolsProtocolMethodForSession(
+                                    &HSTRING::from(s.as_str()),
+                                    &HSTRING::from(name),
+                                    &HSTRING::from(body),
+                                    &handler,
+                                )
+                            }),
+                        })
                 };
                 if let Err(e) = sent {
                     let _ = failed.send(Err(format!("{name}: {e}")));
@@ -1632,6 +1791,132 @@ mod platform {
             })
             .map_err(|e| e.to_string())?;
         wait(rx, name)
+    }
+
+    /// The child frames of the browser's document: those of its process (its frame tree), and those of another
+    /// site in their own (a session each, its address read in it).
+    fn frames<R: Runtime>(webview: &Webview<R>) -> Result<Vec<Frame>, String> {
+        let tree = cdp(webview, Method::PageGetFrameTree, json!({}))?;
+        let mut out: Vec<Frame> = tree["frameTree"]["childFrames"]
+            .as_array()
+            .map(|a| a.as_slice())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|c| {
+                Some(Frame {
+                    id: c["frame"]["id"].as_str()?.to_string(),
+                    url: c["frame"]["url"].as_str().unwrap_or("").to_string(),
+                    session: None,
+                })
+            })
+            .collect();
+        let attached = sessions()
+            .lock()
+            .get(webview.label())
+            .cloned()
+            .unwrap_or_default();
+        for (session, id) in attached {
+            let Ok(t) = cdp_frame(
+                webview,
+                Some(&session),
+                Method::PageGetFrameTree,
+                json!({}),
+                None,
+            ) else {
+                continue;
+            };
+            let url = t["frameTree"]["frame"]["url"].as_str().unwrap_or("");
+            let id = t["frameTree"]["frame"]["id"]
+                .as_str()
+                .unwrap_or(&id)
+                .to_string();
+            match out.iter_mut().find(|f| f.id == id) {
+                Some(f) => {
+                    f.session = Some(session);
+                    f.url = url.to_string();
+                }
+                None => out.push(Frame {
+                    id,
+                    url: url.to_string(),
+                    session: Some(session),
+                }),
+            }
+        }
+        Ok(out)
+    }
+
+    /// Escouade's world in a child frame: the one made for its document, or a new one.
+    fn frame_world<R: Runtime>(
+        webview: &Webview<R>,
+        frame: &Frame,
+        fresh: bool,
+    ) -> Result<i64, String> {
+        let key = (webview.label().to_string(), frame.id.clone());
+        if !fresh {
+            if let Some(ctx) = frame_worlds().lock().get(&key) {
+                return Ok(*ctx);
+            }
+        }
+        let made = cdp_frame(
+            webview,
+            frame.session.as_deref(),
+            Method::PageCreateIsolatedWorld,
+            json!({ "frameId": frame.id, "worldName": WORLD, "grantUniveralAccess": false }),
+            None,
+        )?;
+        let ctx = made["executionContextId"]
+            .as_i64()
+            .ok_or("no isolated world in the frame")?;
+        frame_worlds().lock().insert(key, ctx);
+        Ok(ctx)
+    }
+
+    /// Runs an expression of Escouade's scripts in its world of the child frame of the `<iframe>` whose `src` and
+    /// rank are given (ESC-682): its text. `Err("unreached")` when the frame is not found among the document's.
+    pub fn eval_frame<R: Runtime>(
+        webview: &Webview<R>,
+        src: &str,
+        rank: usize,
+        expression: &str,
+    ) -> Result<String, String> {
+        let all = frames(webview)?;
+        let frame = pick_frame(&all, src, rank).ok_or("unreached")?.clone();
+        log::info!(
+            "a frame of {} reached {}",
+            webview.label(),
+            if frame.session.is_some() {
+                "by its own session"
+            } else {
+                "in the page's process"
+            }
+        );
+        let mut last = String::new();
+        for fresh in [false, true] {
+            let ctx = frame_world(webview, &frame, fresh)?;
+            let answer = cdp_frame(
+                webview,
+                frame.session.as_deref(),
+                Method::RuntimeEvaluate,
+                json!({ "expression": expression, "contextId": ctx, "returnByValue": true, "silent": true }),
+                Some(ctx),
+            );
+            match answer {
+                Ok(v) if v.get("exceptionDetails").is_none() => {
+                    return v["result"]["value"]
+                        .as_str()
+                        .map(String::from)
+                        .ok_or_else(|| "no answer".into())
+                }
+                Ok(v) => {
+                    last = v["exceptionDetails"]["text"]
+                        .as_str()
+                        .unwrap_or("threw")
+                        .to_string()
+                }
+                Err(e) => last = e,
+            }
+        }
+        Err(last)
     }
 
     /// Escouade's world in the main frame of the browser: the one made for its document, or a new one.
@@ -1739,6 +2024,7 @@ mod platform {
     }
 
     pub fn attach<R: Runtime>(webview: &Webview<R>, buffers: Arc<Buffers>) {
+        let label = webview.label().to_string();
         let asked = webview.with_webview(move |platform| {
             // SAFETY: the controller is the live one of this WebView, used on its thread; the
             // registrations last as long as the WebView.
@@ -1752,6 +2038,10 @@ mod platform {
                 let handler = DevToolsProtocolEventReceivedEventHandler::create(Box::new(
                     move |_, args: Option<ICoreWebView2DevToolsProtocolEventReceivedEventArgs>| {
                         if let Some(a) = args {
+                            // A frame's own session (ESC-682) tells nothing to the browser's buffers.
+                            if from_frame(&a) {
+                                return Ok(());
+                            }
                             let mut s = PWSTR::null();
                             // SAFETY: the event's arguments, alive for the call.
                             unsafe { a.ParameterObjectAsJson(&mut s)? };
@@ -1774,8 +2064,52 @@ mod platform {
                     log::error!("a browser's {event} is not kept: {e}");
                 }
             }
+            // The frames of another site, each in its own process (ESC-682): their sessions, kept by label.
+            for event in ["Target.attachedToTarget", "Target.detachedFromTarget"] {
+                let label = label.clone();
+                let handler = DevToolsProtocolEventReceivedEventHandler::create(Box::new(
+                    move |_, args: Option<ICoreWebView2DevToolsProtocolEventReceivedEventArgs>| {
+                        let Some(a) = args else { return Ok(()) };
+                        if from_frame(&a) {
+                            return Ok(());
+                        }
+                        let mut s = PWSTR::null();
+                        // SAFETY: the event's arguments, alive for the call.
+                        unsafe { a.ParameterObjectAsJson(&mut s)? };
+                        let Ok(p) = serde_json::from_str::<Value>(&take_pwstr(s)) else {
+                            return Ok(());
+                        };
+                        let Some(session) = p["sessionId"].as_str() else {
+                            return Ok(());
+                        };
+                        let mut all = sessions().lock();
+                        let list = all.entry(label.clone()).or_default();
+                        list.retain(|(s, _)| s != session);
+                        if event == "Target.attachedToTarget"
+                            && p["targetInfo"]["type"].as_str() == Some("iframe")
+                        {
+                            if let Some(id) = p["targetInfo"]["targetId"].as_str() {
+                                list.push((session.to_string(), id.to_string()));
+                            }
+                        }
+                        Ok(())
+                    },
+                ));
+                // SAFETY: as above.
+                let listened = unsafe {
+                    core.GetDevToolsProtocolEventReceiver(&HSTRING::from(event))
+                        .and_then(|receiver| {
+                            let mut token = 0i64;
+                            receiver.add_DevToolsProtocolEventReceived(&handler, &mut token)
+                        })
+                };
+                if let Err(e) = listened {
+                    log::error!("a browser's {event} is not kept: {e}");
+                }
+            }
             // The domains whose events these are; the network keeps no body (its buffers at 1 byte).
             let enables = [
+                (Method::TargetSetAutoAttach, auto_attach()),
                 (Method::RuntimeEnable, json!({})),
                 (Method::LogEnable, json!({})),
                 (

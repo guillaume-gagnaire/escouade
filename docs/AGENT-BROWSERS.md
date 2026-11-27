@@ -139,9 +139,9 @@ Ce que ces paliers impliquent :
 **Limite** : l'artefact s'affiche dans un cadre d'une autre origine, à l'intérieur de la page de claude.ai. Dans cette version :
 
 - marchent sans réserve : défiler la page, recharger, changer de largeur et mettre en évidence le **cadre** de l'artefact ;
-- `scroll_to` et `highlight` **sur un élément de l'artefact** demandent d'atteindre ce cadre. Sous Windows, il faut ouvrir une session du protocole DevTools vers le cadre (`Target.setAutoAttach`, `CallDevToolsProtocolMethodForSession`), ce qui n'est pas vérifié par la sonde. Sous WebKit, il n'y a pas d'API publique.
+- `scroll_to` et `highlight` **sur un élément de l'artefact** demandent d'atteindre ce cadre. Sous Windows, il faut ouvrir une session du protocole DevTools vers le cadre (`Target.setAutoAttach`, `CallDevToolsProtocolMethodForSession`). Sous WebKit, il n'y a pas d'API publique.
 
-C'est l'objet d'AB-11, en 2.2, pour ce cas sous Windows. Sous WebKit, le repli est le cadre entier mis en évidence.
+C'est l'objet d'AB-11 (construit, ESC-682) : `drive_browser({ action: "highlight", frame: "#artefact", target: "#risques" })`. Sous Windows, le geste se fait dans le monde isolé du cadre, atteint par sa propre session (`frame: "inside"`, vérifié par l'e2e `agent-browsers-frames.spec.ts`) ; sous WebKit, sans `target`, ou quand le cadre n'est pas atteint, le cadre entier est défilé ou mis en évidence (`frame: "whole"`). La spec d'Escouade (`kanban/navigateurs-pilotes`, « Les cadres d'une autre origine ») fait foi.
 
 ## 3. Les outils MCP
 
@@ -406,7 +406,7 @@ Une autre adresse `http(s)` est **demandée** à l'utilisateur (choix C3 tranch�
 
 - Les cookies, `localStorage`, `sessionStorage`, IndexedDB, les en-têtes (d'authentification ou autres), les corps des réponses réseau.
 - La valeur d'un champ mot de passe : `read_browser` la rend `«masqué»` et l'arbre d'accessibilité ne la donne pas (vérifié sous Windows).
-- **Pas de passe-plat vers le protocole DevTools.** Le cœur appelle une liste fermée de méthodes : `Page.captureScreenshot`, `Page.createIsolatedWorld`, `Page.getFrameTree`, `Page.navigate`, `Page.reload`, `Runtime.evaluate` (seulement dans le monde isolé et avec nos scripts), `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Input.insertText`, `Overlay.highlightNode`, `Overlay.hideHighlight`, `Emulation.setDeviceMetricsOverride`, `Emulation.clearDeviceMetricsOverride`, `Accessibility.getFullAXTree`, et `Runtime`/`Log`/`Network.enable` pour leurs événements. Pourquoi : la sonde a lu `session=secret-cookie-663` par `Network.getCookies` et le jeton du `localStorage` par `Runtime.evaluate` dans le monde de la page.
+- **Pas de passe-plat vers le protocole DevTools.** Le cœur appelle une liste fermée de méthodes : `Page.captureScreenshot`, `Page.createIsolatedWorld`, `Page.getFrameTree`, `Page.navigate`, `Page.reload`, `Runtime.evaluate` (seulement dans le monde isolé et avec nos scripts), `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Input.insertText`, `Overlay.highlightNode`, `Overlay.hideHighlight`, `Emulation.setDeviceMetricsOverride`, `Emulation.clearDeviceMetricsOverride`, `Accessibility.getFullAXTree`, `Runtime`/`Log`/`Network.enable` pour leurs événements, et `Target.setAutoAttach` (les `iframe` seules, à plat, jamais en pause : AB-11), dont la session d'un cadre ne permet que `Page.getFrameTree`, `Page.createIsolatedWorld` et `Runtime.evaluate` de nos scripts. Pourquoi : la sonde a lu `session=secret-cookie-663` par `Network.getCookies` et le jeton du `localStorage` par `Runtime.evaluate` dans le monde de la page.
 
 ### 5.3 Qui peut piloter
 

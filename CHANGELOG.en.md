@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - A Claude Code agent opens its artifact for you beside its conversation, and the tab reloads at each new version it publishes, except while you have the hand. Only artifacts it published itself open this way; on claude.ai it shows without reading anything of your session without your permission.
 - An agent now drives what it opens for you, gesture by gesture, to show you its work: it scrolls, highlights, switches to the phone width, and on the project’s launch it clicks, types and chooses; elsewhere, acting waits for your permission. Your first gesture in the page takes the hand back until you give it back; it never types a secret, never downloads or sends a file, and fills a password only with your permission.
+- An agent can now show you a passage of its Claude artifact, inside its frame: under Windows it scrolls the page there to the element and outlines it; under macOS and Linux, it highlights the whole frame. It still reads nothing of what the frame holds.
 
 ## [2.2.15] — 2026-11-27
 

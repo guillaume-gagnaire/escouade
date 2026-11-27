@@ -159,6 +159,33 @@ pub enum Act {
     Select(Target, String),
     Press(Key),
     Version(u32),
+    /// `scroll_to` or `highlight` with `frame` (ESC-682, AB-11): an element of the frame of that `<iframe>`
+    /// (`target`), or the frame as a whole (no `target`, or WebKit, or a frame Windows did not reach).
+    InFrame {
+        frame: Target,
+        gesture: FrameGesture,
+        target: Option<Target>,
+        label: String,
+    },
+}
+
+/// The gestures that reach into a frame of another origin (ESC-682, AB-11): to show, nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameGesture {
+    ScrollTo,
+    Highlight,
+}
+
+/// How a gesture in a frame was made: in the frame itself (Windows, by the frame's own isolated world), or on the
+/// frame as a whole (WebKit, which has no public way into a frame of another origin; or a frame Windows did not
+/// reach).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Reach {
+    /// Windows alone.
+    #[cfg(windows)]
+    Inside,
+    Whole,
 }
 
 /// The tier of a gesture.
@@ -201,6 +228,14 @@ impl Act {
             Act::Select(..) => "select",
             Act::Press(_) => "press",
             Act::Version(_) => "version",
+            Act::InFrame {
+                gesture: FrameGesture::ScrollTo,
+                ..
+            } => "scroll_to",
+            Act::InFrame {
+                gesture: FrameGesture::Highlight,
+                ..
+            } => "highlight",
         }
     }
 
@@ -814,7 +849,32 @@ pub fn expression(args: &Value) -> String {
 /// Runs the library with `args` in Escouade's world of `webview`: its answer, an error it gave said as one.
 pub fn run<R: Runtime>(webview: &Webview<R>, args: Value) -> Result<Value, String> {
     let text = crate::browserread::eval_expression(webview, &expression(&args))?;
-    let v: Value = serde_json::from_str(&text)
+    answered(&text)
+}
+
+/// The frame each browser's highlight was last put in (its `<iframe>`'s `src` and rank), to take it off (ESC-682).
+#[cfg(windows)]
+fn lit_frames() -> &'static Mutex<HashMap<String, (String, usize)>> {
+    static LIT: std::sync::OnceLock<Mutex<HashMap<String, (String, usize)>>> =
+        std::sync::OnceLock::new();
+    LIT.get_or_init(Default::default)
+}
+
+/// Takes off the highlight Escouade put in a frame of `webview`, if any (Windows; nothing elsewhere, where a
+/// highlight is never put in a frame).
+pub fn clear_frames<R: Runtime>(webview: &Webview<R>) {
+    #[cfg(windows)]
+    if let Some((src, rank)) = lit_frames().lock().remove(webview.label()) {
+        let e = expression(&json!({ "run": "clear" }));
+        let _ = crate::browserread::eval_frame_expression(webview, &src, rank, &e);
+    }
+    #[cfg(not(windows))]
+    let _ = webview;
+}
+
+/// The answer of the library, an error it gave said as one.
+fn answered(text: &str) -> Result<Value, String> {
+    let v: Value = serde_json::from_str(text)
         .map_err(|e| format!("not an answer of Escouade's script: {e}"))?;
     match v["error"].as_str() {
         Some("selector") => Err("selector".into()),
@@ -828,6 +888,71 @@ pub fn run<R: Runtime>(webview: &Webview<R>, args: Value) -> Result<Value, Strin
         )),
         None => Ok(v),
     }
+}
+
+/// `scroll_to` or `highlight` with `frame` (ESC-682, AB-11). The `<iframe>` is found in the document and brought into
+/// view; then, under Windows, the gesture is made on `target` in the frame's own isolated world (its document's
+/// scroll, a contour in it); without `target`, under WebKit, or when Windows does not reach the frame, the frame is
+/// scrolled to or highlighted as a whole. Nothing of the frame's content comes back: « found » or not.
+pub fn in_frame<R: Runtime>(
+    webview: &Webview<R>,
+    frame: &Target,
+    gesture: FrameGesture,
+    target: Option<&Target>,
+    label: &str,
+    color: &str,
+) -> Result<Reach, String> {
+    let f = run(
+        webview,
+        json!({ "run": "frame", "target": frame.arg(), "reveal": true }),
+    )?;
+    if f["found"] != json!(true) {
+        return Err("missing-frame".into());
+    }
+    if f["frame"] != json!(true) {
+        return Err("not-frame".into());
+    }
+    let _ = run(webview, json!({ "run": "clear" }));
+    clear_frames(webview);
+    #[cfg(windows)]
+    if let Some(t) = target {
+        let src = f["src"].as_str().unwrap_or("");
+        let rank = f["rank"].as_u64().unwrap_or(0) as usize;
+        let args = match gesture {
+            FrameGesture::ScrollTo => json!({ "run": "scroll_to", "target": t.arg() }),
+            FrameGesture::Highlight => {
+                json!({ "run": "highlight", "target": t.arg(), "label": label, "color": color })
+            }
+        };
+        match crate::browserread::eval_frame_expression(webview, src, rank, &expression(&args)) {
+            Ok(text) => {
+                let v = answered(&text)?;
+                if v["found"] != json!(true) {
+                    return Err("missing".into());
+                }
+                if gesture == FrameGesture::Highlight {
+                    lit_frames()
+                        .lock()
+                        .insert(webview.label().to_string(), (src.to_string(), rank));
+                }
+                return Ok(Reach::Inside);
+            }
+            Err(e) => log::warn!("a frame was not reached, the gesture is on the whole frame: {e}"),
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = target;
+    let args = match gesture {
+        FrameGesture::ScrollTo => json!({ "run": "scroll_to", "target": frame.arg() }),
+        FrameGesture::Highlight => {
+            json!({ "run": "highlight", "target": frame.arg(), "label": label, "color": color })
+        }
+    };
+    let v = run(webview, args)?;
+    if v["found"] != json!(true) {
+        return Err("missing-frame".into());
+    }
+    Ok(Reach::Whole)
 }
 
 /// An agent's gesture is under way for `ms`: what the page makes of it is not the user's.

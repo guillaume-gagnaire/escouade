@@ -153,6 +153,36 @@
     return { found: true, kind: kind(el), box: box(el) };
   }
 
+  // The `<iframe>` a target names in this document (ESC-682, AB-11), made visible: its address (the `src` the
+  // document gave it, resolved) and its rank among the document's iframes of that origin, for the core to tell its
+  // frame; never anything of the frame's content.
+  function frame(a) {
+    var f = find(a.target);
+    if (f.error) return { error: f.error };
+    if (!f.el) return { found: false, hidden: !!f.hidden };
+    var el = f.el;
+    var tag = (el.localName || '').toLowerCase();
+    if (tag !== 'iframe' && tag !== 'frame') return { found: true, frame: false };
+    if (a.reveal && !inView(box(el))) el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+    var origin = function (u) {
+      try {
+        return new URL(u, location.href).origin;
+      } catch (e) {
+        return '';
+      }
+    };
+    var src = '';
+    try {
+      src = new URL(el.getAttribute('src') || 'about:blank', location.href).href;
+    } catch (e) {}
+    var rank = 0;
+    var all = document.querySelectorAll('iframe,frame');
+    for (var i = 0; i < all.length && all[i] !== el; i++) {
+      if (origin(all[i].getAttribute('src') || 'about:blank') === origin(src)) rank++;
+    }
+    return { found: true, frame: true, src: src, rank: rank, box: box(el) };
+  }
+
   function scrollTo(a) {
     var f = find(a.target);
     if (f.error) return { error: f.error };
@@ -363,6 +393,7 @@
     state();
     var run = args.run;
     if (run === 'locate') result = locate(args);
+    else if (run === 'frame') result = frame(args);
     else if (run === 'scroll_to') result = scrollTo(args);
     else if (run === 'scroll') result = scrollBy(args);
     else if (run === 'highlight') result = highlight(args);

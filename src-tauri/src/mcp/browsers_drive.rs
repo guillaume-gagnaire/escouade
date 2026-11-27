@@ -212,6 +212,56 @@ fn act_of(args: &DriveBrowserArgs, row: &Row) -> Result<Act, ToolError> {
         }
     };
     let need = |t: Result<Option<Target>, ToolError>| t.map(|t| t.expect("a target"));
+    // `frame` (ESC-682, AB-11): the <iframe> by a selector, for scroll_to and highlight alone.
+    if let Some(raw) = args
+        .frame
+        .as_deref()
+        .map(str::trim)
+        .filter(|f| !f.is_empty())
+    {
+        let gesture = match args.action {
+            DriveActionArg::ScrollTo => drive::FrameGesture::ScrollTo,
+            DriveActionArg::Highlight => drive::FrameGesture::Highlight,
+            _ => {
+                return Err(ToolError::Failed(tr!(
+                    "frame vaut pour scroll_to et highlight seuls.",
+                    "frame is for scroll_to and highlight alone."
+                )))
+            }
+        };
+        let frame = match drive::target(raw, None) {
+            Ok(t @ Target::Css(_)) => t,
+            Ok(Target::Text(_)) => {
+                return Err(ToolError::Failed(tr!(
+                    "frame prend le cadre par un sélecteur (#id, iframe[title=…]), pas par text=.",
+                    "frame takes the frame by a selector (#id, iframe[title=…]), not by text=."
+                )))
+            }
+            Err(b) => return Err(bad_target(raw, b)),
+        };
+        let inner = match args
+            .target
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+        {
+            None => None,
+            Some(t) => Some(drive::target(t, None).map_err(|b| bad_target(t, b))?),
+        };
+        let label = args.label.as_deref().unwrap_or("").trim().to_string();
+        if label.chars().count() > drive::LABEL_MAX || label.chars().any(char::is_control) {
+            return Err(ToolError::Failed(tr!(
+                "label tient sur une ligne de 60 caractères au plus.",
+                "label is one line of 60 characters at most."
+            )));
+        }
+        return Ok(Act::InFrame {
+            frame,
+            gesture,
+            target: inner,
+            label,
+        });
+    }
     Ok(match args.action {
         DriveActionArg::Navigate => {
             let Some(url) = args.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
@@ -490,6 +540,21 @@ fn what_of(act: &Act, raw: Option<&str>) -> String {
             tr!("Presse {k}", "Presses {k}")
         }
         Act::Version(n) => tr!("Montre la version {n}", "Shows version {n}"),
+        Act::InFrame {
+            gesture: drive::FrameGesture::Highlight,
+            label,
+            ..
+        } if !label.is_empty() => {
+            tr!("Met en évidence « {label} »", "Highlights “{label}”")
+        }
+        Act::InFrame {
+            gesture: drive::FrameGesture::Highlight,
+            ..
+        } => tr!("Met en évidence « {t} »", "Highlights “{t}”"),
+        Act::InFrame {
+            gesture: drive::FrameGesture::ScrollTo,
+            ..
+        } => tr!("Défile jusqu’à « {t} »", "Scrolls to “{t}”"),
     }
 }
 
@@ -504,6 +569,14 @@ fn page_failed(e: &str, raw: Option<&str>) -> ToolError {
         "missing" => ToolError::Failed(tr!(
             "Aucun élément visible pour « {t} ».",
             "No visible element for “{t}”."
+        )),
+        "missing-frame" => ToolError::Failed(tr!(
+            "Aucun cadre visible pour frame.",
+            "No visible frame for frame."
+        )),
+        "not-frame" => ToolError::Failed(tr!(
+            "frame ne désigne pas un <iframe>.",
+            "frame does not name an <iframe>."
         )),
         "option" => ToolError::Failed(tr!(
             "Aucune option de cette valeur ni de ce libellé dans « {t} ».",
@@ -657,7 +730,7 @@ pub(super) async fn drive<R: Runtime>(
 ) -> Result<Vec<ContentBlock>, ToolError> {
     let row = row_of(core, caller, &args.browser)?;
     let act = act_of(&args, &row)?;
-    let raw = args.target.as_deref();
+    let raw = args.target.as_deref().or(args.frame.as_deref());
     let pages = pages_of(core).unwrap_or_default();
     // The tiers: outside the launch, to act waits for the user's leave (C4), the one of read_browser.
     let leave = match &row.line {
@@ -785,7 +858,7 @@ pub(super) async fn drive<R: Runtime>(
         "title": extra["title"].as_str().unwrap_or(""),
         "hand": pages.drives.hand(&row.key).unwrap_or(Hand::Agent),
     });
-    for k in ["scrollY", "innerWidth", "found", "ms", "version"] {
+    for k in ["scrollY", "innerWidth", "found", "ms", "version", "frame"] {
         if !extra[k].is_null() {
             answer[k] = extra[k].clone();
         }
@@ -912,7 +985,11 @@ async fn perform<R: Runtime>(
     to: Option<Url>,
     webview: tauri::Webview<R>,
 ) -> Result<Value, ToolError> {
-    let raw_t = act.target().map(|t| match t {
+    let raw_t = match act {
+        Act::InFrame { frame, target, .. } => Some(target.as_ref().unwrap_or(frame)),
+        a => a.target(),
+    }
+    .map(|t| match t {
         Target::Css(c) => c.clone(),
         Target::Text(t) => format!("text={t}"),
     });
@@ -1004,12 +1081,27 @@ async fn perform<R: Runtime>(
             Act::Scroll(by) => {
                 drive::run(w, json!({ "run": "scroll", "by": by }))?;
             }
-            Act::Highlight(t, label) => found(drive::run(
-                w,
-                json!({ "run": "highlight", "target": t.arg(), "label": label, "color": color }),
-            )?)?,
+            Act::Highlight(t, label) => {
+                drive::clear_frames(w);
+                found(drive::run(
+                    w,
+                    json!({ "run": "highlight", "target": t.arg(), "label": label, "color": color }),
+                )?)?
+            }
             Act::Clear => {
+                drive::clear_frames(w);
                 drive::run(w, json!({ "run": "clear" }))?;
+            }
+            Act::InFrame {
+                frame,
+                gesture,
+                target,
+                label,
+            } => {
+                let reach = drive::in_frame(w, frame, *gesture, target.as_ref(), label, &color)?;
+                let mut v = drive::settle(w);
+                v["frame"] = json!(reach);
+                return Ok(v);
             }
             Act::Width(mode) if agent_page => drive::emulate_width(w, *mode)?,
             Act::Tab(t) | Act::Click(t) => {

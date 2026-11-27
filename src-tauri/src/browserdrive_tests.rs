@@ -35,7 +35,142 @@ fn every_act() -> Vec<Act> {
         Act::Select(css("#s"), "b".into()),
         Act::Press(Key::Enter),
         Act::Version(2),
+        Act::InFrame {
+            frame: css("iframe#art"),
+            gesture: FrameGesture::ScrollTo,
+            target: Some(css("#risques")),
+            label: String::new(),
+        },
+        Act::InFrame {
+            frame: css("iframe#art"),
+            gesture: FrameGesture::Highlight,
+            target: None,
+            label: "L’artefact".into(),
+        },
     ]
+}
+
+#[test]
+fn a_gesture_in_a_frame_is_one_to_show() {
+    // scroll_to and highlight in a frame of another origin (ESC-682, AB-11): to show, without asking, everywhere.
+    let outside = Line::Outside("https://claude.ai".into());
+    for act in every_act()
+        .into_iter()
+        .filter(|a| matches!(a, Act::InFrame { .. }))
+    {
+        assert_eq!(act.tier(), Tier::Show);
+        assert_eq!(decide(&outside, &act, false), Verdict::Go);
+        assert_eq!(decide(&Line::Launch, &act, false), Verdict::Go);
+        // Not an element of the document: the checks of an element to act on are never asked for it.
+        assert_eq!(act.target(), None);
+        let kind = Kind {
+            password: true,
+            file: true,
+            ..Kind::default()
+        };
+        assert_eq!(forbid(&outside, &act, &kind, false), None);
+    }
+    let names: Vec<&str> = every_act()
+        .iter()
+        .filter(|a| matches!(a, Act::InFrame { .. }))
+        .map(Act::name)
+        .collect();
+    assert_eq!(names, ["scroll_to", "highlight"]);
+    // The answer says where the gesture was made.
+    assert_eq!(serde_json::to_value(Reach::Whole).unwrap(), json!("whole"));
+    #[cfg(windows)]
+    assert_eq!(
+        serde_json::to_value(Reach::Inside).unwrap(),
+        json!("inside")
+    );
+}
+
+#[test]
+fn a_frame_is_reached_by_the_closed_list_alone() {
+    use crate::browserread::{auto_attach, guard_frame, pick_frame, Frame};
+    // Target.setAutoAttach: the iframes of the document, never paused, flat; nothing else of the Target domain.
+    assert_eq!(
+        Method::parse("Target.setAutoAttach").unwrap(),
+        Method::TargetSetAutoAttach
+    );
+    for name in [
+        "Target.getTargets",
+        "Target.attachToTarget",
+        "Target.createTarget",
+        "Target.setDiscoverTargets",
+        "Target.sendMessageToTarget",
+    ] {
+        assert!(Method::parse(name).is_err(), "{name}");
+    }
+    assert!(guard(Method::TargetSetAutoAttach, &auto_attach(), None).is_ok());
+    for bad in [
+        json!({ "autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true, "filter": [{ "type": "iframe", "exclude": false }] }),
+        json!({ "autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true }),
+        json!({ "autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true, "filter": [{ "type": "page", "exclude": false }] }),
+    ] {
+        assert!(
+            guard(Method::TargetSetAutoAttach, &bad, None).is_err(),
+            "{bad}"
+        );
+    }
+    // In a frame's session: its tree, Escouade's world, Escouade's scripts in that world; no input, capture, network.
+    let drive = expression(&json!({ "run": "scroll_to", "target": { "css": "#risques" } }));
+    let eval = |e: &str, ctx: i64| {
+        guard_frame(
+            Method::RuntimeEvaluate,
+            &json!({ "expression": e, "contextId": ctx, "returnByValue": true, "silent": true }),
+            Some(12),
+        )
+    };
+    assert!(eval(&drive, 12).is_ok());
+    assert!(eval(&drive, 3).is_err(), "the frame's own world");
+    assert!(eval("document.body.innerText", 12).is_err());
+    assert!(guard_frame(Method::PageGetFrameTree, &json!({}), None).is_ok());
+    assert!(guard_frame(
+        Method::PageCreateIsolatedWorld,
+        &json!({ "frameId": "F", "worldName": "escouade-agent" }),
+        None
+    )
+    .is_ok());
+    for (m, p) in [
+        (
+            Method::InputDispatchMouseEvent,
+            json!({ "type": "mousePressed", "x": 1.0, "y": 1.0 }),
+        ),
+        (Method::InputInsertText, json!({ "text": "x" })),
+        (Method::PageCaptureScreenshot, json!({})),
+        (Method::PageNavigate, json!({ "url": "https://claude.ai/" })),
+        (Method::NetworkEnable, json!({})),
+        (Method::RuntimeEnable, json!({})),
+        (Method::AccessibilityGetFullAxTree, json!({})),
+        (Method::TargetSetAutoAttach, auto_attach()),
+    ] {
+        assert!(guard_frame(m, &p, Some(12)).is_err(), "{}", m.name());
+    }
+    // Which frame is the <iframe>'s: of its origin, by rank; a lone frame whose address went elsewhere.
+    let f = |id: &str, url: &str, s: Option<&str>| Frame {
+        id: id.into(),
+        url: url.into(),
+        session: s.map(String::from),
+    };
+    let frames = [
+        f("A", "http://localhost:4100/ad", None),
+        f("B", "https://a.claudeusercontent.com/x?v=2", Some("S1")),
+        f("C", "https://a.claudeusercontent.com/y", Some("S2")),
+    ];
+    let pick = |src: &str, rank: usize| pick_frame(&frames, src, rank).map(|f| f.id.as_str());
+    assert_eq!(pick("http://localhost:4100/ad", 0), Some("A"));
+    assert_eq!(pick("https://a.claudeusercontent.com/x", 0), Some("B"));
+    assert_eq!(pick("https://a.claudeusercontent.com/x", 1), Some("C"));
+    assert_eq!(pick("https://a.claudeusercontent.com/x", 2), None);
+    assert_eq!(pick("https://elsewhere.example/", 0), None);
+    assert_eq!(pick("about:blank", 0), None);
+    let lone = [f("Z", "https://b.example/after-redirect", Some("S9"))];
+    assert_eq!(
+        pick_frame(&lone, "https://a.example/", 0).map(|f| f.id.as_str()),
+        Some("Z")
+    );
+    assert_eq!(pick_frame(&[], "https://a.example/", 0), None);
 }
 
 #[test]
