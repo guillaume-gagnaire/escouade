@@ -206,7 +206,8 @@ export async function answerWants(key: string, follow: boolean) {
 /** The rows open when the window starts (a reload of the window: the backend kept them for this run). */
 export async function loadRows() {
   const rows = await api.agentpageRows().catch(() => [] as AgentPageRow[]);
-  for (const row of rows) adopt(row);
+  // A core that answers nothing (an older one, or a test's mock) gives no rows, never a throw at the window's start.
+  for (const row of Array.isArray(rows) ? rows : []) adopt(row);
 }
 
 app.onAgentPage((e) => void onAgentPageEvent(e));
