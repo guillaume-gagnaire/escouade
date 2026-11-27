@@ -346,7 +346,14 @@
     <i></i>
     <button onclick={fitAll}>{t('workspace.fit')}</button>
     <i></i>
-    <button aria-pressed={hideIdle} onclick={() => (hideIdle = !hideIdle)}>{t('workspace.hideIdle')}</button>
+    <!-- An icon alone: with its words the bar would run over « Quitter » and « Workflows » at 1024 px. -->
+    <button
+      class="icon-btn"
+      aria-label={t('workspace.hideIdle')}
+      aria-pressed={hideIdle}
+      use:tip={t('workspace.hideIdle')}
+      onclick={() => (hideIdle = !hideIdle)}><Icon name="collapse" size={14} /></button
+    >
     <i></i>
     <span class="info">{t('workspace.count', { count: agents.length })}</span>
     {#if questions}<span class="info q">{t('workspace.questions', { count: questions })}</span>{/if}
@@ -476,6 +483,12 @@
   .bar button:hover,
   .bar button[aria-pressed='true'] {
     background: var(--hover);
+  }
+  .bar .icon-btn {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    padding: 0;
   }
   .bar i {
     width: 1px;
