@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { PluginsAutoUpdate } from '../../lib/types';
+  import { tip } from '../../lib/tip';
   import { onMount } from 'svelte';
   import { t } from '../../lib/i18n';
   import { openUrl } from '@tauri-apps/plugin-opener';
@@ -82,7 +84,9 @@
             >
           {:else if page.kind === 'updates'}
             <h2>{t('plugins.updates.title')}</h2>
-            <span class="sub">{t('plugins.updates.sub')}</span>
+            <span class="sub"
+              >{t((app.settings.pluginsAutoUpdate ?? 'never') === 'never' ? 'plugins.updates.sub' : 'plugins.updates.subAuto')}</span
+            >
             {#if plugins.storeRead}<span class="sub read" class:warn={!!plugins.store?.error} role="status">{plugins.storeRead}</span>{/if}
           {:else if page.kind === 'dev'}
             <h2>{t('plugins.dev.title')}</h2>
@@ -101,6 +105,20 @@
                 aria-label={t('plugins.installed.verifiedOnly')}
                 onclick={() => plugins.setVerifiedOnly(!app.settings.pluginsVerifiedOnly)}
               ></button>{t('plugins.installed.verifiedOnly')}</label
+            >
+            <!-- « Mettre à jour tout seuls » (ESC-700), beside it: off by default. -->
+            <label class="tog auto"
+              >{t('plugins.installed.autoUpdate')}<select
+                class="field"
+                aria-label={t('plugins.installed.autoUpdate')}
+                use:tip={{ text: t('plugins.installed.autoUpdateDesc') }}
+                value={app.settings.pluginsAutoUpdate ?? 'never'}
+                onchange={(e) => plugins.setAutoUpdate((e.currentTarget as HTMLSelectElement).value as PluginsAutoUpdate)}
+              >
+                <option value="never">{t('plugins.installed.autoNever')}</option>
+                <option value="escouade">{t('plugins.installed.autoEscouade')}</option>
+                <option value="verified">{t('plugins.installed.autoVerified')}</option>
+              </select></label
             >
           {/if}
           {#if (page.kind === 'installed' || page.kind === 'updates') && plugins.updates.length}
@@ -195,6 +213,24 @@
             >
           </p>
         {:else if page.kind === 'updates'}
+          {#if plugins.updatedToday.length || plugins.autoFailed.length}
+            <!-- What went by itself (ESC-700): a discreet line, the plugins and their versions; what failed, each said. -->
+            <div class="auto-done">
+              {#if plugins.updatedToday.length}
+                <p class="hint" role="status">
+                  {t('plugins.updates.autoToday', { count: plugins.updatedToday.length })} ·
+                  {#each plugins.updatedToday as p, i (p.id)}{#if i},
+                    {/if}<button class="lnk" onclick={() => plugins.openPlugin(p.id, 'versions')}>{p.name}</button>
+                    <span class="mono"
+                      >{t('plugins.updates.row', { from: p.choices.autoUpdated?.from ?? '', to: p.choices.autoUpdated?.to ?? '' })}</span
+                    >{/each}
+                </p>
+              {/if}
+              {#each plugins.autoFailed as f (f.id)}
+                <p class="err" role="alert">{t('plugins.updates.autoFailed', { name: f.name, version: f.version, message: f.message })}</p>
+              {/each}
+            </div>
+          {/if}
           {#if !plugins.updates.length}
             <p class="hint">{t('plugins.updates.empty')}</p>
           {/if}
@@ -387,6 +423,19 @@
     color: var(--soft);
     font-size: 12px;
     white-space: nowrap;
+  }
+  /* « Mettre à jour tout seuls » (ESC-700): its menu beside the switch, as small. */
+  .tog.auto select {
+    width: auto;
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+  .auto-done {
+    display: grid;
+    gap: 6px;
+  }
+  .auto-done .hint {
+    margin: 0;
   }
   .sbox {
     flex: 1;

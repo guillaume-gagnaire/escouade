@@ -701,6 +701,8 @@ describe('SettingsModal', () => {
             'closed_projects',
             // What the seed holds, for a harness not installed (R4).
             'plugins_list',
+            // The updates by themselves that failed (ESC-700), read with the plugins.
+            'plugins_auto_failed',
             'plugin_seed_offers',
             'data_dir',
             // What the files of the box « À toi » weigh (ESC-510), in « Avancé › Données locales ».

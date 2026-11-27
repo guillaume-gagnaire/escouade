@@ -25,6 +25,8 @@ macro_rules! tr {
 pub mod journal;
 // The names of an account's secret and budget (the app's `plugins::accounts` serves the accounts, INT-6).
 pub mod accounts;
+// « Mettre à jour tout seuls » (ESC-700): which offered updates install without a gesture.
+pub mod auto;
 // The codes of a plugin's errors (the app's adapters of the sources and code hosts read them, INT-5).
 pub mod adapters;
 // The conformance bench and the fake Escouade, for `escouade-plugin` and the tests (PLG-3).
@@ -138,6 +140,8 @@ pub mod plugins_runtime_tests;
 #[cfg(test)]
 mod plugins_fresh_tests;
 // « Depuis un dossier… » on a plugin's folder as its author has it (issue #43, ESC-652).
+#[cfg(test)]
+mod plugins_auto_tests;
 #[cfg(test)]
 mod plugins_folder_tests;
 #[cfg(test)]
@@ -330,6 +334,10 @@ pub struct Choices {
     /// whose line is not among them asks again before it runs.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub harnesses_approved: BTreeMap<String, Vec<String>>,
+    /// Its last update made by itself (ESC-700, « Mettre à jour tout seuls »): what its tab Versions and the page Mises à
+    /// jour say. An install by a gesture takes it off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_updated: Option<auto::AutoUpdated>,
 }
 
 impl Default for Choices {
@@ -344,6 +352,7 @@ impl Default for Choices {
             profiles: BTreeMap::new(),
             secret_names: Vec::new(),
             harnesses_approved: BTreeMap::new(),
+            auto_updated: None,
         }
     }
 }
@@ -1653,6 +1662,8 @@ impl Plugins {
             .find(|l| l.installed.id == id)
             .map(|l| l.installed.choices.clone());
         installed.choices = before.or_else(|| self.kept(&id)).unwrap_or_default();
+        // Installed by a gesture: no longer an update made by itself (`auto_update` notes its own after it).
+        installed.choices.auto_updated = None;
         let copy = self.data.plugins_dir().join(&id);
         match staged.dir {
             Some(dir) => {

@@ -11,6 +11,8 @@
 // - dev.exemple.high-contrast: 1.0.0 verified, 1.1.0 not (an update that is not verified);
 // - dev.exemple.team-rules: 1.0.0 verified, a program that decides permissions;
 // - dev.exemple.nuit: 1.0.0 verified, 1.1.0 held back and not verified (ESC-438);
+// - dev.exemple.aube: 1.0.0 verified; 1.1.0 (held back) verified and asks for nothing more, 1.2.0 (held back) verified and
+//   connects to a host; dev.escouade.discord 1.2.0 held back (ESC-700, « Mettre à jour tout seuls »);
 // - dev.exemple.slack: 1.0.0 not verified, a program and its binary for each system;
 // - dev.exemple.later: 2.0.0 for an Escouade to come (min 99.0.0), 1.0.0 for this one (the last compatible is chosen);
 // - dev.exemple.tampered: its archive changed after its version.json (refused);
@@ -266,6 +268,32 @@ const SPEC = [
     verified: true,
     cat: ['themes'],
     kw: ['contraste', 'thème'],
+    held: true,
+  },
+  // ESC-700: « Mettre à jour tout seuls ». A theme whose 1.0.0 is verified; its 1.1.0 (held back) verified and asks for
+  // nothing more, its 1.2.0 (held back) verified and connects to a host. Escouade's own Discord, its 1.2.0 held back.
+  { id: 'dev.exemple.aube', v: '1.0.0', from: 'high-contrast', verified: true, cat: ['themes'], kw: ['aube'], installs: 5, name: 'Aube' },
+  { id: 'dev.exemple.aube', v: '1.1.0', from: 'high-contrast', verified: true, cat: ['themes'], kw: ['aube'], name: 'Aube', held: true },
+  {
+    id: 'dev.exemple.aube',
+    v: '1.2.0',
+    from: 'high-contrast',
+    verified: true,
+    cat: ['themes'],
+    kw: ['aube'],
+    name: 'Aube',
+    held: true,
+    over: { permissions: { network: ['aube.example'] } },
+  },
+  {
+    id: 'dev.escouade.discord',
+    v: '1.2.0',
+    from: 'discord',
+    verified: true,
+    cat: ['notifications'],
+    kw: ['discord', 'notifications'],
+    path: 'plugins/discord',
+    repo: 'guillaume-gagnaire/escouade',
     held: true,
   },
   {

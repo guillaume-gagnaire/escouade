@@ -1041,6 +1041,10 @@ class AppState {
         this.toast(e.text, 'ok');
         this.pluginsSeeded++;
         break;
+      case 'pluginsAutoUpdated':
+        // Said on the page Mises à jour and the tab Versions, not in a toast (ESC-700).
+        this.pluginsSeeded++;
+        break;
       case 'toast':
         // For want of an account (ESC-128): with « Ajouter un compte… ».
         if (missingAccountOf(e.text)) this.refused(e.text);

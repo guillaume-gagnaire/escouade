@@ -527,30 +527,8 @@ pub fn plugin_install(
     let view = core.install_plugin(&token, crate::i18n::ui())?;
     // A run.js plugin's module compiled and precompiled now, in the cache, off this thread (ESC-320).
     core.plugin_runtime.prepare(&view.id);
-    let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
-    let from_seed = matches!(
-        view.origin,
-        crate::plugins::Origin::Store { seed: true, .. }
-    );
-    core.telemetry
-        .track(crate::telemetry::Event::PluginInstalled { from_store });
-    // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4); a version of the seed
-    // through the counts the seed keeps, once (ESC-394).
-    if from_seed {
-        core.spawn_seed_counts();
-    } else if from_store
-        && core.settings.read().telemetry == Some(true)
-        && crate::offline::allows(crate::offline::Flow::Statistics)
-    {
-        let settings = core.settings.read().clone();
-        let (store, id, version) = (core.store.clone(), view.id.clone(), view.version.clone());
-        let update = staged.is_some_and(|(_, update)| update);
-        tauri::async_runtime::spawn(async move {
-            if let Ok(http) = crate::plugins::store::client(&settings) {
-                store.count(&http, &id, &version, update).await;
-            }
-        });
-    }
+    let update = staged.is_some_and(|(_, update)| update);
+    core.count_plugin_install(&view, update);
     Ok(view)
 }
 
@@ -899,19 +877,31 @@ pub fn plugin_start(core: CoreState, id: String) -> Result<PluginRun, String> {
 /// What « Rechercher des mises à jour » found: the plugins as they are now, and the store as it was read (`readAt`,
 /// `error` when it did not answer: the offers of `readAt` were looked at).
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdatesLooked {
     plugins: Vec<crate::plugins::PluginView>,
     store: crate::plugins::store::StoreView,
+    /// The updates by themselves that failed (ESC-700).
+    auto_failed: Vec<crate::plugins::auto::AutoFailed>,
 }
 
 /// Looks for newer versions of the installed plugins (offered, never installed), the store read again first (ESC-405).
 #[tauri::command(async)]
 pub async fn plugins_check_updates(core: CoreState<'_>) -> Result<UpdatesLooked, ()> {
     core.look_for_updates().await;
+    // Then what installs by itself (ESC-700), before the window is answered: it sees them updated.
+    core.auto_update_plugins().await;
     Ok(UpdatesLooked {
         plugins: core.plugins.list(crate::i18n::ui()),
         store: core.store.view(),
+        auto_failed: core.plugins_auto_failed(),
     })
+}
+
+/// The updates by themselves that failed since the start (ESC-700): the page Mises à jour says them.
+#[tauri::command]
+pub fn plugins_auto_failed(core: CoreState) -> Vec<crate::plugins::auto::AutoFailed> {
+    core.plugins_auto_failed()
 }
 
 /// The user agrees to the commands a plugin runs on facts, as they are now, or takes the

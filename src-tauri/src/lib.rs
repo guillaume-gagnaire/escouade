@@ -835,6 +835,7 @@ pub fn run() {
                 commands::plugin_run,
                 commands::plugin_start,
                 commands::plugins_check_updates,
+                commands::plugins_auto_failed,
                 commands::plugin_icon,
                 commands::account_sign_in_ended,
                 commands::claude_found,

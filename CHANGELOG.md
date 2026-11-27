@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Les plugins peuvent se mettre à jour tout seuls : un réglage à côté de « N’installer que des versions vérifiées », éteint d’office, le permet pour les plugins d’Escouade ou pour tous les plugins vérifiés. Seules partent les versions vérifiées qui ne demandent rien de plus, jamais au milieu du tour d’un agent ; la page Mises à jour dit ce qui est parti.
+
 ## [2.2.18] — 2026-11-27
 
 - Hors du lancement du projet, un agent qui fait défiler ou met en évidence n’apprend plus le titre ni l’adresse complète de la page sans ton accord, seulement son site. Quand il cesse de piloter son lancement, la bande disparaît aussitôt et la ligne redevient ordinaire.

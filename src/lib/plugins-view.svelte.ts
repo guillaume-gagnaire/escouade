@@ -7,6 +7,8 @@ import { t } from './i18n';
 import {
   contributionsOf,
   pluginsApi,
+  updatedToday,
+  type AutoFailed,
   type Category,
   type Manifest,
   type PluginPreview,
@@ -18,6 +20,7 @@ import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Sugge
 import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
 import { api } from './ipc';
+import type { PluginsAutoUpdate } from './types';
 
 export type PluginTab = 'overview' | 'permissions' | 'versions' | 'projects' | 'settings' | 'journal';
 
@@ -75,6 +78,8 @@ class PluginsStore {
   ahead = $state<PluginPreview[]>([]);
   /** How each update under way goes, by id, on its line of the updates' page (ESC-436); the finished ones until it is left. */
   rows = $state<Record<string, UpdateRow>>({});
+  /** The updates by themselves that failed since the start (ESC-700): said at the head of the page Mises à jour. */
+  autoFailed = $state<AutoFailed[]>([]);
   /** The store as the core keeps it (STORE-9): its catalogue cached, when it was read. */
   store = $state<StoreView | null>(null);
   storeBusy = $state(false);
@@ -213,6 +218,17 @@ class PluginsStore {
     app.run(api.saveSettings($state.snapshot(app.settings)));
   }
 
+  /** « Mettre à jour tout seuls » (ESC-700): saved with the app's settings; off (`never`) by default. */
+  setAutoUpdate(choice: PluginsAutoUpdate) {
+    app.settings.pluginsAutoUpdate = choice;
+    app.run(api.saveSettings($state.snapshot(app.settings)));
+  }
+
+  /** The plugins updated by themselves today (ESC-700): the line at the head of the page Mises à jour. */
+  get updatedToday() {
+    return updatedToday(this.list);
+  }
+
   /** A plugin of the store: its page in the view, the installed one's when it is installed. */
   openStorePlugin(id: string, tab: StoreTab = 'overview') {
     if (this.byId(id)) this.openPlugin(id);
@@ -246,6 +262,7 @@ class PluginsStore {
   async load() {
     try {
       this.list = (await pluginsApi.list()) ?? [];
+      this.autoFailed = (await pluginsApi.autoFailed().catch(() => null)) ?? this.autoFailed;
       await this.loadOffers();
     } catch (e) {
       this.error = errorText(e);
@@ -349,6 +366,8 @@ class PluginsStore {
       if (got) {
         this.list = got.plugins;
         this.store = got.store;
+        // What installed by itself after the search (ESC-700) is in `plugins`; what failed, here.
+        if (got.autoFailed) this.autoFailed = got.autoFailed;
       }
     } catch (e) {
       this.error = errorText(e);

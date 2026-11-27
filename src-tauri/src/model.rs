@@ -319,6 +319,9 @@ pub enum UiEvent {
         id: String,
         text: String,
     },
+    /// Plugins updated by themselves, or an update by itself that failed (ESC-700): the window reads the plugins again,
+    /// without a word (the page Mises à jour says it).
+    PluginsAutoUpdated,
     /// Something done in the background the window says in passing (tickets imported by
     /// themselves).
     Toast {

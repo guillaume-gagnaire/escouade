@@ -220,6 +220,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('pluginsInstalled', 'plugins', 'plugins.installed.title'),
   row('pluginsSeed', 'plugins', 'plugins.installed.seedTitle'),
   row('pluginsVerifiedOnly', 'plugins', 'plugins.installed.verifiedOnly', s('pluginsVerifiedOnly')),
+  row('pluginsAutoUpdate', 'plugins', 'plugins.installed.autoUpdate', s('pluginsAutoUpdate')),
   row('thirdPartyHarnesses', 'plugins', 'plugins.installed.thirdPartyHarnesses', s('thirdPartyHarnesses')),
 
   // Avancé › Réseau, Terminaux, Pièces jointes, Recherche par le sens, Données locales.

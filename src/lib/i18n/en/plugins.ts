@@ -135,6 +135,12 @@ export default defineZone('plugins', {
     verifiedOnly: 'Install verified versions only',
     verifiedOnlyScope:
       'Holds for the store, folders and git repositories: a folder or a repository is accepted only if it is the verified version of the store, with the same files. Development mode is a gesture of its own, which it does not cover.',
+    autoUpdate: 'Update by themselves',
+    autoNever: 'Never',
+    autoEscouade: 'Escouade’s plugins',
+    autoVerified: 'All verified plugins',
+    autoUpdateDesc:
+      'After each search for updates, the versions of the store verified by Escouade that ask for nothing more than the one installed install by themselves: no new permission, contribution or harness line. The rest stays offered. Never in the middle of an agent’s turn: its harness waits for the turn to end.',
     thirdPartyHarnesses: 'Third-party harnesses',
     thirdPartyHarnessesDesc:
       'A harness a third-party plugin describes runs a program of this machine out of the sandbox. “Ask” says its whole command at its first launch, and at each change; “Refuse” launches none.',
@@ -149,6 +155,13 @@ export default defineZone('plugins', {
   updates: {
     title: 'Updates',
     sub: 'Looked for at start, offered here, never installed by themselves',
+    subAuto: 'Looked for at start and every 6 hours; the verified ones that ask for nothing more install by themselves',
+    autoToday: {
+      one: '{count} plugin updated by itself today',
+      other: '{count} plugins updated by themselves today',
+    },
+    autoFailed:
+      '{name} could not update itself to v{version}: {message} The version installed stays; it will not be tried again before the next start.',
     empty: 'Your plugins are up to date.',
     check: 'Look now',
     checking: 'Looking…',
@@ -461,6 +474,7 @@ export default defineZone('plugins', {
     available: 'available, not installed',
     check: 'Look for an update',
     upToDate: 'No newer version.',
+    auto: 'updated by itself on {date}, from v{from}',
   },
 
   install: {

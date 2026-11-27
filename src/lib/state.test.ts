@@ -1337,6 +1337,15 @@ describe('board', () => {
     expect(app.pluginsSeeded).toBe(before + 1);
   });
 
+  it('has the plugins read again, without a toast, when plugins updated by themselves (ESC-700)', async () => {
+    const { emit } = await start();
+    const before = app.pluginsSeeded;
+    const toasts = app.toasts.length;
+    emit({ type: 'pluginsAutoUpdated' });
+    expect(app.pluginsSeeded).toBe(before + 1);
+    expect(app.toasts.length).toBe(toasts);
+  });
+
   it('knows why a board starts nothing, from the start and as the backend tells it', async () => {
     const unborn = "main n'a encore aucun commit — aucun ticket ne démarre";
     const { emit } = await start({ boardIssues: { p1: unborn } });

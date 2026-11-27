@@ -102,6 +102,32 @@ export interface Choices {
   profiles?: Record<string, { id: string; values: Record<string, unknown> }[]>;
   /** The names of the secrets kept for it (never their values). */
   secretNames?: string[];
+  /** Its last update made by itself (ESC-700): its tab Versions and the page Mises à jour say it; a gesture takes it off. */
+  autoUpdated?: AutoUpdated;
+}
+
+/** An update made by itself (ESC-700, « Mettre à jour tout seuls »): from, to, when (RFC 3339). */
+export interface AutoUpdated {
+  from: string;
+  to: string;
+  at: string;
+}
+
+/** An update by itself that failed (ESC-700): the version installed stays, not tried again before the next start. */
+export interface AutoFailed {
+  id: string;
+  name: string;
+  version: string;
+  message: string;
+  at: string;
+}
+
+/** The plugins updated by themselves on the day of `now` (local time), the latest first. */
+export function updatedToday(list: { id: string; name: string; choices: Choices }[], now = new Date()) {
+  const day = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return list
+    .filter((p) => p.choices.autoUpdated && day(new Date(p.choices.autoUpdated.at)) === day(now))
+    .sort((a, b) => Date.parse(b.choices.autoUpdated!.at) - Date.parse(a.choices.autoUpdated!.at));
 }
 
 export interface PluginUpdate {
@@ -268,7 +294,9 @@ export const pluginsApi = {
   run: (id: string) => invoke<PluginRun>('plugin_run', { id }),
   start: (id: string) => invoke<PluginRun>('plugin_start', { id }),
   /** « Rechercher des mises à jour »: the store read again first (ESC-405), the plugins then, and the store as it was read. */
-  checkUpdates: () => invoke<{ plugins: PluginView[]; store: StoreView }>('plugins_check_updates'),
+  checkUpdates: () => invoke<{ plugins: PluginView[]; store: StoreView; autoFailed?: AutoFailed[] }>('plugins_check_updates'),
+  /** The updates by themselves that failed since the start (ESC-700). */
+  autoFailed: () => invoke<AutoFailed[]>('plugins_auto_failed'),
   /** The icon of an installed plugin (PLG-13), a `data:image/png` address; null: its letters. */
   icon: (id: string) => invoke<string | null>('plugin_icon', { id }),
 };

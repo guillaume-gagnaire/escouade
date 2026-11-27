@@ -13,6 +13,9 @@ export type AgentsMcp = 'all' | 'escouade';
 /** Who among the agents answers another agent's permissions and questions (ESC-423). */
 export type AgentsAnswer = 'nobody' | 'chef' | 'all';
 
+/** « Mettre à jour tout seuls » (ESC-700). */
+export type PluginsAutoUpdate = 'never' | 'escouade' | 'verified';
+
 export interface Settings {
   claudePath: string;
   sound: boolean;
@@ -125,6 +128,11 @@ export interface Settings {
   pluginTheme?: string;
   /** « N'installer que des versions vérifiées » (STORE-9): a version of the store without the seal is refused. */
   pluginsVerifiedOnly?: boolean;
+  /**
+   * « Mettre à jour tout seuls » (ESC-700): `never` (the default), `escouade` (`dev.escouade.*` alone) or `verified` (every
+   * plugin): the updates of the store, verified, that ask for nothing more install by themselves.
+   */
+  pluginsAutoUpdate?: PluginsAutoUpdate;
   /**
    * « Harness des plugins tiers » (SEC-01, ESC-589): `ask`, a harness a third party describes asks at its first launch,
    * its whole command said; `refuse`, none runs.
@@ -3026,6 +3034,8 @@ export type UiEvent =
   | { type: 'targetCi'; projectId: string; ci: BranchCi | null }
   /** A plugin of the seed installed for a gesture that needs it (ESC-373): said in a line, the plugins read again. */
   | { type: 'pluginSeeded'; id: string; text: string }
+  /** Plugins updated by themselves, or one that failed (ESC-700): the plugins read again, without a word. */
+  | { type: 'pluginsAutoUpdated' }
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }

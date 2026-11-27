@@ -233,6 +233,10 @@ pub struct Settings {
     /// (`Core::settle_verified_only`); one that has one keeps its choice. A new installation has it settled already.
     #[serde(default)]
     pub plugins_verified_settled: bool,
+    /// « Mettre à jour tout seuls » (la vue Plugins, beside « N'installer que des versions vérifiées », ESC-700): off by
+    /// default, for a new installation as for one before it.
+    #[serde(default)]
+    pub plugins_auto_update: PluginsAutoUpdate,
     /// « Harness des plugins tiers » (Réglages › Plugins, SEC-01, ESC-589): a harness a plugin of a third party
     /// describes runs a program of this machine out of the sandbox; it asks the user at its first launch, its whole
     /// command said (`Ask`), or none of them runs (`Refuse`, what the policy of a managed device will impose).
@@ -278,6 +282,20 @@ pub struct Settings {
     pub user_id: String,
     /// The first launch's window asking the name was shown (answered or put off).
     pub name_asked: bool,
+}
+
+/// « Mettre à jour tout seuls » (`Settings::plugins_auto_update`, ESC-700): which plugins install their updates without a
+/// gesture, those only that ask for nothing more and whose version is verified (`escouade_plugins::auto`). Off by default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PluginsAutoUpdate {
+    /// « Jamais »: every update offered, installed by a gesture.
+    #[default]
+    Never,
+    /// « Les plugins d'Escouade »: `dev.escouade.*` alone, signed at the store.
+    Escouade,
+    /// « Tous les plugins vérifiés ».
+    Verified,
 }
 
 /// « Harness des plugins tiers » (`Settings::third_party_harnesses`, ESC-589).
@@ -1064,6 +1082,7 @@ impl Default for Settings {
             plugin_theme: String::new(),
             plugins_verified_only: true,
             plugins_verified_settled: true,
+            plugins_auto_update: PluginsAutoUpdate::Never,
             third_party_harnesses: ThirdPartyHarnesses::Ask,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
@@ -3681,6 +3700,28 @@ mod tests {
         assert!(Settings::default().plugins_verified_settled);
         let s: Settings = serde_json::from_value(json!({ "pluginsVerifiedOnly": false })).unwrap();
         assert!(!s.plugins_verified_settled);
+    }
+
+    #[test]
+    fn plugins_update_by_themselves_never_by_default() {
+        assert_eq!(
+            Settings::default().plugins_auto_update,
+            PluginsAutoUpdate::Never
+        );
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert_eq!(s.plugins_auto_update, PluginsAutoUpdate::Never);
+        for (word, choice) in [
+            ("never", PluginsAutoUpdate::Never),
+            ("escouade", PluginsAutoUpdate::Escouade),
+            ("verified", PluginsAutoUpdate::Verified),
+        ] {
+            let s: Settings = serde_json::from_value(json!({ "pluginsAutoUpdate": word })).unwrap();
+            assert_eq!(s.plugins_auto_update, choice);
+            assert_eq!(
+                serde_json::to_value(&s).unwrap()["pluginsAutoUpdate"],
+                json!(word)
+            );
+        }
     }
 
     #[test]

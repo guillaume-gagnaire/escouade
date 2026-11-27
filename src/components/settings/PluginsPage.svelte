@@ -198,6 +198,20 @@
       onclick={() => (settingsForm.settings.pluginsVerifiedOnly = !settingsForm.settings.pluginsVerifiedOnly)}
     ></button>
   </Row>
+  <!-- « Mettre à jour tout seuls » (ESC-700): off by default; the verified versions that ask for nothing more. -->
+  <Row label={t('plugins.installed.autoUpdate')} desc={t('plugins.installed.autoUpdateDesc')}>
+    <select
+      class="field"
+      aria-label={t('plugins.installed.autoUpdate')}
+      value={settingsForm.settings.pluginsAutoUpdate ?? 'never'}
+      onchange={(e) =>
+        (settingsForm.settings.pluginsAutoUpdate = (e.currentTarget as HTMLSelectElement).value as 'never' | 'escouade' | 'verified')}
+    >
+      <option value="never">{t('plugins.installed.autoNever')}</option>
+      <option value="escouade">{t('plugins.installed.autoEscouade')}</option>
+      <option value="verified">{t('plugins.installed.autoVerified')}</option>
+    </select>
+  </Row>
   <!-- « Harness des plugins tiers » (SEC-01, ESC-589): asked at the first launch, its whole command said, or none runs. -->
   <Row label={t('plugins.installed.thirdPartyHarnesses')} desc={t('plugins.installed.thirdPartyHarnessesDesc')}>
     <select

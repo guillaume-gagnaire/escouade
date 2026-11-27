@@ -198,6 +198,17 @@
               >{plugin.installedAt ? t('plugins.versions.installed', { date: fDate(Date.parse(plugin.installedAt)) }) : ''}</span
             ><span class="mono print">{plugin.fingerprint ? shortPrint(plugin.fingerprint) : t('plugins.origin.devPrint')}</span>
           </div>
+          {#if plugin.choices.autoUpdated}
+            <!-- Made by itself (ESC-700, « Mettre à jour tout seuls »). -->
+            <div class="auto" role="status">
+              <span class="vd"
+                >{t('plugins.versions.auto', {
+                  date: fDate(Date.parse(plugin.choices.autoUpdated.at)),
+                  from: plugin.choices.autoUpdated.from,
+                })}</span
+              >
+            </div>
+          {/if}
         </div>
         {#if !dev}
           <button class="btn check" disabled={plugins.checking} aria-busy={plugins.checking} onclick={() => plugins.checkUpdates()}

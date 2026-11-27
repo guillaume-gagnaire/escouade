@@ -1000,6 +1000,19 @@ impl<R: Runtime> Drop for WorkingOwned<R> {
     }
 }
 
+/// What the passes of « Mettre à jour tout seuls » keep while the app runs (ESC-700).
+#[derive(Default)]
+pub(crate) struct PluginsAuto {
+    /// One pass at a time.
+    running: tokio::sync::Mutex<()>,
+    /// The versions tried by themselves since the start: never tried again, an error does not loop.
+    tried: Mutex<std::collections::HashSet<(String, String)>>,
+    /// A plugin waits for the end of a turn of its harness.
+    waiting: std::sync::atomic::AtomicBool,
+    /// The updates by themselves that failed, the last of each plugin.
+    failed: Mutex<Vec<crate::plugins::auto::AutoFailed>>,
+}
+
 pub struct Core<R: Runtime = Wry> {
     /// Itself, for what runs in the background from a method that only has `&self`.
     me: std::sync::Weak<Self>,
@@ -1031,6 +1044,8 @@ pub struct Core<R: Runtime = Wry> {
     pub plugins: Arc<crate::plugins::Plugins>,
     /// The store in the app (STORE-9): its catalogue and its revocation list, cached.
     pub store: Arc<crate::plugins::store::Store>,
+    /// « Mettre à jour tout seuls » (ESC-700): what its passes keep while the app runs (`auto_update_plugins`).
+    pub(crate) plugins_auto: PluginsAuto,
     /// Their processes (`plugins::runtime`): started at their first activation, closed with the app.
     pub(crate) plugin_runtime: Arc<crate::plugins::runtime::Runtime>,
     /// The launch environments of the plugins the app gives (INT-14): isola runs a worktree's services.
@@ -1952,6 +1967,138 @@ impl<R: Runtime> Core<R> {
         self.plugins
             .apply_store(self.store.revocations(), self.store.offers());
         self.send_seed_counts().await;
+        // At the start and every 6 hours, once the catalogue and the revocation list are read (ESC-700).
+        self.auto_update_plugins().await;
+    }
+
+    /// « Mettre à jour tout seuls » (ESC-700): after each search of the updates, the updates offered that the window for
+    /// all of « Tout mettre à jour » would agree to install by themselves (`escouade_plugins::auto`), as a gesture would:
+    /// the plugin stopped then started again, counted on the store with the consent to the statistics. A plugin whose
+    /// harness has an agent in its turn waits for the end of that turn (`apply`); an error leaves the version installed,
+    /// is said on the page Mises à jour, and that version is not tried again until the next start. Nothing when the store
+    /// was not read now (its revocation list first): the updates stay offered.
+    pub async fn auto_update_plugins(&self) {
+        let settings = self.settings.read().clone();
+        if settings.plugins_auto_update == PluginsAutoUpdate::Never
+            || !crate::offline::allows(crate::offline::Flow::Updates)
+        {
+            return;
+        }
+        let Ok(_one) = self.plugins_auto.running.try_lock() else {
+            return;
+        };
+        if self.store.view().error.is_some() {
+            return;
+        }
+        let Ok(http) = crate::plugins::store::client(&settings) else {
+            return;
+        };
+        let lang = crate::i18n::ui();
+        let busy = |p: &crate::plugins::PluginView| {
+            crate::plugins::auto::serves(p, &self.engines_in_turn())
+        };
+        let install = |token: &str| -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+            let view = self.install_plugin(token, lang)?;
+            self.plugin_runtime.prepare(&view.id);
+            self.count_plugin_install(&view, true);
+            Ok(view)
+        };
+        let report = self
+            .plugins
+            .auto_update(
+                &self.store,
+                &http,
+                settings.plugins_auto_update,
+                &busy,
+                &self.plugins_auto.tried,
+                &install,
+                lang,
+            )
+            .await;
+        self.plugins_auto.waiting.store(
+            !report.waiting.is_empty(),
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        {
+            let mut failed = self.plugins_auto.failed.lock();
+            let done: Vec<&str> = report
+                .installed
+                .iter()
+                .map(|(v, _)| v.id.as_str())
+                .collect();
+            failed.retain(|f| {
+                !done.contains(&f.id.as_str()) && !report.failed.iter().any(|n| n.id == f.id)
+            });
+            failed.extend(report.failed.iter().cloned());
+        }
+        for f in &report.failed {
+            log::warn!(
+                "plugin {} v{}: not updated by itself: {}",
+                f.id,
+                f.version,
+                f.message
+            );
+        }
+        for (view, from) in &report.installed {
+            log::info!(
+                "plugin {}: updated by itself, v{from} → v{}",
+                view.id,
+                view.version
+            );
+        }
+        if !report.installed.is_empty() {
+            self.sync_voice_plugins();
+        }
+        if !report.installed.is_empty() || !report.failed.is_empty() {
+            self.hub.emit(UiEvent::PluginsAutoUpdated);
+        }
+    }
+
+    /// The harnesses an agent is in its turn on (running, or waiting for an answer within its turn).
+    pub(crate) fn engines_in_turn(&self) -> Vec<String> {
+        let handles: Vec<AgentHandle> = self.agents.read().values().cloned().collect();
+        handles
+            .iter()
+            .filter_map(|h| {
+                let rt = h.lock();
+                rt.meta
+                    .status
+                    .is_active()
+                    .then(|| rt.meta.engine.as_str().to_string())
+            })
+            .collect()
+    }
+
+    /// The updates by themselves that failed since the start (ESC-700): said on the page Mises à jour.
+    pub fn plugins_auto_failed(&self) -> Vec<crate::plugins::auto::AutoFailed> {
+        self.plugins_auto.failed.lock().clone()
+    }
+
+    /// An install of the store counted on the store, only with the user's consent to the statistics (docs/STORE.md §5.4),
+    /// `update` for an update; a version of the seed through the counts the seed keeps, once (ESC-394). The same for an
+    /// install by a gesture and an update by itself (ESC-700).
+    pub(crate) fn count_plugin_install(&self, view: &crate::plugins::PluginView, update: bool) {
+        let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
+        let from_seed = matches!(
+            view.origin,
+            crate::plugins::Origin::Store { seed: true, .. }
+        );
+        self.telemetry
+            .track(crate::telemetry::Event::PluginInstalled { from_store });
+        if from_seed {
+            self.spawn_seed_counts();
+        } else if from_store
+            && self.settings.read().telemetry == Some(true)
+            && crate::offline::allows(crate::offline::Flow::Statistics)
+        {
+            let settings = self.settings.read().clone();
+            let (store, id, version) = (self.store.clone(), view.id.clone(), view.version.clone());
+            tauri::async_runtime::spawn(async move {
+                if let Ok(http) = crate::plugins::store::client(&settings) {
+                    store.count(&http, &id, &version, update).await;
+                }
+            });
+        }
     }
 
     /// « Rechercher des mises à jour » (ESC-405): the store read again (a reading under way or of less than 30 s taken as it
@@ -2255,6 +2402,7 @@ impl<R: Runtime> Core<R> {
             plugin_events,
             plugins,
             store,
+            plugins_auto: PluginsAuto::default(),
             app,
             data,
             hub: Hub::default(),
@@ -3359,6 +3507,16 @@ impl<R: Runtime> Core<R> {
             // Read after its turn ended (Claude Code tells it after the result): its account may
             // just have passed « Changer de compte à » (ESC-148).
             self.switch_soon(id);
+        }
+        // A turn over: an update by itself that waited for it goes now (ESC-700).
+        if fx.turn_end.is_some()
+            && self
+                .plugins_auto
+                .waiting
+                .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            let c = self.clone();
+            tauri::async_runtime::spawn(async move { c.auto_update_plugins().await });
         }
         let limited = fx.limited.is_some();
         if let Some(resets_at) = fx.limited {
