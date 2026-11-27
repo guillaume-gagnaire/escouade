@@ -4,12 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.16] — 2026-11-27
 
 - You sign in to a site in an Escouade tab, its sign-in window included (Google, OAuth, a link from an email pasted in the bar): it all happens in Escouade, and the session stays the project’s.
-- A Claude Code agent opens its artifact for you beside its conversation, and the tab reloads at each new version it publishes, except while you have the hand. Only artifacts it published itself open this way; on claude.ai it shows without reading anything of your session without your permission.
 - An agent now drives what it opens for you, gesture by gesture, to show you its work: it scrolls, highlights, switches to the phone width, and on the project’s launch it clicks, types and chooses; elsewhere, acting waits for your permission. Your first gesture in the page takes the hand back until you give it back; it never types a secret, never downloads or sends a file, and fills a password only with your permission.
 - You watch the agent drive before your eyes: a band above the page says who is driving and its last gesture, a cursor in the project’s colour goes where it acts and what it highlights lights up, without the page being able to read or erase them. Each gesture is a numbered row in the conversation and, on an agent’s page, a mark on the rail that takes you back there; “Take over” stops it at once, “Hand it back” lets it go on.
+- A Claude Code agent opens its artifact for you beside its conversation, and the tab reloads at each new version it publishes, except while you have the hand. Only artifacts it published itself open this way; on claude.ai it shows without reading anything of your session without your permission.
 - An agent can now show you a passage of its Claude artifact, inside its frame: under Windows it scrolls the page there to the element and outlines it; under macOS and Linux, it highlights the whole frame. It still reads nothing of what the frame holds.
 
 ## [2.2.15] — 2026-11-27
