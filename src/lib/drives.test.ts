@@ -87,6 +87,18 @@ describe('the driving in the window', () => {
     expect(driveOf('page:p-12')?.stopped).toBe(true);
   });
 
+  it('is read again when its agent no longer drives it: the row is an ordinary one again (ESC-685)', async () => {
+    fakeBackend({ browser_drive_state: () => view() });
+    devpages.pages['page:p-12'] = page();
+    await refreshDrive('page:p-12');
+    expect(driveOf('page:p-12')).not.toBeNull();
+    // close_browser on its launch: the core forgets the driving and says `undriven`.
+    const b = fakeBackend({ browser_drive_state: () => view({ agent: null, step: 0, pins: [] }) });
+    onPageEvent({ agentId: 'page:p-12', phase: 'undriven', url: '' });
+    await vi_wait(() => driveOf('page:p-12') === null);
+    expect(b.called('browser_drive_state').map((c) => c.args.key)).toEqual(['page:p-12']);
+  });
+
   it('sends « Reprendre la main », « La rendre », « Continuer » to the core and draws what it answers', async () => {
     const b = fakeBackend({
       browser_drive_hand: (a: { hand: string }) => view({ hand: a.hand === 'take' ? 'user' : 'agent' }),

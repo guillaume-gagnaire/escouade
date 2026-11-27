@@ -873,12 +873,16 @@ pub(super) async fn drive<R: Runtime>(
     let step = pages.drives.done(&row.key, &what, &extra);
     tell(core, &row.key);
     keep_polling(core, pages.clone(), row.key.clone(), row.label.clone());
+    let now = extra["url"].as_str().unwrap_or(&row.url);
+    let unread = matches!(&row.line, Line::Outside(_))
+        && !origin_of(now).is_some_and(|o| pages.granted(&row.key, &row.agent, &o));
+    let (url, title) = told(unread, now, extra["title"].as_str().unwrap_or(""));
     let mut answer = json!({
         "done": true,
         "step": step,
         "what": what,
-        "url": extra["url"].as_str().unwrap_or(&row.url),
-        "title": extra["title"].as_str().unwrap_or(""),
+        "url": url,
+        "title": title,
         "hand": pages.drives.hand(&row.key).unwrap_or(Hand::Agent),
     });
     for k in ["scrollY", "innerWidth", "found", "ms", "version", "frame"] {
@@ -917,6 +921,17 @@ pub(super) async fn drive<R: Runtime>(
     }
     blocks.extend(marked(&answer));
     Ok(blocks)
+}
+
+/// What a gesture's answer says of the page, its address and its title. `unread`, outside the launch without the leave
+/// to read and act (C4: to show tells nothing of the page): its origin alone and no title, as `list_browsers` cuts it,
+/// for a path or a title may name a document or a conversation of the user's.
+pub(super) fn told(unread: bool, url: &str, title: &str) -> (String, String) {
+    if unread {
+        (origin_of(url).unwrap_or_default(), String::new())
+    } else {
+        (url.to_string(), title.to_string())
+    }
 }
 
 /// Outside the launch, to act asks the user's leave in the browser's band: « veut lire et agir », the leave of

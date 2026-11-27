@@ -632,6 +632,8 @@ export function onPageEvent(e: PageEvent) {
     case 'undriven':
       page.driver = undefined;
       page.waiting = undefined;
+      // The core forgot its driving: the band goes and the row is an ordinary one again (ESC-685).
+      void refreshDrive(e.agentId);
       break;
     case 'outside':
       // A mail or phone address (ESC-695: every web origin stays in the tab): the system's.

@@ -545,3 +545,25 @@ async fn reprendre_la_main_from_the_band_stops_the_agent_in_the_core_at_once() {
     assert!(e.contains("no such pin"), "{e}");
     c.cancel().await.unwrap();
 }
+
+/// Outside the launch, to show tells nothing of the page (C4, ESC-685): without the leave to read, a gesture's answer
+/// says the page's origin alone and no title (its path and its title may name a document or a conversation of the
+/// user's); with the leave, on the launch and on an agent's page, its address and its title.
+#[test]
+fn a_gesture_outside_the_launch_tells_its_origin_alone_without_the_leave() {
+    use super::browsers_drive::told;
+    let url = "https://claude.ai/chat/1234-conversation?x=1";
+    assert_eq!(
+        told(true, url, "Ma conversation — Claude"),
+        ("https://claude.ai".to_string(), String::new())
+    );
+    assert_eq!(
+        told(false, url, "Ma conversation — Claude"),
+        (url.to_string(), "Ma conversation — Claude".to_string())
+    );
+    // An address without an origin tells nothing.
+    assert_eq!(
+        told(true, "about:blank", "x"),
+        (String::new(), String::new())
+    );
+}

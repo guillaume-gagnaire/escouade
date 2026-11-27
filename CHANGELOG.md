@@ -7,6 +7,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ## [Non publié]
 
 - La fenêtre des nouveautés parle aussi anglais, et qui a sauté des versions n’y voit que la dernière.
+- Hors du lancement du projet, un agent qui fait défiler ou met en évidence n’apprend plus le titre ni l’adresse complète de la page sans ton accord, seulement son site. Quand il cesse de piloter son lancement, la bande disparaît aussitôt et la ligne redevient ordinaire.
 
 ## [2.2.17] — 2026-11-27
 

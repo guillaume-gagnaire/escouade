@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - The window of what’s new now speaks English too, and after skipped versions it shows only the latest.
+- Outside the project's launch, an agent that scrolls or highlights no longer learns the page's title or full address without your leave, only its site. When it stops driving its launch, the band goes at once and the row is an ordinary one again.
 
 ## [2.2.17] — 2026-11-27
 
