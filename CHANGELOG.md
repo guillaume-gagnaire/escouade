@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.15] — 2026-11-27
 
 - Une page d’agent s’ouvre à côté de sa conversation quand tu la regardes, sinon elle t’attend dans « Navigateurs » ; sa carte dans la conversation l’affiche ou la rouvre, et sa barre remonte à une version précédente ou la montre en largeur tablette ou mobile. Une bande au-dessus rappelle qui l’a écrite et qu’elle n’a ni réseau ni accès à Escouade ou à tes fichiers.
 - Une page d’agent peut porter une question : tu choisis dans la page, et une bande d’Escouade sous la page reprend ton choix avec les mots de la demande, puis l’envoie quand tu cliques « Envoyer ». La page seule ne peut rien envoyer ni répondre à un feu vert ; la demande est aussi dans « À toi », avec « Ouvrir la page ».

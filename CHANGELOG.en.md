@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.15] — 2026-11-27
 
 - An agent’s page opens beside its conversation when you’re looking at it, otherwise it waits for you in “Browsers”; its card in the conversation shows it or opens it again, and its bar goes back to an earlier version or shows it at tablet or mobile width. A band above it says who wrote it and that it has no network nor access to Escouade or your files.
 - An agent’s page can carry a question: you choose in the page, and a band of Escouade under it repeats your choice in the request’s own words, then sends it when you click “Send”. The page alone can send nothing nor answer a go-ahead; the request is also in “Your turn”, with “Open the page”.
