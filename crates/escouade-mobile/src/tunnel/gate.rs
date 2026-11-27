@@ -1,9 +1,14 @@
 //! The gate of the local proxy. On a phone, every app reaches 127.0.0.1: the proxy forwards a connection only if its
 //! first request names the session's secret as the first segment of its path (`GET /<secret>/remote HTTP/1.1`), and
 //! takes the secret out before it goes into the tunnel (`GET /remote HTTP/1.1`). The app's WebView knows the secret
-//! (the plugin gives it the address); another app does not. Behind it, the API still asks for the device's token.
+//! (the plugin gives it the address); another app does not. Behind it, the API still asks for the device's token:
+//! the proxy writes it itself (ESC-570, SR1-15), in the header [`DEVICE_HEADER`] after the first line, so that the
+//! WebView's JavaScript never holds it (its handshake gives an empty one).
 
 use subtle::ConstantTimeEq;
+
+/// The header the proxy writes the device's token in (`src-tauri/src/remoteapi/proto.rs`, `DEVICE_HEADER`).
+pub const DEVICE_HEADER: &str = "X-Escouade-Device";
 
 /// The longest first line read before giving up (a WebSocket's is a few dozen bytes).
 pub const MAX_LINE: usize = 8 * 1024;
@@ -22,8 +27,9 @@ pub enum Gate {
     Refuse,
 }
 
-/// Looks at the first bytes of a connection (all of them read so far).
-pub fn check(buf: &[u8], secret: &str) -> Gate {
+/// Looks at the first bytes of a connection (all of them read so far); `token`: the device's, written in the request
+/// (a token that is not a header's printable text is not written).
+pub fn check(buf: &[u8], secret: &str, token: Option<&str>) -> Gate {
     let Some(end) = buf.windows(2).position(|w| w == b"\r\n") else {
         return if buf.len() >= MAX_LINE {
             Gate::Refuse
@@ -60,6 +66,12 @@ pub fn check(buf: &[u8], secret: &str) -> Gate {
     out.extend_from_slice(rest);
     out.push(b' ');
     out.extend_from_slice(version);
+    if let Some(t) = token.filter(|t| !t.is_empty() && t.bytes().all(|b| b.is_ascii_graphic())) {
+        out.extend_from_slice(b"\r\n");
+        out.extend_from_slice(DEVICE_HEADER.as_bytes());
+        out.extend_from_slice(b": ");
+        out.extend_from_slice(t.as_bytes());
+    }
     out.extend_from_slice(&buf[end..]);
     Gate::Pass(out)
 }
@@ -71,7 +83,7 @@ mod tests {
     const S: &str = "Zm9vYmFyYmF6cXV4";
 
     fn pass(input: &str) -> String {
-        match check(input.as_bytes(), S) {
+        match check(input.as_bytes(), S, None) {
             Gate::Pass(out) => String::from_utf8(out).unwrap(),
             other => panic!("{input:?}: {other:?}"),
         }
@@ -106,16 +118,40 @@ mod tests {
 
     #[test]
     fn waits_for_the_whole_first_line() {
-        assert_eq!(check(b"", S), Gate::NeedMore);
+        assert_eq!(check(b"", S, None), Gate::NeedMore);
         assert_eq!(
-            check(format!("GET /{S}/remote HT").as_bytes(), S),
+            check(format!("GET /{S}/remote HT").as_bytes(), S, None),
             Gate::NeedMore
         );
         assert_eq!(
-            check(format!("GET /{S}/remote HTTP/1.1\r").as_bytes(), S),
+            check(format!("GET /{S}/remote HTTP/1.1\r").as_bytes(), S, None),
             Gate::NeedMore
         );
-        assert_eq!(check(&vec![b'a'; MAX_LINE], S), Gate::Refuse);
+        assert_eq!(check(&vec![b'a'; MAX_LINE], S, None), Gate::Refuse);
+    }
+
+    #[test]
+    fn writes_the_device_s_token_after_the_first_line_and_never_a_broken_one() {
+        let pass = |token: Option<&str>| match check(
+            format!("GET /{S}/remote HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").as_bytes(),
+            S,
+            token,
+        ) {
+            Gate::Pass(out) => String::from_utf8(out).unwrap(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            pass(Some("tok_EN-1")),
+            "GET /remote HTTP/1.1\r\nX-Escouade-Device: tok_EN-1\r\nHost: 127.0.0.1\r\n\r\n"
+        );
+        // None, empty, or a text that would break the request: nothing written.
+        for t in [None, Some(""), Some("a\r\nHost: x"), Some("a b")] {
+            assert_eq!(
+                pass(t),
+                "GET /remote HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+                "{t:?}"
+            );
+        }
     }
 
     #[test]
@@ -134,7 +170,7 @@ mod tests {
             format!(" /{S}/remote HTTP/1.1\r\n"),
             "SSH-2.0-OpenSSH_9.6\r\n".to_string(),
         ] {
-            assert_eq!(check(bad.as_bytes(), S), Gate::Refuse, "{bad:?}");
+            assert_eq!(check(bad.as_bytes(), S, Some("t")), Gate::Refuse, "{bad:?}");
         }
     }
 }

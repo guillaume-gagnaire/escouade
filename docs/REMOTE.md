@@ -199,7 +199,7 @@ La spec la décrit (« Escouade à distance › L'API distante »). Rien ne chan
 
 Chaque commande du cœur est écrite une fois (`#[tauri::command]` dans `commands.rs`), puis rangée dans une des quatre classes de la liste unique, `src-tauri/src/remoteapi/list.rs` : l'IPC de Tauri et l'API distante sont faits tous deux de cette liste. Un test (`remoteapi_tests`) vérifie que toute commande écrite y est, et que cette section dit la même classe que la liste.
 
-**Ajouter une commande** : l'écrire dans `commands.rs` avec `#[tauri::command]`, comme avant, puis mettre son nom dans sa classe de `remoteapi/list.rs`, et ici : une puce par commande, à sa place dans l'ordre alphabétique de sa classe (deux tickets qui ajoutent chacun une commande ne touchent pas la même ligne).
+**Ajouter une commande** : l'écrire dans `commands.rs` avec `#[tauri::command]`, comme avant, puis mettre son nom dans sa classe et sa portée de `remoteapi/list.rs` (`served(computer)`, `served(phone)`…), et ici : une puce par commande, à sa place dans l'ordre alphabétique de sa classe (deux tickets qui ajoutent chacun une commande ne touchent pas la même ligne), suivie de « · téléphone » quand un téléphone peut l'appeler (« Les portées des appareils », plus bas).
 
 #### Servies telles quelles
 
@@ -239,8 +239,8 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `agent_prs_refresh`
 - `agent_signed_in`
 - `agent_terminal`
-- `answer_permission`
-- `answer_question`
+- `answer_permission` · téléphone
+- `answer_question` · téléphone
 - `archive_agent`
 - `autopilot_resume`
 - `back_to_previous_account`
@@ -348,7 +348,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `fs_write`
 - `fs_write_bytes`
 - `get_commands`
-- `get_conversation`
+- `get_conversation` · téléphone
 - `get_workflow_tracks`
 - `get_workflows`
 - `git_branches`
@@ -371,22 +371,22 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `harness_scope`
 - `host_notification_click`
 - `http_ready`
-- `inbox_answer` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur ; les fichiers de la réponse arrivent par `attach_*`, en octets bruts
+- `inbox_answer` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur ; les fichiers de la réponse arrivent par `attach_*`, en octets bruts
 - `inbox_closing` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
-- `inbox_delegate` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_delegate` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
 - `inbox_erase_closed_files` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur : les fichiers effacés sont ceux du cœur
-- `inbox_file` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur : une part d’un fichier en base64, pour la fenêtre
-- `inbox_file_bytes` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur : un fichier entier en octets bruts (trames binaires, en parties au-delà de 16 Mo, ESC-495)
-- `inbox_get` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
-- `inbox_list` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
-- `inbox_reopen` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
-- `inbox_seen` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
-- `inbox_snooze` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_file` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur : une part d’un fichier en base64, pour la fenêtre
+- `inbox_file_bytes` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur : un fichier entier en octets bruts (trames binaires, en parties au-delà de 16 Mo, ESC-495)
+- `inbox_get` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_list` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_reopen` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_seen` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_snooze` · téléphone : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
 - `inbox_track` : la boîte « À toi » (ESC-510) : ce que la fenêtre seule voit de la boîte (ouverte, « Comparer en grand », un fichier regardé), compté sur le cœur dont c’est la boîte
-- `inbox_view_act` : la boîte « À toi » (ESC-513) : le geste d’une vue est celui de sa source (permission, ticket, décision, docs), sur l’état du cœur
-- `inbox_view_reopen` : la boîte « À toi » (ESC-557) : « Remettre dans la boîte » une vue que le chef a prise en charge ou cochée réglée, sur l’état du cœur
-- `inbox_view_snooze` : la boîte « À toi » (ESC-513) : « Plus tard » sur une vue, gardé dans l’état durable du cœur
-- `inbox_views` : la boîte « À toi » (ESC-513) : ce qu’Escouade y verse de lui-même, lu dans l’état du cœur à chaque lecture
+- `inbox_view_act` · téléphone : la boîte « À toi » (ESC-513) : le geste d’une vue est celui de sa source (permission, ticket, décision, docs), sur l’état du cœur
+- `inbox_view_reopen` · téléphone : la boîte « À toi » (ESC-557) : « Remettre dans la boîte » une vue que le chef a prise en charge ou cochée réglée, sur l’état du cœur
+- `inbox_view_snooze` · téléphone : la boîte « À toi » (ESC-513) : « Plus tard » sur une vue, gardé dans l’état durable du cœur
+- `inbox_views` · téléphone : la boîte « À toi » (ESC-513) : ce qu’Escouade y verse de lui-même, lu dans l’état du cœur à chaque lecture
 - `inbox_weight` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
 - `integrate_base`
 - `integration_connect`
@@ -396,7 +396,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `integration_issues`
 - `integration_resync`
 - `integration_states`
-- `interrupt`
+- `interrupt` · téléphone
 - `isola_approve`
 - `isola_config`
 - `isola_down`
@@ -412,7 +412,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `merge_agent`
 - `merge_agent_repos`
 - `message_subagent`
-- `offline_state` : « Mode hors ligne » (ESC-596) : celui du cœur, dont les flux s’arrêtent, et la stratégie de sa machine
+- `offline_state` · téléphone : « Mode hors ligne » (ESC-596) : celui du cœur, dont les flux s’arrêtent, et la stratégie de sa machine
 - `onboarding_act`
 - `onboarding_need`
 - `onboarding_offers`
@@ -423,6 +423,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `overseer_view`
 - `overview_prs`
 - `phone_check` : Réglages › Téléphone (ESC-567) : le réseau revu (la box, l'adresse publique, Tailscale)
+- `phone_pair_qr` : le QR code d’un téléphone (ESC-570) : 10 minutes, un téléphone, son pair qui attend et un code de la portée « téléphone » ; la fenêtre et les appareils « poste »
 - `phone_remove` : Réglages › Téléphone (ESC-567) : un téléphone retiré du tunnel, ses connexions coupées, l’appareil qui lui est lié révoqué (ESC-630)
 - `phone_rotate_key` : Réglages › Téléphone (ESC-567) : la clé du tunnel changée, chaque téléphone à appairer de nouveau
 - `phone_set` : Réglages › Téléphone (ESC-567) : l'accès allumé ou éteint, son port UDP, Tailscale ; refusé par la stratégie
@@ -491,8 +492,8 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `refuse_delete` : la suppression qu’un agent demande, refusée sur sa carte (ESC-511)
 - `remote_device_revoke` : Réglages de l’espace › Appareils (ESC-539) : un appareil appairé au cœur retiré avec ceux nés de lui, ses connexions fermées ; l’auteur pris de la connexion (ESC-630)
 - `remote_devices` : Réglages de l’espace › Appareils (ESC-539) : les appareils appairés au cœur
-- `remote_image`
-- `remote_pair_code` : un code d’appairage de 10 minutes, donné à la fenêtre du cœur seule ; refusé à un client distant (ESC-630)
+- `remote_image` · téléphone
+- `remote_pair_code` : un code d’appairage de 10 minutes, donné à la fenêtre du cœur et aux appareils de la portée « poste » ; refusé à un téléphone (ESC-630, ESC-570)
 - `remove_project`
 - `remove_workflow_file`
 - `rename_agent`
@@ -508,11 +509,11 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `scheduled_pause`
 - `scheduled_preview`
 - `scheduled_update`
-- `search_conversations`
+- `search_conversations` · téléphone
 - `secrets_file` : les secrets des plugins gardés dans un fichier (ESC-499) : le fichier et le trousseau de la machine du cœur
 - `secrets_file_remove` : les secrets des plugins gardés dans un fichier (ESC-499) : le fichier et le trousseau de la machine du cœur
-- `send_message`
-- `sent_file_bytes`
+- `send_message` · téléphone
+- `sent_file_bytes` · téléphone
 - `sent_files`
 - `set_agent_account`
 - `set_agent_options`
@@ -525,19 +526,19 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `shared_trust`
 - `shared_unkeep`
 - `shared_write`
-- `space_glance` : « Partout » et les piles (ESC-539) : ce qui attend sur le cœur, lu par la connexion de chaque espace
+- `space_glance` · téléphone : « Partout » et les piles (ESC-539) : ce qui attend sur le cœur, lu par la connexion de chaque espace
 - `stats`
 - `stop_bg_task`
 - `stop_subagent`
 - `store_refresh`
 - `store_suggestions`
 - `store_view`
-- `subagent_transcript`
-- `subscribe`
+- `subagent_transcript` · téléphone
+- `subscribe` · téléphone
 - `suggest_run_commands`
 - `suggest_worktree_steps`
 - `target_cis`
-- `task_output`
+- `task_output` · téléphone
 - `team_breaker_lift`
 - `team_breaker_online`
 - `team_breaker_set`
@@ -608,13 +609,13 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `term_write`
 - `test_recipe_approve`
 - `test_run_start`
-- `ticket_approve`
-- `ticket_create`
+- `ticket_approve` · téléphone
+- `ticket_create` · téléphone
 - `ticket_delete`
 - `ticket_dismiss`
 - `ticket_finish_anyway`
 - `ticket_hide`
-- `ticket_images`
+- `ticket_images` · téléphone
 - `ticket_pr_back_to_todo`
 - `ticket_pr_fix_ci`
 - `ticket_pr_fix_reviews`
@@ -623,12 +624,12 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `ticket_pr_update_branch`
 - `ticket_prioritize`
 - `ticket_prs_refresh`
-- `ticket_reject`
-- `ticket_resolve_conflict`
-- `ticket_resume`
+- `ticket_reject` · téléphone
+- `ticket_resolve_conflict` · téléphone
+- `ticket_resume` · téléphone
 - `ticket_set_target`
 - `ticket_share`
-- `ticket_start`
+- `ticket_start` · téléphone
 - `ticket_team_accept`
 - `ticket_team_assign`
 - `ticket_team_handoff`
@@ -797,6 +798,19 @@ Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-serve
 - `read_logo` : lu sur la machine du cœur : lu par le client et envoyé en mode serveur
 - `sent_file_open` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
 - `set_project_logo` : lu sur la machine du cœur : lu par le client et envoyé en mode serveur
+
+### Les portées des appareils (ESC-570, SR1-01)
+
+Avant MO-4, tout appareil appairé avait toute la fenêtre : le terminal, les fichiers, les secrets, l'appairage, la révocation, l'exposition au réseau. Un téléphone perdu ou une page piégée dans la WebView valait un poste. Chaque appareil a maintenant une **portée**, choisie à l'appairage et gardée dans `remote-devices.json` (`scope`) :
+
+- **`computer`** (« Poste ») : tout ce qui est servi, comme avant. Un appareil d'avant les portées en est un (le champ absent). Né de « Créer un code », de `escouade-server pair` ou de « Se connecter à un serveur ».
+- **`phone`** (« Téléphone ») : ce que fait l'app du téléphone, rien d'autre : la boîte « À toi », répondre aux autorisations et aux questions, lire et écrire dans une conversation, les fichiers d'une demande et d'une conversation, ce qui attend d'un coup d'œil, le Kanban en gestes simples (lancer, valider, renvoyer, « L'agent résout », un ticket créé). Ni terminal, ni fichiers, ni secrets, ni plugins, ni appareils, ni réglages réseau. Né du QR code d'un téléphone, et toujours d'un appairage par le tunnel du téléphone ou avec une clé de téléphone (`Pair.key`), quel que soit le code.
+
+**Chaque commande a sa portée** : dans `remoteapi/list.rs`, chaque groupe la dit (`served(phone) { … }`, `served(computer) { … }`, `desk(computer) { … }`…) ; la macro refuse un groupe sans portée, et une commande refusée à distance (`desk`, `moves_refused`) est d'un poste. Dans la liste ci-dessus, une commande qu'un téléphone peut appeler est suivie de « · téléphone » ; `remoteapi_tests` vérifie que cette section et la liste disent la même portée, et que les commandes d'un téléphone sont exactement celles qu'il nomme (une de plus se décide, elle ne s'ajoute pas par mégarde).
+
+**Vérifiée avant la classe** : `dispatch` (`remoteapi/server.rs`) compare la portée de l'appareil de la connexion à celle de la commande avant toute autre chose ; refusée, la commande ne s'exécute pas et le client reçoit l'erreur nommée `scope`. Les commandes « appareils » (`remote_pair_code`, `phone_pair_qr`, `remote_devices`, `remote_device_revoke`, `phone_*`) sont d'un poste, et `remote_pair_code`, `phone_pair_qr` et `remote_device_revoke` le vérifient encore elles-mêmes (la fenêtre, ou un appareil `computer`).
+
+**Le jeton d'un téléphone n'est jamais envoyé** (SR1-15) : à l'appairage, le natif du téléphone fait une paire de clés X25519 et en donne la moitié publique avec le code (`{ t: 'pair', code, name, key }`) ; le cœur répond la moitié publique d'une paire à lui (`paired.key`, `token` vide), et chacun dérive du secret partagé, par HKDF-SHA256 (sans sel), le jeton de l'appareil (`escouade-mobile/device-token/v1`) et la clé de l'appairage (`escouade-mobile/pairing-key/v1`, qui scellera les notifications, MO-6, gardée au trousseau du cœur sous `remote-device-key-<id>`). Le proxy local du téléphone écrit le jeton dans l'en-tête `X-Escouade-Device` de chaque requête ; le JavaScript de la WebView donne un jeton vide dans sa poignée de main. Un même vecteur de test (le téléphone [1; 32], le cœur [2; 32]) est vérifié par la crate, par le cœur et par le côté navigateur du plugin.
 
 ## Le mode serveur
 
@@ -980,7 +994,13 @@ La spec le décrit (« Escouade à distance › Le tunnel du téléphone »). Le
 - **Réglages › Téléphone** (`PhonePage.svelte`) : l'accès, le port, l'état du tunnel et l'adresse de l'API dedans, la box (ouvert par UPnP ou NAT-PMP, ou le geste à faire avec l'adresse de la machine, ce que la box a répondu), un CGNAT et ses issues, l'IPv6, l'adresse publique et son changement, Tailscale, les téléphones (leur dernière poignée de main, « Retirer »), et sous « Avancé » la clé publique et « Changer la clé du tunnel ». La même page dans un espace serveur agit sur le cœur du serveur (les commandes sont servies) et dit son pare-feu au lieu d'une box.
 - **`escouade-server phone`** : `status`, `on [PORT]`, `off`, `add NOM [--endpoint HÔTE]` (la config WireGuard du téléphone et son QR code dans le terminal, pour l'app WireGuard officielle, en attendant l'appairage de MO-4 : sa clé privée n'est gardée nulle part), `remove ID`. Le serveur qui tourne relit `phone.json` dans les deux secondes. Une page ouverte dans le tunnel qui n'est pas une WebSocket est dite dans son journal.
 - **Les essais** : Rust (`phone_tests` : la poignée de main et l'API jointe dans le tunnel par un pair WireGuard de test écrit avec la même pile, rien hors du tunnel ni d'autre `Host` ou `Origin` dedans, une clé inconnue sans réponse, un pair retiré, la clé tournée, un pair lié à son appareil et emporté par sa révocation, la box et l'adresse publique relue par une fausse box NAT-PMP et un faux STUN sur le bouclage, la stratégie qui coupe, Tailscale, un port pris, 2 Mo dans chaque sens, `escouade-server phone add` repris par le cœur qui tourne) ; Vitest (`PhonePage.test.ts`) ; e2e (`phone.spec.ts`, avec la fausse box). Aucun essai n'atteint la box de l'utilisateur : les e2e ont `ESCOUADE_PHONE_NET=off` (ou une fausse box, `fake;natpmp=…;stun=…;local=…`), lu en build de développement seulement.
-- **Pas encore** : l'essai réel en 4G (« L'ordre proposé », 1 : un geste de l'utilisateur, déposé dans « À toi ») ; le QR code de l'appairage et la sorte « téléphone » des appareils (MO-4) ; le côté téléphone (MO-3) ; un nom DynDNS donné à la place de l'adresse publique ; le pare-feu IPv6 de la box ouvert par UPnP (pinhole) ; empêcher la veille du poste tant que l'accès est allumé.
+- **Pas encore** : l'essai réel en 4G (« L'ordre proposé », 1 : un geste de l'utilisateur, déposé dans « À toi ») ; le côté téléphone (MO-3) ; un nom DynDNS donné à la place de l'adresse publique ; le pare-feu IPv6 de la box ouvert par UPnP (pinhole) ; empêcher la veille du poste tant que l'accès est allumé.
+
+### L'appairage et la révocation, MO-4 (ESC-570, 2026-11-27)
+
+- **Le QR code** (`Phone::pair_qr`, la commande `phone_pair_qr`, `escouade-server pair --qr [--endpoint HÔTE]`) : une paire de clés faite pour le téléphone, son pair ajouté aussitôt mais **en attente** (`pendingUntil`, les dix minutes du code), et un code d'appairage de la portée `phone` qui le nomme (`remote-pairing.json` : `scope`, `peer`, le hash du code). Le QR porte `{ escouade: "pair/1", name, here, version, code, expiresAt, tunnel: { privateKey, peerPublicKey, endpoint, address, api } }` ; la fenêtre n'en reçoit que le SVG, le code et sa fin, jamais le texte. Un nouveau QR prend la place du précédent et retire son pair en attente ; un pair dont le code a fini sans servir part (la veille de deux secondes, `drop_expired`). Appairé par lui, le pair est à l'appareil né (`paired`) et n'attend plus.
+- **Le code à 8 caractères** est celui du QR, écrit à côté. Tapé sur le téléphone, il va avec l'adresse d'un espace joint **sans** le tunnel WireGuard (son adresse Tailscale) : le natif ouvre le même proxy local vers cette adresse (`MobileDirect`), qui y écrit le jeton de même.
+- **La révocation** (`remote_device_revoke`, « Retirer » de Réglages › Téléphone, `devices revoke`) retire le jeton, la clé de l'appairage (`remote-device-key-<id>`) et l'inscription au push (`remote-device-push-<id>`, que MO-6 écrira), et le pair WireGuard aussitôt (`Phone::drop_revoked`) ; les connexions de l'appareil se ferment dans les deux secondes, quelle que soit la relecture du fichier qui a vu la révocation la première (`sync_devices` regarde toujours chaque connexion).
 
 ### Architecture retenue
 

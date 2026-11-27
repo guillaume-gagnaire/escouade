@@ -2,15 +2,18 @@
   // Réglages de l'espace › Appareils (ESC-539, docs/SERVER-UX.md § 2 step 8, S5, design `b-appareils`): the devices
   // paired to the server the window is on — this computer marked, its « Se déconnecter » being « Retirer » of
   // Réglages › Serveurs (S15) —, removing another one (its connections close within two seconds) with the devices
-  // paired from it, said before (SR1-02). A code is created on the server (`escouade-server pair`), never from a paired
-  // device: the server refuses it. Read from the server, through the window's own connection: nothing of it is this
-  // computer's.
+  // paired from it, said before (SR1-02). Each device says its scope (ESC-570): a computer, or a phone. « Créer un code »
+  // pairs a computer, « Appairer un téléphone » shows a phone's QR code (MO-4): the server gives them to a computer's
+  // connection alone, never to a phone's. Read from the server, through the window's own connection: nothing of it is
+  // this computer's.
   import { connection } from '../../lib/connection.svelte';
   import { fDate } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { invoke } from '../../lib/transport';
   import { app } from '../../lib/state.svelte';
+  import { tip } from '../../lib/tip';
   import Icon from '../Icon.svelte';
+  import PairQr from './PairQr.svelte';
 
   interface Device {
     id: string;
@@ -18,6 +21,8 @@
     createdAt: number;
     lastSeen?: number | null;
     pairedBy?: string | null;
+    /** What it may call (ESC-570): `computer` when the server does not say (before the scopes). */
+    scope?: 'computer' | 'phone';
   }
 
   const server = $derived(connection.server);
@@ -25,6 +30,17 @@
   let failed = $state('');
   let confirm = $state<Device | null>(null);
   let busy = $state(false);
+  let code = $state<{ code: string; expiresAt: number } | null>(null);
+
+  async function makeCode() {
+    try {
+      code = await invoke<{ code: string; expiresAt: number }>('remote_pair_code');
+    } catch (e) {
+      app.toast(String(e), 'error');
+    }
+  }
+
+  const isPhone = (d: Device) => d.scope === 'phone';
 
   async function load() {
     try {
@@ -92,13 +108,18 @@
     <ul class="list" aria-label={t('spaces.devices.title')}>
       {#each devices as d (d.id)}
         <li class="drow" data-testid="device-row">
-          <span class="ic" aria-hidden="true"
-            ><Icon name={/pixel|phone|iphone|android/i.test(d.name) ? 'phone' : 'monitor'} size={15} /></span
-          >
+          <span class="ic" aria-hidden="true"><Icon name={isPhone(d) ? 'phone' : 'monitor'} size={15} /></span>
           <div class="main">
             <div class="l1">
               <b>{d.name}</b>
               {#if mine(d)}<span class="mine">{t('spaces.devices.thisOne')}</span>{/if}
+              <span
+                class="scope"
+                class:phone={isPhone(d)}
+                data-testid="device-scope"
+                use:tip={isPhone(d) ? t('spaces.devices.scopePhoneDesc') : t('spaces.devices.scopeComputerDesc')}
+                >{isPhone(d) ? t('spaces.devices.scopePhone') : t('spaces.devices.scopeComputer')}</span
+              >
             </div>
             <span class="l2"
               >{d.lastSeen ? t('spaces.devices.seen', { date: fDate(d.lastSeen) }) : t('spaces.devices.never')} · {t(
@@ -144,11 +165,42 @@
     <div>
       <b>{t('spaces.devices.pairTitle')}</b>
       <p>{t('spaces.devices.pairText')}</p>
+      <div class="acts">
+        <button class="btn" onclick={() => void makeCode()}><Icon name="key" size={12} />{t('spaces.devices.makeCode')}</button>
+      </div>
+      {#if code}
+        <p class="mono" data-testid="device-code">
+          {t('spaces.devices.code', {
+            code: code.code,
+            time: new Date(code.expiresAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+          })}
+        </p>
+      {/if}
+    </div>
+  </div>
+  <div class="pair">
+    <div>
+      <b>{t('spaces.devices.phoneTitle')}</b>
+      <PairQr onpaired={() => void load()} />
     </div>
   </div>
 {/if}
 
 <style>
+  .scope {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 6px;
+    color: var(--muted);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .scope.phone {
+    color: var(--teal-ink);
+  }
+  .mono {
+    font-family: var(--mono);
+  }
   .intro,
   .empty {
     margin: 0 0 8px;

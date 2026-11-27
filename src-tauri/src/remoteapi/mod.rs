@@ -61,10 +61,49 @@ impl Class {
     }
 }
 
+/// The scope of a device, and of a command (ESC-570, SR1-01, `docs/REMOTE.md`, « Les portées des appareils »).
+///
+/// - A **device** has the scope chosen when it was paired, kept in `remote-devices.json`: `computer` (a desktop client:
+///   every command served, as before the scopes; a device of before them is one) or `phone` (the mobile app).
+/// - A **command** has the narrowest scope of the devices that may call it (`list.rs`, each group says it): `phone`
+///   (the box « À toi », the answers to permissions and questions, a conversation read and written, the files of a
+///   request and of a conversation, the Kanban's simple gestures) or `computer` (all the others: the terminal, the
+///   files, the secrets, the plugins, the devices, the network settings…).
+///
+/// The server checks it in `dispatch`, before the command's class: a phone asking a command of a computer is refused
+/// with the error `scope`, the command never run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Scope {
+    #[default]
+    Computer,
+    Phone,
+}
+
+impl Scope {
+    /// Whether a device of this scope may call a command of the scope `command`.
+    pub fn allows(self, command: Scope) -> bool {
+        match self {
+            Scope::Computer => true,
+            Scope::Phone => command == Scope::Phone,
+        }
+    }
+
+    /// As the files and the client say it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Scope::Computer => "computer",
+            Scope::Phone => "phone",
+        }
+    }
+}
+
 /// A command of the list.
 pub struct Command {
     pub name: &'static str,
     pub class: Class,
+    /// The narrowest scope of the devices that may call it.
+    pub scope: Scope,
     /// `__remote_<name>`, written by `#[tauri::command]` (`escouade_command::command`).
     pub call: fn(Call) -> Reply,
 }
@@ -416,6 +455,8 @@ pub mod codes {
     pub const DESK_ONLY: &str = "desk-only";
     /// A command that changes machines, not served yet.
     pub const NOT_SERVED_YET: &str = "not-served-yet";
+    /// A command beyond the scope of the device that asked it (ESC-570): a phone asking a computer's command.
+    pub const SCOPE: &str = "scope";
     /// No such command.
     pub const UNKNOWN_COMMAND: &str = "unknown-command";
     /// What the command needs is not in this process (a state of the desktop app, a request's raw body).

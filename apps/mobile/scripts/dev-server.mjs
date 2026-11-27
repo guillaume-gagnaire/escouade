@@ -1,14 +1,16 @@
 // `npm run dev:server` (MO-1): the phone's page in Vite, on a local `escouade-server` of its own (its debug build:
 // `cargo build --bin escouade-server` first), a phone paired, through the forward that stands for the phone's tunnel.
-// The pairing of MO-4 does not exist yet: the space is given to the page of development (`VITE_ESCOUADE_SPACES`).
+// The space is given to the page of development (`VITE_ESCOUADE_SPACES`); with `--pair` (MO-4), it is not: the page
+// opens on its pairing, and the terminal says the code and the address to type (a browser has no WireGuard: the
+// address of the forward, as a space reached by Tailscale).
 //
-//   ESCOUADE_PORT_BASE=4170 npm run dev:server -- [--demo]
+//   ESCOUADE_PORT_BASE=4170 npm run dev:server -- [--demo] [--pair]
 //
 // The page on base + 1, the server on base + 2, the forward on base + 3 (without a base: 5174, then free ports).
 // `--demo`: a project and its agent stopped on a permission (the fake `claude`), for « À toi » and « Agents ». The
 // server's data folder is a temporary one, removed at the end.
 
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,8 +60,14 @@ if (args.includes('--demo')) {
   await stoppedAgent(api.call, root);
   api.close();
 }
-const spaces = JSON.stringify([{ id: 'travail', name: 'Travail', url: `ws://127.0.0.1:${forward.port}/remote`, token }]);
+const pairing = args.includes('--pair');
+const spaces = pairing ? '[]' : JSON.stringify([{ id: 'travail', name: 'Travail', url: `ws://127.0.0.1:${forward.port}/remote`, token }]);
 console.log(`escouade-server on 127.0.0.1:${port}, the phone's forward on 127.0.0.1:${forward.port}`);
+if (pairing) {
+  const printed = execFileSync(program, ['pair', '--data-dir', data], { env, encoding: 'utf8' });
+  const code = /([A-Z2-9]{4}-[A-Z2-9]{4})/.exec(printed)?.[1] ?? '?';
+  console.log(`To pair the page: the code ${code}, the address 127.0.0.1:${forward.port} (10 minutes; escouade-server pair for another).`);
+}
 
 const vite = spawn(process.execPath, [path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js')], {
   cwd: path.join(ROOT, 'apps', 'mobile'),

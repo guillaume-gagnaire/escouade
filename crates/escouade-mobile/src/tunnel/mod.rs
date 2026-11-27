@@ -11,8 +11,10 @@
 //! dropping it, closes everything.
 
 mod device;
+pub mod direct;
 mod engine;
 pub mod gate;
+pub mod pairing;
 
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -43,6 +45,9 @@ pub struct TunnelConfig {
     pub api: String,
     /// WireGuard's persistent keepalive, in seconds ([`DEFAULT_KEEPALIVE_SECS`] when `None`, 0 for none).
     pub keepalive_secs: Option<u16>,
+    /// The device's token (ESC-570): the proxy writes it in each request ([`gate::DEVICE_HEADER`]); the WebView never
+    /// holds it. None: the page gives its own (the tests).
+    pub device_token: Option<String>,
 }
 
 impl std::fmt::Debug for TunnelConfig {
@@ -120,6 +125,7 @@ struct Shared {
 
 /// What the engine is started with, read from a [`TunnelConfig`].
 struct Plan {
+    token: Option<Zeroizing<String>>,
     private: Zeroizing<[u8; 32]>,
     peer: [u8; 32],
     preshared: Option<Zeroizing<[u8; 32]>>,
@@ -169,6 +175,12 @@ fn plan(config: &TunnelConfig) -> Result<Plan, TunnelError> {
         Some(s) => Some(s),
     };
     Ok(Plan {
+        token: config
+            .device_token
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(|t| Zeroizing::new(t.to_string())),
         private,
         peer,
         preshared,
@@ -293,6 +305,7 @@ mod tests {
             address: "10.77.0.2/24".into(),
             api: "10.77.0.1:7878".into(),
             keepalive_secs: None,
+            device_token: None,
         }
     }
 

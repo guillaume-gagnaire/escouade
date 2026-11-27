@@ -83,6 +83,8 @@ pub(super) struct Engine {
     endpoint: SocketAddr,
     api: SocketAddrV4,
     secret: String,
+    /// The device's token, written in each request (ESC-570).
+    token: Option<zeroize::Zeroizing<String>>,
     shared: Arc<Mutex<Shared>>,
     stop: Arc<AtomicBool>,
     inbuf: Vec<u8>,
@@ -190,6 +192,7 @@ impl Engine {
             endpoint: plan.endpoint,
             api: plan.api,
             secret,
+            token: plan.token.clone(),
             shared,
             stop,
             inbuf: vec![0u8; 65536],
@@ -440,7 +443,7 @@ impl Engine {
                     Err(_) => c.dead = true,
                 }
                 if let Some(g) = &c.gate {
-                    match gate::check(g, &self.secret) {
+                    match gate::check(g, &self.secret, self.token.as_deref().map(String::as_str)) {
                         Gate::NeedMore if c.local_eof => c.dead = true,
                         Gate::NeedMore => {}
                         Gate::Pass(bytes) => {

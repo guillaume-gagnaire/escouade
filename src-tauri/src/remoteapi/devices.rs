@@ -14,10 +14,16 @@
 //! Each device keeps the device it was paired from (`pairedBy`: the one that asked for its code; none for the window
 //! or `escouade-server pair`). A device revoked takes with it the devices paired from it, and theirs (SR1-02): one
 //! that leaked cannot leave a device of its own behind.
+//!
+//! Each device has its scope (ESC-570, SR1-01, [`Scope`]): `computer` (every command, as before the scopes: a device
+//! of before them is one) or `phone`, chosen when it was paired. A device revoked takes with it what was kept for it
+//! beside its token (ESC-570): its pairing key (`remote-device-key-<id>`, which seals its notifications) and its
+//! registration to the push (`remote-device-push-<id>`, written by MO-6).
 
 use crate::integrations::secrets::{keep_secret, SecretStore};
 use crate::model::{new_id, now_ms};
 use crate::paths::DataDir;
+pub use crate::remoteapi::Scope;
 use anyhow::{bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
@@ -67,6 +73,9 @@ pub struct Device {
     /// revoking that one revokes it too.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paired_by: Option<String>,
+    /// What it may call (ESC-570): `computer` when the file does not say (a device of before the scopes).
+    #[serde(default)]
+    pub scope: Scope,
 }
 
 /// A device as its file keeps it: its token there only when the keychain refused it.
@@ -92,6 +101,16 @@ pub struct Devices {
 
 fn entry(id: &str) -> String {
     format!("remote-device-{id}")
+}
+
+/// The keychain's entry of a device's pairing key (ESC-570): what seals its notifications (MO-6).
+pub fn key_entry(id: &str) -> String {
+    format!("remote-device-key-{id}")
+}
+
+/// The keychain's entry of a device's registration to the push (MO-6): its push token, its platform.
+pub fn push_entry(id: &str) -> String {
+    format!("remote-device-push-{id}")
 }
 
 fn read_traces(file: &Path) -> Vec<Trace> {
@@ -154,6 +173,7 @@ impl Devices {
             created_at: now_ms(),
             last_seen: None,
             paired_by: None,
+            scope: Scope::Computer,
         };
         Self {
             file: None,
@@ -201,6 +221,18 @@ impl Devices {
     /// A new device named `name`, paired from the device `paired_by` (the one that asked for its code; none: the
     /// window, `escouade-server pair`), and its token.
     pub fn add_from(&self, name: &str, paired_by: Option<&str>) -> Result<(Device, String)> {
+        self.add_as(name, paired_by, Scope::Computer, None)
+    }
+
+    /// A new device of the scope `scope`, paired from `paired_by`, and its token: `token` when it is given (derived
+    /// at its pairing, ESC-570: the phone derives the same, it is never sent), else a new one.
+    pub fn add_as(
+        &self,
+        name: &str,
+        paired_by: Option<&str>,
+        scope: Scope,
+        token: Option<String>,
+    ) -> Result<(Device, String)> {
         let name = name.trim();
         if name.is_empty() {
             bail!(tr!("un appareil a un nom", "a device has a name"));
@@ -211,8 +243,11 @@ impl Devices {
             created_at: now_ms(),
             last_seen: None,
             paired_by: paired_by.map(str::to_string),
+            scope,
         };
-        let token = escouade_mcp::new_token();
+        let token = token
+            .filter(|t| !t.is_empty())
+            .unwrap_or_else(escouade_mcp::new_token);
         let in_file = match keep_secret(&*self.store, &entry(&device.id), &token) {
             Ok(()) => false,
             Err(e) => {
@@ -286,8 +321,29 @@ impl Devices {
             if let Err(e) = self.store.delete(&entry(&device.id)) {
                 log::warn!("remote API: the system keychain did not forget a revoked device's token: {e:#}");
             }
+            // Its pairing key and its registration to the push with it (ESC-570): nothing is sealed nor sent to it
+            // any more.
+            for kept in [key_entry(&device.id), push_entry(&device.id)] {
+                if let Err(e) = self.store.delete(&kept) {
+                    log::warn!("remote API: the system keychain did not forget what a revoked device kept: {e:#}");
+                }
+            }
         }
         Ok(gone.into_iter().map(|(d, _, _)| d).collect())
+    }
+
+    /// The pairing key of the device `id` kept (ESC-570), in the keychain.
+    pub fn keep_key(&self, id: &str, key: &str) -> Result<()> {
+        keep_secret(&*self.store, &key_entry(id), key)
+    }
+
+    /// The device `id`, while it is one.
+    pub fn get(&self, id: &str) -> Option<Device> {
+        self.known
+            .read()
+            .iter()
+            .find(|(d, _, _)| d.id == id)
+            .map(|(d, _, _)| d.clone())
     }
 
     /// The name of the device `id`, while it is one.

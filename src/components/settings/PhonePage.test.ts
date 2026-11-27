@@ -272,4 +272,52 @@ describe('Réglages › Téléphone', () => {
     expect(screen.getByTestId('phone-cgnat')).toHaveTextContent('ask the provider for a dedicated IPv4');
     expect(screen.getByText(/reaches this computer through a WireGuard tunnel/)).toBeVisible();
   });
+
+  it('shows a phone’s QR code ten minutes with its code, then hides it once the phone paired through it', async () => {
+    status = on();
+    const expiresAt = Date.now() + 600_000;
+    serve({
+      phone_pair_qr: () => {
+        status = on({
+          peers: [{ id: 'p9', name: 'Téléphone', address: '10.77.0.2', device: null, addedAt: 1, sinceHandshake: null, pending: true }],
+        });
+        return {
+          svg: '<svg data-testid="qr-svg"></svg>',
+          code: 'K7Q2-9MXA',
+          expiresAt,
+          peer: 'p9',
+          endpoint: '203.0.113.7:51820',
+          endpointUnknown: false,
+        };
+      },
+    });
+    render(PhonePage);
+    await userEvent.click(await screen.findByRole('button', { name: /Appairer un téléphone/ }));
+    const shown = await screen.findByRole('region', { name: 'QR code d’appairage' });
+    expect(within(shown).getByTestId('pair-qr-code')).toHaveTextContent('K7Q2-9MXA');
+    expect(within(shown).getByTestId('pair-qr-left')).toHaveTextContent(/Valable encore (9 min|10 min)/);
+    expect(shown).toHaveTextContent('Le téléphone joindra 203.0.113.7:51820.');
+    expect(shown).toHaveTextContent('ne le photographie pas');
+    // Its peer waits, said so in the list.
+    await waitFor(() => expect(screen.getByTestId('phone-row')).toHaveTextContent('En attente de son QR code'));
+    // The phone paired through it: the QR leaves the screen.
+    status = on({
+      peers: [{ id: 'p9', name: 'Pixel 8', address: '10.77.0.2', device: 'd9', addedAt: 1, sinceHandshake: 1000, pending: false }],
+    });
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'QR code d’appairage' })).toBeNull(), { timeout: 6000 });
+    expect(screen.getByRole('status')).toHaveTextContent('Téléphone appairé');
+    expect(callsOf('phone_pair_qr')).toHaveLength(1);
+  });
+
+  it('says why no QR code when the core refuses it', async () => {
+    status = on();
+    serve({
+      phone_pair_qr: () => {
+        throw new Error('L’accès du téléphone est éteint');
+      },
+    });
+    render(PhonePage);
+    await userEvent.click(await screen.findByRole('button', { name: /Appairer un téléphone/ }));
+    expect(await screen.findByText(/L’accès du téléphone est éteint/)).toBeVisible();
+  });
 });

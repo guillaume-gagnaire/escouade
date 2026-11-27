@@ -13,8 +13,13 @@
 //!   alone, when the keychain refuses it (Linux, a server).
 //! - **A peer** belongs to the device paired through it (`TunnelPeer::paired`): only that device's token is taken
 //!   through it; a device revoked takes its peer with it.
-//! - **The phone's side** (its app, its key, the QR code) is MO-3 and MO-4: here, the tests' peer is a WireGuard of
-//!   Rust (`stack`) that connects to the core like the phone will.
+//! - **The QR code** (ESC-570, MO-4, [`Phone::pair_qr`]): a key pair made for the phone, its peer added at once but
+//!   **waiting** (`Peer::pending_until`: ten minutes, the code's), and a pairing code of the scope `phone` that names
+//!   it. The QR holds the phone's WireGuard config (its private key, the core's public key, the endpoint, its address),
+//!   the API's address in the tunnel, the code and what the phone shows (« Ce poste · DESKTOP-7QK2 · Escouade 2.3.0 »).
+//!   It is a secret: shown to the user alone, never written in the log. The peer paired through it is the device's from
+//!   then on; one still waiting when its code ends, or when another QR takes its place, goes.
+//! - **The tests' peer** is a WireGuard of Rust (`stack`) that connects to the core like the phone does.
 
 pub mod nat;
 pub mod stack;
@@ -72,7 +77,66 @@ pub struct Peer {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device: Option<String>,
     pub added_at: i64,
+    /// Made for a QR code not used yet (ESC-570): it goes at this time (ms) if no device was paired through it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_until: Option<i64>,
 }
+
+/// What the QR code of a phone's pairing holds (ESC-570, `docs/MOBILE.md` § 3.1): read by the app's native side alone
+/// (`apps/mobile-plugin`), which keeps the keys in the Keystore or the Keychain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QrPayload {
+    /// `pair/1`: what the app reads.
+    pub escouade: String,
+    /// The machine, as the phone shows it (`DESKTOP-7QK2`, `vps-travail`).
+    pub name: String,
+    /// This computer (`true`), or a server.
+    pub here: bool,
+    /// Escouade's version on it.
+    pub version: String,
+    /// The pairing code (`ABCD-EFGH`), the one shown beside the QR.
+    pub code: String,
+    pub expires_at: i64,
+    pub tunnel: QrTunnel,
+}
+
+/// The phone's WireGuard config, in the QR code.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QrTunnel {
+    pub private_key: String,
+    pub peer_public_key: String,
+    /// `host:port` (UDP).
+    pub endpoint: String,
+    /// `10.77.0.N/32`.
+    pub address: String,
+    /// `10.77.0.1:80`.
+    pub api: String,
+}
+
+/// A phone's QR code, as Réglages › Téléphone and `escouade-server pair --qr` show it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PairQr {
+    /// The QR's text (JSON): never written in the log.
+    #[serde(skip)]
+    pub text: String,
+    /// The QR code, as SVG (dark on light).
+    pub svg: String,
+    /// The code shown beside it, for an app that cannot scan.
+    pub code: String,
+    pub expires_at: i64,
+    /// The phone's peer waiting for it.
+    pub peer: String,
+    /// The endpoint the phone will reach (`host:port`), for the window to say it.
+    pub endpoint: String,
+    /// The endpoint is a guess (no public address seen yet, none given): the window says to check it.
+    pub endpoint_unknown: bool,
+}
+
+/// The QR's marker and version.
+pub const QR_VERSION: &str = "pair/1";
 
 /// The public address, as last seen, and when it changed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -157,6 +221,8 @@ pub struct PeerStatus {
     pub added_at: i64,
     /// Milliseconds since its last handshake; none when its session is down.
     pub since_handshake: Option<u64>,
+    /// Made for a QR code not used yet (ESC-570).
+    pub pending: bool,
 }
 
 /// What Réglages › Téléphone shows.
@@ -348,6 +414,11 @@ impl Phone {
     /// The core of a server (`escouade-server`): its firewall to open, no box.
     pub fn mark_server(&self) {
         self.server.store(true, Ordering::Relaxed);
+    }
+
+    /// The core of a server (`escouade-server`), not a computer's.
+    pub fn is_server(&self) -> bool {
+        self.server.load(Ordering::Relaxed)
     }
 
     fn save(&self) -> Result<()> {
@@ -562,6 +633,7 @@ impl Phone {
                 address,
                 device: None,
                 added_at: now_ms(),
+                pending_until: None,
             };
             saved.peers.push(peer.clone());
             peer
@@ -604,8 +676,9 @@ impl Phone {
         let changed = {
             let mut saved = self.saved.lock();
             match saved.peers.iter_mut().find(|p| p.id == id) {
-                Some(p) if p.device.as_deref() != Some(device) => {
+                Some(p) if p.device.as_deref() != Some(device) || p.pending_until.is_some() => {
                     p.device = Some(device.to_string());
+                    p.pending_until = None;
                     true
                 }
                 _ => false,
@@ -618,8 +691,122 @@ impl Phone {
         }
     }
 
+    /// A phone's QR code (ESC-570, `docs/MOBILE.md` § 3.1): a key pair made for it, its peer added and waiting ten
+    /// minutes, a pairing code of the scope `phone` asked by `by` (none: the window, `escouade-server pair --qr`) that
+    /// takes the place of the one that waited (and of its waiting peer). `here`: this computer, not a server.
+    /// `endpoint`: where the phone reaches it (else the public address last seen). Refused while the access is off.
+    pub fn pair_qr(
+        &self,
+        data: &DataDir,
+        by: Option<&str>,
+        here: bool,
+        endpoint: Option<&str>,
+    ) -> Result<PairQr> {
+        if !self.saved.lock().enabled {
+            bail!(tr!(
+                "L’accès du téléphone est éteint : allume-le d’abord (Réglages › Téléphone, ou « escouade-server phone on »).",
+                "The phone's access is off: turn it on first (Settings › Phone, or “escouade-server phone on”)."
+            ));
+        }
+        self.private_key()?;
+        let (private, public) = stack::new_key();
+        let peer = self.add_peer(&tr!("Téléphone", "Phone"), &stack::key_text(&public))?;
+        let now = now_ms();
+        let made = crate::remoteapi::pairing::create_with(
+            data,
+            now,
+            crate::remoteapi::pairing::Ask {
+                by: by.map(str::to_string),
+                scope: crate::remoteapi::Scope::Phone,
+                peer: Some(peer.id.clone()),
+            },
+        );
+        let (code, replaced) = match made {
+            Ok(made) => made,
+            Err(e) => {
+                let _ = self.take_peer(&peer.id);
+                return Err(e);
+            }
+        };
+        // Its peer waits as long as its code; the one of the code it replaced goes, unless a device was paired through it.
+        {
+            let mut saved = self.saved.lock();
+            if let Some(p) = saved.peers.iter_mut().find(|p| p.id == peer.id) {
+                p.pending_until = Some(code.expires_at);
+            }
+        }
+        self.save()?;
+        if let Some(old) = replaced.filter(|old| *old != peer.id) {
+            let waiting = self
+                .saved
+                .lock()
+                .peers
+                .iter()
+                .any(|p| p.id == old && p.device.is_none());
+            if waiting {
+                let _ = self.take_peer(&old);
+            }
+        }
+        let saved = self.saved.lock().clone();
+        let seen = saved.public.as_ref().map(|p| p.address.clone());
+        let endpoint_unknown = endpoint.is_none() && seen.is_none();
+        let host = endpoint
+            .map(str::to_string)
+            .or(seen)
+            .unwrap_or_else(|| crate::remoteapi::this_machine().host);
+        let host = if host.contains(':') && !host.starts_with('[') {
+            format!("[{host}]")
+        } else {
+            host
+        };
+        let endpoint = format!("{host}:{}", saved.port);
+        let payload = QrPayload {
+            escouade: QR_VERSION.into(),
+            name: crate::remoteapi::this_machine().host,
+            here,
+            version: env!("CARGO_PKG_VERSION").into(),
+            code: code.text.clone(),
+            expires_at: code.expires_at,
+            tunnel: QrTunnel {
+                private_key: stack::key_text(&private.to_bytes()),
+                peer_public_key: saved.public_key.unwrap_or_default(),
+                endpoint: endpoint.clone(),
+                address: format!("{}/32", peer.address),
+                api: format!("{TUNNEL_ADDRESS}:{API_PORT}"),
+            },
+        };
+        let text = serde_json::to_string(&payload)?;
+        log::info!("phone: a QR code made, its peer {} waiting", peer.id);
+        Ok(PairQr {
+            svg: crate::teams::qr_svg(&text),
+            text,
+            code: code.text,
+            expires_at: code.expires_at,
+            peer: peer.id,
+            endpoint,
+            endpoint_unknown,
+        })
+    }
+
+    /// The peers made for a QR code that ended unused, removed (ESC-570). True when one went.
+    pub fn drop_expired(&self, now: i64) -> bool {
+        let gone: Vec<String> = self
+            .saved
+            .lock()
+            .peers
+            .iter()
+            .filter(|p| p.device.is_none() && p.pending_until.is_some_and(|until| now >= until))
+            .map(|p| p.id.clone())
+            .collect();
+        for id in &gone {
+            log::info!("phone: the peer {id} of a QR code not used went");
+            let _ = self.take_peer(id);
+        }
+        !gone.is_empty()
+    }
+
     /// The peers whose device was revoked, removed with it.
-    fn drop_revoked(&self) {
+    pub fn drop_revoked(&self) {
         let linked: Vec<(String, String)> = self
             .saved
             .lock()
@@ -802,6 +989,7 @@ impl Phone {
                     return;
                 }
                 phone.drop_revoked();
+                phone.drop_expired(now_ms());
                 if checked.elapsed() >= CHECK_EVERY {
                     checked = tokio::time::Instant::now();
                     phone.check().await;
@@ -1098,6 +1286,7 @@ impl Phone {
                     address: p.address.to_string(),
                     device: p.device.clone(),
                     added_at: p.added_at,
+                    pending: p.pending_until.is_some() && p.device.is_none(),
                     since_handshake: states
                         .iter()
                         .find(|s| s.id == p.id)

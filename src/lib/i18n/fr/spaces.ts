@@ -82,7 +82,15 @@ export default {
     none: 'Aucun appareil appairé.',
     pairTitle: 'Appairer un appareil',
     pairText:
-      'Lance escouade-server pair sur le serveur : un code de 10 minutes, pour un seul appareil. Il ne se crée pas depuis un appareil appairé, pour qu’un jeton qui aurait fuité ne puisse pas en faire naître d’autres.',
+      'Un poste : « Créer un code » (10 minutes, un seul appareil), à donner à « Se connecter à un serveur ». Un téléphone : son QR code. Sur le serveur, escouade-server pair (--qr) fait de même. Un téléphone appairé n’en crée jamais : il n’a pas cette portée.',
+    phoneTitle: 'Appairer un téléphone',
+    makeCode: 'Créer un code',
+    code: 'Code : {code} · valable jusqu’à {time}',
+    scopeComputer: 'Poste',
+    scopePhone: 'Téléphone',
+    scopeComputerDesc: 'Tout ce que fait Escouade sur ce serveur',
+    scopePhoneDesc:
+      'La boîte « À toi », les réponses, les conversations et le Kanban : ni terminal, ni fichiers, ni secrets, ni plugins, ni appareils, ni réseau',
     unavailable: 'Les appareils se lisent sur un serveur : va sur l’espace d’un serveur.',
   },
 } as const satisfies Tree;

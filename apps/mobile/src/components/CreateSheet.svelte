@@ -1,14 +1,36 @@
 <script lang="ts">
   // The sheet of the header's « + » (MO-1, docs/MOBILE.md § 3.12): what the phone will create, a project on a server,
   // an agent and its first message, a dictated ticket. Its gestures come with MO-10 and MO-11: here, they are named,
-  // not offered. The system's back, the scrim and « Fermer » close it.
+  // not offered. Below, the spaces of this phone (MO-4): « Retirer » one (the core asked to revoke it, then its keys
+  // forgotten), « Appairer un espace ». The system's back, the scrim and « Fermer » close it.
   import { onMount } from 'svelte';
   import Icon from '$shared/components/Icon.svelte';
   import { t } from '$shared/lib/i18n';
   import type { IconName } from '$shared/lib/icons';
   import { closeSheet } from '../lib/nav.svelte';
+  import { keptSpaces } from '../lib/paired';
+  import { openPairing, removeSpace } from '../lib/pairing.svelte';
+  import { phone } from '../lib/phone-spaces.svelte';
 
   let sheet = $state<HTMLElement>();
+  let confirming = $state<string | null>(null);
+  let removing = $state(false);
+  const kept = new Set(keptSpaces().map((s) => s.id));
+
+  async function remove(id: string) {
+    removing = true;
+    try {
+      await removeSpace(id, true);
+    } finally {
+      removing = false;
+      confirming = null;
+    }
+  }
+
+  function pairAnother() {
+    closeSheet();
+    openPairing();
+  }
   const ITEMS: { icon: IconName; title: 'project' | 'agent' | 'ticket' }[] = [
     { icon: 'folder-plus', title: 'project' },
     { icon: 'agents', title: 'agent' },
@@ -46,6 +68,29 @@
     {/each}
   </ul>
   <p class="soon">{t('mobile.create.soon')}</p>
+  <h3 class="sub">{t('mobile.manage.title')}</h3>
+  <ul class="spaces">
+    {#each phone.spaces as s (s.id)}
+      <li class="space">
+        <span class="k"><Icon name={s.here ? 'monitor' : 'remote'} size={18} /></span>
+        {#if confirming === s.id}
+          <span class="tx"><span class="ht" role="alert">{t('mobile.manage.confirm', { name: s.name })}</span></span>
+          <button type="button" class="rm danger" disabled={removing} onclick={() => remove(s.id)}>{t('mobile.manage.confirmYes')}</button>
+        {:else}
+          <span class="tx"><span class="tt">{s.name}</span></span>
+          {#if kept.has(s.id)}
+            <button
+              type="button"
+              class="rm"
+              aria-label={t('mobile.manage.removeLabel', { name: s.name })}
+              onclick={() => (confirming = s.id)}>{t('mobile.manage.remove')}</button
+            >
+          {/if}
+        {/if}
+      </li>
+    {/each}
+  </ul>
+  <button type="button" class="add" onclick={pairAnother}><Icon name="plus" size={18} />{t('mobile.manage.add')}</button>
 </div>
 
 <style>
@@ -142,6 +187,51 @@
   }
   .ht {
     font-size: var(--small);
+  }
+  .sub {
+    margin: 18px 0 8px;
+    font-size: var(--small);
+    font-weight: 650;
+    color: var(--muted);
+    text-transform: none;
+  }
+  .spaces .space {
+    color: var(--soft);
+  }
+  .space .tx {
+    flex: 1;
+  }
+  .rm {
+    flex: none;
+    min-height: var(--target);
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--r-m);
+    background: transparent;
+    color: var(--p-ink);
+    font-size: var(--body);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .rm.danger {
+    color: var(--del);
+  }
+  .add {
+    margin-top: 10px;
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: calc(var(--target) + 4px);
+    border: 0;
+    border-radius: var(--r-l);
+    background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
+    font-size: var(--body);
+    font-weight: 620;
+    cursor: pointer;
   }
   .soon {
     margin: 12px 0 0;

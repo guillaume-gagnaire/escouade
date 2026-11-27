@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use crate::keys::decode_key;
 use crate::notification::{self, OpenError, ReplayGuard};
+use crate::tunnel::direct::Direct;
+use crate::tunnel::pairing;
 use crate::tunnel::{Tunnel, TunnelConfig, TunnelError, TunnelState, TunnelStatus};
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
@@ -74,6 +76,8 @@ pub struct MobileTunnelConfig {
     pub address: String,
     pub api: String,
     pub keepalive_secs: Option<u16>,
+    /// The device's token (ESC-570): the proxy writes it in each request, the WebView never holds it.
+    pub device_token: Option<String>,
 }
 
 impl From<MobileTunnelConfig> for TunnelConfig {
@@ -86,6 +90,7 @@ impl From<MobileTunnelConfig> for TunnelConfig {
             address: c.address,
             api: c.api,
             keepalive_secs: c.keepalive_secs,
+            device_token: c.device_token,
         }
     }
 }
@@ -155,6 +160,71 @@ impl MobileTunnel {
     pub fn stop(&self) {
         self.inner.stop();
     }
+}
+
+/// A space reached without the tunnel (ESC-570: its address on Tailscale, or the e2e's): the same local proxy, its
+/// secret and the device's token, to a TCP address.
+#[derive(uniffi::Object)]
+pub struct MobileDirect {
+    inner: Direct,
+}
+
+#[uniffi::export]
+impl MobileDirect {
+    /// Starts the proxy to `api` (`host:port`): `status` gives its address.
+    #[uniffi::constructor]
+    pub fn start(api: String, device_token: Option<String>) -> Result<Arc<Self>, MobileError> {
+        Ok(Arc::new(MobileDirect {
+            inner: Direct::start(&api, device_token)?,
+        }))
+    }
+
+    pub fn status(&self) -> MobileTunnelStatus {
+        self.inner.status().into()
+    }
+
+    pub fn stop(&self) {
+        self.inner.stop();
+    }
+}
+
+/// The phone's half of a pairing (ESC-570): a key pair made here; its public half goes with the code, its private half
+/// stays in the native side until [`finish_pairing`].
+#[derive(Clone, uniffi::Record)]
+pub struct MobilePairingKey {
+    pub private_key: String,
+    pub public_key: String,
+}
+
+/// What a pairing gives the phone, derived from the secret it shares with the core: never sent.
+#[derive(Clone, uniffi::Record)]
+pub struct MobilePairing {
+    pub device_token: String,
+    pub pairing_key: String,
+}
+
+/// A key pair for a pairing.
+#[uniffi::export]
+pub fn new_pairing_key() -> MobilePairingKey {
+    let (private_key, public_key) = pairing::new_key();
+    MobilePairingKey {
+        private_key: private_key.to_string(),
+        public_key,
+    }
+}
+
+/// The device's token and the pairing key, from the phone's private half and the core's public half.
+#[uniffi::export]
+pub fn finish_pairing(
+    private_key: String,
+    core_public_key: String,
+) -> Result<MobilePairing, MobileError> {
+    let (device_token, pairing_key) = pairing::finish(&private_key, &core_public_key)
+        .map_err(|e| MobileError::BadKey(e.to_string()))?;
+    Ok(MobilePairing {
+        device_token: device_token.to_string(),
+        pairing_key: pairing_key.to_string(),
+    })
 }
 
 /// A notification opened, and the replay guard's new state, to keep for the next one.
@@ -260,6 +330,7 @@ mod tests {
             address: "10.77.0.2/24".into(),
             api: "nowhere".into(),
             keepalive_secs: None,
+            device_token: None,
         };
         assert!(matches!(
             MobileTunnel::start(c.clone()),

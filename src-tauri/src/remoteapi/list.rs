@@ -16,8 +16,46 @@
 use crate::{commands, fileorigin, vsx};
 
 escouade_command::commands! {
-    // Served as they are.
-    served {
+    // A phone may call them too (ESC-570, SR1-01): the box « À toi », the answers to permissions and
+    // questions, a conversation read and written, the files of a request and of a conversation, what waits at a glance,
+    // the Kanban's simple gestures. Every other command is a computer's alone.
+    served(phone) {
+        commands::subscribe,
+        commands::offline_state,
+        commands::get_conversation,
+        commands::search_conversations,
+        commands::send_message,
+        commands::interrupt,
+        commands::task_output,
+        commands::subagent_transcript,
+        commands::answer_question,
+        commands::answer_permission,
+        commands::remote_image,
+        commands::ticket_create,
+        commands::space_glance,
+        commands::inbox_list,
+        commands::inbox_get,
+        commands::inbox_file,
+        commands::inbox_file_bytes,
+        commands::inbox_answer,
+        commands::inbox_snooze,
+        commands::inbox_delegate,
+        commands::inbox_reopen,
+        commands::inbox_seen,
+        commands::inbox_views,
+        commands::inbox_view_act,
+        commands::inbox_view_snooze,
+        commands::inbox_view_reopen,
+        commands::ticket_images,
+        commands::ticket_start,
+        commands::ticket_resume,
+        commands::ticket_approve,
+        commands::ticket_reject,
+        commands::ticket_resolve_conflict,
+        commands::sent_file_bytes,
+    }
+    // Served as they are, to a computer alone.
+    served(computer) {
         // The extensions of the VS Code view (ESC-481): the core's store, whatever the client's machine.
         vsx::vsx_installed,
         vsx::vsx_search,
@@ -30,7 +68,6 @@ escouade_command::commands! {
         vsx::vsx_set_theme,
         vsx::vsx_files,
         vsx::vsx_file,
-        commands::subscribe,
         commands::dismiss_recovery,
         // The screen of the copies (ESC-487).
         commands::backups_view,
@@ -43,7 +80,6 @@ escouade_command::commands! {
         commands::claude_update_status,
         commands::data_dir,
         // « Mode hors ligne » (ESC-596): the core's, whose flows stop, and the policy of its machine.
-        commands::offline_state,
         commands::plugins_list,
         commands::plugin_inspect_git,
         commands::plugin_install,
@@ -246,17 +282,9 @@ escouade_command::commands! {
         commands::create_agent,
         commands::warm_agent,
         commands::restart_agent_process,
-        commands::get_conversation,
-        commands::search_conversations,
-        commands::send_message,
-        commands::interrupt,
         commands::stop_subagent,
         commands::stop_bg_task,
-        commands::task_output,
-        commands::subagent_transcript,
         commands::message_subagent,
-        commands::answer_question,
-        commands::answer_permission,
         commands::set_agent_options,
         commands::set_agent_account,
         commands::resume_on_account,
@@ -343,7 +371,6 @@ escouade_command::commands! {
         commands::fs_delete,
         commands::sent_files,
         commands::agent_local_image,
-        commands::remote_image,
         commands::fs_mkdir,
         commands::fs_base,
         commands::fs_stat,
@@ -356,7 +383,6 @@ escouade_command::commands! {
         commands::term_resize,
         commands::term_kill,
         commands::term_report,
-        commands::ticket_create,
         commands::scheduled_create,
         commands::scheduled_update,
         commands::scheduled_pause,
@@ -368,10 +394,10 @@ escouade_command::commands! {
         commands::overseer_undo,
         commands::overseer_revoke,
         // « Partout » and Réglages de l'espace › Appareils (ESC-539): what waits at a glance, the devices, a code.
-        commands::space_glance,
         commands::remote_devices,
         commands::remote_device_revoke,
         commands::remote_pair_code,
+        commands::phone_pair_qr,
         // Réglages › Téléphone (ESC-567): the phone's tunnel of this core, a server's from its space's settings.
         commands::phone_status,
         commands::phone_set,
@@ -379,30 +405,16 @@ escouade_command::commands! {
         commands::phone_rotate_key,
         commands::phone_remove,
         // The box « À toi » (ESC-509): the phone's first screen, its files' bytes in raw frames.
-        commands::inbox_list,
-        commands::inbox_get,
-        commands::inbox_file,
-        commands::inbox_file_bytes,
-        commands::inbox_answer,
-        commands::inbox_snooze,
-        commands::inbox_delegate,
-        commands::inbox_reopen,
-        commands::inbox_seen,
         commands::inbox_closing,
         commands::inbox_weight,
         commands::inbox_erase_closed_files,
         // What Escouade puts in the box of its own (ESC-513): views on the core's state, their gestures those of their
         // sources, served as these are; and what the window alone sees of the box, counted on the core (ESC-510).
-        commands::inbox_views,
-        commands::inbox_view_act,
-        commands::inbox_view_snooze,
         // « Remettre dans la boîte » (ESC-557): a mark of the squad lead taken off, on the core's state.
-        commands::inbox_view_reopen,
         commands::inbox_track,
         commands::ticket_update,
         commands::ticket_delete,
         commands::clean_worktrees,
-        commands::ticket_images,
         commands::ticket_prioritize,
         commands::ticket_share,
         commands::project_link_team_board,
@@ -423,11 +435,6 @@ escouade_command::commands! {
         commands::ticket_hide,
         commands::shared_resolve,
         commands::git_user_name,
-        commands::ticket_start,
-        commands::ticket_resume,
-        commands::ticket_approve,
-        commands::ticket_reject,
-        commands::ticket_resolve_conflict,
         commands::ticket_dismiss,
         commands::ticket_set_target,
         commands::ticket_prs_refresh,
@@ -498,12 +505,11 @@ escouade_command::commands! {
         commands::fs_browse,
         commands::clone_repo,
         commands::set_project_logo_bytes,
-        commands::sent_file_bytes,
         commands::agent_local_bytes,
         commands::host_notification_click,
     }
     // The desktop's only: refused at a distance (`desk-only`).
-    desk {
+    desk(computer) {
         // An admission confirms six words compared with the invitee's screen (SR2-08): on the desktop only, never
         // at a distance.
         commands::team_admit,
@@ -584,7 +590,7 @@ escouade_command::commands! {
         commands::local_voice_set,
     }
     // They change machines in server mode, and work as they are: served.
-    moves_served {
+    moves_served(computer) {
         commands::claude_locate,
         commands::plugin_inspect_folder,
         commands::plugin_inspect_dev,
@@ -619,7 +625,7 @@ escouade_command::commands! {
         commands::attach_discard,
     }
     // They change machines in server mode, and do not work as they are yet: refused (`not-served-yet`).
-    moves_refused {
+    moves_refused(computer) {
         commands::open_path,
         commands::set_project_logo,
         commands::read_logo,

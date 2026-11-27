@@ -1,5 +1,6 @@
 ext {
-    minSdkVersion = 24
+    // Android 8.0: the QR code reader (@capacitor/barcode-scanner) and the phone's Rust plugin need it (MO-4, ESC-570).
+    minSdkVersion = 26
     compileSdkVersion = 36
     targetSdkVersion = 36
     androidxActivityVersion = '1.11.0'

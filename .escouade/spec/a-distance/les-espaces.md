@@ -2,8 +2,8 @@
 title: "Les espaces"
 subject: "a-distance"
 sources: ["docs/SERVER-UX.md (§ 5 les espaces, § 6 les trois directions, § 7 S1 à S16, § 8 MS-5, § 10, § 11)","design/server-2-3/maquette.html?d=b et ses captures b-* (b-un, b-deux, b-trois, b-serveur, b-coupure, b-appareils)","docs/REMOTE.md, « Plusieurs serveurs pilotés par un seul Escouade », « Les espaces, MS-5 (ESC-539) »","src-tauri/src/servers (mod.rs, window.rs), src-tauri/src/glance.rs","src/lib/spaces.svelte.ts, src/components/servers (RailSpace, Everywhere), src/components/settings/DevicesPage.svelte","src-tauri/src/servers_tests.rs, src-tauri/src/glance_tests.rs, src/components/servers/spaces.test.ts, tests/e2e/spaces.spec.ts"]
-tickets: ["ESC-539","ESC-538","ESC-630"]
-decisions: [218,285]
+tickets: ["ESC-539","ESC-538","ESC-630","ESC-570"]
+decisions: [218,285,348]
 compared: null
 ---
 
@@ -71,3 +71,12 @@ Commandes servies (`remoteapi/list.rs`) : `space_glance` (ce qui attend, `counts
 
 - **Les ports relayés** d'un serveur (un serveur de test, le retour d'une connexion de compte) appartiennent au serveur où est la fenêtre : ils s'arrêtent quand elle va sur un autre espace, revient sur ce poste ou que l'app se ferme. Les tunnels des espaces, eux, restent.
 - **Ce que publie le serveur où est la fenêtre** (une notification, un son, le compte de ce qui attend) vient de la connexion de la fenêtre et se montre nommé par son espace. Ce que publient les autres serveurs n'est pas repris de leur connexion : leurs demandes nouvelles sont notifiées par la lecture de « Partout », nommées par leur espace. Rien n'est donc notifié deux fois, ni sous le nom d'un autre espace.
+
+## Appareils : la portée, « Créer un code », « Appairer un téléphone » (ESC-570)
+
+Depuis ESC-570, le point « Appairer un appareil » de la page Appareils (ci-dessus) est remplacé par ce qui suit : les appareils « poste » qu'il annonçait sont là.
+
+- **Chaque appareil dit sa portée**, d'un mot à côté de son nom : « Poste » (tout ce que fait Escouade sur ce serveur) ou « Téléphone » (la boîte « À toi », les réponses, les conversations et le Kanban : ni terminal, ni fichiers, ni secrets, ni plugins, ni appareils, ni réseau) ; le détail au survol. L'icône suit la portée, non plus le nom.
+- **« Créer un code »** : le client de bureau, appareil de la portée poste, crée un code de 10 minutes pour un seul appareil, montré avec son heure de fin (« Code : ABCD-EFGH · valable jusqu'à 10:42 »), à donner à « Se connecter à un serveur » ; l'appareil né est un poste, appairé depuis ce poste (et révoqué avec lui).
+- **« Appairer un téléphone »** : le QR code du tunnel du téléphone du serveur (voir *Le tunnel du téléphone*), dix minutes, un téléphone.
+- Un **téléphone** ne crée ni code ni QR : le serveur le refuse par sa portée. `escouade-server pair` (`--qr` pour un téléphone) fait de même sur le serveur.

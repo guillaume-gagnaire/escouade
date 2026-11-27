@@ -13,7 +13,12 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": false,
-    "paths": { "$shared/*": ["./src/*"] }
+    "paths": {
+      "$shared/*": ["./src/*"],
+      "@escouade/capacitor-mobile": ["./apps/mobile-plugin/src/index.ts"],
+      "@capacitor/core": ["./apps/mobile/node_modules/@capacitor/core"],
+      "@capacitor/barcode-scanner": ["./apps/mobile/node_modules/@capacitor/barcode-scanner"]
+    }
   },
   "include": [
     "src/**/*.ts",

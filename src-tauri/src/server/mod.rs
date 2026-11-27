@@ -109,8 +109,11 @@ pub struct Args {
     pub gate: bool,
     /// What `update` is asked.
     pub update: update::Asked,
-    /// Where a phone reaches the server (`phone add --endpoint`): its name or address on the Internet.
+    /// Where a phone reaches the server (`phone add --endpoint`, `pair --qr --endpoint`): its name or address on the
+    /// Internet.
     pub endpoint: Option<String>,
+    /// `pair --qr` (ESC-570): a phone's QR code, in characters, in place of a computer's code.
+    pub qr: bool,
     /// The name of the team on this machine (`team pair --name`; else its server's address).
     pub name: Option<String>,
 }
@@ -144,6 +147,7 @@ pub fn parse_with(
         }),
         update: update::Asked::default(),
         endpoint: None,
+        qr: false,
         name: None,
     };
     if let Some(v) = var(PORT_VAR) {
@@ -206,6 +210,7 @@ pub fn parse_with(
             "--debug" => out.debug = true,
             "--gate" => out.gate = true,
             "--endpoint" => out.endpoint = Some(value("--endpoint")?),
+            "--qr" => out.qr = true,
             "--name" => out.name = Some(value("--name")?),
             "--to" => {
                 update_flags = true;
@@ -276,6 +281,9 @@ pub fn parse_with(
             ))
         }
     };
+    if out.qr && out.command != Command::Pair {
+        return Err(tr!("--qr va avec « pair »", "--qr goes with “pair”"));
+    }
     if out.name.is_some() && !matches!(out.command, Command::TeamPair { .. }) {
         return Err(tr!(
             "--name va avec « team pair »",
@@ -358,6 +366,7 @@ pub fn help() -> String {
          Usage :\n  \
          escouade-server [run]              sert l’API distante sur 127.0.0.1 (port {port})\n  \
          escouade-server pair               un code d’appairage pour un nouvel appareil (10 min, une fois)\n  \
+         escouade-server pair --qr          le QR code d’un téléphone (10 min, une fois ; --endpoint HÔTE)\n  \
          escouade-server devices            les appareils appairés\n  \
          escouade-server devices revoke ID  révoque un appareil\n  \
          escouade-server health             le serveur tourne-t-il et répond-il ? (code 0 si oui)\n  \
@@ -378,6 +387,7 @@ pub fn help() -> String {
          Usage:\n  \
          escouade-server [run]              serves the remote API on 127.0.0.1 (port {port})\n  \
          escouade-server pair               a pairing code for a new device (10 min, once)\n  \
+         escouade-server pair --qr          a phone's QR code (10 min, once; --endpoint HOST)\n  \
          escouade-server devices            the paired devices\n  \
          escouade-server devices revoke ID  revokes a device\n  \
          escouade-server health             does the server run and answer? (exit code 0 if so)\n  \
@@ -528,6 +538,9 @@ fn team_pair(args: &Args, server: &str, code: &str) -> Result<()> {
 /// `pair`: a new code, printed for the user alone (never in the log).
 fn pair(args: &Args) -> Result<()> {
     let data = data_of(args)?;
+    if args.qr {
+        return pair_qr(args, &data);
+    }
     let now = crate::model::now_ms();
     let code = pairing::create(&data, now)?;
     let until = chrono::DateTime::from_timestamp_millis(code.expires_at)
@@ -540,6 +553,41 @@ fn pair(args: &Args) -> Result<()> {
             "Pairing code: {}\n\nGood once, for {} minutes (until {until}); a wrong code does not void it.\nGive it to Escouade on the new device (“Connect to a server”). A new “pair” replaces this code.",
             code.text,
             pairing::LIFETIME_MS / 60_000
+        )
+    );
+    Ok(())
+}
+
+/// `pair --qr` (ESC-570): a phone's QR code, in characters, and its code beside it, for the user alone (never in the
+/// log): the phone's WireGuard config, its private key included. The phone's tunnel must be on.
+fn pair_qr(args: &Args, data: &DataDir) -> Result<()> {
+    let store = Arc::new(secrets::FileStore::open(data)?);
+    let phone = crate::phone::Phone::load(data, store);
+    phone.mark_server();
+    let qr = phone.pair_qr(data, None, false, args.endpoint.as_deref())?;
+    let drawn = qrcode::QrCode::with_error_correction_level(qr.text.as_bytes(), qrcode::EcLevel::M)
+        .map(|c| {
+            c.render::<qrcode::render::unicode::Dense1x2>()
+                .quiet_zone(true)
+                .build()
+        })
+        .unwrap_or_default();
+    let until = chrono::DateTime::from_timestamp_millis(qr.expires_at)
+        .map(|t| t.with_timezone(&chrono::Local).format("%H:%M").to_string())
+        .unwrap_or_default();
+    println!(
+        "{drawn}\n{}",
+        tr!(
+            "Dans l’app Escouade du téléphone : « Scanner le QR code ». Code : {}\nValable une fois, {} minutes (jusqu’à {until}). Le téléphone joindra {}{}.\nCe QR porte la clé du téléphone : ne le photographie pas, ne le partage pas.",
+            "In Escouade’s app on the phone: “Scan the QR code”. Code: {}\nGood once, for {} minutes (until {until}). The phone will reach {}{}.\nThis QR holds the phone’s key: do not photograph it, do not share it.",
+            qr.code,
+            crate::remoteapi::pairing::LIFETIME_MS / 60_000,
+            qr.endpoint,
+            if qr.endpoint_unknown {
+                tr!(" (à vérifier : --endpoint HÔTE)", " (to check: --endpoint HOST)")
+            } else {
+                String::new()
+            }
         )
     );
     Ok(())

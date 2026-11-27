@@ -76,9 +76,17 @@ export default {
     },
     pairedFrom: 'paired from {device}',
     none: 'No paired device.',
+    phoneTitle: 'Pair a phone',
+    makeCode: 'Create a code',
+    code: 'Code: {code} · good until {time}',
+    scopeComputer: 'Computer',
+    scopePhone: 'Phone',
+    scopeComputerDesc: 'Everything Escouade does on this server',
+    scopePhoneDesc:
+      'The “Your turn” box, the answers, the conversations and the Kanban: no terminal, files, secrets, plugins, devices or network',
     pairTitle: 'Pair a device',
     pairText:
-      'Run escouade-server pair on the server: a 10-minute code, for a single device. It is not created from a paired device, so that a token that leaked cannot give birth to others.',
+      'A computer: “Create a code” (10 minutes, one device), to give to “Connect to a server”. A phone: its QR code. On the server, escouade-server pair (--qr) does the same. A paired phone never creates one: it does not have that scope.',
     unavailable: 'Devices are read on a server: go to a server’s space.',
   },
 } as const satisfies Tree;

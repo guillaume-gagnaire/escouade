@@ -239,3 +239,74 @@ test('« Retirer » a phone revokes the device it was paired as, and says so', a
   const traces = JSON.parse(fs.readFileSync(path.join(app.data, 'remote-revoked.json'), 'utf8')) as { name: string; by: string }[];
   expect(traces).toEqual([expect.objectContaining({ name: 'Pixel 8', by: 'la fenêtre d’Escouade' })]);
 });
+
+/**
+ * The QR code shown as a capture may show it (`docs/MOBILE.md` § 12): a pattern drawn at random that holds nothing, and
+ * a code of fiction. The real one holds the phone's key of the test's core: it never goes in a capture.
+ */
+async function fictionalQr(dialog: Locator) {
+  await dialog.evaluate((root) => {
+    const img = root.querySelector('[data-testid="pair-qr"] .code-img');
+    if (img) {
+      const n = 29;
+      let cells = '';
+      for (let y = 0; y < n; y++)
+        for (let x = 0; x < n; x++) {
+          const finder = (x < 7 || x >= n - 7) && y < 7 ? true : x < 7 && y >= n - 7;
+          const on = finder
+            ? (() => {
+                const fx = x < 7 ? x : x - (n - 7);
+                const fy = y < 7 ? y : y - (n - 7);
+                return fx === 0 || fx === 6 || fy === 0 || fy === 6 || (fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4);
+              })()
+            : Math.random() < 0.48;
+          if (on) cells += `<rect x="${x + 2}" y="${y + 2}" width="1" height="1"/>`;
+        }
+      img.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n + 4} ${n + 4}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><g fill="#000">${cells}</g></svg>`;
+    }
+    const code = root.querySelector('[data-testid="pair-qr-code"]');
+    if (code) code.textContent = 'K7Q2-9MXA';
+  });
+}
+
+test('« Appairer un téléphone » shows its QR code ten minutes with its code, its peer waiting for it', async ({ app }) => {
+  const { page } = app;
+  if (!process.env.ESCOUADE_E2E_VIEWPORT) await page.setViewportSize({ width: 1440, height: 900 });
+  const dialog = await openSettingsPage(page, 'Téléphone');
+  // Off: no QR code offered.
+  await expect(dialog.getByRole('button', { name: /Appairer un téléphone/ })).toHaveCount(0);
+  await dialog.getByRole('spinbutton', { name: 'Port UDP' }).fill(String(UDP));
+  await dialog.getByRole('button', { name: 'Appliquer' }).click();
+  await dialog.getByRole('switch', { name: 'Accès depuis le téléphone' }).click();
+  await expect(dialog.getByTestId('phone-state')).toContainText(`Prêt sur le port UDP ${UDP}`);
+  await expect(dialog.getByTestId('phone-public')).toHaveText('203.0.113.7', { timeout: 20_000 });
+
+  await dialog.getByRole('button', { name: /Appairer un téléphone/ }).click();
+  const shown = dialog.getByRole('region', { name: 'QR code d’appairage' });
+  await expect(shown).toBeVisible();
+  await expect(shown.locator('.code-img svg')).toBeVisible();
+  await expect(shown.getByTestId('pair-qr-code')).toHaveText(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  await expect(shown.getByTestId('pair-qr-left')).toContainText(/Valable encore (9|10) min/);
+  await expect(shown).toContainText(`Le téléphone joindra 203.0.113.7:${UDP}.`);
+  // Its peer waits for it, said so; the code waits ten minutes.
+  await expect(dialog.getByTestId('phone-row')).toContainText('En attente de son QR code');
+  const waiting = JSON.parse(fs.readFileSync(path.join(app.data, 'remote-pairing.json'), 'utf8')) as {
+    expiresAt: number;
+    scope: string;
+    peer: string;
+    hash: string;
+  };
+  expect(waiting.scope).toBe('phone');
+  expect(waiting.expiresAt - Date.now()).toBeGreaterThan(9 * 60_000);
+  expect(waiting.expiresAt - Date.now()).toBeLessThanOrEqual(10 * 60_000);
+  // The file holds the code's hash, never the code nor the key.
+  const code = (await shown.getByTestId('pair-qr-code').textContent()) ?? '';
+  expect(JSON.stringify(waiting)).not.toContain(code.replace('-', ''));
+  await shown.scrollIntoViewIfNeeded();
+  await fictionalQr(dialog);
+  await shoot(page, dialog, 'qr');
+  // A new one takes the place of the first, and of its peer.
+  await shown.getByRole('button', { name: 'Masquer' }).click();
+  await dialog.getByRole('button', { name: /Appairer un téléphone/ }).click();
+  await expect(dialog.getByTestId('phone-row')).toHaveCount(1);
+});

@@ -15,6 +15,13 @@
 //!   of how close a code came.
 //! - **Never written in the log**: neither the code nor the token it is exchanged for; `pair` prints the code on its
 //!   standard output, for the user alone.
+//! - **Its scope** (ESC-570, SR1-01): a code says the scope of the device born of it (`computer` for « Créer un code »
+//!   and `escouade-server pair`, `phone` for a phone's QR code), and the phone's peer it was made with, when it is a
+//!   QR code (the peer goes when the code ends unused, or another code takes its place).
+//! - **A phone's token, never sent** (ESC-570, SR1-15): a phone gives, with the code, the public half of a key pair its
+//!   native side made (X25519); the core answers the public half of one of its own, and each side derives the device's
+//!   token and its pairing key from the secret they share ([`derive`]): the token never crosses the WebView's
+//!   JavaScript, which sees two public keys.
 
 use crate::headless::with_file_lock;
 use crate::paths::DataDir;
@@ -22,6 +29,14 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+
+pub use super::Scope;
+
+/// HKDF-SHA256's `info` of a phone's device token, derived from the secret of the pairing (`docs/MOBILE.md` § 3.1;
+/// `crates/escouade-mobile/src/pairing.rs` derives the same).
+pub const TOKEN_INFO: &[u8] = b"escouade-mobile/device-token/v1";
+/// HKDF-SHA256's `info` of a phone's pairing key (which seals its notifications, MO-6).
+pub const KEY_INFO: &[u8] = b"escouade-mobile/pairing-key/v1";
 
 /// The file of the code that waits, in the data folder.
 pub const FILE: &str = "remote-pairing.json";
@@ -58,6 +73,80 @@ struct Waiting {
     /// None: the window or `escouade-server pair`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     by: Option<String>,
+    /// The scope of the device born of it (ESC-570): `computer` in a file of before.
+    #[serde(default)]
+    scope: Scope,
+    /// The phone's peer made with it (a QR code): it goes when the code ends unused, or another takes its place.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    peer: Option<String>,
+}
+
+/// What asks for a code: who, for which scope, with which phone's peer.
+#[derive(Debug, Clone, Default)]
+pub struct Ask {
+    /// The device that asked for it (none: the window, `escouade-server pair`).
+    pub by: Option<String>,
+    pub scope: Scope,
+    /// The phone's peer made for it (a QR code).
+    pub peer: Option<String>,
+}
+
+/// What a code gave, once redeemed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Redeemed {
+    pub by: Option<String>,
+    pub scope: Scope,
+    pub peer: Option<String>,
+}
+
+/// What a phone's pairing derives on the core's side ([`derive`]).
+pub struct Derived {
+    /// The device's token (base64url, 32 bytes): the phone derives the same.
+    pub token: String,
+    /// The pairing key (base64, 32 bytes): it seals the phone's notifications (MO-6).
+    pub key: String,
+    /// The core's public half (base64, 32 bytes), answered to the phone.
+    pub public: String,
+}
+
+/// The token and the pairing key of a phone that gave `phone_public` (its X25519 public key, base64): a key pair of the
+/// core's made for it, the secret they share, HKDF-SHA256 (no salt) with [`TOKEN_INFO`] and [`KEY_INFO`]. None when
+/// the key is not 32 bytes of base64, or gives a secret of none (a point of small order).
+pub fn derive(phone_public: &str) -> Option<Derived> {
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD;
+    let bytes: [u8; 32] = b64.decode(phone_public.trim()).ok()?.try_into().ok()?;
+    let mut seed = [0u8; 32];
+    getrandom::fill(&mut seed).ok()?;
+    let ours = boringtun::x25519::StaticSecret::from(seed);
+    let public = boringtun::x25519::PublicKey::from(&ours);
+    let (token, key) = derive_from(&ours, &bytes)?;
+    Some(Derived {
+        token,
+        key,
+        public: b64.encode(public.as_bytes()),
+    })
+}
+
+/// The token and the key of the secret `ours` shares with `theirs`: what both sides derive (`derive`, the tests).
+pub fn derive_from(
+    ours: &boringtun::x25519::StaticSecret,
+    theirs: &[u8; 32],
+) -> Option<(String, String)> {
+    use base64::Engine;
+    let shared = ours.diffie_hellman(&boringtun::x25519::PublicKey::from(*theirs));
+    if !shared.was_contributory() {
+        return None;
+    }
+    let hk = hkdf::Hkdf::<Sha256>::new(None, shared.as_bytes());
+    let mut token = [0u8; 32];
+    let mut key = [0u8; 32];
+    hk.expand(TOKEN_INFO, &mut token).ok()?;
+    hk.expand(KEY_INFO, &mut key).ok()?;
+    Some((
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(token),
+        base64::engine::general_purpose::STANDARD.encode(key),
+    ))
 }
 
 /// Why a code was refused: what the client tells the user.
@@ -164,6 +253,19 @@ pub fn create(data: &DataDir, now: i64) -> Result<Code> {
 
 /// A new code asked by the device `by` (none: the window, `escouade-server pair`), kept with it.
 pub fn create_by(data: &DataDir, now: i64, by: Option<&str>) -> Result<Code> {
+    create_with(
+        data,
+        now,
+        Ask {
+            by: by.map(str::to_string),
+            ..Ask::default()
+        },
+    )
+    .map(|(code, _)| code)
+}
+
+/// A new code as `ask` says, from `now`: it, and the phone's peer of the code it took the place of (to remove).
+pub fn create_with(data: &DataDir, now: i64, ask: Ask) -> Result<(Code, Option<String>)> {
     let mut bytes = [0u8; LENGTH];
     getrandom::fill(&mut bytes).map_err(|e| anyhow::anyhow!("random: {e}"))?;
     let letters: String = bytes
@@ -173,14 +275,23 @@ pub fn create_by(data: &DataDir, now: i64, by: Option<&str>) -> Result<Code> {
     let waiting = Waiting {
         hash: hash(&letters),
         expires_at: now + LIFETIME_MS,
-        by: by.map(str::to_string),
+        by: ask.by,
+        scope: ask.scope,
+        peer: ask.peer,
     };
     let path = file(data);
-    with_file_lock(&path, || write(&path, &waiting))?;
-    Ok(Code {
-        text: format!("{}-{}", &letters[..4], &letters[4..]),
-        expires_at: waiting.expires_at,
-    })
+    let replaced = with_file_lock(&path, || {
+        let before = read(&path).and_then(|w| w.peer);
+        write(&path, &waiting)?;
+        Ok(before)
+    })?;
+    Ok((
+        Code {
+            text: format!("{}-{}", &letters[..4], &letters[4..]),
+            expires_at: waiting.expires_at,
+        },
+        replaced,
+    ))
 }
 
 /// The code `presented` given for `data` at `now`: Ok once, when it is the one that waits and has not ended; it ends
@@ -195,6 +306,15 @@ pub fn redeem_by(
     presented: &str,
     now: i64,
 ) -> std::result::Result<Option<String>, Refusal> {
+    redeem_with(data, presented, now).map(|r| r.by)
+}
+
+/// As `redeem`: who asked for the code, its scope and its phone's peer.
+pub fn redeem_with(
+    data: &DataDir,
+    presented: &str,
+    now: i64,
+) -> std::result::Result<Redeemed, Refusal> {
     let path = file(data);
     let outcome = with_file_lock(&path, || {
         let Some(waiting) = read(&path) else {
@@ -208,7 +328,11 @@ pub fn redeem_by(
         let right = code.len() == LENGTH && escouade_mcp::same_token(&hash(&code), &waiting.hash);
         if right {
             remove(&path);
-            return Ok(Ok(waiting.by));
+            return Ok(Ok(Redeemed {
+                by: waiting.by,
+                scope: waiting.scope,
+                peer: waiting.peer,
+            }));
         }
         // Nothing written: a wrong code leaves the one that waits as it was (ESC-654).
         Ok(Err(Refusal::Wrong))
@@ -227,6 +351,35 @@ pub fn waiting_until(data: &DataDir, now: i64) -> Option<i64> {
     read(&file(data))
         .filter(|w| now < w.expires_at)
         .map(|w| w.expires_at)
+}
+
+/// The phone's peer of a code that ended unused (expired) at `now`, the code forgotten: the peer to remove. None while
+/// it waits, or when it was no QR code.
+pub fn ended_peer(data: &DataDir, now: i64) -> Option<String> {
+    let path = file(data);
+    let w = read(&path)?;
+    if now < w.expires_at || w.peer.is_none() {
+        return None;
+    }
+    with_file_lock(&path, || {
+        // Read again under the lock: another process may have made a new one meanwhile.
+        match read(&path) {
+            Some(again) if now >= again.expires_at => {
+                remove(&path);
+                Ok(again.peer)
+            }
+            _ => Ok(None),
+        }
+    })
+    .ok()
+    .flatten()
+}
+
+/// The phone's peer of the code that waits (a QR code), while it waits.
+pub fn waiting_peer(data: &DataDir, now: i64) -> Option<String> {
+    read(&file(data))
+        .filter(|w| now < w.expires_at)
+        .and_then(|w| w.peer)
 }
 
 /// The code that waits ended by hand (`escouade-server pair --cancel`).

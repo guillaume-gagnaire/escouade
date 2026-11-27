@@ -49,6 +49,7 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             gate: false,
             update: update::Asked::default(),
             endpoint: None,
+            qr: false,
             name: None,
         }
     );
@@ -416,6 +417,7 @@ async fn pair(addr: SocketAddr, code: &str, name: &str) -> ToClient {
         &ToServer::Pair {
             code: code.into(),
             name: name.into(),
+            key: None,
         },
     )
     .await;
@@ -525,7 +527,7 @@ async fn a_device_pairs_by_its_code_connects_with_its_token_and_the_log_says_nei
     assert_eq!(c, "pairing");
     assert_eq!(reason.as_deref(), Some("wrong"));
     let answer = pair(addr, &code.text, "Portable du bureau").await;
-    let ToClient::Paired { device, token } = answer else {
+    let ToClient::Paired { device, token, .. } = answer else {
         panic!("{answer:?}")
     };
     assert_eq!(device.name, "Portable du bureau");

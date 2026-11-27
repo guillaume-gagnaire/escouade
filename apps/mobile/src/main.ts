@@ -8,7 +8,8 @@ import App from './App.svelte';
 import { applyAppearance, followSystemTheme, systemTheme } from './lib/appearance';
 import { barsFor, onBackButton, onForeground, platformOf } from './lib/native';
 import { back, followHistory } from './lib/nav.svelte';
-import { pairedSpaces } from './lib/paired';
+import { allSpaces } from './lib/paired';
+import { onSpacesChanged } from './lib/pairing.svelte';
 import { pauseSpaces, resumeSpaces, startSpaces } from './lib/phone-spaces.svelte';
 
 const platform = platformOf();
@@ -22,7 +23,9 @@ followSystemTheme((next) => {
 // The views over every space take Escouade's teal (src/lib/theme.ts), as « Partout » on the desktop.
 applyTheme(null);
 
-startSpaces(pairedSpaces());
+startSpaces(allSpaces());
+// A space paired or removed (MO-4): the connections opened again.
+onSpacesChanged(() => startSpaces(allSpaces()));
 onForeground((active) => (active ? resumeSpaces() : pauseSpaces()));
 
 onBackButton(back);

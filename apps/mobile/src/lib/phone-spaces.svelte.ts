@@ -13,7 +13,8 @@
 import { connectionOf, type Connection } from '$shared/lib/connection.svelte';
 import { t } from '$shared/lib/i18n';
 import type { Glance, GlanceAgent, GlanceAsk, GlanceProject } from '$shared/lib/spaces.svelte';
-import { RemoteTransport, RETRY_DELAYS, type Socket } from '$shared/lib/transport';
+import { RemoteTransport, RETRY_DELAYS, type RemoteLink, type Socket } from '$shared/lib/transport';
+import { EscouadeMobile, type EscouadeMobilePlugin } from '@escouade/capacitor-mobile';
 import type { PairedSpace } from './paired';
 
 /** How often each space is asked what waits there. */
@@ -46,6 +47,8 @@ export interface SpacesOptions {
   every?: number;
   /** The app's version, said in the handshake. */
   version?: string;
+  /** The native side the ways of the spaces kept by the app are asked of (a test's). */
+  native?: Pick<EscouadeMobilePlugin, 'startTunnel' | 'tunnelStatus' | 'stopTunnel'>;
 }
 
 const links = new Map<string, Link>();
@@ -75,26 +78,62 @@ export function startSpaces(paired: PairedSpace[], opts: SpacesOptions = {}): ()
     at: kept.get(p.id)?.at ?? 0,
   }));
   if (phone.filter !== ALL && !paired.some((p) => p.id === phone.filter)) phone.filter = ALL;
+  const version = opts.version ?? appVersion();
   for (const [i, p] of paired.entries()) {
     const conn = phone.spaces[i].conn;
-    const link = new RemoteTransport(
-      { url: p.url, token: p.token, version: opts.version ?? appVersion() },
-      opts.open,
-      deskOnly,
-      opts.delays ?? RETRY_DELAYS,
-      null,
-      conn,
-    );
-    links.set(p.id, link);
-    link.onStale(() => void poll(p.id));
-    void poll(p.id);
+    const made = (first: RemoteLink, refresh: (() => Promise<RemoteLink | null>) | null) => {
+      const link = new RemoteTransport(first, opts.open, deskOnly, opts.delays ?? RETRY_DELAYS, refresh, conn);
+      links.set(p.id, link);
+      link.onStale(() => void poll(p.id));
+      void poll(p.id);
+    };
+    if (!p.kept) {
+      made({ url: p.url, token: p.token, version }, null);
+      continue;
+    }
+    // Paired by the app (MO-4): its way asked of the native side, now and before each try (its tunnel's proxy may
+    // have taken another port). The page gives an empty token: the proxy writes it (SR1-15).
+    const era = generation;
+    const refresh = () => linkOf(p.id, version, opts.native ?? EscouadeMobile);
+    void refresh()
+      .catch(() => null)
+      .then((first) => {
+        if (era !== generation) return;
+        made(first ?? { url: `ws://127.0.0.1:9/${p.id}`, token: '', version }, refresh);
+      });
   }
   poller = setInterval(() => void pollAll(), opts.every ?? GLANCE_EVERY);
   return stopSpaces;
 }
 
+/** Each start of the spaces: what a late answer of the native side belongs to. */
+let generation = 0;
+
+/** The way to a space kept by the app: its tunnel up (or its address's proxy), its WebSocket through the proxy. */
+export async function linkOf(
+  id: string,
+  version: string,
+  native: Pick<EscouadeMobilePlugin, 'startTunnel' | 'tunnelStatus'>,
+  waitMs = 15_000,
+): Promise<RemoteLink> {
+  let s = await native.tunnelStatus({ space: id }).catch(() => null);
+  if (!s || s.state === 'stopped' || s.state === 'failed') s = await native.startTunnel({ space: id });
+  const until = Date.now() + waitMs;
+  while (s.state === 'connecting' && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 250));
+    s = await native.tunnelStatus({ space: id });
+  }
+  return { url: s.websocketUrl, token: s.token ?? '', version };
+}
+
+/** The ways of the spaces kept by the app stopped (the app in the background: no tunnel left running). */
+async function stopWays(native: Pick<EscouadeMobilePlugin, 'stopTunnel'>): Promise<void> {
+  await Promise.all(given.filter((p) => p.kept).map((p) => native.stopTunnel({ space: p.id }).catch(() => {})));
+}
+
 /** Every connection closed (what they said last is kept). */
 export function stopSpaces(): void {
+  generation++;
   if (poller) clearInterval(poller);
   poller = null;
   for (const link of links.values()) link.close();
@@ -105,6 +144,7 @@ export function stopSpaces(): void {
 /** The app went to the background: no connection while it is there (§ 5). */
 export function pauseSpaces(): void {
   stopSpaces();
+  void stopWays(options.native ?? EscouadeMobile);
 }
 
 /** The app came back: the connections opened again, each space read again. */
@@ -168,6 +208,10 @@ export function stateOf(s: Pick<PhoneSpace, 'conn'>): SpaceState {
       return s.conn.lostAt !== null || s.conn.tries > 0 ? 'cut' : 'connecting';
   }
 }
+
+/** The spaces that revoked this phone, or no longer know its token (MO-4): each has its screen. */
+export const revokedSpaces = (spaces: PhoneSpace[]): PhoneSpace[] =>
+  spaces.filter((s) => s.conn.state === 'refused' && s.conn.refusal?.code === 'token');
 
 /** What waits in a space: its glance's count (0 before it said). */
 export const waitingIn = (s: Pick<PhoneSpace, 'glance'>): number => s.glance?.waiting ?? 0;

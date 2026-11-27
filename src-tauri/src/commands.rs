@@ -7215,9 +7215,26 @@ fn revoker(devices: &crate::remoteapi::devices::Devices) -> String {
 /// two seconds. Who asked is the caller (`revoker`). False when there was none.
 #[tauri::command(async)]
 pub fn remote_device_revoke(core: CoreState, id: String) -> Res<bool> {
+    computer_caller(&core)?;
     let devices = crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone());
     let by = revoker(&devices);
-    devices.revoke_by(&id, Some(&by)).map_err(err)
+    let revoked = devices.revoke_by(&id, Some(&by)).map_err(err)?;
+    // Its phone's peer goes at once (ESC-570), not at the tunnel's next look.
+    if revoked {
+        core.phone.drop_revoked();
+    }
+    Ok(revoked)
+}
+
+/// A phone's QR code (ESC-570, Réglages › Téléphone; Réglages de l'espace › Appareils on a server): ten minutes, one
+/// phone; it takes the place of the code that waited. The window, or a device of the scope `computer`.
+#[tauri::command(async)]
+pub fn phone_pair_qr(core: CoreState) -> Res<crate::phone::PairQr> {
+    computer_caller(&core)?;
+    let by = crate::remoteapi::current_device();
+    core.phone
+        .pair_qr(&core.data, by.as_deref(), !core.phone.is_server(), None)
+        .map_err(err)
 }
 
 /// A pairing code (S5): ten minutes, one device; it takes the place of the one that waited. Asked by the window alone:
@@ -7229,14 +7246,25 @@ pub struct PairCode {
     pub expires_at: i64,
 }
 
+/// The window, or a device of the scope `computer` (ESC-570): a phone never makes devices, even should its command's
+/// scope be checked elsewhere.
+fn computer_caller(core: &crate::core::Core) -> Res<()> {
+    let Some(id) = crate::remoteapi::current_device() else {
+        return Ok(());
+    };
+    let devices = crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone());
+    match devices.get(&id) {
+        Some(d) if d.scope == crate::remoteapi::Scope::Computer => Ok(()),
+        _ => Err(tr!(
+            "Un téléphone ne crée pas d’appareil : crée le code dans Escouade sur un poste, ou par « escouade-server pair » sur le serveur.",
+            "A phone does not make devices: create the code in Escouade on a computer, or with “escouade-server pair” on the server."
+        )),
+    }
+}
+
 #[tauri::command(async)]
 pub fn remote_pair_code(core: CoreState) -> Res<PairCode> {
-    if crate::remoteapi::current() != crate::remoteapi::Client::Window {
-        return Err(tr!(
-            "Un code d’appairage ne se crée pas depuis un appareil appairé : lance « escouade-server pair » sur le serveur, ou crée-le dans la fenêtre d’Escouade de cette machine.",
-            "A pairing code is not created from a paired device: run “escouade-server pair” on the server, or create it in Escouade’s window on that machine."
-        ));
-    }
+    computer_caller(&core)?;
     let code = crate::remoteapi::pairing::create_by(
         &core.data,
         crate::model::now_ms(),

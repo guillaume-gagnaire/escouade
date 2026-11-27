@@ -1,7 +1,8 @@
 <script lang="ts">
   // The phone's shell, direction B « le fil » (MO-1, docs/MOBILE.md § 6 and design/mobile-2-3/): the header (the tab's
   // title and the « + »), the chips of the spaces, the band of a space that is cut, the tab's content, and the three
-  // tabs at the bottom; the sheet of the « + » above. With no space paired, « Escouade sur ce téléphone ».
+  // tabs at the bottom; the sheet of the « + » above. With no space paired, « Escouade sur ce téléphone » and its
+  // pairing (MO-4); a space that revoked this phone, its own screen above all.
   import Icon from '$shared/components/Icon.svelte';
   import IconSprite from '$shared/components/IconSprite.svelte';
   import { t } from '$shared/lib/i18n';
@@ -11,12 +12,15 @@
   import KanbanTab from './components/KanbanTab.svelte';
   import SpaceBands from './components/SpaceBands.svelte';
   import SpaceChips from './components/SpaceChips.svelte';
+  import Pairing from './components/Pairing.svelte';
+  import Revoked from './components/Revoked.svelte';
   import TabBar from './components/TabBar.svelte';
-  import Welcome from './components/Welcome.svelte';
+  import { pairing } from './lib/pairing.svelte';
   import { nav, openSheet } from './lib/nav.svelte';
-  import { phone } from './lib/phone-spaces.svelte';
+  import { phone, revokedSpaces } from './lib/phone-spaces.svelte';
 
   let body = $state<HTMLElement>();
+  const revoked = $derived(revokedSpaces(phone.spaces)[0] ?? null);
 
   // A tab opens at its top.
   $effect(() => {
@@ -26,8 +30,10 @@
 </script>
 
 <IconSprite />
-{#if !phone.spaces.length}
-  <Welcome />
+{#if revoked}
+  <Revoked space={revoked} />
+{:else if !phone.spaces.length || pairing.open}
+  <Pairing />
 {:else}
   <div class="shell" inert={nav.sheet !== null}>
     <header class="head">

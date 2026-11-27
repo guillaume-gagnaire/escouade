@@ -359,8 +359,9 @@ fn class_title(class: Class) -> &'static str {
 }
 
 /// What « Le classement des commandes » of `doc` says amiss of `list.rs`: one part per class (`#### <its title>`), one
-/// bullet per command (`` - `name` ``, maybe with why), in alphabetical order, so that two tickets that each add a
-/// command touch two lines. A command missing, one too many, in the wrong class or out of its place: each said.
+/// bullet per command (`` - `name` ``, then « · téléphone » when a phone may call it, ESC-570, maybe with why), in
+/// alphabetical order, so that two tickets that each add a command touch two lines. A command missing, one too many,
+/// in the wrong class, of another scope or out of its place: each said.
 fn classes_as_docs_says(doc: &str) -> Vec<String> {
     let mut errors = Vec::new();
     let Some(start) = doc.find("### Le classement des commandes") else {
@@ -372,6 +373,7 @@ fn classes_as_docs_says(doc: &str) -> Vec<String> {
         .filter_map(|h| section[4..].find(h))
         .min()
         .map_or(section.len(), |i| i + 4);
+    let mut phone_marked: Vec<&str> = Vec::new();
     let parts: Vec<(&str, Vec<&str>)> = section[..end]
         .split("\n#### ")
         .skip(1)
@@ -380,11 +382,28 @@ fn classes_as_docs_says(doc: &str) -> Vec<String> {
             let names = body
                 .lines()
                 .filter_map(|l| l.strip_prefix("- `"))
-                .filter_map(|l| l.split('`').next())
+                .filter_map(|l| {
+                    let (name, rest) = l.split_once('`')?;
+                    if rest.trim_start().starts_with("· téléphone") {
+                        phone_marked.push(name);
+                    }
+                    Some(name)
+                })
                 .collect();
             (title.trim(), names)
         })
         .collect();
+    for c in list::COMMANDS {
+        let marked = phone_marked.contains(&c.name);
+        if marked != (c.scope == remoteapi::Scope::Phone) {
+            errors.push(format!(
+                "`{}`: of the scope {} in remoteapi/list.rs, {} « · téléphone » here",
+                c.name,
+                c.scope.as_str(),
+                if marked { "with" } else { "without" }
+            ));
+        }
+    }
     let titles: Vec<&str> = parts.iter().map(|(t, _)| *t).collect();
     let wanted = [
         class_title(Class::Served),
@@ -461,6 +480,15 @@ fn the_classes_of_docs_remote_fail_when_a_command_is_missing_extra_misplaced_or_
     says(
         misplaced,
         "`deep_links_take`: in « Servies telles quelles »",
+    );
+    // Of another scope (ESC-570): a computer's command said a phone's, a phone's said a computer's.
+    says(
+        doc.replace("- `term_spawn`\n", "- `term_spawn` · téléphone\n"),
+        "`term_spawn`: of the scope computer",
+    );
+    says(
+        doc.replace("- `inbox_answer` · téléphone", "- `inbox_answer`"),
+        "`inbox_answer`: of the scope phone",
     );
     // Out of its place.
     says(
@@ -1925,10 +1953,11 @@ async fn pair(
     c.send(&ToServer::Pair {
         code: code.into(),
         name: name.into(),
+        key: None,
     })
     .await;
     match parse(&c.recv().await.expect("an answer to the pairing")) {
-        Some(ToClient::Paired { device, token }) => Ok((device, token)),
+        Some(ToClient::Paired { device, token, .. }) => Ok((device, token)),
         Some(other) => Err(code_of(&other).unwrap_or("?").to_string()),
         None => Err("?".into()),
     }
@@ -1973,25 +2002,123 @@ async fn a_revocation_s_author_is_the_device_of_the_connection_never_a_name_it_g
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_pairing_code_is_refused_to_a_paired_device_with_its_reason_and_given_to_the_window() {
+async fn a_pairing_code_is_given_to_the_window_and_a_computer_and_refused_to_a_phone_by_its_scope()
+{
     let (_dir, h, api, token) = served("remote-pair-code").await;
-    let mut phone = Client::connect(&api, &token).await;
-    match phone.call("remote_pair_code", json!({})).await {
-        ToClient::Reply {
-            ok: None,
-            error: Some(e),
-            ..
-        } => {
-            assert!(e.to_string().contains("escouade-server pair"), "{e}")
-        }
-        other => panic!("a code given to a paired device: {other:?}"),
-    }
+    // A phone (ESC-570): refused by its scope, before the command runs.
+    let (_, phone_token) = api
+        .devices()
+        .add_as("Pixel", None, remoteapi::Scope::Phone, None)
+        .unwrap();
+    let mut phone = Client::connect(&api, &phone_token).await;
+    let refused = phone.call("remote_pair_code", json!({})).await;
+    assert_eq!(code_of(&refused), Some(codes::SCOPE), "{refused:?}");
     assert!(remoteapi::pairing::waiting_until(&h.core.data, crate::model::now_ms()).is_none());
+    // A computer has one, and the device born of it was paired from it (a computer, as its code says).
+    let mut laptop = Client::connect(&api, &token).await;
+    let code = laptop.ok("remote_pair_code", json!({})).await;
+    let (device, _) = pair(&api, code["code"].as_str().unwrap(), "Tablette")
+        .await
+        .unwrap();
+    assert_eq!(
+        device.paired_by.as_deref(),
+        Some(id_of(&api, "Téléphone").as_str())
+    );
+    assert_eq!(device.scope, remoteapi::Scope::Computer);
     // The window has it, and the device born of it was paired from nothing but the window.
     let code = crate::commands::remote_pair_code(remoteapi::State::of_test(&h.core)).unwrap();
-    let (device, _) = pair(&api, &code.code, "Tablette").await.unwrap();
+    let (device, _) = pair(&api, &code.code, "Portable").await.unwrap();
     assert_eq!(device.paired_by, None);
     h.stop();
+}
+
+/// The commands a phone may call (ESC-570, SR1-01): this list is the review of each; a command put in the scope
+/// `phone` without it here fails, as one taken out.
+const PHONE_COMMANDS: &[&str] = &[
+    "answer_permission",
+    "answer_question",
+    "get_conversation",
+    "inbox_answer",
+    "inbox_delegate",
+    "inbox_file",
+    "inbox_file_bytes",
+    "inbox_get",
+    "inbox_list",
+    "inbox_reopen",
+    "inbox_seen",
+    "inbox_snooze",
+    "inbox_view_act",
+    "inbox_view_reopen",
+    "inbox_view_snooze",
+    "inbox_views",
+    "interrupt",
+    "offline_state",
+    "remote_image",
+    "search_conversations",
+    "send_message",
+    "sent_file_bytes",
+    "space_glance",
+    "subagent_transcript",
+    "subscribe",
+    "task_output",
+    "ticket_approve",
+    "ticket_create",
+    "ticket_images",
+    "ticket_reject",
+    "ticket_resolve_conflict",
+    "ticket_resume",
+    "ticket_start",
+];
+
+#[test]
+fn each_command_has_its_scope_and_a_phone_reaches_none_of_a_computer_s() {
+    use remoteapi::Scope;
+    let phone: BTreeSet<&str> = list::COMMANDS
+        .iter()
+        .filter(|c| c.scope == Scope::Phone)
+        .map(|c| c.name)
+        .collect();
+    let wanted: BTreeSet<&str> = PHONE_COMMANDS.iter().copied().collect();
+    assert_eq!(phone, wanted, "the commands of the scope `phone`");
+    // A command refused at a distance is a computer's (the list's macro refuses it otherwise).
+    for c in list::COMMANDS.iter().filter(|c| !c.class.served()) {
+        assert_eq!(c.scope, Scope::Computer, "{}", c.name);
+    }
+    // The terminal, the files, the secrets, the plugins, the devices, the network, the settings: a computer's.
+    for name in [
+        "term_spawn",
+        "term_write",
+        "fs_write",
+        "fs_read",
+        "fs_tree",
+        "fs_write_bytes",
+        "plugin_set_secret",
+        "plugin_secrets",
+        "plugin_install",
+        "plugin_remove",
+        "remote_pair_code",
+        "phone_pair_qr",
+        "remote_devices",
+        "remote_device_revoke",
+        "phone_status",
+        "phone_set",
+        "phone_remove",
+        "phone_rotate_key",
+        "set_remote_control",
+        "save_settings",
+        "account_key",
+        "create_project",
+        "git_push",
+    ] {
+        let c = remoteapi::find(name).unwrap_or_else(|| panic!("no command {name}"));
+        assert_eq!(c.scope, Scope::Computer, "{name}");
+        assert!(!Scope::Phone.allows(c.scope), "{name}");
+        assert!(Scope::Computer.allows(c.scope), "{name}");
+    }
+    // A device of before the scopes is a computer.
+    let old: remoteapi::devices::Device =
+        serde_json::from_value(json!({ "id": "a", "name": "Portable", "createdAt": 1 })).unwrap();
+    assert_eq!(old.scope, Scope::Computer);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -2106,6 +2233,7 @@ async fn pair_answer(api: &RemoteApi, code: &str) -> ToClient {
     c.send(&ToServer::Pair {
         code: code.into(),
         name: "Tablette".into(),
+        key: None,
     })
     .await;
     parse(&c.recv().await.expect("an answer to the pairing")).expect("a message of the protocol")
@@ -2128,6 +2256,7 @@ async fn pair_from(api: &Arc<RemoteApi>, from: std::net::IpAddr, code: &str) -> 
         serde_json::to_string(&ToServer::Pair {
             code: code.into(),
             name: "Tablette".into(),
+            key: None,
         })
         .unwrap(),
     ))
@@ -2433,6 +2562,7 @@ fn pair_message(code: &str) -> ToServer {
     ToServer::Pair {
         code: code.into(),
         name: "Tablette".into(),
+        key: None,
     }
 }
 
@@ -2883,4 +3013,28 @@ Host: evil.example
         );
     }
     h.stop();
+}
+
+/// A phone's token and pairing key (ESC-570): the core derives what `crates/escouade-mobile/src/tunnel/pairing.rs`
+/// derives on the phone, the same vector checked there (the phone [1; 32], the core [2; 32]).
+#[test]
+fn the_core_derives_a_phone_s_token_and_key_as_the_phone_does() {
+    use base64::Engine;
+    let phone =
+        boringtun::x25519::PublicKey::from(&boringtun::x25519::StaticSecret::from([1u8; 32]));
+    let core = boringtun::x25519::StaticSecret::from([2u8; 32]);
+    let (token, key) = remoteapi::pairing::derive_from(&core, phone.as_bytes()).unwrap();
+    assert_eq!(token, "mX1HZhfIWYIZzkH1vuI6Ig8Ga_W-jTfxGzbHZeqlB5o");
+    assert_eq!(key, "qZxFr/xX1SpwFdIjtQhNHT2R4TiuZur629pvqH4Aoq8=");
+    // A key of none is refused; a fresh one gives the core's half and what it derived.
+    assert!(remoteapi::pairing::derive_from(&core, &[0u8; 32]).is_none());
+    let d = remoteapi::pairing::derive(
+        &base64::engine::general_purpose::STANDARD.encode(phone.as_bytes()),
+    )
+    .unwrap();
+    assert_eq!(d.public.len(), 44);
+    assert_ne!(
+        d.token, token,
+        "a key pair of the core's own for each pairing"
+    );
 }

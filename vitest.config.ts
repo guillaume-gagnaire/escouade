@@ -6,7 +6,14 @@ import { svelteTesting } from '@testing-library/svelte/vite';
 export default defineConfig({
   plugins: [svelte(), svelteTesting()],
   // The phone's app (apps/mobile, MO-1) imports the app's interface where it is, as `$shared`.
-  resolve: { alias: { $shared: fileURLToPath(new URL('./src', import.meta.url)) } },
+  // The phone's native side (apps/mobile-plugin, MO-4) from its sources, its Capacitor the app's.
+  resolve: {
+    alias: {
+      $shared: fileURLToPath(new URL('./src', import.meta.url)),
+      '@escouade/capacitor-mobile': fileURLToPath(new URL('./apps/mobile-plugin/src/index.ts', import.meta.url)),
+      '@capacitor/core': fileURLToPath(new URL('./apps/mobile/node_modules/@capacitor/core', import.meta.url)),
+    },
+  },
   test: {
     environment: 'jsdom',
     include: [

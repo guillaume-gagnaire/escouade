@@ -2,8 +2,8 @@
 title: "Le tunnel du téléphone"
 subject: "a-distance"
 sources: ["docs/MOBILE.md § 3.1, § 3.10, § 8 (MO-2), M12","docs/REMOTE.md, « Le téléphone » (« Architecture retenue », « Configuration, pour l'utilisateur », « Points durs (sur le PC) », « Alternative sans WireGuard dans l'app », « Le tunnel côté cœur, MO-2 »)","src-tauri/src/phone (mod.rs, stack.rs, nat.rs, tailscale.rs)","src-tauri/src/remoteapi/server.rs (Via, serve_stream, Listen::Nothing)","src/components/settings/PhonePage.svelte","crates/escouade-policy/src/list.rs (servers.phone)","Revue de sécurité de la 2.3 (ESC-624), rapport privé SR-1 « Réseau et téléphone », SR1-05 et SR1-11 (hors du dépôt)","website/content/privacy (fr.md, en.md) : « L’accès du téléphone, si tu l’allumes »"]
-tickets: ["ESC-567","ESC-630","ESC-631","ESC-641"]
-decisions: [230,262,285,328,333]
+tickets: ["ESC-567","ESC-630","ESC-631","ESC-641","ESC-570"]
+decisions: [230,262,285,328,333,348]
 compared: null
 ---
 
@@ -72,3 +72,11 @@ L'essai réel avec un téléphone en 4G (un geste de l'utilisateur) ; l'essai r�
 ## Retirer un téléphone (ESC-630)
 
 « Retirer » un téléphone, dans Réglages › Téléphone ou par `escouade-server phone remove ID`, retire son pair **et révoque l'appareil de l'API distante qui lui est lié** (appairé à travers lui), avec les appareils nés de lui : son jeton ne vaut plus nulle part, ni par Tailscale, ni par la boucle locale d'un serveur, ni par un autre pair. L'écran le dit : « Pixel retiré et son accès révoqué ». Un pair qui n'a jamais été lié à un appareil est retiré du tunnel, et l'écran dit qu'aucun jeton n'était lié à lui.
+
+## Le QR code d'un téléphone (ESC-570)
+
+- **Où** : Réglages › Téléphone › « Appairer un téléphone » (le poste, accès allumé), Réglages de l'espace › Appareils › « Appairer un téléphone » (un serveur, depuis un client de bureau, appareil de la portée poste), et `escouade-server pair --qr [--endpoint HÔTE]` (le QR en caractères dans le terminal du serveur, l'accès du téléphone allumé). Un téléphone ne peut pas en demander.
+- **Ce qu'il porte** : la configuration WireGuard du téléphone (une clé faite pour lui, la clé publique du cœur, l'adresse où le joindre, son adresse dans le tunnel, l'API dans le tunnel), le code d'appairage, le nom de la machine, si c'est ce poste, la version d'Escouade et sa fin. **C'est un secret** : la fenêtre n'en reçoit que l'image (noir sur blanc, quel que soit le thème), le code à 8 caractères écrit à côté, le temps qu'il vaut encore (« Valable encore 9 min 42 s, pour un seul téléphone ») et l'adresse que le téléphone joindra (« à vérifier » quand aucune adresse publique n'a encore été vue) ; jamais son texte, jamais dans le journal, ni dans le presse-papiers. La page dit de ne pas le photographier.
+- **Dix minutes, un téléphone** : son pair est ajouté aussitôt, **en attente** (« En attente de son QR code » dans la liste des téléphones) ; son code est de la portée « téléphone ». Un nouveau QR prend la place du précédent et retire son pair qui attendait ; un pair dont le QR a fini sans servir part de lui-même. Appairé par lui, le pair appartient à l'appareil né, n'attend plus, et le QR quitte l'écran (« Téléphone appairé : le QR code a servi »). Masqué, ou à la fin de ses dix minutes (« Le QR code a expiré : demandes-en un nouveau »), il n'est plus montré.
+- **La révocation** du téléphone, depuis le poste ou le serveur (« Retirer » dans Réglages › Téléphone, « Retirer » dans Réglages de l'espace › Appareils, `escouade-server devices revoke`), retire son jeton, la clé de son appairage, son inscription au push et son pair WireGuard, aussitôt ; ses connexions se ferment dans les deux secondes.
+- La liste des téléphones vide dit désormais « Aucun téléphone appairé : « Appairer un téléphone » plus haut montre son QR code. » ; `escouade-server phone add` reste pour l'app WireGuard officielle.

@@ -17,7 +17,14 @@ export default defineConfig({
   clearScreen: false,
   define: { __ESCOUADE_VERSION__: JSON.stringify(version) },
   // The app's interface, shared: imported where it is (`$shared/lib/transport`), never copied.
-  resolve: { alias: { $shared: fileURLToPath(new URL('../../src', import.meta.url)) } },
+  // The native side's API (MO-3, MO-4), from its sources: in a browser, its web side stands for it (`web.ts`).
+  resolve: {
+    alias: {
+      $shared: fileURLToPath(new URL('../../src', import.meta.url)),
+      '@escouade/capacitor-mobile': fileURLToPath(new URL('../mobile-plugin/src/index.ts', import.meta.url)),
+      '@capacitor/core': fileURLToPath(new URL('./node_modules/@capacitor/core', import.meta.url)),
+    },
+  },
   server: {
     port: Number(process.env.PORT ?? 0) || 5174,
     strictPort: true,

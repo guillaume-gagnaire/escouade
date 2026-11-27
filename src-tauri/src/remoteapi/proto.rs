@@ -24,6 +24,10 @@ use std::time::Duration;
 /// The path of the WebSocket: `ws://127.0.0.1:<port>/remote`.
 pub const PATH: &str = "/remote";
 
+/// The header in which a phone's native proxy writes its device token (ESC-570, SR1-15): the WebView's JavaScript never
+/// holds it and gives an empty token in its handshake. `crates/escouade-mobile/src/tunnel/gate.rs` writes the same.
+pub const DEVICE_HEADER: &str = "x-escouade-device";
+
 /// The largest message the server reads, and the largest it sends: a message past it closes the connection; an answer
 /// or a body past it goes in parts.
 pub const MAX_MESSAGE: usize = 16 << 20;
@@ -114,7 +118,16 @@ pub enum ToServer {
     /// In place of the handshake, a new device's first connection (ESC-514): the pairing code `escouade-server pair`
     /// showed (`remoteapi::pairing`), and the name the user gives the device. Answered by [`ToClient::Paired`] (its
     /// token, given once) or [`ToClient::Refused`] (`pairing`), then closed: the device connects again with its token.
-    Pair { code: String, name: String },
+    ///
+    /// `key` (ESC-570): a phone's public key (X25519, base64), made by its native side. The device's token is then
+    /// derived on both sides from the secret they share (`pairing::derive`), never sent: [`ToClient::Paired`] gives
+    /// the core's public key in its place.
+    Pair {
+        code: String,
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+    },
     /// In place of the handshake, a device that forgets the server (ESC-537, « Retirer un serveur de ce poste »): its
     /// token, which the server revokes (its own name said as who revoked it); answered by [`ToClient::Unpaired`] or
     /// [`ToClient::Refused`] (`token`), then closed.
@@ -183,9 +196,13 @@ pub enum ToClient {
     Pong { id: u64 },
     /// The pairing passed (ESC-514): the new device and its token, which the client keeps and gives at each handshake
     /// from now on. Given once; the connection then closes.
+    /// For a phone that gave its key (ESC-570), `token` is empty and `key` is the core's public key: the phone derives
+    /// the token itself.
     Paired {
         device: super::devices::Device,
         token: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
     },
     /// The connection refused, then closed: `code` says why (`remoteapi::codes`). For `version`, both versions and
     /// which one to update (`server` or `client`), for the client to offer « Mettre à jour le serveur ».

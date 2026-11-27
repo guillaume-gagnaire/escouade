@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# The QR code reader (@capacitor/barcode-scanner, MO-4): its scan parameters carry Gson's annotation, never read by
+# Gson in the app (the bridge passes them as JSON itself); R8 asks for the class alone.
+-dontwarn com.google.gson.annotations.SerializedName

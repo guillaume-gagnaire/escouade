@@ -3,14 +3,15 @@
   // core the window is on — this computer's, or a server's (the same page in the settings of a server's space, read
   // through the window's connection). On or off, the UDP port, the tunnel's state, what to do in the box (or the
   // server's firewall), a CGNAT and its ways out, the public address and when it changed, Tailscale, the phones. A policy
-  // of the device (`servers.phone`, `servers.remoteApi`) greys the switch with who imposes it. The QR code that pairs a
-  // phone is MO-4's.
+  // of the device (`servers.phone`, `servers.remoteApi`) greys the switch with who imposes it. « Appairer un téléphone »
+  // shows its QR code (MO-4, `PairQr`); a phone whose QR code waits is said so.
   import { fDate, fList, fWhen } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import { invoke } from '../../lib/transport';
   import Icon from '../Icon.svelte';
   import Group from './Group.svelte';
+  import PairQr from './PairQr.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
 
@@ -38,6 +39,8 @@
     device: string | null;
     addedAt: number;
     sinceHandshake: number | null;
+    /** Made for a QR code not used yet (ESC-570). */
+    pending: boolean;
   }
   interface PhoneStatus {
     enabled: boolean;
@@ -313,6 +316,7 @@
   {/if}
 
   <Group title={t('phone.phones.title')}>
+    {#if on}<PairQr onpaired={() => void load()} />{/if}
     <ul class="list" aria-label={t('phone.phones.title')}>
       {#each status.peers as p (p.id)}
         <li class="drow" data-testid="phone-row">
@@ -320,10 +324,11 @@
           <div class="main">
             <b>{p.name}</b>
             <span class="l2"
-              >{p.sinceHandshake != null ? t('phone.phones.up', { ago: ago(p.sinceHandshake) }) : t('phone.phones.idle')} · {t(
-                'phone.phones.address',
-                { address: p.address },
-              )}</span
+              >{p.pending
+                ? t('phone.phones.pending')
+                : p.sinceHandshake != null
+                  ? t('phone.phones.up', { ago: ago(p.sinceHandshake) })
+                  : t('phone.phones.idle')} · {t('phone.phones.address', { address: p.address })}</span
             >
           </div>
           <button class="btn ghost danger" onclick={() => void remove(p)}>{t('phone.phones.remove')}</button>

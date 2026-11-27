@@ -225,6 +225,10 @@ jobs:
               - '.github/workflows/ci.yml'
             app:
               - 'apps/mobile/**'
+              - 'apps/mobile-plugin/**'
+              - 'crates/escouade-mobile/**'
+              - 'scripts/mobile-android.sh'
+              - 'scripts/mobile-ios.sh'
               - 'src/**'
               - 'package.json'
               - 'package-lock.json'
@@ -369,6 +373,24 @@ jobs:
           npm ci --no-audit --no-fund
           npm ci --prefix apps/mobile --no-audit --no-fund
 
+      # The app's native side (MO-4): the plugin (apps/mobile-plugin) and its Rust, built into it before Gradle.
+      - name: Rust toolchain (pinned in crates/escouade-mobile/rust-toolchain.toml)
+        working-directory: crates/escouade-mobile
+        run: rustup toolchain install && rustup target add aarch64-linux-android x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: crates/escouade-mobile
+
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-ndk@4.1.2
+
+      - name: The plugin's Android libraries and Kotlin bindings
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME" bash scripts/mobile-android.sh
+
       # Java 21 (Capacitor 8's), the runner's Android SDK; the Gradle wrapper checks its distribution's SHA-256.
       - name: The page, then the Android project
         working-directory: apps/mobile
@@ -420,6 +442,19 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm ci --prefix apps/mobile --no-audit --no-fund
+
+      # The app's native side (MO-4): the plugin's XCFramework and Swift bindings, before Xcode.
+      - name: Rust toolchain (pinned in crates/escouade-mobile/rust-toolchain.toml)
+        working-directory: crates/escouade-mobile
+        run: rustup toolchain install && rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: crates/escouade-mobile
+          shared-key: mobile-ios
+
+      - name: The plugin's XCFramework and Swift bindings
+        run: bash scripts/mobile-ios.sh
 
       - name: The page, then the iOS project
         working-directory: apps/mobile

@@ -1,10 +1,11 @@
 /**
- * The spaces this phone is paired with (MO-1): each its name, the address of its remote API and the device's token.
+ * The spaces this phone is paired with (MO-1, MO-4): each its name and how it is reached.
  *
- * MO-4 pairs them by QR code and keeps the token in the Keystore or the Keychain. Until then, a space is given to the
- * page alone: by `window.__ESCOUADE_SPACES__` (the e2e put it there before the page loads), or, in a build of
- * development only, by `VITE_ESCOUADE_SPACES` (`npm run dev:server` pairs a local `escouade-server` and says it). The
- * app on a phone is given neither: it opens on « Escouade sur ce téléphone ».
+ * - **Paired by the app** (MO-4, `pairing.svelte.ts`): the list kept on the phone (`localStorage`, `escouade.spaces`)
+ *   holds their id, name and kind alone; their keys and token are the native side's, in the Keystore or the Keychain
+ *   (SR1-15), and their address is asked of it at each connection (`startTunnel`).
+ * - **Given to the page** (the e2e of the shell, a build of development): `window.__ESCOUADE_SPACES__` or
+ *   `VITE_ESCOUADE_SPACES`, with their address and token.
  */
 
 /** A space the phone knows. */
@@ -19,6 +20,73 @@ export interface PairedSpace {
   url: string;
   /** The device's token. */
   token: string;
+  /** Kept by the app (MO-4): its address and token are the native side's, `url` and `token` empty here. */
+  kept?: boolean;
+}
+
+/** A space the app paired, as its list keeps it: no address, no key, no token. */
+export interface KeptSpace {
+  id: string;
+  name: string;
+  here: boolean;
+  kind: 'tunnel' | 'direct';
+}
+
+const LIST = 'escouade.spaces';
+
+/** The spaces the app paired (a broken list is none). */
+export function keptSpaces(store: Pick<Storage, 'getItem'> | null = safeStorage()): KeptSpace[] {
+  try {
+    const raw = JSON.parse(store?.getItem(LIST) ?? '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (s): s is KeptSpace =>
+        !!s && typeof s.id === 'string' && !!s.id && typeof s.name === 'string' && (s.kind === 'tunnel' || s.kind === 'direct'),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function write(list: KeptSpace[], store: Pick<Storage, 'setItem'> | null): void {
+  try {
+    store?.setItem(LIST, JSON.stringify(list));
+  } catch {
+    // A private window: the list lasts as long as the page.
+  }
+}
+
+/** A space paired: kept (in place of one of the same id). */
+export function keepSpace(space: KeptSpace, store: Storage | null = safeStorage()): void {
+  write([...keptSpaces(store).filter((s) => s.id !== space.id), space], store);
+}
+
+/** A space forgotten from the list. */
+export function dropSpace(id: string, store: Storage | null = safeStorage()): void {
+  write(
+    keptSpaces(store).filter((s) => s.id !== id),
+    store,
+  );
+}
+
+function safeStorage(): Storage | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Every space of the phone: those given to the page, then those the app paired. */
+export function allSpaces(): PairedSpace[] {
+  const given = pairedSpaces();
+  const ids = new Set(given.map((s) => s.id));
+  return [
+    ...given,
+    ...keptSpaces()
+      .filter((s) => !ids.has(s.id))
+      .map((s) => ({ id: s.id, name: s.name, here: s.here, url: '', token: '', kept: true })),
+  ];
 }
 
 declare global {

@@ -178,6 +178,7 @@ pub async fn pair(
         &ToServer::Pair {
             code: code.to_string(),
             name: name.to_string(),
+            key: None,
         },
     )
     .await?;

@@ -121,6 +121,8 @@ http-body-util = "0.1"
 getrandom = "0.4"
 # The ids of the teams, as their folders and the window name them (`teams`).
 hex = "0.4"
+# A phone's token and pairing key, derived from the secret of its pairing (ESC-570).
+hkdf = "0.13"
 # « Codex peut piloter Escouade »: its entry in each account's `config.toml`, the user's comments and layout kept.
 toml_edit = "0.25"
 # What every part stands on (the languages written in now, the guards of the paths), and the parts of the app cut out of

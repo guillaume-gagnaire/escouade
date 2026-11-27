@@ -407,10 +407,14 @@ async fn a_peer_paired_as_a_device_takes_that_devices_token_alone() {
         &ToServer::Pair {
             code: code.text.clone(),
             name: "Pixel".into(),
+            key: None,
         },
     )
     .await;
-    let Some(ToClient::Paired { device, token: own }) = next(&mut ws).await else {
+    let Some(ToClient::Paired {
+        device, token: own, ..
+    }) = next(&mut ws).await
+    else {
         panic!("paired")
     };
     assert_eq!(
@@ -948,10 +952,11 @@ async fn paired_phone(h: &Headless, name: &str) -> (Phone, String, String, Strin
         &ToServer::Pair {
             code: code.text,
             name: name.into(),
+            key: None,
         },
     )
     .await;
-    let Some(ToClient::Paired { device, token }) = next(&mut ws).await else {
+    let Some(ToClient::Paired { device, token, .. }) = next(&mut ws).await else {
         panic!("paired")
     };
     (phone, peer.id, device.id, token)
@@ -1036,5 +1041,343 @@ async fn unpair_through_the_peer_of_another_device_is_refused_as_the_handshake_i
     send(&mut ws, &ToServer::Unpair { token: own }).await;
     assert!(matches!(next(&mut ws).await, Some(ToClient::Unpaired {})));
     assert!(!api.devices().holds(&device));
+    h.stop();
+}
+
+// ---------- the QR code, the scope of a phone, the revocation (ESC-570, MO-4) ----------
+
+/// The WebSocket opened on `stream` with the device's token in the header a phone's native proxy writes
+/// (`proto::DEVICE_HEADER`): its JavaScript never holds it.
+async fn open_with_header(stream: stack::TunnelStream, token: &str) -> Ws {
+    let mut req = format!("ws://{TUNNEL_ADDRESS}{}", proto::PATH)
+        .into_client_request()
+        .unwrap();
+    req.headers_mut()
+        .insert("host", TUNNEL_ADDRESS.to_string().parse().unwrap());
+    req.headers_mut()
+        .insert(proto::DEVICE_HEADER, token.parse().unwrap());
+    tokio::time::timeout(
+        Duration::from_secs(20),
+        tokio_tungstenite::client_async(req, stream),
+    )
+    .await
+    .expect("the WebSocket's handshake in 20 s")
+    .map(|(ws, _)| ws)
+    .unwrap()
+}
+
+/// A call through `ws`: its answer's error code (none when it went well).
+async fn call_code(ws: &mut Ws, id: u64, cmd: &str, args: Value) -> Option<String> {
+    let Value::Object(args) = args else {
+        panic!("an object")
+    };
+    send(
+        ws,
+        &ToServer::Call {
+            id,
+            cmd: cmd.into(),
+            args,
+            body: None,
+            headers: Default::default(),
+        },
+    )
+    .await;
+    loop {
+        match next(ws).await.expect("an answer") {
+            ToClient::Reply { id: got, code, .. } if got == id => return code,
+            _ => continue,
+        }
+    }
+}
+
+/// A phone paired by the QR code of the window: the QR read, its tunnel up with the QR's key, the code given with
+/// a key of the phone's; the payload, the device, the token the phone derived and its tunnel.
+async fn paired_by_qr(h: &Headless) -> (crate::phone::QrPayload, String, String, Phone) {
+    let state = crate::remoteapi::State::of_test(&h.core);
+    let qr = crate::commands::phone_pair_qr(state).unwrap();
+    let payload: crate::phone::QrPayload = serde_json::from_str(&qr.text).unwrap();
+    assert_eq!(payload.escouade, crate::phone::QR_VERSION);
+    let private = stack::key_of(&payload.tunnel.private_key).expect("the phone's key in the QR");
+    let private = boringtun::x25519::StaticSecret::from(private);
+    let public = boringtun::x25519::PublicKey::from(&private).to_bytes();
+    let address: Ipv4Addr = payload
+        .tunnel
+        .address
+        .trim_end_matches("/32")
+        .parse()
+        .unwrap();
+    let port: u16 = payload
+        .tunnel
+        .endpoint
+        .rsplit(':')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let core_public = stack::key_of(&payload.tunnel.peer_public_key).unwrap();
+    let phone = Phone::with_key(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        core_public,
+        address,
+        private,
+        public,
+    );
+    // The phone's native side: a key pair of its own, its public half given with the code.
+    let mut seed = [7u8; 32];
+    getrandom::fill(&mut seed).unwrap();
+    let mine = boringtun::x25519::StaticSecret::from(seed);
+    let mine_public = {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD
+            .encode(boringtun::x25519::PublicKey::from(&mine).as_bytes())
+    };
+    let s = phone
+        .reach(20)
+        .await
+        .expect("the tunnel of the QR's config");
+    let mut ws = open(s, &TUNNEL_ADDRESS.to_string(), None).await.unwrap();
+    send(
+        &mut ws,
+        &ToServer::Pair {
+            code: payload.code.clone(),
+            name: "Pixel 8".into(),
+            key: Some(mine_public),
+        },
+    )
+    .await;
+    let Some(ToClient::Paired { device, token, key }) = next(&mut ws).await else {
+        panic!("paired")
+    };
+    // The token never sent: the phone derives it from the core's public half.
+    assert_eq!(token, "", "a phone's token sent in the pairing's answer");
+    let core_half: [u8; 32] = {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD
+            .decode(key.expect("the core's public half"))
+            .unwrap()
+            .try_into()
+            .unwrap()
+    };
+    let (derived, _) = crate::remoteapi::pairing::derive_from(&mine, &core_half).unwrap();
+    assert_eq!(device.scope, crate::remoteapi::Scope::Phone);
+    (payload, device.id, derived, phone)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_qr_code_holds_ten_minutes_one_phone_and_its_peer_waits_for_it_alone() {
+    let (h, _api, _token) = core("phone-qr", Listen::Nothing).await;
+    // Off: no QR.
+    let state = crate::remoteapi::State::of_test(&h.core);
+    assert!(crate::commands::phone_pair_qr(state.clone()).is_err());
+    turn_on(&h).await;
+    let before = crate::model::now_ms();
+    let first = crate::commands::phone_pair_qr(state.clone()).unwrap();
+    let payload: crate::phone::QrPayload = serde_json::from_str(&first.text).unwrap();
+    // Ten minutes, the code beside it (8 characters in two groups), what the phone shows.
+    let lifetime = first.expires_at - before;
+    assert!(
+        (crate::remoteapi::pairing::LIFETIME_MS..=crate::remoteapi::pairing::LIFETIME_MS + 2_000)
+            .contains(&lifetime),
+        "{lifetime}"
+    );
+    assert_eq!(crate::remoteapi::pairing::LIFETIME_MS, 10 * 60_000);
+    assert_eq!(first.code, payload.code);
+    assert_eq!(first.code.len(), 9);
+    assert_eq!(first.code.chars().filter(|c| *c != '-').count(), 8);
+    assert!(payload.here);
+    assert!(payload.tunnel.address.ends_with("/32"));
+    assert_eq!(payload.tunnel.api, format!("{TUNNEL_ADDRESS}:{API_PORT}"));
+    assert!(first.svg.contains("<svg"));
+    // Never in what is serialized to the window but the SVG and the code: the QR's text stays out.
+    let shown = serde_json::to_string(&first).unwrap();
+    assert!(!shown.contains(&payload.tunnel.private_key), "{shown}");
+    // Its peer waits.
+    let peers = h.core.phone.peers();
+    assert_eq!(peers.len(), 1);
+    assert_eq!(peers[0].pending_until, Some(first.expires_at));
+    // A second QR takes the place of the first, and of its peer.
+    let second = crate::commands::phone_pair_qr(state).unwrap();
+    let peers = h.core.phone.peers();
+    assert_eq!(peers.len(), 1);
+    assert_eq!(peers[0].id, second.peer);
+    assert_eq!(
+        crate::remoteapi::pairing::redeem(&h.core.data, &first.code, crate::model::now_ms()),
+        Err(crate::remoteapi::pairing::Refusal::Wrong)
+    );
+    // Past its ten minutes: the code refused as expired, its peer gone.
+    assert!(!h.core.phone.drop_expired(second.expires_at - 1));
+    assert!(h.core.phone.drop_expired(second.expires_at));
+    assert!(h.core.phone.peers().is_empty());
+    assert_eq!(
+        crate::remoteapi::pairing::redeem(&h.core.data, &second.code, second.expires_at),
+        Err(crate::remoteapi::pairing::Refusal::Expired)
+    );
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_paired_by_its_qr_code_derives_its_token_and_answers_but_touches_nothing_else() {
+    let (h, api, _token) = core("phone-qr-scope", Listen::Nothing).await;
+    turn_on(&h).await;
+    let (_payload, device, token, phone) = paired_by_qr(&h).await;
+    // Its peer is its device's from now on, waiting no more.
+    let peer = h.core.phone.peers().into_iter().next().unwrap();
+    assert_eq!(peer.device.as_deref(), Some(device.as_str()));
+    assert_eq!(peer.pending_until, None);
+    assert!(api.devices().find(&token).is_some());
+    // The token in the proxy's header, an empty one in the handshake: welcome.
+    let s = phone.reach(20).await.unwrap();
+    let mut ws = open_with_header(s, &token).await;
+    assert!(matches!(hello(&mut ws, "").await, ToClient::Welcome { .. }));
+    // What a phone does: answered.
+    assert_eq!(
+        call_code(&mut ws, 1, "space_glance", serde_json::json!({})).await,
+        None
+    );
+    // The terminal, the files, the secrets, the plugins, the devices, the network: refused by its scope, never run.
+    for (i, (cmd, args)) in [
+        (
+            "term_spawn",
+            serde_json::json!({ "cwd": ".", "cols": 80, "rows": 24 }),
+        ),
+        (
+            "fs_write",
+            serde_json::json!({ "root": ".", "path": "x", "text": "x" }),
+        ),
+        ("fs_read", serde_json::json!({ "root": ".", "path": "x" })),
+        (
+            "plugin_set_secret",
+            serde_json::json!({ "id": "x", "key": "k", "value": "v" }),
+        ),
+        ("plugin_install", serde_json::json!({})),
+        ("remote_pair_code", serde_json::json!({})),
+        ("phone_pair_qr", serde_json::json!({})),
+        ("remote_devices", serde_json::json!({})),
+        ("remote_device_revoke", serde_json::json!({ "id": device })),
+        ("phone_set", serde_json::json!({ "enabled": false })),
+        ("phone_remove", serde_json::json!({ "id": "x" })),
+        ("set_remote_control", serde_json::json!({ "enabled": true })),
+        ("save_settings", serde_json::json!({})),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            call_code(&mut ws, 10 + i as u64, cmd, args)
+                .await
+                .as_deref(),
+            Some(crate::remoteapi::codes::SCOPE),
+            "{cmd}"
+        );
+    }
+    // Nothing of it ran: the access is on, the device is there, no code waits.
+    assert!(h.core.phone.running());
+    assert!(api.devices().holds(&device));
+    assert!(
+        crate::remoteapi::pairing::waiting_until(&h.core.data, crate::model::now_ms()).is_none()
+    );
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn revoking_a_phone_takes_its_peer_its_token_its_key_and_its_push_and_it_is_told_so() {
+    let (h, api, _token) = core("phone-qr-revoke", Listen::Nothing).await;
+    turn_on(&h).await;
+    let (_payload, device, token, phone) = paired_by_qr(&h).await;
+    let entries = [
+        crate::remoteapi::devices::key_entry(&device),
+        crate::remoteapi::devices::push_entry(&device),
+    ];
+    // Its pairing key kept at the pairing; its registration to the push as MO-6 will keep it.
+    assert!(h.core.secrets.get(&entries[0]).unwrap().is_some());
+    h.core
+        .secrets
+        .set(&entries[1], "push-token-of-test")
+        .unwrap();
+    let s = phone.reach(20).await.unwrap();
+    let mut ws = open_with_header(s, &token).await;
+    assert!(matches!(hello(&mut ws, "").await, ToClient::Welcome { .. }));
+    // Revoked from the window (Réglages › Téléphone, Réglages de l'espace › Appareils).
+    let state = crate::remoteapi::State::of_test(&h.core);
+    assert!(crate::commands::remote_device_revoke(state, device.clone()).unwrap());
+    // Its peer at once, its token, its key and its push.
+    assert!(h.core.phone.peers().is_empty());
+    for entry in &entries {
+        assert_eq!(h.core.secrets.get(entry).unwrap(), None, "{entry}");
+    }
+    api.devices().refresh();
+    assert!(!api.devices().holds(&device));
+    // Its connection put out on the core's side (its peer gone, nothing reaches the phone any more).
+    wait("the revoked phone's connection closed", || {
+        api.clients() == 0
+    })
+    .await;
+    drop(ws);
+    // Its token, by any other way, is told revoked, and by whom: what the phone's screen says.
+    match hello_by_tailscale(&api, &token).await {
+        ToClient::Refused { code, revoked, .. } => {
+            assert_eq!(code, "token");
+            let r = revoked.expect("told revoked");
+            assert_eq!(r.device, "Pixel 8");
+            assert_eq!(
+                r.by,
+                Some(tr!("la fenêtre d’Escouade", "Escouade’s window"))
+            );
+        }
+        other => panic!("a revoked phone welcome: {other:?}"),
+    }
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_s_key_that_is_none_leaves_the_code_waiting() {
+    let (h, _api, _token) = core("phone-qr-badkey", Listen::Nothing).await;
+    turn_on(&h).await;
+    let state = crate::remoteapi::State::of_test(&h.core);
+    let qr = crate::commands::phone_pair_qr(state).unwrap();
+    let payload: crate::phone::QrPayload = serde_json::from_str(&qr.text).unwrap();
+    let private =
+        boringtun::x25519::StaticSecret::from(stack::key_of(&payload.tunnel.private_key).unwrap());
+    let public = boringtun::x25519::PublicKey::from(&private).to_bytes();
+    let port: u16 = payload
+        .tunnel
+        .endpoint
+        .rsplit(':')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let address: Ipv4Addr = payload
+        .tunnel
+        .address
+        .trim_end_matches("/32")
+        .parse()
+        .unwrap();
+    let phone = Phone::with_key(
+        SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        stack::key_of(&payload.tunnel.peer_public_key).unwrap(),
+        address,
+        private,
+        public,
+    );
+    // A key of none (all zeros: a point of small order) and one that is not 32 bytes.
+    for key in ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "bm9wZQ=="] {
+        let s = phone.reach(20).await.unwrap();
+        let mut ws = open(s, &TUNNEL_ADDRESS.to_string(), None).await.unwrap();
+        send(
+            &mut ws,
+            &ToServer::Pair {
+                code: payload.code.clone(),
+                name: "Pixel".into(),
+                key: Some(key.into()),
+            },
+        )
+        .await;
+        assert_eq!(refused_code(&next(&mut ws).await.unwrap()), Some("pairing"));
+    }
+    assert!(
+        crate::remoteapi::pairing::waiting_until(&h.core.data, crate::model::now_ms()).is_some(),
+        "the code ended by a key of none"
+    );
     h.stop();
 }

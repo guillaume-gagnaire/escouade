@@ -2,7 +2,7 @@
 //! hand back (ESC-654), to show what the server does of them when their connection closes or their device is revoked.
 //! Each keeps what it saw under the key its call gives (`key`), so that tests running together never read each other's.
 
-use super::{Call, Class, Command, Reply};
+use super::{Call, Class, Command, Reply, Scope};
 use parking_lot::{Condvar, Mutex};
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -27,11 +27,13 @@ pub const COMMANDS: &[Command] = &[
     Command {
         name: "__test_hang",
         class: Class::Served,
+        scope: Scope::Phone,
         call: hang,
     },
     Command {
         name: "__test_hold",
         class: Class::Served,
+        scope: Scope::Phone,
         call: hold,
     },
 ];

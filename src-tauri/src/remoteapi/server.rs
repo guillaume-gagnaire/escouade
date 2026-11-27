@@ -120,6 +120,8 @@ impl Default for Limits {
 struct Conn {
     client: Client,
     device: String,
+    /// What its device may call (ESC-570): checked in `dispatch` before the command's class.
+    scope: super::Scope,
     session: String,
     sessions: Arc<Sessions>,
     outbox: Outbox,
@@ -503,11 +505,10 @@ impl RemoteApi {
         &self,
         code: &str,
         name: &str,
+        key: Option<&str>,
+        tunnel: bool,
         source: &Source,
-    ) -> std::result::Result<
-        (super::devices::Device, String),
-        (&'static str, String, Option<&'static str>),
-    > {
+    ) -> std::result::Result<Paired, (&'static str, String, Option<&'static str>)> {
         let core = self.services.core().clone();
         if let Err(e) = core.locks.read().check_remote_api() {
             return Err((codes::POLICY, e.to_string(), None));
@@ -518,9 +519,30 @@ impl RemoteApi {
             let refusal = super::pairing::Refusal::Wait;
             return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
         }
+        // A phone's key, read before the code is: a key that is none leaves the code waiting (ESC-570).
+        let derived = match key {
+            None => None,
+            Some(key) => match super::pairing::derive(key) {
+                Some(d) => Some(d),
+                None => {
+                    self.failed(source);
+                    log::warn!(
+                        "remote API: pairing refused from {source}: the phone's key is not one"
+                    );
+                    return Err((
+                        codes::PAIRING,
+                        tr!(
+                            "La clé de ce téléphone est illisible : mets l’app à jour.",
+                            "This phone's key is unreadable: update the app."
+                        ),
+                        Some("key"),
+                    ));
+                }
+            },
+        };
         let data = core.data.clone();
-        let paired_by = match super::pairing::redeem_by(&data, code, crate::model::now_ms()) {
-            Ok(by) => by,
+        let redeemed = match super::pairing::redeem_with(&data, code, crate::model::now_ms()) {
+            Ok(r) => r,
             Err(refusal) => {
                 self.failed(source);
                 if refusal == super::pairing::Refusal::Wrong {
@@ -533,6 +555,7 @@ impl RemoteApi {
                 return Err((codes::PAIRING, refusal.text(), Some(refusal.code())));
             }
         };
+        let paired_by = redeemed.by;
         // A code asked by a device revoked since: no device is born of it (SR1-02).
         self.devices.refresh();
         if let Some(by) = paired_by.as_deref().filter(|by| !self.devices.holds(by)) {
@@ -548,10 +571,34 @@ impl RemoteApi {
         } else {
             name
         };
-        match self.devices.add_from(&name, paired_by.as_deref()) {
+        // A phone's scope (ESC-570): its QR code's, and always through its tunnel or with a key of its own; never more
+        // than its code says.
+        let scope = if tunnel || derived.is_some() {
+            super::Scope::Phone
+        } else {
+            redeemed.scope
+        };
+        let given = derived.as_ref().map(|d| d.token.clone());
+        match self
+            .devices
+            .add_as(&name, paired_by.as_deref(), scope, given)
+        {
             Ok((device, token)) => {
-                log::info!("remote API: device « {} » paired", device.name);
-                Ok((device, token))
+                log::info!(
+                    "remote API: device « {} » paired ({})",
+                    device.name,
+                    device.scope.as_str()
+                );
+                match derived {
+                    // The token never sent: the phone derives it. Its pairing key kept, for its notifications.
+                    Some(d) => {
+                        if let Err(e) = self.devices.keep_key(&device.id, &d.key) {
+                            log::warn!("remote API: a phone's pairing key not kept: {e:#}");
+                        }
+                        Ok((device, String::new(), Some(d.public)))
+                    }
+                    None => Ok((device, token, None)),
+                }
             }
             Err(e) => {
                 log::error!("remote API: a paired device not kept: {e:#}");
@@ -594,9 +641,9 @@ impl RemoteApi {
     /// The devices read again when another process changed them (`escouade-server devices revoke`): the connections
     /// of a device revoked there are closed, its sessions forgotten.
     fn sync_devices(&self) {
-        if !self.devices.refresh() {
-            return;
-        }
+        // Every live connection looked at, whoever read the file again first (a handshake or a pairing reads it too:
+        // a change it read was never told to the connections of a revoked device, ESC-570).
+        self.devices.refresh();
         let gone: Vec<String> = self
             .live
             .lock()
@@ -809,6 +856,9 @@ impl RemoteApi {
         let proxied = matches!(via, Via::Loopback)
             && from.is_some_and(|ip| self.proxies.lock().contains(&ip));
         let forwarded: Mutex<Option<std::net::IpAddr>> = Mutex::new(None);
+        // A phone's token, written by its native proxy in the request (ESC-570, SR1-15): the WebView's JavaScript never
+        // holds it, and says an empty one in its handshake.
+        let header_token: Mutex<Option<String>> = Mutex::new(None);
         // The callback's type is tungstenite's: its error, an HTTP answer, is large.
         #[allow(clippy::result_large_err)]
         let guard = |req: &Request, resp: Response| match guard(req, &hosts, way) {
@@ -816,6 +866,7 @@ impl RemoteApi {
                 if proxied {
                     *forwarded.lock() = forwarded_for(req);
                 }
+                *header_token.lock() = device_header(req);
                 Ok(resp)
             }
             Err((status, why)) => {
@@ -856,6 +907,15 @@ impl RemoteApi {
         if let Some(client) = forwarded.into_inner() {
             source = Source::forwarded(client);
         }
+        let header_token = header_token.into_inner().unwrap_or_default();
+        // The token of the handshake, else the one the phone's proxy wrote in the request.
+        let token_of = |given: String| -> String {
+            if given.is_empty() {
+                header_token.clone()
+            } else {
+                given
+            }
+        };
         let (mut sink, mut stream) = ws.split();
         // Before the handshake, the few messages of a refusal: a queue of their own, never past its bounds.
         let refuse_with = |code: &'static str,
@@ -907,18 +967,19 @@ impl RemoteApi {
                     version,
                     token,
                     session,
-                }) => (version, token, session),
+                }) => (version, token_of(token), session),
                 // A new device's code, in place of the handshake (ESC-514): its token, or why not; closed either way.
-                Ok(ToServer::Pair { code, name }) => {
-                    let messages = match self.pair(&code, &name, &source) {
-                        Ok((device, token)) => {
+                Ok(ToServer::Pair { code, name, key }) => {
+                    let tunnel = matches!(via, Via::Tunnel(_));
+                    let messages = match self.pair(&code, &name, key.as_deref(), tunnel, &source) {
+                        Ok((device, token, key)) => {
                             // Through the phone's tunnel: its peer belongs to this device from now on.
                             if let Via::Tunnel(peer) = &via {
                                 peer.paired(&device.id);
                             }
                             let mut out = Vec::new();
                             if let Ok(text) =
-                                serde_json::to_string(&ToClient::Paired { device, token })
+                                serde_json::to_string(&ToClient::Paired { device, token, key })
                             {
                                 out.push(Message::text(text));
                             }
@@ -937,7 +998,7 @@ impl RemoteApi {
                 }
                 // A device that forgets this server (ESC-537): its token revoked; closed either way.
                 Ok(ToServer::Unpair { token }) => {
-                    let messages = match self.unpair(&token, &via) {
+                    let messages = match self.unpair(&token_of(token), &via) {
                         Some(_) => {
                             let mut out = Vec::new();
                             if let Ok(text) = serde_json::to_string(&ToClient::Unpaired {}) {
@@ -1081,6 +1142,7 @@ impl RemoteApi {
                 let conn = Arc::new(Conn {
                     client: client.clone(),
                     device: device.id.clone(),
+                    scope: device.scope,
                     session,
                     sessions: self.sessions.clone(),
                     outbox: Outbox::new(self.limits.queue),
@@ -1332,6 +1394,27 @@ impl RemoteApi {
                 )),
             );
         };
+        // The device's scope first (ESC-570, SR1-01), whatever the command's class: a phone never reaches a computer's
+        // command, served or not.
+        if !conn.scope.allows(command.scope) {
+            log::warn!(
+                "remote API: {} ({}) asked {}, refused: a command of a computer",
+                conn.client.label(),
+                conn.scope.as_str(),
+                command.name
+            );
+            return conn.answer(
+                id,
+                Err(Failure::refused(
+                    codes::SCOPE,
+                    tr!(
+                        "Un téléphone n’a pas accès à {name} : il répond, il ne touche ni au terminal, ni aux fichiers, ni aux secrets, ni aux plugins, ni aux appareils, ni au réseau.",
+                        "A phone has no access to {name}: it answers, it touches neither the terminal, nor the files, the secrets, the plugins, the devices or the network.",
+                        name = command.name
+                    ),
+                )),
+            );
+        }
         if !command.class.served() {
             log::info!(
                 "remote API: {} asked {}, refused ({})",
@@ -1407,6 +1490,10 @@ impl RemoteApi {
         }
     }
 }
+
+/// A device paired: it, the token to answer (empty for a phone, which derives it), and the core's public half of a
+/// phone's pairing (ESC-570).
+type Paired = (super::devices::Device, String, Option<String>);
 
 /// The handshake of this number over, whatever its end: its place is free.
 struct HandshakeOver(Arc<RemoteApi>, u64);
@@ -1663,6 +1750,18 @@ impl std::fmt::Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.key)
     }
+}
+
+/// The device's token a phone's native proxy wrote in the request (`proto::DEVICE_HEADER`, ESC-570): one, not empty;
+/// none else (given twice, it is none).
+fn device_header(req: &Request) -> Option<String> {
+    let mut all = req.headers().get_all(proto::DEVICE_HEADER).iter();
+    let first = all.next()?;
+    if all.next().is_some() {
+        return None;
+    }
+    let text = first.to_str().ok()?.trim();
+    (!text.is_empty() && text.len() <= 256).then(|| text.to_string())
 }
 
 /// The client a proxy says it forwards: the last address of its last `X-Forwarded-For` (the one the proxy wrote; those

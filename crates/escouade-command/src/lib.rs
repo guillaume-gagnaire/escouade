@@ -114,9 +114,10 @@ fn adapter(func: &ItemFn, snake: bool) -> Tokens {
     }
 }
 
-/// One group of the list: its class and its commands.
+/// One group of the list: its class, its scope and its commands.
 struct Group {
     class: Ident,
+    scope: Ident,
     paths: Punctuated<Path, Token![,]>,
 }
 
@@ -127,16 +128,32 @@ impl Parse for List {
         let mut groups = Vec::new();
         while !input.is_empty() {
             let class: Ident = input.parse()?;
+            // Every group says its scope (ESC-570, SR1-01): no command is without one.
+            if !input.peek(syn::token::Paren) {
+                return Err(syn::Error::new_spanned(
+                    &class,
+                    "a group says its scope: `served(computer) { … }` or `served(phone) { … }`",
+                ));
+            }
+            let inner;
+            syn::parenthesized!(inner in input);
+            let scope: Ident = inner.parse()?;
             let content;
             braced!(content in input);
             let paths = Punctuated::parse_terminated(&content)?;
-            groups.push(Group { class, paths });
+            groups.push(Group {
+                class,
+                scope,
+                paths,
+            });
         }
         Ok(List(groups))
     }
 }
 
-/// The list of the commands, by class: `served { commands::a, … } desk { … } moves_served { … } moves_refused { … }`.
+/// The list of the commands, by class and scope: `served(phone) { commands::a, … } served(computer) { … }
+/// desk(computer) { … } moves_served(computer) { … } moves_refused(computer) { … }`. The scope is the narrowest kind of
+/// device that may call the command (ESC-570, SR1-01): `phone` (a phone or a computer) or `computer` (a computer alone).
 /// It makes, in the module it is written in:
 /// - `ipc()`, the IPC's handler of all of them (`tauri::generate_handler!`);
 /// - `IPC`, the names it was given, in the list's order;
@@ -167,6 +184,28 @@ pub fn commands(input: TokenStream) -> TokenStream {
                 .into()
             }
         };
+        let scope = match group.scope.to_string().as_str() {
+            "computer" => quote!(crate::remoteapi::Scope::Computer),
+            "phone" => quote!(crate::remoteapi::Scope::Phone),
+            other => {
+                return syn::Error::new_spanned(
+                    &group.scope,
+                    format!("unknown scope `{other}`: computer or phone"),
+                )
+                .to_compile_error()
+                .into()
+            }
+        };
+        if matches!(group.class.to_string().as_str(), "desk" | "moves_refused")
+            && group.scope != "computer"
+        {
+            return syn::Error::new_spanned(
+                &group.scope,
+                "a command refused at a distance is of the scope `computer`",
+            )
+            .to_compile_error()
+            .into();
+        }
         for path in &group.paths {
             let last = path.segments.last().expect("a path has a segment");
             let name = last.ident.to_string();
@@ -180,16 +219,16 @@ pub fn commands(input: TokenStream) -> TokenStream {
             all.push(path.clone());
             names.push(name.clone());
             rows.push(quote! {
-                crate::remoteapi::Command { name: #name, class: #class, call: #remote }
+                crate::remoteapi::Command { name: #name, class: #class, scope: #scope, call: #remote }
             });
             let refused = matches!(group.class.to_string().as_str(), "desk" | "moves_refused");
             rows_alone.push(if refused {
                 quote! {
-                    crate::remoteapi::Command { name: #name, class: #class, call: crate::remoteapi::refused_here }
+                    crate::remoteapi::Command { name: #name, class: #class, scope: #scope, call: crate::remoteapi::refused_here }
                 }
             } else {
                 quote! {
-                    crate::remoteapi::Command { name: #name, class: #class, call: #remote }
+                    crate::remoteapi::Command { name: #name, class: #class, scope: #scope, call: #remote }
                 }
             });
         }

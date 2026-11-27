@@ -4,6 +4,7 @@
 // takes the page's Origin off (`http://127.0.0.1:<port>`): on the loopback the core refuses every page's Origin but
 // its own window's, the phone's WebView's included (`remoteapi::proto::PHONE_ORIGINS`, taken through the tunnel alone).
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -27,6 +28,10 @@ export interface TestSpace {
   token: string;
   /** A folder of the test's: its repository, its fake `claude`'s files. */
   root: string;
+  /** The forward's address, as the phone types it with a code (`127.0.0.1:<port>`, MO-4). */
+  address: string;
+  /** A new pairing code of the server (`escouade-server pair`), as the user reads it on the server. */
+  pairCode(): string;
   /** A command of the core, as a client of the API of its own calls it. */
   call<T = unknown>(cmd: string, args?: Record<string, unknown>): Promise<T>;
   /** Cut: the forward closed (the server goes on), as a tunnel that falls. */
@@ -71,6 +76,15 @@ export async function startSpace(): Promise<TestSpace> {
       server,
       url: `ws://127.0.0.1:${fwd.port}/remote`,
       token,
+      address: `127.0.0.1:${fwd.port}`,
+      pairCode: () => {
+        const printed = execFileSync(SERVER, ['pair', '--data-dir', data], { env, encoding: 'utf8', timeout: 60_000 });
+        const code = /([A-Z2-9]{4}-[A-Z2-9]{4})/.exec(printed)?.[1];
+        if (!code)
+          throw new Error(`escouade-server pair printed no code:
+${printed}`);
+        return code;
+      },
       root,
       call: own.call,
       cut: () => fwd.close(),

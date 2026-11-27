@@ -4,3 +4,9 @@ project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/
 
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../node_modules/@capacitor/app/android')
+
+include ':capacitor-barcode-scanner'
+project(':capacitor-barcode-scanner').projectDir = new File('../node_modules/@capacitor/barcode-scanner/android')
+
+include ':escouade-capacitor-mobile'
+project(':escouade-capacitor-mobile').projectDir = new File('../../mobile-plugin/android')

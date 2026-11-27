@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { setLang } from '$shared/lib/i18n';
 import App from './App.svelte';
 import { nav } from './lib/nav.svelte';
+import { pairing } from './lib/pairing.svelte';
 import { ALL, phone, startSpaces, stopSpaces } from './lib/phone-spaces.svelte';
 import { FakeSocket, glance, tick } from './test/fake-socket';
 
@@ -19,6 +20,7 @@ describe('the phone’s shell', () => {
     phone.filter = ALL;
     nav.tab = 'inbox';
     nav.sheet = null;
+    pairing.open = false;
   });
   afterEach(() => stopSpaces());
 
@@ -118,5 +120,43 @@ describe('the phone’s shell', () => {
     expect(screen.getByRole('tab', { name: 'Your turn' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Everywhere, 0 waiting' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Nothing is waiting for you' })).toBeInTheDocument();
+  });
+
+  it('shows a space that revoked this phone on a screen of its own, when and from which device', async () => {
+    startSpaces([{ id: 'travail', name: 'Travail', here: false, url: 'ws://127.0.0.1:2/remote', token: 'b' }], {
+      open: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+      delays: [10_000],
+      every: 60_000,
+    });
+    render(App);
+    sockets[0].onopen?.();
+    sockets[0].json({
+      t: 'refused',
+      code: 'token',
+      error: 'revoked',
+      revoked: { device: 'Pixel 8', at: Date.UTC(2026, 10, 27, 9, 0), by: 'MacBook-Air' },
+    });
+    sockets[0].close(1008, 'token');
+    const dialog = await screen.findByRole('alertdialog', { name: 'Ce téléphone n’est plus appairé à Travail' });
+    expect(within(dialog).getByText(/Révoqué le .*, depuis MacBook-Air./)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Appairer de nouveau' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Retirer Travail de ce téléphone' })).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('lists the spaces of this phone in the « + » sheet, with « Appairer un espace »', async () => {
+    await withSpaces([{}, {}]);
+    render(App);
+    await fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+    const sheet = screen.getByRole('dialog', { name: 'Créer' });
+    expect(within(sheet).getByText('Tes espaces')).toBeInTheDocument();
+    expect(within(sheet).getByText('Travail')).toBeInTheDocument();
+    await fireEvent.click(within(sheet).getByRole('button', { name: 'Appairer un espace' }));
+    expect(screen.getByRole('heading', { name: 'Escouade sur ce téléphone' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scanner le QR code' })).toBeInTheDocument();
   });
 });

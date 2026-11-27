@@ -50,6 +50,7 @@ pub fn phone_config(phone: &Keys, core_public: &[u8; 32], endpoint: SocketAddr) 
         address: PHONE_IP.into(),
         api: format!("{CORE_IP}:{API_PORT}"),
         keepalive_secs: None,
+        device_token: None,
     }
 }
 

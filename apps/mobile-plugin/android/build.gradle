@@ -53,4 +53,8 @@ dependencies {
     implementation project(':capacitor-android')
     // What UniFFI's Kotlin bindings load the library with.
     implementation 'net.java.dev.jna:jna:5.17.0@aar'
+    // The system's lock before a gesture that makes an agent act (M3, ESC-570): BiometricPrompt, the code as fallback.
+    implementation 'androidx.biometric:biometric:1.1.0'
+    // Capacitor's activity (`Plugin.getActivity()`), an AppCompatActivity: its class on the plugin's classpath.
+    implementation "androidx.appcompat:appcompat:${project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'}"
 }

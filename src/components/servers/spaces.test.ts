@@ -365,9 +365,10 @@ describe('Réglages', () => {
     backend = fakeBackend({
       remote_devices: () => [
         { id: 'd1', name: 'DESKTOP-7QK2 · Windows', createdAt: 1, lastSeen: 2 },
-        { id: 'd2', name: 'Pixel 8', createdAt: 1 },
+        { id: 'd2', name: 'Pixel 8', createdAt: 1, scope: 'phone' },
       ],
       remote_device_revoke: () => true,
+      remote_pair_code: () => ({ code: 'ABCD-EFGH', expiresAt: Date.UTC(2026, 10, 27, 10, 0) }),
     });
     render(DevicesPage);
     const rows = await screen.findAllByTestId('device-row');
@@ -378,9 +379,13 @@ describe('Réglages', () => {
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Retirer' }));
     // Who asks is the window's connection, as the server knows it: the window never names it (SR1-02).
     await vi.waitFor(() => expect(backend.called('remote_device_revoke')[0]?.args).toEqual({ id: 'd2' }));
-    // A code is created on the server, never from here: no button, the way said.
-    expect(screen.queryByRole('button', { name: /Créer un code/ })).toBeNull();
-    expect(screen.getByText(/Lance escouade-server pair sur le serveur/)).toBeVisible();
+    // Each device its scope (ESC-570): a computer, or a phone (neither terminal, files, secrets, plugins, devices nor network).
+    expect(within(rows[0]).getByTestId('device-scope')).toHaveTextContent('Poste');
+    expect(within(rows[1]).getByTestId('device-scope')).toHaveTextContent('Téléphone');
+    // This window's connection is a computer's: it creates a code (the server refuses it to a phone), and a phone's QR code.
+    await userEvent.click(screen.getByRole('button', { name: /Créer un code/ }));
+    expect(await screen.findByTestId('device-code')).toHaveTextContent('ABCD-EFGH');
+    expect(screen.getByRole('button', { name: /Appairer un téléphone/ })).toBeVisible();
   });
 
   it('says before removing a device the devices paired from it, which go with it', async () => {
