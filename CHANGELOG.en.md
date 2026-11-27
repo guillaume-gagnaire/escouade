@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.17] — 2026-11-27
 
 - After an update, a window shows you its news once, in a few screens taken from the real interface (for an interface in French, for now). Thanks to @OshOEz (#51).
 - An agent never takes your screen: what it wants to show you opens beside its conversation only if you are looking at it, otherwise its row waits in “Browsers” and opens when you come back. It has one pane at a time, and a pane you closed does not come back until you have left its conversation and returned. “Let drive…”, in the menu of a browser you opened, hands it to an agent of the project.
