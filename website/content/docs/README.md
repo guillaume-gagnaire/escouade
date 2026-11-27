@@ -28,7 +28,7 @@ Du texte, des listes, des tableaux.
 
 ## Images
 
-Les captures du site, prises dans la vidéo de présentation, dans la langue de la page : `![Ce que montre la capture](/images/board.jpg)` en français, `![What it shows](/images/en/board.jpg)` en anglais. Il y a `agents`, `board`, `board-review`, `chat`, `editor`, `environments`, `git`, `inbox`, `inbox-compare`, `integrations`, `launch`, `notifications`, `pr-review`, `prs`, `remote`, `stats` et `test` (`.jpg`) ; `inbox` et `inbox-compare` sont prises dans l’app réelle par l’e2e `tests/e2e/inbox.spec.ts` (`ESCOUADE_E2E_VIEWPORT=1920x960`, `ESCOUADE_E2E_SHOTS`). Le texte entre crochets est lu par les lecteurs d’écran : il dit ce que montre l’image.
+Les captures du site, prises dans la vidéo de présentation, dans la langue de la page : `![Ce que montre la capture](/images/board.jpg)` en français, `![What it shows](/images/en/board.jpg)` en anglais. Il y a `agent-pages`, `agents`, `board`, `board-review`, `chat`, `editor`, `environments`, `git`, `inbox`, `inbox-compare`, `integrations`, `launch`, `notifications`, `pr-review`, `prs`, `remote`, `stats` et `test` (`.jpg`) ; `inbox` et `inbox-compare` sont prises dans l’app réelle par l’e2e `tests/e2e/inbox.spec.ts` (`ESCOUADE_E2E_VIEWPORT=1920x960`, `ESCOUADE_E2E_SHOTS`). `agent-pages` vient de l’e2e `tests/e2e/agent-browsers-band.spec.ts` (`design/agent-browsers/captures/pilotage/pilotee-*-dark-1440.png`, en JPEG), sur ses pages locales de test : jamais un compte réel. Le texte entre crochets est lu par les lecteurs d’écran : il dit ce que montre l’image.
 
 ## Encadrés
 

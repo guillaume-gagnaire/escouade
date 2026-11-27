@@ -83,7 +83,7 @@ The page is the app you’re building, or a site you typed: Escouade doesn’t t
 - Its cookies and storage (localStorage, IndexedDB…) are the **project’s**, never the Escouade window’s: a `pages/<project>` folder in Escouade’s data on Windows and Linux, a separate store on macOS 14 and later (a private session before).
 - Only an `http://` or `https://` address opens in a browser, never an Escouade address, a file or another scheme.
 - It’s a real browser: links, redirections, forms and what you type in the bar stay in the tab, to any `http://` or `https://` site, and the bar always says where you are. Never: an Escouade address, a file, `data:`, `javascript:`, `blob:`, another scheme, nor this machine (`localhost`, `127.0.0.1`) at a port your project doesn’t declare (its launch commands, its agents’ ports), where a site would reach a service of your machine: Escouade refuses it and says so. `mailto:` and `tel:` addresses open in the system’s app.
-- Neither Escouade nor an agent reads a tab’s cookies or storage. An agent reads, captures and drives a site outside the project’s launch only with your permission (see [the browsers’ tools](mcp)), and nothing it reads comes from a page it has no permission for, even when the tab went there and came back.
+- Neither Escouade nor an agent reads a tab’s cookies or storage. An agent reads, captures and drives a site outside the project’s launch only with your permission (see [agents and browsers](agent-browsers)), and nothing it reads comes from a page it has no permission for, even when the tab went there and came back.
 
 ## Signing in to a site
 
@@ -94,4 +94,4 @@ You sign in to a site in an Escouade tab as in your browser, and the session sta
 - **A sign-in link you got by email**: copy it, paste it in the tab’s bar, then `Enter`: you sign in in the tab, not in your browser.
 - **“Open in the system browser”** stays in the bar (or in “…”) for whoever would rather sign in there.
 
-An agent’s page (`show_page`, see [the tools](mcp)) opens no window: it has no network.
+An agent’s page (`show_page`, see [agents’ pages](agent-pages)) opens no window: it has no network.

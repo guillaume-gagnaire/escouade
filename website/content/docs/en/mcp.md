@@ -165,7 +165,7 @@ Three tools show pages: an agent shows you a page in a `page:p-<n>` row of “Br
 
 | Tool | Arguments | What it returns |
 |---|---|---|
-| `show_page` | `title`, `template` (`review`, `diagram`, `compare` or `html`), `data` (for a template), `html` or `file` (for `html`), `page` (for a new version), `open` | The page’s number (`p-<n>`), the key of its row (`browser`), its version, `opened`, its size and files, and `left_out`: what the document named that was not taken. |
+| `show_page` | `title`, `template` (`review`, `diagram`, `compare`, `html` or `custom`, [your own page](agent-pages#your-own-page)), `data` (for a template), `html` or `file` (for `html`), `page` (for a new version), `open`, `ask` (a question to decide in the page) | The page’s number (`p-<n>`), the key of its row (`browser`), its version, `opened`, its size and files, and `left_out`: what the document named that was not taken. |
 | `get_page` | `page` | Its title, template, ticket, versions, its row (open or closed), where it is shown and whether it is loaded. Never what you did in it. |
 | `close_page` | `page` | Closes its row; the page is kept with its versions. |
 
@@ -179,6 +179,14 @@ Two more open and close a real tab of “Browsers”, to show you a piece of wor
 | `close_browser` | `browser` | Closes a tab the agent opened; on the page of its launch, it stops driving it and the row stays. Never a browser you opened. |
 
 The project’s launch opens without asking. Any other internet address is asked in the agent’s conversation, once per origin: “esc-412 wants to open docs.stripe.com · Refuse / Allow once”; nothing opens before your answer, which reaches the agent as a message. Never opened, even with your permission: Escouade’s addresses, `file:`, `data:`, `javascript:`, `blob:` and the other schemes, nor your machine (`localhost`, `127.0.0.1`, `[::1]`) at a port no launch of the project declares. The tab keeps the project’s storage, never the Escouade window’s.
+
+One last drives them, gesture by gesture, while you watch. Reserved to Escouade’s agents.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `drive_browser` | `browser`, `action`, and depending on the action `target`, `url`, `for`, `timeout`, `by`, `label`, `width`, `text`, `submit`, `value`, `key`, `n`; `look`, `wait_user` | One gesture on a row on screen: show (`scroll_to`, `scroll`, `highlight`, `clear`, `width`, `wait`, `reload`, `back`, `forward`), act (`tab`, `click`, `type`, `select`, `press`, `navigate`), or `version` on an agent’s page. `target` aims at an `#id`, a simple selector, `text=…` or a key of a page’s template. `look` attaches a capture after the gesture; `wait_user` waits for your “Continue”, 5 minutes at most. Returns the gesture’s caption, the address and who has control. |
+
+On an agent’s page, it only shows, plus `tab` and `version`. On the project’s launch, everything, except a password without your permission; outside the launch, showing without asking and acting with your permission. Your first gesture in the page takes control back. What it may do, what it asks and what stays refused: [agents and browsers](agent-browsers) and [agents’ pages](agent-pages).
 
 ### Leading the whole Kanban from Claude
 

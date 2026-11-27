@@ -83,7 +83,7 @@ La page est l’app que tu développes, ou un site que tu as tapé : Escouade n
 - Ses cookies et son stockage (localStorage, IndexedDB…) sont ceux du **projet**, jamais ceux de la fenêtre d’Escouade : un dossier `pages/<projet>` dans les données d’Escouade sous Windows et Linux, un magasin à part sous macOS 14 et plus (une session privée avant).
 - Seule une adresse `http://` ou `https://` s’ouvre dans un navigateur, jamais une adresse d’Escouade, un fichier ou un autre schéma.
 - C’est un vrai navigateur : les liens, les redirections, les formulaires et ce que tu tapes dans la barre restent dans l’onglet, vers n’importe quel site `http://` ou `https://`, et la barre dit toujours l’adresse où tu es. Jamais : une adresse d’Escouade, un fichier, `data:`, `javascript:`, `blob:`, un autre schéma, ni ce poste (`localhost`, `127.0.0.1`) à un port que ton projet ne déclare pas (ses commandes de lancement, les ports de ses agents), où un site joindrait un service de ta machine : Escouade le refuse et le dit. Les adresses `mailto:` et `tel:` s’ouvrent dans l’application du système.
-- Ni Escouade ni un agent ne lit les cookies ou le stockage d’un onglet. Un agent ne lit, ne capture et ne pilote un site hors du lancement du projet qu’avec ton accord (voir [les outils des navigateurs](mcp)), et rien de ce qu’il lit ne vient d’une page où il n’a pas cet accord, même quand l’onglet y est passé puis revenu.
+- Ni Escouade ni un agent ne lit les cookies ou le stockage d’un onglet. Un agent ne lit, ne capture et ne pilote un site hors du lancement du projet qu’avec ton accord (voir [les agents et les navigateurs](agent-browsers)), et rien de ce qu’il lit ne vient d’une page où il n’a pas cet accord, même quand l’onglet y est passé puis revenu.
 
 ## Se connecter à un site
 
@@ -94,4 +94,4 @@ Tu te connectes à un site dans un onglet d’Escouade comme dans ton navigateur
 - **Un lien de connexion reçu par courriel** : copie-le et colle-le dans la barre de l’onglet, puis `Entrée` : la connexion se fait dans l’onglet, et pas dans ton navigateur.
 - **« Ouvrir dans le navigateur du système »** reste dans la barre (ou dans « … ») pour qui préfère s’y connecter.
 
-Une page d’agent (`show_page`, voir [les outils](mcp)) n’ouvre aucune fenêtre : elle n’a pas de réseau.
+Une page d’agent (`show_page`, voir [les pages des agents](agent-pages)) n’ouvre aucune fenêtre : elle n’a pas de réseau.

@@ -165,7 +165,7 @@ Trois outils montrent des pages : un agent te montre une page dans une ligne `pa
 
 | Outil | Arguments | Ce qu’il rend |
 |---|---|---|
-| `show_page` | `title`, `template` (`review`, `diagram`, `compare` ou `html`), `data` (pour un modèle), `html` ou `file` (pour `html`), `page` (pour une nouvelle version), `open` | Le numéro de la page (`p-<n>`), la clé de sa ligne (`browser`), sa version, `opened`, sa taille et ses fichiers, et `left_out` : ce que le document nommait et qui n’a pas été pris. |
+| `show_page` | `title`, `template` (`review`, `diagram`, `compare`, `html` ou `custom`, la [page à soi](agent-pages#la-page-a-soi)), `data` (pour un modèle), `html` ou `file` (pour `html`), `page` (pour une nouvelle version), `open`, `ask` (une question à trancher dans la page) | Le numéro de la page (`p-<n>`), la clé de sa ligne (`browser`), sa version, `opened`, sa taille et ses fichiers, et `left_out` : ce que le document nommait et qui n’a pas été pris. |
 | `get_page` | `page` | Son titre, son modèle, son ticket, ses versions, sa ligne (ouverte ou fermée), où elle est affichée et si elle est chargée. Jamais ce que tu as fait dedans. |
 | `close_page` | `page` | Ferme sa ligne ; la page reste gardée avec ses versions. |
 
@@ -179,6 +179,14 @@ Deux autres ouvrent et ferment un vrai onglet de « Navigateurs », pour te mo
 | `close_browser` | `browser` | Ferme un onglet que l’agent a ouvert ; sur la page de son lancement, il cesse de la piloter et la ligne reste. Jamais un navigateur que tu as ouvert. |
 
 Le lancement du projet s’ouvre sans demander. Une autre adresse d’internet t’est demandée dans la conversation de l’agent, une fois par origine : « esc-412 veut ouvrir docs.stripe.com · Refuser / Permettre une fois » ; rien ne s’ouvre avant ta réponse, qui revient à l’agent par un message. Ne s’ouvrent jamais, même avec ton accord : les adresses d’Escouade, `file:`, `data:`, `javascript:`, `blob:` et les autres schémas, ni ton poste (`localhost`, `127.0.0.1`, `[::1]`) à un port qu’aucun lancement du projet ne déclare. L’onglet garde le stockage du projet, jamais celui de la fenêtre d’Escouade.
+
+Un dernier les pilote, geste par geste, sous tes yeux. Réservé aux agents d’Escouade.
+
+| Outil | Arguments | Ce qu’il fait |
+|---|---|---|
+| `drive_browser` | `browser`, `action`, et selon l’action `target`, `url`, `for`, `timeout`, `by`, `label`, `width`, `text`, `submit`, `value`, `key`, `n` ; `look`, `wait_user` | Un geste sur une ligne affichée : montrer (`scroll_to`, `scroll`, `highlight`, `clear`, `width`, `wait`, `reload`, `back`, `forward`), agir (`tab`, `click`, `type`, `select`, `press`, `navigate`), ou `version` sur une page d’agent. `target` vise un `#id`, un sélecteur simple, `text=…` ou une clé du modèle d’une page. `look` joint une capture après le geste ; `wait_user` attend ton « Continuer », 5 minutes au plus. Répond la légende du geste, l’adresse et qui a la main. |
+
+Sur une page d’agent, il ne fait que montrer, `tab` et `version`. Sur le lancement du projet, tout, sauf un mot de passe sans ton accord ; hors du lancement, montrer sans demander et agir avec ton accord. Ton premier geste dans la page lui reprend la main. Ce qu’il peut faire, ce qu’il demande et ce qui reste refusé : [les agents et les navigateurs](agent-browsers) et [les pages des agents](agent-pages).
 
 ### Mener tout le Kanban depuis Claude
 
