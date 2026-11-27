@@ -4,6 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- On the Workspace canvas, “Hide idle” keeps only the agents that work, wait or failed, and the zoom bar stays above the cards. Thanks to @OshOEz (#48).
+- A link `escouade://agent/<id>`, opened from another app, brings the window to that agent's conversation, its composer ready to type in; it only navigates. Thanks to @OshOEz (#47).
+- Escouade's MCP server also gives an agent's plan (its tasks and how many are done) in `list_background_work`. Thanks to @OshOEz (#46).
+
 ## [2.2.19] — 2026-11-27
 
 - Plugins can update by themselves: a setting beside “Install verified versions only”, off by default, allows it for Escouade’s plugins or for every verified plugin. Only verified versions that ask for nothing more go, never in the middle of an agent’s turn; the Updates page says what went.

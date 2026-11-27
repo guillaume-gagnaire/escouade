@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Sur la toile du Workspace, « Masquer les inactifs » ne garde que les agents qui travaillent, attendent ou ont échoué, et la barre de zoom reste au-dessus des cartes. Merci à @OshOEz (#48).
+- Un lien `escouade://agent/<id>`, ouvert depuis une autre app, amène la fenêtre sur la conversation de cet agent, son champ de saisie prêt à écrire ; il ne fait que naviguer. Merci à @OshOEz (#47).
+- Le serveur MCP d'Escouade donne aussi le plan d'un agent (ses tâches et combien sont faites) dans `list_background_work`. Merci à @OshOEz (#46).
+
 ## [2.2.19] — 2026-11-27
 
 - Les plugins peuvent se mettre à jour tout seuls : un réglage à côté de « N’installer que des versions vérifiées », éteint d’office, le permet pour les plugins d’Escouade ou pour tous les plugins vérifiés. Seules partent les versions vérifiées qui ne demandent rien de plus, jamais au milieu du tour d’un agent ; la page Mises à jour dit ce qui est parti.

@@ -130,7 +130,7 @@
   $effect(() => {
     if (plugins.loaded) applyPluginTheme(chosenTheme(app.settings.pluginTheme));
   });
-  // The links `escouade://plugin/<id>` (STORE-11) and `escouade://agent/<id>` (ESC-2): the one the app was started with,
+  // The links `escouade://plugin/<id>` (STORE-11) and `escouade://agent/<id>` (PR #47): the one the app was started with,
   // then each one handed over.
   $effect(() => {
     void app.deepLinks;

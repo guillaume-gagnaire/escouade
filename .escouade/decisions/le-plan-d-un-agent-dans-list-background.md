@@ -5,9 +5,9 @@ title: "Le plan d'un agent dans list_background_work"
 date: "2026-11-26"
 state: "proposed"
 origin: "ticket"
-origin_ref: "ESC-1"
+origin_ref: "PR #46"
 pages: ["harness/serveur-mcp"]
-tickets: ["ESC-1"]
+tickets: []
 documents: []
 supersedes: []
 superseded_by: null

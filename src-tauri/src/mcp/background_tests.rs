@@ -2591,7 +2591,7 @@ async fn a_real_client_lists_the_four_tools_with_their_schemas_and_reads_the_wor
     h.core.mcp.stop();
 }
 
-// ---------- the plan in list_background_work (ESC-1) ----------
+// ---------- the plan in list_background_work (PR #46) ----------
 
 /// The task `id` of a plan, in the state `status`.
 fn plan_task(id: &str, status: TaskStatus) -> PlanTask {

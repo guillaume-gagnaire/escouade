@@ -2330,7 +2330,7 @@ class AppState {
 
   /**
    * The links `escouade://` not yet taken: a plugin's page opened in the view Plugins (STORE-11), an agent's conversation
-   * shown with its composer focused (ESC-2), a link the app cannot read said; the last one wins. Navigation only: any page
+   * shown with its composer focused (PR #47), a link the app cannot read said; the last one wins. Navigation only: any page
    * or app may open such a link, so it never installs, sends, answers, starts nor stops anything.
    */
   async takeLinks() {

@@ -980,7 +980,7 @@ fn fuzz_the_deep_link_gives_a_plugin_id_or_nothing() {
                 assert!(manifest::is_id(&id), "{url:?} gave the id {id:?}");
                 assert!(!id.contains(['/', '\\', ':', '%', ' ', '"']), "{id:?}");
             }
-            // ESC-2: an agent's id is lower-case hexadecimal, nothing else reaches the window.
+            // PR #47: an agent's id is lower-case hexadecimal, nothing else reaches the window.
             DeepLink::Agent { id } => {
                 assert!((1..=64).contains(&id.len()), "{url:?} gave the id {id:?}");
                 assert!(

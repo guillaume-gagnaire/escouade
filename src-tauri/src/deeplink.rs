@@ -21,7 +21,7 @@ const MAX_LEN: usize = 300;
 pub enum DeepLink {
     /// The page of the plugin `id`: its page in the store, its own when it is installed.
     Plugin { id: String },
-    /// The conversation of the agent `id` (ESC-2): shown, its composer focused. Navigation only, nothing sent nor started.
+    /// The conversation of the agent `id` (PR #47): shown, its composer focused. Navigation only, nothing sent nor started.
     Agent { id: String },
     /// A link of the scheme the app cannot read: said, nothing done.
     Bad { url: String },

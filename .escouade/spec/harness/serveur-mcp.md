@@ -1,8 +1,8 @@
 ---
 title: "Serveur MCP"
 subject: "Harness"
-sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md, fiche SEC-07 (ESC-595)","https://github.com/guillaume-gagnaire/escouade/pull/44","2026-11-24-escouade-mcp-plan-design.md (fichier du ticket ESC-1, écrit depuis le pont PhoneBox)"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-509","ESC-511","ESC-513","ESC-557","ESC-595","ESC-1"]
+sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md, fiche SEC-07 (ESC-595)","https://github.com/guillaume-gagnaire/escouade/pull/44","https://github.com/guillaume-gagnaire/escouade/pull/46","2026-11-24-escouade-mcp-plan-design.md (PR #46, écrit depuis le pont PhoneBox)"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-509","ESC-511","ESC-513","ESC-557","ESC-595"]
 decisions: [153,211,210,242,290,302]
 compared: null
 ---
@@ -309,7 +309,7 @@ Les instructions que le serveur donne à chaque harness disent, en plus de ce qu
 - **La consigne** des instructions du serveur ajoute : retirer une demande avec une note qui dit comment elle a été tranchée ; chef d'escouade, prendre en charge un ticket « À tester » qu'on vérifie et cocher comme réglé ce qu'on a réglé par un autre chemin, jamais ce qui reste le geste de l'utilisateur.
 - Le journal d'activité garde le ticket, l'agent, la décision ou le projet nommés, jamais la note.
 
-## Le plan d'un agent dans `list_background_work` (ESC-1)
+## Le plan d'un agent dans `list_background_work` (PR #46)
 
 `list_background_work` donne aussi le **plan** de l'agent, tel que la fenêtre le montre au-dessus de la conversation, pour les clients hors de la fenêtre (widget PhoneBox, agent qui suit le travail d'un collègue) : `plan: { title, done, total, tasks }`.
 

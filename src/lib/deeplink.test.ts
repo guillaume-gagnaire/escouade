@@ -3,7 +3,7 @@ import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
 
-// The link `escouade://agent/<id>` (ESC-2): the agent's conversation shown, its composer focused, nothing else done.
+// The link `escouade://agent/<id>` (PR #47): the agent's conversation shown, its composer focused, nothing else done.
 describe('the link escouade://agent/<id>', () => {
   beforeEach(() => {
     setLang('fr');
