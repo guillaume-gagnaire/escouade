@@ -962,6 +962,7 @@ fn fuzz_the_deep_link_gives_a_plugin_id_or_nothing() {
         b"escouade://plugin/dev.exemple.slack",
         b"escouade:plugin/a.b",
         b"escouade://plugin/dev%2Eexemple%2Eslack/",
+        b"escouade://agent/8279e1ecf8b7",
     ];
     fuzz("deeplink::parse", |rng| {
         let seed = *rng.pick(seeds);
@@ -981,6 +982,14 @@ fn fuzz_the_deep_link_gives_a_plugin_id_or_nothing() {
             }
             // The Overseer's screen (ESC-468, after this audit): it carries nothing.
             DeepLink::Overseer => {}
+            // PR #47: an agent's id is lower-case hexadecimal, nothing else reaches the window.
+            DeepLink::Agent { id } => {
+                assert!((1..=64).contains(&id.len()), "{url:?} gave the id {id:?}");
+                assert!(
+                    id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+                    "{id:?}"
+                );
+            }
             DeepLink::Bad { url: shown } => {
                 assert!(shown.chars().count() <= 121 && !shown.chars().any(char::is_control));
             }

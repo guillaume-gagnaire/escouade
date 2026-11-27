@@ -308,4 +308,8 @@ export default {
     /** The box of the question, unchecked: closing keeps the history unless it is checked. */
     closeErase: 'Effacer aussi son historique (conversations, tickets, réglages)',
   },
+  // A link `escouade://agent/<id>` (PR #47) to an agent this window does not know: said, nothing else done.
+  deepLink: {
+    agentUnknown: 'Agent introuvable : {id}',
+  },
 } as const satisfies Tree;

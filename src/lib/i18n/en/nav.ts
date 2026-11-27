@@ -258,4 +258,7 @@ export default defineZone('nav', {
     closeConfirm: 'Close the project',
     closeErase: 'Also erase its history (conversations, tickets, settings)',
   },
+  deepLink: {
+    agentUnknown: 'Agent not found: {id}',
+  },
 });

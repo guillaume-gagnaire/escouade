@@ -79,6 +79,8 @@ export interface Suggestion {
 /** What a link `escouade://` asks (STORE-11): the page of a plugin, or nothing for a link the app cannot read. */
 export type DeepLink =
   | { kind: 'plugin'; id: string }
+  /** The conversation of an agent (PR #47): shown, its composer focused. */
+  | { kind: 'agent'; id: string }
   /** An invitation to a team (TS-3): « Rejoindre une équipe », the link filled in. */
   | { kind: 'teamJoin'; link: string }
   /** The Overseer's screen (ESC-468): its global shortcut, or `xdg-open escouade://overseer` under Wayland. */

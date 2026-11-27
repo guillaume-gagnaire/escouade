@@ -92,6 +92,12 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - An agent that reads a GitHub pull request now gets all of it: its description, its commits, its files and its discussion threads with their answers and their state. It is the first stone of the pull request view in Escouade.
 - Security: seven low findings of the 2.2.0 audit fixed. A harness’s plugin no longer writes through a link out of the agent’s folder nor a script beside its settings, a harness can no longer stop the app with an absurd message length, a plugin’s output is capped at its memory per turn, the tests’ variables are no longer read by the published app, the local servers cut a silent connection sooner, and the window and the website have stricter security policies.
 
+## [2.2.20] — 2026-11-28
+
+- On the Workspace canvas, “Hide idle” keeps only the agents that work, wait or failed, and the zoom bar stays above the cards. Thanks to @OshOEz (#48).
+- A link `escouade://agent/<id>`, opened from another app, brings the window to that agent's conversation, its composer ready to type in; it only navigates. Thanks to @OshOEz (#47).
+- Escouade's MCP server also gives an agent's plan (its tasks and how many are done) in `list_background_work`. Thanks to @OshOEz (#46).
+
 ## [2.2.19] — 2026-11-27
 
 - Plugins can update by themselves: a setting beside “Install verified versions only”, off by default, allows it for Escouade’s plugins or for every verified plugin. Only verified versions that ask for nothing more go, never in the middle of an agent’s turn; the Updates page says what went.

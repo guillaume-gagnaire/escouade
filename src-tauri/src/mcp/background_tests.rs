@@ -8,7 +8,9 @@ use super::tools_tests::{
 };
 use crate::core_tests::{harness, Harness};
 use crate::model::*;
-use crate::plan::{BgKind, BgTask, PlanState, RunStatus, SubAgent, WorkflowRun};
+use crate::plan::{
+    BgKind, BgTask, PlanState, PlanTask, RunStatus, SubAgent, TaskStatus, WorkflowRun,
+};
 use serde_json::{json, Value};
 
 /// `plan` as the plan of the agent `id`.
@@ -645,6 +647,7 @@ async fn an_agent_of_escouade_is_given_the_work_it_sees_and_one_the_core_no_long
             "backgroundTasksRunning",
             "id",
             "name",
+            "plan",
             "status",
             "subagents",
             "subagentsRunning",
@@ -2585,5 +2588,140 @@ async fn a_real_client_lists_the_four_tools_with_their_schemas_and_reads_the_wor
     assert_eq!(ids(&listed, "subagents"), ["toolu_1"]);
     assert_eq!(ids(&listed, "tasks"), ["b1"]);
     c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+// ---------- the plan in list_background_work (PR #46) ----------
+
+/// The task `id` of a plan, in the state `status`.
+fn plan_task(id: &str, status: TaskStatus) -> PlanTask {
+    PlanTask {
+        id: id.into(),
+        title: format!("Tâche {id}"),
+        status,
+        // Never given: the window does not show it.
+        blocked_by: vec!["0".into()],
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn the_plan_of_an_agent_is_listed_in_its_order_with_its_counts_and_only_those_elsewhere() {
+    let h = harness("mcp-bg-list-plan");
+    let p = project(&h).await;
+    let other = other_project(&h, "autre").await;
+    let target = put_agent(&h, &other, "cible", 1);
+    put_agent(&h, &other, "sans-plan", 2);
+    let empty = put_agent(&h, &other, "plan-vide", 3);
+    let far = put_agent(&h, &p, "voisin", 4);
+    let mut tasks: Vec<PlanTask> = (1..=7)
+        .map(|i| {
+            let status = match i {
+                1..=3 => TaskStatus::Done,
+                _ => TaskStatus::Pending,
+            };
+            plan_task(&i.to_string(), status)
+        })
+        .collect();
+    tasks[3] = PlanTask {
+        status: TaskStatus::InProgress,
+        active: Some("Fermeture d'office en cours".into()),
+        steps: Some((2, 5)),
+        ..plan_task("4", TaskStatus::InProgress)
+    };
+    // Out of the id's order, as a plan may be: the plan's order is kept.
+    tasks.swap(5, 6);
+    let work = PlanState {
+        title: Some("versioning-processus".into()),
+        tasks,
+        agents: vec![subagent("toolu_1", "Chercher", RunStatus::Running)],
+        bg_tasks: vec![task("b1", BgKind::Command, RunStatus::Running)],
+        ..Default::default()
+    };
+    with_plan(&h, &target.id, work.clone());
+    with_plan(
+        &h,
+        &empty.id,
+        PlanState {
+            title: Some("Rien encore".into()),
+            agents: vec![subagent("toolu_2", "Lire", RunStatus::Running)],
+            ..Default::default()
+        },
+    );
+
+    let outside = external(&h).await;
+    let full = read(
+        &outside,
+        "list_background_work",
+        json!({ "agent": "cible" }),
+    )
+    .await;
+    assert_eq!(
+        full["plan"],
+        json!({
+            "title": "versioning-processus",
+            "done": 3,
+            "total": 7,
+            "tasks": [
+                { "id": "1", "title": "Tâche 1", "status": "done" },
+                { "id": "2", "title": "Tâche 2", "status": "done" },
+                { "id": "3", "title": "Tâche 3", "status": "done" },
+                { "id": "4", "title": "Tâche 4", "status": "inProgress",
+                  "active": "Fermeture d'office en cours", "steps": [2, 5] },
+                { "id": "5", "title": "Tâche 5", "status": "pending" },
+                { "id": "7", "title": "Tâche 7", "status": "pending" },
+                { "id": "6", "title": "Tâche 6", "status": "pending" },
+            ]
+        })
+    );
+    // The fields given before do not change: the same answer as without a task in the plan.
+    with_plan(
+        &h,
+        &target.id,
+        PlanState {
+            tasks: vec![],
+            ..work.clone()
+        },
+    );
+    let mut before = read(
+        &outside,
+        "list_background_work",
+        json!({ "agent": "cible" }),
+    )
+    .await;
+    assert_eq!(before["plan"], Value::Null);
+    before["plan"] = full["plan"].clone();
+    assert_eq!(before, full);
+    assert_eq!(counts(&full), (json!(1), json!(1)));
+    with_plan(&h, &target.id, work);
+
+    // No plan, or a plan without a task: null.
+    for agent in ["sans-plan", "plan-vide"] {
+        let listed = read(&outside, "list_background_work", json!({ "agent": agent })).await;
+        assert!(listed.as_object().unwrap().contains_key("plan"), "{agent}");
+        assert_eq!(listed["plan"], Value::Null, "{agent}");
+    }
+    assert_eq!(
+        read(
+            &outside,
+            "list_background_work",
+            json!({ "agent": "plan-vide" })
+        )
+        .await["subagents"][0]["id"],
+        "toolu_2"
+    );
+
+    // An agent of another project that may not act there: the counts alone.
+    let from = as_agent(&h, &far.id).await;
+    h.core.agents.write().remove(&far.id);
+    let (text, error) = call(&from, "list_background_work", json!({ "agent": "cible" })).await;
+    assert!(!error, "{text}");
+    let outline: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(outline["plan"], json!({ "done": 3, "total": 7 }));
+    for hidden in ["versioning-processus", "Fermeture", "Tâche 4"] {
+        assert!(!text.contains(hidden), "{hidden} in {text}");
+    }
+    from.cancel().await.unwrap();
+    outside.cancel().await.unwrap();
     h.core.mcp.stop();
 }

@@ -16,11 +16,10 @@ import {
   type PluginView,
   type SeedOffer,
 } from './plugins';
-import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Suggestion } from './store';
+import { storeApi, type CatalogPlugin, type StoreView, type Suggestion } from './store';
 import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
 import { api } from './ipc';
-import { overseer } from './overseer.svelte';
 import { teamPluginsApi } from './team-plugins';
 import type { PluginsAutoUpdate } from './types';
 
@@ -237,30 +236,6 @@ class PluginsStore {
   openStorePlugin(id: string, tab: StoreTab = 'overview') {
     if (this.byId(id)) this.openPlugin(id);
     else this.show({ kind: 'storePlugin', id, tab });
-  }
-
-  /**
-   * The links `escouade://` not yet taken (STORE-11): a plugin's page opened in the view, a link it cannot read said. Never
-   * an install: that stays the user's gesture, from the page, with its permissions shown.
-   */
-  async takeLinks() {
-    let links: DeepLink[] = [];
-    try {
-      links = (await storeApi.deepLinks()) ?? [];
-    } catch {
-      return;
-    }
-    for (const link of links) {
-      if (link.kind === 'plugin') {
-        app.openPlugins();
-        this.openStorePlugin(link.id);
-      } else if (link.kind === 'overseer') {
-        overseer.open = true;
-      } else if (link.kind === 'teamJoin') {
-        // Joining stays the user's gesture: the link is shown with its server and the team's six words.
-        app.modal = { kind: 'team', step: 'join', link: link.link };
-      } else app.toast(t('plugins.deepLink.bad', { url: link.url }), 'error');
-    }
   }
 
   /** « Installer » of a team's plugin (TS-14): read from the team's server, checked again, shown before anything. */

@@ -96,6 +96,12 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un agent qui lit une PR de GitHub en a maintenant tout : sa description, ses commits, ses fichiers et ses fils de discussion avec leurs réponses et leur état. C’est la première pierre de la vue des PR dans Escouade.
 - Sécurité : sept constats faibles de l’audit de la 2.2.0 corrigés. Un plugin de harness n’écrit plus à travers un lien hors du dossier de l’agent ni un script à côté de ses réglages, un harness ne peut plus arrêter l’app par une longueur de message absurde, la sortie d’un plugin est plafonnée à sa mémoire par tour, les variables des tests ne sont plus lues par l’app publiée, les serveurs locaux coupent plus tôt une connexion muette, la fenêtre et le site ont des politiques de sécurité plus strictes.
 
+## [2.2.20] — 2026-11-28
+
+- Sur la toile du Workspace, « Masquer les inactifs » ne garde que les agents qui travaillent, attendent ou ont échoué, et la barre de zoom reste au-dessus des cartes. Merci à @OshOEz (#48).
+- Un lien `escouade://agent/<id>`, ouvert depuis une autre app, amène la fenêtre sur la conversation de cet agent, son champ de saisie prêt à écrire ; il ne fait que naviguer. Merci à @OshOEz (#47).
+- Le serveur MCP d'Escouade donne aussi le plan d'un agent (ses tâches et combien sont faites) dans `list_background_work`. Merci à @OshOEz (#46).
+
 ## [2.2.19] — 2026-11-27
 
 - Les plugins peuvent se mettre à jour tout seuls : un réglage à côté de « N’installer que des versions vérifiées », éteint d’office, le permet pour les plugins d’Escouade ou pour tous les plugins vérifiés. Seules partent les versions vérifiées qui ne demandent rien de plus, jamais au milieu du tour d’un agent ; la page Mises à jour dit ce qui est parti.

@@ -151,6 +151,12 @@
     };
   });
 
+  // Asked to take the focus (a deep link, PR #47; the agent chosen again): no composer here, the terminal takes it.
+  $effect(() => {
+    if (!app.focusComposer) return;
+    if (untrack(() => !pane || pane.active)) getXTerm(untrack(() => term) ?? '')?.term.focus();
+  });
+
   $effect(() => {
     const id = term;
     const el = box;

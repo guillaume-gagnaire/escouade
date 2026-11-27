@@ -14,6 +14,7 @@ export default defineZone('workspace', {
   zoomOut: 'Zoom out',
   zoom: '{percent} %',
   fit: 'Fit',
+  hideIdle: 'Hide idle',
   waiting: 'waits for your answer',
   land: {
     title: 'Landing zone · {landed}, {coming}',
