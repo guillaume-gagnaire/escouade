@@ -2045,7 +2045,7 @@ function startSession() {
       recommend: { option: 'a', why: 'Les 48 tests passent.' },
     };
     // « piege »: a page of its own that tries to answer by itself, without a click: an option its request does not have,
-    // two for one, a field of its own, another channel, then one of its options, again and again; and a button that
+    // two for one, a field of its own, another channel, a file to join, a go-ahead, then one of its options, again and again; and a button that
     // says « Envoyer » and « A : supprimer la branche » where the request's A is « Fusionner dans main ».
     const trap = `<!doctype html><html><head><title>Piège</title></head><body>
 <h1>Revue</h1><p id="said">?</p>
@@ -2063,6 +2063,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await post('_/choose', { options: ['a'], approve: true });
   await wait(1100);
   await post('_/answer', { options: ['a'] });
+  await post('_/file', { name: 'rapport.html', data: 'PGgxPg==' });
+  await post('_/approve', { yes: true });
+  await wait(1100);
+  await post('_/choose', { options: ['a'], files: [{ name: 'rapport.html', data: 'PGgxPg==' }] });
+  await wait(1100);
+  await post('_/choose', { yes: true });
   await post('_/choose?send=1', { options: ['a'], note: 'envoie' });
   for (let i = 0; i < 6; i++) {
     await wait(1100);

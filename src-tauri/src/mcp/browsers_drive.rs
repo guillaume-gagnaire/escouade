@@ -1223,7 +1223,13 @@ async fn look<R: Runtime>(
             "no capture: 20 a minute at most, the next one in {wait} s"
         ));
     }
+    // Under Windows the overlay has one shape at a time, the ghost cursor's while it stays: what the agent highlights
+    // is drawn again first, so that it sees what it shows (ESC-683).
+    let (mark, color) = (pages.drives.mark(&row.key), row.color.clone());
     let shot = blocking(move || {
+        if mark.is_some() {
+            drive::cursor_gone(&webview, mark.as_ref(), &color);
+        }
         let shot = crate::browserread::capture(&webview, crate::browserread::Ask::default())?;
         crate::browserread::fit(&shot)
     })

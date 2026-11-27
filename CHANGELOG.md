@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sous Windows, quand un agent regarde ce qu’il vient de mettre en évidence, sa capture montre bien l’élément éclairé, et non plus seulement son curseur.
 - Une mise à jour d’un plugin tiers qui change la commande de son harness redemande toujours ton accord, même pour un agent qui démarrait à ce moment-là : l’ancienne commande ne se lance plus après la mise à jour.
 - Un agent ne prend jamais ton écran : ce qu’il veut te montrer s’ouvre à côté de sa conversation seulement si tu la regardes, sinon sa ligne attend dans « Navigateurs » et s’ouvre quand tu y reviens. Il n’a qu’un volet à la fois, et un volet que tu as fermé ne revient pas tant que tu n’as pas quitté sa conversation puis n’y es pas revenu. « Laisser piloter par… », dans le menu d’un navigateur que tu as ouvert, le confie à un agent du projet.
 
