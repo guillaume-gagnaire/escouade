@@ -1,0 +1,18 @@
+{
+  "app": "Escouade",
+  "langue": "fr",
+  "prod": "tag:v*",
+  "base": "main",
+  "dossier": "public/whats-up",
+  "url": "/whats-up/",
+  "theme": {
+    "fond": "var(--raise)",
+    "texte": "var(--text)",
+    "accent": "var(--brand)",
+    "doux": "var(--muted)",
+    "bord": "var(--line-2)",
+    "rayon": "10px",
+    "police": "'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif"
+  },
+  "apercu": { "lancer": "npx vite --port {port} --strictPort", "url": "http://localhost:{port}/?whats-up=apercu" }
+}
