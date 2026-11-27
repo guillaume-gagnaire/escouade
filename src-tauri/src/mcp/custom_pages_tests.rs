@@ -31,8 +31,8 @@ fn set_mine(h: &Harness, id: &str, page: &str) {
 
 /// What `window.escouade` holds, read back from the script written into the document.
 fn escouade(html: &str) -> Value {
-    let start = html.find("value:f(").expect("no window.escouade") + "value:f(".len();
-    let end = html[start..].find("),writable").unwrap() + start;
+    let start = html.find("const e=").expect("no window.escouade") + "const e=".len();
+    let end = html[start..].find(";const p=self.fetch").unwrap() + start;
     serde_json::from_str(&html[start..end]).unwrap()
 }
 
@@ -151,6 +151,27 @@ async fn the_machines_page_is_shown_with_its_files_and_window_escouade() {
     assert_eq!(escouade(&index(&h, &p, "p-1", 2))["version"], 2);
     let g = read(&c, "get_page", json!({ "page": "p-1" })).await;
     assert_eq!(g["template"], "custom");
+    // With a request (AP-4): it reads it, and proposes by window.escouade.choose (_/choose).
+    let v = read(
+        &c,
+        "show_page",
+        json!({ "title": "Ma revue", "template": "custom", "data": { "n": 4 }, "page": "p-1",
+                "ask": { "kind": "choice", "title": "Laquelle ?", "options": [{ "label": "Un" }, { "label": "Deux" }] } }),
+    )
+    .await;
+    let html = index(&h, &p, "p-1", 3);
+    let e = escouade(&html);
+    assert_eq!(e["ask"]["title"], "Laquelle ?");
+    assert_eq!(
+        e["ask"]["options"],
+        json!([{ "id": "a", "label": "Un" }, { "id": "b", "label": "Deux" }])
+    );
+    assert!(e["ask"]["answered"].is_null());
+    assert!(e["ask"].get("id").is_none() && !html.contains(v["ask"].as_str().unwrap()));
+    assert!(
+        html.contains("e.choose=") && html.contains("\"_/choose\""),
+        "{html}"
+    );
     c.cancel().await.unwrap();
 }
 

@@ -615,6 +615,17 @@ pub fn run() {
                 paths::DataDir::new(paths::default_data_dir()),
             );
             app.manage(core.clone());
+            // A page's proposal (`_/choose`, AP-4) goes to the core, which checks it against the
+            // page's request; nothing is answered before the user's gesture in the window.
+            {
+                let hub = std::sync::Arc::downgrade(&core);
+                app.state::<Arc<agentpage::Shelter>>().set_propose(Arc::new(
+                    move |page, proposal| {
+                        hub.upgrade()
+                            .is_some_and(|core| core.page_propose(page, proposal))
+                    },
+                ));
+            }
             // The dictation: its events to the window, as the core's.
             let hub = std::sync::Arc::downgrade(&core);
             app.manage(Arc::new(voice::Voice::for_app(
@@ -758,6 +769,8 @@ pub fn run() {
                 commands::agentpage_reopen,
                 commands::agentpage_version,
                 commands::agentpage_close_row,
+                commands::agentpage_drop_proposal,
+                commands::agentpage_click,
                 commands::agentpage_open_template,
                 commands::agentpage_read,
                 commands::agentpage_capture,

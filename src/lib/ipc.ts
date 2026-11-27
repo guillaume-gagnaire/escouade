@@ -902,6 +902,8 @@ export const api = {
   agentpageVersion: (page: string, n: number) => invoke<AgentPageRow>('agentpage_version', { page, n }),
   /** The user closes the row of an agent's page (its ×): the page stays kept. Whether it was open. */
   agentpageCloseRow: (page: string) => invoke<boolean>('agentpage_close_row', { page }),
+  /** « Annuler » of the band of the choice (AP-4): what the page proposed is let go. */
+  agentpageDropProposal: (page: string) => invoke<boolean>('agentpage_drop_proposal', { page }),
   /** An agent's page placed at `bounds` in the window, or hidden. */
   agentpagePlace: (page: string, bounds: PageBounds | null, placement?: PagePlacement) =>
     invoke<void>('agentpage_place', { page, bounds, placement: placement ?? null }),

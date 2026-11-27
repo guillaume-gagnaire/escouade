@@ -7,6 +7,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ## [Non publié]
 
 - Une page d’agent s’ouvre à côté de sa conversation quand tu la regardes, sinon elle t’attend dans « Navigateurs » ; sa carte dans la conversation l’affiche ou la rouvre, et sa barre remonte à une version précédente ou la montre en largeur tablette ou mobile. Une bande au-dessus rappelle qui l’a écrite et qu’elle n’a ni réseau ni accès à Escouade ou à tes fichiers.
+- Une page d’agent peut porter une question : tu choisis dans la page, et une bande d’Escouade sous la page reprend ton choix avec les mots de la demande, puis l’envoie quand tu cliques « Envoyer ». La page seule ne peut rien envoyer ni répondre à un feu vert ; la demande est aussi dans « À toi », avec « Ouvrir la page ».
 
 ## [2.2.14] — 2026-11-27
 

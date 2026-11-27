@@ -195,6 +195,9 @@ test.describe('the squad lead’s marks', () => {
     // The lead, another agent than the ticket's, takes it in hand through the MCP server.
     await page.getByRole('button', { name: 'Agents', exact: true }).click();
     await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
+    // The new agent's own view first: until it is there, « Agents » shows the ticket's conversation, whose composer
+    // would take the message (the ticket's agent may not take its own ticket in hand).
+    await expect(page.getByRole('heading', { name: 'agent-2', level: 1 })).toBeVisible();
     await send(page, '[chef-prend DEM-1]');
     await expect(page.getByText('Je m’occupe de DEM-1 (il en reste 0).')).toBeVisible({ timeout: 30_000 });
     // No longer waiting for the user: the count drops; the line stays to read, with its note.

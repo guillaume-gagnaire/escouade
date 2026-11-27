@@ -84,6 +84,23 @@ export default {
     unseen: 'Nouvelle page : elle attend que tu l’ouvres',
     closeRow: 'Fermer la page (elle reste gardée)',
   },
+  /** The band of the choice under an agent's page (AP-4): what the page proposed, sent on the user's gesture alone. */
+  choice: {
+    label: 'Ta réponse à {agent}',
+    idle: 'Choisis dans la page : rien ne part sans ton geste ici.',
+    proposed: 'Choisi dans la page :',
+    note: 'avec le mot « {note} »',
+    send: 'Envoyer à {agent}',
+    cancel: 'Annuler',
+    inBox: 'Ouvrir dans « À toi »',
+    gate: 'Un feu vert : réponds-y dans la boîte ou ici, jamais depuis la page.',
+    yes: 'Oui',
+    no: 'Non',
+    sending: 'Envoyé à {agent} dans quelques secondes.',
+    taken: 'Revenir sur ma réponse',
+    answered: 'Répondu :',
+    trust: 'Les mots de cette bande sont ceux de la demande, pas ceux de la page.',
+  },
   /** The driving band of every row (AP-3; driven by AB-8). */
   drive: {
     label: 'Pilotage et confiance',

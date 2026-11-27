@@ -68,6 +68,9 @@ export default defineZone('inbox', {
     task: 'Task',
   },
   ask: {
+    page: 'The page that comes with it',
+    pageMeta: '{template} · v{n}',
+    openPage: 'Open the page',
     nth: '{n} of {total}',
     prev: 'Previous',
     next: 'Next',

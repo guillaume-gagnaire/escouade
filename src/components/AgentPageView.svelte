@@ -30,6 +30,7 @@
   import { IS_MAC, keyLabel } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tip';
+  import ChoiceBand from './ChoiceBand.svelte';
   import DriveBand from './DriveBand.svelte';
   import Icon from './Icon.svelte';
 
@@ -83,7 +84,7 @@
   }
 
   $effect(() => {
-    void [visible, zoomState.shown, mode, paneDrag.on, page?.wants, older];
+    void [visible, zoomState.shown, mode, paneDrag.on, page?.wants, older, info?.ask, info?.proposal];
     sync();
   });
 
@@ -262,6 +263,10 @@
       <div class="msg quiet" role="status"><p>{t('devpage.agentPage.loading')}</p></div>
     {/if}
   </div>
+  {#if page && info?.ask}
+    <!-- The band of the choice (AP-4): under the page, out of its webview; what the page proposed is sent here alone. -->
+    <ChoiceBand page={pageId} askId={info.ask} proposal={info.proposal ?? null} agent={agentName} />
+  {/if}
 </section>
 
 <style>

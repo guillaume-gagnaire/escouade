@@ -54,6 +54,8 @@ pub(crate) mod memory;
 mod memory_tests;
 #[cfg(test)]
 mod modes_tests;
+#[cfg(test)]
+mod page_asks_tests;
 mod pages;
 #[cfg(test)]
 mod pages_tests;

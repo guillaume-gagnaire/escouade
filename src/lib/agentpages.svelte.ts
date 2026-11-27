@@ -97,9 +97,11 @@ export function openBesideAgent(key: string, agentId: string) {
   const page = devpages.pages[key];
   if (!page) return;
   page.unseen = false;
-  if (shown(key) || inAPane(key)) return;
+  // From « À toi » (« Ouvrir la page », AP-4) or another view: back to the project, where its pane may already be.
+  if (app.ui.view === 'inbox') app.closeInbox();
   if (app.ui.activeProject !== page.projectId) app.ui.activeProject = page.projectId;
   app.ui.view = 'project';
+  if (shown(key) || inAPane(key)) return;
   const agent: PaneItem = { kind: 'agent', id: agentId };
   const live = app.agents[agentId] && !app.agents[agentId].archived;
   if (!live) return app.selectPage(key);
@@ -156,6 +158,10 @@ export async function onAgentPageEvent(e: AgentPageEvent) {
     case 'erased':
       agentpages.info[e.page] = null;
       closePage(key, true);
+      return;
+    case 'proposed':
+      // The page proposed (or its proposal went): the band reads it again, in the request's words.
+      void refresh(e.page);
       return;
   }
   const page = devpages.pages[key];

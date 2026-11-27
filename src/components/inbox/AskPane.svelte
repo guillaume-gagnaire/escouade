@@ -20,6 +20,7 @@
   import ChoicePlates from './ChoicePlates.svelte';
   import CompareFull from './CompareFull.svelte';
   import PdfReader from './PdfReader.svelte';
+  import PageThumb from './PageThumb.svelte';
 
   // A request of the box, in the panel (direction B, `b-choix.png`, `b-pdf.png`, `b-validation.png`, `b-tache.png`): who
   // asks, what, since when; its text (an agent's data, sanitized, nothing from the web without a click); its options on
@@ -277,6 +278,7 @@
       </span>
     </div>
     <h2 id="ask-title-{ask.id}">{ask.title}</h2>
+    {#if ask.page}<PageThumb page={ask.page} />{/if}
 
     {#if ask.state === 'snoozed' && ask.snoozedUntil}
       <p class="band">

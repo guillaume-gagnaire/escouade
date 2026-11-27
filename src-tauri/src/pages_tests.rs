@@ -61,6 +61,7 @@ fn show(title: &str, page: Option<&str>, b: Bundle) -> Show {
         bundle: b,
         quiet: false,
         escouade: None,
+        ask: None,
     }
 }
 

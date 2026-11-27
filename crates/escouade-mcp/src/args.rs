@@ -1449,6 +1449,70 @@ pub struct ShowPageArgs {
         description = "beside (the default: beside your conversation when the user is looking at it) or quiet (its row waits). The answer's opened says what happened: beside, on screen; waiting, its row waiting in « Navigateurs » for the user."
     )]
     pub open: Option<PageOpenArg>,
+    #[schemars(
+        description = "The request the page carries (choice or confirm), left in the user's box « À toi » as by ask_user: its options are drawn in the page (a template draws them; your own html proposes one by POST _/choose with {\"options\": [\"a\"]}) and the box shows it too. A click in the page only proposes: the answer goes when the user sends it in Escouade's band, and comes to you as ask_user's does. A go-ahead (gate) is never proposed from the page: the user answers it in Escouade. Left out on a new version, the page keeps its request."
+    )]
+    pub ask: Option<PageAskArg>,
+}
+
+/// What a page's request may be: a choice, or a yes or no.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PageAskKindArg {
+    Choice,
+    Confirm,
+}
+
+/// The request a page carries: `ask_user`'s fields for a choice or a confirm.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct PageAskArg {
+    #[schemars(description = "choice (an option among 2 to 6) or confirm (yes or no).")]
+    pub kind: PageAskKindArg,
+    #[schemars(
+        description = "The question, in one sentence, on one line (140 characters at most)."
+    )]
+    pub title: String,
+    #[schemars(description = "The context, in Markdown (8,000 characters at most).")]
+    pub body: Option<String>,
+    #[schemars(
+        description = "A choice's options, 2 to 6 (their id a to f, by default their rank). Their renders are in the page, not in files."
+    )]
+    pub options: Option<Vec<AskOptionArg>>,
+    #[schemars(description = "A choice where several options may be chosen.")]
+    pub multi: Option<bool>,
+    #[schemars(description = "Your recommendation, and why.")]
+    pub recommend: Option<AskRecommendArg>,
+    #[schemars(
+        description = "What the answer unblocks, in one sentence (200 characters at most)."
+    )]
+    pub unblocks: Option<String>,
+    #[schemars(
+        description = "The tickets of the project that wait for the answer (10 at most): their keys or ids."
+    )]
+    pub tickets: Option<Vec<String>>,
+    #[schemars(description = "normal (the default) or today.")]
+    pub urgency: Option<UrgencyArg>,
+    #[schemars(description = "How long it lives: 14 days by default, 1 to 30.")]
+    pub expires_in_days: Option<u32>,
+    #[schemars(
+        description = "true: the answer settles a decision of the product; once answered, you are told to propose it (propose_decision)."
+    )]
+    pub decision: Option<bool>,
+    #[schemars(
+        description = "true (the default): the answer comes to you as a message; false: you read it by get_ask."
+    )]
+    pub wake: Option<bool>,
+    #[schemars(description = "A confirm's yes label (24 characters at most).")]
+    pub yes_label: Option<String>,
+    #[schemars(description = "A confirm's no label (24 characters at most).")]
+    pub no_label: Option<String>,
+    #[schemars(
+        description = "A confirm that is a go-ahead (publish, sign, delete, spend): never proposed from the page, the user answers it in Escouade alone."
+    )]
+    pub gate: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]

@@ -74,6 +74,10 @@ export default {
   },
   // A request, in the panel.
   ask: {
+    /** The agent's page that carries it (AP-4): its thumbnail and « Ouvrir la page ». */
+    page: 'La page qui l’accompagne',
+    pageMeta: '{template} · v{n}',
+    openPage: 'Ouvrir la page',
     nth: '{n} sur {total}',
     prev: 'Précédente',
     next: 'Suivante',

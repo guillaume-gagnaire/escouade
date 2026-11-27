@@ -25,6 +25,12 @@
 //!   `X-DNS-Prefetch-Control: off`), WebRTC taken away by a script of Escouade before the page's,
 //!   in every frame.
 //!
+//! - **One way back** (AP-4): `POST _/choose`, a closed body `{ "options": ["a"], "note": "…" }`
+//!   (4 KB, a note of 2 000 characters), one a second per page, from its own webview alone
+//!   (`parse_choose`). It **only proposes**: the core checks it against the page's request
+//!   (`Propose`, `pages::checked_proposal`), and
+//!   the band of the window, out of the webview, sends on the user's gesture. Anything else is a 404.
+//!
 //! What a real webview does with it on each system is said by `agentpage_probe` (examples; in the
 //! CI under Linux and macOS) and by `tests/e2e/agentpage.spec.ts` (Windows), with the same trap
 //! (`agentpage_trap.html`).
@@ -227,7 +233,7 @@ fn leaks(tag: &str) -> bool {
 pub enum Route {
     /// A file of the page, by its cleaned relative path.
     File(String),
-    /// The page's way back (`_/<name>`, AP-4): none answers yet.
+    /// The page's way back (`_/<name>`, AP-4): `_/choose` alone answers, to a `POST`.
     Channel(String),
     /// A file of the templates (`_t/<name>`, AP-5): Escouade's, the same for every page.
     Template(String),
@@ -372,6 +378,48 @@ fn read_file(root: &Path, rel: &str) -> Option<Vec<u8>> {
     std::fs::read(real).ok()
 }
 
+/// The body of `_/choose`, at most.
+pub const CHOOSE_MAX: usize = 4 * 1024;
+/// A proposal's note, at most, in characters.
+pub const NOTE_MAX: usize = 2000;
+/// One proposal a second per page, at most.
+const CHOOSE_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// What a page proposes by `_/choose`: a closed body, nothing else.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Proposal {
+    pub options: Vec<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// The body of `_/choose` as a proposal: 4 KB at most, `{ "options": [...], "note": "…" }` and no
+/// other field, 6 options of 16 characters at most, a note of 2 000 characters at most. None for
+/// anything else (said by nothing but a 404).
+pub fn parse_choose(body: &[u8]) -> Option<Proposal> {
+    if body.is_empty() || body.len() > CHOOSE_MAX {
+        return None;
+    }
+    let p: Proposal = serde_json::from_slice(body).ok()?;
+    if p.options.is_empty()
+        || p.options.len() > 6
+        || p.options
+            .iter()
+            .any(|o| o.is_empty() || o.chars().count() > 16)
+        || p.note
+            .as_ref()
+            .is_some_and(|n| n.chars().count() > NOTE_MAX)
+    {
+        return None;
+    }
+    Some(p)
+}
+
+/// What the core does of a page's proposal: true once it is kept for the band (its request open, its
+/// options among the request's, no go-ahead), false when it is refused.
+pub type Propose = Arc<dyn Fn(&str, Proposal) -> bool + Send + Sync>;
+
 /// A page, as the shelter keeps it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -430,6 +478,10 @@ pub struct Shelter {
     unfiltered: Mutex<std::collections::HashSet<String>>,
     /// The data folder of each open page's webview (Linux), new at each opening, gone at its close.
     stores: Mutex<HashMap<String, PathBuf>>,
+    /// What a page's `_/choose` goes to (the core, AP-4); none, it is a 404.
+    propose: Mutex<Option<Propose>>,
+    /// When each page last proposed.
+    proposed: Mutex<HashMap<String, std::time::Instant>>,
 }
 
 impl Shelter {
@@ -465,10 +517,72 @@ impl Shelter {
         }
     }
 
-    /// The answer to a request of the webview `label` for `uri`. A page is served to its own
-    /// webview alone; anything else is a 404 that says nothing (another page, the window, a path
-    /// out of the folder, a method but GET and HEAD, a channel: none is open in AP-1).
+    /// Where the pages' proposals go (the core, AP-4).
+    pub fn set_propose(&self, propose: Propose) {
+        *self.propose.lock() = Some(propose);
+    }
+
+    /// A request without a body: `serve_body`.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn serve(&self, label: &str, method: &str, uri: &str, windows: bool) -> Response<Vec<u8>> {
+        self.serve_body(label, method, uri, &[], windows)
+    }
+
+    /// `_/choose` of page `page`, its own webview's: a proposal handed to the core, a 204 once it is
+    /// kept; a 404 for anything else (a method but POST, a body that is not the closed one, a second
+    /// proposal within the second, a proposal the core refuses).
+    fn choose(&self, page: &str, method: &str, body: &[u8]) -> Response<Vec<u8>> {
+        let nothing = || {
+            answer(
+                StatusCode::NOT_FOUND,
+                "text/plain; charset=utf-8",
+                Vec::new(),
+                None,
+            )
+        };
+        if method != "POST" || self.unfiltered.lock().contains(page) {
+            return nothing();
+        }
+        let Some(proposal) = parse_choose(body) else {
+            return nothing();
+        };
+        {
+            let mut last = self.proposed.lock();
+            let now = std::time::Instant::now();
+            if last
+                .get(page)
+                .is_some_and(|t| now.duration_since(*t) < CHOOSE_EVERY)
+            {
+                return nothing();
+            }
+            last.insert(page.to_string(), now);
+        }
+        let Some(propose) = self.propose.lock().clone() else {
+            return nothing();
+        };
+        if propose(page, proposal) {
+            answer(
+                StatusCode::NO_CONTENT,
+                "text/plain; charset=utf-8",
+                Vec::new(),
+                None,
+            )
+        } else {
+            nothing()
+        }
+    }
+
+    /// The answer to a request of the webview `label` for `uri`, with its `body`. A page is served to
+    /// its own webview alone; anything else is a 404 that says nothing (another page, the window, a
+    /// path out of the folder, a method but GET and HEAD, a channel but `_/choose`).
+    pub fn serve_body(
+        &self,
+        label: &str,
+        method: &str,
+        uri: &str,
+        body: &[u8],
+        windows: bool,
+    ) -> Response<Vec<u8>> {
         let nothing = || {
             answer(
                 StatusCode::NOT_FOUND,
@@ -483,6 +597,13 @@ impl Shelter {
         if page_of(label) != Some(page.as_str()) {
             log::warn!("the webview {label} asked for page {page}: refused");
             return nothing();
+        }
+        if let Route::Channel(name) = &route {
+            return if name == "choose" {
+                self.choose(&page, method, body)
+            } else {
+                nothing()
+            };
         }
         if !matches!(method, "GET" | "HEAD") {
             return nothing();
@@ -1038,6 +1159,12 @@ pub fn register<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
             .map(|s| s.inner().clone());
         let method = request.method().as_str().to_string();
         let uri = request.uri().to_string();
+        // A body is read for `_/choose` alone, 4 KB at most: a longer one is refused there.
+        let body = if request.body().len() <= CHOOSE_MAX {
+            request.body().clone()
+        } else {
+            Vec::new()
+        };
         std::thread::spawn(move || {
             // Windows: a request that comes before the page's filter is on waits for it (5 s at
             // most) rather than being refused, which left WebView2 now and then on its error page
@@ -1049,7 +1176,7 @@ pub fn register<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
                 }
             }
             let answer = match shelter {
-                Some(s) => s.serve(&label, &method, &uri, cfg!(windows)),
+                Some(s) => s.serve_body(&label, &method, &uri, &body, cfg!(windows)),
                 None => answer(StatusCode::NOT_FOUND, "text/plain", Vec::new(), None),
             };
             responder.respond(answer);

@@ -5033,6 +5033,31 @@ pub fn agentpage_close_row(core: CoreState, page: String) -> bool {
     core.page_close_row(&page)
 }
 
+/// « Annuler » of the band of the choice (AP-4): what agent's page `page` proposed is let go.
+#[tauri::command]
+pub fn agentpage_drop_proposal(core: CoreState, page: String) -> bool {
+    core.page_drop_proposal(&page)
+}
+
+/// A debug build alone (the end-to-end test): a click on the first element `selector` matches in
+/// agent's page `page`, as the user's in the page (the page's own scripts answer it).
+#[tauri::command]
+pub fn agentpage_click(app: tauri::AppHandle, page: String, selector: String) -> Res<()> {
+    use tauri::Manager;
+    if !cfg!(debug_assertions) {
+        return Err("a debug build's alone".into());
+    }
+    let webview = app
+        .get_webview(&crate::agentpage::label(&page))
+        .ok_or("no such page")?;
+    let sel = serde_json::to_string(&selector).map_err(|e| e.to_string())?;
+    webview
+        .eval(format!(
+            "(function(){{var e=document.querySelector({sel});if(e)e.click()}})()"
+        ))
+        .map_err(|e| e.to_string())
+}
+
 /// The user's gesture on « La page veut ouvrir… »: `follow` opens the web address the core kept
 /// for page `page` in the system's browser (never one the window gives), else it is let go.
 #[tauri::command]

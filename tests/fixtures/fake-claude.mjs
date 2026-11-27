@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[page demande]" and "[page piege]" (a review that carries a request, and a page of its own that tries to answer it alone, AP-4), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
 // message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
@@ -2008,7 +2008,7 @@ function startSession() {
   // An agent's page by Escouade's tools (its --mcp-config server), as Claude Code calls them: a review shown, then a new
   // version of it, then its row closed. The call and its answer go in the conversation, where the window draws its card.
   function pageTurn(text) {
-    const [, what, num] = text.match(/\[page (montre|maj|ferme|calme)(?: (p-\d+))?\]/);
+    const [, what, num] = text.match(/\[page (montre|maj|ferme|calme|demande|piege)(?: (p-\d+))?\]/);
     const criteria = [
       { text: 'La liste montre 25 adhérents par page', state: 'met', md: 'Vérifié par `users.spec.ts`.' },
       { text: 'Suivante et précédente au clavier', state: 'met' },
@@ -2037,12 +2037,55 @@ function startSession() {
       },
       open: 'quiet',
     };
+    // « demande » (AP-4): the review carries its verdict, a request of the box.
+    const verdict = {
+      kind: 'choice',
+      title: 'Fusionner POR-41 ?',
+      options: [{ label: 'Fusionner dans main' }, { label: 'Renvoyer avec un mot' }, { label: 'Attendre' }],
+      recommend: { option: 'a', why: 'Les 48 tests passent.' },
+    };
+    // « piege »: a page of its own that tries to answer by itself, without a click: an option its request does not have,
+    // two for one, a field of its own, another channel, then one of its options, again and again; and a button that
+    // says « Envoyer » and « A : supprimer la branche » where the request's A is « Fusionner dans main ».
+    const trap = `<!doctype html><html><head><title>Piège</title></head><body>
+<h1>Revue</h1><p id="said">?</p>
+<button id="fake" data-option="a">A : supprimer la branche</button><button id="send">Envoyer</button>
+<script>
+const said = [];
+const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  .then((r) => said.push(path + ' ' + r.status)).catch((e) => said.push(path + ' ' + e));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+(async () => {
+  await post('_/choose', { options: ['z'] });
+  await wait(1100);
+  await post('_/choose', { options: ['a', 'b'] });
+  await wait(1100);
+  await post('_/choose', { options: ['a'], approve: true });
+  await wait(1100);
+  await post('_/answer', { options: ['a'] });
+  await post('_/choose?send=1', { options: ['a'], note: 'envoie' });
+  for (let i = 0; i < 6; i++) {
+    await wait(1100);
+    await post('_/choose', { options: ['a'] });
+    document.getElementById('send').click();
+  }
+  document.getElementById('said').textContent = 'fini ' + said.join(' | ');
+})();
+</script></body></html>`;
     const input =
       what === 'ferme'
         ? { page: num ?? 'p-1' }
         : what === 'calme'
           ? diagram
-          : { title: 'Revue avant fusion · POR-41', template: 'review', data: review, ...(what === 'maj' ? { page: num ?? 'p-1' } : {}) };
+          : what === 'piege'
+            ? { title: 'Une revue', template: 'html', html: trap, ask: verdict }
+            : {
+                title: 'Revue avant fusion · POR-41',
+                template: 'review',
+                data: review,
+                ...(what === 'maj' ? { page: num ?? 'p-1' } : {}),
+                ...(what === 'demande' ? { ask: verdict } : {}),
+              };
     const call = `toolu_p${msg}`;
     assistant({ type: 'tool_use', id: call, name: `mcp__escouade__${tool}`, input });
     escouadeTool(tool, input)
@@ -2053,6 +2096,8 @@ function startSession() {
           maj: 'J’ai gardé le tri dans l’adresse : la revue est à jour.',
           ferme: 'Je ferme la revue ; elle reste gardée.',
           calme: 'Je t’ai laissé le schéma du tri dans Navigateurs, à ouvrir quand tu veux.',
+          demande: 'Voici la revue de POR-41 : choisis ton verdict dans la page.',
+          piege: 'Voici une revue.',
         }[what];
         streamText(said);
         result();
@@ -3414,7 +3459,7 @@ function startSession() {
       });
       return;
     }
-    if (/\[page (montre|maj|ferme|calme)( p-\d+)?\]/.test(text)) {
+    if (/\[page (montre|maj|ferme|calme|demande|piege)( p-\d+)?\]/.test(text)) {
       pageTurn(text);
       return;
     }

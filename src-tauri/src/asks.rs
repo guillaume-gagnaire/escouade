@@ -940,6 +940,8 @@ impl<R: Runtime> Core<R> {
         self.hub.emit(UiEvent::Inbox {
             project_id: project_id.to_string(),
         });
+        // A page that carries a request shows its answer, or no longer does (AP-4).
+        self.pages_asks_changed();
     }
 
     /// A request, as it is now.
@@ -1931,6 +1933,20 @@ pub struct WindowAsk {
     pub delegated_name: Option<String>,
     /// The agents the user may leave it to (§ 8.5), by id and name.
     pub delegates: Vec<(String, String)>,
+    /// The agent's page that carries it (AP-4): « Ouvrir la page » and its thumbnail in the box.
+    pub page: Option<AskPage>,
+}
+
+/// The page a request comes with, as the box shows it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AskPage {
+    /// `p-<n>`.
+    pub page: String,
+    pub title: String,
+    pub template: String,
+    /// Its last version.
+    pub version: u32,
 }
 
 /// The box as the window reads it.
@@ -2001,7 +2017,21 @@ impl<R: Runtime> Core<R> {
         } else {
             Vec::new()
         };
+        let page = self
+            .pages
+            .lock()
+            .list
+            .iter()
+            .filter(|p| p.ask.as_deref() == Some(a.id.as_str()))
+            .max_by_key(|p| p.updated_at)
+            .map(|p| AskPage {
+                page: p.id.clone(),
+                title: p.title.clone(),
+                template: p.template.clone(),
+                version: p.latest().map_or(1, |v| v.n),
+            });
         WindowAsk {
+            page,
             project_name: project.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
             private: project.is_some_and(|p| p.private),
             ticket_key,

@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - An agent’s page opens beside its conversation when you’re looking at it, otherwise it waits for you in “Browsers”; its card in the conversation shows it or opens it again, and its bar goes back to an earlier version or shows it at tablet or mobile width. A band above it says who wrote it and that it has no network nor access to Escouade or your files.
+- An agent’s page can carry a question: you choose in the page, and a band of Escouade under it repeats your choice in the request’s own words, then sends it when you click “Send”. The page alone can send nothing nor answer a go-ahead; the request is also in “Your turn”, with “Open the page”.
 
 ## [2.2.14] — 2026-11-27
 

@@ -65,6 +65,22 @@ pub struct PageBox {
     pub quiet: HashSet<String>,
     /// The version each open row shows, when it is not the last (« v2 ▾ » of its bar, AP-3).
     pub shown: HashMap<String, u32>,
+    /// What each page last proposed by `_/choose` (AP-4), checked against its request: the band of
+    /// the window shows it, in the request's own words, and sends it on the user's gesture alone.
+    pub proposals: HashMap<String, PageProposal>,
+    /// The answer each open page was last told (its options; empty: none), to tell it once.
+    pub told: HashMap<String, Vec<String>>,
+}
+
+/// A page's proposal, as the core kept it: its request, the options (among the request's), and the
+/// note the page joined.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageProposal {
+    pub ask: String,
+    pub options: Vec<String>,
+    pub note: Option<String>,
+    pub at: i64,
 }
 
 /// A page as the window draws it (AP-3): its row of « Navigateurs », its bar, its card.
@@ -88,6 +104,10 @@ pub struct PageRow {
     pub quiet: bool,
     /// Its webview's last load finished.
     pub loaded: bool,
+    /// The request it carries (`a-<n>`, AP-4).
+    pub ask: Option<String>,
+    /// What it proposed and the user has not sent yet.
+    pub proposal: Option<PageProposal>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -290,7 +310,7 @@ pub(crate) fn with_escouade(b: &mut Bundle, mut escouade: serde_json::Value, pag
         .replace('\u{2028}', "\\u2028")
         .replace('\u{2029}', "\\u2029");
     let script = format!(
-        "<script>(()=>{{const f=o=>{{if(o&&typeof o===\"object\"){{for(const k of Object.keys(o))f(o[k]);Object.freeze(o)}}return o}};Object.defineProperty(window,\"escouade\",{{value:f({literal}),writable:false,configurable:false,enumerable:true}})}})()</script>"
+        "<script>(()=>{{const f=o=>{{if(o&&typeof o===\"object\"){{for(const k of Object.keys(o))f(o[k]);Object.freeze(o)}}return o}};const e={literal};const p=self.fetch.bind(self);e.choose=(options,note)=>p(\"_/choose\",{{method:\"POST\",headers:{{\"Content-Type\":\"application/json\"}},body:JSON.stringify(note==null?{{options}}:{{options,note:String(note)}})}}).then(r=>r.ok,()=>false);Object.defineProperty(window,\"escouade\",{{value:f(e),writable:false,configurable:false,enumerable:true}})}})()</script>"
     );
     let Some((_, doc)) = b.files.iter_mut().find(|(r, _)| r == "index.html") else {
         return;
@@ -750,6 +770,9 @@ pub(crate) struct Show {
     /// For the page of one's own (`custom`, AP-7): what `window.escouade` holds but its page and
     /// version, which `page_show` adds once it knows them (`with_escouade`).
     pub escouade: Option<serde_json::Value>,
+    /// The request it now carries (`ask` of `show_page`, AP-4), deposited by the same call; none
+    /// keeps the one it had.
+    pub ask: Option<String>,
 }
 
 /// What `show_page` answers.
@@ -914,6 +937,9 @@ impl<R: Runtime> Core<R> {
             match b.list.iter_mut().find(|p| p.id == id) {
                 Some(p) => {
                     p.versions.push(version);
+                    if show.ask.is_some() {
+                        p.ask = show.ask.clone();
+                    }
                     p.title = show.title.clone();
                     p.template = show.template.to_string();
                     p.updated_at = now;
@@ -931,15 +957,18 @@ impl<R: Runtime> Core<R> {
                     title: show.title.clone(),
                     template: show.template.to_string(),
                     versions: vec![version],
-                    ask: None,
+                    ask: show.ask.clone(),
                     created_at: now,
                     updated_at: now,
                     orphaned_at: None,
                 }),
             }
             b.rows.entry(id.clone()).or_insert(Placement::Hidden);
-            // A new version shows at once, wherever the user went back to.
+            // A new version shows at once, wherever the user went back to; it is told its answer
+            // again once it has loaded, and what the old one proposed is gone.
             b.shown.remove(&id);
+            b.told.remove(&id);
+            b.proposals.remove(&id);
             if show.quiet {
                 b.quiet.insert(id.clone());
             } else {
@@ -964,7 +993,7 @@ impl<R: Runtime> Core<R> {
         if let Some(template) = TEMPLATES.iter().find(|t| **t == show.template) {
             self.telemetry.track(crate::telemetry::Event::PageShown {
                 template,
-                ask: false,
+                ask: show.ask.is_some(),
                 size: bracket(incoming),
             });
         }
@@ -1293,6 +1322,11 @@ impl<R: Runtime> Core<R> {
         let core = Arc::downgrade(self);
         let tell: agentpage::Tell = Arc::new(move |page| {
             if let Some(core) = core.upgrade() {
+                // Loaded again (opened, reloaded, a version): it is told its answer once more.
+                if page.phase == "finished" {
+                    core.pages.lock().told.remove(&page.page);
+                    core.page_tell_answer(&page.page);
+                }
                 core.hub.emit(UiEvent::AgentPage { page });
             }
         });
@@ -1310,6 +1344,107 @@ impl<R: Runtime> Core<R> {
         );
         if let Err(e) = opened {
             log::warn!("page {page}: its webview did not open: {e}");
+        }
+    }
+
+    /// A proposal of page `page` (`_/choose`, from its own webview: the shelter checked it), kept
+    /// for the band when its request takes it (`checked_proposal`): true then. Nothing is answered:
+    /// the band of the window sends it, on the user's gesture.
+    pub(crate) fn page_propose(&self, page: &str, proposal: agentpage::Proposal) -> bool {
+        if !self.pages_on() {
+            return false;
+        }
+        let Some(ask_id) = self.page_ask(page) else {
+            return false;
+        };
+        let Ok(ask) = self.ask(&ask_id) else {
+            return false;
+        };
+        let Some(kept) = checked_proposal(&ask, proposal, now_ms()) else {
+            log::info!("page {page}: a proposal for {ask_id} refused");
+            return false;
+        };
+        let changed = {
+            let mut b = self.pages.lock();
+            if !b.list.iter().any(|p| p.id == page) {
+                return false;
+            }
+            let same = b
+                .proposals
+                .get(page)
+                .is_some_and(|x| x.options == kept.options && x.note == kept.note);
+            b.proposals.insert(page.to_string(), kept);
+            !same
+        };
+        if changed {
+            self.page_tell(page, "proposed");
+        }
+        true
+    }
+
+    /// The request page `page` carries, if any.
+    pub(crate) fn page_ask(&self, page: &str) -> Option<String> {
+        self.pages
+            .lock()
+            .list
+            .iter()
+            .find(|p| p.id == page)
+            .and_then(|p| p.ask.clone())
+    }
+
+    /// « Annuler » of the band: what page `page` proposed is let go (the page may propose again).
+    pub(crate) fn page_drop_proposal(&self, page: &str) -> bool {
+        let gone = self.pages.lock().proposals.remove(page).is_some();
+        if gone {
+            self.page_tell(page, "proposed");
+        }
+        gone
+    }
+
+    /// The requests of the box changed: each page that carries one is told its answer (its options
+    /// checked, the others frozen), or that it has none any more (the answer taken back); what it
+    /// proposed goes once its request no longer waits.
+    pub(crate) fn pages_asks_changed(&self) {
+        let carried: Vec<(String, String)> = {
+            let b = self.pages.lock();
+            b.list
+                .iter()
+                .filter_map(|p| p.ask.clone().map(|a| (p.id.clone(), a)))
+                .collect()
+        };
+        for (page, ask) in carried {
+            let waiting = self.ask(&ask).is_ok_and(|a| a.state.waiting());
+            if !waiting && self.pages.lock().proposals.remove(&page).is_some() {
+                self.page_tell(&page, "proposed");
+            }
+            self.page_tell_answer(&page);
+        }
+    }
+
+    /// Page `page`'s webview is told the answer of its request, once (`answer_script`): a fixed
+    /// script, with nothing in it but the options' ids.
+    pub(crate) fn page_tell_answer(&self, page: &str) {
+        let Some(ask) = self.page_ask(page) else {
+            return;
+        };
+        let options = self
+            .ask(&ask)
+            .ok()
+            .map(|a| answered_options(&a))
+            .unwrap_or_default();
+        {
+            let mut b = self.pages.lock();
+            let before = b.told.get(page);
+            let same = before == Some(&options) || (before.is_none() && options.is_empty());
+            b.told.insert(page.to_string(), options.clone());
+            if same {
+                return;
+            }
+        }
+        if let Some(w) = self.app.get_webview(&agentpage::label(page)) {
+            if let Err(e) = w.eval(answer_script(&options)) {
+                log::warn!("page {page}: its answer not told: {e}");
+            }
         }
     }
 
@@ -1339,6 +1474,98 @@ pub(crate) fn gone(lang: Lang, page: &str) -> String {
     )
 }
 
+/// A page's proposal checked against its request `ask`: kept when the request waits, is no
+/// go-ahead (`gate`: never proposed from a page), and its options are the request's own (a choice:
+/// one, or several when `multi`; a confirm: `yes` or `no`); its note on its lines, 2 000
+/// characters at most. None for anything else: an answer or a task, an unknown option, two for one.
+pub(crate) fn checked_proposal(
+    ask: &crate::asks::Ask,
+    p: agentpage::Proposal,
+    at: i64,
+) -> Option<PageProposal> {
+    use crate::asks::AskKind;
+    if !ask.state.waiting() || ask.gate {
+        return None;
+    }
+    let mut options: Vec<String> = Vec::new();
+    for o in p.options {
+        let o = o.trim().to_ascii_lowercase();
+        if !options.contains(&o) {
+            options.push(o);
+        }
+    }
+    let fits = match ask.kind {
+        AskKind::Choice => {
+            !options.is_empty()
+                && (ask.multi || options.len() == 1)
+                && options
+                    .iter()
+                    .all(|o| ask.options.iter().any(|x| x.id == *o))
+        }
+        AskKind::Confirm => options.len() == 1 && (options[0] == "yes" || options[0] == "no"),
+        _ => false,
+    };
+    if !fits {
+        return None;
+    }
+    let note = p
+        .note
+        .map(|n| {
+            n.chars()
+                .map(|c| if c.is_control() && c != '\n' { ' ' } else { c })
+                .collect::<String>()
+                .trim()
+                .to_string()
+        })
+        .filter(|n| !n.is_empty());
+    if note
+        .as_ref()
+        .is_some_and(|n| n.chars().count() > agentpage::NOTE_MAX)
+    {
+        return None;
+    }
+    Some(PageProposal {
+        ask: ask.id.clone(),
+        options,
+        note,
+        at,
+    })
+}
+
+/// The options a request's answer chose, as a page shows them: a choice's, `yes` or `no` for a
+/// confirm; none before it is answered (or once the answer was taken back).
+pub(crate) fn answered_options(ask: &crate::asks::Ask) -> Vec<String> {
+    let Some(a) = &ask.answer else {
+        return Vec::new();
+    };
+    match a.yes {
+        Some(true) => vec!["yes".into()],
+        Some(false) => vec!["no".into()],
+        None => a.options.clone(),
+    }
+}
+
+/// The fixed script that tells a page its answer: the options chosen checked (`aria-pressed`,
+/// `.on`), every option frozen once there is an answer, `data-answered` on the request's block,
+/// and the event `escouade:answered` for a page of its own. Nothing goes in but ids made of letters,
+/// digits, `-` and `_` (a request's are `a` to `f`, `yes`, `no`).
+pub(crate) fn answer_script(options: &[String]) -> String {
+    let ids: Vec<&str> = options
+        .iter()
+        .map(String::as_str)
+        .filter(|o| {
+            !o.is_empty()
+                && o.len() <= 16
+                && o.bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        })
+        .collect();
+    let list = serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into());
+    format!(
+        "(function(a){{try{{var on=a.length>0;document.querySelectorAll('[data-ask]').forEach(function(h){{if(on)h.setAttribute('data-answered','1');else h.removeAttribute('data-answered')}});document.querySelectorAll('[data-option]').forEach(function(b){{var c=a.indexOf(b.getAttribute('data-option'))>=0;b.setAttribute('aria-pressed',String(c));b.classList.toggle('on',c);b.disabled=on}});window.dispatchEvent(new CustomEvent('escouade:answered',{{detail:{{options:a.slice()}}}}))}}catch(e){{}}}})({list});"
+    )
+}
+
 /// Page `p` as the window draws it.
 fn row_of(b: &PageBox, p: &AgentPage, loaded: bool) -> PageRow {
     let last = p.latest().map_or(1, |v| v.n);
@@ -1359,5 +1586,7 @@ fn row_of(b: &PageBox, p: &AgentPage, loaded: bool) -> PageRow {
         open: b.rows.contains_key(&p.id),
         quiet: b.quiet.contains(&p.id),
         loaded,
+        ask: p.ask.clone(),
+        proposal: b.proposals.get(&p.id).cloned(),
     }
 }

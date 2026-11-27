@@ -5,6 +5,7 @@
 
 use crate::agentpage::*;
 use std::path::Path;
+use std::sync::Arc;
 use tauri::Url;
 
 fn url(s: &str) -> Url {
@@ -275,9 +276,8 @@ fn a_link_in_its_folder_is_never_followed() {
 }
 
 #[test]
-fn no_channel_answers_yet() {
+fn without_the_core_no_channel_answers() {
     let (_tmp, s) = folders();
-    // The way back of AP-4 (`_/choose`) is not open: every `_/` path is a 404.
     assert_eq!(
         locate("escouade-page://p-12.localhost/_/choose"),
         Some(("p-12".into(), Route::Channel("choose".into())))
@@ -288,11 +288,131 @@ fn no_channel_answers_yet() {
         ("GET", "escouade-page://p-12.localhost/_"),
     ] {
         assert_eq!(
-            s.serve("agentpage-p-12", method, uri, false).status(),
+            s.serve_body(
+                "agentpage-p-12",
+                method,
+                uri,
+                br#"{"options":["a"]}"#,
+                false
+            )
+            .status(),
             404,
             "{uri}"
         );
     }
+}
+
+#[test]
+fn the_body_of_choose_is_closed_and_bounded() {
+    assert_eq!(
+        parse_choose(br#"{"options":["a"],"note":"garde la courbe"}"#),
+        Some(Proposal {
+            options: vec!["a".into()],
+            note: Some("garde la courbe".into())
+        })
+    );
+    assert!(parse_choose(br#"{"options":["a","b"]}"#).is_some());
+    let long_note = format!(
+        r#"{{"options":["a"],"note":"{}"}}"#,
+        "é".repeat(NOTE_MAX + 1)
+    );
+    let big = format!(r#"{{"options":["a"],"note":"{}"}}"#, "x".repeat(CHOOSE_MAX));
+    for wrong in [
+        &b""[..],
+        b"null",
+        b"[]",
+        br#"{"options":[]}"#,
+        br#"{"options":"a"}"#,
+        br#"{"options":[""]}"#,
+        br#"{"options":["a"],"ask":"a-2"}"#,
+        br#"{"options":["a"],"approve":true}"#,
+        br#"{"options":["abcdefghijklmnopq"]}"#,
+        br#"{"options":["a","b","c","d","e","f","g"]}"#,
+        long_note.as_bytes(),
+        big.as_bytes(),
+    ] {
+        assert_eq!(
+            parse_choose(wrong),
+            None,
+            "{}",
+            String::from_utf8_lossy(wrong)
+        );
+    }
+}
+
+#[test]
+fn choose_only_proposes_from_its_own_page_once_a_second() {
+    let (_tmp, s) = folders();
+    let seen: Arc<parking_lot::Mutex<Vec<(String, Proposal)>>> = Arc::default();
+    let kept = seen.clone();
+    s.set_propose(Arc::new(move |page, p| {
+        let ok = p.options != ["z"];
+        kept.lock().push((page.to_string(), p));
+        ok
+    }));
+    let uri = "escouade-page://p-12.localhost/_/choose";
+    let body = br#"{"options":["a"]}"#;
+    // Another page's webview, the window, a GET, another channel: a 404, the core never told.
+    assert_eq!(
+        s.serve_body("agentpage-p-13", "POST", uri, body, false)
+            .status(),
+        404
+    );
+    assert_eq!(s.serve_body("main", "POST", uri, body, false).status(), 404);
+    assert_eq!(
+        s.serve_body("agentpage-p-12", "GET", uri, body, false)
+            .status(),
+        404
+    );
+    assert_eq!(
+        s.serve_body(
+            "agentpage-p-12",
+            "POST",
+            "escouade-page://p-12.localhost/_/answer",
+            body,
+            false
+        )
+        .status(),
+        404
+    );
+    assert_eq!(
+        s.serve_body(
+            "agentpage-p-12",
+            "POST",
+            uri,
+            br#"{"options":["a"],"x":1}"#,
+            false
+        )
+        .status(),
+        404
+    );
+    assert!(seen.lock().is_empty());
+    // Its own: handed to the core, a 204 that says nothing more.
+    let ok = s.serve_body("agentpage-p-12", "POST", uri, body, false);
+    assert_eq!(ok.status(), 204);
+    assert!(ok.body().is_empty());
+    assert_eq!(seen.lock().len(), 1);
+    assert_eq!(seen.lock()[0].0, "p-12");
+    // A second within the second: refused before the core.
+    assert_eq!(
+        s.serve_body("agentpage-p-12", "POST", uri, body, false)
+            .status(),
+        404
+    );
+    assert_eq!(seen.lock().len(), 1);
+    // The neighbour has its own second; what the core refuses is a 404.
+    assert_eq!(
+        s.serve_body(
+            "agentpage-p-13",
+            "POST",
+            "escouade-page://p-13.localhost/_/choose",
+            br#"{"options":["z"]}"#,
+            false
+        )
+        .status(),
+        404
+    );
+    assert_eq!(seen.lock().len(), 2);
 }
 
 #[test]

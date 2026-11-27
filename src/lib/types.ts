@@ -1132,7 +1132,7 @@ export interface AgentPageEvent {
   page: string;
   /** `shown`: an agent showed it or a version of it, its row opened (ESC-673); `closed`: its row closed; `erased`: no
    * longer kept (its agent or its project gone, room made), its cards say so (AP-3). */
-  phase: 'started' | 'finished' | 'wants' | 'refused' | 'download' | 'permission' | 'title' | 'shown' | 'closed' | 'erased';
+  phase: 'started' | 'finished' | 'wants' | 'refused' | 'download' | 'permission' | 'title' | 'shown' | 'closed' | 'erased' | 'proposed';
   url?: string;
   title?: string;
 }
@@ -1158,6 +1158,18 @@ export interface AgentPageRow {
   /** The agent asked its row to wait (`open: quiet`). */
   quiet: boolean;
   loaded: boolean;
+  /** The request of the box it carries (`a-<n>`, AP-4). */
+  ask?: string | null;
+  /** What the page proposed (`_/choose`, checked by the core), not sent yet: the band shows it in the request's words. */
+  proposal?: PageProposal | null;
+}
+
+/** A page's proposal (`pages::PageProposal`): options of its request, and the note it joined. */
+export interface PageProposal {
+  ask: string;
+  options: string[];
+  note: string | null;
+  at: number;
 }
 
 /** Where a page goes in the window, in its logical pixels. */
@@ -3890,6 +3902,8 @@ export interface WindowAsk {
   delegatedName: string | null;
   /** The agents the user may leave it to, by id and name. */
   delegates: [string, string][];
+  /** The agent's page that carries it (AP-4): « Ouvrir la page » and its thumbnail. */
+  page?: { page: string; title: string; template: string; version: number } | null;
 }
 
 /** The box as the window reads it (`asks::InboxView`). */

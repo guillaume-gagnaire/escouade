@@ -151,7 +151,7 @@ test.describe('a fake agent shows the page of one’s own', () => {
       expect(text).toContain('EQUIPE');
       expect(text).toContain('page=p-1 v=1 modele=custom agent=');
       expect(text).toContain('n=7 gele=true reste=true csp=true');
-      expect(text).toContain('cles=agent,ask,data,lang,page,project,template,theme,ticket,title,version');
+      expect(text).toContain('cles=agent,ask,choose,data,lang,page,project,template,theme,ticket,title,version');
       const body = await invoke<string>(page, 'agentpage_read', { page: 'p-1', selector: 'body', text: false });
       expect(body).not.toContain('<b>x</b>');
       expect(body).not.toContain(app.repo.replace(/\\/g, '\\\\'));
