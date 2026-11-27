@@ -585,6 +585,70 @@ fn keep_polling<R: Runtime>(core: &Arc<Core<R>>, pages: Arc<Pages>, key: String,
     });
 }
 
+/// The tabs `agent` opened on the artifact `address` (`open_browser` with `artifact`, AB-10), by their key.
+pub(crate) fn artifact_tabs(pages: &Pages, agent: &str, address: &str) -> Vec<String> {
+    pages
+        .all()
+        .into_iter()
+        .filter(|p| {
+            p.opener.as_deref() == Some(agent)
+                && super::browsers_open::artifact_address(&p.url).as_deref() == Some(address)
+        })
+        .map(|p| p.agent_id)
+        .collect()
+}
+
+/// What the band says of the reload of a new version.
+pub(crate) fn reload_what(version: Option<u32>) -> String {
+    match version {
+        Some(n) => tr!("Recharge : version {n}", "Reloads: version {n}"),
+        None => tr!("Recharge : nouvelle version", "Reloads: new version"),
+    }
+}
+
+/// A new version of an artifact `agent` published, read in its own journal (its `Artifact` tool's result, AB-10;
+/// never an address a page, a file or the agent's text gave): each tab it opened on that artifact reloads, the band
+/// saying « Recharge : version N ». A tab whose hand is the user's (their gestures since the agent's last one
+/// included), or whose driving ended, is left as they have it; « Agents et navigateurs » off, nothing.
+pub(crate) fn artifact_published<R: Runtime>(
+    core: &Arc<Core<R>>,
+    agent: &str,
+    address: &str,
+    version: Option<u32>,
+) {
+    if !core.settings.read().agent_browsers {
+        return;
+    }
+    let Some(pages) = pages_of(core) else {
+        return;
+    };
+    for key in artifact_tabs(&pages, agent, address) {
+        let (core, pages, agent) = (core.clone(), pages.clone(), agent.to_string());
+        std::thread::spawn(move || {
+            let label = devpage::page_label(&key);
+            let Some(webview) = core.app.get_webview(&label) else {
+                return;
+            };
+            if user_moved(&core, &pages, &key, &webview) {
+                return;
+            }
+            if pages
+                .drives
+                .reloaded(&key, &agent, &reload_what(version))
+                .is_none()
+            {
+                return;
+            }
+            if let Err(e) = webview.reload() {
+                log::warn!("browser {key}: the artifact's new version not reloaded: {e}");
+                return;
+            }
+            tell(&core, &key);
+            keep_polling(&core, pages, key, label);
+        });
+    }
+}
+
 /// `drive_browser`.
 pub(super) async fn drive<R: Runtime>(
     core: &Arc<Core<R>>,

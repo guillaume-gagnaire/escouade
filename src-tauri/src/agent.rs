@@ -111,6 +111,9 @@ pub struct Effects {
     /// Calls of `SendUserFile` (ESC-171), by their item and with their input: the core copies
     /// their images and says what their files are on their item (`sentfiles::deliver`).
     pub sent: Vec<(String, Value)>,
+    /// The artifacts its `Artifact` tool just published (AB-10), with the version its result says: the core reloads
+    /// the tabs the agent opened on them (`browsers_drive::artifact_published`).
+    pub published: Vec<(String, Option<u32>)>,
 }
 
 struct PendingReq {
@@ -4161,6 +4164,90 @@ npm test")
         assert_eq!(art["url"], "https://claude.ai/artifact/z9");
         assert_eq!(art["title"], "R");
         assert_eq!(art["versions"], 1);
+    }
+
+    #[test]
+    fn a_publication_of_its_artifact_tool_is_told_to_the_core_with_its_version() {
+        let mut a = rt();
+        call(
+            &mut a,
+            None,
+            "p1",
+            "Artifact",
+            json!({"file_path": "plan.html"}),
+        );
+        let fx = returns(
+            &mut a,
+            "p1",
+            "Published plan.html at https://claude.ai/code/artifact/plan-24 (Version 3, version id 1794-12f1).",
+            Value::Null,
+        );
+        assert_eq!(
+            fx.published,
+            vec![(
+                "https://claude.ai/code/artifact/plan-24".to_string(),
+                Some(3)
+            )]
+        );
+        // Another tool's result, a read, an asset uploaded, an error: no version of its artifact.
+        call(&mut a, None, "b1", "Bash", json!({"command": "echo"}));
+        let fx = returns(
+            &mut a,
+            "b1",
+            "https://claude.ai/artifact/bash (Version 9)",
+            Value::Null,
+        );
+        assert!(fx.published.is_empty());
+        for (id, input) in [
+            (
+                "r1",
+                json!({"action": "read", "url": "https://claude.ai/artifact/other"}),
+            ),
+            (
+                "u1",
+                json!({"url": "https://claude.ai/code/artifact/plan-24", "asset": true, "file_path": "a.png"}),
+            ),
+        ] {
+            call(&mut a, None, id, "Artifact", input);
+            let fx = returns(
+                &mut a,
+                id,
+                "https://claude.ai/code/artifact/plan-24",
+                Value::Null,
+            );
+            assert!(fx.published.is_empty(), "{id}");
+        }
+        call(
+            &mut a,
+            None,
+            "e1",
+            "Artifact",
+            json!({"file_path": "plan.html"}),
+        );
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"https://claude.ai/code/artifact/plan-24","is_error":true}]},"parent_tool_use_id":null}),
+            &mut fx,
+        );
+        assert!(fx.published.is_empty());
+        // Without a version said, the address alone.
+        call(
+            &mut a,
+            None,
+            "p2",
+            "Artifact",
+            json!({"file_path": "plan.html"}),
+        );
+        let fx = returns(
+            &mut a,
+            "p2",
+            "Published https://claude.ai/artifact/z9",
+            Value::Null,
+        );
+        assert_eq!(
+            fx.published,
+            vec![("https://claude.ai/artifact/z9".to_string(), None)]
+        );
     }
 
     #[test]

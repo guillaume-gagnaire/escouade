@@ -6,7 +6,7 @@
 //! « Le navigateur ne s’est pas ouvert » (there is no window to put it in), the proof it passed.
 //! Opening a real tab beside a conversation is the e2e's (browsers-open.spec.ts).
 
-use super::browsers_open::{artifact_address, artifacts_of, place_of};
+use super::browsers_open::{artifact_address, artifact_version, artifacts_of, place_of};
 use super::browsers_tests::{browser, pages, world};
 use super::private_tests::make_private;
 use super::tools_tests::{as_agent, call, external, other_project, put_agent, read, refused};
@@ -592,4 +592,60 @@ async fn who_may_open_the_switch_claude_outside_and_a_private_project() {
         assert!(e.contains("Agents et navigateurs"), "{tool}: {e}");
     }
     c.cancel().await.unwrap();
+}
+
+#[test]
+fn a_file_uploaded_to_its_assets_is_no_version_and_the_version_is_the_results() {
+    let upload = |input: serde_json::Value| {
+        json!({ "kind": "tool", "id": "u", "name": "Artifact", "input": input, "status": "ok",
+                "result": { "isError": false, "text": "Uploaded to https://claude.ai/code/artifact/plan-24" } })
+    };
+    for input in [
+        json!({ "url": "https://claude.ai/code/artifact/plan-24", "asset": true, "file_path": "a.png" }),
+        json!({ "url": "https://claude.ai/code/artifact/plan-24", "asset": true, "file_paths": ["a.png"] }),
+        json!({ "url": "https://claude.ai/code/artifact/plan-24", "file_paths": ["a.png"] }),
+    ] {
+        assert!(artifacts_of(&[upload(input.clone())]).is_empty(), "{input}");
+    }
+    // What Claude Code's result says of the version, else nothing.
+    for (text, want) in [
+        ("Published p.html at https://claude.ai/artifact/a (Version 3, version id 17-12f1) Icon: \"page\".", Some(3)),
+        ("Published https://claude.ai/artifact/a (Version 12)", Some(12)),
+        ("Published https://claude.ai/artifact/a", None),
+        ("Version 0", None),
+        ("Version x", None),
+    ] {
+        assert_eq!(artifact_version(text), want, "{text}");
+    }
+}
+
+#[tokio::test]
+async fn a_new_version_reloads_the_tabs_it_opened_on_that_artifact_alone() {
+    use super::browsers_drive::{artifact_published, artifact_tabs, reload_what};
+    let h = harness("mcp-browsers-open-artifact-version");
+    let (p, a) = world(&h).await;
+    let other = put_agent(&h, &p, "Bob", 2);
+    let plan = "https://claude.ai/code/artifact/plan-24";
+    tab(&h, &p, "browser:a1", plan, &a.id);
+    // Another agent's tab on the same artifact, its own tab on claude.ai elsewhere, on another artifact.
+    tab(&h, &p, "browser:a2", plan, &other.id);
+    tab(&h, &p, "browser:a3", "https://claude.ai/new", &a.id);
+    tab(
+        &h,
+        &p,
+        "browser:a4",
+        "https://claude.ai/artifact/other",
+        &a.id,
+    );
+    let pages = pages(&h);
+    assert_eq!(artifact_tabs(&pages, &a.id, plan), ["browser:a1"]);
+    assert_eq!(artifact_tabs(&pages, &other.id, plan), ["browser:a2"]);
+    // An address that is not an artifact's, even one the tab is on, reloads nothing.
+    assert!(artifact_tabs(&pages, &a.id, "https://claude.ai/new").is_empty());
+    assert_eq!(reload_what(Some(3)), "Recharge : version 3");
+    assert_eq!(reload_what(None), "Recharge : nouvelle version");
+    // Without a window (no webview) nothing reloads and nothing breaks; the band is left as it was.
+    artifact_published(&h.core, &a.id, plan, Some(2));
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert_eq!(pages.drives.view("browser:a1").step, 0);
 }

@@ -132,7 +132,7 @@ Ce que ces paliers impliquent :
    - `highlight` sur un élément, au palier « trouvé ou pas trouvé ».
 
    Il explique ce qu'il a changé d'après ce qu'il sait de sa propre modification, sans lire la page.
-4. **Une nouvelle version** : il republie l'artefact, puis `drive_browser({ action: "reload", wait_user: true })`. La bande dit « ④ Recharge : version 3 », et « Continuer » attend que l'utilisateur ait vu. L'agent dit ce qui a changé (« le tableau des risques est en haut »), et le fait défiler jusque-là s'il le trouve.
+4. **Une nouvelle version** : il republie l'artefact ; Escouade, qui lit la publication dans son journal, recharge l'onglet lui-même (AB-10, ESC-681), sauf si l'utilisateur a la main. La bande dit « Recharge : version 3 ». Pour attendre que l'utilisateur ait vu, il passe ensuite `drive_browser({ action: "wait", wait_user: true })`, et « Continuer » l'attend. L'agent dit ce qui a changé (« le tableau des risques est en haut »), et le fait défiler jusque-là s'il le trouve.
 5. **Pour vérifier lui-même** ce qu'il montre (une capture), il demande l'accord du palier « lire » une fois pour `claude.ai`. La bande dit « esc-412 veut lire et agir sur claude.ai (avec ta session) ». Sans cet accord, il montre sans voir.
 6. **L'utilisateur reprend la main** quand il veut (§ 4), commente l'artefact dans claude.ai, ou répond dans la conversation.
 

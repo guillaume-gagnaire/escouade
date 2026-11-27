@@ -3408,6 +3408,10 @@ impl<R: Runtime> Core<R> {
         if fx.plan_files {
             self.ask_plan_scan(id);
         }
+        // A new version of an artifact it published: the tabs it opened on it reload (AB-10).
+        for (address, version) in &fx.published {
+            crate::mcp::browsers_drive::artifact_published(self, id, address, *version);
+        }
         for (item, input) in fx.sent {
             self.deliver_sent(id, item, input);
         }

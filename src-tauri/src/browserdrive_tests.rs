@@ -358,6 +358,42 @@ fn the_rule_of_the_hand() {
     assert!(!d.acted_lately("browser:9", CHOICE_QUIET, t));
 }
 
+#[test]
+fn a_new_version_of_the_artifact_is_reloaded_while_the_hand_is_the_agents() {
+    let d = Drives::default();
+    // Opened, never driven yet: the reload is a step of the band, the agent's name on it.
+    assert_eq!(
+        d.reloaded("browser:1", "esc-1", "Recharge : version 2"),
+        Some(1)
+    );
+    let v = d.view("browser:1");
+    assert_eq!((v.step, v.what.as_str()), (1, "Recharge : version 2"));
+    assert_eq!(v.agent.as_deref(), Some("esc-1"));
+    // Not a gesture of its pace: four of its own still go in the same second.
+    let now = Instant::now();
+    for _ in 0..4 {
+        assert_eq!(d.take("browser:1", "esc-1", now), May::Go);
+    }
+    // The user has the hand: the row is left as they have it.
+    d.user_took("browser:1");
+    assert_eq!(
+        d.reloaded("browser:1", "esc-1", "Recharge : version 3"),
+        None
+    );
+    assert_eq!(d.view("browser:1").step, 1);
+    // Given back, it reloads again; the driving ended, never.
+    d.moved("browser:1", HandMove::Give);
+    assert_eq!(
+        d.reloaded("browser:1", "esc-1", "Recharge : version 3"),
+        Some(2)
+    );
+    d.moved("browser:1", HandMove::Stop);
+    assert_eq!(
+        d.reloaded("browser:1", "esc-1", "Recharge : version 4"),
+        None
+    );
+}
+
 #[tokio::test]
 async fn wait_user_ends_by_continue_by_the_hand_or_by_the_row() {
     let d = Drives::default();

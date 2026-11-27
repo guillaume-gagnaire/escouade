@@ -127,16 +127,29 @@ pub(crate) fn never_said(n: Never) -> ToolError {
     })
 }
 
+/// The origins of the artifacts: claude.ai's, and in a debug build the local server of an end-to-end test that asks it
+/// (`ESCOUADE_E2E_ARTIFACT_ORIGIN`, an `http://127.0.0.1:<port>`), whose fake agent publishes there. Never in a
+/// release build: there, claude.ai alone.
+fn artifact_origins() -> Vec<String> {
+    #[allow(unused_mut)]
+    let mut out = vec!["https://claude.ai".to_string()];
+    #[cfg(debug_assertions)]
+    if let Some(o) = std::env::var("ESCOUADE_E2E_ARTIFACT_ORIGIN")
+        .ok()
+        .and_then(|v| Url::parse(v.trim()).ok())
+        .filter(|u| u.scheme() == "http" && u.host_str() == Some("127.0.0.1"))
+    {
+        out.push(o.origin().ascii_serialization());
+    }
+    out
+}
+
 /// An artifact's address as Escouade knows it: `https://claude.ai/artifact/<id>` or
 /// `https://claude.ai/code/artifact/<id>`, without its query or its fragment. None for any other.
 pub(crate) fn artifact_address(text: &str) -> Option<String> {
     let u = Url::parse(text.trim()).ok()?;
-    if u.scheme() != "https"
-        || u.host_str() != Some("claude.ai")
-        || u.port().is_some()
-        || !u.username().is_empty()
-        || u.password().is_some()
-    {
+    let origin = u.origin().ascii_serialization();
+    if !artifact_origins().contains(&origin) || !u.username().is_empty() || u.password().is_some() {
         return None;
     }
     let parts: Vec<&str> = u.path().trim_end_matches('/').split('/').skip(1).collect();
@@ -149,14 +162,18 @@ pub(crate) fn artifact_address(text: &str) -> Option<String> {
         && id
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-    fine.then(|| format!("https://claude.ai{}", u.path().trim_end_matches('/')))
+    fine.then(|| format!("{origin}{}", u.path().trim_end_matches('/')))
 }
 
 /// The artifacts' addresses a text says, in their order.
 fn artifacts_in_text(text: &str) -> Vec<String> {
+    let starts: Vec<String> = artifact_origins()
+        .into_iter()
+        .map(|o| format!("{o}/"))
+        .collect();
     let mut found = Vec::new();
     let mut rest = text;
-    while let Some(at) = rest.find("https://claude.ai/") {
+    while let Some(at) = starts.iter().filter_map(|s| rest.find(s.as_str())).min() {
         let tail = &rest[at..];
         let end = tail
             .find(|c: char| {
@@ -174,6 +191,18 @@ fn artifacts_in_text(text: &str) -> Vec<String> {
     found
 }
 
+/// The version a publication's result says (« (Version 3, version id …) » of Claude Code's `Artifact`), if it does.
+pub(crate) fn artifact_version(text: &str) -> Option<u32> {
+    text.match_indices("Version ").find_map(|(at, w)| {
+        let digits: String = text[at + w.len()..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .take(6)
+            .collect();
+        digits.parse().ok().filter(|n| *n > 0)
+    })
+}
+
 /// The artifacts an agent published, the oldest first: the addresses in the results of its own
 /// `Artifact` tool (a publication, its harness's: never what the agent wrote elsewhere, nor
 /// another tool's result, nor a read of another artifact).
@@ -187,7 +216,11 @@ pub(crate) fn artifacts_of(items: &[Value]) -> Vec<String> {
             continue;
         }
         let action = v["input"]["action"].as_str().unwrap_or("publish");
-        if action != "publish" {
+        // A file uploaded to its assets (`asset`, `file_paths`) is no version of the page.
+        if action != "publish"
+            || v["input"]["asset"] == true
+            || v["input"].get("file_paths").is_some()
+        {
             continue;
         }
         for a in artifacts_in_text(v["result"]["text"].as_str().unwrap_or_default()) {

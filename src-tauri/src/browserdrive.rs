@@ -613,6 +613,22 @@ impl Drives {
         d.step
     }
 
+    /// A new version of the artifact `agent` opened on `key` (AB-10): Escouade reloads it for the agent, a step of the
+    /// band, unless the hand is the user's or the driving ended (None: the row is left as the user has it). Not a
+    /// gesture of the agent's pace.
+    pub fn reloaded(&self, key: &str, agent: &str, what: &str) -> Option<u32> {
+        let mut rows = self.rows.lock();
+        let d = rows.entry(key.to_string()).or_default();
+        if d.stopped || d.hand == Hand::User {
+            return None;
+        }
+        d.agent = Some(agent.to_string());
+        d.step += 1;
+        d.what = what.to_string();
+        d.acted = Some(Instant::now());
+        Some(d.step)
+    }
+
     /// The user's gesture in the row (or « Reprendre la main »): the hand is theirs, a `wait_user` ends. False when it
     /// was already.
     pub fn user_took(&self, key: &str) -> bool {

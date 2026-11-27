@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[page demande]" and "[page piege]" (a review that carries a request, and a page of its own that tries to answer it alone, AP-4), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[page demande]" and "[page piege]" (a review that carries a request, and a page of its own that tries to answer it alone, AP-4), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "[artefact vN]" (version N of an artifact published at ESCOUADE_E2E_ARTIFACT_ORIGIN, AB-10), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
 // message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
@@ -3461,6 +3461,22 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     }
     if (/\[page (montre|maj|ferme|calme|demande|piege)( p-\d+)?\]/.test(text)) {
       pageTurn(text);
+      return;
+    }
+    const artifactVersion = /\[artefact v(\d+)\]/.exec(text);
+    if (artifactVersion && process.env.ESCOUADE_E2E_ARTIFACT_ORIGIN) {
+      // Version N of an artifact (AB-10), published at the local server of the test (ESCOUADE_E2E_ARTIFACT_ORIGIN, read
+      // by a debug build alone) as Claude Code 2.1.319 words it: the app reloads the tab the agent opened on it.
+      const url = `${process.env.ESCOUADE_E2E_ARTIFACT_ORIGIN}/code/artifact/plan-24`;
+      const call = `toolu_v${msg}`;
+      const file = path.join(os.tmpdir(), 'scratchpad', 'plan.html');
+      assistant({ type: 'tool_use', id: call, name: 'Artifact', input: { file_path: file, title: 'Plan de la 2.4' } });
+      toolResult(
+        call,
+        `Published ${file} at ${url} (Version ${artifactVersion[1]}, version id 1794233240-${artifactVersion[1]}) Icon: "page".`,
+      );
+      streamText(`Version ${artifactVersion[1]} publiée.`);
+      result();
       return;
     }
     if (text.includes('[artefact]')) {

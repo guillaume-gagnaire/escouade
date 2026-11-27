@@ -768,12 +768,19 @@ impl AgentRt {
             plan.on_tool_result(&id, error, &output, &tur, now_ms())
         });
         self.canvas_apply(fx, |c| c.on_tool_result(&id, error, &output, now_ms()));
+        let version = crate::mcp::browsers_open::artifact_version(&output);
         let result = tool_result(output, error, &tur);
         self.patch(
             &id,
             json!({ "status": if error { "error" } else { "ok" }, "result": result }),
             fx,
         );
+        // A publication of its own Artifact tool, read in its journal (AB-10): never an address it wrote elsewhere.
+        if let Some(call) = self.conv.get(&id).filter(|c| c["name"] == "Artifact") {
+            for address in crate::mcp::browsers_open::artifacts_of(std::slice::from_ref(call)) {
+                fx.published.push((address, version));
+            }
+        }
     }
 
     /// A text or a reasoning whole: the end of what streamed under `id`, else an item of its own (under `id` when it has
