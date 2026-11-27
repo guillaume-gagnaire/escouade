@@ -187,11 +187,14 @@ test('two servers as spaces: piles, « Partout » answered on the right server, 
   fs.writeFileSync(POLICIES, '{}');
   await expect(travail.getByTestId('everywhere-counts')).toHaveCount(0, { timeout: 30_000 });
 
-  // Réglages de l'espace › Appareils: this computer marked; a code is made on the server, never from here (SR1-02).
+  // Réglages de l'espace › Appareils: this computer marked, a computer; being one, it makes a code for another computer
+  // (ESC-570: the scopes; a phone is refused it by the server).
   const devices = await openSettingsPage(page, 'Appareils');
   await expect(devices.getByTestId('device-row').first()).toContainText('Ce poste');
-  await expect(devices.getByText(/Lance escouade-server pair sur le serveur/)).toBeVisible();
-  await expect(devices.getByRole('button', { name: 'Créer un code' })).toHaveCount(0);
+  await expect(devices.getByTestId('device-scope').first()).toHaveText('Poste');
+  await expect(devices.getByText(/Un poste : « Créer un code » \(10 minutes, un seul appareil\)/)).toBeVisible();
+  await devices.getByRole('button', { name: 'Créer un code' }).click();
+  await expect(devices.getByTestId('device-code')).toContainText(/Code : [A-Z2-9]{4}-?[A-Z2-9]{4} · valable jusqu’à/);
   await shot(page, 'espaces-appareils');
   await page.keyboard.press('Escape');
 
