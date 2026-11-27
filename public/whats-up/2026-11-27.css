@@ -1,0 +1,55 @@
+/* What's up ? 2026-11-27 : captures 1440 x 900 de l'atelier, cadrées par une caméra (le transform du cadre). */
+.wu-20261127-cadre { position: absolute; left: 0; top: 8px; width: 1440px; height: 900px; transform-origin: 0 0; transform: scale(.36); }
+.wu-20261127-etat { position: absolute; inset: 0; width: 1440px; height: 900px; }
+.wu-20261127-apres { opacity: 0; }
+@keyframes wu-20261127-montre { to { opacity: 1; } }
+.wu-20261127-curseur { position: absolute; z-index: 1; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+  background: rgb(255 255 255 / .9); box-shadow: 0 0 0 3px rgb(0 0 0 / .35), 0 6px 16px rgb(0 0 0 / .4); opacity: 0; }
+
+/* 1. Pages des agents : « Choisir B » dans la page, puis « Envoyer à front-1 » dans le bandeau. */
+.wu-20261127-p1 { animation: wu-20261127-cam1 .5s .2s ease-in-out forwards; }
+@keyframes wu-20261127-cam1 { to { transform: translate(-490px, -280px) scale(.7); } }
+.wu-20261127-p1 .wu-20261127-apres { animation: wu-20261127-montre .2s 1.15s forwards; }
+.wu-20261127-p1 .wu-20261127-curseur { left: 1060px; top: 620px; animation: wu-20261127-c1 1.1s .75s ease-in-out forwards; }
+@keyframes wu-20261127-c1 {
+  10% { opacity: 1; left: 1060px; top: 620px; }
+  35%, 55% { opacity: 1; left: 1130px; top: 508px; }
+  100% { opacity: 1; left: 1392px; top: 852px; }
+}
+
+/* 2. Le Workspace : la toile, puis « Workflows ». */
+.wu-20261127-p2 { animation: wu-20261127-cam2 .5s .2s ease-in-out forwards; }
+@keyframes wu-20261127-cam2 { to { transform: translate(-160px, -19px) scale(.47); } }
+.wu-20261127-p2 .wu-20261127-apres { animation: wu-20261127-montre .2s 1.2s forwards; }
+.wu-20261127-p2 .wu-20261127-curseur { left: 1200px; top: 300px; animation: wu-20261127-c2 .45s .75s ease-in-out forwards; }
+@keyframes wu-20261127-c2 { 15% { opacity: 1; left: 1200px; top: 300px; } 100% { opacity: 1; left: 1400px; top: 82px; } }
+
+/* 3. Navigateurs : l'adresse sous « + », puis l'onglet et sa ligne. */
+.wu-20261127-p3 { transform: translate(0, -560px) scale(1); animation: wu-20261127-cam3 .6s 1.15s ease-in-out forwards; }
+@keyframes wu-20261127-cam3 { to { transform: scale(.36); } }
+.wu-20261127-p3 .wu-20261127-apres { animation: wu-20261127-montre .2s .95s forwards; }
+.wu-20261127-p3 .wu-20261127-curseur { left: 230px; top: 820px; animation: wu-20261127-c3 .5s .3s ease-in-out forwards, wu-20261127-part .15s 1.1s forwards; }
+@keyframes wu-20261127-c3 { 20% { opacity: 1; left: 230px; top: 820px; } 100% { opacity: 1; left: 306px; top: 766px; } }
+@keyframes wu-20261127-part { from { opacity: 1; left: 306px; top: 766px; } to { opacity: 0; left: 306px; top: 766px; } }
+
+/* 4. L'agent pilote l'onglet : largeur mobile et le bouton entouré. */
+.wu-20261127-p4 { animation: wu-20261127-cam4 .6s 1.1s ease-in-out forwards; }
+@keyframes wu-20261127-cam4 { to { transform: translate(-160px, -70px) scale(.47); } }
+.wu-20261127-p4 .wu-20261127-apres { animation: wu-20261127-montre .25s .7s forwards; }
+
+/* 5. Page à soi : Réglages › Projets › Lancement. */
+.wu-20261127-p5 { animation: wu-20261127-cam5 .5s .2s ease-in-out forwards; }
+@keyframes wu-20261127-cam5 { to { transform: translate(-425px, -440px) scale(1); } }
+.wu-20261127-p5 .wu-20261127-curseur { left: 760px; top: 600px; animation: wu-20261127-c5 .6s .8s ease-in-out forwards; }
+@keyframes wu-20261127-c5 { 15% { opacity: 1; left: 760px; top: 600px; } 100% { opacity: 1; left: 562px; top: 680px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .wu-20261127-cadre, .wu-20261127-cadre * { animation: none !important; }
+  .wu-20261127-apres { opacity: 1; }
+  .wu-20261127-curseur { display: none; }
+  .wu-20261127-p1 { transform: translate(-490px, -280px) scale(.7); }
+  .wu-20261127-p2 { transform: translate(-160px, -19px) scale(.47); }
+  .wu-20261127-p3 { transform: scale(.36); }
+  .wu-20261127-p4 { transform: translate(-160px, -70px) scale(.47); }
+  .wu-20261127-p5 { transform: translate(-425px, -440px) scale(1); }
+}
