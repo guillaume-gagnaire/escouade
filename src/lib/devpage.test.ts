@@ -374,4 +374,20 @@ describe('the widths of a page: full, tablet, mobile', () => {
     onPageEvent({ agentId: 'a7', phase: 'width', url: 'watch' });
     expect(modeOf('a7')).toBe('tablet');
   });
+
+  it('keeps the width an agent drives it to, the bar following; a driving change moves nothing (ESC-679)', async () => {
+    const b = fakeBackend();
+    await openLaunchPage(A, RECIPE.open);
+    onPageEvent({ agentId: 'a7', phase: 'mode', url: 'mobile' });
+    expect(modeOf('a7')).toBe('mobile');
+    expect(loadModes()).toEqual({ 'pagination-users · web': 'mobile' });
+    expect(b.called('devpage_mode').map((c) => c.args.mode)).toEqual(['mobile']);
+    // A width it does not know changes nothing; nor does a gesture's news.
+    onPageEvent({ agentId: 'a7', phase: 'mode', url: 'watch' });
+    onPageEvent({ agentId: 'a7', phase: 'drive', url: '' });
+    expect(modeOf('a7')).toBe('mobile');
+    onPageEvent({ agentId: 'a7', phase: 'mode', url: 'full' });
+    expect(modeOf('a7')).toBe('full');
+    expect(loadModes()).toEqual({});
+  });
 });

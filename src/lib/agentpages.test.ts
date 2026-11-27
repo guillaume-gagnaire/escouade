@@ -90,6 +90,20 @@ describe('a page an agent shows', () => {
     expect(devpages.pages['page:p-12'].wants).toBe('https://example.com/');
   });
 
+  it('its agent shows another of its versions (drive_browser): its bar says which, where it is (ESC-679)', async () => {
+    const versions = [
+      { n: 1, at: 0 },
+      { n: 2, at: 1 },
+    ];
+    fakeBackend({ agentpage_info: () => row({ versions, shown: 2 }) });
+    app.selectAgent('a7');
+    await onAgentPageEvent({ page: 'p-12', phase: 'shown' });
+    fakeBackend({ agentpage_info: () => row({ versions, shown: 1 }) });
+    await onAgentPageEvent({ page: 'p-12', phase: 'version' });
+    expect(agentpages.info['p-12']?.shown).toBe(1);
+    expect(onScreen()).toEqual(['agent:a7', 'page:page:p-12']);
+  });
+
   it('its row closes by its agent (nothing asked back) or by its × (asked), the page kept; erased, it is no longer known', async () => {
     const b = fakeBackend({ agentpage_info: () => row({ open: false }) });
     devpages.pages['page:p-12'] = {

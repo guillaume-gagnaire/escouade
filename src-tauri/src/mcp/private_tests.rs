@@ -398,6 +398,9 @@ async fn every_tool_that_names_something_is_in_the_tests_of_the_private_projects
         "close_page",
         "capture_browser",
         "browser_console",
+        // The caller's own rows alone, by their key: a private project's are known to its own agents alone
+        // (browsers_drive_tests).
+        "drive_browser",
     ];
     let named: Vec<&str> = naming_calls().iter().map(|(t, _, _)| *t).collect();
     for tool in EXPOSED {

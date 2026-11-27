@@ -386,6 +386,9 @@ pub struct Pages {
     seq: std::sync::atomic::AtomicU64,
     /// The captures each agent took in the last minute (`capture_browser`, ESC-670), by agent.
     shots: Mutex<HashMap<String, std::collections::VecDeque<std::time::Instant>>>,
+    /// The driving of each row (`drive_browser`, ESC-679): the hand, the pace, the leaves to fill a password, by the
+    /// same key; agents' pages (`page:<p-n>`) among them. It falls with the row.
+    pub drives: crate::browserdrive::Drives,
 }
 
 /// What the agents may read of one page outside the launch.
@@ -693,6 +696,7 @@ impl Pages {
         // Its leaves fall with it (ESC-669), and the origins the user let open in it (ESC-678).
         self.consents.lock().remove(agent_id);
         self.openings.lock().allowed.remove(agent_id);
+        self.drives.forget(agent_id);
         self.pages.lock().remove(agent_id)
     }
 
@@ -831,6 +835,8 @@ fn builder<R: Runtime>(
     // WebKit gives the app no console: a relay in the page tells Escouade's world (ESC-668).
     if cfg!(not(windows)) {
         b = b.initialization_script(crate::browserread::RELAY);
+        // Nor does its isolated world keep a listener: the user's gestures are counted in the page (ESC-679).
+        b = b.initialization_script(crate::browserdrive::GESTURES);
     }
     b = with_store(b, data_root, project_id);
     // Every address it is asked to load.

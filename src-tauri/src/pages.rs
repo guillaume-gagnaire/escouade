@@ -155,6 +155,16 @@ pub(crate) fn version_dir(root: &Path, project: &str, page: &str, n: u32) -> Pat
     folder(root, project, page).join(format!("v{n}"))
 }
 
+/// The anchors of the version in `dir` (`…/v<k>`), kept beside it: `…/anchors-v<k>.json` (never served: the shelter
+/// serves the version's folder alone).
+pub(crate) fn anchors_file(dir: &Path) -> PathBuf {
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    dir.with_file_name(format!("anchors-{name}.json"))
+}
+
 /// The title of a page, checked: one line, 1 to 120 characters.
 pub(crate) fn checked_title(lang: Lang, title: &str) -> Result<String, String> {
     let t = title.trim();
@@ -765,6 +775,8 @@ pub(crate) struct Show {
     /// A page of the agent's, for a new version of it.
     pub page: Option<String>,
     pub bundle: Bundle,
+    /// The anchors of a template's page, by its keys (`drive_browser`, ESC-679): kept beside the version.
+    pub anchors: Vec<templates::Anchor>,
     /// `open: quiet`: its row waits, even when the user looks at the agent.
     pub quiet: bool,
     /// For the page of one's own (`custom`, AP-7): what `window.escouade` holds but its page and
@@ -927,6 +939,11 @@ impl<R: Runtime> Core<R> {
                     "Copying the page failed: {e}"
                 )
             })?;
+            if !show.anchors.is_empty() {
+                if let Ok(bytes) = serde_json::to_vec(&show.anchors) {
+                    let _ = std::fs::write(anchors_file(&dir), bytes);
+                }
+            }
             let version = PageVersion {
                 n,
                 at: now,
@@ -977,6 +994,7 @@ impl<R: Runtime> Core<R> {
             (id, n, project, dropped, evicted, incoming)
         };
         for dir in dropped {
+            let _ = std::fs::remove_file(anchors_file(&dir));
             let _ = std::fs::remove_dir_all(dir);
         }
         for p in &evicted {
@@ -1185,6 +1203,76 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// What `drive_browser` needs of page `page` of agent `agent` (ESC-679): its row, the version it shows, its
+    /// versions and the anchors of the one shown (a template's; none for an html page).
+    pub(crate) fn page_drive_info(&self, agent: &str, page: &str) -> Result<DriveInfo, String> {
+        let seen = self.page_get(agent, page)?;
+        let p = &seen.page;
+        let latest = p.latest().map_or(1, |v| v.n);
+        let shown = self
+            .pages
+            .lock()
+            .shown
+            .get(&p.id)
+            .copied()
+            .unwrap_or(latest);
+        let root = self.data.root().to_path_buf();
+        let anchors = std::fs::read(anchors_file(&version_dir(
+            &root,
+            &p.project_id,
+            &p.id,
+            shown,
+        )))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Vec<serde_json::Value>>(&b).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|a| {
+            Some((
+                a["key"].as_str()?.to_string(),
+                a["selector"].as_str()?.to_string(),
+            ))
+        })
+        .collect();
+        Ok(DriveInfo {
+            page: p.id.clone(),
+            template: p.template.clone(),
+            row: seen.row,
+            shown,
+            anchors,
+        })
+    }
+
+    /// Page `page` of agent `agent` shows its version `n` (`drive_browser`, `version`): what « v2 ▾ » of its bar
+    /// does, and the window reads its row again (`version`). A version it no longer keeps is refused with those it keeps.
+    pub(crate) fn page_drive_version(
+        self: &Arc<Self>,
+        agent: &str,
+        page: &str,
+        n: u32,
+    ) -> Result<(), String> {
+        let lang = crate::i18n::ui();
+        let seen = self.page_get(agent, page)?;
+        let p = &seen.page;
+        if !p.versions.iter().any(|v| v.n == n) {
+            let kept = p
+                .versions
+                .iter()
+                .map(|v| v.n.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(tr_in!(
+                lang,
+                "La page {page} n’a pas de version {n} : ses versions gardées sont {kept}.",
+                "Page {page} has no version {n}: its kept versions are {kept}.",
+                page = p.id
+            ));
+        }
+        self.page_show_version(&p.id, n)?;
+        self.page_tell(&p.id, "version");
+        Ok(())
+    }
+
     /// « Pages des agents » or the MCP server turned off: every row closes; nothing is erased.
     pub(crate) fn pages_close_rows(&self) {
         let rows: Vec<String> = {
@@ -1354,6 +1442,22 @@ impl<R: Runtime> Core<R> {
         if !self.pages_on() {
             return false;
         }
+        // A page its agent is driving proposes nothing: a choice made by a gesture of the agent's (a declared tab of
+        // its own page whose script proposes) is never the user's (ESC-679).
+        let driven = self
+            .app
+            .try_state::<Arc<crate::devpage::Pages>>()
+            .is_some_and(|p| {
+                p.drives.acted_lately(
+                    &key(page),
+                    crate::browserdrive::CHOICE_QUIET,
+                    std::time::Instant::now(),
+                )
+            });
+        if driven {
+            log::info!("page {page}: a proposal refused, made while its agent drove it");
+            return false;
+        }
         let Some(ask_id) = self.page_ask(page) else {
             return false;
         };
@@ -1453,6 +1557,10 @@ impl<R: Runtime> Core<R> {
         if let Some(s) = self.app.try_state::<Arc<Shelter>>() {
             agentpage::close(&self.app, &s, page);
         }
+        // Its driving falls with its row (`drive_browser`, ESC-679).
+        if let Some(p) = self.app.try_state::<Arc<crate::devpage::Pages>>() {
+            p.drives.forget(&key(page));
+        }
     }
 }
 
@@ -1463,6 +1571,48 @@ pub(crate) fn switched_off(lang: Lang) -> String {
         "Les pages des agents sont coupées (Réglages › Agents › « Pages des agents ») : aucun de leurs outils ne répond. L’utilisateur seul les rallume.",
         "The agents' pages are off (Settings › Agents › “Agents' pages”): none of their tools answers. Only the user turns them back on."
     )
+}
+
+/// What `drive_browser` knows of an agent's page (ESC-679).
+#[derive(Debug, Clone)]
+pub(crate) struct DriveInfo {
+    pub page: String,
+    pub template: String,
+    /// Where its row is shown; none when it is closed.
+    pub row: Option<Placement>,
+    /// The version it shows.
+    pub shown: u32,
+    /// The anchors of the version shown: key, selector.
+    pub anchors: Vec<(String, String)>,
+}
+
+impl DriveInfo {
+    /// The selector of a key of its template, or what keys there are.
+    pub(crate) fn anchor(&self, key: &str) -> Result<String, String> {
+        if self.template == "diagram" {
+            if let Some(node) = key.strip_prefix("nodes.") {
+                let ok = !node.is_empty()
+                    && node.len() <= 64
+                    && node
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+                if ok {
+                    return Ok(format!("#diagram [data-node=\"{node}\"]"));
+                }
+            }
+        }
+        self.anchors
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, s)| s.clone())
+            .ok_or_else(|| {
+                let mut keys: Vec<&str> = self.anchors.iter().map(|(k, _)| k.as_str()).collect();
+                if self.template == "diagram" {
+                    keys.push("nodes.<id>");
+                }
+                keys.join(", ")
+            })
+    }
 }
 
 /// The refusal of a page no longer kept (its agent or its project gone, or room made for others).

@@ -289,7 +289,7 @@ fn bundle<R: Runtime>(
     html: Option<String>,
     file: Option<String>,
     choice: Option<templates::Choice>,
-) -> Result<pages::Bundle, ToolError> {
+) -> Result<(pages::Bundle, Vec<templates::Anchor>), ToolError> {
     let lang = crate::i18n::ui();
     let failed = ToolError::Failed;
     match template {
@@ -328,7 +328,7 @@ fn bundle<R: Runtime>(
             }
             // Its document is the user's: what it left out is not the agent's to know by name.
             b.left_out.clear();
-            Ok(b)
+            Ok((b, Vec::new()))
         }
         PageTemplateArg::Html => {
             if data.is_some() {
@@ -342,7 +342,9 @@ fn bundle<R: Runtime>(
                     "Donne le document (html) ou son fichier (file), l’un des deux.",
                     "Give the document (html) or its file (file), one of the two."
                 ))),
-                (Some(html), None) => pages::from_html(lang, &html).map_err(failed),
+                (Some(html), None) => pages::from_html(lang, &html)
+                    .map(|b| (b, Vec::new()))
+                    .map_err(failed),
                 (None, Some(file)) => {
                     if who.discussion {
                         return Err(ToolError::Refused(tr!(
@@ -356,6 +358,7 @@ fn bundle<R: Runtime>(
                         who.home.join(&file)
                     };
                     pages::from_file(lang, &full, &who.home, &pages::open_within)
+                        .map(|b| (b, Vec::new()))
                         .map_err(ToolError::Refused)
                 }
             }
@@ -388,7 +391,7 @@ fn bundle<R: Runtime>(
             let home = (!who.discussion).then_some(who.home.as_path());
             pages::add_images(lang, &mut b, &rendered.images, home, &pages::open_within)
                 .map_err(ToolError::Refused)?;
-            Ok(b)
+            Ok((b, rendered.anchors))
         }
     }
 }
@@ -450,7 +453,7 @@ pub(super) async fn show_page<R: Runtime>(
                 let ask = carried.as_ref().map_or(Value::Null, ask_json);
                 escouade_of(&core2, &who, &title, a.data.clone(), ask)
             });
-            let bundle = bundle(&core2, &who, template, &title, a.data, a.html, a.file, choice)?;
+            let (bundle, anchors) = bundle(&core2, &who, template, &title, a.data, a.html, a.file, choice)?;
             core2
                 .page_show(
                     &who.author,
@@ -459,6 +462,7 @@ pub(super) async fn show_page<R: Runtime>(
                         template: template_name(template),
                         page: a.page,
                         bundle,
+                        anchors,
                         quiet,
                         escouade,
                         ask: deposited.as_ref().map(|x| x.id.clone()),
@@ -595,4 +599,4 @@ pub(super) fn close_page<R: Runtime>(
 }
 
 /// The sentence of the server's instructions on the pages, given while they are on.
-pub(super) const GUIDANCE: &str = "To show the user something that reads better as a page than as text (an end-of-batch or pre-merge review, a diagram, options to compare), show it with show_page: a template (review, diagram, compare) filled with your data, or your own HTML; then update it with a new version of the same page (page: \"p-<n>\") rather than opening another. It is copied and shown in a shelter of Escouade, without network. Put in it no secret, and no third party's content you have not read again. A Claude Code agent keeps its artifacts for what must be published on claude.ai.";
+pub(super) const GUIDANCE: &str = "To show the user something that reads better as a page than as text (an end-of-batch or pre-merge review, a diagram, options to compare), show it with show_page: a template (review, diagram, compare) filled with your data, or your own HTML; then update it with a new version of the same page (page: \"p-<n>\") rather than opening another, and walk the user through it with drive_browser (browser page:p-<n>: scroll_to and highlight by a key of its template such as criteria.2, tab, version). It is copied and shown in a shelter of Escouade, without network. Put in it no secret, and no third party's content you have not read again. A Claude Code agent keeps its artifacts for what must be published on claude.ai.";

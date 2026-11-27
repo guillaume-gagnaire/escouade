@@ -59,6 +59,7 @@ fn show(title: &str, page: Option<&str>, b: Bundle) -> Show {
         template: "html",
         page: page.map(str::to_string),
         bundle: b,
+        anchors: Vec::new(),
         quiet: false,
         escouade: None,
         ask: None,

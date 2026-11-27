@@ -13,11 +13,11 @@ export default {
     /** ESC-669: the tools of the browsers (list_browsers, read_browser…), under the server. */
     browsers: 'Agents et navigateurs',
     browsersDesc:
-      'Les agents ouvrent un navigateur de leur projet à côté de leur conversation et le ferment (open_browser, close_browser), et lisent ceux de « Navigateurs » (list_browsers, read_browser, capture_browser, browser_console) : le lancement du projet sans demander ; une autre adresse, avec ton accord, une fois par origine ; un artefact qu’ils ont publié, pour te le montrer. Jamais les adresses d’Escouade, ni ce poste hors des ports déclarés, ni les cookies, le stockage ou un mot de passe.',
+      'Les agents ouvrent un navigateur de leur projet à côté de leur conversation et le ferment (open_browser, close_browser), et lisent ceux de « Navigateurs » (list_browsers, read_browser, capture_browser, browser_console) et les pilotent geste par geste (drive_browser) : le lancement du projet sans demander ; une autre adresse, avec ton accord, une fois par origine (montrer y passe sans demander, agir attend ton accord) ; un artefact qu’ils ont publié, pour te le montrer. Ton premier geste dans la page leur reprend la main. Jamais les adresses d’Escouade, ni ce poste hors des ports déclarés, ni les cookies, le stockage, un fichier, un téléchargement ou un secret d’Escouade ; un mot de passe seulement sur le lancement et avec ton accord.',
     /** ESC-673: the tools of the agents' pages (show_page, get_page, close_page), under the server. */
     pages: 'Pages des agents',
     pagesDesc:
-      'Les agents te montrent une page dans « Navigateurs » (show_page) : une revue, un schéma, des options à comparer, ou leur propre HTML. Escouade la copie et la sert à part, sans réseau, sans accès à Escouade ni à tes fichiers. Coupé, leurs outils disparaissent et leurs lignes se ferment ; rien n’est effacé.',
+      'Les agents te montrent une page dans « Navigateurs » (show_page) : une revue, un schéma, des options à comparer, ou leur propre HTML, qu’ils font défiler et mettent en évidence (drive_browser). Escouade la copie et la sert à part, sans réseau, sans accès à Escouade ni à tes fichiers. Coupé, leurs outils disparaissent et leurs lignes se ferment ; rien n’est effacé.',
     /** ESC-423 (audit SEC-03): who among the agents answers another agent's permissions and questions. */
     answer: 'Les agents peuvent répondre aux demandes des autres agents',
     answerDesc:
@@ -117,6 +117,7 @@ export default {
     getPage: 'Lire l’état d’une page',
     closePage: 'Fermer une page',
     captureBrowser: 'Capturer un navigateur',
+    driveBrowser: 'Piloter un navigateur',
     browserConsole: 'Lire la console d’un navigateur',
     getBackgroundOutput: 'Lire la sortie d’une tâche de fond ou le rapport d’un sous-agent',
     stopBackgroundWork: 'Arrêter une tâche de fond ou un sous-agent',

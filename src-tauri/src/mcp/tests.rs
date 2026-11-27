@@ -47,6 +47,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "delete_folder",
     "delete_ticket",
     "dismiss_block",
+    "drive_browser",
     "forget_memory",
     "get_agent_summary",
     "get_ask",

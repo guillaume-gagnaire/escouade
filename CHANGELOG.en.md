@@ -4,6 +4,10 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- An agent now drives what it opens for you, gesture by gesture, to show you its work: it scrolls, highlights, switches to the phone width, and on the project’s launch it clicks, types and chooses; elsewhere, acting waits for your permission. Your first gesture in the page takes the hand back until you give it back; it never types a secret, never downloads or sends a file, and fills a password only with your permission.
+
 ## [2.2.15] — 2026-11-27
 
 - An agent’s page opens beside its conversation when you’re looking at it, otherwise it waits for you in “Browsers”; its card in the conversation shows it or opens it again, and its bar goes back to an earlier version or shows it at tablet or mobile width. A band above it says who wrote it and that it has no network nor access to Escouade or your files.

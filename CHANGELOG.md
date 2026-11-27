@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Un agent pilote maintenant ce qu’il t’ouvre, geste par geste, pour te montrer son travail : il fait défiler, met en évidence, passe en largeur mobile, et sur le lancement du projet il clique, tape et choisit ; ailleurs, agir attend ton accord. Ton premier geste dans la page lui reprend la main jusqu’à ce que tu la rendes ; il ne tape jamais un secret, ne télécharge ni n’envoie de fichier, et ne remplit un mot de passe qu’avec ton accord.
+
 ## [2.2.15] — 2026-11-27
 
 - Une page d’agent s’ouvre à côté de sa conversation quand tu la regardes, sinon elle t’attend dans « Navigateurs » ; sa carte dans la conversation l’affiche ou la rouvre, et sa barre remonte à une version précédente ou la montre en largeur tablette ou mobile. Une bande au-dessus rappelle qui l’a écrite et qu’elle n’a ni réseau ni accès à Escouade ou à tes fichiers.

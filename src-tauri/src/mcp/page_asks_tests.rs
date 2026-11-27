@@ -296,3 +296,33 @@ fn the_answer_told_to_a_page_is_a_fixed_script_with_ids_alone() {
     assert!(s.ends_with("([]);"), "{s}");
     assert!(!s.contains("alert"));
 }
+
+#[tokio::test]
+async fn a_page_its_agent_drives_proposes_nothing_for_the_user() {
+    // ESC-679: a choice the page proposes during a gesture of its agent's, or just after it (a declared tab of its own
+    // page whose script proposes), is the agent's doing: refused, nothing for the band.
+    let h = harness("page-asks-driven");
+    let (_p, a) = world(&h).await;
+    let c = as_agent(&h, &a.id).await;
+    read(
+        &c,
+        "show_page",
+        json!({ "title": "Revue", "template": "review", "data": review(), "ask": verdict() }),
+    )
+    .await;
+    let pages = super::browsers_tests::pages(&h);
+    let now = std::time::Instant::now();
+    assert_eq!(
+        pages.drives.take("page:p-1", &a.id, now),
+        crate::browserdrive::May::Go
+    );
+    assert!(!h.core.page_propose("p-1", proposal(&["a"])));
+    assert!(h.core.page_row("p-1").unwrap().proposal.is_none());
+    // Another page is not held by it.
+    assert!(!pages
+        .drives
+        .acted_lately("page:p-2", crate::browserdrive::CHOICE_QUIET, now));
+    // Once the agent's gesture is well over, the user's choice goes to the band again.
+    pages.drives.forget("page:p-1");
+    assert!(h.core.page_propose("p-1", proposal(&["a"])));
+}

@@ -21,6 +21,9 @@ mod background;
 #[cfg(test)]
 mod background_tests;
 pub(crate) mod browsers;
+pub(crate) mod browsers_drive;
+#[cfg(test)]
+mod browsers_drive_tests;
 pub(crate) mod browsers_open;
 #[cfg(test)]
 mod browsers_open_tests;
@@ -486,6 +489,14 @@ impl<R: Runtime> McpServer<R> {
     /// Who brings `token`: None when it is no token the server gave.
     pub fn caller(&self, token: &str) -> Option<Caller> {
         self.tokens.caller(token)
+    }
+
+    /// Every token the server gave, Claude outside Escouade's and the agents' (the secrets `drive_browser` never
+    /// types, ESC-679).
+    pub fn token_values(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.tokens.agents.read().values().cloned().collect();
+        out.extend(self.tokens.external.read().clone());
+        out
     }
 }
 

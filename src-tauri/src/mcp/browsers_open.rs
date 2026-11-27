@@ -98,7 +98,7 @@ pub(crate) fn judge(
 }
 
 /// What a refusal of `judge` says.
-fn never_said(n: Never) -> ToolError {
+pub(crate) fn never_said(n: Never) -> ToolError {
     ToolError::Refused(match n {
         Never::NotAnAddress => tr!(
             "Ce n’est pas une adresse : donne une adresse http ou https complète.",
@@ -819,6 +819,7 @@ pub(super) async fn close<R: Runtime>(
     }
     if page.driver.as_deref() == Some(me) || page.agent_id == me {
         pages.set_driver(&page.agent_id, None);
+        pages.drives.forget(&page.agent_id);
         tell_page(core, &page.agent_id, "undriven");
         return Ok(json!({
             "browser": page.agent_id,

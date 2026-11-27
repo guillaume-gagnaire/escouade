@@ -172,7 +172,7 @@ pub fn guard(method: Method, params: &Value, world: Option<i64>) -> Result<(), S
             let ours = fields
                 .get("expression")
                 .and_then(Value::as_str)
-                .is_some_and(|e| e.starts_with(&lib_head()));
+                .is_some_and(|e| e.starts_with(&lib_head()) || e.starts_with(&drive_head()));
             if !ours {
                 return Err("Runtime.evaluate: Escouade's scripts alone".into());
             }
@@ -192,6 +192,73 @@ pub fn guard(method: Method, params: &Value, world: Option<i64>) -> Result<(), S
                 Ok(())
             } else {
                 Err("Page.navigate: a web address alone".into())
+            }
+        }
+        // The driving's inputs (ESC-679): a click, a wheel, a key of the closed list, a text of 2 000 characters.
+        Method::InputDispatchMouseEvent => {
+            let t = fields.get("type").and_then(Value::as_str).unwrap_or("");
+            if !matches!(
+                t,
+                "mouseMoved" | "mousePressed" | "mouseReleased" | "mouseWheel"
+            ) {
+                return Err(format!("Input.dispatchMouseEvent: {t} is not allowed"));
+            }
+            let at = ["x", "y"].iter().all(|k| {
+                fields
+                    .get(*k)
+                    .and_then(Value::as_f64)
+                    .is_some_and(|v| (0.0..=20_000.0).contains(&v))
+            });
+            if !at {
+                return Err("Input.dispatchMouseEvent: a point of the view".into());
+            }
+            Ok(())
+        }
+        Method::InputDispatchKeyEvent => {
+            let t = fields.get("type").and_then(Value::as_str).unwrap_or("");
+            if !matches!(t, "keyDown" | "rawKeyDown" | "keyUp") {
+                return Err(format!("Input.dispatchKeyEvent: {t} is not allowed"));
+            }
+            let key = fields.get("key").and_then(Value::as_str).unwrap_or("");
+            if crate::browserdrive::Key::parse(key).is_none() {
+                return Err(format!(
+                    "Input.dispatchKeyEvent: {key} is not a key of the list"
+                ));
+            }
+            if let Some(k) = fields.keys().find(|k| {
+                ![
+                    "type",
+                    "key",
+                    "code",
+                    "windowsVirtualKeyCode",
+                    "nativeVirtualKeyCode",
+                    "text",
+                    "unmodifiedText",
+                ]
+                .contains(&k.as_str())
+            }) {
+                return Err(format!("Input.dispatchKeyEvent: {k} is not allowed"));
+            }
+            Ok(())
+        }
+        Method::InputInsertText => {
+            let ok = fields
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|t| t.chars().count() <= crate::browserdrive::TEXT_MAX)
+                && fields.len() == 1;
+            if ok {
+                Ok(())
+            } else {
+                Err("Input.insertText: a text of 2 000 characters alone".into())
+            }
+        }
+        Method::EmulationSetDeviceMetricsOverride => {
+            let w = fields.get("width").and_then(Value::as_i64).unwrap_or(0);
+            if (200..=4000).contains(&w) {
+                Ok(())
+            } else {
+                Err("Emulation.setDeviceMetricsOverride: a width between 200 and 4 000".into())
             }
         }
         _ => Ok(()),
@@ -228,6 +295,11 @@ pub enum Script<'a> {
 /// The start of every expression the core runs: its library, called.
 fn lib_head() -> String {
     format!("({LIB}")
+}
+
+/// The start of the driving's expressions (`browserdrive`, ESC-679): its own library, called.
+fn drive_head() -> String {
+    format!("({}", crate::browserdrive::LIB)
 }
 
 /// The expression of `script`: the library called with its arguments, values in JSON.
@@ -1215,6 +1287,35 @@ pub fn read<R: Runtime>(
 pub fn eval<R: Runtime>(webview: &Webview<R>, script: &Script<'_>) -> Result<Value, String> {
     let text = platform::eval(webview, &expression(script))?;
     serde_json::from_str(&text).map_err(|e| format!("not an answer of Escouade's script: {e}"))
+}
+
+/// Runs an expression of the driving's library (`browserdrive::expression`) in Escouade's world: its text. Under
+/// Windows the guard takes it for Escouade's own (it starts with the library) or refuses it.
+pub fn eval_expression<R: Runtime>(
+    webview: &Webview<R>,
+    expression: &str,
+) -> Result<String, String> {
+    if !expression.starts_with(&drive_head()) && !expression.starts_with(&lib_head()) {
+        return Err("Escouade's scripts alone".into());
+    }
+    platform::eval(webview, expression)
+}
+
+/// An input or a width of the DevTools protocol for the driving (ESC-679), of the closed list and checked by `guard`.
+#[cfg(windows)]
+pub fn input<R: Runtime>(
+    webview: &Webview<R>,
+    method: Method,
+    params: Value,
+) -> Result<Value, String> {
+    match method {
+        Method::InputDispatchMouseEvent
+        | Method::InputDispatchKeyEvent
+        | Method::InputInsertText
+        | Method::EmulationSetDeviceMetricsOverride
+        | Method::EmulationClearDeviceMetricsOverride => platform::cdp(webview, method, params),
+        _ => Err(format!("{}: not an input", method.name())),
+    }
 }
 
 // ---------- captures ----------

@@ -155,6 +155,10 @@ export async function onAgentPageEvent(e: AgentPageEvent) {
       closePage(key, true);
       void refresh(e.page);
       return;
+    case 'version':
+      // Its agent showed another of its versions (`drive_browser`, ESC-679): its bar says which.
+      await refresh(e.page);
+      return;
     case 'erased':
       agentpages.info[e.page] = null;
       closePage(key, true);

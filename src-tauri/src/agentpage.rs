@@ -958,6 +958,11 @@ fn builder<R: Runtime>(
         .devtools(true)
         .general_autofill_enabled(false)
         .initialization_script_for_all_frames(init_script());
+    // WebKit's world of Escouade keeps nothing between two calls: the user's gestures are counted in the page
+    // (`drive_browser`, ESC-679).
+    if !windows {
+        b = b.initialization_script(crate::browserdrive::GESTURES);
+    }
     // Its network through the dead end alone, or no page. Windows: a browser of the pages' own,
     // and its filter as well, put once it is made. macOS: none (WKWebView's proxy needs macOS 14
     // and a feature of Tauri): the CSP, `on_navigation` and the guard hold it there.

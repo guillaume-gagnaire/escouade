@@ -1597,3 +1597,115 @@ pub struct BrowserConsoleArgs {
     )]
     pub limit: Option<u64>,
 }
+
+/// What `drive_browser` does (ESC-679, AB-7), one action per call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(inline)]
+pub enum DriveActionArg {
+    Navigate,
+    Back,
+    Forward,
+    Reload,
+    Wait,
+    ScrollTo,
+    Scroll,
+    Highlight,
+    Clear,
+    Width,
+    Tab,
+    Click,
+    Type,
+    Select,
+    Press,
+    Version,
+}
+
+/// What `wait` waits for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum WaitForArg {
+    Load,
+    Target,
+}
+
+/// The widths of the bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum DriveWidthArg {
+    Full,
+    Tablet,
+    Mobile,
+}
+
+/// A key `press` gives: the closed list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[schemars(inline)]
+pub enum PressKeyArg {
+    Enter,
+    Escape,
+    Tab,
+    ArrowUp,
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DriveBrowserArgs {
+    #[schemars(
+        description = "The row, by the key list_browsers gives: your agent's id for the page of your test, run:<project>:<command>, browser:<id> for a tab you opened, page:p-<n> for one of your pages."
+    )]
+    pub browser: String,
+    #[schemars(
+        description = "One action. To show (without asking, everywhere): scroll_to, scroll, highlight, clear, width, wait; reload, back, forward on a tab; version on one of your pages. To act: tab, click, type, select, press, navigate: without asking on your project's launch; outside it (an artifact, a third party's site) with the user's leave, once per origin and per browser; on one of your pages, tab alone."
+    )]
+    pub action: DriveActionArg,
+    #[schemars(
+        description = "The element: #id, a CSS selector (200 characters at most, without :has(), four levels at most), text=Envoyer (the first visible clickable element of that text), or on one of your pages a key of its template (criteria.2, sections.perf, verdict.a, nodes.A). For scroll_to, highlight, tab, click, type, select, and wait with for target."
+    )]
+    pub target: Option<String>,
+    #[schemars(
+        description = "navigate: an address of the browser's origin (or of your project's launch). Another origin is opened by open_browser, which asks the user."
+    )]
+    pub url: Option<String>,
+    #[schemars(description = "wait: load (the default) or target.")]
+    #[serde(rename = "for")]
+    pub wait_for: Option<WaitForArg>,
+    #[schemars(description = "wait: the seconds to wait at most, 30 at most (10 by default).")]
+    pub timeout: Option<u64>,
+    #[schemars(description = "scroll: the pixels, -5000 to 5000 (down when positive).")]
+    pub by: Option<i64>,
+    #[schemars(description = "highlight: the label beside the contour, 60 characters at most.")]
+    pub label: Option<String>,
+    #[schemars(description = "width: full, tablet (768 px) or mobile (390 px).")]
+    pub width: Option<DriveWidthArg>,
+    #[schemars(
+        description = "type: the text, 2000 characters at most; what the field held is replaced. Never a secret of Escouade; a password field only on your project's launch and with the user's leave (asked once per browser)."
+    )]
+    pub text: Option<String>,
+    #[schemars(description = "type: press Enter after the text.")]
+    pub submit: Option<bool>,
+    #[schemars(description = "select: the value of the option, or its label.")]
+    pub value: Option<String>,
+    #[schemars(
+        description = "press: Enter, Escape, Tab, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, PageUp, PageDown, Home or End, in the focused element."
+    )]
+    pub key: Option<PressKeyArg>,
+    #[schemars(description = "version: the version of your page to show (get_page lists them).")]
+    pub n: Option<u32>,
+    #[schemars(
+        description = "true: after the gesture, the band shows « Continuer » and the tool waits for the user's click, 5 minutes at most; user then says continued, took_hand or timeout."
+    )]
+    pub wait_user: Option<bool>,
+    #[schemars(
+        description = "true: an image of the view after the gesture, within capture_browser's bounds and leaves (20 a minute)."
+    )]
+    pub look: Option<bool>,
+}

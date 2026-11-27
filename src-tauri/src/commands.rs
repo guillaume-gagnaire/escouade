@@ -5470,3 +5470,41 @@ pub async fn inbox_save_file(
     .map_err(|e| e.to_string())?
     .map_err(err)
 }
+
+/// The driving of the row `key` (`drive_browser`, ESC-679): who drives it, who has the hand, the last gesture,
+/// whether « Continuer » waits, the requests to fill a password. For the band of AB-8.
+#[tauri::command]
+pub fn browser_drive_state(
+    pages: State<Arc<crate::devpage::Pages>>,
+    key: String,
+) -> crate::browserdrive::DriveView {
+    pages.drives.view(&key)
+}
+
+/// A move of the user's on the row `key`: « Reprendre la main » (`take`), « La rendre » (`give`), « Ne plus laisser
+/// piloter » (`stop`), « Continuer » (`continue`). The agent is told when the hand comes back or the driving ends.
+#[tauri::command]
+pub async fn browser_drive_hand(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    key: String,
+    hand: crate::browserdrive::HandMove,
+) -> Res<crate::browserdrive::DriveView> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    Ok(crate::mcp::browsers_drive::hand(&core, &pages, &key, hand).await)
+}
+
+/// The user's answer to `agent`'s request to fill a password in the row `key` (choice C2, once per browser).
+#[tauri::command]
+pub async fn browser_drive_password(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    key: String,
+    agent: String,
+    allow: bool,
+) -> Res<crate::browserdrive::DriveView> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    Ok(crate::mcp::browsers_drive::password(&core, &pages, &key, &agent, allow).await)
+}

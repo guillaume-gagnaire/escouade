@@ -36,6 +36,9 @@ mod branchci;
 // probe (`agentbrowser_probe`) and the tests use it, and parts of it (the driving's methods) wait.
 #[cfg(test)]
 mod branches_tests;
+mod browserdrive;
+#[cfg(test)]
+mod browserdrive_tests;
 #[allow(dead_code)]
 mod browserread;
 #[cfg(test)]
@@ -752,6 +755,9 @@ pub fn run() {
                 commands::devpage_consents,
                 commands::devpage_consent,
                 commands::devpage_revoke,
+                commands::browser_drive_state,
+                commands::browser_drive_hand,
+                commands::browser_drive_password,
                 commands::devpage_looking,
                 commands::devpage_open_asks,
                 commands::devpage_open_answer,

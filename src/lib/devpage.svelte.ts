@@ -566,6 +566,10 @@ export function onPageEvent(e: PageEvent) {
     case 'responsive':
       cycleMode(e.agentId);
       break;
+    case 'mode':
+      // An agent's `drive_browser` width (ESC-679): kept, as the user's own choice is, and the bar follows.
+      if (e.url === 'full' || e.url === 'tablet' || e.url === 'mobile') setMode(e.agentId, e.url);
+      break;
     case 'width':
       // An agent's capture at another width: shown at it, then given back its own.
       page.shot = e.url === 'full' || e.url === 'tablet' || e.url === 'mobile' ? e.url : undefined;

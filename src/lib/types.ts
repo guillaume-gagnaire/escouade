@@ -1118,8 +1118,22 @@ export interface PageEvent {
   agentId: string;
   /** `consents`: an agent asked to read it, or its leaves changed (ESC-669): the window reads them again. `width`: an agent's capture shows it at the width in `url` (`full`, `tablet`, `mobile`) for its time, an empty `url` gives it back its own (ESC-670). `opens`: an
    * agent asked to open an address, or was answered (ESC-678, keyed by the agent): the bands read them again. `closed`:
-   * its agent closed it; `undriven`: its agent no longer drives it. */
-  phase: 'started' | 'finished' | 'outside' | 'refused' | 'responsive' | 'title' | 'consents' | 'width' | 'opens' | 'closed' | 'undriven';
+   * its agent closed it; `undriven`: its agent no longer drives it. `mode`: its agent shows it at the width in `url`, for good
+   * (`drive_browser`, ESC-679). `drive`: its driving changed (a gesture, the hand, « Continuer »; AB-8 draws it). */
+  phase:
+    | 'started'
+    | 'finished'
+    | 'outside'
+    | 'refused'
+    | 'responsive'
+    | 'title'
+    | 'consents'
+    | 'width'
+    | 'opens'
+    | 'closed'
+    | 'undriven'
+    | 'mode'
+    | 'drive';
   url: string;
   /** Its document's title, with `title` (cleaned by the backend). */
   title?: string;
@@ -1131,8 +1145,20 @@ export interface AgentPageEvent {
   /** Its number, `p-<n>`. */
   page: string;
   /** `shown`: an agent showed it or a version of it, its row opened (ESC-673); `closed`: its row closed; `erased`: no
-   * longer kept (its agent or its project gone, room made), its cards say so (AP-3). */
-  phase: 'started' | 'finished' | 'wants' | 'refused' | 'download' | 'permission' | 'title' | 'shown' | 'closed' | 'erased' | 'proposed';
+   * longer kept (its agent or its project gone, room made), its cards say so (AP-3); `version`: its agent showed another of its versions (`drive_browser`, ESC-679). */
+  phase:
+    | 'started'
+    | 'finished'
+    | 'wants'
+    | 'refused'
+    | 'download'
+    | 'permission'
+    | 'title'
+    | 'shown'
+    | 'closed'
+    | 'erased'
+    | 'proposed'
+    | 'version';
   url?: string;
   title?: string;
 }
