@@ -19,6 +19,12 @@ fn own(u: &Url) -> bool {
         || u.scheme() == "tauri"
 }
 
+/// The ports of this machine the project's launch declares, in these tests: 4100 to 4109 (its
+/// commands and its agents' blocks), Escouade's server's never among them.
+fn local(port: u16) -> bool {
+    (4100..4110).contains(&port)
+}
+
 #[test]
 fn a_page_stays_on_its_launchs_origin() {
     let home = url("http://localhost:41731/users?search=marie@");
@@ -28,23 +34,75 @@ fn a_page_stays_on_its_launchs_origin() {
         "http://localhost:41731/a/b#c",
         "about:blank",
     ] {
-        assert_eq!(judge(&url(to), &home, own), Verdict::Here, "{to}");
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Here, "{to}");
     }
 }
 
 #[test]
-fn another_origin_opens_in_the_systems_browser() {
+fn another_web_origin_stays_in_the_tab() {
+    // ESC-695: a tab is a real browser. A sign-in goes through its provider and comes back by a
+    // redirection: links, redirections, forms and the bar stay in the tab, on any web origin.
     let home = url("http://localhost:41731/");
     for to in [
-        // Another port, another host, another scheme of the same host: other origins.
+        "https://claude.ai/login",
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id=x&redirect_uri=y",
+        "https://github.com/login/oauth/authorize?scope=read",
+        "http://example.com/",
+        "http://localhost.evil.com:41731/",
+        "https://xn--80ak6aa92e.com/",
+    ] {
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Here, "{to}");
+    }
+    // From a site of the internet too, back to the launch included.
+    let home = url("https://claude.ai/");
+    for to in [
+        "https://accounts.google.com/",
+        "http://localhost:4105/callback",
+    ] {
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Here, "{to}");
+    }
+}
+
+#[test]
+fn this_machine_at_a_port_the_project_does_not_declare_is_refused() {
+    // A site that stays in the tab could reach a service of this machine (Escouade's own server,
+    // a database's console): the loopback at another port than the tab's own and the project's
+    // declared ones goes nowhere, in every spelling of it.
+    let home = url("http://localhost:41731/");
+    for to in [
         "http://localhost:41732/",
+        "http://127.0.0.1:22/",
+        "http://127.1.2.3:8080/",
+        "http://[::1]:5000/",
+        "http://[::ffff:127.0.0.1]:5000/",
+        "http://0.0.0.0:6379/",
+        "http://app.localhost:9000/",
+        "http://2130706433:5000/",
+        "https://localhost/",
+    ] {
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Nowhere, "{to}");
+    }
+    // Its own port, on any name of the loopback, and the declared ones.
+    for to in [
         "http://127.0.0.1:41731/",
         "https://localhost:41731/",
-        "https://github.com/gagnaire/escouade",
-        "http://localhost.evil.com:41731/",
-        "mailto:someone@example.com",
+        "http://localhost:4100/",
+        "http://[::1]:4109/x",
     ] {
-        assert_eq!(judge(&url(to), &home, own), Verdict::Outside, "{to}");
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Here, "{to}");
+    }
+    // A site of the internet has no port of this machine of its own: its 443 is not the loopback's.
+    let home = url("https://claude.ai/");
+    for to in ["https://localhost/", "http://127.0.0.1:443/"] {
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Nowhere, "{to}");
+    }
+}
+
+#[test]
+fn mail_and_phone_open_in_the_system() {
+    let home = url("http://localhost:41731/");
+    for to in ["mailto:someone@example.com", "tel:+33123456789"] {
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Outside, "{to}");
     }
 }
 
@@ -58,7 +116,16 @@ fn escouades_own_addresses_are_refused_even_on_the_launchs_origin() {
         "http://tauri.localhost/",
         "tauri://localhost/",
     ] {
-        assert_eq!(judge(&url(to), &home, own), Verdict::Nowhere, "{to}");
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Nowhere, "{to}");
+    }
+    // Nor from another site.
+    let home = url("https://example.com/");
+    for to in ["http://localhost:1420/", "http://tauri.localhost/"] {
+        assert_eq!(
+            judge(&url(to), &home, own, |_| true),
+            Verdict::Nowhere,
+            "{to}"
+        );
     }
 }
 
@@ -69,18 +136,86 @@ fn files_scripts_and_other_schemes_go_nowhere() {
         "file:///C:/Users/me/.escouade/settings.json",
         "javascript:alert(1)",
         "data:text/html,<p>x</p>",
+        "blob:http://localhost:41731/0f1e-2d3c",
         "ipc://localhost/open_url",
         "http://ipc.localhost/open_url",
         "asset://localhost/x",
         "vscode://file/x",
+        "ms-settings:privacy",
+        "ftp://example.com/",
+        "ws://example.com/",
     ] {
-        let verdict = judge(&url(to), &home, own);
-        assert!(
-            verdict == Verdict::Nowhere || (verdict == Verdict::Outside && to.starts_with("http")),
-            "{to}: {verdict:?}"
-        );
-        assert_ne!(verdict, Verdict::Here, "{to}");
+        assert_eq!(judge(&url(to), &home, own, local), Verdict::Nowhere, "{to}");
     }
+}
+
+#[test]
+fn the_windows_a_page_opens_are_bounded_and_close_with_their_tab() {
+    // ESC-695: a sign-in's window opens in Escouade, on the tab's session; a few at a time.
+    let pages = Pages::default();
+    for n in 0..POPUPS_MAX {
+        assert!(pages.add_popup("browser:b1", &format!("w{n}")), "{n}");
+    }
+    assert!(!pages.add_popup("browser:b1", "w9"), "beyond the bound");
+    assert_eq!(pages.popups("browser:b1"), POPUPS_MAX);
+    assert_eq!(pages.popups("browser:b2"), 0);
+    // Another tab has its own.
+    assert!(pages.add_popup("browser:b2", "x0"));
+    // One closed by its page (`window.close`) makes room again.
+    pages.remove_popup("w1");
+    assert!(pages.add_popup("browser:b1", "w3"));
+    // The tab closes: its windows with it, the other tab's kept.
+    let mut gone = pages.take_popups("browser:b1");
+    gone.sort();
+    assert_eq!(gone, vec!["w0", "w2", "w3"]);
+    assert!(pages.take_popups("browser:b1").is_empty());
+    assert_eq!(pages.take_popups("browser:b2"), vec!["x0"]);
+}
+
+#[test]
+fn a_pages_window_is_refused_every_command_and_says_its_origin_first() {
+    // Its label is its tab's, with a `:` that no tab's label holds: no command answers it.
+    let label = popup_label("browser:b1", 3);
+    assert_eq!(label, "devpage-browser_b1:w3");
+    assert!(refuses(&label));
+    assert!(refuses(&popup_label("agent-1", 1)));
+    assert_ne!(popup_label("browser:b1", 1), page_label("browser:b1-w1"));
+    // Its title: the origin, which the page does not choose, before the document's title.
+    let at = url("https://accounts.google.com/o/oauth2/v2/auth?client_id=x");
+    assert_eq!(popup_title(&at, ""), "https://accounts.google.com");
+    assert_eq!(
+        popup_title(&at, "Sign in – Google\u{202e}\nAccounts"),
+        "https://accounts.google.com — Sign in – Google Accounts"
+    );
+    assert_eq!(
+        popup_title(&url("https://evil.example/"), "https://accounts.google.com"),
+        "https://evil.example — https://accounts.google.com"
+    );
+    assert_eq!(popup_title(&url("about:blank"), ""), "");
+}
+
+#[test]
+fn a_pages_window_closes_by_its_own_address_a_tab_refuses_it() {
+    // The window's `window.close` goes to `CLOSE_URL`, which its own navigation closes it by; in a
+    // tab, that address is refused as any other of Escouade's schemes.
+    let script = close_script();
+    assert!(script.contains(CLOSE_URL));
+    assert!(script.contains("defineProperty(window, 'close'"));
+    let home = url("http://localhost:41731/");
+    assert_eq!(judge(&url(CLOSE_URL), &home, own, local), Verdict::Nowhere);
+}
+
+#[test]
+fn a_pages_window_has_a_size_of_its_own_whatever_the_page_asks() {
+    // A page asks any number (WebView2 gives them unsigned: a negative one comes huge); the window's
+    // place is Escouade's, never the page's.
+    assert_eq!(popup_size(None), (520.0, 680.0));
+    assert_eq!(popup_size(Some((480.0, 600.0))), (480.0, 600.0));
+    assert_eq!(popup_size(Some((4_294_935_296.0, 1.0))), (1200.0, 320.0));
+    assert_eq!(
+        popup_size(Some((f64::NAN, f64::INFINITY))),
+        (1200.0, 1000.0)
+    );
 }
 
 #[test]
@@ -90,7 +225,7 @@ fn a_page_cannot_open_its_devtools_by_itself() {
     // page that goes there opens nothing.
     let home = url("http://localhost:41731/");
     assert_eq!(
-        judge(&url("escouade-devtools://open/"), &home, own),
+        judge(&url("escouade-devtools://open/"), &home, own, local),
         Verdict::Nowhere
     );
     // Its script holds the width's shortcut alone: no F12, no Ctrl+Shift+I, nothing of Tauri's.
@@ -263,6 +398,7 @@ fn launching_again_keeps_one_page_per_agent() {
                 }),
                 data_root: &dir,
                 visible: true,
+                local: Arc::new(local),
             },
             own.clone(),
             tell.clone(),
@@ -301,7 +437,10 @@ fn the_widths_are_said_to_the_window_as_it_says_them() {
 #[test]
 fn the_width_shortcut_asks_the_window_for_the_next_width() {
     let home = url("http://localhost:41731/");
-    assert_eq!(judge(&url(RESPONSIVE_URL), &home, own), Verdict::Responsive);
+    assert_eq!(
+        judge(&url(RESPONSIVE_URL), &home, own, local),
+        Verdict::Responsive
+    );
     let script = shortcut_script();
     assert!(script.contains(RESPONSIVE_URL));
     assert!(script.contains("e.code === 'KeyM'"));

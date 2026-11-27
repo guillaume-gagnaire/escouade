@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Tu te connectes à un site dans un onglet d’Escouade, sa fenêtre de connexion comprise (Google, OAuth, lien reçu par courriel collé dans la barre) : tout se fait dans Escouade, et la session reste celle du projet.
 - Un agent de Claude Code t’ouvre son artefact à côté de sa conversation, et l’onglet se recharge à chaque nouvelle version qu’il publie, sauf quand tu as la main. Seuls les artefacts qu’il a lui-même publiés s’ouvrent ainsi ; sur claude.ai, il montre sans rien lire de ta session sans ton accord.
 - Un agent pilote maintenant ce qu’il t’ouvre, geste par geste, pour te montrer son travail : il fait défiler, met en évidence, passe en largeur mobile, et sur le lancement du projet il clique, tape et choisit ; ailleurs, agir attend ton accord. Ton premier geste dans la page lui reprend la main jusqu’à ce que tu la rendes ; il ne tape jamais un secret, ne télécharge ni n’envoie de fichier, et ne remplit un mot de passe qu’avec ton accord.
 - Tu vois l’agent piloter sous tes yeux : une bande au-dessus de la page dit qui pilote et son dernier geste, un curseur à la couleur du projet va où il agit et ce qu’il met en évidence s’éclaire, sans que la page puisse les lire ni les effacer. Chaque geste est une rangée numérotée dans la conversation et, sur une page d’agent, un repère sur le rail qui t’y ramène ; « Reprendre la main » l’arrête aussitôt, « La rendre » le laisse continuer.

@@ -488,9 +488,51 @@ fn a_read_answers_its_html_or_its_text_with_its_bounds() {
 
 // ---------- browser_console (ESC-671, AB-4) ----------
 
-/// The buffers of the browser `key`, as its webview's creation makes them.
+/// The buffers of the browser `key`, as its webview's creation makes them: on its address's origin.
 fn logs(h: &Harness, key: &str) -> Arc<crate::browserread::Buffers> {
-    pages(h).new_logs(key)
+    let logs = pages(h).new_logs(key);
+    if let Some(p) = pages(h).get(key) {
+        logs.set_origin(&p.url);
+    }
+    logs
+}
+
+#[tokio::test]
+async fn the_console_gives_nothing_of_an_origin_the_agent_may_not_read() {
+    // ESC-695: the tab of the launch went to a sign-in's provider and came back; what the console
+    // kept there is not the launch's, and the agent has no leave for it.
+    let h = harness("mcp-browsers-console-origins");
+    let (_, a) = world(&h).await;
+    let buffers = logs(&h, &a.id);
+    buffers.push_console(told(
+        "avant",
+        crate::browserread::Level::Log,
+        "http://localhost:4211/app.js",
+    ));
+    buffers.set_origin("https://accounts.google.com/signin");
+    buffers.push_console(told(
+        "chez le fournisseur",
+        crate::browserread::Level::Log,
+        "",
+    ));
+    buffers.push_network(failed("https://accounts.google.com/x", Some(403), None));
+    buffers.set_origin("http://localhost:4211/callback");
+    buffers.push_console(told(
+        "après",
+        crate::browserread::Level::Log,
+        "http://localhost:4211/app.js",
+    ));
+    let c = as_agent(&h, &a.id).await;
+    let v = console(&c, json!({ "browser": a.id, "network": true })).await;
+    let texts: Vec<_> = v["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["text"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(texts, vec!["avant", "après"]);
+    assert!(v["network"].as_array().unwrap().is_empty(), "{v}");
+    c.cancel().await.unwrap();
 }
 
 fn told(

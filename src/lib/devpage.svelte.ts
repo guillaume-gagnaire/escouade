@@ -563,9 +563,13 @@ export function onPageEvent(e: PageEvent) {
       page.waiting = undefined;
       break;
     case 'outside':
-      // Another origin: the system's browser, as every link of the window.
+      // A mail or phone address (ESC-695: every web origin stays in the tab): the system's.
       app.run(openUrl(e.url));
-      app.toast(t('devpage.outside', { host: hostOf(e.url), page: hostOf(page.url) }), 'info');
+      app.toast(t('devpage.outside', { url: e.url.slice(0, 200) }), 'info');
+      break;
+    case 'popups':
+      // A window its page asked for, beyond the few it may have open (ESC-695).
+      app.toast(t('devpage.popups'), 'info');
       break;
     case 'responsive':
       cycleMode(e.agentId);

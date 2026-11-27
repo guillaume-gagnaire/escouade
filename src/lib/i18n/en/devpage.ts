@@ -34,7 +34,8 @@ export default {
   relaunch: 'Launch again',
   viewLogs: 'View logs',
   covered: 'The page comes back when what is over it closes.',
-  outside: '{host} opened in your browser: only {page} shows here.',
+  outside: '{url} opened outside Escouade, in your system’s app.',
+  popups: 'The page already has 3 windows open: close one to open another.',
   refused: 'The page tried to open {url}: refused.',
   devtoolsWhere: {
     windows: 'In a window of their own: WebView2 doesn’t dock them in the page.',

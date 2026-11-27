@@ -906,7 +906,8 @@ impl Stamped for NetEntry {
 /// A buffer of `CAP` entries: the oldest go first. It keeps how many went, and when the last
 /// `CAP` of them were told, to say what a reader lost.
 struct Ring<T> {
-    kept: VecDeque<T>,
+    /// Each entry with the origin of the document the browser was on when it came (ESC-695).
+    kept: VecDeque<(T, Arc<str>)>,
     /// The last number given (the first entry is 1).
     last: u64,
     last_t: u64,
@@ -927,13 +928,13 @@ impl<T> Default for Ring<T> {
 }
 
 impl<T: Stamped + Clone> Ring<T> {
-    fn push(&mut self, mut entry: T, now: u64) {
+    fn push(&mut self, mut entry: T, now: u64, origin: Arc<str>) {
         self.last += 1;
         // The times only go forward, for `since` to cut right.
         self.last_t = self.last_t.max(now);
         entry.stamp(self.last, self.last_t);
         if self.kept.len() >= CAP {
-            if let Some(old) = self.kept.pop_front() {
+            if let Some((old, _)) = self.kept.pop_front() {
                 self.evicted += 1;
                 if self.evicted_t.len() >= CAP {
                     self.evicted_t.pop_front();
@@ -941,12 +942,18 @@ impl<T: Stamped + Clone> Ring<T> {
                 self.evicted_t.push_back(old.t());
             }
         }
-        self.kept.push_back(entry);
+        self.kept.push_back((entry, origin));
     }
 
-    /// The entries after `since` that `keep` takes, `limit` at most; the number of the last one
-    /// looked at; and how many after `since` were lost.
-    fn read(&self, since: SinceAt, limit: usize, keep: impl Fn(&T) -> bool) -> (Vec<T>, u64, u64) {
+    /// The entries after `since` that `keep` takes, of an origin `of` takes, `limit` at most; the
+    /// number of the last one looked at; and how many after `since` were lost.
+    fn read(
+        &self,
+        since: SinceAt,
+        limit: usize,
+        keep: impl Fn(&T) -> bool,
+        of: &dyn Fn(&str) -> bool,
+    ) -> (Vec<T>, u64, u64) {
         let after = |e: &T| match since {
             SinceAt::Seq(s) => e.seq() > s,
             SinceAt::Time(t) => e.t() >= t,
@@ -961,16 +968,17 @@ impl<T: Stamped + Clone> Ring<T> {
             SinceAt::Time(_) => self
                 .kept
                 .iter()
+                .map(|(e, _)| e)
                 .take_while(|e| !after(e))
                 .last()
                 .map_or(self.evicted, |e| e.seq()),
         };
-        for e in self.kept.iter().filter(|e| after(e)) {
+        for (e, origin) in self.kept.iter().filter(|(e, _)| after(e)) {
             if out.len() >= limit {
                 break;
             }
             cursor = e.seq();
-            if keep(e) {
+            if keep(e) && of(origin) {
                 out.push(e.clone());
             }
         }
@@ -1059,6 +1067,8 @@ pub struct Buffers {
 
 #[derive(Default)]
 struct Inner {
+    /// The origin of the document the browser is on (`set_origin`), given to what comes now.
+    origin: Arc<str>,
     console: Ring<ConsoleEntry>,
     network: Ring<NetEntry>,
     pending: HashMap<String, Pending>,
@@ -1092,7 +1102,9 @@ impl Buffers {
         e.text = clip_chars(&e.text, TEXT_MAX);
         e.url = strip_url(&e.url);
         e.source = clip_chars(&e.source, 40);
-        self.inner.lock().console.push(e, now_ms());
+        let mut inner = self.inner.lock();
+        let origin = inner.origin.clone();
+        inner.console.push(e, now_ms(), origin);
     }
 
     pub fn push_network(&self, mut e: NetEntry) {
@@ -1103,11 +1115,30 @@ impl Buffers {
         e.method = clip_chars(&e.method, 16);
         e.kind = clip_chars(&e.kind, 40);
         e.error = e.error.map(|x| clip_chars(&x, 200));
-        self.inner.lock().network.push(e, now_ms());
+        let mut inner = self.inner.lock();
+        let origin = inner.origin.clone();
+        inner.network.push(e, now_ms(), origin);
     }
 
-    /// What `q` asks, oldest first.
+    /// The browser goes to `url` (ESC-695): what comes from now on is of its origin
+    /// (`scheme://host[:port]`, empty for another scheme).
+    pub fn set_origin(&self, url: &str) {
+        let origin = tauri::Url::parse(url)
+            .ok()
+            .filter(|u| matches!(u.scheme(), "http" | "https"))
+            .map(|u| u.origin().ascii_serialization())
+            .unwrap_or_default();
+        self.inner.lock().origin = Arc::from(origin);
+    }
+
+    /// What `q` asks, oldest first, of every origin.
     pub fn read(&self, q: &Query) -> Logs {
+        self.read_of(q, &|_| true)
+    }
+
+    /// What `q` asks, oldest first, of the origins `of` takes alone (ESC-695): a tab goes to any
+    /// web origin, and an agent reads only what came while it was on one it may read.
+    pub fn read_of(&self, q: &Query, of: &dyn Fn(&str) -> bool) -> Logs {
         let limit = if q.limit == 0 { 200 } else { q.limit.min(CAP) };
         let inner = self.inner.lock();
         let (sc, sn) = match q.since {
@@ -1128,11 +1159,14 @@ impl Buffers {
             ),
             Since::Time(t) => (SinceAt::Time(t), SinceAt::Time(t)),
         };
-        let (entries, console, dropped_c) = inner.console.read(sc, limit, |e| {
-            q.levels.is_empty() || q.levels.contains(&e.level)
-        });
+        let (entries, console, dropped_c) = inner.console.read(
+            sc,
+            limit,
+            |e| q.levels.is_empty() || q.levels.contains(&e.level),
+            of,
+        );
         let (network, net, dropped_n) = if q.network {
-            inner.network.read(sn, limit, |_| true)
+            inner.network.read(sn, limit, |_| true, of)
         } else {
             (Vec::new(), inner.network.last, 0)
         };

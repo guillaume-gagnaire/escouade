@@ -38,8 +38,10 @@ export default {
   relaunch: 'Relancer',
   viewLogs: 'Voir les logs',
   covered: 'La page revient quand ce qui passe dessus se ferme.',
-  /** `{host}`: the other site; `{page}`: the launch's. */
-  outside: '{host} s’est ouvert dans ton navigateur : ici, seul {page} s’affiche.',
+  /** A mail or phone address the page opened (ESC-695: every web origin stays in the tab). */
+  outside: '{url} s’est ouvert hors d’Escouade, dans l’application du système.',
+  /** A window the page asked for, beyond the 3 it may have open. */
+  popups: 'La page a déjà 3 fenêtres ouvertes : ferme-en une pour en ouvrir une autre.',
   refused: 'La page a voulu ouvrir {url} : refusé.',
   /** Where the devtools go on this system (ESC-657): docked in the page where its webview can, else a window of their own. */
   devtoolsWhere: {

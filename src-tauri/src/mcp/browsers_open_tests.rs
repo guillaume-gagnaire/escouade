@@ -649,3 +649,44 @@ async fn a_new_version_reloads_the_tabs_it_opened_on_that_artifact_alone() {
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     assert_eq!(pages.drives.view("browser:a1").step, 0);
 }
+
+#[tokio::test]
+async fn a_tabs_page_goes_on_this_machine_at_its_projects_declared_ports_alone() {
+    // ESC-695: a tab's page goes to any web origin, never to this machine at a port its project
+    // does not declare (`devpage::judge` asks `local_of`), read as the launch is when it goes there.
+    let h = harness("mcp-browsers-open-local");
+    let (p, a) = world(&h).await;
+    let local = super::browsers::local_of(&h.core, &p.id);
+    for port in [4100, 4210, 4211, 4219] {
+        assert!(local(port), "{port}");
+    }
+    for port in [22, 4101, 4220, 6379, 1420] {
+        assert!(!local(port), "{port}");
+    }
+    // An agent's block given afterwards counts at once; another project's never.
+    h.core.agent(&a.id).unwrap().lock().meta.port_base = Some(4300);
+    assert!(local(4305));
+    assert!(!local(4211));
+    let other = other_project(&h, "Voisin").await;
+    assert!(!super::browsers::local_of(&h.core, &other.id)(4305));
+    // What an agent opens is still judged as before (C3): another origin is asked of the user,
+    // though the tab's page may go there by itself.
+    let c = as_agent(&h, &a.id).await;
+    let v = read(
+        &c,
+        "open_browser",
+        json!({ "url": "https://accounts.google.com/" }),
+    )
+    .await;
+    assert_eq!(v["place"], "asked");
+    assert_eq!(v["origin"], "https://accounts.google.com");
+    assert_eq!(pages(&h).open_asks().len(), 1);
+    let e = refused(
+        &c,
+        "open_browser",
+        json!({ "url": "http://localhost:6379/" }),
+    )
+    .await;
+    assert!(!e.contains(PASSED), "{e}");
+    c.cancel().await.unwrap();
+}

@@ -4795,6 +4795,7 @@ pub fn devpage_open(
             bounds,
             data_root: core.data.root(),
             visible: bounds.is_some(),
+            local: crate::mcp::browsers::local_of(core.inner(), &project_id),
         },
         own,
         tell_of(&core),

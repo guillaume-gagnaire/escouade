@@ -621,6 +621,7 @@ async fn perform<R: Runtime>(
         project_id.to_string(),
     );
     let own = devpage::own_of(&core.app);
+    let local = super::browsers::local_of(core, project_id);
     let tell = tell_of(core);
     let root = core.data.root().to_path_buf();
     tokio::task::spawn_blocking(move || {
@@ -635,6 +636,7 @@ async fn perform<R: Runtime>(
                 bounds: None,
                 data_root: &root,
                 visible: false,
+                local,
             },
             own,
             tell,

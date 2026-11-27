@@ -202,6 +202,24 @@ pub(crate) fn is_loopback(u: &Url) -> bool {
     }
 }
 
+/// Whether a port of this machine is one project `project_id`'s launch declares, never Escouade's
+/// server's, read when a tab's page goes there (`devpage::judge`, ESC-695): its launch commands,
+/// its agents' blocks and test launches, as they are then.
+pub(crate) fn local_of<R: Runtime>(core: &Arc<Core<R>>, project_id: &str) -> devpage::Local {
+    let core = Arc::downgrade(core);
+    let project_id = project_id.to_string();
+    Arc::new(move |port| {
+        let Some(core) = core.upgrade() else {
+            return false;
+        };
+        let Ok(project) = core.project(&project_id) else {
+            return false;
+        };
+        let server = Some(core.mcp.status().port).filter(|p| *p != 0);
+        Some(port) != server && Launch::of(&core, &project).declares(port)
+    })
+}
+
 /// The origins of the project's launch (docs/AGENT-BROWSERS.md § 5.1): those of its launch
 /// commands' addresses (the user's own, their ports given for the project and for each worktree),
 /// and the ports of this machine its commands, its agents' test launches and their reserved
@@ -597,6 +615,7 @@ pub(super) async fn read<R: Runtime>(
                         "This browser just closed."
                     ))
                 })?;
+            let may = may_read(core, caller, &key)?;
             let read = tokio::task::spawn_blocking(move || {
                 crate::browserread::read(&webview, selector.as_deref(), what, Some(max))
             })
@@ -608,9 +627,39 @@ pub(super) async fn read<R: Runtime>(
                     "The page was not read: {e}"
                 ))
             })?;
+            // The document read is the one the gate let through (ESC-695: a tab goes to any origin).
+            if !may(&origin_of(&read.url).unwrap_or_default()) {
+                return Err(moved_away());
+            }
             Ok(marked(&answer_of(&read)))
         }
     }
+}
+
+/// The origins of the browser `key` the caller may read (ESC-695): those of its project's launch,
+/// and those the user let it read there (C4). A tab goes to any web origin: what an agent reads of
+/// it, its console included, is of one of these alone.
+pub(super) fn may_read<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    key: &str,
+) -> Result<impl Fn(&str) -> bool, ToolError> {
+    let who = reader(core, caller, None)?;
+    let launch = Launch::of(core, &who.project);
+    let agent = who.agent.clone().unwrap_or_default();
+    let pages = pages_of(core).unwrap_or_default();
+    let key = key.to_string();
+    Ok(move |origin: &str| {
+        !origin.is_empty() && (launch.holds(origin) || pages.granted(&key, &agent, origin))
+    })
+}
+
+/// The page went to another origin while it was read or captured: nothing of it is given.
+pub(super) fn moved_away() -> ToolError {
+    ToolError::Refused(tr!(
+        "La page est allée sur une autre origine pendant que tu la lisais : rien n’en est rendu. Relis-la ; hors du lancement, l’utilisateur doit te le permettre.",
+        "The page went to another origin while you read it: nothing of it is given. Read it again; outside the launch, the user must let you."
+    ))
 }
 
 /// What a tool answers while the user is asked to let it read `origin` in the browser `key`: the
@@ -718,7 +767,8 @@ pub(super) fn console<R: Runtime>(
                         "This browser has no console yet: its view is not made yet, or it just closed."
                     ))
                 })?;
-            let v = serde_json::to_value(logs.read(&query))
+            let may = may_read(core, caller, &key)?;
+            let v = serde_json::to_value(logs.read_of(&query, &may))
                 .map_err(|e| ToolError::Failed(e.to_string()))?;
             Ok(marked(&v))
         }
@@ -928,6 +978,17 @@ pub(super) async fn capture<R: Runtime>(
     .await;
     if matches!(how, Widen::Bar(_)) {
         tell_width(core, &key, None);
+    }
+    // Still on an origin the gate let through, now that it is taken (ESC-695).
+    let may = may_read(core, caller, &key)?;
+    let now = core
+        .app
+        .get_webview(&devpage::page_label(&key))
+        .and_then(|w| w.url().ok())
+        .map(|u| u.to_string())
+        .unwrap_or_default();
+    if !may(&origin_of(&now).unwrap_or_default()) {
+        return Err(moved_away());
     }
     let (shot, fitted) = shot
         .map_err(|e| ToolError::Failed(e.to_string()))?

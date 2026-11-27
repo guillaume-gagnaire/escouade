@@ -10,8 +10,10 @@
 //!   plugin answers it either;
 //! - its cookies and storage are its project's, never the window's: a data folder per project
 //!   (Windows, Linux), a data store per project (macOS 14 and later), a private session before;
-//! - it stays on its launch's origin (`judge`): Escouade's own addresses are refused, another
-//!   origin opens in the system's browser, anything else nowhere;
+//! - it is a real browser (`judge`, ESC-695): any web origin stays in its tab, and the windows
+//!   its page opens (a sign-in's) open in Escouade on its session; Escouade's own addresses, this
+//!   machine at a port its project does not declare, files and other schemes are refused, mail
+//!   and phone go to the system;
 //! - its devtools are its own (`open_devtools` on its webview), opened by a gesture of the user
 //!   alone (ESC-657): its bar, a key while Escouade has the focus, the system's own keys and menu
 //!   in the page; never by an address the page could go to by itself. The window's stay off in a
@@ -40,6 +42,20 @@ pub const RUN_PREFIX: &str = "run:";
 /// The address a page goes to, by its shortcut (Ctrl+Shift+M, Cmd+Shift+M), to be shown at the
 /// next width (`Verdict::Responsive`).
 pub const RESPONSIVE_URL: &str = "escouade-devtools://responsive/";
+/// The address a window of a page goes to when its page closes it (`window.close`, ESC-695): the
+/// window closes. Only its own page goes there, which may close it anyway; a tab ignores it.
+pub const CLOSE_URL: &str = "escouade-devtools://close/";
+
+/// What a window of a page runs first: its `window.close` closes it, on every system (WKWebView
+/// does not tell wry when its page closes it).
+pub fn close_script() -> String {
+    format!(
+        "(function () {{ try {{\
+           var go = function () {{ window.location.href = '{CLOSE_URL}'; }};\
+           Object.defineProperty(window, 'close', {{ value: go, configurable: true, writable: true }});\
+         }} catch (e) {{}} }})();"
+    )
+}
 
 /// The most captures an agent takes in a minute (`capture_browser`, ESC-670).
 pub const SHOTS_PER_MINUTE: usize = 20;
@@ -101,6 +117,10 @@ pub enum Leave {
 /// The most requests a browser holds at once, of every agent: the band shows them one by one.
 pub const ASKS_MAX: usize = 5;
 
+/// The most windows the page of a tab has open at once (a sign-in's, an OAuth's, ESC-695): the
+/// next is refused, and the window says so.
+pub const POPUPS_MAX: usize = 3;
+
 /// Keeps a label to what Tauri allows (letters, digits, `-`, `_`), every other character an `_`.
 fn clean(id: &str) -> String {
     id.chars()
@@ -156,20 +176,35 @@ pub fn refuses(label: &str) -> bool {
 /// What a page asked to load leads to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
-    /// Its launch's origin (or a blank page): the page loads it.
+    /// A web address (or a blank page): the page loads it, in its tab (ESC-695).
     Here,
-    /// Another web or mail address: refused, the system's browser or mail client opens it.
+    /// A mail or phone address: refused, the system's mail client or phone opens it.
     Outside,
     /// Its shortcut for the next width: refused, and the window shows it so.
     Responsive,
-    /// Escouade's own pages, a file, a script, another scheme: refused, opened nowhere.
+    /// Escouade's own pages, this machine at a port the project does not declare, a file, a script,
+    /// another scheme: refused, opened nowhere.
     Nowhere,
 }
 
-/// Where `url`, asked by the page of the launch at `home`, leads. `own` says whether an address is
-/// Escouade's own (`navigation::destination`): never loaded in a page, even when it is on the
-/// launch's origin (the dev server's, when the launch is Escouade itself).
-pub fn judge(url: &Url, home: &Url, own: impl Fn(&Url) -> bool) -> Verdict {
+/// Whether a port of this machine is one the project's launch declares (its launch commands, its
+/// agents' blocks and test launches), never Escouade's server's (`mcp::browsers::local_of`).
+pub type Local = Arc<dyn Fn(u16) -> bool + Send + Sync>;
+
+/// Where `url`, asked by the page of the tab that opened at `home` (a link, a redirection, a form,
+/// its bar, a window it opens), leads. A tab is a real browser (ESC-695): any web origin stays in
+/// it, where a sign-in goes through its provider and comes back. Never there: Escouade's own
+/// addresses (`own`, `navigation::destination`, even on the tab's origin: the dev server's, when
+/// the launch is Escouade itself); this machine (`mcp::browsers::is_loopback`) at a port that is
+/// neither the tab's own nor one the project declares (`local`), where a site would reach a service
+/// of the machine; a file, a script, `data:`, `blob:` and any other scheme. Mail and phone open in
+/// the system. What an agent opens is judged before, by `open_browser` (C3).
+pub fn judge(
+    url: &Url,
+    home: &Url,
+    own: impl Fn(&Url) -> bool,
+    local: impl Fn(u16) -> bool,
+) -> Verdict {
     if url.as_str() == RESPONSIVE_URL {
         return Verdict::Responsive;
     }
@@ -180,8 +215,20 @@ pub fn judge(url: &Url, home: &Url, own: impl Fn(&Url) -> bool) -> Verdict {
         return Verdict::Here;
     }
     match url.scheme() {
-        "http" | "https" if url.origin() == home.origin() => Verdict::Here,
-        "http" | "https" | "mailto" => Verdict::Outside,
+        "http" | "https" if url.host_str().is_none_or(str::is_empty) => Verdict::Nowhere,
+        "http" | "https" if crate::mcp::browsers::is_loopback(url) => {
+            let port = url.port_or_known_default();
+            let its_own = crate::mcp::browsers::is_loopback(home)
+                && port.is_some()
+                && port == home.port_or_known_default();
+            if url.origin() == home.origin() || its_own || port.is_some_and(&local) {
+                Verdict::Here
+            } else {
+                Verdict::Nowhere
+            }
+        }
+        "http" | "https" => Verdict::Here,
+        "mailto" | "tel" => Verdict::Outside,
         _ => Verdict::Nowhere,
     }
 }
@@ -353,8 +400,9 @@ pub enum OpenLeave {
 #[serde(rename_all = "camelCase")]
 pub struct PageEvent {
     pub agent_id: String,
-    /// `started` and `finished` (a load, at `url`), `outside` (`url` opened in the system's
-    /// browser), `refused` (`url` opened nowhere), `responsive` (its width's shortcut), `title`
+    /// `started` and `finished` (a load, at `url`), `outside` (`url`, a mail or phone address,
+    /// opened by the system), `refused` (`url` opened nowhere), `popups` (a window of the page
+    /// refused: `POPUPS_MAX` open), `responsive` (its width's shortcut), `title`
     /// (its document's title changed, in `title`), `consents` (an agent asked to read it, or its
     /// leaves changed: the window reads them again, `devpage_consents`).
     pub phase: &'static str,
@@ -389,6 +437,8 @@ pub struct Pages {
     /// The driving of each row (`drive_browser`, ESC-679): the hand, the pace, the leaves to fill a password, by the
     /// same key; agents' pages (`page:<p-n>`) among them. It falls with the row.
     pub drives: crate::browserdrive::Drives,
+    /// The windows the page of each tab opened (ESC-695), by its key: their labels.
+    popups: Mutex<HashMap<String, Vec<String>>>,
 }
 
 /// What the agents may read of one page outside the launch.
@@ -400,6 +450,36 @@ struct Leaves {
 }
 
 impl Pages {
+    /// One more window of the page of tab `key`, `label`: refused when it has `POPUPS_MAX`.
+    pub fn add_popup(&self, key: &str, label: &str) -> bool {
+        let mut all = self.popups.lock();
+        let list = all.entry(key.to_string()).or_default();
+        if list.len() >= POPUPS_MAX {
+            return false;
+        }
+        list.push(label.to_string());
+        true
+    }
+
+    /// The window `label` is gone.
+    pub fn remove_popup(&self, label: &str) {
+        let mut all = self.popups.lock();
+        for list in all.values_mut() {
+            list.retain(|l| l != label);
+        }
+        all.retain(|_, l| !l.is_empty());
+    }
+
+    /// How many windows the page of tab `key` has open.
+    pub fn popups(&self, key: &str) -> usize {
+        self.popups.lock().get(key).map_or(0, Vec::len)
+    }
+
+    /// The windows of the page of tab `key`, which closes: forgotten.
+    pub fn take_popups(&self, key: &str) -> Vec<String> {
+        self.popups.lock().remove(key).unwrap_or_default()
+    }
+
     pub fn get(&self, agent_id: &str) -> Option<PageView> {
         self.pages.lock().get(agent_id).cloned()
     }
@@ -727,6 +807,8 @@ pub struct Open<'a> {
     pub data_root: &'a Path,
     /// Shown at once, else hidden until `place` shows it.
     pub visible: bool,
+    /// The ports of this machine its project declares (`judge`).
+    pub local: Local,
 }
 
 /// Whether an address is Escouade's own, for the main window's setup.
@@ -773,6 +855,7 @@ pub fn open<R: Runtime>(
         url.clone(),
         o.data_root,
         own,
+        o.local.clone(),
         tell,
     );
     let page = PageView {
@@ -810,12 +893,262 @@ pub fn open<R: Runtime>(
         let _ = webview.hide();
     }
     // Its console and its network's failures, from now on (ESC-668).
-    crate::browserread::attach(&webview, pages.new_logs(o.agent_id));
+    let logs = pages.new_logs(o.agent_id);
+    logs.set_origin(url.as_str());
+    crate::browserread::attach(&webview, logs);
     pages.put(page);
     Ok(())
 }
 
-/// The webview of a page: its launch's origin alone, its own storage, no command, its shortcut.
+/// What judges every address of a tab and of the windows its page opens (ESC-695): the same rule,
+/// the same session, the same events.
+struct Guard<R: Runtime> {
+    app: AppHandle<R>,
+    pages: Arc<Pages>,
+    /// The tab's key.
+    key: String,
+    /// The tab's address of departure: its own origin and port (`judge`).
+    home: Url,
+    own: Own,
+    local: Local,
+    tell: Tell,
+}
+
+impl<R: Runtime> Guard<R> {
+    /// Whether the page may load `to`: else what it leads to is done (`act`).
+    fn allows(&self, to: &Url) -> bool {
+        // A tab's own `window.close` (WKWebView and WebKitGTK may share the windows' scripts with
+        // their tab): nothing to close, nothing to say.
+        if to.as_str() == CLOSE_URL {
+            return false;
+        }
+        let verdict = judge(to, &self.home, |u| (self.own)(u), |p| (self.local)(p));
+        if verdict != Verdict::Here {
+            act(&self.key, to, verdict, &self.tell);
+        }
+        verdict == Verdict::Here
+    }
+}
+
+/// What a window the page asks for (`window.open`, `target=_blank`, a sign-in's) leads to: in
+/// Escouade, on the tab's session, kept as the page's (`window.opener`); refused as any address
+/// when `judge` refuses it, or when the tab has `POPUPS_MAX` open.
+fn on_new_window<R: Runtime>(
+    g: Arc<Guard<R>>,
+) -> impl Fn(Url, tauri::webview::NewWindowFeatures) -> NewWindowResponse<R> + Send + 'static {
+    move |to, features| {
+        if !g.allows(&to) {
+            return NewWindowResponse::Deny;
+        }
+        match popup(&g, &to, features) {
+            Ok(window) => NewWindowResponse::Create { window },
+            Err(e) => {
+                log::info!("a page's window was not opened: {e}");
+                NewWindowResponse::Deny
+            }
+        }
+    }
+}
+
+/// The label of a window the page of tab `key` opened: its tab's, then `:w<n>` (a `:` that no
+/// tab's label holds), so that no command answers it either (`refuses`).
+pub fn popup_label(key: &str, n: u64) -> String {
+    format!("{}:w{n}", page_label(key))
+}
+
+/// The size of a window the page opens, in logical pixels: what it asked, bounded (320 to 1200
+/// wide, 320 to 1000 high: a page asks any number), 520 × 680 when it asked none.
+pub fn popup_size(asked: Option<(f64, f64)>) -> (f64, f64) {
+    let bound = |v: f64, max: f64| {
+        if v.is_finite() {
+            v.clamp(320.0, max)
+        } else {
+            max
+        }
+    };
+    match asked {
+        Some((w, h)) => (bound(w, 1200.0), bound(h, 1000.0)),
+        None => (520.0, 680.0),
+    }
+}
+
+/// A window's title: the origin it is on first, which the page does not choose, then its
+/// document's title (`clip_title`).
+pub fn popup_title(url: &Url, doc: &str) -> String {
+    let origin = match url.scheme() {
+        "http" | "https" => url.origin().ascii_serialization(),
+        _ => String::new(),
+    };
+    let doc = clip_title(doc);
+    match (origin.is_empty(), doc.is_empty()) {
+        (true, _) => doc,
+        (false, true) => origin,
+        (false, false) => format!("{origin} — {doc}"),
+    }
+}
+
+/// Opens a window of the page of tab `g.key`, for `to`: a window of Escouade's own on the same
+/// session as the tab (WebView2's environment, WebKitGTK's related view, WKWebView's configuration:
+/// `window_features`), never on top of the other applications, read by nothing of Escouade.
+fn popup<R: Runtime>(
+    g: &Arc<Guard<R>>,
+    to: &Url,
+    features: tauri::webview::NewWindowFeatures,
+) -> Result<tauri::WebviewWindow<R>, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let label = popup_label(
+        &g.key,
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+    );
+    if !g.pages.add_popup(&g.key, &label) {
+        (g.tell)(PageEvent {
+            agent_id: g.key.clone(),
+            phase: "popups",
+            url: String::new(),
+            title: String::new(),
+        });
+        return Err(format!("{POPUPS_MAX} windows open already"));
+    }
+    let blank = Url::parse("about:blank").map_err(|e| e.to_string())?;
+    // Its size, bounded; its place, over Escouade's window: never where the page says (WebView2
+    // gives `left` and `top` unsigned, a negative one huge, which overflows the window's maker).
+    let asked = features.size().map(|s| (s.width, s.height));
+    let (width, height) = popup_size(asked);
+    let at = g.app.get_window("main").and_then(|w| {
+        let scale = w.scale_factor().ok()?;
+        let pos = w.outer_position().ok()?.to_logical::<f64>(scale);
+        let size = w.outer_size().ok()?.to_logical::<f64>(scale);
+        Some((
+            pos.x + ((size.width - width) / 2.0).max(0.0),
+            pos.y + ((size.height - height) / 2.0).max(0.0),
+        ))
+    });
+    let (x, y) = at.unwrap_or((120.0, 120.0));
+    let mut b = tauri::WebviewWindowBuilder::new(&g.app, &label, WebviewUrl::External(blank))
+        .title(popup_title(to, ""))
+        // The tab's session (its environment, related view or configuration), then its own bounds.
+        .window_features(features)
+        .inner_size(width, height)
+        .position(x, y)
+        .devtools(true)
+        .always_on_top(false)
+        .focused(true);
+    // Windows: owned by Escouade's window, above it and never above another application.
+    #[cfg(windows)]
+    {
+        if let Some(hwnd) = g.app.get_window("main").and_then(|w| w.hwnd().ok()) {
+            b = b.owner_raw(hwnd);
+        }
+    }
+    {
+        let (g, label) = (g.clone(), label.clone());
+        b = b.on_navigation(move |to| {
+            if to.as_str() == CLOSE_URL {
+                close_popup(&g.app, &label);
+                return false;
+            }
+            g.allows(to)
+        });
+    }
+    b = b.initialization_script(close_script());
+    b = b.on_new_window(on_new_window(g.clone()));
+    b = b.on_page_load(|w, load| {
+        if matches!(load.event(), PageLoadEvent::Started) {
+            let _ = w.set_title(&popup_title(load.url(), ""));
+        }
+    });
+    b = b.on_document_title_changed(|w, title| {
+        if let Ok(url) = w.url() {
+            let _ = w.set_title(&popup_title(&url, &title));
+        }
+    });
+    let window = match b.build() {
+        Ok(w) => w,
+        Err(e) => {
+            g.pages.remove_popup(&label);
+            return Err(e.to_string());
+        }
+    };
+    {
+        let (pages, label) = (g.pages.clone(), label.clone());
+        window.on_window_event(move |e| {
+            if matches!(e, tauri::WindowEvent::Destroyed) {
+                pages.remove_popup(&label);
+            }
+        });
+    }
+    follow_close(&window);
+    log::info!("a page's window opened on its tab's session: {label}");
+    Ok(window)
+}
+
+/// Closes the window `label` of a page, off the webview's own call (it is destroyed after it).
+fn close_popup<R: Runtime>(app: &AppHandle<R>, label: &str) {
+    if let Some(w) = app.get_webview_window(label) {
+        tauri::async_runtime::spawn(async move {
+            let _ = w.destroy();
+        });
+    }
+}
+
+/// A window of a page closes when its webview is asked to close (its page's `window.close`, or the
+/// opener's `w.close()`): wry takes its webview away alone, and the window would stay, empty.
+fn follow_close<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    let (app, label) = (window.app_handle().clone(), window.label().to_string());
+    if let Err(e) = window.with_webview(move |webview| on_close(webview, app, label)) {
+        log::warn!("a page's window will not close with its page: {e}");
+    }
+}
+
+#[cfg(windows)]
+fn on_close<R: Runtime>(
+    webview: tauri::webview::PlatformWebview,
+    app: AppHandle<R>,
+    label: String,
+) {
+    use webview2_com::WindowCloseRequestedEventHandler;
+    let handler = WindowCloseRequestedEventHandler::create(Box::new(move |_, _| {
+        close_popup(&app, &label);
+        Ok(())
+    }));
+    // SAFETY: the controller is the live one of this WebView, used on its thread (`with_webview`).
+    let added = unsafe {
+        webview.controller().CoreWebView2().and_then(|core| {
+            // The registration lasts as long as the WebView: it is never removed.
+            let mut token = 0;
+            core.add_WindowCloseRequested(&handler, &mut token)
+        })
+    };
+    if let Err(e) = added {
+        log::warn!("a page's window will not close with its page: {e}");
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn on_close<R: Runtime>(
+    webview: tauri::webview::PlatformWebview,
+    app: AppHandle<R>,
+    label: String,
+) {
+    // wry answers WebKit's `close` by destroying the webview first, which stops the signal there: the
+    // window follows its webview's end instead.
+    use gtk::prelude::WidgetExt;
+    webview
+        .inner()
+        .connect_destroy(move |_| close_popup(&app, &label));
+}
+
+// macOS: WKWebView tells it to a delegate wry keeps; `close_script` does it for the page itself.
+#[cfg(not(any(windows, target_os = "linux")))]
+fn on_close<R: Runtime>(
+    _webview: tauri::webview::PlatformWebview,
+    _app: AppHandle<R>,
+    _label: String,
+) {
+}
+
+/// The webview of a page: any web origin, its project's storage, no command, its shortcut; the
+/// windows it opens on its session (ESC-695).
 #[allow(clippy::too_many_arguments)]
 fn builder<R: Runtime>(
     app: &AppHandle<R>,
@@ -826,9 +1159,18 @@ fn builder<R: Runtime>(
     url: Url,
     data_root: &Path,
     own: Own,
+    local: Local,
     tell: Tell,
 ) -> WebviewBuilder<R> {
-    let home = url.clone();
+    let guard = Arc::new(Guard {
+        app: app.clone(),
+        pages: pages.clone(),
+        key: agent_id.to_string(),
+        home: url.clone(),
+        own,
+        local,
+        tell: tell.clone(),
+    });
     let mut b = WebviewBuilder::new(label, WebviewUrl::External(url))
         .devtools(true)
         .initialization_script(shortcut_script());
@@ -841,38 +1183,22 @@ fn builder<R: Runtime>(
     b = with_store(b, data_root, project_id);
     // Every address it is asked to load.
     {
-        let (home, own, tell) = (home.clone(), own.clone(), tell.clone());
-        let agent = agent_id.to_string();
-        b = b.on_navigation(move |to| {
-            let verdict = judge(to, &home, |u| own(u));
-            if verdict != Verdict::Here {
-                act(&agent, to, verdict, &tell);
-            }
-            verdict == Verdict::Here
-        });
+        let g = guard.clone();
+        b = b.on_navigation(move |to| g.allows(to));
     }
-    // Its new windows: on its origin, in the same page (one page per worktree); else as above.
-    {
-        let (app, home, own, tell) = (app.clone(), home.clone(), own.clone(), tell.clone());
-        let (agent, label) = (agent_id.to_string(), label.to_string());
-        b = b.on_new_window(move |to, _| {
-            match judge(&to, &home, |u| own(u)) {
-                Verdict::Here => {
-                    if let Some(w) = app.get_webview(&label) {
-                        let _ = w.navigate(to);
-                    }
-                }
-                verdict => act(&agent, &to, verdict, &tell),
-            }
-            NewWindowResponse::Deny
-        });
-    }
-    // Its loads, for its bar.
+    // Its new windows: in Escouade, on its session.
+    b = b.on_new_window(on_new_window(guard));
+    // Its loads, for its bar; what an agent reads of its console is of the origin it is on.
     {
         let (pages, tell) = (pages.clone(), tell.clone());
         let agent = agent_id.to_string();
         b = b.on_page_load(move |_, load| {
             let url = load.url().to_string();
+            if matches!(load.event(), PageLoadEvent::Started) {
+                if let Some(logs) = pages.logs(&agent) {
+                    logs.set_origin(&url);
+                }
+            }
             pages.set_url(&agent, &url);
             pages.set_loaded(&agent, matches!(load.event(), PageLoadEvent::Finished));
             tell(PageEvent {
@@ -1091,8 +1417,8 @@ pub fn place<R: Runtime>(
     }
 }
 
-/// Back, forward, reload, or an address typed in its bar (judged by the page's guard like any
-/// other: another origin opens outside).
+/// Back, forward, reload, or an address typed or pasted in its bar (judged by the page's guard like
+/// any other: any web origin loads in the tab, a sign-in's link included).
 pub fn go<R: Runtime>(
     app: &AppHandle<R>,
     agent_id: &str,
@@ -1194,6 +1520,12 @@ pub fn close<R: Runtime>(
         let _ = w.close();
     }
     crate::browserread::forget(&label);
+    // The windows its page opened close with it (ESC-695).
+    for popup in pages.take_popups(agent_id) {
+        if let Some(w) = app.get_webview_window(&popup) {
+            let _ = w.destroy();
+        }
+    }
     pages.remove(agent_id);
     Ok(())
 }

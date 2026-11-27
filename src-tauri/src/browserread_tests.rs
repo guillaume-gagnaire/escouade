@@ -747,3 +747,37 @@ fn too_many_bytes_lower_the_quality_then_the_size() {
 fn what_is_no_image_is_refused() {
     assert!(fit(&shot(b"not an image".to_vec(), Format::Png)).is_err());
 }
+
+#[test]
+fn an_agent_reads_the_console_of_the_origins_it_may_read_alone() {
+    // ESC-695: a tab goes to any web origin, a sign-in's included. What the console kept while it
+    // was on a site the agent may not read is not given, even once the tab is back on the launch.
+    let b = Buffers::default();
+    b.set_origin("http://localhost:4211/tarifs");
+    b.push_console(console("launch 1", Level::Log));
+    b.push_network(failure("http://localhost:4211/api"));
+    b.set_origin("https://accounts.google.com/signin?continue=x");
+    b.push_console(console("provider", Level::Error));
+    b.push_network(failure("https://accounts.google.com/x"));
+    b.set_origin("data:text/html,x");
+    b.push_console(console("no origin", Level::Log));
+    b.set_origin("http://localhost:4211/callback");
+    b.push_console(console("launch 2", Level::Log));
+    let launch = |o: &str| o == "http://localhost:4211";
+    let q = Query {
+        network: true,
+        ..Default::default()
+    };
+    let read = b.read_of(&q, &launch);
+    let texts: Vec<_> = read.entries.iter().map(|e| e.text.as_str()).collect();
+    assert_eq!(texts, vec!["launch 1", "launch 2"]);
+    assert_eq!(read.network.len(), 1);
+    assert_eq!(read.network[0].url, "http://localhost:4211/api");
+    // The cursor still goes past what it did not give: the next read starts after it.
+    assert_eq!(read.cursor, "4.2");
+    // With the user's leave for the provider (C4), its entries too.
+    let both = |o: &str| launch(o) || o == "https://accounts.google.com";
+    assert_eq!(b.read_of(&q, &both).entries.len(), 3);
+    // Escouade's own reading (no agent) is of every origin.
+    assert_eq!(b.read(&q).entries.len(), 4);
+}

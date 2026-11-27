@@ -713,6 +713,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(move |window, event| {
+            // A window a tab's page opened (a sign-in's, ESC-695) is the page's: it closes as it
+            // asks, and says nothing of Escouade's own window.
+            if devpage::refuses(window.label()) {
+                return;
+            }
             // Back to the window: a harness installed meanwhile (in a terminal) gets Escouade's server.
             if let WindowEvent::Focused(true) = event {
                 if let Some(core) = window.try_state::<Arc<Core>>() {

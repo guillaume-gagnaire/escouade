@@ -1161,6 +1161,7 @@ export interface PageEvent {
     | 'started'
     | 'finished'
     | 'outside'
+    | 'popups'
     | 'refused'
     | 'responsive'
     | 'title'

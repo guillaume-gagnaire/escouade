@@ -141,12 +141,20 @@ describe('a page’s life', () => {
     expect(devpages.pages.a7.phase).toBe('stalled');
   });
 
-  it('sends another origin to the system’s browser, and says so', () => {
+  it('sends a mail address to the system, and says so', () => {
     const b = fakeBackend();
     const toast = vi.spyOn(app, 'toast');
-    onPageEvent({ agentId: 'a7', phase: 'outside', url: 'https://github.com/gagnaire/escouade' });
-    expect(b.called('open_url').map((c) => c.args.url)).toEqual(['https://github.com/gagnaire/escouade']);
-    expect(toast).toHaveBeenCalledWith('github.com s’est ouvert dans ton navigateur : ici, seul localhost:4111 s’affiche.', 'info');
+    onPageEvent({ agentId: 'a7', phase: 'outside', url: 'mailto:support@example.com' });
+    expect(b.called('open_url').map((c) => c.args.url)).toEqual(['mailto:support@example.com']);
+    expect(toast).toHaveBeenCalledWith('mailto:support@example.com s’est ouvert hors d’Escouade, dans l’application du système.', 'info');
+  });
+
+  it('says a window of the page was refused beyond the few it may have open', () => {
+    const b = fakeBackend();
+    const toast = vi.spyOn(app, 'toast');
+    onPageEvent({ agentId: 'a7', phase: 'popups', url: '' });
+    expect(b.called('open_url')).toEqual([]);
+    expect(toast).toHaveBeenCalledWith('La page a déjà 3 fenêtres ouvertes : ferme-en une pour en ouvrir une autre.', 'info');
   });
 
   it('is shown by its row', async () => {

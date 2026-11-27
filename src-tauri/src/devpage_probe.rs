@@ -37,7 +37,20 @@ fetch('/width?w=' + innerWidth);
   localStorage.setItem('mark', 'esc-311');
   r.storage = localStorage.getItem('mark');
   await fetch('/report', { method: 'POST', body: JSON.stringify(r) });
+  // ESC-695: a sign-in's window, of another origin (localhost is not 127.0.0.1), which answers its opener.
+  addEventListener('message', (e) => fetch('/said?m=' + encodeURIComponent(e.data) + '&from=' + encodeURIComponent(e.origin)));
+  setTimeout(() => {
+    const w = window.open('http://localhost:' + location.port + '/popup', 'connexion', 'width=480,height=600');
+    fetch('/opened?w=' + (w ? 1 : 0));
+  }, 1500);
 })();
+</script>"#;
+
+/// The sign-in's window (ESC-695): its cookie, its opener told, then it closes itself.
+const POPUP: &str = r#"<!doctype html><meta charset="utf-8"><title>connexion</title><h1>Connexion</h1><script>
+fetch('/opener?has=' + (window.opener ? 1 : 0));
+if (window.opener) window.opener.postMessage('signed-in', '*');
+setTimeout(() => window.close(), 1000);
 </script>"#;
 
 /// What the page tells the server.
@@ -45,6 +58,14 @@ enum Told {
     Report(String),
     Width(u32),
     Pwned,
+    /// What the page's `window.open` answered.
+    Opened(bool),
+    /// Whether the window had its `window.opener`.
+    Opener(bool),
+    /// What the page heard by `postMessage`: the message and its origin.
+    Said(String),
+    /// The cookies the tab sent on its way back to the window's origin.
+    Who(String),
 }
 
 /// Serves the page on a free port of the loopback; what it tells comes on `tx`.
@@ -61,6 +82,7 @@ fn serve(tx: mpsc::Sender<Told>) -> std::io::Result<u16> {
                     return;
                 }
                 let mut length = 0usize;
+                let mut cookie = String::new();
                 loop {
                     let mut line = String::new();
                     if reader.read_line(&mut line).unwrap_or(0) == 0 || line.trim().is_empty() {
@@ -68,6 +90,9 @@ fn serve(tx: mpsc::Sender<Told>) -> std::io::Result<u16> {
                     }
                     if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
                         length = v.trim().parse().unwrap_or(0);
+                    }
+                    if line.to_ascii_lowercase().starts_with("cookie:") {
+                        cookie = line[7..].trim().to_string();
                     }
                 }
                 let mut body = vec![0u8; length];
@@ -81,11 +106,28 @@ fn serve(tx: mpsc::Sender<Told>) -> std::io::Result<u16> {
                     }
                 } else if path == "/pwned" {
                     let _ = tx.send(Told::Pwned);
+                } else if let Some(w) = path.strip_prefix("/opened?w=") {
+                    let _ = tx.send(Told::Opened(w == "1"));
+                } else if let Some(h) = path.strip_prefix("/opener?has=") {
+                    let _ = tx.send(Told::Opener(h == "1"));
+                } else if let Some(m) = path.strip_prefix("/said?") {
+                    let _ = tx.send(Told::Said(m.to_string()));
+                } else if path == "/whoami" {
+                    let _ = tx.send(Told::Who(cookie.clone()));
                 }
-                let html = if path == "/" { PAGE } else { "ok" };
+                let html = match path.as_str() {
+                    "/" => PAGE,
+                    "/popup" => POPUP,
+                    _ => "ok",
+                };
+                let set = if path == "/popup" {
+                    "Set-Cookie: sid=probe; Path=/; SameSite=Lax\r\n"
+                } else {
+                    ""
+                };
                 let _ = write!(
                     &stream,
-                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{html}",
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n{set}Content-Length: {}\r\nConnection: close\r\n\r\n{html}",
                     html.len()
                 );
             });
@@ -111,6 +153,16 @@ struct Seen {
     width_as_tablet: Option<u32>,
     /// Every width the page told, in order.
     widths: Vec<u32>,
+    /// ESC-695: the page's `window.open` gave it a window, in Escouade.
+    popup_opened: Option<bool>,
+    /// That window had its `window.opener`.
+    popup_opener: Option<bool>,
+    /// What the page heard from it (`postMessage`): the message and its origin.
+    popup_said: Option<String>,
+    /// It closed itself (`window.close`), and the tab's list forgot it.
+    popup_closed: bool,
+    /// The tab, sent to the window's origin, came with the cookie the window set: one session.
+    session_shared: Option<bool>,
 }
 
 impl Seen {
@@ -132,6 +184,21 @@ impl Seen {
             && self.width_in_agent == Some(390)
             && self.width_in_agent_held
             && self.width_as_tablet == Some(768)
+            && self.signed_in()
+    }
+
+    /// The sign-in's window held (ESC-695). WKWebView opens no window a script asks without a
+    /// gesture of the user, which the probe cannot make: reported there, not counted.
+    fn signed_in(&self) -> bool {
+        cfg!(target_os = "macos")
+            || (self.popup_opened == Some(true)
+                && self.popup_opener == Some(true)
+                && self
+                    .popup_said
+                    .as_deref()
+                    .is_some_and(|s| s.starts_with("m=signed-in&from=http%3A%2F%2Flocalhost%3A"))
+                && self.popup_closed
+                && self.session_shared == Some(true))
     }
 }
 
@@ -146,6 +213,8 @@ fn wait<T>(
     while let Some(left) = end.checked_duration_since(std::time::Instant::now()) {
         match rx.recv_timeout(left) {
             Ok(Told::Pwned) => seen.pwned = true,
+            Ok(Told::Opened(w)) => seen.popup_opened = Some(w),
+            Ok(Told::Opener(o)) => seen.popup_opener = Some(o),
             Ok(told) => {
                 if let Told::Width(w) = told {
                     seen.widths.push(w);
@@ -216,11 +285,23 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                     }),
                     data_root: &data,
                     visible: true,
+                    local: std::sync::Arc::new(|_| false),
                 },
                 own,
                 tell,
             )
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+            // WebKitGTK opens no window a script asks without a gesture of the user, which the probe
+            // cannot make: it lets the page's script open it, the rest is the app's own way.
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview(&devpage::page_label("probe")) {
+                let _ = w.with_webview(|platform| {
+                    use webkit2gtk::{SettingsExt, WebViewExt};
+                    if let Some(settings) = platform.inner().settings() {
+                        settings.set_javascript_can_open_windows_automatically(true);
+                    }
+                });
+            }
             let (handle, pages, data) = (app.handle().clone(), pages.clone(), data.clone());
             std::thread::spawn(move || {
                 let mut seen = Seen {
@@ -232,6 +313,20 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                     Told::Report(r) => serde_json::from_str(r).ok(),
                     _ => None,
                 });
+                // The sign-in's window: what its opener heard, then it closes itself.
+                seen.popup_said = wait(&rx, &mut seen, Duration::from_secs(20), |t| match t {
+                    Told::Said(m) => Some(m.clone()),
+                    _ => None,
+                });
+                if seen.popup_said.is_some() {
+                    for _ in 0..40 {
+                        if pages.popups("probe") == 0 {
+                            seen.popup_closed = true;
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(250));
+                    }
+                }
                 seen.storage_dir = (!cfg!(target_os = "macos"))
                     .then(|| devpage::data_dir(&data, "probe").is_dir());
                 // Its devtools, never the window's: first, as a user would, or last (`--devtools-last`).
@@ -290,6 +385,15 @@ pub fn cli(args: Vec<String>, context: tauri::Context) -> i32 {
                 });
                 if devtools_last {
                     devtools(&mut seen);
+                }
+                // The tab goes to the window's origin, as a link pasted in its bar: with its cookie.
+                let back = format!("http://localhost:{port}/whoami");
+                if devpage::go(&handle, "probe", "to", Some(&back)).is_ok() {
+                    seen.session_shared =
+                        wait(&rx, &mut seen, Duration::from_secs(15), |t| match t {
+                            Told::Who(c) => Some(c.contains("sid=probe")),
+                            _ => None,
+                        });
                 }
                 let ok = seen.kept_apart();
                 println!("{}", serde_json::to_string(&seen).unwrap_or_default());
