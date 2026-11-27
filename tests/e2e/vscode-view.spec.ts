@@ -100,10 +100,11 @@ test('the VS Code view: the project’s editor, on the core’s files, a file ch
   });
   await addProject(page, app.repo, { worktrees: true });
   await expect(page.locator('aside.side .agent')).toHaveCount(1, { timeout: 30_000 });
-  const openEditor = page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' });
+  const openEditor = page.getByRole('button', { name: 'Éditeur ou workspace du projet' });
 
   // 1-2. The project's editor is the view: its explorer, its tabs, its editor, laid over the view's place.
   await openEditor.click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   const view = page.getByTestId('vscode-view');
   await expect(view).toBeVisible();
   const wb = page.locator('#vscode-layer .monaco-workbench');

@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { open } from '@tauri-apps/plugin-dialog';
+  import { connection } from '../../lib/connection.svelte';
   import Icon from '../Icon.svelte';
+  import { customPageOf, customPageProblem, relativeToProject } from '../../lib/custom-page';
   import { t } from '../../lib/i18n';
   import { revealHidden } from '../../lib/recipe';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -38,6 +41,19 @@
   const EXAMPLE = 'http://localhost:${ESCOUADE_PORT_BASE:-3000}';
 
   const launchProposal = $derived(settingsForm.launchProposal[project.id]);
+
+  /** « Page à soi » (AP-7): this machine's first, then the one .escouade.yml proposes once trusted. */
+  const customPage = $derived(customPageOf(project, draft.customPage));
+  const customProblem = $derived(customPageProblem(draft.customPage ?? ''));
+  async function chooseCustomPage() {
+    const path = await open({
+      multiple: false,
+      title: t('settings.project.customPagePickTitle'),
+      defaultPath: project.path,
+      filters: [{ name: t('settings.project.customPageFilter'), extensions: ['html', 'htm'] }],
+    });
+    if (typeof path === 'string') draft.customPage = relativeToProject(path, project.path);
+  }
   let launchButton = $state<HTMLButtonElement>();
 </script>
 
@@ -167,7 +183,59 @@
   {/if}
 </Group>
 
+<Group title={t('settings.project.agentPagesGroup')} anchor="custom-page">
+  <Row
+    label={t('settings.project.customPage')}
+    desc={t('settings.project.customPageDesc')}
+    wide
+    error={customProblem ? t('settings.project.customPageNotHtml') : ''}
+    errorId="custom-page-error"
+  >
+    <div class="custom">
+      <input
+        class="field mono"
+        aria-label={t('settings.project.customPage')}
+        aria-invalid={!!customProblem}
+        aria-describedby={customProblem ? 'custom-page-error' : 'custom-page-from'}
+        spellcheck="false"
+        placeholder={t('settings.project.customPagePlaceholder')}
+        value={draft.customPage ?? ''}
+        oninput={(e) => (draft.customPage = e.currentTarget.value)}
+      />
+      <!-- The system's dialog picks a file of this computer: on a server (ESC-538), the page's path is written. -->
+      {#if !connection.server}
+        <button class="btn" onclick={chooseCustomPage}>{t('settings.project.customPagePick')}</button>
+      {/if}
+      {#if draft.customPage?.trim()}
+        <button class="btn" onclick={() => (draft.customPage = '')}>{t('settings.project.customPageClear')}</button>
+      {/if}
+    </div>
+    <p class="hint" id="custom-page-from" data-testid="custom-page-from" data-from={customPage.from}>
+      {#if customPage.from === 'machine'}
+        {customPage.file ? t('settings.project.customPageAhead', { path: customPage.file }) : ''}
+      {:else if customPage.from === 'repo'}
+        {t('settings.project.customPageRepo', { path: customPage.path })}
+      {:else if customPage.from === 'waiting'}
+        {t('settings.project.customPageWaiting', { path: customPage.path })}
+      {:else}
+        {t('settings.project.customPageNone')}
+      {/if}
+    </p>
+  </Row>
+</Group>
+
 <style>
+  .custom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .custom .field {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
   .error {
     margin: 0;
     font-size: 12px;

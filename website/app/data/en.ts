@@ -431,6 +431,8 @@ export const en: Catalog = {
       autopilot: 'Autopilot',
       testing: 'Review and approve',
       browser: 'The launch page',
+      'agent-pages': 'Agents’ pages',
+      'agent-browsers': 'Agents and browsers',
       integrations: 'External tickets',
       'shared-board': 'Sharing the Kanban',
       'docs-space': 'The Docs space',

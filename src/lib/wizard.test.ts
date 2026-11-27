@@ -336,9 +336,14 @@ describe('the checks of the way of working', () => {
     expect(controls(info(), recommendedConfig(), ctx)).toEqual([]);
   });
 
-  it('says a repository without commit, or no repository at all: no ticket starts', () => {
+  it('says a repository without commit: no ticket starts', () => {
     expect(controls(info({ hasCommit: false, branches: [] }), recommendedConfig(), ctx)).toEqual(['noCommit']);
-    expect(controls(null, recommendedConfig(), ctx)).toEqual(['noCommit']);
+  });
+
+  it('never takes a folder not read, or that git failed to read, for one without commit (ESC-687)', () => {
+    expect(controls(null, recommendedConfig(), ctx)).toEqual([]);
+    expect(controls(null, recommendedConfig(), { ...ctx, unread: true })).toEqual(['unread']);
+    expect(controls(info({ hasCommit: false, branches: [] }), recommendedConfig(), { ...ctx, unread: true })).toEqual(['unread']);
   });
 
   it('says a target branch not found, for a merge or a pull request only', () => {

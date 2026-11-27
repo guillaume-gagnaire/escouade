@@ -170,6 +170,13 @@ pub enum Event {
     InboxAttachmentOpened {
         kind: &'static str,
     },
+    /// An agent showed a page, or a version of one (ESC-673): its template, whether it carries a request, and what
+    /// it weighs (a bracket). Never a title, a text, a path or a name.
+    PageShown {
+        template: &'static str,
+        ask: bool,
+        size: &'static str,
+    },
     /// The first launch's journey began (ESC-507, `docs/ONBOARDING.md` § 9): a first start (`first`) or done again
     /// (`redo`); what Escouade found (`ready`, `installed`, `none`, `managed`). Told once the run ends, with the consent.
     OnboardingStarted {
@@ -269,6 +276,7 @@ impl Event {
             Event::DiscoverDone { .. } => "discover_done",
             Event::DiscoverDismissed { .. } => "discover_dismissed",
             Event::DiscoverHidden => "discover_hidden",
+            Event::PageShown { .. } => "page_shown",
         }
     }
 
@@ -369,6 +377,11 @@ impl Event {
             }
             Event::DiscoverDone { item, from } => json!({ "item": item, "from": from }),
             Event::DiscoverDismissed { item } => json!({ "item": item }),
+            Event::PageShown {
+                template,
+                ask,
+                size,
+            } => json!({ "template": template, "ask": yes(*ask), "size": size }),
             _ => json!({}),
         };
         match props {
@@ -1043,6 +1056,11 @@ mod tests {
             },
             Event::DiscoverDismissed { item: "voice" },
             Event::DiscoverHidden,
+            Event::PageShown {
+                template: "review",
+                ask: false,
+                size: "small",
+            },
         ];
         let names: std::collections::HashSet<_> = events.iter().map(Event::name).collect();
         assert_eq!(names.len(), events.len());

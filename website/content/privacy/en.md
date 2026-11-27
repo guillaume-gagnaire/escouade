@@ -65,6 +65,7 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `discover_done` | A discovery of the “To discover” map is done | `item`: its id (`ticket`, `terminal`, `dictation`, `secondAgent`…, a closed list); `from`: `tip` (a bubble had offered it) or `other` |
 | `discover_dismissed` | A discovery is dismissed | `item` |
 | `discover_hidden` | “Hide all” on the “To discover” map | — |
+| `page_shown` | An agent shows you a page, or a new version of one | `template`: `review`, `diagram`, `compare` or `html`; `ask`: whether it carries a request (yes or no); `size`: its weight, by range (`small`, `medium` or `large`); never its title, its content or a path |
 
 An event says that a feature was used, not on what: never the name of the project, the agent, the branch or the repository, nor a host’s address, nor anything that was written.
 

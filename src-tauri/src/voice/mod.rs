@@ -11,6 +11,7 @@
 
 pub mod conversation;
 pub mod live;
+mod meter;
 pub mod models;
 pub mod online;
 pub mod online_catalog;
@@ -127,6 +128,19 @@ pub enum VoiceEvent {
     /// The microphone was lost: the conversation is over.
     #[serde(rename_all = "camelCase")]
     ConvEnded { session: u64, error: Option<String> },
+    /// The tester of the settings (ESC-665), every `TICK`: the loudest frame since (RMS), the room's noise learnt, the
+    /// threshold over which a frame is speech, and whether a sentence is heard. Levels only, never the sound.
+    #[serde(rename_all = "camelCase")]
+    Meter {
+        session: u64,
+        level: f32,
+        noise: f32,
+        threshold: f32,
+        speech: bool,
+    },
+    /// The tester stopped by itself (the microphone gone, `MAX_LISTEN`).
+    #[serde(rename_all = "camelCase")]
+    MeterEnded { session: u64, error: Option<String> },
 }
 
 /// What `start` answers.
@@ -200,6 +214,8 @@ pub struct Voice {
     pub voices: speech::VoiceStore,
     pub voices_url: String,
     conv: Mutex<Option<conversation::Conversation>>,
+    /// « Tester » of the settings (ESC-665).
+    meter: Mutex<Option<meter::Meter>>,
     /// What « Écouter » of the settings plays.
     preview: Mutex<Option<Arc<dyn speech::output::Playing>>>,
     /// Where the models are downloaded from (`models::MODELS_URL`; a fake server in tests).
@@ -248,6 +264,7 @@ impl Voice {
             voices,
             voices_url: speech::VOICES_URL.into(),
             conv: Mutex::new(None),
+            meter: Mutex::new(None),
             preview: Mutex::new(None),
             models_url,
             emit,
@@ -373,6 +390,8 @@ impl Voice {
             return Err(VoiceError::AlreadyListening);
         }
         self.called_off.store(false, Ordering::Release);
+        // The dictation takes the microphone from the settings' tester.
+        self.meter_stop_any();
         let opened = self.open(choice, model);
         self.opening.store(false, Ordering::Release);
         opened
@@ -589,6 +608,7 @@ impl Voice {
             c.store(true, Ordering::Release);
         }
         self.conversation_stop();
+        self.meter_stop_any();
         self.preview.lock().take();
     }
 
@@ -635,11 +655,7 @@ impl Voice {
         self.downloads.lock().remove(id);
         match r {
             Ok(_) => Ok(()),
-            Err(e) if e.is::<models::ChecksumMismatch>() => Err(anyhow::anyhow!(tr!(
-                "Le fichier téléchargé n’est pas le bon modèle (somme de contrôle différente) : il n’est pas gardé. Réessaie ; derrière un proxy qui modifie les fichiers, télécharge-le ailleurs.",
-                "The file downloaded is not the right model (checksum mismatch): it was not kept. Try again; behind a proxy that alters files, download it elsewhere."
-            ))),
-            Err(e) => Err(e),
+            Err(e) => Err(models::download_error(e, models::Downloaded::Model)),
         }
     }
 
@@ -721,11 +737,7 @@ impl Voice {
         self.downloads.lock().remove(&key);
         match r {
             Ok(()) => Ok(()),
-            Err(e) if e.is::<models::ChecksumMismatch>() => Err(anyhow::anyhow!(tr!(
-                "Le fichier téléchargé n’est pas la bonne voix (somme de contrôle différente) : il n’est pas gardé. Réessaie ; derrière un proxy qui modifie les fichiers, télécharge-la ailleurs.",
-                "The file downloaded is not the right voice (checksum mismatch): it was not kept. Try again; behind a proxy that alters files, download it elsewhere."
-            ))),
-            Err(e) => Err(e),
+            Err(e) => Err(models::download_error(e, models::Downloaded::Voice)),
         }
     }
 

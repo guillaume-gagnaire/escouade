@@ -1536,3 +1536,395 @@ pub struct SettleInboxViewArgs {
     )]
     pub note: String,
 }
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListBrowsersArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade leaves it out: it sees the browsers of its own project alone. Claude outside Escouade gives it."
+    )]
+    pub project: Option<String>,
+}
+
+/// What `read_browser` gives of a page: its HTML or its visible text.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum ReadWhatArg {
+    Html,
+    Text,
+}
+
+/// Where `open_browser` shows the browser.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PlaceArg {
+    Full,
+    Beside,
+    Below,
+    Quiet,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct OpenBrowserArgs {
+    #[schemars(
+        description = "An http or https address. On an origin of your project's launch (its launch commands' addresses, localhost at the ports they declare) it opens without asking; any other address of the internet is asked of the user, once per origin. Never Escouade's own addresses, file:, data:, javascript:, blob: or another scheme; localhost, 127.0.0.1 or [::1] at a port no launch of the project declares is refused. With launch: an address of the same origin."
+    )]
+    pub url: Option<String>,
+    #[schemars(
+        description = "true: the page of your launch (your test's, else the project's launch command), at its address or at url."
+    )]
+    pub launch: Option<bool>,
+    #[schemars(
+        description = "Claude Code only: \"last\" for the last artifact you published (your Artifact tool's result), or the address of one you published in this conversation. Opened without asking, to show it; not with url or launch."
+    )]
+    pub artifact: Option<String>,
+    #[schemars(
+        description = "beside (the default): in a pane beside your conversation; below: under it; full: alone in the main area; quiet: its row alone, nothing shown."
+    )]
+    pub place: Option<PlaceArg>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CloseBrowserArgs {
+    #[schemars(
+        description = "The browser, by the key list_browsers or open_browser gives: one you opened is closed; on the page of your launch your driving stops and its row stays."
+    )]
+    pub browser: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ReadBrowserArgs {
+    #[schemars(
+        description = "The browser, by the key list_browsers gives: the id of the agent for the page of its test, run:<project>:<command>, or browser:<id>."
+    )]
+    pub browser: String,
+    #[schemars(
+        description = "A CSS selector (200 characters at most, without :has(), four levels at most): only the elements it matches, end to end, matched saying how many. Left out: the whole document."
+    )]
+    pub selector: Option<String>,
+    #[schemars(
+        description = "html (the default): the serialized DOM, masked; text: the visible text (innerText)."
+    )]
+    pub what: Option<ReadWhatArg>,
+    #[schemars(
+        description = "The most characters answered: 50000 by default, 200000 at most. Beyond it the HTML is cut at a tag, truncated true and total_chars saying how long it was."
+    )]
+    pub max_chars: Option<u64>,
+}
+
+/// The template of a page (`show_page`, ESC-673).
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PageTemplateArg {
+    Review,
+    Diagram,
+    Compare,
+    Html,
+    Custom,
+}
+
+/// Where a page opens.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PageOpenArg {
+    Beside,
+    Quiet,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ShowPageArgs {
+    #[schemars(
+        description = "One line, 120 characters at most: the name of the page's row in « Navigateurs » and of its card."
+    )]
+    pub title: String,
+    #[schemars(
+        description = "review (an end-of-batch or pre-merge review), diagram (a Mermaid diagram), compare (options side by side), html (your own page: html or file) or custom (the page of one's own the user set for the project: give it your data, which it reads in window.escouade.data; refused, saying what to take, when none is set)."
+    )]
+    pub template: PageTemplateArg,
+    #[schemars(
+        description = "For review, diagram and compare: the template's data, a JSON object of its schema, 256 KB at most; for custom, any JSON value the page reads (window.escouade.data), 256 KB at most. Refused with every field that does not fit, by its path."
+    )]
+    pub data: Option<serde_json::Value>,
+    #[schemars(
+        description = "For html: the document, 2 MB at most. Give html or file, not both. What it names relatively has no folder to come from: give a file for a page with its own files."
+    )]
+    pub html: Option<String>,
+    #[schemars(
+        description = "For html: an .html file of your working folder (relative to it, or absolute within it). The files it names relatively (./app.js, img/x.png, a style sheet's url(), a script's import from \"./…\") come with it, taken from its own folder and its subfolders alone; a name that leaves the folder, a hidden file or one that is not there is left out (left_out). 64 files and 10 MB per version."
+    )]
+    pub file: Option<String>,
+    #[schemars(
+        description = "One of your pages (p-<n>): makes a new version of it rather than a new page. A page keeps its 10 last versions."
+    )]
+    pub page: Option<String>,
+    #[schemars(
+        description = "beside (the default: beside your conversation when the user is looking at it) or quiet (its row waits). The answer's opened says what happened: beside, on screen; waiting, its row waiting in « Navigateurs » for the user."
+    )]
+    pub open: Option<PageOpenArg>,
+    #[schemars(
+        description = "The request the page carries (choice or confirm), left in the user's box « À toi » as by ask_user: its options are drawn in the page (a template draws them; your own html proposes one by POST _/choose with {\"options\": [\"a\"]}) and the box shows it too. A click in the page only proposes: the answer goes when the user sends it in Escouade's band, and comes to you as ask_user's does. A go-ahead (gate) is never proposed from the page: the user answers it in Escouade. Left out on a new version, the page keeps its request."
+    )]
+    pub ask: Option<PageAskArg>,
+}
+
+/// What a page's request may be: a choice, or a yes or no.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum PageAskKindArg {
+    Choice,
+    Confirm,
+}
+
+/// The request a page carries: `ask_user`'s fields for a choice or a confirm.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct PageAskArg {
+    #[schemars(description = "choice (an option among 2 to 6) or confirm (yes or no).")]
+    pub kind: PageAskKindArg,
+    #[schemars(
+        description = "The question, in one sentence, on one line (140 characters at most)."
+    )]
+    pub title: String,
+    #[schemars(description = "The context, in Markdown (8,000 characters at most).")]
+    pub body: Option<String>,
+    #[schemars(
+        description = "A choice's options, 2 to 6 (their id a to f, by default their rank). Their renders are in the page, not in files."
+    )]
+    pub options: Option<Vec<AskOptionArg>>,
+    #[schemars(description = "A choice where several options may be chosen.")]
+    pub multi: Option<bool>,
+    #[schemars(description = "Your recommendation, and why.")]
+    pub recommend: Option<AskRecommendArg>,
+    #[schemars(
+        description = "What the answer unblocks, in one sentence (200 characters at most)."
+    )]
+    pub unblocks: Option<String>,
+    #[schemars(
+        description = "The tickets of the project that wait for the answer (10 at most): their keys or ids."
+    )]
+    pub tickets: Option<Vec<String>>,
+    #[schemars(description = "normal (the default) or today.")]
+    pub urgency: Option<UrgencyArg>,
+    #[schemars(description = "How long it lives: 14 days by default, 1 to 30.")]
+    pub expires_in_days: Option<u32>,
+    #[schemars(
+        description = "true: the answer settles a decision of the product; once answered, you are told to propose it (propose_decision)."
+    )]
+    pub decision: Option<bool>,
+    #[schemars(
+        description = "true (the default): the answer comes to you as a message; false: you read it by get_ask."
+    )]
+    pub wake: Option<bool>,
+    #[schemars(description = "A confirm's yes label (24 characters at most).")]
+    pub yes_label: Option<String>,
+    #[schemars(description = "A confirm's no label (24 characters at most).")]
+    pub no_label: Option<String>,
+    #[schemars(
+        description = "A confirm that is a go-ahead (publish, sign, delete, spend): never proposed from the page, the user answers it in Escouade alone."
+    )]
+    pub gate: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct PageArgs {
+    #[schemars(description = "One of your pages, by its number (p-<n>), as show_page gave it.")]
+    pub page: String,
+}
+
+/// The width `capture_browser` takes a page at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum CaptureWidthArg {
+    Current,
+    Full,
+    Tablet,
+    Mobile,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CaptureBrowserArgs {
+    #[schemars(
+        description = "The browser, by the key list_browsers gives: the id of the agent for the page of its test, run:<project>:<command>, or browser:<id>."
+    )]
+    pub browser: String,
+    #[schemars(
+        description = "A CSS selector (200 characters at most, without :has(), four levels at most): the first visible element it matches, what of it shows in the view. Left out: the view."
+    )]
+    pub selector: Option<String>,
+    #[schemars(
+        description = "current (the default): as shown; full, tablet (768 px) or mobile (390 px): taken at that width, then put back (the user sees the page change meanwhile)."
+    )]
+    pub width: Option<CaptureWidthArg>,
+    #[schemars(
+        description = "true: the whole document, 8000 CSS pixels high at most (not with a selector; not under macOS). false by default."
+    )]
+    pub full_page: Option<bool>,
+}
+
+/// From where `browser_console` reads: a cursor a read gave or an ISO 8601 time (a string), or
+/// milliseconds since 1970 (a number).
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+#[serde(untagged)]
+#[schemars(inline)]
+pub enum SinceArg {
+    Millis(u64),
+    Text(String),
+}
+
+/// A level of the console `browser_console` keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum ConsoleLevelArg {
+    Error,
+    Warn,
+    Info,
+    Log,
+    Debug,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct BrowserConsoleArgs {
+    #[schemars(
+        description = "The browser, by the key list_browsers gives: the id of the agent for the page of its test, run:<project>:<command>, or browser:<id>."
+    )]
+    pub browser: String,
+    #[schemars(
+        description = "From where to read: the cursor the previous browser_console answered (only what came after it), an ISO 8601 time (2026-11-26T10:00:00Z), or milliseconds since 1970 as a number. Left out: everything the buffers keep since the browser opened."
+    )]
+    pub since: Option<SinceArg>,
+    #[schemars(
+        description = "The console's levels to keep, among error, warn, info, log and debug. Left out (or empty): all."
+    )]
+    pub levels: Option<Vec<ConsoleLevelArg>>,
+    #[schemars(
+        description = "The failed requests too (a status of 400 or more, or no answer): true by default."
+    )]
+    pub network: Option<bool>,
+    #[schemars(
+        description = "The most entries of the console, and the most requests, answered: 200 by default, 500 at most. What is left comes with the next read from the cursor answered."
+    )]
+    pub limit: Option<u64>,
+}
+
+/// What `drive_browser` does (ESC-679, AB-7), one action per call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(inline)]
+pub enum DriveActionArg {
+    Navigate,
+    Back,
+    Forward,
+    Reload,
+    Wait,
+    ScrollTo,
+    Scroll,
+    Highlight,
+    Clear,
+    Width,
+    Tab,
+    Click,
+    Type,
+    Select,
+    Press,
+    Version,
+}
+
+/// What `wait` waits for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum WaitForArg {
+    Load,
+    Target,
+}
+
+/// The widths of the bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum DriveWidthArg {
+    Full,
+    Tablet,
+    Mobile,
+}
+
+/// A key `press` gives: the closed list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[schemars(inline)]
+pub enum PressKeyArg {
+    Enter,
+    Escape,
+    Tab,
+    ArrowUp,
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DriveBrowserArgs {
+    #[schemars(
+        description = "The row, by the key list_browsers gives: your agent's id for the page of your test, run:<project>:<command>, browser:<id> for a tab you opened, page:p-<n> for one of your pages."
+    )]
+    pub browser: String,
+    #[schemars(
+        description = "One action. To show (without asking, everywhere): scroll_to, scroll, highlight, clear, width, wait; reload, back, forward on a tab; version on one of your pages. To act: tab, click, type, select, press, navigate: without asking on your project's launch; outside it (an artifact, a third party's site) with the user's leave, once per origin and per browser; on one of your pages, tab alone."
+    )]
+    pub action: DriveActionArg,
+    #[schemars(
+        description = "The element: #id, a CSS selector (200 characters at most, without :has(), four levels at most), text=Envoyer (the first visible clickable element of that text), or on one of your pages a key of its template (criteria.2, sections.perf, verdict.a, nodes.A). For scroll_to, highlight, tab, click, type, select, and wait with for target."
+    )]
+    pub target: Option<String>,
+    #[schemars(
+        description = "scroll_to and highlight: the <iframe> (#id or a CSS selector) whose frame holds target, such as an artifact of claude.ai in its frame of another origin. Under Windows the gesture is made in the frame; under macOS and Linux, or without target, on the frame as a whole (the answer says frame: inside or whole). The frame's content is never read."
+    )]
+    pub frame: Option<String>,
+    #[schemars(
+        description = "navigate: an address of the browser's origin (or of your project's launch). Another origin is opened by open_browser, which asks the user."
+    )]
+    pub url: Option<String>,
+    #[schemars(description = "wait: load (the default) or target.")]
+    #[serde(rename = "for")]
+    pub wait_for: Option<WaitForArg>,
+    #[schemars(description = "wait: the seconds to wait at most, 30 at most (10 by default).")]
+    pub timeout: Option<u64>,
+    #[schemars(description = "scroll: the pixels, -5000 to 5000 (down when positive).")]
+    pub by: Option<i64>,
+    #[schemars(description = "highlight: the label beside the contour, 60 characters at most.")]
+    pub label: Option<String>,
+    #[schemars(description = "width: full, tablet (768 px) or mobile (390 px).")]
+    pub width: Option<DriveWidthArg>,
+    #[schemars(
+        description = "type: the text, 2000 characters at most; what the field held is replaced. Never a secret of Escouade; a password field only on your project's launch and with the user's leave (asked once per browser)."
+    )]
+    pub text: Option<String>,
+    #[schemars(description = "type: press Enter after the text.")]
+    pub submit: Option<bool>,
+    #[schemars(description = "select: the value of the option, or its label.")]
+    pub value: Option<String>,
+    #[schemars(
+        description = "press: Enter, Escape, Tab, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, PageUp, PageDown, Home or End, in the focused element."
+    )]
+    pub key: Option<PressKeyArg>,
+    #[schemars(description = "version: the version of your page to show (get_page lists them).")]
+    pub n: Option<u32>,
+    #[schemars(
+        description = "true: after the gesture, the band shows « Continuer » and the tool waits for the user's click, 5 minutes at most; user then says continued, took_hand or timeout."
+    )]
+    pub wait_user: Option<bool>,
+    #[schemars(
+        description = "true: an image of the view after the gesture, within capture_browser's bounds and leaves (20 a minute)."
+    )]
+    pub look: Option<bool>,
+}

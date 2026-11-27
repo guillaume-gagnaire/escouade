@@ -328,7 +328,7 @@ impl PartialEq for Seen {
 
 impl Seen {
     /// `call` is met for the first time.
-    fn first_time(&self, call: &str) -> bool {
+    pub(crate) fn first_time(&self, call: &str) -> bool {
         let mut ring = self.0.lock();
         if ring.iter().any(|s| s == call) {
             return false;

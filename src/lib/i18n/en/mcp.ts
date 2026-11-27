@@ -7,6 +7,12 @@ export default defineZone('mcp', {
     enable: 'Agents can drive Escouade',
     enableDesc:
       'Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
+    browsers: 'Agents and browsers',
+    browsersDesc:
+      'The agents open a browser of their project beside their conversation and close it (open_browser, close_browser), and read those of “Browsers” (list_browsers, read_browser, capture_browser, browser_console) and drive them gesture by gesture (drive_browser): the project’s launch without asking; another address with your permission, once per origin (showing goes without asking there, acting waits for your permission); an artifact they published, to show it to you. Your first gesture in the page takes the hand back. Never Escouade’s addresses, nor this machine outside the declared ports, nor the cookies, the storage, a file, a download or a secret of Escouade; a password only on the launch and with your permission.',
+    pages: 'Agents’ pages',
+    pagesDesc:
+      'The agents show you a page in “Browsers” (show_page): a review, a diagram, options to compare, or their own HTML, which they scroll and highlight (drive_browser). Escouade copies it and serves it apart, without network, without access to Escouade or to your files. Off, their tools go away and their rows close; nothing is erased.',
     answer: 'Agents can answer the other agents’ requests',
     answerDesc:
       'Through answer_permission and answer_question, and the requests of the “Your turn” box too, one at a time, when you leave them to the squad lead (answer_ask). “Drive Escouade” does not give them: by default, only you (and Claude outside Escouade, for the questions and permissions) answer an agent’s request.',
@@ -90,6 +96,16 @@ export default defineZone('mcp', {
     stopAgent: 'Stop an agent',
     deleteAgent: 'Ask to delete an agent',
     listBackgroundWork: 'List an agent’s subagents and background tasks',
+    listBrowsers: 'List the browsers',
+    readBrowser: 'Read a browser',
+    openBrowser: 'Open a browser',
+    closeBrowser: 'Close a browser',
+    showPage: 'Show a page',
+    getPage: 'Read a page’s state',
+    closePage: 'Close a page',
+    captureBrowser: 'Capture a browser',
+    driveBrowser: 'Drive a browser',
+    browserConsole: 'Read a browser’s console',
     getBackgroundOutput: 'Read a background task’s output or a subagent’s report',
     stopBackgroundWork: 'Stop a background task or a subagent',
     messageSubagent: 'Write to a subagent',

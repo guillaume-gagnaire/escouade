@@ -101,8 +101,13 @@ This group sets up the voice that reads the agent’s answers during a [voice co
 | “Speed” | From 0.5× to 2×, in steps of 0.1: 1 is the voice’s own pace, higher it reads faster. Online, brought within the service’s bounds; the row says when it takes none. | 1.0× |
 | “Volume” | From 0 to 100 %, applied on your machine, whatever the service. | 100 % |
 | “Delay before sending” | The silence after which what you said goes to the agent, from 0.5 to 3 s, in steps of 0.1 s. | 1.2 s |
+| “Microphone sensitivity” | From “Less sensitive” to “More sensitive”, in 11 steps: how loud, over the room’s noise, your voice must be for the conversation to hear it (the start and end of your sentences, and your voice when you cut the agent off), with local and online transcription alike. Dictation does not depend on it: it listens until you click again. | “Default” (the setting before 2.2.12) |
 
 The conversation is held in the “Spoken language” when it is French or English, else in the interface’s language.
+
+### Testing the microphone
+
+“Test”, beside “Microphone sensitivity”, listens to the “Microphone used” and shows, live, your voice’s level, the room’s noise (measured during a moment of silence), the threshold’s line and a “Voice detected” light, which comes on when the conversation would hear you and goes off after the “Delay before sending”. Moving the slider moves the line at once: if the light comes on while you are quiet, make the microphone less sensitive; if it stays off when you speak low, more sensitive. “Stop”, or leaving the page, closes the microphone. Nothing it hears is kept or sent: only its level is shown.
 
 ### The voices
 

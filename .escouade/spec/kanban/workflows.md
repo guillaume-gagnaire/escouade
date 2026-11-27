@@ -1,9 +1,9 @@
 ---
 title: "Workflows"
 subject: "Kanban"
-sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309","docs/PLUGINS-DESIGN.md §4.5, choix 158 de design/app-redesign/UX-NOTES.md","Demande de l'utilisateur du 2026-11-10 (ticket ESC-406) et son choix sur aperçu : direction A de design/workflow-path/index.html"]
-tickets: ["ESC-195","ESC-309","ESC-200","ESC-245","ESC-406","ESC-653"]
-decisions: [143,308]
+sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309","docs/PLUGINS-DESIGN.md §4.5, choix 158 de design/app-redesign/UX-NOTES.md","Demande de l'utilisateur du 2026-11-10 (ticket ESC-406) et son choix sur aperçu : direction A de design/workflow-path/index.html","Correction de l'utilisateur du 2026-11-26 (ticket ESC-689) : l'onglet Workflow retiré, le diagramme dans le Workspace"]
+tickets: ["ESC-195","ESC-309","ESC-200","ESC-245","ESC-406","ESC-653","ESC-689"]
+decisions: [143,308,"les-workflows-dans-le-workspace-l-onglet"]
 compared: "2026-10-31T10:04:30+01:00"
 gaps: [{"text":"La page dit que rien d'une machine ni aucune empreinte n'entre dans le fichier. Quand un workflow a été affiné, le code écrit dans `workflow.refined` l'empreinte de la lecture d'origine, et cette empreinte est versionnée dans le dépôt.","code":["src-tauri/src/workflowfiles.rs","src-tauri/src/workflow.rs"]}]
 ---
@@ -25,7 +25,7 @@ Escouade lit les workflows d'un projet : les enchaînements que suivent ses agen
 
 ### Le dossier fait foi
 
-- Les workflows montrés et suivis (réglages, onglet, suivi, outil `get_workflow` du serveur MCP) sont ceux des fichiers, avec leurs corrections.
+- Les workflows montrés et suivis (réglages, Workspace, suivi, outil `get_workflow` du serveur MCP) sont ceux des fichiers, avec leurs corrections.
 - Une lecture de la machine ajoute un workflow nouveau et met à jour celui qui a changé (« mis à jour par la relecture », avec les étapes ajoutées ou disparues). Elle ne supprime jamais un fichier, et ne recrée jamais celui d'un workflow supprimé (voir plus bas).
 - « Ce n'est pas un workflow » le garde, marqué comme tel, pour toute l'équipe. « Retirer du dépôt » supprime le fichier d'un workflow que la machine ne lit pas ; il compte alors comme supprimé.
 - Les fichiers sont relus au démarrage et quand le dossier change, comme les tickets partagés. Un fichier illisible est dit avec son chemin et sa raison, sans toucher aux corrections gardées.
@@ -44,7 +44,7 @@ Escouade lit les workflows d'un projet : les enchaînements que suivent ses agen
 
 - Un choix du projet, « Workflows du projet » : « Lire les workflows » (par défaut) ou « Pas de workflow pour ce projet ». Dans l'assistant « Nouveau projet » (étape Kanban) et en tête de Réglages › Projets › Workflow ; partagé par la clé `workflows.enabled` de `.escouade.yml` (`false` : pas de workflow).
 - Tant qu'il est choisi : aucune lecture (ni relecture, ni au démarrage, ni première lecture), aucune écriture (ni fichiers, ni corrections, ni lecture gardée), aucun workflow montré ni suivi. Ce qui est déjà dans `.escouade/workflows/` reste tel quel.
-- Les réglages le disent avec comment le défaire : « Pas de workflow pour ce projet : Escouade ne lit ni n'écrit ses workflows et n'y suit aucun agent ; .escouade/workflows/ reste tel quel. Pour le défaire, choisis « Lire les workflows » et enregistre. » L'onglet Workflow aussi (« Pas de workflow pour ce projet », « Ouvrir les réglages du workflow »).
+- Les réglages le disent avec comment le défaire : « Pas de workflow pour ce projet : Escouade ne lit ni n'écrit ses workflows et n'y suit aucun agent ; .escouade/workflows/ reste tel quel. Pour le défaire, choisis « Lire les workflows » et enregistre. » « Workflows » du Workspace aussi (« Pas de workflow pour ce projet », « Ouvrir les réglages du workflow »).
 - Le défaire relit les workflows du projet, ses suppressions gardées.
 
 ### Dépôt ou machine
@@ -75,17 +75,17 @@ Ils sont émis d'après les passages du suivi des agents, pas d'après la fenêt
 
 Un plugin peut apprendre à Escouade un workflow qu'elle ne lit pas seule : `contributes.workflowReaders[]` (un `id`, un `name`, `files`, des globs depuis le dossier du projet, sans `..` ni chemin absolu). Escouade lui donne par `workflow/read` seulement les fichiers que ses globs désignent (texte, au plus 200 de 256 Ko ; ceux du dossier de chaque dépôt pour un projet de plusieurs) ; il rend `{ workflows: [{ id, name, steps, transitions, exit }] }`.
 
-- Le workflow est suivi comme ceux qu'Escouade lit : onglet, carte, faits `workflow.*`. Son id est `plugin:<plugin>:<id>` : il ne prend jamais la place d'un workflow lu par l'app.
+- Le workflow est suivi comme ceux qu'Escouade lit : Workspace, carte, faits `workflow.*`. Son id est `plugin:<plugin>:<id>` : il ne prend jamais la place d'un workflow lu par l'app.
 - Un graphe qui ne tient pas (étape sans nom, deux étapes du même nom, transition vers une étape absente, plus de 50 workflows) est refusé en entier, avec la raison. Un plugin qui plante ne fait pas perdre ce qui était lu. Délai : 60 s.
 - Le registre qui appellera les lecteurs lit les manifestes avec INT-6 ; le lecteur et son contrat existent, sans être encore appelés par l'app.
 
-## Le diagramme de l'onglet Workflow
+## Le diagramme d'un workflow
 
-La vue « Diagramme » de l'onglet Workflow (à côté de la vue « Colonne », le choix retenu pour toute l'app) dessine le workflow en couches, dans la colonne de l'onglet et agrandi sur tout le panneau de travail. Elle part toujours d'un point d'entrée, montre où le workflow peut aller depuis lui, et où l'agent lu est vraiment allé.
+Le diagramme dessine le workflow en couches, en grand sur tout le panneau de travail, par-dessus le Workspace (voir *Workspace*) : depuis l'étape sur la carte d'un agent, avec son chemin, ou depuis « Workflows » de la toile, sans agent. Il part toujours d'un point d'entrée, montre où le workflow peut aller depuis lui, et où l'agent lu est vraiment allé. C'est celui de l'ancien onglet Workflow du panneau de droite, qui n'existe plus (ESC-689) ; sa vue « Colonne » (le rail des étapes, l'historique d'un agent, les portes à mettre dans la saisie) est partie avec lui.
 
 ### Le point d'entrée
 
-- **Avec un agent lu** (l'agent ouvert, ou celui choisi dans la liste sous le diagramme) : la porte par laquelle il est entré, d'après le premier passage de sa phase en cours. C'est la porte tapée (commande ou skill), sans ses arguments ; sinon la commande de l'étape où il a commencé ; pour une boucle de prompt, son prompt. Une porte que le workflow ne connaît pas est montrée comme elle a été tapée, vers l'étape où elle a mené.
+- **Avec un agent lu** (celui dont la carte, ou la ligne dans « Workflows », a ouvert le diagramme) : la porte par laquelle il est entré, d'après le premier passage de sa phase en cours. C'est la porte tapée (commande ou skill), sans ses arguments ; sinon la commande de l'étape où il a commencé ; pour une boucle de prompt, son prompt. Une porte que le workflow ne connaît pas est montrée comme elle a été tapée, vers l'étape où elle a mené.
 - Un agent sans historique (« Tickets », un suivi juste lu) : la première entrée du workflow qui atteint son étape, sinon son étape.
 - **Sans agent**, ou quand l'entrée ne peut pas être connue (ses étapes n'existent plus dans le workflow) : un choix des portes en tête, « Entrée : par où l'agent commence », la première par défaut. Ce sont toutes les portes d'entrée du workflow, chacune vers l'étape où elle entre ; la première étape y figure en tête si aucune porte n'y mène. Une seule entrée : pas de choix. Les flèches du clavier passent d'une porte à l'autre.
 - La porte est dessinée en tête, « Entrée » puis ce qui se tape ; une porte qui entre plus loin est juste au-dessus de son étape.
@@ -108,12 +108,12 @@ La vue « Diagramme » de l'onglet Workflow (à côté de la vue « Colonne », 
 
 ### Plusieurs agents
 
-Seul l'agent lu a son chemin. Les autres agents du workflow restent des pastilles sur leur étape (verte pour l'agent lu, ambre pour celui qui attend, « +n » au-delà de trois) ; en choisir un dans la liste lit le sien, depuis sa propre entrée.
+Seul l'agent lu a son chemin. Les autres agents du workflow restent des pastilles sur leur étape (verte pour l'agent lu, ambre pour celui qui attend, « +n » au-delà de trois) ; le sien se lit depuis sa carte, ou sa ligne dans « Workflows », depuis sa propre entrée. La liste « Agents » du diagramme ouvre la conversation de chacun.
 
 ### En mots
 
-- Le chemin se lit aussi dans une liste ordonnée pour un lecteur d'écran, « Chemin de <agent>, dans l'ordre », dans la colonne comme en grand : « Planifier, entrée par /gsd:plan-phase », « Planifier, tour de boucle : <raison>, 2e passage », « Planifier, retour depuis Vérifier : <raison>, 3e passage », « Exécuter, 2e passage, en cours ».
-- La colonne et la vue agrandie suivent la même logique ; à 1024 px de large, rien ne déborde du panneau (340 px) ni de la vue agrandie.
+- Le chemin se lit aussi dans une liste ordonnée pour un lecteur d'écran, « Chemin de <agent>, dans l'ordre » : « Planifier, entrée par /gsd:plan-phase », « Planifier, tour de boucle : <raison>, 2e passage », « Planifier, retour depuis Vérifier : <raison>, 3e passage », « Exécuter, 2e passage, en cours ».
+- À 1024 px de large, rien ne déborde de la vue agrandie. Échap la ferme et rend la toile telle qu'elle était.
 
 ## Un fichier d'état venu du dépôt (ESC-653)
 

@@ -91,7 +91,8 @@ test('53 and 56: the view’s tree with its files changed marked, and what its s
     path.join(app.repo, 'src', 'routes', 'users.ts'),
     'export const users = [];\nexport const paginate = () => users.slice(0, 50);\n// paginate\n',
   );
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await openInExplorer(page, 'src/routes/users.ts');
   await expect(editorLines(page)).toContainText('paginate');
   const wb = workbench(page);

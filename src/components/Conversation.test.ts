@@ -2596,7 +2596,7 @@ describe('Conversation: files an agent sends (ESC-171)', () => {
 });
 
 describe('the entry in a step of a workflow (ESC-197, choice 145)', () => {
-  it('draws a divider before the message of the door, which leads to the Workflow tab on that workflow', async () => {
+  it('draws a divider before the message of the door, which opens the workflow’s diagram with the agent’s path (ESC-689)', async () => {
     const at = new Date(2026, 9, 26, 10, 47).getTime();
     const items = [
       { kind: 'user', id: 'u0', text: 'Bonjour', images: 0, ts: at - 600_000, queued: false },
@@ -2616,9 +2616,8 @@ describe('the entry in a step of a workflow (ESC-197, choice 145)', () => {
     // Before the message of its door.
     expect(div.nextElementSibling).toHaveAttribute('data-item', 'u1');
     await userEvent.click(within(div).getByRole('button', { name: 'GSD · Vérifier' }));
-    expect(app.panelTab).toBe('workflow');
-    expect(app.filesOpen).toBe(true);
-    expect(workflows.chosen.p1).toBe(GSD_ID);
+    expect(app.workflowDiagram).toEqual({ projectId: 'p1', workflow: GSD_ID, agentId: a.id });
+    expect(app.workspaceOn).toBe(true);
     // A workflow dismissed is in no list: no divider.
     workflows.scans.p1 = scanOf();
     await waitFor(() => expect(screen.queryByTestId('step-divider')).toBeNull());

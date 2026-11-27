@@ -13,10 +13,13 @@ export default {
     starting: 'Ouverture du micro…',
     /** Live transcription (ESC-136): the service, beside what it heard so far. */
     live: '{service} · en direct',
-    /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape. */
-    keys: '{key} pour finir · {escape} pour annuler',
+    /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape; the second click on
+     * the microphone named, which a user did not guess (ESC-664). */
+    keys: 'Reclique sur le micro ou {key} pour écrire ce que tu as dit · {escape} pour annuler',
+    /** Its short form, in a narrow composer (ESC-664). */
+    keysShort: 'Reclique sur le micro pour écrire ce que tu as dit',
     listening: 'À l’écoute',
-    hint: 'Clique ou {key} pour finir · Échap pour annuler',
+    hint: 'Reclique sur le micro ou {key} pour écrire ce que tu as dit · Échap pour annuler',
     holdHint: 'Relâche pour finir · Échap pour annuler',
     level: 'Niveau du micro',
     transcribing: 'Transcription sur ta machine…',
@@ -209,6 +212,12 @@ export default {
     volume: 'Volume',
     silence: 'Délai avant l’envoi',
     silenceDesc: 'Le silence après lequel ce que tu as dit part à l’agent.',
+    sensitivity: 'Sensibilité du micro',
+    sensitivityDesc:
+      'Le volume, au-dessus du bruit de la pièce, à partir duquel la conversation vocale entend ta voix : le début et la fin de tes phrases, et ta voix quand tu coupes l’agent. Vaut aussi avec la transcription en ligne. La dictée n’en dépend pas : elle écoute jusqu’à ce que tu recliques.',
+    sensitivityLess: 'Moins sensible',
+    sensitivityMore: 'Plus sensible',
+    sensitivityDefault: 'Par défaut',
     seconds: '{n} s',
     previewFailed: 'La voix n’a pas pu être lue : {error}',
     engine: 'Voix générée par',
@@ -239,6 +248,23 @@ export default {
     volumeDesc: 'Appliqué sur ta machine, quel que soit le service.',
   },
   /** Each language named in itself. */
+  /** « Tester » beside « Sensibilité du micro » (ESC-665). */
+  meter: {
+    test: 'Tester',
+    stop: 'Arrêter',
+    label: 'Testeur du micro',
+    level: 'Niveau de ta voix',
+    noise: 'Bruit de la pièce',
+    threshold: 'Seuil',
+    heard: 'Voix détectée',
+    notHeard: 'Pas de voix',
+    learning: 'Reste silencieux un instant : le bruit de la pièce se mesure.',
+    hint: 'Parle : le témoin s’allume quand la conversation t’entendrait, et s’éteint après le délai avant l’envoi. Bouge le curseur pour déplacer le seuil.',
+    private: 'Rien de ce que le micro entend n’est gardé ni envoyé : seul son niveau s’affiche ici.',
+    db: '{n} dB',
+    under: 'sous {n} dB',
+    failed: 'Le micro n’a pas pu être ouvert : {error}',
+  },
   languages: {
     fr: 'Français',
     en: 'English',

@@ -5,34 +5,23 @@
   import type { Agent, Project } from '../lib/types';
   import FilesPanel from './FilesPanel.svelte';
   import GitGraph from './GitGraph.svelte';
-  import WorkflowPanel from './WorkflowPanel.svelte';
   import PrPanel from './PrPanel.svelte';
   import { prWord } from '../lib/prs';
   import { ciFailed } from '../lib/prview';
-  import { workflows } from '../lib/workflows.svelte';
-  import { followers, ticketTracks } from '../lib/workflow-view';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
   import { PANEL_MIN, panelRoom, panelShown, panelWidth, workGuess } from '../lib/panel-width.svelte';
   import { observeWidth } from '../lib/resize';
   import Splitter from './Splitter.svelte';
 
-  // The agent's side panel: its uncommitted files, the repository history, the project's workflow (ESC-194), and the
-  // pull request of its branch with its CI, reviews and deployments (ESC-305); without an agent, the project's open ones.
+  // The agent's side panel: its uncommitted files, the repository history, and the pull request of its branch with its
+  // CI, reviews and deployments (ESC-305); without an agent, the project's open ones. The project's workflows are in the
+  // « Workspace » since ESC-689: its « Workflows », and the step on each agent's card.
   // `docked`: beside the conversation in the split layout (always shown), else an optional panel.
   let { project, agent, docked = false }: { project: Project; agent: Agent | null; docked?: boolean } = $props();
 
   let count = $state(0);
-  // The workflows a feature (F-1): off, their tab goes and the files take its place.
-  const tab = $derived(app.panelTab === 'workflow' && !app.feature('workflows') ? 'files' : app.panelTab);
-  /** The agents that follow a workflow of the project (ESC-194), « Tickets » too (ESC-197): the count of its tab. */
-  const following = $derived(
-    followers([
-      ...workflows.list(project.id).filter((tr) => app.agents[tr.agentId]),
-      ...ticketTracks(project.id, Object.values(app.tickets), app.agents, 0),
-    ]),
-  );
-  $effect(() => void workflows.loadTracks(project.id));
+  const tab = $derived(app.panelTab);
   /** The host's word (« MR » on GitLab), the agent's once its project's host is known. */
   const word = $derived(agent ? prWord(agent) : 'PR');
   /** The CI of the agent's pull request failed: the tab's dot. */
@@ -69,11 +58,6 @@
     <button role="tab" id="side-tab-history" aria-selected={tab === 'history'} onclick={() => (app.panelTab = 'history')}>
       {t('nav.sidePanel.history')}
     </button>
-    {#if app.feature('workflows')}
-      <button role="tab" id="side-tab-workflow" aria-selected={tab === 'workflow'} onclick={() => (app.panelTab = 'workflow')}>
-        {t('workflow.tab')}{#if following}{' '}<span class="n">{following}</span>{/if}
-      </button>
-    {/if}
     <button role="tab" id="side-tab-hosts" aria-selected={tab === 'hosts'} onclick={() => (app.panelTab = 'hosts')}>
       {t('nav.sidePanel.hosts', { word })}{#if failed && agent}<span
           class="dot"
@@ -103,8 +87,6 @@
       <FilesPanel {project} {agent} {docked} bind:count />
     {:else if tab === 'history'}
       <GitGraph {project} {agent} />
-    {:else if tab === 'workflow'}
-      <WorkflowPanel {project} {agent} />
     {:else}
       <PrPanel {project} {agent} />
     {/if}
@@ -179,16 +161,12 @@
     border-radius: 50%;
     background: var(--del);
   }
-  /* Narrower still (340 px beside the classic layout, the window of 1028 px), the tabs draw closer, the Workflow tab's
-     count goes (choice 132) and « PR et CI » leaves the strip for the × (choice 189): its tab comes back with the width. */
+  /* Narrower still (340 px beside the classic layout, the window of 1028 px), the tabs draw closer: the three of them
+     hold beside the × since the Workflow tab left (ESC-689), « PR et CI » no longer goes (choice 189). */
   @container git-side (max-width: 420px) {
     .utabs {
       gap: 12px;
       padding: 0 14px;
-    }
-    #side-tab-workflow .n,
-    #side-tab-hosts {
-      display: none;
     }
   }
   .close {

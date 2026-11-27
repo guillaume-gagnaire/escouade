@@ -96,7 +96,8 @@ test('the changes from the base in the VS Code view: marks, comparisons, letters
   fs.writeFileSync(path.join(wt, 'src', 'new.ts'), 'export const fresh = 1;\n');
 
   // 2. The view on the agent's worktree: its folder alone shown, the project's folded.
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   const view = page.getByTestId('vscode-view');
   const wb = workbench(page);
   await expect(wb).toBeVisible({ timeout: 60_000 });

@@ -136,6 +136,12 @@ export default {
     verifiedOnly: 'N’installer que des versions vérifiées',
     verifiedOnlyScope:
       'Vaut pour le store, les dossiers et les dépôts git : un dossier ou un dépôt n’est accepté que s’il est la version vérifiée du store, aux mêmes fichiers. Le mode développement est un geste à part, qu’il ne couvre pas.',
+    autoUpdate: 'Mettre à jour tout seuls',
+    autoNever: 'Jamais',
+    autoEscouade: 'Les plugins d’Escouade',
+    autoVerified: 'Tous les plugins vérifiés',
+    autoUpdateDesc:
+      'Après chaque recherche des mises à jour, s’installent seules les versions du store vérifiées par Escouade qui ne demandent rien de plus que celle installée : ni permission, ni contribution, ni ligne de harness nouvelle. Le reste reste proposé. Jamais au milieu du tour d’un agent : son harness attend la fin du tour.',
     thirdPartyHarnesses: 'Harness des plugins tiers',
     thirdPartyHarnessesDesc:
       'Un harness décrit par un plugin tiers lance un programme de ce poste hors du bac à sable. « Demander » redit sa commande entière à son premier lancement, et à chaque changement ; « Refuser » n’en lance aucun.',
@@ -150,6 +156,13 @@ export default {
   updates: {
     title: 'Mises à jour',
     sub: 'Cherchées au démarrage, proposées ici, jamais installées seules',
+    subAuto: 'Cherchées au démarrage et toutes les 6 heures ; les vérifiées qui ne demandent rien de plus s’installent seules',
+    autoToday: {
+      one: '{count} plugin mis à jour tout seul aujourd’hui',
+      other: '{count} plugins mis à jour tout seuls aujourd’hui',
+    },
+    autoFailed:
+      '{name} n’a pas pu se mettre à jour tout seul en v{version} : {message} La version installée reste ; elle ne sera pas réessayée avant le prochain démarrage.',
     empty: 'Tes plugins sont à jour.',
     check: 'Chercher maintenant',
     checking: 'Recherche…',
@@ -481,6 +494,7 @@ export default {
     available: 'disponible, pas installée',
     check: 'Chercher une mise à jour',
     upToDate: 'Pas de version plus récente.',
+    auto: 'mise à jour toute seule le {date}, depuis la v{from}',
   },
 
   install: {

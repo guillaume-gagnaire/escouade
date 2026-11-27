@@ -370,6 +370,62 @@ describe('the new project’s assistant', () => {
     await waitFor(() => expect(screen.queryByText('Le dépôt n’a aucun commit')).not.toBeInTheDocument());
   });
 
+  it('says git’s error, never « aucun commit », and reads the folder again on « Réessayer » (ESC-687)', async () => {
+    let fails = 1;
+    const be = backend({
+      inspect_setup: () => {
+        if (fails-- > 0) throw 'git rev-parse a échoué (code 128) : fatal: unable to read HEAD';
+        return setup();
+      },
+    });
+    render(NewProjectModal);
+    await typePath();
+    expect(
+      await screen.findByText('Lecture du dépôt impossible : git rev-parse a échoué (code 128) : fatal: unable to read HEAD'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Le dépôt n’a aucun commit')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Faire un premier commit' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    await waitFor(() => expect(screen.queryByText(/Lecture du dépôt impossible/)).toBeNull());
+    // The folder read again from the start, and nothing committed on the error.
+    expect(be.called('inspect_folder').length).toBeGreaterThan(1);
+    expect(be.called('first_commit')).toHaveLength(0);
+    expect(screen.queryByText('Le dépôt n’a aucun commit')).toBeNull();
+  });
+
+  it('says a folder git failed to read, its steps held until « Réessayer » reads it (ESC-687)', async () => {
+    let fails = 1;
+    const be = backend({
+      inspect_folder: () => {
+        if (fails-- > 0) throw 'git status interrompu : toujours pas terminé après 120 s';
+        return folder();
+      },
+    });
+    render(NewProjectModal);
+    await typePath();
+    const said = 'Lecture du dépôt impossible : git status interrompu : toujours pas terminé après 120 s';
+    expect((await screen.findAllByText(said)).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Suivant' })).toBeDisabled();
+    expect(screen.queryByText('Le dépôt n’a aucun commit')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByText('Dépôt git détecté · branche main · propre')).toBeInTheDocument();
+    expect(screen.queryByText(said)).toBeNull();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    expect(be.called('first_commit')).toHaveLength(0);
+  });
+
+  it('says nothing of a commit while the folder is being checked (ESC-687)', async () => {
+    backend({ inspect_setup: () => new Promise(() => {}) });
+    render(NewProjectModal);
+    await typePath();
+    expect(await screen.findByText('Dépôt git détecté · branche main · propre')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    expect(screen.queryByText('Le dépôt n’a aucun commit')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    expect(screen.getByText('Lecture du dépôt…')).toBeInTheDocument();
+    expect(screen.queryByText(/dépôt prêt/)).toBeNull();
+  });
+
   it('says worktrees in a folder git tracks, and goes back to the default folder', async () => {
     backend({ inspect_setup: ({ worktreeDir }) => setup({ worktreesTracked: worktreeDir === 'src' }) });
     render(NewProjectModal);

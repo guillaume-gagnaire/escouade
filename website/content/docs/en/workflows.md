@@ -38,7 +38,7 @@ What Escouade understands of a workflow of the repository’s configuration (its
 - A file that comes back (a `git pull`, another branch) gives the workflow back to the project.
 - “This is not a workflow” remains the other way to set it apart: its file is kept, marked, so the whole team sets it apart too.
 
-“No workflow for this project”, in the “New project” assistant (Kanban step) or at the top of Settings › Projects › Kanban › Workflow, turns everything off. Escouade no longer reads the project’s workflows, writes no file and follows no agent in them. What is already in `.escouade/workflows/` is left as it is. The Workflow tab says so, with where to undo it: “Read the workflows”, then “Save”. In a shared project, it is the `workflows.enabled: false` key of its [`.escouade.yml`](escouade-yml).
+“No workflow for this project”, in the “New project” assistant (Kanban step) or at the top of Settings › Projects › Kanban › Workflow, turns everything off. Escouade no longer reads the project’s workflows, writes no file and follows no agent in them. What is already in `.escouade/workflows/` is left as it is. “Workflows”, in the Workspace, says so, with where to undo it: “Read the workflows”, then “Save”. In a shared project, it is the `workflows.enabled: false` key of its [`.escouade.yml`](escouade-yml).
 
 ## Where each agent is
 
@@ -48,7 +48,9 @@ Every stay in a step is kept in the agent’s history: the time, the duration, t
 
 ## The diagram: where it may go, where it really goes
 
-In the Workflow tab, the “Diagram” view always starts from an entry point.
+In the Workspace, the card of each agent that follows a workflow says its step (“GSD · Plan · pass 2”, “running”), and in red the way back that sent it there, with its reason. A click on it opens the diagram, enlarged, with that agent’s path. “Workflows”, at the top right of the canvas, lists the project’s workflows and their agents, opens the diagram of each without an agent, copies it as Mermaid and leads to the settings. Esc closes the diagram.
+
+The diagram always starts from an entry point.
 
 - **With an agent**, it is the door it came in by: the command or the skill it typed, the prompt loop, else the first step Escouade saw it in. It is written at the head, “Entry”, in a full line.
 - **Without an agent**, you choose the door in “Entry: where the agent starts”. The first one is taken by default; the arrow keys move from one to the next.
@@ -60,7 +62,7 @@ Two lines read at a glance:
 - **what is possible**: a light dashed line, steps with a dashed edge, with the conditions of the choices and the ways back;
 - **what the agent took**: a full, thick line. Each stay has its number on its step, in the order of the path (“1, 2, 5” on a step it came back to). A way back it took is full and red, with the reason the step gave; a loop says its rounds (“1/3”). The step in progress is ringed in green and says “in progress”, the next one “next”.
 
-The other agents of the same workflow stay dots on their step; pick one in the list to see its path. The enlarged view follows the same logic.
+The other agents of the same workflow stay dots on their step; its path is read from its card, or its line in “Workflows”.
 
 For a screen reader, the path is an ordered list too: “Plan, entered by /gsd:plan-phase”, “Plan, back from Verify: 2 red tests, pass 3”, “Execute, pass 2, in progress”. The path comes from the agent’s history: it is back as it was after a restart.
 
@@ -87,7 +89,7 @@ Three things seen for real: a door the agent runs by itself (Claude Code calls `
 
 Three tools, all read only (see [the MCP server](mcp) for the others):
 
-- **`get_workflow`** (`project`): the project’s workflows, as the Workflow tab shows them. For each one, its doors, its steps (command, sub-agents, files read and written), its returns (`back`, with their `condition` and `max`) and, on each step, the agents on it now (`agentsHere`: id, name, since when, nth stay). Agents that follow a workflow without being on a step are apart (`agentsElsewhere`).
+- **`get_workflow`** (`project`): the project’s workflows, as the Workspace shows them. For each one, its doors, its steps (command, sub-agents, files read and written), its returns (`back`, with their `condition` and `max`) and, on each step, the agents on it now (`agentsHere`: id, name, since when, nth stay). Agents that follow a workflow without being on a step are apart (`agentsElsewhere`).
 - **`list_agents`**: each agent gains `workflow`, its name, step, turn (that of a prompt played again, or its ticket’s loop) and since when; `null` when it follows none.
 - **`get_agent_summary`**: the same `workflow`, and the history of its steps (`history`, the latest 100 stays, oldest first).
 

@@ -15,7 +15,7 @@ use crate::git;
 use crate::i18n::{self, Lang};
 use crate::model::{now_ms, Column, Ticket, TicketEnv, UiEvent};
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 /// How long after it is done a ticket is still followed in its environments (ms): 30 days.
@@ -60,6 +60,42 @@ pub struct ProjectEnvironments {
     pub unsupported: bool,
     /// The host's name (« GitHub »).
     pub host: String,
+    /// The deployments of the agents' branches (the Workspace's landing zone), previews included.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub branches: Vec<BranchDeployment>,
+}
+
+/// A deployment of a commit of the agents' own branches.
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchDeployment {
+    pub deployment: Deployment,
+    pub agents: Vec<String>,
+}
+
+/// The deployments of `list` (newest first) whose commit is one of an agent's own (`own`: by
+/// agent, the commits of its branch not on the target), the newest by environment and agent.
+pub fn branch_deployments(
+    list: &[Deployment],
+    own: &[(String, HashSet<String>)],
+) -> Vec<BranchDeployment> {
+    let mut taken = HashSet::new();
+    list.iter()
+        .filter(|d| !d.sha.is_empty())
+        .filter_map(|d| {
+            let agents: Vec<String> = own
+                .iter()
+                .filter(|(id, shas)| {
+                    shas.contains(&d.sha) && taken.insert((d.environment.clone(), id.clone()))
+                })
+                .map(|(id, _)| id.clone())
+                .collect();
+            (!agents.is_empty()).then(|| BranchDeployment {
+                deployment: d.clone(),
+                agents,
+            })
+        })
+        .collect()
 }
 
 /// A pull request's preview or a review app, not one of the repository's environments: Vercel's
@@ -326,6 +362,7 @@ impl Core {
                 if !provider.capabilities().deployments {
                     out.unsupported = true;
                     out.environments.clear();
+                    out.branches.clear();
                     out.error = None;
                 } else {
                     out.unsupported = false;
@@ -339,6 +376,13 @@ impl Core {
                         }
                         Ok(list) => {
                             out.environments = summarize(&list);
+                            // No project, no agent: nothing left of an earlier reading.
+                            out.branches = match self.project(project_id) {
+                                Ok(project) => {
+                                    branch_deployments(&list, &self.own_commits(&project).await)
+                                }
+                                Err(_) => Vec::new(),
+                            };
                             out.read_at = Some(now_ms());
                             out.error = None;
                         }
@@ -376,6 +420,56 @@ impl Core {
         self.hub.emit(UiEvent::Environments {
             environments: out.clone(),
         });
+        out
+    }
+
+    /// The commits of each live agent's own branch (`HEAD` but its target, 200 at most), by agent:
+    /// an agent of several repositories, or whose folder or target git does not know, is left out.
+    /// The target is wherever it is known, as `update_base` brings it (its upstream, origin's, the
+    /// local branch): a local one behind would give the agent the commits merged since.
+    async fn own_commits(&self, project: &crate::model::Project) -> Vec<(String, HashSet<String>)> {
+        let target = self.ci_target(project).await;
+        let dirs: Vec<(String, String)> = self
+            .project_agents(&project.id)
+            .iter()
+            .filter_map(|h| {
+                let guard = h.lock();
+                let m = &guard.meta;
+                let dir = match (&m.worktree, &m.found_worktree) {
+                    _ if m.archived => None,
+                    (Some(w), _) if w.repos.is_empty() => Some(w.path.clone()),
+                    (_, Some(f)) => Some(f.path.clone()),
+                    _ => None,
+                };
+                dir.map(|d| (m.id.clone(), d))
+            })
+            .collect();
+        let mut out = Vec::new();
+        for (id, dir) in dirs {
+            let mut bases = Vec::new();
+            if let Some(up) = git::upstream_of(&dir, &target).await {
+                bases.push(up.tracking);
+            }
+            bases.push(format!("refs/remotes/origin/{target}"));
+            bases.push(target.clone());
+            let mut args = vec!["rev-list", "--max-count=200", "--end-of-options", "HEAD"];
+            let mut not = Vec::new();
+            for base in bases {
+                // `commit_of` takes no name that starts with `-`: the target is typed by the user.
+                if git::commit_of(&dir, &base).await.is_ok() {
+                    not.push(format!("^{base}"));
+                }
+            }
+            if not.is_empty() {
+                log::debug!("own commits of {id}: target « {target} » unknown in {dir}");
+                continue;
+            }
+            args.extend(not.iter().map(String::as_str));
+            match git::text(&dir, &args).await {
+                Ok(list) => out.push((id, list.lines().map(str::to_string).collect())),
+                Err(e) => log::debug!("own commits of {id}: {e:#}"),
+            }
+        }
         out
     }
 

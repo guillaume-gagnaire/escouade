@@ -75,7 +75,7 @@ Une colonne à gauche de la fenêtre, de la barre de titre à la barre de statut
 - **La machine**, dès que ce poste connaît un serveur : la plaque et le nom de l'espace avant le projet, avec l'hôte SSH d'un serveur (masqué sous 1100 px de large), « Ce poste » sur ce poste ; en ambre avec « reconnexion » quand la connexion est coupée. Un `status` pour les lecteurs d'écran. Sur « Partout », « Tous les espaces / Vue d'ensemble » : aucune machine en particulier, chaque ligne dit la sienne. Une fenêtre d'espace a sa propre barre, donc sa machine.
 - Puis le projet affiché : pastille de couleur, nom, cadenas, `Δ n`, menu.
 - Au centre : « Rechercher » (`Ctrl+K`, voir *Rechercher dans les conversations*).
-- À droite : « Éditeur » et les boutons de la fenêtre.
+- À droite : « Éditeur » et les boutons de la fenêtre. « Éditeur » ouvre un menu, « Éditeur » ou « Workspace » (voir *Workspace*).
 
 ## Réglages
 

@@ -1190,6 +1190,20 @@ jobs:
         working-directory: src-tauri
         run: xvfb-run -a cargo run --example devpage_probe
 
+      # An agent's page in a real WebKitGTK (ESC-667): the trap of docs/AGENT-PAGES.md § 8.4 reaches nothing (two
+      # listeners of the loopback say so), no command answers it, its storage does not last; and whether the CSP of a
+      # header of the scheme, or of its <meta>, holds alone.
+      - name: An agent's page in a real webview
+        working-directory: src-tauri
+        run: xvfb-run -a cargo run --example agentpage_probe
+
+      # The read bridge of the browsers in a real WebKitGTK (ESC-672, AB-5): a page that defends itself is read (its
+      # secrets masked), captured (the view, an element, the document) and its console and failed requests kept from the
+      # browser's creation, across a navigation. The probe exits 1 when a step does not hold, which fails the job.
+      - name: The agents read a browser in a real webview
+        working-directory: src-tauri
+        run: xvfb-run -a cargo run --example agentbrowser_probe
+
       # The conversation's voice under Linux: Microsoft's ONNX Runtime (glibc 2.27), in the .deb and the AppImage
       # (tauri.ort-linux.conf.json), its checksum checked; pyke's needs glibc 2.38.
       - name: ONNX Runtime for Linux
@@ -1459,3 +1473,14 @@ jobs:
           cargo run --example devpage_probe -- --devtools-last; last=$?
           cargo run --example devpage_probe; first=$?
           exit $((last || first))
+
+      # An agent's page in a real WKWebView (ESC-667): the same trap, the same verdict.
+      - name: An agent's page in a real webview
+        working-directory: src-tauri
+        run: cargo run --example agentpage_probe
+
+      # The read bridge of the browsers in a real WKWebView (ESC-672, AB-5), its first true trial: the same page read,
+      # captured and its console kept; the probe exits 1 when a step does not hold.
+      - name: The agents read a browser in a real webview
+        working-directory: src-tauri
+        run: cargo run --example agentbrowser_probe

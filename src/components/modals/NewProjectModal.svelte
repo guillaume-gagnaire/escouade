@@ -125,17 +125,24 @@
 
   $effect(() => {
     const p = form.path.trim();
+    // « Réessayer » reads it again.
+    void form.attempt;
     const now = opening;
     opening = false;
     clearTimeout(timer);
     if (!p) {
       form.info = null;
       form.setup = null;
+      form.folderError = null;
+      form.setupError = null;
       return;
     }
     const read = async () => {
-      const i = await api.inspectFolder(p, historyFor(p)).catch(() => null);
+      // Git failed to read it: said with « Réessayer » (ESC-687), not shown as a folder without git or without commit.
+      let error: string | null = null;
+      const i = await api.inspectFolder(p, historyFor(p)).catch((e: unknown) => ((error = String(e)), null));
       if (form.path.trim() !== p) return;
+      form.folderError = error;
       // Another folder, another choice.
       if (i?.history?.id !== form.info?.history?.id) fresh = false;
       form.info = i;
@@ -166,24 +173,26 @@
   }
 
   const gitLine = $derived(
-    !info
-      ? { text: t('shell.newProject.git.choose'), color: 'var(--dim)' }
-      : !info.exists
-        ? { text: t('shell.newProject.git.missing'), color: 'var(--del)' }
-        : info.repos?.length
-          ? // Of several repositories (ESC-169): « 4 dépôts git : front, api, infra, docs ».
-            {
-              text: t('repos.wizard.found', { count: info.repos.length, repos: info.repos.map(repoLabel).join(', ') }),
-              color: 'var(--run)',
-            }
-          : info.isRepo
-            ? {
-                text: info.dirty
-                  ? t('shell.newProject.git.repoDirty', { branch: info.branch || '—', count: info.dirty })
-                  : t('shell.newProject.git.repoClean', { branch: info.branch || '—' }),
+    form.folderError
+      ? { text: t('wizard.checks.unread.title', { error: form.folderError }), color: 'var(--del)' }
+      : !info
+        ? { text: t('shell.newProject.git.choose'), color: 'var(--dim)' }
+        : !info.exists
+          ? { text: t('shell.newProject.git.missing'), color: 'var(--del)' }
+          : info.repos?.length
+            ? // Of several repositories (ESC-169): « 4 dépôts git : front, api, infra, docs ».
+              {
+                text: t('repos.wizard.found', { count: info.repos.length, repos: info.repos.map(repoLabel).join(', ') }),
                 color: 'var(--run)',
               }
-            : { text: t('shell.newProject.git.none'), color: 'var(--muted)' },
+            : info.isRepo
+              ? {
+                  text: info.dirty
+                    ? t('shell.newProject.git.repoDirty', { branch: info.branch || '—', count: info.dirty })
+                    : t('shell.newProject.git.repoClean', { branch: info.branch || '—' }),
+                  color: 'var(--run)',
+                }
+              : { text: t('shell.newProject.git.none'), color: 'var(--muted)' },
   );
 
   const STARTS = $derived<{ id: Start; label: string; desc: string }[]>(

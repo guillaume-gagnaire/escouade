@@ -90,6 +90,7 @@ impl AgentRt {
                 self.plan_apply(fx, |plan| {
                     plan.on_tool_result(id, is_error, &text, &Value::Null, now_ms())
                 });
+                self.canvas_apply(fx, |c| c.on_tool_result(id, is_error, &text, now_ms()));
                 let call = self.conv.get(id).cloned().unwrap_or_default();
                 if call["name"] == "Edit" && !is_error {
                     if let Some(path) = call["input"]["file_path"].as_str() {

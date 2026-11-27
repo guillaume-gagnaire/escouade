@@ -79,7 +79,8 @@ async function start(page: Page, repo: string) {
       ),
     ),
   );
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
 }
 
@@ -378,7 +379,8 @@ for (const scheme of ['light', 'dark'] as const) {
       document.documentElement.dataset.theme = t;
       document.documentElement.style.colorScheme = t;
     }, scheme);
-    await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+    await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+    await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
     await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
     const cases: [string, string, () => Promise<void>][] = [
       ['assets/photo.png', 'image', () => expect(preview(page, 'image').locator('img.pv-image')).toBeVisible()],

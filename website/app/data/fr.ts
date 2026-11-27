@@ -435,6 +435,8 @@ export const fr: Catalog = {
       autopilot: 'Le pilote auto',
       testing: 'Tester et valider',
       browser: 'La page du lancement',
+      'agent-pages': 'Les pages des agents',
+      'agent-browsers': 'Les agents et les navigateurs',
       integrations: 'Tickets externes',
       'shared-board': 'Partager le Kanban',
       'docs-space': 'L’espace Docs',

@@ -169,6 +169,7 @@ beforeEach(() => {
   plugins.suggestions = [];
   plugins.suggestionsFor = null;
   plugins.dismissed = {};
+  plugins.autoFailed = [];
   localStorage.clear();
 });
 
@@ -419,5 +420,119 @@ describe('the link escouade://plugin/<id> (STORE-11)', () => {
       'Lien Escouade illisible, rien n’a été fait : escouade://plugin/nope',
     ]);
     expect(plugins.install).toBeNull();
+  });
+});
+
+// « Mettre à jour tout seuls » (ESC-700): the setting beside « N'installer que des versions vérifiées », off by default and
+// kept with the settings; what went by itself said at the head of the page Mises à jour and in the tab Versions.
+describe('the updates by themselves (ESC-700)', () => {
+  const now = new Date().toISOString();
+
+  it('is a setting beside « N’installer que des versions vérifiées », off by default, kept with the settings', async () => {
+    plugins.page = { kind: 'installed' };
+    const backend = fakeBackend({ store_view: () => store(), plugins_list: () => [] });
+    render(PluginsView);
+    const menu = (await screen.findByRole('combobox', { name: 'Mettre à jour tout seuls' })) as HTMLSelectElement;
+    expect(menu.value).toBe('never');
+    expect([...menu.options].map((o) => o.textContent)).toEqual(['Jamais', 'Les plugins d’Escouade', 'Tous les plugins vérifiés']);
+    // Beside the switch, in the same head.
+    const toggle = screen.getByRole('switch', { name: 'N’installer que des versions vérifiées' });
+    expect(toggle.closest('.row')).toBe(menu.closest('.row'));
+    await userEvent.selectOptions(menu, 'escouade');
+    expect(backend.called('save_settings').at(-1)?.args.settings.pluginsAutoUpdate).toBe('escouade');
+    await userEvent.selectOptions(menu, 'verified');
+    expect(backend.called('save_settings').at(-1)?.args.settings.pluginsAutoUpdate).toBe('verified');
+  });
+
+  it('is said in English too', async () => {
+    setLang('en');
+    plugins.page = { kind: 'installed' };
+    fakeBackend({ store_view: () => store(), plugins_list: () => [] });
+    render(PluginsView);
+    const menu = (await screen.findByRole('combobox', { name: 'Update by themselves' })) as HTMLSelectElement;
+    expect([...menu.options].map((o) => o.textContent)).toEqual(['Never', 'Escouade’s plugins', 'All verified plugins']);
+  });
+
+  it('says at the head of the page Mises à jour what updated by itself today, and what failed', async () => {
+    plugins.page = { kind: 'updates' };
+    app.settings.pluginsAutoUpdate = 'verified';
+    fakeBackend({
+      store_view: () => store(),
+      plugins_list: () => [
+        installed({
+          version: '1.1.0',
+          choices: { enabled: true, projects: {}, revoked: [], settings: {}, autoUpdated: { from: '1.0.0', to: '1.1.0', at: now } },
+        }),
+        // Yesterday's: not today's line.
+        installed({
+          id: 'dev.exemple.nuit',
+          name: 'Nuit',
+          choices: {
+            enabled: true,
+            projects: {},
+            revoked: [],
+            settings: {},
+            autoUpdated: { from: '0.9.0', to: '1.0.0', at: '2020-01-01T10:00:00Z' },
+          },
+        }),
+      ],
+      plugins_auto_failed: () => [
+        { id: 'dev.exemple.slack', name: 'Slack', version: '1.2.0', message: 'Le store ne répond pas.', at: now },
+      ],
+    });
+    render(PluginsView);
+    const line = await screen.findByText(/1 plugin mis à jour tout seul aujourd’hui/);
+    expect(line.textContent).toContain('Contraste élevé');
+    expect(line.textContent).toContain('v1.0.0 → v1.1.0');
+    expect(line.textContent).not.toContain('Nuit');
+    const alert = await screen.findByText(/Slack n’a pas pu se mettre à jour tout seul en v1.2.0/);
+    expect(alert.textContent).toContain('Le store ne répond pas.');
+    expect(alert.textContent).toContain('elle ne sera pas réessayée avant le prochain démarrage');
+    expect(screen.getByText(/les vérifiées qui ne demandent rien de plus s’installent seules/)).toBeTruthy();
+  });
+
+  it('« Chercher maintenant » shows what installed by itself after the search', async () => {
+    plugins.page = { kind: 'updates' };
+    fakeBackend({
+      store_view: () => store(),
+      plugins_list: () => [installed({ update: { version: '1.1.0', verified: true } })],
+      plugins_check_updates: () => ({
+        plugins: [
+          installed({
+            version: '1.1.0',
+            choices: { enabled: true, projects: {}, revoked: [], settings: {}, autoUpdated: { from: '1.0.0', to: '1.1.0', at: now } },
+          }),
+        ],
+        store: store(),
+        autoFailed: [],
+      }),
+    });
+    render(PluginsView);
+    expect(screen.queryByText(/mis à jour tout seul/)).toBeNull();
+    expect(screen.getByText('Cherchées au démarrage, proposées ici, jamais installées seules')).toBeTruthy();
+    await userEvent.click(await screen.findByRole('button', { name: 'Chercher maintenant' }));
+    expect((await screen.findByText(/1 plugin mis à jour tout seul aujourd’hui/)).textContent).toContain('v1.0.0 → v1.1.0');
+    expect(screen.getByText('Tes plugins sont à jour.')).toBeTruthy();
+  });
+
+  it('the tab Versions says the update made by itself', async () => {
+    plugins.page = { kind: 'plugin', id: MANIFEST.id, tab: 'versions' };
+    fakeBackend({
+      store_view: () => store(),
+      plugins_list: () => [
+        installed({
+          version: '1.1.0',
+          choices: {
+            enabled: true,
+            projects: {},
+            revoked: [],
+            settings: {},
+            autoUpdated: { from: '1.0.0', to: '1.1.0', at: '2026-11-27T09:30:00Z' },
+          },
+        }),
+      ],
+    });
+    render(PluginsView);
+    expect((await screen.findByText(/mise à jour toute seule le .*27.*, depuis la v1\.0\.0/)).textContent).toBeTruthy();
   });
 });

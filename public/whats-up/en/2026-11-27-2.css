@@ -1,0 +1,139 @@
+/* What's up ? 2026-11-27-2 (2.2.18) : captures 1440 x 900 de l'atelier, cadrées par une caméra (le transform du cadre). */
+.wu-20261127-2-cadre {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 1440px;
+  height: 900px;
+  transform-origin: 0 0;
+  transform: scale(0.36);
+}
+.wu-20261127-2-etat {
+  position: absolute;
+  inset: 0;
+  width: 1440px;
+  height: 900px;
+}
+.wu-20261127-2-apres {
+  opacity: 0;
+}
+@keyframes wu-20261127-2-montre {
+  to {
+    opacity: 1;
+  }
+}
+.wu-20261127-2-curseur {
+  position: absolute;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.9);
+  box-shadow:
+    0 0 0 3px rgb(0 0 0 / 0.35),
+    0 6px 16px rgb(0 0 0 / 0.4);
+  opacity: 0;
+}
+@keyframes wu-20261127-2-part {
+  to {
+    opacity: 0;
+  }
+}
+
+/* 1. Connexion : « Continuer avec Exemple ID », puis la fenêtre de connexion dans Escouade. */
+.wu-20261127-2-p1 {
+  animation: wu-20261127-2-cam1 0.6s 1.2s ease-in-out forwards;
+}
+@keyframes wu-20261127-2-cam1 {
+  to {
+    transform: translate(-202px, -55px) scale(0.5);
+  }
+}
+.wu-20261127-2-p1 .wu-20261127-2-apres {
+  animation: wu-20261127-2-montre 0.25s 1.05s forwards;
+}
+.wu-20261127-2-p1 .wu-20261127-2-curseur {
+  left: 760px;
+  top: 560px;
+  animation:
+    wu-20261127-2-c1 0.6s 0.3s ease-in-out forwards,
+    wu-20261127-2-part 0.15s 1.05s forwards;
+}
+@keyframes wu-20261127-2-c1 {
+  20% {
+    opacity: 1;
+    left: 760px;
+    top: 560px;
+  }
+  100% {
+    opacity: 1;
+    left: 880px;
+    top: 334px;
+  }
+}
+
+/* 2. L'écran : la ligne qui attend sous « Navigateurs », puis l'onglet à côté de front-1. */
+.wu-20261127-2-p2 {
+  transform: translate(0, -306px) scale(0.7);
+  animation: wu-20261127-2-cam2 0.6s 1.2s ease-in-out forwards;
+}
+@keyframes wu-20261127-2-cam2 {
+  to {
+    transform: scale(0.36);
+  }
+}
+.wu-20261127-2-p2 .wu-20261127-2-apres {
+  animation: wu-20261127-2-montre 0.2s 1.05s forwards;
+}
+.wu-20261127-2-p2 .wu-20261127-2-curseur {
+  left: 300px;
+  top: 640px;
+  animation:
+    wu-20261127-2-c2 0.6s 0.3s ease-in-out forwards,
+    wu-20261127-2-part 0.15s 1.05s forwards;
+}
+@keyframes wu-20261127-2-c2 {
+  20% {
+    opacity: 1;
+    left: 300px;
+    top: 640px;
+  }
+  100% {
+    opacity: 1;
+    left: 140px;
+    top: 768px;
+  }
+}
+
+/* 3. Laisser piloter : le menu de la ligne et ses agents. */
+.wu-20261127-2-p3 {
+  animation: wu-20261127-2-cam3 0.6s 0.3s ease-in-out forwards;
+}
+@keyframes wu-20261127-2-cam3 {
+  to {
+    transform: translate(-34px, -442px) scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wu-20261127-2-cadre,
+  .wu-20261127-2-cadre * {
+    animation: none !important;
+  }
+  .wu-20261127-2-apres {
+    opacity: 1;
+  }
+  .wu-20261127-2-curseur {
+    display: none;
+  }
+  .wu-20261127-2-p1 {
+    transform: translate(-202px, -55px) scale(0.5);
+  }
+  .wu-20261127-2-p2 {
+    transform: scale(0.36);
+  }
+  .wu-20261127-2-p3 {
+    transform: translate(-34px, -442px) scale(0.85);
+  }
+}

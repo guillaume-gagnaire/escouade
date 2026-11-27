@@ -3,7 +3,7 @@ title: "La boîte « À toi »"
 subject: "harness"
 sources: ["docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 16 et § 18 pour le reversement)","design/inbox-2-3/README.md (direction B, captures b-)","docs/REMOTE.md (Le classement des commandes)","docs/INBOX.md (ESC-508, choix de l'utilisateur du 2026-11-17 au § 15 ; § 5, § 11, § 13 pour IN-3 ; § 5.1 pour ESC-557 ; § 10.2 pour le filtre d'ESC-578 ; § 18)","Demande de l'utilisateur du 2026-11-20 (ESC-557) : « quand toi, l'agent qui valide et merge un ticket, le fait, de pouvoir cocher comme terminé la tâche dans \"à toi\", afin d'être toujours à jour »","Demande de l'utilisateur du 2026-11-21 (ESC-578) : « Dans le \"À toi\", ajoute le fait de pouvoir filtrer par type de demande. »"]
 tickets: ["ESC-508","ESC-509","ESC-510","ESC-513","ESC-520","ESC-538","ESC-540","ESC-552","ESC-585","ESC-557","ESC-578","ESC-628","ESC-645","ESC-647"]
-decisions: [210,204,240,242,222,227,263,290,296,315,340]
+decisions: [210,204,240,242,222,227,263,290,296,315,359]
 compared: null
 ---
 

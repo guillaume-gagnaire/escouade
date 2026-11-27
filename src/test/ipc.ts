@@ -177,6 +177,7 @@ export const SETTINGS: Settings = {
       rate: 1,
       volume: 1,
       silenceMs: 1200,
+      sensitivity: 0,
       engine: 'local',
       onlineService: 'openai',
       onlineModels: {},
@@ -440,6 +441,8 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.prReviews = {};
   app.prDrafts = {};
   app.docs = {};
+  app.workspace = {};
+  app.overviewCanvas = false;
   app.docsSpace = {};
   app.docsPage = {};
   app.docsEdit = null;

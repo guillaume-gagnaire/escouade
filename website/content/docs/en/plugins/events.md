@@ -208,7 +208,7 @@ Escouade reads the workflows of a project by itself (GSD, Superpowers, Ralph…)
 
 - Escouade calls `workflow/read` with `{ "reader": "bmad", "root": "…", "repos": [], "files": [{ "path": "_bmad/brief.md", "text": "…" }] }`: **only the files its globs match**, from the project’s folder (and from each repository’s of a project of several), as text, at most 200 files of 256 KB. A glob with `..` or an absolute path finds nothing.
 - The plugin answers the graph: `{ "workflows": [{ "id", "name", "steps": [{ "name", "command", "description", "path", "agents", "reads", "writes" }], "transitions": [{ "from", "to", "back", "condition", "max" }], "exit" }] }`. A step is signalled by its `command` typed, by the sub-agents it names or the files it writes; a transition with `back` is a way back, with its `condition` as the reason when the step says none.
-- The workflow is followed like those Escouade reads: the Workflow tab, the card, the `workflow.*` facts. Its id is `plugin:<plugin>:<id>`, so it never takes the place of another.
+- The workflow is followed like those Escouade reads: the Workspace, the card, the `workflow.*` facts. Its id is `plugin:<plugin>:<id>`, so it never takes the place of another.
 - A graph that does not hold (a step without a name, two of one name, a transition to a step that is not there, more than 50 workflows) is refused whole, with why, in the journal. The call has 60 s.
 
 ## The journal

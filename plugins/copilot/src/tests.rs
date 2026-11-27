@@ -202,6 +202,66 @@ fn a_message_during_a_turn_goes_in_at_once_and_its_files_go_as_the_core_made_the
     assert_eq!(second["params"]["mode"], "immediate");
 }
 
+/// The params of `session.create` once `connect` answered `protocol`.
+fn created_with(protocol: u64) -> Value {
+    let answer = move |m: &str| match m {
+        "connect" => Some(json!({ "protocolVersion": protocol })),
+        m => signed_in(m),
+    };
+    let mut a = Agent::new(&Attach {
+        effort: "high".into(),
+        session: None,
+        ..attach()
+    });
+    let mut p = params();
+    p.effort = "high".into();
+    let mut todo = a.launch(&p).writes;
+    while let Some(line) = todo.pop() {
+        if parsed(&line)["method"] == "session.create" {
+            return parsed(&line)["params"].clone();
+        }
+        let mut more = writes(&a.frames(&[reply(&line, &answer)]));
+        more.reverse();
+        todo.extend(more);
+    }
+    panic!("no session.create");
+}
+
+#[test]
+fn protocol_4_of_copilot_cli_1_0_116_takes_the_options_nested_and_protocol_3_flat() {
+    // Copilot CLI 1.0.116 (SDK v2, 2026-11-25) answers `connect` with protocol 4: refused until then.
+    let p = created_with(4);
+    assert_eq!(p["clientName"], "escouade");
+    assert_eq!(p["workingDirectory"], CWD);
+    assert_eq!(p["model"], "gpt-6-luna");
+    assert_eq!(p["events"]["streaming"], true);
+    assert_eq!(p["permissions"]["request"], true);
+    assert_eq!(p["interaction"]["requestUserInput"], true);
+    assert_eq!(p["interaction"]["requestElicitation"], true);
+    assert_eq!(p["interaction"]["requestExitPlanMode"], true);
+    assert_eq!(p["mcp"]["envValueMode"], "direct");
+    assert_eq!(p["inference"]["reasoningEffort"], "high");
+    for flat in [
+        "streaming",
+        "requestPermission",
+        "requestUserInput",
+        "requestElicitation",
+        "envValueMode",
+    ] {
+        assert!(
+            p.get(flat).is_none(),
+            "{flat} at the root in protocol 4: {p}"
+        );
+    }
+    // An older Copilot CLI keeps its flat options.
+    let p = created_with(3);
+    assert_eq!(p["streaming"], true);
+    assert_eq!(p["requestPermission"], true);
+    assert_eq!(p["envValueMode"], "direct");
+    assert_eq!(p["reasoningEffort"], "high");
+    assert!(p.get("events").is_none() && p.get("permissions").is_none());
+}
+
 #[test]
 fn another_protocol_or_no_sign_in_stops_it_and_says_why() {
     let old = |m: &str| match m {

@@ -99,10 +99,16 @@ test('a workflow deleted, here or by hand, never comes back; no workflow for the
   expect(fs.existsSync(gsd) || fs.existsSync(dev) || fs.existsSync(reading)).toBe(false);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  // The Workflow tab says it too, and where it is undone.
-  await page.keyboard.press('Control+Shift+B');
-  const side = page.locator('aside.git-side');
-  await side.getByRole('tab', { name: /^Workflow/ }).click();
+  // « Workflows » of the « Workspace » says it too, and where it is undone (ESC-689).
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Workspace' }).click();
+  await page
+    .locator('.ws')
+    .getByRole('button', { name: /^Workflows/ })
+    .click();
+  const side = page.getByTestId('workspace-workflows');
   await expect(side.getByTestId('workflow-off')).toContainText('Pas de workflow pour ce projet');
   await expect(side.getByTestId('workflow-off')).toContainText('Réglages › Projets › Kanban, « Lire les workflows »');
+  await side.getByRole('button', { name: 'Ouvrir les réglages du workflow' }).click();
+  await expect(page.getByRole('dialog', { name: 'Réglages' }).locator('#sg-workflow')).toBeInViewport();
 });

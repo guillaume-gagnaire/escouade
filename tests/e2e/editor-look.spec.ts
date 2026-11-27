@@ -145,8 +145,8 @@ async function agentAtWork(repo: string, write: ReturnType<typeof previewsProjec
 
 /** The view's words, in each language. */
 const VIEW_WORDS = {
-  fr: { editor: 'Ouvrir l’éditeur du projet', five: '5 lignes modifiées par rapport à main' },
-  en: { editor: 'Open the project’s editor', five: '5 lines changed from main' },
+  fr: { editor: 'Éditeur ou workspace du projet', editorItem: 'Éditeur', five: '5 lignes modifiées par rapport à main' },
+  en: { editor: 'Editor or workspace of the project', editorItem: 'Editor', five: '5 lines changed from main' },
 };
 
 /**
@@ -156,6 +156,7 @@ const VIEW_WORDS = {
 async function editorAsThePreview(page: Page, lang: 'fr' | 'en' = 'fr') {
   const words = VIEW_WORDS[lang];
   await page.getByRole('button', { name: words.editor }).click();
+  await page.getByRole('menuitemradio', { name: words.editorItem }).click();
   const view = page.getByTestId('vscode-view');
   const wb = workbench(page);
   await expect(wb).toBeVisible({ timeout: 60_000 });
@@ -369,7 +370,8 @@ async function followsTheTokens(page: Page, where: string) {
 
 /** The view on the preview's project, users.ts shown after index.ts, its search open. */
 async function vscodeOnThePreview(page: Page) {
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await openInExplorer(page, 'src/db/index.ts');
   await openInExplorer(page, 'src/routes/users.ts');
   await expect(editorLines(page)).toContainText("import { Router } from 'express';");
@@ -444,7 +446,8 @@ test('the VS Code view takes the tint of the project shown, and a plugin’s the
   const first = await bgOf(side);
   // The other project, its editor: the view in its tint once `--p` has glided, the first project's tabs kept.
   await tile('studio-web').click();
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await expect(workbench(page)).toBeVisible();
   await expect.poll(() => bgOf(side), { timeout: 10_000 }).not.toLookLike(first);
   await followsTheTokens(page, 'studio-web');
@@ -481,7 +484,8 @@ test('the VS Code view takes « Taille du texte de l’éditeur » at once', asy
   const { page } = app;
   previewsProject(app.repo);
   await addProject(page, app.repo);
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await openInExplorer(page, 'src/routes/users.ts');
   const size = () => editorLines(page).evaluate((n) => getComputedStyle(n).fontSize);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
@@ -506,7 +510,8 @@ test('the VS Code view speaks Escouade’s language, and takes a new one when th
   const { page } = app;
   previewsProject(app.repo);
   await addProject(page, app.repo);
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await openInExplorer(page, 'src/db/index.ts');
   await openInExplorer(page, 'src/routes/users.ts');
   const title = () => workbench(page).locator('.part.sidebar .title-label').first();
@@ -554,7 +559,8 @@ test('the editor stays still with prefers-reduced-motion', async ({ app }) => {
   await agentAtWork(app.repo, write);
   // Before the view's first opening: its workbench reads it as it starts.
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   const view = page.getByTestId('vscode-view');
   await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
   const motion = (el: Locator) => el.evaluate((e) => getComputedStyle(e).animationName);
@@ -683,8 +689,13 @@ for (const lang of ['fr', 'en'] as const)
       await agentAtWork(app.repo, write);
       const words =
         lang === 'fr'
-          ? { conv: 'Rechercher dans les conversations', open: 'Ouvrir un fichier', editor: 'Ouvrir l’éditeur du projet' }
-          : { conv: 'Search conversations', open: 'Open a file', editor: 'Open the project’s editor' };
+          ? {
+              conv: 'Rechercher dans les conversations',
+              open: 'Ouvrir un fichier',
+              editor: 'Éditeur ou workspace du projet',
+              editorItem: 'Éditeur',
+            }
+          : { conv: 'Search conversations', open: 'Open a file', editor: 'Editor or workspace of the project', editorItem: 'Editor' };
       const view = page.getByTestId('vscode-view');
       const back = () => page.getByTestId('vscode-back').click();
       const sizes = [
@@ -727,6 +738,7 @@ for (const lang of ['fr', 'en'] as const)
             await expect(box).toBeHidden();
           }
           await page.getByRole('button', { name: words.editor }).click();
+          await page.getByRole('menuitemradio', { name: words.editorItem }).click();
           await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
           // Ctrl+P in the view: the same palette, on the core's index; the file opens in a tab of the view.
           await workbench(page).click({ position: { x: 400, y: 300 } });

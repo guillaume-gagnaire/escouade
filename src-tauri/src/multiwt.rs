@@ -36,8 +36,17 @@ async fn unusable(dir: &str) -> Option<String> {
     if !Path::new(dir).is_dir() {
         return Some(tr!("introuvable", "not found"));
     }
-    if !git::has_commit(dir).await {
-        return Some(tr!("aucun commit", "no commit"));
+    match git::has_commit(dir).await {
+        Ok(true) => {}
+        Ok(false) => return Some(tr!("aucun commit", "no commit")),
+        // Git failed to read it (ESC-687): said as such, never « no commit ».
+        Err(e) => {
+            return Some(tr!(
+                "lecture impossible : {e}",
+                "could not be read: {e}",
+                e = format!("{e:#}")
+            ))
+        }
     }
     if git::head_branch(dir).await.is_empty() {
         return Some(tr!("HEAD détaché", "detached HEAD"));

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>piège</title>
+<!-- Served as written, these would leak before any script: Escouade takes them out of what it serves. -->
+<link rel="dns-prefetch" href="http://127.0.0.1:__PORT__/">
+<link rel="preconnect" href="http://127.0.0.1:__PORT__/">
+<link rel="prefetch" href="http://127.0.0.1:__PORT__/prefetch-static">
+<link rel="prerender" href="http://127.0.0.1:__PORT__/prerender-static">
+<style>body { font: 14px system-ui; margin: 24px; } .far { background: url(http://127.0.0.1:__PORT__/css); }</style>
+</head>
+<body>
+<h1>Page piège (ESC-667)</h1>
+<p class="far">Tout ce que cette page essaie doit échouer, sauf ses propres fichiers.</p>
+<script>
+// The trap of an agent's page (docs/AGENT-PAGES.md § 8.4), the same for `agentpage_probe` and
+// `tests/e2e/agentpage.spec.ts`: it tries every way out, then says what it got in its title
+// (`escouade-probe:` and a JSON), the one thing it can give without a channel. What reached the
+// network is told by the listeners on __PORT__ (TCP) and __UDP__ (UDP), not by the page.
+const r = { ran: true, origin: location.origin, violations: [] };
+// Where it got to, in its title until its report: a step it never leaves says where a webview stopped it.
+const step = (name) => { r.step = name; document.title = 'escouade-step:' + name; };
+(async () => {
+  const far = (what) => 'http://127.0.0.1:__PORT__/' + what;
+  document.addEventListener('securitypolicyviolation', (e) => r.violations.push(e.violatedDirective + ' ' + e.blockedURI));
+  r.metas = document.querySelectorAll('meta[http-equiv]').length;
+  const settle = (p, ms = 3000) =>
+    Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
+  step('header');
+  try { r.header = (await settle(fetch('./other.txt'))).headers.get('content-security-policy'); } catch (e) { r.header = 'error ' + String((e && (e.name || e.message)) || e); }
+  const outcome = async (f) => {
+    try { return 'reached: ' + String(await settle(f())); } catch (e) { return 'refused: ' + String((e && (e.name || e.message)) || e); }
+  };
+  // Its own files: what it may reach (the probe fails if it cannot).
+  step('own');
+  r.own = await outcome(async () => (await fetch('./other.txt')).text());
+  // Another agent's page, served by the same scheme.
+  const other = location.protocol === 'http:'
+    ? location.origin.replace(/\.p-\d+\.localhost/, '.p-13.localhost') + '/index.html'
+    : 'escouade-page://p-13.localhost/index.html';
+  r.otherPage = await outcome(async () => { const a = await fetch(other); return a.status + ' ' + (await a.text()).slice(0, 40); });
+  r.otherPath = await outcome(async () => { const a = await fetch('/../p-13.localhost/index.html'); return a.status; });
+  // The way back of AP-4 is not open yet: no path of the scheme answers but the page's files.
+  r.choose = await outcome(async () => (await fetch('./_/choose', { method: 'POST', body: '{"options":["z"]}' })).status);
+  // The network, every way the CSP covers.
+  step('network');
+  r.fetch = await outcome(async () => (await fetch(far('fetch'))).status);
+  r.img = await outcome(() => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok('loaded'); i.onerror = () => no(new Error('error')); i.src = far('img'); }));
+  r.ws = await outcome(() => new Promise((ok, no) => { const w = new WebSocket('ws://127.0.0.1:__PORT__/ws'); w.onopen = () => ok('open'); w.onerror = () => no(new Error('error')); }));
+  r.beacon = await outcome(async () => navigator.sendBeacon(far('beacon'), 'x') ? 'queued' : Promise.reject(new Error('false')));
+  r.frame = await outcome(() => new Promise((ok) => { const f = document.createElement('iframe'); f.src = far('frame'); document.body.append(f); setTimeout(() => ok('appended'), 800); }));
+  r.open = await outcome(async () => { const w = window.open(far('open')); return w ? 'window' : Promise.reject(new Error('null')); });
+  // What the CSP does not cover: prefetches added by a script, then WebRTC (in the page and in a
+  // frame of its own, where a script of the page could find it again).
+  step('prefetch');
+  for (const rel of ['dns-prefetch', 'preconnect', 'prefetch', 'prerender']) {
+    const l = document.createElement('link'); l.rel = rel; l.href = far(rel + '-dynamic'); document.head.append(l);
+  }
+  try {
+    const s = document.createElement('script'); s.type = 'speculationrules';
+    s.textContent = JSON.stringify({ prefetch: [{ source: 'list', urls: [far('speculation')] }] });
+    document.head.append(s);
+  } catch (e) {}
+  step('webrtc');
+  const blank = document.createElement('iframe'); document.body.append(blank);
+  const inFrame = (blank.contentWindow || {});
+  r.rtc = typeof window.RTCPeerConnection + '/' + typeof window.webkitRTCPeerConnection;
+  r.rtcInFrame = typeof inFrame.RTCPeerConnection + '/' + typeof inFrame.webkitRTCPeerConnection;
+  r.rtcCall = await outcome(async () => {
+    const Rtc = window.RTCPeerConnection || window.webkitRTCPeerConnection || inFrame.RTCPeerConnection || inFrame.webkitRTCPeerConnection;
+    if (!Rtc) throw new Error('absent');
+    const pc = new Rtc({ iceServers: [{ urls: 'stun:127.0.0.1:__UDP__' }, { urls: 'turn:127.0.0.1:__PORT__?transport=tcp', username: 'u', credential: 'c' }] });
+    pc.createDataChannel('x');
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise((ok) => setTimeout(ok, 1500));
+    return 'made';
+  });
+  // Escouade: its commands, a plugin's.
+  step('escouade');
+  const call = (cmd, args) => outcome(() => window.__TAURI_INTERNALS__.invoke(cmd, args).then((a) => JSON.stringify(a)));
+  r.tauri = typeof window.__TAURI_INTERNALS__;
+  r.app = await call('open_url', { url: far('pwned') });
+  r.plugin = await call('plugin:opener|open_url', { url: far('pwned') });
+  r.touch = await call('probe_touch', {});
+  r.list = await call('agentpage_view', { page: 'p-13' });
+  // Code from text, storage that lasts, permissions, a download.
+  step('eval');
+  r.eval = await outcome(async () => eval('6 * 7'));
+  r.evalSource = String(window.eval).slice(0, 80);
+  r.evalComplex = (() => { try { return 'reached ' + eval('(function () { var a = [6]; return a[0] * 7; })()'); } catch (e) { return 'refused ' + e.name; } })();
+  r.evalIndirect = (() => { try { return 'reached ' + (0, eval)('6 * 7'); } catch (e) { return 'refused ' + e.name; } })();
+  r.evalSync = (() => { try { return 'reached ' + eval('1'); } catch (e) { return 'refused ' + e.name; } })();
+  r.timer = await new Promise((ok) => { window.__t = () => ok('reached'); try { setTimeout('window.__t()', 0); } catch (e) { ok('refused ' + e.name); } setTimeout(() => ok('refused: never ran'), 500); });
+  r.fn = await outcome(async () => new Function('return 6 * 7')());
+  r.storageBefore = (() => { try { return localStorage.getItem('mark'); } catch (e) { return 'refused'; } })();
+  try { localStorage.setItem('mark', 'esc-667'); } catch (e) {}
+  r.storage = (() => { try { return localStorage.getItem('mark'); } catch (e) { return 'refused'; } })();
+  step('permissions');
+  r.camera = await outcome(async () => { const m = await navigator.mediaDevices.getUserMedia({ video: true }); m.getTracks().forEach((t) => t.stop()); return 'granted'; });
+  r.microphone = await outcome(async () => { const m = await navigator.mediaDevices.getUserMedia({ audio: true }); m.getTracks().forEach((t) => t.stop()); return 'granted'; });
+  r.clipboard = await outcome(async () => 'read ' + (await navigator.clipboard.readText()).length);
+  r.notification = await outcome(async () => { const p = await Notification.requestPermission(); return p === 'granted' ? p : Promise.reject(new Error(p)); });
+  r.geolocation = await outcome(() => new Promise((ok, no) => navigator.geolocation.getCurrentPosition(() => ok('position'), (e) => no(new Error('code ' + e.code)), { timeout: 2000 })));
+  step('download');
+  const a = document.createElement('a'); a.href = './other.txt'; a.download = 'other.txt'; document.body.append(a); a.click();
+  await new Promise((ok) => setTimeout(ok, 800));
+  // Its report in parts first (WebKitGTK cuts a title at about 1 000 characters), then whole.
+  const report = JSON.stringify(r);
+  const parts = Math.ceil(report.length / 400);
+  for (let i = 0; i < parts; i++) {
+    document.title = 'escouade-part:' + i + '/' + parts + ':' + report.slice(i * 400, (i + 1) * 400);
+    await new Promise((ok) => setTimeout(ok, 50));
+  }
+  document.title = 'escouade-probe:' + report;
+  // Last, a navigation without a gesture: the address is how a page would carry something out.
+  setTimeout(() => { location.href = far('navigation?secret=1'); }, 400);
+})().catch((e) => { r.crashed = String((e && (e.stack || e.message)) || e); document.title = 'escouade-probe:' + JSON.stringify(r); });
+</script>
+</body>
+</html>

@@ -568,6 +568,77 @@ async fn a_download_cut_short_or_refused_is_not_kept() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_file_published_again_with_another_size_says_so_plainly() {
+    // ESC-664: rhasspy/piper-voices retrained siwis, its settings 6369 bytes where the catalog says 4875.
+    let body = vec![5u8; 6_369];
+    let (url, _) = serve(body.clone(), 200).await;
+    let dir = crate::paths::test_dir("voice-changed");
+    let store = Store {
+        dir: dir.join("models"),
+    };
+    let m = ModelInfo {
+        size: 4_875,
+        ..info_for(&body)
+    };
+    let e = store
+        .download(
+            &reqwest::Client::new(),
+            &url,
+            &m,
+            &AtomicBool::new(false),
+            |_| {},
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        e.downcast_ref::<models::FileChanged>(),
+        Some(&models::FileChanged {
+            got: 6_369,
+            expected: 4_875,
+            more: false
+        }),
+        "{e:#}"
+    );
+    assert!(!store.path("tiny").exists());
+    assert!(std::fs::read_dir(&store.dir).unwrap().next().is_none());
+    let fr = models::download_error_in(Lang::Fr, e, models::Downloaded::Voice).to_string();
+    assert!(
+        fr.contains(
+            "Le fichier publié pour cette voix a changé (6369 octets au lieu de 4875 attendus)"
+        ),
+        "{fr}"
+    );
+    assert!(fr.contains("c’est à Escouade de se mettre à jour"), "{fr}");
+    assert!(!fr.contains("bytes and more"), "{fr}");
+    let e = anyhow::Error::new(models::FileChanged {
+        got: 6_369,
+        expected: 4_875,
+        more: true,
+    });
+    let en = models::download_error_in(Lang::En, e, models::Downloaded::Model).to_string();
+    assert!(en.contains("The file published for this model has changed (over 4875 bytes instead of the 4875 expected)"), "{en}");
+    assert!(en.contains("Escouade has to be updated"), "{en}");
+    assert_eq!(crate::i18n::check::french_in(&en), None, "{en}");
+    let en = models::download_error_in(
+        Lang::En,
+        anyhow::Error::new(models::ChecksumMismatch),
+        models::Downloaded::Voice,
+    )
+    .to_string();
+    assert!(
+        en.contains("the file published has changed and Escouade has to be updated"),
+        "{en}"
+    );
+    // Any other error as it is.
+    let other = models::download_error_in(
+        Lang::En,
+        anyhow::anyhow!("timed out"),
+        models::Downloaded::Model,
+    );
+    assert_eq!(other.to_string(), "timed out");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_download_called_off_leaves_nothing() {
     let body = vec![3u8; 3_000_000];
     let (url, _) = serve(body.clone(), 200).await;
@@ -720,6 +791,7 @@ fn called_off_while_the_microphone_opens_it_never_listens() {
 }
 
 include!("conv_tests.rs");
+include!("meter_tests.rs");
 
 fn online_choice(base: &str) -> Choice {
     let mut spec = online::Spec::new(online::Provider::Groq, "gsk-test-key".into());

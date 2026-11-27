@@ -8,6 +8,7 @@ extern crate escouade_plugin_cli;
 
 pub mod i18n;
 pub mod paths;
+pub mod secrets;
 pub mod text;
 
 #[cfg(any(test, feature = "testing"))]

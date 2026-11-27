@@ -1229,6 +1229,121 @@ describe('editor of a removed agent or project', () => {
   });
 });
 
+describe('workspace', () => {
+  beforeEach(() => resetApp({ projects: [project({ id: 'p1' }), project({ id: 'p2', name: 'Autre' })] }));
+
+  it('opens in place of the board, the docs, the pull requests and the editor', () => {
+    app.openBoard('p1');
+    app.openWorkspace('p1');
+    expect(app.workspaceOn).toBe(true);
+    expect(app.boardOn).toBe(false);
+    expect(app.docsOn).toBe(false);
+    expect(app.prsOn).toBe(false);
+    expect(app.editorOn).toBe(false);
+    expect(app.panesOn).toBe(false);
+  });
+
+  it('gives the answer keys up on the canvas: several cards may wait at once', () => {
+    resetApp({ projects: [project({ id: 'p1' })], agents: [agent({ id: 'a1', projectId: 'p1' })] });
+    expect(app.keysFor('a1')).toBe(true);
+    app.openWorkspace('p1');
+    expect(app.keysFor('a1')).toBe(false);
+  });
+
+  it('is closed by the other views', () => {
+    app.openWorkspace('p1');
+    app.openDocs('p1');
+    expect(app.workspaceOn).toBe(false);
+  });
+
+  it('closes and gives back the view underneath', () => {
+    app.openWorkspace('p1');
+    app.closeWorkspace('p1');
+    expect(app.workspaceOn).toBe(false);
+    expect(app.ui.view).toBe('project');
+  });
+
+  it('leaves the view under it as it was: « Quitter » goes back to it', async () => {
+    const back = [
+      [() => app.openBoard('p1'), () => app.boardOn],
+      [() => app.openDocs('p1'), () => app.docsOn],
+      [() => app.openPrs('p1'), () => app.prsOn],
+      [() => app.selectTerm('t1'), () => app.selectedTerm.p1 === 't1'],
+      [() => app.selectLaunch('c1'), () => app.selectedLaunch.p1 === 'c1'],
+      [() => app.selectPage('k1'), () => app.selectedPage.p1 === 'k1'],
+    ] as const;
+    for (const [open, on] of back) {
+      open();
+      app.openWorkspace('p1');
+      expect(app.workspaceOn).toBe(true);
+      app.closeWorkspace('p1');
+      expect(on()).toBe(true);
+    }
+    fakeBackend();
+    await app.openEditor({ projectId: 'p1', source: 'project', path: 'a.ts' });
+    app.openWorkspace('p1');
+    expect(app.editorOn).toBe(false);
+    app.closeWorkspace('p1');
+    expect(app.editorOn).toBe(true);
+  });
+
+  it('gives way to an agent, a terminal, a launch or a page picked in the sidebar', () => {
+    resetApp({ projects: [project({ id: 'p1' })], agents: [agent({ id: 'a1', projectId: 'p1' })] });
+    app.openWorkspace('p1');
+    app.selectAgent('a1');
+    expect(app.workspaceOn).toBe(false);
+    for (const pick of [() => app.selectTerm('t1'), () => app.selectLaunch('c1'), () => app.selectPage('k1')]) {
+      app.openWorkspace('p1');
+      pick();
+      expect(app.workspaceOn).toBe(false);
+    }
+  });
+
+  it('hides the agent under it: nothing is shown alone, no agent is seen', () => {
+    resetApp({ projects: [project({ id: 'p1' })], agents: [agent({ id: 'a1', projectId: 'p1' })] });
+    app.selectAgent('a1');
+    app.openWorkspace('p1');
+    expect(app.agentShown).toBeNull();
+    expect(app.singleItem).toBeNull();
+  });
+
+  it('is per project', () => {
+    app.openWorkspace('p1');
+    app.selectProject('p2');
+    expect(app.workspaceOn).toBe(false);
+    app.selectProject('p1');
+    expect(app.workspaceOn).toBe(true);
+  });
+
+  describe('of every project, from « Vue d’ensemble »', () => {
+    it('opens over the overview and goes back to it', () => {
+      app.selectProject('p1');
+      app.openOverviewCanvas();
+      expect(app.ui.view).toBe('overview');
+      expect(app.overviewCanvasOn).toBe(true);
+      expect(app.workspaceOn).toBe(false);
+      app.closeOverviewCanvas();
+      expect(app.overviewCanvasOn).toBe(false);
+      expect(app.ui.view).toBe('overview');
+    });
+
+    it('gives the answer keys up, as the canvas of a project', () => {
+      resetApp({ projects: [project({ id: 'p1' })], agents: [agent({ id: 'a1', projectId: 'p1' })] });
+      app.openOverviewCanvas();
+      expect(app.keysFor('a1')).toBe(false);
+    });
+
+    it('is closed by the other views: the overview opens again on its list', () => {
+      resetApp({ projects: [project({ id: 'p1' })], agents: [agent({ id: 'a1', projectId: 'p1' })] });
+      app.openOverviewCanvas();
+      app.selectAgent('a1');
+      expect(app.overviewCanvasOn).toBe(false);
+      app.openOverview();
+      expect(app.overviewCanvasOn).toBe(false);
+    });
+  });
+});
+
 describe('board', () => {
   beforeEach(() => resetApp());
 
@@ -1263,6 +1378,15 @@ describe('board', () => {
     emit({ type: 'pluginSeeded', id: 'dev.escouade.codex', text: 'Plugin Codex installé' });
     expect(app.toasts.at(-1)).toMatchObject({ text: 'Plugin Codex installé', kind: 'ok' });
     expect(app.pluginsSeeded).toBe(before + 1);
+  });
+
+  it('has the plugins read again, without a toast, when plugins updated by themselves (ESC-700)', async () => {
+    const { emit } = await start();
+    const before = app.pluginsSeeded;
+    const toasts = app.toasts.length;
+    emit({ type: 'pluginsAutoUpdated' });
+    expect(app.pluginsSeeded).toBe(before + 1);
+    expect(app.toasts.length).toBe(toasts);
   });
 
   it('knows why a board starts nothing, from the start and as the backend tells it', async () => {

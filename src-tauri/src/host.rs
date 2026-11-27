@@ -94,6 +94,14 @@ pub trait Host: Send + Sync + 'static {
     fn machine(&self) -> Option<crate::remoteapi::proto::Machine> {
         Some(crate::remoteapi::this_machine())
     }
+
+    /// The desktop app's handle, as an `AppHandle` of its runtime (ESC-701): what the core does with the window's
+    /// webviews (the browsers read and driven, the agents' pages, ESC-667 to ESC-685) reaches them by it
+    /// (`Core::app`). None for a host without a window.
+    #[cfg(feature = "desktop")]
+    fn desktop(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
 }
 
 /// What `Core::load` takes for its host: a Tauri app's handle (the desktop's and most tests'), or a
@@ -138,6 +146,10 @@ impl<R: Runtime> TauriHost<R> {
 
 #[cfg(feature = "desktop")]
 impl<R: Runtime> Host for TauriHost<R> {
+    fn desktop(&self) -> Option<&dyn std::any::Any> {
+        Some(&self.app)
+    }
+
     fn version(&self) -> String {
         self.app.package_info().version.to_string()
     }

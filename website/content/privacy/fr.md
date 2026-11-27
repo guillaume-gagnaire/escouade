@@ -65,6 +65,7 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `discover_done` | Une découverte de la carte « À découvrir » est faite | `item` : son identifiant (`ticket`, `terminal`, `dictation`, `secondAgent`…, une liste fermée) ; `from` : `tip` (une bulle l’avait proposée) ou `other` |
 | `discover_dismissed` | Une découverte est écartée | `item` |
 | `discover_hidden` | « Tout masquer » sur la carte « À découvrir » | — |
+| `page_shown` | Un agent te montre une page, ou une nouvelle version d’une page | `template` : `review`, `diagram`, `compare` ou `html` ; `ask` : si elle porte une demande (oui ou non) ; `size` : son poids par tranche (`small`, `medium` ou `large`) ; jamais son titre, son contenu ni un chemin |
 
 Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent, de la branche ou du dépôt, ni l’adresse d’un hébergeur, ni ce qui a été écrit.
 

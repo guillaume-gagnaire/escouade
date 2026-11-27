@@ -2,8 +2,8 @@
 title: "Stats"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","tests/fixtures/copilot/full-turn.jsonl","tests/fixtures/engines/copilot-1.0.98.session-events.schema.json","tests/fixtures/engines/codex-0.163.0.schema.json"]
-tickets: ["ESC-30","ESC-662"]
-decisions: [343]
+tickets: ["ESC-30","ESC-662","ESC-691"]
+decisions: [343,"en-2-2-x-aussi-les-sous-agents-comptent"]
 compared: null
 ---
 
@@ -54,7 +54,7 @@ L'écran des statistiques d'usage : tokens, coûts et prompts des agents lancés
 - Les agents lancés hors d'Escouade ne comptent pas.
 - Les statistiques n'enregistrent que les coûts exacts que donne le harness, ou son estimation quand il n'en donne pas (voir *Barre de statut*).
 
-### Sous-agents (ESC-662)
+### Sous-agents (ESC-662, ESC-691)
 
 - Un sous-agent que lance un agent (le `Task` de Claude Code, le `task` de Copilot CLI, un sous-agent de Codex, d'OpenCode, de Cursor CLI…) tourne dans le process de son agent, donc sur son compte et son harness. Ce qu'il consomme compte dans le tour de son agent, **une fois** : dans les totaux de l'agent (en-tête, carte) et dans les stats par projet, harness, compte et modèle. Le total qu'un harness donne d'un sous-agent à sa fin (les `totalTokens` de Copilot CLI) s'affiche sur sa carte et ne s'y ajoute jamais.
 - Par modèle, il compte pour le modèle sur lequel il a tourné, quand le harness le dit : Claude Code (son `modelUsage`), Copilot CLI (le modèle de chaque appel), Codex (le modèle que nomme le départ du sous-agent), OpenCode (le modèle de chaque message, fournisseur compris). Sinon, pour le modèle de l'agent (Cursor CLI, Mistral Vibe, Gemini CLI, Antigravity CLI, qui donnent l'usage du tour entier).

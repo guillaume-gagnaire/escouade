@@ -24,6 +24,32 @@ pub async fn toplevel(path: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// The root of the repository `path` is in, `None` when it is in none; an error when git could not
+/// tell (not started, stopped, refused by `safe.directory`, a folder `.git` it can't read): unlike
+/// `toplevel`, never `None` for a repository git failed to read, which the new project's
+/// assistant would make again with `git init` (ESC-687).
+pub async fn repo_root(path: &str) -> Result<Option<String>> {
+    match text(path, &["rev-parse", "--show-toplevel"]).await {
+        Ok(top) if !top.is_empty() => Ok(Some(top)),
+        Ok(_) => bail!(tr!(
+            "git rev-parse --show-toplevel n’a rien répondu",
+            "git rev-parse --show-toplevel answered nothing"
+        )),
+        Err(_) if in_no_repo(Path::new(path)) => Ok(None),
+        Err(e) => {
+            log::warn!("git rev-parse --show-toplevel in {path}: {e:#}");
+            Err(e)
+        }
+    }
+}
+
+/// Neither `path` nor a folder above it holds a `.git` (folder or file): git has no repository to
+/// find there. What tells a folder outside any repository from a repository git failed to read,
+/// whatever the language of git's messages.
+fn in_no_repo(path: &Path) -> bool {
+    !path.ancestors().any(|a| a.join(".git").exists())
+}
+
 pub async fn current_branch(path: &str) -> String {
     text(path, &["rev-parse", "--abbrev-ref", "HEAD"])
         .await
@@ -831,21 +857,82 @@ pub async fn worktrees_in_tracked_folder(repo: &str, root: &Path) -> bool {
 }
 
 /// The repository has a commit: HEAD names one (a new repository's has none, and no worktree can
-/// start from it).
-pub async fn has_commit(repo: &str) -> bool {
-    run(repo, &["rev-parse", "--verify", "--quiet", "HEAD"])
-        .await
-        .is_ok_and(|out| !out.is_empty())
+/// start from it). Three answers (ESC-687): yes; no, only when git says HEAD names no commit (or
+/// the folder is in no repository); and an error for anything else git does (not started,
+/// stopped, a fatal error, an answer empty or cut), never taken for « no commit »: on it, nothing
+/// commits in the user's repository nor refuses it.
+pub async fn has_commit(repo: &str) -> Result<bool> {
+    let args = HEAD_COMMIT;
+    let answer = head_commit(command(repo, &args), Path::new(repo)).await;
+    if let Err(e) = &answer {
+        log::warn!("git rev-parse --verify HEAD in {repo}: {e:#}");
+    }
+    answer
+}
+
+/// What `has_commit` asks git.
+const HEAD_COMMIT: [&str; 4] = ["rev-parse", "--verify", "--quiet", "HEAD"];
+
+/// `has_commit` with the command `cmd` (`HEAD_COMMIT` in `dir`): a test gives it a false git.
+async fn head_commit(cmd: tokio::process::Command, dir: &Path) -> Result<bool> {
+    let out = output(cmd, &HEAD_COMMIT).await?;
+    head_answer(&out, dir)
+}
+
+/// What git's answer to `HEAD_COMMIT` in `dir` says. `--verify --quiet` ends with 1 and says
+/// nothing when HEAD names no commit; git ends with 128 on a fatal error, which is « no commit »
+/// only for a folder outside any repository.
+fn head_answer(out: &std::process::Output, dir: &Path) -> Result<bool> {
+    let said = |b: &[u8]| String::from_utf8_lossy(b).trim().to_string();
+    let (stdout, stderr) = (said(&out.stdout), said(&out.stderr));
+    if out.status.success() {
+        if !stdout.is_empty() && stdout.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Ok(true);
+        }
+        bail!(tr!(
+            "git rev-parse a répondu « {stdout} » au lieu d’un commit",
+            "git rev-parse answered “{stdout}” instead of a commit",
+            stdout = stdout
+        ));
+    }
+    if out.status.code() == Some(1) && stderr.is_empty() && stdout.is_empty() {
+        return Ok(false);
+    }
+    if in_no_repo(dir) {
+        return Ok(false);
+    }
+    let code = out
+        .status
+        .code()
+        .map_or_else(|| "?".to_string(), |c| c.to_string());
+    let why = if stderr.is_empty() { stdout } else { stderr };
+    bail!(if why.is_empty() {
+        tr!(
+            "git rev-parse a échoué (code {code})",
+            "git rev-parse failed (code {code})",
+            code = code
+        )
+    } else {
+        tr!(
+            "git rev-parse a échoué (code {code}) : {why}",
+            "git rev-parse failed (code {code}): {why}",
+            code = code,
+            why = why
+        )
+    })
 }
 
 /// Makes the folder a repository if it is none, and gives it a first commit, empty: no file of the
 /// project is committed without the user's say (an `.env` would be), but its worktrees have a
 /// commit to start from.
+///
+/// Only on git's word (ESC-687): a folder git failed to read is neither made a repository again
+/// nor given a commit, the error is returned.
 pub async fn first_commit(path: &str) -> Result<()> {
-    if toplevel(path).await.is_none() {
+    if repo_root(path).await?.is_none() {
         init_repo(path).await?;
     }
-    if has_commit(path).await {
+    if has_commit(path).await? {
         return Ok(());
     }
     let message = tr!("Premier commit", "Initial commit");
@@ -4218,11 +4305,11 @@ mod repo_tests {
     #[tokio::test]
     async fn a_new_repository_has_no_commit_until_its_first_one() {
         let r = repo("git-has-commit");
-        assert!(has_commit(&r).await);
+        assert!(has_commit(&r).await.unwrap());
         let fresh = crate::paths::test_dir("git-has-commit-new");
         let fresh = fresh.to_string_lossy().to_string();
         // Not even a repository: made one, then given an empty commit.
-        assert!(!has_commit(&fresh).await);
+        assert!(!has_commit(&fresh).await.unwrap());
         let g = |args: &[&str]| {
             assert!(Command::new("git")
                 .arg("-C")
@@ -4236,9 +4323,9 @@ mod repo_tests {
         g(&["config", "user.email", "t@t"]);
         g(&["config", "user.name", "t"]);
         std::fs::write(Path::new(&fresh).join(".env"), "SECRET=1").unwrap();
-        assert!(!has_commit(&fresh).await);
+        assert!(!has_commit(&fresh).await.unwrap());
         first_commit(&fresh).await.unwrap();
-        assert!(has_commit(&fresh).await);
+        assert!(has_commit(&fresh).await.unwrap());
         // No file of the project went into it.
         assert_eq!(text(&fresh, &["ls-files"]).await.unwrap(), "");
         // Once is enough.
@@ -4249,6 +4336,74 @@ mod repo_tests {
                 .unwrap(),
             "1"
         );
+    }
+
+    /// A false git: a program that ends with `code` after printing `out` (ESC-687).
+    fn false_git(out: &str, code: u8) -> tokio::process::Command {
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut c = tokio::process::Command::new("cmd");
+            let echo = if out.is_empty() {
+                String::new()
+            } else {
+                format!("echo {out}& ")
+            };
+            c.args(["/C", &format!("{echo}exit /b {code}")]);
+            c
+        };
+        #[cfg(not(windows))]
+        let mut cmd = {
+            let mut c = tokio::process::Command::new("sh");
+            c.args(["-c", &format!("printf '{out}'; exit {code}")]);
+            c
+        };
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        cmd
+    }
+
+    #[tokio::test]
+    async fn an_error_of_git_is_never_taken_for_no_commit() {
+        // In a repository: only git's « HEAD names no commit » is a no.
+        let r = repo("git-has-commit-errors");
+        let dir = Path::new(&r);
+        let hash = "0123456789abcdef0123456789abcdef01234567";
+        assert!(head_commit(false_git(hash, 0), dir).await.unwrap());
+        assert!(!head_commit(false_git("", 1), dir).await.unwrap());
+        // A fatal error, an answer empty or that is no commit, git not started: errors, never « no ».
+        let fatal = head_commit(false_git("fatal", 128), dir).await.unwrap_err();
+        assert!(format!("{fatal:#}").contains("128"), "{fatal:#}");
+        assert!(head_commit(false_git("", 0), dir).await.is_err());
+        assert!(head_commit(false_git("", 3), dir).await.is_err());
+        assert!(head_commit(false_git("oops", 1), dir).await.is_err());
+        let missing = tokio::process::Command::new("escouade-no-such-git-687");
+        assert!(head_commit(missing, dir).await.is_err());
+        // Outside any repository git's error is a « no »: the folder has no commit.
+        let outside = crate::paths::test_dir("git-has-commit-outside");
+        assert!(!head_commit(false_git("fatal", 128), &outside)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn a_repository_git_cannot_read_is_an_error_not_a_folder_to_init() {
+        let r = repo("git-unreadable");
+        // Its .git broken: git fails, and the folder is neither « no repository » nor « no commit ».
+        std::fs::write(Path::new(&r).join(".git/HEAD"), "garbage").unwrap();
+        assert!(repo_root(&r).await.is_err());
+        assert!(has_commit(&r).await.is_err());
+        // « Faire un premier commit » refuses it: no `git init`, no commit.
+        assert!(first_commit(&r).await.is_err());
+        assert_eq!(
+            std::fs::read_to_string(Path::new(&r).join(".git/HEAD")).unwrap(),
+            "garbage"
+        );
+        // A folder in no repository is told as such.
+        let outside = crate::paths::test_dir("git-root-outside");
+        assert_eq!(repo_root(&outside.to_string_lossy()).await.unwrap(), None);
+        let fresh = repo("git-root-inside");
+        assert!(repo_root(&fresh).await.unwrap().is_some());
     }
 
     #[tokio::test]

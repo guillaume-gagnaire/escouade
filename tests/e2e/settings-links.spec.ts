@@ -1,7 +1,7 @@
 // Each link of the app to a project's settings leads to its page (R6 of the 2.2 settings, ESC-385; PROPOSITION.md,
 // annexe B): « Projets › demo-api › Lancement », no longer the middle of a scroll of the 2.0 tab « Projets ». One test
 // per link: the tile's « Réglages du projet… », the side bar's « Harness par défaut du projet… », Lancement's ⚙,
-// « Configurer » and « Proposer des commandes », the Kanban's « Après validation », the Workflow panel, an account
+// « Configurer » and « Proposer des commandes », the Kanban's « Après validation », « Workflows » of the Workspace, an account
 // reserved to a private project, and « Tous les projets fermés… » of the rail. (« Les lire » of the Kanban, for the
 // commands of .escouade.yml, is driven by escouade-yml.spec.ts; « Lier une source » of an import by integrations.spec.ts.)
 
@@ -90,11 +90,15 @@ test('the Kanban’s « Après validation » opens Projets › demo-api › Kanb
   await expect(dialog.getByRole('heading', { name: 'Workflow' })).toBeAttached();
 });
 
-test('the Workflow panel opens Projets › demo-api › Kanban, on its workflow', async ({ app }) => {
+test('« Workflows » of the Workspace opens Projets › demo-api › Kanban, on its workflow (ESC-689)', async ({ app }) => {
   const page = app.page;
-  await page.keyboard.press('Control+Shift+B');
-  const side = page.locator('aside.git-side');
-  await side.getByRole('tab', { name: /^Workflow/ }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Workspace' }).click();
+  await page
+    .locator('.ws')
+    .getByRole('button', { name: /^Workflows/ })
+    .click();
+  const side = page.getByTestId('workspace-workflows');
   await side.getByRole('button', { name: 'Décrire un workflow…' }).click();
   const dialog = await landsOn(page, 'Kanban');
   // Scrolled to its group: « Workflow » in view, not the top of the page.

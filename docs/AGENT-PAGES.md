@@ -1,16 +1,16 @@
-# Les pages des agents (2.3) : étude et design
+# Les pages des agents (2.2) : étude et design
 
-ESC-661, sur `release/2.3`, le 2026-11-25. Une étude sans code : elle conçoit, propose des choix et découpe les tickets. Rien n'est construit. Les choix restent à l'utilisateur (§ 13). Les maquettes sont dans [`design/agent-pages/`](../design/agent-pages/README.md).
+ESC-661, sur `release/2.3`, le 2026-11-25 ; apportée sur `main` par ESC-666 (AP-0) le 2026-11-26, car tout ce qui touche aux navigateurs sort en 2.2 (l'utilisateur, 2026-11-26). Ce que seule la 2.3 a (Réglages › Fonctionnalités, les parties d'un projet, l'API distante et le mode serveur, le téléphone, le serveur d'équipe, l'Overseer) est dit « en 2.3 » et se branche par AB-R. Une étude sans code : elle conçoit, propose des choix et découpe les tickets. Rien n'est construit. Les choix restent à l'utilisateur (§ 13). Les maquettes sont dans [`design/agent-pages/`](../design/agent-pages/README.md).
 
 ## 0. En bref
 
 - **Un outil MCP, `show_page`**, ouvert à tous les harness (Claude Code, Codex, OpenCode, Copilot CLI, Cursor CLI, Vibe…) puisqu'il passe par le serveur MCP d'Escouade. Un agent y montre à l'utilisateur une page HTML : un **modèle** d'Escouade rempli de ses données (une revue avec choix, un schéma, une comparaison), son **propre HTML**, ou **la page à soi** que l'utilisateur a réglée une fois. Une page se met à jour par versions. Elle reste sur le poste.
-- **Elle s'ouvre dans une ligne de « Navigateurs »**, à côté de la conversation de l'agent (le cas phare). L'agent la **pilote** avec `drive_browser`, l'outil de pilotage des navigateurs d'ESC-663 : il fait défiler, met en évidence, change la largeur. L'utilisateur **reprend la main** quand il veut.
+- **Elle s'ouvre dans une ligne de « Navigateurs »**, à côté de la conversation de l'agent (le cas phare). L'agent la **pilote** avec `drive_browser`, l'outil de pilotage des navigateurs d'ESC-663, en la visant par `browser: "page:p-12"` : il fait défiler, met en évidence, change la largeur. L'utilisateur **reprend la main** quand il veut. Le contrat du pilotage est commun aux deux études (§ 10).
 - **Les choix reviennent par `ask_user`.** Une page avec des choix porte une demande de la boîte « À toi », la même que celle d'aujourd'hui. Un clic dans la page **propose** une réponse. La réponse ne part qu'au geste de l'utilisateur dans une **bande d'Escouade, hors de la page**. Ensuite, même circuit, même délai de 10 s, même message à l'agent.
 - **La sécurité tient en trois règles.** La page vit dans une webview à part, sous une origine à elle (`escouade-page://`) : CSP stricte, aucun réseau, aucun appel à Escouade, aucun stockage qui dure. Escouade sert ses fichiers depuis une copie bornée, jamais depuis le worktree. Elle n'a qu'**un canal de retour** au schéma fermé : proposer une option de sa demande, avec un mot. C'est le cœur qui valide.
-- **Sa place** : un interrupteur « Pages des agents » dans Réglages › Fonctionnalités, et la partie « Lancement et navigateurs » de chaque projet. Le téléphone et une fenêtre connectée à un serveur ne voient pas la page en 2.3. Ils voient sa demande, avec ses options, dans « À toi ».
+- **Sa place** : en 2.2, un interrupteur « Pages des agents » dans Réglages › Agents, sous « Les agents peuvent piloter Escouade ». En 2.3, il passe dans Réglages › Fonctionnalités, avec la partie « Lancement et navigateurs » de chaque projet. Le téléphone et une fenêtre connectée à un serveur (en 2.3) ne voient pas la page. Ils voient sa demande, avec ses options, dans « À toi ».
 - **Trois directions de design** : A « Les repères » (recommandée), B « La visite », C « L'onglet ». Elles sont rendues en clair et en sombre et déposées dans « À toi ».
-- **Dix tickets (AP-0 à AP-9), environ 23 h d'agent, tiennent dans la 2.3** (§ 14). Il faut compter en plus les essais réels sous macOS et Linux. Après la 2.3 : l'aperçu en image pour le téléphone, puis la page servie à une fenêtre connectée à un serveur. Les plugins d'interface de la 2.4 repartent de la même cloison (§ 11).
+- **Les tickets sortent en 2.2, de `main`** (§ 14). Avec ceux d'ESC-663, ils forment une seule liste, qui fait foi : [`AGENT-BROWSERS-TICKETS.md`](AGENT-BROWSERS-TICKETS.md), 50 h d'agent en tout, dont 16 h 30 pour le socle des pages. Il faut compter en plus les essais réels sous macOS et Linux. Après la 2.3 : l'aperçu en image pour le téléphone, puis la page servie à une fenêtre connectée à un serveur. Les plugins d'interface de la 2.4 repartent de la même cloison (§ 11).
 
 ## 1. D'où ça vient
 
@@ -24,10 +24,10 @@ Le 2026-11-24, un utilisateur, l'auteur du fork serveur, a écrit qu'il se serva
 | --- | --- | --- |
 | Les artefacts de Claude Code (spec *Pilotage de Claude Code*, *Conversation*) | Publiés sur claude.ai, pour Claude Code seul (`CLAUDE_CODE_ARTIFACT=1`) ; la conversation les montre comme une rangée « Artefact ». | **Rien n'y change.** Les pages des agents sont une fonction à part : tous les harness, rien ne sort du poste. Un agent Claude Code a les deux ; la consigne du serveur MCP dit quand prendre l'une ou l'autre (§ 4.6). |
 | La boîte « À toi » et `ask_user` (`src-tauri/src/mcp/asks.rs`, spec *La boîte « À toi »*) | Demandes asynchrones (choix, feu vert, réponse, tâche), options, recommandation, fichiers joints (images, PDF, Markdown ; une page HTML ou un SVG ne s'ouvre jamais), réponse en message après 10 s, « rien d'autre ne part ». | **Le circuit du retour, tel quel.** Une page avec choix porte une demande `a-<n>` ; la boîte et la page en sont deux vues. |
-| Les navigateurs (ESC-657 : `src-tauri/src/devpage.rs`, `src/lib/devpage.svelte.ts`, `BrowsersSection.svelte`, `DevPage.svelte`) | Une webview enfant par ligne, posée sur la fenêtre. Aucune commande ne lui répond (`refuses`, sur le préfixe `devpage-`). Stockage par projet. Elle reste sur son origine (`judge`). Devtools sur un geste de l'utilisateur seulement. Trois largeurs, ouverture à côté, volets. | **La ligne, la vue, le placement, les volets, les largeurs.** La cloison est à durcir : une page de lancement est l'app développée (réseau permis, son origine `http`), une page d'agent n'a droit à rien (§ 8). |
+| Les navigateurs (ESC-660 sur `main`, 2.2.11 ; ESC-657 en 2.3 : `src-tauri/src/devpage.rs`, `src/lib/devpage.svelte.ts`, `BrowsersSection.svelte`, `DevPage.svelte`) | Une webview enfant par ligne, posée sur la fenêtre. Aucune commande ne lui répond (`refuses`, sur le préfixe `devpage-`). Stockage par projet. Elle reste sur son origine (`judge`). Devtools sur un geste de l'utilisateur seulement. Trois largeurs, ouverture à côté, volets. | **La ligne, la vue, le placement, les volets, les largeurs.** La cloison est à durcir : une page de lancement est l'app développée (réseau permis, son origine `http`), une page d'agent n'a droit à rien (§ 8). |
 | Le panneau de droite (`SidePanel.svelte`) | Non commités, Historique, PR et CI, à côté de la conversation. | La direction C l'essaie (§ 12). |
-| Les parties d'un projet (ESC-658) et Réglages › Fonctionnalités (ESC-550) | Couper une partie dans un projet, une fonctionnalité dans toute l'app. | La place de la fonction (§ 9). |
-| L'API distante, le téléphone, le serveur d'équipe | Les commandes `devpage_*` sont « du poste seulement » ; une webview ne se montre pas à distance. | La même règle pour la page ; sa demande, elle, va partout (§ 9). |
+| Les parties d'un projet (ESC-658) et Réglages › Fonctionnalités (ESC-550), en 2.3 | Couper une partie dans un projet, une fonctionnalité dans toute l'app. `main` n'a ni l'un ni l'autre. | La place de la fonction en 2.3 ; en 2.2, un interrupteur de Réglages › Agents (§ 9). |
+| L'API distante, le téléphone, le serveur d'équipe, en 2.3 | Les commandes `devpage_*` sont « du poste seulement » ; une webview ne se montre pas à distance. | La même règle pour la page ; sa demande, elle, va partout (§ 9). |
 
 ## 3. Le modèle : une page, ses versions, sa demande
 
@@ -57,7 +57,7 @@ Le 2026-11-24, un utilisateur, l'auteur du fork serveur, a écrit qu'il se serva
 
 ### 4.2 `drive_browser` : piloter la page montrée
 
-Le nom vient d'ESC-663 (`docs/AGENT-BROWSERS.md`) : un seul outil pilote toutes les lignes de « Navigateurs », et une page d'agent en est une. Sa cible s'écrit `page: "p-12"` ou `browser: "page:p-12"`, la forme est à trancher en AP-0.
+Le nom vient d'ESC-663 (`docs/AGENT-BROWSERS.md`) : un seul outil pilote toutes les lignes de « Navigateurs », et une page d'agent en est une. Sa cible est `browser: "page:p-12"`, la clé de sa ligne, sans champ `page` à part (tranché par AP-0, § 10, qui fait foi pour tout le pilotage).
 
 Une action à la fois. Le cœur la traduit en un script **fixe d'Escouade**, paramétré par des valeurs encodées en JSON. **Jamais un script de l'agent.** Ce script tourne dans un **monde isolé** de la page, par la poignée native de la webview (`with_webview`) : `Page.createIsolatedWorld` puis `Runtime.evaluate` du protocole DevTools de WebView2, en process et sans port ; `run_javascript_in_world` de WebKitGTK ; `evaluateJavaScript:inFrame:inContentWorld:` de WKWebView (macOS 11+, à vérifier sur la CI Mac). **Pas de `webview.eval`.** La sonde d'ESC-663 l'a montré sur une vraie webview (WebView2, WebKitGTK 2.52) : `eval` tourne dans le monde de la page, qui peut réécrire `JSON.stringify`, `querySelector` ou `click` et fausser nos scripts ; Tauri n'en rend pas non plus le résultat. Le monde isolé lit juste malgré la réécriture, et son résultat revient par le rappel natif, jamais par une IPC de la page.
 
@@ -69,6 +69,8 @@ Une action à la fois. Le cœur la traduit en un script **fixe d'Escouade**, par
 | `width` | `full` \| `tablet` \| `mobile` | Les trois largeurs des navigateurs. |
 | `tab` | `target` | Clique un onglet *déclaré* de la page (`role="tab"`, ou un modèle). Rien d'autre ne se clique. |
 | `version` | `n` | Montre une version. |
+
+Sur une page d'agent, `scroll`, `wait`, `wait_user` et `look` valent aussi, comme sur un onglet ; `click`, `type`, `select`, `press` et `navigate` y sont refusés (§ 10).
 
 - `target` : l'`id` d'un élément (`#crit-3`) ou une clé du modèle (`criteria.2`), 200 caractères au plus. Un sélecteur CSS simple est aussi permis, sans `:has()` ni plus de quatre niveaux. L'élément introuvable est dit à l'agent.
 - **Chaque geste laisse une trace** dans la conversation : une rangée numérotée (« ③ Met en évidence le critère 3 ») et un repère sur le rail de la page (direction A, § 12). L'utilisateur sait donc toujours ce que l'agent a fait.
@@ -90,7 +92,7 @@ L'appel `show_page` se dessine comme une **carte** et non comme une rangée d'ou
 | Qui | Permis | Ce que ça donne |
 | --- | --- | --- |
 | Un agent (ticket ou non), sur tout harness | Oui | Sa ligne, à côté de sa conversation. |
-| L'Overseer | Oui, `html` ou modèle, sans `file` (il n'a pas de worktree) | Dans sa conversation. |
+| L'Overseer, en 2.3 (`main` ne l'a pas) | Oui, `html` ou modèle, sans `file` (il n'a pas de worktree) | Dans sa conversation. |
 | Une discussion ou un brainstorm des Docs | Oui, sans `file` | Dans la discussion, à côté. |
 | Claude hors Escouade (`Caller::External`) | **Seulement avec `ask`** (proposé, P9) | Pas de conversation où l'ouvrir : la page se voit par sa demande dans « À toi » (« Ouvrir la page »). |
 | Un agent d'un autre projet | Non | Une page n'existe que dans le projet de son auteur. |
@@ -153,7 +155,7 @@ Un modèle est **une page d'Escouade** (HTML, CSS et script livrés avec l'app, 
 }
 ```
 
-Avec `ask`, son verdict : « Fusionner », « Renvoyer avec un mot », « Attendre ». Pour un lot (fin de lot de l'Overseer ou du chef), `subject.tickets` en liste et une section par ticket, chacune avec son ancre pour `drive_browser`. Un diff se dessine avec les couleurs de l'éditeur, replié au-delà de 400 lignes.
+Avec `ask`, son verdict : « Fusionner », « Renvoyer avec un mot », « Attendre ». Pour un lot (fin de lot du chef, ou de l'Overseer en 2.3), `subject.tickets` en liste et une section par ticket, chacune avec son ancre pour `drive_browser`. Un diff se dessine avec les couleurs de l'éditeur, replié au-delà de 400 lignes.
 
 ### 7.2 `diagram` : le schéma
 
@@ -166,7 +168,7 @@ Avec `ask`, son verdict : « Fusionner », « Renvoyer avec un mot », « Attend
 ### 7.4 La page à soi (`custom`)
 
 - **Ce que c'est** : un fichier HTML que l'utilisateur choisit une fois. Il est servi dans la même cloison. L'agent le remplit de ses données par `show_page(template: "custom", data)`.
-- **Où on la règle** : Réglages › Projets › *(projet)* › Lancement, dans un groupe « Pages des agents » : « Page à soi : [Choisir un fichier…] ». Ce choix est gardé sur le poste. Le dépôt peut aussi la proposer par une clé `pages.custom: design/ma-revue.html` du `.escouade.yml`. La règle des parties s'applique : le poste l'emporte sur le dépôt, l'équipe impose (`enforced`) ou recommande (`defaults`). Une page du dépôt n'a pas besoin d'un accord comme une commande de lancement, puisqu'elle ne fait rien tourner hors de la cloison. Le réglage dit pourtant d'où elle vient (« Proposée par le dépôt »).
+- **Où on la règle** : Réglages › Projets › *(projet)* › Lancement, dans un groupe « Pages des agents » : « Page à soi : [Choisir un fichier…] ». Ce choix est gardé sur le poste. Le dépôt peut aussi la proposer par une clé `pages.custom: design/ma-revue.html` du `.escouade.yml`. Le poste l'emporte sur le dépôt. En 2.3, la règle des parties s'y ajoute : l'équipe impose (`enforced`) ou recommande (`defaults`). Construite par AP-7 (ESC-677), qui a tranché autrement que cette étude : un `.escouade.yml` peut venir d'un tiers, donc `pages.custom` ne s'applique qu'après l'accord du poste, avec les commandes du fichier, et un chemin qui sort du dépôt est refusé. Le réglage dit d'où elle vient (« Proposée par le dépôt »).
 - **Ce qu'elle reçoit**, avant ses propres scripts, en lecture seule (`Object.freeze`) : `window.escouade = { page: "p-12", version: 2, template: "custom", title, agent: { name }, ticket: { key, title } | null, project: { name }, theme: "dark" | "light", lang: "fr" | "en", data, ask: { title, options, recommend, multi, answered } | null, choose(options, note) }`. Il n'y a ni chemin, ni jeton, ni rien d'autre. `choose` poste sur `_/choose`. Un événement `escouade:answered` lui dit la réponse.
 - **Une page à soi par poste ou par projet**, pas par modèle : un agent qui veut « sa » revue prend `custom`. Plusieurs pages à soi nommées (`pages.custom: { revue: …, lot: … }`) viendraient après la 2.3, si le besoin se montre.
 - **Sans page à soi réglée**, `template: "custom"` est refusé : « L'utilisateur n'a pas réglé de page à soi pour ce projet : prends `review`, `diagram`, `compare` ou `html`. »
@@ -230,22 +232,75 @@ Chaque ligne « à vérifier » devient un test de `devpage_probe` étendu (`age
 
 ## 9. La place dans l'app
 
-- **Réglages › Fonctionnalités** : un interrupteur « Pages des agents », allumé par défaut, à côté de « Boîte « À toi » ». Il dépend du serveur MCP : serveur éteint, pas de pages, comme pas de boîte. Coupé, `show_page`, `drive_browser`, `get_page` et `close_page` quittent la liste des outils de tous les harness, la consigne se tait, les lignes se ferment et les cartes disent « Les pages des agents sont coupées (Réglages › Fonctionnalités) ». Rien n'est effacé.
-- **La partie d'un projet** : « Lancement et navigateurs » (ESC-658) porte aussi les pages, puisqu'elles vivent dans ses lignes. Coupée dans un projet, ses outils de page y sont refusés avec la phrase des parties. Il faut ajouter les outils à `parts::of_tool`, comme la spec des parties l'annonçait (« s'ils en reçoivent un »). Sa description dit « son lancement, ses navigateurs et les pages de ses agents ».
-- **Le téléphone (app mobile)** : il ne voit pas la page, et une webview ne se montre pas à distance. Il voit **sa demande** dans « À toi », avec ses options natives, et une ligne « Une page l'accompagne, à voir sur ton poste ». Après la 2.3, un aperçu en image (PNG rendu par le poste, joint à la demande) pourra s'ajouter (AP-10).
-- **Une fenêtre connectée à un serveur** : en 2.3, même chose que le téléphone. La carte dit « Page sur le serveur : elle se verra dans une prochaine version ; sa demande est dans À toi ». Après la 2.3 (AP-11), le serveur servira la version par l'API distante (`page_bundle`, octets bruts, bornés), et la fenêtre la montrera **dans sa propre cloison locale**, avec le canal relayé au serveur.
-- **L'API distante** : les commandes `page_*` de la fenêtre sont « du poste seulement » (`desk-only`), comme `devpage_*`. Seules les demandes passent, avec un champ `page` (`{ id, title, template, version }`) dans `inbox_get`.
-- **Le serveur d'équipe** : une page ne quitte jamais le poste. Elle n'est ni synchronisée ni copiée dans les flux d'équipe. Sa demande reste une demande locale, comme aujourd'hui.
+- **En 2.2, Réglages › Agents** : un interrupteur « Pages des agents », allumé par défaut, sous « Les agents peuvent piloter Escouade » et à côté d'« Agents et navigateurs » (§ 10). Il dépend du serveur MCP : serveur éteint, pas de pages, comme pas de boîte. Coupé, `show_page`, `get_page` et `close_page` quittent la liste des outils de tous les harness, `drive_browser` refuse les lignes `page:`, la consigne se tait, les lignes se ferment et les cartes disent « Les pages des agents sont coupées (Réglages › Agents) ». Rien n'est effacé.
+- **En 2.3, Réglages › Fonctionnalités** : le même interrupteur, sous la même clé, à côté de « Boîte « À toi » » (AB-R). La carte dit alors « (Réglages › Fonctionnalités) ».
+- **En 2.3, la partie d'un projet** : « Lancement et navigateurs » (ESC-658) porte aussi les pages, puisqu'elles vivent dans ses lignes. Coupée dans un projet, ses outils de page y sont refusés avec la phrase des parties. Il faut ajouter les outils à `parts::of_tool`, comme la spec des parties l'annonçait (« s'ils en reçoivent un »). Sa description dit « son lancement, ses navigateurs et les pages de ses agents ». `main` n'a pas de parties.
+- **Le téléphone (app mobile), en 2.3** : il ne voit pas la page, et une webview ne se montre pas à distance. Il voit **sa demande** dans « À toi », avec ses options natives, et une ligne « Une page l'accompagne, à voir sur ton poste ». Après la 2.3, un aperçu en image (PNG rendu par le poste, joint à la demande) pourra s'ajouter (AP-10).
+- **Une fenêtre connectée à un serveur, en 2.3** : même chose que le téléphone. La carte dit « Page sur le serveur : elle se verra dans une prochaine version ; sa demande est dans À toi ». Après la 2.3 (AP-11), le serveur servira la version par l'API distante (`page_bundle`, octets bruts, bornés), et la fenêtre la montrera **dans sa propre cloison locale**, avec le canal relayé au serveur.
+- **L'API distante, en 2.3** : les commandes `page_*` de la fenêtre sont « du poste seulement » (`desk-only`), comme `devpage_*`. Seules les demandes passent, avec un champ `page` (`{ id, title, template, version }`) dans `inbox_get`. `main` n'a pas d'API distante : en 2.2, rien ne passe à distance.
+- **Le serveur d'équipe, en 2.3** : une page ne quitte jamais le poste. Elle n'est ni synchronisée ni copiée dans les flux d'équipe. Sa demande reste une demande locale, comme aujourd'hui.
 - **Les statistiques d'usage**, si l'utilisateur les laisse : `page_shown` (modèle, avec ou sans demande, taille par tranche), `page_driven` (action), `page_choice_proposed` puis `ask_answered` (`via: "page"`). Jamais un titre, un texte, un chemin ni un nom.
 - **Journaux** : `app.log` ne dit que « page p-12 v2 shown by agent e6e0… (review, ask a-31, 41 KB) », « driven (highlight) », « choice proposed », « closed ». L'activité du serveur MCP garde le projet, le modèle et le numéro.
 
-## 10. Avec ESC-663 : un seul canal, un seul modèle d'outils
+## 10. Le pilotage, commun aux deux études (ESC-666, AP-0)
 
-ESC-663 étudie en même temps le pilotage des navigateurs par un agent (`docs/AGENT-BROWSERS.md`, sur `ticket/esc-663`). Les deux agents se sont écrit le 2026-11-25 et s'accordent sur ce qui suit ; AP-0 (§ 14) n'a plus qu'à reprendre le nom de la cible et le monde isolé dans les deux docs :
+> Ce bloc est écrit **mot pour mot** dans `docs/AGENT-PAGES.md` et dans `docs/AGENT-BROWSERS.md`. Il fait foi pour les deux études : un passage de l'une ou de l'autre qui le contredit se lit selon lui. Il est tranché par la décision *Un seul pilotage pour toutes les lignes de « Navigateurs »* (ESC-666), qui remplace la décision 324.
 
-- **Un seul outil de pilotage pour toutes les lignes de « Navigateurs »** : `drive_browser` (le nom d'ESC-663). Il vise une page d'agent (`page: "p-12"`) ou un navigateur (sa clé). Les mêmes actions (`scroll_to`, `highlight`, `clear`, `width`, `tab`), la même règle « reprendre la main / la rendre », la même trace numérotée dans la conversation, les mêmes bornes. Un navigateur de l'app développée peut en avoir de plus (taper, cliquer, lire le DOM pour tester) : ce sont ses gestes à lui, sous ses propres garde-fous.
-- **Un seul canal étroit d'une webview cloisonnée vers le cœur** : un `POST` sur le schéma de la page, au schéma fermé, vérifié par l'étiquette de la webview et validé par le cœur. Pour une page d'agent, ce canal ne porte qu'une proposition de choix. Une page de lancement n'en a **aucun** : c'est l'app développée, qui n'a rien à proposer à Escouade.
-- **Un seul sens pour piloter** : le cœur vers la page, par des scripts fixes d'Escouade paramétrés en JSON, exécutés dans un **monde isolé** (pas de `webview.eval`, § 4.2), jamais un script d'un agent. Sous Windows, ESC-663 fait passer les clics et la frappe par `Input.*` du protocole DevTools (`isTrusted` vrai) ; sous WebKit, un clic du monde isolé n'est pas « trusted ». Si ESC-663 veut qu'un agent exécute son propre JavaScript dans l'app développée (pour tester), c'est un autre outil, refusé sur une page d'agent.
+**Deux modes d'ouverture, un seul pilotage.** Un agent montre soit **sa page** (mode 1, `show_page`, ESC-661), soit **un vrai onglet** de navigateur (mode 2, `open_browser` ou la page de son test, ESC-663). Les deux sont des lignes de « Navigateurs », et un seul outil les pilote.
+
+**L'outil : `drive_browser`.** Il n'y a pas de `drive_page`. Une action par appel.
+
+**La cible : `browser`, la clé de la ligne, et rien d'autre.** C'est la clé que rend `list_browsers` :
+
+- l'id de l'agent pour la page de son test (`esc-412`) ;
+- `run:<projet>:<commande>` pour une commande de lancement ;
+- `browser:<id>` pour un onglet ouvert par l'utilisateur ou par `open_browser` ;
+- `page:p-12` pour une page d'agent.
+
+Pas de champ `page` à part. Dans la ligne, l'élément se vise par `target` : un `#id`, un sélecteur CSS simple (200 caractères au plus, ni `:has()` ni plus de quatre niveaux), `text=Envoyer` (le premier élément cliquable de ce texte visible), ou, sur une page d'agent, une clé de son modèle (`criteria.2`). Un élément introuvable ou caché est dit à l'agent.
+
+**Les actions, en deux paliers.**
+
+| Palier | Actions | Page d'agent (mode 1) | Onglet sur le lancement du projet | Onglet hors du lancement |
+| --- | --- | --- | --- | --- |
+| Montrer | `scroll_to`, `scroll`, `highlight`, `clear`, `width`, `wait` ; `reload`, `back`, `forward` sur un onglet ; `version` sur une page d'agent | Sans demander | Sans demander | Sans demander (l'agent ne sait que « trouvé » ou non) |
+| Agir | `tab`, `click`, `type`, `select`, `press`, `navigate` | `tab` seul (un onglet déclaré de la page) ; le reste refusé | Sans demander (un mot de passe : avec accord, C2) | Avec l'accord de l'utilisateur, une fois par origine et par navigateur (C4) |
+| Interdit | Envoyer un fichier, télécharger, taper un secret d'Escouade, lire cookies, stockage et en-têtes | Refusé | Refusé | Refusé, mot de passe compris |
+
+- **Options communes** : `wait_user` (C1 : la bande montre « Continuer » et l'outil attend ce clic, 5 minutes au plus, puis répond `continued`, `took_hand` ou `timeout`) ; `look` (une capture jointe, aux bornes et aux accords de `capture_browser`).
+- **Retour commun** : `{ done, step, what, url, title, hand }`. Chaque geste rend la main à l'agent quand la page s'est posée, 1,5 s au plus.
+- **Les autres outils sur une page d'agent** : `list_browsers` la liste, `capture_browser` et `browser_console` s'y servent sans demander (c'est la page de l'agent) ; `read_browser` y est refusé, car `get_page` en dit l'état et rien de ce que l'utilisateur y fait ne revient à l'agent. `close_browser` sur `page:p-12` renvoie à `close_page`.
+
+**La règle de la main**, la même pour toutes les lignes :
+
+- l'agent ne pilote qu'une ligne affichée : sinon, « Le navigateur n'est pas affiché : l'utilisateur ne le voit pas » ;
+- le premier geste de l'utilisateur dans la ligne (pointeur, molette, touche : un événement `isTrusted` qui n'est pas le geste en cours de l'agent) ou le bouton « Reprendre la main » suspend le pilotage. Le geste en cours de l'agent finit (400 ms au plus), puis la main passe ;
+- tant que l'utilisateur a la main, `drive_browser` répond sans rien faire : « L'utilisateur a repris la main : il te la rendra par « La rendre », ou écris-lui. » ;
+- « La rendre » rouvre le pilotage. « Ne plus laisser piloter », dans le menu de la ligne, le ferme jusqu'à la fermeture de la ligne ;
+- les gestes de l'utilisateur sont relevés par le cœur dans le monde isolé, à chaque appel et toutes les 500 ms : aucun message ne monte de la page ;
+- bornes : 4 gestes par seconde et 600 par heure, par ligne.
+
+**Ce que voit l'utilisateur, pareil pour les deux modes.** Une seule **bande de pilotage**, native, au-dessus de la ligne et hors du rectangle de la webview : « Piloté par <agent> », la légende du dernier geste, « Reprendre la main » ou « Tu as la main · La rendre », et « Continuer » quand l'agent attend. Sur une page d'agent, elle porte en plus la mention de confiance (« Écrite par <agent> · hors réseau, sans accès à Escouade ni à tes fichiers »). Un curseur fantôme et le contour avec son étiquette montrent où l'agent agit. Chaque geste est une rangée numérotée dans la conversation. Sur une page d'agent, le même numéro est aussi un repère sur son rail (direction A).
+
+**Un seul canal, un seul sens pour piloter.**
+
+- **Du cœur vers la webview** : des scripts fixes d'Escouade (`agent-drive.js`, compilé dans l'app), paramétrés par des valeurs encodées en JSON. Ils sont exécutés dans le monde isolé `escouade-agent` du cadre principal, par la poignée native de `Webview::with_webview` :
+  - sous Windows, le protocole DevTools de WebView2 dans le process, sans port (`Page.createIsolatedWorld` puis `Runtime.evaluate`, `Input.*`, `Overlay.*`), par une liste fermée de méthodes ;
+  - sous Linux, `run_javascript_in_world` de WebKitGTK ;
+  - sous macOS, `evaluateJavaScript:inFrame:inContentWorld:` de WKWebView.
+
+  Le résultat revient par le rappel natif. Jamais `webview.eval`, que la page fausse (vérifié par la sonde d'ESC-663), et jamais un script de l'agent.
+- **De la webview vers le cœur** : un onglet n'a **aucun** canal. Une page d'agent n'a que `POST escouade-page://p-<n>/_/choose` : un corps fermé, la webview vérifiée par son étiquette, une simple proposition de choix que l'utilisateur confirme dans la bande d'Escouade. Le relais de console de WebKit et les gestes de l'utilisateur restent dans le monde isolé, où le cœur les relève : ils ne sont pas un canal vers Escouade.
+- Pour la 2.4, les panneaux des plugins d'interface repartent du même pont.
+
+**Où ça se coupe.**
+
+- **En 2.2** (de `main`), deux interrupteurs dans Réglages › Agents, sous « Les agents peuvent piloter Escouade », dont ils dépendent ; tous deux sont allumés par défaut :
+  - « Agents et navigateurs » coupe les sept outils des navigateurs ;
+  - « Pages des agents » coupe `show_page`, `get_page` et `close_page`.
+
+  `drive_browser` reste listé tant que l'un des deux est allumé, et refuse les lignes de celui qui est coupé.
+- **En 2.3**, ils deviennent les interrupteurs de Réglages › Fonctionnalités, sous les mêmes clés, et la partie « Lancement et navigateurs » d'un projet porte tous ces outils (AB-R).
 
 ## 11. Pour la 2.4 : les plugins d'interface
 
@@ -260,7 +315,7 @@ ESC-663 étudie en même temps le pilotage des navigateurs par un agent (`docs/A
   - les **jetons du thème** injectés ;
   - la **place déclarée** dans le manifeste (panneau, vue, barre d'état) ;
   - ce que la revue « Vérifié par Escouade » du store doit lire de plus (le HTML et ses messages).
-- **Rien de cela n'entre dans la 2.3.** Le seul engagement est de ne pas fermer la porte : le gestionnaire du schéma et la validation du canal s'écrivent en modules qui prennent une table de messages permis. La 2.3 n'en remplit qu'une ligne, `choose`.
+- **Rien de cela n'entre dans la 2.2 ni dans la 2.3.** Le seul engagement est de ne pas fermer la porte : le gestionnaire du schéma et la validation du canal s'écrivent en modules qui prennent une table de messages permis. La 2.3 n'en remplit qu'une ligne, `choose`.
 
 ## 12. Le design : trois directions
 
@@ -285,7 +340,7 @@ Chaque écran est rendu en sombre et en clair, à 1440 × 900 et à 1024 × 728.
 - **B — « La visite »** (`b-*.png`) : la page prend les deux tiers. La conversation se réduit à la **narration** : la phrase en cours en grand (« étape 3 sur 4 »), les étapes de la visite avec leur heure, l'ancien texte replié. La barre de la page porte la visite (‹ ● ● ━ ● ›) et la carte a des vignettes et « Revoir la visite ». *Pour* : la plus proche du cas phare, une démonstration qu'on suit, et la page large se lit bien. *Contre* : la conversation n'est plus une conversation tant que la visite dure, et l'agent doit découper son explication en étapes (un champ `step` de `drive_browser`, en plus).
 - **C — « L'onglet »** (`c-*.png`) : la page est un onglet « Revue · POR-41 » du **panneau de droite**, à côté de Non commités, Historique et PR. La conversation garde sa colonne de 780 px. Les choix ne sont pas dans la page mais **en natif au pied du panneau**, avec leurs options, la recommandation, un mot et « Choisir A ». *Pour* : le plus simple à construire et le plus sûr (la page ne fait qu'afficher, il n'y a pas de proposition à valider), et la plus proche d'aujourd'hui. *Contre* : la page est étroite (≈ 500 px à 1440 et la moitié à 1024), le panneau n'est pas un navigateur (pas de volet ni de largeurs), et le pilotage s'y voit moins.
 
-**Choisie par l'utilisateur le 2026-11-25 : A.** Ma recommandation était la même : Elle sert le cas phare sans sacrifier la conversation. Ses repères sont le seul geste qui rend le pilotage lisible après coup (« qu'est-ce qu'il m'a montré ? »). Elle reprend tels quels la ligne, les volets et les largeurs d'ESC-657. On peut lui prendre plus tard le « Revoir la visite » de B (rejouer les repères dans l'ordre) sans changer sa structure. C reste un bon repli si l'utilisateur préfère une 2.3 plus courte : AP-3 et AP-4 y coûtent une heure de moins chacun.
+**Choisie par l'utilisateur le 2026-11-25 : A.** Ma recommandation était la même : Elle sert le cas phare sans sacrifier la conversation. Ses repères sont le seul geste qui rend le pilotage lisible après coup (« qu'est-ce qu'il m'a montré ? »). Elle reprend tels quels la ligne, les volets et les largeurs d'ESC-657 (ESC-660 sur `main`). On peut lui prendre plus tard le « Revoir la visite » de B (rejouer les repères dans l'ordre) sans changer sa structure. C reste un bon repli si l'utilisateur préfère un lot plus court : AP-3 et AP-4 y coûtent une heure de moins chacun.
 
 ## 13. Les choix, tranchés
 
@@ -293,47 +348,50 @@ Chaque écran est rendu en sombre et en clair, à 1440 × 900 et à 1024 × 728.
 
 | # | Question | Options | Recommandé |
 | --- | --- | --- | --- |
-| P1 | Les outils | **`show_page`, `get_page`, `close_page`, et le pilotage par `drive_browser` d'ESC-663 (cible `page: "p-12"` ou `browser: "page:p-12"`, en AP-0)** · un seul outil `page` à actions | `show_page` + `get_page` + `close_page` + `drive_browser` |
+| P1 | Les outils | **`show_page`, `get_page`, `close_page`, et le pilotage par `drive_browser` d'ESC-663 (cible `browser: "page:p-12"`, fixée par AP-0)** · un seul outil `page` à actions | `show_page` + `get_page` + `close_page` + `drive_browser` |
 | P2 | Où la page s'ouvre | **Une ligne de « Navigateurs », à côté de la conversation, et sa demande dans « À toi »** · un onglet du panneau de droite · les deux | La ligne et la boîte |
 | P3 | Le geste qui envoie | **Un clic dans la page propose, la bande d'Escouade envoie** · le clic dans la page suffit | La bande |
 | P4 | Le HTML libre | **Scripts permis dans la cloison (sans `unsafe-eval`)** · HTML sans script (assaini) · scripts et `unsafe-eval` | Scripts, sans `unsafe-eval` |
 | P5 | Le réseau | **Aucun, sans exception** · une liste d'origines par projet | Aucun |
 | P6 | La page à soi | **Le poste, et le dépôt qui la propose (`pages.custom`), le poste l'emporte** · le poste seulement | Le poste et le dépôt |
-| P7 | La place | **Un interrupteur dans Fonctionnalités et la partie « Lancement et navigateurs »** · une partie à elle | Fonctionnalités + Lancement et navigateurs |
-| P8 | À distance | **En 2.3, la page reste sur le poste et sa demande va partout ; l'aperçu en image et la page servie à une fenêtre après** · tout dans la 2.3 | Poste seulement en 2.3 |
-| P9 | Qui montre | **Agents, Overseer, discussions ; Claude hors Escouade seulement avec une demande** · Claude hors Escouade aussi sans demande, dans un navigateur sans agent | Avec une demande seulement |
+| P7 | La place | **Un interrupteur dans Fonctionnalités et la partie « Lancement et navigateurs »** · une partie à elle (en 2.2, sans Fonctionnalités ni parties : l'interrupteur est dans Réglages › Agents, § 9) | Fonctionnalités + Lancement et navigateurs |
+| P8 | À distance | **En 2.3, la page reste sur le poste et sa demande va partout ; l'aperçu en image et la page servie à une fenêtre après** · tout dans la 2.3 (en 2.2, rien n'est à distance) | Poste seulement en 2.3 |
+| P9 | Qui montre | **Agents, Overseer, discussions ; Claude hors Escouade seulement avec une demande** · Claude hors Escouade aussi sans demande, dans un navigateur sans agent (l'Overseer en 2.3 : `main` ne l'a pas) | Avec une demande seulement |
 | P10 | Durée de vie | **Avec son agent, puis le délai des fichiers de la boîte ; 20 pages par agent, 10 versions** · le temps du lancement d'Escouade seulement | Avec son agent |
 | P11 | La direction de design | **A « Les repères »** · B « La visite » · C « L'onglet » | A |
 
 ## 14. Les tickets
 
-Dans l'ordre. Les heures sont des heures d'agent Claude Code (Opus, effort moyen), relecture et e2e compris. Le Kanban en tient six en parallèle.
+> **La liste finale, qui fait foi**, réunit ces tickets avec ceux d'ESC-663 : [`AGENT-BROWSERS-TICKETS.md`](AGENT-BROWSERS-TICKETS.md) (ESC-666). Elle les met dans l'ordre et fond les doublons. Le tableau ci-dessous en est la part des pages, avec les mêmes dépendances et les mêmes heures.
 
-| Ticket | Ce qu'il fait | Dépend de | Heures | 2.3 ? |
+Tout part de `main` et sort en 2.2 (l'utilisateur, 2026-11-26), puis se reverse dans `release/2.3`. Les heures sont des heures d'agent Claude Code (Opus, effort moyen), relecture et e2e compris. Le Kanban en tient six en parallèle.
+
+| Ticket | Ce qu'il fait | Dépend de | Heures | Part de |
 | --- | --- | --- | --- | --- |
-| **AP-0** | Réunir avec ESC-663 : un nom d'outil de pilotage, ses actions, la règle de la main, le canal (§ 10). Mise à jour de cette étude, de la sienne et des décisions. Pas de code. | ESC-663 rendu | 0 h 45 | Oui |
-| **AP-1** | La cloison : schéma `escouade-page://` servi à sa seule webview (étiquette), webview `agentpage-*` refusée par `refuses`, CSP en en-tête et en `<meta>`, `incognito`, permissions et téléchargements refusés, navigation stricte et la bande « La page veut ouvrir… », préchargements retirés, `RTCPeerConnection` retiré. `agentpage_probe` en CI (Linux, macOS) et page piège en e2e Windows (§ 8.4). | — | 3 h 30 | Oui |
-| **AP-2** | Le modèle et l'outil : `pages.rs` (registre `p-<n>`, versions, bornes, copie depuis le worktree avec ses fichiers relatifs, état durable, purge), `show_page`, `get_page`, `close_page`, projet privé, interrupteur de Fonctionnalités, `parts::of_tool`, consigne du serveur MCP, journaux, statistiques. | AP-1 | 3 h | Oui |
-| **AP-3** | La vue (dans la direction choisie) : la ligne `page:<p-n>` de « Navigateurs », l'ouverture à côté de la conversation, la barre (versions, la main, largeurs), la bande de confiance, la carte dans la conversation et ses états, fr et en, clair et sombre, 1440 et 1024. | AP-2 | 3 h | Oui |
-| **AP-4** | Le retour par `ask_user` : `ask` de `show_page` (le même dépôt que `ask_user`), le canal `_/choose` validé par le cœur, la bande du choix et son geste (`inbox_answer`), la réponse renvoyée à la page, « Ouvrir la page » et la vignette dans « À toi », le feu vert jamais proposé par la page. | AP-2, AP-3 | 2 h 30 | Oui |
-| **AP-5** | Les modèles `review`, `diagram` (Mermaid embarqué, `strict`) et `compare` (planches de la boîte), leurs schémas de données validés par le cœur, leurs ancres pour le pilotage. | AP-1 | 3 h | Oui |
-| **AP-6** | Le pilotage : `drive_browser` (scripts fixes paramétrés, dans un monde isolé par système), reprendre la main et la rendre, la trace numérotée et les repères (direction A), bornes. Partagé avec le ticket d'ESC-663 qui pilote les navigateurs. | AP-3, AP-0 | 2 h 30 | Oui |
-| **AP-7** | La page à soi : réglage du poste, `pages.custom` du `.escouade.yml` et de l'équipe, `window.escouade`, refus sans page réglée. | AP-2, AP-5 | 1 h 30 | Oui |
-| **AP-8** | À distance et docs : `page_*` « du poste seulement », champ `page` des demandes servi au téléphone (« Une page l'accompagne… »), carte d'une fenêtre sur un serveur. Doc du site fr et en (« Les pages des agents »), page de spec passée de « À trancher » à construite. | AP-4 | 1 h 30 | Oui |
-| **AP-9** | **L'e2e du cas phare** (Windows) : un faux agent appelle `show_page(review, ask)`, la page s'ouvre à côté de sa conversation, `drive_browser` fait défiler et met en évidence (capture réelle par `PrintWindow`, comme `browsers.spec.ts`), l'utilisateur reprend la main, clique A dans la page, la bande s'allume, « Envoyer », puis l'agent reçoit « L'utilisateur a choisi A ». Avec ça : la page piège ne joint rien, et une réponse dans la boîte coche la page. | AP-4, AP-6 | 2 h | Oui |
-| AP-10 | L'aperçu en image : le poste rend la version en PNG (capture de la webview cachée), jointe à la demande pour le téléphone et la boîte. | AP-4 | 2 h | Après |
-| AP-11 | La page servie à une fenêtre connectée à un serveur : `page_bundle` par l'API distante, cloison locale, canal relayé. | AP-4, mode serveur | 3 h | Après |
-| AP-12 | Plusieurs pages à soi nommées ; d'autres moteurs de schéma (D2, Graphviz en WASM). | AP-7 | 2 h | Après |
+| **AP-0** | Réunir avec ESC-663 : un nom d'outil de pilotage, ses actions, la règle de la main, le canal (§ 10). Mise à jour de cette étude, de la sienne et des décisions. Pas de code. **Fait : ESC-666.** | ESC-663 rendu | 0 h 45 | main |
+| **AP-1** | La cloison : schéma `escouade-page://` servi à sa seule webview (étiquette), webview `agentpage-*` refusée par `refuses`, CSP en en-tête et en `<meta>`, `incognito`, permissions et téléchargements refusés, navigation stricte et la bande « La page veut ouvrir… », préchargements retirés, `RTCPeerConnection` retiré. `agentpage_probe` en CI (Linux, macOS) et page piège en e2e Windows (§ 8.4). | — | 3 h 30 | main → 2.2 |
+| **AP-2** | Le modèle et l'outil : `pages.rs` (registre `p-<n>`, versions, bornes, copie depuis le worktree avec ses fichiers relatifs, état durable, purge), `show_page`, `get_page`, `close_page`, projet privé, l'interrupteur « Pages des agents » de Réglages › Agents (§ 9), consigne du serveur MCP, journaux, statistiques, les lignes `page:` dans `list_browsers`. | AP-1, AB-2 (pour `list_browsers`) | 3 h | main → 2.2 |
+| **AP-5** | Les modèles `review`, `diagram` (Mermaid embarqué, `strict`) et `compare` (planches de la boîte), leurs schémas de données validés par le cœur, leurs ancres pour le pilotage. | AP-1 | 3 h | main → 2.2 |
+| **AP-3** | La vue, dans la direction A : la ligne `page:<p-n>` de « Navigateurs », l'ouverture à côté de la conversation, la barre (versions, largeurs), la bande de pilotage commune aux deux modes avec sa mention de confiance (§ 10), la carte dans la conversation et ses états, fr et en, clair et sombre, 1440 et 1024. | AP-2 | 3 h | main → 2.2 |
+| **AP-4** | Le retour par `ask_user` : `ask` de `show_page` (le même dépôt que `ask_user`), le canal `_/choose` validé par le cœur, la bande du choix et son geste (`inbox_answer`), la réponse renvoyée à la page, « Ouvrir la page » et la vignette dans « À toi », le feu vert jamais proposé par la page. | AP-2, AP-3 | 2 h 30 | main → 2.2 |
+| **AP-7** | La page à soi : réglage du poste, `pages.custom` du `.escouade.yml` (le poste l'emporte), `window.escouade`, refus sans page réglée. | AP-2, AP-5 | 1 h 30 | main → 2.2 |
+| ~~AP-6~~ | Le pilotage d'une page : **fondu dans AB-7 et AB-8** d'ESC-663 (un seul `drive_browser`, une seule bande, les repères du rail dans AB-8). | — | — | — |
+| **AP-9** | **L'e2e du cas phare** (Windows) : un faux agent appelle `show_page(review, ask)`, la page s'ouvre à côté de sa conversation, `drive_browser` fait défiler et met en évidence (capture réelle par `PrintWindow`, comme `browsers.spec.ts`), l'utilisateur reprend la main, clique A dans la page, la bande s'allume, « Envoyer », puis l'agent reçoit « L'utilisateur a choisi A ». Avec ça : la page piège ne joint rien, et une réponse dans la boîte coche la page. | AP-4, AB-8 | 2 h | main → 2.2 |
+| ~~AP-8~~ | Les docs : **fondu dans DOC** (avec AB-13) ; sa part « à distance » va dans AB-R. | — | — | — |
+| AB-R | En 2.3 : pour les pages, `parts::of_tool`, l'interrupteur de Fonctionnalités, `page_*` « du poste seulement », le champ `page` des demandes servi au téléphone (« Une page l'accompagne… »), la carte d'une fenêtre sur un serveur, l'Overseer qui montre une page, `pages.custom` d'équipe. | lots reversés | (dans AB-R) | 2.3 seulement |
+| AP-10 | L'aperçu en image : le poste rend la version en PNG (capture de la webview cachée), jointe à la demande pour le téléphone et la boîte. | AP-4 | 2 h | Après la 2.3 |
+| AP-11 | La page servie à une fenêtre connectée à un serveur : `page_bundle` par l'API distante, cloison locale, canal relayé. | AP-4, mode serveur | 3 h | Après la 2.3 |
+| AP-12 | Plusieurs pages à soi nommées ; d'autres moteurs de schéma (D2, Graphviz en WASM). | AP-7 | 2 h | Après la 2.3 |
 | — | Les plugins d'interface (§ 11) : leur étude repart d'ici. | — | — | 2.4 |
 
-**Ce qui tient dans la 2.3** : AP-0 à AP-9, soit **environ 23 h d'agent**. Le chemin le plus long (AP-1 → AP-2 → AP-3 → AP-4 → AP-9, avec AP-6 à côté) fait environ 14 h. Avec le parallélisme du Kanban (AP-5 dès AP-1 ; AP-6 et AP-7 avec AP-4) et mes vérifications (30 à 60 min par ticket), il faut compter **deux jours** du Kanban une fois les choix faits. Avec la direction C, AP-3 et AP-4 coûtent une heure de moins chacun, et AP-6 n'a pas de repères.
+**Ce qui sort en 2.2** : AP-1 à AP-5, AP-7 et AP-9, soit **18 h 30 d'agent**, plus la part des pages dans AB-7, AB-8 et DOC. Le plus long chemin des pages (AP-1, AP-2, AP-3, AP-4) fait 12 h. Le compte de l'ensemble (50 h pour les deux études, trois jours du Kanban) est dans la liste finale. Avec la direction C, AP-3 et AP-4 auraient coûté une heure de moins chacun, et AB-8 n'aurait pas de repères.
 
 **Ce qui n'avance pas au rythme des agents** :
 
-- les choix P1 à P11, à l'utilisateur ;
-- ESC-663 rendu, pour AP-0 ;
 - les **essais réels de la cloison sur un Mac et sous Linux**, au-delà de la CI : CSP d'un schéma maison honorée par WKWebView et WebKitGTK, WebRTC, préchargements, permissions ;
 - un essai du cas phare par l'utilisateur avec un vrai agent de chaque harness qu'il a (Claude Code, Codex au moins).
+
+Les choix P1 à P11 sont tranchés (§ 13), et ESC-663 est rendu.
 
 ## 15. Sources
 

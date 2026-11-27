@@ -1,0 +1,23 @@
+{
+  "id": "2026-11-27-2",
+  "ecrans": [
+    {
+      "etiquette": "Navigateurs",
+      "titre": "Connecte-toi à un site dans un onglet",
+      "texte": "La fenêtre de connexion d’un site (Google, OAuth) s’ouvre dans Escouade, sur la session du projet. Un lien reçu par courriel se colle dans la barre d’adresse de l’onglet.",
+      "scene": "<div class=\"wu-20261127-2-cadre wu-20261127-2-p1\"><img class=\"wu-20261127-2-etat\" src=\"2026-11-27-2-connexion.webp\" data-sombre=\"2026-11-27-2-connexion-sombre.webp\" alt=\"\"><img class=\"wu-20261127-2-etat wu-20261127-2-apres\" src=\"2026-11-27-2-connexion-fenetre.webp\" data-sombre=\"2026-11-27-2-connexion-fenetre-sombre.webp\" alt=\"\"><span class=\"wu-20261127-2-curseur\"></span></div>"
+    },
+    {
+      "etiquette": "Ton écran",
+      "titre": "Un agent ne prend jamais ton écran",
+      "texte": "Quand tu regardes ailleurs, ce qu’il veut te montrer t’attend sous <b>Navigateurs</b>. Reviens à sa conversation : l’onglet s’ouvre à côté.",
+      "scene": "<div class=\"wu-20261127-2-cadre wu-20261127-2-p2\"><img class=\"wu-20261127-2-etat\" src=\"2026-11-27-2-ecran.webp\" data-sombre=\"2026-11-27-2-ecran-sombre.webp\" alt=\"\"><img class=\"wu-20261127-2-etat wu-20261127-2-apres\" src=\"2026-11-27-2-ecran-revenu.webp\" data-sombre=\"2026-11-27-2-ecran-revenu-sombre.webp\" alt=\"\"><span class=\"wu-20261127-2-curseur\"></span></div>"
+    },
+    {
+      "etiquette": "Laisser piloter",
+      "titre": "Confie ton onglet à un agent",
+      "texte": "Dans le menu d’un navigateur que tu as ouvert, <b>Laisser piloter par…</b> le prête à un agent du projet, qui l’apprend par un message.",
+      "scene": "<div class=\"wu-20261127-2-cadre wu-20261127-2-p3\"><img class=\"wu-20261127-2-etat\" src=\"2026-11-27-2-laisser-piloter.webp\" data-sombre=\"2026-11-27-2-laisser-piloter-sombre.webp\" alt=\"\"></div>"
+    }
+  ]
+}

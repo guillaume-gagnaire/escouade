@@ -20,6 +20,17 @@ mod asks_tests;
 mod background;
 #[cfg(test)]
 mod background_tests;
+pub(crate) mod browsers;
+pub(crate) mod browsers_drive;
+#[cfg(test)]
+mod browsers_drive_tests;
+pub(crate) mod browsers_open;
+#[cfg(test)]
+mod browsers_open_tests;
+#[cfg(test)]
+mod browsers_tests;
+#[cfg(test)]
+mod custom_pages_tests;
 #[cfg(test)]
 mod declare_tests;
 mod docs;
@@ -51,6 +62,11 @@ mod modes_tests;
 mod overseer;
 #[cfg(test)]
 mod overseer_tests;
+#[cfg(test)]
+mod page_asks_tests;
+mod pages;
+#[cfg(test)]
+mod pages_tests;
 #[cfg(test)]
 mod parts_tests;
 #[cfg(test)]
@@ -91,6 +107,19 @@ use crate::paths;
 use anyhow::{anyhow, Context, Result};
 use parking_lot::{Mutex, MutexGuard};
 use std::path::PathBuf;
+
+pub(crate) use resolve::CHOICES;
+
+/// A file opened within `within` (its path checked on the file opened), for the copy of a page
+/// (`crate::pages`): what refuses it is said, never what it holds.
+pub(crate) fn open_within(
+    raw: &str,
+    within: Option<&std::path::Path>,
+) -> std::result::Result<(std::fs::File, u64), String> {
+    images::open_within(raw, within).map_err(|e| match e {
+        tools::ToolError::Refused(m) | tools::ToolError::Failed(m) => m,
+    })
+}
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Weak};
 use tokio::sync::watch;
@@ -225,7 +254,10 @@ impl McpServer {
             port,
             std::sync::Arc::downgrade(&core),
             tools::Tools::router(),
-            tools::Tools::new,
+            {
+                let core = std::sync::Arc::downgrade(&core);
+                move |router| tools::Tools::new(router, core.clone())
+            },
         );
         let limits = self.limits.lock().clone();
         // On the app's own runtime: never the single-threaded one of a caller, which a stop's
@@ -472,6 +504,14 @@ impl McpServer {
     /// Who brings `token`: None when it is no token the server gave.
     pub fn caller(&self, token: &str) -> Option<Caller> {
         self.tokens.caller(token)
+    }
+
+    /// Every token the server gave, Claude outside Escouade's and the agents' (the secrets `drive_browser` never
+    /// types, ESC-679).
+    pub fn token_values(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.tokens.agents.read().values().cloned().collect();
+        out.extend(self.tokens.external.read().clone());
+        out
     }
 }
 

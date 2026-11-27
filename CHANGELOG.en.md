@@ -6,12 +6,12 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- The 2.2’s browsers driven by agents, their pages, the Workspace and the window of what’s new come into 2.3. On a server without a window, an agent is told there is no browser nor page; the menu’s “Editor” entry and the Workspace’s workflows follow their switches in Settings › Features.
 - Security: a paired phone now has only what it needs: your “Your turn” box, your answers, your conversations and the Kanban. The terminal, the files, the secrets, the plugins, the devices and the network stay with the computers; Space settings › Devices shows what each device is.
 - Pairing your phone is done with a 10-minute QR code, in Settings › Phone, in a server’s settings or with `escouade-server pair --qr`. Its key and token stay in the phone’s vault (Keystore, Keychain), which must have a screen lock; once revoked, it tells you, and you can remove a space from the phone.
 - Team server: a Claude Code agent passed to a teammate who takes it with Claude Code resumes its own session, its paths rewritten to their worktree; if their `claude` is older, a path of before is left or the first turn fails, it starts again from the handover file, as before (ESC-607).
 - Security: a task an agent schedules launches nothing until you accept it, in the “Your turn” box or on its row, which names the agent that set it. An agent schedules in its own project only, never more than once every quarter of an hour, and no longer erases a team memory a human approved: it proposes its removal, which you settle in Shared memory.
 - Security: on the team server, a member can no longer grow the base without end outside their team’s quota: everything they write counts in its projects or its quota. The `init` token expires after 24 hours, a revoked device no longer takes a place among the team’s 500, the last administrator can no longer be revoked, and the server’s logs no longer carry a team or file id.
-- Stats: what a subagent of Copilot CLI, Codex or OpenCode spends on another model than its agent’s now counts for that model, at the right price for Codex, and still only once in the agent’s totals. The work of a Copilot subagent its plugin lost sight of while restarting is no longer forgotten.
 - Security: on the team server, a file (a document, an image, a past conversation) can now only be read by the devices that have access to its project, and only its author or an administrator can delete it. Files put before stay their author’s and the administrators’ until one of them opens them again in their project.
 - Security: behind a proxy, your server refuses a request that comes under two names at once (two `Host` or `Origin` headers, or an address that names another), so that the proxy and the server always read the same one.
 - Team server: a machine of the team, in server mode, enrolls under a role of service, neither a member nor an administrator. An administrator shows a code in “Machines of the team”, the machine types it (`escouade-server team pair`); it reads and writes the projects opened to it and takes tickets, and can never sign a member, a role, a setting, a circuit breaker or a private plugin.
@@ -21,14 +21,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Security: `escouade-server update` never goes back to an older version unless you name it (`--to X.Y.Z --downgrade`), takes the newest of the channels with `--beta`, and refuses a signed archive served under another version’s name. The server started by hand keeps its data folder and its log to its own user, and the Docker image stands on pinned bases.
 - Security: on the team server, a member or a hijacked agent can no longer freeze the team or a project with an invalid commit. Every device passes it, an administrator voids it and sees who posted it on the team’s card, then removes the member and changes the keys as usual; only administrators commit, but for a member’s own devices.
 - Security: the Overseer now grants an agent nothing but reading files of its project or its worktree. A command, a write, the network stay yours: it leaves the request in “Your turn” with what it recommends. And it reads only its own folder, the projects and their spec, never a harness’s credentials nor a key.
-- A WASM plugin is no longer stopped because your machine is loaded (a big build beside it): its 2 s turn counts the time it really spends working, and a 10 s ceiling still stops a stuck plugin. The plugins’ bench also waits for the programs a plugin runs to end before it judges what it does.
-- On Windows, two saves of the same data file at the same moment (the state, the settings) no longer fail now and then with “Access denied” on a loaded machine.
-- In the Claude Code view, a finished turn no longer goes back to “running” for good on a loaded machine: the agent finished its command (/compact) but stayed shown at work.
 - Security: behind a TLS proxy, each client of your server counts its failed tries apart (`--trust-proxy`), and wrong pairing codes from elsewhere never block the one you type on the machine or through SSH. Through Tailscale, only the phone app opens the API, no longer a web page of another machine.
 - Security: a ticket of a team Kanban that a teammate wrote and that is assigned to you waits for your go-ahead: neither the autopilot, the Overseer nor your agents start it before you accept it, on its card or in the “Your turn” box. The card says who wrote its text and who assigned it, and a text a teammate changes after your go-ahead asks again.
 - Security: whoever hosts a team server can unfreeze a team or a project blocked by an unreadable entry, with `escouade-team-server drop-entry`. They see the entry, confirm, and the database keeps who removed it, when and its digest, never its content; the devices read on instead of taking it for a rollback, and the administrators see it on the team’s card.
 - Each project picks its parts in Settings › Projects › Project parts: turn off its Docs, its shared memory, its Kanban or its launch and browsers, and they disappear from that project, its agents’ tools included, deleting nothing. Its .escouade.yml can propose a default, but your choice always goes first.
-- Browsers in the sidebar, like terminals: one row per tab under “Terminals”, opened full screen or next to an agent, with tablet and mobile widths and the developer tools next to the address. You open one from “+”, and an agent’s test or a launch command opens its own; the “Pages” window is gone.
 - The “Offline mode” of 2.2.6 can be imposed by a team’s policies too, and a managed device finds it in its list of policies; on a server, nothing outside its folders is shown to the computer.
 - Security: whoever reaches a server can no longer block the pairing of a new device by typing wrong codes, nor shut your devices out with failed or silent connections; a device not connected yet always has room to revoke another, and a device revoked or disconnected loses its calls under way and waiting. Thanks to OshOEz, whose audit of their own server showed these flaws.
 - Security: on the team server, a member can no longer erase a project’s history or the administrators’ entries with a snapshot. The team’s own streams take none any more, and the operations a snapshot covers stay 30 days. A snapshot that does not open is put aside on the computer, which reads the journal instead, and the administrators see who posted it and remove it in one click.
@@ -95,6 +91,63 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Device policies now cover everything an IT department can impose (proxy and certificates, plugins, private projects, voice, updates, models and effort, servers, outside MCP clients), and apply without a restart when it changes them. Escouade comes with its ADMX, an example MDM profile and a documentation page on how to deploy them.
 - An agent that reads a GitHub pull request now gets all of it: its description, its commits, its files and its discussion threads with their answers and their state. It is the first stone of the pull request view in Escouade.
 - Security: seven low findings of the 2.2.0 audit fixed. A harness’s plugin no longer writes through a link out of the agent’s folder nor a script beside its settings, a harness can no longer stop the app with an absurd message length, a plugin’s output is capped at its memory per turn, the tests’ variables are no longer read by the published app, the local servers cut a silent connection sooner, and the window and the website have stricter security policies.
+
+## [2.2.19] — 2026-11-27
+
+- Plugins can update by themselves: a setting beside “Install verified versions only”, off by default, allows it for Escouade’s plugins or for every verified plugin. Only verified versions that ask for nothing more go, never in the middle of an agent’s turn; the Updates page says what went.
+
+## [2.2.18] — 2026-11-27
+
+- Outside the project's launch, an agent that scrolls or highlights no longer learns the page's title or full address without your leave, only its site. When it stops driving its launch, the band goes at once and the row is an ordinary one again.
+- The window of what’s new now speaks English too, and after skipped versions it shows only the latest.
+
+## [2.2.17] — 2026-11-27
+
+- After an update, a window shows you its news once, in a few screens taken from the real interface (for an interface in French, for now). Thanks to @OshOEz (#51).
+- An agent never takes your screen: what it wants to show you opens beside its conversation only if you are looking at it, otherwise its row waits in “Browsers” and opens when you come back. It has one pane at a time, and a pane you closed does not come back until you have left its conversation and returned. “Let drive…”, in the menu of a browser you opened, hands it to an agent of the project.
+- An update of a third-party plugin that changes its harness’s command always asks for your agreement again, even for an agent that was starting at that moment: the old command no longer launches after the update.
+- Under Windows, when an agent looks at what it just highlighted, its capture now shows the element lit up, not only its cursor.
+
+## [2.2.16] — 2026-11-27
+
+- You sign in to a site in an Escouade tab, its sign-in window included (Google, OAuth, a link from an email pasted in the bar): it all happens in Escouade, and the session stays the project’s.
+- An agent now drives what it opens for you, gesture by gesture, to show you its work: it scrolls, highlights, switches to the phone width, and on the project’s launch it clicks, types and chooses; elsewhere, acting waits for your permission. Your first gesture in the page takes the hand back until you give it back; it never types a secret, never downloads or sends a file, and fills a password only with your permission.
+- You watch the agent drive before your eyes: a band above the page says who is driving and its last gesture, a cursor in the project’s colour goes where it acts and what it highlights lights up, without the page being able to read or erase them. Each gesture is a numbered row in the conversation and, on an agent’s page, a mark on the rail that takes you back there; “Take over” stops it at once, “Hand it back” lets it go on.
+- A Claude Code agent opens its artifact for you beside its conversation, and the tab reloads at each new version it publishes, except while you have the hand. Only artifacts it published itself open this way; on claude.ai it shows without reading anything of your session without your permission.
+- An agent can now show you a passage of its Claude artifact, inside its frame: under Windows it scrolls the page there to the element and outlines it; under macOS and Linux, it highlights the whole frame. It still reads nothing of what the frame holds.
+
+## [2.2.15] — 2026-11-27
+
+- An agent’s page opens beside its conversation when you’re looking at it, otherwise it waits for you in “Browsers”; its card in the conversation shows it or opens it again, and its bar goes back to an earlier version or shows it at tablet or mobile width. A band above it says who wrote it and that it has no network nor access to Escouade or your files.
+- An agent’s page can carry a question: you choose in the page, and a band of Escouade under it repeats your choice in the request’s own words, then sends it when you click “Send”. The page alone can send nothing nor answer a go-ahead; the request is also in “Your turn”, with “Open the page”.
+
+## [2.2.14] — 2026-11-27
+
+- An agent opens a real tab next to its conversation to show you its work: the project’s launch, an address, or the Claude artifact it just published. It opens only while you look at its conversation; otherwise its row in “Browsers” waits for you. An address outside the project is asked once in its conversation; Escouade’s own addresses and your machine’s other ports never open.
+- Agents can show you a page: a review, a diagram, options to compare or their own HTML, copied apart and served without network or access to Escouade or your files; a new version updates the page. The “Agents’ pages” switch in Settings › Agents turns them off, erasing nothing.
+- Your own page for the agents: an HTML document chosen in Settings › Projects › Launch, or proposed by the repository in `.escouade.yml` (once you trust it), that your agents fill with their data. Your machine’s comes before the repository’s.
+- Your project’s workflows move to the Workspace: each agent’s card says its step (and in red why it was sent back), and a click opens the workflow’s diagram with its path; “Workflows”, at the top right of the canvas, lists the project’s workflows and their agents. The right-hand panel keeps three tabs.
+- The commands an agent ran, kept for the Workspace, no longer keep any password, token or key in the clear: they are masked before being saved.
+- Stats: what a subagent of Copilot CLI, Codex or OpenCode spends counts only once, on the model it really ran on (at the right price for Codex); that of a Copilot subagent its plugin had lost sight of is no longer forgotten.
+- On macOS, the console of a browser the agents read now also keeps the page’s errors and its failed requests; on Linux, it also keeps what comes after the page has loaded.
+- On Windows, your data files (the state, the settings) are no longer lost when two writes cross; and on a loaded machine, a plugin is no longer stopped during a big build beside it, and an agent of the Claude Code view that finished its turn no longer stays shown at work.
+- On a busy machine, the “New project” assistant no longer says “The repository has no commit” of a repository that has some: it reads the folder faster, says “Reading the repository…” while it does, and if git fails it shows its error with “Try again” instead of offering a first commit.
+
+## [2.2.13] — 2026-11-26
+
+- The voice conversation’s microphone sensitivity can be set in Settings › Voice, with a tester that shows your voice’s level, the threshold and when your voice is detected, live.
+- Agents read the browsers of their project: they list them, read the HTML or the text of a page on screen, passwords and tokens masked, capture it as an image (the view, an element or the whole page, at a tablet’s or a phone’s width) and read its console with its failed requests, to see what you see and what breaks. The page of their launch is read and captured without asking; another origin (an artifact, a site you’re signed in to) waits for your permission in the browser’s band, which you revoke with “Revoke the permissions”. The “Agents and browsers” switch in Settings › Agents turns them off.
+- The Workspace, a canvas of all your agents, opened from the “Editor” button or the Overview: each with its plan, its skills and plugins, its subagents, its tests and what it delivered (artifacts, CI, deployments). You answer a question and write to an agent there without opening its conversation. Thanks to @OshOEz (#45).
+
+## [2.2.12] — 2026-11-26
+
+- The conversation’s voices download again: they are taken at a fixed version of their repository, which its updates no longer break (a voice retrained upstream made its download fail). The models of the dictation and of the search by meaning are fixed the same way.
+- When a published file no longer matches the one Escouade expects, the message says so plainly and that Escouade has to be updated, instead of “6369 bytes and more, 4875 expected”.
+- While dictating, the band says to click the mic again (or the shortcut) to type what you said.
+
+## [2.2.11] — 2026-11-25
+
+- Browsers in the sidebar, like terminals: one row per tab under “Terminals”, opened full screen or next to an agent, with tablet and mobile widths and the developer tools next to the address. You open one from “+”, and an agent’s test or a launch command opens its own; the “Pages” window is gone.
 
 ## [2.2.10] — 2026-11-24
 

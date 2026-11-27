@@ -3,7 +3,7 @@ title: "L'Overseer"
 subject: "Overseer"
 sources: ["docs/OVERSEER.md","design/overseer/ecran-discussion.png","design/overseer/voix-tu-parles.png","design/overseer/voix-il-repond.png","design/overseer/maquettes-discussion.html","design/overseer/maquettes-voix.html","src-tauri/src/overseer.rs","src-tauri/src/overseer_core.rs","src-tauri/src/overseer_reads.rs","src-tauri/src/mcp/overseer.rs","src-tauri/src/hotkey.rs","src-tauri/src/voice/conversation.rs","src/lib/orbit.ts","src/lib/overseer-voice.svelte.ts","src/components/overseer/OverseerScreen.svelte","src/components/overseer/Orbit.svelte","src/components/settings/OverseerPage.svelte","src/components/inbox/InboxViewPane.svelte","Revue de sécurité de la 2.3 (ESC-627), constats SR4-02 et SR4-03 (rapport privé, hors du dépôt)"]
 tickets: ["ESC-462","ESC-468","ESC-646"]
-decisions: [174,181,329]
+decisions: [174,181,358]
 compared: null
 ---
 

@@ -14,6 +14,16 @@ mod agent;
 mod agentbranch;
 #[cfg(test)]
 mod agentbranch_tests;
+#[cfg(feature = "desktop")]
+mod agentbrowser_probe;
+mod agentpage;
+#[cfg(feature = "desktop")]
+mod agentpage_probe;
+mod agentpage_templates;
+#[cfg(test)]
+mod agentpage_templates_tests;
+#[cfg(test)]
+mod agentpage_tests;
 mod agentprs;
 #[cfg(test)]
 mod agentprs_tests;
@@ -30,8 +40,17 @@ mod attachfiles;
 mod attachfiles_tests;
 mod board;
 mod branchci;
+// The read bridge of the browsers (ESC-668): its MCP tools come with AB-2 to AB-4; until then the
+// probe (`agentbrowser_probe`) and the tests use it, and parts of it (the driving's methods) wait.
 #[cfg(test)]
 mod branches_tests;
+mod browserdrive;
+#[cfg(test)]
+mod browserdrive_tests;
+#[allow(dead_code)]
+mod browserread;
+#[cfg(test)]
+mod browserread_tests;
 mod bypass;
 #[cfg(feature = "desktop")]
 mod clipboard;
@@ -200,6 +219,9 @@ mod overseer_reads_tests;
 mod overseer_tests;
 mod pace;
 mod pagecrash;
+mod pages;
+#[cfg(test)]
+mod pages_tests;
 mod parts;
 mod paths;
 pub mod phone;
@@ -215,7 +237,7 @@ mod remoteapi_tests;
 #[cfg(test)]
 mod save_tests;
 // What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
-use escouade_plan::{plan, planfiles};
+use escouade_plan::{canvas, plan, planfiles};
 // The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).
 use escouade_model::{agentgroups, heat, job, pricing, proc, wsl};
 /// A plugin's profiles and its settings of each project, as the window sets them (ESC-530).
@@ -624,6 +646,21 @@ pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
     devpage_probe::cli(args, context())
 }
 
+/// `agentpage_probe` (examples): an agent's page in a real webview of this system (ESC-667), the
+/// trap of docs/AGENT-PAGES.md § 8.4 trying every way out. Gives the exit code.
+#[cfg(feature = "desktop")]
+pub fn agentpage_probe_cli(args: Vec<String>) -> i32 {
+    agentpage_probe::cli(args, context())
+}
+
+/// `agentbrowser_probe` (examples): what the read bridge of the browsers (`browserread`, ESC-668)
+/// reads, captures and keeps of a page that defends itself, in a real webview of this system.
+/// Gives the exit code.
+#[cfg(feature = "desktop")]
+pub fn agentbrowser_probe_cli(args: Vec<String>) -> i32 {
+    agentbrowser_probe::cli(args, context())
+}
+
 #[cfg(feature = "desktop")]
 pub fn run() {
     // A debug build told `--sandbox-keychain …` takes back the keychain's entries of sandboxed runs, then stops: the
@@ -698,6 +735,8 @@ pub fn run() {
                 &request,
             )
         });
+    // The agents' pages (ESC-667): each served to its own webview alone.
+    let builder = agentpage::register(builder);
     builder
         .setup(move |app| {
             init_logging();
@@ -717,6 +756,8 @@ pub fn run() {
             app.manage(deeplink::Inbox::default());
             // The pages of the launches (ESC-311).
             app.manage(Arc::new(devpage::Pages::default()));
+            // The agents' pages (ESC-667): what the scheme `escouade-page://` serves.
+            app.manage(Arc::new(agentpage::Shelter::default()));
             // The process groups of agents a killed launch left behind (macOS, Linux: ESC-417),
             // stopped before any agent starts; this launch's are noted from now on.
             agentgroups::start(
@@ -743,6 +784,17 @@ pub fn run() {
             app.manage(lsp::for_app(app.handle().clone()));
             // The editor's extensions (ESC-481): Open VSX by the core, checked, served.
             app.manage(vsx::Extensions::new(core.data.root()));
+            // A page's proposal (`_/choose`, AP-4) goes to the core, which checks it against the
+            // page's request; nothing is answered before the user's gesture in the window.
+            {
+                let hub = std::sync::Arc::downgrade(&core);
+                app.state::<Arc<agentpage::Shelter>>().set_propose(Arc::new(
+                    move |page, proposal| {
+                        hub.upgrade()
+                            .is_some_and(|core| core.page_propose(page, proposal))
+                    },
+                ));
+            }
             // The dictation: its events to the window, as the core's.
             let hub = std::sync::Arc::downgrade(&core);
             app.manage(Arc::new(voice::Voice::for_app(
@@ -921,6 +973,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(move |window, event| {
+            // A window a tab's page opened (a sign-in's, ESC-695) is the page's: it closes as it
+            // asks, and says nothing of Escouade's own window.
+            if devpage::refuses(window.label()) {
+                return;
+            }
             // Back to the window: a harness installed meanwhile (in a terminal) gets Escouade's server.
             if let WindowEvent::Focused(true) = event {
                 if let Some(core) = window.try_state::<Arc<Core>>() {

@@ -46,6 +46,8 @@ describe('the window and the core', () => {
       'components/plugins/PluginsView.svelte': ['@tauri-apps/plugin-opener'],
       'components/plugins/StorePluginPage.svelte': ['@tauri-apps/plugin-opener'],
       'components/settings/AdvancedPage.svelte': ['@tauri-apps/plugin-dialog'],
+      // « Page à soi » (AP-7): its file picked on this computer, the button gone on a server.
+      'components/settings/LaunchPage.svelte': ['@tauri-apps/plugin-dialog'],
       'components/team/TeamClone.svelte': ['@tauri-apps/plugin-dialog'],
       'components/team/TeamPlugins.svelte': ['@tauri-apps/plugin-dialog'],
       'components/TitleBar.svelte': ['@tauri-apps/api/window'],

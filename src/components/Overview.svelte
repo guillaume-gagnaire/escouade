@@ -499,6 +499,10 @@
       {/if}
       <Rich k="stats.overview.hintBack">{#snippet key()}<kbd>{keyLabel('Esc')}</kbd>{/snippet}</Rich>
     </span>
+    <!-- The canvas of every project's agents, in place of the list; « Quitter » comes back to it. -->
+    <button class="btn canvas" onclick={() => app.openOverviewCanvas()}
+      ><Icon name="diagram" size={14} /><span>{t('workspace.open')}</span></button
+    >
   </header>
   <div class="scroll">
     {#if spacesShown() && spacesState.filter !== currentId()}
@@ -617,6 +621,9 @@
     text-overflow: ellipsis;
     color: var(--muted);
     font-size: 12.5px;
+  }
+  .canvas {
+    flex: none;
   }
   .keys {
     flex: none;
@@ -1014,6 +1021,9 @@
     }
     .keys {
       display: none;
+    }
+    .canvas {
+      margin-left: auto;
     }
   }
   @media (prefers-reduced-motion: reduce) {

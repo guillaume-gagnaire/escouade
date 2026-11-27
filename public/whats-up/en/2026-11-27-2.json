@@ -1,0 +1,23 @@
+{
+  "id": "2026-11-27-2",
+  "ecrans": [
+    {
+      "etiquette": "Browsers",
+      "titre": "Sign in to a site in a tab",
+      "texte": "A site’s sign-in window (Google, OAuth) opens in Escouade, on the project’s session. A link received by email pastes into the tab’s address bar.",
+      "scene": "<div class=\"wu-20261127-2-cadre wu-20261127-2-p1\"><img class=\"wu-20261127-2-etat\" src=\"2026-11-27-2-connexion.webp\" data-sombre=\"2026-11-27-2-connexion-sombre.webp\" alt=\"\"><img class=\"wu-20261127-2-etat wu-20261127-2-apres\" src=\"2026-11-27-2-connexion-fenetre.webp\" data-sombre=\"2026-11-27-2-connexion-fenetre-sombre.webp\" alt=\"\"><span class=\"wu-20261127-2-curseur\"></span></div>"
+    },
+    {
+      "etiquette": "Your screen",
+      "titre": "An agent never takes your screen",
+      "texte": "When you are looking elsewhere, what it wants to show you waits under <b>Browsers</b>. Go back to its conversation: the tab opens beside it.",
+      "scene": "<div class=\"wu-20261127-2-cadre wu-20261127-2-p2\"><img class=\"wu-20261127-2-etat\" src=\"2026-11-27-2-ecran.webp\" data-sombre=\"2026-11-27-2-ecran-sombre.webp\" alt=\"\"><img class=\"wu-20261127-2-etat wu-20261127-2-apres\" src=\"2026-11-27-2-ecran-revenu.webp\" data-sombre=\"2026-11-27-2-ecran-revenu-sombre.webp\" alt=\"\"><span class=\"wu-20261127-2-curseur\"></span></div>"
+    },
+    {
+      "etiquette": "Let drive",
+      "titre": "Hand your tab to an agent",
+      "texte": "In the menu of a browser you opened, <b>Let drive…</b> lends it to an agent of the project, who learns it from a message.",
+      "scene": "<div class=\"wu-20261127-2-cadre wu-20261127-2-p3\"><img class=\"wu-20261127-2-etat\" src=\"2026-11-27-2-laisser-piloter.webp\" data-sombre=\"2026-11-27-2-laisser-piloter-sombre.webp\" alt=\"\"></div>"
+    }
+  ]
+}

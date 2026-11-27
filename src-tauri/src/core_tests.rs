@@ -11681,3 +11681,34 @@ async fn a_turn_a_safeguard_refused_is_left_out_of_the_history_and_a_second_one_
     assert_ne!(forked, session);
     assert_eq!((a.fork_of, a.fork_at, a.refusal_cut), (None, None, None));
 }
+
+/// « Mettre à jour tout seuls » (ESC-700): the harnesses an agent is in its turn on (running, or waiting for an answer
+/// within its turn) hold back the plugins that serve them; an agent idle, done or in error holds back none. The setting
+/// off, a pass does nothing and says nothing failed.
+#[tokio::test]
+async fn the_plugins_of_a_harness_in_a_turn_wait_and_the_setting_off_does_nothing() {
+    let h = harness("auto-update-turn");
+    let (p, _) = h.project(false).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    assert!(h.core.engines_in_turn().is_empty());
+    for (status, busy) in [
+        (AgentStatus::Running, true),
+        (AgentStatus::Waiting, true),
+        (AgentStatus::Idle, false),
+        (AgentStatus::Done, false),
+        (AgentStatus::Error, false),
+    ] {
+        h.core.agent(&a).unwrap().lock().meta.status = status;
+        let engines = h.core.engines_in_turn();
+        assert_eq!(!engines.is_empty(), busy, "{status:?}");
+        if busy {
+            assert_eq!(engines, [h.agent(&a).engine.as_str().to_string()]);
+        }
+    }
+    assert_eq!(
+        h.core.settings.read().plugins_auto_update,
+        PluginsAutoUpdate::Never
+    );
+    h.core.auto_update_plugins().await;
+    assert!(h.core.plugins_auto_failed().is_empty());
+}

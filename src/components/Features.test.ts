@@ -1,8 +1,10 @@
 import { render, screen } from '@testing-library/svelte';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DictationTarget } from '../lib/dictation.svelte';
 import { FEATURES, featureOn } from '../lib/features';
 import { setLang } from '../lib/i18n';
+import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import type { Feature, Features } from '../lib/types';
 import { heat } from '../test/heat';
@@ -72,12 +74,27 @@ describe('Espace Docs off', () => {
 });
 
 describe('Éditeur off', () => {
-  it('takes the editor’s button away from the title bar, and the editor cannot open', async () => {
+  it('takes the editor out of the menu of the project’s views (the « Workspace » stays), and the editor cannot open', async () => {
     only('editor');
+    menu.close();
+    app.ui.activeProject = 'p1';
     render(TitleBar);
-    expect(screen.queryByRole('button', { name: 'Ouvrir l’éditeur du projet' })).toBeNull();
+    // The button opens the menu of the project's views (ESC-701: the 2.2's menu, its « Éditeur » entry the feature's).
+    await userEvent.click(screen.getByRole('button', { name: 'Éditeur ou workspace du projet' }));
+    expect(menu.open!.items.filter((i) => !i.separator).map((i) => i.label)).toEqual(['Workspace']);
+    menu.close();
     await app.openEditor({ projectId: 'p1', source: 'project' });
     expect(app.editorOn).toBe(false);
+  });
+
+  it('keeps the editor in the menu once on', async () => {
+    only();
+    menu.close();
+    app.ui.activeProject = 'p1';
+    render(TitleBar);
+    await userEvent.click(screen.getByRole('button', { name: 'Éditeur ou workspace du projet' }));
+    expect(menu.open!.items.filter((i) => !i.separator).map((i) => i.label)).toEqual(['Éditeur', 'Workspace']);
+    menu.close();
   });
 });
 
@@ -112,9 +129,10 @@ describe('Statistiques off', () => {
 });
 
 describe('Workflows off', () => {
-  it('takes their tab from the side panel, the files in its place', () => {
+  // Their tab left the side panel for the Workspace (ESC-689): its « Workflows » and the cards' step go with the switch
+  // there (WorkspaceWorkflows.test.ts).
+  it('leaves no tab of theirs in the side panel, the files first', () => {
     only('workflows');
-    app.panelTab = 'workflow';
     render(SidePanel, { project: project(), agent: app.agents.a1 });
     expect(screen.queryByRole('tab', { name: /Workflow/ })).toBeNull();
     expect(screen.getByRole('tab', { selected: true })).toHaveAttribute('id', 'side-tab-files');

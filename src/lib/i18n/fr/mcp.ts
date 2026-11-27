@@ -10,6 +10,14 @@ export default {
     enable: 'Les agents peuvent piloter Escouade',
     enableDesc:
       'Les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
+    /** ESC-669: the tools of the browsers (list_browsers, read_browser…), under the server. */
+    browsers: 'Agents et navigateurs',
+    browsersDesc:
+      'Les agents ouvrent un navigateur de leur projet à côté de leur conversation et le ferment (open_browser, close_browser), et lisent ceux de « Navigateurs » (list_browsers, read_browser, capture_browser, browser_console) et les pilotent geste par geste (drive_browser) : le lancement du projet sans demander ; une autre adresse, avec ton accord, une fois par origine (montrer y passe sans demander, agir attend ton accord) ; un artefact qu’ils ont publié, pour te le montrer. Ton premier geste dans la page leur reprend la main. Jamais les adresses d’Escouade, ni ce poste hors des ports déclarés, ni les cookies, le stockage, un fichier, un téléchargement ou un secret d’Escouade ; un mot de passe seulement sur le lancement et avec ton accord.',
+    /** ESC-673: the tools of the agents' pages (show_page, get_page, close_page), under the server. */
+    pages: 'Pages des agents',
+    pagesDesc:
+      'Les agents te montrent une page dans « Navigateurs » (show_page) : une revue, un schéma, des options à comparer, ou leur propre HTML, qu’ils font défiler et mettent en évidence (drive_browser). Escouade la copie et la sert à part, sans réseau, sans accès à Escouade ni à tes fichiers. Coupé, leurs outils disparaissent et leurs lignes se ferment ; rien n’est effacé.',
     /** ESC-423 (audit SEC-03): who among the agents answers another agent's permissions and questions. */
     answer: 'Les agents peuvent répondre aux demandes des autres agents',
     answerDesc:
@@ -102,6 +110,16 @@ export default {
     stopAgent: 'Arrêter un agent',
     deleteAgent: 'Demander la suppression d’un agent',
     listBackgroundWork: 'Lister les sous-agents et tâches de fond d’un agent',
+    listBrowsers: 'Lister les navigateurs',
+    readBrowser: 'Lire un navigateur',
+    openBrowser: 'Ouvrir un navigateur',
+    closeBrowser: 'Fermer un navigateur',
+    showPage: 'Montrer une page',
+    getPage: 'Lire l’état d’une page',
+    closePage: 'Fermer une page',
+    captureBrowser: 'Capturer un navigateur',
+    driveBrowser: 'Piloter un navigateur',
+    browserConsole: 'Lire la console d’un navigateur',
     getBackgroundOutput: 'Lire la sortie d’une tâche de fond ou le rapport d’un sous-agent',
     stopBackgroundWork: 'Arrêter une tâche de fond ou un sous-agent',
     messageSubagent: 'Écrire à un sous-agent',

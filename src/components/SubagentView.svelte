@@ -8,7 +8,7 @@
   import { app } from '../lib/state.svelte';
   import { inVscode } from '../lib/shortcuts';
   import { menu } from '../lib/menu.svelte';
-  import { crumbs, subagentInfo, subDuration, threadOf } from '../lib/subagents';
+  import { canWriteSub, crumbs, subagentInfo, subDuration, threadOf } from '../lib/subagents';
   import type { Agent, ConvItem, Project, TranscriptCursor } from '../lib/types';
   import Markdown from './conv/Markdown.svelte';
   import PermissionCard from './conv/PermissionCard.svelte';
@@ -54,9 +54,7 @@
   // stopping one alone there was never tried on a real stream.
   const stoppable = $derived(running && info?.background === true && !inTerminal);
   const canStop = $derived(stoppable && !!info?.taskId);
-  // While it runs, and in the background: the plan never opens an ended row again, so one taken up again by a message
-  // would still say it ended; in the foreground the agent waits for it, and would pass the message on once it ended.
-  const canWrite = $derived(running && !!info?.taskId && info?.background === true && !inTerminal && !agent.archived);
+  const canWrite = $derived(!!info && canWriteSub(agent, info));
   const statusWord = $derived(info ? t(`subagents.status.${info.status ?? 'unknown'}`) : '');
   const editorSource = $derived(agent.worktree ? agent.id : 'project');
   const openFile = (abs: string, line: number | null) =>

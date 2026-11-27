@@ -23,6 +23,7 @@
   import { WATCH_TICK_MS } from './lib/prnew';
   import Board from './components/board/Board.svelte';
   import PrsView from './components/prs/PrsView.svelte';
+  import WorkspaceView from './components/workspace/WorkspaceView.svelte';
   import DocsView from './components/docs/DocsView.svelte';
   import TicketForm from './components/board/TicketForm.svelte';
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
@@ -90,6 +91,9 @@
   import { overseer } from './lib/overseer.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import DevPage from './components/DevPage.svelte';
+  import AgentPageView from './components/AgentPageView.svelte';
+  import { isAgentPage } from './lib/devpage.svelte';
+  import { loadRows } from './lib/agentpages.svelte';
   import TitleBar from './components/TitleBar.svelte';
   import TlsBanner from './components/TlsBanner.svelte';
   import RecoveryBanner from './components/RecoveryBanner.svelte';
@@ -122,6 +126,8 @@
 
   onMount(() => {
     app.init().catch((e) => (initError = String(e)));
+    // The agents' pages whose row the backend kept for this run (a reload of the window).
+    void loadRows();
     // The servers this computer knows (ESC-537): the machine is said once one is.
     void loadServers();
     // The other spaces (ESC-539): a connection to each, read every few seconds; a notification of one brings it.
@@ -304,6 +310,7 @@
     void app.editorOn;
     void app.boardOn;
     void app.docsOn;
+    void app.workspaceOn;
     void app.ui.view;
     void app.panes;
     app.markSeen();
@@ -381,7 +388,9 @@
       {:else if !app.ready}
         <div class="work"></div>
       {:else if app.ui.view === 'overview'}
-        <div class="work"><Overview /></div>
+        <div class="work">
+          {#if app.overviewCanvas}<WorkspaceView />{:else}<Overview />{/if}
+        </div>
       {:else if app.ui.view === 'inbox' && app.settings.mcpEnabled}
         <InboxQueue />
         <div class="work"><InboxScreen /></div>
@@ -402,7 +411,11 @@
         {:else}
           <!-- What is shown alone carries its key: a content dragged from the sidebar is dropped beside it (ESC-392). -->
           <div class="work" data-pane-key={app.singleItem ? itemKey(app.singleItem) : undefined}>
-            {#if app.boardOn}
+            {#if app.workspaceOn}
+              {#key project.id}
+                <WorkspaceView {project} />
+              {/key}
+            {:else if app.boardOn}
               {#key project.id}
                 <Board {project} />
               {/key}
@@ -425,7 +438,12 @@
             {:else if app.pageShown}
               <!-- A browser of the project (ESC-657), shown alone as a terminal is. -->
               {#key app.pageShown}
-                <DevPage pageKey={app.pageShown} />
+                {#if isAgentPage(app.pageShown)}
+                  <!-- An agent's page (AP-3), in its shelter. -->
+                  <AgentPageView pageKey={app.pageShown} />
+                {:else}
+                  <DevPage pageKey={app.pageShown} />
+                {/if}
               {/key}
             {:else if app.agent}
               {#key app.agent.id}

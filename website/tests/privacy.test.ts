@@ -65,6 +65,8 @@ const EVENTS = [
   'discover_done',
   'discover_dismissed',
   'discover_hidden',
+  // The agents' pages (ESC-673).
+  'page_shown',
 ];
 /** The values some props take, written on the page as `value`. */
 const VALUES = [
@@ -136,6 +138,14 @@ const VALUES = [
   '120-300',
   '>300',
   'tip',
+  // The agents' pages (ESC-673).
+  'review',
+  'diagram',
+  'compare',
+  'html',
+  'small',
+  'medium',
+  'large',
 ];
 const PROPS = [
   'worktree',
@@ -167,6 +177,9 @@ const PROPS = [
   'seconds',
   'demo',
   'item',
+  'template',
+  'ask',
+  'size',
 ];
 
 const source = (lang: Lang) => readFileSync(new URL(`../${privacySource(lang)}`, import.meta.url), 'utf8');

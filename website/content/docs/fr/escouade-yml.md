@@ -235,6 +235,14 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 - Une partie coupée perd ses vues, ses outils MCP, ce que ses agents en entendent et son travail de fond, sans rien effacer. `true` ne lance rien : le travail de fond d’une partie suit ses propres réglages. Un dépôt ne peut donc rien faire tourner de plus que ce que l’utilisateur a déjà permis, ni lever une protection (la confiance des commandes, le projet privé, les autorisations restent ce qu’ils sont).
 - Une équipe peut les recommander (`defaults`, après le dépôt) ou les imposer (`enforced`, avant le poste) dans son `.escouade.yml` d’équipe.
 
+### pages
+
+| Clé | Type | Valeurs | Absente | Exemple |
+|---|---|---|---|---|
+| `pages.custom` | Chemin relatif | Un document `.html` du dépôt | aucune page à soi proposée | `custom: design/ma-revue.html` |
+
+- `custom` : la page à soi que le dépôt propose aux agents (`show_page` avec le modèle `custom`). Elle est servie dans la même cloison que leurs pages, sans réseau, et reçoit leurs données dans `window.escouade`. Elle attend ton accord, avec les commandes du fichier : avant, rien d’elle ne s’applique. Elle ne sort jamais du dépôt : un chemin complet, ou qui remonte au-dessus du dépôt (`../`), est refusé ; un lien qui mène dehors n’est pas suivi. Une page à soi réglée sur ta machine (Réglages › Projets › Lancement, groupe Pages des agents) passe devant.
+
 ### plugins
 
 | Clé | Type | Valeurs | Absente | Exemple |

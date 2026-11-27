@@ -58,7 +58,8 @@ test('the keyboard in the VS Code view: the keys of each, Ctrl+P on the core’s
   writeProject(app.repo);
   await addProject(page, app.repo);
   await expect(page.locator('aside.side .agent')).toHaveCount(1, { timeout: 30_000 });
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   // Shown, the view takes the keyboard.
   await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
   await expect.poll(() => keyboardIn(page)).toBe('view');
@@ -157,7 +158,8 @@ test('the keyboard in the VS Code view: the keys of each, Ctrl+P on the core’s
     'export function f1(x: number): number {\n  const y = x;\n  return y;\n}\n',
   );
   // Opened again: the same tabs, nothing left modified.
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await expect.poll(async () => (await vscodeTabs(page)).sort()).toEqual(['app.ts', 'f1.ts']);
   noErrors();
 });
@@ -171,7 +173,8 @@ test('the closes asked when files are modified: a tab, the view, a project', asy
   await expect(page.locator('aside.side .agent')).toHaveCount(1, { timeout: 30_000 });
   const f1 = path.join(app.repo, 'src', 'f1.ts');
   const before = fs.readFileSync(f1, 'utf8');
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await openInExplorer(page, 'src/f1.ts');
 
   // A tab: VS Code's own question, « Ne pas enregistrer » gives up, « Enregistrer » writes through the core.
@@ -213,14 +216,16 @@ test('the closes asked when files are modified: a tab, the view, a project', asy
   await expect.poll(() => keyboardIn(page)).toBe('composer');
 
   // Without a file modified: closed at once.
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await expect(page.getByTestId('vscode-view')).toBeVisible();
   await page.getByTestId('vscode-back').click();
   await expect(page.getByTestId('vscode-view')).toHaveCount(0);
   await expect(dialog(page, /Enregistrer les modifications/)).toHaveCount(0);
 
   // A project: once its close is confirmed, its files modified in the view are asked for. « Annuler »: it stays.
-  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await page.getByRole('button', { name: 'Éditeur ou workspace du projet' }).click();
+  await page.getByRole('menuitemradio', { name: 'Éditeur' }).click();
   await editorLines(page).click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type(' quatre');
