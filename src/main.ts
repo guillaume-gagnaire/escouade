@@ -8,7 +8,7 @@ import { guardFileDrops } from './lib/attachments';
 import { guardLinks } from './lib/links';
 import { earlyPluginTheme } from './lib/plugin-theme.svelte';
 import { markWebKit } from './lib/webkit';
-import { skipPastNews } from './lib/whats-up';
+import { skipOtherLanguage, skipPastNews } from './lib/whats-up';
 
 // The app is a desktop window: keep the browser's own context menu out of the way,
 // except in text fields where copy/paste matters.
@@ -25,6 +25,8 @@ guardLinks(document);
 
 // What's up ? stays shut at the window's first start (nothing kept yet): past notes are no news.
 void skipPastNews(document.querySelector('whats-up'));
+// Its notes are in French alone for now: an interface in English sees none (nothing kept, a note in English will open).
+skipOtherLanguage(document.querySelector('whats-up'));
 
 // The theme the page kept, before the first render: the settings say it again a moment later.
 earlyAppearance();

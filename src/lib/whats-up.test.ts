@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { THEME_KEY } from './appearance';
-import { SEEN_KEY, skipPastNews } from './whats-up';
+import { SEEN_KEY, skipOtherLanguage, skipPastNews } from './whats-up';
 
 const store = (kept: Record<string, string> = {}) => {
   const m = new Map(Object.entries(kept));
@@ -32,5 +32,14 @@ describe("What's up ?", () => {
     });
     expect(el.getAttribute('vu')).toBe('9999-12-31');
     expect(s.m.has(SEEN_KEY)).toBe(false);
+  });
+
+  it('stays shut for an interface in English, keeping nothing, and opens for one in French', () => {
+    const en = document.createElement('whats-up');
+    skipOtherLanguage(en, 'en');
+    expect(en.getAttribute('vu')).toBe('9999-12-31');
+    const fr = document.createElement('whats-up');
+    skipOtherLanguage(fr, 'fr');
+    expect(fr.hasAttribute('vu')).toBe(false);
   });
 });

@@ -6,9 +6,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
-- Under Windows, when an agent looks at what it just highlighted, its capture now shows the element lit up, not only its cursor.
-- An update of a third-party plugin that changes its harness’s command always asks for your agreement again, even for an agent that was starting at that moment: the old command no longer launches after the update.
+- After an update, a window shows you its news once, in a few screens taken from the real interface (for an interface in French, for now). Thanks to @OshOEz (#51).
 - An agent never takes your screen: what it wants to show you opens beside its conversation only if you are looking at it, otherwise its row waits in “Browsers” and opens when you come back. It has one pane at a time, and a pane you closed does not come back until you have left its conversation and returned. “Let drive…”, in the menu of a browser you opened, hands it to an agent of the project.
+- An update of a third-party plugin that changes its harness’s command always asks for your agreement again, even for an agent that was starting at that moment: the old command no longer launches after the update.
+- Under Windows, when an agent looks at what it just highlighted, its capture now shows the element lit up, not only its cursor.
 
 ## [2.2.16] — 2026-11-27
 

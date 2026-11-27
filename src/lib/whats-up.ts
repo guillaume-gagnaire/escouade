@@ -1,5 +1,6 @@
 // What's up ? (index.html, public/whats-up/): the window of a version's news, once per user after an update.
 import { THEME_KEY } from './appearance';
+import { locale, type Lang } from './i18n/locale.svelte';
 
 /** Where the window keeps the last note seen (`whats-up:<app>`, app="Escouade" in index.html). */
 export const SEEN_KEY = 'whats-up:Escouade';
@@ -37,4 +38,13 @@ export async function skipPastNews(
   } catch {
     // No storage: shut for this start all the same.
   }
+}
+
+/**
+ * The notes are written in French alone for now (`lang="fr"` in index.html): an interface in English keeps the window
+ * shut, and keeps nothing, so a note in English opens once there is one. The language is the one the window starts in
+ * (the system's, the default setting) before the backend says the settings'.
+ */
+export function skipOtherLanguage(el: Element | null, lang: Lang = locale.ui): void {
+  if (el && lang !== 'fr') el.setAttribute('vu', AFTER_ALL);
 }
