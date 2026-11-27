@@ -2612,7 +2612,12 @@ impl<R: Runtime> Core<R> {
         }
         let installed = self.plugins.install(token, lang);
         match (&installed, staged) {
-            (Ok(view), _) => self.plugin_changed(&view.id),
+            (Ok(view), _) => {
+                self.plugin_changed(&view.id);
+                // The harnesses it describes as it is now, at once: a start reads the line of the plugin installed at
+                // its launch, never one an update replaced (SEC-01, ESC-697).
+                self.sync_harnesses();
+            }
             // Refused: the version it had stays, and starts again if it decides.
             (Err(_), Some((id, _))) => self.plugin_changed(&id),
             (Err(_), None) => {}

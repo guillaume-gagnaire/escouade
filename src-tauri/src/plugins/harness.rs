@@ -812,6 +812,7 @@ impl ProcessEngine {
             if !line.covers(&launch.args, &env, &launch.remove_env) {
                 bail!(not_the_line(self.name));
             }
+            still_the_line(self.name, line, &ask.program)?;
         }
         let vars = self.vars();
         check_env(self.name, &vars, &launch.env).map_err(|e| anyhow!(e))?;
@@ -1368,6 +1369,31 @@ fn not_the_line(name: &str) -> String {
         "Le plugin de {name} décrit un lancement qui n’est pas la commande que tu as acceptée : rien n’est lancé.",
         "The plugin of {name} describes a launch that is not the command you agreed to: nothing is launched."
     )
+}
+
+/// The line agreed to at the start of a launch, read again as its program is about to run (ESC-697): a start begun
+/// before an update of the plugin holds the harness of then, whose line stays among those kept. The line the plugin
+/// installed now describes for `program` is the one judged: changed, it asks the user's agreement again; refused or
+/// gone, nothing runs.
+fn still_the_line(name: &str, line: &super::consent::LaunchLine, program: &Program) -> Result<()> {
+    let Some(now) = crate::engine::by_id(line.engine).launch_line(program) else {
+        log::warn!("{name}: its harness is no longer the one of its agreed command");
+        bail!(not_the_line(name));
+    };
+    let changed = now.fingerprint != line.fingerprint;
+    if changed {
+        log::warn!("{name}: its command changed since its start began, by an update of its plugin");
+    }
+    if let Err(held) = super::consent::check(&now) {
+        bail!(super::consent::refusal(&now, &held));
+    }
+    if changed {
+        bail!(tr!(
+            "La commande de {name} a changé pendant son démarrage (son plugin mis à jour) : rien n’est lancé, relance l’agent.",
+            "The command of {name} changed while it started (its plugin updated): nothing is launched, start the agent again."
+        ));
+    }
+    Ok(())
 }
 
 /// A file a plugin wants written: in the agent's own folder alone.
@@ -2417,7 +2443,7 @@ impl ProcessEngineProcess {
         )
         .map_err(|e| anyhow!(e))?;
         check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
-        self.hold_to_line(&launch)?;
+        self.hold_to_line(&spawn.program, &launch)?;
         self.vars.hold_removed(self.name, &mut launch.remove_env);
         {
             let mut a = self.attach.lock();
@@ -2451,11 +2477,13 @@ impl ProcessEngineProcess {
     }
 
     /// The launch the plugin described, for a harness of a third party: the command agreed to, read again as it is about
-    /// to run (SEC-01, ESC-589). The variables the core names itself (the account's folder, its key) are its own.
-    fn hold_to_line(&self, launch: &proto::Launch) -> Result<()> {
+    /// to run (SEC-01, ESC-589), and still the line of the plugin installed now (ESC-697). The variables the core names
+    /// itself (the account's folder, its key) are its own.
+    fn hold_to_line(&self, program: &Program, launch: &proto::Launch) -> Result<()> {
         let Some(line) = &self.line else {
             return Ok(());
         };
+        still_the_line(self.name, line, program)?;
         let env: Vec<(String, String)> = launch
             .env
             .iter()
@@ -2526,7 +2554,7 @@ impl ProcessEngineProcess {
             launch,
         )
         .map_err(|e| anyhow!(e))?;
-        self.hold_to_line(launch)?;
+        self.hold_to_line(&spawn.program, launch)?;
         // Its next program no more than its first: nothing opens the mode of no question without the setting (SEC-09).
         let launch = next_launch(self.name, &self.vars, launch, spawn.bypass)?;
         write_files(&launch)?;
