@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[page demande]" and "[page piege]" (a review that carries a request, and a page of its own that tries to answer it alone, AP-4), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "[artefact vN]" (version N of an artifact published at ESCOUADE_E2E_ARTIFACT_ORIGIN, AB-10), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[page demande]" and "[page piege]", "[pilote p-N]", "[pilote p-N encore]" and "[pilote p-N attends]" (its page driven by drive_browser, gesture by gesture, AB-8) (a review that carries a request, and a page of its own that tries to answer it alone, AP-4), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "[artefact vN]" (version N of an artifact published at ESCOUADE_E2E_ARTIFACT_ORIGIN, AB-10), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
 // message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
@@ -2113,6 +2113,49 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       });
   }
 
+  // ---------- "[pilote p-N]", "[pilote p-N encore]" (AB-8, ESC-680) ----------
+
+  // The agent drives its page by Escouade's drive_browser, as Claude Code calls it: each gesture a call in the
+  // conversation (its numbered row), its answer or its refusal (the user took the hand) as the server gives it.
+  async function driveTurn(text) {
+    const [, page, again] = text.match(/\[pilote (p-\d+)( encore| attends)?\]/);
+    const browser = `page:${page}`;
+    const gestures = again
+      ? [{ browser, action: 'scroll', by: 300, ...(again === ' attends' ? { wait_user: true } : {}) }]
+      : [
+          { browser, action: 'scroll_to', target: 'criteria' },
+          { browser, action: 'highlight', target: 'criteria.2', label: 'Critère 3' },
+          { browser, action: 'scroll_to', target: 'changes' },
+        ];
+    let refused = false;
+    for (const [i, input] of gestures.entries()) {
+      const call = `toolu_d${msg}_${i}`;
+      assistant({ type: 'tool_use', id: call, name: 'mcp__escouade__drive_browser', input });
+      try {
+        const r = await escouadeTool('drive_browser', input);
+        toolResult(call, r.content.map((c) => c.text ?? '').join('\n'));
+      } catch (e) {
+        refused = true;
+        out({
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: call, content: e.message, is_error: true }] },
+          parent_tool_use_id: null,
+        });
+        break;
+      }
+    }
+    streamText(
+      refused
+        ? 'Tu as repris la main : j’attends que tu me la rendes.'
+        : again === ' attends'
+          ? 'Merci d’avoir regardé, je continue.'
+          : again
+            ? 'Je continue la visite.'
+            : 'Les deux premiers critères passent. Le troisième, à moitié : le filtre est gardé dans l’adresse, pas le tri.',
+    );
+    result();
+  }
+
   function toolResult(toolUseId, content, extra = {}) {
     out({
       type: 'user',
@@ -3461,6 +3504,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     }
     if (/\[page (montre|maj|ferme|calme|demande|piege)( p-\d+)?\]/.test(text)) {
       pageTurn(text);
+      return;
+    }
+    if (/\[pilote p-\d+( encore| attends)?\]/.test(text)) {
+      void driveTurn(text);
       return;
     }
     const artifactVersion = /\[artefact v(\d+)\]/.exec(text);

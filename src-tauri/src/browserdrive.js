@@ -140,7 +140,90 @@
   }
 
   function where() {
-    return { url: location.href, title: document.title, scrollY: Math.round(scrollY), innerWidth: innerWidth, ready: document.readyState };
+    var doc = document.documentElement;
+    return {
+      url: location.href,
+      title: document.title,
+      scrollY: Math.round(scrollY),
+      innerWidth: innerWidth,
+      ready: document.readyState,
+      // Where the view is in the document: the rail of an agent's page (ESC-680) draws it.
+      height: Math.round(Math.max(doc ? doc.scrollHeight : 0, innerHeight)),
+      view: Math.round(innerHeight),
+    };
+  }
+
+  // The user's pin on the rail of an agent's page (ESC-680): the page goes back where the agent had put it.
+  function goTo(a) {
+    var y = Math.max(0, Math.min(1e7, +a.y || 0));
+    window.scrollTo({ top: y, left: 0, behavior: reduced() ? 'auto' : 'smooth' });
+    return { done: true };
+  }
+
+  // The ghost cursor under WebKit (ESC-680; under Windows the browser's overlay draws it, out of the page's DOM): an
+  // arrow at the project's colour with the agent's initials, that glides from where it last was to where the agent
+  // acts, then fades. Pure CSS: nothing waits in this world from one call to the next (ESC-692). The page sees the
+  // element (its shadow root is closed) and may remove it, which only takes it from the screen.
+  var CURSOR = 'escouade-drive-cursor';
+  function cursor(a) {
+    var num = function (v) {
+      v = +v;
+      return isFinite(v) ? Math.max(-100, Math.min(20000, v)) : 0;
+    };
+    var x = num(a.x);
+    var y = num(a.y);
+    var fx = x;
+    var fy = y;
+    var old = document.querySelectorAll('[data-escouade="' + CURSOR + '"]');
+    for (var i = 0; i < old.length; i++) {
+      if (i === old.length - 1) {
+        fx = num(old[i].getAttribute('data-x'));
+        fy = num(old[i].getAttribute('data-y'));
+      }
+      old[i].parentNode.removeChild(old[i]);
+    }
+    var color = /^#[0-9a-fA-F]{6}$/.test(a.color || '') ? a.color : '#7c6cf0';
+    var host = document.createElement('div');
+    host.setAttribute('data-escouade', CURSOR);
+    host.setAttribute('data-x', String(x));
+    host.setAttribute('data-y', String(y));
+    host.style.cssText = 'all:initial;position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:2147483647';
+    var root = host.attachShadow ? host.attachShadow({ mode: 'closed' }) : host;
+    var style = document.createElement('style');
+    var still = reduced() || (fx === x && fy === y);
+    style.textContent =
+      '@keyframes go{from{transform:translate(' + fx + 'px,' + fy + 'px)}to{transform:translate(' + x + 'px,' + y + 'px)}}' +
+      '@keyframes out{to{opacity:0}}' +
+      '.c{position:fixed;left:0;top:0;transform:translate(' + x + 'px,' + y + 'px);' +
+      'animation:' + (still ? '' : 'go .32s cubic-bezier(.2,.8,.2,1) both,') + 'out .5s 2.4s forwards}' +
+      '.i{position:absolute;left:14px;top:17px;font:700 10px/16px system-ui,sans-serif;color:#fff;background:' + color +
+      ';padding:0 5px;border-radius:8px;box-shadow:0 0 0 1.5px #fff;white-space:nowrap}';
+    root.appendChild(style);
+    var c = document.createElement('div');
+    c.className = 'c';
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '18');
+    svg.setAttribute('height', '22');
+    svg.setAttribute('viewBox', '0 0 18 22');
+    var path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', 'M1 1 L1 18 L5.6 13.8 L8.6 20.6 L11.4 19.4 L8.5 12.8 L14.6 12.6 Z');
+    path.setAttribute('fill', color);
+    path.setAttribute('stroke', '#fff');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+    c.appendChild(svg);
+    var initials = String(a.initials || '').slice(0, 3);
+    if (initials) {
+      var tag = document.createElement('span');
+      tag.className = 'i';
+      tag.textContent = initials;
+      c.appendChild(tag);
+    }
+    root.appendChild(c);
+    document.documentElement.appendChild(host);
+    return { done: true };
   }
 
   // The element, made visible for a gesture: its box in the view after it.
@@ -388,6 +471,13 @@
     return { done: true };
   }
 
+  // Under Windows, the element itself (not its JSON): the core gives its object to the browser's overlay, which
+  // highlights it out of the page's DOM (ESC-680). Nothing of it is read.
+  if (args.run === 'node') {
+    var nf = find(args.target);
+    return nf && nf.el ? nf.el : null;
+  }
+
   var result;
   try {
     state();
@@ -408,6 +498,8 @@
     else if (run === 'gestures') result = gestures();
     else if (run === 'arm') result = arm(args);
     else if (run === 'where') result = {};
+    else if (run === 'goto') result = goTo(args);
+    else if (run === 'cursor') result = cursor(args);
     else result = { error: 'unknown' };
     if (result && !result.error) {
       var w = where();

@@ -758,6 +758,8 @@ pub fn run() {
                 commands::browser_drive_state,
                 commands::browser_drive_hand,
                 commands::browser_drive_password,
+                commands::browser_drive_place,
+                commands::browser_drive_revisit,
                 commands::devpage_looking,
                 commands::devpage_open_asks,
                 commands::devpage_open_answer,

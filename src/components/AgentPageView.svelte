@@ -2,7 +2,7 @@
   // The view of an agent's page (AP-3; docs/AGENT-PAGES.md § 5 and § 12, direction A « Les repères »): a row of
   // « Navigateurs » (`page:p-12`), shown alone or in a pane, beside its agent's conversation when it opened by itself. Its
   // bar: the page's title, its versions (« v2 ▾ », the last by default), its widths, « … ». Under it, the driving band of
-  // every row (`DriveBand`), here with the trust mention alone (the driving comes with AB-8); « La page veut ouvrir… »
+  // every row (`DriveBand`), with the trust mention, and while its agent drives it (AB-8) who has the hand; « La page veut ouvrir… »
   // when it asked for a web address; the version the user went back to. The page itself is a webview of its own (its
   // shelter, AP-1), drawn over the window in the room below and hidden whenever something of the window passes over it.
   import { onDestroy, onMount } from 'svelte';
@@ -32,6 +32,8 @@
   import { tip } from '../lib/tip';
   import ChoiceBand from './ChoiceBand.svelte';
   import DriveBand from './DriveBand.svelte';
+  import DriveRail from './DriveRail.svelte';
+  import { driveOf, moveHand } from '../lib/drives.svelte';
   import Icon from './Icon.svelte';
 
   /** The row's key: `page:p-12`. */
@@ -43,6 +45,9 @@
   const ownPane = $derived(pane?.key === `page:${key}`);
 
   const page = $derived(devpages.pages[key]);
+  /** Its agent driving it (AB-8): the band says who has the hand, the rail its gestures (direction A). */
+  const drive = $derived(driveOf(key));
+  const pins = $derived(drive?.pins ?? []);
   const info = $derived(agentpages.info[pageId] ?? null);
   /** Its agent by its name now (it may have been renamed since), else the one it had when it showed the page. */
   const agentName = $derived((page?.by.kind === 'page' ? app.agents[page.by.id]?.name : undefined) ?? info?.agentName ?? '');
@@ -84,7 +89,7 @@
   }
 
   $effect(() => {
-    void [visible, zoomState.shown, mode, paneDrag.on, page?.wants, older, info?.ask, info?.proposal];
+    void [visible, zoomState.shown, mode, paneDrag.on, page?.wants, older, info?.ask, info?.proposal, !!drive, pins.length > 0];
     sync();
   });
 
@@ -228,7 +233,18 @@
     </div>
     {#if page.phase === 'loading'}<div class="load" aria-hidden="true"></div>{/if}
     <!-- The driving band of every row (AB-8 drives it); on an agent's page, its trust mention. Out of the webview. -->
-    <DriveBand agent={agentName} trust />
+    <DriveBand
+      agent={agentName}
+      trust
+      hand={drive?.hand ?? null}
+      step={drive?.step || null}
+      last={drive?.what ?? ''}
+      waiting={drive?.waiting ?? false}
+      stopped={drive?.stopped ?? false}
+      ontake={() => moveHand(key, 'take')}
+      ongive={() => moveHand(key, 'give')}
+      oncontinue={() => moveHand(key, 'continue')}
+    />
     {#if page.wants}
       <div class="strip" role="alert">
         <span class="ic"><Icon name="globe" size={14} /></span>
@@ -251,17 +267,23 @@
     {/if}
   {/if}
 
-  <div class="room" bind:this={room} class:device={mode !== 'full' && visible}>
-    {#if mode !== 'full' && visible}
-      <div class="frame" aria-hidden="true" style:left="{fit.left - 1}px" style:width="{fit.width + 2}px"></div>
+  <div class="stage">
+    {#if page && pins.length}
+      <!-- The rail of its pins (direction A): Escouade's, beside the page and out of its webview. -->
+      <DriveRail pageKey={key} agent={agentName} {pins} live={visible} />
     {/if}
-    {#if !page}
-      <div class="msg"><p>{t('devpage.agentPage.gone')}</p></div>
-    {:else if covered || paneDrag.on}
-      <div class="msg quiet"><p>{t('devpage.covered')}</p></div>
-    {:else if page.phase === 'loading'}
-      <div class="msg quiet" role="status"><p>{t('devpage.agentPage.loading')}</p></div>
-    {/if}
+    <div class="room" bind:this={room} class:device={mode !== 'full' && visible}>
+      {#if mode !== 'full' && visible}
+        <div class="frame" aria-hidden="true" style:left="{fit.left - 1}px" style:width="{fit.width + 2}px"></div>
+      {/if}
+      {#if !page}
+        <div class="msg"><p>{t('devpage.agentPage.gone')}</p></div>
+      {:else if covered || paneDrag.on}
+        <div class="msg quiet"><p>{t('devpage.covered')}</p></div>
+      {:else if page.phase === 'loading'}
+        <div class="msg quiet" role="status"><p>{t('devpage.agentPage.loading')}</p></div>
+      {/if}
+    </div>
   </div>
   {#if page && info?.ask}
     <!-- The band of the choice (AP-4): under the page, out of its webview; what the page proposed is sent here alone. -->
@@ -439,9 +461,16 @@
     flex: none;
     gap: 6px;
   }
+  /* The page and, while its agent drives it, the rail of its pins on its left (direction A). */
+  .stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
   .room {
     position: relative;
     flex: 1;
+    min-width: 0;
     min-height: 0;
     display: grid;
     place-items: center;

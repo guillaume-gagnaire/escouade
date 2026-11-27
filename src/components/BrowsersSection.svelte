@@ -21,6 +21,8 @@
     type PageState,
   } from '../lib/devpage.svelte';
   import { agentpages, latestOf, pageOfKey } from '../lib/agentpages.svelte';
+  import { driveOf, moveHand } from '../lib/drives.svelte';
+  import { initials } from '../lib/project-rail';
   import { t } from '../lib/i18n';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { openUrl } from '../lib/opener';
@@ -90,12 +92,38 @@
     const id = pageOfKey(key);
     return id ? (agentpages.info[id] ?? null) : null;
   };
+  /** Who drives it (AB-8), said first: the user always sees that an agent drives. */
+  const drivenSay = (key: string) => {
+    const d = driveOf(key);
+    if (!d) return '';
+    const agent = agentName(d.agent ?? undefined);
+    if (d.stopped) return t('devpage.drive.rowStopped');
+    return d.hand === 'agent' ? t('devpage.drive.rowDriven', { agent }) : t('devpage.drive.rowYours', { agent });
+  };
   const tipOf = (key: string, p: PageState) => {
+    const said = baseTip(key, p);
+    const driven = drivenSay(key);
+    return driven ? `${driven} · ${said}` : said;
+  };
+  const baseTip = (key: string, p: PageState) => {
     const info = pageInfo(key);
     const name = (p.by.kind === 'page' && app.agents[p.by.id]?.name) || info?.agentName || '';
     if (p.by.kind === 'page') return t('devpage.agentPage.rowTip', { title: p.title, agent: name });
     return p.waiting ? t('devpage.browsers.waiting', { name: agentName(p.driver) }) : p.url;
   };
+
+  /** The driving's moves in a row's menu (AB-8): take the hand or give it back, stop letting it drive. */
+  function driveItems(key: string): MenuItem[] {
+    const d = driveOf(key);
+    if (!d || d.stopped) return [];
+    return [
+      d.hand === 'agent'
+        ? { label: t('devpage.drive.take'), icon: 'pause', onClick: () => void moveHand(key, 'take') }
+        : { label: t('devpage.drive.give'), icon: 'play', onClick: () => void moveHand(key, 'give') },
+      { label: t('devpage.drive.stop'), icon: 'close', onClick: () => void moveHand(key, 'stop') },
+      { label: '', separator: true },
+    ];
+  }
 
   function rowMenu(e: MouseEvent, key: string, p: PageState) {
     // Beside what is on screen; a browser opened alone and shown alone has nothing to go beside.
@@ -113,11 +141,16 @@
         : [];
     // An agent's page: beside or below, and close its row (the page stays kept, its card opens it again).
     if (p.by.kind === 'page') {
-      menu.show(e, [...beside, { label: t('devpage.agentPage.closeRow'), icon: 'close', onClick: () => closePage(key) }]);
+      menu.show(e, [
+        ...beside,
+        ...driveItems(key),
+        { label: t('devpage.agentPage.closeRow'), icon: 'close', onClick: () => closePage(key) },
+      ]);
       return;
     }
     const items: MenuItem[] = [
       ...beside,
+      ...driveItems(key),
       { label: t('devpage.reload'), icon: 'restart', onClick: () => go(key, 'reload') },
       {
         label: t('devpage.browsers.copy'),
@@ -189,11 +222,14 @@
     {/if}
     {#each rows as [key, p] (key)}
       {@const tn = tone(p)}
+      {@const drive = driveOf(key)}
       <div
         class="row-item browser"
         class:sel={selected(key)}
         class:inpane={inPane(key)}
         class:waits={!!p.waiting}
+        class:driven={!!drive && drive.hand === 'agent' && !drive.stopped}
+        data-driven={drive ? (drive.stopped ? 'stopped' : drive.hand) : undefined}
         role="button"
         tabindex="0"
         aria-current={selected(key) ? 'true' : undefined}
@@ -204,6 +240,13 @@
         oncontextmenu={(e) => rowMenu(e, key, p)}
         onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && showPage(key)}
       >
+        {#if drive}
+          <!-- Driven (AB-8): the agent's initials before the name, in the project's colour; dimmed once the user has the hand. -->
+          <span class="av" class:held={drive.hand === 'user' || drive.stopped} aria-hidden="true" data-testid="driven-avatar"
+            >{initials(agentName(drive.agent ?? undefined))}</span
+          >
+          <span class="sr">{drivenSay(key)}</span>
+        {/if}
         {#if p.by.kind === 'page'}
           <!-- An agent's page (AP-3): the page's icon for the dot; its point while it waits for the user. -->
           <span class="pg" class:unseen={p.unseen} aria-hidden="true"><Icon name="page" size={13} /></span>
@@ -331,6 +374,30 @@
     font-weight: 550;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* Driven (AB-8): the agent's initials in the project's colour before the name; held by the user, a quiet outline. */
+  .av {
+    flex: none;
+    display: grid;
+    place-items: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 5px;
+    background: var(--p);
+    color: #0b0c0e;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1;
+  }
+  .av.held {
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--line-3);
+    color: var(--muted);
+  }
+  .row-item.driven .nm {
+    color: var(--text);
   }
   /* An agent's page: the page's icon in the project's ink, a point on it while it waits for the user. */
   .pg {

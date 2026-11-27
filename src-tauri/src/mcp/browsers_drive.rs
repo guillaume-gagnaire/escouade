@@ -802,29 +802,34 @@ pub(super) async fn drive<R: Runtime>(
             }
         }
     }
-    // The element, and what is never done to it.
+    // The element, and what is never done to it; where it is, for the ghost cursor.
+    let mut at: Option<(f64, f64)> = None;
     if (act.target().is_some() && act.tier() == drive::Tier::Act) || matches!(act, Act::Press(_)) {
         let (w, a) = (webview.clone(), act.clone());
-        let kind = tokio::task::spawn_blocking(move || -> Result<drive::Kind, String> {
-            let v = match &a {
-                Act::Press(_) => drive::run(&w, json!({ "run": "focused" }))?,
-                a => {
-                    let t = a.target().expect("a target");
-                    let v = drive::run(
-                        &w,
-                        json!({ "run": "locate", "target": t.arg(), "reveal": true }),
-                    )?;
-                    if v["found"] != json!(true) {
-                        return Err("missing".into());
+        let (kind, bx) =
+            tokio::task::spawn_blocking(move || -> Result<(drive::Kind, Value), String> {
+                let v = match &a {
+                    Act::Press(_) => drive::run(&w, json!({ "run": "focused" }))?,
+                    a => {
+                        let t = a.target().expect("a target");
+                        let v = drive::run(
+                            &w,
+                            json!({ "run": "locate", "target": t.arg(), "reveal": true }),
+                        )?;
+                        if v["found"] != json!(true) {
+                            return Err("missing".into());
+                        }
+                        v
                     }
-                    v
-                }
-            };
-            Ok(serde_json::from_value(v["kind"].clone()).unwrap_or_default())
-        })
-        .await
-        .map_err(|e| ToolError::Failed(e.to_string()))?
-        .map_err(|e| page_failed(&e, raw))?;
+                };
+                Ok((
+                    serde_json::from_value(v["kind"].clone()).unwrap_or_default(),
+                    v["box"].clone(),
+                ))
+            })
+            .await
+            .map_err(|e| ToolError::Failed(e.to_string()))?
+            .map_err(|e| page_failed(&e, raw))?;
         let password = kind.password
             && matches!(act, Act::Type { .. })
             && row.line == Line::Launch
@@ -843,11 +848,29 @@ pub(super) async fn drive<R: Runtime>(
             }
             return Err(forbidden(f));
         }
+        at = drive::centre(&bx);
+    }
+    // « Reprendre la main » stops the agent at once, in the core: taken while this gesture was checked, it is not made.
+    match pages.drives.still(&row.key) {
+        May::Go => {}
+        May::UserHasHand => return Err(hand_refused()),
+        _ => return Err(stopped_refused()),
+    }
+    // The ghost cursor goes where the agent acts: before a click, a key or a text, on the element.
+    let who = initials_of(core, &row.agent);
+    if let Some(at) = at {
+        show_cursor(&pages, &row, &webview, at, &who).await;
     }
     // The gesture.
     let extra = perform(core, &pages, &row, &act, to, webview.clone()).await?;
+    // After a scroll or a highlight, where it took the page.
+    if at.is_none() {
+        if let Some(to) = cursor_after(&act, &extra, &webview).await {
+            show_cursor(&pages, &row, &webview, to, &who).await;
+        }
+    }
     let what = what_of(&act, raw);
-    let step = pages.drives.done(&row.key, &what);
+    let step = pages.drives.done(&row.key, &what, &extra);
     tell(core, &row.key);
     keep_polling(core, pages.clone(), row.key.clone(), row.label.clone());
     let mut answer = json!({
@@ -1025,6 +1048,10 @@ async fn perform<R: Runtime>(
             let pages = pages.clone();
             let start = Instant::now();
             loop {
+                // « Reprendre la main » ends the wait at once.
+                if pages.drives.blocked(&key).is_some() {
+                    return Err(hand_refused());
+                }
                 let w = webview.clone();
                 let tt = t.clone();
                 let v = blocking(move || match &tt {
@@ -1050,6 +1077,17 @@ async fn perform<R: Runtime>(
                 tokio::time::sleep(Duration::from_millis(200)).await;
             }
         }
+        _ => {}
+    }
+    // What the agent highlights, drawn again by Windows’ overlay after each ghost cursor; none after a new document.
+    match act {
+        Act::Highlight(t, _) => pages.drives.set_mark(&row.key, Some(t.arg())),
+        Act::Clear
+        | Act::Navigate(_)
+        | Act::Back
+        | Act::Forward
+        | Act::Reload
+        | Act::Version(_) => pages.drives.set_mark(&row.key, None),
         _ => {}
     }
     let (a, color) = (act.clone(), row.color.clone());
@@ -1081,16 +1119,17 @@ async fn perform<R: Runtime>(
             Act::Scroll(by) => {
                 drive::run(w, json!({ "run": "scroll", "by": by }))?;
             }
+            // Windows: the browser’s overlay, out of the page’s DOM; WebKit: Escouade’s element (ESC-680). A highlight
+            // in a frame of another origin goes first (ESC-682).
             Act::Highlight(t, label) => {
                 drive::clear_frames(w);
-                found(drive::run(
-                    w,
-                    json!({ "run": "highlight", "target": t.arg(), "label": label, "color": color }),
-                )?)?
+                if !drive::highlight(w, &t.arg(), label, &color, true)? {
+                    return Err("missing".into());
+                }
             }
             Act::Clear => {
                 drive::clear_frames(w);
-                drive::run(w, json!({ "run": "clear" }))?;
+                drive::unhighlight(w)?;
             }
             Act::InFrame {
                 frame,
@@ -1195,6 +1234,105 @@ async fn look<R: Runtime>(
         base64::engine::general_purpose::STANDARD.encode(&shot.bytes),
         "image/jpeg".to_string(),
     ))
+}
+
+// ---------- the ghost cursor (ESC-680, AB-8) ----------
+
+/// The initials of the agent on its ghost cursor (WebKit draws them; Windows' overlay draws shapes alone).
+fn initials_of<R: Runtime>(core: &Core<R>, agent: &str) -> String {
+    let name = core
+        .agent(agent)
+        .map(|h| h.lock().meta.name.clone())
+        .unwrap_or_else(|_| agent.to_string());
+    drive::initials(&name)
+}
+
+/// Where the ghost cursor goes after a gesture that has no element to act on first: the element it scrolled to or
+/// highlighted, the middle of the view after a scroll.
+async fn cursor_after<R: Runtime>(
+    act: &Act,
+    extra: &Value,
+    webview: &tauri::Webview<R>,
+) -> Option<(f64, f64)> {
+    match act {
+        Act::ScrollTo(t) | Act::Highlight(t, _) => {
+            let (w, t) = (webview.clone(), t.arg());
+            let v = blocking(move || drive::run(&w, json!({ "run": "locate", "target": t })))
+                .await
+                .ok()?;
+            drive::centre(&v["box"])
+        }
+        Act::Scroll(_) => {
+            let w = extra["innerWidth"].as_f64()?;
+            let h = extra["view"].as_f64()?;
+            Some((w / 2.0, h / 2.0))
+        }
+        _ => None,
+    }
+}
+
+/// Shows the ghost cursor of the row at `to`, gliding from where it was; under Windows, once it stayed, the overlay
+/// draws again what the agent highlights (it has one shape at a time), unless a later cursor came.
+async fn show_cursor<R: Runtime>(
+    pages: &Arc<Pages>,
+    row: &Row,
+    webview: &tauri::Webview<R>,
+    to: (f64, f64),
+    initials: &str,
+) {
+    let (from, turn) = pages.drives.cursor_to(&row.key, to);
+    let (w, color, who) = (webview.clone(), row.color.clone(), initials.to_string());
+    if let Err(e) = blocking(move || drive::cursor(&w, from, to, &color, &who)).await {
+        log::debug!("browsers: no ghost cursor on {}: {e}", row.key);
+        return;
+    }
+    if cfg!(windows) {
+        let (pages, key, w, color) = (
+            pages.clone(),
+            row.key.clone(),
+            webview.clone(),
+            row.color.clone(),
+        );
+        std::thread::spawn(move || {
+            std::thread::sleep(drive::CURSOR_STAY);
+            if pages.drives.cursor_still(&key, turn) {
+                drive::cursor_gone(&w, pages.drives.mark(&key).as_ref(), &color);
+            }
+        });
+    }
+}
+
+// ---------- the rail of an agent's page (ESC-680, AB-8) ----------
+
+/// The label of the webview of the row `key`: an agent's page, or a tab.
+fn label_of(key: &str) -> String {
+    match crate::pages::of_key(key) {
+        Some(page) => crate::agentpage::label(page),
+        None => devpage::page_label(key),
+    }
+}
+
+/// Where the page of the row `key` is (its scroll, height and view): the rail draws the part on screen.
+pub(crate) async fn place<R: Runtime>(core: &Arc<Core<R>>, key: &str) -> Option<Value> {
+    let webview = core.app.get_webview(&label_of(key))?;
+    let v = blocking(move || drive::place(&webview)).await.ok()?;
+    Some(json!({ "y": v["scrollY"], "height": v["height"], "view": v["view"] }))
+}
+
+/// A pin of the rail clicked: the page goes back where the agent had put it. The user's move, not a gesture of the
+/// agent's: the hand does not change.
+pub(crate) async fn revisit<R: Runtime>(
+    core: &Arc<Core<R>>,
+    pages: &Arc<Pages>,
+    key: &str,
+    n: u32,
+) -> Result<(), String> {
+    let pin = pages.drives.pin(key, n).ok_or("no such pin")?;
+    let webview = core
+        .app
+        .get_webview(&label_of(key))
+        .ok_or("the page is not shown")?;
+    blocking(move || drive::go_to(&webview, pin.y)).await
 }
 
 // ---------- the user's moves (the band, AB-8) ----------

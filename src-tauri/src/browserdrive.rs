@@ -539,6 +539,38 @@ struct Drive {
     polling: bool,
     /// When the agent's last gesture began or ended: what the page does then is the agent's, not the user's.
     acted: Option<Instant>,
+    /// Its gestures, numbered, with where the page was after each (the rail of an agent's page, ESC-680).
+    pins: VecDeque<Pin>,
+    /// Where the ghost cursor last was, in the view (ESC-680): the next one glides from there.
+    cursor: Option<(f64, f64)>,
+    /// The ghost cursor's turn: a later one ends the former's fading (Windows' overlay).
+    cursor_turn: u64,
+    /// What the agent highlights now, its target as the library takes it (Windows' overlay draws it again after the
+    /// cursor, which shares its single highlight).
+    mark: Option<Value>,
+}
+
+/// The most pins a row keeps: the oldest go.
+pub const PINS_MAX: usize = 99;
+
+/// A gesture of the agent's, as the conversation and the rail say it (ESC-680): its number, what it did, where the page
+/// was after it (its scroll, its height, its view, in CSS pixels).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pin {
+    pub n: u32,
+    pub what: String,
+    pub y: i64,
+    pub height: i64,
+    pub view: i64,
+}
+
+impl Pin {
+    /// Where the page was, as the library's `where` says it.
+    pub fn place(v: &Value) -> (i64, i64, i64) {
+        let get = |k: &str| v[k].as_f64().map(|x| x.round() as i64).unwrap_or(0).max(0);
+        (get("scrollY"), get("height"), get("view"))
+    }
 }
 
 /// What the window shows of a row's driving (AB-8 draws it).
@@ -555,6 +587,8 @@ pub struct DriveView {
     pub waiting: bool,
     /// An agent asks to fill a password (C2).
     pub password_asks: Vec<String>,
+    /// Its gestures, the oldest first (ESC-680).
+    pub pins: Vec<Pin>,
 }
 
 /// What the user did with the hand of a row.
@@ -638,14 +672,69 @@ impl Drives {
         }
     }
 
-    /// A gesture done: its number, and what the band says of it.
-    pub fn done(&self, key: &str, what: &str) -> u32 {
+    /// A gesture done: its number, and what the band says of it; its pin, where the page was after it (`where`).
+    pub fn done(&self, key: &str, what: &str, at: &Value) -> u32 {
         let mut rows = self.rows.lock();
         let d = rows.entry(key.to_string()).or_default();
         d.step += 1;
         d.what = what.to_string();
         d.acted = Some(Instant::now());
+        let (y, height, view) = Pin::place(at);
+        d.pins.push_back(Pin {
+            n: d.step,
+            what: what.to_string(),
+            y,
+            height,
+            view,
+        });
+        while d.pins.len() > PINS_MAX {
+            d.pins.pop_front();
+        }
         d.step
+    }
+
+    /// The pin `n` of `key`, while it is kept.
+    pub fn pin(&self, key: &str, n: u32) -> Option<Pin> {
+        self.rows
+            .lock()
+            .get(key)
+            .and_then(|d| d.pins.iter().find(|p| p.n == n).cloned())
+    }
+
+    /// The ghost cursor goes to `to`: where it was (to glide from), and its turn.
+    pub fn cursor_to(&self, key: &str, to: (f64, f64)) -> (Option<(f64, f64)>, u64) {
+        let mut rows = self.rows.lock();
+        let d = rows.entry(key.to_string()).or_default();
+        let from = d.cursor.replace(to);
+        d.cursor_turn += 1;
+        (from, d.cursor_turn)
+    }
+
+    /// Whether `turn` is still the ghost cursor's last one on `key`.
+    pub fn cursor_still(&self, key: &str, turn: u64) -> bool {
+        self.rows
+            .lock()
+            .get(key)
+            .is_some_and(|d| d.cursor_turn == turn)
+    }
+
+    /// What the agent highlights on `key` now (its target as the library takes it), or nothing.
+    pub fn set_mark(&self, key: &str, mark: Option<Value>) {
+        self.rows.lock().entry(key.to_string()).or_default().mark = mark;
+    }
+
+    /// What the agent highlights on `key`.
+    pub fn mark(&self, key: &str) -> Option<Value> {
+        self.rows.lock().get(key).and_then(|d| d.mark.clone())
+    }
+
+    /// Whether `agent`'s gesture on `key`, taken a moment ago, may still go: the user may have taken the hand since
+    /// (« Reprendre la main » stops the agent at once, in the core: a gesture not begun yet is not made).
+    pub fn still(&self, key: &str) -> May {
+        match self.blocked(key) {
+            Some(m) => m,
+            None => May::Go,
+        }
     }
 
     /// A new version of the artifact `agent` opened on `key` (AB-10): Escouade reloads it for the agent, a step of the
@@ -661,6 +750,8 @@ impl Drives {
         d.step += 1;
         d.what = what.to_string();
         d.acted = Some(Instant::now());
+        // A new document: the highlight of the former is gone with it (ESC-680).
+        d.mark = None;
         Some(d.step)
     }
 
@@ -826,6 +917,7 @@ impl Drives {
             what: d.what.clone(),
             waiting: d.waiter.is_some(),
             password_asks: d.password_asked.clone(),
+            pins: d.pins.iter().cloned().collect(),
         }
     }
 
@@ -967,6 +1059,269 @@ pub fn gestures<R: Runtime>(webview: &Webview<R>) -> u64 {
         .ok()
         .and_then(|v| v["gestures"].as_u64())
         .unwrap_or(0)
+}
+
+// ---------- what the user sees: the ghost cursor and the highlight (ESC-680, AB-8) ----------
+
+/// How long the ghost cursor stays where the agent acted before it goes (Windows: the overlay draws the highlight again,
+/// or clears; WebKit: it fades by itself, in CSS).
+pub const CURSOR_STAY: Duration = Duration::from_millis(1600);
+
+/// Escouade's violet: a colour it cannot read.
+const VIOLET: (u8, u8, u8) = (124, 108, 240);
+
+/// A project's colour as sRGB: `#rrggbb`, or `oklch(L C H)` as the projects' palette writes it (L from 0 to 1 or in %,
+/// H in degrees); none for any other.
+pub fn srgb(color: &str) -> Option<(u8, u8, u8)> {
+    let c = color.trim();
+    if let Some(h) = c.strip_prefix('#') {
+        if h.len() != 6 || !h.chars().all(|c| c.is_ascii_hexdigit()) {
+            return None;
+        }
+        let at = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok();
+        return Some((at(0)?, at(2)?, at(4)?));
+    }
+    let inner = c.strip_prefix("oklch(")?.strip_suffix(')')?;
+    let parts: Vec<&str> = inner
+        .split(|ch: char| ch.is_whitespace() || ch == '/')
+        .filter(|s| !s.is_empty())
+        .collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let l = match parts[0].strip_suffix('%') {
+        Some(p) => p.parse::<f64>().ok()? / 100.0,
+        None => parts[0].parse::<f64>().ok()?,
+    };
+    let ch: f64 = parts[1].parse().ok()?;
+    let hue: f64 = parts[2].trim_end_matches("deg").parse().ok()?;
+    let (a, b) = (ch * hue.to_radians().cos(), ch * hue.to_radians().sin());
+    let l_ = (l + 0.396_337_777_4 * a + 0.215_803_757_3 * b).powi(3);
+    let m_ = (l - 0.105_561_345_8 * a - 0.063_854_172_8 * b).powi(3);
+    let s_ = (l - 0.089_484_177_5 * a - 1.291_485_548 * b).powi(3);
+    let lin = [
+        4.076_741_662_1 * l_ - 3.307_711_591_3 * m_ + 0.230_969_929_2 * s_,
+        -1.268_438_004_6 * l_ + 2.609_757_401_1 * m_ - 0.341_319_396_5 * s_,
+        -0.004_196_086_3 * l_ - 0.703_418_614_7 * m_ + 1.707_614_701 * s_,
+    ];
+    let gamma = |x: f64| {
+        let x = x.clamp(0.0, 1.0);
+        let v = if x <= 0.003_130_8 {
+            12.92 * x
+        } else {
+            1.055 * x.powf(1.0 / 2.4) - 0.055
+        };
+        (v * 255.0).round().clamp(0.0, 255.0) as u8
+    };
+    Some((gamma(lin[0]), gamma(lin[1]), gamma(lin[2])))
+}
+
+/// A project's colour as `#rrggbb`, for the library of the page (WebKit's cursor and highlight); Escouade's violet
+/// for one it cannot read.
+#[cfg_attr(windows, allow(dead_code))]
+pub fn hex(color: &str) -> String {
+    let (r, g, b) = srgb(color).unwrap_or(VIOLET);
+    format!("#{r:02x}{g:02x}{b:02x}")
+}
+
+/// A project's colour as the protocol's RGBA (Windows' overlay); Escouade's violet for one it cannot read.
+#[cfg(windows)]
+pub fn rgba(color: &str, a: f64) -> Value {
+    let (r, g, b) = srgb(color).unwrap_or(VIOLET);
+    json!({ "r": r, "g": g, "b": b, "a": a })
+}
+
+/// The ghost cursor's arrow as a quad of the view, its tip at `(x, y)` in CSS pixels: what Windows' overlay draws.
+#[cfg(windows)]
+pub fn arrow(x: f64, y: f64) -> [f64; 8] {
+    [x, y, x, y + 19.0, x + 5.5, y + 14.5, x + 13.0, y + 13.5]
+}
+
+/// The points a glide of the ghost cursor goes through, from where it was (none: it appears there) to `to`, `to` last.
+#[cfg(windows)]
+pub fn glide(from: Option<(f64, f64)>, to: (f64, f64), steps: usize) -> Vec<(f64, f64)> {
+    let Some(from) = from.filter(|f| *f != to) else {
+        return vec![to];
+    };
+    let steps = steps.max(1);
+    (1..=steps)
+        .map(|i| {
+            // Ease out: fast first, slow at the end.
+            let t = i as f64 / steps as f64;
+            let e = 1.0 - (1.0 - t).powi(3);
+            (from.0 + (to.0 - from.0) * e, from.1 + (to.1 - from.1) * e)
+        })
+        .collect()
+}
+
+/// The initials of an agent's name on its ghost cursor: the first letters of its first two words, else its first two.
+pub fn initials(name: &str) -> String {
+    let words: Vec<&str> = name
+        .split(['-', '_', ' ', '.'])
+        .filter(|w| !w.is_empty())
+        .collect();
+    let first = |w: &str| {
+        w.chars()
+            .next()
+            .map(|c| c.to_uppercase().collect::<String>())
+    };
+    if words.len() > 1 {
+        return format!(
+            "{}{}",
+            first(words[0]).unwrap_or_default(),
+            first(words[1]).unwrap_or_default()
+        );
+    }
+    let mut c = words.first().copied().unwrap_or(name).chars();
+    let a = c
+        .next()
+        .map(|c| c.to_uppercase().collect::<String>())
+        .unwrap_or_default();
+    let b = c.next().map(String::from).unwrap_or_default();
+    format!("{a}{b}")
+}
+
+/// The centre of a box the library gives (`{x, y, width, height}`, CSS pixels of the view).
+pub fn centre(bx: &Value) -> Option<(f64, f64)> {
+    let x = bx["x"].as_f64()?;
+    let y = bx["y"].as_f64()?;
+    Some((
+        x + bx["width"].as_f64().unwrap_or(0.0) / 2.0,
+        y + bx["height"].as_f64().unwrap_or(0.0) / 2.0,
+    ))
+}
+
+/// Shows the ghost cursor at `to`, gliding from `from`: Windows' overlay (out of the page's DOM, no initials: the
+/// overlay draws shapes alone), elsewhere an element of Escouade's world with the agent's initials.
+pub fn cursor<R: Runtime>(
+    webview: &Webview<R>,
+    from: Option<(f64, f64)>,
+    to: (f64, f64),
+    color: &str,
+    initials: &str,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let _ = initials;
+        use crate::browserread::{overlay, Method};
+        overlay(webview, Method::DomEnable, json!({}))?;
+        overlay(webview, Method::OverlayEnable, json!({}))?;
+        let points = glide(from, to, 7);
+        let last = points.len() - 1;
+        for (i, (x, y)) in points.into_iter().enumerate() {
+            overlay(
+                webview,
+                Method::OverlayHighlightQuad,
+                json!({ "quad": arrow(x, y), "color": rgba(color, 0.95), "outlineColor": rgba("#ffffff", 1.0) }),
+            )?;
+            if i < last {
+                std::thread::sleep(Duration::from_millis(30));
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = from;
+        run(
+            webview,
+            json!({ "run": "cursor", "x": to.0, "y": to.1, "color": hex(color), "initials": initials }),
+        )
+        .map(|_| ())
+    }
+}
+
+/// Highlights the element `target` (the library's form), at the project's colour: Windows' overlay draws it over the
+/// node, out of the page's DOM (the label goes in the band); elsewhere an element of Escouade's world with its label.
+/// Whether it was found.
+pub fn highlight<R: Runtime>(
+    webview: &Webview<R>,
+    target: &Value,
+    label: &str,
+    color: &str,
+    reveal: bool,
+) -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        let _ = label;
+        use crate::browserread::{overlay, Method};
+        let v = run(
+            webview,
+            json!({ "run": "locate", "target": target, "reveal": reveal }),
+        )?;
+        if v["found"] != json!(true) {
+            return Ok(false);
+        }
+        let Some(object) = crate::browserread::node(
+            webview,
+            &expression(&json!({ "run": "node", "target": target })),
+        )?
+        else {
+            return Ok(false);
+        };
+        overlay(webview, Method::DomEnable, json!({}))?;
+        overlay(webview, Method::OverlayEnable, json!({}))?;
+        overlay(
+            webview,
+            Method::OverlayHighlightNode,
+            json!({ "objectId": object, "highlightConfig": {
+                "showInfo": false,
+                "contentColor": rgba(color, 0.16),
+                "paddingColor": rgba(color, 0.22),
+                "borderColor": rgba(color, 0.9),
+            } }),
+        )?;
+        Ok(true)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = reveal;
+        let v = run(
+            webview,
+            json!({ "run": "highlight", "target": target, "label": label, "color": hex(color) }),
+        )?;
+        Ok(v["found"] == json!(true))
+    }
+}
+
+/// Clears the highlight (and Windows' cursor, which shares the overlay).
+pub fn unhighlight<R: Runtime>(webview: &Webview<R>) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        crate::browserread::overlay(
+            webview,
+            crate::browserread::Method::OverlayHideHighlight,
+            json!({}),
+        )
+        .map(|_| ())
+    }
+    #[cfg(not(windows))]
+    {
+        run(webview, json!({ "run": "clear" })).map(|_| ())
+    }
+}
+
+/// The ghost cursor's end under Windows, once it stayed: the highlight the agent laid drawn again (the overlay has one
+/// shape at a time), or the overlay cleared. Under WebKit it fades by itself.
+pub fn cursor_gone<R: Runtime>(webview: &Webview<R>, mark: Option<&Value>, color: &str) {
+    if cfg!(not(windows)) {
+        return;
+    }
+    let _ = match mark {
+        // Where it is now: the page is not moved under the user.
+        Some(t) => highlight(webview, t, "", color, false).map(|_| ()),
+        None => unhighlight(webview),
+    };
+}
+
+/// Where the page is (`where`): its scroll, height and view, for the rail.
+pub fn place<R: Runtime>(webview: &Webview<R>) -> Result<Value, String> {
+    run(webview, json!({ "run": "where" }))
+}
+
+/// The page back where a pin says the agent had put it.
+pub fn go_to<R: Runtime>(webview: &Webview<R>, y: i64) -> Result<(), String> {
+    run(webview, json!({ "run": "goto", "y": y })).map(|_| ())
 }
 
 /// Waits for the page to settle after a gesture: loaded, its scroll still, `SETTLE` at most. Where it is then.

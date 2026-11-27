@@ -5,6 +5,7 @@
   // beside the conversation or waiting in « Navigateurs »; closed (by its agent, its ×, or a restart: « Rouvrir »); no
   // longer kept (its agent or project gone, room made); the pages off. A card always opens the last version.
   import { agentpages, know, latestOf, openFromCard, pageCall, pageKey, rowOnScreen, templateName } from '../../lib/agentpages.svelte';
+  import { driveOf } from '../../lib/drives.svelte';
   import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
@@ -33,12 +34,15 @@
   const version = $derived(call?.version ?? 1);
   const newer = $derived(info ? latestOf(info) : version);
   const name = $derived(agent.name || info?.agentName || '');
+  const marks = $derived(call?.page ? (driveOf(pageKey(call.page))?.pins.length ?? 0) : 0);
   const meta = $derived(
     [
       t('devpage.card.by', { agent: name }),
       t('devpage.card.template', { name: templateName(call?.template ?? 'html') }),
       t('devpage.agentPage.version', { n: version }),
       ...(phase === 'running' || phase === 'off' ? [] : [t(`devpage.card.where.${phase}`)]),
+      // Its agent's gestures on it (AB-8, direction A): « 3 repères », its rows under the card and its pins on the rail.
+      ...(marks ? [t('devpage.drive.pins', { count: marks })] : []),
     ].join(' · '),
   );
 

@@ -263,6 +263,18 @@ test.describe('a fake agent drives its launch and its page', () => {
         const lit = await agent.drive({ browser: key, action: 'highlight', target: 'text=Choisir', label: 'Le bouton' });
         expect(lit).toMatchObject({ done: true, step: 2, what: 'Met en évidence « Le bouton »' });
         expect((await state(page, key)).what).toBe('Met en évidence « Le bouton »');
+        // What the user sees (AB-8, ESC-680): the band above the tab says who drives and the last gesture; the agent's
+        // row wears its initials; the highlight is the browser's overlay, absent from the page's DOM.
+        const tabBand = page
+          .getByTestId('drive-band')
+          .filter({ has: page.getByTestId('drive-hand') })
+          .first();
+        await expect(tabBand.getByTestId('drive-hand')).toContainText('pilote');
+        await expect(tabBand.getByTestId('drive-last')).toContainText('Le bouton');
+        await expect(page.locator(`[data-browser="${key}"]`)).toHaveAttribute('data-driven', 'agent');
+        const dom = JSON.stringify(agent.page(await agent.call('read_browser', { browser: key, what: 'html' })));
+        expect(dom).toContain('Choisir');
+        expect(dom).not.toContain('escouade-drive');
         const phone = await agent.drive({ browser: key, action: 'width', width: 'mobile' });
         expect(phone.innerWidth).toBeLessThanOrEqual(400);
         expect(phone.what).toBe('Passe en largeur mobile');
@@ -316,7 +328,7 @@ test.describe('a fake agent drives its launch and its page', () => {
         // wait_user: « Continuer » in the band, the tool waits for it.
         const waiting = agent.call('drive_browser', { browser: key, action: 'scroll', by: 200, wait_user: true });
         await expect.poll(async () => (await state(page, key)).waiting, { timeout: 15_000 }).toBe(true);
-        await invoke(page, 'browser_drive_hand', { key, hand: 'continue' });
+        await tabBand.getByRole('button', { name: 'Continuer' }).click();
         expect(agent.page(await waiting)).toMatchObject({ user: 'continued', hand: 'agent' });
 
         // The user's own gesture in the page, a real wheel of Windows over it: the hand is theirs, taken by polling.
@@ -337,15 +349,16 @@ test.describe('a fake agent drives its launch and its page', () => {
         await expect
           .poll(async () => (await state(page, key)).hand, { timeout: 15_000, message: 'the page heard the wheel, the hand did not pass' })
           .toBe('user');
+        await expect(tabBand.getByTestId('drive-hand')).toContainText('Tu as la main');
         const refused = await agent.call('drive_browser', { browser: key, action: 'scroll', by: 100 });
         expect(refused.error).toBe(true);
         expect(refused.text).toContain('L’utilisateur a repris la main');
         // « La rendre »: told to the agent, it drives again.
-        await invoke(page, 'browser_drive_hand', { key, hand: 'give' });
+        await tabBand.getByRole('button', { name: 'La rendre' }).click();
         await expect(page.getByText(/l’utilisateur te rend la main/).first()).toBeVisible({ timeout: 20_000 });
         expect(await agent.drive({ browser: key, action: 'scroll', by: 100 })).toMatchObject({ done: true, hand: 'agent' });
         // « Reprendre la main » from the band, then « Ne plus laisser piloter ».
-        await invoke(page, 'browser_drive_hand', { key, hand: 'take' });
+        await tabBand.getByRole('button', { name: 'Reprendre la main' }).click();
         expect((await agent.call('drive_browser', { browser: key, action: 'clear' })).text).toContain('repris la main');
         await invoke(page, 'browser_drive_hand', { key, hand: 'stop' });
         expect((await agent.call('drive_browser', { browser: key, action: 'clear' })).text).toContain('ne laisse plus piloter');

@@ -438,7 +438,7 @@ fn the_rule_of_the_hand() {
     let now = Instant::now();
     assert_eq!(d.take("browser:1", "esc-1", now), May::Go);
     assert_eq!(d.hand("browser:1"), Some(Hand::Agent));
-    assert_eq!(d.done("browser:1", "Défile"), 1);
+    assert_eq!(d.done("browser:1", "Défile", &json!({})), 1);
     // The user's first gesture (or « Reprendre la main »): every gesture refused, the hand theirs.
     assert!(d.user_took("browser:1"));
     assert!(!d.user_took("browser:1"));
@@ -667,4 +667,204 @@ fn the_librarys_expression_carries_values_never_code() {
         e.ends_with(r#"({"run":"locate","target":{"css":"\");alert(1);(\""}})"#),
         "{e}"
     );
+}
+
+// ---------- what the user sees (ESC-680, AB-8) ----------
+
+#[test]
+fn the_overlay_draws_a_node_of_escouade_s_world_and_a_quad_and_nothing_else() {
+    let ok = |m: Method, p: serde_json::Value| guard(m, &p, Some(7));
+    // The two domains, without parameters.
+    for m in [
+        Method::DomEnable,
+        Method::OverlayEnable,
+        Method::OverlayHideHighlight,
+    ] {
+        assert!(ok(m, json!({})).is_ok(), "{}", m.name());
+        assert!(
+            ok(m, json!({ "includeWhitespace": "all" })).is_err(),
+            "{}",
+            m.name()
+        );
+    }
+    // A node: the object Escouade's world found, and how to paint it; never a node id nor a selector of the page's.
+    let config =
+        json!({ "showInfo": false, "contentColor": { "r": 59, "g": 130, "b": 246, "a": 0.16 } });
+    assert!(ok(
+        Method::OverlayHighlightNode,
+        json!({ "objectId": "-3141.7.2", "highlightConfig": config })
+    )
+    .is_ok());
+    assert!(ok(
+        Method::OverlayHighlightNode,
+        json!({ "highlightConfig": config })
+    )
+    .is_err());
+    assert!(ok(
+        Method::OverlayHighlightNode,
+        json!({ "objectId": "", "highlightConfig": config })
+    )
+    .is_err());
+    assert!(ok(
+        Method::OverlayHighlightNode,
+        json!({ "objectId": "1", "selector": "#tarifs", "highlightConfig": config })
+    )
+    .is_err());
+    // The ghost cursor: four points of the view, two colours.
+    let quad = [100.0, 200.0, 100.0, 219.0, 105.5, 214.5, 113.0, 213.5];
+    assert!(ok(
+        Method::OverlayHighlightQuad,
+        json!({ "quad": quad, "color": { "r": 59, "g": 130, "b": 246, "a": 0.95 }, "outlineColor": { "r": 255, "g": 255, "b": 255, "a": 1.0 } })
+    )
+    .is_ok());
+    assert!(ok(Method::OverlayHighlightQuad, json!({ "quad": [1, 2, 3] })).is_err());
+    assert!(ok(
+        Method::OverlayHighlightQuad,
+        json!({ "quad": [0, 0, 0, 1e9, 0, 0, 0, 0] })
+    )
+    .is_err());
+    assert!(ok(
+        Method::OverlayHighlightQuad,
+        json!({ "quad": quad, "frameId": "x" })
+    )
+    .is_err());
+    // The other drawings of the overlay stay out of the list (the inspector's, the debugger's).
+    for name in [
+        "Overlay.setInspectMode",
+        "Overlay.setPausedInDebuggerMessage",
+        "Overlay.highlightRect",
+        "DOM.getDocument",
+        "DOM.querySelector",
+        "DOM.getOuterHTML",
+    ] {
+        assert!(Method::parse(name).is_err(), "{name}");
+    }
+}
+
+#[test]
+fn the_ghost_cursor_glides_at_the_projects_colour_with_the_agents_initials() {
+    // The projects' palette writes oklch (theme.ts): its orange, and the reference red of CSS Color 4.
+    let (r, g, b) = srgb("oklch(0.72 0.12 48)").unwrap();
+    assert!(r > g && g > b, "an orange: {r} {g} {b}");
+    let (r, g, b) = srgb("oklch(62.8% 0.2577 29.23)").unwrap();
+    assert!(r >= 250 && g <= 6 && b <= 6, "red: {r} {g} {b}");
+    assert_eq!(hex("#3B82F6"), "#3b82f6");
+    assert_eq!(hex("oklch(nope)"), "#7c6cf0");
+    assert_eq!(srgb("rgb(1, 2, 3)"), None);
+    // The initials, as the projects' tiles make them.
+    assert_eq!(initials("esc-412"), "E4");
+    assert_eq!(initials("pagination"), "Pa");
+    assert_eq!(initials("chef portail"), "CP");
+    assert_eq!(initials("élan"), "Él");
+    // The middle of a box.
+    assert_eq!(
+        centre(&json!({ "x": 10, "y": 20, "width": 100, "height": 40 })),
+        Some((60.0, 40.0))
+    );
+    assert_eq!(centre(&json!(null)), None);
+    // Each cursor its turn: a later one ends the former's.
+    let d = Drives::default();
+    let (from, one) = d.cursor_to("k", (1.0, 2.0));
+    assert_eq!(from, None);
+    let (from, two) = d.cursor_to("k", (3.0, 4.0));
+    assert_eq!(from, Some((1.0, 2.0)));
+    assert!(!d.cursor_still("k", one));
+    assert!(d.cursor_still("k", two));
+    // What it highlights, drawn again after the cursor; none once cleared.
+    d.set_mark("k", Some(json!({ "css": "#tarifs" })));
+    assert_eq!(d.mark("k"), Some(json!({ "css": "#tarifs" })));
+    d.set_mark("k", None);
+    assert_eq!(d.mark("k"), None);
+}
+
+/// Windows' overlay: the project's colour as the protocol's RGBA, the arrow's quad, the glide.
+#[cfg(windows)]
+#[test]
+fn the_overlay_paints_the_arrow_at_the_projects_colour_and_glides_it() {
+    // Another value is Escouade's violet.
+    assert_eq!(
+        rgba("#3B82F6", 0.5),
+        json!({ "r": 59, "g": 130, "b": 246, "a": 0.5 })
+    );
+    assert_eq!(
+        rgba("red", 1.0),
+        json!({ "r": 124, "g": 108, "b": 240, "a": 1.0 })
+    );
+    // Its tip where the agent acts; the quad the guard lets through.
+    let a = arrow(10.0, 20.0);
+    assert_eq!((a[0], a[1]), (10.0, 20.0));
+    assert!(a[3] > a[1] && a[6] > a[0]);
+    assert!(guard(
+        Method::OverlayHighlightQuad,
+        &json!({ "quad": arrow(100.0, 200.0), "color": rgba("#3b82f6", 0.95), "outlineColor": rgba("#ffffff", 1.0) }),
+        Some(7)
+    )
+    .is_ok());
+    // A first one appears there; the next glides from the former, slowing, and ends there.
+    assert_eq!(glide(None, (5.0, 5.0), 7), vec![(5.0, 5.0)]);
+    assert_eq!(glide(Some((5.0, 5.0)), (5.0, 5.0), 7), vec![(5.0, 5.0)]);
+    let g = glide(Some((0.0, 0.0)), (100.0, 50.0), 7);
+    assert_eq!(g.len(), 7);
+    assert_eq!(*g.last().unwrap(), (100.0, 50.0));
+    assert!(g[0].0 > 100.0 / 7.0, "fast first: {g:?}");
+    assert!(g.windows(2).all(|w| w[1].0 >= w[0].0));
+}
+
+#[test]
+fn each_gesture_is_a_numbered_pin_with_where_the_page_was() {
+    let d = Drives::default();
+    let now = Instant::now();
+    d.take("page:p-3", "esc-1", now);
+    let at =
+        json!({ "scrollY": 840.4, "height": 2400, "view": 700, "url": "escouade-page://p-3/" });
+    assert_eq!(d.done("page:p-3", "Défile jusqu’à « Critères »", &at), 1);
+    assert_eq!(
+        d.done("page:p-3", "Met en évidence « Critère 3 »", &json!({})),
+        2
+    );
+    let v = d.view("page:p-3");
+    assert_eq!(v.step, 2);
+    assert_eq!(v.what, "Met en évidence « Critère 3 »");
+    assert_eq!(
+        v.pins[0],
+        Pin {
+            n: 1,
+            what: "Défile jusqu’à « Critères »".into(),
+            y: 840,
+            height: 2400,
+            view: 700
+        }
+    );
+    // A page that said nothing of where it was: at the top.
+    assert_eq!((v.pins[1].y, v.pins[1].height), (0, 0));
+    assert_eq!(d.pin("page:p-3", 1).map(|p| p.y), Some(840));
+    assert_eq!(d.pin("page:p-3", 9), None);
+    // The oldest go past the bound; the numbers go on.
+    for _ in 0..PINS_MAX + 5 {
+        d.done("page:p-3", "Défile", &json!({}));
+    }
+    let v = d.view("page:p-3");
+    assert_eq!(v.pins.len(), PINS_MAX);
+    assert_eq!(v.pins.last().unwrap().n, v.step);
+    assert_eq!(d.pin("page:p-3", 1), None);
+    // They fall with the row.
+    d.forget("page:p-3");
+    assert!(d.view("page:p-3").pins.is_empty());
+}
+
+#[test]
+fn taking_the_hand_back_stops_a_gesture_not_begun_yet() {
+    // « Reprendre la main » between the check of a gesture and the gesture itself: the core makes none.
+    let d = Drives::default();
+    assert_eq!(d.take("browser:1", "esc-1", Instant::now()), May::Go);
+    assert_eq!(d.still("browser:1"), May::Go);
+    d.moved("browser:1", HandMove::Take);
+    assert_eq!(d.still("browser:1"), May::UserHasHand);
+    // Given back: the next one goes.
+    d.moved("browser:1", HandMove::Give);
+    assert_eq!(d.still("browser:1"), May::Go);
+    d.moved("browser:1", HandMove::Stop);
+    assert_eq!(d.still("browser:1"), May::Stopped);
+    // A row nobody drives: nothing stops it.
+    assert_eq!(d.still("browser:2"), May::Go);
 }

@@ -57,6 +57,8 @@
   import SentFiles from './conv/SentFiles.svelte';
   import PageCard from './conv/PageCard.svelte';
   import { pageCall } from '../lib/agentpages.svelte';
+  import DriveRow from './conv/DriveRow.svelte';
+  import { driveCall } from '../lib/drives.svelte';
   import SetupProgress from './conv/SetupProgress.svelte';
   import Thinking from './conv/Thinking.svelte';
   import ToolRow from './conv/ToolRow.svelte';
@@ -983,6 +985,9 @@
               {:else if item.kind === 'tool' && !item.parent && pageCall(item)}
                 <!-- A page the agent showed (show_page, AP-3): its card, not its call's row; a failed call keeps its row. -->
                 <PageCard {item} {agent} />
+              {:else if item.kind === 'tool' && !item.parent && driveCall(item)}
+                <!-- A gesture of the agent's on a browser (drive_browser, AB-8): its numbered row; a failed call keeps its row. -->
+                <DriveRow {item} linked={nextIsTool(j)} />
               {:else if item.kind === 'tool'}
                 <ToolRow
                   {item}

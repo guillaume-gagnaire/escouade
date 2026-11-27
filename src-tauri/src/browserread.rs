@@ -84,7 +84,10 @@ pub enum Method {
     InputDispatchKeyEvent,
     InputInsertText,
     OverlayHighlightNode,
+    OverlayHighlightQuad,
     OverlayHideHighlight,
+    OverlayEnable,
+    DomEnable,
     EmulationSetDeviceMetricsOverride,
     EmulationClearDeviceMetricsOverride,
     AccessibilityGetFullAxTree,
@@ -97,7 +100,7 @@ pub enum Method {
 }
 
 impl Method {
-    pub const ALL: [Method; 18] = [
+    pub const ALL: [Method; 21] = [
         Method::PageCaptureScreenshot,
         Method::PageCreateIsolatedWorld,
         Method::PageGetFrameTree,
@@ -108,7 +111,10 @@ impl Method {
         Method::InputDispatchKeyEvent,
         Method::InputInsertText,
         Method::OverlayHighlightNode,
+        Method::OverlayHighlightQuad,
         Method::OverlayHideHighlight,
+        Method::OverlayEnable,
+        Method::DomEnable,
         Method::EmulationSetDeviceMetricsOverride,
         Method::EmulationClearDeviceMetricsOverride,
         Method::AccessibilityGetFullAxTree,
@@ -131,7 +137,10 @@ impl Method {
             Method::InputDispatchKeyEvent => "Input.dispatchKeyEvent",
             Method::InputInsertText => "Input.insertText",
             Method::OverlayHighlightNode => "Overlay.highlightNode",
+            Method::OverlayHighlightQuad => "Overlay.highlightQuad",
             Method::OverlayHideHighlight => "Overlay.hideHighlight",
+            Method::OverlayEnable => "Overlay.enable",
+            Method::DomEnable => "DOM.enable",
             Method::EmulationSetDeviceMetricsOverride => "Emulation.setDeviceMetricsOverride",
             Method::EmulationClearDeviceMetricsOverride => "Emulation.clearDeviceMetricsOverride",
             Method::AccessibilityGetFullAxTree => "Accessibility.getFullAXTree",
@@ -271,6 +280,52 @@ pub fn guard(method: Method, params: &Value, world: Option<i64>) -> Result<(), S
                 Ok(())
             } else {
                 Err("Emulation.setDeviceMetricsOverride: a width between 200 and 4 000".into())
+            }
+        }
+        // What the user sees of the driving (ESC-680, AB-8), painted by the browser over the page and absent from its
+        // DOM: the highlight of the node Escouade's world found (its object alone), the ghost cursor (a quad of the
+        // view), and the two domains they need, without parameters.
+        Method::OverlayHighlightNode => {
+            let object = fields
+                .get("objectId")
+                .and_then(Value::as_str)
+                .is_some_and(|o| !o.is_empty() && o.len() <= 200);
+            if !object {
+                return Err("Overlay.highlightNode: a node of Escouade's world alone".into());
+            }
+            if let Some(k) = fields
+                .keys()
+                .find(|k| !["objectId", "highlightConfig"].contains(&k.as_str()))
+            {
+                return Err(format!("Overlay.highlightNode: {k} is not allowed"));
+            }
+            Ok(())
+        }
+        Method::OverlayHighlightQuad => {
+            let quad = fields
+                .get("quad")
+                .and_then(Value::as_array)
+                .is_some_and(|q| {
+                    q.len() == 8
+                        && q.iter()
+                            .all(|v| v.as_f64().is_some_and(|v| (-100.0..=20_000.0).contains(&v)))
+                });
+            if !quad {
+                return Err("Overlay.highlightQuad: four points of the view".into());
+            }
+            if let Some(k) = fields
+                .keys()
+                .find(|k| !["quad", "color", "outlineColor"].contains(&k.as_str()))
+            {
+                return Err(format!("Overlay.highlightQuad: {k} is not allowed"));
+            }
+            Ok(())
+        }
+        Method::OverlayEnable | Method::DomEnable | Method::OverlayHideHighlight => {
+            if fields.is_empty() {
+                Ok(())
+            } else {
+                Err(format!("{}: no parameter", method.name()))
             }
         }
         _ => Ok(()),
@@ -1403,6 +1458,34 @@ pub fn input<R: Runtime>(
     }
 }
 
+/// What the user sees of the driving under Windows (ESC-680, AB-8): the browser's overlay, of the closed list and
+/// checked by `guard`. The page's script neither reads nor clears it: it is not in its DOM.
+#[cfg(windows)]
+pub fn overlay<R: Runtime>(
+    webview: &Webview<R>,
+    method: Method,
+    params: Value,
+) -> Result<Value, String> {
+    match method {
+        Method::DomEnable
+        | Method::OverlayEnable
+        | Method::OverlayHighlightNode
+        | Method::OverlayHighlightQuad
+        | Method::OverlayHideHighlight => platform::cdp(webview, method, params),
+        _ => Err(format!("{}: not of the overlay", method.name())),
+    }
+}
+
+/// The object of the element an expression of the driving's library finds in Escouade's world (`run: "node"`), for
+/// the overlay to highlight; `None` when none is found.
+#[cfg(windows)]
+pub fn node<R: Runtime>(webview: &Webview<R>, expression: &str) -> Result<Option<String>, String> {
+    if !expression.starts_with(&drive_head()) {
+        return Err("Escouade's scripts alone".into());
+    }
+    platform::node(webview, expression)
+}
+
 // ---------- captures ----------
 
 /// The view of a page as `Script::Rect` tells it, in CSS pixels.
@@ -1959,6 +2042,41 @@ mod platform {
                         .as_str()
                         .map(String::from)
                         .ok_or_else(|| "no answer".into())
+                }
+                Ok(v) => {
+                    last = v["exceptionDetails"]["text"]
+                        .as_str()
+                        .unwrap_or("threw")
+                        .to_string()
+                }
+                Err(e) => last = e,
+            }
+        }
+        Err(last)
+    }
+
+    /// The remote object of the element the expression gives, evaluated in Escouade's world (not by value): for the
+    /// overlay alone. `None` when it gives no element.
+    pub fn node<R: Runtime>(
+        webview: &Webview<R>,
+        expression: &str,
+    ) -> Result<Option<String>, String> {
+        let mut last = String::new();
+        for fresh in [false, true] {
+            let ctx = world(webview, fresh)?;
+            let answer = cdp(
+                webview,
+                Method::RuntimeEvaluate,
+                json!({ "expression": expression, "contextId": ctx, "returnByValue": false, "silent": true }),
+            );
+            match answer {
+                Ok(v) if v.get("exceptionDetails").is_none() => {
+                    let r = &v["result"];
+                    return Ok(if r["subtype"] == "node" {
+                        r["objectId"].as_str().map(String::from)
+                    } else {
+                        None
+                    });
                 }
                 Ok(v) => {
                     last = v["exceptionDetails"]["text"]

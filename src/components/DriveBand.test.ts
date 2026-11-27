@@ -28,7 +28,8 @@ describe('the driving band', () => {
     render(DriveBand, { agent: 'pagination', trust: true, hand: 'agent', step: 3, last: 'Met en évidence le critère 3', ontake });
     expect(screen.getByText('pagination pilote')).toBeTruthy();
     const last = document.querySelector('[data-testid="drive-last"]');
-    expect(last?.textContent).toBe('3Met en évidence le critère 3');
+    // Its number to the eye, « Geste 3 : » to a screen reader.
+    expect(last?.textContent).toBe('3Geste 3 : Met en évidence le critère 3');
     await fireEvent.click(screen.getByRole('button', { name: 'Reprendre la main' }));
     expect(ontake).toHaveBeenCalledOnce();
     // The trust mention stays beside it.
@@ -47,11 +48,38 @@ describe('the driving band', () => {
     expect(oncontinue).toHaveBeenCalledOnce();
   });
 
+  it('once the user stopped it: says so until the row closes, no button gives it back, no « Continuer »', () => {
+    render(DriveBand, { agent: 'pagination', hand: 'user', stopped: true, waiting: true, last: 'Fait défiler' });
+    expect(screen.getByText('Tu ne laisses plus piloter')).toBeTruthy();
+    expect(screen.getByText('Jusqu’à la fermeture de ce navigateur')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(document.querySelector('[data-testid="drive-hand"]')?.getAttribute('data-hand')).toBe('stopped');
+  });
+
+  it('is always there on a driven tab, even without a gesture caption: the user always sees that an agent drives', () => {
+    render(DriveBand, { agent: 'esc-412', hand: 'agent', step: null, last: '' });
+    expect(band()).toBeTruthy();
+    expect(screen.getByText('esc-412 pilote')).toBeTruthy();
+    expect(document.querySelector('[data-testid="drive-last"]')).toBeNull();
+    expect(document.querySelector('[data-testid="drive-hand"]')?.getAttribute('data-hand')).toBe('agent');
+  });
+
   it('speaks English', () => {
     setLang('en');
     render(DriveBand, { agent: 'pagination', trust: true, hand: 'agent' });
     expect(band()?.textContent).toContain('Written by pagination · offline, no access to Escouade or your files');
     expect(screen.getByText('pagination is driving')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Take over' })).toBeTruthy();
+  });
+
+  it('speaks English once the user has the hand, and once they stopped it', () => {
+    setLang('en');
+    const { unmount } = render(DriveBand, { agent: 'pagination', hand: 'user', waiting: true });
+    expect(screen.getByText('You have control')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hand it back' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy();
+    unmount();
+    render(DriveBand, { agent: 'pagination', hand: 'user', stopped: true });
+    expect(screen.getByText('You no longer let it drive')).toBeTruthy();
   });
 });

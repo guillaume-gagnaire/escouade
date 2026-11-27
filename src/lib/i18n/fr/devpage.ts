@@ -112,6 +112,31 @@ export default {
     youHave: 'Tu as la main',
     give: 'La rendre',
     continue: 'Continuer',
+    /** ESC-680 (AB-8): the band wired, the driven row, the numbered rows, the rail. */
+    continueTip: '{agent} attend que tu aies regardé : « Continuer » le laisse poursuivre',
+    takeTip: 'L’agent s’arrête aussitôt : son prochain geste est refusé tant que tu ne la lui rends pas',
+    giveTip: '{agent} pourra de nouveau piloter ce navigateur',
+    stopped: 'Tu ne laisses plus piloter',
+    stoppedTip: 'Jusqu’à la fermeture de ce navigateur',
+    lastSr: 'Geste {n} : {what}',
+    /** The row of « Navigateurs » an agent drives. */
+    rowDriven: 'Piloté par {agent}',
+    rowYours: 'Tu as repris la main sur {agent}',
+    rowStopped: 'Pilotage arrêté',
+    stop: 'Ne plus laisser piloter',
+    /** A gesture in the conversation. */
+    running: 'Pilote le navigateur…',
+    stepSr: 'Geste {n} : ',
+    rowTip: 'Afficher le navigateur',
+    rowPageTip: 'Afficher la page où l’agent l’avait mise',
+    rowGone: 'Ce navigateur est fermé',
+    /** The rail of an agent’s page (direction A). */
+    rail: 'Repères de {agent}',
+    pinTip: '{n} · {what} — y revenir',
+    pins: { one: '{count} repère', other: '{count} repères' },
+    /** C2: an agent asks to fill a password. */
+    password: '{agent} veut remplir un mot de passe',
+    passwordWhy: '(dans ce navigateur, jusqu’à sa fermeture ; la valeur n’est jamais relue)',
   },
   /** The card of a page in its agent's conversation (AP-3). */
   card: {

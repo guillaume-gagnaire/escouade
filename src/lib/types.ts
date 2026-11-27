@@ -1113,6 +1113,43 @@ export interface PageConsents {
 }
 
 /** What happened to a page: a load (`started`, `finished`), a link opened outside or refused, its devtools. */
+/** A gesture of an agent on a row of « Navigateurs », numbered (ESC-680): what it did, where the page was after it. */
+export interface DrivePin {
+  n: number;
+  what: string;
+  /** The page’s scroll, height and view after it, in CSS pixels. */
+  y: number;
+  height: number;
+  view: number;
+}
+
+/** The driving of a row of « Navigateurs » (`drive_browser`, ESC-679; drawn by AB-8). */
+export interface DriveView {
+  browser: string;
+  /** The agent that drives it, once it made a gesture. */
+  agent: string | null;
+  hand: 'agent' | 'user';
+  /** « Ne plus laisser piloter »: until the row closes. */
+  stopped: boolean;
+  step: number;
+  what: string;
+  /** « Continuer » waits for the user (`wait_user`). */
+  waiting: boolean;
+  /** The agents asking to fill a password (C2). */
+  passwordAsks: string[];
+  pins: DrivePin[];
+}
+
+/** What the user did with the hand of a row. */
+export type HandMove = 'take' | 'give' | 'stop' | 'continue';
+
+/** Where the page of a row is: its scroll, its height, its view (the rail of an agent’s page). */
+export interface DrivePlace {
+  y: number;
+  height: number;
+  view: number;
+}
+
 export interface PageEvent {
   /** The page's key: its agent's id, or `browser:<id>` for a browser opened alone (ESC-657). */
   agentId: string;

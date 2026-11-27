@@ -24,6 +24,7 @@ import type {
 } from './types';
 import { loadModes, nextMode, saveMode, type PageMode } from './devpage-key';
 import { activeItem, has, itemKey, type PaneItem } from './panes';
+import { forgetDrive, refreshDrive } from './drives.svelte';
 
 /** A page that started loading and has not finished after this long does not answer. */
 export const STALLED_MS = 20_000;
@@ -481,6 +482,7 @@ export function closePage(key: string, told = false) {
   const page = devpages.pages[key];
   if (!page) return;
   delete devpages.pages[key];
+  forgetDrive(key);
   clearTimeout(stalls.get(key));
   stalls.delete(key);
   if (app.selectedPage[page.projectId] === key) app.selectedPage[page.projectId] = null;
@@ -524,6 +526,8 @@ function adopt(key: string) {
 export function onPageEvent(e: PageEvent) {
   // An agent's request to open an address, keyed by the agent (ESC-678): not a page's.
   if (e.phase === 'opens') return void loadOpenAsks();
+  // Its driving changed (a gesture, the hand, « Continuer », a password asked; ESC-680): the band reads it again.
+  if (e.phase === 'drive') return void refreshDrive(e.agentId);
   const page = devpages.pages[e.agentId];
   if (!page) {
     // Its loads and its title only: what opens or refuses something is not done later.

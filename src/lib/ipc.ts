@@ -6,6 +6,9 @@ import type {
   EngineDecl,
   PageBounds,
   PageConsents,
+  DriveView,
+  DrivePlace,
+  HandMove,
   BrowserOpenAsk,
   PagePlacement,
   PageView,
@@ -881,6 +884,16 @@ export const api = {
     invoke<PageConsents>('devpage_consent', { agentId, agent, origin, allow }),
   /** « Retirer les accords » of the browser `agentId`. */
   devpageRevoke: (agentId: string) => invoke<PageConsents>('devpage_revoke', { agentId }),
+  /** The driving of the row `key` (ESC-679, drawn by AB-8): who drives, who has the hand, its gestures. */
+  browserDriveState: (key: string) => invoke<DriveView>('browser_drive_state', { key }),
+  /** « Reprendre la main », « La rendre », « Ne plus laisser piloter », « Continuer »: the core's, told to the agent. */
+  browserDriveHand: (key: string, hand: HandMove) => invoke<DriveView>('browser_drive_hand', { key, hand }),
+  /** The user's answer to an agent's request to fill a password in the row `key` (C2). */
+  browserDrivePassword: (key: string, agent: string, allow: boolean) => invoke<DriveView>('browser_drive_password', { key, agent, allow }),
+  /** Where the page of the row `key` is: its scroll, height and view (the rail of an agent's page, ESC-680). */
+  browserDrivePlace: (key: string) => invoke<DrivePlace | null>('browser_drive_place', { key }),
+  /** A pin of the rail clicked: the page goes back where its agent had put it (ESC-680). */
+  browserDriveRevisit: (key: string, n: number) => invoke<void>('browser_drive_revisit', { key, n }),
   /** The agents whose conversation is on screen (ESC-678): an agent's browser opens beside it only then. */
   devpageLooking: (agents: string[]) => invoke<void>('devpage_looking', { agents }),
   /** The agents' requests to open an address outside their project's launch (ESC-678, C3). */

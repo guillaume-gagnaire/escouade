@@ -5508,3 +5508,26 @@ pub async fn browser_drive_password(
     let pages = pages.inner().clone();
     Ok(crate::mcp::browsers_drive::password(&core, &pages, &key, &agent, allow).await)
 }
+
+/// Where the page of the row `key` is: its scroll, height and view (ESC-680), for the rail of an agent's page.
+#[tauri::command]
+pub async fn browser_drive_place(
+    core: CoreState<'_>,
+    key: String,
+) -> Res<Option<serde_json::Value>> {
+    let core = core.inner().clone();
+    Ok(crate::mcp::browsers_drive::place(&core, &key).await)
+}
+
+/// A pin of the rail of an agent's page clicked (ESC-680): the page goes back where its agent had put it.
+#[tauri::command]
+pub async fn browser_drive_revisit(
+    core: CoreState<'_>,
+    pages: State<'_, Arc<crate::devpage::Pages>>,
+    key: String,
+    n: u32,
+) -> Res<()> {
+    let core = core.inner().clone();
+    let pages = pages.inner().clone();
+    crate::mcp::browsers_drive::revisit(&core, &pages, &key, n).await
+}

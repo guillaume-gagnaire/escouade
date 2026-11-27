@@ -6,6 +6,7 @@ import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentpages } from '../lib/agentpages.svelte';
 import { devpages } from '../lib/devpage.svelte';
+import { drives } from '../lib/drives.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
@@ -36,6 +37,7 @@ function row(over: Partial<AgentPageRow> = {}): AgentPageRow {
 
 beforeEach(() => {
   setLang('fr');
+  drives.rows = {};
   resetApp({ agents: [agent({ id: 'a7', name: 'pagination' })], tickets: [ticket({ id: 't41', key: 'POR-41' })] });
   agentpages.info = { 'p-12': row() };
   devpages.pages = {
@@ -136,5 +138,50 @@ describe('the view of an agent’s page', () => {
     expect(screen.getByRole('button', { name: 'Versions of the page' })).toBeTruthy();
     expect(document.querySelector('[data-testid="drive-band"]')?.textContent).toContain('Written by pagination');
     expect(document.querySelector('.bar')?.textContent).toContain('Review');
+  });
+});
+
+describe('an agent’s page its agent drives (AB-8, ESC-680)', () => {
+  const pins = [
+    { n: 1, what: 'Défile jusqu’à « Critères »', y: 0, height: 2400, view: 700 },
+    { n: 2, what: 'Met en évidence « Critère 3 »', y: 840, height: 2400, view: 700 },
+  ];
+  const driving = (over = {}) => ({
+    browser: 'page:p-12',
+    agent: 'a7',
+    hand: 'agent' as const,
+    stopped: false,
+    step: 2,
+    what: 'Met en évidence « Critère 3 »',
+    waiting: false,
+    passwordAsks: [],
+    pins,
+    ...over,
+  });
+
+  it('says beside the trust mention who drives, its last gesture with its number, and draws the rail of its pins', async () => {
+    const b = fakeBackend({
+      browser_drive_hand: () => driving({ hand: 'user' }),
+      browser_drive_place: () => ({ y: 840, height: 2400, view: 700 }),
+    });
+    drives.rows['page:p-12'] = driving();
+    render(AgentPageView, { pageKey: 'page:p-12' });
+    const band = document.querySelector('[data-testid="drive-band"]')!;
+    expect(band.textContent).toContain('Écrite par pagination');
+    expect(band.textContent).toContain('pagination pilote');
+    expect(band.querySelector('[data-testid="drive-last"]')?.textContent).toContain('Met en évidence « Critère 3 »');
+    expect([...document.querySelectorAll('[data-testid="drive-rail"] [data-pin]')].map((p) => p.textContent)).toEqual(['1', '2']);
+    await fireEvent.click(screen.getByRole('button', { name: 'Reprendre la main' }));
+    expect(b.called('browser_drive_hand').map((c) => [c.args.key, c.args.hand])).toEqual([['page:p-12', 'take']]);
+    await vi.waitFor(() => expect(screen.getByText('Tu as la main')).toBeTruthy());
+    await fireEvent.click(screen.getByRole('button', { name: 'La rendre' }));
+    expect(b.called('browser_drive_hand').map((c) => c.args.hand)).toEqual(['take', 'give']);
+  });
+
+  it('has no rail while nothing was driven, the trust mention alone', () => {
+    fakeBackend();
+    render(AgentPageView, { pageKey: 'page:p-12' });
+    expect(document.querySelector('[data-testid="drive-rail"]')).toBeNull();
+    expect(document.querySelector('[data-testid="drive-hand"]')).toBeNull();
   });
 });

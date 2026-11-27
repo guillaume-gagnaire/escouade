@@ -508,3 +508,40 @@ async fn a_private_projects_browsers_and_pages_are_driven_by_its_own_agents_alon
     );
     x.cancel().await.unwrap();
 }
+
+#[tokio::test]
+async fn reprendre_la_main_from_the_band_stops_the_agent_in_the_core_at_once() {
+    // ESC-680 (AB-8): the band's « Reprendre la main » is the core's, not the screen's: the very next call is refused
+    // without a gesture, « La rendre » lets the agent go on, « Continuer » with nothing waiting changes nothing, and a
+    // pin of the rail that is not kept is said.
+    let h = harness("mcp-drive-band");
+    let (_, a) = world(&h).await;
+    let pages = pages(&h);
+    let c = as_agent(&h, &a.id).await;
+    let scroll = json!({ "browser": a.id, "action": "scroll", "by": 100 });
+    // The agent drives: its gesture passes every refusal (no webview in the tests).
+    let e = refused(&c, "drive_browser", scroll.clone()).await;
+    assert!(e.contains(PASSED), "{e}");
+    let core = h.core.clone();
+    let v = super::browsers_drive::hand(&core, &pages, &a.id, HandMove::Take).await;
+    assert_eq!(v.hand, crate::browserdrive::Hand::User);
+    let e = refused(&c, "drive_browser", scroll.clone()).await;
+    assert!(e.contains("L’utilisateur a repris la main"), "{e}");
+    // Taken twice changes nothing.
+    let again = super::browsers_drive::hand(&core, &pages, &a.id, HandMove::Take).await;
+    assert_eq!(again, v);
+    // « Continuer » with nothing waiting: nothing.
+    let v = super::browsers_drive::hand(&core, &pages, &a.id, HandMove::Continue).await;
+    assert_eq!(v.hand, crate::browserdrive::Hand::User);
+    // « La rendre »: the agent goes on.
+    let v = super::browsers_drive::hand(&core, &pages, &a.id, HandMove::Give).await;
+    assert_eq!(v.hand, crate::browserdrive::Hand::Agent);
+    let e = refused(&c, "drive_browser", scroll).await;
+    assert!(e.contains(PASSED), "{e}");
+    // A pin nobody kept.
+    let e = super::browsers_drive::revisit(&core, &pages, &a.id, 42)
+        .await
+        .unwrap_err();
+    assert!(e.contains("no such pin"), "{e}");
+    c.cancel().await.unwrap();
+}
