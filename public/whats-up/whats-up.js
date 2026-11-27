@@ -1,8 +1,9 @@
-// whats-up v1
+// whats-up v2
 // What's up ? — release notes window for any web app: one file, no dependency, Shadow DOM.
 // <script type="module" src="/whats-up/whats-up.js"></script>
 // <whats-up src="/whats-up/" app="Mon app" lang="fr"></whats-up>
 // Theme: --wu-fond, --wu-texte, --wu-accent, --wu-doux, --wu-bord, --wu-rayon, --wu-police on the element or above.
+// theme-sombre="<selector>": when <html> matches it, a scene's <img data-sombre> shows its dark capture.
 
 /** Sortable key of a note id: `2026-11-27` < `2026-11-27-2` < … < `2026-11-27-10`. */
 export const cle = (id) => {
@@ -30,12 +31,17 @@ export function filtrerCss(css) {
     .replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q, u) => (urlPermise(u) ? m : 'none'));
 }
 
+/** A note's image: a file of the notes' folder (no scheme, no absolute path, no `..`), as captured by capturer.mjs. */
+export function imageSure(chemin) {
+  return /^(?:\.\/)?(?:[\w-]+\/)*[\w.-]+\.(?:webp|png|jpe?g|avif)$/i.test(chemin) && !chemin.split('/').includes('..');
+}
+
 const TEXTES = {
   fr: { marque: (app) => `Nouveautés de ${app}`, precedent: 'Précédent', suivant: 'Suivant', fin: 'C’est parti', fermer: 'Fermer', ecrans: 'Écrans', position: (i, n) => `${i} sur ${n}` },
   en: { marque: (app) => `What's new in ${app}`, precedent: 'Previous', suivant: 'Next', fin: "Let's go", fermer: 'Close', ecrans: 'Screens', position: (i, n) => `${i} of ${n}` },
 };
 
-const BALISES_SCENE = new Set('div span p b i strong em ul ol li br svg path line circle rect polyline polygon g'.split(' '));
+const BALISES_SCENE = new Set('div span p b i strong em ul ol li br svg path line circle rect polyline polygon g img'.split(' '));
 const BALISES_TEXTE = new Set(['b', 'i', 'strong', 'em', 'br']);
 const ATTRIBUTS = new Set('class style aria-hidden d viewbox x y x1 y1 x2 y2 cx cy r rx ry width height points fill stroke stroke-width stroke-linecap stroke-linejoin'.split(' '));
 
@@ -49,8 +55,10 @@ function nettoyer(html, balises) {
       for (const a of [...el.attributes]) {
         const nom = a.name.toLowerCase();
         const styleExterne = nom === 'style' && /url\s*\(/i.test(a.value) && filtrerCss(a.value) !== a.value;
-        if (!ATTRIBUTS.has(nom) || styleExterne) el.removeAttribute(a.name);
+        const image = el.localName === 'img' && (((nom === 'src' || nom === 'data-sombre') && imageSure(a.value)) || nom === 'alt');
+        if (!(ATTRIBUTS.has(nom) || image) || styleExterne) el.removeAttribute(a.name);
       }
+      if (el.localName === 'img' && !el.hasAttribute('src')) { el.remove(); continue; }
       parcourir(el);
     }
   };
@@ -71,7 +79,7 @@ const STYLE = `
 .marque { font-weight: 600; color: var(--wu-accent, #4f46e5); }
 .date { flex: 1; }
 .fermer { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; font-size: 18px; color: var(--wu-doux, #666); }
-.scene { position: relative; box-sizing: border-box; height: 340px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 16px;
+.scene { position: relative; box-sizing: border-box; height: 340px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 0;
   border: 1px solid var(--wu-bord, #e2e2e2); border-radius: calc(var(--wu-rayon, 12px) * .75);
   background: color-mix(in srgb, var(--wu-accent, #4f46e5) 6%, var(--wu-fond, #fff)); }
 .scene > * { max-width: 100%; min-width: 0; }
@@ -185,7 +193,11 @@ class WhatsUp extends Base {
     const lang = this.getAttribute('lang') === 'en' ? 'en' : 'fr';
     $('.date').textContent = new Date(`${fiche.id.slice(0, 10)}T12:00:00Z`).toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     // Replaced at each screen, so its animations play again.
-    $('.scene').replaceChildren(nettoyer(ecran.scene, BALISES_SCENE));
+    // Paths resolved before insertion: an inserted image starts loading at once.
+    const scene = nettoyer(ecran.scene, BALISES_SCENE);
+    this.images(scene);
+    $('.scene').replaceChildren(scene);
+    $('.scene').inert = true;
     $('.etiquette').textContent = `${this.t.position(this.i + 1, n)} · ${ecran.etiquette}`;
     $('h2').textContent = ecran.titre;
     $('.texte').replaceChildren(nettoyer(ecran.texte, BALISES_TEXTE));
@@ -194,6 +206,19 @@ class WhatsUp extends Base {
     $('.points').hidden = n < 2;
     [...$('.points').children].forEach((b, j) => (j === this.i ? b.setAttribute('aria-current', 'step') : b.removeAttribute('aria-current')));
     $('.suivant').focus();
+  }
+
+  // Captures are files of the notes' folder; in a dark app, the dark one when the note has it.
+  images(scene) {
+    const dossier = new URL((this.getAttribute('src') || '/whats-up/').replace(/\/?$/, '/'), location.href);
+    const sel = this.getAttribute('theme-sombre');
+    let sombre = false;
+    try { sombre = sel ? document.documentElement.matches(sel) : matchMedia('(prefers-color-scheme: dark)').matches; } catch { /* bad selector: light */ }
+    for (const im of scene.querySelectorAll('img')) {
+      const f = sombre && im.dataset.sombre ? im.dataset.sombre : im.getAttribute('src');
+      im.removeAttribute('data-sombre');
+      im.src = new URL(f, dossier).href;
+    }
   }
 
   touche(e) {

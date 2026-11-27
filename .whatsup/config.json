@@ -14,5 +14,12 @@
     "rayon": "10px",
     "police": "'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif"
   },
-  "apercu": { "lancer": "npx vite --port {port} --strictPort", "url": "http://localhost:{port}/?whats-up=apercu" }
+  "apercu": {
+    "lancer": "npx vite --port {port} --strictPort",
+    "url": "http://localhost:{port}/?whats-up=apercu"
+  },
+  "atelier": {
+    "lancer": "npx vite --config .whatsup/atelier/vite.config.ts --port {port}",
+    "url": "http://127.0.0.1:{port}/.whatsup/atelier/atelier.html"
+  }
 }
