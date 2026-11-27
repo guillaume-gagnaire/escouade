@@ -1233,6 +1233,7 @@ Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un se
 2. **Le tunnel par défaut du mode serveur** : SSH (proposé), WireGuard intégré ou Tailscale.
 3. **La version** : après les plugins (2.2 ?), avec le téléphone.
 4. **La distribution du serveur** : un binaire et systemd (proposé), puis une image Docker ?
+5. **Le client navigateur servi par `escouade-server`** (ESC-655, 2026-11-26) : étudié d'après le fork d'OshOEz dans [`BROWSER-CLIENT-STUDY.md`](BROWSER-CLIENT-STUDY.md), tickets BC-1 à BC-9 proposés ; ses quatre choix ont été tranchés par l'utilisateur, (a) pour chacun : le client fait, éteint par défaut et allumé par `--browser` (B1) ; l'appareil du navigateur tenu par une clé WebCrypto non extractible et un défi signé (B2) ; la socket Unix par défaut pour le service d'`install.sh`, le port pour l'image et le proxy (B3) ; le navigateur permis derrière un proxy, en HTTPS seulement (B4).
 
 ## Tâches
 

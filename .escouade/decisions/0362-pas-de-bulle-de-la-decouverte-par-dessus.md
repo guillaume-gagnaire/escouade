@@ -1,5 +1,5 @@
 ---
-number: 352
+number: 362
 id: "pas-de-bulle-de-la-decouverte-par-dessus"
 title: "Pas de bulle de la découverte par-dessus une fenêtre ouverte"
 date: "2026-11-19"

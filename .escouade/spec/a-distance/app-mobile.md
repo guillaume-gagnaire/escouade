@@ -3,7 +3,7 @@ title: "L'app mobile"
 subject: "a-distance"
 sources: ["docs/MOBILE.md (ESC-549, MO-0 : la conception, les choix M1 à M16, le découpage MO-1 à MO-11 ; § 3.13, ESC-568 : le Rust du téléphone et le format des notifications scellées ; § 3.14, ESC-569 : la coque)","apps/mobile (ESC-569 : l'app en Capacitor 8, sa coque, ses e2e, son README)","crates/escouade-mobile (ESC-568 : le tunnel, le proxy, les notifications scellées)","apps/mobile-plugin (ESC-568 : le plugin Capacitor et son API TypeScript)","design/mobile-2-3/README.md (les trois directions, la création en B, la page qui les compare) ; design/mobile-2-3/app/ (ESC-569 : les captures de l'app)","docs/MOBILE-STUDY.md (ESC-445 : Capacitor recommandé)","docs/REMOTE.md (Le téléphone ; Ajouts du 2026-11-14 : l'app mobile ; Plusieurs serveurs pilotés par un seul Escouade ; Ce qui change de machine, MS-4)","docs/SERVER-UX.md (les espaces, direction B, et « Partout »)","docs/INBOX.md (I15 : la boîte en file, premier écran du téléphone)","Préférence de l'utilisateur du 2026-11-20, relayée par le chef : « Firebase obligatoire ? J'aurais bien tout hosté moi-même sur Coolify. »","Choix de l'utilisateur du 2026-11-20, relayés par le chef : la direction B ; créer depuis le téléphone (« Je pilote depuis le téléphone, comment je crée un nouveau projet ? »)"]
 tickets: ["ESC-549","ESC-445","ESC-568","ESC-569","ESC-641","ESC-570"]
-decisions: [350,233,234,235,236,351,229,230,231,232,237,258,283,333,348]
+decisions: [360,233,234,235,236,361,229,230,231,232,237,258,283,333,348]
 compared: null
 ---
 

@@ -3,7 +3,7 @@ title: "Le coupe-circuit de l'administrateur"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md §9, §3.7, §3.9, §6.1, §6.2, §16 (TS-15)","crates/escouade-team/src/breaker.rs, crates/escouade-team/tests/breaker.rs","crates/escouade-team-server/src/api.rs (ADMIN_STREAMS, TEAM_STREAMS), src/live.rs (is_live)","src-tauri/src/team_breakers.rs, src-tauri/src/teams_breakers.rs, src-tauri/src/locks.rs (LockedBy::Breaker, Lock::denies, Locks::halt)","crates/escouade-policy/src/list.rs (team.maxOfflineHours)","src/components/team/BreakerBand.svelte, src/components/team/TeamBreakers.svelte, src/lib/team-breakers.ts","tests/e2e/team-breaker.spec.ts"]
 tickets: ["ESC-546","ESC-579"]
-decisions: [356]
+decisions: [366]
 compared: null
 ---
 

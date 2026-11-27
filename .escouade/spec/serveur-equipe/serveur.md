@@ -3,7 +3,7 @@ title: "Le serveur d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md","Revue de sécurité de la 2.3 (ESC-625), SR2-05, SR2-06, SR2-07 : le serveur d'équipe borné","Revue de sécurité de la 2.3 (ESC-625), SR2-04, SR2-10 à SR2-13 : quotas, journaux, jeton d'init, révoqués, dernier administrateur"]
 tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635","ESC-639","ESC-638","ESC-642"]
-decisions: [167,168,173,178,355,357,286,314,330,332,340,344]
+decisions: [167,168,173,178,365,367,286,314,330,332,340,344]
 compared: null
 ---
 

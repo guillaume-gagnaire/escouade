@@ -1,5 +1,5 @@
 ---
-number: 358
+number: 368
 id: "l-overseer-n-accorde-qu-une-lecture-dans"
 title: "L'Overseer n'accorde qu'une lecture dans le projet de l'agent, et ne lit que ses dossiers"
 date: "2026-11-26"

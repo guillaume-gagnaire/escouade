@@ -3,7 +3,7 @@ title: "Livraison et mises à jour"
 subject: "Introduction"
 sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml",".github/workflows/ci.yml",".github/dependabot.yml","scripts/beta-channel.mjs","scripts/beta-notes.mjs","scripts/image-tags.mjs","scripts/server-release.sh","scripts/team-server-trial.sh","scripts/compat-2.2.sh","docs/BETA-2.3.md","src-tauri/src/updates.rs","src-tauri/src/server/update.rs","src/components/modals/UpdateModal.svelte","src-tauri/windows/installer-hooks.nsh","tests/e2e/fixture.ts","tests/e2e/update-guard.ts",".github/workflows/advisories.yml","scripts/release-sums.mjs","scripts/no-testing.mjs","docs/SECURITY-DEPENDENCIES.md","deny.toml","src-tauri/.cargo/audit.toml","docs/security/audit-2026-11/rapport.md (SEC-04, SEC-16, SEC-18)","Revue de sécurité de la 2.3 (ESC-624), rapport privé SR-1, constats SR1-07, SR1-12, SR1-14 (ESC-640)","docs/WHATS-UP.md","src/lib/whats-up.ts","public/whats-up/whats-up.js","PR 51 (OshOEz)"]
 tickets: ["ESC-374","ESC-380","ESC-533","ESC-543","ESC-586","ESC-594","ESC-640","ESC-699"]
-decisions: [114,244,251,355,300,331,"what-s-up-fiches-en-francais-et-en-angla"]
+decisions: [114,244,251,365,300,331,"what-s-up-fiches-en-francais-et-en-angla"]
 compared: null
 ---
 

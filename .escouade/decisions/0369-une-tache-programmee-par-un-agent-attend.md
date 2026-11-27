@@ -1,5 +1,5 @@
 ---
-number: 359
+number: 369
 id: "une-tache-programmee-par-un-agent-attend"
 title: "Une tâche programmée par un agent attend l'accord de l'utilisateur ; un outil ne fait que proposer le retrait d'un souvenir d'équipe validé"
 date: "2026-11-26"
