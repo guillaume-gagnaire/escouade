@@ -16,6 +16,7 @@ export default {
   zoomOut: 'Dézoomer',
   zoom: '{percent} %',
   fit: 'Ajuster',
+  hideIdle: 'Masquer les inactifs',
   /** The line of a card whose agent waits for an answer. */
   waiting: 'attend ta réponse',
   /** The landing zone, south of a compass: what the agent delivered, its remote CI, its deployments. */
