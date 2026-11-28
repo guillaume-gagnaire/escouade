@@ -287,6 +287,7 @@ pub const PERSONAL_SPACE: &str = "servers.personalSpace";
 pub const AGGREGATE_VIEW: &str = "servers.aggregateView";
 pub const REMOTE_API: &str = "servers.remoteApi";
 pub const PHONE: &str = "servers.phone";
+pub const PRIVATE_NETWORK: &str = "servers.privateNetwork";
 pub const CONTENTLESS: &str = "servers.contentlessNotifications";
 pub const MCP_EXTERNAL: &str = "mcp.externalClients";
 pub const TEAM_SERVER: &str = "team.server";
@@ -1021,6 +1022,26 @@ pub const POLICIES: &[Def] = &[
             title: "Deny the access from the phone",
             help: "The phone’s WireGuard tunnel (ESC-567) does not turn on on this device nor on a server that receives it: no UDP port opened, nothing in the box, no API on the Tailscale address. The server mode through SSH stays allowed. Only the value false (0) is imposed.",
             locks: "Settings › Phone, off and grayed; a tunnel that is on turns off at once.",
+        },
+    },
+    Def {
+        key: PRIVATE_NETWORK,
+        sort: Sort::Restrict,
+        form: off(),
+        rows: &[],
+        within: None,
+        category: Category::Servers,
+        later: false,
+        example: "false",
+        fr: Text {
+            title: "Interdire le réseau privé (les connecteurs)",
+            help: "Un serveur Escouade qui la reçoit n’ouvre ni l’entrée des connecteurs (--connector-listen) ni la porte de ses agents, et refuse d’appairer un connecteur : aucun agent n’atteint un réseau privé par escouade-connector. Seule la valeur false (0) s’impose.",
+            locks: "L’entrée des connecteurs fermée et leurs canaux coupés, l’appairage refusé ; la porte non ouverte au démarrage du serveur.",
+        },
+        en: Text {
+            title: "Deny the private network (the connectors)",
+            help: "An Escouade server that receives it opens neither the connectors’ entry (--connector-listen) nor its agents’ gate, and refuses to pair a connector: no agent reaches a private network through escouade-connector. Only the value false (0) is imposed.",
+            locks: "The connectors’ entry closed and their channels cut, the pairing refused; the gate not opened at the server’s start.",
         },
     },
     // ---------- MCP ----------

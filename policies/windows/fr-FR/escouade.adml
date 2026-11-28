@@ -237,6 +237,12 @@ Clé : servers.remoteApi (booléen, false (0)). Sorte : restreindre. « Désact
 Sur le poste : Réglages › Téléphone, éteint et grisé ; un tunnel allumé s’éteint aussitôt.
 
 Clé : servers.phone (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="servers_privateNetwork">Interdire le réseau privé (les connecteurs)</string>
+      <string id="servers_privateNetwork_Explain">Un serveur Escouade qui la reçoit n’ouvre ni l’entrée des connecteurs (--connector-listen) ni la porte de ses agents, et refuse d’appairer un connecteur : aucun agent n’atteint un réseau privé par escouade-connector. Seule la valeur false (0) s’impose.
+
+Sur le poste : L’entrée des connecteurs fermée et leurs canaux coupés, l’appairage refusé ; la porte non ouverte au démarrage du serveur.
+
+Clé : servers.privateNetwork (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
       <string id="mcp_externalClients">Clients MCP extérieurs</string>
       <string id="mcp_externalClients_Explain">Ce que Claude hors d’Escouade (un client MCP extérieur) peut faire par le serveur MCP d’Escouade : denied (rien), readOnly (lire seulement), allowed (tout). Les agents d’Escouade ne sont pas concernés.
 

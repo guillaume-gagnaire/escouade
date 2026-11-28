@@ -293,6 +293,8 @@ fn the_table_names_its_keys_once_with_their_sort_and_rows() {
         if k.rows.is_empty() {
             assert!(
                 [
+                    // The private network of a server (RP-4): its entry, its gate, its pairing.
+                    PRIVATE_NETWORK,
                     MODELS,
                     MAX_EFFORT,
                     PLUGIN_ORIGINS_KEY,

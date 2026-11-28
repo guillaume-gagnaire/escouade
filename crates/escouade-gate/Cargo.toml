@@ -1,7 +1,7 @@
 [package]
 name = "escouade-gate"
 version = "0.1.0"
-description = "The gate of escouade-server (RP-1, docs/PRIVATE-NETWORK.md § 4.3): the agents' proxy on 127.0.0.1 (HTTP CONNECT and SOCKS5 by name), a token per agent, the list of each project, the routes to a connector, straight out or by the space's proxy, its refusals and its journal; `escouade-server via` for ssh"
+description = "The gate of escouade-server (RP-1, docs/PRIVATE-NETWORK.md § 4.3) and its connectors' entry (RP-4, § 4.5): the agents' proxy on 127.0.0.1 (HTTP CONNECT and SOCKS5 by name), a token per agent, the list of each project, the routes to a connector, straight out or by the space's proxy, its refusals and its journal; `escouade-server via` for ssh"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
 edition = "2021"
@@ -24,3 +24,14 @@ parking_lot = "0.13"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
+# The connectors' entry (RP-4): the protocol of the connectors (RP-2), its WebSocket and its TLS.
+escouade-connector-proto = { path = "../escouade-connector-proto" }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "sync", "time", "io-util", "test-util"] }
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }

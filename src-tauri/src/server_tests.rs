@@ -51,8 +51,11 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             endpoint: None,
             qr: false,
             name: None,
+            connector: Default::default(),
         }
     );
+    // The connectors' entry is off by default (RP-4).
+    assert_eq!(run.connector.listen, None);
     // A machine of the team (OE-1): `team pair <serveur> <CODE> [--name <nom>]`.
     let a = server::parse(&args("team pair team.acme.fr K7Q4M-2XZ8P --name ACME")).unwrap();
     assert_eq!(
@@ -141,6 +144,87 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
         assert!(server::parse(&args(bad)).is_err(), "{bad}");
     }
     assert!(server::help().contains("escouade-server pair"));
+}
+
+#[test]
+fn the_connectors_entry_and_its_commands_are_read_and_off_unless_asked() {
+    let a = server::parse(&args(
+        "--connector-listen 0.0.0.0:8443 --connector-cert /etc/e/cert.pem --connector-key /etc/e/key.pem --connector-url wss://escouade.exemple.fr:8443/connector",
+    ))
+    .unwrap();
+    assert_eq!(a.command, Command::Run);
+    assert_eq!(a.connector.listen, Some("0.0.0.0:8443".parse().unwrap()));
+    assert_eq!(
+        a.connector.cert.as_deref(),
+        Some(std::path::Path::new("/etc/e/cert.pem"))
+    );
+    assert_eq!(
+        a.connector.url.as_deref(),
+        Some("wss://escouade.exemple.fr:8443/connector")
+    );
+    // Its variables, for a container; an option given wins.
+    let env = |name: &str| match name {
+        "ESCOUADE_SERVER_CONNECTOR_LISTEN" => Some("[::]:9443".to_string()),
+        "ESCOUADE_SERVER_CONNECTOR_URL" => Some("wss://e.fr/connector".to_string()),
+        _ => None,
+    };
+    let b = server::parse_with(&[], env).unwrap();
+    assert_eq!(b.connector.listen, Some("[::]:9443".parse().unwrap()));
+    assert_eq!(b.connector.url.as_deref(), Some("wss://e.fr/connector"));
+    let c = server::parse_with(&args("--connector-listen 127.0.0.1:8443"), env).unwrap();
+    assert_eq!(c.connector.listen, Some("127.0.0.1:8443".parse().unwrap()));
+    for (line, want) in [
+        ("connector pair Acme", Command::ConnectorPair("Acme".into())),
+        (
+            "connector pair Client d'Acme",
+            Command::ConnectorPair("Client d'Acme".into()),
+        ),
+        ("connectors", Command::Connectors),
+        ("connectors list", Command::Connectors),
+        (
+            "connectors remove Acme",
+            Command::ConnectorRemove("Acme".into()),
+        ),
+    ] {
+        assert_eq!(server::parse(&args(line)).unwrap().command, want, "{line}");
+    }
+    for bad in [
+        "connector pair",
+        "connector",
+        "connectors remove",
+        "--connector-listen 8443",
+        "--connector-listen localhost:8443",
+        "--connector-url https://e.fr/connector",
+    ] {
+        assert!(server::parse(&args(bad)).is_err(), "{bad}");
+    }
+    let help = server::help();
+    for word in ["connector pair", "connectors remove", "--connector-listen"] {
+        assert!(help.contains(word), "{word}");
+    }
+}
+
+#[test]
+fn connector_pair_beside_the_server_leaves_a_code_in_the_secrets_and_remove_says_none() {
+    let data = data_dir("connector-pair");
+    let root = data.root().to_string_lossy().into_owned();
+    let line = |l: &str| {
+        let mut a = args(l);
+        a.extend(["--data-dir".to_string(), root.clone()]);
+        a
+    };
+    assert_eq!(server::main(line("connector pair Acme")), 0);
+    let store = Arc::new(FileStore::open(&data).unwrap());
+    let registry = crate::privateentry::registry_of(&data, store);
+    let pending = registry.pending(crate::model::now_ms() as u64);
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].name, "Acme");
+    assert_eq!(server::main(line("connectors")), 0);
+    assert_eq!(
+        server::main(line("connectors remove Acme")),
+        1,
+        "none paired"
+    );
 }
 
 // ---------- the pairing code ----------

@@ -1,9 +1,9 @@
 ---
 title: "Le mode serveur"
 subject: "a-distance"
-sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « La mise à jour automatique du serveur (ESC-702) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs, autoupdate.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","src/components/servers/UpdateServer.svelte, src/components/settings/ServerUpdates.svelte","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs, image-tags.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image), .github/dependabot.yml","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts, tests/e2e/server-update.spec.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »","Demande de l'utilisateur du 2026-11-27 : « Faudra gérer évidemment l'auto update du binaire serveur » (ESC-702)","Revue de sécurité de la 2.3 (ESC-624), rapport privé SR-1, constats SR1-07, SR1-12, SR1-13 (ESC-640)"]
-tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620","ESC-654","ESC-631","ESC-640","ESC-702"]
-decisions: [202,216,281,289,328,331,362]
+sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs, image-tags.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image), .github/dependabot.yml","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »","Revue de sécurité de la 2.3 (ESC-624), rapport privé SR-1, constats SR1-07, SR1-12, SR1-13 (ESC-640)","docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « La mise à jour automatique du serveur (ESC-702) », « Tâches › Mode serveur »","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs, autoupdate.rs), src-tauri/src/bin/escouade-server.rs","src/components/servers/UpdateServer.svelte, src/components/settings/ServerUpdates.svelte","tests/e2e/server.spec.ts, tests/e2e/server.ts, tests/e2e/server-update.spec.ts","Demande de l'utilisateur du 2026-11-27 : « Faudra gérer évidemment l'auto update du binaire serveur » (ESC-702)"]
+tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620","ESC-654","ESC-631","ESC-640","ESC-597","ESC-600","ESC-702"]
+decisions: [202,216,281,289,328,331,363,362]
 compared: null
 ---
 
@@ -195,3 +195,22 @@ Un serveur tourne H24 sur une machine qu'on dimensionne pour lui : son Kanban pr
 - La borne est celle du cœur qui fait tourner le Kanban : un client qui règle l'espace d'un serveur la reçoit du serveur (`board_capacity`, servie par l'API distante), avec la machine du serveur (ses cœurs, sa mémoire) pour l'avertissement au-delà de 6.
 - Une stratégie posée sur le serveur (`projects.maxParallel`) ou l'équipe d'un projet l'abaisse, comme sur un poste.
 - Les limites conseillées de l'image (4 Go, 2048 tâches) valent pour quelques agents ; pour beaucoup d'agents, compter la place d'un agent que dit l'avertissement (environ 6 Go et 2 cœurs pour un agent qui compile et lance des tests, jusqu'à 17 Go au pic d'une compilation).
+
+## Le réseau privé sur un serveur (RP-1, RP-4)
+
+Un serveur peut faire joindre à ses agents le réseau privé d'une entreprise par ses connecteurs (voir *Atteindre un réseau privé*). Rien n'est ouvert par défaut.
+
+| Commande ou option | Ce qu'elle fait |
+| --- | --- |
+| `--gate` (`ESCOUADE_SERVER_GATE`) | La porte seule : le seul proxy des agents, sur 127.0.0.1 |
+| `--connector-listen <adresse:port>` (`ESCOUADE_SERVER_CONNECTOR_LISTEN`) | L'entrée des connecteurs, et la porte avec elle : un port à part, qui ne parle que le protocole des connecteurs, jamais l'API distante |
+| `--connector-cert <fichier>`, `--connector-key <fichier>` (`ESCOUADE_SERVER_CONNECTOR_CERT`, `ESCOUADE_SERVER_CONNECTOR_KEY`) | Son certificat TLS, en PEM ; sans eux, elle se sert derrière un proxy TLS (Traefik, Caddy) |
+| `--connector-url wss://…/connector` (`ESCOUADE_SERVER_CONNECTOR_URL`) | Son adresse telle que les connecteurs la joignent, que donne l'appairage |
+| `escouade-server connector pair <nom>` | Le code d'appairage d'un connecteur : 8 lettres, 10 minutes, une fois ; avec l'adresse de l'entrée |
+| `escouade-server connectors` (`list`) | Les connecteurs, leur état, leur version, leur plafond ; puis ceux retirés |
+| `escouade-server connectors remove <nom ou id>` | Retire un connecteur : sa clé ne vaut plus ; un serveur qui tourne ferme son canal dans les deux secondes |
+
+- Comme `pair` et `devices`, ces commandes marchent que le serveur tourne ou non.
+- `secrets.json` garde aussi la clé du serveur pour les connecteurs, la clé publique de chacun et les codes qui attendent (leur clé prépartagée, jamais le code) ; `connectors.json`, à côté (0600), leur liste et la trace des retirés, sans aucune clé.
+- Le journal dit l'entrée ouverte, son adresse et si elle a son propre TLS, chaque connecteur appairé, connecté ou coupé, chaque code faux et sa source ; jamais un code ni une clé.
+- La stratégie `servers.privateNetwork` à `false` posée sur le serveur ferme l'entrée, ne laisse pas la porte s'ouvrir au démarrage et refuse l'appairage.

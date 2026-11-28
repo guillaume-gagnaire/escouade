@@ -38,8 +38,8 @@ pub use escouade_policy::list::{
     EXTENSIONS_ALLOWED, FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MAX_OFFLINE_HOURS, MAX_PARALLEL,
     MCP_EXTERNAL, MODELS, MODES_KEY, OFFLINE, ONLY_THIS_SERVER, PERSONAL_SPACE, PHONE,
     PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, PLUGIN_PROJECT_SETTINGS, POLICIES as KEYS,
-    PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS, TEAM_FINGERPRINT,
-    TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
+    PRIVATE_NETWORK, PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS,
+    TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
 };
 
 /// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
@@ -1020,6 +1020,18 @@ impl Locks {
         Ok(())
     }
 
+    /// Whether the private network may be served (RP-4): the connectors' entry, the gate, the pairing of a connector.
+    pub fn check_private_network(&self) -> Result<()> {
+        if self.off(PRIVATE_NETWORK) {
+            bail!(tr!(
+                "Le réseau privé (l’entrée des connecteurs, la porte, l’appairage d’un connecteur) est interdit {by} ({PRIVATE_NETWORK}).",
+                "The private network (the connectors’ entry, the gate, the pairing of a connector) is denied {by} ({PRIVATE_NETWORK}).",
+                by = self.by_line(PRIVATE_NETWORK)
+            ));
+        }
+        Ok(())
+    }
+
     /// What Claude outside Escouade may do through its MCP server: `denied`, `readOnly` or `allowed`.
     pub fn mcp_external(&self) -> &str {
         self.text(MCP_EXTERNAL).unwrap_or("allowed")
@@ -1923,6 +1935,16 @@ impl crate::core::Core {
             let me = self.clone();
             tauri::async_runtime::spawn(async move {
                 let _ = me.phone.apply(&me).await;
+            });
+        }
+        // The private network (RP-4): its entry closed at once when a policy forbids it, opened again when it no longer
+        // does (on a server that asked for it).
+        if self.private_network.asked().any() {
+            let me = self.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = me.apply_private_network().await {
+                    log::warn!("escouade-server: the private network: {e:#}");
+                }
             });
         }
         *self.team_locks.write() = by_team;
