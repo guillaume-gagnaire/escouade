@@ -1,1 +1,1 @@
-agents,code,Claude Code,Codex,IA,développeur,Kanban,autorisation,WireGuard,serveur,terminal
+agents,code,IA,développeur,Kanban,autorisation,serveur,terminal,tickets,automatisation,distance
