@@ -131,8 +131,12 @@ Tried without secrets (2026-11-28, fastlane 2.242.0): every lane stops before do
   | Folder | Size | For |
   |---|---|---|
   | `play` | 1,080 × 2,160 | Google Play, phone |
+  | `play-tablet-7` | 1,080 × 1,920 | Google Play, 7-inch tablet |
+  | `play-tablet-10` | 1,800 × 3,200 | Google Play, 10-inch tablet |
   | `appstore-6.9` | 1,290 × 2,796 | App Store, 6.9-inch iPhone |
   | `appstore-6.5` | 1,242 × 2,688 | App Store, 6.5-inch iPhone |
+
+  On a tablet, the phone's page is centred, 600 px at most (M10). No iPad: the app is declared for the iPhone alone, so the App Store asks no iPad captures.
 
   Six screens per locale: the “Your turn” thread (dark and light), an authorization unfolded, a choice and its renders, the conversation, the agents, the Kanban. The agents' texts come from the fake `claude`, in French; the app's own follow the locale.
 - **The icons and Google Play's images**, drawn from Escouade's logo (`website/public/logo.svg`) by `node apps/mobile/scripts/icons.mjs`: the app's icons and launch screens (Android and iOS), Play's icon at 512 × 512 and its feature graphic at 1,024 × 500 (a PNG without transparency), in `fr-FR` and `en-US`, in `apps/mobile/store/graphics/play/`. The App Store takes the icon from the binary.
