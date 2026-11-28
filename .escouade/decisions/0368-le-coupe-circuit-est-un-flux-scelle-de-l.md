@@ -1,5 +1,5 @@
 ---
-number: 366
+number: 368
 id: "le-coupe-circuit-est-un-flux-scelle-de-l"
 title: "Le coupe-circuit est un flux scellé de l'équipe, appliqué comme une restriction de rang 5 du verrou"
 date: "2026-11-20"

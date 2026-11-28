@@ -3,7 +3,7 @@ title: "La mémoire d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","src-tauri/src/teammemory.rs","src-tauri/src/mcp/memory.rs","src-tauri/src/memory.rs","docs/security/audit-2026-11/build.mjs","src/lib/i18n/fr/memory.ts","src/components/settings/TeamMemory.svelte","Revue de sécurité de la 2.3 (ESC-626), constat SR3-04 : corrigé par ESC-649","Revue de sécurité de la 2.3 (ESC-627), constat SR4-05 (rapport privé)"]
 tickets: ["ESC-518","ESC-649","ESC-647"]
-decisions: [203,369]
+decisions: [203,371]
 compared: null
 ---
 

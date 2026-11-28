@@ -1,5 +1,5 @@
 ---
-number: 360
+number: 362
 id: "app-mobile-m1-la-direction-de-l-app-prop"
 title: "App mobile, M1 : la direction de l'app est B, « Le fil » (choisie par l'utilisateur)"
 date: "2026-11-20"

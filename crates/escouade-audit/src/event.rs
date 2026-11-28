@@ -147,6 +147,19 @@ pub struct Who {
     pub name: Option<Name>,
 }
 
+/// Whose role changed: a member of the roster (S2), or a device and its role on the server (S1, which knows no
+/// member).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoleTarget {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member: Option<Id>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device: Option<Id>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<Name>,
+}
+
 /// A member and their role.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -405,6 +418,10 @@ detail!(RateLimited {
 });
 detail!(ClientTooOld { version: Version });
 detail!(
+    /// A body refused for its size (413): the most bytes the route takes.
+    TooLarge { max: u64 }
+);
+detail!(
     /// Open to the team, or a list of devices.
     AccessChanged { open: bool, devices: List<Id> }
 );
@@ -634,7 +651,7 @@ events! {
     /// S1's own word of an enrolment (`/v1/enroll`, §3.1), its token's sort: S2 says `team.created` or `device.added`.
     DeviceEnrolled = "device.enrolled", 2, DeviceTarget, DeviceEnrolled;
     DeviceRevoked = "device.revoked", 3, DeviceTarget, DeviceRevoked;
-    RoleChanged = "role.changed", 4, Who, RoleChanged;
+    RoleChanged = "role.changed", 4, RoleTarget, RoleChanged;
     EpochOpened = "epoch.opened", 2, Nothing, EpochOpened;
     InvitationCreated = "invitation.created", 2, InvitationTarget, InvitationDetail;
     InvitationUsed = "invitation.used", 2, InvitationTarget, InvitationDetail;
@@ -649,6 +666,8 @@ events! {
     SessionRefused = "session.refused", 3, Nothing, SessionRefused;
     RateLimited = "rate.limited", 3, Nothing, RateLimited;
     ClientTooOld = "client.too_old", 1, Nothing, ClientTooOld;
+    /// A body the server refused for its size (AU-2, §3.1: « les tailles refusées »).
+    RequestTooLarge = "request.too_large", 2, Nothing, TooLarge;
     ProjectAccessChanged = "project.access.changed", 3, ProjectTarget, AccessChanged;
     /// S1's word of an entry written to a stream (§3.1): the anchor holds its number, its epoch and the fingerprint of
     /// its encrypted bytes, which S2's event of the same entry repeats (§5.3).

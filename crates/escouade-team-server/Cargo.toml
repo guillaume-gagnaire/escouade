@@ -49,6 +49,8 @@ async-trait = "0.1"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
+# The server's own audit (AU-2): the model, its outputs and its buffer.
+escouade-audit = { path = "../escouade-audit" }
 
 [dev-dependencies]
 tempfile = "3"

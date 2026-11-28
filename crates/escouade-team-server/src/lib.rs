@@ -7,6 +7,7 @@
 //! broadcasts the new entries by WebSocket. `README.md` says what it sees, how to install it, and what is left.
 
 pub mod api;
+pub mod audit;
 pub mod auth;
 pub mod config;
 pub mod db;
@@ -55,9 +56,44 @@ pub struct App {
     /// The pairing relay's steps without a session, by address (SR2-05).
     pub pair_rate: Limiter<IpAddr>,
     pub trust_proxy: bool,
+    /// The server's own audit (AU-2): off unless an output is asked.
+    pub audit: audit::Audit,
 }
 
 pub type Shared = Arc<App>;
+
+/// Which device a request is of, once its session is read (`auth::Authed` fills it): what `observe` tells the audit of
+/// a refusal that comes after (a device over its rate, a body too large).
+#[derive(Default)]
+pub struct Who(pub std::sync::Mutex<Option<(Id, Id)>>);
+
+/// The address of a request's client, whole (the audit's, which `--audit-ip` cuts): the peer, or the last hop of
+/// `X-Forwarded-For` behind a trusted proxy.
+pub fn client_ip(app: &App, parts: &axum::http::request::Parts) -> Option<IpAddr> {
+    let peer = parts
+        .extensions
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|c| c.0);
+    let forwarded = parts
+        .headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok());
+    listen::client_address(peer, forwarded, app.trust_proxy)
+}
+
+/// The client's address, as an extractor for the routes without a session (`enroll`, the signed challenge).
+pub struct ClientIp(pub Option<IpAddr>);
+
+impl axum::extract::FromRequestParts<Shared> for ClientIp {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        app: &Shared,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(ClientIp(client_ip(app, parts)))
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -66,6 +102,8 @@ pub enum Error {
     Store(Box<db::StoreError>),
     #[error(transparent)]
     Blobs(#[from] files::BlobError),
+    #[error("the audit: {0}")]
+    Audit(std::io::Error),
 }
 
 impl From<db::StoreError> for Error {
@@ -95,6 +133,7 @@ impl Server {
             device_rate: Limiter::new(config.rates.per_device),
             pair_rate: Limiter::new(config.rates.pairing),
             trust_proxy: config.trust_proxy,
+            audit: audit::Audit::start(&config.audit, &config.data).map_err(Error::Audit)?,
         });
         Ok(Server { app })
     }
@@ -281,6 +320,7 @@ impl Server {
                 app.device_rate.sweep();
                 app.pair_rate.sweep();
                 app.hub.sweep();
+                app.audit.sweep();
                 app.pairs.sweep();
                 if let Err(e) = app.store.sweep_tokens(util::now()).await {
                     tracing::warn!("tokens: {e}");
@@ -366,8 +406,39 @@ async fn observe(State(app): State<Shared>, req: Request, next: Next) -> Respons
         .get::<MatchedPath>()
         .map_or("unmatched", |m| m.as_str())
         .to_string();
+    let who = Arc::new(Who::default());
+    let (req, audited) = if app.audit.is_on() {
+        let (mut parts, body) = req.into_parts();
+        parts.extensions.insert(who.clone());
+        let ip = client_ip(&app, &parts);
+        let version = parts
+            .headers
+            .get(handshake::HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        (Request::from_parts(parts, body), Some((ip, version)))
+    } else {
+        (req, None)
+    };
     let response = next.run(req).await;
     let status = response.status();
+    if let Some((ip, version)) = audited {
+        let refusal = match status {
+            StatusCode::TOO_MANY_REQUESTS => Some(audit::Refusal::RateLimited),
+            StatusCode::UPGRADE_REQUIRED => Some(audit::Refusal::TooOld),
+            StatusCode::PAYLOAD_TOO_LARGE => Some(audit::Refusal::TooLarge(
+                response
+                    .extensions()
+                    .get::<transport::TooLarge>()
+                    .map_or(0, |t| t.0),
+            )),
+            _ => None,
+        };
+        if let Some(refusal) = refusal {
+            let who = *who.0.lock().unwrap_or_else(|e| e.into_inner());
+            app.audit.refused(refusal, who, ip, version.as_deref());
+        }
+    }
     app.metrics.request(&method, &route, status.as_u16());
     let ms = started.elapsed().as_millis() as u64;
     if status == StatusCode::INTERNAL_SERVER_ERROR {

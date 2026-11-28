@@ -411,6 +411,24 @@ impl TokenKind {
             TokenKind::Recovery => 2,
         }
     }
+
+    pub fn from_code(c: i64) -> TokenKind {
+        match c {
+            0 => TokenKind::Team,
+            2 => TokenKind::Recovery,
+            _ => TokenKind::Device,
+        }
+    }
+}
+
+/// An entry appended, and the epoch it stands at (`Store::append`): its own for a commit or a void, its stream's
+/// (`stands`, the number of the stream's commits) for a message.
+pub(crate) fn with_epoch(entry: Entry, stands: u64) -> (Entry, u64) {
+    let epoch = match entry.kind {
+        Kind::Message => stands,
+        _ => entry.epoch.unwrap_or(stands),
+    };
+    (entry, epoch)
 }
 
 /// A project's snapshot a device found unreadable (SR2-01): its messages are never pruned while it is flagged, and an
@@ -480,8 +498,9 @@ pub enum StoreError {
     BadToken,
     /// The token served already: kept used until it expires, so its second user is told so (and its team's
     /// administrators too).
+    /// Its team, when the token is one's (the audit says whose, AU-2).
     #[error("this token was already used")]
-    TokenUsed,
+    TokenUsed(Option<Id>),
     #[error("a team keeps one administrator on the server at least")]
     LastAdmin,
     #[error("this key already has a device")]
@@ -564,13 +583,14 @@ pub trait Store: Send + Sync {
     /// Uses a token once: a team token makes a team and its administrator, a device token a member of its team, a
     /// recovery token an administrator of its team. A used token stays, used, until its time is over (then a week):
     /// a second use is `TokenUsed`, and noted for the team's administrators (`token_alerts`).
+    /// Answers the device and the sort of the token it used.
     async fn enroll(
         &self,
         hash: [u8; 32],
         public_key: [u8; 32],
         now: i64,
         quotas: Quotas,
-    ) -> Result<Device>;
+    ) -> Result<(Device, TokenKind)>;
 
     async fn device(&self, id: Id) -> Result<Option<Device>>;
     async fn devices(&self, team: Id) -> Result<Vec<Device>>;
@@ -589,6 +609,8 @@ pub trait Store: Send + Sync {
     /// administrator's). A void (SR2-02) must be for the epoch of the stream's last commit, not declared null yet: that
     /// commit is then declared null (it stays, served as before), and its epoch free again, kept to the administrators
     /// until their next commit.
+    /// Answers the entry, and the epoch it stands at for the audit's anchor (AU-2): a commit's or a void's own, a
+    /// message's the one its stream is in (the number of its commits).
     async fn append(
         &self,
         team: Id,
@@ -596,7 +618,7 @@ pub trait Store: Send + Sync {
         entry: NewEntry,
         quotas: Quotas,
         page: Page,
-    ) -> Result<Entry>;
+    ) -> Result<(Entry, u64)>;
     /// The entries after `since`, a page at most, and whether more follow.
     async fn read(
         &self,
@@ -703,6 +725,7 @@ pub trait Store: Send + Sync {
     async fn open_access(&self, team: Id, project: Id) -> Result<()>;
     /// Takes, renews or gives back a ticket's claim, in one transaction (§4.2). A new claim makes the project known
     /// and counts `ROW_BYTES` in the quota (SR2-04).
+    /// Answers the claim, and the one before (none for a ticket never claimed): what the audit tells apart (AU-2).
     #[allow(clippy::too_many_arguments)]
     async fn claim(
         &self,
@@ -714,7 +737,7 @@ pub trait Store: Send + Sync {
         now: i64,
         lease: i64,
         quotas: Quotas,
-    ) -> Result<Claim>;
+    ) -> Result<(Claim, Option<Claim>)>;
     /// A project's claims.
     async fn claims(&self, team: Id, project: Id) -> Result<Vec<Claim>>;
     /// The next number of a project's tickets (§4.1): 1, 2, 3…, one at a time, never twice.

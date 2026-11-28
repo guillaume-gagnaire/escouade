@@ -26,6 +26,7 @@ pub mod frame;
 pub mod life;
 pub mod limits;
 pub mod noise;
+pub mod pairing;
 pub mod transport;
 pub mod version;
 

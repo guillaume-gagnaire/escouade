@@ -1,5 +1,5 @@
 ---
-number: 365
+number: 367
 id: "une-beta-s-annonce-comme-beta-partout-di"
 title: "Une bêta s'annonce comme bêta partout, Discord compris, et le serveur d'équipe se publie avec chaque version"
 date: "2026-11-21"

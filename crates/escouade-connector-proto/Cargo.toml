@@ -32,6 +32,8 @@ percent-encoding = "2"
 base64 = "0.22"
 hex = "0.4"
 zeroize = "1"
+# The pairing's pre-shared key from the code (BLAKE2s, as the Noise suite).
+blake2 = "0.10"
 thiserror = "2"
 
 [dev-dependencies]

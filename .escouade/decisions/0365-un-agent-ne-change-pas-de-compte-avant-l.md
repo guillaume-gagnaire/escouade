@@ -1,5 +1,5 @@
 ---
-number: 363
+number: 365
 id: "un-agent-ne-change-pas-de-compte-avant-l"
 title: "Un agent ne change pas de compte avant le tour que Claude Code doit sur une tâche de fond finie"
 date: "2026-11-18"

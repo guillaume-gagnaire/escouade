@@ -1,13 +1,13 @@
 ---
 title: "Atteindre un réseau privé"
 subject: "a-distance"
-sources: ["docs/PRIVATE-NETWORK.md (ESC-551, l'étude RP-0 ; § 4.2 le protocole, § 4.3 la porte, § 4.4 les refus, § 4.8 la coupure, § 5 les choix R1 à R12, § 6 les tickets RP-1 à RP-9)","Réponse de l'utilisateur du 2026-11-21 (la demande a-22 de la boîte « À toi », ESC-587) : « A · Les recommandations : V0 guidée, V2 construite »","docs/REMOTE.md : « Le mode serveur », MS-1 (ESC-514, l'appairage), MS-3 (ESC-515), « Ce qui change de machine, MS-4 » (ESC-538), « Le téléphone », « Les agents sur le serveur, en auto-hébergé »","docs/SERVER-UX.md","docs/TEAM-SERVER.md § 13","docs/security/audit-2026-11/rapport.md, § 6.1 et SEC-02","src-tauri/src/fence.rs","crates/escouade-model/src/model.rs (proxy_env, network_env)","crates/escouade-plugins/src/procs.rs (variables refusées aux plugins)","crates/escouade-gate (la porte, RP-1 : lib.rs, http.rs, socks.rs, outside.rs, env.rs, via.rs, journal.rs, lists.rs ; tests/gate.rs, le faux connecteur)","src-tauri/src/privatenet.rs et privatenet_tests.rs (le cœur et la porte, RP-1)","src-tauri/src/server/mod.rs (--gate, ESCOUADE_SERVER_GATE, via)","crates/escouade-model/src/git.rs (set_net_env, les git du cœur)","crates/escouade-connector-proto (ESC-598, RP-2 : le transport, Noise IK, les trames, les versions, les bornes ; ses vecteurs dans tests/vectors.rs)","fuzz/fuzz_targets/connector-frames.rs, fuzz/fuzz_targets/connector-handshake.rs (ESC-598)","Demande de l'utilisateur du 2026-11-20 (ESC-551) : des agents sur un serveur Escouade qui joignent un git et des services derrière le VPN d'une entreprise"]
+sources: ["docs/PRIVATE-NETWORK.md (ESC-551, l'étude RP-0 ; § 4.2 le protocole, § 4.3 la porte, § 4.4 les refus, § 4.5 l'appairage, § 4.8 la coupure, § 4.9 la fiche, § 5 les choix R1 à R12, § 6 les tickets RP-1 à RP-9)","Réponse de l'utilisateur du 2026-11-21 (la demande a-22 de la boîte « À toi », ESC-587) : « A · Les recommandations : V0 guidée, V2 construite »","docs/REMOTE.md : « Le mode serveur », MS-1 (ESC-514, l'appairage), MS-3 (ESC-515), « Ce qui change de machine, MS-4 » (ESC-538), « Le téléphone », « Les agents sur le serveur, en auto-hébergé »","docs/SERVER-UX.md","docs/TEAM-SERVER.md § 13","docs/security/audit-2026-11/rapport.md, § 6.1 et SEC-02","src-tauri/src/fence.rs","crates/escouade-model/src/model.rs (proxy_env, network_env)","crates/escouade-plugins/src/procs.rs (variables refusées aux plugins)","crates/escouade-gate (la porte, RP-1 : lib.rs, http.rs, socks.rs, outside.rs, env.rs, via.rs, journal.rs, lists.rs ; tests/gate.rs, le faux connecteur)","src-tauri/src/privatenet.rs et privatenet_tests.rs (le cœur et la porte, RP-1)","src-tauri/src/server/mod.rs (--gate, ESCOUADE_SERVER_GATE, via)","crates/escouade-model/src/git.rs (set_net_env, les git du cœur)","crates/escouade-connector-proto (ESC-598, RP-2 : le transport, Noise IK, les trames, les versions, les bornes ; ses vecteurs dans tests/vectors.rs ; src/pairing.rs, l'appairage, ESC-599)","fuzz/fuzz_targets/connector-frames.rs, fuzz/fuzz_targets/connector-handshake.rs (ESC-598)","crates/escouade-connector (ESC-599, RP-3 : config.rs, ceiling.rs, guard.rs, run.rs, commands.rs, keys.rs, journal.rs, main.rs ; tests/checks.rs, service.rs, pair_and_run.rs, check_and_crate.rs)","Demande de l'utilisateur du 2026-11-20 (ESC-551) : des agents sur un serveur Escouade qui joignent un git et des services derrière le VPN d'une entreprise"]
 tickets: ["ESC-551","ESC-587","ESC-597","ESC-598","ESC-599","ESC-600","ESC-601","ESC-602","ESC-603","ESC-604","ESC-605","ESC-654"]
-decisions: ["reseau-prive-r1-le-serveur-dans-l-entrep","reseau-prive-r2-le-connecteur-parle-par","reseau-prive-r3-une-entree-des-connecteu","reseau-prive-r4-un-plafond-au-connecteur","reseau-prive-r5-la-liste-d-un-projet-est","reseau-prive-r6-l-agent-emprunte-la-port",336,337,338,345]
+decisions: ["reseau-prive-r1-le-serveur-dans-l-entrep","reseau-prive-r2-le-connecteur-parle-par","reseau-prive-r3-une-entree-des-connecteu","reseau-prive-r4-un-plafond-au-connecteur","reseau-prive-r5-la-liste-d-un-projet-est","reseau-prive-r6-l-agent-emprunte-la-port",336,337,338,345,359]
 compared: null
 ---
 
-> **Décidé ; la porte (RP-1) et le protocole (RP-2) construits, le reste à venir.** L'utilisateur a choisi le 2026-11-21 (ESC-587) les recommandations de l'étude RP-0 (`docs/PRIVATE-NETWORK.md`, ESC-551) : « V0 guidée, V2 construite ». Les choix R1 à R12 ci-dessous sont donc ceux de l'étude ; R1 à R6 ont chacun une décision proposée. La construction passe par les tickets RP-1 à RP-9 (ESC-597 à ESC-605), qui mettent cette page à jour à mesure : **RP-1 (ESC-597) a construit la porte** (*La porte, construite*, plus bas) ; sans connecteur (RP-4), elle refuse ce qui est d'un réseau privé et laisse sortir le reste. **RP-2 (ESC-598) a construit le protocole** (la crate `escouade-connector-proto`, voir *Le protocole* plus bas).
+> **Décidé ; la porte (RP-1), le protocole (RP-2) et le connecteur (RP-3) construits, le reste à venir.** L'utilisateur a choisi le 2026-11-21 (ESC-587) les recommandations de l'étude RP-0 (`docs/PRIVATE-NETWORK.md`, ESC-551) : « V0 guidée, V2 construite ». Les choix R1 à R12 ci-dessous sont donc ceux de l'étude ; R1 à R6 ont chacun une décision proposée. La construction passe par les tickets RP-1 à RP-9 (ESC-597 à ESC-605), qui mettent cette page à jour à mesure : **RP-1 (ESC-597) a construit la porte** (*La porte, construite*, plus bas) ; sans connecteur (RP-4), elle refuse ce qui est d'un réseau privé et laisse sortir le reste. **RP-2 (ESC-598) a construit le protocole** (la crate `escouade-connector-proto`, voir *Le protocole* plus bas). **RP-3 (ESC-599) a construit le programme `escouade-connector`** (*Le connecteur, construit*, plus bas) ; il n'est pas encore distribué (RP-6).
 
 ## Ce que c'est
 
@@ -112,7 +112,78 @@ La crate `crates/escouade-connector-proto`, partagée par `escouade-server` (RP-
 - **Le contrôle de débit** : chaque flux a une fenêtre de 256 Kio dans chaque sens, rendue à mesure que le lecteur lit ; un flux lent n'arrête que lui (un `git clone` lent ne bloque pas un `npm install`). Un pair qui dépasse sa fenêtre est coupé.
 - **La vie** : un `ping` toutes les 15 s, des deux côtés ; rien reçu pendant 45 s, le canal est coupé et tous ses flux fermés. Le connecteur rouvre après 250 ms, 500 ms, 1 s, 2 s, 4 s, puis toutes les 5 s.
 - **Les bornes**, réglables par l'appelant : une trame de 64 Kio au plus (32 Kio au moins), 256 flux ouverts, 32 ouvertures demandées par seconde (refusées comprises), un flux muet fermé après 10 min ; au-delà, l'ouverture est refusée (`bornes`), ou le canal coupé pour une trame trop grande.
-- **Les essais** : des vecteurs de test (chaque trame, octet par octet), la poignée de main avec des clés faites dans les tests, un faux proxy d'entreprise et une fausse inspection TLS en local, deux flux dont un lent, le temps simulé pour le ping et la coupure ; deux cibles de fuzzing dans `fuzz/` (`connector-frames`, `connector-handshake`).
+- **L'appairage** (ajouté par RP-3, ESC-599, le module `pairing`, pris tel quel par RP-4) : sur le même port, au chemin de l'entrée suivi de `/pair` (`wss://…:8443/connector/pair`). Une poignée de main `Noise_XXpsk0_25519_ChaChaPoly_BLAKE2s` dont la clé prépartagée est tirée du code mis en forme (majuscules, sans tiret ni blanc ; BLAKE2s-256 de `escouade-connector-pair/1` suivi du code) : **le code ne passe jamais**, même sous une inspection TLS, et le serveur peut n'en garder que cette clé. Les trois messages de XX (le premier porte la version du connecteur, le deuxième le verdict du serveur), puis un quatrième du serveur, chiffré : appairé, ou refusé avec sa raison. Un code faux (ou aucun en attente) ne déchiffre pas le premier message : le serveur ferme sans un mot, et compte un essai raté. Une version refusée l'est par le quatrième message, avec ce qu'il faut faire, sans consommer le code. Chaque côté prouve qu'il tient la clé privée de la clé publique qu'il donne.
+- **Les essais** : des vecteurs de test (chaque trame, octet par octet), la poignée de main avec des clés faites dans les tests, un faux proxy d'entreprise et une fausse inspection TLS en local, deux flux dont un lent, le temps simulé pour le ping et la coupure ; deux cibles de fuzzing dans `fuzz/` (`connector-frames`, `connector-handshake`) ; l'appairage (bon code parmi plusieurs, code faux, aucun en attente, version refusée, refus du serveur, silence).
+
+## Le connecteur, construit (RP-3, ESC-599)
+
+Le programme `escouade-connector`, la crate `crates/escouade-connector`, en Rust, sans rien du cœur ni de Tauri (le protocole, `tokio`, `rustls`, `serde`, TOML). Sa version est celle de l'app (`scripts/version.mjs`) : c'est elle que le serveur juge. Il n'est pas encore distribué ni installé en service (RP-6). Ses textes (commandes, journal, raisons des refus) sont en anglais, comme ceux du protocole ; la porte les met entre parenthèses dans ses propres phrases. Les choix de ce ticket sont la décision proposée `reseau-prive-rp-3-le-connecteur-connecto`.
+
+### `connector.toml`
+
+Écrit par le service informatique (`--config`, `ESCOUADE_CONNECTOR_CONFIG`, sinon `/etc/escouade-connector/connector.toml`, ou `%ProgramData%\escouade-connector\connector.toml` sous Windows) :
+
+```toml
+server = "wss://escouade.exemple.fr:8443/connector"     # facultatif : pair le donne aussi
+proxy = "http://it:motdepasse@proxy.acme.internal:3128"  # facultatif : sinon HTTPS_PROXY et NO_PROXY ; http:// et Basic seulement
+authorities = "/etc/escouade-connector/acme-root.pem"    # autorités en plus (l'inspection TLS)
+allow = ["gitlab.acme.internal:22", "*.npm.acme.internal:443", "10.20.1.5:8443"]   # le plafond
+ranges = ["10.20.0.0/16"]                                # facultatif : toute adresse jointe y est
+auto_update = false                                      # lu seulement (RP-6 le fera)
+[limits]
+max_streams = 256        # de 1 à 4 096
+opens_per_second = 32    # de 1 à 1 024
+idle_minutes = 10        # de 1 à 1 440
+```
+
+- **Une clé inconnue est une erreur** (une faute de frappe ne passe pas pour une règle oubliée), comme une règle illisible (`gitlab` sans port, `*.internal:22` sous un nom d'un seul mot, une plage dont les bits passent sa longueur), avec sa ligne ; jamais le mot de passe du proxy dans le message.
+- **Une règle** : `hôte:port` ; `*.suffixe:port` pour chaque nom sous le suffixe, pas le suffixe lui-même ; une adresse écrite telle quelle (`10.20.1.5:8443`, `[fd00::5]:22`), seule façon de permettre une adresse. Les hôtes sont mis en forme comme à la porte : minuscules, sans point final, nom international en `xn--`, IPv6 sans crochets, IPv4 dans IPv6 lue comme IPv4.
+- **Relu à chaud**, toutes les 2 s : le changement est dit au journal (ce qui a été ajouté et retiré du plafond, les bornes) ; le plafond est renvoyé au serveur ; un flux ouvert que le nouveau plafond (ou ses plages) ne permet plus est **fermé**, dit au journal ; un autre serveur, proxy ou fichier d'autorités rouvre le canal ; les nouvelles bornes de flux et d'ouvertures valent aussitôt, le silence à la prochaine connexion. Un fichier qui ne se lit plus : dit au journal, et le dernier lu est gardé. Au démarrage, un fichier illisible arrête le programme avec son erreur.
+- **Le plafond envoyé au serveur** : ses règles mises en forme, puis ses plages, sans port (`10.20.0.0/16`), pour que l'interface les montre.
+
+### Les commandes
+
+- **`pair <adresse> <code>`** (ou `-` pour lire le code sur l'entrée standard, hors de la liste des process) : refuse s'il est déjà appairé, ou si `connector.toml` nomme un autre serveur ; fait une nouvelle paire de clés, s'appaire (le proxy et les autorités de `connector.toml`), et ne garde les clés qu'une fois le serveur d'accord. Il dit l'adresse, la clé publique du serveur et la sienne ; jamais le code. Un code faux : « the code is wrong, expired or already used (ask a new one) ».
+- **`unpair`** : écrit des zéros sur la clé privée, puis efface les deux fichiers. Le serveur garde le connecteur jusqu'à ce qu'il soit retiré de l'espace ; sans sa clé, rien ne passe.
+- **`run`** : le service, le journal sur la sortie standard ; il s'arrête proprement sur Ctrl+C et, sous Unix, SIGTERM (le canal fermé, les flux fermés).
+- **`check`** : pour chaque règle du plafond, la résolution, les contrôles et une connexion, comme un `open` : « ok gitlab.acme.internal:22: … answers at 10.20.1.5:22 (12 ms) », ou la raison (non résolu, une adresse jamais jointe, ne répond pas) ; un motif est dit, pas essayé. Il dit aussi s'il est appairé. Code de sortie 1 si un hôte ne répond pas.
+- **`version`**, et `--state <dossier>` pour le dossier des clés.
+
+### Ce qu'il garde
+
+Dans son dossier d'état (`--state`, sinon `$STATE_DIRECTORY` de systemd, `/var/lib/escouade-connector`, ou `%ProgramData%\escouade-connector`) : `connector.key`, la clé privée, en mode `0600` dans un dossier `0700` sous Unix, **scellée par DPAPI** sous Windows pour le compte qui a lancé `pair` (lui seul l'ouvre) ; `paired.toml`, l'adresse du serveur, sa clé publique et la sienne. Rien d'autre. Une clé privée qui n'est pas celle que dit `paired.toml` est refusée (« pair again »).
+
+### Les contrôles de chaque `open`
+
+Dans cet ordre, chaque refus revenant au serveur avec le code du protocole et sa raison :
+
+1. **Les bornes** : plus de `max_streams` flux à la fois, ou plus de `opens_per_second` ouvertures dans la seconde (refusées comprises) : refusé (`bornes`). Le protocole garde au-dessus ses propres limites dures (4 096 flux, 1 024 par seconde).
+2. **Le plafond**, après mise en forme : un nom hors du plafond, refusé ; une adresse littérale que le plafond n'écrit pas telle quelle, refusée (« an address the ceiling of this connector does not write »).
+3. **Une seule résolution**, par le DNS de la machine (10 s au plus) : un nom inconnu, refusé (`non résolu`).
+4. **Chaque adresse résolue vérifiée**, et celle qui est écrite aussi : jamais la boucle (`127.0.0.0/8`, `::1`), le lien local (`169.254.0.0/16`, `fe80::/10`), les métadonnées connues d'un cloud (`169.254.169.254`, `100.100.100.200`, `fd00:ec2::254`), l'adresse non précisée, la diffusion ou le multicast, une adresse de la machine du connecteur (reconnue parce qu'une socket peut s'y lier, sans écouter), ni une adresse hors des plages ; les formes cachées (IPv4 dans IPv6, NAT64 `64:ff9b::/96`) sont lues comme l'IPv4 qu'elles portent. Les adresses interdites sont écartées et dites au journal ; s'il n'en reste aucune, refusé.
+5. **L'adresse vérifiée est jointe telle quelle** (10 s au plus, la première qui répond), sans seconde résolution : un DNS qui change sa réponse (le *rebinding*) ne fait rien joindre d'autre que ce qui a été vérifié. Rien ne répond : refusé (`injoignable`).
+
+### La reconnexion
+
+- Au calendrier du protocole : 250 ms, 500 ms, 1 s, 2 s, 4 s, puis toutes les 5 s ; de nouveau 250 ms une fois un canal ouvert puis coupé. À la coupure, les flux ouverts sont fermés, sans reprise.
+- **Un serveur qui ne connaît plus le connecteur** (retiré de l'espace) ou **qui refuse sa version** : dit au journal avec ce qu'il faut faire (« unpair, then pair again with a new code », « escouade-connector update --to … », « update escouade-server »), et réessayé **toutes les 60 s** seulement (chaque essai compte comme un essai raté au serveur). Une version « à mettre à jour » est acceptée et dite.
+- **Non appairé** : dit une fois, rien n'est essayé ; `pair` lancé à côté du service est vu dans les 2 s (le canal s'ouvre), `unpair` aussi (le canal est fermé). Un `server` de `connector.toml` qui n'est pas celui de l'appairage : dit, rien n'est essayé tant qu'il ne change pas.
+
+### Le journal
+
+Une ligne JSON par événement sur la sortie standard, avec `time` (UTC, RFC 3339) et `event` :
+
+- **`allowed`** (à l'ouverture : hôte, port, adresse jointe, agent et projet annoncés par le serveur, les adresses écartées), **`closed`** (à la fin : les mêmes, `bytes_to_host`, `bytes_from_host`, `duration_ms`, et la raison d'une fermeture par le connecteur), **`refused`** (hôte, port, agent, projet, `code` — `not-allowed`, `unresolved`, `unreachable`, `limits` —, la raison) ;
+- la vie du service : `started`, `connected` (le serveur, sa version, le verdict, le plafond), `outdated`, `unreachable`, `cut`, `not-known`, `version-refused`, `not-paired`, `paired`, `server-mismatch`, `config-reloaded`, `config-error`, `state-error`, `auto-update`, `stopped`.
+- **Jamais le contenu, ni le code d'appairage, ni une clé privée** : aucun événement ne les porte, et en dernier garde le journal remplace par `held-back` toute ligne qui contiendrait la clé privée.
+
+### Ce qu'il ne fait pas
+
+Il n'écoute sur aucun port (aucune socket à l'écoute dans son code) ; il ne se connecte qu'à son serveur (et au proxy de l'entreprise) et aux hôtes de son plafond ; ni UDP ni ICMP.
+
+### Les essais
+
+Rust (`cargo nextest run -p escouade-connector`, une quarantaine) : un faux serveur en mémoire et un faux serveur en TLS réel sur 127.0.0.1 (une autorité faite dans le test), des hôtes d'écho sur 127.0.0.1 (la boucle permise par une option des tests seulement, jamais par `connector.toml` ni la ligne de commande), un faux DNS qui change de réponse ; les refus (métadonnées, lien local en IPv4, IPv6 et IPv4 dans IPv6, boucle par défaut, adresse littérale, hors plage, la machine du connecteur, nom inconnu, bornes), le rebinding, le plafond relu à chaud, `check`, la reconnexion en temps simulé, la coupure, les versions, `pair` puis `run` de bout en bout, et aucun code ni clé dans le journal, dans ce que dit `pair` ni dans un fichier autre que la clé.
 
 ## Limites
 
@@ -122,13 +193,15 @@ La crate `crates/escouade-connector-proto`, partagée par `escouade-server` (RP-
 - Le proxy de l'entreprise, pour la sortie du connecteur : Basic seulement (ni NTLM, ni Kerberos), et en `http://`.
 - Ce qui ne suit pas les variables de proxy (Java : Maven, Gradle ; le `fetch` de Node sans `NODE_USE_ENV_PROXY` ; un programme qui ouvre ses sockets lui-même) ne passe pas par la porte : les noms en boucle locale de l'image (RP-7) le couvriront.
 - Le journal de la porte n'est gardé qu'en mémoire : il repart de zéro au redémarrage du serveur, et rien ne le montre encore (RP-5).
+- Sous Windows, la clé du connecteur est scellée pour le compte qui a lancé `pair` : le service doit tourner sous ce compte (RP-6 lancera `pair` sous le compte du service).
+- Le connecteur ne se met pas encore à jour lui-même : `auto_update` est lu et dit, pas fait (RP-6).
 
 ## Les tickets
 
 - **RP-1** (ESC-597) : la porte dans `escouade-server`, les variables des agents, `escouade-server via`. **Fait.**
 - **RP-2** (ESC-598) : la crate `escouade-connector-proto`. **Fait.**
-- **RP-3** (ESC-599) : le programme `escouade-connector`.
-- **RP-4** (ESC-600) : l'entrée des connecteurs, l'appairage, la stratégie `servers.privateNetwork`.
+- **RP-3** (ESC-599) : le programme `escouade-connector`, et l'appairage dans la crate du protocole. **Fait.**
+- **RP-4** (ESC-600) : l'entrée des connecteurs, l'appairage côté serveur, la stratégie `servers.privateNetwork`.
 - **RP-5** (ESC-601) : Réglages de l'espace et du projet › Réseau privé, le `.escouade.yml`, la boîte « À toi ».
 - **RP-6** (ESC-602) : la distribution et la mise à jour du connecteur.
 - **RP-7** (ESC-603) : les noms en boucle locale dans l'image.

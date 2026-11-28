@@ -1,5 +1,5 @@
 ---
-number: 361
+number: 363
 id: "app-mobile-m10-pas-d-ipad-en-2-3-les-tab"
 title: "App mobile, M10 : pas d'iPad en 2.3, les tablettes Android centrées (proposé)"
 date: "2026-11-20"

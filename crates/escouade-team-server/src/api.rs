@@ -17,7 +17,8 @@ use crate::live::Event;
 use crate::metrics::Metrics;
 use crate::transport::{body, Cbor, Problem};
 use crate::util::{id_from, id_from_hex, new_token, now, token_hash, Id};
-use crate::Shared;
+use crate::{ClientIp, Shared};
+use escouade_audit::event::SessionRefusal;
 
 /// The bodies, as they travel (CBOR). Public for the client to come (TS-2) and the tests.
 pub mod wire {
@@ -393,7 +394,7 @@ fn store_problem(e: StoreError) -> Problem {
             "bad_token",
             "this token is unknown, used or expired",
         ),
-        StoreError::TokenUsed => Problem::new(
+        StoreError::TokenUsed(_) => Problem::new(
             StatusCode::CONFLICT,
             "token_used",
             "this token was already used",
@@ -529,6 +530,7 @@ pub async fn healthz(State(app): State<Shared>) -> Response {
 
 pub async fn enroll(
     State(app): State<Shared>,
+    ClientIp(ip): ClientIp,
     Cbor(req): Cbor<EnrollRequest>,
 ) -> Result<Cbor<EnrollResponse>, Problem> {
     let public_key: [u8; 32] = req
@@ -541,16 +543,20 @@ pub async fn enroll(
     if req.token.len() > 128 {
         return Err(store_problem(StoreError::BadToken));
     }
-    let device = app
+    let hash = token_hash(&req.token);
+    let (device, kind) = app
         .store
-        .enroll(token_hash(&req.token), public_key, now(), app.quotas())
+        .enroll(hash, public_key, now(), app.quotas())
         .await
         .map_err(|e| {
-            if matches!(e, StoreError::BadToken) {
-                Metrics::inc(&app.metrics.auth_failures);
+            match &e {
+                StoreError::BadToken => Metrics::inc(&app.metrics.auth_failures),
+                StoreError::TokenUsed(team) => app.audit.token_reused(*team, &hash, ip),
+                _ => {}
             }
             store_problem(e)
         })?;
+    app.audit.enrolled(&device, kind, ip);
     Ok(Cbor(EnrollResponse {
         team: device.team.to_vec(),
         device: device.id.to_vec(),
@@ -560,12 +566,18 @@ pub async fn enroll(
 
 pub async fn challenge(
     State(app): State<Shared>,
+    ClientIp(ip): ClientIp,
     Cbor(req): Cbor<ChallengeRequest>,
 ) -> Result<Cbor<ChallengeResponse>, Problem> {
     let id = device_id(&req.device)?;
     let known = app.store.device(id).await.map_err(store_problem)?;
-    let Some(device) = known.filter(|d| d.revoked_at.is_none()) else {
+    let Some(device) = known.clone().filter(|d| d.revoked_at.is_none()) else {
         Metrics::inc(&app.metrics.auth_failures);
+        let (team, cause) = match known {
+            Some(d) => (Some(d.team), SessionRefusal::Revoked),
+            None => (None, SessionRefusal::Unknown),
+        };
+        app.audit.session_refused(team, &id, cause, ip);
         return Err(Problem::unauthorized());
     };
     let ttl = app.limits.challenge_ttl;
@@ -580,16 +592,29 @@ pub async fn challenge(
 
 pub async fn session(
     State(app): State<Shared>,
+    ClientIp(ip): ClientIp,
     Cbor(req): Cbor<SessionRequest>,
 ) -> Result<Cbor<TokenResponse>, Problem> {
-    let refuse = || {
+    let id = device_id(&req.device)?;
+    let known = app.store.device(id).await.map_err(store_problem)?;
+    let refuse = |cause: SessionRefusal| {
         Metrics::inc(&app.metrics.auth_failures);
+        let cause = match &known {
+            None => SessionRefusal::Unknown,
+            Some(d) if d.revoked_at.is_some() => SessionRefusal::Revoked,
+            Some(_) => cause,
+        };
+        app.audit
+            .session_refused(known.as_ref().map(|d| d.team), &id, cause, ip);
         Problem::unauthorized()
     };
-    let id = device_id(&req.device)?;
-    let challenge: [u8; 32] = req.challenge.as_slice().try_into().map_err(|_| refuse())?;
+    let challenge: [u8; 32] = req
+        .challenge
+        .as_slice()
+        .try_into()
+        .map_err(|_| refuse(SessionRefusal::BadSignature))?;
     if !app.sessions.take_challenge(&id, &challenge) {
-        return Err(refuse());
+        return Err(refuse(SessionRefusal::BadSignature));
     }
     let device = app
         .store
@@ -597,12 +622,13 @@ pub async fn session(
         .await
         .map_err(store_problem)?
         .filter(|d| d.revoked_at.is_none())
-        .ok_or_else(refuse)?;
+        .ok_or_else(|| refuse(SessionRefusal::Revoked))?;
     if !auth::verify(&device.public_key, &id, &challenge, &req.signature) {
-        return Err(refuse());
+        return Err(refuse(SessionRefusal::BadSignature));
     }
     let ttl = app.limits.session_ttl;
     let token = app.sessions.open(id, Instant::now() + ttl)?;
+    app.audit.session_opened(&device, ip);
     Ok(Cbor(TokenResponse {
         token,
         expires_in: ttl.as_secs(),
@@ -720,6 +746,10 @@ pub async fn set_role(
         .await
         .map_err(store_problem)?
     {
+        if let Some(before) = current {
+            app.audit
+                .role_changed(authed.by(), &device, before.role, req.role);
+        }
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(Problem::not_found())
@@ -769,6 +799,7 @@ pub async fn revoke(
     }
     app.sessions.close_device(&device);
     app.hub.publish(&team, Event::Revoked(device));
+    app.audit.revoked(authed.by(), &device);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1051,16 +1082,22 @@ async fn append(
         fence,
         by_admin: authed.is_admin(),
     };
-    let entry = app
+    let (entry, epoch) = app
         .store
         .append(team, stream, entry, app.quotas(), app.page(None))
         .await
         .map_err(|e| {
-            if matches!(e, StoreError::EpochTaken { .. }) {
-                Metrics::inc(&app.metrics.epoch_conflicts);
+            match (&e, stream, fence) {
+                (StoreError::EpochTaken { .. }, _, _) => Metrics::inc(&app.metrics.epoch_conflicts),
+                (StoreError::StaleToken(c), Stream::Project(p), Some(f)) => {
+                    app.audit
+                        .fenced(authed.by(), &p, &f.ticket, f.token, c.token)
+                }
+                _ => {}
             }
             store_problem(e)
         })?;
+    app.audit.written(authed.by(), stream, &entry, epoch);
     let seq = entry.seq;
     match stream {
         Stream::Team => {
@@ -1205,13 +1242,15 @@ pub async fn put_access(
             project,
             crate::db::Access {
                 everyone: req.everyone,
-                devices,
+                devices: devices.clone(),
             },
             authed.is_admin(),
             app.quotas(),
         )
         .await
         .map_err(store_problem)?;
+    app.audit
+        .access_changed(authed.by(), &project, req.everyone, &devices);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1234,7 +1273,7 @@ async fn claim_ask(
         _ => claim_lease(app),
     };
     let at = now();
-    let claim = app
+    let (claim, before) = app
         .store
         .claim(
             authed.device.team,
@@ -1256,6 +1295,8 @@ async fn claim_ask(
     if !matches!(ask, ClaimAsk::Renew { .. }) {
         Metrics::inc(&app.metrics.claims);
     }
+    app.audit
+        .claimed(authed.by(), &project, ask, &claim, before.as_ref());
     app.hub
         .publish(&authed.device.team, Event::Claim(project, claim.clone()));
     Ok(Cbor(ClaimAnswer {
