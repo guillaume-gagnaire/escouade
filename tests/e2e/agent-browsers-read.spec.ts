@@ -79,15 +79,21 @@ const inner = (text: string) => JSON.parse(text.replace(/^<third_party_data>\n/,
 async function fakeAgent(server: Server) {
   let id = 0;
   const rpc = async (method: string, params: object, notify = false) => {
-    const res = await fetch(server.url, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${server.token}`,
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', ...(notify ? {} : { id: ++id }), method, params }),
-    });
+    // A reset socket (closed by the 2.3's server after 2 s idle, SEC-17, while a synchronous step held the event loop)
+    // was never read: the call goes again, once, on a new one (ESC-701).
+    const post = () =>
+      fetch(server.url, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${server.token}`,
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', ...(notify ? {} : { id: ++id }), method, params }),
+      });
+    const res = await post().catch((e: { cause?: { code?: string } }) =>
+      ['ECONNRESET', 'UND_ERR_SOCKET', 'EPIPE'].includes(e?.cause?.code ?? '') ? post() : Promise.reject(e),
+    );
     const text = await res.text();
     return text ? JSON.parse(text) : null;
   };
