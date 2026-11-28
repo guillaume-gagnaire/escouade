@@ -2598,6 +2598,7 @@ dependencies = [
  "chacha20poly1305",
  "ciborium",
  "ed25519-dalek",
+ "escouade-audit",
  "escouade-team-crypto",
  "escouade-team-server",
  "futures-util",

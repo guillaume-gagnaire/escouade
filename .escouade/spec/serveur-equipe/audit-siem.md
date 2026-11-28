@@ -1,15 +1,15 @@
 ---
 title: "L'audit vers un SIEM"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-AUDIT.md (ESC-580, TS-21 : l'étude, les choix A1 à A8, le découpage AU-1 à AU-6 ; §3.1 précisé par AU-2)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : toutes les recommandations, A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A","docs/TEAM-SERVER.md §3.7, §3.8, §6, §9, §12, §13, §15","crates/escouade-team-server/README.md (Ce que le serveur voit et garde ; L'audit vers un SIEM, AU-2)","crates/escouade-team-crypto/src/beacon.rs (les balises de tête)","crates/escouade-team/README.md (Les coûts de l'équipe : la clé des administrateurs)","docs/registre-rgpd.md","crates/escouade-audit/README.md (AU-1, ESC-608 : ce qui est construit)","RFC 8785 (JCS), RFC 5424 et RFC 5425 (syslog sur TLS), RFC 5612 (le numéro 32473)"]
+sources: ["docs/TEAM-AUDIT.md (ESC-580, TS-21 : l'étude, les choix A1 à A8, le découpage AU-1 à AU-6 ; §3.1 précisé par AU-2 ; §3.3 construit par AU-3)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : toutes les recommandations, A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A","docs/TEAM-SERVER.md §3.7, §3.8, §6, §9, §12, §13, §15","crates/escouade-team-server/README.md (Ce que le serveur voit et garde ; L'audit vers un SIEM, AU-2 ; Les défenses, l'audit des postes, AU-3)","crates/escouade-team-crypto/src/beacon.rs (les balises de tête)","crates/escouade-team/README.md (Les coûts de l'équipe : la clé des administrateurs ; L'audit des postes, AU-3)","crates/escouade-team-crypto/README.md (Les clés par époque d'un usage, AU-3)","docs/registre-rgpd.md","crates/escouade-audit/README.md (AU-1, ESC-608 : ce qui est construit)","RFC 8785 (JCS), RFC 5424 et RFC 5425 (syslog sur TLS), RFC 5612 (le numéro 32473), RFC 9180 (HPKE)"]
 tickets: ["ESC-580","ESC-588","ESC-608","ESC-609","ESC-610","ESC-612","ESC-614","ESC-617","ESC-606"]
-decisions: [264,275,265,266,267,268,346,342,360]
+decisions: [264,275,265,266,267,268,346,342,360,375]
 compared: null
 ---
 
 # L'audit vers un SIEM
 
-> **Décidé ; le modèle est construit (AU-1), le serveur émet seul (AU-2).** L'utilisateur a pris toutes les recommandations de l'étude d'ESC-580 (`docs/TEAM-AUDIT.md`) le 2026-11-21 (A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A). Cette page dit ce qui est décidé ; chaque partie se construit par un ticket, de AU-1 (ESC-608) à AU-6 (ESC-617). AU-1 est fait : la crate `escouade-audit` (plus bas). AU-2 est fait : le serveur d'équipe émet son propre audit (plus bas, *Ce qu'émet le serveur seul*). Le rôle de service dont dépend la machine d'audit est construit (OE-1, ESC-606). Les postes et la machine d'audit n'émettent encore rien.
+> **Décidé ; le modèle est construit (AU-1), le serveur émet seul (AU-2), la clé d'audit et le flux des postes sont là (AU-3).** L'utilisateur a pris toutes les recommandations de l'étude d'ESC-580 (`docs/TEAM-AUDIT.md`) le 2026-11-21 (A1-C, A2-A, A3-B, A4-A, A5-B, A6-A, A7-A, A8-A). Cette page dit ce qui est décidé ; chaque partie se construit par un ticket, de AU-1 (ESC-608) à AU-6 (ESC-617). AU-1 est fait : la crate `escouade-audit` (plus bas). AU-2 est fait : le serveur d'équipe émet son propre audit (plus bas, *Ce qu'émet le serveur seul*). AU-3 est fait : la clé d'audit des postes et le flux où ils déposent leurs faits scellés (plus bas, *La clé d'audit et le flux des postes*). Le rôle de service dont dépend la machine d'audit est construit (OE-1, ESC-606). Les postes ne déposent encore rien (AU-4 branche leurs faits) et la machine d'audit n'émet rien (AU-5).
 
 ## Ce que c'est
 
@@ -27,7 +27,7 @@ Un journal d'audit de l'équipe, envoyé à son outil de sécurité (Splunk, Ela
 - **Le serveur seul** (AU-2, ESC-609, **fait**) : ce que voient ses routes, en ids opaques, signé par une clé d'audit du serveur tirée à `init`.
 - **Une machine de l'équipe qui déchiffre** (AU-5, ESC-614), sous le **rôle de service** (OE-1, ESC-606, **fait**) ; un poste d'administrateur en recours, tant qu'il est ouvert. Elle nomme ce qui se passe dans le journal et les projets qu'elle tient, et dit ceux qu'elle ne suit pas.
   - Ce que donne OE-1 : un administrateur l'inscrit par un code court (« Inscrire une machine de l'équipe », puis `escouade-server team pair` sur la machine) ; elle a son propre id au registre, rattaché à l'équipe ; elle lit le flux de l'équipe et les projets qu'on lui ouvre, et ne signe jamais un membre, un rôle, un réglage, un coupe-circuit, un plugin privé, ni ne répond à une invitation (chaque poste le refuse, `policy.rs`) ; le serveur la refuse sur ses routes d'administrateur et sur les flux propres de l'équipe. La même machine peut porter l'Overseer d'équipe (voir « L'Overseer d'équipe »).
-- **Les postes** (AU-3, ESC-610 ; AU-4, ESC-612) : ce qui n'arrive que là (refus du cœur, autorisations, commandes approuvées, plugins, coupe-circuit appliqué), scellé pour une clé d'audit à part et déposé sur le serveur ; la machine l'ouvre. Un poste ne parle jamais au SIEM, et rien ne sort d'un poste en clair. Un poste modifié peut taire ses faits.
+- **Les postes** (AU-3, ESC-610, **fait** pour la clé et le flux ; AU-4, ESC-612, pour les faits) : ce qui n'arrive que là (refus du cœur, autorisations, commandes approuvées, plugins, coupe-circuit appliqué), scellé pour une clé d'audit à part et déposé sur le serveur ; la machine l'ouvre. Un poste ne parle jamais au SIEM, et rien ne sort d'un poste en clair. Un poste modifié peut taire ses faits.
 
 ## Les formats (A4-A)
 
@@ -47,7 +47,7 @@ Le serveur d'équipe (`escouade-team-server serve --audit-*`, voir « Le serveur
   - l'inscription d'un appareil (`device.enrolled`, avec la sorte du jeton : `init`, invitation, récupération) ; le jeton de récupération quand il sert (`recovery.used`) ; le second usage d'un jeton (`invitation.reused`) ;
   - l'ouverture d'une session (`session.opened`, **une fois par appareil et par adresse, puis une fois par jour**) et son refus (`session.refused` : appareil inconnu, révoqué, mauvaise signature ; une fois par minute pour un même appareil, une même cause et une même adresse), avec l'adresse IP ;
   - la révocation d'un appareil (`device.revoked`) et le changement de son rôle sur le serveur (`role.changed`, l'appareil et ses deux rôles) ;
-  - l'écriture d'une entrée (`stream.written`) : chaque entrée du flux de l'équipe et de ses flux propres (la liste des projets, les réglages, les propositions, la clé des coûts, le store privé, le coupe-circuit ; pas les totaux des coûts), les commits d'un projet ; **jamais les opérations d'un projet**, qui sont le travail de chacun ;
+  - l'écriture d'une entrée (`stream.written`) : chaque entrée du flux de l'équipe et de ses flux propres (la liste des projets, les réglages, les propositions, la clé des coûts, le store privé, le coupe-circuit, la clé d'audit des postes et les dépôts des postes ; pas les totaux des coûts), les commits d'un projet ; **jamais les opérations d'un projet**, qui sont le travail de chacun ;
   - les droits d'un projet (`project.access.changed`) ;
   - les prises : `claim.taken`, `claim.released`, `claim.expired` (quand un autre appareil reprend un ticket dont le bail était fini), `handoff.offered`, `handoff.taken`, `handoff.withdrawn`, et `claim.fenced` (une écriture sous un jeton dépassé) ; **jamais les renouvellements** ;
   - les refus avant toute route : `rate.limited` (une fois par minute, avec le nombre de refus depuis), `client.too_old` (une fois par heure pour une adresse et une version), `request.too_large` (un corps refusé pour sa taille, et la taille la plus grande de la route).
@@ -55,6 +55,18 @@ Le serveur d'équipe (`escouade-team-server serve --audit-*`, voir « Le serveur
 - **Les fichiers et les instantanés** n'émettent rien : leurs octets sont le contenu des projets.
 - **L'adresse IP** est en entier par défaut, coupée à son /24 ou son /48, ou retirée (`--audit-ip`).
 - Un test lit tout ce qui sort pendant un parcours complet (équipe, invitation, projet, tickets, passage, documents), sur SQLite puis PostgreSQL, et n'y trouve aucun contenu, jeton, clé ni session ; `escouade-audit verify` vérifie la sortie.
+
+## La clé d'audit et le flux des postes (AU-3, ESC-610)
+
+Le modèle est la clé des coûts (voir « Les coûts et les quotas de l'équipe »), dont le code est devenu commun sans que les coûts changent (mêmes étiquettes, mêmes octets, même état).
+
+- **Les émetteurs** : les appareils des machines de l'équipe (rôle de service) quand l'équipe en a une ; sinon les appareils de ses administrateurs (le recours d'A2-A ; AU-5 dira lequel tient l'audit, tous peuvent ouvrir d'ici là). Personne d'autre.
+- **La clé d'audit** : une paire HPKE (RFC 9180) à part des clés de l'équipe et de celle des coûts, une par époque. Chaque émetteur publie sa propre clé d'audit ; un émetteur tire la paire de l'époque et l'enveloppe pour les seuls émetteurs, puis pour ceux qui viennent après. Une clé enveloppée pour un appareil qui n'émet plus (une machine retirée, un administrateur parti, ou une machine qui arrive : les administrateurs passent la main) est périmée : aucun poste n'y scelle, et un émetteur en tire une nouvelle. Chaque poste refuse une entrée de la clé dont le signataire n'émettait pas à son époque (un administrateur ne glisse pas sa paire quand une machine émet). Un chiffré ou une enveloppe des coûts ne s'ouvre jamais comme ceux de l'audit, ni l'inverse.
+- **Le flux des postes** (`escouade/audit` dans l'étude ; deux flux propres de l'équipe, `escouade/audit/k` pour la clé et `escouade/audit/f` pour les faits, chacun de 16 octets comme les autres) : chaque poste y dépose ses faits scellés. **Le serveur refuse qu'un membre le lise**, ses propres faits compris, par le flux, le direct ou un fichier ; seuls un administrateur ou une machine le lisent, et seuls les émetteurs l'ouvrent. Un membre n'écrit pas la clé (le serveur le refuse). Le serveur n'en voit qu'une taille, un appareil et une heure.
+- **Ce qu'un poste dépose** : des faits de la liste fermée que le §1 donne aux postes (`team.fork`, `team.rollback`, `settings.sensitive.answered`, `command.approved`, `command.revoked`, `policy.applied`, `lock.refused`, `killswitch.applied`, `plugin.installed`, `plugin.removed`, `plugin.updated`, `plugin.refused`, `ticket.approved`, `ticket.rejected`, `permission.answered`, `agent.mode.changed`, `directive.added`, `directive.revoked`), chacun avec sa cible et son détail fermés (AU-1), son id et l'heure du poste. **Jamais d'auteur** : l'émetteur le prend de la signature de l'entrée (le membre et l'appareil), un poste ne parle pas pour un autre. Un autre événement, ou un champ en trop, est refusé au dépôt comme à l'ouverture.
+- **Hors ligne** : les faits attendent dans une file chiffrée sur le poste, dans leur ordre, comme les totaux des coûts, et partent au retour par lots (et tant que la clé est périmée ou absente). La file garde 10 000 faits ; au-delà, les plus vieux tombent et le lot suivant dit combien. Chaque fait garde l'heure du poste (`at`) ; l'émetteur ajoute l'heure où le serveur l'a reçu (`seen`). Un lot envoyé deux fois (une réponse perdue) ne compte qu'une fois : l'émetteur prend chaque fait une fois, par son id.
+- **Rien ne s'affiche encore** : AU-4 branche les faits du poste et montre au membre ce qui part (Réglages › Équipe) ; AU-5 fait la machine qui les ouvre et les émet. Aucun outil du MCP ne lit ni ne dépose dans ce flux.
+- Des tests le vérifient contre le vrai serveur, sur SQLite puis PostgreSQL : la paire par époque, l'enveloppe pour les émetteurs seuls, la rotation au départ d'un émetteur et à l'arrivée d'une machine, un membre qui ne peut ouvrir aucun fait, le serveur qui refuse sa lecture à un membre, la file hors ligne et sa reprise, `at` et `seen`, et les coûts inchangés.
 
 ## Ce que livre AU-1 : la crate `escouade-audit` (ESC-608)
 
@@ -81,7 +93,7 @@ La crate `crates/escouade-audit`, au workspace, sans dépendance au cœur de l'a
 | --- | --- | --- |
 | AU-1 (ESC-608), **fait** | la crate `escouade-audit` : le modèle, les événements, ce qui ne sort jamais, les écritures, le tampon, la signature, `verify` | ESC-588 |
 | AU-2 (ESC-609), **fait** | le serveur émet seul : sa clé d'audit, ses options, les événements de ses routes et leurs ancres | AU-1 |
-| AU-3 (ESC-610) | la clé d'audit et le flux des postes | AU-1 |
+| AU-3 (ESC-610), **fait** | la clé d'audit des postes (le code de la clé des coûts rendu commun) et le flux des postes, la file hors ligne, les champs fermés de chaque fait | AU-1 |
 | AU-4 (ESC-612) | les faits des postes, ce que voit le membre | AU-3, ESC-546, ESC-579 |
 | AU-5 (ESC-614) | la machine d'audit, les noms, le recoupement ; l'inscription de la clé d'audit du serveur au journal des membres | AU-2, AU-4, OE-1 (fait), ESC-546, ESC-579 |
 | AU-6 (ESC-617) | les guides du site, l'essai contre Splunk et Elastic | AU-5 |

@@ -15,6 +15,7 @@
 //!
 //! The core wires it in (`src-tauri/src/teams.rs`). `README.md` says what is done and what is left.
 
+pub mod audit;
 pub mod breaker;
 pub mod catalog;
 pub mod client;
@@ -24,6 +25,7 @@ pub mod escrow;
 pub mod fuzzing;
 pub mod handoff;
 pub mod keychain;
+mod keyring;
 pub mod merge;
 pub mod pairing;
 pub mod plugins;

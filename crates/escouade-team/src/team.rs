@@ -836,6 +836,19 @@ impl Team {
             .and_then(|m| Identity::from_bytes(&m.identity).ok())
     }
 
+    /// The leaves of `epoch` (its members' devices, and the recovery leaf), None when this device does not hold the
+    /// epoch (AU-3: who emitted the audit then).
+    pub fn leaves_at(&self, epoch: u64) -> Option<Vec<Identity>> {
+        Some(
+            self.device
+                .record(epoch)?
+                .members
+                .iter()
+                .filter_map(|m| Identity::from_bytes(&m.identity).ok())
+                .collect(),
+        )
+    }
+
     /// A value of this device's own beside the team's state (the team's settings, TS-13): in the same encrypted base.
     pub fn load_extra<T: serde::de::DeserializeOwned>(
         &self,

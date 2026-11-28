@@ -25,16 +25,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use escouade_team_crypto::content::SealedObject;
+use escouade_team_crypto::costkey::Costs;
 use escouade_team_crypto::recovery::Sealed;
-use escouade_team_crypto::{CostKey, MemberId, ObjectId, ProjectId, Role};
-use openmls_rust_crypto::OpenMlsRustCrypto;
+use escouade_team_crypto::{CostKey, Identity, MemberId, ProjectId, Role};
 use openmls_traits::OpenMlsProvider;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
+pub use crate::keyring::Alarm;
+use crate::keyring::{self, is_stale, open, provider, seal_entry, Opened, Ring, Step, Wrap};
 use crate::team::Team;
-use crate::{wire, CryptoError, Error};
+use crate::{wire, Error};
 
 /// The administrators' key of the costs, its wraps and the summaries: a project id no client draws (16 bytes).
 pub const KEY_STREAM: ProjectId = ProjectId(*b"escouade/costkey");
@@ -232,13 +232,6 @@ pub struct Summary {
 
 // ---------- the streams ----------
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Wrap {
-    device: [u8; 16],
-    sealed: Sealed,
-}
-
 /// An entry of [`KEY_STREAM`], sealed under the team's key and signed by its author's leaf.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
@@ -263,22 +256,47 @@ enum KeyEntry {
     },
 }
 
+impl keyring::Entry for KeyEntry {
+    fn step(self) -> Result<Step, Self> {
+        match self {
+            KeyEntry::Device { public } => Ok(Step::Device { public }),
+            KeyEntry::Key {
+                epoch,
+                public,
+                wraps,
+            } => Ok(Step::Key {
+                epoch,
+                public,
+                wraps,
+            }),
+            KeyEntry::Wrap { epoch, wraps } => Ok(Step::Wrap { epoch, wraps }),
+            own @ KeyEntry::Summary { .. } => Err(own),
+        }
+    }
+
+    fn of(step: Step) -> Self {
+        match step {
+            Step::Device { public } => KeyEntry::Device { public },
+            Step::Key {
+                epoch,
+                public,
+                wraps,
+            } => KeyEntry::Key {
+                epoch,
+                public,
+                wraps,
+            },
+            Step::Wrap { epoch, wraps } => KeyEntry::Wrap { epoch, wraps },
+        }
+    }
+}
+
 /// An entry of [`TOTALS_STREAM`]: the totals sealed to the administrators' key of `epoch`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TotalsEntry {
     epoch: u64,
     sealed: Sealed,
-}
-
-/// The administrators' key of an epoch, as this device read it.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
-struct KeyInfo {
-    public: Vec<u8>,
-    /// The devices it is wrapped for (hex).
-    devices: BTreeSet<String>,
-    seq: u64,
 }
 
 /// What a device read of another's totals (an administrator's).
@@ -304,31 +322,14 @@ pub struct ReceivedDay {
     pub tickets: Vec<TicketRow>,
 }
 
-/// Why this device stopped reading the key's stream.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Alarm {
-    /// The last entry read is gone.
-    Rollback,
-    /// The last entry read changed.
-    Rewritten,
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct State {
-    /// This device's own key of the costs (an administrator's device draws it), and whether it was written.
-    own: Option<[u8; 32]>,
-    announced: bool,
-    /// The keys of the devices, as their `Device` entries say (device hex → (member hex, public)).
-    devices: BTreeMap<String, (String, Vec<u8>)>,
-    keys: BTreeMap<u64, KeyInfo>,
-    /// The administrators' pairs this device holds (an administrator's), by epoch.
-    seeds: BTreeMap<u64, [u8; 32]>,
-    key_cursor: u64,
-    key_last: Option<(u64, [u8; 32])>,
+    /// The key's stream as this device read it (its own key, the devices', the pairs and the seeds it holds, the
+    /// cursor, the alarm, the entries refused): flattened, under the names TS-16 wrote.
+    #[serde(flatten)]
+    ring: Ring,
     totals_cursor: u64,
-    alarm: Option<Alarm>,
     /// What waits to go, day by day (the last totals of each day).
     pending: BTreeMap<String, Day>,
     pending_member: Option<String>,
@@ -342,8 +343,6 @@ struct State {
     /// An administrator's: what each device sent.
     received: BTreeMap<String, DeviceTotals>,
     summary: Option<Summary>,
-    /// Entries refused at the reading (not an administrator's, not signed, not opened).
-    refused: usize,
     /// Totals sealed to a key this device does not hold (before it became an administrator).
     unreadable: usize,
 }
@@ -374,14 +373,6 @@ fn load(team: &Team) -> Result<State, Error> {
     Ok(team.load_extra(STATE)?.unwrap_or_default())
 }
 
-fn provider() -> OpenMlsRustCrypto {
-    OpenMlsRustCrypto::default()
-}
-
-fn digest(e: &wire::Entry) -> [u8; 32] {
-    Sha256::digest(wire::encode(e)).into()
-}
-
 /// The administrators' devices of the team now: (device hex, member hex).
 fn admin_devices(team: &Team) -> Result<BTreeMap<String, String>, Error> {
     Ok(team
@@ -407,191 +398,36 @@ fn admins_now(team: &Team) -> BTreeSet<MemberId> {
         .unwrap_or_default()
 }
 
-enum Opened<T> {
-    Ok(MemberId, [u8; 16], T),
-    Refused,
-    Later,
-}
-
-fn open<T: serde::de::DeserializeOwned>(
-    team: &Team,
-    stream: ProjectId,
-    payload: &[u8],
-    admin_only: bool,
-) -> Opened<T> {
-    let Ok(sealed) = wire::decode::<SealedObject>(payload) else {
-        return Opened::Refused;
-    };
-    if sealed.header.project != stream {
-        return Opened::Refused;
+/// Who writes the key's stream: an administrator of the entry's epoch (of now, for an epoch this device did not live).
+fn by_an_administrator(team: &Team, epoch: u64, who: &Identity) -> bool {
+    match team.admins_at(epoch) {
+        Some(then) => then.contains(&who.member),
+        None => admins_now(team).contains(&who.member),
     }
-    let plain = match team.device().open(&sealed) {
-        Ok(p) => p,
-        Err(CryptoError::Behind(_) | CryptoError::Fork { .. }) => return Opened::Later,
-        Err(_) => return Opened::Refused,
-    };
-    let Some(who) = team.signer_at(sealed.header.epoch, &sealed.header.author) else {
-        return Opened::Refused;
-    };
-    if admin_only {
-        let admin = match team.admins_at(sealed.header.epoch) {
-            Some(then) => then.contains(&who.member),
-            None => admins_now(team).contains(&who.member),
-        };
-        if !admin {
-            return Opened::Refused;
-        }
-    }
-    match wire::decode::<T>(&plain) {
-        Ok(v) => Opened::Ok(who.member, who.device.0, v),
-        Err(_) => Opened::Refused,
-    }
-}
-
-fn seal_entry<T: Serialize>(team: &Team, stream: ProjectId, entry: &T) -> Result<Vec<u8>, Error> {
-    let mut object = [0u8; 16];
-    getrandom::fill(&mut object).map_err(|e| Error::Encoding(e.to_string()))?;
-    let sealed = team
-        .device()
-        .seal(stream, ObjectId(object), 0, &wire::encode(entry))?;
-    Ok(wire::encode(&sealed))
-}
-
-/// The current key: the highest epoch read.
-fn current(state: &State) -> Option<(u64, &KeyInfo)> {
-    state.keys.iter().next_back().map(|(e, k)| (*e, k))
-}
-
-/// A key wrapped for a device that is no longer an administrator's device of the team.
-fn is_stale(key: &KeyInfo, admins: &BTreeMap<String, String>) -> bool {
-    key.devices.iter().any(|d| !admins.contains_key(d))
-}
-
-fn own_key(state: &State) -> Result<Option<CostKey>, Error> {
-    let p = provider();
-    state
-        .own
-        .map(|seed| CostKey::from_seed(p.crypto(), seed))
-        .transpose()
-        .map_err(Error::from)
 }
 
 async fn read_keys(team: &Team, state: &mut State) -> Result<(), Error> {
-    if state.alarm.is_some() {
-        return Ok(());
-    }
-    let client = team.client().clone();
-    if let Some((seq, d)) = state.key_last {
-        let page = client.read_project(&KEY_STREAM.0, seq - 1, Some(1)).await?;
-        match page.entries.first() {
-            Some(e) if e.seq == seq => {
-                if digest(e) != d {
-                    state.alarm = Some(Alarm::Rewritten);
-                    return Ok(());
+    let summary = &mut state.summary;
+    keyring::read_keys::<Costs, KeyEntry>(
+        team,
+        KEY_STREAM,
+        &mut state.ring,
+        &by_an_administrator,
+        &mut |entry| match entry {
+            KeyEntry::Summary { summary: s } if !summary_ok(&s) => false,
+            KeyEntry::Summary { summary: s } => {
+                if summary
+                    .as_ref()
+                    .is_none_or(|was| (was.month.as_str(), was.at) <= (s.month.as_str(), s.at))
+                {
+                    *summary = Some(s);
                 }
+                true
             }
-            // The very entry removed by the server's operator (SR2-02): a hole, the reading goes on after it.
-            _ if client.was_dropped(Some(&KEY_STREAM.0), seq, &d).await? => state.key_last = None,
-            _ => {
-                state.alarm = Some(Alarm::Rollback);
-                return Ok(());
-            }
-        }
-    }
-    let me = team.identity().device.0;
-    let id = team.id();
-    let p = provider();
-    'read: loop {
-        let page = client
-            .read_project(&KEY_STREAM.0, state.key_cursor, None)
-            .await?;
-        for e in &page.entries {
-            if e.seq <= state.key_cursor {
-                break 'read;
-            }
-            match open::<KeyEntry>(team, KEY_STREAM, &e.payload, true) {
-                Opened::Ok(member, device, entry) => match entry {
-                    KeyEntry::Device { public } => {
-                        state
-                            .devices
-                            .insert(hex::encode(device), (hex::encode(member.0), public));
-                        if device == me {
-                            state.announced = true;
-                        }
-                    }
-                    KeyEntry::Key {
-                        epoch,
-                        public,
-                        wraps,
-                    } => {
-                        // The first key of an epoch in the stream's order wins: two administrators who drew one at
-                        // once agree on it.
-                        if state.keys.contains_key(&epoch)
-                            || current(state).is_some_and(|(c, _)| c >= epoch)
-                        {
-                            state.refused += 1;
-                        } else {
-                            let mut info = KeyInfo {
-                                public,
-                                devices: BTreeSet::new(),
-                                seq: e.seq,
-                            };
-                            take_wraps(state, &mut info, &wraps, &id, epoch, me, &p);
-                            state.keys.insert(epoch, info);
-                        }
-                    }
-                    KeyEntry::Wrap { epoch, wraps } => {
-                        if let Some(mut info) = state.keys.remove(&epoch) {
-                            take_wraps(state, &mut info, &wraps, &id, epoch, me, &p);
-                            state.keys.insert(epoch, info);
-                        } else {
-                            state.refused += 1;
-                        }
-                    }
-                    KeyEntry::Summary { summary } if !summary_ok(&summary) => {
-                        state.refused += 1;
-                    }
-                    KeyEntry::Summary { summary } => {
-                        if state.summary.as_ref().is_none_or(|s| {
-                            (s.month.as_str(), s.at) <= (summary.month.as_str(), summary.at)
-                        }) {
-                            state.summary = Some(summary);
-                        }
-                    }
-                },
-                Opened::Refused => state.refused += 1,
-                Opened::Later => break 'read,
-            }
-            state.key_cursor = e.seq;
-            state.key_last = Some((e.seq, digest(e)));
-        }
-        if !page.more || page.entries.is_empty() {
-            break;
-        }
-    }
-    Ok(())
-}
-
-/// The wraps of a key: the devices it is for, and its seed when one is for this device.
-fn take_wraps(
-    state: &mut State,
-    info: &mut KeyInfo,
-    wraps: &[Wrap],
-    team: &[u8; 16],
-    epoch: u64,
-    me: [u8; 16],
-    p: &OpenMlsRustCrypto,
-) {
-    for w in wraps {
-        info.devices.insert(hex::encode(w.device));
-        if w.device == me && !state.seeds.contains_key(&epoch) {
-            if let Ok(Some(own)) = own_key(state) {
-                if let Ok(k) = own.unwrap_seed(p.crypto(), team, epoch, &me, &w.sealed) {
-                    state.seeds.insert(epoch, *k.seed());
-                }
-            }
-        }
-    }
+            _ => false,
+        },
+    )
+    .await
 }
 
 async fn read_totals(team: &Team, state: &mut State) -> Result<(), Error> {
@@ -606,8 +442,8 @@ async fn read_totals(team: &Team, state: &mut State) -> Result<(), Error> {
             if e.seq <= state.totals_cursor {
                 break 'read;
             }
-            match open::<TotalsEntry>(team, TOTALS_STREAM, &e.payload, false) {
-                Opened::Ok(member, device, entry) => match state.seeds.get(&entry.epoch) {
+            match open::<TotalsEntry>(team, TOTALS_STREAM, &e.payload, &|_, _, _| true) {
+                Opened::Ok(member, device, entry) => match state.ring.seeds.get(&entry.epoch) {
                     Some(seed) => {
                         let opened = CostKey::from_seed(p.crypto(), *seed)
                             .and_then(|k| {
@@ -617,12 +453,12 @@ async fn read_totals(team: &Team, state: &mut State) -> Result<(), Error> {
                             .and_then(|plain| wire::decode::<Totals>(&plain).ok());
                         let taken = opened.is_some_and(|t| take(state, member, device, e.seq, t));
                         if !taken {
-                            state.refused += 1;
+                            state.ring.refused += 1;
                         }
                     }
                     None => state.unreadable += 1,
                 },
-                Opened::Refused => state.refused += 1,
+                Opened::Unallowed(_) | Opened::Refused => state.ring.refused += 1,
                 Opened::Later => break 'read,
             }
             state.totals_cursor = e.seq;
@@ -683,87 +519,15 @@ fn take(state: &mut State, member: MemberId, device: [u8; 16], seq: u64, t: Tota
 }
 
 /// What an administrator's device does: its own key written, a key drawn when there is none or the current one is
-/// stale, the key wrapped for the administrators' devices that have none, and the month's summary published when it
-/// changed.
+/// stale, the key wrapped for the administrators' devices that have none (`keyring::serve`), and the month's summary
+/// published when it changed.
 async fn serve(team: &Team, state: &mut State, month: &str, now: i64) -> Result<bool, Error> {
-    if !team.is_admin()? || state.alarm.is_some() {
+    if !team.is_admin()? || state.ring.alarm.is_some() {
         return Ok(false);
     }
-    let p = provider();
-    let client = team.client().clone();
-    let mut wrote = false;
-    if state.own.is_none() {
-        state.own = Some(*CostKey::generate(p.crypto(), p.rand())?.seed());
-        state.announced = false;
-    }
-    let own = own_key(state)?.expect("drawn above");
-    if !state.announced {
-        let entry = KeyEntry::Device {
-            public: own.public(),
-        };
-        client
-            .append_project(&KEY_STREAM.0, &seal_entry(team, KEY_STREAM, &entry)?)
-            .await?;
-        wrote = true;
-    }
     let admins = admin_devices(team)?;
-    // The administrators' devices whose key was read, this one's included (its entry may not be read yet).
-    let mut ready: BTreeMap<String, Vec<u8>> = state
-        .devices
-        .iter()
-        .filter(|(d, (m, _))| admins.get(*d) == Some(m))
-        .map(|(d, (_, k))| (d.clone(), k.clone()))
-        .collect();
-    let me = team.identity().device.0;
-    ready.insert(hex::encode(me), own.public());
-    let id = team.id();
-    let wraps_for = |key: &CostKey, epoch: u64, to: &BTreeMap<String, Vec<u8>>| {
-        to.iter()
-            .filter_map(|(d, public)| {
-                let mut device = [0u8; 16];
-                hex::decode_to_slice(d, &mut device).ok()?;
-                let sealed = key
-                    .wrap_seed(p.crypto(), public, &id, epoch, &device)
-                    .ok()?;
-                Some(Wrap { device, sealed })
-            })
-            .collect::<Vec<_>>()
-    };
-    match current(state) {
-        Some((epoch, key)) if !is_stale(key, &admins) => {
-            if let Some(seed) = state.seeds.get(&epoch) {
-                let missing: BTreeMap<String, Vec<u8>> = ready
-                    .iter()
-                    .filter(|(d, _)| !key.devices.contains(*d))
-                    .map(|(d, k)| (d.clone(), k.clone()))
-                    .collect();
-                if !missing.is_empty() {
-                    let k = CostKey::from_seed(p.crypto(), *seed)?;
-                    let entry = KeyEntry::Wrap {
-                        epoch,
-                        wraps: wraps_for(&k, epoch, &missing),
-                    };
-                    client
-                        .append_project(&KEY_STREAM.0, &seal_entry(team, KEY_STREAM, &entry)?)
-                        .await?;
-                    wrote = true;
-                }
-            }
-        }
-        other => {
-            let epoch = other.map_or(1, |(e, _)| e + 1);
-            let key = CostKey::generate(p.crypto(), p.rand())?;
-            let entry = KeyEntry::Key {
-                epoch,
-                public: key.public(),
-                wraps: wraps_for(&key, epoch, &ready),
-            };
-            client
-                .append_project(&KEY_STREAM.0, &seal_entry(team, KEY_STREAM, &entry)?)
-                .await?;
-            wrote = true;
-        }
-    }
+    let mut wrote =
+        keyring::serve::<Costs, KeyEntry>(team, KEY_STREAM, &mut state.ring, &admins).await?;
     // The summary of the month, for every member (their budgets).
     let summary = summary_of(state, month, now);
     let same = state.summary.as_ref().is_some_and(|s| {
@@ -771,7 +535,7 @@ async fn serve(team: &Team, state: &mut State, month: &str, now: i64) -> Result<
     });
     if !same && (!summary.projects.is_empty() || state.summary.is_some()) {
         let entry = KeyEntry::Summary { summary };
-        client
+        team.client()
             .append_project(&KEY_STREAM.0, &seal_entry(team, KEY_STREAM, &entry)?)
             .await?;
         wrote = true;
@@ -809,10 +573,10 @@ async fn flush(
     state: &mut State,
     admins: &BTreeMap<String, String>,
 ) -> Result<(), Error> {
-    if state.pending.is_empty() || state.alarm.is_some() {
+    if state.pending.is_empty() || state.ring.alarm.is_some() {
         return Ok(());
     }
-    let Some((epoch, key)) = current(state) else {
+    let Some((epoch, key)) = state.ring.current() else {
         return Ok(());
     };
     // A former administrator may hold this key: the totals wait for the next one.
@@ -857,17 +621,17 @@ async fn flush(
 }
 
 fn view_of(state: &State, admins: &BTreeMap<String, String>) -> View {
-    let cur = current(state);
+    let cur = state.ring.current();
     View {
         epoch: cur.map(|(e, _)| e),
-        holds: cur.is_some_and(|(e, _)| state.seeds.contains_key(&e)),
+        holds: state.ring.holds(),
         stale: cur.is_some_and(|(_, k)| is_stale(k, admins)),
-        alarm: state.alarm,
+        alarm: state.ring.alarm,
         pending: state.pending.keys().cloned().collect(),
         sent: state.sent.clone(),
         received: state.received.values().cloned().collect(),
         summary: state.summary.clone(),
-        refused: state.refused,
+        refused: state.ring.refused,
         unreadable: state.unreadable,
     }
 }
@@ -875,7 +639,10 @@ fn view_of(state: &State, admins: &BTreeMap<String, String>) -> View {
 /// Whether the month must go again whole: the key changed since it last went.
 pub fn wants_month(team: &Team) -> Result<bool, Error> {
     let state = load(team)?;
-    Ok(current(&state).is_some_and(|(e, _)| e != state.resent_for))
+    Ok(state
+        .ring
+        .current()
+        .is_some_and(|(e, _)| e != state.resent_for))
 }
 
 /// Puts the totals of this device in the queue: each day replaces what waited for it. They go at the next [`sync`].
@@ -885,7 +652,10 @@ pub fn queue(team: &Team, totals: Totals) -> Result<(), Error> {
     let mut state = load(team)?;
     // A day that went already as it is waits no more, unless the key changed (the month goes again to it) or the member
     // is named now: nothing goes for nothing.
-    let again = current(&state).is_some_and(|(e, _)| e != state.resent_for);
+    let again = state
+        .ring
+        .current()
+        .is_some_and(|(e, _)| e != state.resent_for);
     let went = |d: &Day| {
         !again
             && state
@@ -950,12 +720,7 @@ pub fn view(team: &Team) -> Result<View, Error> {
 /// After an alarm, once a human looked: read from the start again.
 pub fn retry(team: &Team) -> Result<(), Error> {
     let mut state = load(team)?;
-    state.alarm = None;
-    state.key_last = None;
-    state.key_cursor = 0;
-    state.keys.clear();
-    state.devices.clear();
-    state.announced = false;
+    state.ring.retry();
     team.save_extra(STATE, &state)?;
     Ok(())
 }
@@ -1093,6 +858,57 @@ mod tests {
         t.days[0].tickets.truncate(1);
         t.days[0].tickets[0].cost = f64::NAN;
         assert!(check(&t, None).is_err());
+    }
+
+    /// AU-3 moved the key's part of the state into `keyring::Ring`, flattened: a state written before reads back whole,
+    /// and is written again under the same names.
+    #[test]
+    fn a_state_written_before_the_ring_reads_back_whole() {
+        let seed = [7u8; 32];
+        let before = serde_json::json!({
+            "own": seed,
+            "announced": true,
+            "devices": { "aa": ["bb", [1, 2]] },
+            "keys": { "1": { "public": [3], "devices": ["aa"], "seq": 4 }, "2": { "public": [5], "devices": [], "seq": 9 } },
+            "seeds": { "2": seed },
+            "key_cursor": 9,
+            "key_last": [9, seed],
+            "totals_cursor": 12,
+            "alarm": null,
+            "pending": {},
+            "pending_member": null,
+            "pending_hour": 0,
+            "sent": null,
+            "went": {},
+            "resent_for": 2,
+            "received": {},
+            "summary": null,
+            "refused": 3,
+            "unreadable": 1
+        });
+        let state: State = serde_json::from_value(before.clone()).unwrap();
+        assert_eq!(state.ring.own, Some(seed));
+        assert!(state.ring.announced);
+        assert_eq!(state.ring.current().map(|(e, k)| (e, k.seq)), Some((2, 9)));
+        assert!(state.ring.holds());
+        assert_eq!((state.ring.key_cursor, state.ring.refused), (9, 3));
+        assert_eq!(
+            (state.totals_cursor, state.resent_for, state.unreadable),
+            (12, 2, 1)
+        );
+        let again = serde_json::to_value(&state).unwrap();
+        let names = |v: &serde_json::Value| {
+            v.as_object()
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        };
+        assert_eq!(names(&again), names(&before));
+        // Through the bytes the base keeps, too.
+        let bytes = serde_json::to_vec(&state).unwrap();
+        let back: State = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(back.ring.seeds.get(&2), Some(&seed));
     }
 
     /// SR3-08: a summary with a NaN is refused, and what is kept reads back.

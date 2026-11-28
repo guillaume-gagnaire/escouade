@@ -149,6 +149,29 @@ fn a_field_an_event_does_not_know_is_refused_at_every_level() {
     assert!(Record::from_value(v).is_err(), "another schema");
 }
 
+/// AU-3: the events a station seals for the key of the audit are those §1 gives to S3, and only them.
+#[test]
+fn the_station_events_are_those_of_s3_in_section_1() {
+    let doc = include_str!("../../../docs/TEAM-AUDIT.md");
+    let s1 = &doc[doc.find("## 1. ").unwrap()..doc.find("## 2. ").unwrap()];
+    let mut from_doc = BTreeSet::new();
+    for line in s1.lines().filter(|l| l.starts_with("| `")) {
+        let cells: Vec<&str> = line.split('|').collect();
+        if cells[2].contains("S3") {
+            for name in cells[1].split('`').skip(1).step_by(2) {
+                from_doc.insert(name.to_owned());
+            }
+        }
+    }
+    let ours: BTreeSet<String> = STATION_EVENTS.iter().map(|s| s.to_string()).collect();
+    assert_eq!(ours, from_doc);
+    assert_eq!(ours.len(), STATION_EVENTS.len(), "a name given twice");
+    for name in STATION_EVENTS {
+        assert!(Fact::NAMES.contains(name), "{name} of the list");
+    }
+    assert!(!ours.contains("stream.written") && !ours.contains("member.added"));
+}
+
 #[test]
 fn the_list_is_the_one_of_team_audit_section_1_with_its_severities() {
     let doc = include_str!("../../../docs/TEAM-AUDIT.md");

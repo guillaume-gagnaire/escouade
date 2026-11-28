@@ -18,6 +18,7 @@ fuzzing = ["escouade-team-crypto/test-door"]
 [dependencies]
 # The cryptography: the MLS group, its roster and rules, the project keys by epoch, the history, the beacons.
 escouade-team-crypto = { path = "../escouade-team-crypto" }
+escouade-audit = { path = "../escouade-audit" }
 openmls = "0.9.2"
 openmls_rust_crypto = "0.6"
 openmls_basic_credential = "0.6"

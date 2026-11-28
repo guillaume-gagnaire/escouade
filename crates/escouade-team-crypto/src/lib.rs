@@ -9,10 +9,12 @@
 //! server around it; pure and synchronous, without any I/O.
 
 pub mod anchor;
+pub mod auditkey;
 pub mod beacon;
 pub mod content;
 pub mod costkey;
 pub mod device;
+pub mod epochkey;
 pub mod history;
 pub mod hlc;
 pub mod identity;
@@ -34,12 +36,14 @@ mod vectors;
 use openmls::prelude::Ciphersuite;
 
 pub use anchor::{Anchor, AnchorGrant};
+pub use auditkey::AuditKey;
 pub use beacon::Beacon;
 pub use costkey::CostKey;
 pub use device::{
     Admission, Change, Checkpoint, HeadCheck, PendingCommit, Processed, Publication, SavedState,
     TeamDevice,
 };
+pub use epochkey::EpochKey;
 pub use identity::{DeviceId, DeviceKind, Identity, MemberId, ObjectId, ProjectId};
 pub use invite::{AdmissionCode, InvitationError, InviteLink, Purpose};
 pub use policy::{may_sign, Act, CommitScope};

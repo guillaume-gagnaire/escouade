@@ -193,6 +193,8 @@ async fn run(app: &Shared, mut socket: WebSocket, authed: Authed) {
                         Event::Team(entry) => cbor::encode(&Frame { stream: "team", project: None, entry: Some(entry), claim: None }),
                         // A project's frames go to the devices that have access to it alone (TS-6).
                         Event::Project(p, _) | Event::Claim(p, _) if !admitted(app, authed.device.team, *p, me).await => continue,
+                        // The facts of the audit of the stations go to their emitters' devices alone (AU-3).
+                        Event::Project(p, _) if !crate::api::reads(&authed, p) => continue,
                         Event::Project(p, entry) => {
                             cbor::encode(&Frame { stream: "project", project: Some(p), entry: Some(entry), claim: None })
                         }

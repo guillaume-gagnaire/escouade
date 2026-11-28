@@ -27,7 +27,7 @@ Elle ne dépend pas du cœur de l'app (ni Tauri ni rien de `src-tauri`) : serde,
 
 - `id` : un ULID (48 bits de millisecondes, 80 aléatoires) ; un SIEM déduplique par lui.
 - `at` : l'heure du fait (l'entrée du journal, le poste) ; `seen` : celle où l'émetteur l'a eu. RFC 3339 en UTC, à la milliseconde.
-- `source` : `server` (S1, le serveur aveugle), `machine` (S2, une machine de l'équipe qui déchiffre), `device` (S3, le fait d'un poste ouvert par la machine).
+- `source` : `server` (S1, le serveur aveugle), `machine` (S2, une machine de l'équipe qui déchiffre), `device` (S3, le fait d'un poste ouvert par la machine). Les événements qu'un poste dit de lui-même sont `event::STATION_EVENTS` (`Fact::of_station`), ceux que le §1 donne à S3 : un test les recoupe avec le document, et le poste ne scelle qu'eux (AU-3, `escouade-team/src/audit.rs`).
 - `actor`, `target` et `detail` sont **fermés par sorte d'événement** : une enum Rust (`event::Fact`), chaque partie une structure `deny_unknown_fields`. Un champ inconnu, un événement hors de la liste ou une sévérité qui n'est pas celle de l'événement sont refusés à la lecture (`Record::from_line`).
 - `emitter`, `anchor` et `sig` portent l'intégrité (plus bas).
 - Les lignes s'écrivent les membres de chaque objet dans l'ordre alphabétique (celui du JSON canonique) ; un lecteur ne doit pas compter sur un ordre.

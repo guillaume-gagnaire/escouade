@@ -992,10 +992,24 @@ pub const COST_TOTALS_STREAM: Id = *b"escouade/costsum";
 /// proposes there, the devices refuse what an administrator alone writes from anyone else.
 pub const PLUGINS_STREAM: Id = *b"escouade/plugins";
 
+/// The stream of the key of the audit of the stations (`escouade_team::audit::KEY_STREAM`, AU-3): its public half and
+/// its wraps for the devices that emit the audit, written by an administrator or a machine of the team alone (the
+/// devices judge more finely, at the reading: an emitter of the entry's epoch).
+pub const AUDIT_KEY_STREAM: Id = *b"escouade/audit/k";
+
+/// The stream of the facts of the stations (`escouade_team::audit::FACTS_STREAM`, AU-3, `escouade/audit` in
+/// `docs/TEAM-AUDIT.md`): every device drops there what its station says, sealed to the key of the audit; only the
+/// administrators and the machines of the team read it (the emitters are among them), never a member.
+pub const AUDIT_FACTS_STREAM: Id = *b"escouade/audit/f";
+
+/// The streams of the audit of the stations, whose content no file of the team joins.
+pub const AUDIT_STREAMS: [Id; 2] = [AUDIT_KEY_STREAM, AUDIT_FACTS_STREAM];
+
 /// The streams of the team itself (its list of projects, its settings, the proposals of its members, TS-7, the costs,
-/// TS-16, its private store, TS-14, the circuit breakers, TS-15): open to every device of the team, always. Nobody restricts
-/// them, or a member could shut the administrators out of them.
-pub const TEAM_STREAMS: [Id; 7] = [
+/// TS-16, its private store, TS-14, the circuit breakers, TS-15, the audit of the stations, AU-3): open to every device
+/// of the team, always (but the facts of the audit, which a member does not read). Nobody restricts them, or a member
+/// could shut the administrators out of them.
+pub const TEAM_STREAMS: [Id; 9] = [
     CATALOG_STREAM,
     *b"escouade/setting",
     *b"escouade/propose",
@@ -1003,7 +1017,26 @@ pub const TEAM_STREAMS: [Id; 7] = [
     COST_TOTALS_STREAM,
     PLUGINS_STREAM,
     BREAKER_STREAM,
+    AUDIT_KEY_STREAM,
+    AUDIT_FACTS_STREAM,
 ];
+
+/// Whether `authed` may read `project`'s entries (or its frames in the live, or its files) beyond its access: the facts
+/// of the audit of the stations are the emitters' alone, so the server, which knows the roles, refuses them to a member
+/// (AU-3). The member cannot open them anyway: they are sealed to a key it does not hold.
+pub fn reads(authed: &Authed, project: &Id) -> bool {
+    *project != AUDIT_FACTS_STREAM || authed.is_admin() || authed.is_service()
+}
+
+fn may_read(app: &Shared, authed: &Authed, project: &Id) -> Result<(), Problem> {
+    if reads(authed, project) {
+        return Ok(());
+    }
+    Metrics::inc(&app.metrics.refused_access);
+    Err(Problem::forbidden(
+        "only the devices that emit the audit read the facts of the stations",
+    ))
+}
 
 /// The team's streams a machine of the team never writes (OE-1): all of them but the totals of the costs, where it
 /// says what it spent as every device does.
@@ -1146,6 +1179,13 @@ pub async fn append_project(
     if project == COST_KEY_STREAM && !authed.is_admin() {
         return Err(Problem::forbidden(
             "only an administrator writes the key of the costs",
+        ));
+    }
+    // The key of the audit of the stations (AU-3): its emitters' (a machine of the team, or an administrator when the
+    // team has none). A member who wrote one would have the facts sealed to a key of its own.
+    if project == AUDIT_KEY_STREAM && !authed.is_admin() && !authed.is_service() {
+        return Err(Problem::forbidden(
+            "only the devices that emit the audit write its key",
         ));
     }
     // A machine of the team (OE-1) writes the content of the projects opened to it, never in the team's own streams:
@@ -1473,6 +1513,7 @@ pub async fn read_project(
 ) -> Result<Cbor<Entries>, Problem> {
     let project = path_id(&project)?;
     may(&app, &authed, &project).await?;
+    may_read(&app, &authed, &project)?;
     let (entries, more) = app
         .store
         .read(
@@ -1708,6 +1749,7 @@ async fn readable(
     let team = authed.device.team;
     if let Some(p) = &project {
         may(app, authed, p).await?;
+        may_read(app, authed, p)?;
     }
     let stored = app
         .store
@@ -1744,6 +1786,10 @@ async fn put_file_in(
 ) -> Result<StatusCode, Problem> {
     if let Some(p) = &project {
         may(&app, &authed, p).await?;
+        // The audit of the stations (AU-3) carries its facts in its entries: no file joins them.
+        if AUDIT_STREAMS.contains(p) {
+            return Err(Problem::forbidden("the streams of the audit take no file"));
+        }
     }
     let max = app.limits.max_file;
     let bytes: Bytes = body::read(req, max).await?;

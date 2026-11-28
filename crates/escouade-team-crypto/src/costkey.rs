@@ -1,5 +1,6 @@
 //! The administrators' key of the costs (TS-16, `docs/TEAM-SERVER.md` §10): an HPKE key pair (RFC 9180, the suite's
-//! KEM, KDF and AEAD) apart from the team's MLS keys.
+//! KEM, KDF and AEAD) apart from the team's MLS keys, an [`EpochKey`] of the use [`Costs`] (what it shares with the key
+//! of the audit, AU-3, is in `epochkey.rs`; its labels and its bytes are those of TS-16, unchanged).
 //!
 //! - Every member seals the totals of its device to its public half ([`CostKey::seal_totals`]): the server, which
 //!   keeps them, and the other members, who can read the stream, cannot open them; the member keeps its own totals in
@@ -14,61 +15,25 @@
 //! pass one device's totals for another's.
 
 use openmls_traits::crypto::OpenMlsCrypto;
-use openmls_traits::random::OpenMlsRand;
-use openmls_traits::types::HpkeKeyPair;
-use zeroize::Zeroizing;
 
-use crate::recovery::{hpke_open, hpke_seal, Sealed};
-use crate::{Error, CIPHERSUITE};
+use crate::epochkey::{EpochKey, Use};
+use crate::recovery::Sealed;
+use crate::Error;
 
-const TOTALS_INFO: &[u8] = b"escouade/cost-totals/v1";
-const WRAP_INFO: &[u8] = b"escouade/cost-key-wrap/v1";
+/// The use of the costs: its labels are TS-16's.
+pub struct Costs;
+
+impl Use for Costs {
+    const NAME: &'static str = "cost";
+    const TYPE: &'static str = "CostKey";
+    const SEAL_INFO: &'static [u8] = b"escouade/cost-totals/v1";
+    const WRAP_INFO: &'static [u8] = b"escouade/cost-key-wrap/v1";
+}
 
 /// An HPKE key pair of the costs: the administrators' (its epoch), or a device's own (to receive the wraps).
-pub struct CostKey {
-    keys: HpkeKeyPair,
-    seed: Zeroizing<[u8; 32]>,
-}
+pub type CostKey = EpochKey<Costs>;
 
-impl std::fmt::Debug for CostKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CostKey")
-            .field("public", &hex::encode(&self.keys.public))
-            .finish_non_exhaustive()
-    }
-}
-
-fn aad(team: &[u8; 16], epoch: u64, device: &[u8; 16]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(40);
-    out.extend_from_slice(team);
-    out.extend_from_slice(&epoch.to_be_bytes());
-    out.extend_from_slice(device);
-    out
-}
-
-impl CostKey {
-    pub fn generate(crypto: &impl OpenMlsCrypto, rand: &impl OpenMlsRand) -> Result<Self, Error> {
-        let seed: [u8; 32] = rand.random_array().map_err(|_| Error::Random)?;
-        Self::from_seed(crypto, seed)
-    }
-
-    /// The pair again from its seed (what a wrap carries, what the device's state keeps).
-    pub fn from_seed(crypto: &impl OpenMlsCrypto, seed: [u8; 32]) -> Result<Self, Error> {
-        let seed = Zeroizing::new(seed);
-        let keys = crypto
-            .derive_hpke_keypair(CIPHERSUITE.hpke_config(), seed.as_slice())
-            .map_err(|e| Error::Mls(format!("cost HPKE key: {e:?}")))?;
-        Ok(Self { keys, seed })
-    }
-
-    pub fn seed(&self) -> &[u8; 32] {
-        &self.seed
-    }
-
-    pub fn public(&self) -> Vec<u8> {
-        self.keys.public.clone()
-    }
-
+impl EpochKey<Costs> {
     /// The totals of `device`, sealed to the administrators' key `public` of `epoch`.
     pub fn seal_totals(
         crypto: &impl OpenMlsCrypto,
@@ -78,13 +43,7 @@ impl CostKey {
         device: &[u8; 16],
         plain: &[u8],
     ) -> Result<Sealed, Error> {
-        hpke_seal(
-            crypto,
-            public,
-            TOTALS_INFO,
-            &aad(team, epoch, device),
-            plain,
-        )
+        Self::seal(crypto, public, team, epoch, device, plain)
     }
 
     /// Totals sealed to this key (the administrators' of `epoch`) by `device`.
@@ -96,55 +55,7 @@ impl CostKey {
         device: &[u8; 16],
         sealed: &Sealed,
     ) -> Result<Vec<u8>, Error> {
-        hpke_open(
-            crypto,
-            &self.keys.private,
-            TOTALS_INFO,
-            &aad(team, epoch, device),
-            sealed,
-        )
-    }
-
-    /// This pair's seed (the administrators' of `epoch`), wrapped for the device `device`, whose own key of the costs
-    /// is `public`.
-    pub fn wrap_seed(
-        &self,
-        crypto: &impl OpenMlsCrypto,
-        public: &[u8],
-        team: &[u8; 16],
-        epoch: u64,
-        device: &[u8; 16],
-    ) -> Result<Sealed, Error> {
-        hpke_seal(
-            crypto,
-            public,
-            WRAP_INFO,
-            &aad(team, epoch, device),
-            self.seed.as_slice(),
-        )
-    }
-
-    /// The administrators' pair of `epoch`, from its wrap for this device (`self` being the device's own key).
-    pub fn unwrap_seed(
-        &self,
-        crypto: &impl OpenMlsCrypto,
-        team: &[u8; 16],
-        epoch: u64,
-        device: &[u8; 16],
-        sealed: &Sealed,
-    ) -> Result<CostKey, Error> {
-        let seed = Zeroizing::new(hpke_open(
-            crypto,
-            &self.keys.private,
-            WRAP_INFO,
-            &aad(team, epoch, device),
-            sealed,
-        )?);
-        let seed: [u8; 32] = seed
-            .as_slice()
-            .try_into()
-            .map_err(|_| Error::Encoding("a cost key's seed is 32 bytes".into()))?;
-        CostKey::from_seed(crypto, seed)
+        self.open(crypto, team, epoch, device, sealed)
     }
 }
 
@@ -208,5 +119,51 @@ mod tests {
         // The seed gives the same pair again.
         let again = CostKey::from_seed(p.crypto(), *admins.seed()).unwrap();
         assert_eq!(again.public(), admins.public());
+    }
+
+    /// AU-3 made the code common: the bytes of the costs did not move. Their labels and associated data are TS-16's,
+    /// opened here by hand, as a client of before would.
+    #[test]
+    fn the_labels_and_the_associated_data_of_the_costs_are_those_of_ts_16() {
+        use crate::recovery::hpke_open;
+        let p = OpenMlsRustCrypto::default();
+        let admins = CostKey::generate(p.crypto(), p.rand()).unwrap();
+        let mut aad = Vec::new();
+        aad.extend_from_slice(&TEAM);
+        aad.extend_from_slice(&5u64.to_be_bytes());
+        aad.extend_from_slice(&BOB);
+        let pair = p
+            .crypto()
+            .derive_hpke_keypair(crate::CIPHERSUITE.hpke_config(), admins.seed())
+            .unwrap();
+        let sealed =
+            CostKey::seal_totals(p.crypto(), &admins.public(), &TEAM, 5, &BOB, b"totals").unwrap();
+        let plain = hpke_open(
+            p.crypto(),
+            &pair.private,
+            b"escouade/cost-totals/v1",
+            &aad,
+            &sealed,
+        )
+        .unwrap();
+        assert_eq!(plain, b"totals");
+        let device = CostKey::generate(p.crypto(), p.rand()).unwrap();
+        let wrap = admins
+            .wrap_seed(p.crypto(), &device.public(), &TEAM, 5, &BOB)
+            .unwrap();
+        let own = p
+            .crypto()
+            .derive_hpke_keypair(crate::CIPHERSUITE.hpke_config(), device.seed())
+            .unwrap();
+        let seed = hpke_open(
+            p.crypto(),
+            &own.private,
+            b"escouade/cost-key-wrap/v1",
+            &aad,
+            &wrap,
+        )
+        .unwrap();
+        assert_eq!(seed.as_slice(), admins.seed());
+        assert_eq!(format!("{admins:?}").split(' ').next(), Some("CostKey"));
     }
 }

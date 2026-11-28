@@ -714,7 +714,36 @@ events! {
     AuditCheckpoint = "audit.checkpoint", 1, Nothing, Checkpoint;
 }
 
+/// The events a station says of itself (S3, `docs/TEAM-AUDIT.md` §3.3): what it seals for the key of the audit and
+/// drops in the stream of the stations (AU-3, `escouade-team::audit`), and nothing else. The others are the server's
+/// (S1) or the audit machine's (S2).
+pub const STATION_EVENTS: &[&str] = &[
+    "team.fork",
+    "team.rollback",
+    "settings.sensitive.answered",
+    "command.approved",
+    "command.revoked",
+    "policy.applied",
+    "lock.refused",
+    "killswitch.applied",
+    "plugin.installed",
+    "plugin.removed",
+    "plugin.updated",
+    "plugin.refused",
+    "ticket.approved",
+    "ticket.rejected",
+    "permission.answered",
+    "agent.mode.changed",
+    "directive.added",
+    "directive.revoked",
+];
+
 impl Fact {
+    /// Whether a station says this event of itself (S3, [`STATION_EVENTS`]).
+    pub fn of_station(&self) -> bool {
+        STATION_EVENTS.contains(&self.name())
+    }
+
     /// The event's severity, 1 to 5: its name's, but a permission « Toujours autoriser », 4.
     pub fn severity(&self) -> u8 {
         match self {
