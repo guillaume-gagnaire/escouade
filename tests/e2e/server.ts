@@ -109,6 +109,11 @@ export function firstAnswer(url: string, message: unknown): Promise<Record<strin
   });
 }
 
+/** The log `out` from its byte `from` on: what the process started then wrote. */
+function ownLog(out: string, from: number): () => string {
+  return () => (fs.existsSync(out) ? fs.readFileSync(out).subarray(from).toString('utf8') : '');
+}
+
 /** An `escouade-server` started, not paired yet (ESC-537: the client pairs it itself, through a fake `ssh`). */
 export interface BareServer {
   data: string;
@@ -122,6 +127,9 @@ export async function startBareServer(program: string, data: string, env: NodeJS
   if (!fs.existsSync(program)) throw new Error(`build the server first: cargo build --bin escouade-server (missing ${program})`);
   // Its own log (ESC-539: two servers of one test each read their own « ready » line).
   const out = path.join(data, '..', `${path.basename(data)}-stdout.log`);
+  // Its own part of the file: a server started again on the same data appends to it, and the « ready » line of the one
+  // before is not this one's (ESC-703: read as ready before it was, or when it did not start at all).
+  const from = fs.existsSync(out) ? fs.statSync(out).size : 0;
   const fd = fs.openSync(out, 'a');
   const at = Date.now();
   const child: ChildProcess = spawn(program, ['run', '--data-dir', data, '--port', String(port)], { env, stdio: ['ignore', fd, fd] });
@@ -132,7 +140,7 @@ export async function startBareServer(program: string, data: string, env: NodeJS
     exited = `exit code ${code}`;
     exitedAt = Date.now();
   });
-  const log = () => (fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '');
+  const log = ownLog(out, from);
   const stop = async () => {
     await endServer(child, at, () => exitedAt);
   };
@@ -158,6 +166,9 @@ export async function startServer(
 ): Promise<Server> {
   if (!fs.existsSync(program)) throw new Error(`build the server first: cargo build --bin escouade-server (missing ${program})`);
   const out = path.join(data, '..', 'server-stdout.log');
+  // Its own part of the file: a server started again on the same data appends to it, and the « ready » line of the one
+  // before is not this one's (ESC-703: read as ready before it was, or when it did not start at all).
+  const from = fs.existsSync(out) ? fs.statSync(out).size : 0;
   const fd = fs.openSync(out, 'a');
   const at = Date.now();
   const child: ChildProcess = spawn(program, ['run', '--data-dir', data, '--port', String(ports.server)], {
@@ -171,7 +182,7 @@ export async function startServer(
     exited = `exit code ${code}`;
     exitedAt = Date.now();
   });
-  const log = () => (fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '');
+  const log = ownLog(out, from);
   const kill = async () => {
     await endServer(child, at, () => exitedAt);
   };
