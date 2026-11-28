@@ -108,7 +108,12 @@ fn no_command_answers_an_agents_page() {
         .iter()
         .filter_map(|w| w.as_str())
         .collect();
-    assert_eq!(webviews, ["main"]);
+    // The main window, and the spaces' own windows of the 2.3 (ESC-539): neither pattern takes an agent's page.
+    assert_eq!(webviews, ["main", "space-*"]);
+    for w in &webviews {
+        let pattern = glob::Pattern::new(w).unwrap();
+        assert!(!pattern.matches(&label("p-1")), "{w}");
+    }
     assert!(cap.get("windows").is_none() && cap.get("remote").is_none());
     for dir in ["capabilities"] {
         for entry in std::fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join(dir)).unwrap() {
