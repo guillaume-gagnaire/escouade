@@ -19,6 +19,7 @@
 import { EscouadeMobile, type EscouadeMobilePlugin, type PairingFound } from '@escouade/capacitor-mobile';
 import { t } from '$shared/lib/i18n';
 import type { Socket } from '$shared/lib/transport';
+import { forgetKept } from './kept';
 import { lockState } from './lock';
 import { platformOf } from './native';
 import { dropSpace, keepSpace, type KeptSpace } from './paired';
@@ -298,7 +299,7 @@ export async function pairNow(): Promise<KeptSpace | null> {
 
 /**
  * The space `id` removed from this phone: when `unpair`, the core asked to revoke it first (« Retirer », S15), as far
- * as it answers; then its keys and token forgotten, whatever the core said.
+ * as it answers; then its keys and token forgotten, whatever the core said, and what the phone kept of it (M13).
  */
 export async function removeSpace(id: string, unpair: boolean): Promise<void> {
   if (unpair) {
@@ -313,5 +314,6 @@ export async function removeSpace(id: string, unpair: boolean): Promise<void> {
   await deps.plugin.stopTunnel({ space: id }).catch(() => {});
   await deps.plugin.forgetSpace({ space: id }).catch(() => {});
   dropSpace(id);
+  forgetKept(id);
   changed();
 }

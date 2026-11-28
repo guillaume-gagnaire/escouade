@@ -7,6 +7,7 @@ import { applyTheme } from '$shared/lib/theme';
 import App from './App.svelte';
 import { applyAppearance, followSystemTheme, systemTheme } from './lib/appearance';
 import { barsFor, onBackButton, onForeground, platformOf } from './lib/native';
+import { forgetFiles } from './lib/act';
 import { back, followHistory, goTab, tabOf } from './lib/nav.svelte';
 import { allSpaces } from './lib/paired';
 import { onSpacesChanged } from './lib/pairing.svelte';
@@ -26,7 +27,14 @@ applyTheme(null);
 startSpaces(allSpaces());
 // A space paired or removed (MO-4): the connections opened again.
 onSpacesChanged(() => startSpaces(allSpaces()));
-onForeground((active) => (active ? resumeSpaces() : pauseSpaces()));
+// In the background, no connection, and nothing of a request kept in memory (M13).
+onForeground((active) => {
+  if (active) resumeSpaces();
+  else {
+    pauseSpaces();
+    forgetFiles();
+  }
+});
 
 const asked = tabOf(location.hash);
 if (asked) goTab(asked);

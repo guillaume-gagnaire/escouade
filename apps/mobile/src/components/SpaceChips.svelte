@@ -5,7 +5,14 @@
   import Icon from '$shared/components/Icon.svelte';
   import SpacePlate from '$shared/components/servers/SpacePlate.svelte';
   import { t } from '$shared/lib/i18n';
+  import { unfold } from '../lib/nav.svelte';
   import { ALL, phone, stateOf, waitingIn } from '../lib/phone-spaces.svelte';
+
+  /** Another chip: the thread of other spaces, every line folded. */
+  function show(filter: string) {
+    if (phone.filter !== filter) unfold(null);
+    phone.filter = filter;
+  }
 
   const total = $derived(phone.spaces.reduce((n, s) => n + waitingIn(s), 0));
 
@@ -24,7 +31,7 @@
     class="chip"
     aria-checked={phone.filter === ALL}
     aria-label={t('mobile.spaces.everywhereLabel', { count: total })}
-    onclick={() => (phone.filter = ALL)}
+    onclick={() => show(ALL)}
   >
     {t('mobile.spaces.everywhere')} <span class="c">{total}</span>
   </button>
@@ -41,7 +48,7 @@
       data-state={state}
       aria-checked={phone.filter === s.id}
       aria-label={labelOf(s)}
-      onclick={() => (phone.filter = s.id)}
+      onclick={() => show(s.id)}
     >
       <SpacePlate name={s.name} here={s.here} {cut} size={22} />
       <span class="name">{s.name}</span>

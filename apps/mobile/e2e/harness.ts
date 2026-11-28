@@ -9,7 +9,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startBareServer, type BareServer } from '../../../tests/e2e/server';
-import { apiClient, pairPhone, phoneForward, prepareServer, ROOT, stoppedAgent as stopAgent } from '../scripts/local-space.mjs';
+import {
+  agentSaying,
+  apiClient,
+  demoSpace,
+  makeProject,
+  pairPhone,
+  phoneForward,
+  prepareServer,
+  ROOT,
+  stoppedAgent as stopAgent,
+} from '../scripts/local-space.mjs';
 
 export { ROOT };
 const EXE = process.platform === 'win32' ? '.exe' : '';
@@ -36,6 +46,8 @@ export interface TestSpace {
   call<T = unknown>(cmd: string, args?: Record<string, unknown>): Promise<T>;
   /** Cut: the forward closed (the server goes on), as a tunnel that falls. */
   cut(): void;
+  /** Back after a cut: the forward listens again on its port (MO-5). */
+  restore(): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -70,7 +82,7 @@ export async function startSpace(): Promise<TestSpace> {
     forward = await phoneForward(0, server.port);
     const token = await pairPhone(SERVER, data, env, server.port);
     api = await apiClient(`ws://127.0.0.1:${server.port}/remote`, token);
-    const fwd = forward;
+    let fwd = forward;
     const own = api;
     return {
       server,
@@ -88,6 +100,9 @@ ${printed}`);
       root,
       call: own.call,
       cut: () => fwd.close(),
+      restore: async () => {
+        fwd = await phoneForward(fwd.port, server.port);
+      },
       stop: async () => {
         own.close();
         fwd.close();
@@ -105,3 +120,14 @@ ${printed}`);
 
 /** An agent of `space` stopped on a permission. */
 export const stoppedAgent = (space: TestSpace): Promise<void> => stopAgent(space.call, space.root);
+
+/** A project of the space (its repository in the test's folder). */
+export const projectOf = (space: TestSpace, name?: string, color?: string): Promise<{ id: string }> =>
+  makeProject(space.call, space.root, name, color);
+
+/** An agent of the project told the text: the fake claude plays what it names (« permission », « question »…). */
+export const agentTold = (space: TestSpace, project: { id: string }, text: string): Promise<{ id: string }> =>
+  agentSaying(space.call, project, text);
+
+/** What waits on a demo's space (MO-5): a permission, thirty lines, a question, a plan, a request with renders and a PDF. */
+export const demo = (space: TestSpace): Promise<void> => demoSpace(space.call, space.root);

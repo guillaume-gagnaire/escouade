@@ -2,13 +2,9 @@
 // the test's: one connection per space, the three tabs, the chips, the « + » and its sheet, the system's back, the
 // safe areas, the system's theme followed (light and dark), French and English, the sizes of what a finger touches.
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { expect, test as base, type Page, type TestInfo } from '@playwright/test';
-import { ROOT, startSpace, stoppedAgent, type TestSpace } from './harness';
-
-const sizeOf = (info: TestInfo) => (info.project.name.endsWith('360') ? '360' : '430');
-const targetOf = (info: TestInfo) => (info.project.name.startsWith('android') ? 48 : 44);
+import { expect, test as base } from '@playwright/test';
+import { startSpace, stoppedAgent, type TestSpace } from './harness';
+import { open, shot, tab, targetOf } from './page';
 
 const test = base.extend<{ space: TestSpace }>({
   space: async ({}, use) => {
@@ -17,33 +13,6 @@ const test = base.extend<{ space: TestSpace }>({
     await space.stop();
   },
 });
-
-/** The page opened on `spaces` (as MO-4 will have paired them), in `theme`. */
-async function open(
-  page: Page,
-  spaces: { id: string; name: string; here?: boolean; url: string; token: string }[],
-  theme: 'dark' | 'light' = 'dark',
-) {
-  await page.emulateMedia({ colorScheme: theme });
-  await page.addInitScript((given) => ((window as unknown as { __ESCOUADE_SPACES__: unknown }).__ESCOUADE_SPACES__ = given), spaces);
-  await page.goto('/');
-}
-
-/** With ESCOUADE_MOBILE_SHOTS=1, the screen in design/mobile-2-3/app/ (`<name>[-clair]-<size>.png`). */
-async function shot(page: Page, info: TestInfo, name: string) {
-  if (!process.env.ESCOUADE_MOBILE_SHOTS) return;
-  const theme = await page.evaluate(() => document.documentElement.dataset.theme);
-  const dir = path.join(ROOT, 'design', 'mobile-2-3', 'app');
-  fs.mkdirSync(dir, { recursive: true });
-  // The fonts loaded, nothing moving.
-  await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({
-    path: path.join(dir, `${name}${theme === 'light' ? '-clair' : ''}-${sizeOf(info)}.png`),
-    animations: 'disabled',
-  });
-}
-
-const tab = (page: Page, name: string | RegExp) => page.getByRole('tablist').getByRole('tab', { name });
 
 test('with no space paired, the phone says what it is for and where the pairing starts', async ({ page }, info) => {
   for (const theme of ['dark', 'light'] as const) {

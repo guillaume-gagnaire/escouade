@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sur le téléphone, « À toi » montre tout ce qui t’attend dans tes espaces, rangé comme la boîte du bureau, et tu y réponds sur place : la commande entière avant « Autoriser » et le verrou du téléphone, une question, un plan, un choix et ses rendus, un PDF. Tu y lis une conversation et envoies un message, dicté ou avec une photo ; coupé, le téléphone garde ce qu’il savait, daté, sans répondre sur un écran périmé.
 - Réglages › Téléphone : un port UDP tapé et pas encore appliqué ne s’efface plus quand tu bascules un autre réglage de la page (STUN, Tailscale) entre-temps.
 - Les navigateurs pilotés par les agents, leurs pages, le Workspace et la fenêtre des nouveautés de la 2.2 arrivent dans la 2.3. Sur un serveur sans fenêtre, un agent apprend qu’il n’y a ni navigateur ni page ; l’entrée « Éditeur » du menu et les workflows du Workspace suivent leurs interrupteurs de Réglages › Fonctionnalités.
 - Réseau privé : `escouade-server` ouvre, si tu le lui demandes (`--connector-listen`), une entrée à part pour les connecteurs d’une entreprise, qui ne parle que leur protocole et jamais l’API distante. `escouade-server connector pair NOM` donne le code de 8 lettres (10 minutes, une fois) que le service informatique tape sur sa machine, `connectors` montre leur état et leur version, `connectors remove` en retire un et ferme son canal ; la stratégie `servers.privateNetwork` l’interdit.

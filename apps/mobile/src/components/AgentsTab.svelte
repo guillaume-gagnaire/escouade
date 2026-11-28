@@ -1,8 +1,9 @@
 <script lang="ts">
   // « Agents » (MO-1, direction B): the agents of the spaces the chip shows, those that wait first, then those at work
-  // with what they do. MO-5 opens a conversation from here.
+  // with what they do; touched, its conversation (MO-5).
   import { t } from '$shared/lib/i18n';
   import { ALL, allAgents, phone, shownSpaces } from '../lib/phone-spaces.svelte';
+  import { openTalk } from '../lib/nav.svelte';
   import Empty from './Empty.svelte';
   import Row from './Row.svelte';
 
@@ -21,6 +22,7 @@
         space={x.space}
         project={x.project}
         waits={x.item.status === 'waiting'}
+        onOpen={() => openTalk(x.space.id, x.item.id)}
       />
     {/each}
   </ul>

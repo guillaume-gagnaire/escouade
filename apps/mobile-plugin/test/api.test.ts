@@ -40,13 +40,16 @@ describe('the Capacitor plugin', () => {
 
   it('has the same methods in TypeScript, Kotlin and Swift', () => {
     expect(methods).toEqual([
+      'dictate',
       'finishPairing',
       'forgetSpace',
       'lockState',
+      'openFile',
       'openNotification',
       'pairingKey',
       'readPairing',
       'startTunnel',
+      'stopDictation',
       'stopTunnel',
       'tunnelStatus',
       'unlock',
@@ -62,7 +65,15 @@ describe('the Capacitor plugin', () => {
 
   it('reads only the options the API names', () => {
     const options = new Set(
-      ['SpaceOptions', 'UnlockOptions', 'ReadPairingOptions', 'FinishPairingOptions', 'OpenNotificationOptions'].flatMap(fields),
+      [
+        'SpaceOptions',
+        'UnlockOptions',
+        'ReadPairingOptions',
+        'FinishPairingOptions',
+        'OpenNotificationOptions',
+        'DictateOptions',
+        'OpenFileOptions',
+      ].flatMap(fields),
     );
     const kotlinReads = all(kotlin, /call\.get(?:String|Int)\("(\w+)"\)/g);
     const swiftReads = all(swift, /call\.get(?:String|Int)\("(\w+)"\)/g);
@@ -78,7 +89,7 @@ describe('the Capacitor plugin', () => {
   it('answers only the fields the API names', () => {
     // `token` is the browser's alone (no proxy writes it there): never a native side's answer.
     const answers = new Set(
-      [...['TunnelStatus', 'OpenedNotification', 'LockState', 'PairingFound', 'PairingKey'].flatMap(fields), 'version'].filter(
+      [...['TunnelStatus', 'OpenedNotification', 'LockState', 'PairingFound', 'PairingKey', 'Dictated'].flatMap(fields), 'version'].filter(
         (f) => f !== 'token',
       ),
     );
@@ -95,7 +106,7 @@ describe('the Capacitor plugin', () => {
   it('has the states and the error codes of the crate', () => {
     expect(union('TunnelState')).toEqual(variants('MobileTunnelState').map((v) => v.toLowerCase()));
     const codes = union('EscouadeMobileErrorCode');
-    expect(codes).toEqual([...variants('MobileError'), 'NoTunnel', 'NoSpace', 'NoLock', 'Cancelled', 'BadPairing']);
+    expect(codes).toEqual([...variants('MobileError'), 'NoTunnel', 'NoSpace', 'NoLock', 'Cancelled', 'BadPairing', 'NoDictation', 'NoApp']);
     // The plugin's own codes are among them.
     for (const code of [...all(kotlin, /call\.reject\("[^"]*", "(\w+)"\)/g), ...all(swift, /call\.reject\("[^"]*", "(\w+)"\)/g)])
       expect(codes).toContain(code);

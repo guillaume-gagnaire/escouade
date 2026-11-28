@@ -2,9 +2,12 @@ import { WebPlugin } from '@capacitor/core';
 
 import {
   QR_VERSION,
+  type DictateOptions,
+  type Dictated,
   type EscouadeMobilePlugin,
   type FinishPairingOptions,
   type LockState,
+  type OpenFileOptions,
   type OpenedNotification,
   type PairingFound,
   type PairingKey,
@@ -21,6 +24,8 @@ import { b64, derive, unb64 } from './derive';
  * token derived as the native side derives it, WebCrypto here), and the token is kept in the page's storage and given in
  * the handshake (`TunnelStatus.token`): what the native side never does. The screen lock is the test's:
  * `window.__ESCOUADE_LOCK__` is `'ok'` (by default), `'cancel'` (the sheet cancelled) or `'none'` (no screen lock).
+ * The dictation is the test's too (`window.__ESCOUADE_DICTATE__`: what the system hears; none, no dictation), and a file
+ * opened is downloaded by the browser, its name said in `window.__ESCOUADE_OPENED__`.
  */
 
 const STORE = 'escouade.web-spaces';
@@ -37,6 +42,10 @@ declare global {
     __ESCOUADE_LOCK__?: 'ok' | 'cancel' | 'none';
     /** What the lock was asked, for the e2e (the reasons, in order). */
     __ESCOUADE_UNLOCKS__?: string[];
+    /** What the system's dictation hears, for the e2e; none: this browser has no dictation. */
+    __ESCOUADE_DICTATE__?: string;
+    /** The files opened, for the e2e (their names, in order). */
+    __ESCOUADE_OPENED__?: string[];
   }
 }
 
@@ -166,6 +175,24 @@ export class EscouadeMobileWeb extends WebPlugin implements EscouadeMobilePlugin
 
   async version(): Promise<{ version: string }> {
     return { version: 'escouade-mobile (web)' };
+  }
+
+  async dictate(_options: DictateOptions): Promise<Dictated> {
+    const heard = typeof window !== 'undefined' ? window.__ESCOUADE_DICTATE__ : undefined;
+    if (heard === undefined) throw this.fail('no dictation in this browser', 'NoDictation');
+    if (!heard) throw this.fail('nothing heard', 'Cancelled');
+    return { text: heard };
+  }
+
+  async stopDictation(): Promise<void> {}
+
+  async openFile(options: OpenFileOptions): Promise<void> {
+    (window.__ESCOUADE_OPENED__ ??= []).push(options.name);
+    const bytes = unb64(options.data);
+    const url = URL.createObjectURL(new Blob([bytes], { type: options.mediaType }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: options.name });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
   private fail(message: string, code: string): Error {

@@ -47,6 +47,10 @@
 	<string>Escouade lit le QR code d’appairage montré sur ton poste ou par un serveur.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Escouade demande Face ID avant une réponse qui fait agir un agent.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Escouade transcrit ta dictée sur le téléphone : le son ne part pas à Escouade.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Escouade écoute ta dictée pour écrire un message ou une réponse à un agent.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

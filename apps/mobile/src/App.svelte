@@ -2,13 +2,16 @@
   // The phone's shell, direction B « le fil » (MO-1, docs/MOBILE.md § 6 and design/mobile-2-3/): the header (the tab's
   // title and the « + »), the chips of the spaces (on the Kanban, its project and its columns: MO-7), the band of a
   // space that is cut, the tab's content, and the three tabs at the bottom; the sheet of the « + » (or of the Kanban's
-  // projects) above. With no space paired, « Escouade sur ce téléphone » and its
-  // pairing (MO-4); a space that revoked this phone, its own screen above all.
+  // projects) above. An agent's conversation and the sheets of MO-5 (a render in the viewer, a PDF, a file, a command
+  // read in full screen) above the tabs. With no space paired, « Escouade sur ce téléphone » and its pairing (MO-4); a
+  // space that revoked this phone, its own screen above all.
   import Icon from '$shared/components/Icon.svelte';
   import IconSprite from '$shared/components/IconSprite.svelte';
   import { t } from '$shared/lib/i18n';
   import AgentsTab from './components/AgentsTab.svelte';
+  import CommandSheet from './components/CommandSheet.svelte';
   import CreateSheet from './components/CreateSheet.svelte';
+  import FileSheet from './components/FileSheet.svelte';
   import InboxTab from './components/InboxTab.svelte';
   import KanbanHead from './components/KanbanHead.svelte';
   import KanbanTab from './components/KanbanTab.svelte';
@@ -16,8 +19,11 @@
   import SpaceBands from './components/SpaceBands.svelte';
   import SpaceChips from './components/SpaceChips.svelte';
   import Pairing from './components/Pairing.svelte';
+  import PdfSheet from './components/PdfSheet.svelte';
   import Revoked from './components/Revoked.svelte';
   import TabBar from './components/TabBar.svelte';
+  import Talk from './components/Talk.svelte';
+  import Viewer from './components/Viewer.svelte';
   import { pairing } from './lib/pairing.svelte';
   import { nav, openSheet } from './lib/nav.svelte';
   import { phone, revokedSpaces } from './lib/phone-spaces.svelte';
@@ -38,7 +44,7 @@
 {:else if !phone.spaces.length || pairing.open}
   <Pairing />
 {:else}
-  <div class="shell" inert={nav.sheet !== null}>
+  <div class="shell" inert={nav.sheet !== null || nav.talk !== null}>
     <header class="head">
       <div class="r">
         <h1>{t(`mobile.tabs.${nav.tab}`)}</h1>
@@ -61,7 +67,12 @@
     <TabBar />
   </div>
 {/if}
-{#if nav.sheet === 'create'}<CreateSheet />{:else if nav.sheet === 'project'}<ProjectSheet />{/if}
+{#if nav.talk && !revoked}
+  {#key `${nav.talk.space}:${nav.talk.agent}`}<div class="layer" inert={nav.sheet !== null}><Talk talk={nav.talk} /></div>{/key}
+{/if}
+{#if nav.sheet === 'create'}<CreateSheet />{:else if nav.sheet === 'project'}<ProjectSheet />{:else if nav.sheet === 'viewer'}<Viewer
+  />{:else if nav.sheet === 'pdf'}<PdfSheet />{:else if nav.sheet === 'file'}<FileSheet />{:else if nav.sheet === 'command'}<CommandSheet
+  />{/if}
 
 <style>
   .shell {

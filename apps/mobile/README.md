@@ -10,6 +10,7 @@ the app's Svelte interface. Direction B, « le fil » (`design/mobile-2-3/`).
   one `RemoteTransport` per space), its tabs and the system's back (`src/lib/nav.svelte.ts`), its Kanban (MO-7:
   `src/lib/board.svelte.ts`, read by `board_glance`, its gestures under the lock of `src/lib/lock.ts`), its appearance
   and Capacitor (`src/lib/appearance.ts`, `src/lib/native.ts`), its tokens (`src/mobile.css`).
+- **What waits, and answering it** (MO-5, `docs/MOBILE.md` § 3.15): the thread of « À toi » (`src/lib/thread.ts`, pure; `src/lib/feed.svelte.ts`, its steady order and its dots), each space's box read with its glance (`phone-spaces.svelte.ts`), the lines unfolded on the spot (`StopFold`, `AskFold`, `ViewFold`), the gestures through each space's own connection, under the lock when they make an agent act (`src/lib/act.ts`), the conversation (`Talk.svelte`), the system's dictation and the photos (`src/lib/voice.ts`), what is kept offline (`src/lib/kept.ts`: the glance without what an agent asks, the drafts).
 - **The spaces**: MO-4 pairs them by QR code. Until then, a space is given to the page by the e2e
   (`window.__ESCOUADE_SPACES__`) or by `npm run dev:server`; the app on a phone opens on « Escouade sur ce téléphone ».
 - **The native projects** (`android/`, `ios/`) are Capacitor's, made by `cap add`, then: R8 and the shrinking of the
@@ -38,8 +39,9 @@ cargo build --bin escouade-server                       # in src-tauri/
 ESCOUADE_PORT_BASE=4170 npm run dev:server -- --demo    # the page on base + 1, on a local escouade-server
 ```
 
-`--demo` makes a project and its agent stopped on a permission (the fake `claude` of the tests), and a project whose
-Kanban (MO-7) has two tickets to test and one to do: `#kanban` at the end of the page's address opens that tab. The
+`--demo` makes agents stopped on a permission, a command of thirty lines, a question and a plan, and a request of the box
+with its renders and its PDF (the fake `claude` of the tests): the page opens on « À toi » with all of them; and a project
+whose Kanban (MO-7) has two tickets to test and one to do: `#kanban` at the end of the page's address opens that tab. The
 server's API refuses a browser page's Origin on the loopback (it takes the WebView's through the phone's tunnel alone,
 MO-2): a forward of the script stands for the tunnel and takes the page's Origin off.
 

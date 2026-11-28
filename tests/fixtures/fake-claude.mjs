@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[page demande]" and "[page piege]", "[pilote p-N]", "[pilote p-N encore]" and "[pilote p-N attends]" (its page driven by drive_browser, gesture by gesture, AB-8) (a review that carries a request, and a page of its own that tries to answer it alone, AP-4), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "[artefact vN]" (version N of an artifact published at ESCOUADE_E2E_ARTIFACT_ORIGIN, AB-10), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[chef-prend KEY]" and "[chef-regle KEY]" (the squad lead takes the ticket KEY of the box in hand, or ticks it as settled, ESC-557), "[page montre]", "[page maj p-N]", "[page ferme p-N]", "[page calme]" (an agent's page shown, updated and closed by Escouade's show_page and close_page, AP-3), "[page demande]" and "[page piege]", "[pilote p-N]", "[pilote p-N encore]" and "[pilote p-N attends]" (its page driven by drive_browser, gesture by gesture, AB-8) (a review that carries a request, and a page of its own that tries to answer it alone, AP-4), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "[artefact vN]" (version N of an artifact published at ESCOUADE_E2E_ARTIFACT_ORIGIN, AB-10), "question", "permission" ("permission trente": a command of thirty lines), "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
 // message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
@@ -3730,6 +3730,23 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       return;
     }
     if (text.includes('question')) return askQuestion();
+    // "permission trente" (ESC-571): a command of thirty lines, which the phone reads in full screen beyond twelve.
+    if (text.includes('permission trente')) {
+      const tuid = `toolu_l${msg}`;
+      const lines = Array.from({ length: 29 }, (_, i) => `echo "étape ${i + 1} sur 30"`);
+      const input = {
+        command: [...lines, 'rm -rf build # la dernière ligne'].join('\n'),
+        description: 'Nettoie le build en trente étapes',
+      };
+      assistant({ type: 'tool_use', id: tuid, name: 'Bash', input });
+      pendingAnswer = { id: 'req_perm', tuid, kind: 'permission' };
+      out({
+        type: 'control_request',
+        request_id: 'req_perm',
+        request: { subtype: 'can_use_tool', tool_name: 'Bash', input, tool_use_id: tuid },
+      });
+      return;
+    }
     if (text.includes('permission')) {
       const tuid = `toolu_p${msg}`;
       const input = { command: 'rm -rf build', description: 'Supprime le dossier build' };

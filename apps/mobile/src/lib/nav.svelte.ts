@@ -1,7 +1,9 @@
 /**
- * Where the app is (MO-1, direction B): its three tabs (À toi, Agents, Kanban) and the sheet open above them (the « + »
- * of the header). The system's back goes one step back: it closes the sheet, then brings « À toi » back, then leaves
- * the app (Android puts it in the background, as its other apps do at their first screen).
+ * Where the app is (MO-1, MO-5, direction B): its three tabs (À toi, Agents, Kanban), the line unfolded in the thread,
+ * an agent's conversation opened above the tabs, and the sheet open above everything (the « + » of the header; a
+ * render in the viewer, a PDF, a command read in full screen, a file). The system's back goes one step back: it closes
+ * the sheet, then the conversation, then folds the line, then brings « À toi » back, then leaves the app (Android
+ * puts it in the background, as its other apps do at their first screen).
  *
  * Android's back button comes from Capacitor (`native.ts`); a browser's (the e2e, `npm run dev`) from its history: the
  * page keeps one entry above its own, and each back that comes there is one step.
@@ -9,9 +11,20 @@
 
 export type Tab = 'inbox' | 'agents' | 'kanban';
 export const TABS: Tab[] = ['inbox', 'agents', 'kanban'];
-export type Sheet = 'create' | 'project';
+export type Sheet = 'create' | 'project' | 'viewer' | 'pdf' | 'command' | 'file';
 
-export const nav = $state<{ tab: Tab; sheet: Sheet | null }>({ tab: 'inbox', sheet: null });
+/** An agent's conversation, in its space. */
+export interface Talk {
+  space: string;
+  agent: string;
+}
+
+export const nav = $state<{ tab: Tab; sheet: Sheet | null; talk: Talk | null; open: string | null }>({
+  tab: 'inbox',
+  sheet: null,
+  talk: null,
+  open: null,
+});
 
 /** The tab a page's address names (`#kanban`: the development's and the tests' way to open one), if any. */
 export function tabOf(hash: string): Tab | null {
@@ -21,6 +34,7 @@ export function tabOf(hash: string): Tab | null {
 
 export function goTab(tab: Tab): void {
   nav.sheet = null;
+  nav.talk = null;
   nav.tab = tab;
 }
 
@@ -32,10 +46,33 @@ export function closeSheet(): void {
   nav.sheet = null;
 }
 
+/** An agent's conversation opened (from a line, the « Agents » tab). */
+export function openTalk(space: string, agent: string): void {
+  nav.sheet = null;
+  nav.talk = { space, agent };
+}
+
+export function closeTalk(): void {
+  nav.talk = null;
+}
+
+/** A line of the thread unfolded (none: all folded). */
+export function unfold(key: string | null): void {
+  nav.open = key;
+}
+
 /** One step back: whether the app stays (`false`: it is at its first screen, it leaves). */
 export function back(): boolean {
   if (nav.sheet) {
     nav.sheet = null;
+    return true;
+  }
+  if (nav.talk) {
+    nav.talk = null;
+    return true;
+  }
+  if (nav.open && nav.tab === 'inbox') {
+    nav.open = null;
     return true;
   }
   if (nav.tab !== 'inbox') {

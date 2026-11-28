@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- On the phone, “Your turn” shows everything waiting for you in your spaces, ordered as the desktop’s box, and you answer on the spot: the whole command before “Allow” and the phone’s lock, a question, a plan, a choice and its renders, a PDF. You read a conversation there and send a message, dictated or with a photo; cut off, the phone keeps what it knew, dated, and never answers from a stale screen.
 - Settings › Phone: a UDP port typed and not applied yet is no longer wiped when you switch another setting of the page (STUN, Tailscale) meanwhile.
 - The 2.2’s browsers driven by agents, their pages, the Workspace and the window of what’s new come into 2.3. On a server without a window, an agent is told there is no browser nor page; the menu’s “Editor” entry and the Workspace’s workflows follow their switches in Settings › Features.
 - Private network: `escouade-server` opens, when you ask it to (`--connector-listen`), an entry apart for a company’s connectors, which speaks their protocol alone and never the remote API. `escouade-server connector pair NAME` gives the 8-letter code (10 minutes, once) the IT department types on its machine, `connectors` shows their state and version, `connectors remove` removes one and closes its channel; the policy `servers.privateNetwork` denies it.

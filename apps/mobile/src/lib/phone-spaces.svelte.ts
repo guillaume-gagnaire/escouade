@@ -12,13 +12,28 @@
 
 import { connectionOf, type Connection } from '$shared/lib/connection.svelte';
 import { t } from '$shared/lib/i18n';
+import type { InboxItem, InboxViews } from '$shared/lib/inbox/views';
 import type { Glance, GlanceAgent, GlanceAsk, GlanceProject } from '$shared/lib/spaces.svelte';
+import type { InboxView, WindowAsk } from '$shared/lib/types';
 import { RemoteTransport, RETRY_DELAYS, type RemoteLink, type Socket } from '$shared/lib/transport';
 import { EscouadeMobile, type EscouadeMobilePlugin } from '@escouade/capacitor-mobile';
+import { keepGlance, keptGlances } from './kept';
 import type { PairedSpace } from './paired';
 
 /** How often each space is asked what waits there. */
 export const GLANCE_EVERY = 3000;
+/** The box of a space is read again when its glance changes, and at least that often (its views: a ticket to approve). */
+export const BOX_EVERY = 15_000;
+
+/** The box « À toi » of a space (MO-5): its requests and its views, as `inbox_list` and `inbox_views` give them. */
+export interface SpaceBox {
+  /** The core's MCP server is on: off, the box holds nothing (its agents still stop, the glance says them). */
+  enabled: boolean;
+  asks: WindowAsk[];
+  views: InboxItem[];
+  /** When it was read (ms). */
+  at: number;
+}
 
 /** A space, as the phone shows it. */
 export interface PhoneSpace {
@@ -31,6 +46,8 @@ export interface PhoneSpace {
   glance: Glance | null;
   /** When it said it (ms), 0 before. */
   at: number;
+  /** Its box, once read (MO-5); none before, and never kept on the phone (M13). */
+  box: SpaceBox | null;
 }
 
 /** « Partout », or a space's id. */
@@ -69,13 +86,16 @@ export function startSpaces(paired: PairedSpace[], opts: SpacesOptions = {}): ()
   given = paired;
   options = opts;
   const kept = new Map(phone.spaces.map((s) => [s.id, s]));
+  // At the opening, what each space said last before (M13): shown, dated, until it says again.
+  const stored = keptGlances();
   phone.spaces = paired.map((p) => ({
     id: p.id,
     name: p.name,
     here: p.here,
     conn: connectionOf(),
-    glance: kept.get(p.id)?.glance ?? null,
-    at: kept.get(p.id)?.at ?? 0,
+    glance: kept.get(p.id)?.glance ?? stored[p.id]?.glance ?? null,
+    at: kept.get(p.id)?.at ?? stored[p.id]?.at ?? 0,
+    box: kept.get(p.id)?.box ?? null,
   }));
   if (phone.filter !== ALL && !paired.some((p) => p.id === phone.filter)) phone.filter = ALL;
   const version = opts.version ?? appVersion();
@@ -139,6 +159,7 @@ export function stopSpaces(): void {
   for (const link of links.values()) link.close();
   links.clear();
   busy.clear();
+  boxBusy.clear();
 }
 
 /** The app went to the background: no connection while it is there (§ 5). */
@@ -180,14 +201,54 @@ async function poll(id: string): Promise<void> {
     const g = await link.invoke<Glance>('space_glance', { counts: false });
     const s = spaceOf(id);
     if (s && links.get(id) === link) {
+      const changed = glanceMark(s.glance) !== glanceMark(g);
       s.glance = g;
       s.at = Date.now();
+      keepGlance(id, g, s.at);
+      if (g.countsOnly) s.box = null;
+      else if (changed || !s.box || s.at - s.box.at >= BOX_EVERY) void readBox(id);
     }
   } catch {
     // Cut meanwhile: its chip and its band say so.
   } finally {
     busy.delete(id);
   }
+}
+
+/** What of a glance says the box changed: the agents that wait and on what, the requests open. */
+export function glanceMark(g: Glance | null): string {
+  if (!g) return '';
+  const agents = g.agents.map((a) => `${a.id}:${a.status}:${a.request?.id ?? ''}`).join(',');
+  return `${g.waiting}|${agents}|${g.asks.map((a) => a.id).join(',')}`;
+}
+
+const boxBusy = new Set<string>();
+
+/** Reads the box of the space `id` again (after a glance that changed, or a gesture). */
+export async function readBox(id: string): Promise<void> {
+  const link = links.get(id);
+  if (!link || boxBusy.has(id)) return;
+  boxBusy.add(id);
+  try {
+    const [list, views] = await Promise.all([
+      link.invoke<InboxView>('inbox_list', { projectId: null }),
+      link.invoke<InboxViews>('inbox_views', { projectId: null }),
+    ]);
+    const s = spaceOf(id);
+    if (s && links.get(id) === link) s.box = { enabled: list.enabled, asks: list.asks, views: views.views, at: Date.now() };
+  } catch {
+    // Cut, or a core without the box: the glance alone says what waits.
+  } finally {
+    boxBusy.delete(id);
+  }
+}
+
+/** The glance and the box of a space read again at once (after a gesture). */
+export async function refreshSpace(id: string): Promise<void> {
+  await poll(id);
+  // The poll may have started a reading: wait for it, then read once more for what the gesture changed.
+  for (let i = 0; i < 40 && boxBusy.has(id); i++) await new Promise((r) => setTimeout(r, 50));
+  await readBox(id);
 }
 
 // ---------- what the screens read (pure) ----------
@@ -213,8 +274,21 @@ export function stateOf(s: Pick<PhoneSpace, 'conn'>): SpaceState {
 export const revokedSpaces = (spaces: PhoneSpace[]): PhoneSpace[] =>
   spaces.filter((s) => s.conn.state === 'refused' && s.conn.refusal?.code === 'token');
 
-/** What waits in a space: its glance's count (0 before it said). */
-export const waitingIn = (s: Pick<PhoneSpace, 'glance'>): number => s.glance?.waiting ?? 0;
+/**
+ * What waits in a space: as the box of the desktop counts it once its box is read (the requests open, the agents
+ * stopped, the views that wait for the user and are no agent's request: a ticket to approve, a decision), else its
+ * glance's count (0 before it said).
+ */
+export function waitingIn(s: Pick<PhoneSpace, 'glance'> & { box?: SpaceBox | null }): number {
+  const g = s.glance;
+  if (!s.box?.enabled || !g || g.countsOnly) return g?.waiting ?? 0;
+  const views = s.box.views;
+  const handled = new Set(views.filter((v) => v.group === 'stopped' && v.mark && v.agentId).map((v) => v.agentId));
+  const stopped = g.agents.filter((a) => a.status === 'waiting' && !handled.has(a.id)).length;
+  const asks = s.box.asks.filter((a) => a.state === 'open').length;
+  const other = views.filter((v) => !v.snoozedUntil && !v.mark && v.group !== 'stopped').length;
+  return stopped + asks + other;
+}
 
 /** The spaces a filter shows: all of them for « Partout ». */
 export function shownSpaces<S extends { id: string }>(spaces: S[], filter: string): S[] {

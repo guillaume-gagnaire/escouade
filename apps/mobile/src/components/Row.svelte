@@ -1,6 +1,6 @@
 <script lang="ts">
   // A line of the thread (MO-1, direction B): its kind in a square (amber for an agent that waits), what it is, and
-  // where (the kind, the space's plate and name, the project's dot and name). MO-5 unfolds it on the spot to answer.
+  // where (the kind, the space's plate and name, the project's dot and name). Touched (MO-5), it opens what it names.
   import Icon from '$shared/components/Icon.svelte';
   import SpacePlate from '$shared/components/servers/SpacePlate.svelte';
   import type { IconName } from '$shared/lib/icons';
@@ -14,6 +14,7 @@
     space,
     project,
     waits = false,
+    onOpen,
   }: {
     icon: IconName;
     title: string;
@@ -21,10 +22,12 @@
     space: Pick<PhoneSpace, 'name' | 'here'>;
     project: GlanceProject | null;
     waits?: boolean;
+    onOpen?: () => void;
   } = $props();
 </script>
 
 <li class="row" class:waits>
+  {#if onOpen}<button type="button" class="hit" aria-label={title} onclick={onOpen}></button>{/if}
   <span class="k"><Icon name={icon} size={16} /></span>
   <span class="tt">{title}</span>
   <span class="mt">
@@ -42,6 +45,7 @@
 
 <style>
   .row {
+    position: relative;
     display: grid;
     grid-template-columns: 30px minmax(0, 1fr);
     gap: 4px 12px;
@@ -51,6 +55,15 @@
   }
   .row + :global(.row) {
     box-shadow: inset 0 1px 0 var(--line);
+  }
+  .hit {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: transparent;
+  }
+  .hit:active {
+    background: var(--hover);
   }
   .k {
     width: 30px;

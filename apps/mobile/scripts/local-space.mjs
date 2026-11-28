@@ -31,6 +31,8 @@ export function prepareServer(root) {
       accountsVersion: 1,
       autoUpdate: false,
       midTurnDelaySecs: 0,
+      // The box « À toi » (MO-5): the MCP server on, on a free port, as the agents' requests need it.
+      mcpEnabled: true,
       accounts: [{ id: 'principal', name: 'Principal', engine: 'claude', configDir: '', claudePath: '', active: true }],
       // Every feature on, as the desktop's e2e have them (tests/e2e/fixture.ts): a settings file without them reads as
       // an update, which keeps on only what is in use, and leaves the Kanban off (MO-7).
@@ -200,6 +202,40 @@ export function makeRepo(root, name = 'facturation') {
   git(repo, 'add', '-A');
   git(repo, 'commit', '-qm', 'init');
   return repo;
+}
+
+/** A project of the server (its repository under `root`). */
+export async function makeProject(call, root, name = 'facturation', color = 'oklch(0.72 0.12 250)') {
+  const repo = makeRepo(root, name);
+  return call('create_project', {
+    path: repo,
+    name,
+    color,
+    worktreePerAgent: false,
+    firstAgent: null,
+    restore: false,
+  });
+}
+
+/** An agent of `project` told `text` (the fake `claude` plays the scenario it names). */
+export async function agentSaying(call, project, text) {
+  const agent = await call('create_agent', { projectId: project.id, model: null, engine: null, isolated: null, base: null });
+  await call('send_message', { id: agent.id, text, attachments: [], files: [] });
+  return agent;
+}
+
+/**
+ * What waits on a demo's space (MO-5): an agent stopped on a permission, one on a command of thirty lines, one on a
+ * question, one on a plan; and, in a second project, a request of the box with its renders and its PDF.
+ */
+export async function demoSpace(call, root) {
+  const fac = await makeProject(call, root);
+  await agentSaying(call, fac, 'Lance les tests, permission');
+  await agentSaying(call, fac, 'Nettoie tout, permission trente');
+  await agentSaying(call, fac, 'Quelle base ? question');
+  await agentSaying(call, fac, 'Prépare le travail, exit plan');
+  const portail = await makeProject(call, root, 'portail-adherents', 'oklch(0.72 0.15 45)');
+  await agentSaying(call, portail, '[demande] rends les trois directions du tableau de bord');
 }
 
 /** A project of the server and its agent, stopped on a permission (the fake `claude` asks one for « permission »). */

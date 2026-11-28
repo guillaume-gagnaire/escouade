@@ -7,15 +7,16 @@
 //   ESCOUADE_PORT_BASE=4170 npm run dev:server -- [--demo] [--pair]
 //
 // The page on base + 1, the server on base + 2, the forward on base + 3 (without a base: 5174, then free ports).
-// `--demo`: a project and its agent stopped on a permission (the fake `claude`), for « À toi » and « Agents »; and a
-// project whose Kanban has two tickets « À tester » and one « À faire » (MO-7: open the page on #kanban). The
-// server's data folder is a temporary one, removed at the end.
+// `--demo`: agents stopped on a permission, a command of thirty lines, a question and a plan, and a request of the box
+// with its renders and its PDF (the fake `claude`, MO-5), for « À toi » and « Agents »; and a project whose Kanban has
+// two tickets « À tester » and one « À faire » (MO-7: open the page on #kanban). The server's data folder is a
+// temporary one, removed at the end.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { apiClient, kanbanProject, pairPhone, phoneForward, prepareServer, ROOT, stoppedAgent } from './local-space.mjs';
+import { apiClient, demoSpace, kanbanProject, pairPhone, phoneForward, prepareServer, ROOT } from './local-space.mjs';
 
 const args = process.argv.slice(2);
 const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
@@ -58,7 +59,7 @@ const token = await pairPhone(program, data, env, port);
 const forward = await phoneForward(ports.forward, port);
 if (args.includes('--demo')) {
   const api = await apiClient(`ws://127.0.0.1:${port}/remote`, token);
-  await stoppedAgent(api.call, root);
+  await demoSpace(api.call, root);
   await kanbanProject(api.call, root, 'relances');
   api.close();
 }

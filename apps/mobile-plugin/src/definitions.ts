@@ -71,6 +71,41 @@ export interface EscouadeMobilePlugin {
 
   /** The crate's version (`escouade-mobile 0.1.0`), for the app's « About ». */
   version(): Promise<{ version: string }>;
+
+  /**
+   * The system's dictation (M9, MO-5), on the device when it allows: Android's recognition sheet (offline preferred),
+   * iOS's speech recognizer (on the device when it supports it). Resolves with what was heard, to read again before
+   * it goes; the audio never reaches Escouade's core. Rejects with `Cancelled` (closed, or nothing heard) or
+   * `NoDictation` (none on this phone, or not allowed).
+   */
+  dictate(options: DictateOptions): Promise<Dictated>;
+
+  /** Ends the dictation under way (iOS: the user touched the microphone again); Android's sheet ends by itself. */
+  stopDictation(): Promise<void>;
+
+  /**
+   * A file of a request, downloaded, opened by the system's app that reads it (its chooser): written in the app's
+   * cache, which the system empties and the app's removal takes with it, never in the phone's files. Rejects with
+   * `NoApp` when no app of the phone reads it, `Io` when it cannot be written.
+   */
+  openFile(options: OpenFileOptions): Promise<void>;
+}
+
+export interface DictateOptions {
+  /** The language to hear (`fr-FR`, `en-US`): the app's. */
+  lang: string;
+}
+
+export interface Dictated {
+  text: string;
+}
+
+export interface OpenFileOptions {
+  /** Its name (its extension tells the system what it is). */
+  name: string;
+  mediaType: string;
+  /** Its bytes, in base64. */
+  data: string;
 }
 
 /** The biometry the phone offers: `none` leaves its code alone. */
@@ -187,8 +222,9 @@ export interface OpenedNotification {
 
 /**
  * The `code` of a rejected promise: the crate's error (`MobileError`), then the plugin's own: `NoTunnel`, `NoSpace`
- * (nothing kept of that space), `NoLock` (no screen lock), `Cancelled` (the lock cancelled or failed), `BadPairing`
- * (not a QR code of Escouade's pairing).
+ * (nothing kept of that space), `NoLock` (no screen lock), `Cancelled` (the lock or the dictation cancelled or failed),
+ * `BadPairing` (not a QR code of Escouade's pairing), `NoDictation` (no dictation on this phone), `NoApp` (no app opens
+ * that file).
  */
 export type EscouadeMobileErrorCode =
   | 'BadKey'
@@ -205,7 +241,9 @@ export type EscouadeMobileErrorCode =
   | 'NoSpace'
   | 'NoLock'
   | 'Cancelled'
-  | 'BadPairing';
+  | 'BadPairing'
+  | 'NoDictation'
+  | 'NoApp';
 
 /** The QR code's marker and version (`src-tauri/src/phone/mod.rs`, `QR_VERSION`). */
 export const QR_VERSION = 'pair/1';

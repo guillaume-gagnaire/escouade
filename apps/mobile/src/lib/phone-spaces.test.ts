@@ -135,6 +135,7 @@ describe('what the screens read of the spaces', () => {
     conn: { state: 'open' } as never,
     glance: g as never,
     at: 1,
+    box: null,
   });
 
   it('puts the agents that wait first, the longest waiting first, then the latest at work', () => {

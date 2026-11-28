@@ -1,21 +1,28 @@
 package dev.escouade.mobile.plugin
 
 import android.app.KeyguardManager
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.speech.RecognizerIntent
 import android.util.Base64
+import androidx.activity.result.ActivityResult
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
+import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
+import java.io.File
 import java.security.KeyStore
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
@@ -318,6 +325,64 @@ class EscouadeMobilePlugin : Plugin() {
 
     @PluginMethod
     fun version(call: PluginCall) = call.resolve(JSObject().put("version", mobileVersion()))
+
+    // ---------- the dictation (M9) and the files of a request (MO-5) ----------
+
+    /**
+     * The system's recognition sheet, offline preferred: the audio stays with the system's recognizer, never reaches
+     * the WebView nor Escouade's core. What it heard comes back to read again before it goes.
+     */
+    @PluginMethod
+    fun dictate(call: PluginCall) {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, call.getString("lang") ?: "fr-FR")
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        if (intent.resolveActivity(context.packageManager) == null) return call.reject("no dictation on this phone", "NoDictation")
+        try {
+            startActivityForResult(call, intent, "dictated")
+        } catch (e: ActivityNotFoundException) {
+            call.reject("no dictation on this phone", "NoDictation")
+        }
+    }
+
+    @ActivityCallback
+    private fun dictated(call: PluginCall?, result: ActivityResult) {
+        if (call == null) return
+        val heard = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (heard.isNullOrBlank()) return call.reject("nothing heard", "Cancelled")
+        call.resolve(JSObject().put("text", heard))
+    }
+
+    /** Android's sheet ends by itself, when the user stops speaking. */
+    @PluginMethod
+    fun stopDictation(call: PluginCall) = call.resolve()
+
+    /**
+     * A file of a request, written in the app's cache (escouade-files/, which the system empties and the app's removal
+     * takes), handed to the system's chooser through the app's FileProvider, read-only.
+     */
+    @PluginMethod
+    fun openFile(call: PluginCall) {
+        val name = (call.getString("name") ?: "file").replace(Regex("""[/\\:]"""), "_")
+        val mediaType = call.getString("mediaType") ?: "application/octet-stream"
+        val file = try {
+            val dir = File(context.cacheDir, "escouade-files").apply { mkdirs() }
+            File(dir, name).apply { writeBytes(Base64.decode(call.getString("data") ?: "", Base64.DEFAULT)) }
+        } catch (e: Exception) {
+            return call.reject(e.message ?: "cannot write the file", "Io")
+        }
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+        val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mediaType).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (view.resolveActivity(context.packageManager) == null) return call.reject("no app opens this file", "NoApp")
+        try {
+            activity.startActivity(Intent.createChooser(view, name).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            call.resolve()
+        } catch (e: ActivityNotFoundException) {
+            call.reject("no app opens this file", "NoApp")
+        }
+    }
 
     override fun handleOnDestroy() {
         ways.keys.toList().forEach(::stop)
