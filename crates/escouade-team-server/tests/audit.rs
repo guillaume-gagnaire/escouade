@@ -111,6 +111,7 @@ fn message(payload: Vec<u8>, fence: Option<FenceWire>) -> AppendRequest {
         payload,
         fence,
         own: false,
+        lease: None,
     }
 }
 

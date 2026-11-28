@@ -44,6 +44,7 @@ async fn put(
             &path(project),
             &AppendRequest {
                 own,
+                lease: None,
                 fence: None,
                 kind,
                 epoch: Some(epoch),
@@ -214,6 +215,7 @@ async fn a_void_names_the_last_commit_alone(b: Backend) {
             "/v1/team/stream",
             &AppendRequest {
                 own: false,
+                lease: None,
                 fence: None,
                 kind: Kind::Void,
                 epoch: None,

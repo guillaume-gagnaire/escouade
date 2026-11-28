@@ -26,6 +26,7 @@ pub mod fuzzing;
 pub mod handoff;
 pub mod keychain;
 mod keyring;
+pub mod lease;
 pub mod merge;
 pub mod pairing;
 pub mod plugins;
@@ -43,6 +44,7 @@ pub use client::{
 pub use escouade_team_crypto as crypto;
 pub use escouade_team_crypto::Error as CryptoError;
 pub use keychain::{KeyPlace, Keychain, MemoryKeychain, Vault};
+pub use lease::{LeaseError, LeaseKeeper, LeaseState};
 pub use pairing::{PairCode, PairState};
 pub use storage::{SqliteStorage, StorageError, TeamProvider};
 pub use team::{

@@ -162,6 +162,8 @@ pub struct Lies {
     pub lose_op_answer: bool,
     /// Serves these payloads as entries of their numbers, beside the real ones (a forged entry, a replay: TS-13).
     pub project_inject: Vec<(u64, Vec<u8>)>,
+    /// Every request fails as when the network is cut, for this device alone (the relay cuts every device: OE-2).
+    pub offline: bool,
 }
 
 /// A transport around the real one: honest until the test sets its lies; it can hold the next commit until the
@@ -327,6 +329,9 @@ impl Liar {
 #[async_trait]
 impl Transport for Liar {
     async fn call(&self, call: Call) -> Result<Reply, ClientError> {
+        if self.lies.lock().unwrap().offline {
+            return Err(ClientError::Net("cut".into()));
+        }
         if call.path == "/v1/auth/session" {
             self.sign_ins.fetch_add(1, Ordering::SeqCst);
         }

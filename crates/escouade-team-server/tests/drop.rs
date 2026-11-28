@@ -144,6 +144,7 @@ async fn a_projects_entry_goes_and_is_listed_to_its_devices_alone(b: Backend) {
     let commit = |epoch: u64, payload: &[u8]| AppendRequest {
         // A member's, of their own devices (SR2-02).
         own: true,
+        lease: None,
         fence: None,
         kind: Kind::Commit,
         epoch: Some(epoch),

@@ -42,6 +42,11 @@ pub enum ClientError {
     /// it is.
     #[error("the claim is refused ({code})")]
     Claim { code: String, claim: Box<Claim> },
+    /// A lease of the team refused (OE-2): `taken` (another machine holds it), `lease_lost` (no longer this
+    /// machine's), `stale_token` (a write in the name of its holder under a token taken over, or its lease over); the
+    /// lease as it is.
+    #[error("the lease is refused ({code})")]
+    Lease { code: String, lease: Box<Lease> },
     #[error("the server refused ({status} {error}): {message}")]
     Refused {
         status: u16,
@@ -413,6 +418,21 @@ fn refusal(reply: &Reply) -> ClientError {
             match p.detail.and_then(|d| d.deserialized::<EpochTaken>().ok()) {
                 Some(detail) => ClientError::EpochTaken(detail),
                 None => ClientError::Decode("an epoch_taken without its detail".into()),
+            }
+        }
+        // A lease's refusal says its name; a claim's, its ticket.
+        (409, Some(p))
+            if matches!(p.error.as_str(), "taken" | "lease_lost" | "stale_token")
+                && p.detail
+                    .as_ref()
+                    .is_some_and(|d| d.deserialized::<Lease>().is_ok()) =>
+        {
+            match p.detail.and_then(|d| d.deserialized::<Lease>().ok()) {
+                Some(lease) => ClientError::Lease {
+                    code: p.error,
+                    lease: Box::new(lease),
+                },
+                None => ClientError::Decode("a refused lease without its detail".into()),
             }
         }
         (409, Some(p))
@@ -818,10 +838,11 @@ impl ServerClient {
         epoch: Option<u64>,
         payload: &[u8],
     ) -> Result<u64, ClientError> {
-        self.append_with(path, kind, epoch, payload, None, false)
+        self.append_with(path, kind, epoch, payload, None, None, false)
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn append_with(
         &self,
         path: String,
@@ -829,6 +850,7 @@ impl ServerClient {
         epoch: Option<u64>,
         payload: &[u8],
         fence: Option<FenceWire>,
+        lease: Option<LeaseFenceWire>,
         own: bool,
     ) -> Result<u64, ClientError> {
         let reply = self
@@ -840,6 +862,7 @@ impl ServerClient {
                     epoch,
                     payload: payload.to_vec(),
                     fence,
+                    lease,
                     own,
                 },
             ))
@@ -861,9 +884,82 @@ impl ServerClient {
             None,
             payload,
             fence,
+            None,
             false,
         )
         .await
+    }
+
+    /// A message in the team's stream (`project` None) or a project's, in the name of a lease's holder (OE-2: an entry of
+    /// the team's Overseer): refused with `ClientError::Lease` (`stale_token`) once another machine took the lease over,
+    /// or its lease is over.
+    pub async fn append_leased(
+        &self,
+        project: Option<&[u8; 16]>,
+        payload: &[u8],
+        lease: LeaseFenceWire,
+    ) -> Result<u64, ClientError> {
+        let path = match project {
+            None => "/v1/team/stream".to_string(),
+            Some(p) => format!("/v1/projects/{}/stream", hex::encode(p)),
+        };
+        self.append_with(path, Kind::Message, None, payload, None, Some(lease), false)
+            .await
+    }
+
+    /// Takes a lease of the team (OE-2), a machine of the team's: `ClientError::Lease` (`taken`, with who holds it)
+    /// when another machine holds it.
+    pub async fn take_lease(&self, name: &str) -> Result<LeaseAnswer, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Post,
+                path: format!("/v1/team/leases/{name}"),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        ok_cbor(reply)
+    }
+
+    async fn lease_token(
+        &self,
+        name: &str,
+        what: &str,
+        token: u64,
+    ) -> Result<LeaseAnswer, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                format!("/v1/team/leases/{name}/{what}"),
+                &ClaimToken { token },
+            ))
+            .await?;
+        ok_cbor(reply)
+    }
+
+    /// Renews a lease of the team, under its token: `lease_lost` once another machine took it.
+    pub async fn renew_lease(&self, name: &str, token: u64) -> Result<LeaseAnswer, ClientError> {
+        self.lease_token(name, "renew", token).await
+    }
+
+    /// Gives a lease of the team back.
+    pub async fn release_lease(&self, name: &str, token: u64) -> Result<LeaseAnswer, ClientError> {
+        self.lease_token(name, "release", token).await
+    }
+
+    /// A lease of the team as it is: who holds it, since when, until when.
+    pub async fn lease(&self, name: &str) -> Result<LeaseAnswer, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Get,
+                path: format!("/v1/team/leases/{name}"),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        ok_cbor(reply)
     }
 
     /// Who has access to a project on the server (TS-6).
@@ -1053,6 +1149,7 @@ impl ServerClient {
             Some(epoch),
             commit,
             None,
+            None,
             own,
         )
         .await
@@ -1130,6 +1227,7 @@ impl ServerClient {
             Kind::Commit,
             Some(epoch),
             commit,
+            None,
             None,
             own,
         )

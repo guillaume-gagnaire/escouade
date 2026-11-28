@@ -55,6 +55,9 @@ pub struct Limits {
     pub claim_lease: Duration,
     /// The lease of a ticket handed to a teammate (TS-17, §11): 14 days, while they have not taken it.
     pub hand_lease: Duration,
+    /// The lease of the team (OE-2, `docs/TEAM-OVERSEER.md` §7.1): 10 minutes, renewed every 3 by the machine of the
+    /// team that holds it.
+    pub team_lease: Duration,
     /// How long the messages a snapshot holds stay after it (SR2-01): 30 days. A device that finds the snapshot
     /// unreadable reads them instead, and flags it: a flagged snapshot never takes their place.
     pub snapshot_retention: Duration,
@@ -85,6 +88,7 @@ impl Default for Limits {
             enrollment_ttl_max: Duration::from_secs(7 * 24 * 3600),
             claim_lease: Duration::from_secs(10 * 60),
             hand_lease: Duration::from_secs(14 * 24 * 3600),
+            team_lease: Duration::from_secs(10 * 60),
             snapshot_retention: Duration::from_secs(30 * 24 * 3600),
             body_timeout: Duration::from_secs(30),
             body_min_rate: 64 << 10,

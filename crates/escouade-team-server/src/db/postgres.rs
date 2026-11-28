@@ -116,6 +116,16 @@ CREATE TABLE IF NOT EXISTS claims (
     handed_by BYTEA,
     PRIMARY KEY (team_id, project_id, ticket_id)
 );
+CREATE TABLE IF NOT EXISTS team_leases (
+    team_id BYTEA NOT NULL,
+    name TEXT NOT NULL,
+    holder BYTEA,
+    until BIGINT NOT NULL,
+    token BIGINT NOT NULL,
+    claimed_at BIGINT NOT NULL,
+    renewed_at BIGINT NOT NULL,
+    PRIMARY KEY (team_id, name)
+);
 CREATE TABLE IF NOT EXISTS project_keys (
     team_id BYTEA NOT NULL,
     project_id BYTEA NOT NULL,
@@ -202,6 +212,73 @@ async fn put_claim(
     )
     .await?;
     Ok(())
+}
+
+const LEASE_COLUMNS: &str = "name, holder, until, token, claimed_at, renewed_at";
+
+fn lease_row(r: &tokio_postgres::Row) -> Lease {
+    Lease {
+        name: r.get(0),
+        holder: r
+            .get::<_, Option<Vec<u8>>>(1)
+            .and_then(|v| <Id>::try_from(v).ok()),
+        until: r.get(2),
+        token: r.get::<_, i64>(3) as u64,
+        claimed_at: r.get(4),
+        renewed_at: r.get(5),
+    }
+}
+
+async fn lease_of(
+    c: &impl tokio_postgres::GenericClient,
+    team: &Id,
+    name: &str,
+) -> Result<Option<Lease>> {
+    Ok(c.query_opt(
+        &format!("SELECT {LEASE_COLUMNS} FROM team_leases WHERE team_id = $1 AND name = $2"),
+        &[&team.as_slice(), &name],
+    )
+    .await?
+    .map(|r| lease_row(&r)))
+}
+
+async fn put_lease(c: &impl tokio_postgres::GenericClient, team: &Id, lease: &Lease) -> Result<()> {
+    c.execute(
+        "INSERT INTO team_leases (team_id, name, holder, until, token, claimed_at, renewed_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (team_id, name) DO UPDATE SET holder = excluded.holder, until = excluded.until,
+           token = excluded.token, claimed_at = excluded.claimed_at, renewed_at = excluded.renewed_at",
+        &[
+            &team.as_slice(),
+            &lease.name,
+            &lease.holder.as_ref().map(|h| h.as_slice()),
+            &lease.until,
+            &(lease.token as i64),
+            &lease.claimed_at,
+            &lease.renewed_at,
+        ],
+    )
+    .await?;
+    Ok(())
+}
+
+/// Whether a lease's holder still holds: a machine of the team, not revoked.
+async fn lease_holder_ok(
+    c: &impl tokio_postgres::GenericClient,
+    team: &Id,
+    holder: Option<Id>,
+) -> Result<bool> {
+    let Some(holder) = holder else {
+        return Ok(true);
+    };
+    let row = c
+        .query_opt(
+            "SELECT role, revoked_at FROM devices WHERE id = $1 AND team_id = $2",
+            &[&holder.as_slice(), &team.as_slice()],
+        )
+        .await?
+        .map(|r| (r.get::<_, String>(0), r.get::<_, Option<i64>>(1)));
+    Ok(matches!(row, Some((role, None)) if Role::parse(&role) == Role::Service))
 }
 
 async fn access_of(
@@ -781,6 +858,15 @@ impl Store for Postgres {
         let size = entry.payload.len() as i64;
         if (stored + size) as u64 > quotas.team_bytes {
             return Err(StoreError::Quota);
+        }
+        // A write in the name of a lease's holder (OE-2) passes under its current token alone, its lease not over.
+        if let Some(fence) = &entry.lease {
+            lease_fenced(
+                lease_of(&tx, &team, &fence.name).await?,
+                fence,
+                entry.device,
+                entry.at,
+            )?;
         }
         let stands: u64;
         let out = match stream {
@@ -1704,6 +1790,57 @@ impl Store for Postgres {
             .iter()
             .map(claim_row)
             .collect())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn lease(
+        &self,
+        team: Id,
+        name: &str,
+        device: Id,
+        ask: LeaseAsk,
+        now: i64,
+        length: i64,
+        quotas: Quotas,
+    ) -> Result<(Lease, Option<Lease>)> {
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await?;
+        // The team's row locked: leases and their holders' writes go one at a time, as on SQLite.
+        tx.query_one(
+            "SELECT 1 FROM teams WHERE id = $1 FOR UPDATE",
+            &[&team.as_slice()],
+        )
+        .await?;
+        let current = lease_of(&tx, &team, name).await?;
+        if current.is_none() {
+            if ask != LeaseAsk::Take {
+                return Err(StoreError::LeaseLost(Box::new(Lease::free(name))));
+            }
+            let n: i64 = tx
+                .query_one(
+                    "SELECT COUNT(*) FROM team_leases WHERE team_id = $1",
+                    &[&team.as_slice()],
+                )
+                .await?
+                .get(0);
+            if n >= MAX_LEASES {
+                return Err(StoreError::TooMany("leases"));
+            }
+            charge(&tx, &team, ROW_BYTES as i64, &quotas).await?;
+        }
+        let ok = lease_holder_ok(&tx, &team, current.as_ref().and_then(|l| l.holder)).await?;
+        let before = current.clone();
+        let lease = decide_lease(current, name, device, ask, now, length, ok)?;
+        put_lease(&tx, &team, &lease).await?;
+        tx.commit().await?;
+        Ok((lease, before))
+    }
+
+    async fn lease_of(&self, team: Id, name: &str) -> Result<Lease> {
+        let client = self.client.lock().await;
+        Ok(lease_of(&*client, &team, name)
+            .await?
+            .unwrap_or_else(|| Lease::free(name)))
     }
 
     async fn next_key(&self, team: Id, project: Id, quotas: Quotas) -> Result<u64> {

@@ -192,6 +192,14 @@ impl Team {
         devices.iter().find_map(|d| names.get(d).cloned())
     }
 
+    /// The name of a device of the team in any of its projects (the machine that holds the lease of the team, OE-2:
+    /// « l'Overseer d'équipe tourne sur la machine build-2 »); the server never knows it.
+    pub fn machine_name(&mut self, device: &DeviceId) -> Option<String> {
+        self.projects()
+            .into_iter()
+            .find_map(|p| self.name_of(p, device))
+    }
+
     /// The names the devices wrote in the project.
     pub fn names(&mut self, project: ProjectId) -> Result<BTreeMap<DeviceId, String>, Error> {
         Ok(self

@@ -1,15 +1,15 @@
 ---
 title: "L'Overseer d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-OVERSEER.md (ESC-580, TS-22 : l'étude, les choix O1 à O8, le découpage OE-1 à OE-6)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : toutes les recommandations, O1 à O8 en A","docs/OVERSEER.md","docs/TEAM-SERVER.md §4.2, §9, §10, §11, §12, §13, C11, C15","spec : L'Overseer ; Le Kanban d'équipe ; Les coûts et les quotas de l'équipe ; Passer un agent à un collègue"]
+sources: ["docs/TEAM-OVERSEER.md (ESC-580, TS-22 : l'étude, les choix O1 à O8, le découpage OE-1 à OE-6 ; §7.1 pour le bail)","Réponse de l'utilisateur du 2026-11-21 (demande a-23) : toutes les recommandations, O1 à O8 en A","docs/OVERSEER.md","docs/TEAM-SERVER.md §4.2, §9, §10, §11, §12, §13, C11, C15","spec : L'Overseer ; Le Kanban d'équipe ; Les coûts et les quotas de l'équipe ; Passer un agent à un collègue","crates/escouade-team-server/README.md (OE-2 : table team_leases, routes /v1/team/leases/{nom})","crates/escouade-team/README.md (OE-2 : LeaseKeeper)"]
 tickets: ["ESC-580","ESC-588","ESC-606","ESC-611","ESC-613","ESC-615","ESC-616","ESC-618","ESC-546"]
-decisions: [269,275,270,271,272,273,342]
+decisions: [269,275,270,271,272,273,342,376]
 compared: null
 ---
 
 # L'Overseer d'équipe
 
-> **Décidé, en partie construit.** L'utilisateur a pris toutes les recommandations de l'étude d'ESC-580 (`docs/TEAM-OVERSEER.md`) le 2026-11-21 (O1 à O8 en A). Cette page dit ce qui est décidé ; chaque partie se construit par un ticket, de OE-1 (ESC-606) à OE-6 (ESC-618). **OE-1 est fait** (ESC-606) : le rôle de service au registre (section ci-dessous). L'Overseer de chacun (page « L'Overseer ») ne change pas.
+> **Décidé, en partie construit.** L'utilisateur a pris toutes les recommandations de l'étude d'ESC-580 (`docs/TEAM-OVERSEER.md`) le 2026-11-21 (O1 à O8 en A). Cette page dit ce qui est décidé ; chaque partie se construit par un ticket, de OE-1 (ESC-606) à OE-6 (ESC-618). **OE-1 est fait** (ESC-606) : le rôle de service au registre ; **OE-2 est fait** (ESC-611) : le bail d'équipe (sections ci-dessous). L'Overseer de chacun (page « L'Overseer ») ne change pas.
 
 ## Ce que c'est
 
@@ -19,7 +19,7 @@ Un Overseer qui suit les projets d'une équipe, jour et nuit : il lance et suit 
 
 - Une **machine de l'équipe en mode serveur** (`escouade-server team overseer`, OE-3, ESC-613), sous un **rôle de service** (OE-1, ESC-606, fait) : un appareil de l'équipe, pas d'un membre, qui ne signe rien d'administratif (ni membre, ni rôle, ni réglage, ni coupe-circuit, ni plugin privé) et ne répond pas aux invitations.
 - Sur les **comptes de harness de la machine** (un siège d'équipe, une clé d'API), jamais le compte d'un membre ; son modèle se règle sur la machine (Haiku par défaut).
-- **Un seul actif par équipe** : il tient un **bail d'équipe** au serveur (OE-2, ESC-611), 10 min renouvelées toutes les 3 min, sous un jeton qui croît et que portent ses écritures ; une autre machine attend et le dit.
+- **Un seul actif par équipe** : il tient un **bail d'équipe** au serveur (OE-2, ESC-611, fait : section « Le bail d'équipe »), 10 min renouvelées toutes les 3 min, sous un jeton qui croît et que portent ses écritures ; une autre machine attend et le dit.
 
 ## Le rôle de service (OE-1, fait)
 
@@ -32,6 +32,16 @@ Un Overseer qui suit les projets d'une équipe, jour et nuit : il lance et suit 
 - **Réglages › Équipe** la range à part, sous **« Machines de l'équipe »** : son nom court, ses appareils, ce qu'elle peut et ne peut pas, et pour un administrateur **« Retirer »**, qui la coupe comme un appareil (coupée au serveur, sortie du groupe, les clés de l'équipe tournent). Le compte des membres ne compte que les personnes. « Passer à un collègue » la propose parmi « Machines de l'équipe ».
 - **Le MCP** : aucun outil ne donne ni ne retire le rôle ; « Retirer » est un geste de la fenêtre du poste, jamais à distance.
 - **La machine en mode serveur** tient ses équipes : `escouade-server` ouvre les équipes comme le poste, et les sert aux fenêtres distantes.
+
+## Le bail d'équipe (OE-2, fait)
+
+- **Au serveur**, `/v1/team/leases/{nom}` : prendre (`POST`), renouveler (`…/renew`), rendre (`…/release`), lire (`GET` : qui le tient, depuis quand, jusqu'à quand). Le nom est libre (`overseer` aujourd'hui pour l'Overseer d'équipe ; un nom par projet plus tard, O6-B, par les mêmes routes) : 1 à 64 caractères parmi `a-z`, `0-9`, `.`, `_`, `-`.
+- **Réservé aux machines de l'équipe** (rôle de service, OE-1) : l'appareil d'une personne, administrateur compris, est refusé (403) sur chaque route, la lecture comprise.
+- **Un seul détenteur** : la prise se fait en une transaction ; une autre machine reçoit « pris » (`taken`) et le bail en détail (l'appareil qui le tient, depuis quand, jusqu'à quand). **Bail de 10 min**, renouvelé toutes les 3 min par la machine qui le tient ; un détenteur révoqué ne tient plus rien. **Le jeton croît à chaque prise**, même quand la même machine le reprend (un redémarrage retire l'ancien jeton).
+- **Le jeton sur les écritures** : une écriture qui se dit de l'Overseer d'équipe (une entrée du fil, une proposition, un ticket créé : elles arrivent avec OE-4) porte le nom et le jeton du bail, au flux de l'équipe comme à celui d'un projet. Le serveur la refuse (`stale_token`, comme les prises de tickets) quand le jeton n'est plus le courant, n'est pas celui de l'appareil qui écrit, **ou que le bail est fini** : une machine revenue d'une coupure ne parle plus au nom de l'Overseer, et même restée seule, elle renouvelle avant de reparler. Rien n'est écrit d'une écriture refusée.
+- **La machine** (`escouade-team`, `LeaseKeeper`) prend le bail au départ, le renouvelle en tâche de fond, le rend à l'arrêt (l'autre le prend aussitôt). Elle le **perd proprement** : un renouvellement refusé, un `stale_token`, ou le bail fini à sa propre horloge sans renouvellement entendu du serveur ; dès lors elle n'a plus de jeton à donner et n'écrit plus rien au nom de l'Overseer.
+- **La machine qui attend le dit** : « En attente : l'Overseer d'équipe tourne sur la machine build-2 » (le nom que la machine a écrit dans les projets de l'équipe, chiffré ; « sur une autre machine de l'équipe » s'il n'est pas connu). Elle relit le bail et **le prend à son expiration**, sous un jeton plus grand. OE-3 et OE-4 montrent cet état ; il n'a pas d'écran avant eux.
+- **Ce que voit le serveur** : un nom, un appareil, des heures (prise, dernier renouvellement, fin) et le jeton ; jamais le nom de la machine, ce que fait l'Overseer, ni un projet. Le bail n'est pas encore dans l'audit du serveur (AU-2).
 
 ## Ce qu'il voit
 
@@ -63,7 +73,7 @@ Tout membre, dans un **fil commun** de l'équipe (OE-4, ESC-615), chiffré, chaq
 | Ticket | Ce qu'il construit | Après |
 | --- | --- | --- |
 | OE-1 (ESC-606), **fait** | le rôle de service au registre (partagé avec l'audit) | ESC-588 |
-| OE-2 (ESC-611) | le bail d'équipe | OE-1 |
+| OE-2 (ESC-611), **fait** | le bail d'équipe | OE-1 |
 | OE-3 (ESC-613) | l'Overseer d'équipe sur la machine | OE-2 |
 | OE-4 (ESC-615) | le fil de l'équipe et son écran | OE-3 |
 | OE-5 (ESC-616) | les bornes et le coupe-circuit | OE-3, ESC-546 |

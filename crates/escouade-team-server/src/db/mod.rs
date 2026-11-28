@@ -123,6 +123,9 @@ pub struct NewEntry {
     pub payload: Vec<u8>,
     /// A write of a ticket's holder (TS-6): refused when its claim token is no longer the current one.
     pub fence: Option<Fence>,
+    /// A write that says it is the holder's of a lease of the team (OE-2): refused when its token is no longer the
+    /// current one, or its lease is over.
+    pub lease: Option<LeaseFence>,
     /// The device is an administrator's on the server: after a void, the epoch is kept to the administrators until
     /// their next commit (SR2-02).
     pub by_admin: bool,
@@ -368,6 +371,134 @@ pub(crate) fn fenced(current: Option<Claim>, fence: &Fence, device: Id) -> Resul
     })
 }
 
+/// A lease of the team (OE-2, `docs/TEAM-OVERSEER.md` §7.1): one machine of the team holds it at a time (the team's
+/// Overseer, `overseer`), the others wait. The server sees a name, a device and hours, and the token, nothing else.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lease {
+    pub name: String,
+    /// The device that holds it; still there once its lease is over, until another one takes it.
+    #[serde(default, with = "opt_id", skip_serializing_if = "Option::is_none")]
+    pub holder: Option<Id>,
+    /// The end of the lease (seconds); 0 when it was given back.
+    pub until: i64,
+    /// Grows at each take: a write that says it is the holder's carries it, and one under an older token is refused.
+    pub token: u64,
+    /// When its holder took it (« depuis »).
+    pub claimed_at: i64,
+    /// Its holder's last renewal.
+    pub renewed_at: i64,
+}
+
+impl Lease {
+    pub fn free(name: &str) -> Lease {
+        Lease {
+            name: name.to_string(),
+            holder: None,
+            until: 0,
+            token: 0,
+            claimed_at: 0,
+            renewed_at: 0,
+        }
+    }
+}
+
+/// What a machine asks of a lease of the team.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LeaseAsk {
+    /// Take it: free, its lease over, its holder gone, or already this device's (a new token, which retires the old).
+    Take,
+    /// Keep it a lease longer, under its token (also once its lease is over, while nobody took it).
+    Renew { token: u64 },
+    /// Give it back.
+    Release { token: u64 },
+}
+
+/// A write that says it is the holder's of a lease (an entry of the team's Overseer): its name and token.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LeaseFence {
+    pub name: String,
+    pub token: u64,
+}
+
+/// The most leases a team keeps (one per name: `overseer`, later one per project, O6-B).
+pub const MAX_LEASES: i64 = 256;
+
+/// Whether a name is one of a lease: 1 to 64 characters among `a-z`, `0-9`, `.`, `_`, `-`, a letter or a digit first.
+pub fn lease_name_ok(name: &str) -> bool {
+    let b = name.as_bytes();
+    (1..=64).contains(&b.len())
+        && b[0].is_ascii_alphanumeric()
+        && b.iter().all(|c| {
+            c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'.' | b'_' | b'-')
+        })
+}
+
+/// What a lease becomes (the same for both bases): `holder_ok` says its holder is still a machine of the team (not
+/// revoked); a holder gone holds nothing.
+pub(crate) fn decide_lease(
+    current: Option<Lease>,
+    name: &str,
+    device: Id,
+    ask: LeaseAsk,
+    now: i64,
+    length: i64,
+    holder_ok: bool,
+) -> Result<Lease> {
+    let l = current.unwrap_or_else(|| Lease::free(name));
+    let held_by_other = l.holder.is_some_and(|h| h != device) && l.until > now && holder_ok;
+    match ask {
+        LeaseAsk::Take => {
+            if held_by_other {
+                return Err(StoreError::LeaseTaken(Box::new(l)));
+            }
+            Ok(Lease {
+                holder: Some(device),
+                until: now + length,
+                token: l.token + 1,
+                claimed_at: now,
+                renewed_at: now,
+                ..l
+            })
+        }
+        LeaseAsk::Renew { token } => {
+            if l.holder != Some(device) || l.token != token {
+                return Err(StoreError::LeaseLost(Box::new(l)));
+            }
+            Ok(Lease {
+                until: now + length,
+                renewed_at: now,
+                ..l
+            })
+        }
+        LeaseAsk::Release { token } => {
+            if l.holder != Some(device) || l.token != token {
+                return Err(StoreError::LeaseLost(Box::new(l)));
+            }
+            Ok(Lease {
+                holder: None,
+                until: 0,
+                renewed_at: now,
+                ..l
+            })
+        }
+    }
+}
+
+/// Whether a write under a lease passes: its token is the current one, it is its holder's, and the lease is not over
+/// (a machine back from a cut renews before it speaks again in the name of the Overseer).
+pub(crate) fn lease_fenced(
+    current: Option<Lease>,
+    fence: &LeaseFence,
+    device: Id,
+    now: i64,
+) -> Result<()> {
+    let l = current.unwrap_or_else(|| Lease::free(&fence.name));
+    if l.holder != Some(device) || l.token != fence.token || l.until <= now {
+        return Err(StoreError::StaleLease(Box::new(l)));
+    }
+    Ok(())
+}
+
 /// What a row with no payload of its own (a ticket's claim) is counted in its team's quota (SR2-04), so that the quota
 /// bounds every row a device makes. An access list counts its devices' bytes; a project's counter and its access row
 /// are one per project, bounded by `max_projects`.
@@ -552,6 +683,15 @@ pub enum StoreError {
     /// A hand to a device that is not one of the project's (TS-17): revoked, without access, or the holder itself.
     #[error("that device is not one of this project")]
     NotInProject(Claim),
+    /// Another machine holds the lease of the team (OE-2).
+    #[error("the lease is held by another machine")]
+    LeaseTaken(Box<Lease>),
+    /// The lease is no longer this machine's (taken over, or given back).
+    #[error("the lease was lost")]
+    LeaseLost(Box<Lease>),
+    /// A write under a lease's token that is no longer the current one, or whose lease is over.
+    #[error("the lease token is stale")]
+    StaleLease(Box<Lease>),
     #[error("the base: {0}")]
     Backend(String),
 }
@@ -740,6 +880,22 @@ pub trait Store: Send + Sync {
     ) -> Result<(Claim, Option<Claim>)>;
     /// A project's claims.
     async fn claims(&self, team: Id, project: Id) -> Result<Vec<Claim>>;
+    /// Takes, renews or gives back a lease of the team (OE-2), in one transaction; a holder revoked, or no longer a
+    /// machine of the team, holds nothing. A new name counts `ROW_BYTES` in the quota, `MAX_LEASES` at most.
+    /// Answers the lease, and the one before.
+    #[allow(clippy::too_many_arguments)]
+    async fn lease(
+        &self,
+        team: Id,
+        name: &str,
+        device: Id,
+        ask: LeaseAsk,
+        now: i64,
+        length: i64,
+        quotas: Quotas,
+    ) -> Result<(Lease, Option<Lease>)>;
+    /// A lease of the team as it is (free when never taken).
+    async fn lease_of(&self, team: Id, name: &str) -> Result<Lease>;
     /// The next number of a project's tickets (§4.1): 1, 2, 3…, one at a time, never twice.
     /// It makes the project known (counted in `max_projects`, SR2-04).
     async fn next_key(&self, team: Id, project: Id, quotas: Quotas) -> Result<u64>;
@@ -959,5 +1115,127 @@ mod tests {
         assert_eq!((rows.len(), more), (1, true));
         let (rows, more) = paginate(vec![entry(1, 4)], page);
         assert_eq!((rows.len(), more), (1, false));
+    }
+
+    #[test]
+    fn a_lease_has_one_holder_and_its_token_grows_at_each_take() {
+        let a = decide_lease(None, "overseer", A, LeaseAsk::Take, 100, 600, true).unwrap();
+        assert_eq!(
+            (a.holder, a.token, a.until, a.claimed_at),
+            (Some(A), 1, 700, 100)
+        );
+        assert!(matches!(
+            decide_lease(
+                Some(a.clone()),
+                "overseer",
+                B,
+                LeaseAsk::Take,
+                200,
+                600,
+                true
+            ),
+            Err(StoreError::LeaseTaken(_))
+        ));
+        // Renewed by its holder, under its token only.
+        let r = decide_lease(
+            Some(a.clone()),
+            "overseer",
+            A,
+            LeaseAsk::Renew { token: 1 },
+            300,
+            600,
+            true,
+        )
+        .unwrap();
+        assert_eq!((r.until, r.claimed_at, r.renewed_at), (900, 100, 300));
+        assert!(matches!(
+            decide_lease(
+                Some(r.clone()),
+                "overseer",
+                B,
+                LeaseAsk::Renew { token: 1 },
+                300,
+                600,
+                true
+            ),
+            Err(StoreError::LeaseLost(_))
+        ));
+        let fence = LeaseFence {
+            name: "overseer".into(),
+            token: 1,
+        };
+        assert!(lease_fenced(Some(r.clone()), &fence, A, 400).is_ok());
+        // Its lease over, B takes it under a greater token; A's write and renewal are refused from then on.
+        let b = decide_lease(
+            Some(r.clone()),
+            "overseer",
+            B,
+            LeaseAsk::Take,
+            900,
+            600,
+            true,
+        )
+        .unwrap();
+        assert_eq!((b.holder, b.token), (Some(B), 2));
+        assert!(matches!(
+            lease_fenced(Some(b.clone()), &fence, A, 901),
+            Err(StoreError::StaleLease(_))
+        ));
+        assert!(matches!(
+            decide_lease(
+                Some(b.clone()),
+                "overseer",
+                A,
+                LeaseAsk::Renew { token: 1 },
+                901,
+                600,
+                true
+            ),
+            Err(StoreError::LeaseLost(_))
+        ));
+        // Over, a write under the current token is refused too, until it is renewed.
+        let fb = LeaseFence {
+            name: "overseer".into(),
+            token: 2,
+        };
+        assert!(matches!(
+            lease_fenced(Some(b.clone()), &fb, B, 1500),
+            Err(StoreError::StaleLease(_))
+        ));
+        // A holder gone (revoked) holds nothing.
+        let c = decide_lease(
+            Some(b.clone()),
+            "overseer",
+            A,
+            LeaseAsk::Take,
+            1000,
+            600,
+            false,
+        )
+        .unwrap();
+        assert_eq!((c.holder, c.token), (Some(A), 3));
+        // Given back: free, and the next take a token further still.
+        let g = decide_lease(
+            Some(c),
+            "overseer",
+            A,
+            LeaseAsk::Release { token: 3 },
+            1100,
+            600,
+            true,
+        )
+        .unwrap();
+        assert_eq!((g.holder, g.until), (None, 0));
+        let t = decide_lease(Some(g), "overseer", B, LeaseAsk::Take, 1101, 600, true).unwrap();
+        assert_eq!(t.token, 4);
+    }
+
+    #[test]
+    fn a_lease_name_is_short_and_plain() {
+        assert!(lease_name_ok("overseer"));
+        assert!(lease_name_ok("overseer.0a1b-c_d"));
+        for bad in ["", "-x", "Overseer", "a b", "é", &"a".repeat(65)] {
+            assert!(!lease_name_ok(bad), "{bad}");
+        }
     }
 }

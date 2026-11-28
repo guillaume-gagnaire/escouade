@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{self, Authed};
 use crate::db::{
-    Claim, ClaimAsk, Entry, Fence, Kind, NewEntry, Page, Quotas, Role, Snapshot, StoreError, Stream,
+    lease_name_ok, Claim, ClaimAsk, Entry, Fence, Kind, Lease, LeaseAsk, LeaseFence, NewEntry,
+    Page, Quotas, Role, Snapshot, StoreError, Stream,
 };
 use crate::live::Event;
 use crate::metrics::Metrics;
@@ -196,6 +197,11 @@ pub mod wire {
         /// `stale_token`) when the token is no longer the current one.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub fence: Option<FenceWire>,
+        /// A write that says it is the holder's of a lease of the team (OE-2: an entry of the team's Overseer): the
+        /// lease's name and token. Refused (409 `stale_token`, the lease as detail) when the token is no longer the
+        /// current one, or its lease is over.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub lease: Option<LeaseFenceWire>,
         /// A commit says, in clear, that it changes its member's own devices only (SR2-02): a member's commit is
         /// refused without it (403). The devices check the same, signed inside the commit.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -207,6 +213,20 @@ pub mod wire {
         #[serde(with = "serde_bytes")]
         pub ticket: Vec<u8>,
         pub token: u64,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct LeaseFenceWire {
+        pub name: String,
+        pub token: u64,
+    }
+
+    /// A lease of the team (OE-2), with the server's time and the length of a lease (seconds).
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct LeaseAnswer {
+        pub lease: Lease,
+        pub now: i64,
+        pub length: i64,
     }
 
     /// Who has access to a project (TS-6): every device of the team, or those listed.
@@ -481,6 +501,24 @@ fn store_problem(e: StoreError) -> Problem {
             "the device a ticket is handed to is not one of this project",
         )
         .with_detail(&c),
+        StoreError::LeaseTaken(l) => Problem::new(
+            StatusCode::CONFLICT,
+            "taken",
+            "another machine of the team holds this lease",
+        )
+        .with_detail(&*l),
+        StoreError::LeaseLost(l) => Problem::new(
+            StatusCode::CONFLICT,
+            "lease_lost",
+            "this lease is no longer this machine's",
+        )
+        .with_detail(&*l),
+        StoreError::StaleLease(l) => Problem::new(
+            StatusCode::CONFLICT,
+            "stale_token",
+            "a write under a lease token that is no longer the current one, or whose lease is over",
+        )
+        .with_detail(&*l),
         StoreError::Backend(e) => {
             tracing::error!("base: {e}");
             Problem::internal()
@@ -1106,6 +1144,14 @@ async fn append(
             token: f.token,
         }),
     };
+    let lease = match req.lease {
+        None => None,
+        Some(l) if !lease_name_ok(&l.name) => return Err(bad_lease_name()),
+        Some(l) => Some(LeaseFence {
+            name: l.name,
+            token: l.token,
+        }),
+    };
     let entry = NewEntry {
         kind: req.kind,
         epoch: req.epoch,
@@ -1113,6 +1159,7 @@ async fn append(
         at: now(),
         payload: req.payload,
         fence,
+        lease,
         by_admin: authed.is_admin(),
     };
     let (entry, epoch) = app
@@ -1459,6 +1506,108 @@ pub async fn list_claims(
         claims,
         now: now(),
         lease: claim_lease(&app),
+    }))
+}
+
+fn bad_lease_name() -> Problem {
+    Problem::bad_request(
+        "bad_name",
+        "a lease's name is 1 to 64 characters among a-z, 0-9, '.', '_', '-'",
+    )
+}
+
+fn team_lease(app: &Shared) -> i64 {
+    app.limits.team_lease.as_secs().max(1) as i64
+}
+
+/// The leases of the team are its machines' (OE-1): a member's device, an administrator's too, is refused (403).
+fn lease_name(authed: &Authed, name: &str) -> Result<(), Problem> {
+    if !authed.is_service() {
+        return Err(Problem::forbidden(
+            "the leases of the team are its machines' (role of service)",
+        ));
+    }
+    if !lease_name_ok(name) {
+        return Err(bad_lease_name());
+    }
+    Ok(())
+}
+
+async fn lease_ask(
+    app: &Shared,
+    authed: &Authed,
+    name: &str,
+    ask: LeaseAsk,
+) -> Result<Cbor<LeaseAnswer>, Problem> {
+    lease_name(authed, name)?;
+    let length = team_lease(app);
+    let at = now();
+    let (lease, _before) = app
+        .store
+        .lease(
+            authed.device.team,
+            name,
+            authed.device.id,
+            ask,
+            at,
+            length,
+            app.quotas(),
+        )
+        .await
+        .map_err(store_problem)?;
+    Ok(Cbor(LeaseAnswer {
+        lease,
+        now: at,
+        length,
+    }))
+}
+
+/// Takes a lease of the team (OE-2, `docs/TEAM-OVERSEER.md` §7.1): one machine holds it, under a token that grows at
+/// each take; the others are told which holds it, since when and until when (409 `taken`, the lease as detail).
+pub async fn take_lease(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(name): Path<String>,
+) -> Result<Cbor<LeaseAnswer>, Problem> {
+    lease_ask(&app, &authed, &name, LeaseAsk::Take).await
+}
+
+/// Renews a lease of the team (every 3 minutes), under its token: 409 `lease_lost` once another machine took it.
+pub async fn renew_lease(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(name): Path<String>,
+    Cbor(req): Cbor<TokenRequest>,
+) -> Result<Cbor<LeaseAnswer>, Problem> {
+    lease_ask(&app, &authed, &name, LeaseAsk::Renew { token: req.token }).await
+}
+
+/// Gives a lease of the team back (the machine stops).
+pub async fn release_lease(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(name): Path<String>,
+    Cbor(req): Cbor<TokenRequest>,
+) -> Result<Cbor<LeaseAnswer>, Problem> {
+    lease_ask(&app, &authed, &name, LeaseAsk::Release { token: req.token }).await
+}
+
+/// A lease of the team as it is: who holds it, since when, until when (free when never taken).
+pub async fn read_lease(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(name): Path<String>,
+) -> Result<Cbor<LeaseAnswer>, Problem> {
+    lease_name(&authed, &name)?;
+    let lease = app
+        .store
+        .lease_of(authed.device.team, &name)
+        .await
+        .map_err(store_problem)?;
+    Ok(Cbor(LeaseAnswer {
+        lease,
+        now: now(),
+        length: team_lease(&app),
     }))
 }
 

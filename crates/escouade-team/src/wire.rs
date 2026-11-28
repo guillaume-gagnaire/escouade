@@ -196,6 +196,9 @@ pub struct AppendRequest {
     /// A write of a ticket's holder (TS-6): the claim's opaque id and its token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fence: Option<FenceWire>,
+    /// A write in the name of a lease's holder (OE-2: an entry of the team's Overseer): the lease's name and token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lease: Option<LeaseFenceWire>,
     /// A commit of a member, of their own devices only (SR2-02): the server refuses a member's commit without it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub own: bool,
@@ -206,6 +209,35 @@ pub struct FenceWire {
     #[serde(with = "serde_bytes")]
     pub ticket: Vec<u8>,
     pub token: u64,
+}
+
+/// A write in the name of a lease's holder (OE-2): refused `stale_token` once another machine took the lease over, or
+/// its lease is over.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LeaseFenceWire {
+    pub name: String,
+    pub token: u64,
+}
+
+/// A lease of the team, as the server keeps it (OE-2, `docs/TEAM-OVERSEER.md` §7.1): a name, the device that holds it,
+/// hours (seconds of the server's clock) and the token. Nothing else.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lease {
+    pub name: String,
+    #[serde(default, with = "opt_bytes", skip_serializing_if = "Option::is_none")]
+    pub holder: Option<Vec<u8>>,
+    pub until: i64,
+    pub token: u64,
+    pub claimed_at: i64,
+    pub renewed_at: i64,
+}
+
+/// A lease, with the server's time and the length of a lease (seconds).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LeaseAnswer {
+    pub lease: Lease,
+    pub now: i64,
+    pub length: i64,
 }
 
 /// Who has access to a project on the server (TS-6).

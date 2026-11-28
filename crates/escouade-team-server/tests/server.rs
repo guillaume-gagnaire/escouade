@@ -49,6 +49,7 @@ async fn a_snapshot_takes_the_place_of_the_start_of_a_projects_stream(b: Backend
             &format!("/v1/projects/{}/stream", hex::encode(p)),
             &AppendRequest {
                 own: false,
+                lease: None,
                 fence: None,
                 kind: Kind::Commit,
                 epoch: Some(0),
@@ -391,6 +392,7 @@ async fn the_streams_are_numbered_and_read_again_from_n(b: Backend) {
     let project_commit = |epoch: u64, payload: Vec<u8>| AppendRequest {
         // Said of their own devices: Bob is a member (SR2-02).
         own: true,
+        lease: None,
         fence: None,
         kind: Kind::Commit,
         epoch: Some(epoch),
@@ -488,6 +490,7 @@ async fn the_first_commit_of_an_epoch_wins(b: Backend) {
                     "/v1/team/stream",
                     &AppendRequest {
                         own: false,
+                        lease: None,
                         fence: None,
                         kind: Kind::Commit,
                         epoch: Some(2),

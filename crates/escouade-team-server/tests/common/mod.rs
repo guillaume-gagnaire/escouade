@@ -432,6 +432,7 @@ impl Device {
                 "/v1/team/stream",
                 &AppendRequest {
                     own: false,
+                    lease: None,
                     fence: None,
                     kind,
                     epoch,
@@ -459,6 +460,7 @@ impl Device {
                 "/v1/team/stream",
                 &AppendRequest {
                     own: true,
+                    lease: None,
                     fence: None,
                     kind: Kind::Commit,
                     epoch: Some(epoch),
@@ -474,6 +476,7 @@ impl Device {
                 &format!("/v1/projects/{}/stream", hex::encode(project)),
                 &AppendRequest {
                     own: false,
+                    lease: None,
                     fence: None,
                     kind: Kind::Message,
                     epoch: None,

@@ -232,6 +232,12 @@ impl Server {
                 "/v1/projects/{project}/access",
                 get(api::get_access).put(api::put_access),
             )
+            .route(
+                "/v1/team/leases/{name}",
+                get(api::read_lease).post(api::take_lease),
+            )
+            .route("/v1/team/leases/{name}/renew", post(api::renew_lease))
+            .route("/v1/team/leases/{name}/release", post(api::release_lease))
             .route("/v1/projects/{project}/claims", get(api::list_claims))
             .route(
                 "/v1/projects/{project}/claims/{ticket}",
