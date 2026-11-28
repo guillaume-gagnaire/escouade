@@ -1,6 +1,6 @@
 [package]
 name = "escouade-connector"
-version = "2.3.0-beta.1"
+version = "2.3.0-beta.2"
 description = "The connector of a private network (RP-3, docs/PRIVATE-NETWORK.md § 4): a program a company runs in its network, that opens a channel out to an escouade-server and lets through the agents' connections to the hosts of its ceiling alone, resolved and checked on its side"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
