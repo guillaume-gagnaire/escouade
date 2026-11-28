@@ -122,9 +122,14 @@ test('the server’s update: its state on its space, then « Mettre à jour le s
     { ...ssh.env, ESCOUADE_SERVER_TEST_VERSION: '2.2.0', ESCOUADE_SERVER_IMAGE: '1' },
     ssh.server.port,
   );
-  // Tried again by hand: refused again, the image's command this time.
-  await update.getByRole('button', { name: 'Réessayer' }).click();
-  await expect(page.getByTestId('update-server')).toContainText('Dans l’image Docker, rien n’est remplacé', { timeout: 60_000 });
+  // Tried again by hand: refused again, the image's command this time. A try made before this computer's tunnel reaches
+  // the server just started again (the CI's runners are slower) ends on « escouade-server ne répond pas »: tried again,
+  // by its own « Réessayer », until the server's refusal of the versions comes back.
+  await expect(async () => {
+    await screen.getByRole('button', { name: 'Réessayer' }).first().click();
+    await expect(page.getByTestId('update-server')).toContainText('Dans l’image Docker, rien n’est remplacé', { timeout: 10_000 });
+  }).toPass({ timeout: 90_000 });
+  expect(image.log()).toContain('refused a connection (version)');
   await expect(page.getByTestId('update-server')).toContainText('docker pull ghcr.io/guillaume-gagnaire/escouade/escouade-server:');
   await expect(page.getByTestId('update-server').getByRole('button', { name: 'Mettre à jour le serveur' })).toHaveCount(0);
   await shot(page, 'maj-serveur-image');

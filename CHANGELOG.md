@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Réglages › Téléphone : un port UDP tapé et pas encore appliqué ne s’efface plus quand tu bascules un autre réglage de la page (STUN, Tailscale) entre-temps.
 - Les navigateurs pilotés par les agents, leurs pages, le Workspace et la fenêtre des nouveautés de la 2.2 arrivent dans la 2.3. Sur un serveur sans fenêtre, un agent apprend qu’il n’y a ni navigateur ni page ; l’entrée « Éditeur » du menu et les workflows du Workspace suivent leurs interrupteurs de Réglages › Fonctionnalités.
 - Réseau privé : `escouade-server` ouvre, si tu le lui demandes (`--connector-listen`), une entrée à part pour les connecteurs d’une entreprise, qui ne parle que leur protocole et jamais l’API distante. `escouade-server connector pair NOM` donne le code de 8 lettres (10 minutes, une fois) que le service informatique tape sur sa machine, `connectors` montre leur état et leur version, `connectors remove` en retire un et ferme son canal ; la stratégie `servers.privateNetwork` l’interdit.
 - Mode serveur : ton serveur se met à jour tout seul. Il cherche une version de son canal (stable, ou bêta s’il a été installé en bêta), vérifie sa signature, la pose et ne redémarre qu’au repos, jamais vers une plus ancienne ; dans l’image Docker, il dit seulement qu’une nouvelle image existe. Sur un serveur d’une autre version, « Mettre à jour le serveur » le lui demande en un clic, et ses Réglages › Général montrent sa version et ses deux réglages (`escouade-server config` sur le serveur).

@@ -462,12 +462,14 @@ jobs:
           node ../../node_modules/vite/bin/vite.js build
           npx cap sync ios
 
-      # Capacitor by SwiftPM (no CocoaPods); for the simulator, without signing.
+      # Capacitor by SwiftPM (no CocoaPods); for the simulator, without signing. ARCHS=arm64: a Release build for the
+      # generic simulator would also link x86_64, and the plugin's XCFramework has only the arm64 simulator slice
+      # (aarch64-apple-ios-sim, scripts/mobile-ios.sh): its libescouade_mobile.a would be ignored and the link fail.
       - name: The app for the simulator (unsigned)
         working-directory: apps/mobile/ios/App
         run: |
           xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/dd" \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/dd" ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build -quiet
           APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name 'App.app' -path '*Release-iphonesimulator*' | head -1)
           test -n "$APP"

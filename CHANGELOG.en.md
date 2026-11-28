@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Settings › Phone: a UDP port typed and not applied yet is no longer wiped when you switch another setting of the page (STUN, Tailscale) meanwhile.
 - The 2.2’s browsers driven by agents, their pages, the Workspace and the window of what’s new come into 2.3. On a server without a window, an agent is told there is no browser nor page; the menu’s “Editor” entry and the Workspace’s workflows follow their switches in Settings › Features.
 - Private network: `escouade-server` opens, when you ask it to (`--connector-listen`), an entry apart for a company’s connectors, which speaks their protocol alone and never the remote API. `escouade-server connector pair NAME` gives the 8-letter code (10 minutes, once) the IT department types on its machine, `connectors` shows their state and version, `connectors remove` removes one and closes its channel; the policy `servers.privateNetwork` denies it.
 - Server mode: your server updates itself. It looks for a version of its channel (stable, or beta when installed as a beta), checks its signature, puts it in place and restarts at rest only, never to an older one; in the Docker image, it only says that a new image exists. On a server of another version, “Update the server” asks it in one click, and its Settings › General show its version and its two settings (`escouade-server config` on the server).

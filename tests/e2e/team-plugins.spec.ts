@@ -214,8 +214,12 @@ test('an administrator publishes a plugin of the team, a member sees it and inst
   await expect(proposed).toContainText('fr.acme.rules');
   await proposed.getByRole('button', { name: 'Contrôler à nouveau et signer' }).click();
   await proposed.getByLabel('Mot de passe').fill(PASSWORD);
+  // The checks compile the member's plugin on this machine (ESC-648): nothing is signed before it is agreed to.
+  const signDo = proposed.getByRole('button', { name: 'Contrôler à nouveau et signer' });
+  await expect(signDo).toBeDisabled();
+  await proposed.getByRole('checkbox', { name: /Je sais que les contrôles compilent ici le plugin/ }).check();
   await shots(page, 'equipe-plugins-signer');
-  await proposed.getByRole('button', { name: 'Contrôler à nouveau et signer' }).click();
+  await signDo.click();
   await expect(dialog.getByText(/Signé\s: les deux empreintes sont les mêmes/)).toBeVisible({ timeout: 60_000 });
   await expect(dialog.getByTestId('team-plugin-published')).toContainText('ACME · privé');
   await shots(page, 'equipe-plugins-publie');

@@ -21,7 +21,9 @@ both!(
     a_void_of_a_commit_this_device_took_is_a_fork,
 );
 
-async fn three(w: &World) -> (Team, Team, Team) {
+/// The three devices, with their places: a place holds its folder (a temporary directory), dropped with it. Kept for the
+/// whole test: a device that reads its state again from the disk (after a refused reading) must still find it.
+async fn three(w: &World) -> (Team, Team, Team, [Place; 3]) {
     let (pa, pb, pc) = (w.place(), w.place(), w.place());
     let mut alice = w.create(&pa, member(1)).await;
     let mut bob = w.join(&mut alice, &pb, member(2), Role::Member).await;
@@ -30,7 +32,7 @@ async fn three(w: &World) -> (Team, Team, Team) {
         t.sync().await.unwrap();
         t.serve(NOW).await.unwrap();
     }
-    (alice, bob, carol)
+    (alice, bob, carol, [pa, pb, pc])
 }
 
 /// After a null commit: the administrator removes the member and changes the keys; the others follow, on the same
@@ -51,7 +53,7 @@ async fn the_team_goes_on(w: &World, alice: &mut Team, carol: &mut Team, epoch: 
 
 async fn a_garbage_commit_freezes_nobody(b: Backend) {
     let w = World::on(&b).await;
-    let (mut alice, bob, mut carol) = three(&w).await;
+    let (mut alice, bob, mut carol, _places) = three(&w).await;
     let epoch = bob.epoch().unwrap();
     let seq = bob
         .client()
@@ -90,7 +92,7 @@ async fn a_garbage_commit_freezes_nobody(b: Backend) {
 /// change of his own devices.
 async fn a_commit_against_the_rules_freezes_nobody(b: Backend) {
     let w = World::on(&b).await;
-    let (mut alice, mut bob, mut carol) = three(&w).await;
+    let (mut alice, mut bob, mut carol, _places) = three(&w).await;
     let epoch = bob.epoch().unwrap();
     let commit = {
         let mut roster = bob.roster().unwrap();
@@ -130,7 +132,7 @@ async fn a_commit_against_the_rules_freezes_nobody(b: Backend) {
 
 async fn a_garbage_commit_in_a_project_freezes_nobody(b: Backend) {
     let w = World::on(&b).await;
-    let (mut alice, mut bob, mut carol) = three(&w).await;
+    let (mut alice, mut bob, mut carol, _places) = three(&w).await;
     let all: BTreeSet<_> = [member(1), member(2), member(3)].into_iter().collect();
     let kept: ProjectId = alice.create_project(Some(all)).await.unwrap();
     for _ in 0..2 {
@@ -194,7 +196,7 @@ async fn a_garbage_commit_in_a_project_freezes_nobody(b: Backend) {
 /// from an administrator alone.
 async fn the_server_keeps_a_members_commit_to_their_own_devices(b: Backend) {
     let w = World::on(&b).await;
-    let (_alice, bob, _carol) = three(&w).await;
+    let (_alice, bob, _carol, _places) = three(&w).await;
     let epoch = bob.epoch().unwrap();
     let refused = bob
         .client()
@@ -219,7 +221,7 @@ async fn the_server_keeps_a_members_commit_to_their_own_devices(b: Backend) {
 /// administrators': a fork, said, never followed.
 async fn a_void_of_a_commit_this_device_took_is_a_fork(b: Backend) {
     let w = World::on(&b).await;
-    let (alice, mut bob, mut carol) = three(&w).await;
+    let (alice, mut bob, mut carol, _places) = three(&w).await;
     let epoch = bob.epoch().unwrap();
     bob.rotate().await.unwrap();
     carol.sync().await.unwrap();

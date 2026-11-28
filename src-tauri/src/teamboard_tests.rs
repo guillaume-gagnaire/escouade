@@ -198,7 +198,16 @@ pub(crate) async fn server() -> (
     tempfile::TempDir,
 ) {
     let dir = tempfile::tempdir().unwrap();
-    let config = escouade_team_server::config::Config::in_folder(dir.path().join("server"));
+    let mut config = escouade_team_server::config::Config::in_folder(dir.path().join("server"));
+    // Every machine of a test is on 127.0.0.1: they share one bucket of the address, where real members have one each.
+    // A reading makes some fifteen requests; on a fast machine (the CI's Mac) the readings a test runs back to back
+    // emptied the default burst, the server answered 429 and `sync_team_board` let that reading go (logged), so a
+    // teammate's write was not seen yet. The address's bucket is widened here alone; each device keeps its own
+    // (`per_device`, as served), and the bounds of the rate have their own tests (escouade-team-server).
+    config.rates.per_address = escouade_team_server::config::Rate {
+        per_second: 1000.0,
+        burst: 4000.0,
+    };
     let server = Arc::new(escouade_team_server::Server::open(config).await.unwrap());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -588,6 +597,10 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
     hb.core.settings.write().user_name = "Bob Durand".into();
     let (pa, _) = ha.project(false).await;
     let (pb, _) = hb.project(false).await;
+    // Alice's own autopilot is off while the test reads `to_start` on her tickets as they are: on, its pass after
+    // « Accepter » (`schedule`) starts the ticket, sooner or later than the test's look (sooner on a fast machine).
+    // Its real passes are checked below, on then off again.
+    ha.set_board(&pa.id, |s| s.autopilot = false);
     ha.core.set_teams(alice_teams.clone());
     hb.core.set_teams(bob_teams.clone());
     ha.core.set_project_team(&pa.id, Some(id.clone())).unwrap();
@@ -691,6 +704,14 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
         "changed by Bob after the acceptance: {tt:?}"
     );
     assert!(!starts(&ha).contains(&seen.id));
+    // Her real autopilot, on, leaves it too.
+    ha.set_board(&pa.id, |s| s.autopilot = true);
+    ha.core.schedule();
+    ha.wait_board_idle().await;
+    let left = ha.core.ticket(&seen.id).unwrap();
+    assert_eq!(left.column, crate::model::Column::Todo, "{left:?}");
+    ha.set_board(&pa.id, |s| s.autopilot = false);
+    ha.wait_board_idle().await;
     assert!(ha
         .core
         .inbox_view_act(&view.key, crate::inboxviews::ViewAct::Accept)
@@ -726,4 +747,21 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
         "the description is still his"
     );
     assert!(starts(&ha).contains(&seen.id));
+    // And her real autopilot, on, takes it: the ticket starts, with an agent. Where it is by then is not asked: on a fast
+    // machine the fake claude has already ended its turn and the ticket gone on to « En revue ».
+    assert!(ha.core.ticket(&seen.id).unwrap().started_at.is_none());
+    // A pass whose claim the server refused for a moment (its rate) leaves the ticket « À faire » until the next pass:
+    // the test makes them, as the core's events do.
+    ha.set_board(&pa.id, |s| s.autopilot = true);
+    let started = |t: &crate::model::Ticket| {
+        t.column != crate::model::Column::Todo && t.started_at.is_some() && t.agent_id.is_some()
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !started(&ha.core.ticket(&seen.id).unwrap()) && std::time::Instant::now() < deadline {
+        ha.core.schedule();
+        ha.wait_board_idle().await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    ha.wait_ticket(&seen.id, "started by her autopilot", started)
+        .await;
 }

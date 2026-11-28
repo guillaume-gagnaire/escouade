@@ -28,7 +28,7 @@ cd android && ./gradlew assembleRelease bundleRelease   # Java 21: the APK and t
 ```
 
 The iOS app for the simulator is built under macOS with Xcode (`xcodebuild … -sdk iphonesimulator`,
-`CODE_SIGNING_ALLOWED=NO`). The CI's `mobile-app-android` and `mobile-app-ios` jobs do both when the app or `src/`
+`ARCHS=arm64`, `CODE_SIGNING_ALLOWED=NO`): the plugin's XCFramework has only the arm64 simulator slice. The CI's `mobile-app-android` and `mobile-app-ios` jobs do both when the app or `src/`
 changes. Nothing is signed nor published: no account, no key (MO-8 does that).
 
 ## Trying it

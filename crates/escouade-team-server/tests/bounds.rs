@@ -590,7 +590,7 @@ async fn a_trickled_body_is_cut_at_its_time() {
     .await;
     let mut tcp = tokio::net::TcpStream::connect(s.addr).await.unwrap();
     tcp.write_all(
-        b"POST /v1/enroll HTTP/1.1\r\nHost: x\r\nX-Escouade-Protocol: 1\r\nContent-Type: application/cbor\r\nContent-Length: 60000\r\n\r\n",
+        b"POST /v1/enroll HTTP/1.1\r\nHost: x\r\nEscouade-Protocol: 1\r\nContent-Type: application/cbor\r\nContent-Length: 60000\r\n\r\n",
     )
     .await
     .unwrap();
@@ -612,6 +612,12 @@ async fn a_trickled_body_is_cut_at_its_time() {
         "{line:?}"
     );
     assert!(elapsed < Duration::from_secs(12), "cut after {elapsed:?}");
+    // Not refused before its body was read (a 426 for a header the handshake does not know): where the refusal's reset
+    // hides its answer (Windows), only the time tells.
+    assert!(
+        elapsed >= Duration::from_millis(1500),
+        "cut after {elapsed:?}, before its time"
+    );
     s.finish().await;
 }
 

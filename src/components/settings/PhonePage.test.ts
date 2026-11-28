@@ -155,6 +155,31 @@ describe('Réglages › Téléphone', () => {
     expect(callsOf('phone_set').at(-1)?.args).toMatchObject({ port: 51900 });
   });
 
+  it('keeps a port typed and not applied while a switch’s change comes back', async () => {
+    let answer: (s: Status) => void = () => {};
+    serve({
+      phone_set: (a) =>
+        new Promise((resolve) => {
+          status = { ...status, ...(a.stun !== undefined ? { stunOn: a.stun } : {}), ...(a.port ? { port: a.port } : {}) };
+          answer = () => resolve(status);
+        }),
+    });
+    render(PhonePage);
+    const sw = await screen.findByRole('switch', { name: 'Demander l’adresse publique à STUN' });
+    const field = await screen.findByRole('spinbutton', { name: 'Port UDP' });
+    await userEvent.click(sw);
+    // Typed while STUN's change is on its way.
+    await userEvent.clear(field);
+    await userEvent.type(field, '43057');
+    answer(status);
+    await waitFor(() => expect(sw).toBeEnabled());
+    expect(field).toHaveValue(43057);
+    const apply = screen.getByRole('button', { name: 'Appliquer' });
+    expect(apply).toBeEnabled();
+    await userEvent.click(apply);
+    expect(callsOf('phone_set').at(-1)?.args).toMatchObject({ port: 43057 });
+  });
+
   it('says who STUN asks, when and what they see, and turns it off', async () => {
     render(PhonePage);
     const sw = await screen.findByRole('switch', { name: 'Demander l’adresse publique à STUN' });
