@@ -119,6 +119,10 @@ Les agents utilisent les harness installés sur le serveur. Escouade les install
 
 La connexion d’un compte s’ouvre sur ton poste : l’adresse de connexion du harness s’ouvre dans ton navigateur, et le compte reste sur le serveur.
 
+## Atteindre un réseau privé
+
+Si tes agents doivent joindre un git, un registre de paquets ou une API qu’on ne voit que dans le réseau d’une entreprise, derrière son VPN, deux voies : poser le serveur dans ce réseau (voir [Escouade dans le réseau de ton entreprise](private-network/company-server)), ou garder le serveur ici et faire installer chez l’entreprise un connecteur, qui ouvre une connexion sortante vers lui et ne laisse passer que les hôtes de sa liste (voir [le connecteur](private-network/connector)). Comment choisir : [Atteindre un réseau privé](private-network/introduction).
+
 ## Ce que garde le serveur
 
 Tout ce qu’Escouade garde sur un poste, il le garde sur le serveur : les projets, les conversations, le Kanban, les statistiques (voir [Données locales](data)). Deux différences :
@@ -173,6 +177,9 @@ Mesuré sur l’image, sur un poste x64 : le serveur au repos, ses plugins charg
 | `escouade-server status` | Ce que dit le serveur de lui-même et où écoute son API, sa socket ou son port (`--json` : ce que lit ton poste par SSH) |
 | `escouade-server update` | Met le serveur à la dernière version signée (`--to`, `--beta`, `--now`, `--check`) |
 | `escouade-server config` | La mise à jour automatique et son canal (`automatic on` ou `off`, `channel stable` ou `beta`) |
+| `escouade-server connector pair <nom>` | Un code d’appairage pour un connecteur du réseau privé (voir [le connecteur](private-network/connector)) |
+| `escouade-server connectors` | Les connecteurs appairés, leur état, et ceux retirés (`remove <nom>` en retire un) |
+| `escouade-server via <hôte> <port>` | Le `ProxyCommand` de `ssh` par la porte des agents |
 
 Chaque option a sa variable d’environnement ; l’option passe devant la variable.
 
@@ -184,6 +191,10 @@ Chaque option a sa variable d’environnement ; l’option passe devant la varia
 | `--socket <chemin>` | `ESCOUADE_SERVER_SOCKET` | aucune (le service d’`install.sh` la donne) |
 | `--allow-host <nom>` | `ESCOUADE_SERVER_ALLOW_HOSTS` (noms séparés par des virgules) | aucun |
 | `--trust-proxy <adresse>` | `ESCOUADE_SERVER_TRUST_PROXIES` (adresses séparées par des virgules) | aucun |
+| `--gate` | `ESCOUADE_SERVER_GATE` | éteint |
+| `--connector-listen <adresse:port>` | `ESCOUADE_SERVER_CONNECTOR_LISTEN` | éteint |
+| `--connector-cert <fichier>`, `--connector-key <fichier>` | `ESCOUADE_SERVER_CONNECTOR_CERT`, `ESCOUADE_SERVER_CONNECTOR_KEY` | aucun |
+| `--connector-url <wss://…>` | `ESCOUADE_SERVER_CONNECTOR_URL` | faite de l’adresse d’écoute |
 | `--debug` | aucune | éteint |
 
 `--listen` sur une autre adresse que `127.0.0.1` avertit dans le journal : ce port ne doit jamais être ouvert sur Internet.

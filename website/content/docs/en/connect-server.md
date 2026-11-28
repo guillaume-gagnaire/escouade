@@ -76,6 +76,10 @@ Each failure says what happened, that nothing changed on this computer or on the
 | “This computer is no longer paired with Work” | This computer was revoked, with the date and the device that did it | “Pair again” with a new code, or remove the server |
 | “Refused by this computer’s policy” | A managed computer only allows some servers (`servers.allowed`) | See the [managed policies](managed-policies) |
 
+## A server that reaches your company’s network
+
+If the server is in your company’s network, you connect to it over SSH through your VPN, with a `ProxyJump` if a bastion is needed (see [Escouade in your company’s network](private-network/company-server)). If it is elsewhere, its agents can reach that network through a connector (see [Reach a private network](private-network/introduction)).
+
 ## Coming back to this computer, removing a server
 
 - “This computer” in the projects bar, or “Go to This computer” in the band of a cut, brings the window back here. The app reopens on the last machine you were on.

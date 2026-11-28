@@ -86,6 +86,16 @@ export const DOC_GROUPS = [
     ],
   },
   { id: 'team', pages: ['team/join', 'team/install', 'team/security', 'team/data'] },
+  {
+    id: 'network',
+    pages: [
+      'private-network/introduction',
+      'private-network/company-server',
+      'private-network/connector',
+      'private-network/it-sheet',
+      'private-network/vpn-client',
+    ],
+  },
   { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'managed-policies', 'data', 'updates', 'troubleshooting'] },
 ] as const;
 

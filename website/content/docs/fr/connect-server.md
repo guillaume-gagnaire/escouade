@@ -76,6 +76,10 @@ Chaque échec dit ce qui s’est passé, que rien n’a changé sur ce poste ni 
 | « Ce poste n’est plus appairé à Travail » | Ce poste a été révoqué, avec la date et l’appareil qui l’a fait | « Appairer de nouveau » avec un nouveau code, ou retire le serveur |
 | « Refusé par la stratégie de ce poste » | Un poste géré n’autorise que certains serveurs (`servers.allowed`) | Voir les [stratégies du poste](managed-policies) |
 
+## Un serveur qui joint le réseau de ton entreprise
+
+Si le serveur est dans le réseau de ton entreprise, tu t’y connectes par SSH à travers ton VPN, avec un `ProxyJump` s’il faut un bastion (voir [Escouade dans le réseau de ton entreprise](private-network/company-server)). S’il est ailleurs, ses agents peuvent joindre ce réseau par un connecteur (voir [Atteindre un réseau privé](private-network/introduction)).
+
 ## Revenir sur ce poste, retirer un serveur
 
 - « Ce poste » dans la barre des projets, ou « Aller sur Ce poste » dans la bande d’une coupure, ramène la fenêtre ici. L’app rouvre sur la dernière machine où tu étais.

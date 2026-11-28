@@ -287,7 +287,7 @@ export const en: Catalog = {
       },
       {
         q: 'Where does my data go?',
-        a: 'Nowhere: projects, conversations and statistics stay on your machine, in ~/.escouade/. The network is only used by the harnesses themselves, to read your quotas, for updates and, if you connect them, for Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure Boards, where an imported ticket gets its status and comments. In server mode, all of it lives on your server, your accounts’ sign-ins included: its security becomes theirs.',
+        a: 'Nowhere: projects, conversations and statistics stay on your machine, in ~/.escouade/. The network is only used by the harnesses themselves, to read your quotas, for updates and, if you connect them, for Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure Boards, where an imported ticket gets its status and comments. In server mode, all of it lives on your server, your accounts’ sign-ins included: its security becomes theirs. And if its agents reach a company’s private network, Escouade, the publisher, sees nothing of it: no relay of ours, the tunnel runs from the company’s connector to your server, which sees only names, ports, bytes and durations, never the encrypted content.',
       },
       {
         q: 'What about my Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure Boards tokens?',
@@ -400,6 +400,10 @@ export const en: Catalog = {
         title: 'Team server',
         text: 'Join a team, install its server, what it sees and what it does not, and where your data goes.',
       },
+      network: {
+        title: 'Private network',
+        text: 'Let a server’s agents reach the git, the registry or the API of a company’s network: the four ways, the connector and the sheet for the IT department.',
+      },
       reference: { title: 'Reference', text: 'Shortcuts, local data, updates and troubleshooting.' },
     },
     pages: {
@@ -481,6 +485,11 @@ export const en: Catalog = {
       'team/install': 'Install the server',
       'team/security': 'The security officer’s guide',
       'team/data': 'Where does my data go?',
+      'private-network/introduction': 'Reach a private network',
+      'private-network/company-server': 'In your company’s network',
+      'private-network/connector': 'The connector',
+      'private-network/it-sheet': 'The sheet for the IT department',
+      'private-network/vpn-client': 'The server as a VPN client',
       shortcuts: 'Keyboard shortcuts',
       'escouade-yml': '.escouade.yml',
       data: 'Local data',

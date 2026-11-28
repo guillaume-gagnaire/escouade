@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Private network: the site’s documentation says how agents on a server reach a company’s git, registry or API behind its VPN: the four ways and how to choose, Escouade in the company’s network, the connector step by step, a sheet for its IT department and a recipe for a server as a VPN client.
 - Server mode: installed by `install.sh`, your server listens on a Unix socket that is its user’s alone, no longer on a port every account of the machine reaches. Escouade finds it over SSH and opens its tunnel there; if the SSH server refuses forwards to a socket, it says so and offers the fallback to a port (`install.sh --port`).
 - Server mode: `escouade-server --browser` (or `ESCOUADE_SERVER_BROWSER=1`) serves Escouade’s interface to a browser, on the API’s port, through your SSH tunnel or behind a proxy in https. Off by default; the page is inside the program, with the window’s security policy. Signing in from that page comes next.
 - On the phone, “Your turn” shows everything waiting for you in your spaces, ordered as the desktop’s box, and you answer on the spot: the whole command before “Allow” and the phone’s lock, a question, a plan, a choice and its renders, a PDF. You read a conversation there and send a message, dictated or with a photo; cut off, the phone keeps what it knew, dated, and never answers from a stale screen.

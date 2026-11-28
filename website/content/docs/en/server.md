@@ -119,6 +119,10 @@ The agents use the harnesses installed on the server. Escouade installs them wit
 
 Signing an account in opens on your computer: the harness’s sign-in address opens in your browser, and the account stays on the server.
 
+## Reach a private network
+
+If your agents must reach a git, a package registry or an API that can only be seen inside a company’s network, behind its VPN, two ways: put the server in that network (see [Escouade in your company’s network](private-network/company-server)), or keep the server here and have the company install a connector, which opens an outbound connection to it and lets through only the hosts of its list (see [the connector](private-network/connector)). How to choose: [Reach a private network](private-network/introduction).
+
 ## What the server keeps
 
 Everything Escouade keeps on a computer, it keeps on the server: the projects, the conversations, the board, the stats (see [Local data](data)). Two differences:
@@ -173,6 +177,9 @@ Measured on the image, on an x64 computer: the server at rest, its plugins loade
 | `escouade-server status` | What the server says of itself and where its API listens, its socket or its port (`--json`: what your computer reads over SSH) |
 | `escouade-server update` | Puts the server at the latest signed version (`--to`, `--beta`, `--now`, `--check`) |
 | `escouade-server config` | The automatic update and its channel (`automatic on` or `off`, `channel stable` or `beta`) |
+| `escouade-server connector pair <name>` | A pairing code for a connector of the private network (see [the connector](private-network/connector)) |
+| `escouade-server connectors` | The paired connectors, their state, and those removed (`remove <name>` removes one) |
+| `escouade-server via <host> <port>` | The `ProxyCommand` of `ssh` through the agents’ gate |
 
 Each option has its environment variable; the option wins over the variable.
 
@@ -184,6 +191,10 @@ Each option has its environment variable; the option wins over the variable.
 | `--socket <path>` | `ESCOUADE_SERVER_SOCKET` | none (the service of `install.sh` gives it) |
 | `--allow-host <name>` | `ESCOUADE_SERVER_ALLOW_HOSTS` (names separated by commas) | none |
 | `--trust-proxy <address>` | `ESCOUADE_SERVER_TRUST_PROXIES` (addresses separated by commas) | none |
+| `--gate` | `ESCOUADE_SERVER_GATE` | off |
+| `--connector-listen <address:port>` | `ESCOUADE_SERVER_CONNECTOR_LISTEN` | off |
+| `--connector-cert <file>`, `--connector-key <file>` | `ESCOUADE_SERVER_CONNECTOR_CERT`, `ESCOUADE_SERVER_CONNECTOR_KEY` | none |
+| `--connector-url <wss://…>` | `ESCOUADE_SERVER_CONNECTOR_URL` | made from the listening address |
 | `--debug` | none | off |
 
 `--listen` on another address than `127.0.0.1` warns in the log: that port must never be open to the Internet.

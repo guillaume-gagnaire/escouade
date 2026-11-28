@@ -94,6 +94,10 @@ Un poste géré peut l’imposer par la stratégie `network.offline` (vrai). Le 
 
 Une stratégie posée pendant que l’app tourne s’applique dans la minute.
 
+## Sur un serveur, avec la porte du réseau privé
+
+Sur un serveur Escouade lancé avec la porte du réseau privé (`--gate`, ou `--connector-listen` pour les connecteurs), les agents, les terminaux, les lancements et les `git` d’Escouade ne reçoivent plus le proxy réglé ici : ils reçoivent la porte du serveur, sur `127.0.0.1`, et le proxy réglé ici passe derrière elle, avec son mot de passe et ses exclusions, qui sortent directement. Les terminaux la reçoivent même avec « Appliquer aussi le proxy aux terminaux intégrés » décoché. Voir [le connecteur](private-network/connector) et [Atteindre un réseau privé](private-network/introduction). Ce poste et un serveur sans la porte ne changent pas.
+
 ## Images distantes
 
 Une image d’un message qui vient du web ne s’affiche qu’au clic, et jamais depuis ta machine ni ton réseau local : une adresse comme `127.0.0.1`, `192.168.…` ou `10.…`, `localhost`, ou un nom qui y mène, même derrière un proxy. Le message le dit : « Une image de cette machine ou du réseau local ne s’affiche pas ».

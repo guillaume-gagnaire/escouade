@@ -94,6 +94,10 @@ A managed device may impose it with the policy `network.offline` (true). The set
 
 A policy put while the app runs applies within the minute.
 
+## On a server, with the private network’s gate
+
+On an Escouade server started with the private network’s gate (`--gate`, or `--connector-listen` for the connectors), the agents, the terminals, the launches and Escouade’s `git` no longer get the proxy set here: they get the server’s gate, on `127.0.0.1`, and the proxy set here goes behind it, with its password and its exclusions, which go out directly. The terminals get it even with “Also apply the proxy to the built-in terminals” unchecked. See [the connector](private-network/connector) and [Reach a private network](private-network/introduction). This computer and a server without the gate do not change.
+
 ## Remote images
 
 An image of a message that comes from the web shows only on a click, and never from your machine or your local network: an address such as `127.0.0.1`, `192.168.…` or `10.…`, `localhost`, or a name that leads there, even behind a proxy. The message says so: “An image of this machine or of the local network is not shown”.

@@ -291,7 +291,7 @@ export const fr: Catalog = {
       },
       {
         q: 'Où vont mes données ?',
-        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’aux harness eux-mêmes, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards, où un ticket importé reçoit son statut et des commentaires. En mode serveur, tout cela vit sur ton serveur, les connexions de tes comptes comprises : sa sécurité devient la leur.',
+        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’aux harness eux-mêmes, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards, où un ticket importé reçoit son statut et des commentaires. En mode serveur, tout cela vit sur ton serveur, les connexions de tes comptes comprises : sa sécurité devient la leur. Et si ses agents joignent le réseau privé d’une entreprise, Escouade, l’éditeur, n’en voit rien : aucun relais à nous, le tunnel va du connecteur de l’entreprise à ton serveur, qui ne voit que les noms, les ports, les octets et les durées, jamais le contenu chiffré.',
       },
       {
         q: 'Et mes jetons Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards ?',
@@ -404,6 +404,10 @@ export const fr: Catalog = {
         title: 'Serveur d’équipe',
         text: 'Rejoindre une équipe, installer son serveur, ce qu’il voit et ce qu’il ne voit pas, et où vont tes données.',
       },
+      network: {
+        title: 'Réseau privé',
+        text: 'Faire joindre aux agents d’un serveur le git, le registre ou l’API du réseau d’une entreprise : les quatre voies, le connecteur et la fiche pour le service informatique.',
+      },
       reference: { title: 'Référence', text: 'Les raccourcis, les données locales, les mises à jour et le dépannage.' },
     },
     pages: {
@@ -485,6 +489,11 @@ export const fr: Catalog = {
       'team/install': 'Installer le serveur',
       'team/security': 'Le guide du RSSI',
       'team/data': 'Où vont mes données ?',
+      'private-network/introduction': 'Atteindre un réseau privé',
+      'private-network/company-server': 'Dans le réseau de l’entreprise',
+      'private-network/connector': 'Le connecteur',
+      'private-network/it-sheet': 'La fiche du service informatique',
+      'private-network/vpn-client': 'Le serveur client du VPN',
       shortcuts: 'Raccourcis clavier',
       'escouade-yml': '.escouade.yml',
       data: 'Données locales',

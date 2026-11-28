@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Réseau privé : la documentation du site dit comment des agents sur un serveur joignent le git, le registre ou l’API d’une entreprise derrière son VPN : les quatre voies et comment choisir, Escouade dans le réseau de l’entreprise, le connecteur pas à pas, une fiche pour son service informatique et une recette pour un serveur client du VPN.
 - Mode serveur : installé par `install.sh`, ton serveur écoute sur une socket Unix qui n’est qu’à son utilisateur, et non plus sur un port que tous les comptes de la machine atteignent. Escouade la trouve par SSH et y ouvre son tunnel ; si le serveur SSH refuse la redirection vers une socket, il le dit et propose le repli sur un port (`install.sh --port`).
 - Mode serveur : `escouade-server --browser` (ou `ESCOUADE_SERVER_BROWSER=1`) sert l’interface d’Escouade à un navigateur, sur le port de l’API, par ton tunnel SSH ou derrière un proxy en https. Éteint par défaut ; la page est dans le programme, avec la politique de sécurité de la fenêtre. Se connecter depuis cette page vient ensuite.
 - Sur le téléphone, « À toi » montre tout ce qui t’attend dans tes espaces, rangé comme la boîte du bureau, et tu y réponds sur place : la commande entière avant « Autoriser » et le verrou du téléphone, une question, un plan, un choix et ses rendus, un PDF. Tu y lis une conversation et envoies un message, dicté ou avec une photo ; coupé, le téléphone garde ce qu’il savait, daté, sans répondre sur un écran périmé.
