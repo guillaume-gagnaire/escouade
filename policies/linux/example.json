@@ -73,6 +73,7 @@
   "servers.contentlessNotifications": true,
   "servers.personalSpace": false,
   "servers.phone": false,
+  "servers.privateNetwork": false,
   "servers.remoteApi": false,
   "team.fingerprint": "SHA256:3f9a6c1e8b2d47f0a5c3e9d1b7f2a4c6e8d0b2f4a6c8e0d2b4f6a8c0e2d4b6f8",
   "team.maxOfflineHours": 24,

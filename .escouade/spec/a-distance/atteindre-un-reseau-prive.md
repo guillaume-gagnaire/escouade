@@ -1,13 +1,13 @@
 ---
 title: "Atteindre un réseau privé"
 subject: "a-distance"
-sources: ["docs/PRIVATE-NETWORK.md (ESC-551, l'étude RP-0 ; § 4.2 le protocole, § 4.3 la porte, § 4.4 les refus, § 4.5 l'appairage, § 4.8 la coupure, § 4.9 la fiche, § 5 les choix R1 à R12, § 6 les tickets RP-1 à RP-9)","Réponse de l'utilisateur du 2026-11-21 (la demande a-22 de la boîte « À toi », ESC-587) : « A · Les recommandations : V0 guidée, V2 construite »","docs/REMOTE.md : « Le mode serveur », MS-1 (ESC-514, l'appairage), MS-3 (ESC-515), « Ce qui change de machine, MS-4 » (ESC-538), « Le téléphone », « Les agents sur le serveur, en auto-hébergé »","docs/SERVER-UX.md","docs/TEAM-SERVER.md § 13","docs/security/audit-2026-11/rapport.md, § 6.1 et SEC-02","src-tauri/src/fence.rs","crates/escouade-model/src/model.rs (proxy_env, network_env)","crates/escouade-plugins/src/procs.rs (variables refusées aux plugins)","crates/escouade-gate (la porte, RP-1 : lib.rs, http.rs, socks.rs, outside.rs, env.rs, via.rs, journal.rs, lists.rs ; tests/gate.rs, le faux connecteur)","src-tauri/src/privatenet.rs et privatenet_tests.rs (le cœur et la porte, RP-1)","src-tauri/src/server/mod.rs (--gate, ESCOUADE_SERVER_GATE, via)","crates/escouade-model/src/git.rs (set_net_env, les git du cœur)","crates/escouade-connector-proto (ESC-598, RP-2 : le transport, Noise IK, les trames, les versions, les bornes ; ses vecteurs dans tests/vectors.rs ; src/pairing.rs, l'appairage, ESC-599)","fuzz/fuzz_targets/connector-frames.rs, fuzz/fuzz_targets/connector-handshake.rs (ESC-598)","crates/escouade-connector (ESC-599, RP-3 : config.rs, ceiling.rs, guard.rs, run.rs, commands.rs, keys.rs, journal.rs, main.rs ; tests/checks.rs, service.rs, pair_and_run.rs, check_and_crate.rs)","Demande de l'utilisateur du 2026-11-20 (ESC-551) : des agents sur un serveur Escouade qui joignent un git et des services derrière le VPN d'une entreprise"]
+sources: ["docs/PRIVATE-NETWORK.md (ESC-551, l'étude RP-0 ; § 4.2 le protocole, § 4.3 la porte, § 4.4 les refus, § 4.5 l'appairage, § 4.8 la coupure, § 5 les choix R1 à R12, § 6 les tickets RP-1 à RP-9)","Réponse de l'utilisateur du 2026-11-21 (la demande a-22 de la boîte « À toi », ESC-587) : « A · Les recommandations : V0 guidée, V2 construite »","Réponse de l'utilisateur du 2026-11-27 (ESC-600, par l'overseer) : « Les deux » (5 essais par source sans finir le code, 20 par minute sur toute l'entrée), et dire la durée et la taille du code et ce qu'elles bornent","docs/REMOTE.md : « Le mode serveur », MS-1 (ESC-514, l'appairage), MS-3 (ESC-515), « Ce qui change de machine, MS-4 » (ESC-538), « Le téléphone », « Les agents sur le serveur, en auto-hébergé »","docs/SERVER-UX.md","docs/TEAM-SERVER.md § 13","docs/security/audit-2026-11/rapport.md, § 6.1 et SEC-02","src-tauri/src/fence.rs","crates/escouade-model/src/model.rs (proxy_env, network_env)","crates/escouade-plugins/src/procs.rs (variables refusées aux plugins)","crates/escouade-gate (la porte, RP-1 : lib.rs, http.rs, socks.rs, outside.rs, env.rs, via.rs, journal.rs, lists.rs ; tests/gate.rs, le faux connecteur)","crates/escouade-gate/src/entry (l'entrée, RP-4 : mod.rs, bounds.rs, registry.rs, store.rs ; tests/entry.rs, le faux connecteur de la crate du protocole)","src-tauri/src/privatenet.rs et privatenet_tests.rs (le cœur et la porte, RP-1)","src-tauri/src/privateentry.rs et privateentry_tests.rs (le cœur et l'entrée, RP-4)","src-tauri/src/server/mod.rs (--gate, ESCOUADE_SERVER_GATE, via ; --connector-listen, connector pair, connectors)","crates/escouade-model/src/git.rs (set_net_env, les git du cœur)","crates/escouade-connector-proto (ESC-598, RP-2 : le transport, Noise IK, les trames, les versions, les bornes ; ses vecteurs dans tests/vectors.rs ; pairing.rs, ESC-599)","fuzz/fuzz_targets/connector-frames.rs, fuzz/fuzz_targets/connector-handshake.rs (ESC-598)","Demande de l'utilisateur du 2026-11-20 (ESC-551) : des agents sur un serveur Escouade qui joignent un git et des services derrière le VPN d'une entreprise","docs/PRIVATE-NETWORK.md (ESC-551, l'étude RP-0 ; § 4.2 le protocole, § 4.3 la porte, § 4.4 les refus, § 4.5 l'appairage, § 4.8 la coupure, § 4.9 la fiche, § 5 les choix R1 à R12, § 6 les tickets RP-1 à RP-9)","src-tauri/src/server/mod.rs (--gate, ESCOUADE_SERVER_GATE, via)","crates/escouade-connector-proto (ESC-598, RP-2 : le transport, Noise IK, les trames, les versions, les bornes ; ses vecteurs dans tests/vectors.rs ; src/pairing.rs, l'appairage, ESC-599)","crates/escouade-connector (ESC-599, RP-3 : config.rs, ceiling.rs, guard.rs, run.rs, commands.rs, keys.rs, journal.rs, main.rs ; tests/checks.rs, service.rs, pair_and_run.rs, check_and_crate.rs)"]
 tickets: ["ESC-551","ESC-587","ESC-597","ESC-598","ESC-599","ESC-600","ESC-601","ESC-602","ESC-603","ESC-604","ESC-605","ESC-654"]
-decisions: ["reseau-prive-r1-le-serveur-dans-l-entrep","reseau-prive-r2-le-connecteur-parle-par","reseau-prive-r3-une-entree-des-connecteu","reseau-prive-r4-un-plafond-au-connecteur","reseau-prive-r5-la-liste-d-un-projet-est","reseau-prive-r6-l-agent-emprunte-la-port",336,337,338,345,359]
+decisions: ["reseau-prive-r1-le-serveur-dans-l-entrep","reseau-prive-r2-le-connecteur-parle-par","reseau-prive-r3-une-entree-des-connecteu","reseau-prive-r4-un-plafond-au-connecteur","reseau-prive-r5-la-liste-d-un-projet-est","reseau-prive-r6-l-agent-emprunte-la-port",336,337,338,345,363,359]
 compared: null
 ---
 
-> **Décidé ; la porte (RP-1), le protocole (RP-2) et le connecteur (RP-3) construits, le reste à venir.** L'utilisateur a choisi le 2026-11-21 (ESC-587) les recommandations de l'étude RP-0 (`docs/PRIVATE-NETWORK.md`, ESC-551) : « V0 guidée, V2 construite ». Les choix R1 à R12 ci-dessous sont donc ceux de l'étude ; R1 à R6 ont chacun une décision proposée. La construction passe par les tickets RP-1 à RP-9 (ESC-597 à ESC-605), qui mettent cette page à jour à mesure : **RP-1 (ESC-597) a construit la porte** (*La porte, construite*, plus bas) ; sans connecteur (RP-4), elle refuse ce qui est d'un réseau privé et laisse sortir le reste. **RP-2 (ESC-598) a construit le protocole** (la crate `escouade-connector-proto`, voir *Le protocole* plus bas). **RP-3 (ESC-599) a construit le programme `escouade-connector`** (*Le connecteur, construit*, plus bas) ; il n'est pas encore distribué (RP-6).
+> **Décidé ; la porte (RP-1), le protocole (RP-2), le connecteur (RP-3) et l'entrée des connecteurs (RP-4) construits, le reste à venir.** L'utilisateur a choisi le 2026-11-21 (ESC-587) les recommandations de l'étude RP-0 (`docs/PRIVATE-NETWORK.md`, ESC-551) : « V0 guidée, V2 construite ». Les choix R1 à R12 ci-dessous sont donc ceux de l'étude ; R1 à R6 ont chacun une décision proposée. La construction passe par les tickets RP-1 à RP-9 (ESC-597 à ESC-605), qui mettent cette page à jour à mesure : **RP-1 (ESC-597) a construit la porte** (*La porte, construite*, plus bas). **RP-2 (ESC-598) a construit le protocole** (la crate `escouade-connector-proto`, voir *Le protocole* plus bas). **RP-3 (ESC-599) a construit le programme `escouade-connector`** (*Le connecteur, construit*, plus bas) ; il n'est pas encore distribué (RP-6). **RP-4 (ESC-600) a construit l'entrée des connecteurs** (*L'entrée des connecteurs, construite*, plus bas) : l'appairage, l'état de chaque connecteur, les commandes servies à l'espace, la stratégie `servers.privateNetwork` ; la porte passe par ses canaux.
 
 ## Ce que c'est
 
@@ -24,7 +24,7 @@ Des agents qui tournent sur un serveur Escouade (voir *Le mode serveur*) joignen
 
 - **R1, les voies** : V0 guidée, V2 construite, V1 en recette du guide, V3 non construite (décision proposée `reseau-prive-r1-le-serveur-dans-l-entrep`).
 - **R2, le protocole** : une WebSocket sur TLS, sortante, avec à l'intérieur une poignée de main Noise IK dont les deux clés sont épinglées à l'appairage, puis des flux « ouvre `hôte:port` » à contrôle de débit ; une crate `escouade-connector-proto` partagée ; le serveur accepte la version du connecteur et les deux mineures d'avant (`reseau-prive-r2-le-connecteur-parle-par` ; sa forme exacte : `reseau-prive-rp-2-la-forme-du-protocole`).
-- **R3, l'entrée du serveur** : un port à part (`--connector-listen`, `ESCOUADE_SERVER_CONNECTOR_LISTEN`), éteint par défaut, qui ne parle que le protocole des connecteurs, jamais l'API distante ; la stratégie `servers.privateNetwork` à `false` l'empêche (`reseau-prive-r3-une-entree-des-connecteu`).
+- **R3, l'entrée du serveur** : un port à part (`--connector-listen`, `ESCOUADE_SERVER_CONNECTOR_LISTEN`), éteint par défaut, qui ne parle que le protocole des connecteurs, jamais l'API distante ; la stratégie `servers.privateNetwork` à `false` l'empêche (`reseau-prive-r3-une-entree-des-connecteu` ; sa forme construite : `reseau-prive-rp-4-l-entree-des-connecteu`).
 - **R4, où se tient la liste** : un **plafond** au connecteur, écrit par l'entreprise, que le serveur ne peut pas élargir, et une **liste par projet** au serveur, dans ce plafond, vide par défaut (`reseau-prive-r4-un-plafond-au-connecteur`).
 - **R5, qui change la liste d'un projet** : l'utilisateur, dans Réglages du projet › Réseau privé ; le `.escouade.yml` du dépôt la propose, accordée par son empreinte ; une stratégie ou le `.escouade.yml` d'équipe peuvent la fixer ; jamais un agent, aucun outil MCP (`reseau-prive-r5-la-liste-d-un-projet-est`).
 - **R6, comment l'agent l'emprunte** : la porte devient le seul proxy des agents (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`), et `ssh` passe par `ProxyCommand="escouade-server via %h %p"` ; ensuite, dans l'image seulement, des noms en boucle locale pour ce qui ignore les proxys (`reseau-prive-r6-l-agent-emprunte-la-port`).
@@ -37,11 +37,11 @@ Des agents qui tournent sur un serveur Escouade (voir *Le mode serveur*) joignen
 
 ## La porte, construite (RP-1, ESC-597)
 
-Dans `escouade-server`, la crate `escouade-gate` (la porte) et le module `privatenet` du cœur (ce que le cœur en fait). Les essais passent par un faux connecteur en mémoire : RP-4 branchera l'entrée réelle des connecteurs sur le trait `Connectors` de la porte (leur état, leur plafond, l'ouverture d'un flux).
+Dans `escouade-server`, la crate `escouade-gate` (la porte) et le module `privatenet` du cœur (ce que le cœur en fait). La porte demande ses connecteurs à l'entrée réelle (RP-4, *L'entrée des connecteurs, construite*) par le trait `Connectors` : leur état, leur plafond, l'ouverture d'un flux.
 
 ### Quand elle tourne
 
-- **Éteinte par défaut**, allumée par `escouade-server --gate` ou `ESCOUADE_SERVER_GATE=1` (aussi `true`, `on`, `yes`), avant le premier agent ; RP-4 l'allumera avec l'entrée des connecteurs. Jamais sur le poste de bureau, dont les process gardent le proxy réglé comme avant (décision proposée `reseau-prive-rp-1-la-porte-s-allume-par`).
+- **Éteinte par défaut**, allumée par `escouade-server --gate` ou `ESCOUADE_SERVER_GATE=1` (aussi `true`, `on`, `yes`), ou par `--connector-listen` avec l'entrée des connecteurs (RP-4), avant le premier agent. Jamais sur le poste de bureau, dont les process gardent le proxy réglé comme avant (décision proposée `reseau-prive-rp-1-la-porte-s-allume-par`). La stratégie `servers.privateNetwork` à `false` l'empêche au démarrage.
 - **Un port de 127.0.0.1**, choisi par le système, qui parle HTTP et SOCKS5, reconnus à leur premier octet. Une connexion d'ailleurs que la boucle locale est fermée ; 1 024 connexions à la fois au plus.
 
 ### Les jetons
@@ -70,7 +70,7 @@ Pour chaque connexion (`CONNECT hôte:port`, une requête en HTTP clair sous sa 
 
 ### Le journal
 
-Chaque connexion, permise ou refusée : l'heure, l'hôte, le port, HTTP ou SOCKS, la route (connecteur et lequel, direct, proxy de l'espace, refusé), la raison d'un refus, les octets dans chaque sens, la durée, l'agent et le projet ; **jamais le contenu ni un jeton**. Les 1 000 dernières sont gardées en mémoire pour l'interface (RP-5) ; chacune est aussi une ligne du journal du serveur.
+Chaque connexion, permise ou refusée : l'heure, l'hôte, le port, HTTP ou SOCKS, la route (connecteur et lequel, direct, proxy de l'espace, refusé), la raison d'un refus, les octets dans chaque sens, la durée, l'agent et le projet ; **jamais le contenu ni un jeton**. Les 1 000 dernières sont gardées en mémoire et servies à l'espace (`private_network_journal`, RP-4) ; chacune est aussi une ligne du journal du serveur.
 
 ### Les variables
 
@@ -88,12 +88,82 @@ Le `ProxyCommand` de `ssh` : il ouvre `hôte:port` comme son environnement le di
 ### La liste par projet
 
 - Dans `private-network.json`, au dossier des données du serveur : `{"projects": {"<id du projet>": {"hosts": [{"host": "gitlab.acme.internal", "port": 22, "connector": "<id du connecteur>"}]}}}`. Absent, ou un projet sans liste : il n'atteint rien d'un réseau privé. Un hôte illisible est laissé de côté, dit au journal ; un fichier illisible vaut une liste vide.
-- Relu deux secondes au plus après un changement. Ce ticket ne l'écrit pas : Réglages du projet › Réseau privé (RP-5) et l'appairage (RP-4) le feront. **Aucun outil MCP ne le lit ni ne l'écrit** (R5).
+- Relu deux secondes au plus après un changement. L'API distante l'écrit (`private_network_set_project`, RP-4) : chaque hôte mis en forme, d'un connecteur appairé, dans son plafond connu ; l'interface (Réglages du projet › Réseau privé) est celle de RP-5. **Aucun outil MCP ne le lit ni ne l'écrit** (R5).
+
+## L'entrée des connecteurs, construite (RP-4, ESC-600)
+
+Dans `escouade-server` : le module `entry` de la crate `escouade-gate` (l'entrée, ses bornes, le registre des connecteurs) et le module `privateentry` du cœur (ce qu'il en garde, la stratégie, les commandes). Sa forme est la décision proposée `reseau-prive-rp-4-l-entree-des-connecteu`. Les essais passent par un faux connecteur fait de la crate du protocole, sur 127.0.0.1.
+
+### Quand elle tourne
+
+- **Éteinte par défaut.** `escouade-server --connector-listen <adresse:port>` (`ESCOUADE_SERVER_CONNECTOR_LISTEN`), par exemple `0.0.0.0:8443`, l'ouvre, et la porte avec elle (sans `--gate`). Une adresse et un port, toujours nommés : un port seul est refusé.
+- **Elle ne parle que le protocole des connecteurs** : `/connector` (un canal) et `/connector/pair` (l'appairage), en WebSocket. Tout autre chemin répond 404 ; une requête qui n'est pas une WebSocket, un message texte, une poignée de main de l'API distante sont fermés sans réponse. L'API distante reste sur 127.0.0.1, sur son port à elle.
+- **Le TLS** : un certificat à elle (`--connector-cert FICHIER` et `--connector-key FICHIER`, en PEM, ensemble ; `ESCOUADE_SERVER_CONNECTOR_CERT`, `ESCOUADE_SERVER_CONNECTOR_KEY`), ou aucun, derrière le proxy TLS d'un domaine (Traefik de Coolify, Caddy), ce que le journal dit. Noise ne dépend pas du certificat.
+- **Son adresse**, que l'appairage donne au connecteur : `--connector-url wss://…/connector` (`ESCOUADE_SERVER_CONNECTOR_URL`), sinon faite de l'adresse d'écoute (le nom de la machine pour `0.0.0.0`), dite « devinée » au journal. Le serveur qui tourne l'écrit dans `connectors.json`, pour `connector pair` lancé à côté.
+- `--trust-proxy` vaut aussi pour elle : la source d'une connexion d'un proxy déclaré est la dernière adresse de son `X-Forwarded-For`.
+- 64 connexions au plus dont la poignée de main est en cours ; 10 s pour le TLS et la WebSocket, 30 s pour un appairage.
+
+### L'appairage
+
+- `escouade-server connector pair <nom>` (ou « Ajouter un connecteur » dans l'espace, RP-5, par l'API distante) : un code de **8 lettres** d'un alphabet de 32 (sans 0, O, 1 ni I : **40 bits**), montré `ABCD-EFGH`, **valable 10 minutes, une fois**, avec l'adresse de l'entrée et la commande à lancer chez l'entreprise (`escouade-connector pair <adresse> <code>`). Tapé en minuscules ou sans tiret, c'est le même code.
+- Plusieurs codes peuvent attendre, un par nom ; un nouveau code pour un nom remplace celui d'avant. Un nom déjà appairé est refusé (« retire-le d'abord »). Un nom : 1 à 64 caractères, sans caractère de contrôle.
+- **L'échange** (le module `pairing` de la crate du protocole, accordé avec RP-3) : `Noise_XXpsk0_25519_ChaChaPoly_BLAKE2s` sur `/connector/pair`, la clé prépartagée tirée du code (BLAKE2s) : le code ne passe jamais, même sous une inspection TLS. Le connecteur donne sa clé et sa version ; le serveur épingle la clé et répond la sienne. Une version refusée l'est avant, sans consommer le code. Ensuite, un canal n'est accepté que par ces deux clés.
+- **Un code faux, expiré ou déjà utilisé** est fermé sans un mot, comme une clé inconnue, et **n'annule jamais le code qui attend** (comme pour un appareil, ESC-654).
+- **Les bornes** :
+  - **par source**, 20 essais ratés en une minute (pas de poignée de main à temps, pas ce protocole, une clé qu'aucun connecteur n'a, un code faux, un TLS raté, un autre chemin) : ses connexions sont fermées sans être lues jusqu'à la fin de la minute ;
+  - **par source**, 5 codes faux pendant la vie d'un code (10 minutes) : ses appairages sont refusés sans être lus pour le reste de ces 10 minutes ; le code attend toujours, une autre source peut le donner ;
+  - **pour toute l'entrée**, 20 essais ratés en une minute de toutes les sources : l'appairage est fermé à tous jusqu'à la fin de la minute. Un connecteur appairé entre toujours (sa clé se lit, elle ne se devine pas) : un inconnu ne coupe jamais le réseau privé.
+  - **Ce que la durée et la taille du code bornent** : au plus 20 codes faux par minute de tout Internet, soit 200 pendant les 10 minutes d'un code, contre 32⁸ = 2⁴⁰ codes : environ une chance sur 5,5 milliards. Négligeable : le code garde ses 10 minutes et ses 8 lettres.
+  - Derrière un proxy non déclaré, toutes ses connexions comptent pour une seule source : déclarer le proxy (`--trust-proxy`).
+- **Ni le code ni une clé privée au journal** : il dit « un code d'appairage fait pour « Acme » », « « Acme » appairé (son id, sa version) », un code faux et sa source.
+
+### Ce qui est gardé
+
+- **`secrets.json`** (droits 0600, voir *Le mode serveur*) : la clé privée du serveur pour les connecteurs (`connector-server-key`, faite au premier besoin), la clé publique de chaque connecteur (`connector-key-<id>`), les codes qui attendent (`connector-pairing` : le nom, la fin et la clé prépartagée de chacun, jamais le code). Un processus à la fois l'écrit (la commande et le serveur à côté).
+- **`connectors.json`** (dossier des données, 0600) : chaque connecteur (id, nom, date d'appairage, connecté depuis, dernière connexion, sa version, une version refusée, son plafond tel qu'il l'a envoyé), la trace des 32 derniers retirés (nom, date, par qui, l'empreinte SHA-256 de sa clé), l'adresse de l'entrée ouverte. Jamais une clé ni un code.
+
+### L'état de chaque connecteur
+
+- **Son plafond**, reçu à chaque connexion et à chaque relecture de son fichier, gardé et montré tel qu'il l'écrit, ses plages d'adresses comprises ; la porte n'en prend que les règles `hôte:port` et `*.suffixe:port` (les plages ne servent qu'au connecteur, après sa résolution).
+- **Son canal** : connecté (depuis quand), coupé (depuis quand), jamais connecté ; sa dernière connexion. Un serveur redémarré repart de « coupé » ; le connecteur rouvre seul. Un connecteur qui revient alors qu'un canal à lui est encore ouvert prend sa place, l'ancien fermé.
+- **Sa version** : à jour ; « à mettre à jour » à deux mineures du serveur (accepté) ; « trop ancien » au-delà, ou plus récent que le serveur : le canal refusé, le connecteur le sait par le protocole, et l'état dit quoi faire (« escouade-connector update --to 2.3.0 »). Une version refusée vient d'une clé appairée : elle ne compte pas comme un essai raté.
+- **Plusieurs connecteurs** (R12), un par réseau : chaque hôte de la liste d'un projet nomme le sien.
+
+### Les commandes du serveur
+
+| Commande | Ce qu'elle fait |
+| --- | --- |
+| `escouade-server connector pair <nom>` | Le code d'appairage d'un connecteur, l'adresse de l'entrée et la commande à lancer chez l'entreprise |
+| `escouade-server connectors` (`list`) | Les connecteurs : id, nom, état, version, le nombre de règles de son plafond, ce qu'il faut faire de sa version ; puis les retirés |
+| `escouade-server connectors remove <nom ou id>` | Retire un connecteur : sa clé effacée (il n'entre plus), sa trace gardée ; un serveur qui tourne ferme son canal dans les deux secondes |
+
+Elles marchent que le serveur tourne ou non, dans la langue de ses réglages ; un nom peut avoir des espaces (`connector pair Client d'Acme`). `connector pair` est refusé par la stratégie `servers.privateNetwork`.
+
+### Les commandes servies à l'espace
+
+Pour Réglages de l'espace › Réseau privé (l'interface est celle de RP-5), par l'API distante, à un poste seulement (jamais un téléphone), et **jamais par un outil MCP** (R5) :
+
+- `private_network_status` : servi ou non, la stratégie qui l'interdit, l'adresse de l'entrée ouverte, si la porte tourne, les connecteurs et leur état, les codes qui attendent (le nom et la fin, jamais le code), les retirés ;
+- `private_network_pair` (`name`) : un code, sa fin et l'adresse de l'entrée, montrés une fois à qui l'a demandé ;
+- `private_network_remove` (`id`) : le connecteur retiré, « par » l'appareil qui l'a demandé ;
+- `private_network_project` et `private_network_set_project` (`project`, `hosts`) : la liste d'un projet, écrite dans `private-network.json`, chaque hôte mis en forme, d'un connecteur appairé, **dans son plafond connu** (hors du plafond : refusé, « seul le service informatique l'élargit, dans connector.toml ») ; vide, le projet n'atteint plus rien d'un réseau privé ; la porte la relit aussitôt ;
+- `private_network_journal` : le journal de la porte, ses 1 000 dernières connexions.
+
+### La porte branchée
+
+- La porte demande ses connecteurs à l'entrée par le trait `Connectors` de RP-1 : leur état, leur plafond, un flux par le canal du connecteur. Un canal coupé la fait refuser aussitôt (« le réseau privé d'Acme est injoignable depuis 14:32 ») ; un connecteur retiré n'est plus connu d'elle.
+- `--gate` seul (sans `--connector-listen`) garde la porte sans entrée : les connecteurs appairés y sont coupés.
+
+### La stratégie `servers.privateNetwork`
+
+- À `false` (voir *Réglages imposés*), **au démarrage** : ni l'entrée ni la porte ne s'ouvrent, et le journal le dit. `connector pair`, « Ajouter un connecteur » et `private_network_pair` sont refusés, avec qui l'impose (« Le réseau privé (l'entrée des connecteurs, la porte, l'appairage d'un connecteur) est interdit par la stratégie de ce poste (servers.privateNetwork). »).
+- **Arrivée pendant que le serveur tourne** : l'entrée se ferme et tous les canaux sont coupés aussitôt ; la porte des agents déjà lancés reste, sans plus rien atteindre d'un réseau privé (leur couper ce proxy leur couperait Internet). Retirée, l'entrée se rouvre.
+- Lister et retirer les connecteurs restent permis.
 
 ## Le connecteur
 
 - **Le tunnel** : une WebSocket sur TLS, sortante, vers l'entrée des connecteurs du serveur, à travers le proxy de l'entreprise s'il y en a un ; à l'intérieur, Noise, que le proxy ne peut ni lire ni imiter ; des flux « ouvre `hôte:port` ».
-- **L'appairage** : Réglages de l'espace › Réseau privé › « Ajouter un connecteur » (ou `escouade-server connector pair`) donne un code (8 lettres, 10 minutes, une fois) et l'adresse de l'entrée ; comme celui d'un appareil, un code faux ne l'annule pas et les essais sont bornés par source et en tout (voir *L'API distante*, « Les bornes », ESC-654). Le service informatique lance `escouade-connector pair <adresse> <code>`. Ni le code ni une clé privée au journal. Retirer un connecteur, d'un côté ou de l'autre, ferme son canal.
+- **L'appairage** : Réglages de l'espace › Réseau privé › « Ajouter un connecteur » (ou `escouade-server connector pair`) donne un code (8 lettres, 10 minutes, une fois) et l'adresse de l'entrée ; comme celui d'un appareil, un code faux ne l'annule pas et les essais sont bornés par source et en tout (*L'entrée des connecteurs, construite*). Le service informatique lance `escouade-connector pair <adresse> <code>`. Ni le code ni une clé privée au journal. Retirer un connecteur, d'un côté ou de l'autre, ferme son canal.
 - **Deux listes** : le plafond, dans `connector.toml`, et la liste d'un projet, au serveur (R4, R5).
 - **Les contrôles** : nom et port dans le plafond après mise en forme ; adresse littérale refusée sauf écrite dans le plafond ; jamais la boucle, le lien local, les métadonnées d'un cloud ni la machine du connecteur ; 256 flux, 32 ouvertures par seconde, 10 minutes de silence.
 - **L'agent l'emprunte sans le savoir** (R6, *La porte, construite*). Le reste d'Internet sort comme avant.
@@ -105,8 +175,9 @@ Le `ProxyCommand` de `ssh` : il ouvre `hôte:port` comme son environnement le di
 
 La crate `crates/escouade-connector-proto`, partagée par `escouade-server` (RP-1, RP-4) et `escouade-connector` (RP-3), sans rien du cœur ni de Tauri. Sa forme exacte est la décision proposée `reseau-prive-rp-2-la-forme-du-protocole`.
 
-- **Le transport** : `wss://<serveur>:<port C>/connector`, ouvert par le connecteur, directement ou par le proxy de l'entreprise (`CONNECT`, authentification Basic seulement ; `HTTPS_PROXY` et `NO_PROXY` du connecteur, `http://` seulement). Le TLS est vérifié par les autorités du système, celles de Mozilla et un **fichier d'autorités en plus** (celle d'une inspection TLS). Un autre chemin que `/connector` répond 404. Le certificat ne dit pas qui est le serveur : Noise le dit.
+- **Le transport** : `wss://<serveur>:<port C>/connector`, ouvert par le connecteur, directement ou par le proxy de l'entreprise (`CONNECT`, authentification Basic seulement ; `HTTPS_PROXY` et `NO_PROXY` du connecteur, `http://` seulement). Le TLS est vérifié par les autorités du système, celles de Mozilla et un **fichier d'autorités en plus** (celle d'une inspection TLS). Un autre chemin que `/connector` (et `/connector/pair`, l'appairage) répond 404. Le certificat ne dit pas qui est le serveur : Noise le dit.
 - **La poignée de main** : `Noise_IK_25519_ChaChaPoly_BLAKE2s`, dans les deux premiers messages de la WebSocket. Le connecteur y donne sa version ; le serveur lit sa clé et, **sans clé connue, ferme sans rien répondre** (ni message ni fermeture WebSocket) ; il compte alors un essai raté pour les bornes de l'entrée (RP-4), comme un message qui n'est pas de ce protocole ou une poignée de main qui ne vient pas en 10 s. Une clé changée, d'un côté ou de l'autre, est refusée de la même façon. Une inspection TLS ne lit que la demande de WebSocket, puis du Noise.
+- **L'appairage** : `Noise_XXpsk0_25519_ChaChaPoly_BLAKE2s` sur `/connector/pair` (le module `pairing`, ESC-599 et ESC-600), la clé prépartagée tirée du code ; quatre messages, le dernier du serveur dit « appairé » ou « refusé » avec la raison.
 - **Les versions** : le serveur dit la sienne et son verdict dans sa réponse. Sa mineure ou celle d'avant : acceptée ; deux mineures d'avant : acceptée, « à mettre à jour » ; plus vieille, ou un autre majeur : « trop ancien », refusée ; **plus récente que le serveur : refusée aussi**, c'est le serveur qu'il faut mettre à jour. Le connecteur refusé reçoit les versions acceptées et dit quoi faire (« escouade-connector update --to 2.3.0 », ou « mettez escouade-server à jour »). Une version refusée vient d'une clé appairée : elle ne compte pas comme un essai raté.
 - **Les trames** : `open {id, hôte, port, agent, projet}` (du serveur), `opened {id}` et `refused {id, raison}` (du connecteur, la raison lisible avec un code : non permis, non résolu, injoignable, bornes, arrêt), `data {id, octets}` (une `data` vide clôt un sens, comme le FIN de TCP), `close {id}` (le flux est fini dans les deux sens), `window {id, incrément}`, `ping`, `pong`, et le **plafond** envoyé par le connecteur à chaque connexion, et de nouveau quand il relit son fichier.
 - **Le contrôle de débit** : chaque flux a une fenêtre de 256 Kio dans chaque sens, rendue à mesure que le lecteur lit ; un flux lent n'arrête que lui (un `git clone` lent ne bloque pas un `npm install`). Un pair qui dépasse sa fenêtre est coupé.
@@ -192,7 +263,8 @@ Rust (`cargo nextest run -p escouade-connector`, une quarantaine) : un faux serv
 - Le connecteur borne l'entrée dans le réseau de l'entreprise, pas la sortie du serveur vers Internet (R11).
 - Le proxy de l'entreprise, pour la sortie du connecteur : Basic seulement (ni NTLM, ni Kerberos), et en `http://`.
 - Ce qui ne suit pas les variables de proxy (Java : Maven, Gradle ; le `fetch` de Node sans `NODE_USE_ENV_PROXY` ; un programme qui ouvre ses sockets lui-même) ne passe pas par la porte : les noms en boucle locale de l'image (RP-7) le couvriront.
-- Le journal de la porte n'est gardé qu'en mémoire : il repart de zéro au redémarrage du serveur, et rien ne le montre encore (RP-5).
+- Le journal de la porte n'est gardé qu'en mémoire : il repart de zéro au redémarrage du serveur ; il est servi à l'espace, que RP-5 montrera.
+- Un attaquant réparti sur beaucoup de sources peut fermer l'appairage à tous, minute après minute (jamais les canaux des connecteurs appairés) : on réessaie la minute suivante, ou on filtre l'entrée par adresse.
 - Sous Windows, la clé du connecteur est scellée pour le compte qui a lancé `pair` : le service doit tourner sous ce compte (RP-6 lancera `pair` sous le compte du service).
 - Le connecteur ne se met pas encore à jour lui-même : `auto_update` est lu et dit, pas fait (RP-6).
 
@@ -201,7 +273,7 @@ Rust (`cargo nextest run -p escouade-connector`, une quarantaine) : un faux serv
 - **RP-1** (ESC-597) : la porte dans `escouade-server`, les variables des agents, `escouade-server via`. **Fait.**
 - **RP-2** (ESC-598) : la crate `escouade-connector-proto`. **Fait.**
 - **RP-3** (ESC-599) : le programme `escouade-connector`, et l'appairage dans la crate du protocole. **Fait.**
-- **RP-4** (ESC-600) : l'entrée des connecteurs, l'appairage côté serveur, la stratégie `servers.privateNetwork`.
+- **RP-4** (ESC-600) : l'entrée des connecteurs, l'appairage côté serveur, la stratégie `servers.privateNetwork`. **Fait.**
 - **RP-5** (ESC-601) : Réglages de l'espace et du projet › Réseau privé, le `.escouade.yml`, la boîte « À toi ».
 - **RP-6** (ESC-602) : la distribution et la mise à jour du connecteur.
 - **RP-7** (ESC-603) : les noms en boucle locale dans l'image.

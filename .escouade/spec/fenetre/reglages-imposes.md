@@ -2,8 +2,8 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)","src-tauri/src/locks.rs (accounts.reservation, ESC-564)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-546","ESC-550","ESC-567","ESC-564","ESC-620","ESC-651"]
-decisions: [169,175,183,189,198,197,204,201,218,282,281,309]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481","ESC-539","ESC-546","ESC-550","ESC-567","ESC-564","ESC-620","ESC-651","ESC-600"]
+decisions: [169,175,183,189,198,197,204,201,218,282,281,309,363]
 compared: null
 ---
 
@@ -240,3 +240,13 @@ La 2.2.6 apporte « Mode hors ligne » (Réglages › Avancé › Réseau, ESC-5
 
 - Le poste géré la fait tenir par deux chemins : le mode lit lui-même la stratégie du système, et les réglages sont ramenés à « allumé » comme pour toute clé qui restreint. Une équipe l'impose par les réglages ramenés : c'est une clé de l'app, qui vaut tant que le poste est dans l'équipe.
 - Une ligne de plus dans l'ADMX, les ADML, les profils de macOS, le schéma de `/etc` et la page du site, dans la catégorie « Proxy et certificats ».
+
+## Le réseau privé (ESC-600)
+
+| Clé | Sorte | Ce qu'elle verrouille ou refuse |
+| --- | --- | --- |
+| `servers.privateNetwork` | restreindre (éteint seulement) | le réseau privé d'un serveur (voir *Atteindre un réseau privé*) : ni l'entrée des connecteurs (`--connector-listen`) ni la porte des agents ne s'ouvrent au démarrage, et l'appairage d'un connecteur est refusé (`escouade-server connector pair`, « Ajouter un connecteur ») ; posée sur un serveur, elle vaut pour lui |
+
+- **Arrivée pendant que le serveur tourne**, relue à chaud comme les autres : l'entrée se ferme et les canaux des connecteurs sont coupés aussitôt ; la porte des agents déjà lancés reste, sans plus rien atteindre d'un réseau privé (lui couper ce proxy couperait Internet à ces agents). Retirée, l'entrée se rouvre.
+- Le refus dit qui l'impose : « Le réseau privé (l'entrée des connecteurs, la porte, l'appairage d'un connecteur) est interdit par la stratégie de ce poste (servers.privateNetwork). »
+- Une ligne de plus dans l'ADMX, les ADML, les profils de macOS, le schéma de `/etc` et la page du site, dans la catégorie des serveurs.

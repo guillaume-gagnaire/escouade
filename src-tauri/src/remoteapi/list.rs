@@ -408,6 +408,14 @@ escouade_command::commands! {
         commands::phone_check,
         commands::phone_rotate_key,
         commands::phone_remove,
+        // Réglages de l'espace › Réseau privé (RP-4): the connectors, their pairing, the lists of the projects, the gate's
+        // journal; a computer's alone, never an MCP tool's (R5).
+        commands::private_network_status,
+        commands::private_network_pair,
+        commands::private_network_remove,
+        commands::private_network_project,
+        commands::private_network_set_project,
+        commands::private_network_journal,
         // The box « À toi » (ESC-509): the phone's first screen, its files' bytes in raw frames.
         commands::inbox_closing,
         commands::inbox_weight,

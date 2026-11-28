@@ -95,6 +95,30 @@ impl FileStore {
     }
 }
 
+impl FileStore {
+    /// The secret `name` changed from what the file holds now (`None`: none) to what `change` gives (`None`:
+    /// forgotten), one process at a time: what the connectors' codes need (RP-4), written by the command and by the
+    /// server beside it.
+    pub fn update(
+        &self,
+        name: &str,
+        change: &mut dyn FnMut(Option<String>) -> Option<String>,
+    ) -> Result<()> {
+        self.change(|entries| {
+            let before = entries.get(name).cloned();
+            let after = change(before.clone());
+            if after == before {
+                return false;
+            }
+            match after {
+                Some(v) => entries.insert(name.to_string(), v),
+                None => entries.remove(name),
+            };
+            true
+        })
+    }
+}
+
 impl SecretStore for FileStore {
     fn get(&self, name: &str) -> Result<Option<String>> {
         Ok(self.entries()?.get(name).cloned())

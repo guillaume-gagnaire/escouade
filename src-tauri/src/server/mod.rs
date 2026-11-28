@@ -21,6 +21,12 @@
 //!   the core puts in `GIT_SSH_COMMAND` and `core.sshCommand`; nothing else read, nothing logged;
 //! - `--gate` (`ESCOUADE_SERVER_GATE`, RP-1): the gate of the private network on 127.0.0.1, the agents' one proxy
 //!   (`privatenet`); off by default;
+//! - `--connector-listen <adresse:port>` (`ESCOUADE_SERVER_CONNECTOR_LISTEN`, RP-4): the connectors' entry, off by
+//!   default, which speaks their protocol alone (never the remote API), and the gate with it (`privateentry`);
+//!   `--connector-cert`, `--connector-key` (a certificate of its own, else behind a TLS proxy), `--connector-url`
+//!   (its address as the connectors reach it);
+//! - `escouade-server connector pair <nom>`, `connectors [list]`, `connectors remove <nom>` (RP-4): a connector's
+//!   pairing code (8 letters, 10 minutes, once), the connectors paired and their state, one removed;
 //! - `--data-dir <folder>` (else `~/.escouade`), `--port <n>` (else [`DEFAULT_PORT`]), `--listen <address>` (another
 //!   interface than 127.0.0.1: for Docker, behind a tunnel or a proxy; it warns), `--allow-host <name>` (a `Host`
 //!   the API takes besides the loopback's: the name a TLS proxy serves it under), `--trust-proxy <address>` (a proxy
@@ -64,6 +70,11 @@ pub const HOSTS_VAR: &str = "ESCOUADE_SERVER_ALLOW_HOSTS";
 pub const PROXIES_VAR: &str = "ESCOUADE_SERVER_TRUST_PROXIES";
 /// `--gate` (RP-1): `1`, `true`, `on` or `yes`.
 pub const GATE_VAR: &str = "ESCOUADE_SERVER_GATE";
+/// `--connector-listen` and its company (RP-4).
+pub const CONNECTOR_LISTEN_VAR: &str = "ESCOUADE_SERVER_CONNECTOR_LISTEN";
+pub const CONNECTOR_CERT_VAR: &str = "ESCOUADE_SERVER_CONNECTOR_CERT";
+pub const CONNECTOR_KEY_VAR: &str = "ESCOUADE_SERVER_CONNECTOR_KEY";
+pub const CONNECTOR_URL_VAR: &str = "ESCOUADE_SERVER_CONNECTOR_URL";
 
 /// What the command line asks.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +97,12 @@ pub enum Command {
         server: String,
         code: String,
     },
+    /// `connector pair <nom>` (RP-4): a connector's pairing code.
+    ConnectorPair(String),
+    /// `connectors [list]` (RP-4).
+    Connectors,
+    /// `connectors remove <nom>` (RP-4).
+    ConnectorRemove(String),
     Version,
     Help,
 }
@@ -124,6 +141,17 @@ pub struct Args {
     pub qr: bool,
     /// The name of the team on this machine (`team pair --name`; else its server's address).
     pub name: Option<String>,
+    /// The connectors' entry (RP-4): `--connector-listen`, its certificate, its address.
+    pub connector: ConnectorArgs,
+}
+
+/// What the command line says of the connectors' entry (RP-4).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConnectorArgs {
+    pub listen: Option<SocketAddr>,
+    pub cert: Option<PathBuf>,
+    pub key: Option<PathBuf>,
+    pub url: Option<String>,
 }
 
 /// The command line `args` (without the program's name), with the process's variables. `--help` anywhere is the
@@ -157,7 +185,16 @@ pub fn parse_with(
         endpoint: None,
         qr: false,
         name: None,
+        connector: ConnectorArgs::default(),
     };
+    if let Some(v) = var(CONNECTOR_LISTEN_VAR) {
+        out.connector.listen = Some(listen_of(&v)?);
+    }
+    out.connector.cert = var(CONNECTOR_CERT_VAR).map(PathBuf::from);
+    out.connector.key = var(CONNECTOR_KEY_VAR).map(PathBuf::from);
+    if let Some(v) = var(CONNECTOR_URL_VAR) {
+        out.connector.url = Some(connector_url_of(&v)?);
+    }
     if let Some(v) = var(PORT_VAR) {
         out.port = port_of(&v)?;
     }
@@ -217,6 +254,16 @@ pub fn parse_with(
             }
             "--debug" => out.debug = true,
             "--gate" => out.gate = true,
+            "--connector-listen" => {
+                out.connector.listen = Some(listen_of(&value("--connector-listen")?)?)
+            }
+            "--connector-cert" => {
+                out.connector.cert = Some(PathBuf::from(value("--connector-cert")?))
+            }
+            "--connector-key" => out.connector.key = Some(PathBuf::from(value("--connector-key")?)),
+            "--connector-url" => {
+                out.connector.url = Some(connector_url_of(&value("--connector-url")?)?)
+            }
             "--endpoint" => out.endpoint = Some(value("--endpoint")?),
             "--qr" => out.qr = true,
             "--name" => out.name = Some(value("--name")?),
@@ -268,6 +315,25 @@ pub fn parse_with(
             server: server.to_string(),
             code: code.to_string(),
         },
+        ["connector", "pair", ref name @ ..] if !name.is_empty() => {
+            Command::ConnectorPair(name.join(" "))
+        }
+        ["connector", ..] => {
+            return Err(tr!(
+                "connector pair attend le nom du connecteur (escouade-server connector pair Acme)",
+                "connector pair needs the connector's name (escouade-server connector pair Acme)"
+            ))
+        }
+        ["connectors"] | ["connectors", "list"] => Command::Connectors,
+        ["connectors", "remove", ref name @ ..] if !name.is_empty() => {
+            Command::ConnectorRemove(name.join(" "))
+        }
+        ["connectors", "remove"] => {
+            return Err(tr!(
+                "connectors remove attend le nom ou l’id d’un connecteur (escouade-server connectors)",
+                "connectors remove needs a connector's name or id (escouade-server connectors)"
+            ))
+        }
         ["team", ..] => {
             return Err(tr!(
                 "team pair attend l’adresse du serveur d’équipe et le code que montre l’administrateur (escouade-server team pair team.acme.fr K7Q4M-2XZ8P)",
@@ -325,6 +391,29 @@ pub fn parse_with(
         }
     }
     Ok(out)
+}
+
+/// The address of the connectors' entry (`--connector-listen`): `adresse:port`, an IP address and its port.
+fn listen_of(v: &str) -> std::result::Result<SocketAddr, String> {
+    v.trim().parse().map_err(|_| {
+        tr!(
+            "--connector-listen : « {v} » n’est pas une adresse:port (0.0.0.0:8443, [::]:8443, 127.0.0.1:8443)",
+            "--connector-listen: “{v}” is not an address:port (0.0.0.0:8443, [::]:8443, 127.0.0.1:8443)"
+        )
+    })
+}
+
+/// The entry's address as the connectors reach it (`--connector-url`): `wss://…` (or `ws://` for a test).
+fn connector_url_of(v: &str) -> std::result::Result<String, String> {
+    let v = v.trim();
+    let ok = escouade_gate::entry::proto::pairing::pairing_url(v).is_some();
+    if !ok {
+        return Err(tr!(
+            "--connector-url : « {v} » n’est pas une adresse wss:// (wss://escouade.exemple.fr:8443/connector)",
+            "--connector-url: “{v}” is not a wss:// address (wss://escouade.exemple.fr:8443/connector)"
+        ));
+    }
+    Ok(v.to_string())
 }
 
 /// The words after `config`: `automatic on|off`, `channel stable|beta`, one or both.
@@ -409,7 +498,10 @@ pub fn help() -> String {
          escouade-server config             la mise à jour automatique et son canal (automatic on|off, channel stable|beta)\n  \
          escouade-server phone              le tunnel WireGuard du téléphone (on [PORT], off, add NOM [--endpoint HÔTE], remove ID)\n  \
          escouade-server team pair SERVEUR CODE  entre dans une équipe comme machine de l’équipe, par le code que montre un administrateur (--name NOM : son nom ici)\n  \
-         escouade-server via HÔTE PORT      le ProxyCommand de ssh par la porte (ProxyCommand=\"escouade-server via %h %p\")\n\n\
+         escouade-server via HÔTE PORT      le ProxyCommand de ssh par la porte (ProxyCommand=\"escouade-server via %h %p\")\n  \
+         escouade-server connector pair NOM le code d’appairage d’un connecteur du réseau privé (8 lettres, 10 min, une fois)\n  \
+         escouade-server connectors         les connecteurs appairés, leur état, et ceux retirés\n  \
+         escouade-server connectors remove NOM  retire un connecteur : sa clé ne vaut plus, son canal est fermé\n\n\
          Options :\n  \
          --data-dir DOSSIER  le dossier des données (sinon ~/.escouade)\n  \
          --port N            le port de l’API distante (sinon {port})\n  \
@@ -417,6 +509,9 @@ pub fn help() -> String {
          --allow-host NOM    accepte ce nom dans l’en-tête Host (celui d’un proxy TLS devant le serveur)\n  \
          --trust-proxy IP    lit X-Forwarded-For de ce proxy seul : chaque client y compte ses échecs à part\n  \
          --gate              la porte du réseau privé : le seul proxy des agents, sur 127.0.0.1\n  \
+         --connector-listen ADRESSE:PORT  l’entrée des connecteurs (éteinte sinon), et la porte avec elle : le seul protocole des connecteurs, jamais l’API distante\n  \
+         --connector-cert FICHIER, --connector-key FICHIER  son certificat TLS (sinon, derrière un proxy TLS)\n  \
+         --connector-url wss://…  son adresse telle que les connecteurs la joignent\n  \
          --debug             le journal en détail\n  \
          --version, --help",
         "escouade-server {version}: Escouade's core without a window, driven from afar.\n\n\
@@ -431,7 +526,10 @@ pub fn help() -> String {
          escouade-server config             the automatic update and its channel (automatic on|off, channel stable|beta)\n  \
          escouade-server phone              the phone's WireGuard tunnel (on [PORT], off, add NAME [--endpoint HOST], remove ID)\n  \
          escouade-server team pair SERVER CODE  enters a team as a machine of the team, by the code an administrator shows (--name NAME: its name here)\n  \
-         escouade-server via HOST PORT      ssh's ProxyCommand through the gate (ProxyCommand=\"escouade-server via %h %p\")\n\n\
+         escouade-server via HOST PORT      ssh's ProxyCommand through the gate (ProxyCommand=\"escouade-server via %h %p\")\n  \
+         escouade-server connector pair NAME  a pairing code for a connector of the private network (8 letters, 10 min, once)\n  \
+         escouade-server connectors         the paired connectors, their state, and those removed\n  \
+         escouade-server connectors remove NAME  removes a connector: its key no longer holds, its channel is closed\n\n\
          Options:\n  \
          --data-dir FOLDER  the data folder (else ~/.escouade)\n  \
          --port N           the port of the remote API (else {port})\n  \
@@ -439,6 +537,9 @@ pub fn help() -> String {
          --allow-host NAME  takes this name in the Host header (a TLS proxy's in front of the server)\n  \
          --trust-proxy IP   reads X-Forwarded-For from this proxy alone: each client behind it counts its failures apart\n  \
          --gate             the gate of the private network: the agents' one proxy, on 127.0.0.1\n  \
+         --connector-listen ADDRESS:PORT  the connectors' entry (off otherwise), and the gate with it: the connectors' protocol alone, never the remote API\n  \
+         --connector-cert FILE, --connector-key FILE  its TLS certificate (else, behind a TLS proxy)\n  \
+         --connector-url wss://…  its address as the connectors reach it\n  \
          --debug            a detailed log\n  \
          --version, --help",
         version = env!("CARGO_PKG_VERSION"),
@@ -517,6 +618,9 @@ pub fn main(args: Vec<String>) -> i32 {
         Command::Config { automatic, beta } => config(&args, *automatic, *beta),
         Command::Phone(what) => phone(&args, what),
         Command::TeamPair { server, code } => team_pair(&args, server, code),
+        Command::ConnectorPair(name) => connector_pair(&args, name),
+        Command::Connectors => connectors(&args),
+        Command::ConnectorRemove(name) => connector_remove(&args, name),
         Command::Run => run(&args),
     };
     match done {
@@ -568,6 +672,169 @@ fn team_pair(args: &Args, server: &str, code: &str) -> Result<()> {
             "Asked to enter the team “{}”, as a machine of the team.\n\nThis machine's six words: {}\n\nThe administrator compares them with those of their screen, then “Admit”. The machine then enters, under the role of service: it reads and writes the projects opened to it and takes tickets, signing nothing of the administrators'.",
             answer.team.unwrap_or_default(),
             answer.words.join(" ")
+        )
+    );
+    Ok(())
+}
+
+/// The policies of this device on the private network (RP-4): what a command beside the server checks first.
+fn check_private_network() -> Result<()> {
+    let managed = crate::locks::Managed::read();
+    crate::locks::Locks::compute(crate::locks::KEYS, None, &managed).check_private_network()
+}
+
+/// A date of the connectors, in local time.
+fn connector_date(ms: u64) -> String {
+    chrono::DateTime::from_timestamp_millis(ms as i64)
+        .map(|t| {
+            t.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+/// `connector pair <nom>` (RP-4): a code for the connector to be named `name`, printed for the user alone (never in the
+/// log), with the entry's address and the connector's command. Refused when a policy denies the private network.
+fn connector_pair(args: &Args, name: &str) -> Result<()> {
+    check_private_network()?;
+    let data = data_of(args)?;
+    let store = Arc::new(secrets::FileStore::open(&data)?);
+    let registry = crate::privateentry::registry_of(&data, store);
+    let code = registry
+        .create_code(name, crate::model::now_ms() as u64)
+        .map_err(anyhow::Error::msg)?;
+    let until = chrono::DateTime::from_timestamp_millis(code.expires_at as i64)
+        .map(|t| t.with_timezone(&chrono::Local).format("%H:%M").to_string())
+        .unwrap_or_default();
+    let url = args.connector.url.clone().or_else(|| registry.entry_url());
+    let minutes = escouade_gate::entry::registry::CODE_LIFETIME_MS / 60_000;
+    let name = name.trim();
+    println!(
+        "{}",
+        tr!(
+            "Code d’appairage du connecteur « {name} » : {}\n\nValable une fois, {minutes} minutes (jusqu’à {until}) ; un code faux ne l’annule pas. Un nouveau « connector pair {name} » remplace ce code.",
+            "Pairing code of the connector “{name}”: {}\n\nGood once, for {minutes} minutes (until {until}); a wrong code does not void it. A new “connector pair {name}” replaces this code.",
+            code.text
+        )
+    );
+    match url {
+        Some(url) => println!(
+            "{}",
+            tr!(
+                "Sur la machine du connecteur : escouade-connector pair {url} {}",
+                "On the connector's machine: escouade-connector pair {url} {}",
+                code.text
+            )
+        ),
+        None => println!(
+            "{}",
+            tr!(
+                "Sur la machine du connecteur : escouade-connector pair wss://<ce serveur>:<port>/connector {}\n(aucune entrée des connecteurs ouverte : lance escouade-server avec --connector-listen, et --connector-url pour l’adresse qu’elle a vue d’ailleurs)",
+                "On the connector's machine: escouade-connector pair wss://<this server>:<port>/connector {}\n(no connectors' entry open: start escouade-server with --connector-listen, and --connector-url for its address as seen from elsewhere)",
+                code.text
+            )
+        ),
+    }
+    Ok(())
+}
+
+/// `connectors` (RP-4): the connectors paired, their state, and the traces of those removed.
+fn connectors(args: &Args) -> Result<()> {
+    let data = data_of(args)?;
+    let store = Arc::new(secrets::FileStore::open(&data)?);
+    let registry = crate::privateentry::registry_of(&data, store);
+    let views = registry.views();
+    if views.is_empty() {
+        println!(
+            "{}",
+            tr!(
+                "Aucun connecteur appairé (escouade-server connector pair NOM).",
+                "No paired connector (escouade-server connector pair NAME)."
+            )
+        );
+    }
+    use escouade_gate::entry::{State, VersionState};
+    for v in &views {
+        let state = match (v.state, v.since) {
+            (State::Connected, Some(s)) => tr!(
+                "connecté depuis {}",
+                "connected since {}",
+                connector_date(s)
+            ),
+            (State::Connected, None) => tr!("connecté", "connected"),
+            (State::Down, Some(s)) => tr!("coupé depuis {}", "cut since {}", connector_date(s)),
+            (State::Down, None) => tr!("coupé", "cut"),
+            (State::Never, _) => tr!("jamais connecté", "never connected"),
+        };
+        let version = match (&v.version, v.version_state) {
+            (Some(ver), Some(VersionState::Outdated)) => {
+                tr!("{ver}, à mettre à jour", "{ver}, to update")
+            }
+            (Some(ver), Some(VersionState::TooOld)) => {
+                tr!("{ver}, trop ancien (refusé)", "{ver}, too old (refused)")
+            }
+            (Some(ver), Some(VersionState::TooNew)) => tr!(
+                "{ver}, plus récent que le serveur (refusé)",
+                "{ver}, newer than the server (refused)"
+            ),
+            (Some(ver), _) => ver.clone(),
+            (None, _) => "—".into(),
+        };
+        println!(
+            "{}  {}  {state}  escouade-connector {version}  {}",
+            v.id,
+            v.name,
+            tr!("plafond : {} règles", "ceiling: {} rules", v.ceiling.len())
+        );
+        if let Some(advice) = &v.advice {
+            println!("    {advice}");
+        }
+    }
+    let removed = registry.removed();
+    if !removed.is_empty() {
+        println!("\n{}", tr!("Retirés :", "Removed:"));
+        for r in removed.iter().rev() {
+            println!(
+                "{}  {}  {}",
+                r.id,
+                r.name,
+                tr!(
+                    "retiré le {} par {}",
+                    "removed on {} by {}",
+                    connector_date(r.at),
+                    r.by
+                )
+            );
+        }
+    }
+    Ok(())
+}
+
+/// `connectors remove <nom>` (RP-4): its key no longer holds; a server that runs closes its channel within seconds.
+fn connector_remove(args: &Args, which: &str) -> Result<()> {
+    let data = data_of(args)?;
+    let store = Arc::new(secrets::FileStore::open(&data)?);
+    let registry = crate::privateentry::registry_of(&data, store);
+    let removed = registry
+        .remove(
+            which,
+            escouade_gate::entry::registry::BY_COMMAND,
+            crate::model::now_ms() as u64,
+        )
+        .map_err(anyhow::Error::msg)?;
+    let Some(r) = removed else {
+        bail!(tr!(
+            "aucun connecteur « {which} » (escouade-server connectors)",
+            "no connector “{which}” (escouade-server connectors)"
+        ));
+    };
+    println!(
+        "{}",
+        tr!(
+            "Connecteur « {} » retiré : sa clé ne vaut plus, et un serveur qui tourne ferme son canal dans les secondes qui viennent.",
+            "Connector “{}” removed: its key no longer holds, and a server that runs closes its channel within seconds.",
+            r.name
         )
     );
     Ok(())
@@ -887,6 +1154,14 @@ fn run(args: &Args) -> Result<()> {
         hosts: args.hosts.clone(),
         proxies: args.proxies.clone(),
         gate: args.gate,
+        private: crate::privateentry::Asked {
+            gate: args.gate,
+            listen: args.connector.listen,
+            cert: args.connector.cert.clone(),
+            key: args.connector.key.clone(),
+            url: args.connector.url.clone(),
+            proxies: args.proxies.clone(),
+        },
     };
     let done = runtime.block_on(serve(
         data,
@@ -934,6 +1209,8 @@ pub struct Endpoint {
     pub proxies: Vec<IpAddr>,
     /// `--gate` (RP-1).
     pub gate: bool,
+    /// The private network (RP-4): `--connector-listen` and its company (its `gate` is `--gate` too).
+    pub private: crate::privateentry::Asked,
 }
 
 impl Endpoint {
@@ -992,10 +1269,15 @@ pub async fn serve(
     core.phone.mark_server();
     // Its Kanbans go up to 64 tickets at once (ESC-620).
     core.mark_server();
-    // The gate of the private network (RP-1), before any agent starts: the agents’ one proxy. No connector yet (RP-4
-    // plugs its entry): a host of a private network is refused, the rest goes out as before.
-    if endpoint.gate {
-        if let Err(e) = core.start_gate(Arc::new(escouade_gate::NoConnectors)).await {
+    // The private network (RP-1, RP-4), before any agent starts: the gate, the agents’ one proxy, and the connectors'
+    // entry, whose channels the gate goes through; neither when a policy forbids it (`servers.privateNetwork`).
+    let mut private = endpoint.private.clone();
+    private.gate |= endpoint.gate;
+    if private.proxies.is_empty() {
+        private.proxies = endpoint.proxies.clone();
+    }
+    if private.any() {
+        if let Err(e) = core.start_private_network(private, store.clone()).await {
             stop_core(headless).await;
             return Err(e);
         }
@@ -1067,6 +1349,7 @@ pub async fn serve(
     };
     log::info!("escouade-server: {why}: stopping (the agents' turns are cut, the state written)");
     writer.abort();
+    core.private_network.close();
     core.gate.stop();
     let status_data = core.data.clone();
     drop(core);

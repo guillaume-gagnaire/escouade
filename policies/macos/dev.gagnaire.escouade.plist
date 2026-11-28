@@ -603,6 +603,20 @@
     </dict>
     <dict>
       <key>pfm_description</key>
+      <string>An Escouade server that receives it opens neither the connectors’ entry (--connector-listen) nor its agents’ gate, and refuses to pair a connector: no agent reaches a private network through escouade-connector. Only the value false (0) is imposed. On the device: The connectors’ entry closed and their channels cut, the pairing refused; the gate not opened at the server’s start.</string>
+      <key>pfm_name</key>
+      <string>servers.privateNetwork</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Deny the private network (the connectors)</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
       <string>What Claude outside Escouade (an outside MCP client) may do through Escouade’s MCP server: denied (nothing), readOnly (read only), allowed (everything). Escouade’s own agents are not concerned. On the device: An outside client refused at its connection (denied), or its tools that write refused (readOnly).</string>
       <key>pfm_name</key>
       <string>mcp.externalClients</string>

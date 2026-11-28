@@ -237,6 +237,12 @@ Key: servers.remoteApi (Boolean, false (0)). Sort: restrict. “Disabled” remo
 On the device: Settings › Phone, off and grayed; a tunnel that is on turns off at once.
 
 Key: servers.phone (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="servers_privateNetwork">Deny the private network (the connectors)</string>
+      <string id="servers_privateNetwork_Explain">An Escouade server that receives it opens neither the connectors’ entry (--connector-listen) nor its agents’ gate, and refuses to pair a connector: no agent reaches a private network through escouade-connector. Only the value false (0) is imposed.
+
+On the device: The connectors’ entry closed and their channels cut, the pairing refused; the gate not opened at the server’s start.
+
+Key: servers.privateNetwork (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
       <string id="mcp_externalClients">Outside MCP clients</string>
       <string id="mcp_externalClients_Explain">What Claude outside Escouade (an outside MCP client) may do through Escouade’s MCP server: denied (nothing), readOnly (read only), allowed (everything). Escouade’s own agents are not concerned.
 

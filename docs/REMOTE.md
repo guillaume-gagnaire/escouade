@@ -474,6 +474,12 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `pr_review_submit`
 - `pr_reviews`
 - `pr_write`
+- `private_network_journal` : Réglages de l'espace › Réseau privé (RP-4, ESC-600) : le journal de la porte, ses 1 000 dernières connexions, jamais le contenu ni un jeton
+- `private_network_pair` : Réglages de l'espace › Réseau privé (RP-4) : le code d'appairage d'un connecteur (8 lettres, 10 minutes, une fois) et l'adresse de l'entrée ; à un poste seulement, refusé par `servers.privateNetwork`
+- `private_network_project` : Réglages du projet › Réseau privé (RP-4) : la liste d'un projet, ses hôtes et leur connecteur
+- `private_network_remove` : Réglages de l'espace › Réseau privé (RP-4) : un connecteur retiré, sa clé effacée, son canal fermé, sa trace gardée ; à un poste seulement
+- `private_network_set_project` : Réglages du projet › Réseau privé (RP-4) : la liste d'un projet écrite, dans le plafond connu de chaque connecteur ; à un poste seulement, jamais par un outil MCP (R5)
+- `private_network_status` : Réglages de l'espace › Réseau privé (RP-4) : servi ou non, la stratégie, l'entrée, la porte, les connecteurs et leur état, les codes qui attendent (jamais le code), les retirés
 - `project_code_host`
 - `project_environments`
 - `project_environments_read`

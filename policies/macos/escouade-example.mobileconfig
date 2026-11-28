@@ -134,6 +134,8 @@
       <false/>
       <key>servers.phone</key>
       <false/>
+      <key>servers.privateNetwork</key>
+      <false/>
       <key>servers.remoteApi</key>
       <false/>
       <key>team.fingerprint</key>
