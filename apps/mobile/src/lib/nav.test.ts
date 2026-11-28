@@ -1,7 +1,7 @@
 // The tabs and the system's back (MO-1): one step at a time, the sheet, then « À toi », then out of the app.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { waitFor } from '@testing-library/svelte';
-import { back, closeSheet, followHistory, goTab, nav, openSheet } from './nav.svelte';
+import { back, closeSheet, followHistory, goTab, nav, openSheet, tabOf } from './nav.svelte';
 
 describe('the system’s back', () => {
   beforeEach(() => {
@@ -17,6 +17,13 @@ describe('the system’s back', () => {
     expect(back()).toBe(true);
     expect(nav.tab).toBe('inbox');
     expect(back()).toBe(false);
+  });
+
+  it('opens the tab the page’s address names, none else', () => {
+    expect(tabOf('#kanban')).toBe('kanban');
+    expect(tabOf('#agents')).toBe('agents');
+    expect(tabOf('')).toBeNull();
+    expect(tabOf('#reglages')).toBeNull();
   });
 
   it('a tab chosen closes the sheet', () => {

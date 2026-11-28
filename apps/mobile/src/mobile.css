@@ -49,3 +49,12 @@ body {
   max-width: 600px;
   margin: 0 auto;
 }
+
+/* The ink on a gesture that goes (« Valider », « Lancer » of the Kanban, MO-7): dark on the light green of the dark
+   theme, white on the deep green of the light one. */
+:root {
+  --on-add: #0b1a10;
+}
+:root[data-theme='light'] {
+  --on-add: #ffffff;
+}

@@ -7,7 +7,7 @@ import { applyTheme } from '$shared/lib/theme';
 import App from './App.svelte';
 import { applyAppearance, followSystemTheme, systemTheme } from './lib/appearance';
 import { barsFor, onBackButton, onForeground, platformOf } from './lib/native';
-import { back, followHistory } from './lib/nav.svelte';
+import { back, followHistory, goTab, tabOf } from './lib/nav.svelte';
 import { allSpaces } from './lib/paired';
 import { onSpacesChanged } from './lib/pairing.svelte';
 import { pauseSpaces, resumeSpaces, startSpaces } from './lib/phone-spaces.svelte';
@@ -28,6 +28,8 @@ startSpaces(allSpaces());
 onSpacesChanged(() => startSpaces(allSpaces()));
 onForeground((active) => (active ? resumeSpaces() : pauseSpaces()));
 
+const asked = tabOf(location.hash);
+if (asked) goTab(asked);
 onBackButton(back);
 followHistory();
 
