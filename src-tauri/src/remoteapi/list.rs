@@ -33,6 +33,7 @@ escouade_command::commands! {
         commands::remote_image,
         commands::ticket_create,
         commands::space_glance,
+        commands::board_glance,
         commands::inbox_list,
         commands::inbox_get,
         commands::inbox_file,

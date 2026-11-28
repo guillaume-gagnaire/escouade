@@ -32,6 +32,14 @@ export class FakeSocket implements Socket {
     this.onopen?.();
     this.json({ t: 'welcome', version: '2.3.0', client: 'c1', device: 'phone', session: 's1', resumed: false, desk: ['open_url'] });
   }
+  private answered = new Set<number>();
+  /** Each call of `cmd` not answered yet answered with `ok` (or failed with `err`). */
+  answer(cmd: string, ok: unknown, err?: string) {
+    for (const c of this.calls().filter((c) => c.cmd === cmd && !this.answered.has(c.id))) {
+      this.answered.add(c.id);
+      this.json(err === undefined ? { t: 'reply', id: c.id, ok } : { t: 'reply', id: c.id, error: err });
+    }
+  }
   /** Each `space_glance` asked so far answered with `glance`. */
   answerGlances(glance: unknown) {
     for (const c of this.calls().filter((c) => c.cmd === 'space_glance')) this.json({ t: 'reply', id: c.id, ok: glance });

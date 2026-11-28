@@ -32,6 +32,11 @@ export function prepareServer(root) {
       autoUpdate: false,
       midTurnDelaySecs: 0,
       accounts: [{ id: 'principal', name: 'Principal', engine: 'claude', configDir: '', claudePath: '', active: true }],
+      // Every feature on, as the desktop's e2e have them (tests/e2e/fixture.ts): a settings file without them reads as
+      // an update, which keeps on only what is in use, and leaves the Kanban off (MO-7).
+      features: Object.fromEntries(
+        ['kanban', 'editor', 'docs', 'cost', 'stats', 'workflows', 'scheduled', 'overseer', 'voice'].map((f) => [f, true]),
+      ),
     }),
   );
   // Never the machine's own Claude, store, updates or harnesses.
@@ -210,4 +215,42 @@ export async function stoppedAgent(call, root) {
   });
   const agent = await call('create_agent', { projectId: project.id, model: null, engine: null, isolated: null, base: null });
   await call('send_message', { id: agent.id, text: 'Lance les tests, permission', attachments: [], files: [] });
+}
+
+/**
+ * A project of the server for its Kanban (MO-7): its autopilot off (nothing starts before « Lancer »), three tickets
+ * the fake `claude` meets at once (`[ok]`), the first two started and brought to « À tester », the third left to do.
+ * @returns {Promise<{ project: { id: string }, tickets: { id: string, key: string }[] }>}
+ */
+export async function kanbanProject(call, root, name = 'facturation') {
+  const repo = makeRepo(root, name);
+  const project = await call('create_project', {
+    path: repo,
+    name,
+    color: 'oklch(0.72 0.12 250)',
+    worktreePerAgent: true,
+    firstAgent: null,
+    restore: false,
+  });
+  await call('board_set', { projectId: project.id, settings: { ...project.board, autopilot: false } });
+  const tickets = [];
+  for (const title of [
+    'Avoirs partiels sur une facture payée [ok]',
+    'Export comptable au format FEC [ok]',
+    'Relances automatiques à J+15 [ok]',
+  ])
+    tickets.push(
+      await call('ticket_create', {
+        projectId: project.id,
+        draft: { title, description: '', criteria: ['Le fichier est écrit'], maxLoops: 5, after: [], branch: '' },
+      }),
+    );
+  for (const t of tickets.slice(0, 2)) await call('ticket_start', { id: t.id });
+  for (const deadline = Date.now() + 60_000; ;) {
+    const board = await call('board_glance', { projectId: project.id });
+    if (board.tickets.filter((t) => t.column === 'review').length >= 2) break;
+    if (Date.now() > deadline) throw new Error(`the tickets never came to « À tester »: ${JSON.stringify(board.tickets)}`);
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return { project, tickets };
 }

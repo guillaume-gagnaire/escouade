@@ -7196,6 +7196,13 @@ pub fn space_glance(core: CoreState, counts: Option<bool>) -> crate::glance::Gla
     core.glance(counts.unwrap_or(false))
 }
 
+/// A project's board as the phone's tab « Kanban » reads it (MO-7): the projects, the one shown (`project_id`, else
+/// the first), the counts of its columns and its tickets.
+#[tauri::command(async)]
+pub fn board_glance(core: CoreState, project_id: Option<String>) -> crate::glance::BoardGlance {
+    core.board_glance(project_id.as_deref())
+}
+
 /// The devices paired to this core's remote API (Réglages de l'espace › Appareils).
 #[tauri::command(async)]
 pub fn remote_devices(core: CoreState) -> Vec<crate::remoteapi::devices::Device> {
