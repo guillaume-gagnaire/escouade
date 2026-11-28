@@ -2304,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-connector"
-version = "2.2.10"
+version = "2.2.20"
 dependencies = [
  "escouade-connector-proto",
  "hex",
