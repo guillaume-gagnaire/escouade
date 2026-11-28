@@ -1,7 +1,8 @@
 <script lang="ts">
   // The phone's shell, direction B « le fil » (MO-1, docs/MOBILE.md § 6 and design/mobile-2-3/): the header (the tab's
-  // title and the « + »), the chips of the spaces, the band of a space that is cut, the tab's content, and the three
-  // tabs at the bottom; the sheet of the « + » above. With no space paired, « Escouade sur ce téléphone » and its
+  // title and the « + »), the chips of the spaces (on the Kanban, its project and its columns: MO-7), the band of a
+  // space that is cut, the tab's content, and the three tabs at the bottom; the sheet of the « + » (or of the Kanban's
+  // projects) above. With no space paired, « Escouade sur ce téléphone » and its
   // pairing (MO-4); a space that revoked this phone, its own screen above all.
   import Icon from '$shared/components/Icon.svelte';
   import IconSprite from '$shared/components/IconSprite.svelte';
@@ -9,7 +10,9 @@
   import AgentsTab from './components/AgentsTab.svelte';
   import CreateSheet from './components/CreateSheet.svelte';
   import InboxTab from './components/InboxTab.svelte';
+  import KanbanHead from './components/KanbanHead.svelte';
   import KanbanTab from './components/KanbanTab.svelte';
+  import ProjectSheet from './components/ProjectSheet.svelte';
   import SpaceBands from './components/SpaceBands.svelte';
   import SpaceChips from './components/SpaceChips.svelte';
   import Pairing from './components/Pairing.svelte';
@@ -43,7 +46,7 @@
           <Icon name="plus" size={22} />
         </button>
       </div>
-      {#if nav.tab !== 'kanban'}<SpaceChips />{/if}
+      {#if nav.tab !== 'kanban'}<SpaceChips />{:else}<KanbanHead />{/if}
     </header>
     <div class="body" id="panel" role="tabpanel" aria-labelledby="tab-{nav.tab}" bind:this={body}>
       <SpaceBands />
@@ -58,7 +61,7 @@
     <TabBar />
   </div>
 {/if}
-{#if nav.sheet === 'create'}<CreateSheet />{/if}
+{#if nav.sheet === 'create'}<CreateSheet />{:else if nav.sheet === 'project'}<ProjectSheet />{/if}
 
 <style>
   .shell {

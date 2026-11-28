@@ -9,7 +9,7 @@
 <div class="empty">
   <span class="mark"><Icon name={icon} size={26} /></span>
   <h2>{title}</h2>
-  <p>{text}</p>
+  {#if text}<p>{text}</p>{/if}
 </div>
 
 <style>

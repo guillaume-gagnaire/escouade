@@ -247,6 +247,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `back_up_now`
 - `backups_view`
 - `board_capacity`
+- `board_glance` · téléphone : l’onglet Kanban du téléphone (MO-7) : les projets, les nombres des colonnes et les tickets d’un projet, sans leur texte
 - `board_set`
 - `branch_check`
 - `branch_create`

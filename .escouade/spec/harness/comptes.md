@@ -3,7 +3,7 @@ title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-usage/real-2.1.314.json","tests/fixtures/quota-pace.json","design/settings-2-2/PROPOSITION.md","docs/PROTOCOL.md"]
 tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-497","ESC-511","ESC-521","ESC-538","ESC-556","ESC-564","ESC-522"]
-decisions: [20,24,123,154,160,213,161,198,197,211,239,257,365,282]
+decisions: [20,24,123,154,160,213,161,198,197,211,239,257,366,282]
 compared: "2026-10-31T17:26:28+01:00"
 ---
 

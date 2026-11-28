@@ -9,9 +9,15 @@
 
 export type Tab = 'inbox' | 'agents' | 'kanban';
 export const TABS: Tab[] = ['inbox', 'agents', 'kanban'];
-export type Sheet = 'create';
+export type Sheet = 'create' | 'project';
 
 export const nav = $state<{ tab: Tab; sheet: Sheet | null }>({ tab: 'inbox', sheet: null });
+
+/** The tab a page's address names (`#kanban`: the development's and the tests' way to open one), if any. */
+export function tabOf(hash: string): Tab | null {
+  const asked = hash.replace(/^#/, '');
+  return (TABS as string[]).includes(asked) ? (asked as Tab) : null;
+}
 
 export function goTab(tab: Tab): void {
   nav.sheet = null;

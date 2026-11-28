@@ -11,7 +11,7 @@
 
 use crate::core::Core;
 use crate::locks::{AGGREGATE_VIEW, CONTENTLESS};
-use crate::model::{AgentStatus, PendingView};
+use crate::model::{AgentStatus, Column, PendingView, Ticket};
 use crate::remoteapi::proto::Machine;
 use serde::Serialize;
 use serde_json::Value;
@@ -193,6 +193,152 @@ impl Core {
             })
             .collect();
         g
+    }
+}
+
+// ---------- The board of a project, for the phone (MO-7, `docs/MOBILE.md` § 3.7) ----------
+
+/// The most tickets of « Terminé » a board glance names (the latest done); the others are counted.
+pub const MAX_DONE: usize = 30;
+
+/// A project's board as the phone's tab « Kanban » reads it (`board_glance`): the projects of the core, the one shown,
+/// how many tickets each column holds and its tickets. Neither their text nor their conversations.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardGlance {
+    /// Every project of the core, in its order.
+    pub projects: Vec<GlanceProject>,
+    /// The project shown: the one asked, else the first; none when the core has no project.
+    pub project_id: Option<String>,
+    pub counts: BoardCounts,
+    /// The tickets of the project shown, each column in the board's order (« Terminé »: the `MAX_DONE` latest).
+    pub tickets: Vec<BoardTicket>,
+}
+
+/// How many tickets each column holds.
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardCounts {
+    pub todo: usize,
+    pub doing: usize,
+    pub review: usize,
+    pub pr: usize,
+    pub done: usize,
+}
+
+/// A ticket, as a line of the phone's Kanban says it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardTicket {
+    pub id: String,
+    pub key: String,
+    pub title: String,
+    pub column: Column,
+    /// The name of its agent, once started.
+    pub agent: Option<String>,
+    /// n of « boucle n/max » (0 before the start).
+    pub iteration: u32,
+    pub max_loops: u32,
+    /// Its criteria, met or not: the squares of its line.
+    pub criteria: Vec<bool>,
+    /// Sent to « À tester » without all its criteria.
+    pub partial: bool,
+    /// Why it no longer moves on by itself.
+    pub blocked: Option<String>,
+    /// The block is a merge conflict: « L'agent résout ».
+    pub conflict: bool,
+    /// The validation step running (« Merge… »).
+    pub step: Option<String>,
+}
+
+impl Core {
+    /// The board of `project` (the first project when it is none or unknown), for the phone.
+    pub fn board_glance(&self, project: Option<&str>) -> BoardGlance {
+        // Projects before tickets (the lock order of `Core`), each guard dropped at its statement's end.
+        let projects: Vec<GlanceProject> = self
+            .projects
+            .read()
+            .iter()
+            .map(|p| GlanceProject {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                color: p.color.clone(),
+            })
+            .collect();
+        let shown = project
+            .and_then(|id| projects.iter().find(|p| p.id == id))
+            .or(projects.first())
+            .map(|p| p.id.clone());
+        let Some(id) = shown.clone() else {
+            return BoardGlance {
+                projects,
+                ..BoardGlance::default()
+            };
+        };
+        let mut tickets: Vec<Ticket> = self
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| t.project_id == id && !t.shared.as_ref().is_some_and(|s| s.hidden))
+            .cloned()
+            .collect();
+        let mut counts = BoardCounts::default();
+        for t in &tickets {
+            *match t.column {
+                Column::Todo => &mut counts.todo,
+                Column::Doing => &mut counts.doing,
+                Column::Review => &mut counts.review,
+                Column::Pr => &mut counts.pr,
+                Column::Done => &mut counts.done,
+            } += 1;
+        }
+        // The board's order (`src/lib/board.ts`, `columnTickets`): « À faire » by priority, « Terminé » the latest
+        // first, « À tester » and « En revue » by their arrival there, « En cours » by its start.
+        tickets.sort_by_key(|t| {
+            let when = match t.column {
+                Column::Todo => t.rank,
+                Column::Doing => t.started_at.unwrap_or(0),
+                Column::Review | Column::Pr => t.review_at.unwrap_or(0),
+                Column::Done => -t.done_at.unwrap_or(0),
+            };
+            (t.column, when, t.created_at)
+        });
+        let names: std::collections::HashMap<String, String> = self
+            .agent_views()
+            .into_iter()
+            .map(|a| (a.meta.id, a.meta.name))
+            .collect();
+        let mut done = 0;
+        let tickets = tickets
+            .into_iter()
+            .filter(|t| {
+                if t.column != Column::Done {
+                    return true;
+                }
+                done += 1;
+                done <= MAX_DONE
+            })
+            .map(|t| BoardTicket {
+                agent: t.agent_id.as_ref().and_then(|a| names.get(a).cloned()),
+                criteria: t.criteria.iter().map(|c| c.ok).collect(),
+                title: cut(&t.title, 200).0,
+                id: t.id,
+                key: t.key,
+                column: t.column,
+                iteration: t.iteration,
+                max_loops: t.max_loops,
+                partial: t.partial,
+                blocked: t.blocked,
+                conflict: t.conflict,
+                step: t.step,
+            })
+            .collect();
+        BoardGlance {
+            projects,
+            project_id: shown,
+            counts,
+            tickets,
+        }
     }
 }
 

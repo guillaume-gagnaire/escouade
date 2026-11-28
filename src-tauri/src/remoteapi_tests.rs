@@ -2041,6 +2041,7 @@ async fn a_pairing_code_is_given_to_the_window_and_a_computer_and_refused_to_a_p
 const PHONE_COMMANDS: &[&str] = &[
     "answer_permission",
     "answer_question",
+    "board_glance",
     "get_conversation",
     "inbox_answer",
     "inbox_delegate",

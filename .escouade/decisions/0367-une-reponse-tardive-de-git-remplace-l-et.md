@@ -1,5 +1,5 @@
 ---
-number: 366
+number: 367
 id: "une-reponse-tardive-de-git-remplace-l-et"
 title: "Une réponse tardive de git remplace l'état inconnu de la suppression d'un agent"
 date: "2026-11-20"

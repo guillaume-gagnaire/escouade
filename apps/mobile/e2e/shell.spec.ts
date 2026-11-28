@@ -73,7 +73,8 @@ test('the shell on an escouade-server: one connection, the tabs, the « + », th
   await expect(page.getByRole('heading', { level: 1, name: 'Agents' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Aucun agent sur Travail' })).toBeVisible();
   await tab(page, 'Kanban').click();
-  await expect(page.getByRole('heading', { name: 'Choisis un projet' })).toBeVisible();
+  // A server with no project yet (MO-7): no chips, no segments.
+  await expect(page.getByRole('heading', { name: 'Aucun projet' })).toBeVisible();
   await expect(page.getByRole('radiogroup')).toHaveCount(0);
   await page.getByRole('button', { name: 'Créer' }).click();
   const sheet = page.getByRole('dialog', { name: 'Créer' });
@@ -114,8 +115,10 @@ test('an agent stopped on the server shows in « À toi » and « Agents », in 
     await expect(page.getByRole('listitem').filter({ hasText: 'Attend ta réponse' })).toContainText('facturation');
     await shot(page, info, 'agents');
     await tab(page, 'Kanban').click();
-    await expect(page.getByRole('heading', { name: 'Choisis un projet' })).toBeVisible();
-    await shot(page, info, 'kanban');
+    // Its project shown with its space (MO-7), its board empty.
+    await expect(page.getByRole('button', { name: 'facturation, sur Travail : changer de projet' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Rien à faire' })).toBeVisible();
+    await shot(page, info, 'kanban-vide');
     await page.getByRole('button', { name: 'Créer' }).click();
     await expect(page.getByRole('dialog', { name: 'Créer' })).toBeVisible();
     await shot(page, info, 'creer');
