@@ -241,6 +241,7 @@ members = [
     "../crates/escouade-command",
     "../crates/escouade-tauri-shim",
     "../crates/escouade-connector-proto",
+    "../crates/escouade-connector",
     "../crates/escouade-gate",
     "../crates/escouade-audit",
 ]
@@ -268,6 +269,7 @@ default-members = [
     "../crates/escouade-tauri-shim",
     "../crates/escouade-vsx",
     "../crates/escouade-connector-proto",
+    "../crates/escouade-connector",
     "../crates/escouade-gate",
     "../crates/escouade-audit",
 ]

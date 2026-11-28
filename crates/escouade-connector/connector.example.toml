@@ -1,0 +1,35 @@
+# connector.toml of escouade-connector: what this connector lets the agents of an escouade-server reach in this
+# network, and nothing else. Read again while the service runs; each change is said in its journal.
+#
+# Linux: /etc/escouade-connector/connector.toml
+# Windows: %ProgramData%\escouade-connector\connector.toml
+# Anywhere else: escouade-connector --config <this file> <command>
+
+# The entry of the server's connectors, as Space settings › Private network gives it (`pair` gives it too).
+# server = "wss://escouade.example.com:8443/connector"
+
+# The company's proxy out, when the connector must go through one (http:// and Basic alone).
+# Left out: HTTPS_PROXY and NO_PROXY of the environment.
+# proxy = "http://user:password@proxy.example.internal:3128"
+
+# Authorities more, in PEM, for the company's inspection of TLS.
+# authorities = "/etc/escouade-connector/company-root.pem"
+
+# The ceiling: host:port, *.suffix:port (every name under the suffix, not the suffix itself), or an address written as
+# such (the only way an address is let through). Names are resolved by this machine's DNS; the address resolved is
+# checked, then joined as such. Never the loopback, the link-local (a cloud's metadata), nor this machine.
+allow = [
+  "gitlab.example.internal:22",
+  "*.npm.example.internal:443",
+]
+
+# Ranges every address joined must be in (optional).
+# ranges = ["10.20.0.0/16"]
+
+# Read alone for now: `escouade-connector update` is to come.
+auto_update = false
+
+[limits]
+max_streams = 256
+opens_per_second = 32
+idle_minutes = 10

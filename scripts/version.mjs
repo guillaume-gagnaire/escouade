@@ -18,10 +18,12 @@ const files = (root) => ({
   // The program the store's image builds says the same version as the app's (ESC-328).
   cli: path.join(root, 'crates', 'escouade-plugin-cli', 'Cargo.toml'),
   team: path.join(root, 'crates', 'escouade-team-server', 'Cargo.toml'),
+  // The connector of a private network says the server's version: the server judges it by its own (ESC-599).
+  connector: path.join(root, 'crates', 'escouade-connector', 'Cargo.toml'),
 });
 
 /** The crates beside the app's that carry its version, when the folder has them. */
-const CRATES = ['cli', 'team'];
+const CRATES = ['cli', 'team', 'connector'];
 
 export function readVersions(root) {
   const f = files(root);
