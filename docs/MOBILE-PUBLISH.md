@@ -135,7 +135,7 @@ Essayé sans secret (2026-11-28, fastlane 2.242.0) : chaque lane s'arrête avant
   | `appstore-6.5` | 1 242 × 2 688 | App Store, iPhone 6,5 pouces |
 
   Six écrans par langue : le fil « À toi » (en sombre et en clair), une autorisation dépliée, un choix et ses rendus, la conversation, les agents, le Kanban. Les textes des agents viennent du faux `claude`, en français ; ceux de l'app suivent la langue.
-- **Les images de Google Play**, tirées de l'icône de l'app : l'icône en 512 × 512 et l'image de présentation en 1 024 × 500 (PNG sans transparence), en `fr-FR` et en `en-US`, dans `apps/mobile/store/graphics/play/`, par `node apps/mobile/scripts/play-graphics.mjs`. L'App Store prend l'icône dans le binaire.
+- **Les icônes et les images de Google Play**, tirées du logo d'Escouade (`website/public/logo.svg`) par `node apps/mobile/scripts/icons.mjs` : les icônes de l'app et ses écrans de lancement (Android et iOS), l'icône de Play en 512 × 512 et son image de présentation en 1 024 × 500 (PNG sans transparence), en `fr-FR` et en `en-US`, dans `apps/mobile/store/graphics/play/`. L'App Store prend l'icône dans le binaire.
 - Les lanes n'envoient ni texte ni capture : tu les colles dans les consoles (ou une lane `supply`/`deliver` viendra plus tard, sur ton accord).
 
 ## 6. La politique de confidentialité
