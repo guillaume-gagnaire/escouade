@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: the server can send its own audit log to the team’s security tool (a file, the standard output or syslog over TLS, CEF as an option), signed by a key drawn at `init`, with opaque ids and never any content or secret. Off by default: `escouade-team-server serve --audit-file`, `--audit-stdout` or `--audit-syslog`, the IP address set by `--audit-ip`.
 - Security: a paired phone now has only what it needs: your “Your turn” box, your answers, your conversations and the Kanban. The terminal, the files, the secrets, the plugins, the devices and the network stay with the computers; Space settings › Devices shows what each device is.
 - Pairing your phone is done with a 10-minute QR code, in Settings › Phone, in a server’s settings or with `escouade-server pair --qr`. Its key and token stay in the phone’s vault (Keystore, Keychain), which must have a screen lock; once revoked, it tells you, and you can remove a space from the phone.
 - Team server: a Claude Code agent passed to a teammate who takes it with Claude Code resumes its own session, its paths rewritten to their worktree; if their `claude` is older, a path of before is left or the first turn fails, it starts again from the handover file, as before (ESC-607).

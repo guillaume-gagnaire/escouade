@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use escouade_team_server::audit::{self, AuditConfig, IpMode};
 use escouade_team_server::config::{Config, DatabaseConfig, FilesConfig, S3Config};
 use escouade_team_server::db::{entry_digest, Kind, Page, Stream};
 use escouade_team_server::{transport, Server};
@@ -32,6 +33,17 @@ macro_rules! serve_options {
     --tls-key <PEM>           ESCOUADE_TEAM_TLS_KEY
     --trust-proxy             ESCOUADE_TEAM_TRUST_PROXY=1   the client is the last hop of X-Forwarded-For
     --metrics-listen <ADDR>   ESCOUADE_TEAM_METRICS_LISTEN  Prometheus on /metrics, on its own address [off]
+    --audit-file <PATH>       ESCOUADE_TEAM_AUDIT_FILE      the server's audit in JSON lines, <dir>/<name>.jsonl,
+                                                            turned by size (100 MiB) and by day [off]
+    --audit-stdout            ESCOUADE_TEAM_AUDIT_STDOUT=1  the audit in JSON lines on the standard output (the log
+                                                            then goes to the standard error) [off]
+    --audit-syslog <URL>      ESCOUADE_TEAM_AUDIT_SYSLOG    the audit to syslog, tls://host:port (RFC 5425) or
+                                                            tcp://host:port, never UDP [off]
+    --audit-syslog-ca <PEM>   ESCOUADE_TEAM_AUDIT_SYSLOG_CA the certificates syslog's TLS trusts [the system's]
+    --audit-cef               ESCOUADE_TEAM_AUDIT_CEF=1     the audit in CEF in syslog's message, not its JSON
+    --audit-ip <MODE>         ESCOUADE_TEAM_AUDIT_IP        full, truncated (/24, /48) or off [full]
+                              The audit is signed by the server's key (escouade-team-server audit-key) and waits on
+                              the disk (<data>/audit, 7 days or 1 GiB) while an output does not answer.
 "
     };
 }
@@ -60,6 +72,9 @@ USAGE:
                                            remove one entry that blocks a team or a project (a commit the
                                            devices cannot read past), after a confirmation; the base keeps the
                                            line of the audit (who, when, what, its digest), never its bytes
+    escouade-team-server audit-key [OPTIONS]
+                                           print the public half of the server's audit key, for the roster and
+                                           escouade-audit verify (drawn at init, kept in --data)
     escouade-team-server help [COMMAND]    this help, or a command's
 
 `escouade-team-server <COMMAND> --help` lists the options of one command.
@@ -146,6 +161,23 @@ OPTIONS (and their environment variables):
     tail_options!(),
 );
 
+const HELP_AUDIT_KEY: &str = concat!(
+    "\
+escouade-team-server audit-key: print the public half of the server's audit key (Ed25519), its emitter's id in the
+audit, and the file of keys that escouade-audit verify --keys reads. The key is drawn at init (or at the first serve of
+a server initialised before), kept in the data folder (audit-key, never to share), and signs the audit alone. An
+administrator writes its public half in the team's roster (« la clé d'audit du serveur »). It draws one when there is
+none.
+
+USAGE:
+    escouade-team-server audit-key [OPTIONS]
+
+OPTIONS (and their environment variables):
+    --data <DIR>              ESCOUADE_TEAM_DATA            the folder of the key [./data]
+",
+    tail_options!(),
+);
+
 struct Args {
     command: String,
     flags: Vec<(String, Option<String>)>,
@@ -170,7 +202,16 @@ const STORAGE: &[&str] = &[
     "--max-file",
     "--team-quota",
 ];
-const SERVE: &[&str] = &["--listen", "--tls-cert", "--tls-key", "--metrics-listen"];
+const SERVE: &[&str] = &[
+    "--listen",
+    "--tls-cert",
+    "--tls-key",
+    "--metrics-listen",
+    "--audit-file",
+    "--audit-syslog",
+    "--audit-syslog-ca",
+    "--audit-ip",
+];
 
 fn command_help(command: &str) -> Option<&'static str> {
     match command {
@@ -178,6 +219,7 @@ fn command_help(command: &str) -> Option<&'static str> {
         "serve" => Some(HELP_SERVE),
         "recovery-token" => Some(HELP_RECOVERY),
         "drop-entry" => Some(HELP_DROP),
+        "audit-key" => Some(HELP_AUDIT_KEY),
         _ => None,
     }
 }
@@ -189,8 +231,9 @@ fn command_options(command: &str) -> (Vec<&'static str>, &'static [&'static str]
     match command {
         "serve" => {
             valued.extend(SERVE);
-            switches = &["--trust-proxy"];
+            switches = &["--trust-proxy", "--audit-stdout", "--audit-cef"];
         }
+        "audit-key" => valued = vec!["--data"],
         "recovery-token" => valued.push("--team"),
         "drop-entry" => {
             valued.extend(["--team", "--stream", "--project", "--seq", "--by"]);
@@ -218,7 +261,7 @@ fn parse_from(argv: Vec<String>) -> Result<Action, String> {
                     Some(h) if it.next().is_none() => Ok(Action::Print(h.into())),
                     Some(_) => Err("help takes one command at most".into()),
                     None => Err(format!(
-                        "unknown command: {c} (init, serve, recovery-token, drop-entry)"
+                        "unknown command: {c} (init, serve, recovery-token, drop-entry, audit-key)"
                     )),
                 },
             }
@@ -227,7 +270,7 @@ fn parse_from(argv: Vec<String>) -> Result<Action, String> {
     }
     let Some(help) = command_help(&command) else {
         return Err(format!(
-            "unknown command: {command} (init, serve, recovery-token, drop-entry, help)"
+            "unknown command: {command} (init, serve, recovery-token, drop-entry, audit-key, help)"
         ));
     };
     let rest: Vec<String> = it.collect();
@@ -360,6 +403,50 @@ impl Args {
         config.trust_proxy = self.has("--trust-proxy", "ESCOUADE_TEAM_TRUST_PROXY");
         Ok(config)
     }
+
+    /// The data folder (`--data`).
+    fn data(&self) -> PathBuf {
+        PathBuf::from(
+            self.get("--data", "ESCOUADE_TEAM_DATA")
+                .unwrap_or_else(|| "data".into()),
+        )
+    }
+
+    /// Whether the audit goes to the standard output (`serve` then logs to the standard error).
+    fn audit_stdout(&self) -> bool {
+        self.command == "serve" && self.has("--audit-stdout", "ESCOUADE_TEAM_AUDIT_STDOUT")
+    }
+
+    /// The server's audit (`serve`), off without an output.
+    fn audit(&self) -> Result<AuditConfig, String> {
+        let config = AuditConfig {
+            file: self
+                .get("--audit-file", "ESCOUADE_TEAM_AUDIT_FILE")
+                .map(PathBuf::from),
+            stdout: self.audit_stdout(),
+            syslog: self.get("--audit-syslog", "ESCOUADE_TEAM_AUDIT_SYSLOG"),
+            syslog_ca: self
+                .get("--audit-syslog-ca", "ESCOUADE_TEAM_AUDIT_SYSLOG_CA")
+                .map(PathBuf::from),
+            cef: self.has("--audit-cef", "ESCOUADE_TEAM_AUDIT_CEF"),
+            ip: match self.get("--audit-ip", "ESCOUADE_TEAM_AUDIT_IP") {
+                Some(mode) => IpMode::parse(&mode)?,
+                None => IpMode::Full,
+            },
+            limits: None,
+        };
+        if let Some(url) = &config.syslog {
+            escouade_audit::syslog::Target::parse(url)
+                .map_err(|e| format!("--audit-syslog: {e}"))?;
+        }
+        if config.syslog.is_none() && (config.cef || config.syslog_ca.is_some()) {
+            return Err("--audit-cef and --audit-syslog-ca go with --audit-syslog".into());
+        }
+        if !config.is_on() && config.ip != IpMode::Full {
+            return Err("--audit-ip goes with an output of the audit (--audit-file, --audit-stdout, --audit-syslog)".into());
+        }
+        Ok(config)
+    }
 }
 
 async fn shutdown_signal() {
@@ -385,7 +472,17 @@ async fn run(args: Args) -> Result<(), String> {
                 .await
                 .map_err(|e| e.to_string())?;
             let token = server.new_team_token().await.map_err(|e| e.to_string())?;
+            let (key, drawn) =
+                audit::ensure_key(&args.data()).map_err(|e| format!("the audit key: {e}"))?;
             println!("The base is ready.");
+            println!();
+            println!(
+                "The server's audit key ({}, {}): {}",
+                if drawn { "drawn now" } else { "kept" },
+                audit::emitter_id(&key),
+                audit::public_key(&key)
+            );
+            println!("It signs the server's audit alone (serve --audit-*): an administrator writes it in the team's roster.");
             println!();
             println!(
                 "The token that creates the team (one use, for 24 hours; keep it secret until then):"
@@ -421,6 +518,19 @@ async fn run(args: Args) -> Result<(), String> {
             Ok(())
         }
         "drop-entry" => drop_entry(&args).await,
+        "audit-key" => {
+            let (key, drawn) =
+                audit::ensure_key(&args.data()).map_err(|e| format!("the audit key: {e}"))?;
+            if drawn {
+                eprintln!("No audit key was kept: one is drawn now.");
+            }
+            println!("emitter:    {}", audit::emitter_id(&key));
+            println!("public key: {}", audit::public_key(&key));
+            println!();
+            println!("The keys' file of escouade-audit verify --keys:");
+            println!("{}", audit::keys_json(&key));
+            Ok(())
+        }
         "serve" => {
             let listen: SocketAddr = args
                 .get("--listen", "ESCOUADE_TEAM_LISTEN")
@@ -438,9 +548,18 @@ async fn run(args: Args) -> Result<(), String> {
                 (None, None) => None,
                 _ => return Err("--tls-cert and --tls-key go together".into()),
             };
-            let server = Server::open(args.config()?)
-                .await
-                .map_err(|e| e.to_string())?;
+            let mut config = args.config()?;
+            config.audit = args.audit()?;
+            // A server initialised before AU-2 draws its audit key at its first start.
+            let (key, drawn) =
+                audit::ensure_key(&config.data).map_err(|e| format!("the audit key: {e}"))?;
+            if drawn {
+                tracing::info!(
+                    emitter = %audit::emitter_id(&key),
+                    "the server's audit key is drawn: escouade-team-server audit-key prints it"
+                );
+            }
+            let server = Server::open(config).await.map_err(|e| e.to_string())?;
             server.spawn_sweeper();
             if let Some(addr) = args.get("--metrics-listen", "ESCOUADE_TEAM_METRICS_LISTEN") {
                 let addr: SocketAddr = addr
@@ -459,10 +578,13 @@ async fn run(args: Args) -> Result<(), String> {
                 .await
                 .map_err(|e| format!("{listen}: {e}"))?;
             tracing::info!(addr = %listen, tls = tls.is_some(), "serving");
-            server
+            let served = server
                 .serve(listener, tls, shutdown_signal())
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string());
+            // What waits goes before the end (the buffer keeps what an output did not take).
+            server.app().audit.stop();
+            served
         }
         other => Err(format!("unknown command: {other}")),
     }
@@ -664,13 +786,23 @@ async fn list_dropped(args: &Args, team: escouade_team_server::util::Id) -> Resu
 }
 
 fn main() -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .with_target(false)
-        .init();
-    let args = match parse() {
+    let parsed = parse();
+    let filter =
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    // The audit on the standard output keeps it to itself: the log goes to the standard error then.
+    if matches!(&parsed, Ok(Action::Run(a)) if a.audit_stdout()) {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_target(false)
+            .with_writer(std::io::stderr)
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_target(false)
+            .init();
+    }
+    let args = match parsed {
         Ok(Action::Print(text)) => {
             print!("{text}");
             return ExitCode::SUCCESS;

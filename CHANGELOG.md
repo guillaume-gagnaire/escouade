@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : le serveur peut envoyer son propre journal d’audit à l’outil de sécurité de l’équipe (un fichier, la sortie standard ou syslog sur TLS, CEF en option), signé par une clé tirée à `init`, avec des ids opaques et jamais un contenu ni un secret. Éteint par défaut : `escouade-team-server serve --audit-file`, `--audit-stdout` ou `--audit-syslog`, l’adresse IP réglable par `--audit-ip`.
 - Sécurité : un téléphone appairé n’a plus que ce qu’il lui faut : ta boîte « À toi », tes réponses, tes conversations et le Kanban. Le terminal, les fichiers, les secrets, les plugins, les appareils et le réseau restent aux postes ; Réglages de l’espace › Appareils montre ce qu’est chaque appareil.
 - Appairer ton téléphone se fait par un QR code de 10 minutes, dans Réglages › Téléphone, dans les réglages d’un serveur ou par `escouade-server pair --qr`. Sa clé et son jeton restent dans le coffre du téléphone (Keystore, Trousseau), qui doit avoir un verrou d’écran ; révoqué, il te le dit, et tu peux retirer un espace depuis le téléphone.
 - Serveur d’équipe : un agent de Claude Code passé à un collègue qui le prend avec Claude Code reprend sa propre session, chemins réécrits vers son worktree ; si sa version de `claude` est plus ancienne, s'il reste un chemin d'avant ou si le premier tour échoue, il repart de la passation, comme avant (ESC-607).

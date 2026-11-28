@@ -80,7 +80,14 @@ pub struct Problem {
     pub detail: Option<ciborium::Value>,
     #[serde(skip)]
     pub retry_after: Option<u64>,
+    /// The most bytes a body too large could have had (413): told to the audit by the answer's extensions.
+    #[serde(skip)]
+    pub max: Option<u64>,
 }
+
+/// The most bytes of a body refused for its size, in the extensions of its answer.
+#[derive(Clone, Copy, Debug)]
+pub struct TooLarge(pub u64);
 
 impl Problem {
     pub fn new(status: StatusCode, error: &'static str, message: impl Into<String>) -> Self {
@@ -90,6 +97,7 @@ impl Problem {
             message: message.into(),
             detail: None,
             retry_after: None,
+            max: None,
         }
     }
 
@@ -110,11 +118,14 @@ impl Problem {
     }
 
     pub fn too_large(max: usize) -> Self {
-        Self::new(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            "too_large",
-            format!("the body is larger than {max} bytes"),
-        )
+        Problem {
+            max: Some(max as u64),
+            ..Self::new(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "too_large",
+                format!("the body is larger than {max} bytes"),
+            )
+        }
     }
 
     pub fn internal() -> Self {
@@ -138,6 +149,9 @@ impl IntoResponse for Problem {
             response
                 .headers_mut()
                 .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+        }
+        if let Some(max) = self.max {
+            response.extensions_mut().insert(TooLarge(max));
         }
         response
     }

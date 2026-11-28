@@ -1,6 +1,6 @@
 # escouade-audit : l'audit de l'équipe vers un SIEM (AU-1)
 
-Ticket ESC-608 (AU-1) de `docs/TEAM-AUDIT.md` §8, d'après les choix A1-C, A3-B, A4-A, A5-B et A8-A (tranchés le 2026-11-21, demande a-23). La crate porte **le modèle** : ce qu'est un événement d'audit, ce qui n'en sort jamais, comment il s'écrit (JSON lines, syslog, CEF), comment il attend quand la sortie ne répond pas, comment il est signé et chaîné, et ce que vérifie `escouade-audit verify`. **Rien n'est branché** : le serveur émet par elle avec AU-2 (ESC-609), les postes avec AU-3 et AU-4 (ESC-610, ESC-612), la machine d'audit avec AU-5 (ESC-614).
+Ticket ESC-608 (AU-1) de `docs/TEAM-AUDIT.md` §8, d'après les choix A1-C, A3-B, A4-A, A5-B et A8-A (tranchés le 2026-11-21, demande a-23). La crate porte **le modèle** : ce qu'est un événement d'audit, ce qui n'en sort jamais, comment il s'écrit (JSON lines, syslog, CEF), comment il attend quand la sortie ne répond pas, comment il est signé et chaîné, et ce que vérifie `escouade-audit verify`. **Le serveur émet par elle** depuis AU-2 (ESC-609, `crates/escouade-team-server/src/audit.rs`) ; les postes avec AU-3 et AU-4 (ESC-610, ESC-612), la machine d'audit avec AU-5 (ESC-614).
 
 Elle ne dépend pas du cœur de l'app (ni Tauri ni rien de `src-tauri`) : serde, Ed25519 (`ed25519-dalek`), SHA-256, rustls pour syslog sur TLS. Le cœur, lui, en prend une chose : les motifs de jetons (`never::secret_kind`), que la mémoire d'équipe applique aussi (`src-tauri/src/memory.rs`, `secret_in`) ; il n'y a qu'une liste.
 
@@ -40,7 +40,7 @@ La liste est fermée et dans `src/event.rs` (macro `events!`) : un nom stable `f
 | Famille | Événements |
 | --- | --- |
 | Membres, appareils, rôles | `team.created`, `member.added`, `member.removed`, `device.added`, `device.enrolled`, `device.revoked`, `role.changed`, `epoch.opened`, `invitation.created`, `invitation.used`, `invitation.reused`, `recovery.used`, `escrow.set`, `escrow.removed`, `team.fork`, `team.rollback` |
-| Accès au serveur | `session.opened`, `session.refused`, `rate.limited`, `client.too_old`, `project.access.changed`, `stream.written` |
+| Accès au serveur | `session.opened`, `session.refused`, `rate.limited`, `client.too_old`, `request.too_large`, `project.access.changed`, `stream.written` |
 | Réglages imposés, accords des postes | `settings.changed`, `settings.signers.changed`, `settings.sensitive.answered`, `command.approved`, `command.revoked`, `policy.applied`, `lock.refused` |
 | Coupe-circuit (TS-15) | `killswitch.raised`, `killswitch.lifted`, `killswitch.applied` |
 | Store privé et plugins (TS-14) | `store.namespace.declared`, `store.plugin.published`, `store.plugin.revoked`, `plugin.installed`, `plugin.removed`, `plugin.updated`, `plugin.refused` |
@@ -48,6 +48,8 @@ La liste est fermée et dans `src/event.rs` (macro `events!`) : un nom stable `f
 | L'audit lui-même | `audit.dropped`, `audit.checkpoint` |
 
 Quatre ne sont pas dans les tables du §1 : `device.enrolled` et `stream.written` sont les mots de S1 que le §3.1 décrit (l'inscription et sa sorte de jeton ; l'entrée écrite à un flux, dont l'ancre sert au recoupement du §5.3) ; `audit.dropped` est celui du tampon (§4.4) ; `audit.checkpoint` est le point de contrôle de tête (§5.2, lien 4), dont AU-5 écrit les occurrences. `permission.answered` est de sévérité 2, et 4 quand la réponse est « Toujours autoriser ».
+
+Venus avec AU-2 (ESC-609) : `request.too_large` (un corps refusé pour sa taille, sévérité 2, ajouté au §1.2) ; la cible de `role.changed` prend un membre (S2) ou un appareil (S1, qui ne connaît pas les membres) ; `Emitter::seal_for` scelle pour une autre équipe que celle de l'émetteur, pour un serveur qui en porte plusieurs sur une seule chaîne.
 
 Ce qui n'est pas dans la liste, volontairement : chaque tour d'agent, chaque lecture, chaque opération de synchronisation, les renouvellements de sessions et de baux.
 

@@ -1,9 +1,9 @@
 ---
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md","Revue de sécurité de la 2.3 (ESC-625), SR2-05, SR2-06, SR2-07 : le serveur d'équipe borné","Revue de sécurité de la 2.3 (ESC-625), SR2-04, SR2-10 à SR2-13 : quotas, journaux, jeton d'init, révoqués, dernier administrateur"]
-tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635","ESC-639","ESC-638","ESC-642"]
-decisions: [167,168,173,178,277,288,286,314,330,332,340,344]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md","crates/escouade-team-server/Dockerfile","crates/escouade-team-server/deploy/coolify.yml",".github/workflows/release.yml","website/content/docs/fr/team/install.md","Revue de sécurité de la 2.3 (ESC-625), SR2-05, SR2-06, SR2-07 : le serveur d'équipe borné","Revue de sécurité de la 2.3 (ESC-625), SR2-04, SR2-10 à SR2-13 : quotas, journaux, jeton d'init, révoqués, dernier administrateur","docs/TEAM-AUDIT.md §3.1, §4.4 (AU-2, ESC-609 : les options du serveur et sa clé d'audit)"]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466","ESC-586","ESC-637","ESC-633","ESC-636","ESC-635","ESC-639","ESC-638","ESC-642","ESC-609"]
+decisions: [167,168,173,178,277,288,286,314,330,332,340,344,360]
 compared: null
 ---
 
@@ -97,3 +97,13 @@ Le serveur garde le premier commit d'une époque sans pouvoir le lire, puis refu
 - **Les appareils voient le trou.** Le serveur liste à chaque appareil de l'équipe les entrées retirées (`GET /v1/dropped`) : le flux (celles d'un projet aux seuls appareils qui y ont accès), le numéro, le genre et l'époque, l'appareil qui l'avait écrite et quand, l'empreinte, l'heure du retrait ; jamais qui l'a retirée. La dernière entrée qu'un appareil a lue, retirée, n'est pas un retour en arrière si son empreinte est celle qu'il en a gardée : il lit la suite. Une entrée cachée sans être listée reste un retour en arrière. Un appareil qui avait noté le commit retiré sans l'avoir pris (avant d'entrer) l'oublie, pour que le commit qui reprend l'époque ne soit pas une fourche.
 - **Les administrateurs sont prévenus** : leur appareil lit la liste au plus toutes les cinq minutes, aussitôt après un trou vu ; la carte de l'équipe montre « Entrées retirées par l'opérateur du serveur » pendant 30 jours (le flux, le numéro, commit ou message, qui l'avait écrite, quand elle a été retirée). Les membres ne le voient pas.
 - **Ce qu'elle ne permet pas** : lire une entrée ou la rendre, ni en retirer une en silence. Retirer autre chose que l'entrée qui bloque casse ce qui la suit : un commit lu par des appareils, remplacé, est une fourche pour eux ; une opération valide d'un projet fait refuser les suivantes de son appareil ; une entrée d'un administrateur (liste des projets, réglages imposés, store privé) disparaît pour tous.
+
+## Son audit vers un SIEM (AU-2)
+
+Le serveur émet seul son journal d'audit (la source « serveur » de « L'audit vers un SIEM »). **Éteint par défaut** ; l'équipe qui l'héberge l'allume par une option de `escouade-team-server serve` :
+
+- `--audit-file <chemin>` : JSON lines dans un fichier tourné à 100 Mio et chaque jour ; `--audit-stdout` : sur la sortie standard (son journal passe alors sur la sortie d'erreur) ; `--audit-syslog tls://hôte:port` : syslog RFC 5424 sur TLS (ou `tcp://`, jamais UDP), avec `--audit-syslog-ca` pour les certificats auxquels se fier et `--audit-cef` pour un message en CEF. Les sorties se cumulent ; chacune a sa variable d'environnement.
+- `--audit-ip=full|truncated|off` : l'adresse IP en entier (par défaut), coupée à son /24 ou son /48, ou retirée.
+- **Sa clé d'audit** : Ed25519, tirée à `init` (et au premier démarrage d'un serveur initialisé avant), gardée dans son dossier de données (`--data`, même avec PostgreSQL et S3), qui ne sert qu'à signer l'audit. `init` affiche sa clé publique ; `escouade-team-server audit-key` affiche l'id de l'émetteur (`server-` et 16 chiffres hexadécimaux), sa clé publique et le fichier de clés que lit `escouade-audit verify`. Un administrateur l'inscrit au journal des membres (AU-5).
+- **Un tampon par sortie** dans le dossier de données : une sortie qui ne répond pas est réessayée, ses événements attendent 7 jours ou 1 Gio, puis `audit.dropped`. À l'arrêt, ce qui attend part ; au redémarrage, la chaîne reprend sans trou ni doublon. Une requête n'attend jamais l'audit.
+- Ce qu'il émet, et comment, est dans « L'audit vers un SIEM », *Ce qu'émet le serveur seul*.

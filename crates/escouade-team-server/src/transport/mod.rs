@@ -15,4 +15,4 @@ pub mod handshake;
 pub mod listen;
 pub mod rate;
 
-pub use cbor::{Cbor, Problem};
+pub use cbor::{Cbor, Problem, TooLarge};

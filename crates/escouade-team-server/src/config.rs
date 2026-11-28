@@ -134,6 +134,11 @@ pub struct Config {
     pub rates: Rates,
     /// Behind a reverse proxy (Caddy, nginx): the client's address is the last of `X-Forwarded-For`.
     pub trust_proxy: bool,
+    /// The data folder: the base and the files by default, and always the server's audit key and the audit's buffers
+    /// (AU-2).
+    pub data: PathBuf,
+    /// The server's own audit (AU-2), off by default.
+    pub audit: crate::audit::AuditConfig,
 }
 
 impl Config {
@@ -143,9 +148,11 @@ impl Config {
         Config {
             database: DatabaseConfig::Sqlite(folder.join("team.db")),
             files: FilesConfig::Disk(folder.join("files")),
+            data: folder.clone(),
             limits: Limits::default(),
             rates: Rates::default(),
             trust_proxy: false,
+            audit: Default::default(),
         }
     }
 }

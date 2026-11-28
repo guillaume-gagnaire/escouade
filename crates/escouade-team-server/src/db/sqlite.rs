@@ -515,7 +515,7 @@ impl Store for Sqlite {
         public_key: [u8; 32],
         now: i64,
         quotas: Quotas,
-    ) -> Result<Device> {
+    ) -> Result<(Device, TokenKind)> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let token: Option<(i64, Option<Vec<u8>>, Option<i64>, Option<i64>)> = tx
@@ -531,7 +531,7 @@ impl Store for Sqlite {
             if used_at.is_some() {
                 tx.execute("UPDATE tokens SET reused_at = ?2 WHERE hash = ?1", params![hash.as_slice(), now])?;
                 tx.commit()?;
-                return Err(StoreError::TokenUsed);
+                return Err(StoreError::TokenUsed(team.as_deref().and_then(|t| t.try_into().ok())));
             }
             if expires_at.is_some_and(|e| e <= now) {
                 tx.execute("DELETE FROM tokens WHERE hash = ?1", [hash.as_slice()])?;
@@ -571,14 +571,14 @@ impl Store for Sqlite {
             // Kept used, not deleted: a second use is told apart from an unknown token.
             tx.execute("UPDATE tokens SET used_at = ?2 WHERE hash = ?1", params![hash.as_slice(), now])?;
             tx.commit()?;
-            Ok(Device {
+            Ok((Device {
                 id,
                 team,
                 public_key,
                 role,
                 created_at: now,
                 revoked_at: None,
-            })
+            }, TokenKind::from_code(kind)))
         })
         .await
     }
@@ -719,7 +719,7 @@ impl Store for Sqlite {
         entry: NewEntry,
         quotas: Quotas,
         page: Page,
-    ) -> Result<Entry> {
+    ) -> Result<(Entry, u64)> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let (seq, commits, stored, reserved): (i64, i64, i64, bool) = tx.query_row(
@@ -731,6 +731,7 @@ impl Store for Sqlite {
             if (stored + size) as u64 > quotas.team_bytes {
                 return Err(StoreError::Quota);
             }
+            let stands: u64;
             let out = match stream {
                 Stream::Team => {
                     let is_commit = entry.kind == Kind::Commit;
@@ -771,6 +772,7 @@ impl Store for Sqlite {
                             });
                         }
                     }
+                    stands = commits as u64;
                     let seq = seq + 1;
                     tx.execute(
                         "INSERT INTO team_entries (team_id, seq, kind, epoch, device_id, at, payload)
@@ -819,6 +821,7 @@ impl Store for Sqlite {
                         put_claim(&tx, &team, &project, &moved)?;
                     }
                     let project_commits = current.map_or(0, |c| c.1);
+                    stands = project_commits as u64;
                     let reserved = current.is_some_and(|c| c.2);
                     if entry.kind == Kind::Void {
                         let asked = entry.epoch.unwrap_or(u64::MAX);
@@ -903,7 +906,7 @@ impl Store for Sqlite {
                 }
             };
             tx.commit()?;
-            Ok(out)
+            Ok(with_epoch(out, stands))
         })
         .await
     }
@@ -1531,7 +1534,7 @@ impl Store for Sqlite {
         now: i64,
         lease: i64,
         quotas: Quotas,
-    ) -> Result<Claim> {
+    ) -> Result<(Claim, Option<Claim>)> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let current = claim_of(&tx, &team, &project, &ticket)?;
@@ -1557,10 +1560,11 @@ impl Store for Sqlite {
                 ClaimAsk::Hand { to, .. } => holder_ok(&tx, &team, &project, Some(to))?,
                 _ => true,
             };
+            let before = current.clone();
             let claim = decide_with(current, ticket, device, ask, now, lease, ok, to_ok)?;
             put_claim(&tx, &team, &project, &claim)?;
             tx.commit()?;
-            Ok(claim)
+            Ok((claim, before))
         })
         .await
     }
