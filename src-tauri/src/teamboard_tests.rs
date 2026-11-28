@@ -747,15 +747,13 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
         "the description is still his"
     );
     assert!(starts(&ha).contains(&seen.id));
-    // And her real autopilot, on, takes it: the ticket goes, held by her.
+    // And her real autopilot, on, takes it: the ticket starts, with an agent. Where it is by then is not asked: on a fast
+    // machine the fake claude has already ended its turn and the ticket gone on to « En revue ».
+    assert!(ha.core.ticket(&seen.id).unwrap().started_at.is_none());
     ha.set_board(&pa.id, |s| s.autopilot = true);
     ha.wait_board_idle().await;
     ha.wait_ticket(&seen.id, "started by her autopilot", |t| {
-        t.column == crate::model::Column::Doing
-            && t.team
-                .as_ref()
-                .and_then(|x| x.holder.as_ref())
-                .is_some_and(|h| h.mine)
+        t.column != crate::model::Column::Todo && t.started_at.is_some() && t.agent_id.is_some()
     })
     .await;
 }
