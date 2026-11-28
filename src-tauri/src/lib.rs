@@ -348,6 +348,8 @@ pub mod server;
 mod server_moves_tests;
 #[cfg(test)]
 mod server_tests;
+#[cfg(test)]
+mod server_update_tests;
 mod serverfolders;
 // « Se connecter à un serveur » (ESC-537): the client of the server mode, its SSH tunnel and its pairing.
 mod parallel;

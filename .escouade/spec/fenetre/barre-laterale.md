@@ -3,7 +3,7 @@ title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26","https://github.com/guillaume-gagnaire/escouade/pull/44","src-tauri/src/deleteask.rs","src/components/modals/DeleteAgentModal.svelte"]
 tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-448","ESC-511","ESC-522","ESC-544","ESC-560","ESC-657"]
-decisions: [129,133,147,211,367,254,294,310]
+decisions: [129,133,147,211,368,254,294,310]
 compared: null
 ---
 

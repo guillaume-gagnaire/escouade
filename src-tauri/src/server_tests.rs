@@ -975,6 +975,7 @@ fn status_of(pid: u32, busy: Option<&str>, at: i64) -> status::Status {
         busy: busy.map(String::from),
         turns: 0,
         supervisor: Some(status::Supervisor::Systemd),
+        update: None,
     }
 }
 

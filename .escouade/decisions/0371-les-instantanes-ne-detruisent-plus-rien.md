@@ -1,5 +1,5 @@
 ---
-number: 370
+number: 371
 id: "les-instantanes-ne-detruisent-plus-rien"
 title: "Les instantanés ne détruisent plus rien : rétention de 30 jours, instantané illisible écarté, retrait par un administrateur"
 date: "2026-11-22"

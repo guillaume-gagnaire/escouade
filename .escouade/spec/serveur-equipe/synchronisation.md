@@ -3,7 +3,7 @@ title: "La synchronisation des projets"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
 tickets: ["ESC-466","ESC-479","ESC-482","ESC-519","ESC-637"]
-decisions: [168,173,178,199,370]
+decisions: [168,173,178,199,371]
 compared: null
 ---
 

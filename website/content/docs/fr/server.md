@@ -125,10 +125,22 @@ Une sauvegarde contient les connexions des comptes et les secrets : garde-la chi
 
 ## Mettre à jour
 
-- **En Docker**, la mise à jour est une nouvelle image : `docker compose pull && docker compose up -d` (ou `docker pull`, puis le conteneur recréé sur le même volume). Les agents reprennent leurs sessions. `escouade-server update` refuse de tourner dans l’image.
-- **Avec systemd** : `escouade-server update`. Il lit la dernière version (`--to X.Y.Z` pour une version précise, `--beta` pour la plus haute du canal bêta et du canal stable, `--check` pour seulement la dire), télécharge l’archive, vérifie sa signature avec la clé des mises à jour de l’app et que cette signature nomme bien cette archive, puis pose chaque fichier à la place de l’ancien, gardé en `.old`. Il attend ensuite que le serveur soit au repos (aucun tour en cours, aucune question en attente, aucune tâche de fond, aucun terminal utilisé dans les 5 dernières minutes) ; dans un terminal, il propose de redémarrer tout de suite en coupant les tours, et `--now` le fait sans attendre. systemd relance le serveur sur la nouvelle version. Il ne revient jamais à une version plus ancienne que la sienne, sauf nommée : `--to X.Y.Z --downgrade`.
+Le serveur se met à jour **tout seul**. Peu après son démarrage, puis toutes les 15 minutes, il cherche une version de son canal : stable, ou bêta s’il a été installé en bêta (`install.sh --version X.Y.Z-beta.N`) ou mis en bêta. Il la télécharge, vérifie sa signature comme `escouade-server update`, la pose, puis ne redémarre qu’**au repos** : aucun tour en cours, aucune question en attente, aucune tâche de fond, aucun lancement, aucun terminal utilisé dans les 5 dernières minutes. systemd le relance sur la nouvelle version. Il ne prend jamais une version plus ancienne que la sienne, et une archive dont la signature ne tient pas ne change rien. Son journal dit chaque version trouvée, vérifiée, posée et redémarrée, et chaque refus avec sa raison.
 
-Quand la version de ton poste et celle du serveur diffèrent, le serveur refuse la connexion et dit lequel mettre à jour ; pour le serveur, il donne la commande qui le met à la version du poste (`escouade-server update --to <version>`, ou la nouvelle image en Docker), que le client te propose.
+Pour l’éteindre ou changer de canal, sur le serveur :
+
+```sh
+escouade-server config                      # ce qui est réglé
+escouade-server config automatic off        # il dit la version trouvée, sans rien poser
+escouade-server config channel beta         # ou stable
+```
+
+Depuis ton poste, sur l’espace du serveur, **Réglages › Général** montre sa version, celle qu’il a trouvée et ces deux réglages ; « Mettre à jour le serveur » la lui demande. Une stratégie de ton entreprise ou de ton équipe peut imposer l’un ou l’autre (`updates.automatic`, `updates.channel`), comme pour l’app. Le serveur ne pose rien lui-même sans systemd : il dit la version et la commande à lancer.
+
+- **En Docker**, la mise à jour est une nouvelle image : `docker compose pull && docker compose up -d` (ou `docker pull`, puis le conteneur recréé sur le même volume). Les agents reprennent leurs sessions. `escouade-server update` refuse de tourner dans l’image, et le serveur n’y remplace jamais rien : il dit qu’une nouvelle image existe, dans son journal et dans tes Réglages, avec la commande `docker pull`.
+- **Avec systemd, à la main** : `escouade-server update`. Il lit la dernière version (`--to X.Y.Z` pour une version précise, `--beta` pour la plus haute du canal bêta et du canal stable, `--check` pour seulement la dire), télécharge l’archive, vérifie sa signature avec la clé des mises à jour de l’app et que cette signature nomme bien cette archive, puis pose chaque fichier à la place de l’ancien, gardé en `.old`. Il attend ensuite que le serveur soit au repos (aucun tour en cours, aucune question en attente, aucune tâche de fond, aucun terminal utilisé dans les 5 dernières minutes) ; dans un terminal, il propose de redémarrer tout de suite en coupant les tours, et `--now` le fait sans attendre. systemd relance le serveur sur la nouvelle version. Il ne revient jamais à une version plus ancienne que la sienne, sauf nommée : `--to X.Y.Z --downgrade`.
+
+Quand la version de ton poste et celle du serveur diffèrent, le serveur refuse la connexion et dit lequel mettre à jour. Quand c’est le serveur, l’espace dit les deux versions et propose **« Mettre à jour le serveur »** : après ta confirmation, ton poste le lui demande avec son jeton (un téléphone ne le peut pas), et le serveur se met à ta version puis redémarre au repos ; ton poste s’y reconnecte. En Docker, l’écran donne la commande `docker pull` à recopier sur le serveur.
 
 ## Les limites conseillées
 
@@ -144,6 +156,7 @@ Mesuré sur l’image, sur un poste x64 : le serveur au repos, ses plugins charg
 | `escouade-server devices revoke <id>` | Révoque un appareil |
 | `escouade-server health` | Code 0 si le serveur tourne et répond, 1 sinon (le `HEALTHCHECK` de l’image) |
 | `escouade-server update` | Met le serveur à la dernière version signée (`--to`, `--beta`, `--now`, `--check`) |
+| `escouade-server config` | La mise à jour automatique et son canal (`automatic on` ou `off`, `channel stable` ou `beta`) |
 
 Chaque option a sa variable d’environnement ; l’option passe devant la variable.
 

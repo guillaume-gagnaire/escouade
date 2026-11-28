@@ -139,7 +139,7 @@ describe('the dialog « Se connecter à un serveur »', () => {
     [
       'another version',
       { kind: 'version', server: '2.3.0', client: '2.3.2', update: 'server' },
-      [/autre version d’Escouade/, /Ce poste a Escouade 2\.3\.2, le serveur 2\.3\.0/, /installe escouade-server 2\.3\.2/],
+      [/autre version d’Escouade/, /Ce poste a Escouade 2\.3\.2, le serveur 2\.3\.0/, /mettre à jour vers 2\.3\.2/],
     ],
     [
       'the policy',
@@ -297,7 +297,7 @@ describe('the states of a server, said', () => {
     connection.refusal = { code: 'version', error: '', serverVersion: '2.3.0', update: 'server', clientVersion: '2.3.2' };
     render(ServerScreen);
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Travail a une autre version d’Escouade');
-    expect(screen.getByRole('alertdialog')).toHaveTextContent('installe escouade-server 2.3.2');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('mettre à jour vers 2.3.2');
   });
 });
 

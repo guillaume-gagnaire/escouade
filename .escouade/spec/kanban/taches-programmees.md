@@ -3,7 +3,7 @@ title: "Tâches programmées"
 subject: "kanban"
 sources: ["docs/OVERSEER.md","design/overseer/programmees-barre.png","design/overseer/programmees-formulaire.png","src-tauri/src/scheduled.rs","src-tauri/src/mcp/scheduled.rs","src/components/ScheduledSection.svelte","src-tauri/src/inboxviews.rs","Revue de sécurité de la 2.3 (ESC-627), constat SR4-04 (rapport privé)"]
 tickets: ["ESC-448","ESC-647"]
-decisions: [362,372]
+decisions: [363,373]
 compared: null
 ---
 

@@ -132,6 +132,11 @@ pub enum ToServer {
     /// token, which the server revokes (its own name said as who revoked it); answered by [`ToClient::Unpaired`] or
     /// [`ToClient::Refused`] (`token`), then closed.
     Unpair { token: String },
+    /// In place of the handshake, a computer's device refused for its version asks the server to put itself at
+    /// `version` (ESC-702, « Mettre à jour le serveur »): the same update as the automatic one, signed, never older than
+    /// the server, restarted at rest. A device of the scope `computer` alone (a phone is refused with `scope`);
+    /// answered by [`ToClient::UpdateAsked`] or [`ToClient::Refused`] (`token`, `scope`, `update`), then closed.
+    UpdateServer { token: String, version: String },
     /// After the handshake, a measure of the way to the server and back (ESC-537: the latency the status bar says):
     /// answered at once by [`ToClient::Pong`] with the same `id`.
     Ping { id: u64 },
@@ -192,6 +197,8 @@ pub enum ToClient {
     },
     /// The device forgot the server (ESC-537): its token is revoked. The connection then closes.
     Unpaired {},
+    /// The server's update asked (ESC-702): it puts `to` in place, then restarts once at rest. The connection closes.
+    UpdateAsked { to: String },
     /// The answer to [`ToServer::Ping`].
     Pong { id: u64 },
     /// The pairing passed (ESC-514): the new device and its token, which the client keeps and gives at each handshake

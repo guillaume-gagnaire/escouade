@@ -13,8 +13,12 @@
 # writes the unit of the service and starts it. Run again, it changes only what differs (another version, another
 # unit); the data is never touched but by --purge.
 #
+# The server then updates itself (ESC-702): it looks for a version of its channel shortly after it starts and every 15
+# minutes, checks its signature as below, puts it in place and restarts at rest only, under systemd. A beta installed
+# (--version X.Y.Z-beta.N) puts it on the beta channel. `escouade-server config` turns it off or changes the channel.
+#
 # Options:
-#   --version X.Y.Z   this version (else the latest release's)
+#   --version X.Y.Z   this version (else the latest release's); a beta (X.Y.Z-beta.N) puts the server on the beta channel
 #   --system          a service of the system (as root), run by --user (default: escouade)
 #   --user NAME       with --system: the user that runs it
 #   --no-start        installs without starting the service
@@ -266,7 +270,7 @@ ExecStart=$dir/escouade-server run
 # The clean stop: SIGTERM to the server alone, which stops its agents itself (each resumes its session).
 KillMode=mixed
 TimeoutStopSec=90
-# Started again after a crash, and after \`escouade-server update\` stops it on its new version.
+# Started again after a crash, and after \`escouade-server update\` or its automatic update stops it on its new version.
 Restart=always
 RestartSec=3
 UMask=0077
@@ -291,7 +295,7 @@ ExecStart=$dir/escouade-server run
 # The clean stop: SIGTERM to the server alone, which stops its agents itself (each resumes its session).
 KillMode=mixed
 TimeoutStopSec=90
-# Started again after a crash, and after \`escouade-server update\` stops it on its new version.
+# Started again after a crash, and after \`escouade-server update\` or its automatic update stops it on its new version.
 Restart=always
 RestartSec=3
 UMask=0077
@@ -335,6 +339,15 @@ else
   say "Not started (--no-start): $([ "$system" = 1 ] && printf 'systemctl' || printf 'systemctl --user') enable --now $SERVICE"
 fi
 
+# A beta installed (after the start: the new program answers `config`): the server's channel is the beta's, kept in its settings (ESC-702), until `config channel stable`.
+case $version in
+  *-*)
+    as_user "$dir/escouade-server" config channel beta --data-dir "$data" >/dev/null ||
+      die "the beta channel could not be kept in $data"
+    say "Channel: beta (escouade-server config channel stable to go back)."
+    ;;
+esac
+
 if [ "$system" = 0 ]; then
   case ":$PATH:" in
     *":$(dirname "$bin_link"):"*) ;;
@@ -348,7 +361,8 @@ Next:
   2. On your computer, a tunnel to the server's API (it listens on 127.0.0.1 of the server only):
        ssh -N -L 46480:127.0.0.1:46480 <this server>
      then, in Escouade, « Se connecter à un serveur » (Connect to a server), and the code.
-  3. Updates: escouade-server update (it checks the signature and waits for the agents' turns).
+  3. Updates: automatic (the signature checked, the restart at rest); escouade-server config turns them off or
+     changes the channel, escouade-server update runs one now.
 
 The accounts the agents use (Claude Code and the others) are signed in on this server and their sign-ins live here,
 in $home: the security of this server (its disk, its SSH access, its backups) becomes theirs.

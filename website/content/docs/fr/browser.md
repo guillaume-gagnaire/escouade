@@ -1,6 +1,8 @@
 # Les navigateurs
 
-Escouade a des navigateurs comme il a des terminaux : une ligne par onglet dans la section « Navigateurs » de la barre latérale. Tu y ouvres l’app que tu développes à côté des agents qui la codent, avec ses devtools et trois largeurs, par « + » ou de lui-même pour un test ou une commande de lancement.
+Escouade a des navigateurs, comme il a des terminaux : la section « Navigateurs » de la barre latérale, sous « Terminaux », a une ligne par onglet. Tu y ouvres l’app que tu développes à côté des agents qui la codent, avec ses outils de développement et trois largeurs, sans changer de fenêtre.
+
+Un navigateur s’ouvre seul, par son « + », ou de lui-même quand le test d’un agent ou une commande de lancement est prêt.
 
 ![Un navigateur en plein écran : la barre (adresse, largeurs, Devtools) et la page de l’app développée ; à gauche, la section « Navigateurs » et ses trois lignes](/images/browser.jpg)
 

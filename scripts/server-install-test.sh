@@ -5,9 +5,12 @@
 # - a service of the system (--system): the program checked and put in place, the user `escouade` made, the service
 #   up and healthy; run again, nothing changes (the same process); an archive whose signature does not hold changes
 #   nothing; `escouade-server update` checks the next archive, stops the server at rest and systemd starts it again;
+#   the automatic update (ESC-702): off, the version is said and nothing changes; on, the server finds a signed archive of
+#   its channel by itself, checks it, puts it in place, stops at rest and systemd starts it again (the archive of test
+#   holds the same program: the restart then says that the version did not take, and it is not tried again);
 #   --uninstall keeps the data, --uninstall --purge removes it;
 # - the same with openssl alone (no minisign);
-# - a service of a user (systemctl --user, linger), installed and removed.
+# - a service of a user (systemctl --user, linger), installed and removed; a beta installed puts it on the beta channel.
 #
 #   sudo sh scripts/server-install-test.sh <escouade-server, a build of development>
 #
@@ -106,6 +109,63 @@ runuser -u escouade -- env HOME=/var/lib/escouade ESCOUADE_SERVER_UPDATE_URL="$u
 grep -q 'signature refused' "$work/out" || { cat "$work/out"; fail "update does not say the signature"; }
 echo "escouade-server update: signature checked, restarted by systemd; a changed archive refused"
 
+# The automatic update (ESC-702): the service given the fake release and a look every 2 s (a build of development only).
+release 9.9.7
+mkdir -p /etc/systemd/system/escouade-server.service.d
+cat >/etc/systemd/system/escouade-server.service.d/test.conf <<EOF
+[Service]
+Environment=ESCOUADE_SERVER_UPDATE_URL=$url
+Environment=ESCOUADE_SERVER_UPDATE_PUBKEY=$pubkey
+Environment=ESCOUADE_SERVER_UPDATE_EVERY=2
+EOF
+systemctl daemon-reload
+systemctl restart escouade-server
+as_escouade() { runuser -u escouade -- env HOME=/var/lib/escouade "$@"; }
+healthy() { for _ in $(seq 1 60); do as_escouade escouade-server health >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
+healthy || fail "the service did not come back with its update's settings"
+journal() { journalctl -u escouade-server -o cat --no-pager --since "@$since"; }
+# Off: the version found is said, nothing changes.
+as_escouade escouade-server config automatic off >"$work/out" 2>&1 || { cat "$work/out"; fail "config automatic off"; }
+grep -q 'Automatic update: off' "$work/out" || { cat "$work/out"; fail "config does not say the automatic off"; }
+since=$(date +%s)
+before=$(pid)
+printf '{"version":"9.9.7"}\n' >"$work/release/latest/download/latest.json"
+for _ in $(seq 1 30); do journal | grep -q '9.9.7 is published (the automatic update is off)' && break; sleep 1; done
+journal | grep -q '9.9.7 is published (the automatic update is off)' || { journal | tail -20; fail "the automatic off did not say the version"; }
+sleep 5
+[ "$(pid)" = "$before" ] || fail "the automatic off restarted the server"
+grep -q '9.9.7' /var/lib/escouade/.escouade/server-status.json || fail "server-status.json does not say the version found"
+echo "the automatic update off: 9.9.7 said, in the log and server-status.json, nothing changed"
+# On: found, checked, put in place, restarted at rest by systemd.
+since=$(date +%s)
+as_escouade escouade-server config automatic on >"$work/out" 2>&1 || { cat "$work/out"; fail "config automatic on"; }
+for _ in $(seq 1 90); do [ "$(pid)" != "$before" ] && [ -n "$(pid)" ] && [ "$(pid)" != 0 ] && break; sleep 1; done
+[ "$(pid)" != "$before" ] || { journal | tail -30; fail "the automatic update did not restart the server"; }
+healthy || { journal | tail -30; fail "unhealthy after the automatic update"; }
+sleep 3
+journal >"$work/journal"
+for line in '9.9.7 found on the stable channel' '9.9.7: signature checked' '9.9.7 put in' 'at rest, stopping to start again at 9.9.7' 'did not take'; do
+  grep -q "$line" "$work/journal" || { tail -40 "$work/journal"; fail "the log does not say: $line"; }
+done
+after=$(pid)
+sleep 8
+[ "$(pid)" = "$after" ] || fail "a version that did not take was tried again by itself (a loop of restarts)"
+# A changed archive: refused by the automatic update too, nothing changed, never downloaded again.
+since=$(date +%s)
+gets() { grep -c "GET /download/v9.9.8/escouade-server-9.9.8-linux-$arch.tar.gz " "$work/http.log" || true; }
+got=$(gets)
+printf '{"version":"9.9.8"}\n' >"$work/release/latest/download/latest.json"
+for _ in $(seq 1 30); do journal | grep -q 'signature refused' && break; sleep 1; done
+journal | grep -q 'download refused: signature refused' || { journal | tail -20; fail "the automatic update did not refuse a changed archive"; }
+[ "$(pid)" = "$after" ] || fail "a refused archive restarted the server"
+sleep 6
+[ "$(gets)" = "$((got + 1))" ] || fail "a refused archive was downloaded again ($got, then $(gets))"
+rm -rf /etc/systemd/system/escouade-server.service.d
+systemctl daemon-reload
+# The release says its own version again, for what follows.
+printf '{"version":"%s"}\n' "$version" >"$work/release/latest/download/latest.json"
+echo "the automatic update: found, checked, put in place, restarted at rest by systemd, never looped; a changed archive refused"
+
 sh "$install" --uninstall --system >"$work/out" 2>&1 || fail "uninstall failed"
 systemctl cat escouade-server >/dev/null 2>&1 && fail "the service is still there"
 [ -e /usr/local/bin/escouade-server ] && fail "the program is still there"
@@ -153,6 +213,12 @@ as_user systemctl --user is-active --quiet escouade-server || fail "the user's s
 as_user /home/esc-user/.local/bin/escouade-server health || fail "the user's server is not healthy"
 grep -q 'Restart=always' /home/esc-user/.config/systemd/user/escouade-server.service || fail "the unit does not restart"
 as_user sh "$install" >"$work/out" 2>&1 && grep -q "already installed" "$work/out" || fail "run again as a user, it installed again"
+# A beta installed: the beta channel, kept in the server's settings (ESC-702).
+release 9.9.6-beta.1
+as_user sh "$install" --version 9.9.6-beta.1 >"$work/out" 2>&1 || { cat "$work/out"; fail "install.sh --version 9.9.6-beta.1"; }
+grep -q 'Channel: beta' "$work/out" || { cat "$work/out"; fail "a beta installed does not say its channel"; }
+grep -q '"betaUpdates": true' /home/esc-user/.escouade/settings.json || fail "a beta installed is not on the beta channel"
+as_user /home/esc-user/.local/bin/escouade-server config | grep -q 'Channel: beta' || fail "config does not say the beta channel"
 as_user sh "$install" --uninstall >/dev/null || fail "uninstall as a user"
 [ -d /home/esc-user/.escouade ] || fail "the user's data was removed"
 as_user sh "$install" --uninstall --purge >/dev/null

@@ -9,6 +9,7 @@
   import { local } from '../../lib/transport';
   import Icon from '../Icon.svelte';
   import ServerProblem from './ServerProblem.svelte';
+  import UpdateServer from './UpdateServer.svelte';
 
   const server = $derived(connection.server!);
 
@@ -61,7 +62,11 @@
 <div class="screen" data-testid="server-screen">
   <div class="card">
     <span class="plate" aria-hidden="true">{plateOf(server.name)}</span>
-    {#if problem}
+    {#if problem?.kind === 'version' && problem.update !== 'client'}
+      <!-- « Mettre à jour le serveur » (ESC-702): the server asked by this computer's token, or the image's command. -->
+      <ServerProblem {problem} host={server.ssh} name={server.name} target={server.host} />
+      <UpdateServer id={server.id} name={server.name} version={problem.client} how={problem.serverUpdate} />
+    {:else if problem}
       <ServerProblem {problem} host={server.ssh} name={server.name} target={server.host}>
         {#snippet actions()}
           {#if problem?.kind === 'revoked'}

@@ -23,7 +23,9 @@
   import ExtensionsAllowed from './ExtensionsAllowed.svelte';
   import LanguageServers from './LanguageServers.svelte';
   import Row from './Row.svelte';
+  import ServerUpdates from './ServerUpdates.svelte';
   import Switch from './Switch.svelte';
+  import { connection } from '../../lib/connection.svelte';
 
   // The page « Général » (PROPOSITION.md §2, design/settings-2-2/index.html#a-general):
   // - « Apparence » (the theme, the colours, the zoom, the font size of the terminals), applied and saved as it changes,
@@ -220,59 +222,65 @@
 
 <!-- « Mises à jour » (from « À propos »): the version and its check, the automatic ones, the betas (ESC-374), and the
      update found as the status bar says it (ESC-250): downloading, then ready with its restart and its notes. -->
-<Group title={t('settings.groups.updates')}>
-  <Row label="Escouade {shownVersion(app.version)}" desc={upToDate && !update ? t('settings.about.noUpdate') : ''}>
-    <button class="btn" disabled={checking} onclick={check}>{checking ? t('settings.about.checking') : t('settings.about.check')}</button>
-    <span class="live" role="status" aria-live="polite" data-testid="update-live">{updateLive}</span>
-  </Row>
-  {#if update?.ready}
-    {@const notes = update.notes.trim()}
-    <Row label={t('settings.about.updateReady', { version: shownVersion(update.version) })} desc={t('settings.about.updateReadyDesc')}>
-      {#snippet extra()}
-        <div class="upd" data-update="ready">
-          {#if restartSeconds !== null}
-            <b class="restart-in">{t('shell.status.restartIn', { seconds: restartSeconds })}</b>
-          {/if}
-          {#if notes}
-            <button class="link" aria-expanded={notesOpen} aria-controls="update-notes" onclick={() => (notesOpen = !notesOpen)}
-              >{notesOpen ? t('settings.about.hideNotes') : t('settings.about.seeNotes')}</button
-            >
-            {#if notesOpen}<div class="notes" id="update-notes"><Markdown text={notes} /></div>{/if}
-          {/if}
-        </div>
-      {/snippet}
-      {#if restartSeconds !== null}
-        <button class="btn" onclick={postponeRestart}>{t('common.later')}</button>
-      {/if}
-      <!-- The update's window, as the status bar's: it says what a restart cuts, and « Plus tard » comes back here. -->
-      <button class="btn primary" onclick={() => (app.modal = { kind: 'update', back: 'general' })}>{t('shell.update.restartNow')}</button>
+<!-- On a server's space (ESC-702): the server's own updates and its switches, which are its settings. -->
+{#if connection.server}
+  <ServerUpdates name={connection.server.name} />
+{:else}
+  <Group title={t('settings.groups.updates')}>
+    <Row label="Escouade {shownVersion(app.version)}" desc={upToDate && !update ? t('settings.about.noUpdate') : ''}>
+      <button class="btn" disabled={checking} onclick={check}>{checking ? t('settings.about.checking') : t('settings.about.check')}</button>
+      <span class="live" role="status" aria-live="polite" data-testid="update-live">{updateLive}</span>
     </Row>
-  {:else if update}
-    <Row label={t('settings.about.updateFound', { version: shownVersion(update.version) })}>
-      {#snippet extra()}<span class="more upd" data-update="downloading">{t('settings.about.updateDownloading')}</span>{/snippet}
-    </Row>
-  {/if}
-  <!-- An update that does not download, said here while it lasts (choice 13 of the 2.0 design). -->
-  {#if app.updateTrouble && !update}
-    {@const trouble = app.updateTrouble}
-    <Row label={t('settings.about.updateTrouble', { version: shownVersion(trouble.version) })}>
-      {#snippet extra()}
-        <span class="warn">{t('settings.about.updateTroubleDesc', { error: trouble.message })}</span>
-      {/snippet}
-      {#if trouble.page}
-        <button class="btn" onclick={() => openUrl(trouble.page!).catch((e) => app.toast(String(e), 'error'))}
-          ><Icon name="ext" size={14} />{t('shell.update.openInBrowser')}</button
+    {#if update?.ready}
+      {@const notes = update.notes.trim()}
+      <Row label={t('settings.about.updateReady', { version: shownVersion(update.version) })} desc={t('settings.about.updateReadyDesc')}>
+        {#snippet extra()}
+          <div class="upd" data-update="ready">
+            {#if restartSeconds !== null}
+              <b class="restart-in">{t('shell.status.restartIn', { seconds: restartSeconds })}</b>
+            {/if}
+            {#if notes}
+              <button class="link" aria-expanded={notesOpen} aria-controls="update-notes" onclick={() => (notesOpen = !notesOpen)}
+                >{notesOpen ? t('settings.about.hideNotes') : t('settings.about.seeNotes')}</button
+              >
+              {#if notesOpen}<div class="notes" id="update-notes"><Markdown text={notes} /></div>{/if}
+            {/if}
+          </div>
+        {/snippet}
+        {#if restartSeconds !== null}
+          <button class="btn" onclick={postponeRestart}>{t('common.later')}</button>
+        {/if}
+        <!-- The update's window, as the status bar's: it says what a restart cuts, and « Plus tard » comes back here. -->
+        <button class="btn primary" onclick={() => (app.modal = { kind: 'update', back: 'general' })}>{t('shell.update.restartNow')}</button
         >
-      {/if}
+      </Row>
+    {:else if update}
+      <Row label={t('settings.about.updateFound', { version: shownVersion(update.version) })}>
+        {#snippet extra()}<span class="more upd" data-update="downloading">{t('settings.about.updateDownloading')}</span>{/snippet}
+      </Row>
+    {/if}
+    <!-- An update that does not download, said here while it lasts (choice 13 of the 2.0 design). -->
+    {#if app.updateTrouble && !update}
+      {@const trouble = app.updateTrouble}
+      <Row label={t('settings.about.updateTrouble', { version: shownVersion(trouble.version) })}>
+        {#snippet extra()}
+          <span class="warn">{t('settings.about.updateTroubleDesc', { error: trouble.message })}</span>
+        {/snippet}
+        {#if trouble.page}
+          <button class="btn" onclick={() => openUrl(trouble.page!).catch((e) => app.toast(String(e), 'error'))}
+            ><Icon name="ext" size={14} />{t('shell.update.openInBrowser')}</button
+          >
+        {/if}
+      </Row>
+    {/if}
+    <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')} row="autoUpdate">
+      <Switch label={t('settings.about.autoUpdate')} bind:on={s.autoUpdate} />
     </Row>
-  {/if}
-  <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')} row="autoUpdate">
-    <Switch label={t('settings.about.autoUpdate')} bind:on={s.autoUpdate} />
-  </Row>
-  <Row label={t('settings.about.betaUpdates')} desc={t('settings.about.betaUpdatesDesc')} row="betaUpdates">
-    <Switch label={t('settings.about.betaUpdates')} bind:on={() => app.settings.betaUpdates === true, (on) => void setBetaUpdates(on)} />
-  </Row>
-</Group>
+    <Row label={t('settings.about.betaUpdates')} desc={t('settings.about.betaUpdatesDesc')} row="betaUpdates">
+      <Switch label={t('settings.about.betaUpdates')} bind:on={() => app.settings.betaUpdates === true, (on) => void setBetaUpdates(on)} />
+    </Row>
+  </Group>
+{/if}
 
 <!-- « Toi »: the name for the shared tickets (ESC-190, choice 113), and the statistics (from « À propos »). -->
 <Group title={t('settings.groups.you')}>

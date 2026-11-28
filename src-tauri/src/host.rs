@@ -302,6 +302,12 @@ impl HeadlessHost {
         }
     }
 
+    /// Another version than the program's (`escouade-server` in a build of development, its e2e: ESC-702).
+    pub fn with_version(mut self, version: &str) -> Self {
+        self.version = version.to_string();
+        self
+    }
+
     /// The core's secrets kept in a file (`escouade-server`, ESC-514: no keychain on a server).
     pub fn with_secrets(
         mut self,
