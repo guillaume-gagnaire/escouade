@@ -23,6 +23,10 @@ const NOT_OF_TESTS: &[(&str, &str)] = &[
         "ESCOUADE_JAVY",
         "the compiler of the plugins in JS that `escouade-plugin` is given (the store's image, the scripts)",
     ),
+    (
+        "ESCOUADE_CONNECTOR_CONFIG",
+        "the configuration file of `escouade-connector` (RP-3, ESC-599), as its `--config`, documented in its help",
+    ),
 ];
 
 /// The files compiled for the tests alone (their `mod` is under `#[cfg(test)]`), by the end of their path.

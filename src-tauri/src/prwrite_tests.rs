@@ -326,6 +326,14 @@ fn no_tool_of_the_mcp_server_writes_on_a_pull_request() {
         ("mcp/activity.rs", include_str!("mcp/activity.rs")),
         ("mcp/asks.rs", include_str!("mcp/asks.rs")),
         ("mcp/background.rs", include_str!("mcp/background.rs")),
+        // The browsers and the agents' pages (ESC-669 to ESC-685, reversed by ESC-701).
+        ("mcp/browsers.rs", include_str!("mcp/browsers.rs")),
+        (
+            "mcp/browsers_drive.rs",
+            include_str!("mcp/browsers_drive.rs"),
+        ),
+        ("mcp/browsers_open.rs", include_str!("mcp/browsers_open.rs")),
+        ("mcp/pages.rs", include_str!("mcp/pages.rs")),
         ("mcp/docs.rs", include_str!("mcp/docs.rs")),
         ("mcp/files.rs", include_str!("mcp/files.rs")),
         ("mcp/http.rs", include_str!("mcp/http.rs")),
