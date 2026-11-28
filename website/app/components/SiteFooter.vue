@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { docPath } from '~/data/docs';
-import { legalPath, privacyPath } from '~/data/privacy';
+import { legalPath, mobilePath, privacyPath } from '~/data/privacy';
 import { DISCORD, REPO, STORE, SUPPORT } from '~/data/site';
 
 const { lang, text } = useLang();
@@ -14,6 +14,7 @@ const { lang, text } = useLang();
         <nav class="links">
           <NuxtLink :to="docPath(lang)">{{ text.header.docs }}</NuxtLink>
           <a :href="STORE[lang]">{{ text.header.plugins }}</a>
+          <NuxtLink :to="mobilePath(lang)">{{ text.footer.mobile }}</NuxtLink>
           <NuxtLink :to="privacyPath(lang)">{{ text.footer.privacy }}</NuxtLink>
           <NuxtLink :to="legalPath(lang)">{{ text.footer.legal }}</NuxtLink>
           <a :href="REPO">{{ text.footer.github }}</a>

@@ -7,8 +7,10 @@ android {
         applicationId "dev.escouade.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // MO-8: the workflow Mobile release gives the stores a versionCode that grows (its run number) and the app's
+        // version (apps/mobile/release/release.mjs version); a build of the CI or of a machine keeps 1 and 1.0.
+        versionCode((System.getenv('ESCOUADE_VERSION_CODE') ?: '1') as int)
+        versionName(System.getenv('ESCOUADE_VERSION_NAME') ?: '1.0')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +18,26 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // MO-8: the upload key of Google Play (Play App Signing keeps the app's key), only when the workflow Mobile release
+    // has written it from the secrets of its environment (ESCOUADE_UPLOAD_KEYSTORE, a file of the runner's, removed at
+    // the end of the job). Without it, the release stays unsigned, as the CI's mobile-app-android job checks.
+    def uploadKeystore = System.getenv('ESCOUADE_UPLOAD_KEYSTORE')
+    if (uploadKeystore) {
+        signingConfigs {
+            upload {
+                storeFile file(uploadKeystore)
+                storeType 'pkcs12'
+                storePassword System.getenv('ANDROID_UPLOAD_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_UPLOAD_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_UPLOAD_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (uploadKeystore) {
+                signingConfig signingConfigs.upload
+            }
             // R8 (MO-1): the code shrunk and obfuscated, the resources nobody reads taken out. Capacitor and its plugins
             // carry their own keep rules (their consumer rules); ours are in proguard-rules.pro.
             minifyEnabled true

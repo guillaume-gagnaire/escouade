@@ -4,7 +4,10 @@ import { pagePath, type PageId } from '~/data/privacy';
 import { renderDoc, type RenderedDoc } from '~/data/render';
 import { SITE, imageOf } from '~/data/site';
 
-const SOURCES = import.meta.glob<string>(['../../content/privacy/*.md', '../../content/legal/*.md'], { query: '?raw', import: 'default' });
+const SOURCES = import.meta.glob<string>(
+  ['../../content/privacy/*.md', '../../content/legal/*.md', '../../content/mobile/*.md', '../../content/mobile-privacy/*.md'],
+  { query: '?raw', import: 'default' },
+);
 
 /** A page of its own in `lang`, rendered with the site’s addresses. */
 export async function loadPage(id: PageId, lang: Lang, link: (path: string) => string): Promise<RenderedDoc | null> {

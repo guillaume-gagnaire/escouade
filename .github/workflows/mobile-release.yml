@@ -1,0 +1,240 @@
+name: Mobile release
+
+# The publication of the phone's app (MO-8, docs/MOBILE.md § 8, docs/MOBILE-PUBLISH.md). Launched by hand alone
+# (Actions › Mobile release › Run workflow), never on a push nor on a schedule; each job waits for the approval of
+# the environment `mobile-release` (a required reviewer, the branches `main` and `release/*` alone), which holds
+# every secret: none is in the repository's secrets, so a pull request or a fork never sees one.
+#
+# - Android, under Linux: the AAB built (R8), signed with the upload key of Google Play, then sent by fastlane to the
+#   closed test (track `alpha`). « Build only » sends nothing and gives the signed AAB as an artifact: Google wants a
+#   first upload by hand, in the Play Console.
+# - iOS, on a Mac: the IPA signed in a throwaway keychain (deleted at the end, even in failure), then sent by fastlane
+#   to TestFlight (pilot, without waiting for its processing). « Build only » gives the IPA as an artifact.
+#
+# Never a submission to a review, never production: those are the user's gestures in the consoles. A secret missing
+# stops the job before it builds, with its name (apps/mobile/release/release.mjs, then the Fastfile again). Every job
+# runs in guillaume-gagnaire/escouade alone (ESC-483, scripts/workflows-origin.test.ts).
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'The platform (Google Play first: its closed test opens the way)'
+        type: choice
+        options: [android, ios, both]
+        default: android
+      build_only:
+        description: 'Build only: the signed AAB or IPA as an artifact, nothing sent to a store'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# One publication at a time; a second one waits, never cancels the first in the middle of an upload.
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+
+jobs:
+  android:
+    name: Android (AAB signed, closed test)
+    if: github.repository == 'guillaume-gagnaire/escouade' && inputs.platform != 'ios'
+    runs-on: ubuntu-latest
+    environment: mobile-release
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The files the secrets become go to $RUNNER_TEMP/escouade-secrets (the Fastfile's), removed at the end.
+      # Before anything else: each secret missing named, the job stopped (never a value shown).
+      - name: The secrets of the environment mobile-release
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          BUILD_ONLY: ${{ inputs.build_only }}
+        run: |
+          if [ "$BUILD_ONLY" = "true" ]; then
+            node apps/mobile/release/release.mjs check android --build-only
+          else
+            node apps/mobile/release/release.mjs check android
+          fi
+
+      - name: The versions (the app's, and the run number for Google Play)
+        run: node apps/mobile/release/release.mjs version | tee -a "$GITHUB_ENV"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix apps/mobile --no-audit --no-fund
+
+      - name: Rust toolchain (pinned in crates/escouade-mobile/rust-toolchain.toml)
+        working-directory: crates/escouade-mobile
+        run: rustup toolchain install && rustup target add aarch64-linux-android x86_64-linux-android
+
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-ndk@4.1.2
+
+      - name: The plugin's Android libraries and Kotlin bindings
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME" bash scripts/mobile-android.sh
+
+      - name: The page, then the Android project
+        working-directory: apps/mobile
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          node ../../node_modules/vite/bin/vite.js build
+          npx cap sync android
+
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: '3.3'
+          working-directory: apps/mobile
+          bundler-cache: true
+
+      - name: fastlane (build only, or the closed test)
+        working-directory: apps/mobile
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ !inputs.build_only && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON || '' }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          BUILD_ONLY: ${{ inputs.build_only }}
+        run: |
+          if [ "$BUILD_ONLY" = "true" ]; then
+            bundle exec fastlane android build
+          else
+            bundle exec fastlane android closed_test
+          fi
+          mkdir -p "$RUNNER_TEMP/out"
+          cp android/app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/out/escouade-mobile-$ESCOUADE_VERSION_NAME-$ESCOUADE_VERSION_CODE.aab"
+
+      # The AAB holds no secret (the upload key signs it, Google re-signs it): the first upload, by hand.
+      - name: Upload the signed AAB
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-release-android
+          path: ${{ runner.temp }}/out/
+          retention-days: 14
+
+      - name: Remove the files the secrets became
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/escouade-secrets"
+          rm -f apps/mobile/android/app/google-services.json
+
+  ios:
+    name: iOS (IPA signed, TestFlight)
+    if: github.repository == 'guillaume-gagnaire/escouade' && inputs.platform != 'android'
+    runs-on: macos-latest
+    environment: mobile-release
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The secrets of the environment mobile-release
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_DISTRIBUTION_CERT_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERT_P12_BASE64 }}
+          IOS_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          BUILD_ONLY: ${{ inputs.build_only }}
+        run: |
+          if [ "$BUILD_ONLY" = "true" ]; then
+            node apps/mobile/release/release.mjs check ios --build-only
+          else
+            node apps/mobile/release/release.mjs check ios
+          fi
+
+      - name: The versions (the app's, and the run number for App Store Connect)
+        run: node apps/mobile/release/release.mjs version | tee -a "$GITHUB_ENV"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix apps/mobile --no-audit --no-fund
+
+      - name: Rust toolchain (pinned in crates/escouade-mobile/rust-toolchain.toml)
+        working-directory: crates/escouade-mobile
+        run: rustup toolchain install && rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+
+      - name: The plugin's XCFramework and Swift bindings
+        run: bash scripts/mobile-ios.sh
+
+      - name: The page, then the iOS project
+        working-directory: apps/mobile
+        run: |
+          node ../../node_modules/vite/bin/vite.js build
+          npx cap sync ios
+
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: '3.3'
+          working-directory: apps/mobile
+          bundler-cache: true
+
+      - name: fastlane (build only, or TestFlight)
+        working-directory: apps/mobile
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_DISTRIBUTION_CERT_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERT_P12_BASE64 }}
+          IOS_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ !inputs.build_only && secrets.APP_STORE_CONNECT_API_KEY_ID || '' }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ !inputs.build_only && secrets.APP_STORE_CONNECT_API_ISSUER_ID || '' }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ !inputs.build_only && secrets.APP_STORE_CONNECT_API_KEY_P8 || '' }}
+          BUILD_ONLY: ${{ inputs.build_only }}
+        run: |
+          if [ "$BUILD_ONLY" = "true" ]; then
+            bundle exec fastlane ios build
+          else
+            bundle exec fastlane ios testflight_upload
+          fi
+          mkdir -p "$RUNNER_TEMP/out"
+          cp "$RUNNER_TEMP/escouade-ios/escouade-mobile.ipa" "$RUNNER_TEMP/out/escouade-mobile-$ESCOUADE_MARKETING_VERSION-$ESCOUADE_VERSION_CODE.ipa"
+
+      - name: Upload the signed IPA
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-release-ios
+          path: ${{ runner.temp }}/out/
+          retention-days: 14
+
+      # The throwaway keychain, the profile and the files of the secrets: gone, even when a step failed.
+      - name: Remove the keychain, the profile and the files the secrets became
+        if: always()
+        run: |
+          security delete-keychain escouade-release.keychain-db 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/escouade-secrets"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision
+          rm -rf "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"

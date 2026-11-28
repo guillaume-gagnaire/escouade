@@ -22,6 +22,7 @@ export const DOC_GROUPS = [
       'remote-control',
       'connect-server',
       'spaces',
+      'mobile-app',
     ],
   },
   { id: 'code', pages: ['git', 'worktrees', 'branches', 'code-hosts', 'editor', 'terminals', 'split-screen', 'launch'] },

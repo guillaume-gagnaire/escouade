@@ -1,0 +1,1 @@
+agents,coding,Claude Code,Codex,AI,developer,Kanban,permission,WireGuard,server,devtools

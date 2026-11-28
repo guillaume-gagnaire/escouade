@@ -1,0 +1,4 @@
+# The phone's app on both stores (MO-8): one identifier. The team, the keys and the accounts come from the secrets
+# of the environment mobile-release (apps/mobile/fastlane/Fastfile), never from here.
+app_identifier("dev.escouade.mobile")
+package_name("dev.escouade.mobile")

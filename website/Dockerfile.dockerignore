@@ -23,3 +23,5 @@ website/.output
 website/.data
 website/dist
 website/.impeccable
+# The mobile app’s pages give the addresses its store listings link to, checked by their tests (MO-8).
+!apps/mobile/store/listing

@@ -70,6 +70,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- MO-8: ITSAppUsesNonExemptEncryption is left out on purpose until the user settles the export compliance answer
+	     (docs/MOBILE-PUBLISH.md, « Le chiffrement à l'export »): App Store Connect asks it at each build meanwhile. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- MO-1: cleartext to the tunnel's proxy of the app alone, on the loopback (docs/MOBILE.md § 3.13). -->

@@ -1,0 +1,12 @@
+# What fastlane writes at a run (MO-8), and the files the secrets of the workflow Mobile release become.
+fastlane/report.xml
+fastlane/README.md
+fastlane/test_output/
+android/app/google-services.json
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+*.ipa
+*.dSYM.zip

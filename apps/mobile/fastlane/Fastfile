@@ -1,0 +1,188 @@
+# The publication of the phone's app (MO-8, docs/MOBILE.md § 8, docs/MOBILE-PUBLISH.md), run by the workflow
+# `Mobile release` (.github/workflows/mobile-release.yml), launched by hand alone and under its environment
+# `mobile-release`. It reads the secrets by their names (apps/mobile/release/release.mjs lists them) and never shows
+# a value. It sends to the closed test of Google Play (track `alpha`) and to TestFlight; never to a review, never to
+# production: those stay the user's gestures in the consoles.
+#
+#   bundle exec fastlane android build          # the AAB signed with the upload key, nothing sent
+#   bundle exec fastlane android closed_test    # the AAB, then the closed test (alpha)
+#   bundle exec fastlane ios build              # the IPA signed for the App Store, nothing sent
+#   bundle exec fastlane ios testflight_upload  # the IPA, then TestFlight (without waiting for its processing)
+#
+# Without a secret, each lane stops before doing anything, naming every secret missing.
+
+opt_out_usage
+skip_docs
+default_platform(:android)
+
+APP_ID = "dev.escouade.mobile"
+PLAY_TRACK = "alpha"
+PROFILE_NAME = "Escouade App Store"
+ENVIRONMENT = "mobile-release"
+MOBILE = File.expand_path("..", __dir__)
+
+SECRETS = {
+  android_build: %w[
+    ANDROID_UPLOAD_KEYSTORE_BASE64 ANDROID_UPLOAD_KEYSTORE_PASSWORD ANDROID_UPLOAD_KEY_ALIAS ANDROID_UPLOAD_KEY_PASSWORD
+  ],
+  android_upload: %w[GOOGLE_PLAY_SERVICE_ACCOUNT_JSON],
+  ios_build: %w[
+    APPLE_TEAM_ID IOS_DISTRIBUTION_CERT_P12_BASE64 IOS_DISTRIBUTION_CERT_PASSWORD IOS_PROVISIONING_PROFILE_BASE64
+  ],
+  ios_upload: %w[APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_API_ISSUER_ID APP_STORE_CONNECT_API_KEY_P8],
+}.freeze
+
+# Stops the lane, naming each secret missing (never a value).
+def require_secrets!(*groups)
+  names = groups.flat_map { |g| SECRETS.fetch(g) }
+  missing = names.reject { |n| ENV[n].to_s.strip != "" }
+  return if missing.empty?
+
+  missing.each { |n| UI.error("Missing secret #{n} in the environment #{ENVIRONMENT}") }
+  UI.user_error!("Stopped: #{missing.length} secret(s) missing (#{missing.join(', ')}). See docs/MOBILE-PUBLISH.md.")
+end
+
+# A folder of the runner's for the files the secrets become, removed by the workflow at the end of the job.
+def secrets_dir
+  dir = ENV["ESCOUADE_SECRETS_DIR"].to_s
+  dir = File.join(ENV["RUNNER_TEMP"] || Dir.tmpdir, "escouade-secrets") if dir.empty?
+  FileUtils.mkdir_p(dir)
+  File.chmod(0o700, dir)
+  dir
+end
+
+def write_secret_file(name, base64_env)
+  path = File.join(secrets_dir, name)
+  File.binwrite(path, Base64.decode64(ENV.fetch(base64_env)))
+  File.chmod(0o600, path)
+  path
+end
+
+platform :android do
+  desc "The AAB signed with the upload key; nothing sent (the first upload is the user's, in the Play Console)"
+  lane :build do
+    require_secrets!(:android_build)
+    android_bundle
+  end
+
+  desc "The AAB signed, then sent to the closed test of Google Play (alpha); never to production"
+  lane :closed_test do
+    require_secrets!(:android_build, :android_upload)
+    aab = android_bundle
+    upload_to_play_store(
+      package_name: APP_ID,
+      track: PLAY_TRACK,
+      aab: aab,
+      json_key_data: ENV.fetch("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"),
+      release_status: "completed",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+
+  private_lane :android_bundle do
+    ENV["ESCOUADE_UPLOAD_KEYSTORE"] = write_secret_file("upload.jks", "ANDROID_UPLOAD_KEYSTORE_BASE64")
+    # google-services.json (MO-6): written when its secret is there; the app is built without it otherwise.
+    if ENV["GOOGLE_SERVICES_JSON"].to_s.strip.empty?
+      UI.important("GOOGLE_SERVICES_JSON is not set: built without google-services.json (MO-6 reads it)")
+    else
+      File.write(File.join(MOBILE, "android", "app", "google-services.json"), ENV.fetch("GOOGLE_SERVICES_JSON"))
+    end
+    gradle(project_dir: File.join(MOBILE, "android"), task: "bundle", build_type: "Release", flags: "--no-daemon --console=plain")
+    aab = File.join(MOBILE, "android", "app", "build", "outputs", "bundle", "release", "app-release.aab")
+    UI.user_error!("no AAB at #{aab}") unless File.exist?(aab)
+    # Signed by the upload key, or the lane stops here (jarsigner says « jar is unsigned » with a status of 0).
+    verified = sh("jarsigner", "-J-Duser.language=en", "-verify", aab, log: false)
+    UI.user_error!("the AAB is not signed: #{aab}") unless verified.include?("jar verified")
+    aab
+  end
+end
+
+platform :ios do
+  desc "The IPA signed for the App Store, in a throwaway keychain; nothing sent"
+  lane :build do
+    require_secrets!(:ios_build)
+    ios_archive
+  end
+
+  desc "The IPA signed, then sent to TestFlight (pilot, without waiting for its processing); never to a review"
+  lane :testflight_upload do
+    require_secrets!(:ios_build, :ios_upload)
+    ipa = ios_archive
+    key = app_store_connect_api_key(
+      key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+      issuer_id: ENV.fetch("APP_STORE_CONNECT_API_ISSUER_ID"),
+      key_content: ENV.fetch("APP_STORE_CONNECT_API_KEY_P8"),
+      in_house: false,
+    )
+    upload_to_testflight(
+      api_key: key,
+      ipa: ipa,
+      app_identifier: APP_ID,
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      distribute_external: false,
+    )
+  end
+
+  private_lane :ios_archive do
+    keychain = "escouade-release.keychain-db"
+    # A throwaway keychain of the job's (the workflow deletes it at the end, even in failure): its password random.
+    keychain_password = SecureRandom.hex(24)
+    create_keychain(
+      name: keychain,
+      password: keychain_password,
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: false,
+      add_to_search_list: true,
+      default_keychain: false,
+    )
+    import_certificate(
+      certificate_path: write_secret_file("distribution.p12", "IOS_DISTRIBUTION_CERT_P12_BASE64"),
+      certificate_password: ENV.fetch("IOS_DISTRIBUTION_CERT_PASSWORD"),
+      keychain_name: keychain,
+      keychain_password: keychain_password,
+      log_output: false,
+    )
+    install_provisioning_profile(path: write_secret_file("escouade.mobileprovision", "IOS_PROVISIONING_PROFILE_BASE64"))
+
+    project = File.join(MOBILE, "ios", "App", "App.xcodeproj")
+    # In the runner's checkout alone: the App target signed by hand, with the distribution certificate and the profile.
+    update_code_signing_settings(
+      path: project,
+      use_automatic_signing: false,
+      team_id: ENV.fetch("APPLE_TEAM_ID"),
+      targets: ["App"],
+      build_configurations: ["Release"],
+      code_sign_identity: "Apple Distribution",
+      profile_name: PROFILE_NAME,
+      bundle_identifier: APP_ID,
+    )
+    marketing = ENV["ESCOUADE_MARKETING_VERSION"].to_s
+    code = ENV["ESCOUADE_VERSION_CODE"].to_s
+    xcargs = []
+    xcargs << "MARKETING_VERSION=#{marketing}" unless marketing.empty?
+    xcargs << "CURRENT_PROJECT_VERSION=#{code}" unless code.empty?
+    build_app(
+      project: project,
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: {
+        signingStyle: "manual",
+        teamID: ENV.fetch("APPLE_TEAM_ID"),
+        provisioningProfiles: { APP_ID => PROFILE_NAME },
+        uploadSymbols: true,
+      },
+      codesigning_identity: "Apple Distribution",
+      output_directory: File.join(ENV["RUNNER_TEMP"] || Dir.tmpdir, "escouade-ios"),
+      output_name: "escouade-mobile.ipa",
+      xcargs: xcargs.join(" "),
+      clean: true,
+    )
+  end
+end

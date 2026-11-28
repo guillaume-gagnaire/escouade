@@ -11,7 +11,7 @@ const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.gith
 const ORIGIN = "github.repository == 'guillaume-gagnaire/escouade'";
 
 // The workflows whose every job is bounded, and the one that bounds only its nightly run.
-const BOUNDED = ['release.yml', 'revocations.yml', 'sdk-publish.yml', 'discord.yml'];
+const BOUNDED = ['release.yml', 'revocations.yml', 'sdk-publish.yml', 'discord.yml', 'mobile-release.yml'];
 const SCHEDULE_ONLY = ['advisories.yml', 'fuzz.yml'];
 
 // The jobs of a workflow and their `if:` line, read as text (the repository has no YAML parser at its root).

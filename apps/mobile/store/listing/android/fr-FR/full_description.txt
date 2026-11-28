@@ -1,0 +1,24 @@
+Escouade fait travailler des agents de code (Claude Code, Codex et d’autres) sur ton poste ou sur ton serveur. Quand tu t’en éloignes, l’app Escouade te dit ce qui t’attend et te laisse débloquer un agent en quelques secondes.
+
+CE QUI T’ATTEND, PARTOUT
+• Les agents arrêtés en tête : une autorisation, une question, un plan à approuver.
+• Puis la boîte « À toi » : un choix entre des rendus, un feu vert, une réponse, un ticket à valider.
+• Chaque demande dit son espace, son projet et son agent. Plusieurs postes et serveurs, dans un seul fil.
+
+RÉPONDRE, EN SACHANT CE QUE TU ACCEPTES
+• Une commande se lit en entier, ligne à ligne, avant d’être autorisée.
+• Chaque réponse qui fait agir un agent passe par le verrou du téléphone : l’empreinte, le visage ou le code.
+• « Toujours autoriser » ne se coche jamais depuis le téléphone.
+
+PARLER À TES AGENTS
+• Envoie un message tapé ou dicté, avec une photo.
+• Lis leur conversation, regarde le Kanban d’un projet, valide un ticket « À tester » ou renvoie-le.
+• Crée un agent, un ticket dicté, ou un projet sur un serveur.
+
+DIRECT, SANS CLOUD ENTRE VOUS
+• Le téléphone s’appaire à ton poste ou à ton serveur par un QR code, puis lui parle par un tunnel WireGuard chiffré, directement.
+• Aucun compte Escouade, aucune publicité, aucune statistique d’usage.
+• Les clés restent dans le Keystore du téléphone. Révoque un téléphone perdu depuis ton poste.
+• Les notifications sont chiffrées de bout en bout : le relais et Google ne voient qu’un réveil, jamais le texte.
+
+Escouade est libre (GPL-3.0) : le code de l’app, du poste et du serveur est public. L’app demande Escouade 2.3 ou plus récent sur le poste ou le serveur.

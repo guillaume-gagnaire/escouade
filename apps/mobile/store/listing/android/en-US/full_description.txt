@@ -1,0 +1,24 @@
+Escouade runs coding agents (Claude Code, Codex and others) on your computer or on your server. When you step away, the Escouade app tells you what is waiting for you and lets you unblock an agent in seconds.
+
+WHAT IS WAITING, EVERYWHERE
+• Stopped agents first: a permission, a question, a plan to approve.
+• Then your “Your turn” inbox: a choice between renders, a go-ahead, an answer, a ticket to approve.
+• Each request shows its space, its project and its agent. Several computers and servers, in one thread.
+
+ANSWER, KNOWING WHAT YOU ACCEPT
+• A command reads in full, line by line, before you allow it.
+• Every answer that makes an agent act goes through your phone’s lock: fingerprint, face or passcode.
+• “Always allow” is never set from the phone.
+
+TALK TO YOUR AGENTS
+• Send a typed or dictated message, with a photo.
+• Read their conversation, look at a project’s Kanban, approve a ticket in “To review” or send it back.
+• Create an agent, a dictated ticket, or a project on a server.
+
+DIRECT, WITH NO CLOUD IN BETWEEN
+• The phone pairs with your computer or server through a QR code, then talks to it directly through an encrypted WireGuard tunnel.
+• No Escouade account, no ads, no usage statistics.
+• Keys stay in the phone’s Keystore. Revoke a lost phone from your computer.
+• Notifications are end-to-end encrypted: the relay and Google only see a wake-up, never the text.
+
+Escouade is free software (GPL-3.0): the code of the app, the desktop and the server is public. The app needs Escouade 2.3 or later on the computer or server.

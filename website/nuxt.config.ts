@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { DOC_SLUGS, docPath } from './app/data/docs';
-import { legalPath, privacyPath } from './app/data/privacy';
+import { PAGE_IDS, pagePath } from './app/data/privacy';
 import { withPolicy } from './csp';
 
 // The app's version, read from the repo: the one its next release carries.
@@ -29,10 +29,7 @@ export default defineNuxtConfig({
         '/',
         '/en',
         ...(['fr', 'en'] as const).flatMap((lang) => [docPath(lang), ...DOC_SLUGS.map((slug) => docPath(lang, slug))]),
-        privacyPath('fr'),
-        privacyPath('en'),
-        legalPath('fr'),
-        legalPath('en'),
+        ...PAGE_IDS.flatMap((id) => [pagePath(id, 'fr'), pagePath(id, 'en')]),
       ],
       // The language switch's French links (`?lang=fr`) are the French pages, already generated.
       ignore: [(route: string) => route.includes('?lang=')],

@@ -24,6 +24,7 @@ export default defineConfig({
       'tests/e2e/**/*.test.ts',
       'apps/mobile-plugin/test/**/*.test.ts',
       'apps/mobile/src/**/*.test.ts',
+      'apps/mobile/release/**/*.test.ts',
     ],
     // A plugin's template runs its own tests, with node --test, once written (sdk/scripts/template-ci.mjs).
     exclude: [...configDefaults.exclude, 'sdk/create-escouade-plugin/templates/**'],

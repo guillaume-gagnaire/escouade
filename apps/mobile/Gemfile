@@ -1,0 +1,5 @@
+# fastlane, for the publication of the phone's app (MO-8, apps/mobile/fastlane/Fastfile): run by the workflow
+# Mobile release alone (bundle exec fastlane …), its version locked in Gemfile.lock.
+source "https://rubygems.org"
+
+gem "fastlane", "~> 2.242"
