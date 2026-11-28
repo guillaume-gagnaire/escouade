@@ -94,13 +94,15 @@ test("an agent's page in its shelter reaches nothing and nothing of Escouade ans
     const r = JSON.parse(view!.title!.slice('escouade-probe:'.length)) as Record<string, unknown>;
     const said = (k: string) => String(r[k]);
 
-    // No request and no datagram left the page. The end-to-end tests force WebView2's folder (`WEBVIEW2_USER_DATA_FOLDER`),
-    // which leaves the pages no browser of their own, and so no dead end: their filter alone answers every request, but
-    // WebView2 may still connect, without a word, to the address of the navigation it refused (a preconnection). The app
-    // as shipped has the dead end too: `agentpage_probe` sees no connection at all.
+    // No request and no datagram left the page. The 2.3's end-to-end tests give WebView2's folder by the app's API
+    // (`ESCOUADE_WEBVIEW_DIR`, ESC-496), never `WEBVIEW2_USER_DATA_FOLDER`: the page has its own browser and its dead end,
+    // as in the app as shipped, which cuts what reaches for the network (ESC-701; on the 2.2 line, the forced folder left
+    // the filter alone).
     expect(out.hits, 'nothing reached the network').toEqual([]);
     test.info().annotations.push({ type: 'bare connections', description: String(out.bare()) });
-    expect(fs.readFileSync(path.join(app.data, 'app.log'), 'utf8')).toContain('WEBVIEW2_USER_DATA_FOLDER is set, no dead end');
+    const log = fs.readFileSync(path.join(app.data, 'app.log'), 'utf8');
+    expect(log).not.toContain('WEBVIEW2_USER_DATA_FOLDER is set, no dead end');
+    expect(log).toMatch(/an agent page reached for the network: cut \(\d+\)/);
     expect(said('own'), 'its own file is served').toBe('reached: own file');
     expect(said('origin')).toBe('http://escouade-page.p-1.localhost');
     for (const k of ['app', 'plugin', 'touch', 'list']) expect(said(k), k).toMatch(/^refused/);
