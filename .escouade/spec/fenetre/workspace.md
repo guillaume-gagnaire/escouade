@@ -3,7 +3,7 @@ title: "Workspace"
 subject: "Fenêtre"
 sources: ["docs/superpowers/specs/2026-11-25-vue-workspace-design.md","src/components/workspace/WorkspaceView.svelte","src/components/workspace/WorkflowsPanel.svelte","src/components/workspace/WorkflowBig.svelte","src/lib/workspace-workflow.ts","src/lib/workspace-layout.ts","crates/escouade-plan/src/canvas.rs","crates/escouade-base/src/secrets.rs","Correction de l'utilisateur du 2026-11-26, transmise par le chef (ticket ESC-689) : pas d'onglet Workspace, l'onglet Workflow retiré, les workflows dans la toile"]
 tickets: ["ESC-689","ESC-701"]
-decisions: ["le-workspace-une-toile-des-agents-de-leu","les-workflows-dans-le-workspace-l-onglet","la-2-2-11-a-la-2-2-19-reversees-dans-la"]
+decisions: ["le-workspace-une-toile-des-agents-de-leu","les-workflows-dans-le-workspace-l-onglet",374]
 compared: null
 ---
 

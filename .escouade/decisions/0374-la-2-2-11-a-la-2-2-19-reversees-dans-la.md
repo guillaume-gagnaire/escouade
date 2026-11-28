@@ -1,9 +1,9 @@
 ---
-number: null
+number: 374
 id: "la-2-2-11-a-la-2-2-19-reversees-dans-la"
 title: "La 2.2.11 à la 2.2.20 reversées dans la 2.3 : les navigateurs et les pages des agents sur le cœur sans fenêtre, le menu « Éditeur » et les workflows suivent leurs interrupteurs"
 date: "2026-11-27"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-701"
 pages: ["fenetre/fonctionnalites","fenetre/workspace","kanban/navigateurs-pilotes","harness/pages-des-agents"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/fonctionnalites","added":5,"removed":0},{"page":"fenetre/workspace","added":4,"removed":0},{"page":"kanban/navigateurs-pilotes","added":7,"removed":0},{"page":"harness/pages-des-agents","added":4,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-28T11:33:54+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

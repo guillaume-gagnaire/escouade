@@ -3,7 +3,7 @@ title: "Fonctionnalités"
 subject: "fenetre"
 sources: ["docs/FEATURES.md § 1 et § 2 (conception du 2026-10-28, choix du chef)","design/features/reglages-fonctionnalites.png","design/features/assistant.png","design/features/captures/proposition-fonctionnalite-clair-1440.png","docs/ONBOARDING.md § 7 (les découvertes)","crates/escouade-model/src/features.rs (le registre)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur)","src-tauri/src/offers.rs (les propositions, leurs signaux et leurs seuils)","src/lib/features.ts (dans la fenêtre)","src/lib/offers.svelte.ts (les propositions dans la fenêtre)","docs/FEATURES.md § 1 (conception du 2026-10-28, choix du chef)","docs/ONBOARDING.md § 7 (les découvertes) et § 4.5 bis (la station des fonctionnalités)","crates/escouade-model/src/features.rs (le registre, NEW_INSTALL)","src-tauri/src/features.rs (ce que chacune emporte dans le cœur, l'assistant)","src/components/features/FeatureTour.svelte (l'assistant)","tests/site-shots/features-tour.spec.ts (les captures de l'assistant)"]
 tickets: ["ESC-550","ESC-558","ESC-559","ESC-701"]
-decisions: [226,276,280,"la-2-2-11-a-la-2-2-19-reversees-dans-la"]
+decisions: [226,276,280,374]
 compared: null
 ---
 
