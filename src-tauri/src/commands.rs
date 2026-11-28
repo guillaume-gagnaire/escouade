@@ -7805,6 +7805,66 @@ pub fn remote_pair_code(core: CoreState) -> Res<PairCode> {
     })
 }
 
+// ---------- Réglages de l'espace › Réseau privé (RP-4, ESC-600) ----------
+//
+// Served to a computer: a server's window asks them of its core (the interface is RP-5's). No MCP tool reads or writes
+// a project's list (R5).
+
+/// The private network of this core: served or not, denied by a policy, the entry's address, the connectors and their
+/// state, the codes that wait (never a code), those removed.
+#[tauri::command(async)]
+pub fn private_network_status(core: CoreState) -> Res<crate::privateentry::Status> {
+    Ok(core.private_network_status())
+}
+
+/// A pairing code for a connector to be named `name` (« Ajouter un connecteur »): 8 letters, 10 minutes, once, and the
+/// entry's address. Refused by the policy `servers.privateNetwork`, and on a core that serves no private network.
+#[tauri::command(async)]
+pub fn private_network_pair(core: CoreState, name: String) -> Res<crate::privateentry::Code> {
+    computer_caller(&core)?;
+    let (code, entry) = core.pair_connector(&name).map_err(err)?;
+    Ok(crate::privateentry::Code {
+        code: code.text,
+        expires_at: code.expires_at,
+        entry,
+    })
+}
+
+/// The connector `id` removed: its key no longer holds, its channel is closed, a trace is kept. False when none.
+#[tauri::command(async)]
+pub fn private_network_remove(core: CoreState, id: String) -> Res<bool> {
+    computer_caller(&core)?;
+    let devices = crate::remoteapi::devices::Devices::load(&core.data, core.secrets.clone());
+    let by = revoker(&devices);
+    core.remove_connector(&id, &by).map_err(err)
+}
+
+/// The list of `project`: the hosts of the private networks it reaches, each with its connector.
+#[tauri::command(async)]
+pub fn private_network_project(
+    core: CoreState,
+    project: String,
+) -> Res<escouade_gate::ProjectList> {
+    core.project_hosts(&project).map_err(err)
+}
+
+/// The list of `project` written, within its connectors' ceilings (empty: it reaches no private network).
+#[tauri::command(async)]
+pub fn private_network_set_project(
+    core: CoreState,
+    project: String,
+    hosts: Vec<escouade_gate::Allowed>,
+) -> Res<escouade_gate::ProjectList> {
+    computer_caller(&core)?;
+    core.set_project_hosts(&project, hosts).map_err(err)
+}
+
+/// The gate's journal: its last connections (1 000), the oldest first, never what went through nor a token.
+#[tauri::command(async)]
+pub fn private_network_journal(core: CoreState) -> Res<Vec<escouade_gate::Entry>> {
+    Ok(core.gate_journal())
+}
+
 // ---------- Réglages › Téléphone (ESC-567) ----------
 //
 // Served: a server's window asks them of its core (Réglages de l'espace › Téléphone), the desktop's of its own.

@@ -308,6 +308,14 @@
       "title": "Deny the access from the phone",
       "type": "boolean"
     },
+    "servers.privateNetwork": {
+      "description": "An Escouade server that receives it opens neither the connectors’ entry (--connector-listen) nor its agents’ gate, and refuses to pair a connector: no agent reaches a private network through escouade-connector. Only the value false (0) is imposed. The connectors’ entry closed and their channels cut, the pairing refused; the gate not opened at the server’s start.",
+      "enum": [
+        false
+      ],
+      "title": "Deny the private network (the connectors)",
+      "type": "boolean"
+    },
     "servers.remoteApi": {
       "description": "The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed. The remote API refused at its start and at each connection.",
       "enum": [

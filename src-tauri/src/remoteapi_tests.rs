@@ -2109,6 +2109,13 @@ fn each_command_has_its_scope_and_a_phone_reaches_none_of_a_computer_s() {
         "phone_set",
         "phone_remove",
         "phone_rotate_key",
+        // The private network (RP-4): the connectors, their codes, the lists of the projects.
+        "private_network_status",
+        "private_network_pair",
+        "private_network_remove",
+        "private_network_project",
+        "private_network_set_project",
+        "private_network_journal",
         "set_remote_control",
         "save_settings",
         "account_key",

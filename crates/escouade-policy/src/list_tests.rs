@@ -53,6 +53,8 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
         "servers.remoteApi",
         // The phone's tunnel (ESC-567).
         "servers.phone",
+        // The connectors of the private network (RP-4, ESC-600).
+        "servers.privateNetwork",
         "mcp.externalClients",
         "team.server",
         "team.fingerprint",
@@ -85,7 +87,9 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
     assert!(def("projects.maxParallel").is_some());
     // « Mode hors ligne » of the 2.2.6 (ESC-596), reversed into the 2.3 (ESC-651).
     assert!(def("network.offline").is_some());
-    assert_eq!(POLICIES.len(), 48);
+    // The private network of a server (RP-4, ESC-600).
+    assert!(def("servers.privateNetwork").is_some());
+    assert_eq!(POLICIES.len(), 49);
 }
 
 #[test]

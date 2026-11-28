@@ -16,6 +16,7 @@
 //! variables; what holds is the connector's ceiling, in the company's network.
 
 pub mod connectors;
+pub mod entry;
 pub mod env;
 mod http;
 pub mod journal;

@@ -56,7 +56,7 @@ pub struct GateSlot {
     exe: OnceLock<String>,
 }
 
-fn lang() -> Lang {
+pub(crate) fn lang() -> Lang {
     match crate::i18n::ui() {
         crate::i18n::Lang::En => Lang::En,
         _ => Lang::Fr,

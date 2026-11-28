@@ -316,6 +316,10 @@ mod proxysecret;
 pub mod privatenet;
 #[cfg(test)]
 mod privatenet_tests;
+// The connectors' entry of escouade-server (RP-4): the pairing, their channels, the policy servers.privateNetwork.
+pub mod privateentry;
+#[cfg(test)]
+mod privateentry_tests;
 #[cfg(test)]
 mod proxysecret_tests;
 mod prread;

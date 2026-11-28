@@ -1251,6 +1251,8 @@ pub struct Core {
     pub phone: Arc<crate::phone::Phone>,
     /// The gate of escouade-server (RP-1, `privatenet`): the agents’ one proxy, when the private network is on.
     pub gate: Arc<crate::privatenet::GateSlot>,
+    /// The connectors' entry of escouade-server (RP-4, `privateentry`): its connectors, and the entry while it is open.
+    pub private_network: Arc<crate::privateentry::EntrySlot>,
     /// Where the Trello and GitHub APIs are.
     pub bases: RwLock<integrations::Bases>,
     /// The GitHub CLI's token, once asked for.
@@ -2694,6 +2696,7 @@ impl Core {
             kept,
             phone,
             gate: Arc::default(),
+            private_network: Arc::default(),
             bases: RwLock::new(integrations::Bases::from_env()),
             gh_token: Mutex::default(),
             forges: RwLock::new(crate::forge::Registry::standard()),

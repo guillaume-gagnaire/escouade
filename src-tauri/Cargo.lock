@@ -2397,15 +2397,22 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
+ "escouade-connector-proto",
+ "futures-util",
  "getrandom 0.4.3",
  "hex",
  "httparse",
  "log",
  "parking_lot 0.13.0",
+ "rcgen",
+ "rustls",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "sha2 0.11.1",
  "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite 0.30.0",
  "url",
 ]
 
