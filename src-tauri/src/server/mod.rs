@@ -12,6 +12,8 @@
 //!   team (the role of service), by the short code an administrator shows (`teampair`);
 //! - `escouade-server health`: whether the server of the folder runs and still answers (the image's `HEALTHCHECK`);
 //! - `escouade-server update [--to X.Y.Z [--downgrade]] [--beta] [--now] [--check]`: the server at a signed version (`update`);
+//! - `escouade-server config [automatic on|off] [channel stable|beta]` (ESC-702): the automatic update and its channel,
+//!   the server's settings (`autoupdate`);
 //! - `escouade-server phone [status]`, `phone on [PORT]`, `phone off`, `phone add NAME [--endpoint HOST]`,
 //!   `phone remove ID` (ESC-567): the phone's tunnel, its file changed, read again by a server that runs; `add` prints
 //!   the phone's WireGuard config and its QR code for the user alone (the official WireGuard app, until MO-4's pairing);
@@ -32,6 +34,7 @@
 //! Built without the desktop (`cargo build --bin escouade-server --no-default-features`: no WebKit, no GTK, docs/CRATES.md
 //! § 14); it builds with it too (the e2e under Windows).
 
+pub mod autoupdate;
 pub mod logs;
 pub mod secrets;
 pub mod status;
@@ -71,6 +74,11 @@ pub enum Command {
     Revoke(String),
     Health,
     Update,
+    /// `config …` (ESC-702): the automatic update (`automatic`) and the channel (`beta`), each when given.
+    Config {
+        automatic: Option<bool>,
+        beta: Option<bool>,
+    },
     /// `phone …` (ESC-567).
     Phone(PhoneCommand),
     /// `team pair <serveur> <CODE>` (OE-1): enters a team as a machine of the team.
@@ -245,6 +253,11 @@ pub fn parse_with(
         ["devices", "revoke", id] => Command::Revoke(id.to_string()),
         ["health"] => Command::Health,
         ["update"] => Command::Update,
+        ["config"] => Command::Config {
+            automatic: None,
+            beta: None,
+        },
+        ["config", ..] => config_of(&words[1..])?,
         ["phone"] | ["phone", "status"] => Command::Phone(PhoneCommand::Status),
         ["phone", "on"] => Command::Phone(PhoneCommand::On(None)),
         ["phone", "on", port] => Command::Phone(PhoneCommand::On(Some(port_of(port)?))),
@@ -314,6 +327,28 @@ pub fn parse_with(
     Ok(out)
 }
 
+/// The words after `config`: `automatic on|off`, `channel stable|beta`, one or both.
+fn config_of(words: &[String]) -> std::result::Result<Command, String> {
+    let wrong = || {
+        tr!(
+            "config attend « automatic on|off » ou « channel stable|beta » (escouade-server config)",
+            "config needs “automatic on|off” or “channel stable|beta” (escouade-server config)"
+        )
+    };
+    let (mut automatic, mut beta) = (None, None);
+    let mut it = words.iter().map(String::as_str);
+    while let Some(word) = it.next() {
+        match (word, it.next()) {
+            ("automatic" | "auto", Some("on" | "true" | "1")) => automatic = Some(true),
+            ("automatic" | "auto", Some("off" | "false" | "0")) => automatic = Some(false),
+            ("channel", Some("stable")) => beta = Some(false),
+            ("channel", Some("beta")) => beta = Some(true),
+            _ => return Err(wrong()),
+        }
+    }
+    Ok(Command::Config { automatic, beta })
+}
+
 fn port_of(v: &str) -> std::result::Result<u16, String> {
     v.parse().map_err(|_| {
         tr!(
@@ -371,6 +406,7 @@ pub fn help() -> String {
          escouade-server devices revoke ID  révoque un appareil\n  \
          escouade-server health             le serveur tourne-t-il et répond-il ? (code 0 si oui)\n  \
          escouade-server update             met le serveur à la dernière version signée (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
+         escouade-server config             la mise à jour automatique et son canal (automatic on|off, channel stable|beta)\n  \
          escouade-server phone              le tunnel WireGuard du téléphone (on [PORT], off, add NOM [--endpoint HÔTE], remove ID)\n  \
          escouade-server team pair SERVEUR CODE  entre dans une équipe comme machine de l’équipe, par le code que montre un administrateur (--name NOM : son nom ici)\n  \
          escouade-server via HÔTE PORT      le ProxyCommand de ssh par la porte (ProxyCommand=\"escouade-server via %h %p\")\n\n\
@@ -392,6 +428,7 @@ pub fn help() -> String {
          escouade-server devices revoke ID  revokes a device\n  \
          escouade-server health             does the server run and answer? (exit code 0 if so)\n  \
          escouade-server update             puts the server at the latest signed version (--to X.Y.Z [--downgrade], --beta, --now, --check)\n  \
+         escouade-server config             the automatic update and its channel (automatic on|off, channel stable|beta)\n  \
          escouade-server phone              the phone's WireGuard tunnel (on [PORT], off, add NAME [--endpoint HOST], remove ID)\n  \
          escouade-server team pair SERVER CODE  enters a team as a machine of the team, by the code an administrator shows (--name NAME: its name here)\n  \
          escouade-server via HOST PORT      ssh's ProxyCommand through the gate (ProxyCommand=\"escouade-server via %h %p\")\n\n\
@@ -477,6 +514,7 @@ pub fn main(args: Vec<String>) -> i32 {
         Command::Revoke(id) => revoke(&args, id),
         Command::Health => health(&args),
         Command::Update => data_of(&args).and_then(|data| update::run(&data, &args.update)),
+        Command::Config { automatic, beta } => config(&args, *automatic, *beta),
         Command::Phone(what) => phone(&args, what),
         Command::TeamPair { server, code } => team_pair(&args, server, code),
         Command::Run => run(&args),
@@ -757,6 +795,23 @@ fn revoke(args: &Args, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// `config` (ESC-702): the automatic update and its channel changed when asked, then said.
+fn config(args: &Args, automatic: Option<bool>, beta: Option<bool>) -> Result<()> {
+    let data = data_of(args)?;
+    autoupdate::configure(&data, automatic, beta)?;
+    if status::supervisor() == Some(status::Supervisor::Docker) {
+        println!(
+            "{}",
+            tr!(
+                "Dans l’image Docker, rien n’est remplacé : le serveur dit seulement qu’une nouvelle image existe.",
+                "In the Docker image, nothing is replaced: the server only says that a new image exists."
+            )
+        );
+    }
+    println!("{}", autoupdate::shown(&data));
+    Ok(())
+}
+
 /// `health`: the server of the folder runs and still writes its status (`status`): exit code 0, else 1 and why.
 fn health(args: &Args) -> Result<()> {
     let data = data_of(args)?;
@@ -903,7 +958,12 @@ pub async fn serve(
     // The data folder first: nothing of it is touched while another process holds it.
     let lock = crate::headless::InstanceLock::acquire(data.root()).map_err(|e| anyhow!("{e:#}"))?;
     let store = Arc::new(secrets::FileStore::open(&data)?);
-    let host = Arc::new(HeadlessHost::new(resources()).with_secrets(store.clone()));
+    let mut host = HeadlessHost::new(resources()).with_secrets(store.clone());
+    // In a build of development only, another version (the e2e of « Mettre à jour le serveur », ESC-702).
+    if let Some(v) = test_version() {
+        host = host.with_version(&v);
+    }
+    let host = Arc::new(host);
     let root = data.root().to_path_buf();
     let listen = endpoint.listen;
     let port = endpoint.port;
@@ -976,6 +1036,8 @@ pub async fn serve(
     tauri::async_runtime::spawn_blocking(move || warm.warm_claude());
     core.read_all_account_models();
     crate::selfupdate::watch(core.clone());
+    // Its own update (ESC-702): its channel looked at, a version put in place, the restart at rest.
+    let own_update = server_update(&core);
     if !endpoint.hosts.is_empty() {
         log::info!(
             "escouade-server: the API takes the Host {} besides the loopback's (--allow-host)",
@@ -996,7 +1058,13 @@ pub async fn serve(
     // What it says of itself, for `health` and `update` beside it.
     let writer = tauri::async_runtime::spawn(write_status(core.clone(), shown.clone()));
     ready(&api);
-    let why = stop.await;
+    let why = match &own_update {
+        Some(u) => tokio::select! {
+            why = stop => why,
+            _ = u.restarting() => "update",
+        },
+        None => stop.await,
+    };
     log::info!("escouade-server: {why}: stopping (the agents' turns are cut, the state written)");
     writer.abort();
     core.gate.stop();
@@ -1006,6 +1074,55 @@ pub async fn serve(
     status::remove(&status_data);
     log::info!("escouade-server: stopped");
     Ok(())
+}
+
+/// In a build of development, `ESCOUADE_SERVER_TEST_VERSION`: the version the server says it is (never in a release).
+fn test_version() -> Option<String> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    std::env::var("ESCOUADE_SERVER_TEST_VERSION")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| update::is_version(v))
+}
+
+/// The server's own update (ESC-702), kept in the core for the remote API and its commands, its loop started.
+fn server_update(core: &Arc<crate::core::Core>) -> Option<Arc<autoupdate::ServerUpdate>> {
+    let target = match autoupdate::Target::here() {
+        Ok(t) => t,
+        Err(e) => {
+            log::warn!("escouade-server update: no automatic update: {e:#}");
+            return None;
+        }
+    };
+    let client = match update::client(&core.settings.read()) {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("escouade-server update: no automatic update: {e:#}");
+            return None;
+        }
+    };
+    let source = autoupdate::Source {
+        client,
+        base: update::base(),
+        key: update::key(),
+        arch: update::arch().to_string(),
+    };
+    let u = autoupdate::ServerUpdate::new(&core.host.version(), core.data.clone(), source, target);
+    // A build of development reads no real release by itself (as the app, ESC-543): a release of test, or nothing.
+    let u = if cfg!(debug_assertions) && std::env::var(update::URL_VAR).is_err() {
+        log::info!(
+            "escouade-server update: a build of development looks for no version by itself without {}",
+            update::URL_VAR
+        );
+        u.without_looking()
+    } else {
+        u
+    };
+    let _ = core.server_update.set(u.clone());
+    u.watch(core.clone());
+    Some(u)
 }
 
 /// What the log of a server with no paired device says: how to pair one (never a code).
@@ -1027,13 +1144,14 @@ async fn write_status(core: Arc<crate::core::Core>, api: String) {
     let updates = crate::updates::Updates::default();
     let supervisor = status::supervisor();
     let started_at = crate::model::now_ms();
-    let mut written: Option<(Option<String>, usize)> = None;
+    let mut written: Option<(Option<String>, usize, Option<autoupdate::State>)> = None;
     let mut last = std::time::Instant::now();
     loop {
         let now = crate::model::now_ms();
         let snapshot = crate::updates::snapshot(&core, &updates, now);
         let busy = crate::updates::busy(&snapshot).map(|b| status::busy_word(b).to_string());
-        let seen = (busy.clone(), snapshot.turns);
+        let update = core.server_update.get().map(|u| u.state());
+        let seen = (busy.clone(), snapshot.turns, update.clone());
         if written.as_ref() != Some(&seen) || last.elapsed() >= status::EVERY {
             let s = status::Status {
                 pid: std::process::id(),
@@ -1044,6 +1162,7 @@ async fn write_status(core: Arc<crate::core::Core>, api: String) {
                 busy,
                 turns: snapshot.turns,
                 supervisor,
+                update,
             };
             if let Err(e) = status::write(&core.data, &s) {
                 log::warn!("escouade-server: {} not written: {e:#}", status::FILE);

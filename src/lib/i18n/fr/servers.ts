@@ -110,9 +110,23 @@ export default {
     version: {
       title: '{name} a une autre version d’Escouade',
       text: 'Ce poste a Escouade {client}, le serveur {server}. Ils doivent avoir la même pour se parler.',
-      updateServer: 'Le serveur est à mettre à jour : sur le serveur, installe escouade-server {client}.',
+      updateServer: 'Le serveur est à mettre à jour vers {client}.',
       updateClient: 'Ce poste est à mettre à jour vers {server}.',
       updateClientButton: 'Mettre à jour Escouade',
+      // « Mettre à jour le serveur » (ESC-702).
+      updateServerButton: 'Mettre à jour le serveur',
+      confirmTitle: 'Mettre à jour {name} en {version} ?',
+      confirmText:
+        'Le serveur télécharge escouade-server {version}, vérifie sa signature, le pose, puis redémarre dès qu’il est au repos : aucun tour, aucune question, aucune tâche de fond, aucun lancement. Aucun agent n’est coupé.',
+      confirm: 'Mettre à jour',
+      asking: 'Demande en cours…',
+      asked: '{name} se met en {version} : il redémarre dès qu’il est au repos, et ce poste s’y reconnecte de lui-même.',
+      reconnect: 'Se reconnecter',
+      failed: 'La mise à jour n’a pas été demandée : {error}',
+      byHand: 'Ou, sur le serveur :',
+      image: 'Dans l’image Docker, rien n’est remplacé : la mise à jour est une nouvelle image. Sur le serveur :',
+      copy: 'Copier la commande',
+      copied: 'Copiée',
     },
     revoked: {
       title: 'Ce poste n’est plus appairé à {name}',

@@ -610,6 +610,62 @@ impl RemoteApi {
     /// The device whose token `token` is, forgetting this server (ESC-537): revoked, its own name said as who asked;
     /// its connections closed, its sessions forgotten, and the devices paired from it with it. None when the token is
     /// no device's, or not the device of the tunnel's peer it comes through (as the handshake, SR1-10).
+    /// The server's update asked by the device of `token` (ESC-702): a computer's alone, under the policies, on a
+    /// server; the version it aims at, or why not (its code and its text).
+    fn update_asked(
+        &self,
+        token: &str,
+        version: &str,
+        source: &Source,
+    ) -> Result<String, (&'static str, String)> {
+        let core = self.services.core().clone();
+        if let Err(e) = core.locks.read().check_remote_api() {
+            return Err((codes::POLICY, e.to_string()));
+        }
+        self.devices.refresh();
+        let Some(device) = self.devices.find(token) else {
+            self.failed(source);
+            return Err((
+                codes::TOKEN,
+                tr!(
+                    "Jeton d’appareil absent, inconnu ou révoqué.",
+                    "Device token missing, unknown or revoked."
+                ),
+            ));
+        };
+        if device.scope != super::Scope::Computer {
+            log::warn!(
+                "remote API: « {} » ({}) asked the server's update: refused, a computer's alone",
+                device.name,
+                device.scope.as_str()
+            );
+            return Err((
+                codes::SCOPE,
+                tr!(
+                    "Seul un poste appairé met le serveur à jour, jamais un téléphone.",
+                    "Only a paired computer updates the server, never a phone."
+                ),
+            ));
+        }
+        let Some(update) = core.server_update.get() else {
+            return Err((
+                codes::UNAVAILABLE,
+                tr!(
+                    "Ce cœur n’est pas un serveur : il ne se met pas à jour ainsi.",
+                    "This core is not a server: it does not update itself this way."
+                ),
+            ));
+        };
+        log::info!(
+            "remote API: « {} » asks the server's update to {version}",
+            device.name
+        );
+        update.ask(version).map_err(|e| {
+            log::warn!("remote API: the server's update to {version} refused: {e:#}");
+            (codes::UPDATE, format!("{e:#}"))
+        })
+    }
+
     fn unpair(&self, token: &str, via: &Via) -> Option<super::devices::Device> {
         self.devices.refresh();
         let device = self.devices.find(token)?;
@@ -996,6 +1052,25 @@ impl RemoteApi {
                     send_all(&mut sink, messages).await;
                     return;
                 }
+                // A computer asks the server's update (ESC-702): its token, its scope; closed either way.
+                Ok(ToServer::UpdateServer { token, version }) => {
+                    let messages = match self.update_asked(&token_of(token), &version, &source) {
+                        Ok(to) => {
+                            let mut out = Vec::new();
+                            if let Ok(text) = serde_json::to_string(&ToClient::UpdateAsked { to }) {
+                                out.push(Message::text(text));
+                            }
+                            out.push(Message::Close(Some(CloseFrame {
+                                code: CloseCode::Normal,
+                                reason: "update".into(),
+                            })));
+                            out
+                        }
+                        Err((code, error)) => refuse(code, error, None, None),
+                    };
+                    send_all(&mut sink, messages).await;
+                    return;
+                }
                 // A device that forgets this server (ESC-537): its token revoked; closed either way.
                 Ok(ToServer::Unpair { token }) => {
                     let messages = match self.unpair(&token_of(token), &via) {
@@ -1055,6 +1130,12 @@ impl RemoteApi {
         } else if let Some(device) = self.devices.find(&token) {
             if version != server_version {
                 let update = proto::to_update(&server_version, &version);
+                // A newer client knocked: the server looks for its version at once (ESC-702).
+                if update == "server" {
+                    if let Some(u) = core.server_update.get() {
+                        u.poke();
+                    }
+                }
                 // How to put the server at the client's version (ESC-515), for the client to offer it.
                 let server_update = (update == "server").then(|| {
                     proto::server_update(

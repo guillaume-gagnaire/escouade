@@ -1141,6 +1141,73 @@ impl Servers {
         self.change(|s| s.active = None);
     }
 
+    /// « Mettre à jour le serveur » (ESC-702) on the server `id`, which refused this computer's version: asked by this
+    /// computer's token, through the tunnel already up or one of its own, briefly. The version it aims at, or what the
+    /// server said (as text, never run).
+    pub async fn update_server(
+        self: &Arc<Self>,
+        id: &str,
+        version: &str,
+    ) -> Result<String, String> {
+        let Some(known) = self.known(id) else {
+            return Err(tr!("serveur inconnu", "unknown server"));
+        };
+        let Some(token) = self.token(id) else {
+            return Err(tr!(
+                "ce poste n’a pas de jeton pour ce serveur",
+                "this computer has no token for this server"
+            ));
+        };
+        let up = self
+            .live
+            .lock()
+            .get(id)
+            .filter(|l| *l.state.lock() == TunnelState::Up)
+            .map(|l| *l.port.lock());
+        let own = if up.is_none() {
+            Some(
+                Tunnel::start(&self.ssh, &known.dest, known.remote_port, None)
+                    .map_err(|e| e.output.trim().to_string())?,
+            )
+        } else {
+            None
+        };
+        let stream = match (&own, up) {
+            (Some(t), _) => t
+                .listening(Duration::from_secs(20))
+                .await
+                .map_err(|e| e.output.trim().to_string()),
+            (None, Some(port)) => tokio::net::TcpStream::connect(("127.0.0.1", port))
+                .await
+                .map_err(|e| e.to_string()),
+            (None, None) => Err(tr!("aucun tunnel", "no tunnel")),
+        };
+        let port = own.as_ref().map(|t| t.port).or(up).unwrap_or(0);
+        let answer = match stream {
+            Ok(stream) => client::update_server(stream, port, &token, version)
+                .await
+                .map_err(|r| match r {
+                    client::Refusal::Refused { error, .. } => error,
+                    client::Refusal::NoEscouade { detail } => detail,
+                }),
+            Err(e) => Err(e),
+        };
+        if let Some(t) = own {
+            t.stop();
+        }
+        match &answer {
+            Ok(to) => log::info!(
+                "servers: the update of {} to {to} asked",
+                known.dest.shown()
+            ),
+            Err(e) => log::warn!(
+                "servers: the update of {} to {version} refused: {e}",
+                known.dest.shown()
+            ),
+        }
+        answer
+    }
+
     /// The server `id` forgotten here (S15): asked to revoke this computer when it answers, then its token and its line
     /// forgotten. Whether the server revoked it.
     pub async fn forget(self: &Arc<Self>, id: &str) -> bool {

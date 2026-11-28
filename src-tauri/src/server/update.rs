@@ -82,7 +82,7 @@ pub fn target_of(
         }
     };
     if target < current_v && !(asked.to.is_some() && asked.downgrade) {
-        bail!(match &asked.to {
+        return Err(anyhow::Error::new(Older(match &asked.to {
             Some(_) => tr!(
                 "{target} est plus ancienne que ce programme ({current}) : « --to {target} --downgrade » pour revenir en arrière, rien n’est changé",
                 "{target} is older than this program ({current}): “--to {target} --downgrade” to go back, nothing is changed"
@@ -91,10 +91,36 @@ pub fn target_of(
                 "la version publiée ({target}) est plus ancienne que ce programme ({current}) : rien n’est changé (« --to X.Y.Z --downgrade » pour revenir en arrière)",
                 "the published version ({target}) is older than this program ({current}): nothing is changed (“--to X.Y.Z --downgrade” to go back)"
             ),
-        });
+        })));
     }
     Ok(target.to_string())
 }
+
+/// The refusal of a version older than the program's ([`target_of`]): the automatic update (`autoupdate`) takes it for
+/// « nothing newer », never for a failure.
+#[derive(Debug)]
+pub struct Older(pub String);
+
+impl std::fmt::Display for Older {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Older {}
+
+/// The refusal of an archive whose signature does not hold ([`download`]): the automatic update never downloads that
+/// version again by itself (`autoupdate`).
+#[derive(Debug)]
+pub struct SignatureRefused(pub String);
+
+impl std::fmt::Display for SignatureRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for SignatureRefused {}
 
 /// The archive `data` checked as [`verify`] does, and its signature bound to its name: the trusted comment (which the
 /// signature covers) must say `file:<name>`, as the Tauri signer writes it (`timestamp:…\tfile:<name>`). The signed
@@ -173,7 +199,7 @@ pub fn verify(data: &[u8], sig: &str, key: &str) -> Result<String> {
 
 /// The key that checks the archives: the updater's; another in a build of development when `ESCOUADE_SERVER_UPDATE_PUBKEY`
 /// gives one (never in a release: a variable never weakens it).
-fn key() -> String {
+pub(crate) fn key() -> String {
     if cfg!(debug_assertions) {
         if let Ok(k) = std::env::var(KEY_VAR) {
             if !k.trim().is_empty() {
@@ -184,7 +210,7 @@ fn key() -> String {
     UPDATER_PUBLIC_KEY.to_string()
 }
 
-fn base() -> String {
+pub(crate) fn base() -> String {
     std::env::var(URL_VAR)
         .ok()
         .filter(|u| !u.trim().is_empty())
@@ -341,12 +367,20 @@ pub async fn download(
     .await
     .with_context(|| url.clone())?;
     verify_archive(&bytes, &sig, key, &archive_name(target, arch)).map_err(|e| {
-        anyhow!(tr!(
+        anyhow::Error::new(SignatureRefused(tr!(
             "signature refusée ({e:#}) : l’archive ne vient pas de la release d’Escouade, rien n’est changé",
             "signature refused ({e:#}): the archive does not come from Escouade's release, nothing is changed"
-        ))
+        )))
     })?;
     Ok(bytes)
+}
+
+/// The client that reads the releases, as the settings `settings` say (their proxy, their authorities).
+pub(crate) fn client(settings: &crate::model::Settings) -> Result<reqwest::Client> {
+    Ok(crate::tls::app_builder(settings)?
+        .timeout(Duration::from_secs(300))
+        .user_agent(concat!("escouade-server/", env!("CARGO_PKG_VERSION")))
+        .build()?)
 }
 
 /// `escouade-server update` on the data folder `data`.
@@ -371,10 +405,22 @@ pub fn run(data: &DataDir, asked: &Asked) -> Result<()> {
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
-    let client = crate::tls::app_builder(&settings)?
-        .timeout(Duration::from_secs(300))
-        .user_agent(concat!("escouade-server/", env!("CARGO_PKG_VERSION")))
-        .build()?;
+    // Its channel (ESC-702): the one its settings keep, and `--beta` puts it there for good (« mis en bêta »).
+    if asked.beta && !asked.check && !settings.beta_updates {
+        super::autoupdate::configure(data, None, Some(true))?;
+        println!(
+            "{}",
+            tr!(
+                "Canal : bêta, gardé dans les réglages du serveur (« escouade-server config channel stable » pour revenir).",
+                "Channel: beta, kept in the server's settings (“escouade-server config channel stable” to go back)."
+            )
+        );
+    }
+    let asked = &Asked {
+        beta: asked.beta || settings.beta_updates,
+        ..asked.clone()
+    };
+    let client = client(&settings)?;
     let base = base();
     let target = runtime.block_on(read_target(&client, &base, current, asked))?;
     let running = status::read(data).filter(|s| status::alive(s.pid));

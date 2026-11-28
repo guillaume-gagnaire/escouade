@@ -3039,3 +3039,93 @@ fn the_core_derives_a_phone_s_token_and_key_as_the_phone_does() {
         "a key pair of the core's own for each pairing"
     );
 }
+
+/// What the server answers a first message `message`, sent in place of the handshake.
+async fn first_answer(api: &RemoteApi, message: &ToServer) -> ToClient {
+    let ws = open(api.addr(), proto::PATH, None, None).await.unwrap();
+    let mut c = Client {
+        ws,
+        next: 1,
+        seen: Vec::new(),
+    };
+    c.send(message).await;
+    let first = c.recv().await.expect("an answer");
+    parse(&first).expect("a message of the protocol")
+}
+
+/// The server's update (ESC-702) for the tests: on a release that answers nothing, putting versions in place.
+fn test_server_update(core: &crate::core::Core) -> Arc<crate::server::autoupdate::ServerUpdate> {
+    use crate::server::autoupdate;
+    let dir = crate::paths::test_dir("remote-update-program");
+    std::fs::create_dir_all(&dir).unwrap();
+    let u = autoupdate::ServerUpdate::with_periods(
+        "2.3.0",
+        core.data.clone(),
+        autoupdate::Source {
+            client: reqwest::Client::builder().no_proxy().build().unwrap(),
+            base: "http://127.0.0.1:9/r".into(),
+            key: crate::server::update::UPDATER_PUBLIC_KEY.into(),
+            arch: "x64".into(),
+        },
+        autoupdate::target_in(&dir, Some(crate::server::status::Supervisor::Systemd), true),
+        Duration::from_secs(3600),
+        Duration::from_secs(3600),
+    );
+    let _ = core.server_update.set(u.clone());
+    u
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_server_s_update_is_asked_by_a_computer_alone_and_refused_to_a_phone_or_an_unknown_token(
+) {
+    let (_dir, h, api, token) = served("remote-server-update").await;
+    let (_, phone_token) = api
+        .devices()
+        .add_as("Pixel", None, remoteapi::Scope::Phone, None)
+        .unwrap();
+    let ask = |token: &str, version: &str| ToServer::UpdateServer {
+        token: token.into(),
+        version: version.into(),
+    };
+    // A core that is not a server's: refused, said.
+    let refused = first_answer(&api, &ask(&token, "9.9.9")).await;
+    assert_eq!(code_of(&refused), Some(codes::UNAVAILABLE), "{refused:?}");
+    let update = test_server_update(&h.core);
+    // An unknown token, a phone's: refused, nothing asked.
+    let refused = first_answer(&api, &ask("not-a-token", "9.9.9")).await;
+    assert_eq!(code_of(&refused), Some(codes::TOKEN), "{refused:?}");
+    let refused = first_answer(&api, &ask(&phone_token, "9.9.9")).await;
+    assert_eq!(code_of(&refused), Some(codes::SCOPE), "{refused:?}");
+    // A computer's, for an older version: refused with its reason.
+    let refused = first_answer(&api, &ask(&token, "1.0.0")).await;
+    assert_eq!(code_of(&refused), Some(codes::UPDATE), "{refused:?}");
+    assert_eq!(
+        update.state().phase,
+        crate::server::autoupdate::Phase::Waiting
+    );
+    // A computer's, for a newer one: asked.
+    let asked = first_answer(&api, &ask(&token, "9.9.9")).await;
+    assert!(
+        matches!(&asked, ToClient::UpdateAsked { to } if to == "9.9.9"),
+        "{asked:?}"
+    );
+    // The served commands: a computer reads the state and asks; a phone is refused by its scope.
+    let mut laptop = Client::connect(&api, &token).await;
+    let state = laptop.ok("server_update_state", json!({})).await;
+    assert_eq!(state["version"], json!("2.3.0"));
+    assert_eq!(state["channel"], json!("stable"));
+    assert_eq!(
+        laptop
+            .ok("server_update_start", json!({ "version": "9.9.9" }))
+            .await,
+        json!("9.9.9")
+    );
+    let mut phone = Client::connect(&api, &phone_token).await;
+    for (cmd, args) in [
+        ("server_update_state", json!({})),
+        ("server_update_start", json!({ "version": "9.9.9" })),
+    ] {
+        let refused = phone.call(cmd, args).await;
+        assert_eq!(code_of(&refused), Some(codes::SCOPE), "{cmd}: {refused:?}");
+    }
+}
