@@ -134,7 +134,8 @@ Tried without secrets (2026-11-28, fastlane 2.242.0): every lane stops before do
   | `appstore-6.9` | 1,290 × 2,796 | App Store, 6.9-inch iPhone |
   | `appstore-6.5` | 1,242 × 2,688 | App Store, 6.5-inch iPhone |
 
-  Six screens per locale: the “Your turn” thread (dark and light), an authorization unfolded, a choice and its renders, the conversation, the agents, the Kanban. The agents' texts come from the fake `claude`, in French; the app's own follow the locale. The icon (512 × 512) and Google's feature graphic (1,024 × 500) remain to be made with the design.
+  Six screens per locale: the “Your turn” thread (dark and light), an authorization unfolded, a choice and its renders, the conversation, the agents, the Kanban. The agents' texts come from the fake `claude`, in French; the app's own follow the locale.
+- **Google Play's images**, drawn from the app's icon: the icon at 512 × 512 and the feature graphic at 1,024 × 500 (a PNG without transparency), in `fr-FR` and `en-US`, in `apps/mobile/store/graphics/play/`, by `node apps/mobile/scripts/play-graphics.mjs`. The App Store takes the icon from the binary.
 - The lanes send no text nor screenshot: you paste them in the consoles (or a `supply`/`deliver` lane comes later, with your agreement).
 
 ## 6. The privacy policy
