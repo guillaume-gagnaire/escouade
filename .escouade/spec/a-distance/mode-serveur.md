@@ -1,9 +1,9 @@
 ---
 title: "Le mode serveur"
 subject: "a-distance"
-sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs, image-tags.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image), .github/dependabot.yml","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »","Revue de sécurité de la 2.3 (ESC-624), rapport privé SR-1, constats SR1-07, SR1-12, SR1-13 (ESC-640)"]
-tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620","ESC-654","ESC-631","ESC-640"]
-decisions: [202,216,281,289,328,331]
+sources: ["docs/REMOTE.md, « Le mode serveur », « Le mode serveur, MS-1 (ESC-514) », « Le mode serveur, MS-3 (ESC-515) », « La mise à jour automatique du serveur (ESC-702) », « Tâches › Mode serveur »","docs/CRATES.md, § 14 (le cœur sans Tauri)","src-tauri/src/server (mod.rs, secrets.rs, logs.rs, status.rs, update.rs, autoupdate.rs), src-tauri/src/bin/escouade-server.rs","src-tauri/src/remoteapi/pairing.rs, devices.rs, server.rs, proto.rs","src/components/servers/UpdateServer.svelte, src/components/settings/ServerUpdates.svelte","crates/escouade-tauri-shim","deploy/ (Dockerfile, docker-compose.yml, coolify/docker-compose.yml, install.sh, README.md)","scripts/server-libs.sh, server-trial.sh, server-package.sh, server-release.sh, server-image-test.sh, server-image-client.mjs, server-install-test.sh, minisign-verify.mjs, image-tags.mjs",".github/workflows/ci.yml (Server (Linux)), .github/workflows/release.yml (server, server-image), .github/dependabot.yml","website/content/docs/fr/server.md, website/content/docs/en/server.md","tests/e2e/server.spec.ts, tests/e2e/server.ts, tests/e2e/server-update.spec.ts","Demande de l'utilisateur du 2026-11-16 : « faudra penser à proposer une image docker prête à l'emploi pour déployer un serveur escouade »","Demande de l'utilisateur du 2026-11-27 : « Faudra gérer évidemment l'auto update du binaire serveur » (ESC-702)","Revue de sécurité de la 2.3 (ESC-624), rapport privé SR-1, constats SR1-07, SR1-12, SR1-13 (ESC-640)"]
+tickets: ["ESC-514","ESC-515","ESC-537","ESC-538","ESC-539","ESC-567","ESC-620","ESC-654","ESC-631","ESC-640","ESC-702"]
+decisions: [202,216,281,289,328,331,362]
 compared: null
 ---
 
@@ -11,7 +11,7 @@ compared: null
 
 Escouade tourne sur une machine sans bureau (un VPS, un conteneur), H24, et le client de bureau la pilote à distance par l'API distante (voir *L'API distante*), à travers un tunnel. Le cœur (agents, harness, worktrees, Kanban, terminaux, serveur MCP) tourne sur le serveur ; le client n'en est qu'une vue : le fermer, éteindre le poste ou couper le réseau ne touche à aucun agent.
 
-Ce qui est livré : le programme du serveur, `escouade-server` (MS-1) ; le client qui s'y connecte, par un tunnel SSH qu'il ouvre lui-même, décrit dans *Se connecter à un serveur* (ESC-537) ; et la distribution du serveur (ESC-515) : l'image Docker, un Compose d'exemple et une recette Coolify, le script d'installation systemd, la mise à jour signée, la release ; et ce qui change de machine (ESC-538 : les dossiers du serveur, les fichiers envoyés et reçus, les ports relayés, les notifications, la voix, les comptes, les secrets), décrit dans *Ce qui change de machine*. Le guide de l'utilisateur est la page « Mode serveur » de la documentation du site.
+Ce qui est livré : le programme du serveur, `escouade-server` (MS-1) ; le client qui s'y connecte, par un tunnel SSH qu'il ouvre lui-même, décrit dans *Se connecter à un serveur* (ESC-537) ; et la distribution du serveur (ESC-515) : l'image Docker, un Compose d'exemple et une recette Coolify, le script d'installation systemd, la mise à jour signée, la release ; et ce qui change de machine (ESC-538 : les dossiers du serveur, les fichiers envoyés et reçus, les ports relayés, les notifications, la voix, les comptes, les secrets), décrit dans *Ce qui change de machine* ; et la mise à jour automatique du serveur avec l'écran « Mettre à jour le serveur » du client (ESC-702). Le guide de l'utilisateur est la page « Mode serveur » de la documentation du site.
 
 ## `escouade-server`
 
@@ -22,7 +22,7 @@ Ce qui est livré : le programme du serveur, `escouade-server` (MS-1) ; le clien
 - Il charge le cœur comme l'app de bureau (projets, agents, Kanban, Git, plugins, comptes), sans fenêtre : ce que le bureau montrerait (une notification, un carillon, le compte de ce qui attend) est poussé aux clients, qui le rendent chez eux ; le clic d'une notification revient au serveur, qui garde l'action de ses 64 dernières. Ce qu'il demanderait d'ouvrir (un lien, un de ses fichiers) n'est jamais ouvert par un client sans geste.
 - Il sert l'API distante sur **127.0.0.1** (port 46480, ou `--port`). On l'atteint par un tunnel (`ssh -L <port local>:127.0.0.1:46480 <hôte>`).
 - Il s'arrête proprement à **SIGTERM** (systemd, `docker stop`) ou Ctrl+C : l'API se ferme, les tours en cours des agents sont coupés (chacun reprend sa session au démarrage suivant, comme quand on quitte l'app), l'état est écrit, le dossier est lâché.
-- Il dit ce qu'il fait dans `server-status.json`, dans son dossier : son processus, sa version, l'adresse de son API, ce qui le tient occupé (un tour, une question, une tâche de fond, un lancement, un terminal servi depuis moins de 5 minutes : ce qui retient aussi le redémarrage automatique de l'app), réécrit toutes les 5 secondes et aussitôt que cela change, retiré à l'arrêt propre. `health` et `update` le lisent. Il ne contient aucun secret.
+- Il dit ce qu'il fait dans `server-status.json`, dans son dossier : son processus, sa version, l'adresse de son API, ce qui le tient occupé (un tour, une question, une tâche de fond, un lancement, un terminal servi depuis moins de 5 minutes : ce qui retient aussi le redémarrage automatique de l'app), et où en est sa mise à jour (`update`, voir *La mise à jour automatique*), réécrit toutes les 5 secondes et aussitôt que cela change, retiré à l'arrêt propre. `health` et `update` le lisent. Il ne contient aucun secret.
 - **Au premier démarrage**, tant qu'aucun appareil n'est appairé, le journal dit comment en appairer un (« lance « escouade-server pair » sur ce serveur », « docker exec <conteneur> escouade-server pair » dans l'image), jamais le code.
 
 ## Ses commandes
@@ -35,11 +35,12 @@ Ce qui est livré : le programme du serveur, `escouade-server` (MS-1) ; le clien
 | `escouade-server devices revoke <id>` | Révoque un appareil : son jeton ne vaut plus ; un serveur qui tourne ferme ses connexions en quelques secondes |
 | `escouade-server health` | Code 0 si le serveur du dossier tourne et écrit son état depuis moins de 30 s, 1 sinon, avec la raison : le `HEALTHCHECK` de l'image |
 | `escouade-server update` | Met le serveur à une version signée (voir *La mise à jour*) : `--to X.Y.Z` (avec `--downgrade` pour une plus ancienne), `--beta`, `--now`, `--check` |
+| `escouade-server config` | La mise à jour automatique et son canal (voir *La mise à jour automatique*) : sans argument, ce qui est réglé ; `automatic on` ou `off`, `channel stable` ou `beta` |
 | `--data-dir <dossier>`, `--port <n>`, `--listen <adresse>`, `--allow-host <nom>`, `--trust-proxy <adresse>`, `--debug`, `--version`, `--help` | Les options |
 
 Chaque option a sa variable d'environnement, pour un conteneur ; l'option donnée l'emporte, une variable vide compte pour absente : `ESCOUADE_SERVER_DATA`, `ESCOUADE_SERVER_PORT`, `ESCOUADE_SERVER_LISTEN`, `ESCOUADE_SERVER_ALLOW_HOSTS` (des noms séparés par des virgules), `ESCOUADE_SERVER_TRUST_PROXIES` (des adresses IP séparées par des virgules). C'est ce qui fait que `docker exec <conteneur> escouade-server pair` vise le dossier du serveur du conteneur.
 
-`--help` n'exécute jamais une commande à sa place (`pair --help`, `update --help` montrent l'aide, sans faire de code ni rien télécharger). `--to`, `--beta`, `--now`, `--check` et `--downgrade` ne vont qu'avec `update`, `--downgrade` qu'avec `--to` (« --downgrade va avec --to X.Y.Z : la version plus ancienne se nomme »), et `--to` veut une version (`X.Y.Z`, `X.Y.Z-beta.N`). Les commandes parlent la langue des réglages du dossier de données, sinon celle du système. `pair` et `devices` marchent que le serveur tourne ou non.
+`--help` n'exécute jamais une commande à sa place (`pair --help`, `update --help` montrent l'aide, sans faire de code ni rien télécharger). `--to`, `--beta`, `--now`, `--check` et `--downgrade` ne vont qu'avec `update`, `--downgrade` qu'avec `--to` (« --downgrade va avec --to X.Y.Z : la version plus ancienne se nomme »), et `--to` veut une version (`X.Y.Z`, `X.Y.Z-beta.N`). Les commandes parlent la langue des réglages du dossier de données, sinon celle du système. `pair`, `devices` et `config` marchent que le serveur tourne ou non.
 
 ## L'appairage d'un appareil
 
@@ -82,7 +83,7 @@ Le serveur le dit à chaque client : le message d'accueil de l'API porte `secret
 - **Le réseau** : sans `ESCOUADE_SERVER_LISTEN`, l'API n'écoute que sur 127.0.0.1 **du conteneur** : rien n'est joignable du dehors, même un port publié. L'image n'expose aucun port. `ESCOUADE_SERVER_LISTEN=0.0.0.0` l'ouvre au réseau du conteneur, pour un port publié sur 127.0.0.1 de l'hôte seulement (le tunnel SSH vers l'hôte) ou un proxy TLS devant. **L'API y est alors en clair** (HTTP et WebSocket sans TLS) : tout autre conteneur de ce réseau (sur Coolify, les autres ressources du même réseau) l'atteint et peut tenter des codes d'appairage et des jetons, dans les bornes de *L'appairage*. Le TLS est celui du proxy ou du tunnel : le Dockerfile, les deux exemples et la documentation le disent, et conseillent le proxy TLS ou le tunnel, jamais un port publié sur une adresse publique.
 - **Sa santé** : `HEALTHCHECK` lance `escouade-server health` (toutes les 30 s, 120 s laissées au démarrage).
 - **Son arrêt** : `docker stop` (SIGTERM) arrête proprement ; les exemples donnent 60 s.
-- **Sa mise à jour** est une nouvelle image : `escouade-server update` refuse de tourner dans l'image (il le sait par `ESCOUADE_SERVER_IMAGE`) et dit quoi faire.
+- **Sa mise à jour** est une nouvelle image : `escouade-server update` refuse de tourner dans l'image (il le sait par `ESCOUADE_SERVER_IMAGE`) et dit quoi faire ; la mise à jour automatique n'y remplace rien et dit seulement qu'une nouvelle image existe (voir *La mise à jour automatique*).
 - **Les limites conseillées**, d'après une mesure sur l'image x64 : au repos, les plugins chargés, environ 235 Mo et 106 tâches (processus et threads) ; un agent du faux `claude` des tests en plein tour en ajoute environ 18 Mo et 7. Un vrai harness pèse plus. Les exemples fixent 4 Go de mémoire et 2048 tâches, pour quelques agents à la fois.
 
 ## Compose et Coolify
@@ -103,25 +104,45 @@ Aucun exemple n'expose l'API sans TLS sur Internet.
 
 - il télécharge l'archive de la release (la dernière, ou `--version`), vérifie sa **SHA-256** et sa **signature** (la clé de l'updater de l'app ; avec `minisign`, sinon `openssl` 3) : une archive refusée ne change rien ;
 - par défaut, un **service de l'utilisateur** (`systemctl --user`, `loginctl enable-linger` pour qu'il tourne sans session) ; avec `--system`, un **service du système** lancé par l'utilisateur `escouade` (créé s'il manque ; `--user` en choisit un autre), à qui le programme appartient pour qu'il se mette à jour lui-même ;
-- le service : `Restart=always` (après une panne et après `update`), `KillMode=mixed` (SIGTERM au seul serveur, qui arrête ses agents lui-même), 90 s pour s'arrêter, `UMask=0077`, `NoNewPrivileges` ;
+- le service : `Restart=always` (après une panne, après `update` et après la mise à jour automatique), `KillMode=mixed` (SIGTERM au seul serveur, qui arrête ses agents lui-même), 90 s pour s'arrêter, `UMask=0077`, `NoNewPrivileges` ;
+- **une bêta installée** (`--version X.Y.Z-beta.N`) met le serveur sur le canal bêta (`escouade-server config channel beta`, une fois le service relancé), et le dit ;
 - **idempotent** : relancé, il ne change que ce qui diffère, et ne redémarre pas un serveur à la même version ;
 - **désinstallable** : `--uninstall` retire le service et le programme et garde les données ; `--uninstall --purge` retire aussi les données (avec `--system`, l'utilisateur et tout son dossier) ;
-- à la fin, il dit comment appairer, le tunnel, la mise à jour, et que les connexions des comptes vivent sur ce serveur.
+- à la fin, il dit comment appairer, le tunnel, la mise à jour (automatique, `config` pour la régler, `update` pour en faire une tout de suite), et que les connexions des comptes vivent sur ce serveur.
 
 ## La mise à jour
 
 `escouade-server update` :
 
-1. la version : `--to X.Y.Z` (celle que propose le client), sinon celle de `latest.json` de la dernière release ; avec `--beta`, **la plus haute** de `latest.json` et de `beta.json` (comme l'app avec « Recevoir les versions bêta » : une stable sortie après la dernière bêta l'emporte ; sans `beta.json`, celle de `latest.json`) ; `--check` la dit sans rien faire ;
+1. la version : `--to X.Y.Z` (celle que propose le client), sinon celle de `latest.json` de la dernière release ; sur le canal bêta (les réglages du serveur, `betaUpdates`, ou `--beta`, qui l'y met pour de bon et le dit), **la plus haute** de `latest.json` et de `beta.json` (comme l'app avec « Recevoir les versions bêta » : une stable sortie après la dernière bêta l'emporte ; sans `beta.json`, celle de `latest.json`) ; `--check` la dit sans rien faire ;
 2. **jamais une version plus ancienne que la sienne** (ESC-640, SR1-07 : un miroir de `ESCOUADE_SERVER_UPDATE_URL`, ou qui peut changer `latest.json`, servirait une ancienne version signée et vulnérable) : « la version publiée (1.0.0) est plus ancienne que ce programme (2.3.0) : rien n'est changé ». Une bêta compte avant sa version (2.3.0-beta.4 est plus ancienne que 2.3.0) : un serveur sur une bêta y reste jusqu'à la stable qui la suit. Revenir en arrière se fait en la nommant, `--to X.Y.Z --downgrade` ; `--to` seul vers une plus ancienne est refusé et dit comment faire ; la même version ne télécharge rien ;
 3. l'archive de cette version pour l'architecture et sa signature, **vérifiée avec la clé de l'updater de l'app** avant de rien toucher, et **liée à son nom** : le commentaire de confiance de la signature (signé avec elle, `timestamp:…<tab>file:<nom>` tel que l'écrit le signataire de Tauri) doit nommer l'archive attendue, `file:escouade-server-<version>-linux-<arch>.tar.gz`. L'archive signée d'une autre version servie sous ce nom est refusée, même si ses octets sont bien signés ; une signature qui ne tient pas : « signature refusée … rien n'est changé » ;
 4. chaque fichier de l'archive (le programme, l'amorce) posé à la place du sien, l'ancien gardé en `.old` ;
 5. le serveur qui tourne est arrêté **une fois au repos** (aucun tour, aucune question en attente, aucune tâche de fond, aucun lancement, aucun terminal servi depuis 5 minutes) ; dans un terminal, il propose de redémarrer tout de suite en coupant les tours ; `--now` le fait sans attendre ; systemd le relance sur la nouvelle version, et `update` le dit. Sans superviseur, il dit de le relancer ;
 6. dans l'image Docker, il refuse : la mise à jour est une nouvelle image.
 
-Quand la poignée de main refuse la version du client parce que le serveur est plus ancien, elle dit comment mettre le serveur à la version du client (voir *L'API distante*) ; l'écran « Mettre à jour le serveur » vient avec le client. Cette commande ne vise jamais qu'une version plus récente que celle du serveur : seul le côté le plus ancien est mis à jour.
-
 L'app de bureau a la même faiblesse de principe, bornée autrement : voir *Livraison et mises à jour*, « Ce que couvre la signature ».
+
+## La mise à jour automatique (ESC-702)
+
+Le serveur se met à jour **tout seul**, par les fonctions mêmes de `escouade-server update` (la version visée, le téléchargement et sa signature liée au nom de l'archive, la pose avec les `.old`) : aucun chemin à part.
+
+- **Quand** : 2 minutes après son démarrage (les agents repris, les plugins chargés d'abord), puis **toutes les 15 minutes**. L'app cherche toutes les 5 minutes, et le serveur refuse un client d'une autre version : un quart d'heure garde cet écart court, pour un JSON de quelques centaines d'octets ; l'archive ne se télécharge qu'une fois, quand elle est neuve. Il cherche aussi tout de suite quand un de ses deux réglages change, quand un client plus récent est refusé à la poignée de main (avec un jeton d'appareil valide seulement), et quand un administrateur le demande (ci-dessous). Un build de développement ne lit aucune vraie release de lui-même : seulement celle de `ESCOUADE_SERVER_UPDATE_URL` (comme l'app, voir *Livraison et mises à jour*).
+- **Son canal et son interrupteur** sont deux réglages du serveur, ceux de l'app : **« Installer les mises à jour automatiquement » (`autoUpdate`), allumé par défaut comme dans l'app**, et « Recevoir les versions bêta » (`betaUpdates`), éteint par défaut. `install.sh --version X.Y.Z-beta.N` et `escouade-server update --beta` mettent le canal bêta ; `escouade-server config automatic on|off` et `config channel stable|beta` les changent (le serveur qui tourne les prend lui-même, dans les 2 secondes, sous ses stratégies ; arrêté, son fichier de réglages est écrit, le reste gardé tel quel) ; un client les change dans Réglages › Général de l'espace du serveur. **Les stratégies** du poste et d'une équipe qui couvrent le serveur les bornent comme pour l'app : `updates.automatic` à `false` éteint l'automatique (une version est dite, jamais posée seule), `updates.channel` à `stable` garde le canal stable.
+- **Ce qu'il fait** d'une version de son canal plus récente que lui, sous systemd sous Linux et l'automatique allumé : il la télécharge, vérifie sa signature, la pose, puis attend **le repos** (aucun tour, aucune question, aucune tâche de fond, aucun lancement, aucun terminal servi depuis 5 minutes, ce qui retient le redémarrage de l'app) ; au repos, il note le redémarrage (`server-update.json`), s'arrête comme à SIGTERM (les agents reprennent leurs sessions) et systemd le relance. Au démarrage suivant, il dit qu'il a redémarré sur la nouvelle version ; s'il est encore à l'ancienne, il dit que la version n'a pas pris et ne la réessaie plus de lui-même (pas de boucle de redémarrages).
+- **Jamais plus ancien** que lui : une version publiée plus ancienne vaut « rien de plus récent ». **Une archive dont la signature ne tient pas** ne change rien et n'est plus jamais retéléchargée d'elle-même.
+- **L'automatique éteint, sans systemd, ou hors de Linux** : il dit la version trouvée et la commande (`escouade-server update --to X.Y.Z`), ne pose rien.
+- **Dans l'image**, rien n'est remplacé : il dit qu'une nouvelle image existe, avec la commande `docker pull ghcr.io/…/escouade-server:<version> && docker compose up -d`, dans son journal, dans `server-status.json` et au client.
+- **Le journal** dit chaque version trouvée, vérifiée, posée, l'attente du repos et ce qui le retient, l'arrêt pour la mise à jour et le redémarrage, et chaque refus avec sa raison (une version plus ancienne, une signature refusée, un téléchargement ou une pose ratés, une version qui n'a pas pris), une fois par version.
+
+## « Mettre à jour le serveur » (ESC-702)
+
+- **Sur le refus de version**, quand c'est le serveur à mettre à jour (voir *L'API distante*, `serverUpdate`), l'espace du serveur dit sa version et celle du poste, et offre **« Mettre à jour le serveur »**. Après une confirmation qui dit ce qui suit (le téléchargement, la signature, le redémarrage au repos, aucun agent coupé), le poste le demande au serveur par son jeton, à la place de la poignée de main ; le serveur se met à la version du poste, jamais plus ancienne que la sienne, par la mise à jour automatique (même s'il a l'automatique éteint), puis redémarre au repos. L'espace dit que c'est demandé et retente la connexion toutes les 30 secondes. La commande à lancer à la main sur le serveur reste affichée, à copier, avec « Réessayer ».
+- **Réservée à un poste** : seul un appareil de la portée `computer` (l'administrateur du serveur, qui l'a appairé) le demande ; un téléphone est refusé (`scope`), un jeton inconnu aussi (`token`), sous les stratégies du serveur (`servers.remoteApi`).
+- **Une erreur se dit une fois** (dans l'image, sans systemd, une version plus ancienne, un jeton refusé), avec le bouton pour réessayer à la main : jamais de nouvelle demande d'elle-même.
+- **Dans l'image**, l'écran donne la commande `docker pull` à recopier sur le serveur, sans bouton qui changerait le serveur.
+- **Connecté**, Réglages › Général d'un espace de serveur montre **les mises à jour du serveur** à la place de celles du poste : sa version, la version trouvée et où elle en est (posée, en attente du repos et ce qui le retient, en redémarrage, une nouvelle image et sa commande, une erreur), « Mettre à jour le serveur » avec la même confirmation quand une version attend et qu'il peut la poser, et ses deux réglages, sous ses stratégies.
+- **Le téléphone** n'y a pas accès, et sa boîte « À toi » ne dit pas la version du serveur.
 
 ## La release
 
@@ -131,7 +152,7 @@ Le workflow de release publie, pour chaque version : les archives `escouade-serv
 
 - L'API n'écoute que sur 127.0.0.1. `--listen <adresse>` la met sur une autre adresse. Cette option ne sert qu'à Docker, derrière un tunnel, un réseau privé ou un proxy. Elle avertit dans le journal et sur la sortie d'erreur : « ATTENTION : l'API distante écoute sur … pas seulement sur 127.0.0.1 … jamais ouvert sur Internet ». Rien n'est ouvert par défaut.
 - `--allow-host` n'ajoute qu'un nom au contrôle de `Host` ; il n'ouvre aucune interface. `--trust-proxy` ne change que la source à qui sont comptés les échecs ; il n'ouvre rien non plus, et le journal dit au démarrage quels proxys sont déclarés.
-- Les stratégies imposées valent pour le serveur : `servers.remoteApi` à `false` l'empêche de servir l'API, et refuse aussi l'appairage.
+- Les stratégies imposées valent pour le serveur : `servers.remoteApi` à `false` l'empêche de servir l'API, et refuse aussi l'appairage et la demande de mise à jour ; `updates.automatic` et `updates.channel` bornent sa mise à jour automatique.
 - Tout le reste de *L'API distante* vaut ici : le `Host` du bouclage, pas d'`Origin` de page web, les bornes des connexions, des appels et des files.
 
 ## Le journal
@@ -140,6 +161,7 @@ Chaque ligne va sur la **sortie standard**, pour le journal de systemd et les lo
 
 - le démarrage, l'adresse de l'API, le dossier de données et celui des secrets, les noms pris en plus dans `Host` et les proxys déclarés ; sans appareil appairé, comment en appairer un ;
 - chaque appareil appairé, chaque connexion ;
+- chaque étape de sa mise à jour automatique (voir plus haut) et chaque demande d'un administrateur ;
 - chaque refus et sa raison ;
 - l'arrêt et ce qui l'a demandé.
 
@@ -147,7 +169,6 @@ Il ne dit jamais de jeton, de code, de secret ni ce qu'écrit un terminal. `--de
 
 ## Pas encore
 
-- L'écran « Mettre à jour le serveur » qui lance la commande ou dit l'image (le fait est exposé : `serverUpdate`).
 - Une adresse `wss://` d'un domaine dans le client.
 - Les serveurs de langage de l'éditeur, encore refusés à distance.
 

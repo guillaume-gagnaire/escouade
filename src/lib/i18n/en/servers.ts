@@ -107,9 +107,23 @@ export default defineZone('servers', {
     version: {
       title: '{name} runs another version of Escouade',
       text: 'This computer has Escouade {client}, the server {server}. They need the same one to talk.',
-      updateServer: 'The server needs updating: on the server, install escouade-server {client}.',
+      updateServer: 'The server needs updating to {client}.',
       updateClient: 'This computer needs updating to {server}.',
       updateClientButton: 'Update Escouade',
+      // “Update the server” (ESC-702).
+      updateServerButton: 'Update the server',
+      confirmTitle: 'Update {name} to {version}?',
+      confirmText:
+        'The server downloads escouade-server {version}, checks its signature, puts it in place, then restarts as soon as it is at rest: no turn, no question, no background task, no launch. No agent is cut.',
+      confirm: 'Update',
+      asking: 'Asking…',
+      asked: '{name} is moving to {version}: it restarts as soon as it is at rest, and this computer reconnects by itself.',
+      reconnect: 'Reconnect',
+      failed: 'The update was not asked: {error}',
+      byHand: 'Or, on the server:',
+      image: 'In the Docker image, nothing is replaced: an update is a new image. On the server:',
+      copy: 'Copy the command',
+      copied: 'Copied',
     },
     revoked: {
       title: 'This computer is no longer paired with {name}',

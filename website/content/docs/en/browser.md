@@ -1,6 +1,8 @@
 # Browsers
 
-Escouade has browsers, as it has terminals: the “Browsers” section of the sidebar, under “Terminals”, has one row per tab. You open the app you’re building there, next to the agents writing it, with its developer tools and three widths, without switching windows. A browser opens on its own, from its “+”, or by itself when an agent’s test or a launch command is ready.
+Escouade has browsers, as it has terminals: the “Browsers” section of the sidebar, under “Terminals”, has one row per tab. You open the app you’re building there, next to the agents writing it, with its developer tools and three widths, without switching windows.
+
+A browser opens on its own, from its “+”, or by itself when an agent’s test or a launch command is ready.
 
 ![A browser full screen: its bar (address, widths, Devtools) and the page of the app being built; on the left, the “Browsers” section and its three rows](/images/en/browser.jpg)
 

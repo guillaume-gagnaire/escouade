@@ -125,10 +125,22 @@ A backup holds the accounts’ sign-ins and the secrets: keep it encrypted, as t
 
 ## Update
 
-- **In Docker**, an update is a new image: `docker compose pull && docker compose up -d` (or `docker pull`, then the container made again on the same volume). The agents resume their sessions. `escouade-server update` refuses to run in the image.
-- **With systemd**: `escouade-server update`. It reads the latest version (`--to X.Y.Z` for a given version, `--beta` for the higher of the beta and stable channels, `--check` to only say it), downloads the archive, checks its signature with the key of the app’s updates and that this signature names this very archive, then puts each file in place of the old one, kept as `.old`. It then waits for the server to be at rest (no turn under way, no question waiting, no background task, no terminal used in the last 5 minutes); in a terminal, it offers to restart right away, cutting the turns, and `--now` does so without waiting. systemd starts the server again on the new version. It never goes back to an older version than its own unless it is named: `--to X.Y.Z --downgrade`.
+The server updates **itself**. Shortly after it starts, then every 15 minutes, it looks for a version of its channel: stable, or beta when it was installed as a beta (`install.sh --version X.Y.Z-beta.N`) or put on beta. It downloads it, checks its signature as `escouade-server update` does, puts it in place, then restarts **at rest** only: no turn under way, no question waiting, no background task, no launch, no terminal used in the last 5 minutes. systemd starts it again on the new version. It never takes an older version than its own, and an archive whose signature does not hold changes nothing. Its log says each version found, checked, put in place and started again, and each refusal with its reason.
 
-When your computer’s version and the server’s differ, the server refuses the connection and says which to update; for the server, it gives the command that puts it at the computer’s version (`escouade-server update --to <version>`, or the new image in Docker), which the client offers you.
+To turn it off or change the channel, on the server:
+
+```sh
+escouade-server config                      # what is set
+escouade-server config automatic off        # it says the version found, putting nothing in place
+escouade-server config channel beta         # or stable
+```
+
+From your computer, on the server’s space, **Settings › General** shows its version, the one it found and these two settings; “Update the server” asks it. A policy of your company or your team may impose either (`updates.automatic`, `updates.channel`), as for the app. Without systemd, the server puts nothing in place itself: it says the version and the command to run.
+
+- **In Docker**, an update is a new image: `docker compose pull && docker compose up -d` (or `docker pull`, then the container made again on the same volume). The agents resume their sessions. `escouade-server update` refuses to run in the image, and the server never replaces anything there: it says that a new image exists, in its log and in your Settings, with the `docker pull` command.
+- **With systemd, by hand**: `escouade-server update`. It reads the latest version (`--to X.Y.Z` for a given version, `--beta` for the higher of the beta and stable channels, `--check` to only say it), downloads the archive, checks its signature with the key of the app’s updates and that this signature names this very archive, then puts each file in place of the old one, kept as `.old`. It then waits for the server to be at rest (no turn under way, no question waiting, no background task, no terminal used in the last 5 minutes); in a terminal, it offers to restart right away, cutting the turns, and `--now` does so without waiting. systemd starts the server again on the new version. It never goes back to an older version than its own unless it is named: `--to X.Y.Z --downgrade`.
+
+When your computer’s version and the server’s differ, the server refuses the connection and says which to update. When it is the server, the space says both versions and offers **“Update the server”**: once you confirm, your computer asks it with its token (a phone cannot), and the server moves to your version, then restarts at rest; your computer reconnects. In Docker, the screen gives the `docker pull` command to copy on the server.
 
 ## Advised limits
 
@@ -144,6 +156,7 @@ Measured on the image, on an x64 computer: the server at rest, its plugins loade
 | `escouade-server devices revoke <id>` | Revokes a device |
 | `escouade-server health` | Exit code 0 if the server runs and answers, 1 otherwise (the image’s `HEALTHCHECK`) |
 | `escouade-server update` | Puts the server at the latest signed version (`--to`, `--beta`, `--now`, `--check`) |
+| `escouade-server config` | The automatic update and its channel (`automatic on` or `off`, `channel stable` or `beta`) |
 
 Each option has its environment variable; the option wins over the variable.
 

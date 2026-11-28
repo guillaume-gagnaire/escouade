@@ -7108,6 +7108,18 @@ pub async fn server_forget(servers: ServersState<'_>, id: String) -> Res<bool> {
     Ok(servers.inner().forget(&id).await)
 }
 
+/// « Mettre à jour le serveur » (ESC-702) on the server `id`, which refused this computer's version: `version` (this
+/// computer's) asked by its token; the version aimed at, or what the server said.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn server_update_ask(
+    servers: ServersState<'_>,
+    id: String,
+    version: String,
+) -> Res<String> {
+    servers.inner().update_server(&id, &version).await
+}
+
 /// What stopped the window's tries on the server `id`, noted for Réglages › Serveurs.
 #[cfg(feature = "desktop")]
 #[tauri::command]
@@ -7231,6 +7243,35 @@ pub fn remote_device_revoke(core: CoreState, id: String) -> Res<bool> {
         core.phone.drop_revoked();
     }
     Ok(revoked)
+}
+
+/// Where the server's own update stands (ESC-702, Réglages › Général of a server's space): its version, the version
+/// found, its switch and its channel, the image's command. None from a core that is not a server's (the window's own).
+/// The window, or a device of the scope `computer`.
+#[tauri::command(async)]
+pub fn server_update_state(core: CoreState) -> Res<Option<crate::server::autoupdate::State>> {
+    computer_caller(&core)?;
+    Ok(core.server_update.get().map(|u| u.state()))
+}
+
+/// « Mettre à jour le serveur » (ESC-702) from a client on the server: `version` put in place as the automatic update
+/// does (signed, never older than the server), the server restarted once at rest. A device of the scope `computer`
+/// alone, never a phone; refused in the image (a new image is the update) and without systemd. Answers the version
+/// aimed at.
+#[tauri::command(async)]
+pub fn server_update_start(core: CoreState, version: String) -> Res<String> {
+    computer_caller(&core)?;
+    let Some(update) = core.server_update.get() else {
+        return Err(tr!(
+            "Ce cœur n’est pas un serveur : il ne se met pas à jour ainsi.",
+            "This core is not a server: it does not update itself this way."
+        ));
+    };
+    log::info!(
+        "escouade-server update: {version} asked by {}",
+        crate::remoteapi::current_device().unwrap_or_else(|| "the window".into())
+    );
+    update.ask(&version).map_err(err)
 }
 
 /// A phone's QR code (ESC-570, Réglages › Téléphone; Réglages de l'espace › Appareils on a server): ten minutes, one

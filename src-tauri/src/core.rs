@@ -1044,6 +1044,8 @@ pub struct Core {
     pub client_ui: RwLock<HashMap<crate::remoteapi::Client, UiState>>,
     /// This core is a server's (`escouade-server`, ESC-620): its Kanbans go up to 64 tickets at once, not 16.
     pub(crate) server: AtomicBool,
+    /// The server's own update (ESC-702): set by `escouade-server` alone, for the remote API and its commands.
+    pub server_update: std::sync::OnceLock<Arc<crate::server::autoupdate::ServerUpdate>>,
     pub agents: RwLock<HashMap<String, AgentHandle>>,
     pub stats: Stats,
     pub usage: Mutex<UsageSnapshot>,
@@ -2387,6 +2389,7 @@ impl Core {
             ui: RwLock::new(state.ui),
             client_ui: RwLock::new(HashMap::new()),
             server: AtomicBool::new(false),
+            server_update: std::sync::OnceLock::new(),
             agents: RwLock::new(agents),
             usage: Mutex::new(usage),
             models: RwLock::new(state.models),

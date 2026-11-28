@@ -463,6 +463,8 @@ pub mod codes {
     pub const UNAVAILABLE: &str = "unavailable";
     /// The command panicked.
     pub const PANICKED: &str = "panicked";
+    /// The server's update asked by a client (ESC-702) refused: in the image, without systemd, an older version…
+    pub const UPDATE: &str = "update";
     /// The message is not one of the protocol's.
     pub const BAD_MESSAGE: &str = "bad-message";
     /// The client and the server are not of the same version: « Mettre à jour le serveur ».

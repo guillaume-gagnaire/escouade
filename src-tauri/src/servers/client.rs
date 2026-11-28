@@ -190,6 +190,31 @@ pub async fn pair(
     }
 }
 
+/// The server asked to put itself at `version` (ESC-702, « Mettre à jour le serveur »), by this computer's token: the
+/// version it aims at, or why not (`token`, `scope`, `update`: in the image, without systemd, an older version).
+pub async fn update_server(
+    stream: tokio::net::TcpStream,
+    port: u16,
+    token: &str,
+    version: &str,
+) -> Result<String, Refusal> {
+    match ask(
+        stream,
+        port,
+        &ToServer::UpdateServer {
+            token: token.to_string(),
+            version: version.to_string(),
+        },
+    )
+    .await?
+    {
+        ToClient::UpdateAsked { to } => Ok(to),
+        _ => Err(Refusal::NoEscouade {
+            detail: tr!("réponse inattendue", "unexpected answer"),
+        }),
+    }
+}
+
 /// This computer forgotten by the server: its token revoked there.
 pub async fn unpair(stream: tokio::net::TcpStream, port: u16, token: &str) -> Result<(), Refusal> {
     match ask(

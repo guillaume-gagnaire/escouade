@@ -398,6 +398,9 @@ escouade_command::commands! {
         commands::remote_devices,
         commands::remote_device_revoke,
         commands::remote_pair_code,
+        // « Mettre à jour le serveur » (ESC-702): the server's own update, a computer's alone.
+        commands::server_update_state,
+        commands::server_update_start,
         commands::phone_pair_qr,
         // Réglages › Téléphone (ESC-567): the phone's tunnel of this core, a server's from its space's settings.
         commands::phone_status,
@@ -579,6 +582,7 @@ escouade_command::commands! {
         commands::server_retry,
         commands::server_forget,
         commands::server_note,
+        commands::server_update_ask,
         commands::server_rename,
         // What changes machines on a server (ESC-538): this computer's side (the downloads, the ports relayed, the
         // notifications shown).

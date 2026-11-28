@@ -68,6 +68,9 @@ pub struct Status {
     pub turns: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supervisor: Option<Supervisor>,
+    /// Its own update (ESC-702): the version found, put in place, or the new image, and what to run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update: Option<super::autoupdate::State>,
 }
 
 pub fn path(data: &DataDir) -> PathBuf {
