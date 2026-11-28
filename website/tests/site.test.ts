@@ -60,8 +60,11 @@ describe('the roadmap', () => {
   it('announces a version that is not out yet: once it is, the roadmap says what comes after it', () => {
     const parts = (v: string) => v.split('.').map(Number);
     const [nextMajor, nextMinor] = parts(NEXT);
-    const [major, minor] = parts(VERSION);
-    expect(nextMajor > major || (nextMajor === major && nextMinor > minor), `${NEXT} after ${VERSION}`).toBe(true);
+    const [major, minor] = parts(VERSION.split('-')[0]);
+    // A pre-release (2.3.0-beta.2) is not that version out: the roadmap may still announce it.
+    const out = !VERSION.includes('-');
+    const after = nextMajor > major || (nextMajor === major && (nextMinor > minor || (!out && nextMinor === minor)));
+    expect(after, `${NEXT} after ${VERSION}`).toBe(true);
     expect(existsSync(new URL(`../../docs/TODO-${NEXT}.md`, import.meta.url)), `docs/TODO-${NEXT}.md`).toBe(true);
   });
 });
