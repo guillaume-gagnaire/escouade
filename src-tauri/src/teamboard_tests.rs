@@ -198,7 +198,16 @@ pub(crate) async fn server() -> (
     tempfile::TempDir,
 ) {
     let dir = tempfile::tempdir().unwrap();
-    let config = escouade_team_server::config::Config::in_folder(dir.path().join("server"));
+    let mut config = escouade_team_server::config::Config::in_folder(dir.path().join("server"));
+    // Every machine of a test is on 127.0.0.1: they share one bucket of the address, where real members have one each.
+    // A reading makes some fifteen requests; on a fast machine (the CI's Mac) the readings a test runs back to back
+    // emptied the default burst, the server answered 429 and `sync_team_board` let that reading go (logged), so a
+    // teammate's write was not seen yet. The address's bucket is widened here alone; each device keeps its own
+    // (`per_device`, as served), and the bounds of the rate have their own tests (escouade-team-server).
+    config.rates.per_address = escouade_team_server::config::Rate {
+        per_second: 1000.0,
+        burst: 4000.0,
+    };
     let server = Arc::new(escouade_team_server::Server::open(config).await.unwrap());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
