@@ -178,12 +178,18 @@ test('Réglages › Téléphone says who STUN asks and when, and STUN turned off
   await expect(dialog.getByText(/toutes les 5 minutes, ce poste demande son adresse publique à stun\.cloudflare\.com/)).toBeVisible();
   await sw.click();
   await expect(sw).toHaveAttribute('aria-checked', 'false');
+  // The switch turns at once; its change is over when it can be turned again.
+  await expect(sw).toBeEnabled();
   const port = dialog.getByRole('spinbutton', { name: 'Port UDP' });
-  await port.fill(String(UDP));
-  // The app of the worker may hold the port of the tests' already (the test before): « Appliquer » is then greyed.
   const apply = dialog.getByRole('button', { name: 'Appliquer' });
-  if (await apply.isEnabled()) await apply.click();
+  // The app of the worker may hold the port of the tests' already (the test before); else it is applied.
+  if ((await port.inputValue()) !== String(UDP)) {
+    await port.fill(String(UDP));
+    await expect(apply).toBeEnabled();
+    await apply.click();
+  }
   await expect(apply).toBeDisabled();
+  await expect(port).toHaveValue(String(UDP));
   stunAsked = 0;
   await dialog.getByRole('switch', { name: 'Accès depuis le téléphone' }).click();
   await expect(dialog.getByTestId('phone-state')).toContainText(`Prêt sur le port UDP ${UDP}`);

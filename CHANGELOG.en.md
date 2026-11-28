@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Settings › Phone: a UDP port typed and not applied yet is no longer wiped when you switch another setting of the page (STUN, Tailscale) meanwhile.
 - The mobile app shows a project’s Kanban, one column at a time: swipe a ticket to test to approve it (behind the phone’s lock) or send it back to its agent with a word, start a ticket to do, let the agent resolve a conflict. Tapped, a ticket offers the same gestures as buttons.
 - Team server: the server can send its own audit log to the team’s security tool (a file, the standard output or syslog over TLS, CEF as an option), signed by a key drawn at `init`, with opaque ids and never any content or secret. Off by default: `escouade-team-server serve --audit-file`, `--audit-stdout` or `--audit-syslog`, the IP address set by `--audit-ip`.
 - Security: a paired phone now has only what it needs: your “Your turn” box, your answers, your conversations and the Kanban. The terminal, the files, the secrets, the plugins, the devices and the network stay with the computers; Space settings › Devices shows what each device is.

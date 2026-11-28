@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Réglages › Téléphone : un port UDP tapé et pas encore appliqué ne s’efface plus quand tu bascules un autre réglage de la page (STUN, Tailscale) entre-temps.
 - L’app mobile montre le Kanban d’un projet, une colonne à la fois : glisse un ticket à tester pour le valider (sous le verrou du téléphone) ou le renvoyer à son agent avec un mot, lance un ticket à faire, laisse l’agent résoudre un conflit. Touché, un ticket offre les mêmes gestes en boutons.
 - Serveur d’équipe : le serveur peut envoyer son propre journal d’audit à l’outil de sécurité de l’équipe (un fichier, la sortie standard ou syslog sur TLS, CEF en option), signé par une clé tirée à `init`, avec des ids opaques et jamais un contenu ni un secret. Éteint par défaut : `escouade-team-server serve --audit-file`, `--audit-stdout` ou `--audit-syslog`, l’adresse IP réglable par `--audit-ip`.
 - Sécurité : un téléphone appairé n’a plus que ce qu’il lui faut : ta boîte « À toi », tes réponses, tes conversations et le Kanban. Le terminal, les fichiers, les secrets, les plugins, les appareils et le réseau restent aux postes ; Réglages de l’espace › Appareils montre ce qu’est chaque appareil.

@@ -98,9 +98,13 @@
 
   async function change(args: { enabled?: boolean; port?: number; tailscale?: boolean; stun?: boolean }) {
     busy = true;
+    const before = status ? String(status.port) : null;
     try {
-      status = await invoke<PhoneStatus>('phone_set', args);
-      port = String(status.port);
+      const s = await invoke<PhoneStatus>('phone_set', args);
+      // The port typed and not applied stays as typed while another setting changes (a switch turned meanwhile), as
+      // in `load`; applied, or not touched, it is the one served.
+      if (args.port !== undefined || before === null || String(port) === before) port = String(s.port);
+      status = s;
       failed = '';
     } catch (e) {
       failed = String(e);

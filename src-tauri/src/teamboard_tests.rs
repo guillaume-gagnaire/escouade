@@ -750,10 +750,18 @@ async fn a_ticket_a_teammate_writes_and_assigns_waits_for_its_accept() {
     // And her real autopilot, on, takes it: the ticket starts, with an agent. Where it is by then is not asked: on a fast
     // machine the fake claude has already ended its turn and the ticket gone on to « En revue ».
     assert!(ha.core.ticket(&seen.id).unwrap().started_at.is_none());
+    // A pass whose claim the server refused for a moment (its rate) leaves the ticket « À faire » until the next pass:
+    // the test makes them, as the core's events do.
     ha.set_board(&pa.id, |s| s.autopilot = true);
-    ha.wait_board_idle().await;
-    ha.wait_ticket(&seen.id, "started by her autopilot", |t| {
+    let started = |t: &crate::model::Ticket| {
         t.column != crate::model::Column::Todo && t.started_at.is_some() && t.agent_id.is_some()
-    })
-    .await;
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !started(&ha.core.ticket(&seen.id).unwrap()) && std::time::Instant::now() < deadline {
+        ha.core.schedule();
+        ha.wait_board_idle().await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    ha.wait_ticket(&seen.id, "started by her autopilot", started)
+        .await;
 }
