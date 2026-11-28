@@ -512,7 +512,7 @@ impl Store for Postgres {
         public_key: [u8; 32],
         now: i64,
         quotas: Quotas,
-    ) -> Result<Device> {
+    ) -> Result<(Device, TokenKind)> {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await?;
         let Some(token) = tx
@@ -535,7 +535,9 @@ impl Store for Postgres {
             )
             .await?;
             tx.commit().await?;
-            return Err(StoreError::TokenUsed);
+            return Err(StoreError::TokenUsed(
+                team.as_deref().and_then(|t| t.try_into().ok()),
+            ));
         }
         if expires_at.is_some_and(|e| e <= now) {
             tx.execute("DELETE FROM tokens WHERE hash = $1", &[&hash.as_slice()])
@@ -600,14 +602,17 @@ impl Store for Postgres {
         )
         .await?;
         tx.commit().await?;
-        Ok(Device {
-            id,
-            team,
-            public_key,
-            role,
-            created_at: now,
-            revoked_at: None,
-        })
+        Ok((
+            Device {
+                id,
+                team,
+                public_key,
+                role,
+                created_at: now,
+                revoked_at: None,
+            },
+            TokenKind::from_code(kind),
+        ))
     }
 
     async fn device(&self, id: Id) -> Result<Option<Device>> {
@@ -762,7 +767,7 @@ impl Store for Postgres {
         entry: NewEntry,
         quotas: Quotas,
         page: Page,
-    ) -> Result<Entry> {
+    ) -> Result<(Entry, u64)> {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await?;
         let row = tx
@@ -777,6 +782,7 @@ impl Store for Postgres {
         if (stored + size) as u64 > quotas.team_bytes {
             return Err(StoreError::Quota);
         }
+        let stands: u64;
         let out = match stream {
             Stream::Team => {
                 let is_commit = entry.kind == Kind::Commit;
@@ -829,6 +835,7 @@ impl Store for Postgres {
                         });
                     }
                 }
+                stands = commits as u64;
                 let seq = seq + 1;
                 let epoch = entry
                     .epoch
@@ -883,6 +890,7 @@ impl Store for Postgres {
                     put_claim(&tx, &team, &project, &moved).await?;
                 }
                 let project_commits = current.map_or(0, |c| c.1);
+                stands = project_commits as u64;
                 let reserved = current.is_some_and(|c| c.2);
                 if entry.kind == Kind::Void {
                     let asked = entry.epoch.unwrap_or(u64::MAX);
@@ -984,7 +992,7 @@ impl Store for Postgres {
             }
         };
         tx.commit().await?;
-        Ok(out)
+        Ok(with_epoch(out, stands))
     }
 
     async fn drop_entry(
@@ -1641,7 +1649,7 @@ impl Store for Postgres {
         now: i64,
         lease: i64,
         quotas: Quotas,
-    ) -> Result<Claim> {
+    ) -> Result<(Claim, Option<Claim>)> {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await?;
         // The team's row locked: claims and holders' writes go one at a time, as on SQLite.
@@ -1676,10 +1684,11 @@ impl Store for Postgres {
             ClaimAsk::Hand { to, .. } => holder_ok(&tx, &team, &project, Some(to)).await?,
             _ => true,
         };
+        let before = current.clone();
         let claim = decide_with(current, ticket, device, ask, now, lease, ok, to_ok)?;
         put_claim(&tx, &team, &project, &claim).await?;
         tx.commit().await?;
-        Ok(claim)
+        Ok((claim, before))
     }
 
     async fn claims(&self, team: Id, project: Id) -> Result<Vec<Claim>> {

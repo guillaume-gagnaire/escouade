@@ -33,10 +33,51 @@ C'est la table du §3.8, et rien de plus.
 | la mémoire du processus | les défis en cours (60 s), le SHA-256 des jetons de session (15 min), les seaux des limites de débit (par adresse IP, par appareil) | |
 | le journal (`RUST_LOG`) | la méthode, **le modèle de la route** (`/v1/projects/{project}/stream`), le statut, la durée | un id d'équipe, de projet, d'appareil ou de fichier, une adresse IP, un jeton, un contenu. Une erreur de la base n'y dit que sa sorte (le code SQLite, le SQLSTATE de PostgreSQL), jamais son texte qui peut citer une valeur ; une erreur de S3, que sa sorte (délai, connexion, envoi, corps) ou le statut rendu, jamais l'URL qui porte l'équipe et le fichier (SR2-10) |
 | les métriques (`/metrics`) | des compteurs par méthode, modèle de route et statut ; les nombres d'équipes, d'appareils et d'appareils révoqués ; les octets écrits ; les connexions en direct | aucun id d'équipe, de projet ni d'appareil |
+| `<data>/audit-key` (AU-2) | la graine de la **clé d'audit** du serveur (Ed25519, 32 octets en hexadécimal, droits `0600`), tirée à `init` ou au premier `serve` ; elle ne signe que l'audit | ni la clé d'un appareil, ni une clé de contenu : elle ne déchiffre rien |
+| l'audit, quand il est allumé (AU-2) | ses événements (plus bas) : des ids opaques, des heures, des sortes, des numéros d'entrées et l'empreinte SHA-256 de leurs octets chiffrés, l'adresse IP (réglable) ; dans la sortie choisie, et dans `<data>/audit/<sortie>/` le temps qu'elle les prenne | un nom, une clé de ticket, un contenu, un jeton, une clé, ni le hachage d'un jeton |
 
-Les tests le vérifient : `ops::the_metrics_say_no_id` cherche chaque id dans les métriques, et `ops::init_then_serve` dans le journal du vrai binaire.
+Les tests le vérifient : `ops::the_metrics_say_no_id` cherche chaque id dans les métriques, `ops::init_then_serve` dans le journal du vrai binaire, et `audit::a_whole_journey_goes_out_in_opaque_ids_without_content_nor_secret` le contenu et les secrets dans tout ce que sort l'audit.
 
-Ce que ça révèle (§3.8) : l'activité (qui écrit quand, sur combien de projets, à quel rythme), la taille des objets, le nombre d'époques. Les adresses IP ne servent qu'à la limite de débit, en mémoire.
+Ce que ça révèle (§3.8) : l'activité (qui écrit quand, sur combien de projets, à quel rythme), la taille des objets, le nombre d'époques. Les adresses IP ne servent qu'à la limite de débit, en mémoire, et à l'audit quand l'équipe l'allume (`--audit-ip`).
+
+## L'audit vers un SIEM (AU-2)
+
+Le serveur émet seul son audit (la source S1 de `docs/TEAM-AUDIT.md`, §3.1), par la crate `escouade-audit` : le modèle `escouade.audit/v1`, signé et chaîné. **Éteint par défaut** ; une option de `serve` l'allume :
+
+| Option | Variable | Ce qu'elle fait |
+| --- | --- | --- |
+| `--audit-file <chemin>` | `ESCOUADE_TEAM_AUDIT_FILE` | JSON lines dans `<dossier>/<nom>.jsonl` (`.jsonl` ajouté s'il manque), tourné à 100 Mio et chaque jour (UTC) en `<nom>-<jour>.<n>.jsonl` : un agent de SIEM suit `<nom>*.jsonl` |
+| `--audit-stdout` | `ESCOUADE_TEAM_AUDIT_STDOUT=1` | JSON lines sur la sortie standard (Docker, journald) ; le journal du serveur passe alors sur la sortie d'erreur |
+| `--audit-syslog tls://hôte:port` | `ESCOUADE_TEAM_AUDIT_SYSLOG` | syslog RFC 5424 sur TLS (RFC 5425), ou `tcp://` ; jamais UDP |
+| `--audit-syslog-ca <pem>` | `ESCOUADE_TEAM_AUDIT_SYSLOG_CA` | les certificats auxquels se fie le TLS de syslog (ceux du système sans elle) |
+| `--audit-cef` | `ESCOUADE_TEAM_AUDIT_CEF=1` | le message de syslog en CEF plutôt qu'en JSON (la signature n'y passe pas : on vérifie le fichier ou le JSON de syslog) |
+| `--audit-ip=full\|truncated\|off` | `ESCOUADE_TEAM_AUDIT_IP` | l'adresse IP en entier (par défaut, A6-A), coupée à son /24 (IPv4) ou son /48 (IPv6), ou retirée |
+
+Les sorties se cumulent. Chacune a son **tampon** sur le disque (`<data>/audit/file`, `stdout`, `syslog`) : un événement y est écrit avant de partir ; une sortie qui ne répond pas (syslog coupé) est réessayée (1 s, puis le double, une minute au plus), ses événements attendent 7 jours ou 1 Gio, puis les plus vieux tombent et `audit.dropped` le dit dans chaque sortie. À l'arrêt (`Ctrl-C`, `SIGTERM`), ce qui attend part ; au redémarrage, la chaîne reprend où elle s'était arrêtée, sans trou ni doublon. Une route ne l'attend jamais : un fil à part scelle et écrit.
+
+**La clé d'audit** : tirée à `init` (et au premier `serve` d'un serveur initialisé avant), gardée dans `<data>/audit-key`, même avec PostgreSQL et S3 (gardez `--data`). `escouade-team-server audit-key` affiche l'id de l'émetteur (`server-` et 16 chiffres hexadécimaux), sa clé publique (`ed25519:…`) et le fichier que lit `escouade-audit verify --keys` ; un administrateur l'inscrit au journal des membres (« la clé d'audit du serveur », AU-5). Elle ne sert qu'à signer l'audit : la perdre ne coupe rien, une nouvelle est tirée, et le SIEM voit un nouvel émetteur.
+
+**Une chaîne pour tout le serveur** : chaque événement dit son équipe (son id en hexadécimal) ; `server` quand le serveur n'en connaît aucune (une adresse au-delà de sa limite, un client trop vieux, un appareil inconnu qui se connecte).
+
+**Ce qu'il émet** (en ids opaques, en hexadécimal : appareils, équipes, projets, tickets) :
+
+| Route | Événements |
+| --- | --- |
+| `POST /v1/enroll` | `device.enrolled` (la sorte du jeton : `init`, `invitation`, `recovery`) ; `recovery.used` pour le jeton de `recovery-token` ; `invitation.reused` pour un jeton servi une seconde fois, sous un id opaque (`t-` et 32 chiffres d'un SHA-256 de son hachage), jamais le jeton ni son hachage |
+| `/v1/auth/challenge`, `/v1/auth/session` | `session.opened` **une fois par appareil et par adresse, puis une fois par jour** (jamais à chaque renouvellement de 15 min) ; `session.refused` (`unknown`, `revoked`, `bad_signature`), une fois par minute pour un appareil, une cause et une adresse |
+| `POST /v1/devices/{id}/revoke`, `…/role` | `device.revoked` ; `role.changed` (le rôle sur le serveur, de l'appareil : l'ancien et le nouveau) |
+| `POST /v1/team/stream`, `/v1/projects/{id}/stream` | `stream.written` avec son **ancre** : le flux (`team`, un flux propre de l'équipe par son nom, `escouade.setting`, ou l'id du projet), le numéro de l'entrée, son époque (celle d'un commit, ou celle où en est le flux pour un message) et `ct`, le SHA-256 de ses octets chiffrés. Pour chaque entrée du flux de l'équipe et de ses flux propres (sauf les totaux des coûts), et pour les commits d'un projet ; jamais ses opérations (le travail de chacun, §6.2) ; `claim.fenced` pour une écriture sous un jeton de prise dépassé |
+| `PUT /v1/projects/{id}/access` | `project.access.changed` (ouvert à l'équipe, ou ses appareils, par 32 au plus) |
+| `/v1/projects/{id}/claims/{ticket}…` | `claim.taken`, `claim.released`, `claim.expired` (le bail d'un autre fini, à la reprise), `handoff.offered`, `handoff.taken`, `handoff.withdrawn` ; **jamais les renouvellements** |
+| avant toute route | `rate.limited` (une adresse ou un appareil, une fois par minute avec le nombre de refus depuis), `client.too_old` (une fois par heure pour une adresse et une version), `request.too_large` (un corps refusé pour sa taille, et la taille la plus grande de la route) |
+
+Les fichiers et les instantanés n'émettent rien : leurs octets sont le contenu des projets. Le serveur ne sait ni qui, ni quel projet, ni ce que fait un commit : la machine d'audit (AU-5) le nommera, par la même ancre.
+
+```sh
+escouade-team-server serve --data /var/lib/escouade-team-server --audit-file /var/log/escouade/audit.jsonl
+escouade-team-server audit-key --data /var/lib/escouade-team-server | tail -1 > keys.json
+escouade-audit verify --keys keys.json /var/log/escouade/audit*.jsonl
+```
 
 ## Le protocole (version 1)
 
@@ -142,7 +183,9 @@ escouade-team-server --help                                       # les commande
 
 `init` affiche un jeton à usage unique, valable 24 h (SR2-11 : un jeton resté dans un terminal ou un historique ne crée plus rien ensuite ; une base d'avant donne aussi 24 h à partir de sa création à un jeton non servi) : le premier administrateur le donne à Escouade avec l'adresse du serveur, et crée ainsi l'équipe (le lien de création viendra avec TS-3). Relancer `init` donne un autre jeton, pour une autre équipe sur le même serveur.
 
-`init --help`, `serve --help`, `recovery-token --help` et `drop-entry --help` affichent l’aide de la commande, sans rien créer ni écouter ; `--version` la version. Une option inconnue, ou d’une autre commande, est refusée avec le code de sortie 2.
+`init` tire aussi la clé d'audit du serveur et affiche sa clé publique (voir « L'audit vers un SIEM »).
+
+`init --help`, `serve --help`, `recovery-token --help`, `drop-entry --help` et `audit-key --help` affichent l’aide de la commande, sans rien créer ni écouter ; `--version` la version. Une option inconnue, ou d’une autre commande, est refusée avec le code de sortie 2.
 
 PostgreSQL : `--database postgres://user:pass@host/base` (ou `ESCOUADE_TEAM_DATABASE_URL`). S3 : `--s3-endpoint`, `--s3-bucket`, `--s3-region`, `--s3-prefix`, et les clés par `ESCOUADE_TEAM_S3_ACCESS_KEY` et `ESCOUADE_TEAM_S3_SECRET_KEY`, jamais en argument.
 
@@ -182,6 +225,7 @@ cd src-tauri && cargo nextest run -p escouade-team-server
 - **TS-6** (`tests/claims.rs`, SQLite puis PostgreSQL) : dix appareils prennent un ticket en même temps, un seul passe et les neuf autres apprennent qui le tient ; le bail renouvelé, fini (le ticket listé avec son détenteur, puis repris sous un nouveau jeton), le renouvellement arrivé trop tard, le rendu, la version attendue ; l'écriture d'un jeton dépassé refusée sans rien garder ; un projet gardé à quelques appareils (les autres ne lisent, n'écrivent, ne prennent, ne numérotent rien, et un membre n'ouvre pas l'accès) ; un détenteur révoqué ne tient plus rien ; le compteur donne chaque numéro une fois ; la trame d'une prise arrive en moins d'une seconde aux seuls appareils du projet. Les tests purs de `db::decide` et `db::fenced` sont dans `db/mod.rs`.
 - **SR2-02** (`tests/drop.rs`, SQLite puis PostgreSQL) : le commit qui bloque retiré, son époque libre pour le commit de l'administrateur, la numérotation gardée, l'empreinte de l'entrée telle que servie, le quota rendu ; un commit que d'autres suivent refusé ; l'entrée d'un projet listée à ses seuls appareils ; rien sans l'équipe ou l'entrée. `tests/cli.rs` : la commande et ses refus (sans équipe, sans flux, deux flux, un flux inconnu, sans numéro, une entrée absente, une équipe absente, un commit suivi d'un autre, sans confirmation), le retrait confirmé ou par `--yes`, l'audit et `--list`, rien de l'entrée ni d'identifiant au journal. Côté appareils : `crates/escouade-team/tests/team.rs` (l'équipe gelée puis dégelée), `sync.rs` (un projet), `catalog.rs` (un flux de l'équipe).
 - **SR2-02, l'annulation** (`tests/voids.rs`, SQLite puis PostgreSQL) : le commit d'un membre refusé sans `own`, pris avec ; l'annulation refusée à un membre, prise d'un administrateur pour le dernier commit seul et une fois ; l'époque réservée aux administrateurs puis reprise par leur commit, le perdant suivant renvoyé au nouveau gagnant ; rien de réécrit (le commit nul servi à l'identique, l'annulation après lui) ; `drop-entry` ne retire ni l'un ni l'autre. Le flux de l'équipe et celui d'un projet. Côté appareils : `crates/escouade-team/tests/nulls.rs`.
+- **AU-2** (`tests/audit.rs`, SQLite puis PostgreSQL) : un parcours entier (une équipe, une invitation servie deux fois, le flux de l'équipe et un de ses flux propres, un projet, son accès, ses tickets pris, renouvelés, rendus, passés et repris, un bail fini, une écriture sous un jeton dépassé, un fichier et un instantané, les rôles, une révocation, les connexions refusées, un client trop vieux, un corps trop grand, le jeton de récupération) : chaque route son événement, les ancres égales aux empreintes des octets servis, aucun contenu, jeton, hachage de jeton, clé ni session dans tout ce qui sort (en clair, en hexadécimal, en base64), `escouade-audit verify` entier sur la sortie ; `--audit-ip` dans ses trois valeurs ; les débits une fois par minute ; la clé tirée une fois et gardée ; éteint par défaut ; syslog sur TLS contre un collecteur local (JSON et CEF) ; le tampon quand syslog est coupé, puis la reprise après l'arrêt du serveur, la chaîne sans trou. `tests/cli.rs` : `init` et `audit-key` affichent la même clé.
 - `tests/ops.rs` : `init` puis `serve` par le vrai binaire, le journal sans id, TLS avec un certificat donné, la base en WAL, les métriques sans id.
 - **PostgreSQL** : chaque test de `server.rs`, de `bounds.rs` et le scénario ont une variante `postgres::`, qui tourne quand `ESCOUADE_TEST_POSTGRES_URL` est posée (un schéma par test, effacé à la fin). La CI la pose dans le job Linux (`linux-rust`, service `postgres:17`), avec `ESCOUADE_TEST_POSTGRES_REQUIRED=1` : une variante sans base y échoue au lieu de passer sans rien dire.
 - **Les bornes** (`tests/bounds.rs`, TS-18) : les appareils et les projets d'une équipe, le temps d'un défi (et la même réponse pour un appareil inconnu ou révoqué), une page en octets et en entrées, la durée d'un jeton d'inscription et la longueur d'un jeton, les trames du direct, ce que porte le relais d'appairage, tout ce qu'un appareil révoqué n'obtient plus, la taille et le temps de l'en-tête HTTP, le temps d'un corps, le délai d'une connexion muette, le plafond des connexions par adresse et en tout, un appareil qui demande des défis sans fin sans gêner les autres, le débit du relais d'appairage et son jeton ; chaque ligne comptée dans les projets ou le quota, un appareil listé deux fois refusé (SR2-04), le jeton d'`init` servi une fois et expiré après 24 h (SR2-11), les appareils révoqués hors du plafond (SR2-12), le dernier administrateur jamais révoqué (SR2-13) ; une erreur de la base ou de S3 sans id (SR2-10 : `db/sqlite.rs`, `files/s3.rs`) ; dans les modules, les défis et sessions en attente, par appareil, par équipe et en tout (`auth.rs`), le /64 d'une adresse IPv6 (`transport/rate.rs`), les prises d'un projet (`db/sqlite.rs`), les créneaux d'appairage (`pair.rs`).

@@ -274,9 +274,20 @@ pub fn verify(public_key: &[u8; 32], device: &Id, challenge: &[u8; 32], signatur
 pub struct Authed {
     pub device: Device,
     pub expires: Instant,
+    /// The client's address, whole: for the audit (AU-2), which `--audit-ip` cuts.
+    pub ip: Option<std::net::IpAddr>,
 }
 
 impl Authed {
+    /// Who the audit says did it.
+    pub fn by(&self) -> crate::audit::By {
+        crate::audit::By {
+            team: self.device.team,
+            device: self.device.id,
+            ip: self.ip,
+        }
+    }
+
     pub fn is_admin(&self) -> bool {
         self.device.role == Role::Admin
     }
@@ -310,11 +321,15 @@ impl FromRequestParts<Shared> for Authed {
             .map_err(|_| Problem::internal())?
             .filter(|d| d.revoked_at.is_none())
             .ok_or_else(refuse)?;
+        if let Some(who) = parts.extensions.get::<std::sync::Arc<crate::Who>>() {
+            *who.0.lock().unwrap_or_else(|e| e.into_inner()) = Some((device.team, device.id));
+        }
         if let Err(wait) = app.device_rate.take(&device.id) {
             Metrics::inc(&app.metrics.rate_limited);
             return Err(rate::refused(wait));
         }
         Ok(Authed {
+            ip: crate::client_ip(app, parts),
             device,
             expires: session.expires,
         })

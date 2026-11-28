@@ -82,6 +82,15 @@ describe('version script', () => {
     );
   });
 
+  it('keeps the connector at the app’s version (ESC-599)', () => {
+    const root = fixture();
+    const crate = path.join(root, 'crates', 'escouade-connector', 'Cargo.toml');
+    fs.mkdirSync(path.dirname(crate), { recursive: true });
+    fs.writeFileSync(crate, '[package]\nname = "escouade-connector"\nversion = "0.1.0"\n');
+    setVersion(root, '2.3.1');
+    expect(readVersions(root)).toEqual({ package: '2.3.1', tauri: '2.3.1', cargo: '2.3.1', connector: '2.3.1' });
+  });
+
   it('the repository’s manifests say one version', () => {
     const versions = Object.values(readVersions(path.join(path.dirname(fileURLToPath(import.meta.url)), '..')));
     expect(versions.length).toBeGreaterThanOrEqual(5);

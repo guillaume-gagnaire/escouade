@@ -123,7 +123,7 @@ fn help_wins_over_the_other_options() {
 
 #[test]
 fn help_command_prints_the_help_of_a_subcommand() {
-    for command in ["init", "serve", "recovery-token", "drop-entry"] {
+    for command in ["init", "serve", "recovery-token", "drop-entry", "audit-key"] {
         let dir = tempfile::tempdir().unwrap();
         let out = run(dir.path(), &["help", command]);
         assert_eq!(out.status.code(), Some(0));
@@ -181,6 +181,11 @@ fn an_unknown_or_misplaced_option_is_a_usage_error() {
         &["init", "stray"],
         &["init", "--listen", "127.0.0.1:1"], // a serve option, misplaced
         &["init", "--trust-proxy"],
+        &["init", "--audit-file", "a.jsonl"], // a serve option, misplaced
+        &["init", "--audit-stdout"],
+        &["audit-key", "--listen", "127.0.0.1:1"],
+        &["audit-key", "--audit-cef"],
+        &["serve", "--audit-stdout=1"],
         &["init", "--team", "00"],
         &["serve", "--bogus"],
         &["serve", "--team", "00"], // a recovery-token option, misplaced
@@ -510,4 +515,47 @@ async fn drop_entry_removes_the_blocking_commit_and_keeps_its_line_of_audit() {
         "{list}"
     );
     s.finish().await;
+}
+
+// === The server's audit key (AU-2) ===
+
+#[test]
+fn audit_key_help_creates_nothing() {
+    help_of("audit-key", "--help", &[]);
+    help_of("audit-key", "-h", &["--data", "somewhere"]);
+}
+
+/// `init` draws the audit key and prints its public half; `audit-key` prints the same, and the keys' file of
+/// `escouade-audit verify`; the seed stays in the data folder, never printed.
+#[test]
+fn init_draws_the_audit_key_and_audit_key_prints_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = run(dir.path(), &["init", "--data", "base"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    let init = text(&out.stdout);
+    let seed = std::fs::read_to_string(dir.path().join("base").join("audit-key")).unwrap();
+    let seed = seed.trim();
+    assert_eq!(seed.len(), 64);
+    let key_of = |s: &str| {
+        s.split_whitespace()
+            .find(|w| w.starts_with("ed25519:"))
+            .expect("a public key")
+            .to_owned()
+    };
+    let public = key_of(&init);
+    assert!(init.contains("drawn now"), "{init}");
+    let out = run(dir.path(), &["audit-key", "--data", "base"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    let shown = text(&out.stdout);
+    assert_eq!(key_of(&shown), public);
+    assert!(shown.contains("emitter:    server-"), "{shown}");
+    let keys = shown.lines().last().unwrap();
+    assert!(escouade_audit::verify::Keys::parse(keys).is_ok(), "{keys}");
+    // Run again, init keeps it.
+    let again = text(&run(dir.path(), &["init", "--data", "base"]).stdout);
+    assert_eq!(key_of(&again), public);
+    assert!(again.contains("kept"));
+    for printed in [&init, &shown, &again] {
+        assert!(!printed.contains(seed), "the seed is never printed");
+    }
 }

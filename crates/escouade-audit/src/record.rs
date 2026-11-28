@@ -328,13 +328,20 @@ impl Emitter {
 
     /// Signs and chains `draft`, seen at `seen`: its id drawn, its number the next of the chain.
     pub fn seal(&mut self, draft: Draft, seen: Time) -> Result<Sealed, SealError> {
+        let team = self.team.clone();
+        self.seal_for(team, draft, seen)
+    }
+
+    /// [`Emitter::seal`] for another team than the emitter's: the emitter of a server that holds several teams (AU-2)
+    /// keeps one chain, each event saying its team.
+    pub fn seal_for(&mut self, team: Team, draft: Draft, seen: Time) -> Result<Sealed, SealError> {
         let mut record = Record {
             id: Ulid::new(seen),
             severity: draft.fact.severity(),
             fact: draft.fact,
             at: draft.at,
             seen,
-            team: self.team.clone(),
+            team,
             source: self.source,
             emitter: EmitterRef {
                 device: self.device.clone(),

@@ -1,0 +1,38 @@
+[package]
+name = "escouade-connector"
+version = "2.2.10"
+description = "The connector of a private network (RP-3, docs/PRIVATE-NETWORK.md § 4): a program a company runs in its network, that opens a channel out to an escouade-server and lets through the agents' connections to the hosts of its ceiling alone, resolved and checked on its side"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.85"
+workspace = "../../src-tauri"
+# Published by the release of the connector (RP-6), never on crates.io.
+publish = false
+
+[[bin]]
+name = "escouade-connector"
+path = "src/main.rs"
+
+# Nothing of the core nor of Tauri (a program apart, § 4.6): the protocol's crate, tokio, serde and TOML.
+[dependencies]
+escouade-connector-proto = { path = "../escouade-connector-proto" }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "sync", "time", "io-util", "signal"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+url = "2"
+hex = "0.4"
+zeroize = "1"
+thiserror = "2"
+
+# The private key sealed by DPAPI for the account that paired (« le magasin de Windows », § 4.5).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "sync", "time", "io-util", "test-util"] }
+rcgen = "0.14"
+tempfile = "3"

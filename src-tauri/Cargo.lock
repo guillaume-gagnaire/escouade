@@ -2296,10 +2296,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-connector"
+version = "2.2.10"
+dependencies = [
+ "escouade-connector-proto",
+ "hex",
+ "rcgen",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite 0.30.0",
+ "toml 1.1.6+spec-1.1.0",
+ "url",
+ "windows-sys 0.61.2",
+ "zeroize",
+]
+
+[[package]]
 name = "escouade-connector-proto"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "blake2",
  "futures-util",
  "hex",
  "percent-encoding",
@@ -2625,6 +2646,7 @@ dependencies = [
  "base64 0.22.1",
  "ciborium",
  "ed25519-dalek",
+ "escouade-audit",
  "escouade-team-crypto",
  "futures-util",
  "getrandom 0.3.4",

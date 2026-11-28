@@ -3,8 +3,8 @@
 //! TLS, CEF; §4.2), the buffer on the disk and its taking up (§4.4), the signature and the chain (§5.2), and what
 //! `escouade-audit verify` checks of an export (§5.4).
 //!
-//! Nothing here is wired yet: the team server emits by it (AU-2), the stations' facts (AU-4) and the audit machine
-//! (AU-5) too. The crate stands apart from the app's core: neither Tauri nor the network but syslog's socket.
+//! The team server emits by it (AU-2, `escouade-team-server/src/audit.rs`); the stations' facts (AU-4) and the audit machine
+//! (AU-5) will. The crate stands apart from the app's core: neither Tauri nor the network but syslog's socket.
 
 pub mod event;
 pub mod jcs;
