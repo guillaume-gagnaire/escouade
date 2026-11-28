@@ -19,9 +19,12 @@ ssh -N -L 46480:127.0.0.1:46480 <the server>
 
 ## Building the image here
 
-From the archive of `scripts/server-package.sh` (or a release's), in a folder of its own:
+From the archive of `scripts/server-package.sh` (or a release's), in a folder of its own. The program carries the page of
+the browser's client, built before it (`server-package.sh` refuses a program without it):
 
 ```sh
+npm ci && npm run build:web
+(cd src-tauri && ESCOUADE_WEB_DIST=dist-web cargo build --release --package escouade --bin escouade-server --no-default-features)
 sh scripts/server-package.sh src-tauri/target/release/escouade-server 2.3.0 x64 dist <seed folder>
 docker build -f deploy/Dockerfile --build-arg VERSION=2.3.0 -t escouade-server:2.3.0 dist
 sh scripts/server-image-test.sh escouade-server:2.3.0 --harness
@@ -31,3 +34,7 @@ sh scripts/server-image-test.sh escouade-server:2.3.0 --harness
 its digest), and runs the same way as a dry run with a key of your own and without `PUSH=1`.
 `scripts/server-install-test.sh` tries `install.sh` on a machine with systemd (the CI's runner, or a container of
 `debian:trixie` with systemd).
+
+The browser's client is off in the examples: `ESCOUADE_SERVER_BROWSER=1` (or `escouade-server --browser`) serves the
+interface on the API's port, through the SSH tunnel (`http://127.0.0.1:46480`) or behind a TLS proxy named by
+`ESCOUADE_SERVER_ALLOW_HOSTS` (`https://<name>` alone).

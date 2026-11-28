@@ -29,6 +29,7 @@
 
 use super::devices::Devices;
 use super::outbox::{Bounds, Lane, Outbox};
+use super::page::Page;
 use super::proto::{self, Frame, ToClient, ToServer};
 use super::sessions::Sessions;
 use super::{codes, Call, Channels, Client, Failure, Outcome, RawBody, Reply, Services};
@@ -319,6 +320,8 @@ pub struct RemoteApi {
     stopped: Notify,
     /// The names taken in a `Host` besides the loopback's (`escouade-server --allow-host`: a TLS proxy's).
     hosts: Mutex<Arc<Vec<String>>>,
+    /// The page of the browser's client, when it is served (`escouade-server --browser`, BC-1): none by default.
+    page: Mutex<Option<Arc<Page>>>,
 }
 
 /// Where the API listens: a port of 127.0.0.1 (0: a free one), or a socket bound already (the window's, which is told
@@ -419,6 +422,7 @@ impl RemoteApi {
             counts: Counts::default(),
             stopped: Notify::new(),
             hosts: Mutex::new(Arc::new(Vec::new())),
+            page: Mutex::new(None),
         });
         match &listener {
             Some(_) => log::info!("remote API: listening on {addr}"),
@@ -441,6 +445,13 @@ impl RemoteApi {
     /// read: a client cannot choose where its failures go.
     pub fn trust_proxies(&self, proxies: Vec<std::net::IpAddr>) {
         *self.proxies.lock() = Arc::new(proxies);
+    }
+
+    /// The page of the browser's client served on its port from now on, or none (BC-1, `escouade-server --browser`):
+    /// `GET /` and `GET /assets/<name>` on its own socket (never through the phone's tunnel nor Tailscale), and the
+    /// `Origin` of that page taken (`http://<Host>` of the loopback, `https://<name>` of `--allow-host`).
+    pub fn serve_page(&self, page: Option<Arc<Page>>) {
+        *self.page.lock() = page;
     }
 
     /// Where it listens: 127.0.0.1 and its port.
@@ -860,6 +871,81 @@ impl RemoteApi {
         self.pending.lock().retain(|(n, _)| *n != id);
     }
 
+    /// A request of the browser's page (BC-1), no WebSocket: `GET` or `HEAD`, the names of [`names`] (a refusal counts
+    /// as a failed handshake of its source), a `Host` of a strict form; then the page's answer, and the connection
+    /// closed.
+    async fn page_request(
+        &self,
+        stream: Box<dyn Io>,
+        head: &[u8],
+        page: &Page,
+        hosts: &[String],
+        proxied: bool,
+        mut source: Source,
+    ) {
+        let (answer, head_only) = match request_of(head) {
+            Err(why) => {
+                self.failed(&source);
+                log::warn!("remote API: refused a request of the page: {why}");
+                (Page::refusal(400, "bad request", ""), false)
+            }
+            Ok(req) => {
+                if proxied {
+                    if let Some(client) = forwarded_for(&req) {
+                        source = Source::forwarded(client);
+                    }
+                }
+                let head_only = req.method() == tauri::http::Method::HEAD;
+                let host = req
+                    .headers()
+                    .get("host")
+                    .and_then(|h| h.to_str().ok())
+                    .unwrap_or("");
+                let socket = if loopback_host(host) {
+                    format!("ws://{host}")
+                } else {
+                    format!("wss://{host}")
+                };
+                let answer = if req.method() != tauri::http::Method::GET && !head_only {
+                    let mut a = Page::refusal(405, "GET or HEAD", "");
+                    a.headers.push(("Allow", "GET, HEAD".into()));
+                    a
+                } else if let Err((status, why)) = names(&req, hosts, Way::Loopback, true) {
+                    self.failed(&source);
+                    log::warn!("remote API: refused a request of the page: {why}");
+                    Page::refusal(status.as_u16(), status.canonical_reason().unwrap_or(""), "")
+                } else if !page_host(host) {
+                    self.failed(&source);
+                    log::warn!(
+                        "remote API: refused a request of the page: a Host of another form ({})",
+                        shown(host)
+                    );
+                    Page::refusal(400, "bad request", "")
+                } else {
+                    let gzip = req
+                        .headers()
+                        .get_all("accept-encoding")
+                        .iter()
+                        .filter_map(|v| v.to_str().ok())
+                        .any(super::page::takes_gzip);
+                    let if_none_match = req
+                        .headers()
+                        .get("if-none-match")
+                        .and_then(|v| v.to_str().ok());
+                    page.answer(req.uri().path(), &socket, gzip, if_none_match)
+                };
+                log::debug!(
+                    "remote API: the page: {} {} ({})",
+                    req.method(),
+                    shown(req.uri().path()),
+                    answer.status
+                );
+                (answer, head_only)
+            }
+        };
+        write_answer(stream, answer.bytes(head_only)).await;
+    }
+
     async fn accept(self: Arc<Self>, listener: Option<TcpListener>) {
         let mut devices = tokio::time::interval(DEVICES_EVERY);
         loop {
@@ -911,13 +997,57 @@ impl RemoteApi {
         // A connection of a proxy declared (`--trust-proxy`) that says whom it forwards: that client is the source.
         let proxied = matches!(via, Via::Loopback)
             && from.is_some_and(|ip| self.proxies.lock().contains(&ip));
+        // The page of the browser's client (BC-1), on its own socket alone: the head of the request read first; a
+        // WebSocket's goes on to tungstenite as it came, any other request is the page's. Off, nothing is read here.
+        let page = if way == Way::Loopback {
+            self.page.lock().clone()
+        } else {
+            None
+        };
+        let browser = page.is_some();
+        let stream: Box<dyn Io> = match page {
+            None => stream,
+            Some(page) => {
+                let mut stream = stream;
+                let head = tokio::select! {
+                    head = tokio::time::timeout_at(deadline, read_head(&mut stream)) => head,
+                    _ = cancel.notified() => {
+                        log::debug!("remote API: a handshake from {source} let go for a newer one");
+                        return;
+                    }
+                };
+                match head {
+                    Ok(Ok(Some(head))) if is_upgrade(&head) => Box::new(Prefixed {
+                        head,
+                        at: 0,
+                        inner: stream,
+                    }),
+                    Ok(Ok(Some(head))) => {
+                        self.page_request(stream, &head, &page, &hosts, proxied, source)
+                            .await;
+                        return;
+                    }
+                    Ok(Ok(None)) => {
+                        self.failed(&source);
+                        let answer = Page::refusal(431, "request head too large", "");
+                        write_answer(stream, answer.bytes(false)).await;
+                        return;
+                    }
+                    Ok(Err(_)) | Err(_) => {
+                        self.failed(&source);
+                        log::debug!("remote API: no request in time, or cut before it");
+                        return;
+                    }
+                }
+            }
+        };
         let forwarded: Mutex<Option<std::net::IpAddr>> = Mutex::new(None);
         // A phone's token, written by its native proxy in the request (ESC-570, SR1-15): the WebView's JavaScript never
         // holds it, and says an empty one in its handshake.
         let header_token: Mutex<Option<String>> = Mutex::new(None);
         // The callback's type is tungstenite's: its error, an HTTP answer, is large.
         #[allow(clippy::result_large_err)]
-        let guard = |req: &Request, resp: Response| match guard(req, &hosts, way) {
+        let guard = |req: &Request, resp: Response| match guard(req, &hosts, way, browser) {
             Ok(()) => {
                 if proxied {
                     *forwarded.lock() = forwarded_for(req);
@@ -1723,13 +1853,14 @@ fn version_text(server: &str, client: &str, update: &str) -> String {
 /// The request that opens the WebSocket, before it opens: its path, a `Host` of the loopback, no `Origin` but
 /// Escouade's own window's (and, through the tunnel or Tailscale, the phone app's: [`Way::origins`]); a single `Host`
 /// and `Origin`, and the authority of an absolute URI the `Host`'s. Else its HTTP status and why (shown in the log: no
-/// secret there).
+/// secret there). With the browser's page served (`browser`, on the loopback's way alone), the page's `Origin` too
+/// ([`page_origin`]).
 fn guard(
     req: &Request,
     hosts: &[String],
     way: Way,
+    browser: bool,
 ) -> std::result::Result<(), (tauri::http::StatusCode, String)> {
-    let through = way != Way::Loopback;
     use tauri::http::StatusCode;
     if req.uri().path() != proto::PATH {
         return Err((
@@ -1737,6 +1868,20 @@ fn guard(
             format!("path {}", shown(req.uri().path())),
         ));
     }
+    names(req, hosts, way, browser)
+}
+
+/// The names a request gives, the WebSocket's as the page's: a single `Host` and `Origin`, the authority of an
+/// absolute URI the `Host`'s, a `Host` of the loopback (or of `hosts`), an `Origin` of Escouade's own (and of the page,
+/// with `browser`).
+fn names(
+    req: &Request,
+    hosts: &[String],
+    way: Way,
+    browser: bool,
+) -> std::result::Result<(), (tauri::http::StatusCode, String)> {
+    let through = way != Way::Loopback;
+    use tauri::http::StatusCode;
     // One name alone: a `Host` or an `Origin` given twice, a proxy and this server might each read another (ESC-688).
     for name in ["host", "origin"] {
         if req.headers().get_all(name).iter().nth(1).is_some() {
@@ -1779,7 +1924,8 @@ fn guard(
     }
     if let Some(origin) = req.headers().get("origin") {
         let origin = origin.to_str().unwrap_or("");
-        if !proto::ORIGINS.contains(&origin) && !way.origins().contains(&origin) {
+        let the_page = browser && way == Way::Loopback && page_origin(origin, host, hosts);
+        if !proto::ORIGINS.contains(&origin) && !way.origins().contains(&origin) && !the_page {
             return Err((
                 StatusCode::FORBIDDEN,
                 format!("the Origin of a web page ({})", shown(origin)),
@@ -1916,6 +2062,151 @@ fn allowed_host(host: &str, hosts: &[String]) -> bool {
     }
     let name = host.split(':').next().unwrap_or("").to_ascii_lowercase();
     !name.is_empty() && hosts.contains(&name)
+}
+
+/// The `Origin` of the browser's page (BC-1): `http://<Host>` when the `Host` is of the loopback (the page of a tunnel,
+/// on the port the user chose: a page of another port is another origin, refused); `https://<name>[:port]` for a name
+/// of `--allow-host` (a proxy of TLS). Never `http://` of a name: a proxy without TLS would carry the interface and its
+/// device's proof in clear.
+fn page_origin(origin: &str, host: &str, hosts: &[String]) -> bool {
+    if loopback_host(host) && page_host(host) {
+        let same = origin
+            .get(..7)
+            .is_some_and(|s| s.eq_ignore_ascii_case("http://"))
+            && origin
+                .get(7..)
+                .is_some_and(|rest| rest.eq_ignore_ascii_case(host));
+        if same {
+            return true;
+        }
+    }
+    origin
+        .strip_prefix("https://")
+        .is_some_and(|rest| page_host(rest) && allowed_host(rest, hosts))
+}
+
+/// A `Host` (or an origin's authority) of a strict form: a name of letters, digits, dots and dashes, or `[::1]`, and
+/// a port of digits or none. What the page's policy writes (`connect-src`) is never more than that.
+fn page_host(host: &str) -> bool {
+    let (name, port) = match host.rfind(':') {
+        Some(i) if !host[i..].contains(']') => (&host[..i], Some(&host[i + 1..])),
+        _ => (host, None),
+    };
+    let port_ok = port.is_none_or(|p| {
+        !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) && p.parse::<u16>().is_ok()
+    });
+    let name_ok = name == "[::1]"
+        || (!name.is_empty()
+            && name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-'));
+    port_ok && name_ok
+}
+
+/// The most a request's head may take before its end (`\r\n\r\n`).
+const MAX_HEAD: usize = 16 << 10;
+
+/// The head of a request, read until its end: none when it is past [`MAX_HEAD`]; an error when the connection ends
+/// before.
+async fn read_head(stream: &mut Box<dyn Io>) -> std::io::Result<Option<Vec<u8>>> {
+    use tokio::io::AsyncReadExt;
+    let mut head = Vec::with_capacity(1024);
+    let mut buf = [0u8; 2048];
+    loop {
+        let n = stream.read(&mut buf).await?;
+        if n == 0 {
+            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        head.extend_from_slice(&buf[..n]);
+        // Its end, as httparse reads it: an empty line, `\r\n` or a bare `\n`.
+        if head.windows(4).any(|w| w == b"\r\n\r\n") || head.windows(2).any(|w| w == b"\n\n") {
+            return Ok(Some(head));
+        }
+        if head.len() > MAX_HEAD {
+            return Ok(None);
+        }
+    }
+}
+
+/// The request of `head`, as tungstenite would give it to the guard: its method, its URI, its headers (all of them,
+/// a name given twice kept twice).
+fn request_of(head: &[u8]) -> std::result::Result<Request, String> {
+    let mut headers = [httparse::EMPTY_HEADER; 64];
+    let mut parsed = httparse::Request::new(&mut headers);
+    match parsed.parse(head) {
+        Ok(httparse::Status::Complete(_)) => {}
+        Ok(httparse::Status::Partial) => return Err("an incomplete request".into()),
+        Err(e) => return Err(format!("a request it cannot read ({e})")),
+    }
+    let mut req = Request::builder()
+        .method(parsed.method.unwrap_or("GET"))
+        .uri(parsed.path.unwrap_or("/"));
+    for h in parsed.headers.iter() {
+        req = req.header(h.name, h.value);
+    }
+    req.body(())
+        .map_err(|e| format!("a request it cannot read ({e})"))
+}
+
+/// Whether `head` asks for a WebSocket (an `Upgrade` header): tungstenite reads it then, as before.
+fn is_upgrade(head: &[u8]) -> bool {
+    request_of(head).is_ok_and(|req| req.headers().contains_key("upgrade"))
+}
+
+/// `bytes` written to `stream`, then closed.
+async fn write_answer(mut stream: Box<dyn Io>, bytes: Vec<u8>) {
+    use tokio::io::AsyncWriteExt;
+    let _ = stream.write_all(&bytes).await;
+    let _ = stream.flush().await;
+    let _ = stream.shutdown().await;
+}
+
+/// A stream whose first bytes are a head already read: tungstenite reads the request whole.
+struct Prefixed {
+    head: Vec<u8>,
+    at: usize,
+    inner: Box<dyn Io>,
+}
+
+impl tokio::io::AsyncRead for Prefixed {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        if self.at < self.head.len() {
+            let n = (self.head.len() - self.at).min(buf.remaining());
+            let at = self.at;
+            buf.put_slice(&self.head[at..at + n]);
+            self.at += n;
+            return std::task::Poll::Ready(Ok(()));
+        }
+        std::pin::Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for Prefixed {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.inner).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
 }
 
 /// A text a client gave, as the log or an answer may show it: 80 characters at most, printable ones.

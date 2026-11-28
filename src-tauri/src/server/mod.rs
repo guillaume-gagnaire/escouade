@@ -31,10 +31,11 @@
 //!   interface than 127.0.0.1: for Docker, behind a tunnel or a proxy; it warns), `--allow-host <name>` (a `Host`
 //!   the API takes besides the loopback's: the name a TLS proxy serves it under), `--trust-proxy <address>` (a proxy
 //!   whose `X-Forwarded-For` says where a connection comes from: its clients' failures counted apart, SR1-04),
-//!   `--debug`, `--version`, `--help`.
+//!   `--browser` (BC-1: the page of the browser's client on the API's port, off by default), `--debug`, `--version`,
+//!   `--help`.
 //! - Their variables, for a container (ESC-515): `ESCOUADE_SERVER_DATA`, `ESCOUADE_SERVER_PORT`, `ESCOUADE_SERVER_LISTEN`,
 //!   `ESCOUADE_SERVER_ALLOW_HOSTS` (names separated by commas), `ESCOUADE_SERVER_TRUST_PROXIES` (addresses separated by
-//!   commas); an option given wins over its variable. So
+//!   commas), `ESCOUADE_SERVER_GATE` and `ESCOUADE_SERVER_BROWSER` (`1`); an option given wins over its variable. So
 //!   `docker exec <container> escouade-server pair` finds the folder of the server it runs beside.
 //!
 //! Built without the desktop (`cargo build --bin escouade-server --no-default-features`: no WebKit, no GTK, docs/CRATES.md
@@ -51,6 +52,7 @@ use crate::headless::Headless;
 use crate::host::HeadlessHost;
 use crate::paths::DataDir;
 use crate::remoteapi::devices::Devices;
+use crate::remoteapi::page::Page;
 use crate::remoteapi::pairing;
 use crate::remoteapi::server::{Limits, Listen, RemoteApi};
 use anyhow::{anyhow, bail, Context, Result};
@@ -70,6 +72,8 @@ pub const HOSTS_VAR: &str = "ESCOUADE_SERVER_ALLOW_HOSTS";
 pub const PROXIES_VAR: &str = "ESCOUADE_SERVER_TRUST_PROXIES";
 /// `--gate` (RP-1): `1`, `true`, `on` or `yes`.
 pub const GATE_VAR: &str = "ESCOUADE_SERVER_GATE";
+/// `--browser` (BC-1): `1`, `true`, `on` or `yes`.
+pub const BROWSER_VAR: &str = "ESCOUADE_SERVER_BROWSER";
 /// `--connector-listen` and its company (RP-4).
 pub const CONNECTOR_LISTEN_VAR: &str = "ESCOUADE_SERVER_CONNECTOR_LISTEN";
 pub const CONNECTOR_CERT_VAR: &str = "ESCOUADE_SERVER_CONNECTOR_CERT";
@@ -132,6 +136,8 @@ pub struct Args {
     pub debug: bool,
     /// The gate of the private network (`--gate`, RP-1): the agents’ one proxy.
     pub gate: bool,
+    /// The page of the browser's client on the API's port (`--browser`, BC-1): off by default.
+    pub browser: bool,
     /// What `update` is asked.
     pub update: update::Asked,
     /// Where a phone reaches the server (`phone add --endpoint`, `pair --qr --endpoint`): its name or address on the
@@ -178,9 +184,8 @@ pub fn parse_with(
         hosts: Vec::new(),
         proxies: Vec::new(),
         debug: false,
-        gate: var(GATE_VAR).is_some_and(|v| {
-            matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "on" | "yes")
-        }),
+        gate: var(GATE_VAR).is_some_and(|v| on(&v)),
+        browser: var(BROWSER_VAR).is_some_and(|v| on(&v)),
         update: update::Asked::default(),
         endpoint: None,
         qr: false,
@@ -254,6 +259,7 @@ pub fn parse_with(
             }
             "--debug" => out.debug = true,
             "--gate" => out.gate = true,
+            "--browser" => out.browser = true,
             "--connector-listen" => {
                 out.connector.listen = Some(listen_of(&value("--connector-listen")?)?)
             }
@@ -393,6 +399,11 @@ pub fn parse_with(
     Ok(out)
 }
 
+/// A variable that turns something on: `1`, `true`, `on` or `yes` (any case).
+fn on(v: &str) -> bool {
+    matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "on" | "yes")
+}
+
 /// The address of the connectors' entry (`--connector-listen`): `adresse:port`, an IP address and its port.
 fn listen_of(v: &str) -> std::result::Result<SocketAddr, String> {
     v.trim().parse().map_err(|_| {
@@ -509,6 +520,7 @@ pub fn help() -> String {
          --allow-host NOM    accepte ce nom dans l’en-tête Host (celui d’un proxy TLS devant le serveur)\n  \
          --trust-proxy IP    lit X-Forwarded-For de ce proxy seul : chaque client y compte ses échecs à part\n  \
          --gate              la porte du réseau privé : le seul proxy des agents, sur 127.0.0.1\n  \
+         --browser           sert l’interface dans un navigateur sur le port de l’API (éteint sinon) ; derrière un proxy, en https:// seulement\n  \
          --connector-listen ADRESSE:PORT  l’entrée des connecteurs (éteinte sinon), et la porte avec elle : le seul protocole des connecteurs, jamais l’API distante\n  \
          --connector-cert FICHIER, --connector-key FICHIER  son certificat TLS (sinon, derrière un proxy TLS)\n  \
          --connector-url wss://…  son adresse telle que les connecteurs la joignent\n  \
@@ -537,6 +549,7 @@ pub fn help() -> String {
          --allow-host NAME  takes this name in the Host header (a TLS proxy's in front of the server)\n  \
          --trust-proxy IP   reads X-Forwarded-For from this proxy alone: each client behind it counts its failures apart\n  \
          --gate             the gate of the private network: the agents' one proxy, on 127.0.0.1\n  \
+         --browser          serves the interface to a browser on the API's port (off otherwise); behind a proxy, in https:// alone\n  \
          --connector-listen ADDRESS:PORT  the connectors' entry (off otherwise), and the gate with it: the connectors' protocol alone, never the remote API\n  \
          --connector-cert FILE, --connector-key FILE  its TLS certificate (else, behind a TLS proxy)\n  \
          --connector-url wss://…  its address as the connectors reach it\n  \
@@ -587,8 +600,20 @@ fn speak_as_the_settings(args: &[String]) {
     crate::i18n::configure(&text("language"), &text("claudeLanguage"));
 }
 
-/// `escouade-server` with `args` (without the program's name): its exit code.
+/// `escouade-server` with `args` (without the program's name): its exit code. No page of the browser's client.
 pub fn main(args: Vec<String>) -> i32 {
+    main_with(args, Web::default())
+}
+
+/// The page of the browser's client a binary carries (`escouade-web`, BC-1): its files (`(name, gzip)`) and its mark.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Web {
+    pub files: &'static [(&'static str, &'static [u8])],
+    pub mark: &'static str,
+}
+
+/// `escouade-server` with `args`, and the page `web` it serves with `--browser`: its exit code.
+pub fn main_with(args: Vec<String>, web: Web) -> i32 {
     // `ssh`’s ProxyCommand (RP-1): nothing else read, nothing logged; its refusal on its standard error.
     if args.first().map(String::as_str) == Some("via") {
         return escouade_gate::via::main(&args[1..]);
@@ -621,7 +646,7 @@ pub fn main(args: Vec<String>) -> i32 {
         Command::ConnectorPair(name) => connector_pair(&args, name),
         Command::Connectors => connectors(&args),
         Command::ConnectorRemove(name) => connector_remove(&args, name),
-        Command::Run => run(&args),
+        Command::Run => run(&args, web),
     };
     match done {
         Ok(()) => 0,
@@ -1139,7 +1164,8 @@ async fn stop_asked() -> &'static str {
 }
 
 /// The server, until the system asks it to stop.
-fn run(args: &Args) -> Result<()> {
+fn run(args: &Args, web: Web) -> Result<()> {
+    let page = browser_page(args.browser, web)?;
     let data = data_of(args)?;
     logs::install(data.root(), args.debug);
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -1154,6 +1180,7 @@ fn run(args: &Args) -> Result<()> {
         hosts: args.hosts.clone(),
         proxies: args.proxies.clone(),
         gate: args.gate,
+        page,
         private: crate::privateentry::Asked {
             gate: args.gate,
             listen: args.connector.listen,
@@ -1172,6 +1199,24 @@ fn run(args: &Args) -> Result<()> {
     ));
     runtime.shutdown_timeout(std::time::Duration::from_secs(5));
     done
+}
+
+/// The page `--browser` asks for (BC-1), none without it; refused when the binary carries none (a build without
+/// `ESCOUADE_WEB_DIST`): `--browser` never starts a server that serves nothing.
+pub fn browser_page(asked: bool, web: Web) -> Result<Option<Arc<Page>>> {
+    if !asked {
+        return Ok(None);
+    }
+    match Page::embedded(web.files)? {
+        Some(page) => {
+            log::debug!("escouade-server: the browser's page: {}", web.mark);
+            Ok(Some(Arc::new(page)))
+        }
+        None => bail!(tr!(
+            "--browser : ce escouade-server n’a pas la page du navigateur (construit sans ESCOUADE_WEB_DIST : npm run build:web, puis cargo build avec ESCOUADE_WEB_DIST=dist-web)",
+            "--browser: this escouade-server carries no browser page (built without ESCOUADE_WEB_DIST: npm run build:web, then cargo build with ESCOUADE_WEB_DIST=dist-web)"
+        )),
+    }
 }
 
 /// Where the API listens: 127.0.0.1:`port`, or `listen`:`port`, asked for in so many words, said loudly.
@@ -1209,6 +1254,8 @@ pub struct Endpoint {
     pub proxies: Vec<IpAddr>,
     /// `--gate` (RP-1).
     pub gate: bool,
+    /// The page of the browser's client (`--browser`, BC-1): none by default.
+    pub page: Option<Arc<Page>>,
     /// The private network (RP-4): `--connector-listen` and its company (its `gate` is `--gate` too).
     pub private: crate::privateentry::Asked,
 }
@@ -1264,6 +1311,7 @@ pub async fn serve(
     };
     api.allow_hosts(endpoint.hosts.clone());
     api.trust_proxies(endpoint.proxies.clone());
+    api.serve_page(endpoint.page.clone());
     // The phone's tunnel (ESC-567), when Réglages de l'espace › Téléphone turned it on: the same API, in the tunnel.
     core.phone.attach(&api);
     core.phone.mark_server();
@@ -1324,6 +1372,12 @@ pub async fn serve(
         log::info!(
             "escouade-server: the API takes the Host {} besides the loopback's (--allow-host)",
             endpoint.hosts.join(", ")
+        );
+    }
+    if let Some(page) = &endpoint.page {
+        log::info!(
+            "escouade-server: the browser's page on http://{shown}/ ({}; --browser): through a tunnel, or behind a proxy in https:// alone",
+            page.summary
         );
     }
     if !endpoint.proxies.is_empty() {

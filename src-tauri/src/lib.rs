@@ -633,6 +633,15 @@ pub fn server_main(args: Vec<String>) -> i32 {
     server::main(args)
 }
 
+/// The same, with the page of the browser's client the binary carries (`escouade-web`, BC-1): served with `--browser`.
+pub fn server_main_with(
+    args: Vec<String>,
+    files: &'static [(&'static str, &'static [u8])],
+    mark: &'static str,
+) -> i32 {
+    server::main_with(args, server::Web { files, mark })
+}
+
 /// `escouade-plugin` (src/bin): the conformance bench, the manifest's check and the fake Escouade,
 /// for the plugins' authors (PLG-3). Gives the exit code.
 pub fn plugin_cli(args: Vec<String>) -> i32 {

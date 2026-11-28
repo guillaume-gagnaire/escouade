@@ -4,5 +4,10 @@
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    std::process::exit(escouade_lib::server_main(args));
+    // The page of the browser's client (BC-1): named here alone, so that the desktop app never carries it.
+    std::process::exit(escouade_lib::server_main_with(
+        args,
+        escouade_web::FILES,
+        escouade_web::MARK,
+    ));
 }

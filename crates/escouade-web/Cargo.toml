@@ -1,0 +1,14 @@
+[package]
+name = "escouade-web"
+version = "0.1.0"
+description = "The page of the browser's client (BC-1, docs/REMOTE.md « Le client navigateur »): dist-web/ (npm run build:web), each file compressed, embedded in escouade-server alone when ESCOUADE_WEB_DIST names it"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app (docs/CRATES.md, § 14): never published.
+publish = false
+
+[build-dependencies]
+flate2 = "1"

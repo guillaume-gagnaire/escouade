@@ -16,3 +16,6 @@ plugins/*/plugin.wasm
 
 # The example plugins run as their folders hold them: their dist/ is built and committed (plugins/ci.mjs checks it).
 !plugins/*/dist/
+
+# The browser's build of the interface (npm run build:web, BC-1): escouade-server embeds it.
+dist-web

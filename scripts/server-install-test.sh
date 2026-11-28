@@ -44,7 +44,7 @@ pubkey=$(base64 -w0 "$work/key.pub")
 release() { # <version>: the archive of that version in the fake release, signed
   d=$work/release/download/v$1
   mkdir -p "$d"
-  sh "$here/server-package.sh" "$bin" "$1" "$arch" "$d" >/dev/null
+  ESCOUADE_NO_WEB_PAGE=1 sh "$here/server-package.sh" "$bin" "$1" "$arch" "$d" >/dev/null
   minisign -S -s "$work/key.sec" -m "$d/escouade-server-$1-linux-$arch.tar.gz" -x "$work/sig" >/dev/null
   base64 -w0 "$work/sig" >"$d/escouade-server-$1-linux-$arch.tar.gz.sig"
 }

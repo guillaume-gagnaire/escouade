@@ -2182,6 +2182,7 @@ dependencies = [
  "escouade-voice",
  "escouade-voice-local",
  "escouade-vsx",
+ "escouade-web",
  "flate2",
  "futures-util",
  "getrandom 0.4.3",
@@ -2191,6 +2192,7 @@ dependencies = [
  "hkdf 0.13.0",
  "hound",
  "http-body-util",
+ "httparse",
  "hyper",
  "hyper-util",
  "igd-next",
@@ -2781,6 +2783,13 @@ dependencies = [
  "url",
  "uuid",
  "zip 9.5.0",
+]
+
+[[package]]
+name = "escouade-web"
+version = "0.1.0"
+dependencies = [
+ "flate2",
 ]
 
 [[package]]

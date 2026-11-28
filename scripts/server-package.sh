@@ -9,6 +9,10 @@
 #
 #   sh scripts/server-package.sh <program> <version> <x64|arm64> <out folder> [<seed folder>]
 #
+# escouade-server carries the page of the browser's client (BC-1): built before it (npm run build:web, then cargo build
+# with ESCOUADE_WEB_DIST=dist-web), as the Release does. A program without it is refused, unless ESCOUADE_NO_WEB_PAGE=1
+# (the CI's archives of a debug build, which try the rest).
+#
 # The same bytes for the same files (sorted, owned by 0, dated by SOURCE_DATE_EPOCH or the commit), GNU tar.
 set -eu
 bin=${1:?usage: server-package.sh <program> <version> <x64|arm64> <out> [<seed>]}
@@ -20,6 +24,12 @@ case $arch in x64 | arm64) ;; *) echo "server-package.sh: arch x64 or arm64, not
 [ -f "$bin" ] || { echo "server-package.sh: no program at $bin" >&2; exit 1; }
 product=$(basename "$bin")
 case $product in escouade-server | escouade-team-server) ;; *) echo "server-package.sh: escouade-server or escouade-team-server, not $product" >&2; exit 1 ;; esac
+if [ "$product" = escouade-server ] && [ "${ESCOUADE_NO_WEB_PAGE:-0}" != 1 ]; then
+  grep -aq "escouade-web-page:" "$bin" || {
+    echo "server-package.sh: $bin carries no browser page (npm run build:web, then cargo build with ESCOUADE_WEB_DIST=dist-web)" >&2
+    exit 1
+  }
+fi
 root=$(cd "$(dirname "$0")/.." && pwd)
 epoch=${SOURCE_DATE_EPOCH:-$(git -C "$root" log -1 --format=%ct 2>/dev/null || date +%s)}
 stage=$(mktemp -d)

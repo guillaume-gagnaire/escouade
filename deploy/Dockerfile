@@ -26,6 +26,10 @@
 # same network) reaches it and may try pairing codes and tokens. TLS is the proxy's: put one in front (Coolify's
 # Traefik, Caddy) or reach it through an SSH tunnel, never a port published on a public address.
 #
+# The browser's client (BC-1) is off: ESCOUADE_SERVER_BROWSER=1 serves the interface on the same port, to a browser that
+# reaches it through the SSH tunnel (http://127.0.0.1:<port>) or a TLS proxy declared by ESCOUADE_SERVER_ALLOW_HOSTS
+# (https://<name>; http:// of a name is refused). It adds a page and the origin of that page, nothing else.
+#
 # An update is a new image (`docker compose pull && docker compose up -d`): `escouade-server update` refuses to run here.
 
 # The bases pinned by their digest (the index of every architecture, SR1-12): the same bytes at each build, whatever

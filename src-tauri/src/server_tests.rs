@@ -47,6 +47,7 @@ fn the_command_line_reads_its_commands_and_options_and_help_is_never_a_command_r
             proxies: Vec::new(),
             debug: false,
             gate: false,
+            browser: false,
             update: update::Asked::default(),
             endpoint: None,
             qr: false,
@@ -1482,4 +1483,119 @@ fn the_server_s_data_folder_is_0700_and_its_log_0600_whatever_the_umask() {
     assert_eq!(mode(&fresh), 0o700);
     assert_eq!(mode(&fresh.join(server::logs::FILE)), 0o600);
     assert_eq!(mode(&fresh.join("server.1.log")), 0o600);
+}
+
+// ---------- BC-1 (ESC-704): --browser, ESCOUADE_SERVER_BROWSER, the page on the API's port ----------
+
+/// `--browser` is off unless its option or its variable asks (as `--gate`); the help says it in both languages; asked
+/// of a binary that carries no page (a build without `ESCOUADE_WEB_DIST`), it refuses to start and says why.
+#[test]
+fn the_browser_is_off_unless_asked_and_a_server_without_its_page_refuses_it() {
+    let none = |_: &str| None;
+    assert!(!server::parse_with(&[], none).unwrap().browser);
+    assert!(
+        server::parse_with(&args("--browser"), none)
+            .unwrap()
+            .browser
+    );
+    assert!(
+        server::parse_with(&args("run --browser --port 4300"), none)
+            .unwrap()
+            .browser
+    );
+    for on in ["1", "true", "ON", "yes"] {
+        let a = server::parse_with(&[], |n| (n == server::BROWSER_VAR).then(|| on.into())).unwrap();
+        assert!(a.browser, "{on}");
+    }
+    for off in ["0", "no", "off", "", "  "] {
+        let a =
+            server::parse_with(&[], |n| (n == server::BROWSER_VAR).then(|| off.into())).unwrap();
+        assert!(!a.browser, "{off:?}");
+    }
+    assert_eq!(server::BROWSER_VAR, "ESCOUADE_SERVER_BROWSER");
+    // The help says it, in the language of the process; both texts are written (the language is the process's: not
+    // changed here, other tests run beside).
+    assert!(server::help().contains("--browser "));
+    let source = include_str!("server/mod.rs");
+    assert!(source.contains("--browser           sert l’interface dans un navigateur"));
+    assert!(source.contains("--browser          serves the interface to a browser"));
+    assert!(server::browser_page(false, server::Web::default())
+        .unwrap()
+        .is_none());
+    let refused = server::browser_page(true, server::Web::default()).unwrap_err();
+    assert!(
+        refused.to_string().contains("ESCOUADE_WEB_DIST"),
+        "{refused}"
+    );
+}
+
+/// The page given to `serve` (`--browser`) is served on the API's own port, beside its WebSocket; without it, `/` is
+/// no page there.
+#[tokio::test(flavor = "multi_thread")]
+async fn serve_with_the_browser_s_page_serves_it_on_the_api_s_port() {
+    use std::io::Write as _;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let gz = |text: &str| {
+        let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        e.write_all(text.as_bytes()).unwrap();
+        std::borrow::Cow::Owned(e.finish().unwrap())
+    };
+    let index = "<html><head><style id=\"escouade-style-nonce\"></style></head></html>";
+    for with_page in [true, false] {
+        let (_dir, data) = data(if with_page {
+            "server-page-on"
+        } else {
+            "server-page-off"
+        });
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let endpoint = Endpoint {
+            page: with_page.then(|| {
+                Arc::new(
+                    crate::remoteapi::page::Page::new([("index.html".to_string(), gz(index))])
+                        .unwrap(),
+                )
+            }),
+            ..Endpoint::default()
+        };
+        let task = tokio::spawn(async move {
+            server::serve(
+                data,
+                endpoint,
+                Limits::default(),
+                move |api| {
+                    let _ = ready_tx.send(api.addr());
+                },
+                async move {
+                    let _ = stop_rx.await;
+                    "SIGTERM"
+                },
+            )
+            .await
+        });
+        let addr = ready_rx.await.expect("the server is ready");
+        let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
+        s.write_all(format!("GET / HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
+            .await
+            .unwrap();
+        let mut answer = Vec::new();
+        let _ = tokio::time::timeout(Duration::from_secs(30), s.read_to_end(&mut answer)).await;
+        let text = String::from_utf8_lossy(&answer);
+        if with_page {
+            assert!(text.starts_with("HTTP/1.1 200 OK\r\n"), "{text}");
+            assert!(text.contains("Content-Security-Policy: "), "{text}");
+            assert!(text.contains(&format!("ws://{addr}")), "{text}");
+            assert!(text.contains(crate::remoteapi::page::SERVED_MARK), "{text}");
+        } else {
+            assert!(!text.contains(" 200 "), "{text}");
+        }
+        // The WebSocket answers beside it, either way.
+        let (_, refused) = hello(addr, "").await;
+        assert!(
+            matches!(&refused, ToClient::Refused { code, .. } if code == "token"),
+            "{refused:?}"
+        );
+        stop_tx.send(()).unwrap();
+        task.await.unwrap().unwrap();
+    }
 }

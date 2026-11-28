@@ -928,7 +928,7 @@ jobs:
       - name: The image, from this build, tried as a user runs it
         run: |
           strip -o "$RUNNER_TEMP/escouade-server" src-tauri/target/debug/escouade-server
-          sh scripts/server-package.sh "$RUNNER_TEMP/escouade-server" 0.0.0-ci ${{ matrix.arch }} "$RUNNER_TEMP/dist"
+          ESCOUADE_NO_WEB_PAGE=1 sh scripts/server-package.sh "$RUNNER_TEMP/escouade-server" 0.0.0-ci ${{ matrix.arch }} "$RUNNER_TEMP/dist"
           docker build -f deploy/Dockerfile --build-arg VERSION=0.0.0-ci -t escouade-server:ci "$RUNNER_TEMP/dist"
           sh scripts/server-image-test.sh escouade-server:ci --harness
 

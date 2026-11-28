@@ -27,8 +27,9 @@ guardLinks(document);
 // What's up ?: what counts as seen is known at once (and kept at the very first start), before the settings are read.
 const whatsUpSeen = seenAtStart();
 // Its window comes once the interface knows its language (the settings'): its notes and its words are in that one. In
-// a browser without the app (`?whats-up=apercu`), the browser's language at once.
-const inApp = '__TAURI_INTERNALS__' in window;
+// a browser without the app (`?whats-up=apercu`), the browser's language at once. The page escouade-server serves
+// (vite.web.config.ts) is the app: it waits as the window does, and never looks for Tauri (the test falls away there).
+const inApp = !!import.meta.env.ESCOUADE_WEB || '__TAURI_INTERNALS__' in window;
 const whatsUpReady = setInterval(() => {
   if (inApp && !app.ready) return;
   clearInterval(whatsUpReady);

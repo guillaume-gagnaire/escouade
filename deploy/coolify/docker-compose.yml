@@ -32,6 +32,9 @@ services:
       # domain: the address of Coolify's proxy on this network (docker inspect coolify-proxy), whose X-Forwarded-For
       # is read: each client behind it counts its failed tries apart.
       # - ESCOUADE_SERVER_TRUST_PROXIES=10.0.1.2
+      # The browser's client stays off here: "1" serves the interface on the same port, at https://<the domain> (with
+      # ESCOUADE_SERVER_ALLOW_HOSTS above; http:// of the domain is refused) or through the SSH tunnel.
+      # - ESCOUADE_SERVER_BROWSER=1
     ports:
       # 127.0.0.1 of the Coolify server only: an SSH tunnel reaches it. Never "46480:46480".
       - '127.0.0.1:46480:46480'

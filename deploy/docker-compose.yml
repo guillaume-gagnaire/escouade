@@ -25,6 +25,9 @@ services:
       # an SSH tunnel's (below) or a proxy's in front (Caddy, Traefik), never a port on a public address. Without it,
       # the API listens on 127.0.0.1 of the container alone, and nothing reaches it from outside.
       ESCOUADE_SERVER_LISTEN: 0.0.0.0
+      # The browser's client stays off here: "1" serves the interface on the same port, opened through the SSH tunnel
+      # (http://127.0.0.1:46480 on your computer) or behind a TLS proxy (https:// alone, with ESCOUADE_SERVER_ALLOW_HOSTS).
+      # ESCOUADE_SERVER_BROWSER: "1"
     ports:
       # 127.0.0.1 of the host only: reached through an SSH tunnel. Never "46480:46480", which opens it to the Internet.
       - '127.0.0.1:46480:46480'

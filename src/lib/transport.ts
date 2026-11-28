@@ -626,8 +626,8 @@ export function local<T>(cmd: string, args?: Args, options?: Options): Promise<T
 }
 
 const given = typeof window !== 'undefined' ? window.__ESCOUADE_REMOTE__ : undefined;
-/** In Escouade's window (not in the tests of the components, which have no Tauri). */
-const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+/** In Escouade's window (not in the tests of the components, which have no Tauri; never in the browser's build). */
+const inTauri = !import.meta.env.ESCOUADE_WEB && typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 let remote: RemoteTransport | null = given ? new RemoteTransport(given) : null;
 /** The transport is chosen: calls go straight to it, without waiting. */

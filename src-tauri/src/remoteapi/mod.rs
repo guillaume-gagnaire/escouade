@@ -18,6 +18,7 @@
 pub mod devices;
 pub mod list;
 pub mod outbox;
+pub mod page;
 pub mod pairing;
 pub mod proto;
 pub mod server;

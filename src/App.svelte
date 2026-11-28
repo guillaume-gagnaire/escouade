@@ -131,7 +131,8 @@
     // The servers this computer knows (ESC-537): the machine is said once one is.
     void loadServers();
     // The other spaces (ESC-539): a connection to each, read every few seconds; a notification of one brings it.
-    const inTauri = '__TAURI_INTERNALS__' in window;
+    // Never in the browser's build (vite.web.config.ts): the test falls away there.
+    const inTauri = !import.meta.env.ESCOUADE_WEB && '__TAURI_INTERNALS__' in window;
     const stopSpaces = inTauri ? startSpaces() : () => {};
     let unlisten: (() => void) | null = null;
     if (inTauri) {

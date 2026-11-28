@@ -174,10 +174,14 @@ escouade-team = { path = "../crates/escouade-team" }
 # The team's audit (AU-1, docs/TEAM-AUDIT.md): the motifs of tokens the team memory refuses come from its list of what
 # never goes out (`memory::secret_in`); the stations' facts emit by it (AU-4).
 escouade-audit = { path = "../crates/escouade-audit" }
+# The page of the browser's client (BC-1): named by escouade-server's main alone, never by the desktop app.
+escouade-web = { path = "../crates/escouade-web" }
 # The extensions of the editor (ESC-481): Open VSX by the core, checked, served.
 escouade-vsx = { path = "../crates/escouade-vsx" }
 # The QR code of an invitation of one's own device (§3.4), drawn as SVG: no image library.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+# The head of a request to the remote API's port, read before the WebSocket: the page of the browser (BC-1).
+httparse = "1"
 # The transcription as one speaks (ESC-136): a WebSocket to the service, through the settings' proxy (HTTP CONNECT,
 # opened by hand) and TLS by rustls (ring, as reqwest), the system's roots and Mozilla's.
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
@@ -265,6 +269,7 @@ members = [
     "../crates/escouade-connector",
     "../crates/escouade-gate",
     "../crates/escouade-audit",
+    "../crates/escouade-web",
 ]
 default-members = [
     ".",
@@ -293,6 +298,7 @@ default-members = [
     "../crates/escouade-connector",
     "../crates/escouade-gate",
     "../crates/escouade-audit",
+    "../crates/escouade-web",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their

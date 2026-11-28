@@ -42,6 +42,20 @@ describe('the Release of escouade-server', () => {
   });
 
   // ESC-586: the team server is published as escouade-server is, by the same job and the same scripts.
+  it("builds the browser's page before the server that embeds it, and packs no server without it (BC-1)", () => {
+    const server = job(release, 'server');
+    const page = server.indexOf('npm run build:web');
+    expect(page).toBeGreaterThan(-1);
+    expect(page).toBeLessThan(server.indexOf('--bin escouade-server --no-default-features'));
+    expect(server).toMatch(/ESCOUADE_WEB_DIST: dist-web\n\s+run: cargo build --release --locked -p escouade --bin escouade-server/);
+    const pack = read('scripts/server-package.sh');
+    expect(pack).toContain('grep -aq "escouade-web-page:"');
+    // The CI's archives of a debug build say they carry none.
+    expect(read('.github/workflows/ci.yml')).toContain(
+      'ESCOUADE_NO_WEB_PAGE=1 sh scripts/server-package.sh "$RUNNER_TEMP/escouade-server"',
+    );
+  });
+
   it('builds, tries in a bare container, signs and pushes the team server too, by the same script', () => {
     const server = job(release, 'server');
     expect(server).toContain('cargo build --release --locked -p escouade-team-server');
@@ -138,6 +152,9 @@ describe('the image and its examples open nothing by default', () => {
       .filter((l) => !l.trim().startsWith('#'))
       .join('\n');
     expect(instructions).not.toMatch(/sudo/);
+    // The browser's client off in the image unless ESCOUADE_SERVER_BROWSER=1 is given (BC-1).
+    expect(instructions).not.toContain('ESCOUADE_SERVER_BROWSER');
+    expect(file).toContain('ESCOUADE_SERVER_BROWSER=1');
     // Without ESCOUADE_SERVER_LISTEN, the API listens on 127.0.0.1 of the container alone.
     expect(file).not.toMatch(/ENV[^\n]*ESCOUADE_SERVER_LISTEN/);
     // SR1-12: every base pinned by the digest of its index, and what 0.0.0.0 exposes said.
@@ -171,6 +188,10 @@ describe('the image and its examples open nothing by default', () => {
       expect(active).toMatch(/pids_limit: \d+/);
       // A domain only through Coolify's proxy, which holds TLS; nothing else listens on the Internet.
       expect(active).not.toContain('SERVICE_FQDN');
+      // The browser's client (BC-1) left off, and said so in a comment.
+      expect(active).not.toContain('ESCOUADE_SERVER_BROWSER');
+      expect(text).toMatch(/#\s*-?\s*ESCOUADE_SERVER_BROWSER/);
+      expect(text).toMatch(/browser's client stays off/);
     });
   }
 

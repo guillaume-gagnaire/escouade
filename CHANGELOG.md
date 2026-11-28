@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Mode serveur : `escouade-server --browser` (ou `ESCOUADE_SERVER_BROWSER=1`) sert l’interface d’Escouade à un navigateur, sur le port de l’API, par ton tunnel SSH ou derrière un proxy en https. Éteint par défaut ; la page est dans le programme, avec la politique de sécurité de la fenêtre. Se connecter depuis cette page vient ensuite.
 - Sur le téléphone, « À toi » montre tout ce qui t’attend dans tes espaces, rangé comme la boîte du bureau, et tu y réponds sur place : la commande entière avant « Autoriser » et le verrou du téléphone, une question, un plan, un choix et ses rendus, un PDF. Tu y lis une conversation et envoies un message, dicté ou avec une photo ; coupé, le téléphone garde ce qu’il savait, daté, sans répondre sur un écran périmé.
 - Réglages › Téléphone : un port UDP tapé et pas encore appliqué ne s’efface plus quand tu bascules un autre réglage de la page (STUN, Tailscale) entre-temps.
 - Les navigateurs pilotés par les agents, leurs pages, le Workspace et la fenêtre des nouveautés de la 2.2 arrivent dans la 2.3. Sur un serveur sans fenêtre, un agent apprend qu’il n’y a ni navigateur ni page ; l’entrée « Éditeur » du menu et les workflows du Workspace suivent leurs interrupteurs de Réglages › Fonctionnalités.

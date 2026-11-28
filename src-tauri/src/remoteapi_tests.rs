@@ -3051,6 +3051,535 @@ fn the_core_derives_a_phone_s_token_and_key_as_the_phone_does() {
     );
 }
 
+// ---------- BC-1 (ESC-704): the page of the browser's client, its headers, the origins it adds ----------
+
+/// The bytes of `text`, compressed by gzip.
+fn gz(text: &[u8]) -> std::borrow::Cow<'static, [u8]> {
+    use std::io::Write as _;
+    let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    e.write_all(text).unwrap();
+    std::borrow::Cow::Owned(e.finish().unwrap())
+}
+
+const TEST_INDEX: &str = "<!doctype html><html><head><title>Escouade</title>\
+    <style id=\"escouade-style-nonce\"></style>\
+    <script type=\"module\" crossorigin src=\"/assets/app-1.js\"></script></head><body></body></html>";
+const TEST_APP: &str = "console.log('escouade');";
+const TEST_WHATS_UP: &str = "customElements.define('whats-up', class extends HTMLElement {});";
+const TEST_VIEW: &str = "<html><head><style>a{}</style><script>start()</script></head></html>";
+
+/// A page of three files: index.html, a script, an HTML of assets/ with an inline script.
+fn test_page() -> Arc<remoteapi::page::Page> {
+    Arc::new(
+        remoteapi::page::Page::new([
+            ("index.html".to_string(), gz(TEST_INDEX.as_bytes())),
+            ("assets/app-1.js".to_string(), gz(TEST_APP.as_bytes())),
+            ("assets/view-2.html".to_string(), gz(TEST_VIEW.as_bytes())),
+            // What Vite copies of public/, at its path: What's up ? and its notes.
+            (
+                "whats-up/whats-up.js".to_string(),
+                gz(TEST_WHATS_UP.as_bytes()),
+            ),
+            ("whats-up/en/index.json".to_string(), gz(b"{\"ids\":[]}")),
+        ])
+        .unwrap(),
+    )
+}
+
+/// An answer read whole (the server closes after it): its status, its headers (names in lower case), its body.
+struct Raw {
+    status: u16,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+}
+
+impl Raw {
+    fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+/// `request` (a whole head, its end included) written raw to a connection handed to `api` from `via`; the answer, or
+/// none when it closed without one.
+async fn raw_answer(api: &Arc<RemoteApi>, via: Via, request: &str) -> Option<Raw> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let (mut near, far) = tokio::io::duplex(1 << 20);
+    assert!(api.serve_stream_from(Box::new(far), via, ip("127.0.0.1")));
+    near.write_all(request.as_bytes()).await.unwrap();
+    let mut answer = Vec::new();
+    tokio::time::timeout(Duration::from_secs(30), near.read_to_end(&mut answer))
+        .await
+        .expect("an answer in 30 s")
+        .unwrap();
+    let end = answer.windows(4).position(|w| w == b"\r\n\r\n")?;
+    let head = String::from_utf8_lossy(&answer[..end]).to_string();
+    let mut lines = head.split("\r\n");
+    let status = lines.next()?.split(' ').nth(1)?.parse().ok()?;
+    let headers = lines
+        .filter_map(|l| l.split_once(": "))
+        .map(|(n, v)| (n.to_ascii_lowercase(), v.to_string()))
+        .collect();
+    Some(Raw {
+        status,
+        headers,
+        body: answer[end + 4..].to_vec(),
+    })
+}
+
+/// The nonce of a policy's `style-src`.
+fn style_nonce(csp: &str) -> String {
+    let at = csp.find("style-src 'self' 'nonce-").expect(csp) + "style-src 'self' 'nonce-".len();
+    csp[at..].split('\'').next().unwrap().to_string()
+}
+
+/// Off (the default), nothing changes: `/` is no page (404 to a WebSocket's request, no answer to another), and no
+/// `Origin` of a web page is taken, the loopback's own port's and a declared name's in https included.
+#[tokio::test(flavor = "multi_thread")]
+async fn off_no_page_is_served_and_no_web_origin_is_taken() {
+    let (_dir, _h, api, _token) = served("remote-page-off").await;
+    api.allow_hosts(vec!["escouade.example.org".to_string()]);
+    let lo = ip("127.0.0.1");
+    let status = raw_status(
+        &api,
+        Via::Loopback,
+        lo,
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n",
+    )
+    .await;
+    assert_eq!(status, 404);
+    let plain = raw_answer(
+        &api,
+        Via::Loopback,
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n",
+    )
+    .await;
+    assert!(plain.is_none_or(|a| a.status != 200), "no page off");
+    let asset = raw_answer(
+        &api,
+        Via::Loopback,
+        "GET /assets/app-1.js HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n",
+    )
+    .await;
+    assert!(asset.is_none_or(|a| a.status != 200), "no asset off");
+    for (host, origin) in [
+        ("127.0.0.1:8765", "http://127.0.0.1:8765"),
+        ("localhost:8765", "http://localhost:8765"),
+        ("escouade.example.org", "https://escouade.example.org"),
+    ] {
+        let head = format!(
+            "GET {} HTTP/1.1\r\nHost: {host}\r\nOrigin: {origin}\r\n",
+            proto::PATH
+        );
+        assert_eq!(
+            raw_status(&api, Via::Loopback, lo, &head).await,
+            403,
+            "{origin} off"
+        );
+    }
+}
+
+/// On (`--browser`): `/` and `/assets/<name>` with the window's policy, a nonce drawn for each answer (on the
+/// `<style>` of the nonce and in `style-src`), the mark of a served page, the headers of each answer and the cache;
+/// gzip when the client takes it; `HEAD` without its body; another method refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn on_the_page_is_served_with_its_headers_and_a_nonce_of_its_own_each_time() {
+    let (_dir, _h, api, _token) = served("remote-page-on").await;
+    api.serve_page(Some(test_page()));
+    let get = |path: &str, extra: &str| {
+        format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nAccept-Encoding: gzip, br\r\n{extra}\r\n")
+    };
+    let mut nonces = BTreeSet::new();
+    for _ in 0..3 {
+        let a = raw_answer(&api, Via::Loopback, &get("/", ""))
+            .await
+            .expect("an answer");
+        assert_eq!(a.status, 200);
+        assert_eq!(a.header("content-type"), Some("text/html; charset=utf-8"));
+        assert_eq!(a.header("cache-control"), Some("no-cache"));
+        assert_eq!(a.header("x-content-type-options"), Some("nosniff"));
+        assert_eq!(a.header("referrer-policy"), Some("no-referrer"));
+        assert_eq!(a.header("cross-origin-opener-policy"), Some("same-origin"));
+        assert_eq!(
+            a.header("cross-origin-resource-policy"),
+            Some("same-origin")
+        );
+        assert_eq!(
+            a.header("permissions-policy"),
+            Some("microphone=(), camera=(), geolocation=()")
+        );
+        assert!(a.header("access-control-allow-origin").is_none());
+        let csp = a.header("content-security-policy").expect("a policy");
+        for part in [
+            "style-src-attr 'unsafe-inline'",
+            "script-src 'self' 'wasm-unsafe-eval';",
+            "object-src 'none'",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "frame-ancestors 'none'",
+            "ws://127.0.0.1:8765",
+        ] {
+            assert!(csp.contains(part), "{part} in {csp}");
+        }
+        assert!(!csp.contains("ipc") && !csp.contains("asset:"), "{csp}");
+        let nonce = style_nonce(csp);
+        let body = String::from_utf8(a.body).unwrap();
+        assert!(
+            body.contains(&format!(
+                r#"<style nonce="{nonce}" id="escouade-style-nonce">"#
+            )),
+            "{body}"
+        );
+        assert!(body.contains(remoteapi::page::SERVED_MARK), "{body}");
+        nonces.insert(nonce);
+    }
+    assert_eq!(nonces.len(), 3, "a nonce of its own for each answer");
+
+    // A file of assets/: gzip when taken, immutable; its bytes as they are when not.
+    let a = raw_answer(
+        &api,
+        Via::Loopback,
+        &get("/assets/app-1.js", "Origin: http://127.0.0.1:8765\r\n"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(a.status, 200);
+    assert_eq!(a.header("content-encoding"), Some("gzip"));
+    assert_eq!(
+        a.header("cache-control"),
+        Some("public, max-age=31536000, immutable")
+    );
+    assert_eq!(
+        a.header("content-type"),
+        Some("text/javascript; charset=utf-8")
+    );
+    assert_eq!(a.header("vary"), Some("Accept-Encoding"));
+    assert!(a.header("content-security-policy").is_some());
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut flate2::read::GzDecoder::new(&a.body[..]), &mut text)
+        .unwrap();
+    assert_eq!(text, TEST_APP);
+    let plain = raw_answer(
+        &api,
+        Via::Loopback,
+        "GET /assets/app-1.js HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nAccept-Encoding: gzip;q=0\r\n\r\n",
+    )
+    .await
+    .unwrap();
+    assert_eq!(plain.header("content-encoding"), None);
+    assert_eq!(plain.body, TEST_APP.as_bytes());
+
+    // An HTML of assets/: the nonce on its styles, the hash of its inline script in script-src.
+    let view = raw_answer(&api, Via::Loopback, &get("/assets/view-2.html", ""))
+        .await
+        .unwrap();
+    let csp = view.header("content-security-policy").unwrap().to_string();
+    let nonce = style_nonce(&csp);
+    {
+        use base64::Engine as _;
+        use sha2::Digest as _;
+        let hash =
+            base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(b"start()"));
+        assert!(csp.contains(&format!("'sha256-{hash}'")), "{csp}");
+    }
+    assert!(String::from_utf8(view.body)
+        .unwrap()
+        .contains(&format!(r#"<style nonce="{nonce}">a{{}}</style>"#)));
+
+    // HEAD: the headers alone; another method refused; a query of / is the page.
+    let head = raw_answer(
+        &api,
+        Via::Loopback,
+        "HEAD / HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n",
+    )
+    .await
+    .unwrap();
+    assert_eq!(head.status, 200);
+    assert!(head.body.is_empty() && head.header("content-length").is_some_and(|l| l != "0"));
+    let post = raw_answer(
+        &api,
+        Via::Loopback,
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nContent-Length: 0\r\n\r\n",
+    )
+    .await
+    .unwrap();
+    assert_eq!(post.status, 405);
+    assert_eq!(post.header("x-content-type-options"), Some("nosniff"));
+    let query = raw_answer(&api, Via::Loopback, &get("/?space=here", ""))
+        .await
+        .unwrap();
+    assert_eq!(query.status, 200);
+    // A head whose lines end in a bare \n is read to its end, as httparse reads it.
+    let bare = raw_answer(
+        &api,
+        Via::Loopback,
+        "GET / HTTP/1.1\nHost: 127.0.0.1:8765\n\n",
+    )
+    .await
+    .unwrap();
+    assert_eq!(bare.status, 200);
+    // The WebSocket still opens on the same port.
+    let ws = raw_status(
+        &api,
+        Via::Loopback,
+        ip("127.0.0.1"),
+        &format!("GET {} HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n", proto::PATH),
+    )
+    .await;
+    assert_eq!(ws, 101);
+}
+
+/// On: the page's `Origin` is taken (`http://<Host>` of the loopback, `https://<name>` of `--allow-host`); refused, an
+/// `Origin` of another port of the loopback, a `Host` that rebinds a name to the loopback, `http://` of a declared
+/// name (an `X-Forwarded-Proto` changes nothing), another name in https, a `Host` or an `Origin` twice, an absolute
+/// URI of another authority, a `Host` of another form; and through the phone's tunnel, no page's origin at all.
+#[tokio::test(flavor = "multi_thread")]
+async fn on_the_page_s_origins_are_taken_and_the_others_refused() {
+    let (_dir, _h, api, _token) = served("remote-page-origins").await;
+    api.allow_hosts(vec!["escouade.example.org".to_string()]);
+    api.serve_page(Some(test_page()));
+    let lo = ip("127.0.0.1");
+    let path = proto::PATH;
+    let cases: Vec<(&str, &str, u16)> = vec![
+        ("127.0.0.1:8765", "Origin: http://127.0.0.1:8765\r\n", 101),
+        ("localhost:8765", "Origin: http://localhost:8765\r\n", 101),
+        ("LOCALHOST:8765", "Origin: http://localhost:8765\r\n", 101),
+        ("[::1]:8765", "Origin: http://[::1]:8765\r\n", 101),
+        (
+            "escouade.example.org",
+            "Origin: https://escouade.example.org\r\n",
+            101,
+        ),
+        (
+            "escouade.example.org:8443",
+            "Origin: https://escouade.example.org:8443\r\n",
+            101,
+        ),
+        // The window's, as before.
+        ("127.0.0.1:8765", "Origin: tauri://localhost\r\n", 101),
+        // Another port of the loopback: a server of development, another page.
+        ("127.0.0.1:8765", "Origin: http://127.0.0.1:5173\r\n", 403),
+        ("127.0.0.1:8765", "Origin: http://localhost:8765\r\n", 403),
+        ("127.0.0.1:8765", "Origin: https://127.0.0.1:8765\r\n", 403),
+        // DNS rebinding: a name of elsewhere pointed at 127.0.0.1.
+        (
+            "evil.example:8765",
+            "Origin: http://evil.example:8765\r\n",
+            403,
+        ),
+        // http:// of a declared name: a proxy without TLS.
+        (
+            "escouade.example.org",
+            "Origin: http://escouade.example.org\r\n",
+            403,
+        ),
+        (
+            "escouade.example.org",
+            "Origin: http://escouade.example.org\r\nX-Forwarded-Proto: https\r\n",
+            403,
+        ),
+        // A name not declared, in https.
+        (
+            "escouade.example.org",
+            "Origin: https://other.example.org\r\n",
+            403,
+        ),
+        ("127.0.0.1:8765", "Origin: https://evil.example\r\n", 403),
+        ("127.0.0.1:8765", "Origin: null\r\n", 403),
+        // Twice.
+        (
+            "127.0.0.1:8765",
+            "Origin: http://127.0.0.1:8765\r\nOrigin: http://127.0.0.1:5173\r\n",
+            400,
+        ),
+        (
+            "127.0.0.1:8765",
+            "Host: evil.example:8765\r\nOrigin: http://127.0.0.1:8765\r\n",
+            400,
+        ),
+    ];
+    for (host, extra, want) in &cases {
+        let head = format!("GET {path} HTTP/1.1\r\nHost: {host}\r\n{extra}");
+        assert_eq!(
+            raw_status(&api, Via::Loopback, lo, &head).await,
+            *want,
+            "WebSocket: {host} {extra}"
+        );
+        // The page's own requests are judged the same way.
+        let page = raw_answer(
+            &api,
+            Via::Loopback,
+            &format!("GET / HTTP/1.1\r\nHost: {host}\r\n{extra}\r\n"),
+        )
+        .await
+        .expect("an answer");
+        let want_page = if *want == 101 { 200 } else { *want };
+        assert_eq!(page.status, want_page, "page: {host} {extra}");
+        assert_eq!(
+            page.header("referrer-policy"),
+            Some("no-referrer"),
+            "a refusal has the headers too"
+        );
+    }
+    // An absolute URI of another authority than the Host.
+    let head = format!(
+        "GET http://evil.example{path} HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nOrigin: http://127.0.0.1:8765\r\n"
+    );
+    assert_eq!(raw_status(&api, Via::Loopback, lo, &head).await, 400);
+    let page = raw_answer(
+        &api,
+        Via::Loopback,
+        "GET http://evil.example/ HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n",
+    )
+    .await
+    .unwrap();
+    assert_eq!(page.status, 400);
+    let same = raw_answer(
+        &api,
+        Via::Loopback,
+        "GET http://127.0.0.1:8765/ HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n",
+    )
+    .await
+    .unwrap();
+    assert_eq!(same.status, 200);
+    // A Host of another form: what the policy writes is never more than a name and a port.
+    let odd = raw_answer(
+        &api,
+        Via::Loopback,
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1:1; script-src *\r\n\r\n",
+    )
+    .await
+    .unwrap();
+    assert_eq!(odd.status, 400);
+    // Through the phone's tunnel: no page, and no page's origin.
+    let tunnel = FakePeer::via("p").1;
+    let head = format!("GET {path} HTTP/1.1\r\nHost: 10.77.0.1\r\nOrigin: http://10.77.0.1\r\n");
+    assert_eq!(raw_status(&api, tunnel, None, &head).await, 403);
+}
+
+/// On: what Vite copies of public/ (What's up ?, its notes in a folder of their own) is served at its path, as the
+/// window has it, with the page's headers; its name does not change with its content, so it is revalidated (`no-cache`,
+/// its `ETag`, a `304` without a body when the client has it); `assets/` stays immutable.
+#[tokio::test(flavor = "multi_thread")]
+async fn on_the_files_of_public_are_served_at_their_path_and_revalidated() {
+    let (_dir, _h, api, _token) = served("remote-page-public").await;
+    api.serve_page(Some(test_page()));
+    let get = |path: &str, extra: &str| {
+        format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nOrigin: http://127.0.0.1:8765\r\n{extra}\r\n")
+    };
+    let a = raw_answer(&api, Via::Loopback, &get("/whats-up/whats-up.js", ""))
+        .await
+        .unwrap();
+    assert_eq!(a.status, 200);
+    assert_eq!(
+        a.header("content-type"),
+        Some("text/javascript; charset=utf-8")
+    );
+    assert_eq!(a.header("cache-control"), Some("no-cache"));
+    assert_eq!(a.header("x-content-type-options"), Some("nosniff"));
+    assert!(a
+        .header("content-security-policy")
+        .is_some_and(|c| c.contains("script-src 'self' 'wasm-unsafe-eval'")));
+    assert_eq!(a.body, TEST_WHATS_UP.as_bytes());
+    let etag = a.header("etag").expect("an ETag").to_string();
+    assert!(etag.starts_with('"') && etag.ends_with('"'), "{etag}");
+    // The client has it: 304, the headers, no body.
+    let again = raw_answer(
+        &api,
+        Via::Loopback,
+        &get(
+            "/whats-up/whats-up.js",
+            &format!("If-None-Match: {etag}\r\n"),
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(again.status, 304);
+    assert!(again.body.is_empty());
+    assert_eq!(again.header("etag"), Some(etag.as_str()));
+    assert_eq!(again.header("referrer-policy"), Some("no-referrer"));
+    assert!(again.header("content-length").is_none());
+    // Another version: the file.
+    let other = raw_answer(
+        &api,
+        Via::Loopback,
+        &get("/whats-up/whats-up.js", "If-None-Match: \"0000\"\r\n"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(other.status, 200);
+    // A folder of its own (a language's notes).
+    let notes = raw_answer(&api, Via::Loopback, &get("/whats-up/en/index.json", ""))
+        .await
+        .unwrap();
+    assert_eq!(notes.status, 200);
+    assert_eq!(notes.header("content-type"), Some("application/json"));
+    // assets/ stays immutable.
+    let hashed = raw_answer(&api, Via::Loopback, &get("/assets/app-1.js", ""))
+        .await
+        .unwrap();
+    assert_eq!(
+        hashed.header("cache-control"),
+        Some("public, max-age=31536000, immutable")
+    );
+}
+
+/// On: a path outside the page's files is refused (404), dots and encodings included; nothing of the disk is read.
+#[tokio::test(flavor = "multi_thread")]
+async fn on_a_path_outside_the_page_s_files_is_refused() {
+    let (_dir, _h, api, _token) = served("remote-page-paths").await;
+    api.serve_page(Some(test_page()));
+    for path in [
+        "/index.html",
+        "/assets/",
+        "/assets",
+        "/assets/../index.html",
+        "/assets/..%2findex.html",
+        "/assets/%2e%2e/index.html",
+        "/assets/app-1.js%00",
+        "/assets/APP-1.JS",
+        "/assets/sub/app-1.js",
+        "/whats-up/../index.html",
+        "/whats-up/%2e%2e/index.html",
+        "/whats-up/./whats-up.js",
+        "/WHATS-UP/whats-up.js",
+        "/whats-up/",
+        "/whats-up",
+        "/whats-up/en/",
+        "//assets/app-1.js",
+        "/favicon.ico",
+        "/logo.svg",
+        "/remote",
+        "/../Cargo.toml",
+        "/src-tauri/Cargo.toml",
+    ] {
+        let a = raw_answer(
+            &api,
+            Via::Loopback,
+            &format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n"),
+        )
+        .await;
+        let status = a.as_ref().map(|a| a.status);
+        assert!(
+            matches!(status, Some(404) | Some(400)),
+            "{path}: {status:?}"
+        );
+        if let Some(a) = a {
+            assert_eq!(a.header("cache-control"), Some("no-store"), "{path}");
+        }
+    }
+    let a = raw_answer(
+        &api,
+        Via::Loopback,
+        "GET /assets/app-1.js HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n",
+    )
+    .await
+    .unwrap();
+    assert_eq!(a.status, 200);
+}
+
 /// What the server answers a first message `message`, sent in place of the handshake.
 async fn first_answer(api: &RemoteApi, message: &ToServer) -> ToClient {
     let ws = open(api.addr(), proto::PATH, None, None).await.unwrap();
