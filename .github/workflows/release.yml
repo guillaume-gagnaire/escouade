@@ -453,6 +453,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
+      # server-release.sh pushes each image by its digest (push-by-digest), which the runner's default builder (the
+      # docker driver) refuses: « push-by-digest is currently not implemented for docker driver » (2.3.0-beta.1). A
+      # builder of its own, in a container, takes it; the login above reaches it.
+      - name: A builder for the images
+        run: docker buildx create --name escouade-release --driver docker-container --use
+
       # The signing key only here, as in the app's build step. Each server's image is `ghcr.io/<repository>/<program>`.
       - name: Archives, signatures and images of the architecture
         env:
